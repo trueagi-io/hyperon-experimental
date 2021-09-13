@@ -5,7 +5,7 @@ Install Rust v1.53 or higher:
 apt-get install rust
 ```
 
-# Build project
+# Build project and run tests
 
 ```
 cargo test
