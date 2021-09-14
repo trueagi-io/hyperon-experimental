@@ -3,6 +3,7 @@ mod matching;
 mod tests;
 
 use std::collections::HashMap;
+use std::rc::Rc;
 
 #[macro_export]
 macro_rules! expr {
@@ -13,11 +14,7 @@ macro_rules! expr {
     ($($x:tt),*) => { Atom::expr(&[ $( expr!($x) , )* ]) };
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
-#[derive(Hash)]
-#[derive(PartialEq)]
-#[derive(Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct VariableAtom {
     name: String,
 }
@@ -28,14 +25,69 @@ impl VariableAtom {
     }
 }
 
-#[derive(Debug)]
-#[derive(Clone)]
-#[derive(PartialEq)]
+pub trait GroundedValue {
+    fn execute(&self, args: &Vec<&Atom>) -> Result<Vec<Atom>, &str>;
+    fn eq(&self, other: Rc<dyn GroundedValue>) -> bool;
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error>;
+}
+
+pub struct GroundedAtom {
+    value: Rc<dyn GroundedValue>,
+}
+
+impl Clone for GroundedAtom {
+    fn clone(&self) -> Self {
+        GroundedAtom{ value: Rc::clone(&self.value) }
+    }
+}
+
+impl PartialEq for GroundedAtom {
+    fn eq(&self, other: &Self) -> bool {
+        self.value.eq(Rc::clone(&other.value))
+    }
+}
+
+impl std::fmt::Debug for GroundedAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        self.value.fmt(f)
+    }
+}
+
+pub struct Value<T> {
+    x: T,
+}
+
+impl<T: 'static + PartialEq + std::fmt::Display> Value<T> {
+    pub fn new(x: T) -> Atom {
+        Atom::Grounded(GroundedAtom{ value: Rc::new(Value{ x: x }) })
+    }
+}
+
+impl<T: PartialEq + std::fmt::Display> GroundedValue for Value<T> {
+    fn execute(&self, _args: &Vec<&Atom>) -> Result<Vec<Atom>, &str> {
+        Err("value is not executable")
+    }
+
+    fn eq(&self, other: Rc<dyn GroundedValue>) -> bool {
+        let o = Rc::into_raw(other) as *const Value<T>;
+        unsafe {
+            self.x == (*o).x
+        }
+    }
+
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        self.x.fmt(f)
+    }
+}
+
+pub type Int = Value<i32>;
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum Atom {
     Symbol{ symbol: String },
     Expression{ children: Vec<Atom> },
     Variable(VariableAtom),
-    Grounded,
+    Grounded(GroundedAtom),
 }
 
 impl Atom {

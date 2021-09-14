@@ -35,6 +35,12 @@ fn test_expr_self_expression() {
 }
 
 #[test]
+fn test_grounded() {
+    assert_eq!(Int::new(3),
+        Atom::Grounded(GroundedAtom{ value: Rc::new(Int{ x: 3 })}));
+}
+
+#[test]
 fn test_match_symbol() {
     let mut space = GroundingSpace::new();
     space.add(expr!("foo"));
