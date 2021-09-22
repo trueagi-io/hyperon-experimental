@@ -35,9 +35,9 @@ fn test_expr_self_expression() {
 }
 
 #[test]
-fn test_grounded() {
-    assert_eq!(Int::new(3),
-        Atom::Grounded(GroundedAtom{ value: Rc::new(Int{ x: 3 })}));
+fn test_grounded_value() {
+    assert_eq!(GroundedValue::new(3),
+        Atom::Grounded(GroundedAtomHolder{ atom: Rc::new(GroundedValue{ x: 3 })}));
 }
 
 #[test]

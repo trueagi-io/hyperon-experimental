@@ -1,3 +1,5 @@
+pub mod arithmetics;
+
 mod matching;
 #[cfg(test)]
 mod tests;
@@ -25,51 +27,51 @@ impl VariableAtom {
     }
 }
 
-pub trait GroundedValue {
-    fn execute(&self, args: &Vec<&Atom>) -> Result<Vec<Atom>, &str>;
-    fn eq(&self, other: Rc<dyn GroundedValue>) -> bool;
+pub trait GroundedAtom {
+    fn execute<'a, 'b, 'r>(&self, ops: &mut Vec<&'a Atom>, data: &mut Vec<&'b Atom>) -> Result<(), &'r str>;
+    fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool;
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error>;
 }
 
-pub struct GroundedAtom {
-    value: Rc<dyn GroundedValue>,
+pub struct GroundedAtomHolder {
+    atom: Rc<dyn GroundedAtom>,
 }
 
-impl Clone for GroundedAtom {
+impl Clone for GroundedAtomHolder {
     fn clone(&self) -> Self {
-        GroundedAtom{ value: Rc::clone(&self.value) }
+        GroundedAtomHolder{ atom: Rc::clone(&self.atom) }
     }
 }
 
-impl PartialEq for GroundedAtom {
+impl PartialEq for GroundedAtomHolder {
     fn eq(&self, other: &Self) -> bool {
-        self.value.eq(Rc::clone(&other.value))
+        self.atom.eq(Rc::clone(&other.atom))
     }
 }
 
-impl std::fmt::Debug for GroundedAtom {
+impl std::fmt::Debug for GroundedAtomHolder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.value.fmt(f)
+        self.atom.fmt(f)
     }
 }
 
-pub struct Value<T> {
+pub struct GroundedValue<T> {
     x: T,
 }
 
-impl<T: 'static + PartialEq + std::fmt::Display> Value<T> {
+impl<T: 'static + PartialEq + std::fmt::Display> GroundedValue<T> {
     pub fn new(x: T) -> Atom {
-        Atom::Grounded(GroundedAtom{ value: Rc::new(Value{ x: x }) })
+        Atom::Grounded(GroundedAtomHolder{ atom: Rc::new(GroundedValue{ x: x }) })
     }
 }
 
-impl<T: PartialEq + std::fmt::Display> GroundedValue for Value<T> {
-    fn execute(&self, _args: &Vec<&Atom>) -> Result<Vec<Atom>, &str> {
-        Err("value is not executable")
+impl<T: PartialEq + std::fmt::Display> GroundedAtom for GroundedValue<T> {
+    fn execute<'a, 'b, 'r>(&self, _ops: &mut Vec<&'a Atom>, _data: &mut Vec<&'b Atom>) -> Result<(), &'r str> {
+        Err("atom is not executable")
     }
 
-    fn eq(&self, other: Rc<dyn GroundedValue>) -> bool {
-        let o = Rc::into_raw(other) as *const Value<T>;
+    fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool {
+        let o = Rc::into_raw(other) as *const GroundedValue<T>;
         unsafe {
             self.x == (*o).x
         }
@@ -80,14 +82,12 @@ impl<T: PartialEq + std::fmt::Display> GroundedValue for Value<T> {
     }
 }
 
-pub type Int = Value<i32>;
-
 #[derive(Debug, Clone, PartialEq)]
 pub enum Atom {
     Symbol{ symbol: String },
     Expression{ children: Vec<Atom> },
     Variable(VariableAtom),
-    Grounded(GroundedAtom),
+    Grounded(GroundedAtomHolder),
 }
 
 impl Atom {
@@ -131,5 +131,13 @@ impl GroundingSpace {
         result
     }
 
-}
+    pub fn interpret(&self, ops: &mut Vec<&Atom>, data: &mut Vec<&Atom>) -> Result<(), &str> {
+        let op = ops.pop();
+        match op {
+            Some(Atom::Grounded(GroundedAtomHolder{ atom })) => atom.execute(ops, data),
+            Some(_) => Err("Ops stack contains non grounded atom"),
+            None => Err("Ops stack is empty"),
+        }
+    }
 
+}
