@@ -1,6 +1,6 @@
 pub mod arithmetics;
 
-mod matching;
+mod matcher;
 #[cfg(test)]
 mod tests;
 
@@ -123,7 +123,7 @@ impl GroundingSpace {
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
         let mut result = Vec::new();
         for next in &self.content {
-            match matching::match_atoms(next, pattern) {
+            match matcher::match_atoms(next, pattern) {
                 Some((_, b_bindings)) => result.push(b_bindings),
                 None => continue,
             }

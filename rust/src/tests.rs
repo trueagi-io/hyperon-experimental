@@ -79,13 +79,13 @@ fn test_match_different_value_for_variable() {
 #[test]
 fn test_match_variables_in_data() {
     assert_eq!(
-        matching::match_atoms(&expr!("+", a, ("*", b, c)), &expr!("+", "A", ("*", "B", "C"))),
+        matcher::match_atoms(&expr!("+", a, ("*", b, c)), &expr!("+", "A", ("*", "B", "C"))),
         Some((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{})))
 }
 
 #[test]
 fn test_match_different_value_for_variable_in_data() {
     assert_eq!(
-        matching::match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
+        matcher::match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
         None)
 }
