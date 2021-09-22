@@ -1,9 +1,15 @@
-mod matching;
+pub mod arithmetics;
+
+mod matcher;
 #[cfg(test)]
 mod tests;
 
+#[macro_use]
+extern crate mopa;
+
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::fmt::{Display, Debug};
 
 #[macro_export]
 macro_rules! expr {
@@ -25,69 +31,71 @@ impl VariableAtom {
     }
 }
 
-pub trait GroundedValue {
-    fn execute(&self, args: &Vec<&Atom>) -> Result<Vec<Atom>, &str>;
-    fn eq(&self, other: Rc<dyn GroundedValue>) -> bool;
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error>;
+pub trait GroundedAtom : Display + mopa::Any {
+    fn execute(&self, _ops: &mut Vec<&Atom>, _data: &mut Vec<&Atom>) -> Result<(), String> {
+        Err(format!("{} is not executable", self))
+    }
+    fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool;
 }
 
-pub struct GroundedAtom {
-    value: Rc<dyn GroundedValue>,
+mopafy!(GroundedAtom);
+
+pub struct GroundedAtomHolder {
+    atom: Rc<dyn GroundedAtom>,
 }
 
-impl Clone for GroundedAtom {
+impl Clone for GroundedAtomHolder {
     fn clone(&self) -> Self {
-        GroundedAtom{ value: Rc::clone(&self.value) }
+        // TODO: right now clone() copies Rc box not the atom itself. We need 
+        // providing a way of choosing between copying an atom and copying a
+        // smart pointer to a user.
+        GroundedAtomHolder{ atom: Rc::clone(&self.atom) }
     }
 }
 
-impl PartialEq for GroundedAtom {
+impl PartialEq for GroundedAtomHolder {
     fn eq(&self, other: &Self) -> bool {
-        self.value.eq(Rc::clone(&other.value))
+        self.atom.eq(Rc::clone(&other.atom))
     }
 }
 
-impl std::fmt::Debug for GroundedAtom {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        self.value.fmt(f)
+impl Debug for GroundedAtomHolder {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.atom.fmt(f)
     }
 }
 
-pub struct Value<T> {
+pub struct GroundedValue<T> {
     x: T,
 }
 
-impl<T: 'static + PartialEq + std::fmt::Display> Value<T> {
+impl<T: 'static + PartialEq + Display> GroundedValue<T> {
     pub fn new(x: T) -> Atom {
-        Atom::Grounded(GroundedAtom{ value: Rc::new(Value{ x: x }) })
+        Atom::Grounded(GroundedAtomHolder{ atom: Rc::new(GroundedValue{ x: x }) })
     }
 }
 
-impl<T: PartialEq + std::fmt::Display> GroundedValue for Value<T> {
-    fn execute(&self, _args: &Vec<&Atom>) -> Result<Vec<Atom>, &str> {
-        Err("value is not executable")
-    }
-
-    fn eq(&self, other: Rc<dyn GroundedValue>) -> bool {
-        let o = Rc::into_raw(other) as *const Value<T>;
-        unsafe {
-            self.x == (*o).x
+impl<T: 'static + PartialEq + Display> GroundedAtom for GroundedValue<T> {
+    fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool {
+        match other.downcast_ref::<GroundedValue<T>>() {
+            Some(o) => self.x == o.x,
+            None => false,
         }
     }
+}
 
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl<T: 'static + PartialEq + Display> Display for GroundedValue<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.x.fmt(f)
     }
 }
-
-pub type Int = Value<i32>;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Atom {
     Symbol{ symbol: String },
     Expression{ children: Vec<Atom> },
     Variable(VariableAtom),
-    Grounded(GroundedAtom),
+    Grounded(GroundedAtomHolder),
 }
 
 impl Atom {
@@ -123,7 +131,7 @@ impl GroundingSpace {
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
         let mut result = Vec::new();
         for next in &self.content {
-            match matching::match_atoms(next, pattern) {
+            match matcher::match_atoms(next, pattern) {
                 Some((_, b_bindings)) => result.push(b_bindings),
                 None => continue,
             }
@@ -131,5 +139,13 @@ impl GroundingSpace {
         result
     }
 
-}
+    pub fn interpret(&self, ops: &mut Vec<&Atom>, data: &mut Vec<&Atom>) -> Result<(), String> {
+        let op = ops.pop();
+        match op {
+            Some(Atom::Grounded(GroundedAtomHolder{ atom })) => atom.execute(ops, data),
+            Some(_) => Err("Ops stack contains non grounded atom".to_string()),
+            None => Err("Ops stack is empty".to_string()),
+        }
+    }
 
+}

@@ -35,9 +35,9 @@ fn test_expr_self_expression() {
 }
 
 #[test]
-fn test_grounded() {
-    assert_eq!(Int::new(3),
-        Atom::Grounded(GroundedAtom{ value: Rc::new(Int{ x: 3 })}));
+fn test_grounded_value() {
+    assert_eq!(GroundedValue::new(3),
+        Atom::Grounded(GroundedAtomHolder{ atom: Rc::new(GroundedValue{ x: 3 })}));
 }
 
 #[test]
@@ -79,13 +79,13 @@ fn test_match_different_value_for_variable() {
 #[test]
 fn test_match_variables_in_data() {
     assert_eq!(
-        matching::match_atoms(&expr!("+", a, ("*", b, c)), &expr!("+", "A", ("*", "B", "C"))),
+        matcher::match_atoms(&expr!("+", a, ("*", b, c)), &expr!("+", "A", ("*", "B", "C"))),
         Some((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{})))
 }
 
 #[test]
 fn test_match_different_value_for_variable_in_data() {
     assert_eq!(
-        matching::match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
+        matcher::match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
         None)
 }
