@@ -4,6 +4,9 @@ mod matcher;
 #[cfg(test)]
 mod tests;
 
+#[macro_use]
+extern crate mopa;
+
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::fmt::{Display, Debug};
@@ -28,12 +31,14 @@ impl VariableAtom {
     }
 }
 
-pub trait GroundedAtom : Display {
+pub trait GroundedAtom : Display + mopa::Any {
     fn execute(&self, _ops: &mut Vec<&Atom>, _data: &mut Vec<&Atom>) -> Result<(), String> {
         Err(format!("{} is not executable", self))
     }
     fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool;
 }
+
+mopafy!(GroundedAtom);
 
 pub struct GroundedAtomHolder {
     atom: Rc<dyn GroundedAtom>,
@@ -41,6 +46,9 @@ pub struct GroundedAtomHolder {
 
 impl Clone for GroundedAtomHolder {
     fn clone(&self) -> Self {
+        // TODO: right now clone() copies Rc box not the atom itself. We need 
+        // providing a way of choosing between copying an atom and copying a
+        // smart pointer to a user.
         GroundedAtomHolder{ atom: Rc::clone(&self.atom) }
     }
 }
@@ -67,16 +75,16 @@ impl<T: 'static + PartialEq + Display> GroundedValue<T> {
     }
 }
 
-impl<T: PartialEq + Display> GroundedAtom for GroundedValue<T> {
+impl<T: 'static + PartialEq + Display> GroundedAtom for GroundedValue<T> {
     fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool {
-        let o = Rc::into_raw(other) as *const GroundedValue<T>;
-        unsafe {
-            self.x == (*o).x
+        match other.downcast_ref::<GroundedValue<T>>() {
+            Some(o) => self.x == o.x,
+            None => false,
         }
     }
 }
 
-impl<T: PartialEq + Display> Display for GroundedValue<T> {
+impl<T: 'static + PartialEq + Display> Display for GroundedValue<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.x.fmt(f)
     }
