@@ -27,10 +27,11 @@ impl VariableAtom {
     }
 }
 
-pub trait GroundedAtom {
-    fn execute<'a, 'b, 'r>(&self, ops: &mut Vec<&'a Atom>, data: &mut Vec<&'b Atom>) -> Result<(), &'r str>;
+pub trait GroundedAtom : std::fmt::Display {
+    fn execute(&self, _ops: &mut Vec<&Atom>, _data: &mut Vec<&Atom>) -> Result<(), String> {
+        Err(format!("{} is not executable", self))
+    }
     fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool;
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error>;
 }
 
 pub struct GroundedAtomHolder {
@@ -50,7 +51,7 @@ impl PartialEq for GroundedAtomHolder {
 }
 
 impl std::fmt::Debug for GroundedAtomHolder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.atom.fmt(f)
     }
 }
@@ -66,18 +67,16 @@ impl<T: 'static + PartialEq + std::fmt::Display> GroundedValue<T> {
 }
 
 impl<T: PartialEq + std::fmt::Display> GroundedAtom for GroundedValue<T> {
-    fn execute<'a, 'b, 'r>(&self, _ops: &mut Vec<&'a Atom>, _data: &mut Vec<&'b Atom>) -> Result<(), &'r str> {
-        Err("atom is not executable")
-    }
-
     fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool {
         let o = Rc::into_raw(other) as *const GroundedValue<T>;
         unsafe {
             self.x == (*o).x
         }
     }
+}
 
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+impl<T: PartialEq + std::fmt::Display> std::fmt::Display for GroundedValue<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.x.fmt(f)
     }
 }
@@ -131,12 +130,12 @@ impl GroundingSpace {
         result
     }
 
-    pub fn interpret(&self, ops: &mut Vec<&Atom>, data: &mut Vec<&Atom>) -> Result<(), &str> {
+    pub fn interpret(&self, ops: &mut Vec<&Atom>, data: &mut Vec<&Atom>) -> Result<(), String> {
         let op = ops.pop();
         match op {
             Some(Atom::Grounded(GroundedAtomHolder{ atom })) => atom.execute(ops, data),
-            Some(_) => Err("Ops stack contains non grounded atom"),
-            None => Err("Ops stack is empty"),
+            Some(_) => Err("Ops stack contains non grounded atom".to_string()),
+            None => Err("Ops stack is empty".to_string()),
         }
     }
 
