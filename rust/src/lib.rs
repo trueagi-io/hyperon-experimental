@@ -6,6 +6,7 @@ mod tests;
 
 use std::collections::HashMap;
 use std::rc::Rc;
+use std::fmt::{Display, Debug};
 
 #[macro_export]
 macro_rules! expr {
@@ -27,7 +28,7 @@ impl VariableAtom {
     }
 }
 
-pub trait GroundedAtom : std::fmt::Display {
+pub trait GroundedAtom : Display {
     fn execute(&self, _ops: &mut Vec<&Atom>, _data: &mut Vec<&Atom>) -> Result<(), String> {
         Err(format!("{} is not executable", self))
     }
@@ -50,7 +51,7 @@ impl PartialEq for GroundedAtomHolder {
     }
 }
 
-impl std::fmt::Debug for GroundedAtomHolder {
+impl Debug for GroundedAtomHolder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.atom.fmt(f)
     }
@@ -60,13 +61,13 @@ pub struct GroundedValue<T> {
     x: T,
 }
 
-impl<T: 'static + PartialEq + std::fmt::Display> GroundedValue<T> {
+impl<T: 'static + PartialEq + Display> GroundedValue<T> {
     pub fn new(x: T) -> Atom {
         Atom::Grounded(GroundedAtomHolder{ atom: Rc::new(GroundedValue{ x: x }) })
     }
 }
 
-impl<T: PartialEq + std::fmt::Display> GroundedAtom for GroundedValue<T> {
+impl<T: PartialEq + Display> GroundedAtom for GroundedValue<T> {
     fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool {
         let o = Rc::into_raw(other) as *const GroundedValue<T>;
         unsafe {
@@ -75,7 +76,7 @@ impl<T: PartialEq + std::fmt::Display> GroundedAtom for GroundedValue<T> {
     }
 }
 
-impl<T: PartialEq + std::fmt::Display> std::fmt::Display for GroundedValue<T> {
+impl<T: PartialEq + Display> Display for GroundedValue<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.x.fmt(f)
     }
