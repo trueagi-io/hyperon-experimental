@@ -20,6 +20,21 @@ macro_rules! expr {
     ($($x:tt),*) => { Atom::expr(&[ $( expr!($x) , )* ]) };
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct ExpressionAtom {
+    children: Vec<Atom>,
+}
+
+impl ExpressionAtom {
+    fn from(children: &[Atom]) -> ExpressionAtom {
+        ExpressionAtom{ children: children.to_vec() }
+    }
+
+    fn is_plain(&self) -> bool {
+        self.children.iter().all(|atom| ! matches!(atom, Atom::Expression(_)))
+    }
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct VariableAtom {
     name: String,
@@ -32,7 +47,7 @@ impl VariableAtom {
 }
 
 pub trait GroundedAtom : Display + mopa::Any {
-    fn execute(&self, _ops: &mut Vec<&Atom>, _data: &mut Vec<&Atom>) -> Result<(), String> {
+    fn execute(&self, _ops: &mut Vec<Atom>, _data: &mut Vec<Atom>) -> Result<(), String> {
         Err(format!("{} is not executable", self))
     }
     fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool;
@@ -93,7 +108,7 @@ impl<T: 'static + PartialEq + Display> Display for GroundedValue<T> {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Atom {
     Symbol{ symbol: String },
-    Expression{ children: Vec<Atom> },
+    Expression(ExpressionAtom),
     Variable(VariableAtom),
     Grounded(GroundedAtomHolder),
 }
@@ -104,7 +119,7 @@ impl Atom {
     }
 
     pub fn expr(children: &[Atom]) -> Self {
-        Self::Expression{ children: children.to_vec() }
+        Self::Expression(ExpressionAtom::from(children))
     }
 
     pub fn var(name: &str) -> Self {
@@ -139,7 +154,7 @@ impl GroundingSpace {
         result
     }
 
-    pub fn interpret(&self, ops: &mut Vec<&Atom>, data: &mut Vec<&Atom>) -> Result<(), String> {
+    pub fn interpret(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
         let op = ops.pop();
         match op {
             Some(Atom::Grounded(GroundedAtomHolder{ atom })) => atom.execute(ops, data),

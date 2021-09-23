@@ -17,7 +17,7 @@ fn match_atoms_recursively(a: &Atom, b: &Atom,
         (Atom::Symbol{ symbol: a }, Atom::Symbol{ symbol: b }) => a == b,
         (a, Atom::Variable(v)) => check_and_insert_binding(b_bindings, v, a),
         (Atom::Variable(v), b) => check_and_insert_binding(a_bindings, v, b),
-        (Atom::Expression{ children: a }, Atom::Expression{ children: b }) => {
+        (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b })) => {
             if a.len() != b.len() {
                 false
             } else {
