@@ -1,4 +1,6 @@
 pub mod common;
+pub mod interpreter;
+pub mod arithmetics;
 
 mod matcher;
 #[cfg(test)]
@@ -49,13 +51,51 @@ pub trait GroundedAtom : Display + mopa::Any {
     fn execute(&self, _ops: &mut Vec<Atom>, _data: &mut Vec<Atom>) -> Result<(), String> {
         Err(format!("{} is not executable", self))
     }
-    fn eq(&self, other: &Box<dyn GroundedAtom>) -> bool;
+    fn eq(&self, other: &dyn GroundedAtom) -> bool;
     // TODO: try to emit Box by using references and lifetime parameters
     fn clone(&self) -> Box<dyn GroundedAtom>;
 }
 
 mopafy!(GroundedAtom);
 
+#[derive(Debug)]
+pub struct StaticGroundedAtomRef<T: GroundedAtom> {
+    r: &'static T,
+}
+
+impl<T: GroundedAtom> GroundedAtom for StaticGroundedAtomRef<T> {
+    fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
+        self.r.execute(ops, data)
+    }
+
+    fn eq(&self, other: &dyn GroundedAtom) -> bool {
+        match other.downcast_ref::<StaticGroundedAtomRef<T>>() {
+            Some(o) => self.r.eq(o.r),
+            None => false,
+        }
+    }
+
+    fn clone(&self) -> Box<dyn GroundedAtom> {
+        Box::new(*self)
+    }
+}
+
+impl<T: GroundedAtom> Display for StaticGroundedAtomRef<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.r.fmt(f)
+    }
+}
+
+impl<T: GroundedAtom> Clone for StaticGroundedAtomRef<T> {
+    fn clone(&self) -> Self {
+        StaticGroundedAtomRef{ r: self.r }
+    }
+}
+
+impl<T: GroundedAtom> Copy for StaticGroundedAtomRef<T> {}
+
+// TODO: it could be removed but then we need implement Debug, Clone and
+// PartialEq for the Atom type
 pub struct GroundedAtomHolder {
     atom: Box<dyn GroundedAtom>,
 }
@@ -68,7 +108,7 @@ impl Clone for GroundedAtomHolder {
 
 impl PartialEq for GroundedAtomHolder {
     fn eq(&self, other: &Self) -> bool {
-        self.atom.eq(&other.atom)
+        self.atom.eq(&*other.atom)
     }
 }
 
@@ -101,6 +141,13 @@ impl Atom {
 
     pub fn gnd<T: GroundedAtom>(gnd: T) -> Atom {
         Self::Grounded(GroundedAtomHolder{ atom: Box::new(gnd) })
+    }
+}
+
+impl Display for Atom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // TODO: make it more human readable
+        Debug::fmt(self, f)
     }
 }
 

@@ -38,21 +38,21 @@ fn test_expr_self_expression() {
 fn test_match_symbol() {
     let mut space = GroundingSpace::new();
     space.add(expr!("foo"));
-    assert_eq!(space.query(&expr!("foo")), vec![bind!{}])
+    assert_eq!(space.query(&expr!("foo")), vec![bind!{}]);
 }
 
 #[test]
 fn test_match_variable() {
     let mut space = GroundingSpace::new();
     space.add(expr!("foo"));
-    assert_eq!(space.query(&expr!(x)), vec![bind!{x: expr!("foo")}])
+    assert_eq!(space.query(&expr!(x)), vec![bind!{x: expr!("foo")}]);
 }
 
 #[test]
 fn test_match_expression() {
     let mut space = GroundingSpace::new();
     space.add(expr!("+", "a", ("*", "b", "c")));
-    assert_eq!(space.query(&expr!("+", "a", ("*", "b", "c"))), vec![bind!{}])
+    assert_eq!(space.query(&expr!("+", "a", ("*", "b", "c"))), vec![bind!{}]);
 }
 
 #[test]
@@ -60,26 +60,26 @@ fn test_match_expression_with_variables() {
     let mut space = GroundingSpace::new();
     space.add(expr!("+", "A", ("*", "B", "C")));
     assert_eq!(space.query(&expr!("+", a, ("*", b, c))),
-        vec![bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }])
+        vec![bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }]);
 }
 
 #[test]
 fn test_match_different_value_for_variable() {
     let mut space = GroundingSpace::new();
     space.add(expr!("+", "A", ("*", "B", "C")));
-    assert_eq!(space.query(&expr!("+", a, ("*", a, c))), vec![])
+    assert_eq!(space.query(&expr!("+", a, ("*", a, c))), vec![]);
 }
 
 #[test]
 fn test_match_variables_in_data() {
     assert_eq!(
         matcher::match_atoms(&expr!("+", a, ("*", b, c)), &expr!("+", "A", ("*", "B", "C"))),
-        Some((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{})))
+        Some((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{})));
 }
 
 #[test]
 fn test_match_different_value_for_variable_in_data() {
     assert_eq!(
         matcher::match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
-        None)
+        None);
 }
