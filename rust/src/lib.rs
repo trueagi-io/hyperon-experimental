@@ -1,4 +1,4 @@
-pub mod arithmetics;
+pub mod common;
 
 mod matcher;
 #[cfg(test)]
@@ -8,7 +8,6 @@ mod tests;
 extern crate mopa;
 
 use std::collections::HashMap;
-use std::rc::Rc;
 use std::fmt::{Display, Debug};
 
 #[macro_export]
@@ -26,7 +25,7 @@ pub struct ExpressionAtom {
 }
 
 impl ExpressionAtom {
-    fn from(children: &[Atom]) -> ExpressionAtom {
+    fn from(children: &[Atom]) -> Self {
         ExpressionAtom{ children: children.to_vec() }
     }
 
@@ -41,7 +40,7 @@ pub struct VariableAtom {
 }
 
 impl VariableAtom {
-    fn from(name: &str) -> VariableAtom {
+    fn from(name: &str) -> Self {
         VariableAtom{ name: name.to_string() }
     }
 }
@@ -50,58 +49,32 @@ pub trait GroundedAtom : Display + mopa::Any {
     fn execute(&self, _ops: &mut Vec<Atom>, _data: &mut Vec<Atom>) -> Result<(), String> {
         Err(format!("{} is not executable", self))
     }
-    fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool;
+    fn eq(&self, other: &Box<dyn GroundedAtom>) -> bool;
+    // TODO: try to emit Box by using references and lifetime parameters
+    fn clone(&self) -> Box<dyn GroundedAtom>;
 }
 
 mopafy!(GroundedAtom);
 
 pub struct GroundedAtomHolder {
-    atom: Rc<dyn GroundedAtom>,
+    atom: Box<dyn GroundedAtom>,
 }
 
 impl Clone for GroundedAtomHolder {
     fn clone(&self) -> Self {
-        // TODO: right now clone() copies Rc box not the atom itself. We need 
-        // providing a way of choosing between copying an atom and copying a
-        // smart pointer to a user.
-        GroundedAtomHolder{ atom: Rc::clone(&self.atom) }
+        GroundedAtomHolder{ atom: (*(self.atom)).clone() }
     }
 }
 
 impl PartialEq for GroundedAtomHolder {
     fn eq(&self, other: &Self) -> bool {
-        self.atom.eq(Rc::clone(&other.atom))
+        self.atom.eq(&other.atom)
     }
 }
 
 impl Debug for GroundedAtomHolder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.atom.fmt(f)
-    }
-}
-
-pub struct GroundedValue<T> {
-    x: T,
-}
-
-impl<T: 'static + PartialEq + Display> GroundedValue<T> {
-    pub fn new(x: T) -> Atom {
-        Atom::Grounded(GroundedAtomHolder{ atom: Rc::new(GroundedValue{ x: x }) })
-    }
-}
-
-impl<T: 'static + PartialEq + Display> GroundedAtom for GroundedValue<T> {
-    fn eq(&self, other: Rc<dyn GroundedAtom>) -> bool {
-        match other.downcast_ref::<GroundedValue<T>>() {
-            Some(o) => self.x == o.x,
-            None => false,
-        }
-    }
-}
-
-impl<T: 'static + PartialEq + Display> Display for GroundedValue<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.x.fmt(f)
     }
 }
 
@@ -125,6 +98,10 @@ impl Atom {
     pub fn var(name: &str) -> Self {
         Self::Variable(VariableAtom::from(name))
     }
+
+    pub fn gnd<T: GroundedAtom>(gnd: T) -> Atom {
+        Self::Grounded(GroundedAtomHolder{ atom: Box::new(gnd) })
+    }
 }
 
 pub type Bindings = HashMap<VariableAtom, Atom>;
@@ -135,7 +112,7 @@ pub struct GroundingSpace {
 
 impl GroundingSpace {
 
-    pub fn new() -> GroundingSpace {
+    pub fn new() -> Self {
         GroundingSpace{ content: Vec::new() }
     }
     
