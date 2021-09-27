@@ -6,21 +6,16 @@ pub type Int = GroundedValue<i32>;
 pub static SUM: StaticGroundedAtomRef<Operation> = StaticGroundedAtomRef{ r: &Operation{ name: "+", execute: sum }};
 
 fn sum(_ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
-    let arg1 = data.pop().expect("Not enough arguments for a sum operation"); 
-    let arg2 = data.pop().expect("Not enough arguments for a sum operation");
+    // TODO: getting arguments from stack and checking their type can be
+    // done in separate helper function or macros.
+    let arg1 = data.pop().expect("Sum operation called without arguments"); 
+    let arg2 = data.pop().expect("Sum operation called with only argument");
     match (&arg1, &arg2) {
-        (Atom::Grounded(arg1),
-                Atom::Grounded(arg2)) => {
-            let _arg1 = (*arg1).downcast_ref::<Int>();
-            let _arg2 = (*arg2).downcast_ref::<Int>();
-            match (_arg1, _arg2) {
-                (Some(arg1), Some(arg2)) => {
-                    data.push(Int::new(arg1.get() + arg2.get()));
-                    Ok(())
-                },
-                _ => Err(format!("One of the arguments is not Int: {}, {}", arg1, arg2)),
-            }
-            
+        (Atom::Grounded(arg1), Atom::Grounded(arg2)) => {
+            let arg1 = (*arg1).downcast_ref::<Int>().expect(&format!("First argument is not Int: {}", arg1));
+            let arg2 = (*arg2).downcast_ref::<Int>().expect(&format!("Second argument is not Int: {}", arg2));
+            data.push(Int::new(arg1.get() + arg2.get()));
+            Ok(())
         },
         _ => Err(format!("One of the arguments is not grounded: {}, {}", arg1, arg2)),
     }
