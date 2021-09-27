@@ -1,8 +1,8 @@
 use crate::*;
 use crate::common::*;
 
-pub static INTERPRET: StaticGroundedAtomRef<Operation> = StaticGroundedAtomRef{ r: &Operation{ name: "interpret", execute: interpret }};
-pub static EXECUTE: StaticGroundedAtomRef<Operation> = StaticGroundedAtomRef{ r: &Operation{ name: "execute", execute: execute }};
+pub static INTERPRET: &Operation = &Operation{ name: "interpret", execute: interpret };
+pub static EXECUTE: &Operation = &Operation{ name: "execute", execute: execute };
 
 fn is_grounded(expr: &ExpressionAtom) -> bool {
     matches!(expr.children.get(0), Some(Atom::Grounded(_)))

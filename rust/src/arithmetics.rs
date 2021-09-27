@@ -3,7 +3,7 @@ use crate::common::*;
 
 pub type Int = GroundedValue<i32>;
 
-pub static SUM: StaticGroundedAtomRef<Operation> = StaticGroundedAtomRef{ r: &Operation{ name: "+", execute: sum }};
+pub static SUM: &Operation = &Operation{ name: "+", execute: sum };
 
 fn sum(_ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     // TODO: getting arguments from stack and checking their type can be
