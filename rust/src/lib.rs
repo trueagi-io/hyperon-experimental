@@ -56,74 +56,20 @@ pub trait GroundedAtom : Display + mopa::Any {
     fn clone(&self) -> Box<dyn GroundedAtom>;
 }
 
+impl Debug for dyn GroundedAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
+
 mopafy!(GroundedAtom);
 
 #[derive(Debug)]
-pub struct StaticGroundedAtomRef<T: GroundedAtom> {
-    r: &'static T,
-}
-
-impl<T: GroundedAtom> GroundedAtom for StaticGroundedAtomRef<T> {
-    fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
-        self.r.execute(ops, data)
-    }
-
-    fn eq(&self, other: &dyn GroundedAtom) -> bool {
-        match other.downcast_ref::<StaticGroundedAtomRef<T>>() {
-            Some(o) => self.r.eq(o.r),
-            None => false,
-        }
-    }
-
-    fn clone(&self) -> Box<dyn GroundedAtom> {
-        Box::new(*self)
-    }
-}
-
-impl<T: GroundedAtom> Display for StaticGroundedAtomRef<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.r.fmt(f)
-    }
-}
-
-impl<T: GroundedAtom> Clone for StaticGroundedAtomRef<T> {
-    fn clone(&self) -> Self {
-        StaticGroundedAtomRef{ r: self.r }
-    }
-}
-
-impl<T: GroundedAtom> Copy for StaticGroundedAtomRef<T> {}
-
-// TODO: it could be removed but then we need implement Debug, Clone and
-// PartialEq for the Atom type
-pub struct GroundedAtomHolder {
-    atom: Box<dyn GroundedAtom>,
-}
-
-impl Clone for GroundedAtomHolder {
-    fn clone(&self) -> Self {
-        GroundedAtomHolder{ atom: (*(self.atom)).clone() }
-    }
-}
-
-impl PartialEq for GroundedAtomHolder {
-    fn eq(&self, other: &Self) -> bool {
-        self.atom.eq(&*other.atom)
-    }
-}
-
-impl Debug for GroundedAtomHolder {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.atom.fmt(f)
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
 pub enum Atom {
     Symbol{ symbol: String },
     Expression(ExpressionAtom),
     Variable(VariableAtom),
-    Grounded(GroundedAtomHolder),
+    Grounded(Box<dyn GroundedAtom>),
 }
 
 impl Atom {
@@ -140,7 +86,30 @@ impl Atom {
     }
 
     pub fn gnd<T: GroundedAtom>(gnd: T) -> Atom {
-        Self::Grounded(GroundedAtomHolder{ atom: Box::new(gnd) })
+        Self::Grounded(Box::new(gnd))
+    }
+}
+
+impl PartialEq for Atom {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Atom::Symbol{ symbol: sym1 }, Atom::Symbol{ symbol: sym2 }) => sym1 == sym2,
+            (Atom::Expression(expr1), Atom::Expression(expr2)) => expr1 == expr2,
+            (Atom::Variable(var1), Atom::Variable(var2)) => var1 == var2,
+            (Atom::Grounded(gnd1), Atom::Grounded(gnd2)) => gnd1.eq(&**gnd2),
+            _ => false,
+        }
+    }
+}
+
+impl Clone for Atom {
+    fn clone(&self) -> Self {
+        match self {
+            Atom::Symbol{ symbol: sym } => Atom::Symbol{ symbol: sym.clone() },
+            Atom::Expression(expr) => Atom::Expression(expr.clone()),
+            Atom::Variable(var) => Atom::Variable(var.clone()),
+            Atom::Grounded(gnd) => Atom::Grounded((*gnd).clone()),
+        }
     }
 }
 
@@ -181,10 +150,47 @@ impl GroundingSpace {
     pub fn interpret(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
         let op = ops.pop();
         match op {
-            Some(Atom::Grounded(GroundedAtomHolder{ atom })) => atom.execute(ops, data),
+            Some(Atom::Grounded(atom)) => atom.execute(ops, data),
             Some(_) => Err("Ops stack contains non grounded atom".to_string()),
             None => Err("Ops stack is empty".to_string()),
         }
     }
 
 }
+
+#[derive(Debug)]
+pub struct StaticGroundedAtomRef<T: GroundedAtom> {
+    r: &'static T,
+}
+
+impl<T: GroundedAtom> GroundedAtom for StaticGroundedAtomRef<T> {
+    fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
+        self.r.execute(ops, data)
+    }
+
+    fn eq(&self, other: &dyn GroundedAtom) -> bool {
+        match other.downcast_ref::<StaticGroundedAtomRef<T>>() {
+            Some(o) => self.r.eq(o.r),
+            None => false,
+        }
+    }
+
+    fn clone(&self) -> Box<dyn GroundedAtom> {
+        Box::new(*self)
+    }
+}
+
+impl<T: GroundedAtom> Display for StaticGroundedAtomRef<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.r.fmt(f)
+    }
+}
+
+impl<T: GroundedAtom> Clone for StaticGroundedAtomRef<T> {
+    fn clone(&self) -> Self {
+        StaticGroundedAtomRef{ r: self.r }
+    }
+}
+
+impl<T: GroundedAtom> Copy for StaticGroundedAtomRef<T> {}
+

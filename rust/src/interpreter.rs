@@ -31,7 +31,7 @@ fn execute(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let arg = data.pop(); 
     match arg {
         Some(Atom::Expression(expr)) => match &expr.children[0] {
-            Atom::Grounded(GroundedAtomHolder{ atom: op }) => {
+            Atom::Grounded(op) => {
                 &expr.children.iter().skip(1).for_each(|atom| data.push(atom.clone()));
                 op.execute(ops, data)
             },

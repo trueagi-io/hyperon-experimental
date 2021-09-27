@@ -9,8 +9,8 @@ fn sum(_ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let arg1 = data.pop().expect("Not enough arguments for a sum operation"); 
     let arg2 = data.pop().expect("Not enough arguments for a sum operation");
     match (&arg1, &arg2) {
-        (Atom::Grounded(GroundedAtomHolder{ atom: arg1}),
-                Atom::Grounded(GroundedAtomHolder{ atom: arg2})) => {
+        (Atom::Grounded(arg1),
+                Atom::Grounded(arg2)) => {
             let _arg1 = (*arg1).downcast_ref::<Int>();
             let _arg2 = (*arg2).downcast_ref::<Int>();
             match (_arg1, _arg2) {

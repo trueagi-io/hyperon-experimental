@@ -1,7 +1,6 @@
 use super::*;
 use std::fmt::Display;
 
-#[derive(Debug)]
 pub struct GroundedValue<T> {
     value: T,
 }
@@ -30,6 +29,12 @@ impl<T: 'static + PartialEq + Display + Copy> GroundedAtom for GroundedValue<T> 
 impl<T: Display> Display for GroundedValue<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.value.fmt(f)
+    }
+}
+
+impl<T: Display> Debug for GroundedValue<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
     }
 }
 
