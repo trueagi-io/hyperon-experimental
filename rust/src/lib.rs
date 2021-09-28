@@ -59,14 +59,8 @@ pub trait GroundedAtom : Display + mopa::Any {
     fn execute(&self, _ops: &mut Vec<Atom>, _data: &mut Vec<Atom>) -> Result<(), String> {
         Err(format!("{} is not executable", self))
     }
-    fn eq(&self, other: &dyn GroundedAtom) -> bool;
-    // We cannot replace Box by using references and lifetime parameters
-    // because GroundedAtom inherits std::any::Any transitively via mopa::Any.
-    // std::any::Any in turn requires 'static lifetime. Not sure why but it
-    // means that any reference to the instance of the GroundedAtom should be
-    // static. For example see GroundedAtom implementation for &T below. It
-    // doesn't compile if 'static is removed from reference in &T.
-    fn clone(&self) -> Box<dyn GroundedAtom>;
+    fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
+    fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
 }
 
 impl Debug for dyn GroundedAtom {
@@ -77,23 +71,18 @@ impl Debug for dyn GroundedAtom {
 
 mopafy!(GroundedAtom);
 
-// GroundedAtom implementation for the static references to GroundedAtom
-// to allow defining global static operation instances.
-
-impl<T: GroundedAtom> GroundedAtom for &'static T {
-    fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
-        (*self).execute(ops, data)
-    }
-
-    fn eq(&self, other: &dyn GroundedAtom) -> bool {
-        match other.downcast_ref::<&T>() {
-            Some(o) => (*self).eq(o),
+// GroundedAtom implementation for all "regular" types
+// to allow using them as GroundedAtoms
+impl<T: 'static + Clone + PartialEq + Display> GroundedAtom for T {
+    fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
+        match other.downcast_ref::<T>() {
+            Some(o) => self.eq(o),
             None => false,
         }
     }
 
-    fn clone(&self) -> Box<dyn GroundedAtom> {
-        Box::new(*self)
+    fn clone_gnd(&self) -> Box<dyn GroundedAtom> {
+        Box::new(self.clone())
     }
 }
 
@@ -104,6 +93,8 @@ pub enum Atom {
     Symbol{ symbol: String },
     Expression(ExpressionAtom),
     Variable(VariableAtom),
+    // We need using Box here because we need also keep values created
+    // dynamically in heap.
     Grounded(Box<dyn GroundedAtom>),
 }
 
@@ -131,7 +122,7 @@ impl PartialEq for Atom {
             (Atom::Symbol{ symbol: sym1 }, Atom::Symbol{ symbol: sym2 }) => sym1 == sym2,
             (Atom::Expression(expr1), Atom::Expression(expr2)) => expr1 == expr2,
             (Atom::Variable(var1), Atom::Variable(var2)) => var1 == var2,
-            (Atom::Grounded(gnd1), Atom::Grounded(gnd2)) => gnd1.eq(&**gnd2),
+            (Atom::Grounded(gnd1), Atom::Grounded(gnd2)) => gnd1.eq_gnd(&**gnd2),
             _ => false,
         }
     }
@@ -143,7 +134,7 @@ impl Clone for Atom {
             Atom::Symbol{ symbol: sym } => Atom::Symbol{ symbol: sym.clone() },
             Atom::Expression(expr) => Atom::Expression(expr.clone()),
             Atom::Variable(var) => Atom::Variable(var.clone()),
-            Atom::Grounded(gnd) => Atom::Grounded((*gnd).clone()),
+            Atom::Grounded(gnd) => Atom::Grounded((*gnd).clone_gnd()),
         }
     }
 }
