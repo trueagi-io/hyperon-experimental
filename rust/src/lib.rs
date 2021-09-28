@@ -60,7 +60,12 @@ pub trait GroundedAtom : Display + mopa::Any {
         Err(format!("{} is not executable", self))
     }
     fn eq(&self, other: &dyn GroundedAtom) -> bool;
-    // TODO: try to emit Box by using references and lifetime parameters
+    // We cannot replace Box by using references and lifetime parameters
+    // because GroundedAtom inherits std::any::Any transitively via mopa::Any.
+    // std::any::Any in turn requires 'static lifetime. Not sure why but it
+    // means that any reference to the instance of the GroundedAtom should be
+    // static. For example see GroundedAtom implementation for &T below. It
+    // doesn't compile if 'static is removed from reference in &T.
     fn clone(&self) -> Box<dyn GroundedAtom>;
 }
 
