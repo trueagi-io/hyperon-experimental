@@ -28,15 +28,37 @@ fn test_expr_variable() {
 }
 
 #[test]
-fn test_expr_self_expression() {
+fn test_expr_expression() {
     assert_eq!(expr!("=", ("fact", n), ("*", n, ("-", n, "1"))), 
                E(&[S("="), E(&[S("fact"), V("n")]),
                E(&[ S("*"), V("n"), E(&[ S("-"), V("n"), S("1") ]) ]) ]));
 }
 
 #[test]
-fn test_grounded_value() {
+fn test_grounded() {
     assert_eq!(Atom::gnd(3), Atom::Grounded(Box::new(3)));
+}
+
+#[test]
+fn test_display_symbol() {
+    assert_eq!(format!("{}", Atom::sym("test")), "test");
+}
+
+#[test]
+fn test_display_variable() {
+    assert_eq!(format!("{}", Atom::var("x")), "$x");
+}
+
+#[test]
+fn test_display_expression() {
+    assert_eq!(format!("{}", expr!("=", ("fact", n), ("*", n, ("-", n, "1")))),
+        "(= (fact $n) (* $n (- $n 1)))");
+    assert_eq!(format!("{}", expr!()), "()");
+}
+
+#[test]
+fn test_display_grounded() {
+    assert_eq!(format!("{}", Atom::gnd(42)), "42");
 }
 
 #[test]

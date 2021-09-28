@@ -16,7 +16,7 @@ use std::fmt::{Display, Debug};
 
 #[macro_export]
 macro_rules! expr {
-    () => {};
+    () => { Atom::expr(&[]) };
     ($x:ident) => { Atom::var(stringify!($x)) };
     ($x:literal) => { Atom::sym($x) };
     (($($x:tt),*)) => { Atom::expr(&[ $( expr!($x) , )* ]) };
@@ -40,6 +40,17 @@ impl ExpressionAtom {
     }
 }
 
+impl Display for ExpressionAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(")
+            .and_then(|_| self.children.iter().take(1).fold(Ok(()),
+                |res, atom| res.and_then(|_| write!(f, "{}", atom))))
+            .and_then(|_| self.children.iter().skip(1).fold(Ok(()),
+                |res, atom| res.and_then(|_| write!(f, " {}", atom))))
+            .and_then(|_| write!(f, ")"))
+    }
+}
+
 // Variable atom
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -50,6 +61,12 @@ pub struct VariableAtom {
 impl VariableAtom {
     fn from(name: &str) -> Self {
         VariableAtom{ name: name.to_string() }
+    }
+}
+
+impl Display for VariableAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "${}", self.name)
     }
 }
 
@@ -141,8 +158,12 @@ impl Clone for Atom {
 
 impl Display for Atom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO: make it more human readable
-        Debug::fmt(self, f)
+        match self {
+            Atom::Symbol{ symbol: sym } => Display::fmt(sym, f),
+            Atom::Expression(expr) => Display::fmt(expr, f),
+            Atom::Variable(var) => Display::fmt(var, f),
+            Atom::Grounded(gnd) => Display::fmt(gnd, f),
+        }
     }
 }
 
