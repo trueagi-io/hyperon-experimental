@@ -73,9 +73,9 @@ impl Debug for dyn GroundedAtom {
 mopafy!(GroundedAtom);
 
 // GroundedAtom implementation for the static references to GroundedAtom
-// to define global static operation instances.
+// to allow defining global static operation instances.
 
-impl<T: 'static + GroundedAtom> GroundedAtom for &'static T {
+impl<T: GroundedAtom> GroundedAtom for &'static T {
     fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
         (*self).execute(ops, data)
     }
