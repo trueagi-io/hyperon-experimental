@@ -290,3 +290,14 @@ impl GroundingSpace {
 
 }
 
+impl PartialEq for GroundingSpace {
+    fn eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+impl Display for GroundingSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GroundingSpace")
+    }
+}
