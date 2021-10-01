@@ -16,7 +16,7 @@ use std::fmt::{Display, Debug};
 
 #[macro_export]
 macro_rules! expr {
-    () => {};
+    () => { Atom::expr(&[]) };
     ($x:ident) => { Atom::var(stringify!($x)) };
     ($x:literal) => { Atom::sym($x) };
     (($($x:tt),*)) => { Atom::expr(&[ $( expr!($x) , )* ]) };
@@ -35,8 +35,88 @@ impl ExpressionAtom {
         ExpressionAtom{ children: children.to_vec() }
     }
 
-    fn is_plain(&self) -> bool {
+    pub fn is_plain(&self) -> bool {
         self.children.iter().all(|atom| ! matches!(atom, Atom::Expression(_)))
+    }
+
+    // Without lifetime annotations compiler make lifetime elision incorrectly.
+    // It deduces iter<'a>(&'a self) -> ExpressionAtomIter<'a>
+    pub fn iter<'a, 'b>(&'a self) -> ExpressionAtomIter<'b> {
+        ExpressionAtomIter::from(self)
+    }
+}
+
+impl Display for ExpressionAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(")
+            .and_then(|_| self.children.iter().take(1).fold(Ok(()),
+                |res, atom| res.and_then(|_| write!(f, "{}", atom))))
+            .and_then(|_| self.children.iter().skip(1).fold(Ok(()),
+                |res, atom| res.and_then(|_| write!(f, " {}", atom))))
+            .and_then(|_| write!(f, ")"))
+    }
+}
+
+struct ExpressionLevel<'a> {
+    expr: &'a ExpressionAtom,
+    idx: Option<usize>,
+    iter: std::iter::Enumerate<std::slice::Iter<'a, Atom>>,
+}
+
+impl<'a> ExpressionLevel<'a> {
+    fn from(expr: *const ExpressionAtom, idx: Option<usize>) -> Self {
+        unsafe {
+            let rexpr = &*expr as &ExpressionAtom;
+            ExpressionLevel{ expr: rexpr, idx, iter: rexpr.children.iter().enumerate() }
+        }
+    }
+}
+
+pub struct ExpressionAtomIter<'a> {
+    expr: *mut ExpressionAtom,
+    levels: Vec<ExpressionLevel<'a>>,
+}
+
+impl Drop for ExpressionAtomIter<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            // free heap memory by wrapping by box and dropping it
+            Box::from_raw(self.expr);
+        }
+    }
+}
+
+impl<'a> ExpressionAtomIter<'a> {
+    fn from(expr: &ExpressionAtom) -> Self {
+        // get memory on heap under our control
+        let ptr = Box::into_raw(Box::new(expr.clone()));
+        Self{ expr: ptr, levels: vec![ExpressionLevel::from(ptr, None)] }
+    }
+}
+
+impl<'a> Iterator for ExpressionAtomIter<'a> {
+    type Item = (&'a ExpressionAtom, &'a ExpressionAtom, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.levels.is_empty() {
+            let level = self.levels.last_mut().unwrap();
+            let next = level.iter.next();
+            if None == next {
+                let expr = level.expr;
+                let idx = level.idx;
+                self.levels.pop();
+                if !self.levels.is_empty() {
+                    let parent = self.levels.last().unwrap().expr;
+                    return Some((expr, parent, idx.unwrap()))
+                }
+            } else {
+                let (idx, next) = next.unwrap();
+                if let Atom::Expression(next) = next {
+                    self.levels.push(ExpressionLevel::from(next, Some(idx)))
+                }
+            }
+        }
+        None
     }
 }
 
@@ -53,15 +133,20 @@ impl VariableAtom {
     }
 }
 
+impl Display for VariableAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "${}", self.name)
+    }
+}
+
 // Grounded atom
 
 pub trait GroundedAtom : Display + mopa::Any {
     fn execute(&self, _ops: &mut Vec<Atom>, _data: &mut Vec<Atom>) -> Result<(), String> {
         Err(format!("{} is not executable", self))
     }
-    fn eq(&self, other: &dyn GroundedAtom) -> bool;
-    // TODO: try to emit Box by using references and lifetime parameters
-    fn clone(&self) -> Box<dyn GroundedAtom>;
+    fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
+    fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
 }
 
 impl Debug for dyn GroundedAtom {
@@ -72,23 +157,18 @@ impl Debug for dyn GroundedAtom {
 
 mopafy!(GroundedAtom);
 
-// GroundedAtom implementation for the static references to GroundedAtom
-// to define global static operation instances.
-
-impl<T: 'static + GroundedAtom> GroundedAtom for &'static T {
-    fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
-        (*self).execute(ops, data)
-    }
-
-    fn eq(&self, other: &dyn GroundedAtom) -> bool {
-        match other.downcast_ref::<&T>() {
-            Some(o) => (*self).eq(o),
+// GroundedAtom implementation for all "regular" types
+// to allow using them as GroundedAtoms
+impl<T: 'static + Clone + PartialEq + Display> GroundedAtom for T {
+    fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
+        match other.downcast_ref::<T>() {
+            Some(o) => self.eq(o),
             None => false,
         }
     }
 
-    fn clone(&self) -> Box<dyn GroundedAtom> {
-        Box::new(*self)
+    fn clone_gnd(&self) -> Box<dyn GroundedAtom> {
+        Box::new(self.clone())
     }
 }
 
@@ -99,6 +179,8 @@ pub enum Atom {
     Symbol{ symbol: String },
     Expression(ExpressionAtom),
     Variable(VariableAtom),
+    // We need using Box here because if we use reference then we cannot keep
+    // values created dynamically on heap.
     Grounded(Box<dyn GroundedAtom>),
 }
 
@@ -118,6 +200,20 @@ impl Atom {
     pub fn gnd<T: GroundedAtom>(gnd: T) -> Atom {
         Self::Grounded(Box::new(gnd))
     }
+
+    pub fn as_expr(&self) -> Option<&ExpressionAtom> {
+        match self {
+            Atom::Expression(ref expr) => Some(expr),
+            _ => None,
+        }
+    }
+
+    pub fn as_expr_mut(&mut self) -> Option<&mut ExpressionAtom> {
+        match self {
+            Atom::Expression(ref mut expr) => Some(expr),
+            _ => None,
+        }
+    }
 }
 
 impl PartialEq for Atom {
@@ -126,7 +222,7 @@ impl PartialEq for Atom {
             (Atom::Symbol{ symbol: sym1 }, Atom::Symbol{ symbol: sym2 }) => sym1 == sym2,
             (Atom::Expression(expr1), Atom::Expression(expr2)) => expr1 == expr2,
             (Atom::Variable(var1), Atom::Variable(var2)) => var1 == var2,
-            (Atom::Grounded(gnd1), Atom::Grounded(gnd2)) => gnd1.eq(&**gnd2),
+            (Atom::Grounded(gnd1), Atom::Grounded(gnd2)) => gnd1.eq_gnd(&**gnd2),
             _ => false,
         }
     }
@@ -138,15 +234,19 @@ impl Clone for Atom {
             Atom::Symbol{ symbol: sym } => Atom::Symbol{ symbol: sym.clone() },
             Atom::Expression(expr) => Atom::Expression(expr.clone()),
             Atom::Variable(var) => Atom::Variable(var.clone()),
-            Atom::Grounded(gnd) => Atom::Grounded((*gnd).clone()),
+            Atom::Grounded(gnd) => Atom::Grounded((*gnd).clone_gnd()),
         }
     }
 }
 
 impl Display for Atom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        // TODO: make it more human readable
-        Debug::fmt(self, f)
+        match self {
+            Atom::Symbol{ symbol: sym } => Display::fmt(sym, f),
+            Atom::Expression(expr) => Display::fmt(expr, f),
+            Atom::Variable(var) => Display::fmt(var, f),
+            Atom::Grounded(gnd) => Display::fmt(gnd, f),
+        }
     }
 }
 

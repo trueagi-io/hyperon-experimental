@@ -28,10 +28,37 @@ fn test_expr_variable() {
 }
 
 #[test]
-fn test_expr_self_expression() {
+fn test_expr_expression() {
     assert_eq!(expr!("=", ("fact", n), ("*", n, ("-", n, "1"))), 
                E(&[S("="), E(&[S("fact"), V("n")]),
                E(&[ S("*"), V("n"), E(&[ S("-"), V("n"), S("1") ]) ]) ]));
+}
+
+#[test]
+fn test_grounded() {
+    assert_eq!(Atom::gnd(3), Atom::Grounded(Box::new(3)));
+}
+
+#[test]
+fn test_display_symbol() {
+    assert_eq!(format!("{}", Atom::sym("test")), "test");
+}
+
+#[test]
+fn test_display_variable() {
+    assert_eq!(format!("{}", Atom::var("x")), "$x");
+}
+
+#[test]
+fn test_display_expression() {
+    assert_eq!(format!("{}", expr!("=", ("fact", n), ("*", n, ("-", n, "1")))),
+        "(= (fact $n) (* $n (- $n 1)))");
+    assert_eq!(format!("{}", expr!()), "()");
+}
+
+#[test]
+fn test_display_grounded() {
+    assert_eq!(format!("{}", Atom::gnd(42)), "42");
 }
 
 #[test]
@@ -82,4 +109,23 @@ fn test_match_different_value_for_variable_in_data() {
     assert_eq!(
         matcher::match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
         None);
+}
+
+#[test]
+fn test_subexpression_iterator() {
+    // (+ (* 3 (+ 1 1)) (- 4 3))
+    let plus11 = ExpressionAtom::from(&[S("+"), S("1"), V("n")]);
+    let mul3plus11 = ExpressionAtom::from(&[S("*"), S("3"), Atom::Expression(plus11.clone())]);
+    let minus43 = ExpressionAtom::from(&[S("-"), S("4"), S("3")]);
+    let expr = ExpressionAtom::from(&[S("+"), Atom::Expression(mul3plus11.clone()), Atom::Expression(minus43.clone())]);
+
+    let iter = ExpressionAtomIter::from(&expr);
+
+    assert_eq!(iter
+        .map(|(a, p, i)| (a.clone(), p.clone(), i))
+        .collect::<Vec<_>>(), vec![
+            (plus11, mul3plus11.clone(), 2),
+            (mul3plus11, expr.clone(), 1),
+            (minus43, expr, 2),
+        ]);
 }
