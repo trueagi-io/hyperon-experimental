@@ -28,6 +28,7 @@ mod tests {
     fn test_sum_ints() {
         let space = GroundingSpace::new();
         let mut ops = vec![Atom::gnd(INTERPRET)];
+        // (+ 3 5)
         let mut data = vec![Atom::expr(&[Atom::gnd(SUM), Atom::gnd(3), Atom::gnd(5)])];
 
         assert_eq!(space.interpret(&mut ops, &mut data), Ok(()));
@@ -35,5 +36,25 @@ mod tests {
 
         assert_eq!(ops, vec![]);
         assert_eq!(data, vec![Atom::gnd(8)]);
+    }
+
+    #[test]
+    fn test_sum_ints_recursively() {
+        let space = GroundingSpace::new();
+        let mut ops = vec![Atom::gnd(INTERPRET)];
+        // (+ 4 (+ 3 5))
+        let mut data = vec![Atom::expr(&[Atom::gnd(SUM), Atom::gnd(4),
+            Atom::expr(&[Atom::gnd(SUM), Atom::gnd(3), Atom::gnd(5)])])];
+
+        assert_eq!(space.interpret(&mut ops, &mut data), Ok(()));
+        assert_eq!(space.interpret(&mut ops, &mut data), Ok(()));
+        assert_eq!(space.interpret(&mut ops, &mut data), Ok(()));
+        assert_eq!(space.interpret(&mut ops, &mut data), Ok(()));
+        assert_eq!(space.interpret(&mut ops, &mut data), Ok(()));
+        assert_eq!(space.interpret(&mut ops, &mut data), Ok(()));
+        assert_eq!(space.interpret(&mut ops, &mut data), Ok(()));
+
+        assert_eq!(ops, vec![]);
+        assert_eq!(data, vec![Atom::gnd(12)]);
     }
 }

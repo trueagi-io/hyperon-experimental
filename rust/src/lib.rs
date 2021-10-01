@@ -35,7 +35,7 @@ impl ExpressionAtom {
         ExpressionAtom{ children: children.to_vec() }
     }
 
-    fn is_plain(&self) -> bool {
+    pub fn is_plain(&self) -> bool {
         self.children.iter().all(|atom| ! matches!(atom, Atom::Expression(_)))
     }
 }
@@ -110,8 +110,8 @@ pub enum Atom {
     Symbol{ symbol: String },
     Expression(ExpressionAtom),
     Variable(VariableAtom),
-    // We need using Box here because we need also keep values created
-    // dynamically in heap.
+    // We need using Box here because if we use reference then we cannot keep
+    // values created dynamically on heap.
     Grounded(Box<dyn GroundedAtom>),
 }
 
@@ -130,6 +130,20 @@ impl Atom {
 
     pub fn gnd<T: GroundedAtom>(gnd: T) -> Atom {
         Self::Grounded(Box::new(gnd))
+    }
+
+    pub fn as_expr(&self) -> Option<&ExpressionAtom> {
+        match self {
+            Atom::Expression(ref expr) => Some(expr),
+            _ => None,
+        }
+    }
+
+    pub fn as_expr_mut(&mut self) -> Option<&mut ExpressionAtom> {
+        match self {
+            Atom::Expression(ref mut expr) => Some(expr),
+            _ => None,
+        }
     }
 }
 
