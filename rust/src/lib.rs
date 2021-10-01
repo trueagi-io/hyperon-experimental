@@ -38,6 +38,12 @@ impl ExpressionAtom {
     pub fn is_plain(&self) -> bool {
         self.children.iter().all(|atom| ! matches!(atom, Atom::Expression(_)))
     }
+
+    // Without lifetime annotations compiler make lifetime elision incorrectly.
+    // It deduces iter<'a>(&'a self) -> ExpressionAtomIter<'a>
+    pub fn iter<'a, 'b>(&'a self) -> ExpressionAtomIter<'b> {
+        ExpressionAtomIter::from(self)
+    }
 }
 
 impl Display for ExpressionAtom {
@@ -48,6 +54,69 @@ impl Display for ExpressionAtom {
             .and_then(|_| self.children.iter().skip(1).fold(Ok(()),
                 |res, atom| res.and_then(|_| write!(f, " {}", atom))))
             .and_then(|_| write!(f, ")"))
+    }
+}
+
+struct ExpressionLevel<'a> {
+    expr: &'a ExpressionAtom,
+    idx: Option<usize>,
+    iter: std::iter::Enumerate<std::slice::Iter<'a, Atom>>,
+}
+
+impl<'a> ExpressionLevel<'a> {
+    fn from(expr: *const ExpressionAtom, idx: Option<usize>) -> Self {
+        unsafe {
+            let rexpr = &*expr as &ExpressionAtom;
+            ExpressionLevel{ expr: rexpr, idx, iter: rexpr.children.iter().enumerate() }
+        }
+    }
+}
+
+pub struct ExpressionAtomIter<'a> {
+    expr: *mut ExpressionAtom,
+    levels: Vec<ExpressionLevel<'a>>,
+}
+
+impl Drop for ExpressionAtomIter<'_> {
+    fn drop(&mut self) {
+        unsafe {
+            // free heap memory by wrapping by box and dropping it
+            Box::from_raw(self.expr);
+        }
+    }
+}
+
+impl<'a> ExpressionAtomIter<'a> {
+    fn from(expr: &ExpressionAtom) -> Self {
+        // get memory on heap under our control
+        let ptr = Box::into_raw(Box::new(expr.clone()));
+        Self{ expr: ptr, levels: vec![ExpressionLevel::from(ptr, None)] }
+    }
+}
+
+impl<'a> Iterator for ExpressionAtomIter<'a> {
+    type Item = (&'a ExpressionAtom, &'a ExpressionAtom, usize);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.levels.is_empty() {
+            let level = self.levels.last_mut().unwrap();
+            let next = level.iter.next();
+            if None == next {
+                let expr = level.expr;
+                let idx = level.idx;
+                self.levels.pop();
+                if !self.levels.is_empty() {
+                    let parent = self.levels.last().unwrap().expr;
+                    return Some((expr, parent, idx.unwrap()))
+                }
+            } else {
+                let (idx, next) = next.unwrap();
+                if let Atom::Expression(next) = next {
+                    self.levels.push(ExpressionLevel::from(next, Some(idx)))
+                }
+            }
+        }
+        None
     }
 }
 

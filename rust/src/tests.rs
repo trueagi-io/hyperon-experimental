@@ -110,3 +110,22 @@ fn test_match_different_value_for_variable_in_data() {
         matcher::match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
         None);
 }
+
+#[test]
+fn test_subexpression_iterator() {
+    // (+ (* 3 (+ 1 1)) (- 4 3))
+    let plus11 = ExpressionAtom::from(&[S("+"), S("1"), V("n")]);
+    let mul3plus11 = ExpressionAtom::from(&[S("*"), S("3"), Atom::Expression(plus11.clone())]);
+    let minus43 = ExpressionAtom::from(&[S("-"), S("4"), S("3")]);
+    let expr = ExpressionAtom::from(&[S("+"), Atom::Expression(mul3plus11.clone()), Atom::Expression(minus43.clone())]);
+
+    let iter = ExpressionAtomIter::from(&expr);
+
+    assert_eq!(iter
+        .map(|(a, p, i)| (a.clone(), p.clone(), i))
+        .collect::<Vec<_>>(), vec![
+            (plus11, mul3plus11.clone(), 2),
+            (mul3plus11, expr.clone(), 1),
+            (minus43, expr, 2),
+        ]);
+}
