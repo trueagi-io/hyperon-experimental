@@ -1,15 +1,21 @@
 use crate::*;
 use crate::common::*;
+use crate::matcher::*;
+
 use std::rc::Rc;
 use std::iter::Peekable;
 
-pub static SWAP_DATA: &Operation = &Operation{ name: "swap_data", execute: swap_data };
+pub static SWAP_DATA: &Operation = &Operation{ name: "swap_data", execute: |ops, data| swap(ops, data, KindOfStack::Data) };
+pub static POP_DATA: &Operation = &Operation{ name: "pop_data", execute: |ops, data| pop(ops, data, KindOfStack::Data) };
+pub static POP_OPS: &Operation = &Operation{ name: "pop_ops", execute: |ops, data| pop(ops, data, KindOfStack::Ops) };
+
 pub static INTERPRET: &Operation = &Operation{ name: "interpret", execute: |ops, data| interpret_op(ops, data, false) };
 pub static EXECUTE: &Operation = &Operation{ name: "execute", execute: execute };
 pub static REDUCT: &Operation = &Operation{ name: "reduct", execute: reduct };
 pub static REDUCT_NEXT: &Operation = &Operation{ name: "reduct_next", execute: reduct_next };
 pub static INTERPRET_REDUCTED: &Operation = &Operation{ name: "interpret_reducted", execute: |ops, data| interpret_op(ops, data, true) };
 pub static MATCH: &Operation = &Operation{ name: "match", execute: match_op };
+pub static MATCH_NEXT: &Operation = &Operation{ name: "match_next", execute: match_next };
 
 // FIXME: There should be the way to pass reference to the GroundingSpace
 // instead of moving it into. Trying to pass reference and convert it to
@@ -50,20 +56,52 @@ fn is_grounded(expr: &ExpressionAtom) -> bool {
     matches!(expr.children.get(0), Some(Atom::Grounded(_)))
 }
 
-fn swap_data(_ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
-    let args = (data.pop(), data.pop()); 
+enum KindOfStack {
+    Ops,
+    Data,
+}
+
+fn choose_stack<'a>(ops: &'a mut Vec<Atom>, data: &'a mut Vec<Atom>, stack: KindOfStack) -> &'a mut Vec<Atom> {
+    match stack {
+        KindOfStack::Ops => ops,
+        KindOfStack::Data => data,
+    }
+}
+
+fn swap(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, stack: KindOfStack) -> Result<(), String> {
+    let stack = choose_stack(ops, data, stack);
+    let args = (stack.pop(), stack.pop()); 
+    println!("swap{:?}", args);
     match args {
         (Some(a), Some(b)) => {
-            data.push(a);
-            data.push(b);
+            stack.push(a);
+            stack.push(b);
             Ok(())
         },
         _ => Err(format!("Expected two arguments, found: {:?}", args)),
     }
 }
 
+fn pop(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, stack: KindOfStack) -> Result<(), String> {
+    let arg = data.pop();
+    match arg {
+        Some(Atom::Grounded(num)) => {
+            match num.downcast_ref::<usize>() {
+                Some(num) => {
+                    let stack = choose_stack(ops, data, stack);
+                    stack.truncate(stack.len() - num);
+                    Ok(())
+                },
+                _ => Err(format!("usize argument expected, found: {}", num)),
+            }
+        },
+        _ => Err(format!("Atom::Grounded argument expected, found: {:?}", arg)),
+    }
+}
+
 fn interpret_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, reducted: bool) -> Result<(), String> {
     let args = (data.pop(), data.pop()); 
+    println!("interpret_op{:?}", args);
     match args {
         (Some(space), Some(atom)) => match atom {
             Atom::Expression(ref expr) => {
@@ -83,7 +121,10 @@ fn interpret_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, reducted: bool) -> Re
                 }
                 Ok(())
             },
-            _ => Err("Interpret is not implemented for atoms other than Atom::Expression".to_string()),
+            _ => {
+                data.push(atom);
+                Ok(())
+            }
         },
         _ => Err(format!("Expected GroundingSpace and Atom as arguments, found: {:?}", args)),
     }
@@ -92,10 +133,11 @@ fn interpret_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, reducted: bool) -> Re
 
 fn execute(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let arg = data.pop(); 
+    println!("execute({:?})", arg);
     match arg {
         Some(Atom::Expression(expr)) => match &expr.children[0] {
             Atom::Grounded(op) => {
-                &expr.children.iter().skip(1).for_each(|atom| data.push(atom.clone()));
+                &expr.children.iter().skip(1).rev().for_each(|atom| data.push(atom.clone()));
                 op.execute(ops, data)
             },
             _ => Err(format!("Trying to execute non grounded atom: {:?}", expr)),
@@ -108,6 +150,7 @@ fn execute(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
 fn reduct(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     // TODO: think about leaving data on stack when parameters are wrong let arg = data.pop(); 
     let args = (data.pop(), data.pop());
+    println!("reduct{:?}", args);
     match args {
         (Some(space), Some(expr_atom)) => {
             if let Atom::Expression(ref expr) = expr_atom {
@@ -141,6 +184,7 @@ fn reduct(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
 
 fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let args = (data.pop(), data.pop(), data.pop());
+    println!("reduct_next{:?}", args);
     match args {
         (Some(space), Some(reducted), Some(iter_atom)) => {
             if let Atom::Grounded(ref iter) = iter_atom {
@@ -178,12 +222,79 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
     }
 }
 
-fn match_op(_ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
+fn match_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let args = (data.pop(), data.pop());
+    println!("match_op{:?}", args);
     match args {
-        (Some(Atom::Grounded(space)), Some(Atom::Expression(expr))) => {
-            Ok(())
+        (Some(Atom::Grounded(space)), Some(expr)) => {
+            if let Some(space) = space.downcast_ref::<Rc<GroundingSpace>>() {
+                let varX = VariableAtom::from("X");
+                let atomX = Atom::Variable(varX.clone());
+                let bindings = space.query(&Atom::expr(&[Atom::sym("="), expr, atomX]));
+                let mut num: usize = 0;
+                for binding in &bindings {
+                    let res = binding.get(&varX).unwrap(); 
+                    let res = apply_bindings_to_atom(res, binding);
+                    println!("match_op: res: {}", res);
+                    data.push(Atom::gnd(num));
+                    data.push(Atom::gnd(Rc::clone(space)));
+                    ops.push(Atom::gnd(MATCH_NEXT));
+
+                    ops.push(Atom::gnd(SWAP_DATA));
+
+                    data.push(res.clone());
+                    data.push(Atom::gnd(Rc::clone(space)));
+                    ops.push(Atom::gnd(INTERPRET));
+                    num = num + 1;
+                }
+                Ok(())
+            } else {
+                Err(format!("Rc<GroundingSpace> is expected as a first arguments, found: {}", space))
+            }
         },
         _ => Err(format!("Atom::Grounded and Atom::Expression are expected as arguments, found: {:?}", args)),
+    }
+}
+
+fn match_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
+    let args = (data.pop(), data.pop(), data.pop());
+    println!("match_next{:?}", args);
+    match args {
+        (Some(space), Some(atom), Some(num)) => {
+            match (&num, &space) {
+                (Atom::Grounded(num), Atom::Grounded(space)) if num.is::<usize>() && space.is::<Rc<GroundingSpace>>() => {
+                    let num = num.downcast_ref::<usize>().unwrap();
+                    let space = space.downcast_ref::<Rc<GroundingSpace>>().unwrap();
+                    match atom {
+                        // TODO: find out whether we can change Atom implementation
+                        // to match expressions using Rust matchers.
+                        Atom::Expression(ExpressionAtom{ children: ref children }) => {
+                            if let [Atom::Symbol{symbol}, message] = &children[..] {
+                                if symbol == "error" {
+                                    // Return is used here because I would like
+                                    // to have one branch which truncates stacks
+                                    // instead of two (see code below).
+                                    return Ok(())
+                                }
+                            }
+                            println!("match_next: cleanup other alternatives");
+                            ops.truncate(ops.len() - num * 3);
+                            data.truncate(data.len() - num * 4);
+                            data.push(atom.clone());
+                            Ok(())
+                        },
+                        _ => {
+                            println!("match_next: cleanup other alternatives");
+                            ops.truncate(ops.len() - num * 3);
+                            data.truncate(data.len() - num * 4);
+                            data.push(atom.clone());
+                            Ok(())
+                        },
+                    }
+                },
+                _ => Err(format!("GroundingSpace and number of alternatives are expected as first and second argument, found: {}, {}", space, num))
+            }
+        },
+        _ => Err(format!("Expected three arguments, found: {:?}", args)),
     }
 }

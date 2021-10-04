@@ -128,7 +128,7 @@ pub struct VariableAtom {
 }
 
 impl VariableAtom {
-    fn from(name: &str) -> Self {
+    pub fn from(name: &str) -> Self {
         VariableAtom{ name: name.to_string() }
     }
 }
@@ -272,7 +272,10 @@ impl GroundingSpace {
         let mut result = Vec::new();
         for next in &self.content {
             match matcher::match_atoms(next, pattern) {
-                Some((_, b_bindings)) => result.push(b_bindings),
+                Some((a_bindings, b_bindings)) => {
+                    let bindings = matcher::apply_bindings_to_bindings(&a_bindings, &b_bindings);
+                    result.push(bindings);
+                },
                 None => continue,
             }
         }

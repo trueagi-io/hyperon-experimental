@@ -2,6 +2,8 @@ use super::*;
 
 fn check_and_insert_binding(bindings: &mut Bindings, var: &VariableAtom,
         value: &Atom) -> bool{
+    // TODO: replace by logger
+    println!("check_and_insert_binding({:?}, {}, {})", bindings, var, value);
     match bindings.get(var) {
         Some(prev) => prev == value,
         None => {
@@ -15,6 +17,7 @@ fn match_atoms_recursively(a: &Atom, b: &Atom,
         a_bindings: &mut Bindings, b_bindings: &mut Bindings) -> bool {
     match (a, b) {
         (Atom::Symbol{ symbol: a }, Atom::Symbol{ symbol: b }) => a == b,
+        (Atom::Grounded(a), Atom::Grounded(b)) => a.eq_gnd(&**b),
         (a, Atom::Variable(v)) => check_and_insert_binding(b_bindings, v, a),
         (Atom::Variable(v), b) => check_and_insert_binding(a_bindings, v, b),
         (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b })) => {
@@ -40,4 +43,29 @@ pub fn match_atoms(a: &Atom, b: &Atom) -> Option<(Bindings, Bindings)> {
     }
 }
 
+pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
+    match atom {
+        Atom::Symbol{ symbol: _ } => atom.clone(),
+        Atom::Grounded(_) => atom.clone(),
+        Atom::Variable(v) => {
+            if let Some(binding) = bindings.get(v) {
+                binding.clone()
+            } else {
+                Atom::Variable(v.clone())
+            }
+        },
+        Atom::Expression(ExpressionAtom{ children: children }) => {
+            let children = children.iter().map(|a| apply_bindings_to_atom(a, bindings)).collect::<Vec<Atom>>();
+            Atom::expr(&children[..])
+        },
+    }
+}
 
+pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Bindings {
+    let mut res = Bindings::new();
+    for (key, value) in to {
+        let applied = apply_bindings_to_atom(value, from);
+        res.insert(key.clone(), applied);
+    }
+    res
+}

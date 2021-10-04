@@ -1,9 +1,11 @@
 use crate::*;
 use crate::common::*;
 
-pub static SUM: &Operation = &Operation{ name: "+", execute: sum };
+pub static SUM: &Operation = &Operation{ name: "+", execute: |ops, data| bin_op(ops, data, |a, b| a + b) };
+pub static SUB: &Operation = &Operation{ name: "-", execute: |ops, data| bin_op(ops, data, |a, b| a - b) };
+pub static MUL: &Operation = &Operation{ name: "*", execute: |ops, data| bin_op(ops, data, |a, b| a * b) };
 
-fn sum(_ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
+fn bin_op(_ops: &mut Vec<Atom>, data: &mut Vec<Atom>, op: fn(i32, i32) -> i32) -> Result<(), String> {
     // TODO: getting arguments from stack and checking their type can be
     // done in separate helper function or macros.
     let arg1 = data.pop().expect("Sum operation called without arguments"); 
@@ -12,10 +14,10 @@ fn sum(_ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
         (Atom::Grounded(arg1), Atom::Grounded(arg2)) => {
             let arg1 = (*arg1).downcast_ref::<i32>().expect(&format!("First argument is not Int: {}", arg1));
             let arg2 = (*arg2).downcast_ref::<i32>().expect(&format!("Second argument is not Int: {}", arg2));
-            data.push(Atom::gnd(arg1 + arg2));
+            data.push(Atom::gnd(op(*arg1, *arg2)));
             Ok(())
         },
-        _ => Err(format!("One of the arguments is not grounded: {}, {}", arg1, arg2)),
+        _ => Err(format!("One of the arguments is not grounded: ({}, {})", arg1, arg2)),
     }
 }
 
@@ -24,22 +26,52 @@ mod tests {
     use super::*;
     use crate::interpreter::*;
 
+    // Aliases to have a shorter notation
+    fn S(name: &str) -> Atom { Atom::sym(name) }
+    fn E(children: &[Atom]) -> Atom { Atom::expr(children) }
+    fn V(name: &str) -> Atom { Atom::var(name) }
+    fn G<T: GroundedAtom>(value: T) -> Atom { Atom::gnd(value) }
+
     #[test]
     fn test_sum_ints() {
         let space = GroundingSpace::new();
         // (+ 3 5)
-        let expr = Atom::expr(&[Atom::gnd(SUM), Atom::gnd(3), Atom::gnd(5)]);
+        let expr = E(&[G(SUM), G(3), G(5)]);
 
-        assert_eq!(interpret(space, &expr), Ok(Atom::gnd(8)));
+        assert_eq!(interpret(space, &expr), Ok(G(8)));
     }
 
     #[test]
     fn test_sum_ints_recursively() {
         let space = GroundingSpace::new();
         // (+ 4 (+ 3 5))
-        let expr = Atom::expr(&[Atom::gnd(SUM), Atom::gnd(4),
-                Atom::expr(&[Atom::gnd(SUM), Atom::gnd(3), Atom::gnd(5)])]);
+        let expr = E(&[G(SUM), G(4), E(&[G(SUM), G(3), G(5)])]);
 
-        assert_eq!(interpret(space, &expr), Ok(Atom::gnd(12)));
+        assert_eq!(interpret(space, &expr), Ok(G(12)));
+    }
+
+    //#[test]
+    fn test_match_factorial() {
+        let mut space = GroundingSpace::new();
+        // (= (fac 0) 1)
+        space.add(E(&[ S("="), E(&[ S("fac"), G(0) ]), G(1) ]));
+        // (= (fac n) (* n (fac (- n 1))))
+        space.add(E(&[ S("="), E(&[ S("fac"), V("n") ]),
+            E(&[ G(MUL), V("n"), E(&[ S("fac"), E(&[ G(SUB), V("n"), G(1) ]) ]) ]) ]));
+
+        let expr = E(&[ S("fac"), G(3) ]);
+        assert_eq!(space.query(&E(&[ S("="), expr, V("X") ])), vec![]);
+    }
+
+    #[test]
+    fn test_factorial() {
+        let mut space = GroundingSpace::new();
+        // (= (fac n) (* n (fac (- n 1))))
+        space.add(E(&[ S("="), E(&[ S("fac"), V("n") ]),
+            E(&[ G(MUL), V("n"), E(&[ S("fac"), E(&[ G(SUB), V("n"), G(1) ]) ]) ]) ]));
+        // (= (fac 0) 1)
+        space.add(E(&[ S("="), E(&[ S("fac"), G(0) ]), G(1) ]));
+        let expr = E(&[ S("fac"), G(3) ]);
+        assert_eq!(interpret(space, &expr), Ok(G(6)));
     }
 }
