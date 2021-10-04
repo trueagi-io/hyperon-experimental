@@ -23,6 +23,8 @@ fn bin_op(_ops: &mut Vec<Atom>, data: &mut Vec<Atom>, op: fn(i32, i32) -> i32) -
 
 #[cfg(test)]
 mod tests {
+    #![allow(non_snake_case)]
+
     use super::*;
     use crate::interpreter::*;
 
@@ -50,7 +52,7 @@ mod tests {
         assert_eq!(interpret(space, &expr), Ok(G(12)));
     }
 
-    //#[test]
+    #[test]
     fn test_match_factorial() {
         let mut space = GroundingSpace::new();
         // (= (fac 0) 1)
@@ -60,7 +62,8 @@ mod tests {
             E(&[ G(MUL), V("n"), E(&[ S("fac"), E(&[ G(SUB), V("n"), G(1) ]) ]) ]) ]));
 
         let expr = E(&[ S("fac"), G(3) ]);
-        assert_eq!(space.query(&E(&[ S("="), expr, V("X") ])), vec![]);
+        let expected: Bindings = [(VariableAtom::from("X"), E(&[ G(MUL), G(3), E(&[ S("fac"), E(&[ G(SUB), G(3), G(1) ]) ]) ]) )].iter().cloned().collect();
+        assert_eq!(space.query(&E(&[ S("="), expr, V("X") ])), vec![expected]);
     }
 
     #[test]
