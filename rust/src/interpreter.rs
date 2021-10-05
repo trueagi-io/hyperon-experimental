@@ -182,19 +182,21 @@ fn reduct(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     }
 }
 
+type ExpressionAtomIterGnd<'a> = Rc<GndRefCell<Peekable<ExpressionAtomIter<'a>>>>;
+
 fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let args = (data.pop(), data.pop(), data.pop());
     println!("reduct_next{:?}", args);
     match args {
         (Some(space), Some(reducted), Some(iter_atom)) => {
-            if let Atom::Grounded(ref iter) = iter_atom {
-                let iter = iter.downcast_ref::<Rc<GndRefCell<Peekable<ExpressionAtomIter<'_>>>>>();
-                if let Some(iter) = iter {
+            match iter_atom {
+                Atom::Grounded(ref iter) if iter.is::<ExpressionAtomIterGnd>() => {
+                let iter = iter.downcast_ref::<ExpressionAtomIterGnd>().unwrap();
                     let (_, parent, idx) = iter.raw().borrow_mut().next().unwrap();
                     let mut parent = parent.clone();
                     // FIXME: add method to access children indirectly or move iterator into ExpressionAtom
                     parent.children[idx] = reducted;
-                    if let Some((sub, ..)) = iter.raw().borrow_mut().peek() {
+                    if None != iter.raw().borrow_mut().peek() {
                         // TODO: think about implementing Copy for the GroundedAtom
                         data.push(iter_atom.clone());
                         data.push(space.clone());
@@ -202,7 +204,7 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
 
                         ops.push(Atom::gnd(SWAP_DATA));
 
-                        data.push(Atom::Expression((*sub).clone()));
+                        data.push(Atom::Expression(parent.clone()));
                         data.push(space);
                         ops.push(Atom::gnd(INTERPRET));
                     } else {
@@ -211,14 +213,11 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
                         ops.push(Atom::gnd(INTERPRET_REDUCTED));
                     }
                     Ok(())
-                } else {
-                    Err(format!("Reference to expression being reducted is expected as second argument, found: {}", iter_atom))
-                }
-            } else {
-                Err(format!("Grounded atom is expected as a second argument, found: {}", iter_atom))
+                },
+                _ => Err(format!("Reference to expression being reducted is expected as a third argument, found: {}", iter_atom))
             }
         },
-        _ => Err(format!("Two arguments expected, found: {:?}", args)),
+        _ => Err(format!("Three arguments expected, found: {:?}", args)),
     }
 }
 
