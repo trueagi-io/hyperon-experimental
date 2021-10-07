@@ -17,17 +17,11 @@ pub static INTERPRET_REDUCTED: &Operation = &Operation{ name: "interpret_reducte
 pub static MATCH: &Operation = &Operation{ name: "match", execute: match_op };
 pub static MATCH_NEXT: &Operation = &Operation{ name: "match_next", execute: match_next };
 
-// FIXME: There should be the way to pass reference to the GroundingSpace
-// instead of moving it into. Trying to pass reference and convert it to
-// to the atom leads to compiler complaining the link doesn't have 'static
-// lifetime.
-pub fn interpret(space: GroundingSpace, expr: &Atom) -> Result<Atom, String> {
+pub fn interpret(space: Rc<GroundingSpace>, expr: &Atom) -> Result<Atom, String> {
     match expr {
         Atom::Expression(_) => {
             let mut ops: Vec<Atom> = Vec::new();
             let mut data: Vec<Atom> = Vec::new();
-
-            let space = Rc::new(space);
 
             data.push(expr.clone());
             data.push(Atom::gnd(Rc::clone(&space)));
