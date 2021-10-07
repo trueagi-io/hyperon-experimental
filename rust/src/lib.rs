@@ -39,10 +39,18 @@ impl ExpressionAtom {
         self.children.iter().all(|atom| ! matches!(atom, Atom::Expression(_)))
     }
 
-    // Without lifetime annotations compiler make lifetime elision incorrectly.
+    // Without lifetime annotations compiler makes lifetime elision incorrectly.
     // It deduces iter<'a>(&'a self) -> ExpressionAtomIter<'a>
-    pub fn iter<'a, 'b>(&'a self) -> ExpressionAtomIter<'b> {
+    pub fn sub_expr_iter<'a, 'b>(&'a self) -> ExpressionAtomIter<'b> {
         ExpressionAtomIter::from(self)
+    }
+
+    pub fn children(&self) -> &Vec<Atom> {
+        &self.children
+    }
+
+    pub fn children_mut(&mut self) -> &mut Vec<Atom> {
+        &mut self.children
     }
 }
 

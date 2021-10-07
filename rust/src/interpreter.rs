@@ -47,7 +47,7 @@ pub fn interpret(space: Rc<GroundingSpace>, expr: &Atom) -> Result<Atom, String>
 }
 
 fn is_grounded(expr: &ExpressionAtom) -> bool {
-    matches!(expr.children.get(0), Some(Atom::Grounded(_)))
+    matches!(expr.children().get(0), Some(Atom::Grounded(_)))
 }
 
 enum KindOfStack {
@@ -129,9 +129,9 @@ fn execute(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let arg = data.pop(); 
     println!("execute({:?})", arg);
     match arg {
-        Some(Atom::Expression(expr)) => match &expr.children[0] {
-            Atom::Grounded(op) => {
-                &expr.children.iter().skip(1).rev().for_each(|atom| data.push(atom.clone()));
+        Some(Atom::Expression(expr)) => match &expr.children().get(0) {
+            Some(Atom::Grounded(op)) => {
+                expr.children().iter().skip(1).rev().for_each(|atom| data.push(atom.clone()));
                 op.execute(ops, data)
             },
             _ => Err(format!("Trying to execute non grounded atom: {:?}", expr)),
@@ -154,7 +154,7 @@ fn reduct(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
                     ops.push(Atom::gnd(INTERPRET));
                     Ok(())
                 } else {
-                    let iter = Rc::new(GndRefCell::new(expr.iter().peekable()));
+                    let iter = Rc::new(GndRefCell::new(expr.sub_expr_iter().peekable()));
                     let (sub, ..) = iter.raw().borrow_mut().peek().unwrap().clone();
 
                     data.push(Atom::gnd(iter));
@@ -188,8 +188,7 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
                 let iter = iter.downcast_ref::<ExpressionAtomIterGnd>().unwrap();
                     let (_, parent, idx) = iter.raw().borrow_mut().next().unwrap();
                     let mut parent = parent.clone();
-                    // FIXME: add method to access children indirectly or move iterator into ExpressionAtom
-                    parent.children[idx] = reducted;
+                    *(parent.children_mut().get_mut(idx).unwrap()) = reducted;
                     if None != iter.raw().borrow_mut().peek() {
                         // TODO: think about implementing Copy for the GroundedAtom
                         data.push(iter_atom.clone());
@@ -198,11 +197,11 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
 
                         ops.push(Atom::gnd(SWAP_DATA));
 
-                        data.push(Atom::Expression(parent.clone()));
+                        data.push(Atom::Expression(parent));
                         data.push(space);
                         ops.push(Atom::gnd(INTERPRET));
                     } else {
-                        data.push(Atom::Expression(parent.clone()));
+                        data.push(Atom::Expression(parent));
                         data.push(space);
                         ops.push(Atom::gnd(INTERPRET_REDUCTED));
                     }
@@ -257,11 +256,11 @@ fn match_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
                     match atom {
                         // TODO: find out whether we can change Atom implementation
                         // to match expressions using Rust matchers.
-                        Atom::Expression(ExpressionAtom{ children: ref expr }) => {
+                        Atom::Expression(ref expr) => {
                             // TODO: not used yet, the idea is to return error
                             // expression from INTERPRET to move to the next 
                             // alternative
-                            if let [Atom::Symbol{symbol}, _] = &expr[..] {
+                            if let Some(Atom::Symbol{symbol}) = expr.children().get(0) {
                                 if symbol == "error" {
                                     // Return is used here because I would like
                                     // to have one branch which truncates stacks
