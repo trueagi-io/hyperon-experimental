@@ -8,8 +8,9 @@ edition = "2018"
 
 [dependencies]
 mopa = "0.2.2"
+lazy_static = "1.4.0"
 
 [lib]
 name = "hyperon"
 path = "src/lib.rs"
-crate-type = ["dylib", "rlib"]
+crate-type = ["lib", "cdylib", "staticlib"]
