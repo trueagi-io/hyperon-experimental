@@ -49,15 +49,14 @@ pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> *mut atom_t {
 #[no_mangle]
 pub extern "C" fn free_atom(atom: *mut atom_t) {
     unsafe {
-        Box::from_raw(atom);
+        drop(Box::from_raw(atom));
     }
 }
 
-// TODO: change API to pass char buffer and buffer's size in C style
 #[no_mangle]
-pub extern "C" fn atom_to_str(atom: *const atom_t) -> *const c_char {
+pub extern "C" fn atom_to_str(atom: *const atom_t, buffer: *mut c_char, max_size: usize) -> usize {
     unsafe {
-        string_to_cstr(format!("{}", *atom))
+        string_to_cstr(format!("{}", *atom), buffer, max_size)
     }
 }
 
@@ -101,10 +100,10 @@ impl CGroundedAtom {
             Err(format!("{} is not executable", self))
         } else {
             let res = execute(self.as_ptr(), &mut vec_atom_t(ops), &mut vec_atom_t(data));
-            if res as usize == 0 {
-                Ok(())
-            } else {
+            if res.is_null() {
                 Err(cstr_to_string(res).to_owned())
+            } else {
+                Ok(())
             }
         }
     }
@@ -162,23 +161,23 @@ impl Drop for CGroundedAtom {
 
 // String conversion utilities
 
-const BUFFER_SIZE: usize = 4096;
-static mut BUFFER: [u8; BUFFER_SIZE] = [0; BUFFER_SIZE];
-
-fn string_to_cstr(s: String) -> *const c_char {
+fn string_to_cstr(s: String, buffer: *mut c_char, max_size: usize) -> usize {
     unsafe {
         let bytes = s.as_bytes();
-        let len = std::cmp::min(bytes.len(), BUFFER_SIZE - 4);
-        std::ptr::copy_nonoverlapping(bytes.as_ptr(), BUFFER.as_mut_ptr(), len);
-        if bytes.len() > BUFFER_SIZE - 4 {
-            BUFFER[len] = '.' as u8;
-            BUFFER[len + 1] = '.' as u8;
-            BUFFER[len + 2] = '.' as u8;
-            BUFFER[len + 3] = 0;
-        } else {
-            BUFFER[len] = 0;
+        if !buffer.is_null() {
+            let len = std::cmp::min(bytes.len(), max_size - 4);
+            std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer as *mut u8, len);
+            let buffer = std::slice::from_raw_parts_mut::<c_char>(buffer, max_size);
+            if bytes.len() > max_size - 4 {
+                buffer[len] = '.' as c_char;
+                buffer[len + 1] = '.' as c_char;
+                buffer[len + 2] = '.' as c_char;
+                buffer[len + 3] = 0 as c_char;
+            } else {
+                buffer[len] = 0;
+            }
         }
-        BUFFER.as_ptr() as *const c_char
+        bytes.len()
     }
 }
 

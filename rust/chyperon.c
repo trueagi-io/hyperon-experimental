@@ -45,6 +45,12 @@ void int_free(struct gnd_t* self) {
 	free(self);
 }
 
+char buffer[4096];
+char const* _atom_to_str(atom_t const* atom) {
+	atom_to_str(atom, buffer, sizeof(buffer)/sizeof(buffer[0]));
+	return buffer;
+}
+
 int main() {
 	char name[] = "test";
 	atom_t* expr[] = {atom_sym(name), atom_var("X"),
@@ -56,7 +62,8 @@ int main() {
 	for (int i = 0; i < expr_size; ++i) {
 		free_atom(expr[i]);
 	}
-	printf("%s\n", atom_to_str(atom));
+
+	printf("%s\n", _atom_to_str(atom));
 	free_atom(atom);
 	return 0;
 }

@@ -92,7 +92,7 @@ impl Drop for ExpressionAtomIter<'_> {
     fn drop(&mut self) {
         unsafe {
             // free heap memory by wrapping by box and dropping it
-            Box::from_raw(self.expr);
+            drop(Box::from_raw(self.expr));
         }
     }
 }
