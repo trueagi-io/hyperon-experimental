@@ -9,7 +9,6 @@ mod tests;
 
 #[macro_use]
 extern crate mopa;
-extern crate lazy_static;
 
 
 use std::collections::HashMap;
