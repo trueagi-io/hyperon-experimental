@@ -64,7 +64,7 @@ pub extern "C" fn atom_to_str(atom: *const atom_t) -> *const c_char {
 #[allow(non_camel_case_types)]
 pub struct vec_atom_t<'a>(&'a mut Vec<Atom>);
 
-// TODO: think about const and mut accurately
+// TODO: think about const and mut for atoms accurately
 #[no_mangle]
 pub extern "C" fn vec_pop(vec: *mut vec_atom_t) -> *const atom_t {
     unsafe {
@@ -84,14 +84,17 @@ fn atom_to_ptr(atom: Atom) -> *mut atom_t {
 struct CGroundedAtom(*mut gnd_t);
 
 impl CGroundedAtom {
+
     fn as_ptr(&self) -> *mut gnd_t {
         self.0
     }
+
     fn api(&self) -> &gnd_api_t {
         unsafe {
             &*(*self.as_ptr()).api
         }
     }
+
     fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
         let execute = self.api().execute;
         if execute as usize == 0 {
@@ -105,34 +108,44 @@ impl CGroundedAtom {
             }
         }
     }
+
     fn eq(&self, other: &Self) -> bool {
         (self.api().eq)(self.as_ptr(), other.as_ptr())
-    } fn clone(&self) -> Self {
+    }
+
+    fn clone(&self) -> Self {
         CGroundedAtom((self.api().clone)(self.as_ptr()))
     }
+
     fn display(&self) -> &str {
         let buffer = [0; 4096];
         (self.api().display)(self.as_ptr(), buffer.as_ptr() as *mut c_char, 4096);
         cstr_to_string(buffer.as_ptr() as *mut c_char)
     }
+
     fn free(&self) {
         (self.api().free)(self.as_ptr());
     }
+
 }
 
 impl GroundedAtom for CGroundedAtom {
+
     fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
         self.execute(ops, data)
     }
+
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
         match other.downcast_ref::<CGroundedAtom>() {
             Some(o) => self.eq(o),
             None => false,
         }
     }
+
     fn clone_gnd(&self) -> Box<dyn GroundedAtom> {
         Box::new(self.clone())
     }
+
 }
 
 impl Display for CGroundedAtom {
