@@ -1,7 +1,8 @@
-use crate::*;
+use hyperon::*;
 use std::ffi::*;
 use std::os::raw::*;
 use std::convert::TryInto;
+use std::fmt::Display;
 
 #[allow(non_camel_case_types)]
 pub struct atom_t {
@@ -39,9 +40,9 @@ pub extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
 pub extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) -> *mut atom_t {
     unsafe {
         let children: Vec<Atom> = std::slice::from_raw_parts(children, size).iter().map(|p| (**p).atom.clone()).collect();
-        // calling Atom::expr will copy expression one more time because of
+        // TODO: calling Atom::expr will copy expression one more time because of
         // copying Vec into ExpressionAtom::children field.
-        atom_to_ptr(Atom::Expression(ExpressionAtom{ children }))
+        atom_to_ptr(Atom::expr(children.as_slice()))
     }
 }
 

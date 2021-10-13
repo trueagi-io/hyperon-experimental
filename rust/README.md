@@ -13,8 +13,4 @@ cargo test
 
 # Build and try C API
 
-```
-cbindgen -c cbindgen.toml -o hyperon.h
-gcc -o chyperon chyperon.c ./target/debug/libhyperon.a -lpthread -ldl -lm
-./chyperon
-```
+See [./capi/README.md](./capi/README.md)

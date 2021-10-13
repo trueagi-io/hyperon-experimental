@@ -1,4 +1,3 @@
-pub mod capi;
 pub mod common;
 pub mod interpreter;
 pub mod arithmetics;
