@@ -1,9 +1,7 @@
 # Prerequisites
 
-Install Rust v1.55 or higher:
-```
-apt-get install rust
-```
+Install Rust v1.55, see [Rust installation
+page](https://www.rust-lang.org/tools/install)
 
 # Build project and run tests
 
@@ -11,6 +9,6 @@ apt-get install rust
 cargo test
 ```
 
-# Build and try C API
+# Try C API
 
 See [./capi/README.md](./capi/README.md)

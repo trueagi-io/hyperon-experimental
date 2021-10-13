@@ -1,13 +1,13 @@
 [package]
-name = "hyperon_capi"
+name = "hyperon"
 version = "0.1.0"
 authors = ["Vitaly Bogdanov <vsbogd@gmail.com>"]
 edition = "2018"
 
 [dependencies]
-hyperon = { path = "../lib/" }
+mopa = "0.2.2"
 
 [lib]
-name = "hyperon_capi"
+name = "hyperon"
 path = "src/lib.rs"
-crate-type = ["cdylib", "staticlib"]
+crate-type = ["lib"]
