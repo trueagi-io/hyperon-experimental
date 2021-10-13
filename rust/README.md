@@ -6,9 +6,16 @@ page](https://www.rust-lang.org/tools/install)
 # Build project and run tests
 
 ```
+cargo build
 cargo test
 ```
 
-# Try C API
+# Test C API
 
-See [./capi/README.md](./capi/README.md)
+```
+mkdir target/capi
+cd target/capi
+cmake ../../capi
+make
+make test_verbose
+```
