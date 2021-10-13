@@ -4,7 +4,9 @@ use std::os::raw::*;
 use std::convert::TryInto;
 
 #[allow(non_camel_case_types)]
-pub type atom_t = Atom;
+pub struct atom_t {
+    atom: Atom,
+}
 
 #[allow(non_camel_case_types)]
 #[repr(C)]
@@ -36,7 +38,7 @@ pub extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
 #[no_mangle]
 pub extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) -> *mut atom_t {
     unsafe {
-        let children: Vec<Atom> = std::slice::from_raw_parts(children, size).iter().map(|p| (**p).clone()).collect();
+        let children: Vec<Atom> = std::slice::from_raw_parts(children, size).iter().map(|p| (**p).atom.clone()).collect();
         // calling Atom::expr will copy expression one more time because of
         // copying Vec into ExpressionAtom::children field.
         atom_to_ptr(Atom::Expression(ExpressionAtom{ children }))
@@ -64,7 +66,7 @@ pub extern "C" fn free_atom(atom: *mut atom_t) {
 #[no_mangle]
 pub extern "C" fn atom_to_str(atom: *const atom_t, buffer: *mut c_char, max_size: usize) -> usize {
     unsafe {
-        string_to_cstr(format!("{}", *atom), buffer, max_size)
+        string_to_cstr(format!("{}", (*atom).atom), buffer, max_size)
     }
 }
 
@@ -82,7 +84,7 @@ pub extern "C" fn vec_pop(vec: *mut vec_atom_t) -> *const atom_t {
 // Code below is a boilerplate code to implement C API correctly
 
 fn atom_to_ptr(atom: Atom) -> *mut atom_t {
-    Box::into_raw(Box::new(atom))
+    Box::into_raw(Box::new(atom_t{ atom }))
 }
 
 // C grounded atom wrapper

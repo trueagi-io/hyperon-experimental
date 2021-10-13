@@ -14,7 +14,7 @@ cargo test
 # Build and try C API
 
 ```
-cbindgen --lang c -o hyperon.h
+cbindgen -c cbindgen.toml -o hyperon.h
 gcc -o chyperon chyperon.c ./target/debug/libhyperon.a -lpthread -ldl -lm
 ./chyperon
 ```
