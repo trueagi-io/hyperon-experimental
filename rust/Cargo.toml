@@ -1,16 +1,5 @@
-[package]
-name = "hyperon"
-version = "0.1.0"
-authors = ["Vitaly Bogdanov <vsbogd@gmail.com>"]
-edition = "2018"
-
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-mopa = "0.2.2"
-lazy_static = "1.4.0"
-
-[lib]
-name = "hyperon"
-path = "src/lib.rs"
-crate-type = ["lib", "cdylib", "staticlib"]
+[workspace]
+members = [
+	"lib",
+	"capi"
+]

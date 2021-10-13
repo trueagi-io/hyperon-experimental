@@ -1,4 +1,3 @@
-pub mod capi;
 pub mod common;
 pub mod interpreter;
 pub mod arithmetics;
@@ -9,7 +8,6 @@ mod tests;
 
 #[macro_use]
 extern crate mopa;
-extern crate lazy_static;
 
 
 use std::collections::HashMap;
@@ -92,7 +90,7 @@ impl Drop for ExpressionAtomIter<'_> {
     fn drop(&mut self) {
         unsafe {
             // free heap memory by wrapping by box and dropping it
-            Box::from_raw(self.expr);
+            drop(Box::from_raw(self.expr));
         }
     }
 }

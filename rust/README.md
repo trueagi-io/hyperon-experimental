@@ -1,20 +1,21 @@
 # Prerequisites
 
-Install Rust v1.55 or higher:
-```
-apt-get install rust
-```
+Install Rust v1.55, see [Rust installation
+page](https://www.rust-lang.org/tools/install)
 
 # Build project and run tests
 
 ```
+cargo build
 cargo test
 ```
 
-# Build and try C API
+# Test C API
 
 ```
-cbindgen --lang c -o hyperon.h
-gcc -o chyperon chyperon.c ./target/debug/libhyperon.a -lpthread -ldl -lm
-./chyperon
+mkdir target/capi
+cd target/capi
+cmake ../../capi
+make
+make test_verbose
 ```

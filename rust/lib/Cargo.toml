@@ -1,0 +1,13 @@
+[package]
+name = "hyperon"
+version = "0.1.0"
+authors = ["Vitaly Bogdanov <vsbogd@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+mopa = "0.2.2"
+
+[lib]
+name = "hyperon"
+path = "src/lib.rs"
+crate-type = ["lib"]
