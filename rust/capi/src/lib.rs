@@ -27,7 +27,7 @@ pub struct gnd_t {
 }
 
 #[no_mangle]
-pub extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
+pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
     // cstr_as_str() keeps pointer ownership, but Atom::sym() copies resulting
     // String into Atom::Symbol::symbol field. atom_to_ptr() moves value to the
     // heap and gives ownership to the caller.
@@ -37,17 +37,15 @@ pub extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
 // TODO: Think about changing the API to make resulting expression taking ownership of passed
 // values
 #[no_mangle]
-pub extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) -> *mut atom_t {
-    unsafe {
-        let children: Vec<Atom> = std::slice::from_raw_parts(children, size).iter().map(|p| (**p).atom.clone()).collect();
-        // TODO: calling Atom::expr will copy expression one more time because of
-        // copying Vec into ExpressionAtom::children field.
-        atom_to_ptr(Atom::expr(children.as_slice()))
-    }
+pub unsafe extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) -> *mut atom_t {
+    let children: Vec<Atom> = std::slice::from_raw_parts(children, size).iter().map(|p| (**p).atom.clone()).collect();
+    // TODO: calling Atom::expr will copy expression one more time because of
+    // copying Vec into ExpressionAtom::children field.
+    atom_to_ptr(Atom::expr(children.as_slice()))
 }
 
 #[no_mangle]
-pub extern "C" fn atom_var(name: *const c_char) -> *mut atom_t {
+pub unsafe extern "C" fn atom_var(name: *const c_char) -> *mut atom_t {
     atom_to_ptr(Atom::var(cstr_as_str(name)))
 }
 
@@ -57,28 +55,22 @@ pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> *mut atom_t {
 }
 
 #[no_mangle]
-pub extern "C" fn free_atom(atom: *mut atom_t) {
-    unsafe {
-        // drop() does nothing actually, but it is used here for clarity
-        drop(Box::from_raw(atom));
-    }
+pub unsafe extern "C" fn free_atom(atom: *mut atom_t) {
+    // drop() does nothing actually, but it is used here for clarity
+    drop(Box::from_raw(atom));
 }
 
 #[no_mangle]
-pub extern "C" fn atom_to_str(atom: *const atom_t, buffer: *mut c_char, max_size: usize) -> usize {
-    unsafe {
-        string_to_cstr(format!("{}", (*atom).atom), buffer, max_size)
-    }
+pub unsafe extern "C" fn atom_to_str(atom: *const atom_t, buffer: *mut c_char, max_size: usize) -> usize {
+    string_to_cstr(format!("{}", (*atom).atom), buffer, max_size)
 }
 
 #[allow(non_camel_case_types)]
 pub struct vec_atom_t<'a>(&'a mut Vec<Atom>);
 
 #[no_mangle]
-pub extern "C" fn vec_pop(vec: *mut vec_atom_t) -> *const atom_t {
-    unsafe {
-        atom_to_ptr((*vec).0.pop().expect("Vector is empty")) as *const atom_t
-    }
+pub unsafe extern "C" fn vec_pop(vec: *mut vec_atom_t) -> *const atom_t {
+    atom_to_ptr((*vec).0.pop().expect("Vector is empty")) as *const atom_t
 }
 
 ////////////////////////////////////////////////////////////////
@@ -104,7 +96,7 @@ impl CGroundedAtom {
         }
     }
 
-    fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
+    unsafe fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
         let execute = self.api().execute;
         match execute {
             Some(execute) => {
@@ -127,7 +119,7 @@ impl CGroundedAtom {
         CGroundedAtom((self.api().clone)(self.as_ptr()))
     }
 
-    fn display(&self) -> &str {
+    unsafe fn display(&self) -> &str {
         let mut buffer = [0; 4096];
         (self.api().display)(self.as_ptr(), buffer.as_mut_ptr().cast::<c_char>(), 4096);
         cstr_as_str(buffer.as_ptr().cast::<c_char>())
@@ -142,7 +134,9 @@ impl CGroundedAtom {
 impl GroundedAtom for CGroundedAtom {
 
     fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
-        self.execute(ops, data)
+        unsafe {
+            self.execute(ops, data)
+        }
     }
 
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
@@ -160,7 +154,9 @@ impl GroundedAtom for CGroundedAtom {
 
 impl Display for CGroundedAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.display())
+        unsafe {
+            write!(f, "{}", self.display())
+        }
     }
 }
 
@@ -172,29 +168,25 @@ impl Drop for CGroundedAtom {
 
 // String conversion utilities
 
-fn string_to_cstr(s: String, buffer: *mut c_char, max_size: usize) -> usize {
-    unsafe {
-        let bytes = s.as_bytes();
-        if !buffer.is_null() {
-            let len = std::cmp::min(bytes.len(), max_size - 4);
-            std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer.cast::<u8>(), len);
-            //let buffer = std::slice::from_raw_parts_mut::<c_char>(buffer, max_size);
-            let len : isize = len.try_into().unwrap();
-            if bytes.len() > max_size - 4 {
-                buffer.offset(len).write('.' as c_char);
-                buffer.offset(len + 1).write('.' as c_char);
-                buffer.offset(len + 2).write('.' as c_char);
-                buffer.offset(len + 3).write(0);
-            } else {
-                buffer.offset(len).write(0);
-            }
+unsafe fn string_to_cstr(s: String, buffer: *mut c_char, max_size: usize) -> usize {
+    let bytes = s.as_bytes();
+    if !buffer.is_null() {
+        let len = std::cmp::min(bytes.len(), max_size - 4);
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer.cast::<u8>(), len);
+        //let buffer = std::slice::from_raw_parts_mut::<c_char>(buffer, max_size);
+        let len : isize = len.try_into().unwrap();
+        if bytes.len() > max_size - 4 {
+            buffer.offset(len).write('.' as c_char);
+            buffer.offset(len + 1).write('.' as c_char);
+            buffer.offset(len + 2).write('.' as c_char);
+            buffer.offset(len + 3).write(0);
+        } else {
+            buffer.offset(len).write(0);
         }
-        bytes.len()
     }
+    bytes.len()
 }
 
-fn cstr_as_str<'a>(s: *const c_char) -> &'a str {
-    unsafe {
-        CStr::from_ptr(s).to_str().expect("Incorrect UTF-8 sequence")
-    }
+unsafe fn cstr_as_str<'a>(s: *const c_char) -> &'a str {
+    CStr::from_ptr(s).to_str().expect("Incorrect UTF-8 sequence")
 }
