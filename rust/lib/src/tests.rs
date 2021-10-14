@@ -95,8 +95,14 @@ fn test_match_different_value_for_variable() {
 fn test_match_query_variable_has_priority() {
     let mut space = GroundingSpace::new();
     space.add(expr!("equals", x, x));
-    assert_eq!(space.query(&expr!("equals", y, z)),
-        vec![bind!{y: expr!(x), z: expr!(x)}]);
+    assert_eq!(space.query(&expr!("equals", y, z)), vec![bind!{y: expr!(x), z: expr!(x)}]);
+}
+
+#[test]
+fn test_match_query_variable_via_data_variable() {
+    let mut space = GroundingSpace::new();
+    space.add(expr!(x, x));
+    assert_eq!(space.query(&expr!(y, (z))), vec![bind!{y: expr!((z))}]);
 }
 
 #[test]
