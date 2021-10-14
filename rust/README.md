@@ -12,10 +12,26 @@ cargo test
 
 # Test C API
 
+Prerequisites:
 ```
-mkdir target/capi
+pip install conan
+cargo install cbindgen
+```
+
+Setup build:
+```
+mkdir -p target/capi
 cd target/capi
+conan install ../../capi
 cmake ../../capi
+```
+
+Build and run tests:
+```
 make
 make test_verbose
 ```
+
+# Setup IDE
+
+See [Rust Language Server](https://github.com/rust-lang/rls) page.
