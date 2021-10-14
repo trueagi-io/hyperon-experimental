@@ -9,7 +9,6 @@ mod tests;
 #[macro_use]
 extern crate mopa;
 
-
 use std::collections::HashMap;
 use std::fmt::{Display, Debug};
 
@@ -23,6 +22,13 @@ macro_rules! expr {
     (($($x:tt),*)) => { Atom::expr(&[ $( expr!($x) , )* ]) };
     ($($x:tt),*) => { Atom::expr(&[ $( expr!($x) , )* ]) };
 }
+
+#[macro_export]
+macro_rules! bind {
+    ($($k:ident: $v:expr),*) => { vec![$( (VariableAtom::from(stringify!($k)), $v), )*]
+        .iter().cloned().collect() };
+}
+
 
 // Expression atom
 

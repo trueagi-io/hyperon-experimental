@@ -13,9 +13,9 @@ fn check_and_insert_binding(bindings: &mut Bindings, var: &VariableAtom,
     }
 }
 
-fn match_atoms_recursively(a: &Atom, b: &Atom,
+fn match_atoms_recursively(atom: &Atom, pattern: &Atom,
         a_bindings: &mut Bindings, b_bindings: &mut Bindings) -> bool {
-    match (a, b) {
+    match (atom, pattern) {
         (Atom::Symbol{ symbol: a }, Atom::Symbol{ symbol: b }) => a == b,
         (Atom::Grounded(a), Atom::Grounded(b)) => a.eq_gnd(&**b),
         (a, Atom::Variable(v)) => check_and_insert_binding(b_bindings, v, a),
@@ -33,10 +33,10 @@ fn match_atoms_recursively(a: &Atom, b: &Atom,
     }
 }
 
-pub fn match_atoms(a: &Atom, b: &Atom) -> Option<(Bindings, Bindings)> {
+pub fn match_atoms(atom: &Atom, pattern: &Atom) -> Option<(Bindings, Bindings)> {
     let mut a_bindings = Bindings::new();
     let mut b_bindings = Bindings::new();
-    if match_atoms_recursively(a, b, &mut a_bindings, &mut b_bindings) {
+    if match_atoms_recursively(atom, pattern, &mut a_bindings, &mut b_bindings) {
         Some((a_bindings, b_bindings))
     } else {
         None
@@ -68,4 +68,23 @@ pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Bindings {
         res.insert(key.clone(), applied);
     }
     res
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_match_variables_in_data() {
+        assert_eq!(
+            match_atoms(&expr!("+", a, ("*", b, c)), &expr!("+", "A", ("*", "B", "C"))),
+            Some((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{})));
+    }
+
+    #[test]
+    fn test_match_different_value_for_variable_in_data() {
+        assert_eq!(
+            match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
+            None);
+    }
 }
