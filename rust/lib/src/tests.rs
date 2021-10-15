@@ -7,12 +7,6 @@ fn S(name: &str) -> Atom { Atom::sym(name) }
 fn E(children: &[Atom]) -> Atom { Atom::expr(children) }
 fn V(name: &str) -> Atom { Atom::var(name) }
 
-// Make Bindings map from list of (k, v) pairs
-macro_rules! bind {
-    ($($k:ident: $v:expr),*) => { vec![$( (VariableAtom::from(stringify!($k)), $v), )*]
-        .iter().cloned().collect() };
-}
-
 #[test]
 fn test_expr_symbol() {
     assert_eq!(expr!("="), S("="));
@@ -98,34 +92,29 @@ fn test_match_different_value_for_variable() {
 }
 
 #[test]
-fn test_match_variables_in_data() {
-    assert_eq!(
-        matcher::match_atoms(&expr!("+", a, ("*", b, c)), &expr!("+", "A", ("*", "B", "C"))),
-        Some((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{})));
+fn test_match_query_variable_has_priority() {
+    let mut space = GroundingSpace::new();
+    space.add(expr!("equals", x, x));
+    assert_eq!(space.query(&expr!("equals", y, z)), vec![bind!{y: expr!(x), z: expr!(x)}]);
 }
 
 #[test]
-fn test_match_different_value_for_variable_in_data() {
-    assert_eq!(
-        matcher::match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
-        None);
+fn test_match_query_variable_via_data_variable() {
+    let mut space = GroundingSpace::new();
+    space.add(expr!(x, x));
+    assert_eq!(space.query(&expr!(y, (z))), vec![bind!{y: expr!((z))}]);
 }
 
 #[test]
 fn test_subexpression_iterator() {
-    // (+ (* 3 (+ 1 1)) (- 4 3))
-    let plus11 = ExpressionAtom::from(&[S("+"), S("1"), V("n")]);
-    let mul3plus11 = ExpressionAtom::from(&[S("*"), S("3"), Atom::Expression(plus11.clone())]);
-    let minus43 = ExpressionAtom::from(&[S("-"), S("4"), S("3")]);
-    let expr = ExpressionAtom::from(&[S("+"), Atom::Expression(mul3plus11.clone()), Atom::Expression(minus43.clone())]);
+    let expr = expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3"));
 
-    let iter = ExpressionAtomIter::from(&expr);
+    let iter = expr.as_expr().unwrap().sub_expr_iter();
 
-    assert_eq!(iter
-        .map(|(a, p, i)| (a.clone(), p.clone(), i))
-        .collect::<Vec<_>>(), vec![
-            (plus11, mul3plus11.clone(), 2),
-            (mul3plus11, expr.clone(), 1),
-            (minus43, expr, 2),
+    assert_eq!(iter.map(|(a, p, i)| (Atom::Expression(a.clone()), Atom::Expression(p.clone()), i)).collect::<Vec<_>>(),
+        vec![
+            (expr!("+", "1", n), expr!("*", "3", ("+", "1", n)), 2),
+            (expr!("*", "3", ("+", "1", n)), expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3")), 1),
+            (expr!("-", "4", "3"), expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3")), 2),
         ]);
 }
