@@ -1,3 +1,4 @@
+pub mod text;
 pub mod common;
 pub mod interpreter;
 pub mod arithmetics;
@@ -9,8 +10,10 @@ mod tests;
 #[macro_use]
 extern crate mopa;
 
-use std::collections::HashMap;
+use text::{SExprSpace};
+
 use std::fmt::{Display, Debug};
+use std::collections::HashMap;
 
 // Macros to simplify expression writing
 
@@ -142,9 +145,15 @@ pub struct VariableAtom {
     name: String,
 }
 
-impl VariableAtom {
-    pub fn from(name: &str) -> Self {
+impl From<&str> for VariableAtom {
+    fn from(name: &str) -> Self {
         VariableAtom{ name: name.to_string() }
+    }
+}
+
+impl From<String> for VariableAtom {
+    fn from(name: String) -> Self {
+        VariableAtom{ name }
     }
 }
 
@@ -276,7 +285,7 @@ pub struct GroundingSpace {
 impl GroundingSpace {
 
     pub fn new() -> Self {
-        GroundingSpace{ content: Vec::new() }
+        Self{ content: Vec::new() }
     }
     
     pub fn add(&mut self, atom: Atom) {
@@ -306,6 +315,9 @@ impl GroundingSpace {
         }
     }
 
+    pub fn atom_iter(&self) -> std::slice::Iter<Atom>{
+        self.content.iter()
+    }
 }
 
 impl PartialEq for GroundingSpace {
@@ -317,5 +329,13 @@ impl PartialEq for GroundingSpace {
 impl Display for GroundingSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "GroundingSpace")
+    }
+}
+
+impl From<&SExprSpace> for GroundingSpace {
+    fn from(other: &SExprSpace) -> Self {
+        let mut space = GroundingSpace::new();
+        other.into_grounding_space(&mut space);
+        space
     }
 }
