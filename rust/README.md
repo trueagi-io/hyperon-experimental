@@ -30,7 +30,7 @@ Setup build:
 ```
 mkdir -p target/capi
 cd target/capi
-conan install ../../capi
+conan install --build missing ../../capi
 cmake ../../capi
 ```
 
