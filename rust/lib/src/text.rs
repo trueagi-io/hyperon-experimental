@@ -44,14 +44,14 @@ fn parse(it: &mut dyn Iterator<Item=char>, add: &mut dyn FnMut(Atom)) {
                 it.next();
                 let token = next_token(&mut it);
                 println!("token: {}", token);
-                add(Atom::Variable(VariableAtom::from(token)));
+                add(Atom::Variable(token.into()));
             },
             '(' => {
                 let mut children: Vec<Atom> = Vec::new();
                 it.next();
                 parse(&mut it, &mut |atom| children.push(atom));
                 // FIXME: add From trait implementations for all atoms
-                let expr = Atom::Expression(ExpressionAtom{ children: children });
+                let expr = Atom::Expression(children.into());
                 println!("add expression: {}", expr);
                 add(expr);
             },
@@ -62,7 +62,7 @@ fn parse(it: &mut dyn Iterator<Item=char>, add: &mut dyn FnMut(Atom)) {
             _ => {
                 let token = next_token(&mut it);
                 println!("token: {}", token);
-                add(Atom::Symbol{ symbol: token });
+                add(Atom::Symbol(token.into()))
             },
         }
     }

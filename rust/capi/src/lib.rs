@@ -31,7 +31,7 @@ pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
     // cstr_as_str() keeps pointer ownership, but Atom::sym() copies resulting
     // String into Atom::Symbol::symbol field. atom_to_ptr() moves value to the
     // heap and gives ownership to the caller.
-    atom_to_ptr(Atom::sym(cstr_as_str(name)))
+    atom_to_ptr(Atom::Symbol(cstr_as_str(name).into()))
 }
 
 // TODO: Think about changing the API to make resulting expression taking ownership of passed
@@ -39,14 +39,12 @@ pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
 #[no_mangle]
 pub unsafe extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) -> *mut atom_t {
     let children: Vec<Atom> = std::slice::from_raw_parts(children, size).iter().map(|p| (**p).atom.clone()).collect();
-    // TODO: calling Atom::expr will copy expression one more time because of
-    // copying Vec into ExpressionAtom::children field.
-    atom_to_ptr(Atom::expr(children.as_slice()))
+    atom_to_ptr(Atom::Expression(children.into()))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_var(name: *const c_char) -> *mut atom_t {
-    atom_to_ptr(Atom::var(cstr_as_str(name)))
+    atom_to_ptr(Atom::Variable(cstr_as_str(name).into()))
 }
 
 #[no_mangle]

@@ -16,7 +16,7 @@ fn check_and_insert_binding(bindings: &mut Bindings, var: &VariableAtom,
 fn match_atoms_recursively(atom: &Atom, pattern: &Atom,
         a_bindings: &mut Bindings, b_bindings: &mut Bindings) -> bool {
     match (atom, pattern) {
-        (Atom::Symbol{ symbol: a }, Atom::Symbol{ symbol: b }) => a == b,
+        (Atom::Symbol(a), Atom::Symbol(b)) => a == b,
         (Atom::Grounded(a), Atom::Grounded(b)) => a.eq_gnd(&**b),
         (a, Atom::Variable(v)) => check_and_insert_binding(b_bindings, v, a),
         (Atom::Variable(v), b) => check_and_insert_binding(a_bindings, v, b),
@@ -45,8 +45,7 @@ pub fn match_atoms(atom: &Atom, pattern: &Atom) -> Option<(Bindings, Bindings)> 
 
 pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
     match atom {
-        Atom::Symbol{ symbol: _ } => atom.clone(),
-        Atom::Grounded(_) => atom.clone(),
+        Atom::Symbol(_)|Atom::Grounded(_) => atom.clone(),
         Atom::Variable(v) => {
             if let Some(binding) = bindings.get(v) {
                 binding.clone()

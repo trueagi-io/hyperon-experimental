@@ -32,6 +32,30 @@ macro_rules! bind {
         .iter().cloned().collect() };
 }
 
+// Symbol atom
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct SymbolAtom {
+    name: String,
+}
+
+impl From<String> for SymbolAtom {
+    fn from(name: String) -> Self {
+        SymbolAtom{ name }
+    }
+}
+
+impl From<&str> for SymbolAtom {
+    fn from(name: &str) -> Self {
+        SymbolAtom::from(name.to_string())
+    }
+}
+
+impl Display for SymbolAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
 
 // Expression atom
 
@@ -41,10 +65,6 @@ pub struct ExpressionAtom {
 }
 
 impl ExpressionAtom {
-    fn from(children: &[Atom]) -> Self {
-        ExpressionAtom{ children: children.to_vec() }
-    }
-
     pub fn is_plain(&self) -> bool {
         self.children.iter().all(|atom| ! matches!(atom, Atom::Expression(_)))
     }
@@ -61,6 +81,18 @@ impl ExpressionAtom {
 
     pub fn children_mut(&mut self) -> &mut Vec<Atom> {
         &mut self.children
+    }
+}
+
+impl From<Vec<Atom>> for ExpressionAtom {
+    fn from(children: Vec<Atom>) -> Self {
+        ExpressionAtom{ children }
+    }
+}
+
+impl From<&[Atom]> for ExpressionAtom {
+    fn from(children: &[Atom]) -> Self {
+        ExpressionAtom::from(children.to_vec())
     }
 }
 
@@ -145,15 +177,15 @@ pub struct VariableAtom {
     name: String,
 }
 
-impl From<&str> for VariableAtom {
-    fn from(name: &str) -> Self {
-        VariableAtom{ name: name.to_string() }
-    }
-}
-
 impl From<String> for VariableAtom {
     fn from(name: String) -> Self {
         VariableAtom{ name }
+    }
+}
+
+impl From<&str> for VariableAtom {
+    fn from(name: &str) -> Self {
+        VariableAtom::from(name.to_string())
     }
 }
 
@@ -200,7 +232,7 @@ impl<T: 'static + Clone + PartialEq + Display> GroundedAtom for T {
 
 #[derive(Debug)]
 pub enum Atom {
-    Symbol{ symbol: String },
+    Symbol(SymbolAtom),
     Expression(ExpressionAtom),
     Variable(VariableAtom),
     // We need using Box here because if we use reference then we cannot keep
@@ -210,7 +242,7 @@ pub enum Atom {
 
 impl Atom {
     pub fn sym(name: &str) -> Self {
-        Self::Symbol{ symbol: name.to_string() }
+        Self::Symbol(SymbolAtom::from(name))
     }
 
     pub fn expr(children: &[Atom]) -> Self {
@@ -243,7 +275,7 @@ impl Atom {
 impl PartialEq for Atom {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Atom::Symbol{ symbol: sym1 }, Atom::Symbol{ symbol: sym2 }) => sym1 == sym2,
+            (Atom::Symbol(sym1), Atom::Symbol(sym2)) => sym1 == sym2,
             (Atom::Expression(expr1), Atom::Expression(expr2)) => expr1 == expr2,
             (Atom::Variable(var1), Atom::Variable(var2)) => var1 == var2,
             (Atom::Grounded(gnd1), Atom::Grounded(gnd2)) => gnd1.eq_gnd(&**gnd2),
@@ -255,7 +287,7 @@ impl PartialEq for Atom {
 impl Clone for Atom {
     fn clone(&self) -> Self {
         match self {
-            Atom::Symbol{ symbol: sym } => Atom::Symbol{ symbol: sym.clone() },
+            Atom::Symbol(sym) => Atom::Symbol(sym.clone()),
             Atom::Expression(expr) => Atom::Expression(expr.clone()),
             Atom::Variable(var) => Atom::Variable(var.clone()),
             Atom::Grounded(gnd) => Atom::Grounded((*gnd).clone_gnd()),
@@ -266,7 +298,7 @@ impl Clone for Atom {
 impl Display for Atom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Atom::Symbol{ symbol: sym } => Display::fmt(sym, f),
+            Atom::Symbol(sym) => Display::fmt(sym, f),
             Atom::Expression(expr) => Display::fmt(expr, f),
             Atom::Variable(var) => Display::fmt(var, f),
             Atom::Grounded(gnd) => Display::fmt(gnd, f),

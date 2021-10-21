@@ -260,8 +260,8 @@ fn match_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
                             // TODO: not used yet, the idea is to return error
                             // expression from INTERPRET to move to the next 
                             // alternative
-                            if let Some(Atom::Symbol{symbol}) = expr.children().get(0) {
-                                if symbol == "error" {
+                            if let Some(atom) = expr.children().get(0) {
+                                if *atom == Atom::sym("error") {
                                     // Return is used here because I would like
                                     // to have one branch which truncates stacks
                                     // instead of two (see code below).
