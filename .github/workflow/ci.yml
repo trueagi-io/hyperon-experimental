@@ -1,0 +1,51 @@
+name: Hyperon CI
+on: [push, pull_request]
+
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Install Rust stable
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+            toolchain: stable
+            override: true
+
+      - name: Cargo check
+        working-directory: ./rust
+        uses: actions-rs/cargo@v1.0.1
+        with:
+          command: check
+
+      - name: Cargo test
+        working-directory: ./rust
+        uses: actions-rs/cargo@v1.0.1
+        with:
+          command: test
+
+      - name: Install Conan
+        uses: turtlebrowser/get-conan@1.0
+
+      - name: Install cbindgen
+        uses: actions-rs/cargo@v1.0.1
+        with:
+          command: install cbindgen
+
+      - name: Setup C API build
+        working-directory: ./rust
+        run: |
+          mkdir -p target/capi
+          cd target/capi
+          conan install ../../capi
+          cmake ../../capi
+
+      - name: Build C API
+        working-directory: ./rust/target/capi
+        run: make
+
+      - name: Test C API
+        working-directory: ./rust/target/capi
+        run: make test_verbose
