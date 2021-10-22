@@ -1,4 +1,4 @@
-![Hyperon CI](https://github.com/trueagi-io/hyperon-experimental/workflows/ci.yml/badge.svg)
+![Hyperon CI](https://github.com/trueagi-io/hyperon-experimental/actions/workflows/ci.yml/badge.svg)
 
 # Overview
 
