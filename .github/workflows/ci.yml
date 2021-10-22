@@ -1,5 +1,5 @@
 name: Hyperon CI
-on: [push, pull_request]
+on: [pull_request]
 
 jobs:
   tests:
@@ -14,25 +14,21 @@ jobs:
             toolchain: stable
             override: true
 
-      - name: Cargo check
+      - name: Build and test
         working-directory: ./rust
-        uses: actions-rs/cargo@v1.0.1
-        with:
-          command: check
-
-      - name: Cargo test
-        working-directory: ./rust
-        uses: actions-rs/cargo@v1.0.1
-        with:
-          command: test
+        run: |
+          cargo check
+          cargo build
+          cargo test
 
       - name: Install Conan
-        uses: turtlebrowser/get-conan@1.0
+        uses: turtlebrowser/get-conan@v1.0
 
       - name: Install cbindgen
         uses: actions-rs/cargo@v1.0.1
         with:
-          command: install cbindgen
+          command: install
+          args: cbindgen
 
       - name: Setup C API build
         working-directory: ./rust
