@@ -116,8 +116,8 @@ mod tests {
     #[test]
     fn test_text_var() {
         let mut text = SExprSpace::new();
-        text.add_str("$n").unwrap();
 
+        text.add_str("$n").unwrap();
         let space = GroundingSpace::from(&text);
 
         assert_eq!(vec![expr!(n)], space.atom_iter().cloned().collect::<Vec<_>>());
@@ -126,8 +126,8 @@ mod tests {
     #[test]
     fn test_text_sym() {
         let mut text = SExprSpace::new();
-        text.add_str("test").unwrap();
 
+        text.add_str("test").unwrap();
         let space = GroundingSpace::from(&text);
 
         assert_eq!(vec![expr!("test")], space.atom_iter().cloned().collect::<Vec<_>>());
@@ -138,8 +138,8 @@ mod tests {
         let mut text = SExprSpace::new();
         text.register_token(Regex::new(r"\d+").unwrap(),
             |token| Atom::gnd(token.parse::<i32>().unwrap()));
-        text.add_str("(3d 42)").unwrap();
 
+        text.add_str("(3d 42)").unwrap();
         let space = GroundingSpace::from(&text);
 
         assert_eq!(vec![Atom::expr(&[Atom::sym("3d"), Atom::gnd(42)])], space.atom_iter().cloned().collect::<Vec<_>>());
@@ -148,8 +148,8 @@ mod tests {
     #[test]
     fn test_text_expr() {
         let mut text = SExprSpace::new();
-        text.add_str("(= (fac $n) (* $n (fac (- $n 1))))").unwrap();
 
+        text.add_str("(= (fac $n) (* $n (fac (- $n 1))))").unwrap();
         let space = GroundingSpace::from(&text);
 
         assert_eq!(vec![expr!("=", ("fac", n), ("*", n, ("fac", ("-", n, "1"))))],
@@ -159,6 +159,7 @@ mod tests {
     #[test]
     fn test_next_token() {
         let mut it = "n)".chars().peekable();
+
         assert_eq!("n".to_string(), next_token(&mut it));
         assert_eq!(Some(')'), it.next());
     }
