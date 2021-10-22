@@ -65,6 +65,7 @@ fn choose_stack<'a>(ops: &'a mut Vec<Atom>, data: &'a mut Vec<Atom>, stack: Kind
 fn swap(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, stack: KindOfStack) -> Result<(), String> {
     let stack = choose_stack(ops, data, stack);
     let args = (stack.pop(), stack.pop()); 
+    // TODO: replace println! by logging
     println!("swap{:?}", args);
     match args {
         (Some(a), Some(b)) => {
@@ -260,8 +261,8 @@ fn match_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
                             // TODO: not used yet, the idea is to return error
                             // expression from INTERPRET to move to the next 
                             // alternative
-                            if let Some(Atom::Symbol{symbol}) = expr.children().get(0) {
-                                if symbol == "error" {
+                            if let Some(atom) = expr.children().get(0) {
+                                if *atom == Atom::sym("error") {
                                     // Return is used here because I would like
                                     // to have one branch which truncates stacks
                                     // instead of two (see code below).

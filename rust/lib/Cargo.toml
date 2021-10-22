@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 mopa = "0.2.2"
+regex = "1.5.4"
 
 [lib]
 name = "hyperon"
