@@ -1,5 +1,12 @@
 name: Hyperon CI
-on: [pull_request]
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 jobs:
   tests:
