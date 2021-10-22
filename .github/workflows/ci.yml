@@ -18,6 +18,7 @@ jobs:
         working-directory: ./rust
         run: |
           cargo check
+          cargo build
           cargo test
 
       - name: Install Conan
