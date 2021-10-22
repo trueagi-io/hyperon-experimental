@@ -65,6 +65,7 @@ fn choose_stack<'a>(ops: &'a mut Vec<Atom>, data: &'a mut Vec<Atom>, stack: Kind
 fn swap(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, stack: KindOfStack) -> Result<(), String> {
     let stack = choose_stack(ops, data, stack);
     let args = (stack.pop(), stack.pop()); 
+    // TODO: replace println! by logging
     println!("swap{:?}", args);
     match args {
         (Some(a), Some(b)) => {
