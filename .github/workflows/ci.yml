@@ -26,7 +26,8 @@ jobs:
       - name: Install cbindgen
         uses: actions-rs/cargo@v1.0.1
         with:
-          command: install cbindgen
+          command: install
+          args: cbindgen
 
       - name: Setup C API build
         working-directory: ./rust
