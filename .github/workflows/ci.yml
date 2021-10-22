@@ -14,17 +14,11 @@ jobs:
             toolchain: stable
             override: true
 
-      - name: Cargo check
+      - name: Build and test
         working-directory: ./rust
-        uses: actions-rs/cargo@v1.0.1
-        with:
-          command: check
-
-      - name: Cargo test
-        working-directory: ./rust
-        uses: actions-rs/cargo@v1.0.1
-        with:
-          command: test
+        run: |
+          cargo check
+          cargo test
 
       - name: Install Conan
         uses: turtlebrowser/get-conan@1.0
