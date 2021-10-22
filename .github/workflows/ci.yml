@@ -21,7 +21,7 @@ jobs:
           cargo test
 
       - name: Install Conan
-        uses: turtlebrowser/get-conan@1.0
+        uses: turtlebrowser/get-conan@v1.0
 
       - name: Install cbindgen
         uses: actions-rs/cargo@v1.0.1
