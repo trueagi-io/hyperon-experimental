@@ -1,3 +1,5 @@
+![Hyperon CI](https://github.com/trueagi-io/hyperon-experimental/workflows/ci.yml/badge.svg)
+
 # Overview
 
 This is reimplementation of the [C++ Hyperon prototype](https://github.com/trueagi-io/hyperon) from scratch in Rust programming language.
