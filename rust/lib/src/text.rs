@@ -10,10 +10,10 @@ pub struct SExprSpace {
 
 struct TokenDescr {
     regex: Regex,
-    constr: AtomConstr,
+    constr: Box<AtomConstr>,
 }
 
-type AtomConstr = fn(&str) -> Atom;
+type AtomConstr = dyn Fn(&str) -> Atom;
 
 impl SExprSpace {
 
@@ -35,8 +35,8 @@ impl SExprSpace {
         Ok(())
     }
 
-    pub fn register_token(&mut self, regex: Regex, constr: AtomConstr) {
-        self.tokens.push(TokenDescr{ regex, constr });
+    pub fn register_token<C: 'static + Fn(&str) -> Atom>(&mut self, regex: Regex, constr: C) {
+        self.tokens.push(TokenDescr{ regex, constr: Box::new(constr) });
     }
 
     pub fn into_grounding_space(&self, other: &mut GroundingSpace) {
@@ -81,13 +81,13 @@ impl SExprSpace {
         }
     }
 
-    fn find_token(&self, token: &str) -> Option<AtomConstr> {
+    fn find_token(&self, token: &str) -> Option<&AtomConstr> {
         self.tokens.iter().find(|descr| {
             match descr.regex.find_at(token, 0) {
                 Some(m) => m.end() == token.len(),
                 None => false,
             }
-        }).map(|descr| descr.constr)
+        }).map(|descr| &*(descr.constr))
     }
 
 }

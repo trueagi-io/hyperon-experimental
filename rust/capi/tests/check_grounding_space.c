@@ -3,7 +3,6 @@
 #include <hyperon.h>
 
 #include "util.h"
-#include "int_gnd.h"
 
 void setup(void)
 {
@@ -31,13 +30,11 @@ void query_callback(binding_t const* results, uintptr_t size, void* data) {
 START_TEST (test_query)
 {
 	grounding_space_t* space = grounding_space_new();
-	atom_t* data[] = {atom_sym("+"), atom_var("a"), atom_sym("B")};
-	grounding_space_add(space, atom_expr(data, sizeof(data)/sizeof(data[0])));
-	atom_t* query[] = {atom_sym("+"), atom_sym("A"), atom_var("b")};
-	atom_t* query_atom = atom_expr(query, sizeof(query)/sizeof(query[0]));
+	grounding_space_add(space, expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0));
+	atom_t* query = expr(atom_sym("+"), atom_sym("A"), atom_var("b"), 0);
 
 	struct output_t result = { "", 0 };
-	grounding_space_query(space, query_atom, query_callback, &result);
+	grounding_space_query(space, query, query_callback, &result);
 	ck_assert_str_eq(result.str, "b: B, ");
 
 	grounding_space_free(space);

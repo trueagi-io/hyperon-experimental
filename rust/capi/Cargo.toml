@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 hyperon = { path = "../lib/" }
+regex = "1.5.4"
 
 [lib]
 name = "hyperon_capi"

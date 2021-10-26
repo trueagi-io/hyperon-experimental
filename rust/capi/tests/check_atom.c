@@ -26,10 +26,8 @@ END_TEST
 
 START_TEST (test_expr)
 {
-	atom_t* expr[] = {atom_sym("test"), atom_var("var"), atom_sym("five"), atom_gnd(int_new(42))};
-	int size = sizeof(expr)/sizeof(expr[0]);
-	
-	atom_t* atom = atom_expr(expr, size);
+	atom_t* atom = expr(atom_sym("test"), atom_var("var"), atom_sym("five"), atom_gnd(int_new(42)), 0);
+
 	ck_assert_str_eq(stratom(atom), "(test $var five 42)");
 
 	atom_free(atom);

@@ -355,6 +355,10 @@ impl GroundingSpace {
         }
     }
 
+    pub fn as_vec(&self) -> &Vec<Atom> {
+        &self.content
+    }
+
     pub fn atom_iter(&self) -> std::slice::Iter<Atom>{
         self.content.iter()
     }

@@ -1,8 +1,13 @@
 use hyperon::*;
+use hyperon::text::*;
+
 use std::ffi::*;
 use std::os::raw::*;
 use std::convert::TryInto;
 use std::fmt::Display;
+use regex::Regex;
+
+// Atom
 
 #[allow(non_camel_case_types)]
 pub struct atom_t {
@@ -70,6 +75,13 @@ pub unsafe extern "C" fn atom_copy(atom: *const atom_t) -> *mut atom_t {
     atom_to_ptr((*atom).atom.clone())
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn atom_eq(atoma: *const atom_t, atomb: *const atom_t) -> bool {
+    (*atoma).atom == (*atomb).atom
+}
+
+// GroundingSpace
+
 #[allow(non_camel_case_types)]
 pub struct grounding_space_t {
     space: GroundingSpace,
@@ -89,6 +101,16 @@ pub unsafe extern "C" fn grounding_space_free(space: *mut grounding_space_t) {
 pub unsafe extern "C" fn grounding_space_add(space: *mut grounding_space_t, atom: *mut atom_t) {
     let c_atom = Box::from_raw(atom);
     (*space).space.add(c_atom.atom);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn grounding_space_len(space: *const grounding_space_t) -> usize {
+    (*space).space.as_vec().len()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *const atom_t {
+    (&(*space).space.as_vec()[idx] as *const Atom).cast::<atom_t>()
 }
 
 #[allow(non_camel_case_types)]
@@ -140,6 +162,48 @@ pub unsafe extern "C" fn grounding_space_interpret(space: *mut grounding_space_t
     // TODO: think how to return the result string in case of error
     Ok(()) == (*space).space.interpret(ops.cast::<Vec<Atom>>().as_mut().unwrap(),
         data.cast::<Vec<Atom>>().as_mut().unwrap())
+}
+
+// SExprSpace
+
+#[allow(non_camel_case_types)]
+pub struct sexpr_space_t {
+    space: SExprSpace, 
+}
+
+#[no_mangle]
+pub extern "C" fn sexpr_space_new() -> *mut sexpr_space_t {
+    Box::into_raw(Box::new(sexpr_space_t{ space: SExprSpace::new() })) 
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sexpr_space_free(space: *mut sexpr_space_t) {
+    drop(Box::from_raw(space)) 
+}
+
+// TODO: think how to return the result string in case of error
+#[no_mangle]
+pub unsafe extern "C" fn sexpr_space_add_str(space: *mut sexpr_space_t, text: *const c_char) -> bool {
+    Ok(()) == (*space).space.add_str(cstr_as_str(text))
+}
+
+#[allow(non_camel_case_types)]
+type atom_constr_t = extern "C" fn(*const c_char) -> *mut atom_t;
+
+#[no_mangle]
+pub unsafe extern "C" fn sexpr_space_register_token(space: *mut sexpr_space_t,
+    regex: *const c_char, constr: atom_constr_t) {
+    let regex = Regex::new(cstr_as_str(regex)).unwrap();
+    (*space).space.register_token(regex, move |token| {
+        let catom = Box::from_raw(constr(token.as_ptr().cast::<c_char>()));
+        catom.atom
+    });
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sexpr_space_into_grounding_space(sexpr: *const sexpr_space_t,
+        gnd: *mut grounding_space_t) {
+    (*sexpr).space.into_grounding_space(&mut (*gnd).space);
 }
 
 ////////////////////////////////////////////////////////////////
