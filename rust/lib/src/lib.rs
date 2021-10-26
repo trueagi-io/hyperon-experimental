@@ -189,6 +189,12 @@ impl From<&str> for VariableAtom {
     }
 }
 
+impl VariableAtom {
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+}
+
 impl Display for VariableAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "${}", self.name)

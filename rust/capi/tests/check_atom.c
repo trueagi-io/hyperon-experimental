@@ -1,13 +1,8 @@
 #include <check.h>
 #include <hyperon.h>
 
+#include "util.h"
 #include "int_gnd.h"
-
-char buffer[4096];
-char const* _atom_to_str(atom_t const* atom) {
-	atom_to_str(atom, buffer, sizeof(buffer)/sizeof(buffer[0]));
-	return buffer;
-}
 
 void setup(void)
 {
@@ -23,9 +18,9 @@ START_TEST (test_sym)
 	atom_t* atom = atom_sym(name);
 	name[0] = 'r';
 	
-	ck_assert_str_eq(_atom_to_str(atom), "test");
+	ck_assert_str_eq(stratom(atom), "test");
 
-	free_atom(atom);
+	atom_free(atom);
 }
 END_TEST
 
@@ -35,9 +30,9 @@ START_TEST (test_expr)
 	int size = sizeof(expr)/sizeof(expr[0]);
 	
 	atom_t* atom = atom_expr(expr, size);
-	ck_assert_str_eq(_atom_to_str(atom), "(test $var five 42)");
+	ck_assert_str_eq(stratom(atom), "(test $var five 42)");
 
-	free_atom(atom);
+	atom_free(atom);
 }
 END_TEST
 
@@ -47,7 +42,7 @@ Suite * capi_suite(void)
     TCase *tc_core;
     TCase *tc_limits;
 
-    s = suite_create("C API");
+    s = suite_create("Suite");
 
     tc_core = tcase_create("Core");
 

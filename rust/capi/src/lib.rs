@@ -37,8 +37,10 @@ pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
 #[no_mangle]
 pub unsafe extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) -> *mut atom_t {
     let c_arr = std::slice::from_raw_parts(children, size);
-    let children: Vec<Atom> = c_arr.iter().map(|p| (**p).atom.clone()).collect();
-    c_arr.iter().for_each(|p| free_atom(*p));
+    let children: Vec<Atom> = c_arr.into_iter().map(|atom| {
+        let c_atom = Box::from_raw(*atom);
+        c_atom.atom
+    }).collect();
     atom_to_ptr(Atom::Expression(children.into()))
 }
 
@@ -53,7 +55,7 @@ pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> *mut atom_t {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn free_atom(atom: *mut atom_t) {
+pub unsafe extern "C" fn atom_free(atom: *mut atom_t) {
     // drop() does nothing actually, but it is used here for clarity
     drop(Box::from_raw(atom));
 }
@@ -63,12 +65,81 @@ pub unsafe extern "C" fn atom_to_str(atom: *const atom_t, buffer: *mut c_char, m
     string_to_cstr(format!("{}", (*atom).atom), buffer, max_size)
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn atom_copy(atom: *const atom_t) -> *mut atom_t {
+    atom_to_ptr((*atom).atom.clone())
+}
+
 #[allow(non_camel_case_types)]
-pub struct vec_atom_t<'a>(&'a mut Vec<Atom>);
+pub struct grounding_space_t {
+    space: GroundingSpace,
+}
+
+#[no_mangle]
+pub extern "C" fn grounding_space_new() -> *mut grounding_space_t {
+    Box::into_raw(Box::new(grounding_space_t{ space: GroundingSpace::new() })) 
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn grounding_space_free(space: *mut grounding_space_t) {
+    drop(Box::from_raw(space))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn grounding_space_add(space: *mut grounding_space_t, atom: *mut atom_t) {
+    let c_atom = Box::from_raw(atom);
+    (*space).space.add(c_atom.atom);
+}
+
+#[allow(non_camel_case_types)]
+#[repr(C)]
+pub struct binding_t {
+    var: *const c_char,
+    atom: *const atom_t,
+}
+
+#[allow(non_camel_case_types)]
+pub type bindings_callback_t = extern "C" fn(*const binding_t, size: usize, data: *mut c_void);
+
+#[no_mangle]
+pub unsafe extern "C" fn grounding_space_query(space: *mut grounding_space_t,
+        pattern: *const atom_t, callback: bindings_callback_t, data: *mut c_void) {
+    let results = (*space).space.query(&((*pattern).atom));
+    for result in results {
+        let vec = result.iter().map(|(k, v)| binding_t{
+                var: k.name().as_ptr().cast::<c_char>(),
+                atom: (v as *const Atom).cast::<atom_t>()
+            }).collect::<Vec<binding_t>>();
+        callback(vec.as_ptr(), vec.len(), data);
+    }
+}
+
+// TODO: make a macros to generate Vec<T> definitions for C API
+#[allow(non_camel_case_types)]
+pub struct vec_atom_t(Vec<Atom>);
+
+#[no_mangle]
+pub extern "C" fn vec_atom_new() -> *mut vec_atom_t {
+    Box::into_raw(Box::new(vec_atom_t(Vec::new()))) 
+}
 
 #[no_mangle]
 pub unsafe extern "C" fn vec_pop(vec: *mut vec_atom_t) -> *const atom_t {
-    atom_to_ptr((*vec).0.pop().expect("Vector is empty")) as *const atom_t
+    atom_to_ptr((*vec).0.pop().expect("Vector is empty"))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn vec_push(vec: *mut vec_atom_t, atom: *mut atom_t) {
+    let c_atom = Box::from_raw(atom);
+    (*vec).0.push(c_atom.atom);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn grounding_space_interpret(space: *mut grounding_space_t,
+        ops: *mut vec_atom_t, data: *mut vec_atom_t) -> bool {
+    // TODO: think how to return the result string in case of error
+    Ok(()) == (*space).space.interpret(ops.cast::<Vec<Atom>>().as_mut().unwrap(),
+        data.cast::<Vec<Atom>>().as_mut().unwrap())
 }
 
 ////////////////////////////////////////////////////////////////
@@ -98,7 +169,9 @@ impl CGroundedAtom {
         let execute = self.api().execute;
         match execute {
             Some(execute) => {
-                let res = execute(self.as_ptr(), &mut vec_atom_t(ops), &mut vec_atom_t(data));
+                let res = execute(self.as_ptr(),
+                    (ops as *mut Vec<Atom>).cast::<vec_atom_t>(),
+                    (data as *mut Vec<Atom>).cast::<vec_atom_t>());
                 if res.is_null() {
                     Err(cstr_as_str(res).to_string())
                 } else {
