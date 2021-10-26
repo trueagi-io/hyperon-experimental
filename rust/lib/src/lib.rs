@@ -235,8 +235,10 @@ pub enum Atom {
     Symbol(SymbolAtom),
     Expression(ExpressionAtom),
     Variable(VariableAtom),
-    // We need using Box here because if we use reference then we cannot keep
-    // values created dynamically on heap.
+    // We need using Box here because:
+    // - we cannot use GroundedAtom because trait size is not known at compile time
+    // - reference to trait does not allow heap allocated values
+    // - other smart pointers like Rc doesn't allow choosing to copy value or not
     Grounded(Box<dyn GroundedAtom>),
 }
 

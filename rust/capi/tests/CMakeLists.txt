@@ -5,5 +5,5 @@ set(TEST_SOURCES
 add_executable(check_capi ${TEST_SOURCES})
 add_dependencies(check_capi capi_header)
 target_link_libraries(check_capi hyperon_capi ${CONAN_LIBS})
-add_test(NAME capi COMMAND check_capi)
+add_test(NAME check_capi COMMAND check_capi)
 

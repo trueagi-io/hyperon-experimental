@@ -38,9 +38,6 @@ START_TEST (test_expr)
 	ck_assert_str_eq(_atom_to_str(atom), "(test $var five 42)");
 
 	free_atom(atom);
-	for (int i = 0; i < size; ++i) {
-		free_atom(expr[i]);
-	}
 }
 END_TEST
 

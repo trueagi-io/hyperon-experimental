@@ -34,11 +34,11 @@ pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
     atom_to_ptr(Atom::Symbol(cstr_as_str(name).into()))
 }
 
-// TODO: Think about changing the API to make resulting expression taking ownership of passed
-// values
 #[no_mangle]
 pub unsafe extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) -> *mut atom_t {
-    let children: Vec<Atom> = std::slice::from_raw_parts(children, size).iter().map(|p| (**p).atom.clone()).collect();
+    let c_arr = std::slice::from_raw_parts(children, size);
+    let children: Vec<Atom> = c_arr.iter().map(|p| (**p).atom.clone()).collect();
+    c_arr.iter().for_each(|p| free_atom(*p));
     atom_to_ptr(Atom::Expression(children.into()))
 }
 
