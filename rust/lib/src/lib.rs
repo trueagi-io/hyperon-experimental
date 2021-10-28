@@ -189,6 +189,12 @@ impl From<&str> for VariableAtom {
     }
 }
 
+impl VariableAtom {
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+}
+
 impl Display for VariableAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "${}", self.name)
@@ -235,8 +241,10 @@ pub enum Atom {
     Symbol(SymbolAtom),
     Expression(ExpressionAtom),
     Variable(VariableAtom),
-    // We need using Box here because if we use reference then we cannot keep
-    // values created dynamically on heap.
+    // We need using Box here because:
+    // - we cannot use GroundedAtom because trait size is not known at compile time
+    // - reference to trait does not allow heap allocated values
+    // - other smart pointers like Rc doesn't allow choosing to copy value or not
     Grounded(Box<dyn GroundedAtom>),
 }
 
@@ -345,6 +353,10 @@ impl GroundingSpace {
             Some(_) => Err("Ops stack contains non grounded atom".to_string()),
             None => Err("Ops stack is empty".to_string()),
         }
+    }
+
+    pub fn as_vec(&self) -> &Vec<Atom> {
+        &self.content
     }
 
     pub fn atom_iter(&self) -> std::slice::Iter<Atom>{

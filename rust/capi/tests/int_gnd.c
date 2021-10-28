@@ -16,6 +16,12 @@ gnd_t* int_new(int n) {
 	return (gnd_t*) self;
 }
 
+atom_t* int_atom_from_str(char const* str) {
+	int i;
+	sscanf(str, "%u", &i);
+	return atom_gnd(int_new(i));
+}
+
 bool int_eq(struct gnd_t const* _a, struct gnd_t const* _b) {
 	int_gnd_t *a = (int_gnd_t*)_a;
 	int_gnd_t *b = (int_gnd_t*)_b;
