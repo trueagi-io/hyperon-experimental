@@ -1,5 +1,5 @@
 [package]
-name = "hyperon_capi"
+name = "hyperonc"
 version = "0.1.0"
 authors = ["Vitaly Bogdanov <vsbogd@gmail.com>"]
 edition = "2018"
@@ -9,6 +9,6 @@ hyperon = { path = "../lib/" }
 regex = "1.5.4"
 
 [lib]
-name = "hyperon_capi"
+name = "hyperonc"
 path = "src/lib.rs"
 crate-type = ["cdylib", "staticlib"]

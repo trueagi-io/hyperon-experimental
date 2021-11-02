@@ -11,14 +11,16 @@ Please see [Python examples](https://github.com/trueagi-io/hyperon/tree/master/p
 Install Rust v1.55, see [Rust installation
 page](https://www.rust-lang.org/tools/install)
 
-# Build project and run tests
+# Hyperon library
 
+Build and test the library:
 ```
+cd ./lib
 cargo build
 cargo test
 ```
 
-# Test C API
+# C API
 
 Prerequisites:
 ```
@@ -28,16 +30,15 @@ cargo install cbindgen
 
 Setup build:
 ```
-mkdir -p target/capi
-cd target/capi
-conan install --build missing ../../capi
-cmake ../../capi
+mkdir -p build
+cd build
+cmake ../c
 ```
 
 Build and run tests:
 ```
 make
-make test_verbose
+make check
 ```
 
 # Setup IDE

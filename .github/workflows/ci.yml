@@ -22,7 +22,7 @@ jobs:
             override: true
 
       - name: Build and test
-        working-directory: ./rust
+        working-directory: ./lib
         run: |
           cargo check
           cargo build
@@ -38,17 +38,16 @@ jobs:
           args: cbindgen
 
       - name: Setup C API build
-        working-directory: ./rust
+        working-directory: ./c
         run: |
-          mkdir -p target/capi
-          cd target/capi
-          conan install ../../capi
-          cmake ../../capi
+          mkdir -p build
+          cd build
+          cmake ..
 
       - name: Build C API
-        working-directory: ./rust/target/capi
+        working-directory: ./c/build
         run: make
 
       - name: Test C API
-        working-directory: ./rust/target/capi
-        run: make test_verbose
+        working-directory: ./c/build
+        run: make check
