@@ -1,7 +1,7 @@
 #ifndef INT_GND_H
 #define INT_GND_H
 
-#include <hyperon.h>
+#include <hyperon/hyperon.h>
 
 typedef struct _int_gnd_t {
 	gnd_api_t const* api;

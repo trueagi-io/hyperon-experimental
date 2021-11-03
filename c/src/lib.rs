@@ -306,11 +306,11 @@ impl Drop for CGroundedAtom {
 unsafe fn string_to_cstr(s: String, buffer: *mut c_char, max_size: usize) -> usize {
     let bytes = s.as_bytes();
     if !buffer.is_null() {
-        let len = std::cmp::min(bytes.len(), max_size - 4);
+        let trim = bytes.len() > max_size - 1;
+        let len = if trim { max_size - 4 } else { bytes.len() };
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer.cast::<u8>(), len);
-        //let buffer = std::slice::from_raw_parts_mut::<c_char>(buffer, max_size);
         let len : isize = len.try_into().unwrap();
-        if bytes.len() > max_size - 4 {
+        if trim {
             buffer.offset(len).write('.' as c_char);
             buffer.offset(len + 1).write('.' as c_char);
             buffer.offset(len + 2).write('.' as c_char);
@@ -319,7 +319,7 @@ unsafe fn string_to_cstr(s: String, buffer: *mut c_char, max_size: usize) -> usi
             buffer.offset(len).write(0);
         }
     }
-    bytes.len()
+    bytes.len() + 1
 }
 
 unsafe fn cstr_as_str<'a>(s: *const c_char) -> &'a str {

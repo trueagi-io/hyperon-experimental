@@ -1,5 +1,5 @@
 #include <check.h>
-#include <hyperon.h>
+#include <hyperon/hyperon.h>
 
 #include "util.h"
 #include "int_gnd.h"

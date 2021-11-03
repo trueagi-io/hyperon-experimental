@@ -41,6 +41,13 @@ make
 make check
 ```
 
+# Python API
+
+Prerequisites:
+```
+pip install nosetests
+```
+
 # Setup IDE
 
 See [Rust Language Server](https://github.com/rust-lang/rls) page.

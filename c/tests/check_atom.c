@@ -1,5 +1,5 @@
 #include <check.h>
-#include <hyperon.h>
+#include <hyperon/hyperon.h>
 
 #include "util.h"
 #include "int_gnd.h"
@@ -34,6 +34,17 @@ START_TEST (test_expr)
 }
 END_TEST
 
+START_TEST (test_to_str)
+{
+	char str[5];
+	atom_t* atom = atom_sym("test");
+
+	ck_assert_uint_eq(atom_to_str(atom, 0, 0), 5);
+	atom_to_str(atom, str, 5);
+	ck_assert_str_eq(str, "test");
+}
+END_TEST
+
 Suite * capi_suite(void)
 {
     Suite *s;
@@ -47,6 +58,7 @@ Suite * capi_suite(void)
     tcase_add_checked_fixture(tc_core, setup, teardown);
     tcase_add_test(tc_core, test_sym);
     tcase_add_test(tc_core, test_expr);
+    tcase_add_test(tc_core, test_to_str);
     suite_add_tcase(s, tc_core);
 
     return s;
