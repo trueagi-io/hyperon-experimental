@@ -51,6 +51,12 @@ impl From<&str> for SymbolAtom {
     }
 }
 
+impl SymbolAtom {
+    pub fn name(&self) -> &str {
+        self.name.as_str()
+    }
+}
+
 impl Display for SymbolAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)

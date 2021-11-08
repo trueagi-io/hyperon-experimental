@@ -10,6 +10,15 @@ use regex::Regex;
 // Atom
 
 #[allow(non_camel_case_types)]
+#[repr(C)]
+pub enum atom_type_t {
+    SYMBOL,
+    VARIABLE,
+    EXPR,
+    GROUNDED,
+}
+
+#[allow(non_camel_case_types)]
 pub struct atom_t {
     atom: Atom,
 }
@@ -57,6 +66,36 @@ pub unsafe extern "C" fn atom_var(name: *const c_char) -> *mut atom_t {
 #[no_mangle]
 pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> *mut atom_t {
     atom_to_ptr(Atom::gnd(CGroundedAtom(gnd)))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
+    match (*atom).atom {
+        Atom::Symbol(_) => atom_type_t::SYMBOL,
+        Atom::Variable(_) => atom_type_t::VARIABLE,
+        Atom::Expression(_) => atom_type_t::EXPR,
+        Atom::Grounded(_) => atom_type_t::GROUNDED,
+    }
+}
+
+#[allow(non_camel_case_types)]
+type c_str_callback_t = extern "C" fn(str: *const c_char, context: *mut c_void) -> ();
+
+#[no_mangle]
+pub unsafe extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) -> bool {
+    match &((*atom).atom) {
+        Atom::Symbol(s) => {
+            let cstr = CString::new(s.name()).expect("CString::new failed");
+            callback(cstr.as_ptr(), context);
+            true
+        },
+        Atom::Variable(v) => {
+            let cstr = CString::new(v.name()).expect("CString::new failed");
+            callback(cstr.as_ptr(), context);
+            true
+        },
+        _ => false,
+    }
 }
 
 #[no_mangle]
@@ -120,6 +159,7 @@ pub struct binding_t {
     atom: *const atom_t,
 }
 
+// TODO: use this idiom in other API calls which work with C strings
 #[allow(non_camel_case_types)]
 pub type bindings_callback_t = extern "C" fn(*const binding_t, size: usize, data: *mut c_void);
 
@@ -146,7 +186,7 @@ pub extern "C" fn vec_atom_new() -> *mut vec_atom_t {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vec_pop(vec: *mut vec_atom_t) -> *const atom_t {
+pub unsafe extern "C" fn vec_pop(vec: *mut vec_atom_t) -> *mut atom_t {
     atom_to_ptr((*vec).0.pop().expect("Vector is empty"))
 }
 
@@ -307,6 +347,7 @@ unsafe fn string_to_cstr(s: String, buffer: *mut c_char, max_size: usize) -> usi
     let bytes = s.as_bytes();
     if !buffer.is_null() {
         let trim = bytes.len() > max_size - 1;
+        // FIXME: consider case when max_size is less than 4
         let len = if trim { max_size - 4 } else { bytes.len() };
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer.cast::<u8>(), len);
         let len : isize = len.try_into().unwrap();
