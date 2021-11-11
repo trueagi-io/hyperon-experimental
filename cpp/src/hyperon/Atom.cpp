@@ -1,5 +1,6 @@
 #include <cstring>
 #include <algorithm>
+#include <stdexcept>
 
 #include "Atom.hpp"
 
@@ -21,6 +22,22 @@ std::string Atom::get_name() const {
 	return name;
 }
 
+Atom* Atom::from_catom(atom_t* catom) {
+	auto type = atom_get_type(catom);
+	switch (type) {
+	case SYMBOL:
+		return new SymbolAtom(catom);
+	case VARIABLE:
+		return new VariableAtom(catom);
+	case EXPR:
+		return new ExprAtom(catom);
+	case GROUNDED:
+		return new Grounded(catom);
+	default:
+		throw std::runtime_error("Unexpected catom type: " + std::to_string(type));
+	}
+}
+
 atom_t* ExprAtom::into_catom(std::vector<Atom*> &&children) {
 	atom_t* _children[children.size()];
 	std::transform(children.begin(), children.end(), _children,
@@ -38,12 +55,19 @@ extern "C" {
 
 gnd_api_t const CPP_GND_API = { &cpp_execute, &cpp_eq, &cpp_clone, &cpp_display, &cpp_free };
 
+
+class VecAtomWrapper : public VecAtom {
+public:
+	// TODO: make this constructor private
+	VecAtomWrapper(vec_atom_t* vec) : VecAtom(vec) { }
+	virtual ~VecAtomWrapper() { }
+};
+
 static char buffer[4096];
-typedef GroundedAtom::cpp_gnd_t cpp_gnd_t;
 
 const char *cpp_execute(const struct gnd_t* _gnd, struct vec_atom_t* _ops, struct vec_atom_t* _data) {
 	cpp_gnd_t const* gnd = static_cast<cpp_gnd_t const*>(_gnd);
-	VecAtom ops(_ops), data(_data);
+	VecAtomWrapper ops(_ops), data(_data);
 	std::string err = gnd->self->execute(ops, data);
 	size_t size = std::min(err.size(), sizeof(buffer) - 1);
 	memcpy(buffer, err.c_str(), size);

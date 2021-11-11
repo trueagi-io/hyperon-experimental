@@ -1,6 +1,7 @@
 from hyperonpy import (
         Atom,
         GroundedAtom,
+        VecAtom,
         S,
         V,
         E as _E,

@@ -29,14 +29,16 @@ public:
 	}
 
 	GroundedAtom* clone() const override {
-		GroundedAtom const& self = py::cast<GroundedAtom const&>(pygnd);
-		GroundedAtom* copy = self.clone();
-		return copy;
+		return py::cast<GroundedAtom const&>(pygnd).clone();
 	}
 
     std::string to_string() const override {
 		return py::cast<GroundedAtom const&>(pygnd).to_string();
     }
+
+	py::object get_pygnd() {
+		return pygnd;
+	}
 };
 
 class PyGroundedAtomTrampoline : public GroundedAtom {
@@ -56,12 +58,14 @@ public:
 	}
 
 	GroundedAtom* clone() const override {
-        //PYBIND11_OVERRIDE_PURE_NAME(GroundedAtom*, GroundedAtom, "copy", clone,);
-    	py::gil_scoped_acquire gil;  // Acquire the GIL while in this scope.
-    	// Try to look up the overridden method on the Python side.
+    	// Code below wraps cloned Python object into PyGroundedAtomHolder in
+    	// which increments the reference counter in the constructor. This
+    	// prevents Python from deallocating the object. We cannot do this in
+    	// caller.
+    	py::gil_scoped_acquire gil;
     	py::function override = py::get_override(this, "copy");
-    	if (override) {  // method is found
-        	auto obj = override();  // Call the Python function.
+    	if (override) {
+        	auto obj = override();
         	return new PyGroundedAtomHolder(obj);
     	}
         py::pybind11_fail("Tried to call pure virtual function GroundedAtom::clone()");
@@ -93,7 +97,12 @@ PYBIND11_MODULE(hyperonpy, m) {
 	py::class_<ExprAtom, Atom>(m, "ExprAtom");
 	py::class_<VariableAtom, Atom>(m, "VariableAtom")
 		.def("get_name", &VariableAtom::get_name);
-	py::class_<Grounded, Atom>(m, "Grounded");
+	py::class_<Grounded, Atom>(m, "Grounded")
+		.def("get_object", [](Grounded& self) -> py::object {
+					GroundedAtom* obj = self.get_object();
+					PyGroundedAtomHolder* pyobj = dynamic_cast<PyGroundedAtomHolder*>(obj);
+					return pyobj ? pyobj->get_pygnd() : py::cast(obj);
+				});
 
     m.def("S", &SymbolAtom::sym, "Create symbol atom");
     m.def("V", &VariableAtom::var, "Create variable atom");
@@ -110,6 +119,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 		.def("__repr__", &GroundedAtom::to_string);
 
 	py::class_<VecAtom>(m, "VecAtom")
+		.def(py::init<>([]() { return VecAtomCpp(); }))
 		.def("pop", &VecAtom::pop)
 		.def("push", &VecAtom::push);
 }

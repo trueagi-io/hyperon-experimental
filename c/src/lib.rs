@@ -82,19 +82,30 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
 type c_str_callback_t = extern "C" fn(str: *const c_char, context: *mut c_void) -> ();
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) -> bool {
+pub unsafe extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
     match &((*atom).atom) {
         Atom::Symbol(s) => {
             let cstr = CString::new(s.name()).expect("CString::new failed");
             callback(cstr.as_ptr(), context);
-            true
         },
         Atom::Variable(v) => {
             let cstr = CString::new(v.name()).expect("CString::new failed");
             callback(cstr.as_ptr(), context);
-            true
         },
-        _ => false,
+        _ => panic!("Only Symbol and Variable has name attribute!"),
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
+    match &((*atom).atom) {
+        Atom::Grounded(g) => {
+            match (**g).downcast_ref::<CGroundedAtom>() {
+                Some(g) => g.as_ptr(),
+                None => panic!("Returning non C grounded objects is not implemented yet!"),
+            }
+        },
+        _ => panic!("Only Grounded has object attribute!"),
     }
 }
 
@@ -183,6 +194,11 @@ pub struct vec_atom_t(Vec<Atom>);
 #[no_mangle]
 pub extern "C" fn vec_atom_new() -> *mut vec_atom_t {
     Box::into_raw(Box::new(vec_atom_t(Vec::new()))) 
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn vec_atom_free(vec: *mut vec_atom_t) {
+    drop(Box::from_raw(vec));
 }
 
 #[no_mangle]

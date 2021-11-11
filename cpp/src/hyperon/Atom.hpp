@@ -27,6 +27,7 @@ protected:
 	}
 
 	virtual std::string get_name() const;
+	static Atom* from_catom(atom_t* catom);
 
 public:
 	Atom(Atom&& other) : catom(nullptr) {
@@ -53,6 +54,9 @@ public:
 };
 
 class SymbolAtom : public Atom {
+protected:
+	friend class Atom;
+	SymbolAtom(atom_t* catom) : Atom(catom) {}
 public:
 	SymbolAtom(std::string name) : Atom(atom_sym(name.c_str())) {}
 	static SymbolAtom sym(std::string name) { return SymbolAtom(name); }
@@ -60,6 +64,9 @@ public:
 };
 
 class VariableAtom : public Atom {
+protected:
+	friend class Atom;
+	VariableAtom(atom_t* catom) : Atom(catom) {}
 public:
 	VariableAtom(std::string name) : Atom(atom_var(name.c_str())) {}
 	static VariableAtom var(std::string name) { return VariableAtom(name); }
@@ -67,6 +74,9 @@ public:
 };
 
 class ExprAtom : public Atom {
+protected:
+	friend class Atom;
+	ExprAtom(atom_t* catom) : Atom(catom) {}
 public:
 	ExprAtom(std::vector<Atom*>&& children) : Atom(ExprAtom::into_catom(std::move(children))) {}
 	static ExprAtom expr(std::vector<Atom*>&& children) { return ExprAtom(std::move(children)); }
@@ -77,10 +87,22 @@ private:
 
 // TODO: make naming in Rust and C++ conformant
 class GroundedAtom;
+struct cpp_gnd_t : gnd_t {
+	GroundedAtom* self;
+};
+
 class Grounded : public Atom {
+protected:
+	friend class Atom;
+	Grounded(atom_t* catom) : Atom(catom) {}
 public:
 	Grounded(GroundedAtom* value) : Atom(Grounded::into_catom(value)) {}
 	static Grounded gnd(GroundedAtom* value) { return Grounded(value); }
+	GroundedAtom* get_object() { 
+		// TODO: support case of Rust object returned from C API
+		gnd_t* _obj = atom_get_object(catom);
+		return static_cast<cpp_gnd_t*>(_obj)->self;
+	}
 private:
 	atom_t* into_catom(GroundedAtom* atom);
 };
@@ -91,10 +113,6 @@ extern const gnd_api_t CPP_GND_API;
 
 class GroundedAtom {
 public:
-	struct cpp_gnd_t : gnd_t {
-		GroundedAtom* self;
-	};
-
 	GroundedAtom() {
 		gnd.api = &CPP_GND_API;
 		gnd.self = this;
@@ -111,21 +129,28 @@ public:
 };
 
 class VecAtom {
-private:
+protected:
 	vec_atom_t* vec;
 
-public:
-	// TODO: make this constructor private
 	VecAtom(vec_atom_t* vec) : vec(vec) { }
 
+public:
 	virtual ~VecAtom() { }
 
-	Atom pop() {
-		return Atom(vec_pop(vec));
+	Atom* pop() {
+		return Atom::from_catom(vec_pop(vec));
 	}
 
 	void push(Atom& atom) {
-		vec_push(vec, atom.extract_catom());
+		vec_push(vec, atom_copy(atom.catom));
+	}
+};
+
+class VecAtomCpp : public VecAtom {
+public:
+	VecAtomCpp() : VecAtom(vec_atom_new()) { }
+	virtual ~VecAtomCpp() {
+		vec_atom_free(vec);
 	}
 };
 

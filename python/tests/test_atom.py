@@ -40,13 +40,15 @@ class AtomTest(unittest.TestCase):
     def test_grounded_type(self):
         self.assertEqual(ValueAtom(1.0).get_type(), Atom.GROUNDED)
 
-    def _test_grounded_execute_default(self):
-        with self.assertRaises(RuntimeError) as e:
-            ValueAtom(1.0).execute(GroundingSpace(), GroundingSpace())
-        self.assertEqual(str(e.exception), "Operation is not supported")
+    def test_grounded_execute_default(self):
+        self.assertEqual(ValueAtom(1.0).get_object().execute(VecAtom(),
+            VecAtom()), "1.0 is not executable")
 
-    def _test_grounded_execute(self):
-        self.assertEqual(X2Atom().execute(ValueAtom(1.0)), ValueAtom(2.0))
+    def test_grounded_execute(self):
+        data = VecAtom()
+        data.push(ValueAtom(1.0))
+        X2Atom().get_object().execute(VecAtom(), data)
+        self.assertEqual(data.pop(), ValueAtom(2.0))
 
     def test_expr_equals(self):
         self.assertEqual(E(S("+"), S("1"), S("2")),
@@ -105,7 +107,8 @@ class X2(GroundedAtom):
         GroundedAtom.__init__(self)
 
     def execute(self, ops, data):
-        data.push(ValueAtom(2 * data.pop().value))
+        arg = data.pop().get_object()
+        data.push(ValueAtom(2 * arg.value))
         return None
 
     def __eq__(self, other):
