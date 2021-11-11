@@ -17,6 +17,9 @@ class AtomTest(unittest.TestCase):
     def test_symbol_get_symbol(self):
         self.assertEqual(S("a").get_name(), "a")
 
+    def test_symbol_get_symbol_utf8(self):
+        self.assertEqual(S("здравствуйте").get_name(), "здравствуйте")
+
     def test_variable_equals(self):
         self.assertEqual(V("x"), V("x"))
         self.assertNotEqual(V("x"), V("y"))
