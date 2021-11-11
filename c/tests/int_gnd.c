@@ -16,7 +16,7 @@ gnd_t* int_new(int n) {
 	return (gnd_t*) self;
 }
 
-atom_t* int_atom_from_str(char const* str) {
+atom_t* int_atom_from_str(char const* str, void* context) {
 	int i;
 	sscanf(str, "%u", &i);
 	return atom_gnd(int_new(i));

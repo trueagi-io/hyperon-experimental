@@ -241,14 +241,30 @@ pub unsafe extern "C" fn sexpr_space_add_str(space: *mut sexpr_space_t, text: *c
 }
 
 #[allow(non_camel_case_types)]
-type atom_constr_t = extern "C" fn(*const c_char) -> *mut atom_t;
+type atom_constr_t = extern "C" fn(*const c_char, *mut c_void) -> *mut atom_t;
+
+#[allow(non_camel_case_types)]
+#[repr(C)]
+pub struct droppable_t {
+    ptr: *mut c_void,
+    free: Option<extern "C" fn(ptr: *mut c_void)>,
+}
+
+impl Drop for droppable_t {
+    fn drop(&mut self) {
+        let free = (*self).free;
+        if let Some(free) = free {
+            free(self.ptr);
+        }
+    }
+}
 
 #[no_mangle]
 pub unsafe extern "C" fn sexpr_space_register_token(space: *mut sexpr_space_t,
-    regex: *const c_char, constr: atom_constr_t) {
+    regex: *const c_char, constr: atom_constr_t, context: droppable_t) {
     let regex = Regex::new(cstr_as_str(regex)).unwrap();
     (*space).space.register_token(regex, move |token| {
-        let catom = Box::from_raw(constr(token.as_ptr().cast::<c_char>()));
+        let catom = Box::from_raw(constr(str_as_cstr(token).as_ptr(), context.ptr));
         catom.atom
     });
 }

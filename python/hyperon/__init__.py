@@ -122,3 +122,20 @@ class GroundingSpace:
 
     def add_atom(self, atom):
         hp.grounding_space_add(self.cspace, atom.catom)
+
+class SExprSpace:
+
+    def __init__(self):
+        self.cspace = hp.sexpr_space_new()
+
+    def __del__(self):
+        hp.sexpr_space_free(self.cspace)
+
+    def register_token(self, regex, constr):
+        hp.sexpr_space_register_token(self.cspace, regex, constr)
+
+    def add_string(self, text):
+        hp.sexpr_space_add_str(self.cspace, text)
+
+    def add_to(self, gspace):
+        hp.sexpr_space_into_grounding_space(self.cspace, gspace.cspace)

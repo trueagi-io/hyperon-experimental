@@ -5,20 +5,17 @@
 
 namespace py = pybind11;
 
-struct CAtom {
-	CAtom(atom_t* catom) : catom(catom) {}
-	atom_t* catom;
+template <typename T>
+struct CPtr {
+	using type = T;
+	CPtr(T* ptr) : ptr(ptr) {}
+	T* ptr;
 };
 
-struct CVecAtom {
-	CVecAtom(vec_atom_t* cvec) : cvec(cvec) {}
-	vec_atom_t* cvec;
-};
-
-struct CGroundingSpace {
-	CGroundingSpace(grounding_space_t* cspace) : cspace(cspace) {}
-	grounding_space_t* cspace;
-};
+using CAtom = CPtr<atom_t>;
+using CVecAtom = CPtr<vec_atom_t>;
+using CGroundingSpace = CPtr<grounding_space_t>;
+using CSExprSpace = CPtr<sexpr_space_t>;
 
 auto const& copy_to_string = [](char const* cstr, void* context) -> void {
 	std::string* cppstr = static_cast<std::string*>(context);
@@ -75,6 +72,27 @@ void py_free(struct gnd_t* _cgnd) {
 	delete _cgnd;
 }
 
+struct CConstr {
+
+	py::object pyconstr;
+
+	CConstr(py::object pyconstr) : pyconstr(pyconstr) {
+		pyconstr.inc_ref();
+	}
+
+	static void free(void* ptr) {
+		CConstr* self = static_cast<CConstr*>(ptr);
+		self->pyconstr.dec_ref();
+		delete self;
+	}
+
+	static atom_t* apply(char const* token, void* context) {
+		CConstr* self = static_cast<CConstr*>(context);
+		py::object atom = self->pyconstr(token);
+		return atom_copy(atom.attr("catom").cast<CAtom>().ptr);
+	}
+};
+
 PYBIND11_MODULE(hyperonpy, m) {
 	m.doc() = "Python API of the Hyperon library";
 
@@ -96,39 +114,49 @@ PYBIND11_MODULE(hyperonpy, m) {
     		for (auto atom : _children) {
     			// Copying atom is required because atom_expr() moves children
     			// catoms inside new expression atom.
-    			children[idx++] = atom_copy(atom.cast<CAtom&>().catom);
+    			children[idx++] = atom_copy(atom.cast<CAtom&>().ptr);
     		}
     		return CAtom(atom_expr(children, size));
     	}, "Create expression atom");
     m.def("atom_gnd", [](py::object object) { return CAtom(atom_gnd(new GroundedObject(object))); }, "Create grounded atom");
-    m.def("atom_free", [](CAtom atom) { atom_free(atom.catom); }, "Free C atom");
+    m.def("atom_free", [](CAtom atom) { atom_free(atom.ptr); }, "Free C atom");
 
-    m.def("atom_eq", [](CAtom a, CAtom b) -> bool { return atom_eq(a.catom, b.catom); }, "Test if two atoms are equal");
+    m.def("atom_eq", [](CAtom a, CAtom b) -> bool { return atom_eq(a.ptr, b.ptr); }, "Test if two atoms are equal");
     m.def("atom_to_str", [](CAtom atom) {
 			std::string str;
-    		atom_to_str(atom.catom, copy_to_string, &str);
+    		atom_to_str(atom.ptr, copy_to_string, &str);
     		return str;
     	}, "Convert atom to human readable string");
-    m.def("atom_get_type", [](CAtom atom) { return atom_get_type(atom.catom); }, "Get type of the atom");
+    m.def("atom_get_type", [](CAtom atom) { return atom_get_type(atom.ptr); }, "Get type of the atom");
     m.def("atom_get_name", [](CAtom atom) {
 			std::string str;
-    		atom_get_name(atom.catom, copy_to_string, &str);
+    		atom_get_name(atom.ptr, copy_to_string, &str);
     		return str;
     	}, "Get name of the Symbol or Variable atom");
 	m.def("atom_get_object", [](CAtom atom) {
-			return static_cast<GroundedObject const*>(atom_get_object(atom.catom))->pyobj;
+			return static_cast<GroundedObject const*>(atom_get_object(atom.ptr))->pyobj;
 		}, "Get object of the grounded atom");
 
 	py::class_<CVecAtom>(m, "CVecAtom");
 	m.def("vec_atom_new", []() { return CVecAtom(vec_atom_new()); }, "New vector of atoms");
-	m.def("vec_atom_free", [](CVecAtom vec) { vec_atom_free(vec.cvec); }, "Free vector of atoms");
-	m.def("vec_atom_push", [](CVecAtom vec, CAtom atom) { vec_atom_push(vec.cvec, atom_copy(atom.catom)); }, "Push atom into vector");
-	m.def("vec_atom_pop", [](CVecAtom vec) { return CAtom(vec_atom_pop(vec.cvec)); }, "Push atom into vector");
+	m.def("vec_atom_free", [](CVecAtom vec) { vec_atom_free(vec.ptr); }, "Free vector of atoms");
+	m.def("vec_atom_push", [](CVecAtom vec, CAtom atom) { vec_atom_push(vec.ptr, atom_copy(atom.ptr)); }, "Push atom into vector");
+	m.def("vec_atom_pop", [](CVecAtom vec) { return CAtom(vec_atom_pop(vec.ptr)); }, "Push atom into vector");
 
 	py::class_<CGroundingSpace>(m, "CGroundingSpace");
 	m.def("grounding_space_new", []() { return CGroundingSpace(grounding_space_new()); }, "New grounding space instance");
-	m.def("grounding_space_free", [](CGroundingSpace space) { grounding_space_free(space.cspace); }, "Free grounding space");
-	m.def("grounding_space_add", [](CGroundingSpace space, CAtom atom) { grounding_space_add(space.cspace, atom_copy(atom.catom)); }, "Add atom into grounding space");
-	m.def("grounding_space_eq", [](CGroundingSpace a, CGroundingSpace b) { return grounding_space_eq(a.cspace, b.cspace); }, "Check if two grounding spaces are equal");
+	m.def("grounding_space_free", [](CGroundingSpace space) { grounding_space_free(space.ptr); }, "Free grounding space");
+	m.def("grounding_space_add", [](CGroundingSpace space, CAtom atom) { grounding_space_add(space.ptr, atom_copy(atom.ptr)); }, "Add atom into grounding space");
+	m.def("grounding_space_eq", [](CGroundingSpace a, CGroundingSpace b) { return grounding_space_eq(a.ptr, b.ptr); }, "Check if two grounding spaces are equal");
+
+	py::class_<CSExprSpace>(m, "CSExprSpace");
+	m.def("sexpr_space_new", []() { return CSExprSpace(sexpr_space_new()); }, "New sexpr space");
+	m.def("sexpr_space_free", [](CSExprSpace space) { sexpr_space_free(space.ptr); }, "Free sexpr space");
+	m.def("sexpr_space_register_token", [](CSExprSpace space, char const* regex, py::object constr) {
+			droppable_t context = { new CConstr(constr), CConstr::free };
+			sexpr_space_register_token(space.ptr, regex, &CConstr::apply, context);
+		}, "Register sexpr space token");
+	m.def("sexpr_space_add_str", [](CSExprSpace space, char const* str) { sexpr_space_add_str(space.ptr, str); }, "Add text to the sexpr space");
+	m.def("sexpr_space_into_grounding_space", [](CSExprSpace tspace, CGroundingSpace gspace) { sexpr_space_into_grounding_space(tspace.ptr, gspace.ptr); }, "Add content of the sexpr space to the grounding space");
 }
 
