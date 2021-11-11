@@ -38,16 +38,16 @@ jobs:
           args: cbindgen
 
       - name: Setup C API build
-        working-directory: ./c
+        working-directory: .
         run: |
           mkdir -p build
           cd build
           cmake ..
 
       - name: Build C API
-        working-directory: ./c/build
+        working-directory: ./build
         run: make
 
       - name: Test C API
-        working-directory: ./c/build
+        working-directory: ./build
         run: make check

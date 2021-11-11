@@ -20,11 +20,11 @@ cargo build
 cargo test
 ```
 
-# C API
+# C, Python, C++ API
 
 Prerequisites:
 ```
-pip install conan
+pip install conan nosetests
 cargo install cbindgen
 ```
 
@@ -32,20 +32,13 @@ Setup build:
 ```
 mkdir -p build
 cd build
-cmake ../c
+cmake ..
 ```
 
 Build and run tests:
 ```
 make
 make check
-```
-
-# Python API
-
-Prerequisites:
-```
-pip install nosetests
 ```
 
 # Setup IDE
