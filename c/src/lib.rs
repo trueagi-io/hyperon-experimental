@@ -307,10 +307,10 @@ impl CGroundedAtom {
         CGroundedAtom((self.api().clone)(self.as_ptr()))
     }
 
-    unsafe fn display(&self) -> &str {
-        let mut buffer = [0; 4096];
+    unsafe fn display(&self) -> String {
+        let mut buffer = [0u8; 4096];
         (self.api().display)(self.as_ptr(), buffer.as_mut_ptr().cast::<c_char>(), 4096);
-        cstr_as_str(buffer.as_ptr().cast::<c_char>())
+        cstr_into_string(buffer.as_ptr().cast::<c_char>())
     }
 
     fn free(&self) {
@@ -356,6 +356,10 @@ impl Drop for CGroundedAtom {
 
 unsafe fn cstr_as_str<'a>(s: *const c_char) -> &'a str {
     CStr::from_ptr(s).to_str().expect("Incorrect UTF-8 sequence")
+}
+
+unsafe fn cstr_into_string(s: *const c_char) -> String {
+    String::from(cstr_as_str(s))
 }
 
 fn str_as_cstr<'a>(s: &str) -> CString {
