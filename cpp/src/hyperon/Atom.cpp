@@ -4,21 +4,20 @@
 
 #include "Atom.hpp"
 
-auto const& get_string_from_rust = [](char const* cstr, void* context) -> void {
+auto const& copy_to_string = [](char const* cstr, void* context) -> void {
 	std::string* cppstr = static_cast<std::string*>(context);
 	cppstr->assign(cstr);
 };
 
 std::string Atom::to_string() const {
-	size_t size = atom_to_str(catom, 0, 0);
-	char str[size];
-	atom_to_str(catom, str, size);
-	return std::string(str);
+	std::string str;
+	atom_to_str(catom, copy_to_string, &str);
+	return str;
 }
 
 std::string Atom::get_name() const {
 	std::string name;
-	atom_get_name(catom, get_string_from_rust, &name);
+	atom_get_name(catom, copy_to_string, &name);
 	return name;
 }
 

@@ -12,8 +12,8 @@ include(FindPythonInstallPrefix)
 
 pybind11_add_module(hyperonpy hyperonpy.cpp)
 target_link_libraries(hyperonpy PRIVATE hyperoncpp)
-target_include_directories(hyperoncpp INTERFACE
-	$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/cpp/src>
+target_include_directories(hyperonc INTERFACE
+	#$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/cpp/src>
 	#$<INSTALL_INTERFACE:include/mylib>  # <prefix>/include/mylib
 )
 

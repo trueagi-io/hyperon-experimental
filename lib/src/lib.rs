@@ -372,7 +372,7 @@ impl GroundingSpace {
 
 impl PartialEq for GroundingSpace {
     fn eq(&self, other: &Self) -> bool {
-        self == other
+        self.content == other.content
     }
 }
 

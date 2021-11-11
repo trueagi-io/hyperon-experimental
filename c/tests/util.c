@@ -1,11 +1,18 @@
 #include <stdarg.h>
+#include <string.h>
 
 #include "util.h"
 
 static char buffer[4096];
+const size_t buffer_size = sizeof(buffer)/sizeof(buffer[0]);
+
+void return_string(char const* value, void* context) {
+	strncpy(buffer, value, buffer_size - 1);
+	buffer[buffer_size - 1] = 0;
+}
 
 char const* stratom(atom_t const* atom) {
-	atom_to_str(atom, buffer, sizeof(buffer)/sizeof(buffer[0]));
+	atom_to_str(atom, return_string, 0);
 	return buffer;
 }
 

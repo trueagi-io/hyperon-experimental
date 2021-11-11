@@ -3,7 +3,6 @@ use hyperon::text::*;
 
 use std::ffi::*;
 use std::os::raw::*;
-use std::convert::TryInto;
 use std::fmt::Display;
 use regex::Regex;
 
@@ -82,30 +81,28 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
 type c_str_callback_t = extern "C" fn(str: *const c_char, context: *mut c_void) -> ();
 
 #[no_mangle]
+pub unsafe extern "C" fn atom_to_str(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
+    callback(str_as_cstr(format!("{}", (*atom).atom).as_str()).as_ptr(), context);
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
     match &((*atom).atom) {
-        Atom::Symbol(s) => {
-            let cstr = CString::new(s.name()).expect("CString::new failed");
-            callback(cstr.as_ptr(), context);
-        },
-        Atom::Variable(v) => {
-            let cstr = CString::new(v.name()).expect("CString::new failed");
-            callback(cstr.as_ptr(), context);
-        },
+        Atom::Symbol(s) => callback(str_as_cstr(s.name()).as_ptr(), context),
+        Atom::Variable(v) => callback(str_as_cstr(v.name()).as_ptr(), context),
         _ => panic!("Only Symbol and Variable has name attribute!"),
     }
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
-    match &((*atom).atom) {
-        Atom::Grounded(g) => {
-            match (**g).downcast_ref::<CGroundedAtom>() {
-                Some(g) => g.as_ptr(),
-                None => panic!("Returning non C grounded objects is not implemented yet!"),
-            }
-        },
-        _ => panic!("Only Grounded has object attribute!"),
+    if let Atom::Grounded(ref g) = (*atom).atom {
+        match (**g).downcast_ref::<CGroundedAtom>() {
+            Some(g) => g.as_ptr(),
+            None => panic!("Returning non C grounded objects is not implemented yet!"),
+        }
+    } else {
+        panic!("Only Grounded has object attribute!");
     }
 }
 
@@ -113,11 +110,6 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
 pub unsafe extern "C" fn atom_free(atom: *mut atom_t) {
     // drop() does nothing actually, but it is used here for clarity
     drop(Box::from_raw(atom));
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn atom_to_str(atom: *const atom_t, buffer: *mut c_char, max_size: usize) -> usize {
-    string_to_cstr(format!("{}", (*atom).atom), buffer, max_size)
 }
 
 #[no_mangle]
@@ -145,6 +137,11 @@ pub extern "C" fn grounding_space_new() -> *mut grounding_space_t {
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_free(space: *mut grounding_space_t) {
     drop(Box::from_raw(space))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn grounding_space_eq(a: *const grounding_space_t, b: *const grounding_space_t) -> bool {
+    (*a).space == (*b).space
 }
 
 #[no_mangle]
@@ -202,12 +199,12 @@ pub unsafe extern "C" fn vec_atom_free(vec: *mut vec_atom_t) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vec_pop(vec: *mut vec_atom_t) -> *mut atom_t {
+pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> *mut atom_t {
     atom_to_ptr((*vec).0.pop().expect("Vector is empty"))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vec_push(vec: *mut vec_atom_t, atom: *mut atom_t) {
+pub unsafe extern "C" fn vec_atom_push(vec: *mut vec_atom_t, atom: *mut atom_t) {
     let c_atom = Box::from_raw(atom);
     (*vec).0.push(c_atom.atom);
 }
@@ -357,28 +354,10 @@ impl Drop for CGroundedAtom {
     }
 }
 
-// String conversion utilities
-
-unsafe fn string_to_cstr(s: String, buffer: *mut c_char, max_size: usize) -> usize {
-    let bytes = s.as_bytes();
-    if !buffer.is_null() {
-        let trim = bytes.len() > max_size - 1;
-        // FIXME: consider case when max_size is less than 4
-        let len = if trim { max_size - 4 } else { bytes.len() };
-        std::ptr::copy_nonoverlapping(bytes.as_ptr(), buffer.cast::<u8>(), len);
-        let len : isize = len.try_into().unwrap();
-        if trim {
-            buffer.offset(len).write('.' as c_char);
-            buffer.offset(len + 1).write('.' as c_char);
-            buffer.offset(len + 2).write('.' as c_char);
-            buffer.offset(len + 3).write(0);
-        } else {
-            buffer.offset(len).write(0);
-        }
-    }
-    bytes.len() + 1
-}
-
 unsafe fn cstr_as_str<'a>(s: *const c_char) -> &'a str {
     CStr::from_ptr(s).to_str().expect("Incorrect UTF-8 sequence")
+}
+
+fn str_as_cstr<'a>(s: &str) -> CString {
+    CString::new(s).expect("CString::new failed")
 }

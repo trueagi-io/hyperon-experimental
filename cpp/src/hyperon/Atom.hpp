@@ -138,11 +138,11 @@ public:
 	virtual ~VecAtom() { }
 
 	Atom* pop() {
-		return Atom::from_catom(vec_pop(vec));
+		return Atom::from_catom(vec_atom_pop(vec));
 	}
 
 	void push(Atom& atom) {
-		vec_push(vec, atom_copy(atom.catom));
+		vec_atom_push(vec, atom_copy(atom.catom));
 	}
 };
 
