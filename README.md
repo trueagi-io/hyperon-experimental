@@ -41,6 +41,16 @@ make
 make check
 ```
 
+To run release build use following instead of `cmake ..`:
+```
+cmake -DCMAKE_BUILD_TYPE=Release ..
+```
+
 # Setup IDE
 
 See [Rust Language Server](https://github.com/rust-lang/rls) page.
+
+In order to use clangd server generate compile commands using cmake var:
+```
+cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=Y ..
+```
