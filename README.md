@@ -24,8 +24,8 @@ cargo test
 
 Prerequisites:
 ```
-pip install conan nosetests
 cargo install cbindgen
+python -m pip install -e ./python[dev]
 ```
 
 Setup build:
