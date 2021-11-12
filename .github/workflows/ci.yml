@@ -42,7 +42,9 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake ..
+          # specify C compiler as conan could not find it automatically
+          # see https://github.com/conan-io/conan/issues/4322
+          cmake -DCMAKE_C_COMPILER=gcc ..
 
       - name: Build C API
         working-directory: ./build
