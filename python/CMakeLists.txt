@@ -11,11 +11,7 @@ list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 include(FindPythonInstallPrefix)
 
 pybind11_add_module(hyperonpy hyperonpy.cpp)
-target_link_libraries(hyperonpy PRIVATE hyperoncpp)
-target_include_directories(hyperonc INTERFACE
-	#$<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/cpp/src>
-	#$<INSTALL_INTERFACE:include/mylib>  # <prefix>/include/mylib
-)
+target_link_libraries(hyperonpy PRIVATE hyperonc)
 
 set(PYTHONPATH "${CMAKE_CURRENT_BINARY_DIR}:${CMAKE_CURRENT_SOURCE_DIR}")
 add_subdirectory(tests)

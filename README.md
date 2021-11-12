@@ -25,6 +25,7 @@ cargo test
 Prerequisites:
 ```
 cargo install cbindgen
+python -m pip install conan
 python -m pip install -e ./python[dev]
 ```
 
