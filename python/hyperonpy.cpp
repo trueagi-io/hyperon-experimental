@@ -44,7 +44,18 @@ struct GroundedObject : gnd_t {
 	py::object pyobj;
 };
 
-const char *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* ops, struct vec_atom_t* data) {
+py::object inc_ref(py::object obj) {
+	obj.inc_ref();
+	return obj;
+}
+
+const char *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _ops, struct vec_atom_t* _data) {
+	// Increment module reference counter otherwise SIGSEGV happens on exit
+	static py::object hyperon = inc_ref(py::module_::import("hyperon"));
+	static py::object BaseVecAtom = hyperon.attr("BaseVecAtom");
+	py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
+	pyobj.attr("execute")(BaseVecAtom(CVecAtom(_ops)), BaseVecAtom(CVecAtom(_data)));
+	// TODO: implement returning error
 	return nullptr;	
 }
 
@@ -158,5 +169,10 @@ PYBIND11_MODULE(hyperonpy, m) {
 		}, "Register sexpr space token");
 	m.def("sexpr_space_add_str", [](CSExprSpace space, char const* str) { sexpr_space_add_str(space.ptr, str); }, "Add text to the sexpr space");
 	m.def("sexpr_space_into_grounding_space", [](CSExprSpace tspace, CGroundingSpace gspace) { sexpr_space_into_grounding_space(tspace.ptr, gspace.ptr); }, "Add content of the sexpr space to the grounding space");
+
+	m.def("interpret", [](CGroundingSpace space, CAtom expr) { 
+			atom_t* res = interpret(space.ptr, expr.ptr);
+			return res ? py::cast(CAtom(res)) : py::none();
+		}, "Run interpreter on expression and return result");
 }
 

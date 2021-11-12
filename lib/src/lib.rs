@@ -324,6 +324,10 @@ impl Display for Atom {
 
 pub type Bindings = HashMap<VariableAtom, Atom>;
 
+// FIXME: clone should not be required but as interpret puts the GroundingSpace
+// as Atom into data stack we cannot run interpret without moving into
+// into interpreter.
+#[derive(Clone)]
 pub struct GroundingSpace {
     content: Vec<Atom>,
 }

@@ -5,6 +5,7 @@ use std::ffi::*;
 use std::os::raw::*;
 use std::fmt::Display;
 use regex::Regex;
+use std::rc::Rc;
 
 // Atom
 
@@ -217,6 +218,14 @@ pub unsafe extern "C" fn grounding_space_interpret(space: *mut grounding_space_t
         data.cast::<Vec<Atom>>().as_mut().unwrap())
 }
 
+#[no_mangle]
+pub unsafe extern "C" fn interpret(space: *mut grounding_space_t, expr: *const atom_t) -> *mut atom_t {
+    match hyperon::interpreter::interpret(Rc::new((*space).space.clone()), &(*expr).atom) {
+        Ok(atom) => atom_to_ptr(atom),
+        Err(_) => 0 as *mut atom_t,
+    }
+}
+
 // SExprSpace
 
 #[allow(non_camel_case_types)]
@@ -306,9 +315,9 @@ impl CGroundedAtom {
                     (ops as *mut Vec<Atom>).cast::<vec_atom_t>(),
                     (data as *mut Vec<Atom>).cast::<vec_atom_t>());
                 if res.is_null() {
-                    Err(cstr_as_str(res).to_string())
-                } else {
                     Ok(())
+                } else {
+                    Err(cstr_as_str(res).to_string())
                 }
             },
             None => Err(format!("{} is not executable", self)),

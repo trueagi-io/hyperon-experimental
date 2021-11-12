@@ -75,19 +75,24 @@ class GroundedAtom(Atom):
 def G(object):
     return GroundedAtom(hp.atom_gnd(object))
 
-class VecAtom:
+class BaseVecAtom:
 
-    def __init__(self):
-        self.cvec = hp.vec_atom_new()
-
-    def __del__(self):
-        hp.vec_atom_free(self.cvec)
+    def __init__(self, cvec):
+        self.cvec = cvec
 
     def push(self, atom):
         hp.vec_atom_push(self.cvec, atom.catom)
 
     def pop(self):
         return Atom._from_catom(hp.vec_atom_pop(self.cvec))
+
+class VecAtom(BaseVecAtom):
+
+    def __init__(self):
+        super().__init__(hp.vec_atom_new())
+
+    def __del__(self):
+        hp.vec_atom_free(self.cvec)
 
 def ValueAtom(value):
     return G(Value(value))
@@ -139,3 +144,10 @@ class SExprSpace:
 
     def add_to(self, gspace):
         hp.sexpr_space_into_grounding_space(self.cspace, gspace.cspace)
+
+def interpret(gnd_space, expr):
+    catom = hp.interpret(gnd_space.cspace, expr.catom)
+    if catom is None:
+        # TODO: implement returning error
+        raise Exception("Interpret finished with error")
+    return Atom._from_catom(catom)
