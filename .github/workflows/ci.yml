@@ -22,7 +22,7 @@ jobs:
             override: true
 
       - name: Build and test
-        working-directory: ./rust
+        working-directory: ./lib
         run: |
           cargo check
           cargo build
@@ -37,18 +37,22 @@ jobs:
           command: install
           args: cbindgen
 
-      - name: Setup C API build
-        working-directory: ./rust
+      - name: Install Python dependencies
         run: |
-          mkdir -p target/capi
-          cd target/capi
-          conan install ../../capi
-          cmake ../../capi
+          python3 -m pip install -e ./python[dev]
+
+      - name: Setup C API build
+        run: |
+          mkdir -p build
+          cd build
+          # specify C compiler as conan could not find it automatically
+          # see https://github.com/conan-io/conan/issues/4322
+          cmake -DCMAKE_C_COMPILER=gcc ..
 
       - name: Build C API
-        working-directory: ./rust/target/capi
+        working-directory: ./build
         run: make
 
       - name: Test C API
-        working-directory: ./rust/target/capi
-        run: make test_verbose
+        working-directory: ./build
+        run: make check
