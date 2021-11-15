@@ -66,9 +66,9 @@ fn swap(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, stack: KindOfStack) -> Result
     let stack = choose_stack(ops, data, stack);
     let args = (stack.pop(), stack.pop()); 
     // TODO: replace println! by logging
-    println!("swap{:?}", args);
     match args {
         (Some(a), Some(b)) => {
+            println!("swap({}, {})", a, b);
             stack.push(a);
             stack.push(b);
             Ok(())
@@ -96,29 +96,31 @@ fn pop(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, stack: KindOfStack) -> Result<
 
 fn interpret_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, reducted: bool) -> Result<(), String> {
     let args = (data.pop(), data.pop()); 
-    println!("interpret_op{:?}", args);
     match args {
-        (Some(space), Some(atom)) => match atom {
-            Atom::Expression(ref expr) => {
-                if !expr.is_plain() && !reducted {
-                    data.push(atom);
-                    data.push(space);
-                    ops.push(Atom::gnd(REDUCT));
-                } else {
-                    if is_grounded(expr) {
-                        data.push(atom);
-                        ops.push(Atom::gnd(EXECUTE));
-                    } else {
+        (Some(space), Some(atom)) => {
+            println!("{}({}, {})", if reducted { "interpret_reducted" } else { "interpret" }, space, atom);
+            match atom {
+                Atom::Expression(ref expr) => {
+                    if !expr.is_plain() && !reducted {
                         data.push(atom);
                         data.push(space);
-                        ops.push(Atom::gnd(MATCH));
+                        ops.push(Atom::gnd(REDUCT));
+                    } else {
+                        if is_grounded(expr) {
+                            data.push(atom);
+                            ops.push(Atom::gnd(EXECUTE));
+                        } else {
+                            data.push(atom);
+                            data.push(space);
+                            ops.push(Atom::gnd(MATCH));
+                        }
                     }
+                    Ok(())
+                },
+                _ => {
+                    data.push(atom);
+                    Ok(())
                 }
-                Ok(())
-            },
-            _ => {
-                data.push(atom);
-                Ok(())
             }
         },
         _ => Err(format!("Expected GroundingSpace and Atom as arguments, found: {:?}", args)),
@@ -128,14 +130,16 @@ fn interpret_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, reducted: bool) -> Re
 
 fn execute(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let arg = data.pop(); 
-    println!("execute({:?})", arg);
     match arg {
-        Some(Atom::Expression(expr)) => match &expr.children().get(0) {
-            Some(Atom::Grounded(op)) => {
-                expr.children().iter().skip(1).rev().for_each(|atom| data.push(atom.clone()));
-                op.execute(ops, data)
-            },
-            _ => Err(format!("Trying to execute non grounded atom: {:?}", expr)),
+        Some(Atom::Expression(expr)) => {
+            println!("execute({})", expr);
+            match &expr.children().get(0) {
+                Some(Atom::Grounded(op)) => {
+                    expr.children().iter().skip(1).rev().for_each(|atom| data.push(atom.clone()));
+                    op.execute(ops, data)
+                },
+                _ => Err(format!("Trying to execute non grounded atom: {:?}", expr)),
+            }
         },
         Some(atom) => Err(format!("Unexpected argument: {}", atom)),
         _ => Err("No arguments".to_string()),
@@ -145,9 +149,9 @@ fn execute(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
 fn reduct(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     // TODO: think about leaving data on stack when parameters are wrong let arg = data.pop(); 
     let args = (data.pop(), data.pop());
-    println!("reduct{:?}", args);
     match args {
         (Some(space), Some(expr_atom)) => {
+            println!("reduct({}, {})", space, expr_atom);
             if let Atom::Expression(ref expr) = expr_atom {
                 if expr.is_plain() {
                     data.push(expr_atom);
@@ -163,7 +167,7 @@ fn reduct(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
                     ops.push(Atom::gnd(REDUCT_NEXT));
 
                     ops.push(Atom::gnd(SWAP_DATA));
-                    
+
                     data.push(Atom::Expression(sub.clone()));
                     data.push(space);
                     ops.push(Atom::gnd(INTERPRET));
@@ -181,9 +185,9 @@ type ExpressionAtomIterGnd<'a> = Rc<GndRefCell<Peekable<ExpressionAtomIter<'a>>>
 
 fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let args = (data.pop(), data.pop(), data.pop());
-    println!("reduct_next{:?}", args);
     match args {
         (Some(space), Some(reducted), Some(iter_atom)) => {
+            println!("reduct_next({}, {}, {})", space, reducted, iter_atom);
             match iter_atom {
                 Atom::Grounded(ref iter) if iter.is::<ExpressionAtomIterGnd>() => {
                 let iter = iter.downcast_ref::<ExpressionAtomIterGnd>().unwrap();
@@ -217,9 +221,9 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
 
 fn match_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let args = (data.pop(), data.pop());
-    println!("match_op{:?}", args);
     match args {
         (Some(Atom::Grounded(space)), Some(expr)) => {
+            println!("match_op({}, {})", space, expr);
             if let Some(space) = space.downcast_ref::<Rc<GroundingSpace>>() {
                 let var_x = VariableAtom::from("X");
                 let atom_x = Atom::Variable(var_x.clone());
