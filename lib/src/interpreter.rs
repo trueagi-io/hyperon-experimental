@@ -3,7 +3,6 @@ use crate::common::*;
 use crate::matcher::*;
 
 use std::rc::Rc;
-use std::iter::Peekable;
 
 pub static SWAP_DATA: &Operation = &Operation{ name: "swap_data", execute: |ops, data| swap(ops, data, KindOfStack::Data) };
 pub static POP_DATA: &Operation = &Operation{ name: "pop_data", execute: |ops, data| pop(ops, data, KindOfStack::Data) };
@@ -98,7 +97,7 @@ fn interpret_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, reducted: bool) -> Re
     let args = (data.pop(), data.pop()); 
     match args {
         (Some(space), Some(atom)) => {
-            println!("{}({}, {})", if reducted { "interpret_reducted" } else { "interpret" }, space, atom);
+            println!("interpret_op{}({}, {})", if reducted { "<reducted>" } else { "" }, space, atom);
             match atom {
                 Atom::Expression(ref expr) => {
                     if !expr.is_plain() && !reducted {
@@ -156,11 +155,16 @@ fn reduct(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
                 if expr.is_plain() {
                     data.push(expr_atom);
                     data.push(space);
-                    ops.push(Atom::gnd(INTERPRET));
+                    ops.push(Atom::gnd(INTERPRET_REDUCTED));
                     Ok(())
                 } else {
-                    let iter = Rc::new(GndRefCell::new(expr.sub_expr_iter().peekable()));
-                    let (sub, ..) = iter.raw().borrow_mut().peek().unwrap().clone();
+                    let iter = Rc::new(GndRefCell::new(expr.sub_expr_iter()));
+                    let sub;
+                    {
+                        let mut stream = iter.raw().borrow_mut();
+                        stream.next();
+                        sub = stream.get_mut().clone();
+                    }
 
                     data.push(Atom::gnd(iter));
                     data.push(space.clone());
@@ -168,9 +172,9 @@ fn reduct(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
 
                     ops.push(Atom::gnd(SWAP_DATA));
 
-                    data.push(Atom::Expression(sub.clone()));
+                    data.push(sub);
                     data.push(space);
-                    ops.push(Atom::gnd(INTERPRET));
+                    ops.push(Atom::gnd(INTERPRET_REDUCTED));
                     Ok(())
                 }
             } else {
@@ -181,7 +185,7 @@ fn reduct(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     }
 }
 
-type ExpressionAtomIterGnd<'a> = Rc<GndRefCell<Peekable<ExpressionAtomIter<'a>>>>;
+type ExpressionAtomIterGnd = Rc<GndRefCell<SubexpressionStream>>;
 
 fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let args = (data.pop(), data.pop(), data.pop());
@@ -190,11 +194,16 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
             println!("reduct_next({}, {}, {})", space, reducted, iter_atom);
             match iter_atom {
                 Atom::Grounded(ref iter) if iter.is::<ExpressionAtomIterGnd>() => {
-                let iter = iter.downcast_ref::<ExpressionAtomIterGnd>().unwrap();
-                    let (_, parent, idx) = iter.raw().borrow_mut().next().unwrap();
-                    let mut parent = parent.clone();
-                    *(parent.children_mut().get_mut(idx).unwrap()) = reducted;
-                    if None != iter.raw().borrow_mut().peek() {
+                    let iter = iter.downcast_ref::<ExpressionAtomIterGnd>().unwrap();
+                    let next_sub;
+                    {
+                        let mut stream = iter.raw().borrow_mut();
+                        *stream.get_mut() = reducted;
+                        stream.next();
+                        next_sub = stream.get_mut().clone();
+                        println!("reduct_next: next_sub after reduction: {}", next_sub);
+                    }
+                    if iter.raw().borrow().has_next() {
                         // TODO: think about implementing Copy for the GroundedAtom
                         data.push(iter_atom.clone());
                         data.push(space.clone());
@@ -202,11 +211,11 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
 
                         ops.push(Atom::gnd(SWAP_DATA));
 
-                        data.push(Atom::Expression(parent));
+                        data.push(next_sub);
                         data.push(space);
-                        ops.push(Atom::gnd(INTERPRET));
+                        ops.push(Atom::gnd(INTERPRET_REDUCTED));
                     } else {
-                        data.push(Atom::Expression(parent));
+                        data.push(next_sub);
                         data.push(space);
                         ops.push(Atom::gnd(INTERPRET_REDUCTED));
                     }
@@ -227,7 +236,12 @@ fn match_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
             if let Some(space) = space.downcast_ref::<Rc<GroundingSpace>>() {
                 let var_x = VariableAtom::from("X");
                 let atom_x = Atom::Variable(var_x.clone());
-                let bindings = space.query(&Atom::expr(&[Atom::sym("="), expr, atom_x]));
+                let bindings = space.query(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
+                {
+                    let res = expr;
+                    println!("match_op: default: {}", res);
+                    data.push(res);
+                }
                 let mut num: usize = 0;
                 for binding in &bindings {
                     let res = binding.get(&var_x).unwrap(); 
@@ -273,17 +287,17 @@ fn match_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
                                     return Ok(())
                                 }
                             }
-                            println!("match_next: cleanup other alternatives");
+                            println!("match_next: cleanup other alternatives, result: {}", atom);
                             ops.truncate(ops.len() - num * 2);
-                            data.truncate(data.len() - num * 3);
-                            data.push(atom.clone());
+                            data.truncate(data.len() - num * 3 - 1);
+                            data.push(atom);
                             Ok(())
                         },
                         _ => {
-                            println!("match_next: cleanup other alternatives");
+                            println!("match_next: cleanup other alternatives, result: {}", atom);
                             ops.truncate(ops.len() - num * 2);
-                            data.truncate(data.len() - num * 3);
-                            data.push(atom.clone());
+                            data.truncate(data.len() - num * 3 - 1);
+                            data.push(atom);
                             Ok(())
                         },
                     }

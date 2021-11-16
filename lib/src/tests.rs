@@ -111,10 +111,25 @@ fn test_subexpression_iterator() {
 
     let iter = expr.as_expr().unwrap().sub_expr_iter();
 
-    assert_eq!(iter.map(|(a, p, i)| (Atom::Expression(a.clone()), Atom::Expression(p.clone()), i)).collect::<Vec<_>>(),
+    assert_eq!(iter.collect::<Vec<_>>(),
         vec![
-            (expr!("+", "1", n), expr!("*", "3", ("+", "1", n)), 2),
-            (expr!("*", "3", ("+", "1", n)), expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3")), 1),
-            (expr!("-", "4", "3"), expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3")), 2),
+            expr!("+", "1", n),
+            expr!("*", "3", ("+", "1", n)),
+            expr!("-", "4", "3"),
+            expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3")),
+        ]);
+}
+
+#[test]
+fn test_subexpression_iterator_two_sub_expr() {
+    let expr = expr!("*", ("+", "3", "4"), ("-", "5", "2"));
+
+    let iter = expr.as_expr().unwrap().sub_expr_iter();
+
+    assert_eq!(iter.collect::<Vec<_>>(),
+        vec![
+            expr!("+", "3", "4"),
+            expr!("-", "5", "2"),
+            expr!("*", ("+", "3", "4"), ("-", "5", "2")),
         ]);
 }

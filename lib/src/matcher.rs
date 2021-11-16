@@ -3,7 +3,7 @@ use super::*;
 fn check_and_insert_binding(bindings: &mut Bindings, var: &VariableAtom,
         value: &Atom) -> bool{
     // TODO: replace by logger
-    println!("check_and_insert_binding({:?}, {}, {})", bindings, var, value);
+    //println!("check_and_insert_binding({:?}, {}, {})", bindings, var, value);
     match bindings.get(var) {
         Some(prev) => prev == value,
         None => {
