@@ -127,11 +127,12 @@ fn interpret_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, reducted: bool) -> Re
 fn execute(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let arg = data.pop(); 
     match arg {
-        Some(Atom::Expression(expr)) => {
+        Some(Atom::Expression(mut expr)) => {
             println!("execute({})", expr);
-            match &expr.children().get(0) {
+            let op = expr.children().get(0).cloned();
+            match op {
                 Some(Atom::Grounded(op)) => {
-                    expr.children().iter().skip(1).rev().for_each(|atom| data.push(atom.clone()));
+                    expr.children_mut().drain(1..).into_iter().rev().for_each(|atom| data.push(atom));
                     op.execute(ops, data)
                 },
                 _ => Err(format!("Trying to execute non grounded atom: {:?}", expr)),
@@ -200,7 +201,7 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
                 }
                 if iter.raw().borrow().has_next() {
                     // TODO: think about implementing Copy for the GroundedAtom
-                    data.push(iter_atom.clone());
+                    data.push(iter_atom);
                     data.push(space.clone());
                     ops.push(Atom::gnd(REDUCT_NEXT));
 
@@ -230,6 +231,7 @@ fn match_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
             println!("match_op({}, {})", space, expr);
             if let Some(space) = space.as_gnd::<Rc<GroundingSpace>>() {
                 let var_x = VariableAtom::from("X");
+                // TODO: unique variable?
                 let atom_x = Atom::Variable(var_x.clone());
                 let bindings = space.query(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
                 {
@@ -245,7 +247,7 @@ fn match_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
                     data.push(Atom::gnd(num));
                     ops.push(Atom::gnd(MATCH_NEXT));
 
-                    data.push(res.clone());
+                    data.push(res);
                     data.push(Atom::gnd(Rc::clone(space)));
                     ops.push(Atom::gnd(INTERPRET));
                     num = num + 1;
