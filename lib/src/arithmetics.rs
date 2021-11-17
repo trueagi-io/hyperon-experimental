@@ -10,14 +10,11 @@ fn bin_op(_ops: &mut Vec<Atom>, data: &mut Vec<Atom>, op: fn(i32, i32) -> i32) -
     // done in separate helper function or macros.
     let arg1 = data.pop().expect("Sum operation called without arguments"); 
     let arg2 = data.pop().expect("Sum operation called with only argument");
-    match (&arg1, &arg2) {
-        (Atom::Grounded(arg1), Atom::Grounded(arg2)) => {
-            let arg1 = (*arg1).downcast_ref::<i32>().expect(&format!("First argument is not Int: {}", arg1));
-            let arg2 = (*arg2).downcast_ref::<i32>().expect(&format!("Second argument is not Int: {}", arg2));
-            data.push(Atom::gnd(op(*arg1, *arg2)));
-            Ok(())
-        },
-        _ => Err(format!("One of the arguments is not grounded: ({}, {})", arg1, arg2)),
+    if let (Some(arg1), Some(arg2)) = (arg1.as_gnd::<i32>(), arg2.as_gnd::<i32>()) {
+        data.push(Atom::gnd(op(*arg1, *arg2)));
+        Ok(())
+    } else {
+        Err(format!("One of the arguments is not integer: ({}, {})", arg1, arg2))
     }
 }
 

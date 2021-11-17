@@ -79,15 +79,12 @@ fn swap(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, stack: KindOfStack) -> Result
 fn pop(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, stack: KindOfStack) -> Result<(), String> {
     let arg = data.pop();
     match arg {
-        Some(Atom::Grounded(num)) => {
-            match num.downcast_ref::<usize>() {
-                Some(num) => {
-                    let stack = choose_stack(ops, data, stack);
-                    stack.truncate(stack.len() - num);
-                    Ok(())
-                },
-                _ => Err(format!("usize argument expected, found: {}", num)),
-            }
+        Some(gnd) => if let Some(num) = gnd.as_gnd::<usize>() {
+            let stack = choose_stack(ops, data, stack);
+            stack.truncate(stack.len() - num);
+            Ok(())
+        } else {
+            Err(format!("usize argument expected, found: {}", gnd))
         },
         _ => Err(format!("Atom::Grounded argument expected, found: {:?}", arg)),
     }
@@ -192,36 +189,34 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
     match args {
         (Some(space), Some(reducted), Some(iter_atom)) => {
             println!("reduct_next({}, {}, {})", space, reducted, iter_atom);
-            match iter_atom {
-                Atom::Grounded(ref iter) if iter.is::<ExpressionAtomIterGnd>() => {
-                    let iter = iter.downcast_ref::<ExpressionAtomIterGnd>().unwrap();
-                    let next_sub;
-                    {
-                        let mut stream = iter.raw().borrow_mut();
-                        *stream.get_mut() = reducted;
-                        stream.next();
-                        next_sub = stream.get_mut().clone();
-                        println!("reduct_next: next_sub after reduction: {}", next_sub);
-                    }
-                    if iter.raw().borrow().has_next() {
-                        // TODO: think about implementing Copy for the GroundedAtom
-                        data.push(iter_atom.clone());
-                        data.push(space.clone());
-                        ops.push(Atom::gnd(REDUCT_NEXT));
+            if let Some(iter) = iter_atom.as_gnd::<ExpressionAtomIterGnd>() {
+                let next_sub;
+                {
+                    let mut stream = iter.raw().borrow_mut();
+                    *stream.get_mut() = reducted;
+                    stream.next();
+                    next_sub = stream.get_mut().clone();
+                    println!("reduct_next: next_sub after reduction: {}", next_sub);
+                }
+                if iter.raw().borrow().has_next() {
+                    // TODO: think about implementing Copy for the GroundedAtom
+                    data.push(iter_atom.clone());
+                    data.push(space.clone());
+                    ops.push(Atom::gnd(REDUCT_NEXT));
 
-                        ops.push(Atom::gnd(SWAP_DATA));
+                    ops.push(Atom::gnd(SWAP_DATA));
 
-                        data.push(next_sub);
-                        data.push(space);
-                        ops.push(Atom::gnd(INTERPRET_REDUCTED));
-                    } else {
-                        data.push(next_sub);
-                        data.push(space);
-                        ops.push(Atom::gnd(INTERPRET_REDUCTED));
-                    }
-                    Ok(())
-                },
-                _ => Err(format!("Reference to expression being reducted is expected as a third argument, found: {}", iter_atom))
+                    data.push(next_sub);
+                    data.push(space);
+                    ops.push(Atom::gnd(INTERPRET_REDUCTED));
+                } else {
+                    data.push(next_sub);
+                    data.push(space);
+                    ops.push(Atom::gnd(INTERPRET_REDUCTED));
+                }
+                Ok(())
+            } else {
+                Err(format!("Reference to expression being reducted is expected as a third argument, found: {}", iter_atom))
             }
         },
         _ => Err(format!("Three arguments expected, found: {:?}", args)),
@@ -231,9 +226,9 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
 fn match_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let args = (data.pop(), data.pop());
     match args {
-        (Some(Atom::Grounded(space)), Some(expr)) => {
+        (Some(space), Some(expr)) => {
             println!("match_op({}, {})", space, expr);
-            if let Some(space) = space.downcast_ref::<Rc<GroundingSpace>>() {
+            if let Some(space) = space.as_gnd::<Rc<GroundingSpace>>() {
                 let var_x = VariableAtom::from("X");
                 let atom_x = Atom::Variable(var_x.clone());
                 let bindings = space.query(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
@@ -266,44 +261,40 @@ fn match_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
 
 fn match_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let args = (data.pop(), data.pop());
-    println!("match_next{:?}", args);
     match args {
-        (Some(atom), Some(num)) => {
-            match &num {
-                Atom::Grounded(num) if num.is::<usize>() => {
-                    let num = num.downcast_ref::<usize>().unwrap();
-                    match atom {
-                        // TODO: find out whether we can change Atom implementation
-                        // to match expressions using Rust matchers.
-                        Atom::Expression(ref expr) => {
-                            // TODO: not used yet, the idea is to return error
-                            // expression from INTERPRET to move to the next 
-                            // alternative
-                            if let Some(atom) = expr.children().get(0) {
-                                if *atom == Atom::sym("error") {
-                                    // Return is used here because I would like
-                                    // to have one branch which truncates stacks
-                                    // instead of two (see code below).
-                                    return Ok(())
-                                }
-                            }
-                            println!("match_next: cleanup other alternatives, result: {}", atom);
-                            ops.truncate(ops.len() - num * 2);
-                            data.truncate(data.len() - num * 3 - 1);
-                            data.push(atom);
-                            Ok(())
-                        },
-                        _ => {
-                            println!("match_next: cleanup other alternatives, result: {}", atom);
-                            ops.truncate(ops.len() - num * 2);
-                            data.truncate(data.len() - num * 3 - 1);
-                            data.push(atom);
-                            Ok(())
-                        },
+        (Some(atom), Some(num)) => if let Some(num) = num.as_gnd::<usize>() {
+            println!("match_next({}, {})", atom, num);
+            match atom {
+                // TODO: find out whether we can change Atom implementation
+                // to match expressions using Rust matchers.
+                Atom::Expression(ref expr) => {
+                    // TODO: not used yet, the idea is to return error
+                    // expression from INTERPRET to move to the next 
+                    // alternative
+                    if let Some(atom) = expr.children().get(0) {
+                        if *atom == Atom::sym("error") {
+                            // Return is used here because I would like
+                            // to have one branch which truncates stacks
+                            // instead of two (see code below).
+                            return Ok(())
+                        }
                     }
+                    println!("match_next: cleanup other alternatives, result: {}", atom);
+                    ops.truncate(ops.len() - num * 2);
+                    data.truncate(data.len() - num * 3 - 1);
+                    data.push(atom);
+                    Ok(())
                 },
-                _ => Err(format!("Number of alternatives is expected as first argument, found: {}", num))
+                _ => {
+                    println!("match_next: cleanup other alternatives, result: {}", atom);
+                    ops.truncate(ops.len() - num * 2);
+                    data.truncate(data.len() - num * 3 - 1);
+                    data.push(atom);
+                    Ok(())
+                },
             }
+        } else {
+            Err(format!("Number of alternatives is expected as first argument, found: {}", num))
         },
         _ => Err(format!("Expected two arguments, found: {:?}", args)),
     }

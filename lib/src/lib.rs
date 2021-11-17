@@ -289,6 +289,13 @@ impl Atom {
             _ => None,
         }
     }
+
+    pub fn as_gnd<T: GroundedAtom>(&self) -> Option<&T> {
+        match self {
+            Atom::Grounded(gnd) => gnd.downcast_ref::<T>(),
+            _ => None,
+        }
+    }
 }
 
 impl PartialEq for Atom {
