@@ -157,8 +157,8 @@ pub unsafe extern "C" fn grounding_space_len(space: *const grounding_space_t) ->
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *const atom_t {
-    (&(*space).space.as_vec()[idx] as *const Atom).cast::<atom_t>()
+pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *mut atom_t {
+    atom_to_ptr((*space).space.as_vec()[idx].clone())
 }
 
 #[allow(non_camel_case_types)]
