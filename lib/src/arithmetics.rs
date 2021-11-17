@@ -32,8 +32,13 @@ mod tests {
     fn V(name: &str) -> Atom { Atom::var(name) }
     fn G<T: GroundedAtom>(value: T) -> Atom { Atom::gnd(value) }
 
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
     #[test]
     fn test_sum_ints() {
+        init();
         let space = GroundingSpace::new();
         // (+ 3 5)
         let expr = E(&[G(SUM), G(3), G(5)]);
@@ -43,6 +48,7 @@ mod tests {
 
     #[test]
     fn test_sum_ints_recursively() {
+        init();
         let space = GroundingSpace::new();
         // (+ 4 (+ 3 5))
         let expr = E(&[G(SUM), G(4), E(&[G(SUM), G(3), G(5)])]);
@@ -52,6 +58,7 @@ mod tests {
 
     #[test]
     fn test_match_factorial() {
+        init();
         let mut space = GroundingSpace::new();
         // (= (fac 0) 1)
         space.add(E(&[ S("="), E(&[ S("fac"), G(0) ]), G(1) ]));
@@ -66,6 +73,7 @@ mod tests {
 
     #[test]
     fn test_factorial() {
+        init();
         let mut space = GroundingSpace::new();
         // (= (fac n) (* n (fac (- n 1))))
         space.add(E(&[ S("="), E(&[ S("fac"), V("n") ]),

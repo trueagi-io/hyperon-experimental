@@ -361,7 +361,7 @@ impl GroundingSpace {
                 Some((a_bindings, b_bindings)) => {
                     let bindings = matcher::apply_bindings_to_bindings(&a_bindings, &b_bindings);
                     // TODO: implement Display for bindings
-                    println!("query: push result: pattern: {}, bindings: {:?}", pattern, bindings);
+                    log::debug!("query: push result: pattern: {}, bindings: {:?}", pattern, bindings);
                     result.push(bindings);
                 },
                 None => continue,

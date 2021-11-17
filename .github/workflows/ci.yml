@@ -26,7 +26,7 @@ jobs:
         run: |
           cargo check
           cargo build
-          cargo test
+          RUST_LOG=hyperon=debug cargo test
 
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.0

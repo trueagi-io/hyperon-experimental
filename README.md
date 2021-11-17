@@ -20,6 +20,11 @@ cargo build
 cargo test
 ```
 
+To enable logging during tests execute:
+```
+RUST_LOG=hyperon=debug cargo test
+```
+
 # C, Python, C++ API
 
 Prerequisites:

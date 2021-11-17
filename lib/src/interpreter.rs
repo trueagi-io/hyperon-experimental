@@ -64,10 +64,9 @@ fn choose_stack<'a>(ops: &'a mut Vec<Atom>, data: &'a mut Vec<Atom>, stack: Kind
 fn swap(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, stack: KindOfStack) -> Result<(), String> {
     let stack = choose_stack(ops, data, stack);
     let args = (stack.pop(), stack.pop()); 
-    // TODO: replace println! by logging
     match args {
         (Some(a), Some(b)) => {
-            println!("swap({}, {})", a, b);
+            log::debug!("swap({}, {})", a, b);
             stack.push(a);
             stack.push(b);
             Ok(())
@@ -94,7 +93,7 @@ fn interpret_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>, reducted: bool) -> Re
     let args = (data.pop(), data.pop()); 
     match args {
         (Some(space), Some(atom)) => {
-            println!("interpret_op{}({}, {})", if reducted { "<reducted>" } else { "" }, space, atom);
+            log::debug!("interpret_op{}({}, {})", if reducted { "<reducted>" } else { "" }, space, atom);
             match atom {
                 Atom::Expression(ref expr) => {
                     if !expr.is_plain() && !reducted {
@@ -128,7 +127,7 @@ fn execute(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let arg = data.pop(); 
     match arg {
         Some(Atom::Expression(mut expr)) => {
-            println!("execute({})", expr);
+            log::debug!("execute({})", expr);
             let op = expr.children().get(0).cloned();
             match op {
                 Some(Atom::Grounded(op)) => {
@@ -148,7 +147,7 @@ fn reduct(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let args = (data.pop(), data.pop());
     match args {
         (Some(space), Some(expr_atom)) => {
-            println!("reduct({}, {})", space, expr_atom);
+            log::debug!("reduct({}, {})", space, expr_atom);
             if let Atom::Expression(ref expr) = expr_atom {
                 if expr.is_plain() {
                     data.push(expr_atom);
@@ -189,7 +188,7 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
     let args = (data.pop(), data.pop(), data.pop());
     match args {
         (Some(space), Some(reducted), Some(iter_atom)) => {
-            println!("reduct_next({}, {}, {})", space, reducted, iter_atom);
+            log::debug!("reduct_next({}, {}, {})", space, reducted, iter_atom);
             if let Some(iter) = iter_atom.as_gnd::<ExpressionAtomIterGnd>() {
                 let next_sub;
                 {
@@ -197,7 +196,7 @@ fn reduct_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> 
                     *stream.get_mut() = reducted;
                     stream.next();
                     next_sub = stream.get_mut().clone();
-                    println!("reduct_next: next_sub after reduction: {}", next_sub);
+                    log::debug!("reduct_next: next_sub after reduction: {}", next_sub);
                 }
                 if iter.raw().borrow().has_next() {
                     // TODO: think about implementing Copy for the GroundedAtom
@@ -228,7 +227,7 @@ fn match_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let args = (data.pop(), data.pop());
     match args {
         (Some(space), Some(expr)) => {
-            println!("match_op({}, {})", space, expr);
+            log::debug!("match_op({}, {})", space, expr);
             if let Some(space) = space.as_gnd::<Rc<GroundingSpace>>() {
                 let var_x = VariableAtom::from("X");
                 // TODO: unique variable?
@@ -236,14 +235,14 @@ fn match_op(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
                 let bindings = space.query(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
                 {
                     let res = expr;
-                    println!("match_op: default: {}", res);
+                    log::debug!("match_op: default: {}", res);
                     data.push(res);
                 }
                 let mut num: usize = 0;
                 for binding in &bindings {
                     let res = binding.get(&var_x).unwrap(); 
                     let res = apply_bindings_to_atom(res, binding);
-                    println!("match_op: res: {}", res);
+                    log::debug!("match_op: res: {}", res);
                     data.push(Atom::gnd(num));
                     ops.push(Atom::gnd(MATCH_NEXT));
 
@@ -265,7 +264,7 @@ fn match_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
     let args = (data.pop(), data.pop());
     match args {
         (Some(atom), Some(num)) => if let Some(num) = num.as_gnd::<usize>() {
-            println!("match_next({}, {})", atom, num);
+            log::debug!("match_next({}, {})", atom, num);
             match atom {
                 // TODO: find out whether we can change Atom implementation
                 // to match expressions using Rust matchers.
@@ -281,14 +280,14 @@ fn match_next(ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
                             return Ok(())
                         }
                     }
-                    println!("match_next: cleanup other alternatives, result: {}", atom);
+                    log::debug!("match_next: cleanup other alternatives, result: {}", atom);
                     ops.truncate(ops.len() - num * 2);
                     data.truncate(data.len() - num * 3 - 1);
                     data.push(atom);
                     Ok(())
                 },
                 _ => {
-                    println!("match_next: cleanup other alternatives, result: {}", atom);
+                    log::debug!("match_next: cleanup other alternatives, result: {}", atom);
                     ops.truncate(ops.len() - num * 2);
                     data.truncate(data.len() - num * 3 - 1);
                     data.push(atom);
