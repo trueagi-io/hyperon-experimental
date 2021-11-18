@@ -28,9 +28,12 @@ pub fn interpret(space: Rc<GroundingSpace>, expr: &Atom) -> Result<Atom, String>
             ops.push(Atom::gnd(INTERPRET));
 
             while !ops.is_empty() {
-                if let Err(res) = space.interpret(&mut ops, &mut data) {
-                    return Err(res);
-                }
+                let op = ops.pop();
+                match op {
+                    Some(Atom::Grounded(atom)) => atom.execute(&mut ops, &mut data),
+                    Some(_) => Err("Ops stack contains non grounded atom".to_string()),
+                    None => Err("Ops stack is empty".to_string()),
+                }?;
             }
 
             if data.len() == 1 {

@@ -370,15 +370,6 @@ impl GroundingSpace {
         result
     }
 
-    pub fn interpret(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
-        let op = ops.pop();
-        match op {
-            Some(Atom::Grounded(atom)) => atom.execute(ops, data),
-            Some(_) => Err("Ops stack contains non grounded atom".to_string()),
-            None => Err("Ops stack is empty".to_string()),
-        }
-    }
-
     pub fn as_vec(&self) -> &Vec<Atom> {
         &self.content
     }
