@@ -76,9 +76,9 @@ impl ExpressionAtom {
     }
 
     // Without lifetime annotations compiler makes lifetime elision incorrectly.
-    // It deduces iter<'a>(&'a self) -> ExpressionAtomIter<'a>
-    pub fn sub_expr_iter<'a, 'b>(&'a self) -> ExpressionAtomIter<'b> {
-        ExpressionAtomIter::from(self)
+    // It deduces iter<'a>(&'a self) -> SubexpressionStream<'a>
+    pub fn sub_expr_iter(&self) -> SubexpressionStream {
+        SubexpressionStream::from(self)
     }
 
     pub fn children(&self) -> &Vec<Atom> {
@@ -113,66 +113,71 @@ impl Display for ExpressionAtom {
     }
 }
 
-struct ExpressionLevel<'a> {
-    expr: &'a ExpressionAtom,
-    idx: Option<usize>,
-    iter: std::iter::Enumerate<std::slice::Iter<'a, Atom>>,
+pub struct SubexpressionStream {
+    expr: Atom,
+    levels: Vec<usize>,
 }
 
-impl<'a> ExpressionLevel<'a> {
-    fn from(expr: *const ExpressionAtom, idx: Option<usize>) -> Self {
-        unsafe {
-            let rexpr = &*expr as &ExpressionAtom;
-            ExpressionLevel{ expr: rexpr, idx, iter: rexpr.children.iter().enumerate() }
-        }
-    }
-}
-
-pub struct ExpressionAtomIter<'a> {
-    expr: *mut ExpressionAtom,
-    levels: Vec<ExpressionLevel<'a>>,
-}
-
-impl Drop for ExpressionAtomIter<'_> {
-    fn drop(&mut self) {
-        unsafe {
-            // free heap memory by wrapping by box and dropping it
-            drop(Box::from_raw(self.expr));
-        }
-    }
-}
-
-impl<'a> ExpressionAtomIter<'a> {
+impl SubexpressionStream {
     fn from(expr: &ExpressionAtom) -> Self {
-        // get memory on heap under our control
-        let ptr = Box::into_raw(Box::new(expr.clone()));
-        Self{ expr: ptr, levels: vec![ExpressionLevel::from(ptr, None)] }
+        Self{ expr: Atom::Expression((*expr).clone()), levels: vec![0] }
     }
-}
 
-impl<'a> Iterator for ExpressionAtomIter<'a> {
-    type Item = (&'a ExpressionAtom, &'a ExpressionAtom, usize);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        while !self.levels.is_empty() {
-            let level = self.levels.last_mut().unwrap();
-            let next = level.iter.next();
-            if None == next {
-                let expr = level.expr;
-                let idx = level.idx;
-                self.levels.pop();
-                if !self.levels.is_empty() {
-                    let parent = self.levels.last().unwrap().expr;
-                    return Some((expr, parent, idx.unwrap()))
-                }
-            } else {
-                let (idx, next) = next.unwrap();
-                if let Atom::Expression(next) = next {
-                    self.levels.push(ExpressionLevel::from(next, Some(idx)))
-                }
+    fn next_rec(levels: &mut Vec<usize>, expr: &ExpressionAtom, level: usize) {
+        if level < levels.len() - 1 {
+            Self::next_rec(levels, expr.children()[levels[level] - 1].as_expr().unwrap(), level + 1);
+            return;
+        }
+        loop {
+            let idx = levels[level];
+            if idx >= expr.children().len() {
+                levels.pop();
+                return;
+            }
+            let child = &expr.children()[idx];
+            levels[level] = idx + 1;
+            if let Atom::Expression(ref child_expr) = child {
+                levels.push(0);
+                Self::next_rec(levels, child_expr, level + 1);
+                return;
             }
         }
-        None
+    }
+
+    fn next(&mut self) {
+        if let Atom::Expression(ref expr) = self.expr {
+            Self::next_rec(&mut self.levels, expr, 0);
+        }
+    }
+
+    fn has_next(&self) -> bool {
+        self.levels.len() > 0
+    }
+
+    fn get_mut_rec<'a>(levels: &'a Vec<usize>, atom: &'a mut Atom, level: usize) -> &'a mut Atom {
+        if level >= levels.len() {
+            atom
+        } else {
+            let child = &mut (atom.as_expr_mut().unwrap().children_mut()[levels[level] - 1]);
+            Self::get_mut_rec(levels, child, level + 1)
+        }
+    }
+
+    fn get_mut(&mut self) -> &mut Atom {
+        Self::get_mut_rec(&self.levels, &mut self.expr, 0)
+    }
+}
+
+impl Iterator for SubexpressionStream {
+    type Item = Atom;
+    
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.has_next() {
+            None
+        } else {
+            self.next();
+            Some(self.get_mut().clone())
+        }
     }
 }
 
@@ -284,6 +289,13 @@ impl Atom {
             _ => None,
         }
     }
+
+    pub fn as_gnd<T: GroundedAtom>(&self) -> Option<&T> {
+        match self {
+            Atom::Grounded(gnd) => gnd.downcast_ref::<T>(),
+            _ => None,
+        }
+    }
 }
 
 impl PartialEq for Atom {
@@ -348,21 +360,14 @@ impl GroundingSpace {
             match matcher::match_atoms(next, pattern) {
                 Some((a_bindings, b_bindings)) => {
                     let bindings = matcher::apply_bindings_to_bindings(&a_bindings, &b_bindings);
+                    // TODO: implement Display for bindings
+                    log::debug!("query: push result: pattern: {}, bindings: {:?}", pattern, bindings);
                     result.push(bindings);
                 },
                 None => continue,
             }
         }
         result
-    }
-
-    pub fn interpret(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
-        let op = ops.pop();
-        match op {
-            Some(Atom::Grounded(atom)) => atom.execute(ops, data),
-            Some(_) => Err("Ops stack contains non grounded atom".to_string()),
-            None => Err("Ops stack is empty".to_string()),
-        }
     }
 
     pub fn as_vec(&self) -> &Vec<Atom> {

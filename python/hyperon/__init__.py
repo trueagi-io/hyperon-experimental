@@ -94,12 +94,26 @@ class VecAtom(BaseVecAtom):
     def __del__(self):
         hp.vec_atom_free(self.cvec)
 
+class ConstGroundedAtom:
+
+    def copy(self):
+        return self
+
+class OpGroundedAtom(ConstGroundedAtom):
+
+    def __init__(self):
+        super().__init__()
+
+    def __eq__(self, other):
+        return self.__class__ == other.__class__
+
 def ValueAtom(value):
     return G(Value(value))
 
-class Value:
+class Value(ConstGroundedAtom):
 
     def __init__(self, value):
+        super().__init__()
         self.value = value
 
     def __eq__(self, other):
@@ -109,9 +123,6 @@ class Value:
 
     def __str__(self):
         return str(self.value)
-
-    def copy(self):
-        return Value(self.value)
 
 class GroundingSpace:
 
@@ -127,6 +138,10 @@ class GroundingSpace:
 
     def add_atom(self, atom):
         hp.grounding_space_add(self.cspace, atom.catom)
+
+    def get_atoms(self):
+        return [Atom._from_catom(hp.grounding_space_get(self.cspace, i))
+                for i in range(0, hp.grounding_space_len(self.cspace))]
 
 class SExprSpace:
 

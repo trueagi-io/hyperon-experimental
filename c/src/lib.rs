@@ -157,8 +157,8 @@ pub unsafe extern "C" fn grounding_space_len(space: *const grounding_space_t) ->
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *const atom_t {
-    (&(*space).space.as_vec()[idx] as *const Atom).cast::<atom_t>()
+pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *mut atom_t {
+    atom_to_ptr((*space).space.as_vec()[idx].clone())
 }
 
 #[allow(non_camel_case_types)]
@@ -208,14 +208,6 @@ pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> *mut atom_t {
 pub unsafe extern "C" fn vec_atom_push(vec: *mut vec_atom_t, atom: *mut atom_t) {
     let c_atom = Box::from_raw(atom);
     (*vec).0.push(c_atom.atom);
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_interpret(space: *mut grounding_space_t,
-        ops: *mut vec_atom_t, data: *mut vec_atom_t) -> bool {
-    // TODO: think how to return the result string in case of error
-    Ok(()) == (*space).space.interpret(ops.cast::<Vec<Atom>>().as_mut().unwrap(),
-        data.cast::<Vec<Atom>>().as_mut().unwrap())
 }
 
 #[no_mangle]

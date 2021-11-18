@@ -116,19 +116,15 @@ class AtomTest(unittest.TestCase):
 def X2Atom():
     return G(X2())
 
-class X2:
+class X2(OpGroundedAtom):
+
+    def __init__(self):
+        super().__init__()
 
     def execute(self, ops, data):
         arg = data.pop()
         data.push(ValueAtom(2 * arg.get_object().value))
         return None
 
-    def __eq__(self, other):
-        return isinstance(other, X2)
-
     def __str__(self):
         return "*2"
-
-    def copy(self):
-        return X2()
-
