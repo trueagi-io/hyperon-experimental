@@ -76,8 +76,6 @@ impl ExpressionAtom {
         self.children.iter().all(|atom| ! matches!(atom, Atom::Expression(_)))
     }
 
-    // Without lifetime annotations compiler makes lifetime elision incorrectly.
-    // It deduces iter<'a>(&'a self) -> SubexpressionStream<'a>
     pub fn sub_expr_iter(&self) -> SubexpressionStream {
         SubexpressionStream::from(self)
     }
@@ -250,7 +248,8 @@ pub enum Atom {
     // We need using Box here because:
     // - we cannot use GroundedAtom because trait size is not known at compile time
     // - reference to trait does not allow heap allocated values
-    // - other smart pointers like Rc doesn't allow choosing to copy value or not
+    // - other smart pointers like Rc doesn't allow choosing whether value should
+    //   be copied or shared between two atoms when clone() is called
     Grounded(Box<dyn GroundedAtom>),
 }
 
@@ -288,6 +287,13 @@ impl Atom {
     pub fn as_gnd<T: GroundedAtom>(&self) -> Option<&T> {
         match self {
             Atom::Grounded(gnd) => gnd.downcast_ref::<T>(),
+            _ => None,
+        }
+    }
+
+    pub fn as_gnd_mut<T: GroundedAtom>(&mut self) -> Option<&mut T> {
+        match self {
+            Atom::Grounded(gnd) => gnd.downcast_mut::<T>(),
             _ => None,
         }
     }
