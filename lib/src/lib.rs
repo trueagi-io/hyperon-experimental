@@ -214,25 +214,19 @@ impl Display for VariableAtom {
 
 // Grounded atom
 
-pub trait GroundedAtom : Display + mopa::Any {
+pub trait GroundedAtom : Debug + mopa::Any {
     fn execute(&self, _ops: &mut Vec<Atom>, _data: &mut Vec<Atom>) -> Result<(), String> {
-        Err(format!("{} is not executable", self))
+        Err(format!("{:?} is not executable", self))
     }
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
     fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
-}
-
-impl Debug for dyn GroundedAtom {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(self, f)
-    }
 }
 
 mopafy!(GroundedAtom);
 
 // GroundedAtom implementation for all "regular" types
 // to allow using them as GroundedAtoms
-impl<T: 'static + Clone + PartialEq + Display> GroundedAtom for T {
+impl<T: 'static + Clone + PartialEq + Debug> GroundedAtom for T {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
         match other.downcast_ref::<T>() {
             Some(o) => self.eq(o),
@@ -327,7 +321,7 @@ impl Display for Atom {
             Atom::Symbol(sym) => Display::fmt(sym, f),
             Atom::Expression(expr) => Display::fmt(expr, f),
             Atom::Variable(var) => Display::fmt(var, f),
-            Atom::Grounded(gnd) => Display::fmt(gnd, f),
+            Atom::Grounded(gnd) => Debug::fmt(gnd, f),
         }
     }
 }
@@ -385,7 +379,7 @@ impl PartialEq for GroundingSpace {
     }
 }
 
-impl Display for GroundingSpace {
+impl Debug for GroundingSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "GroundingSpace")
     }
