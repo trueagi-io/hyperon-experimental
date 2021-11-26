@@ -213,7 +213,8 @@ pub unsafe extern "C" fn vec_atom_push(vec: *mut vec_atom_t, atom: *mut atom_t) 
 #[no_mangle]
 pub unsafe extern "C" fn interpret(space: *mut grounding_space_t, expr: *const atom_t) -> *mut atom_t {
     match hyperon::interpreter::interpret(Rc::new((*space).space.clone()), &(*expr).atom) {
-        Ok(atom) => atom_to_ptr(atom),
+        // TODO: return full vector 
+        Ok(vec) => atom_to_ptr(vec[0].clone()),
         Err(_) => 0 as *mut atom_t,
     }
 }

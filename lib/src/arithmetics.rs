@@ -43,7 +43,7 @@ mod tests {
         // (+ 3 5)
         let expr = E(&[G(SUM), G(3), G(5)]);
 
-        assert_eq!(interpret(Rc::new(space), &expr), Ok(G(8)));
+        assert_eq!(interpret(Rc::new(space), &expr), Ok(vec![G(8)]));
     }
 
     #[test]
@@ -53,7 +53,7 @@ mod tests {
         // (+ 4 (+ 3 5))
         let expr = E(&[G(SUM), G(4), E(&[G(SUM), G(3), G(5)])]);
 
-        assert_eq!(interpret(Rc::new(space), &expr), Ok(G(12)));
+        assert_eq!(interpret(Rc::new(space), &expr), Ok(vec![G(12)]));
     }
 
     #[test]
@@ -81,6 +81,6 @@ mod tests {
         // (= (fac 0) 1)
         space.add(E(&[ S("="), E(&[ S("fac"), G(0) ]), G(1) ]));
         let expr = E(&[ S("fac"), G(3) ]);
-        assert_eq!(interpret(Rc::new(space), &expr), Ok(G(6)));
+        assert_eq!(interpret(Rc::new(space), &expr), Ok(vec![G(6)]));
     }
 }

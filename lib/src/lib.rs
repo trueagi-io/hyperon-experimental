@@ -225,6 +225,7 @@ mopafy!(GroundedAtom);
 
 // GroundedAtom implementation for all "regular" types
 // to allow using them as GroundedAtoms
+// 'static is required because mopa::Any requires it
 impl<T: 'static + Clone + PartialEq + Debug> GroundedAtom for T {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
         match other.downcast_ref::<T>() {
