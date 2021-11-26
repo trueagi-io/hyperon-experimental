@@ -22,8 +22,9 @@ macro_rules! expr {
     () => { Atom::expr(&[]) };
     ($x:ident) => { Atom::var(stringify!($x)) };
     ($x:literal) => { Atom::sym($x) };
+    ({$x:tt}) => { Atom::gnd($x) };
     (($($x:tt),*)) => { Atom::expr(&[ $( expr!($x) , )* ]) };
-    ($($x:tt),*) => { Atom::expr(&[ $( expr!($x) , )* ]) };
+     ($($x:tt),*)  => { Atom::expr(&[ $( expr!($x) , )* ]) };
 }
 
 #[macro_export]

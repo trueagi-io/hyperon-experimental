@@ -27,6 +27,8 @@ fn test_expr_expression() {
     assert_eq!(expr!("=", ("fact", n), ("*", n, ("-", n, "1"))), 
                E(&[S("="), E(&[S("fact"), V("n")]),
                E(&[ S("*"), V("n"), E(&[ S("-"), V("n"), S("1") ]) ]) ]));
+    assert_eq!(expr!("=", n, {[1, 2, 3]}), E(&[S("="), V("n"), G([1, 2, 3])]));
+    assert_eq!(expr!("=", {6}, ("fact", n)), E(&[S("="), G(6), E(&[S("fact"), V("n")])]));
 }
 
 #[test]
