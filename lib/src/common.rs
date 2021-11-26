@@ -1,5 +1,4 @@
 use super::*;
-use std::fmt::Display;
 use std::cell::RefCell;
 
 // GndRefCell is used to keep pointer to the data located on heap as GroundedAtom.
@@ -24,7 +23,7 @@ impl<T> PartialEq for GndRefCell<T> {
     }
 }
 
-impl<T> Display for GndRefCell<T> {
+impl<T> Debug for GndRefCell<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "GndRefCell")
     }
@@ -57,7 +56,7 @@ impl GroundedAtom for &'static Operation {
     }
 }
 
-impl Display for &'static Operation {
+impl Debug for &'static Operation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)
     }

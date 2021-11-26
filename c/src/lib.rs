@@ -3,7 +3,7 @@ use hyperon::text::*;
 
 use std::ffi::*;
 use std::os::raw::*;
-use std::fmt::Display;
+use std::fmt::Debug;
 use regex::Regex;
 use std::rc::Rc;
 
@@ -312,7 +312,7 @@ impl CGroundedAtom {
                     Err(cstr_as_str(res).to_string())
                 }
             },
-            None => Err(format!("{} is not executable", self)),
+            None => Err(format!("{:?} is not executable", self)),
         }
     }
 
@@ -357,7 +357,7 @@ impl GroundedAtom for CGroundedAtom {
 
 }
 
-impl Display for CGroundedAtom {
+impl Debug for CGroundedAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         unsafe {
             write!(f, "{}", self.display())

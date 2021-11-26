@@ -6,6 +6,7 @@ use super::*;
 fn S(name: &str) -> Atom { Atom::sym(name) }
 fn E(children: &[Atom]) -> Atom { Atom::expr(children) }
 fn V(name: &str) -> Atom { Atom::var(name) }
+fn G<T: GroundedAtom>(gnd: T) -> Atom { Atom::gnd(gnd) }
 
 #[test]
 fn test_expr_symbol() {
@@ -31,6 +32,13 @@ fn test_expr_expression() {
 #[test]
 fn test_grounded() {
     assert_eq!(Atom::gnd(3), Atom::Grounded(Box::new(3)));
+    assert_eq!(G(42).as_gnd::<i32>().unwrap(), &42);
+    assert_eq!(G("Data string"), Atom::Grounded(Box::new("Data string")));
+    assert_eq!(G(vec![1, 2, 3]), Atom::Grounded(Box::new(vec![1, 2, 3])));
+    assert_eq!(G([42, -42]).as_gnd::<[i32; 2]>().unwrap(), &[42, -42]);
+    assert_eq!(G((-42, "42")).as_gnd::<(i32, &str)>().unwrap(), &(-42, "42"));
+    assert_eq!(G(HashMap::from([("q", 0), ("a", 42),])),
+        Atom::Grounded(Box::new(HashMap::from([("q", 0), ("a", 42),]))));
 }
 
 #[test]
@@ -53,6 +61,10 @@ fn test_display_expression() {
 #[test]
 fn test_display_grounded() {
     assert_eq!(format!("{}", Atom::gnd(42)), "42");
+    assert_eq!(format!("{}", Atom::gnd([1, 2, 3])), "[1, 2, 3]");
+    assert_eq!(
+        format!("{}", Atom::gnd(HashMap::from([("hello", "world")]))),
+        "{\"hello\": \"world\"}");
 }
 
 #[test]
