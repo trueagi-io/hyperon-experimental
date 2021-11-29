@@ -107,6 +107,9 @@ struct CConstr {
 PYBIND11_MODULE(hyperonpy, m) {
 	m.doc() = "Python API of the Hyperon library";
 
+	// TODO: integrate Rust logs with Python logger
+	m.def("init_logger", &init_logger, "Initialize Hyperon library logger");
+
 	py::enum_<atom_type_t>(m, "AtomType")
 		.value("SYMBOL", atom_type_t::SYMBOL)
 		.value("VARIABLE", atom_type_t::VARIABLE)

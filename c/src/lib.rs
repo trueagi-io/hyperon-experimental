@@ -7,6 +7,11 @@ use std::fmt::Debug;
 use regex::Regex;
 use std::rc::Rc;
 
+#[no_mangle]
+pub extern "C" fn init_logger() {
+   let _ = env_logger::builder().is_test(true).try_init();
+}
+
 // Atom
 
 #[allow(non_camel_case_types)]

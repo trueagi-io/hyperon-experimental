@@ -1,6 +1,6 @@
 import hyperonpy as hp
 
-from hyperonpy import AtomType
+from hyperonpy import AtomType, init_logger
 
 class Atom:
 
