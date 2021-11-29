@@ -5,7 +5,7 @@ use crate::matcher::*;
 use std::rc::Rc;
 
 pub fn interpret(space: Rc<GroundingSpace>, expr: &Atom) -> InterpreterResult {
-    let mut interpreter = Interpreter { result: Ok(vec![Atom::gnd(space), expr.clone()]), tasks: Vec::new()};
+    let mut interpreter = Interpreter { result: Ok(vec![Atom::gnd(space), expr.clone()]), tasks: Vec::new(), bindings_stack: Vec::new() };
     interpreter.push(interpret_op);
     
     loop {
@@ -30,6 +30,7 @@ type InterpreterResult = Result<Vec<Atom>, String>;
 struct Interpreter {
     result: InterpreterResult,
     tasks: Vec<Box<dyn FnOnce(InterpreterResult, &mut Interpreter) -> InterpreterResult>>,
+    bindings_stack: Vec<Bindings>,
 }
 
 fn result_cloned<T: Clone, E: Clone>(src: &Result<T, E>) -> Result<T, E> {
@@ -57,6 +58,22 @@ impl Interpreter {
             None
         }
     }
+
+    fn bindings_ref(&self) -> &Vec<Bindings> {
+        &self.bindings_stack
+    }
+
+    fn bindings_mut_ref(&mut self) -> &mut Vec<Bindings> {
+        &mut self.bindings_stack
+    }
+}
+
+fn apply_bindings_stack_to_atom(atom: &Atom, bindings_stack: &Vec<Bindings>) -> Atom {
+    let mut atom = atom.clone();
+    for binding in bindings_stack {
+        atom = apply_bindings_to_atom(&atom, binding);
+    }
+    atom
 }
 
 fn interpret_op(args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
@@ -85,7 +102,8 @@ fn interpret_reducted_op(args: InterpreterResult, interpreter: &mut Interpreter)
     if args.len() < 2 {
         Err(format!("Expected GroundingSpace and Atom as arguments, found: {:?}", args))
     } else {
-        let (space, atom) = (args[0].clone(), args[1].clone());
+        let (space, atom) = (args[0].clone(), &args[1]);
+        let atom = apply_bindings_stack_to_atom(atom, interpreter.bindings_ref());
         log::debug!("interpret_reducted_op({}, {})", space, atom);
         if let Some(ref expr) = atom.as_expr() {
             if is_grounded(expr) {
@@ -200,18 +218,18 @@ fn match_op(args: InterpreterResult, interpreter: &mut Interpreter) -> Interpret
                 log::debug!("match_op: no matches found, return: {}", expr);
                 Ok(vec![expr])
             } else {
-                let mut matches: Vec<Atom> = Vec::new();
+                let mut matches: Vec<(Atom, Bindings)> = Vec::new();
                 {
                     let res = expr;
                     log::debug!("match_op: default: {}", res);
-                    matches.push(res);
+                    matches.push((res, Bindings::new()));
                 }
                 let mut num: usize = 0;
-                for binding in &bindings {
+                for binding in bindings {
                     let res = binding.get(&var_x).unwrap(); 
-                    let res = apply_bindings_to_atom(res, binding);
+                    let res = apply_bindings_to_atom(res, &binding);
                     log::debug!("match_op: res: {}", res);
-                    matches.push(res);
+                    matches.push((res, binding));
                     num = num + 1;
                 }
                 let first = matches.pop().unwrap();
@@ -220,7 +238,8 @@ fn match_op(args: InterpreterResult, interpreter: &mut Interpreter) -> Interpret
                 let space_2 = Rc::clone(space);
                 interpreter.push(| result, interpreter | match_next(space_2, matches, result, interpreter));
                 interpreter.push(interpret_op);
-                Ok(vec![Atom::gnd(Rc::clone(space)), first])
+                interpreter.bindings_mut_ref().push(first.1);
+                Ok(vec![Atom::gnd(Rc::clone(space)), first.0])
             }
         } else {
             Err(format!("Rc<GroundingSpace> is expected as a first arguments, found: {}", space))
@@ -228,7 +247,7 @@ fn match_op(args: InterpreterResult, interpreter: &mut Interpreter) -> Interpret
     }
 }
 
-fn match_next(space: Rc<GroundingSpace>, mut matches: Vec<Atom>, args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
+fn match_next(space: Rc<GroundingSpace>, mut matches: Vec<(Atom, Bindings)>, args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
     if args.is_ok() {
         log::debug!("match_next: return: {:?}", args);
         args
@@ -237,14 +256,49 @@ fn match_next(space: Rc<GroundingSpace>, mut matches: Vec<Atom>, args: Interpret
             log::debug!("match_next: return default");
             let next = matches.pop().unwrap();
             interpreter.push(interpret_reducted_op);
-            Ok(vec![Atom::gnd(Rc::clone(&space)), next])
+            interpreter.bindings_mut_ref().pop();
+            interpreter.bindings_mut_ref().push(next.1);
+            Ok(vec![Atom::gnd(Rc::clone(&space)), next.0])
         } else {
             log::debug!("match_next: return: {:?}", args);
             let next = matches.pop().unwrap();
             let space_2 = Rc::clone(&space);
             interpreter.push(| result, interpreter | match_next(space_2, matches, result, interpreter));
             interpreter.push(interpret_op);
-            Ok(vec![Atom::gnd(Rc::clone(&space)), next])
+            interpreter.bindings_mut_ref().pop();
+            interpreter.bindings_mut_ref().push(next.1);
+            Ok(vec![Atom::gnd(Rc::clone(&space)), next.0])
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(non_snake_case)]
+
+    use super::*;
+    use std::rc::Rc;
+    
+    fn init() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
+
+    #[test]
+    fn test_sum_ints() {
+        init();
+        let mut space = GroundingSpace::new();
+        space.add(expr!("=", ("and", "True", "True"), "True"));
+        space.add(expr!("=", ("if", "True", then, else), then));
+        space.add(expr!("=", ("if", "False", then, else), else));
+        space.add(expr!("=", ("Fritz", "croaks"), "True"));
+        space.add(expr!("=", ("Fritz", "eats-flies"), "True"));
+        space.add(expr!("=", ("Tweety", "chirps"), "True"));
+        space.add(expr!("=", ("Tweety", "yellow"), "True"));
+        space.add(expr!("=", ("Tweety", "eats-flies"), "True"));
+        let expr = expr!("if", ("and", (x, "croaks"), (x, "eats-flies")),
+            ("=", (x, "frog"), "True"), "nop");
+
+        assert_eq!(interpret(Rc::new(space), &expr),
+            Ok(vec![expr!("=", ("Fritz", "frog"), "True")]));
     }
 }
