@@ -372,6 +372,12 @@ impl GroundingSpace {
         result
     }
 
+    pub fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
+        self.query(pattern).drain(0..)
+            .map(| bindings | matcher::apply_bindings_to_atom(template, &bindings))
+            .collect()
+    }
+
     pub fn as_vec(&self) -> &Vec<Atom> {
         &self.content
     }

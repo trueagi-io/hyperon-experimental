@@ -14,7 +14,7 @@ class Atom:
         return (isinstance(other, Atom) and
                 hp.atom_eq(self.catom, other.catom))
 
-    def __str__(self):
+    def __repr__(self):
         return hp.atom_to_str(self.catom)
 
     def get_type(self):
@@ -121,7 +121,7 @@ class Value(ConstGroundedAtom):
             return self.value == other.value
         return False
 
-    def __str__(self):
+    def __repr__(self):
         return str(self.value)
 
 class GroundingSpace:
@@ -143,6 +143,14 @@ class GroundingSpace:
         return [Atom._from_catom(hp.grounding_space_get(self.cspace, i))
                 for i in range(0, hp.grounding_space_len(self.cspace))]
 
+    def query(self, pattern):
+        return hp.grounding_space_query(self.cspace, pattern.catom)
+
+    def subst(self, pattern, templ):
+        return [Atom._from_catom(catom) for catom in
+                hp.grounding_space_subst(self.cspace, pattern.catom,
+                                         templ.catom)]
+
 class SExprSpace:
 
     def __init__(self):
@@ -161,8 +169,5 @@ class SExprSpace:
         hp.sexpr_space_into_grounding_space(self.cspace, gspace.cspace)
 
 def interpret(gnd_space, expr):
-    catom = hp.interpret(gnd_space.cspace, expr.catom)
-    if catom is None:
-        # TODO: implement returning error
-        raise Exception("Interpret finished with error")
-    return Atom._from_catom(catom)
+    return [Atom._from_catom(catom) for catom in
+            hp.interpret(gnd_space.cspace, expr.catom)]

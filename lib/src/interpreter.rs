@@ -232,14 +232,11 @@ fn match_op(args: InterpreterResult, interpreter: &mut Interpreter) -> Interpret
                     matches.push((res, binding));
                     num = num + 1;
                 }
-                let first = matches.pop().unwrap();
                 // If this construction is inlined compiler complains, because clone()
                 // is called in the context of the closure
                 let space_2 = Rc::clone(space);
-                interpreter.push(| result, interpreter | match_next(space_2, matches, result, interpreter));
-                interpreter.push(interpret_op);
-                interpreter.bindings_mut_ref().push(first.1);
-                Ok(vec![Atom::gnd(Rc::clone(space)), first.0])
+                interpreter.push(| result, interpreter | match_return_first(space_2, matches, result, interpreter));
+                Ok(Vec::new())
             }
         } else {
             Err(format!("Rc<GroundingSpace> is expected as a first arguments, found: {}", space))
@@ -247,23 +244,32 @@ fn match_op(args: InterpreterResult, interpreter: &mut Interpreter) -> Interpret
     }
 }
 
-fn match_next(space: Rc<GroundingSpace>, mut matches: Vec<(Atom, Bindings)>, args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
+fn match_return_first(space: Rc<GroundingSpace>, mut matches: Vec<(Atom, Bindings)>, _args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
+    let first = matches.pop().unwrap();
+    let space_2 = Rc::clone(&space);
+    interpreter.push(| result, interpreter | match_return_first_next(space_2, matches, result, interpreter));
+    interpreter.push(interpret_op);
+    interpreter.bindings_mut_ref().push(first.1);
+    Ok(vec![Atom::gnd(Rc::clone(&space)), first.0])
+}
+
+fn match_return_first_next(space: Rc<GroundingSpace>, mut matches: Vec<(Atom, Bindings)>, args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
     if args.is_ok() {
-        log::debug!("match_next: return: {:?}", args);
+        log::debug!("match_return_first_next: return: {:?}", args);
         args
     } else {
         if matches.len() == 1 {
-            log::debug!("match_next: return default");
+            log::debug!("match_return_first_next: return default");
             let next = matches.pop().unwrap();
             interpreter.push(interpret_reducted_op);
             interpreter.bindings_mut_ref().pop();
             interpreter.bindings_mut_ref().push(next.1);
             Ok(vec![Atom::gnd(Rc::clone(&space)), next.0])
         } else {
-            log::debug!("match_next: return: {:?}", args);
             let next = matches.pop().unwrap();
+            log::debug!("match_return_first_next: next: {:?}", next);
             let space_2 = Rc::clone(&space);
-            interpreter.push(| result, interpreter | match_next(space_2, matches, result, interpreter));
+            interpreter.push(| result, interpreter | match_return_first_next(space_2, matches, result, interpreter));
             interpreter.push(interpret_op);
             interpreter.bindings_mut_ref().pop();
             interpreter.bindings_mut_ref().push(next.1);
@@ -271,6 +277,36 @@ fn match_next(space: Rc<GroundingSpace>, mut matches: Vec<(Atom, Bindings)>, arg
         }
     }
 }
+
+//fn match_return_all(space: Rc<GroundingSpace>, mut matches: Vec<(Atom, Bindings)>, _args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
+    //let succ_results: Vec<Atom> = Vec::new();
+    //let first = matches.pop().unwrap();
+    //let space_2 = Rc::clone(&space);
+    //interpreter.push(| result, interpreter | match_return_all_next(space_2, matches, succ_results, result, interpreter));
+    //interpreter.push(interpret_op);
+    //interpreter.bindings_mut_ref().push(first.1);
+    //Ok(vec![Atom::gnd(Rc::clone(&space)), first.0])
+//}
+
+//fn match_return_all_next(space: Rc<GroundingSpace>, mut matches: Vec<(Atom, Bindings)>, mut succ_results: Vec<Atom>, args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
+    //if let Ok(mut args) = args {
+        //log::debug!("match_return_all_next: add: {:?}", args);
+        //args.drain(0..).for_each(|atom| succ_results.push(atom));
+    //} 
+    //if matches.len() == 0 {
+        //Ok(succ_results)
+    //} else {
+        //let next = matches.pop().unwrap();
+        //log::debug!("match_return_all_next: next: {:?}", next);
+        //let space_2 = Rc::clone(&space);
+        //interpreter.push(| result, interpreter | match_return_all_next(space_2, matches, succ_results, result, interpreter));
+        //interpreter.push(interpret_op);
+        //interpreter.bindings_mut_ref().pop();
+        //interpreter.bindings_mut_ref().push(next.1);
+        //Ok(vec![Atom::gnd(Rc::clone(&space)), next.0])
+    //}
+//}
+
 
 #[cfg(test)]
 mod tests {

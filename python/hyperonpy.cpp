@@ -17,16 +17,23 @@ using CVecAtom = CPtr<vec_atom_t>;
 using CGroundingSpace = CPtr<grounding_space_t>;
 using CSExprSpace = CPtr<sexpr_space_t>;
 
-auto const& copy_to_string = [](char const* cstr, void* context) -> void {
+void copy_to_string(char const* cstr, void* context) {
 	std::string* cppstr = static_cast<std::string*>(context);
 	cppstr->assign(cstr);
-};
+}
+
+void copy_atoms_to_list(atom_t const* const* atoms, size_t size, void* context) {
+	py::list& list = *(py::list*) context;
+	for (size_t i = 0; i < size; ++i) {
+		list.append(CAtom(atom_copy(atoms[i])));
+	}
+}
 
 extern "C" {
 	const char *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* ops, struct vec_atom_t* data);
 	bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
 	struct gnd_t *py_clone(const struct gnd_t* _gnd);
-	uintptr_t py_display(const struct gnd_t* _gnd, char* buffer, uintptr_t size);
+	size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
 	void py_free(struct gnd_t* _gnd);
 }
 
@@ -71,7 +78,7 @@ struct gnd_t *py_clone(const struct gnd_t* _cgnd) {
 	return new GroundedObject(copy);
 }
 
-uintptr_t py_display(const struct gnd_t* _cgnd, char* buffer, uintptr_t size) {
+size_t py_display(const struct gnd_t* _cgnd, char* buffer, size_t size) {
 	py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
 	std::string str = py::str(pyobj).cast<std::string>();
 	strncpy(buffer, str.c_str(), size - 1);
@@ -138,13 +145,13 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("atom_eq", [](CAtom a, CAtom b) -> bool { return atom_eq(a.ptr, b.ptr); }, "Test if two atoms are equal");
     m.def("atom_to_str", [](CAtom atom) {
 			std::string str;
-    		atom_to_str(atom.ptr, copy_to_string, &str);
+    		atom_to_str(atom.ptr, &copy_to_string, &str);
     		return str;
     	}, "Convert atom to human readable string");
     m.def("atom_get_type", [](CAtom atom) { return atom_get_type(atom.ptr); }, "Get type of the atom");
     m.def("atom_get_name", [](CAtom atom) {
 			std::string str;
-    		atom_get_name(atom.ptr, copy_to_string, &str);
+    		atom_get_name(atom.ptr, &copy_to_string, &str);
     		return str;
     	}, "Get name of the Symbol or Variable atom");
 	m.def("atom_get_object", [](CAtom atom) {
@@ -164,6 +171,27 @@ PYBIND11_MODULE(hyperonpy, m) {
 	m.def("grounding_space_eq", [](CGroundingSpace a, CGroundingSpace b) { return grounding_space_eq(a.ptr, b.ptr); }, "Check if two grounding spaces are equal");
 	m.def("grounding_space_len", [](CGroundingSpace space) { return grounding_space_len(space.ptr); }, "Return number of atoms in grounding space");
 	m.def("grounding_space_get", [](CGroundingSpace space, size_t idx) { return CAtom(grounding_space_get(space.ptr, idx)); }, "Get atom by index from grounding space");
+	m.def("grounding_space_query", [](CGroundingSpace space, CAtom pattern) {
+			py::list results;
+			grounding_space_query(space.ptr, pattern.ptr,
+					[](binding_t const* cbindings, size_t size, void* context) {
+						py::list& results = *(py::list*)context;
+						py::dict pybindings;
+						for (size_t i = 0; i < size; ++i) {
+							pybindings[cbindings[i].var] = CAtom(atom_copy(cbindings[i].atom));
+						}
+						results.append(pybindings);
+					}, &results);
+			return results;
+		}, "Query atoms from grounding space by pattern");
+
+
+
+	m.def("grounding_space_subst", [](CGroundingSpace space, CAtom pattern, CAtom templ) {
+			py::list results;
+			grounding_space_subst(space.ptr, pattern.ptr, templ.ptr, &copy_atoms_to_list, &results);
+			return results;
+		}, "Get bindings for pattern and apply to template");
 
 	py::class_<CSExprSpace>(m, "CSExprSpace");
 	m.def("sexpr_space_new", []() { return CSExprSpace(sexpr_space_new()); }, "New sexpr space");
@@ -176,8 +204,9 @@ PYBIND11_MODULE(hyperonpy, m) {
 	m.def("sexpr_space_into_grounding_space", [](CSExprSpace tspace, CGroundingSpace gspace) { sexpr_space_into_grounding_space(tspace.ptr, gspace.ptr); }, "Add content of the sexpr space to the grounding space");
 
 	m.def("interpret", [](CGroundingSpace space, CAtom expr) { 
-			atom_t* res = interpret(space.ptr, expr.ptr);
-			return res ? py::cast(CAtom(res)) : py::none();
+			py::list results;
+			interpret(space.ptr, expr.ptr, &copy_atoms_to_list, &results);
+			return results;
 		}, "Run interpreter on expression and return result");
 }
 

@@ -111,7 +111,7 @@ class AtomTest(unittest.TestCase):
     def test_interpret(self):
         space = GroundingSpace()
         self.assertEqual(interpret(space, E(X2Atom(), ValueAtom(1))),
-                ValueAtom(2))
+                [ValueAtom(2)])
 
 def X2Atom():
     return G(X2())
