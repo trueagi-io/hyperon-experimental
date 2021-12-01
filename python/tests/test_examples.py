@@ -137,7 +137,6 @@ class ExamplesTest(unittest.TestCase):
                 (start ventilation)
                 '''))
 
-    # FIXME: segfault after this test is executed
     def _test_subset_sum_problem(self):
         atomese = Atomese()
 
@@ -153,13 +152,12 @@ class ExamplesTest(unittest.TestCase):
            (= (subsum (:: $x $xs) (:: $b $bs)) (+ (* $x $b) (subsum $xs $bs)))
         ''')
 
-        target = atomese.parse('''(let $t (gen 3)
+        target = atomese.parse_single('''(let $t (gen 3)
             (if (== (subsum (:: 3 (:: 5 (:: 7 nil))) $t) 8) $t))''')
+        output = interpret(kb, target)
+        self.assertEqual(output, atomese.parse_single('(:: 1 (:: 1 (:: 0 nil)))'))
 
-        output = interpret_and_print_results(target, kb)
-        self.assertEqual(output, '(:: 1 (:: 1 (:: 0 nil)))\n')
-
-    def _test_infer_function_application_type(self):
+    def test_infer_function_application_type(self):
         atomese = Atomese()
 
         kb = atomese.parse('''
@@ -171,10 +169,9 @@ class ExamplesTest(unittest.TestCase):
            (= (: "Hello" String) True)
         ''')
 
-        target = atomese.parse('(if (: (apply reverse "Hello") $t) $t)')
-
-        output = interpret_and_print_results(target, kb)
-        self.assertEqual(output, 'String\n')
+        target = atomese.parse_single('(if (: (apply reverse "Hello") $t) $t)')
+        output = interpret(kb, target)
+        self.assertEqual(output, [S('String')])
 
     def _test_plus_reduces_Z(self):
         atomese = Atomese()
@@ -185,21 +182,21 @@ class ExamplesTest(unittest.TestCase):
            (= (plus (S $k) $y) (S (plus $k $y)))
         ''')
 
-        target = atomese.parse('(eq (+ 2 2) 4)')
-        output = interpret_and_print_results(target, kb)
-        self.assertEqual(output, 'True\n')
+        target = atomese.parse_single('(eq (+ 2 2) 4)')
+        output = interpret(kb, target)
+        self.assertEqual(output, [ValueAtom(True)])
 
-        target = atomese.parse('(eq (+ 2 3) 4)')
-        output = interpret_and_print_results(target, kb)
-        self.assertEqual(output, '(eq 5 4)\n')
+        target = atomese.parse_single('(eq (+ 2 3) 4)')
+        output = interpret(kb, target)
+        self.assertEqual(output, [atomese.parse_single('(eq 5 4)')])
 
-        target = atomese.parse('(eq (plus Z $n) $n)')
-        output = interpret_and_print_results(target, kb)
-        self.assertEqual(output, 'True\n')
+        target = atomese.parse_single('(eq (plus Z $n) $n)')
+        output = interpret(kb, target)
+        self.assertEqual(output, [ValueAtom(True)])
 
-        target = atomese.parse('(eq (plus (S Z) $n) $n)')
-        output = interpret_and_print_results(target, kb)
-        self.assertEqual(output, '(eq (S $n) $n)\n')
+        target = atomese.parse_single('(eq (plus (S Z) $n) $n)')
+        output = interpret(kb, target)
+        self.assertEqual(output, [atomese.parse_single('(eq (S $n) $n)')])
 
 
     def _test_visit_kim(self):
