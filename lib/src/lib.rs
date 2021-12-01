@@ -112,6 +112,7 @@ impl Display for ExpressionAtom {
     }
 }
 
+#[derive(Clone)]
 pub struct SubexpressionStream {
     expr: Atom,
     levels: Vec<usize>,

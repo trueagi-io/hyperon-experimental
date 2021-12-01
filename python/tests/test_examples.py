@@ -78,14 +78,16 @@ class ExamplesTest(unittest.TestCase):
             (= (Fritz eats_flies) True)
         ''')
 
-        fritz_frog = interpret(kb, atomese.parse_single('(if (and ($x croaks) ($x eats_flies)) (= ($x frog) True) nop)'))
+        target = atomese.parse_single('(if (and ($x croaks) ($x eats_flies)) (= ($x frog) True) nop)')
+        fritz_frog = interpret(kb, target)
         self.assertEqual([atomese.parse_single('(= (Fritz frog) True)')], fritz_frog)
         kb.add_atom(fritz_frog[0])
 
-        fritz_green = interpret(kb, atomese.parse_single('(if ($x frog) (= ($x green) True) nop)'))
-        self.assertEqual([atomese.parse_single('(= (Fritz green) True)')], fritz_green)
+        target = atomese.parse_single('(if ($x frog) (= ($x green) True) nop)')
+        self.assertEqual([atomese.parse_single('(= (Fritz green) True)')],
+                interpret(kb, target))
 
-    def _test_frog_unification(self):
+    def test_frog_unification(self):
         atomese = Atomese()
 
         kb = atomese.parse('''
@@ -96,12 +98,11 @@ class ExamplesTest(unittest.TestCase):
            (= (green $x) (frog $x))
         ''')
 
-        target = atomese.parse('(if (green $x) $x)')
+        target = atomese.parse_single('(if (green $x) $x)')
+        expected = atomese.parse_single('Fritz')
+        self.assertEqual([expected], interpret(kb, target))
 
-        output = interpret_and_print_results(target, kb)
-        self.assertEqual(output, 'Fritz\n')
-
-    def _test_air_humidity_regulator(self):
+    def test_air_humidity_regulator(self):
         atomese = Atomese()
 
         kb = atomese.parse('''
@@ -120,15 +121,21 @@ class ExamplesTest(unittest.TestCase):
            (= (makes ventilation (air dry)) True)
         ''')
 
-        fritz_green = interpret(kb, atomese.parse_single('(is (air dry))'))
-        self.assertEqual(atomese.parse_single('(= (Fritz green) True)'), fritz_green)
-        target = atomese.parse('(is (air dry))')
-        output = interpret_and_print_results(target, kb)
-        self.assertEqual(output, '(stop ventilation)\n(start kettle)\n(start humidifier)\n')
+        target = atomese.parse_single('(is (air dry))')
+        output = interpret(kb, target)
+        self.assertEqual(output, atomese.parse_single('''
+                (stop ventilation)
+                (start kettle)
+                (start humidifier)
+                '''))
 
-        target = atomese.parse('(is (air wet))')
-        output = interpret_and_print_results(target, kb)
-        self.assertEqual(output, '(stop kettle)\n(stop humidifier)\n(start ventilation)\n')
+        target = atomese.parse_single('(is (air wet))')
+        output = interpret(kb, target)
+        self.assertEqual(output, atomese.parse_single('''
+                (stop kettle)
+                (stop humidifier)
+                (start ventilation)
+                '''))
 
     # FIXME: segfault after this test is executed
     def _test_subset_sum_problem(self):

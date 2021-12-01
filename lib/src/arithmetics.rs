@@ -67,7 +67,7 @@ mod tests {
         assert_eq!(space.query(&expr!("=", ("fac", {3}), X)), vec![expected]);
     }
 
-    #[test]
+    //#[test]
     fn test_factorial() {
         init();
         let mut space = GroundingSpace::new();

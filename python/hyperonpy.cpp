@@ -61,9 +61,13 @@ const char *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _ops, struc
 	static py::object hyperon = inc_ref(py::module_::import("hyperon"));
 	static py::object BaseVecAtom = hyperon.attr("BaseVecAtom");
 	py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
-	pyobj.attr("execute")(BaseVecAtom(CVecAtom(_ops)), BaseVecAtom(CVecAtom(_data)));
-	// TODO: implement returning error
-	return nullptr;	
+	try {
+		pyobj.attr("execute")(BaseVecAtom(CVecAtom(_ops)), BaseVecAtom(CVecAtom(_data)));
+		return nullptr;	
+	} catch (...) {
+		// TODO: implement returning error description
+		return "Exception caught";
+	}
 }
 
 bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b) {

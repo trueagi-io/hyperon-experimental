@@ -1,18 +1,18 @@
 use crate::*;
-use crate::common::*;
 use crate::matcher::*;
 
 use std::rc::Rc;
 
 pub fn interpret(space: Rc<GroundingSpace>, expr: &Atom) -> InterpreterResult {
-    let mut interpreter = Interpreter { result: Ok(vec![Atom::gnd(space), expr.clone()]), tasks: Vec::new(), bindings_stack: Vec::new() };
-    interpreter.push(interpret_op);
+    let mut interpreter = Interpreter::new(space, expr);
+    // see https://github.com/rust-lang/rust/issues/86654
+    interpreter.push(interpret_op as StepFunc);
     
     loop {
         let result = interpreter.step();
         match result {
             Some(result) => {
-                return result_cloned(result);
+                return Ok(result);
             },
             _ => continue,
         }
@@ -23,14 +23,36 @@ fn is_grounded(expr: &ExpressionAtom) -> bool {
     matches!(expr.children().get(0), Some(Atom::Grounded(_)))
 }
 
-type ExpressionAtomIterGnd = Rc<GndRefCell<SubexpressionStream>>;
-
 type InterpreterResult = Result<Vec<Atom>, String>;
 
-struct Interpreter {
+trait Step {
+    fn call(&mut self, data: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult;
+    fn clone_step(&self) -> Box<dyn Step>;
+}
+
+type StepFunc = fn(InterpreterResult, &mut Interpreter) -> InterpreterResult;
+
+impl Step for StepFunc {
+    fn call(&mut self, data: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
+        self(data, interpreter)
+    }
+    fn clone_step(&self) -> Box<dyn Step> {
+        Box::new(self.clone())
+    }
+}
+
+impl Clone for Box<dyn Step> {
+    fn clone(&self) -> Self {
+        self.clone_step()
+    }
+}
+
+#[derive(Clone)]
+struct Branch {
     result: InterpreterResult,
-    tasks: Vec<Box<dyn FnOnce(InterpreterResult, &mut Interpreter) -> InterpreterResult>>,
+    steps: Vec<Box<dyn Step>>,
     bindings_stack: Vec<Bindings>,
+    space: Rc<GroundingSpace>,
 }
 
 fn result_cloned<T: Clone, E: Clone>(src: &Result<T, E>) -> Result<T, E> {
@@ -42,29 +64,79 @@ fn result_cloned<T: Clone, E: Clone>(src: &Result<T, E>) -> Result<T, E> {
     }
 }
 
-impl Interpreter {
+impl Branch {
 
-    fn push<F>(&mut self, task: F)
-        where F: 'static + FnOnce(InterpreterResult, &mut Interpreter) -> InterpreterResult {
-            self.tasks.push(Box::new(task));
-    }
-
-    fn step(&mut self) -> Option<&InterpreterResult> {
-        if self.tasks.is_empty() {
-            Some(&self.result)
-        } else {
-            let next = self.tasks.pop().unwrap();
-            self.result = next(result_cloned(&self.result), self);
-            None
+    fn new(space: Rc<GroundingSpace>, expr: &Atom) -> Self {
+        Self {
+            result: Ok(vec![expr.clone()]),
+            steps: Vec::new(),
+            bindings_stack: Vec::new(),
+            space: space,
         }
     }
 
-    fn bindings_ref(&self) -> &Vec<Bindings> {
-        &self.bindings_stack
+    fn push<T: 'static + Step>(&mut self, step: T) {
+        self.steps.push(Box::new(step));
     }
 
     fn bindings_mut_ref(&mut self) -> &mut Vec<Bindings> {
         &mut self.bindings_stack
+    }
+}
+
+struct Interpreter {
+    branches: Vec<Branch>,
+    working: usize,
+    results: Vec<Atom>,
+}
+
+impl Interpreter {
+
+    fn new(space: Rc<GroundingSpace>, expr: &Atom) -> Self {
+        Self {
+            branches: vec![Branch::new(space, expr)],
+            working: 0,
+            results: vec![],
+        }
+    }
+
+    fn working_branch(&mut self) -> &mut Branch {
+        &mut self.branches[self.working]
+    }
+
+    fn push<T: 'static + Step>(&mut self, step: T) {
+        self.working_branch().push(step);
+    }
+
+    fn branch(&mut self, result: InterpreterResult) -> &mut Branch {
+        let mut branch = self.working_branch().clone();
+        branch.result = result;
+        self.branches.push(branch);
+        self.branches.last_mut().unwrap()
+    }
+
+    fn step(&mut self) -> Option<Vec<Atom>> {
+        if self.branches.is_empty() {
+            Some(self.results.clone())
+        } else {
+            let idx = self.branches.len() - 1;
+            self.working = idx;
+            if self.branches[idx].steps.is_empty() {
+                let branch = self.branches.pop().unwrap();
+                if let Ok(mut result) = branch.result {
+                    result.drain(0..).for_each(|atom| self.results.push(atom))
+                }
+                None
+            } else {
+                let mut next = self.branches[idx].steps.pop().unwrap();
+                self.branches[idx].result = next.call(result_cloned(&self.branches[idx].result), self);
+                None
+            }
+        }
+    }
+
+    fn bindings_mut_ref(&mut self) -> &mut Vec<Bindings> {
+        self.working_branch().bindings_mut_ref()
     }
 }
 
@@ -78,18 +150,18 @@ fn apply_bindings_stack_to_atom(atom: &Atom, bindings_stack: &Vec<Bindings>) -> 
 
 fn interpret_op(args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
     let args = args?;
-    if args.len() < 2 {
-        Err(format!("Expected GroundingSpace and Atom as arguments, found: {:?}", args))
+    if args.len() < 1 {
+        Err(format!("Expected Atom as argument, found: {:?}", args))
     } else {
-        let (space, atom) = (args[0].clone(), args[1].clone());
-        log::debug!("interpret_op({}, {})", space, atom);
+        let atom = args[0].clone();
+        log::debug!("interpret_op({})", atom);
         if let Some(ref expr) = atom.as_expr() {
             if !expr.is_plain() {
-                interpreter.push(reduct);
-                Ok(vec![space, atom])
+                interpreter.push(reduct as StepFunc);
+                Ok(vec![atom])
             } else {
-                interpreter.push(interpret_reducted_op);
-                Ok(vec![space, atom])
+                interpreter.push(interpret_reducted_op as StepFunc);
+                Ok(vec![atom])
             }
         } else {
             Ok(vec![atom])
@@ -99,19 +171,19 @@ fn interpret_op(args: InterpreterResult, interpreter: &mut Interpreter) -> Inter
 
 fn interpret_reducted_op(args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
     let args = args?;
-    if args.len() < 2 {
-        Err(format!("Expected GroundingSpace and Atom as arguments, found: {:?}", args))
+    if args.len() < 1 {
+        Err(format!("Expected Atom as argument, found: {:?}", args))
     } else {
-        let (space, atom) = (args[0].clone(), &args[1]);
-        let atom = apply_bindings_stack_to_atom(atom, interpreter.bindings_ref());
-        log::debug!("interpret_reducted_op({}, {})", space, atom);
+        let atom = &args[0];
+        let atom = apply_bindings_stack_to_atom(atom, interpreter.bindings_mut_ref());
+        log::debug!("interpret_reducted_op({})", atom);
         if let Some(ref expr) = atom.as_expr() {
             if is_grounded(expr) {
-                interpreter.push(execute);
+                interpreter.push(execute as StepFunc);
                 Ok(vec![atom])
             } else {
-                interpreter.push(match_op);
-                Ok(vec![space, atom])
+                interpreter.push(match_op as StepFunc);
+                Ok(vec![atom])
             }
         } else {
             Ok(vec![atom])
@@ -119,59 +191,76 @@ fn interpret_reducted_op(args: InterpreterResult, interpreter: &mut Interpreter)
     }
 }
 
+#[derive(Clone)]
+struct ReductStep {
+    iter: SubexpressionStream,
+}
+
+impl ReductStep {
+    fn new(iter: SubexpressionStream) -> Self {
+        Self { iter }
+    }
+}
+
+impl Step for ReductStep {
+    fn call(&mut self, data: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
+        reduct_next(self.iter.clone(), data, interpreter)
+    }
+
+    fn clone_step(&self) -> Box<dyn Step> {
+        Box::new((*self).clone())
+    }
+}
+
 fn reduct(args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
     let args = args?;
-    if args.len() < 2 {
-        Err(format!("Two arguments are expected, found: {:?}", args))
+    if args.len() < 1 {
+        Err(format!("1 argument is expected, found: {:?}", args))
     } else {
-        let (space, expr_atom) = (args[0].clone(), args[1].clone());
-        log::debug!("reduct({}, {})", space, expr_atom);
+        let expr_atom = args[0].clone();
+        log::debug!("reduct({})", expr_atom);
         if let Some(ref expr) = expr_atom.as_expr() {
             if expr.is_plain() {
-                interpreter.push(interpret_reducted_op);
-                Ok(vec![space.clone(), expr_atom])
+                interpreter.push(interpret_reducted_op as StepFunc);
+                Ok(vec![expr_atom])
             } else {
-                let iter = Rc::new(GndRefCell::new(expr.sub_expr_iter()));
+                let mut iter = expr.sub_expr_iter();
                 let sub;
                 {
-                    let mut stream = iter.raw().borrow_mut();
-                    stream.next();
-                    sub = stream.get_mut().clone();
+                    iter.next();
+                    sub = iter.get_mut().clone();
                 }
-                let space_2 = space.clone();
-                interpreter.push(move |res, interpreter| reduct_next(space_2, iter, res, interpreter));
-                interpreter.push(interpret_reducted_op);
-                Ok(vec![space.clone(), sub])
+                interpreter.push(ReductStep::new(iter));
+                interpreter.push(interpret_reducted_op as StepFunc);
+                Ok(vec![sub])
             }
         } else {
-            Err(format!("GroundingSpace and Atom::Expression are expected as arguments, found: {}, {}", space, expr_atom))
+            Err(format!("Atom::Expression is expected as an argument, found: {}", expr_atom))
         }
     }
 }
 
-fn reduct_next(space: Atom, iter: ExpressionAtomIterGnd, args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
+fn reduct_next(mut iter: SubexpressionStream, args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
     let args = args?;
     if args.len() < 1 {
-        Err(format!("Intepreted subexpression is expected as argument, found: {:?}", args))
+        Err(format!("Intepreted subexpression is expected as an argument, found: {:?}", args))
     } else {
         let reducted = args[0].clone();
-        log::debug!("reduct_next({}, {})", space, reducted);
+        log::debug!("reduct_next({})", reducted);
         let next_sub;
         {
-            let mut stream = iter.raw().borrow_mut();
-            *stream.get_mut() = reducted;
-            stream.next();
-            next_sub = stream.get_mut().clone();
+            *iter.get_mut() = reducted;
+            iter.next();
+            next_sub = iter.get_mut().clone();
             log::debug!("reduct_next: next_sub after reduction: {}", next_sub);
         }
-        if iter.raw().borrow().has_next() {
-            let space_2 = space.clone();
-            interpreter.push(move |res, interpreter| reduct_next(space_2, iter, res, interpreter));
-            interpreter.push(interpret_reducted_op);
-            Ok(vec![space.clone(), next_sub])
+        if iter.has_next() {
+            interpreter.push(ReductStep::new(iter));
+            interpreter.push(interpret_reducted_op as StepFunc);
+            Ok(vec![next_sub])
         } else {
-            interpreter.push(interpret_reducted_op);
-            Ok(vec![space.clone(), next_sub])
+            interpreter.push(interpret_reducted_op as StepFunc);
+            Ok(vec![next_sub])
         }
     }
 }
@@ -204,109 +293,34 @@ fn execute(args: InterpreterResult, _interpreter: &mut Interpreter) -> Interpret
 
 fn match_op(args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
     let args = args?;
-    if args.len() < 2 {
-        Err(format!("Atom::Grounded and Atom::Expression are expected as arguments, found: {:?}", args))
+    if args.len() < 1 {
+        Err(format!("Atom::Expression is expected as an argument, found: {:?}", args))
     } else {
-        let (space, expr) = (args[0].clone(), args[1].clone());
-        log::debug!("match_op({}, {})", space, expr);
-        if let Some(space) = space.as_gnd::<Rc<GroundingSpace>>() {
-            let var_x = VariableAtom::from("X");
-            // TODO: unique variable?
-            let atom_x = Atom::Variable(var_x.clone());
-            let bindings = space.query(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
-            if bindings.is_empty() {
-                log::debug!("match_op: no matches found, return: {}", expr);
-                Ok(vec![expr])
-            } else {
-                let mut matches: Vec<(Atom, Bindings)> = Vec::new();
-                {
-                    let res = expr;
-                    log::debug!("match_op: default: {}", res);
-                    matches.push((res, Bindings::new()));
-                }
-                let mut num: usize = 0;
-                for binding in bindings {
-                    let res = binding.get(&var_x).unwrap(); 
-                    let res = apply_bindings_to_atom(res, &binding);
-                    log::debug!("match_op: res: {}", res);
-                    matches.push((res, binding));
-                    num = num + 1;
-                }
-                // If this construction is inlined compiler complains, because clone()
-                // is called in the context of the closure
-                let space_2 = Rc::clone(space);
-                interpreter.push(| result, interpreter | match_return_first(space_2, matches, result, interpreter));
-                Ok(Vec::new())
+        let expr = args[0].clone();
+        log::debug!("match_op({})", expr);
+        let var_x = VariableAtom::from("X");
+        // TODO: unique variable?
+        let atom_x = Atom::Variable(var_x.clone());
+        let bindings = interpreter.working_branch().space.query(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
+        if bindings.is_empty() {
+            log::debug!("match_op: no matches found, return: {}", expr);
+            Ok(vec![expr])
+        } else {
+            for binding in bindings {
+                let result = binding.get(&var_x).unwrap(); 
+                let result = apply_bindings_to_atom(result, &binding);
+                log::debug!("match_op: query: {}, binding: {:?}, result: {}", expr, binding, result);
+                let branch = interpreter.branch(Ok(vec![result]));
+                branch.bindings_mut_ref().push(binding);
+                branch.push(interpret_op as StepFunc);
             }
-        } else {
-            Err(format!("Rc<GroundingSpace> is expected as a first arguments, found: {}", space))
+            // Default answer is expression without any variables bound
+            // is not returned because in such case many garbage results are
+            // returned
+            Err(format!("Cancel branch"))
         }
     }
 }
-
-fn match_return_first(space: Rc<GroundingSpace>, mut matches: Vec<(Atom, Bindings)>, _args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
-    let first = matches.pop().unwrap();
-    let space_2 = Rc::clone(&space);
-    interpreter.push(| result, interpreter | match_return_first_next(space_2, matches, result, interpreter));
-    interpreter.push(interpret_op);
-    interpreter.bindings_mut_ref().push(first.1);
-    Ok(vec![Atom::gnd(Rc::clone(&space)), first.0])
-}
-
-fn match_return_first_next(space: Rc<GroundingSpace>, mut matches: Vec<(Atom, Bindings)>, args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
-    if args.is_ok() {
-        log::debug!("match_return_first_next: return: {:?}", args);
-        args
-    } else {
-        if matches.len() == 1 {
-            log::debug!("match_return_first_next: return default");
-            let next = matches.pop().unwrap();
-            interpreter.push(interpret_reducted_op);
-            interpreter.bindings_mut_ref().pop();
-            interpreter.bindings_mut_ref().push(next.1);
-            Ok(vec![Atom::gnd(Rc::clone(&space)), next.0])
-        } else {
-            let next = matches.pop().unwrap();
-            log::debug!("match_return_first_next: next: {:?}", next);
-            let space_2 = Rc::clone(&space);
-            interpreter.push(| result, interpreter | match_return_first_next(space_2, matches, result, interpreter));
-            interpreter.push(interpret_op);
-            interpreter.bindings_mut_ref().pop();
-            interpreter.bindings_mut_ref().push(next.1);
-            Ok(vec![Atom::gnd(Rc::clone(&space)), next.0])
-        }
-    }
-}
-
-//fn match_return_all(space: Rc<GroundingSpace>, mut matches: Vec<(Atom, Bindings)>, _args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
-    //let succ_results: Vec<Atom> = Vec::new();
-    //let first = matches.pop().unwrap();
-    //let space_2 = Rc::clone(&space);
-    //interpreter.push(| result, interpreter | match_return_all_next(space_2, matches, succ_results, result, interpreter));
-    //interpreter.push(interpret_op);
-    //interpreter.bindings_mut_ref().push(first.1);
-    //Ok(vec![Atom::gnd(Rc::clone(&space)), first.0])
-//}
-
-//fn match_return_all_next(space: Rc<GroundingSpace>, mut matches: Vec<(Atom, Bindings)>, mut succ_results: Vec<Atom>, args: InterpreterResult, interpreter: &mut Interpreter) -> InterpreterResult {
-    //if let Ok(mut args) = args {
-        //log::debug!("match_return_all_next: add: {:?}", args);
-        //args.drain(0..).for_each(|atom| succ_results.push(atom));
-    //} 
-    //if matches.len() == 0 {
-        //Ok(succ_results)
-    //} else {
-        //let next = matches.pop().unwrap();
-        //log::debug!("match_return_all_next: next: {:?}", next);
-        //let space_2 = Rc::clone(&space);
-        //interpreter.push(| result, interpreter | match_return_all_next(space_2, matches, succ_results, result, interpreter));
-        //interpreter.push(interpret_op);
-        //interpreter.bindings_mut_ref().pop();
-        //interpreter.bindings_mut_ref().push(next.1);
-        //Ok(vec![Atom::gnd(Rc::clone(&space)), next.0])
-    //}
-//}
-
 
 #[cfg(test)]
 mod tests {

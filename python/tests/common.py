@@ -197,8 +197,10 @@ class Atomese:
         text.add_string(program)
         text.add_to(kb)
         exprs = list(kb.get_atoms())
-        assert len(exprs) == 1, "Only single expression is supposed to be passed"
-        return exprs[0]
+        if len(exprs) == 1:
+            return exprs[0]
+        else:
+            return exprs
 
     def parse(self, program, kb=None):
         if not kb:
