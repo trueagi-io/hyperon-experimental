@@ -173,7 +173,7 @@ class ExamplesTest(unittest.TestCase):
         output = interpret(kb, target)
         self.assertEqual(output, [S('String')])
 
-    def _test_plus_reduces_Z(self):
+    def test_plus_reduces_Z(self):
         atomese = Atomese()
 
         kb = atomese.parse('''
@@ -196,7 +196,7 @@ class ExamplesTest(unittest.TestCase):
 
         target = atomese.parse_single('(eq (plus (S Z) $n) $n)')
         output = interpret(kb, target)
-        self.assertEqual(output, [atomese.parse_single('(eq (S $n) $n)')])
+        self.assertEqual(output, [atomese.parse_single('(eq (S $y) $y)')])
 
 
     def _test_visit_kim(self):

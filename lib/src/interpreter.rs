@@ -351,4 +351,19 @@ mod tests {
         assert_eq!(interpret(Rc::new(space), &expr),
             Ok(vec![expr!("=", ("Fritz", "frog"), "True")]));
     }
+
+    #[test]
+    fn test_variable_keeps_value_in_different_sub_expressions() {
+        init();
+        let mut space = GroundingSpace::new();
+        space.add(expr!("=", ("eq", x, x), "True"));
+        space.add(expr!("=", ("plus", "Z", y), y));
+        space.add(expr!("=", ("plus", ("S", k), y), ("S", ("plus", k, y))));
+        let space = Rc::new(space);
+
+        assert_eq!(interpret(space.clone(), &expr!("eq", ("plus", "Z", n), n)),
+            Ok(vec![expr!("True")]));
+        assert_eq!(interpret(space.clone(), &expr!("eq", ("plus", ("S", "Z"), n), n)),
+            Ok(vec![expr!("eq", ("S", y), y)]));
+    }
 }

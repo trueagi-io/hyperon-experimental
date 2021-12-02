@@ -35,7 +35,7 @@ macro_rules! bind {
 
 // Symbol atom
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SymbolAtom {
     name: String,
 }
@@ -66,7 +66,7 @@ impl Display for SymbolAtom {
 
 // Expression atom
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpressionAtom {
     children: Vec<Atom>,
 }
@@ -313,6 +313,8 @@ impl PartialEq for Atom {
     }
 }
 
+impl Eq for Atom {}
+
 impl Clone for Atom {
     fn clone(&self) -> Self {
         match self {
@@ -358,14 +360,17 @@ impl GroundingSpace {
     }
 
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
+        log::debug!("query: pattern: {}", pattern);
         let mut result = Vec::new();
         for next in &self.content {
             match matcher::match_atoms(next, pattern) {
-                Some((a_bindings, b_bindings)) => {
-                    let bindings = matcher::apply_bindings_to_bindings(&a_bindings, &b_bindings);
-                    // TODO: implement Display for bindings
-                    log::debug!("query: push result: pattern: {}, bindings: {:?}", pattern, bindings);
-                    result.push(bindings);
+                Some(res) => {
+                    let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
+                    if let Ok(bindings) = bindings {
+                        // TODO: implement Display for bindings
+                        log::debug!("query: push result: {}, bindings: {:?}", next, bindings);
+                        result.push(bindings);
+                    }
                 },
                 None => continue,
             }
