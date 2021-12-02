@@ -64,9 +64,11 @@ const char *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _ops, struc
 	try {
 		pyobj.attr("execute")(BaseVecAtom(CVecAtom(_ops)), BaseVecAtom(CVecAtom(_data)));
 		return nullptr;	
-	} catch (...) {
-		// TODO: implement returning error description
-		return "Exception caught";
+	} catch (py::error_already_set &e) {
+		// TODO: implement returning error description without static buffer
+		static char error[4096] = "Exception caught";
+		strncat(error, e.what(), sizeof(error) / sizeof(error[0]) - 1);
+		return error;
 	}
 }
 

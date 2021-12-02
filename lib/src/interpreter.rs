@@ -123,8 +123,9 @@ impl Interpreter {
             self.working = idx;
             if self.branches[idx].steps.is_empty() {
                 let branch = self.branches.pop().unwrap();
-                if let Ok(mut result) = branch.result {
-                    result.drain(0..).for_each(|atom| self.results.push(atom))
+                match branch.result {
+                    Ok(mut result) => result.drain(0..).for_each(|atom| self.results.push(atom)),
+                    Err(err) => log::debug!("branch finished with error: {}", err),
                 }
                 None
             } else {
