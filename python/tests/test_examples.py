@@ -124,17 +124,17 @@ class ExamplesTest(unittest.TestCase):
         target = atomese.parse_single('(is (air dry))')
         output = interpret(kb, target)
         self.assertEqual(output, atomese.parse_single('''
-                (stop ventilation)
-                (start kettle)
                 (start humidifier)
+                (start kettle)
+                (stop ventilation)
                 '''))
 
         target = atomese.parse_single('(is (air wet))')
         output = interpret(kb, target)
         self.assertEqual(output, atomese.parse_single('''
-                (stop kettle)
-                (stop humidifier)
                 (start ventilation)
+                (stop humidifier)
+                (stop kettle)
                 '''))
 
     def _test_subset_sum_problem(self):

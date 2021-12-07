@@ -405,6 +405,12 @@ impl Debug for GroundingSpace {
     }
 }
 
+impl Display for GroundingSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GroundingSpace")
+    }
+}
+
 impl From<&SExprSpace> for GroundingSpace {
     fn from(other: &SExprSpace) -> Self {
         let mut space = GroundingSpace::new();
