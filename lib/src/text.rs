@@ -84,7 +84,7 @@ impl SExprSpace {
     fn find_token(&self, token: &str) -> Option<&AtomConstr> {
         self.tokens.iter().find(|descr| {
             match descr.regex.find_at(token, 0) {
-                Some(m) => m.end() == token.len(),
+                Some(m) => m.start() == 0 && m.end() == token.len(),
                 None => false,
             }
         }).map(|descr| &*(descr.constr))
@@ -131,6 +131,19 @@ mod tests {
         let space = GroundingSpace::from(&text);
 
         assert_eq!(vec![expr!("test")], space.atom_iter().cloned().collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn test_text_recognize_full_token() {
+        let mut text = SExprSpace::new();
+        text.register_token(Regex::new(r"b").unwrap(),
+            |_| Atom::gnd("b"));
+
+        text.add_str("ab").unwrap();
+        let space = GroundingSpace::from(&text);
+
+        assert_eq!(vec![expr!("ab")],
+            space.atom_iter().cloned().collect::<Vec<_>>());
     }
 
     #[test]

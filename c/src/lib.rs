@@ -7,6 +7,11 @@ use std::fmt::Debug;
 use regex::Regex;
 use std::rc::Rc;
 
+#[no_mangle]
+pub extern "C" fn init_logger() {
+   let _ = env_logger::builder().is_test(true).try_init();
+}
+
 // Atom
 
 #[allow(non_camel_case_types)]
@@ -173,7 +178,7 @@ pub struct binding_t {
 pub type bindings_callback_t = extern "C" fn(*const binding_t, size: usize, data: *mut c_void);
 
 #[no_mangle]
-pub unsafe extern "C" fn grounding_space_query(space: *mut grounding_space_t,
+pub unsafe extern "C" fn grounding_space_query(space: *const grounding_space_t,
         pattern: *const atom_t, callback: bindings_callback_t, data: *mut c_void) {
     let results = (*space).space.query(&((*pattern).atom));
     for result in results {
@@ -185,13 +190,24 @@ pub unsafe extern "C" fn grounding_space_query(space: *mut grounding_space_t,
     }
 }
 
+#[allow(non_camel_case_types)]
+pub type atoms_callback_t = extern "C" fn(*const *const atom_t, size: usize, data: *mut c_void);
+
+#[no_mangle]
+pub extern "C" fn grounding_space_subst(space: *const grounding_space_t,
+        pattern: *const atom_t, templ: *const atom_t,
+        callback: atoms_callback_t, data: *mut c_void) {
+    let results = unsafe { (*space).space.subst(&((*pattern).atom), &((*templ).atom)) };
+    return_atoms(&results, callback, data);
+}
+
 // TODO: make a macros to generate Vec<T> definitions for C API
 #[allow(non_camel_case_types)]
 pub struct vec_atom_t(Vec<Atom>);
 
 #[no_mangle]
 pub extern "C" fn vec_atom_new() -> *mut vec_atom_t {
-    Box::into_raw(Box::new(vec_atom_t(Vec::new()))) 
+    vec_atom_to_ptr(Vec::new()) 
 }
 
 #[no_mangle]
@@ -211,10 +227,22 @@ pub unsafe extern "C" fn vec_atom_push(vec: *mut vec_atom_t, atom: *mut atom_t) 
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn interpret(space: *mut grounding_space_t, expr: *const atom_t) -> *mut atom_t {
-    match hyperon::interpreter::interpret(Rc::new((*space).space.clone()), &(*expr).atom) {
-        Ok(atom) => atom_to_ptr(atom),
-        Err(_) => 0 as *mut atom_t,
+pub unsafe extern "C" fn vec_atom_len(vec: *const vec_atom_t) -> usize {
+    (*vec).0.len()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn vec_atom_get(vec: *mut vec_atom_t, idx: usize) -> *mut atom_t {
+    atom_to_ptr((*vec).0[idx].clone())
+}
+
+#[no_mangle]
+pub extern "C" fn interpret(space: *mut grounding_space_t, expr: *const atom_t,
+        callback: atoms_callback_t, data: *mut c_void) {
+    let res = unsafe { hyperon::interpreter::interpret(Rc::new((*space).space.clone()), &(*expr).atom) };
+    match res {
+        Ok(vec) => return_atoms(&vec, callback, data),
+        Err(_) => return_atoms(&vec![], callback, data),
     }
 }
 
@@ -281,6 +309,16 @@ pub unsafe extern "C" fn sexpr_space_into_grounding_space(sexpr: *const sexpr_sp
 
 fn atom_to_ptr(atom: Atom) -> *mut atom_t {
     Box::into_raw(Box::new(atom_t{ atom }))
+}
+
+fn vec_atom_to_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {
+    Box::into_raw(Box::new(vec_atom_t(vec)))
+}
+
+fn return_atoms(atoms: &Vec<Atom>, callback: atoms_callback_t, data: *mut c_void) {
+    let results: Vec<*const atom_t> = atoms.iter()
+        .map(|atom| (atom as *const Atom).cast::<atom_t>()).collect();
+    callback(results.as_ptr(), results.len(), data);
 }
 
 // C grounded atom wrapper

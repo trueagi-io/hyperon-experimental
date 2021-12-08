@@ -120,6 +120,14 @@ fn test_match_query_variable_via_data_variable() {
 }
 
 #[test]
+fn test_match_if_then_with_X() {
+    let mut space = GroundingSpace::new();
+    space.add(expr!("=", ("if", "True", then), then));
+    assert_eq!(space.query(&expr!("=", ("if", "True", "42"), X)),
+        vec![bind!{X: expr!("42")}]);
+}
+
+#[test]
 fn test_subexpression_iterator() {
     let expr = expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3"));
 

@@ -2,41 +2,73 @@ use super::*;
 
 fn check_and_insert_binding(bindings: &mut Bindings, var: &VariableAtom,
         value: &Atom) -> bool{
-    log::trace!("check_and_insert_binding({:?}, {}, {})", bindings, var, value);
-    match bindings.get(var) {
+    let compatible = match bindings.get(var){
         Some(prev) => prev == value,
-        None => {
-            bindings.insert(var.clone(), value.clone());
-            true
+        None => true,
+    };
+    if compatible {
+        bindings.insert(var.clone(), value.clone());
+    }
+    compatible
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct MatchResult {
+    pub candidate_bindings: Bindings,
+    pub pattern_bindings: Bindings,
+}
+
+impl MatchResult {
+    fn new() -> Self {
+        MatchResult {
+            candidate_bindings: Bindings::new(),
+            pattern_bindings: Bindings::new()
         }
     }
 }
 
-fn match_atoms_recursively(atom: &Atom, pattern: &Atom,
-        a_bindings: &mut Bindings, b_bindings: &mut Bindings) -> bool {
-    match (atom, pattern) {
+impl From<(Bindings, Bindings)> for MatchResult {
+    fn from((candidate_bindings, pattern_bindings): (Bindings, Bindings)) -> Self {
+        Self { candidate_bindings, pattern_bindings }
+    }
+}
+
+fn match_atoms_recursively(candidate: &Atom, pattern: &Atom, res: &mut MatchResult) -> bool {
+    match (candidate, pattern) {
         (Atom::Symbol(a), Atom::Symbol(b)) => a == b,
         (Atom::Grounded(a), Atom::Grounded(b)) => a.eq_gnd(&**b),
-        (a, Atom::Variable(v)) => check_and_insert_binding(b_bindings, v, a),
-        (Atom::Variable(v), b) => check_and_insert_binding(a_bindings, v, b),
+        (Atom::Variable(_), Atom::Variable(v)) => {
+            // We stick to prioritize pattern bindings in this case
+            // because otherwise the $X in (= (...) $X) will not be matched with
+            // (= (if True $then) $then)
+            log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, candidate);
+            check_and_insert_binding(&mut res.pattern_bindings, v, candidate)
+        }
+        (Atom::Variable(v), b) => {
+            log::trace!("check_and_insert_binding for candidate({:?}, {}, {})", res.candidate_bindings, v, b);
+            check_and_insert_binding(&mut res.candidate_bindings, v, b)
+        }
+        (a, Atom::Variable(v)) => {
+            log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, a);
+            check_and_insert_binding(&mut res.pattern_bindings, v, a)
+        },
         (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b })) => {
             if a.len() != b.len() {
                 false
             } else {
                 a.iter().zip(b.iter()).fold(true,
-                    |succ, pair| succ && match_atoms_recursively(pair.0, pair.1,
-                        a_bindings, b_bindings))
+                    |succ, pair| succ && match_atoms_recursively(pair.0, pair.1, res))
             }
         },
         _ => false,
     }
 }
 
-pub fn match_atoms(atom: &Atom, pattern: &Atom) -> Option<(Bindings, Bindings)> {
-    let mut a_bindings = Bindings::new();
-    let mut b_bindings = Bindings::new();
-    if match_atoms_recursively(atom, pattern, &mut a_bindings, &mut b_bindings) {
-        Some((a_bindings, b_bindings))
+pub fn match_atoms(candidate: &Atom, pattern: &Atom) -> Option<MatchResult> {
+    log::trace!("match_atoms: candidate: {}, pattern: {}", candidate, pattern);
+    let mut res = MatchResult::new();
+    if match_atoms_recursively(candidate, pattern, &mut res) {
+        Some(res)
     } else {
         None
     }
@@ -59,13 +91,29 @@ pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
     }
 }
 
-pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Bindings {
+fn atom_contains_variable(atom: &Atom, var: &VariableAtom) -> bool {
+    match atom {
+        Atom::Expression(ExpressionAtom{ children }) =>
+            children.iter().any(|sub| atom_contains_variable(sub, var)),
+        Atom::Variable(v) => v == var,
+        _ => false,
+    }
+}
+
+pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bindings, ()> {
     let mut res = Bindings::new();
     for (key, value) in to {
         let applied = apply_bindings_to_atom(value, from);
-        res.insert(key.clone(), applied);
+        // Check that variable is not expressed via itself, if so it is
+        // a task for unification not for matching
+        if !matches!(applied, Atom::Variable(_)) && atom_contains_variable(&applied, key) {
+            return Err(())
+        }
+        if !check_and_insert_binding(&mut res, key, &applied) {
+            return Err(())
+        }
     }
-    res
+    return Ok(res);
 }
 
 #[cfg(test)]
@@ -76,7 +124,7 @@ mod test {
     fn test_match_variables_in_data() {
         assert_eq!(
             match_atoms(&expr!("+", a, ("*", b, c)), &expr!("+", "A", ("*", "B", "C"))),
-            Some((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{})));
+            Some(MatchResult::from((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{}))));
     }
 
     #[test]

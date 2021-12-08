@@ -35,7 +35,7 @@ macro_rules! bind {
 
 // Symbol atom
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SymbolAtom {
     name: String,
 }
@@ -66,7 +66,7 @@ impl Display for SymbolAtom {
 
 // Expression atom
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpressionAtom {
     children: Vec<Atom>,
 }
@@ -76,8 +76,6 @@ impl ExpressionAtom {
         self.children.iter().all(|atom| ! matches!(atom, Atom::Expression(_)))
     }
 
-    // Without lifetime annotations compiler makes lifetime elision incorrectly.
-    // It deduces iter<'a>(&'a self) -> SubexpressionStream<'a>
     pub fn sub_expr_iter(&self) -> SubexpressionStream {
         SubexpressionStream::from(self)
     }
@@ -114,6 +112,7 @@ impl Display for ExpressionAtom {
     }
 }
 
+#[derive(Clone)]
 pub struct SubexpressionStream {
     expr: Atom,
     levels: Vec<usize>,
@@ -227,6 +226,7 @@ mopafy!(GroundedAtom);
 
 // GroundedAtom implementation for all "regular" types
 // to allow using them as GroundedAtoms
+// 'static is required because mopa::Any requires it
 impl<T: 'static + Clone + PartialEq + Debug> GroundedAtom for T {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
         match other.downcast_ref::<T>() {
@@ -250,7 +250,8 @@ pub enum Atom {
     // We need using Box here because:
     // - we cannot use GroundedAtom because trait size is not known at compile time
     // - reference to trait does not allow heap allocated values
-    // - other smart pointers like Rc doesn't allow choosing to copy value or not
+    // - other smart pointers like Rc doesn't allow choosing whether value should
+    //   be copied or shared between two atoms when clone() is called
     Grounded(Box<dyn GroundedAtom>),
 }
 
@@ -291,6 +292,13 @@ impl Atom {
             _ => None,
         }
     }
+
+    pub fn as_gnd_mut<T: GroundedAtom>(&mut self) -> Option<&mut T> {
+        match self {
+            Atom::Grounded(gnd) => gnd.downcast_mut::<T>(),
+            _ => None,
+        }
+    }
 }
 
 impl PartialEq for Atom {
@@ -304,6 +312,8 @@ impl PartialEq for Atom {
         }
     }
 }
+
+impl Eq for Atom {}
 
 impl Clone for Atom {
     fn clone(&self) -> Self {
@@ -350,19 +360,28 @@ impl GroundingSpace {
     }
 
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
+        log::debug!("query: pattern: {}", pattern);
         let mut result = Vec::new();
         for next in &self.content {
             match matcher::match_atoms(next, pattern) {
-                Some((a_bindings, b_bindings)) => {
-                    let bindings = matcher::apply_bindings_to_bindings(&a_bindings, &b_bindings);
-                    // TODO: implement Display for bindings
-                    log::debug!("query: push result: pattern: {}, bindings: {:?}", pattern, bindings);
-                    result.push(bindings);
+                Some(res) => {
+                    let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
+                    if let Ok(bindings) = bindings {
+                        // TODO: implement Display for bindings
+                        log::debug!("query: push result: {}, bindings: {:?}", next, bindings);
+                        result.push(bindings);
+                    }
                 },
                 None => continue,
             }
         }
         result
+    }
+
+    pub fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
+        self.query(pattern).drain(0..)
+            .map(| bindings | matcher::apply_bindings_to_atom(template, &bindings))
+            .collect()
     }
 
     pub fn as_vec(&self) -> &Vec<Atom> {
@@ -381,6 +400,12 @@ impl PartialEq for GroundingSpace {
 }
 
 impl Debug for GroundingSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GroundingSpace")
+    }
+}
+
+impl Display for GroundingSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "GroundingSpace")
     }

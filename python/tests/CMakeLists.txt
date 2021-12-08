@@ -12,4 +12,5 @@ macro(ADD_NOSETESTS)
 endmacro()
 
 ADD_NOSETESTS("test_atom.py")
+ADD_NOSETESTS("test_examples.py")
 
