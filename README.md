@@ -41,6 +41,10 @@ cd build
 cmake ..
 ```
 
+If `Conan` claims it cannot find out the version of the C compiler you can
+workaround it by adding `compiler=` and `compiler.version=` into
+`.conan/profiles/default`.
+
 Build and run tests:
 ```
 make
