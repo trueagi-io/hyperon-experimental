@@ -46,6 +46,24 @@ impl<T, R, F> Plan<T, R> for F where F: FnOnce(T) -> StepResult<(), R> {
         self(arg)
     }
 }
+
+impl<T, R> Plan<T, R> for StepResult<T, R> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<(), R> {
+        match *self {
+            StepResult::Call(plan) => plan.step(arg),
+            StepResult::Return(result) => StepResult::Return(result),
+        }
+    }
+}
+
+// This is to be able use `Box<dyn Plan<T, R>>` where `P: Plan<T, R>` is expected.
+// For example it is used in the `iterator_into_parallel_plan()` test.
+impl<T, R> Plan<T, R> for Box<dyn Plan<T, R>> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<(), R> {
+        (*self).step(arg)
+    }
+}
+
 pub struct ApplyPlan<T, R> {
     arg: T,
     plan: Box<dyn Plan<T, R>>,
@@ -148,23 +166,23 @@ impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2>
 pub trait FoldIntoParallelPlan<I, R>
     where I: Iterator,
           R: 'static + Clone {
-    fn into_parallel_plan<S, M>(self, empty: R, step: S, merge: M) -> StepResult<(), R>
+    fn into_parallel_plan<S, M>(self, empty: R, step: S, merge: M) -> Box<dyn Plan<(), R>>
         where
-          S: Fn(I::Item) -> Box<dyn Plan<(), R>>,
-          M: 'static + Fn(R, R) -> R + Clone;
+          S: FnMut(I::Item) -> Box<dyn Plan<(), R>>,
+          M: 'static + FnMut(R, R) -> R + Clone;
 }
 
 impl<I, R> FoldIntoParallelPlan<I, R> for I
     where I: Iterator,
           R: 'static + Clone {
-    fn into_parallel_plan<S, M>(self, empty: R, step: S, merge: M) -> StepResult<(), R>
+    fn into_parallel_plan<S, M>(self, empty: R, mut step: S, merge: M) -> Box<dyn Plan<(), R>>
         where
-          S: Fn(I::Item) -> Box<dyn Plan<(), R>>,
-          M: 'static + Fn(R, R) -> R + Clone {
+          S: FnMut(I::Item) -> Box<dyn Plan<(), R>>,
+          M: 'static + FnMut(R, R) -> R + Clone {
         let plan: Box<dyn Plan<(), R>> = self
             .fold(Box::new(|_: ()| StepResult::ret(empty)),
                 |plan, step_result| {
-                    let merge = merge.clone();
+                    let mut merge = merge.clone();
                     Box::new(SequencePlan::new(
                         ParallelPlan {
                             first: plan,
@@ -175,7 +193,7 @@ impl<I, R> FoldIntoParallelPlan<I, R> for I
                     ))
                 }
             );
-        StepResult::Call(plan)
+        plan
     }
 }
 
@@ -194,5 +212,18 @@ mod tests {
         assert_eq!(interpret_plan(mul, ()), 42);
     }
 
+    #[test]
+    fn iterator_into_parallel_plan() {
+        let step_counter = &mut 0;
+        let args = vec![1, 2, 3, 4];
+        let plan = args.iter().into_parallel_plan(1,
+            |n| {
+                *step_counter += 1;
+                Box::new(ApplyPlan::new(|n| StepResult::ret(n + 1), *n))
+            },
+            |a, b| a * b);
+        assert_eq!(interpret_plan(plan, ()), 120);
+        assert_eq!(*step_counter, 4);
+    }
 }
 

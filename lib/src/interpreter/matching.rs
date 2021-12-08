@@ -75,7 +75,7 @@ fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, Subexpress
     match prev_result {
         Err(_) => StepResult::ret(prev_result),
         Ok(mut results) => {
-            results.drain(0..)
+            let plan = results.drain(0..)
                 .map(|(reducted, bindings)| {
                     log::debug!("reduct_next({}, {:?})", reducted, bindings);
                     let mut iter = iter.clone();
@@ -100,7 +100,8 @@ fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, Subexpress
                             Box::new(ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), next_sub, bindings)))
                         }
                     },
-                    merge_results)
+                    merge_results);
+            StepResult::Call(plan)
         },
     }
 }
@@ -136,7 +137,7 @@ fn match_op((space, expr, prev_bindings): (Rc<GroundingSpace>, Atom, Bindings)) 
         log::debug!("match_op: no matches found, return: {}", expr);
         StepResult::ret(Ok(vec![(expr, prev_bindings)]))
     } else {
-        local_bindings
+        let plan = local_bindings
             .drain(0..)
             .map(|mut binding| {
                 let result = binding.get(&var_x).unwrap(); 
@@ -154,7 +155,8 @@ fn match_op((space, expr, prev_bindings): (Rc<GroundingSpace>, Atom, Bindings)) 
             .into_parallel_plan(Ok(vec![]),
                 |(result, bindings)| Box::new(
                     ApplyPlan::new(interpret_op, (Rc::clone(&space), result, bindings))),
-                merge_results)
+                merge_results);
+        StepResult::Call(plan)
     }
 }
 
