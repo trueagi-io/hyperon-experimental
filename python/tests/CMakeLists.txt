@@ -13,4 +13,5 @@ endmacro()
 
 ADD_NOSETESTS("test_atom.py")
 ADD_NOSETESTS("test_examples.py")
+ADD_NOSETESTS("test_minecraft.py")
 
