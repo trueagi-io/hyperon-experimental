@@ -18,7 +18,7 @@ fn merge_results(plan_res: InterpreterResult, step_res: InterpreterResult) -> In
 }
 
 pub fn interpret(space: Rc<GroundingSpace>, expr: &Atom) -> Result<Vec<Atom>, String> {
-    interpret_plan(interpret_op, (space, expr.clone(), Bindings::new()))
+    execute_plan(interpret_op, (space, expr.clone(), Bindings::new()))
         .map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect())
 }
 
@@ -30,9 +30,9 @@ fn interpret_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -
     log::debug!("interpret_op({}, {})", space, atom);
     if let Some(ref expr) = atom.as_expr() {
         if !expr.is_plain() {
-            StepResult::call(ApplyPlan::new(reduct_op, (space, atom, bindings)))
+            StepResult::execute(ApplyPlan::new(reduct_op, (space, atom, bindings)))
         } else {
-            StepResult::call(ApplyPlan::new(interpret_reducted_op, (space,  atom, bindings)))
+            StepResult::execute(ApplyPlan::new(interpret_reducted_op, (space,  atom, bindings)))
         }
     } else {
         StepResult::ret(Ok(vec![(atom, bindings)]))
@@ -44,9 +44,9 @@ fn interpret_reducted_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bin
     log::debug!("interpret_reducted_op({})", atom);
     if let Some(ref expr) = atom.as_expr() {
         if is_grounded(expr) {
-            StepResult::call(ApplyPlan::new(execute_op, (atom, bindings)))
+            StepResult::execute(ApplyPlan::new(execute_op, (atom, bindings)))
         } else {
-            StepResult::call(ApplyPlan::new(match_op, (space, atom, bindings)))
+            StepResult::execute(ApplyPlan::new(match_op, (space, atom, bindings)))
         }
     } else {
         StepResult::ret(Ok(vec![(atom, bindings)]))
@@ -62,7 +62,7 @@ fn reduct_op((space, expr_atom, bindings): (Rc<GroundingSpace>, Atom, Bindings))
             iter.next();
             sub = iter.get_mut().clone();
         }
-        StepResult::call(SequencePlan::new(
+        StepResult::execute(SequencePlan::new(
                 ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), sub, bindings)),
                 PartialApplyPlan::new(reduct_next_op, (space, iter))
         ))
@@ -101,7 +101,7 @@ fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, Subexpress
                         }
                     },
                     merge_results);
-            StepResult::Call(plan)
+            StepResult::Execute(plan)
         },
     }
 }
@@ -156,7 +156,7 @@ fn match_op((space, expr, prev_bindings): (Rc<GroundingSpace>, Atom, Bindings)) 
                 |(result, bindings)| Box::new(
                     ApplyPlan::new(interpret_op, (Rc::clone(&space), result, bindings))),
                 merge_results);
-        StepResult::Call(plan)
+        StepResult::Execute(plan)
     }
 }
 
