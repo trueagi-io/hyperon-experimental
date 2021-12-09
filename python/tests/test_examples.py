@@ -145,6 +145,7 @@ class ExamplesTest(unittest.TestCase):
 
         kb = atomese.parse('''
            (= (if True $then) $then)
+           (= (if False $then) nop)
 
            (= (bin) 0)
            (= (bin) 1)
@@ -158,7 +159,8 @@ class ExamplesTest(unittest.TestCase):
         target = atomese.parse_single('''(let $t (gen 3)
             (if (== (subsum (:: 3 (:: 5 (:: 7 nil))) $t) 8) $t))''')
         output = interpret(kb, target)
-        self.assertEqual(output, atomese.parse_single('(:: 1 (:: 1 (:: 0 nil)))'))
+        expected = atomese.parse_single('(:: 1 (:: 1 (:: 0 nil)))')
+        self.assertEqual(output, [expected])
 
     def test_infer_function_application_type(self):
         atomese = Atomese()

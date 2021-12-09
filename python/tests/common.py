@@ -142,6 +142,25 @@ class CallAtom(OpGroundedAtom):
     def __repr__(self):
         return "call:" + self.method_name
 
+class LetAtom(OpGroundedAtom):
+
+    def __init__(self):
+        super().__init__()
+
+    def execute(self, ops, data):
+        pattern = data.pop()
+        atom = data.pop()
+        templ = data.pop()
+        print("pattern:", pattern, "atom:", atom, "templ:", templ)
+        space = GroundingSpace()
+        space.add_atom(atom)
+        for res in space.subst(pattern, templ):
+            print("result:", res)
+            data.push(res)
+
+    def __repr__(self):
+        return "let"
+
 class CommaAtom(OpGroundedAtom):
 
     def __init__(self):
@@ -188,7 +207,7 @@ class Atomese:
         parser.register_token(r"match", lambda token: G(MatchAtom()))
         parser.register_token(r"call:[^\\s)]+", lambda token: G(CallAtom(token[5:])))
         parser.register_token(r",", lambda token: G(CommaAtom()))
-        #parser.register_token(r"let", lambda token: IFMATCH)
+        parser.register_token(r"let", lambda token: G(LetAtom()))
         for regexp in self.tokens.keys():
             parser.register_token(regexp, self.tokens[regexp])
         return parser
@@ -217,3 +236,5 @@ class Atomese:
 
     def add_atom(self, name, symbol):
         self.add_token(name, lambda _: symbol)
+
+
