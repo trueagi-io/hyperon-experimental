@@ -31,7 +31,7 @@ fn is_grounded(expr: &ExpressionAtom) -> bool {
 fn interpret_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> StepResult<(), InterpreterResult> {
     let atom = apply_bindings_to_atom(&atom, &bindings);
     log::debug!("interpret_op: {}", atom);
-    if let Some(ref expr) = atom.as_expr() {
+    if let Atom::Expression(ref expr) = atom {
         if expr.is_plain() {
             StepResult::execute(ApplyPlan::new(interpret_reducted_op, (space,  atom, bindings)))
         } else {
@@ -52,7 +52,7 @@ fn interpret_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -
 fn interpret_reducted_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> StepResult<(), InterpreterResult> {
     let atom = apply_bindings_to_atom(&atom, &bindings);
     log::debug!("interpret_reducted_op: {}", atom);
-    if let Some(ref expr) = atom.as_expr() {
+    if let Atom::Expression(ref expr) = atom {
         if is_grounded(expr) {
             StepResult::execute(ApplyPlan::new(execute_op, (atom, bindings)))
         } else {
@@ -82,8 +82,8 @@ fn reduct_first_if_not_matched_op(((space, expr, bindings), match_result): ((Rc<
 
 fn reduct_first_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> StepResult<(), InterpreterResult> {
     log::debug!("reduct_first_op: {}", expr);
-    if let Some(ref expr) = expr.as_expr() {
-        let mut iter = expr.sub_expr_iter();
+    if let Atom::Expression(expr) = expr {
+        let mut iter = SubexpressionStream::from(expr);
         let sub;
         {
             iter.next();
@@ -126,7 +126,7 @@ fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<Groundin
                             let mut iter = iter.clone();
                             if iter.has_next() {
                                 *iter.get_mut() = result;
-                                Box::new(ApplyPlan::new(interpret_op, (Rc::clone(&space), iter.expr, bindings)))
+                                Box::new(ApplyPlan::new(interpret_op, (Rc::clone(&space), iter.into_atom(), bindings)))
                             } else {
                                 Box::new(|_:()| StepResult::ret(Ok(vec![(result, bindings)])))
                             }
@@ -139,8 +139,8 @@ fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<Groundin
 
 fn reduct_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> StepResult<(), InterpreterResult> {
     log::debug!("reduct_op: {}", expr);
-    if let Some(ref expr) = expr.as_expr() {
-        let mut iter = expr.sub_expr_iter();
+    if let Atom::Expression(expr) = expr {
+        let mut iter = SubexpressionStream::from(expr);
         let sub;
         {
             iter.next();
@@ -168,7 +168,7 @@ fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, Subexpress
                         *iter.get_mut() = reducted;
                         iter.next();
                         next_sub = iter.get_mut().clone();
-                        log::debug!("reduct_next: expression: {}", iter.expr);
+                        log::debug!("reduct_next: expression: {}", iter.as_atom());
                         log::debug!("reduct_next: next_sub after reduction: {}", next_sub);
                     }
                     (next_sub, bindings, iter)
@@ -190,9 +190,9 @@ fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, Subexpress
     }
 }
 
-fn execute_op((mut atom, bindings): (Atom, Bindings)) -> StepResult<(), InterpreterResult> {
+fn execute_op((atom, bindings): (Atom, Bindings)) -> StepResult<(), InterpreterResult> {
     log::debug!("execute_op: {}", atom);
-    if let Some(expr) = atom.as_expr_mut() {
+    if let Atom::Expression(mut expr) = atom {
         let op = expr.children().get(0).cloned();
         if let Some(Atom::Grounded(op)) = op {
             // TODO: change API, remove boilerplate
@@ -246,8 +246,6 @@ fn match_op((space, expr, prev_bindings): (Rc<GroundingSpace>, Atom, Bindings)) 
 
 #[cfg(test)]
 mod tests {
-    #![allow(non_snake_case)]
-
     use super::*;
     use std::rc::Rc;
     

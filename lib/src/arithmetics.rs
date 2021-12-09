@@ -67,6 +67,7 @@ mod tests {
         assert_eq!(space.query(&expr!("=", ("fac", {3}), X)), vec![expected]);
     }
 
+    // TODO: reimplement using grounded if to prevent infinite loop
     //#[test]
     fn test_factorial() {
         init();
