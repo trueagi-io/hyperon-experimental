@@ -1,12 +1,12 @@
 use crate::*;
 
 #[derive(Clone)]
-pub struct SubexpressionStream {
+pub struct BottomSubexprStream {
     expr: Atom,
     levels: Vec<usize>,
 }
 
-impl SubexpressionStream {
+impl BottomSubexprStream {
     pub fn as_atom(&self) -> &Atom {
         &self.expr
     }
@@ -60,7 +60,7 @@ impl SubexpressionStream {
     }
 }
 
-impl Iterator for SubexpressionStream {
+impl Iterator for BottomSubexprStream {
     type Item = Atom;
     
     fn next(&mut self) -> Option<Self::Item> {
@@ -73,7 +73,7 @@ impl Iterator for SubexpressionStream {
     }
 }
 
-impl From<ExpressionAtom> for SubexpressionStream {
+impl From<ExpressionAtom> for BottomSubexprStream {
     fn from(expr: ExpressionAtom) -> Self {
         Self{ expr: Atom::Expression(expr), levels: vec![0] }
     }
@@ -108,7 +108,7 @@ mod tests {
     fn test_subexpression_iterator() {
         let expr = expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3"));
 
-        let iter = SubexpressionStream::from(into_expr_atom(expr));
+        let iter = BottomSubexprStream::from(into_expr_atom(expr));
 
         assert_eq!(iter.collect::<Vec<_>>(),
         vec![
@@ -123,7 +123,7 @@ mod tests {
     fn test_subexpression_iterator_two_sub_expr() {
         let expr = expr!("*", ("+", "3", "4"), ("-", "5", "2"));
 
-        let iter = SubexpressionStream::from(into_expr_atom(expr));
+        let iter = BottomSubexprStream::from(into_expr_atom(expr));
 
         assert_eq!(iter.collect::<Vec<_>>(),
         vec![

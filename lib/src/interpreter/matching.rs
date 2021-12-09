@@ -83,7 +83,7 @@ fn reduct_first_if_not_matched_op(((space, expr, bindings), match_result): ((Rc<
 fn reduct_first_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> StepResult<(), InterpreterResult> {
     log::debug!("reduct_first_op: {}", expr);
     if let Atom::Expression(expr) = expr {
-        let mut iter = SubexpressionStream::from(expr);
+        let mut iter = BottomSubexprStream::from(expr);
         let sub;
         {
             iter.next();
@@ -98,7 +98,7 @@ fn reduct_first_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)
     }
 }
 
-fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<GroundingSpace>, SubexpressionStream), InterpreterResult)) -> StepResult<(), InterpreterResult> {
+fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<GroundingSpace>, BottomSubexprStream), InterpreterResult)) -> StepResult<(), InterpreterResult> {
     log::debug!("interpret_if_reducted_op: reduction_result: {:?}", reduction_result);
     match reduction_result {
         Err(_) => StepResult::ret(reduction_result),
@@ -140,7 +140,7 @@ fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<Groundin
 fn reduct_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> StepResult<(), InterpreterResult> {
     log::debug!("reduct_op: {}", expr);
     if let Atom::Expression(expr) = expr {
-        let mut iter = SubexpressionStream::from(expr);
+        let mut iter = BottomSubexprStream::from(expr);
         let sub;
         {
             iter.next();
@@ -155,7 +155,7 @@ fn reduct_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> S
     }
 }
 
-fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, SubexpressionStream), InterpreterResult)) -> StepResult<(), InterpreterResult> {
+fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, BottomSubexprStream), InterpreterResult)) -> StepResult<(), InterpreterResult> {
     match prev_result {
         Err(_) => StepResult::ret(prev_result),
         Ok(mut results) => {
