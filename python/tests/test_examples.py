@@ -57,13 +57,16 @@ class ExamplesTest(unittest.TestCase):
         # self.assertEqual(ValueAtom('Hello world'),
                 # interpret(kb, atomese.parse_single("(+ 'Hello ' 'world')")))
 
-    def _test_grounded_functions(self):
+    def test_grounded_functions(self):
         atomese = Atomese()
+        obj = SomeObject()
+        atomese.add_atom("obj", ValueAtom(obj))
 
-        atomese.add_atom("obj", ValueAtom(SomeObject()))
-        target = atomese.parse('(call:foo obj)')
+        target = atomese.parse_single('(call:foo obj)')
+        result = interpret(GroundingSpace(), target)
 
-        interpret_and_print_results(target, GroundingSpace())
+        self.assertTrue(obj.called)
+        self.assertEqual(result, [])
 
     def test_frog_reasoning(self):
         atomese = Atomese()
@@ -258,8 +261,11 @@ class ExamplesTest(unittest.TestCase):
 
 class SomeObject():
 
+    def __init__(self):
+        self.called = False
+
     def foo(self):
-        print("foo called")
+        self.called = True
 
 init_logger()
 if __name__ == "__main__":

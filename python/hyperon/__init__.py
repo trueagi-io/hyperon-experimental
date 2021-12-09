@@ -80,6 +80,12 @@ class BaseVecAtom:
     def __init__(self, cvec):
         self.cvec = cvec
 
+    def size(self):
+        return hp.vec_atom_size(self.cvec)
+
+    def is_empty(self):
+        return self.size() == 0
+
     def push(self, atom):
         hp.vec_atom_push(self.cvec, atom.catom)
 

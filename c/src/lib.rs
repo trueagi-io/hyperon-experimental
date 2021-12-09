@@ -216,6 +216,11 @@ pub unsafe extern "C" fn vec_atom_free(vec: *mut vec_atom_t) {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn vec_atom_size(vec: *mut vec_atom_t) -> usize {
+    (*vec).0.len()
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> *mut atom_t {
     atom_to_ptr((*vec).0.pop().expect("Vector is empty"))
 }

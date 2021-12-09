@@ -128,7 +128,9 @@ class CallAtom(OpGroundedAtom):
 
     def execute(self, ops, data):
         obj = data.pop().get_object().value
-        args = data.pop().get_children()
+        args = []
+        while not data.is_empty():
+            args.append(data.pop().get_objec().value)
         method = getattr(obj, self.method_name)
         method(*args)
 
