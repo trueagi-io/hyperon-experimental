@@ -66,7 +66,8 @@ const char *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _ops, struc
 		return nullptr;	
 	} catch (py::error_already_set &e) {
 		// TODO: implement returning error description without static buffer
-		static char error[4096] = "Exception caught";
+		static char error[4096];
+ 	 	strcpy(error, "Exception caught:\n");
 		strncat(error, e.what(), sizeof(error) / sizeof(error[0]) - 1);
 		return error;
 	}
