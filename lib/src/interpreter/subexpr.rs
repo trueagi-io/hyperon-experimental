@@ -17,7 +17,7 @@ impl SubexpressionStream {
 
     fn next_rec(levels: &mut Vec<usize>, expr: &ExpressionAtom, level: usize) {
         if level < levels.len() - 1 {
-            Self::next_rec(levels, expr.children()[levels[level] - 1].as_expr().unwrap(), level + 1);
+            Self::next_rec(levels, as_expr(&expr.children()[levels[level] - 1]), level + 1);
             return;
         }
         loop {
@@ -50,7 +50,7 @@ impl SubexpressionStream {
         if level >= levels.len() {
             atom
         } else {
-            let child = &mut (atom.as_expr_mut().unwrap().children_mut()[levels[level] - 1]);
+            let child = &mut (as_expr_mut(atom).children_mut()[levels[level] - 1]);
             Self::get_mut_rec(levels, child, level + 1)
         }
     }
@@ -79,15 +79,36 @@ impl From<ExpressionAtom> for SubexpressionStream {
     }
 }
 
+fn as_expr(atom: &Atom) -> &ExpressionAtom {
+    match atom {
+        Atom::Expression(ref expr) => expr,
+        _ => panic!("Atom::Expression is expected"),
+    }
+}
+
+fn as_expr_mut(atom: &mut Atom) -> &mut ExpressionAtom {
+    match atom {
+        Atom::Expression(ref mut expr) => expr,
+        _ => panic!("Atom::Expression is expected"),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn into_expr_atom(atom: Atom) -> ExpressionAtom {
+        match atom {
+            Atom::Expression(expr) => expr,
+            _ => panic!("Atom::Expression is expected"),
+        }
+    }
 
     #[test]
     fn test_subexpression_iterator() {
         let expr = expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3"));
 
-        let iter = SubexpressionStream::from(expr.into_expr().unwrap());
+        let iter = SubexpressionStream::from(into_expr_atom(expr));
 
         assert_eq!(iter.collect::<Vec<_>>(),
         vec![
@@ -102,7 +123,7 @@ mod tests {
     fn test_subexpression_iterator_two_sub_expr() {
         let expr = expr!("*", ("+", "3", "4"), ("-", "5", "2"));
 
-        let iter = SubexpressionStream::from(expr.into_expr().unwrap());
+        let iter = SubexpressionStream::from(into_expr_atom(expr));
 
         assert_eq!(iter.collect::<Vec<_>>(),
         vec![

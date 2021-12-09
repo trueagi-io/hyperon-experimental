@@ -199,27 +199,6 @@ impl Atom {
         Self::Grounded(Box::new(gnd))
     }
 
-    pub fn as_expr(&self) -> Option<&ExpressionAtom> {
-        match self {
-            Atom::Expression(ref expr) => Some(expr),
-            _ => None,
-        }
-    }
-
-    pub fn into_expr(self) -> Option<ExpressionAtom> {
-        match self {
-            Atom::Expression(expr) => Some(expr),
-            _ => None,
-        }
-    }
-
-    pub fn as_expr_mut(&mut self) -> Option<&mut ExpressionAtom> {
-        match self {
-            Atom::Expression(ref mut expr) => Some(expr),
-            _ => None,
-        }
-    }
-
     pub fn as_gnd<T: GroundedAtom>(&self) -> Option<&T> {
         match self {
             Atom::Grounded(gnd) => gnd.downcast_ref::<T>(),
