@@ -82,13 +82,10 @@ fn reduct_first_if_not_matched_op(((space, expr, bindings), match_result): ((Rc<
 
 fn reduct_first_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> StepResult<(), InterpreterResult> {
     log::debug!("reduct_first_op: {}", expr);
-    if let Atom::Expression(expr) = expr {
-        let mut iter = BottomSubexprStream::from(expr);
-        let sub;
-        {
-            iter.next();
-            sub = iter.get_mut().clone();
-        }
+    if let Atom::Expression(_) = expr {
+        let mut iter = SubexprStream::from_expr(expr, BOTTOM_UP_DEPTH_WALK);
+        iter.next();
+        let sub = iter.get_mut().clone();
         StepResult::execute(SequencePlan::new(
                 ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), sub, bindings)),
                 PartialApplyPlan::new(interpret_if_reducted_op, (space, iter))
@@ -98,19 +95,16 @@ fn reduct_first_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)
     }
 }
 
-fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<GroundingSpace>, BottomSubexprStream), InterpreterResult)) -> StepResult<(), InterpreterResult> {
+fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<GroundingSpace>, SubexprStream), InterpreterResult)) -> StepResult<(), InterpreterResult> {
     log::debug!("interpret_if_reducted_op: reduction_result: {:?}", reduction_result);
     match reduction_result {
         Err(_) => StepResult::ret(reduction_result),
         Ok(mut vec) if vec.len() == 1 && vec[0].0 == *(iter.get_mut()) => {
             let (result, bindings) = vec.pop().unwrap();
             if iter.has_next() {
-                let next_sub;
-                {
-                    iter.next();
-                    next_sub = iter.get_mut().clone();
-                    log::debug!("interpret_if_reducted_op: reduct next_sub: {}", next_sub);
-                }
+                iter.next();
+                let next_sub = iter.get_mut().clone();
+                log::debug!("interpret_if_reducted_op: reduct next_sub: {}", next_sub);
                 StepResult::execute(SequencePlan::new(
                         ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), next_sub, bindings)),
                         PartialApplyPlan::new(interpret_if_reducted_op, (space, iter))
@@ -139,13 +133,10 @@ fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<Groundin
 
 fn reduct_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> StepResult<(), InterpreterResult> {
     log::debug!("reduct_op: {}", expr);
-    if let Atom::Expression(expr) = expr {
-        let mut iter = BottomSubexprStream::from(expr);
-        let sub;
-        {
-            iter.next();
-            sub = iter.get_mut().clone();
-        }
+    if let Atom::Expression(_) = expr {
+        let mut iter = SubexprStream::from_expr(expr, BOTTOM_UP_DEPTH_WALK);
+        iter.next();
+        let sub = iter.get_mut().clone();
         StepResult::execute(SequencePlan::new(
                 ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), sub, bindings)),
                 PartialApplyPlan::new(reduct_next_op, (space, iter))
@@ -155,7 +146,7 @@ fn reduct_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> S
     }
 }
 
-fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, BottomSubexprStream), InterpreterResult)) -> StepResult<(), InterpreterResult> {
+fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, SubexprStream), InterpreterResult)) -> StepResult<(), InterpreterResult> {
     match prev_result {
         Err(_) => StepResult::ret(prev_result),
         Ok(mut results) => {
@@ -163,14 +154,11 @@ fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, BottomSube
                 .map(|(reducted, bindings)| {
                     log::debug!("reduct_next: reducted: {}, bindings: {:?}", reducted, bindings);
                     let mut iter = iter.clone();
-                    let next_sub;
-                    {
-                        *iter.get_mut() = reducted;
-                        iter.next();
-                        next_sub = iter.get_mut().clone();
-                        log::debug!("reduct_next: expression: {}", iter.as_atom());
-                        log::debug!("reduct_next: next_sub after reduction: {}", next_sub);
-                    }
+                    *iter.get_mut() = reducted;
+                    iter.next();
+                    let next_sub = iter.get_mut().clone();
+                    log::debug!("reduct_next: expression: {}", iter.as_atom());
+                    log::debug!("reduct_next: next_sub after reduction: {}", next_sub);
                     (next_sub, bindings, iter)
                 })
                 .into_parallel_plan(Ok(vec![]),
