@@ -80,10 +80,6 @@ impl SubexprStream {
         (self.walk)(&mut self.levels, as_expr(&self.expr), 0)
     }
 
-    pub fn has_next(&self) -> bool {
-        self.levels.len() > 0
-    }
-
     pub fn as_atom(&self) -> &Atom {
         &self.expr
     }

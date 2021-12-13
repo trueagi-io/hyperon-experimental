@@ -100,9 +100,8 @@ fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<Groundin
     match reduction_result {
         Err(_) => StepResult::ret(reduction_result),
         Ok(mut vec) if vec.len() == 1 && vec[0].0 == *(iter.get_mut()) => {
-            let (result, bindings) = vec.pop().unwrap();
-            if iter.has_next() {
-                iter.next();
+            let (_, bindings) = vec.pop().unwrap();
+            if iter.next() {
                 let next_sub = iter.get_mut().clone();
                 log::debug!("interpret_if_reducted_op: reduct next_sub: {}", next_sub);
                 StepResult::execute(SequencePlan::new(
@@ -110,7 +109,7 @@ fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<Groundin
                         PartialApplyPlan::new(interpret_if_reducted_op, (space, iter))
                 ))
             } else {
-                StepResult::ret(Ok(vec![(result, bindings)]))
+                StepResult::ret(Ok(vec![(iter.into_atom(), bindings)]))
             }
         },
         Ok(mut vec) => {
@@ -118,12 +117,8 @@ fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<Groundin
                     .into_parallel_plan(Ok(vec![]),
                         |(result, bindings)| {
                             let mut iter = iter.clone();
-                            if iter.has_next() {
-                                *iter.get_mut() = result;
-                                Box::new(ApplyPlan::new(interpret_op, (Rc::clone(&space), iter.into_atom(), bindings)))
-                            } else {
-                                Box::new(|_:()| StepResult::ret(Ok(vec![(result, bindings)])))
-                            }
+                            *iter.get_mut() = result;
+                            Box::new(ApplyPlan::new(interpret_op, (Rc::clone(&space), iter.into_atom(), bindings)))
                         },
                         merge_results);
                 StepResult::Execute(plan)
@@ -152,24 +147,28 @@ fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, SubexprStr
         Ok(mut results) => {
             let plan = results.drain(0..)
                 .map(|(reducted, bindings)| {
-                    log::debug!("reduct_next: reducted: {}, bindings: {:?}", reducted, bindings);
                     let mut iter = iter.clone();
+                    log::debug!("reduct_next: reducted: {}, bindings: {:?}", reducted, bindings);
                     *iter.get_mut() = reducted;
-                    iter.next();
-                    let next_sub = iter.get_mut().clone();
                     log::debug!("reduct_next: expression: {}", iter.as_atom());
-                    log::debug!("reduct_next: next_sub after reduction: {}", next_sub);
+
+                    let next_sub = if iter.next() {
+                        let next_sub = iter.get_mut().clone();
+                        log::debug!("reduct_next: next_sub after reduction: {}", next_sub);
+                        Some(next_sub)
+                    } else { None };
+
                     (next_sub, bindings, iter)
                 })
                 .into_parallel_plan(Ok(vec![]),
                     |(next_sub, bindings, iter)| {
-                        if iter.has_next() {
+                        if let Some(next_sub) = next_sub {
                             Box::new(SequencePlan::new(
                                     ApplyPlan::new(interpret_op, (Rc::clone(&space), next_sub, bindings)),
                                     PartialApplyPlan::new(reduct_next_op, (Rc::clone(&space), iter))
                             ))
                         } else {
-                            Box::new(ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), next_sub, bindings)))
+                            Box::new(ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), iter.into_atom(), bindings)))
                         }
                     },
                     merge_results);
