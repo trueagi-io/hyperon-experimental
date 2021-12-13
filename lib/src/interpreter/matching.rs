@@ -84,8 +84,7 @@ fn reduct_first_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)
     log::debug!("reduct_first_op: {}", expr);
     if let Atom::Expression(_) = expr {
         let mut iter = SubexprStream::from_expr(expr, BOTTOM_UP_DEPTH_WALK);
-        iter.next();
-        let sub = iter.get_mut().clone();
+        let sub = iter.next().expect("Non plain expression expected").clone();
         StepResult::execute(SequencePlan::new(
                 ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), sub, bindings)),
                 PartialApplyPlan::new(interpret_if_reducted_op, (space, iter))
@@ -101,8 +100,7 @@ fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<Groundin
         Err(_) => StepResult::ret(reduction_result),
         Ok(mut vec) if vec.len() == 1 && vec[0].0 == *(iter.get_mut()) => {
             let (_, bindings) = vec.pop().unwrap();
-            if iter.next() {
-                let next_sub = iter.get_mut().clone();
+            if let Some(next_sub) = iter.next().cloned() {
                 log::debug!("interpret_if_reducted_op: reduct next_sub: {}", next_sub);
                 StepResult::execute(SequencePlan::new(
                         ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), next_sub, bindings)),
@@ -130,8 +128,7 @@ fn reduct_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> S
     log::debug!("reduct_op: {}", expr);
     if let Atom::Expression(_) = expr {
         let mut iter = SubexprStream::from_expr(expr, BOTTOM_UP_DEPTH_WALK);
-        iter.next();
-        let sub = iter.get_mut().clone();
+        let sub = iter.next().expect("Non plain expression expected").clone();
         StepResult::execute(SequencePlan::new(
                 ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), sub, bindings)),
                 PartialApplyPlan::new(reduct_next_op, (space, iter))
@@ -152,8 +149,7 @@ fn reduct_next_op(((space, iter), prev_result): ((Rc<GroundingSpace>, SubexprStr
                     *iter.get_mut() = reducted;
                     log::debug!("reduct_next: expression: {}", iter.as_atom());
 
-                    let next_sub = if iter.next() {
-                        let next_sub = iter.get_mut().clone();
+                    let next_sub = if let Some(next_sub) = iter.next().cloned() {
                         log::debug!("reduct_next: next_sub after reduction: {}", next_sub);
                         Some(next_sub)
                     } else { None };
