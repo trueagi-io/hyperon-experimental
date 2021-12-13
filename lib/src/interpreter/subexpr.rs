@@ -53,30 +53,24 @@ fn move_bottom_up_depth<'a>(levels: &mut Vec<usize>, expr: &'a ExpressionAtom, l
         let found = move_bottom_up_depth(levels, as_expr(subexpr), level + 1);
         if found == None {
             log::trace!("move_bottom_up_depth: return: {}", subexpr);
-            return Some(subexpr)
+            Some(subexpr)
         } else {
-            return found
+            found
         }
-    }
-    loop {
-        let idx = levels[level];
-        if idx >= expr.children().len() {
-            levels.pop();
-            if level == 0 {
-                log::trace!("move_bottom_up_depth: return: None");
-            }
-            return None;
-        }
-        let child = &expr.children()[idx];
-        levels[level] = idx + 1;
-        if let Atom::Expression(ref child_expr) = child {
-            levels.push(0);
-            let found = move_bottom_up_depth(levels, child_expr, level + 1);
-            if found == None {
-                log::trace!("move_bottom_up_depth: return: {}", child);
-                return Some(child)
+    } else {
+        loop {
+            let found = find_next_sibling_expr(levels, expr, level);
+            if let Some(child) = found {
+                levels.push(0);
+                let found = move_bottom_up_depth(levels, as_expr(child), level + 1);
+                if found == None {
+                    log::trace!("move_bottom_up_depth: return: {}, levels.len(): {}", child, levels.len());
+                    return Some(child)
+                } else {
+                    return found
+                }
             } else {
-                return found
+                return None;
             }
         }
     }
