@@ -78,6 +78,7 @@ fn move_bottom_up_depth<'a>(levels: &mut Vec<usize>, expr: &'a ExpressionAtom, l
 
 type WalkStrategy = for<'a> fn(&mut Vec<usize>, &'a ExpressionAtom, usize) -> Option<&'a Atom>;
 
+pub static FIND_NEXT_SIBLING_WALK: WalkStrategy = find_next_sibling_expr;
 pub static BOTTOM_UP_DEPTH_WALK: WalkStrategy = move_bottom_up_depth;
 pub static TOP_DOWN_DEPTH_WALK: WalkStrategy = move_top_down_depth;
 
