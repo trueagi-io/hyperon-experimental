@@ -15,7 +15,10 @@ fn merge_results(plan_res: InterpreterResult, step_res: InterpreterResult) -> In
             Ok(plan_res)
         },
         (_, Err(msg)) => Err(format!("Unexpected error: {}", msg)),
-        (Err(_), plan_res) => plan_res,
+        (Err(msg), plan_res) => {
+            log::debug!("Skip result because of error: {}", msg);
+            plan_res
+        },
     }
 }
 
@@ -55,7 +58,10 @@ fn interpret_reducted_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bin
     log::debug!("interpret_reducted_op: {}", atom);
     if let Atom::Expression(ref expr) = atom {
         if is_grounded(expr) {
-            StepResult::execute(ApplyPlan::new(execute_op, (atom, bindings)))
+            StepResult::execute(SequencePlan::new(
+                ApplyPlan::new(execute_op, (atom.clone(), bindings.clone())),
+                PartialApplyPlan::new(interpret_results_further_op, (space, atom, bindings))
+            ))
         } else {
             StepResult::execute(SequencePlan::new(
                     ApplyPlan::new(match_op, (space, atom.clone(), bindings.clone())),
@@ -64,6 +70,26 @@ fn interpret_reducted_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bin
         }
     } else {
         StepResult::ret(Ok(vec![(atom, bindings)]))
+    }
+}
+
+fn interpret_results_further_op(((space, atom, bindings), result): ((Rc<GroundingSpace>, Atom, Bindings), InterpreterResult)) -> StepResult<(), InterpreterResult> {
+    match result {
+        // Return original executable atom in case of error.
+        // It helps for the cases when part of symbolic expression
+        // contains variables and cannot be executed before properly
+        // matched. But we can try to execute when trying to match
+        // expression after reduction. See reduct_args_if_not_matched()
+        Err(msg) => {
+            log::debug!("Execution failed, return original atom, error: {}", msg);
+            StepResult::ret(Ok(vec![(atom, bindings)]))
+        },
+        // Further interpret results of the execution
+        Ok(mut vec) => StepResult::execute(
+            vec.drain(0..).into_parallel_plan(Ok(vec![]),
+            |(result, bindings)| Box::new(
+                ApplyPlan::new(interpret_op, (Rc::clone(&space), result, bindings))),
+                merge_results)),
     }
 }
 
