@@ -42,8 +42,10 @@ fn interpret_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -
                 StepResult::execute(ApplyPlan::new(reduct_args_op, (space,  atom, bindings)))
             } else {
                 StepResult::execute(SequencePlan::new(
+                    SequencePlan::new(
                         ApplyPlan::new(match_op, (Rc::clone(&space), atom.clone(), bindings.clone())),
-                        PartialApplyPlan::new(reduct_args_if_not_matched, (space, atom, bindings))
+                        PartialApplyPlan::new(reduct_args_if_not_matched, (Rc::clone(&space), atom.clone(), bindings.clone()))),
+                    PartialApplyPlan::new(interpret_results_further_op, (space, atom, bindings)),
                 ))
             }
         }
@@ -64,8 +66,8 @@ fn interpret_reducted_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bin
             ))
         } else {
             StepResult::execute(SequencePlan::new(
-                    ApplyPlan::new(match_op, (space, atom.clone(), bindings.clone())),
-                    PartialApplyPlan::new(return_if_not_matched_op, (atom, bindings))
+                ApplyPlan::new(match_op, (Rc::clone(&space), atom.clone(), bindings.clone())),
+                PartialApplyPlan::new(interpret_results_further_op, (space, atom, bindings))
             ))
         }
     } else {
@@ -75,13 +77,15 @@ fn interpret_reducted_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bin
 
 fn interpret_results_further_op(((space, atom, bindings), result): ((Rc<GroundingSpace>, Atom, Bindings), InterpreterResult)) -> StepResult<(), InterpreterResult> {
     match result {
-        // Return original executable atom in case of error.
-        // It helps for the cases when part of symbolic expression
-        // contains variables and cannot be executed before properly
-        // matched. But we can try to execute when trying to match
-        // expression after reduction. See reduct_args_if_not_matched()
+        // Return original atom in case of error.
+        // 
+        // For grounded atoms it helps for the cases when part of symbolic expression contains
+        // variables and cannot be executed before properly matched. But we can try to execute when
+        // trying to match expression after reduction. See reduct_args_if_not_matched()
+        //
+        // For symbolic atoms it allows us considering them non-interpretable.
         Err(msg) => {
-            log::debug!("Execution failed, return original atom, error: {}", msg);
+            log::debug!("Error result, return original atom, error: {}", msg);
             StepResult::ret(Ok(vec![(atom, bindings)]))
         },
         // Further interpret results of the execution
@@ -93,14 +97,9 @@ fn interpret_results_further_op(((space, atom, bindings), result): ((Rc<Groundin
     }
 }
 
-fn return_if_not_matched_op((default, match_result): ((Atom, Bindings), InterpreterResult)) -> StepResult<(), InterpreterResult> {
-    StepResult::ret(match_result.map(|vec| if vec.is_empty() { vec![default] } else { vec }))
-}
-
 fn reduct_args_if_not_matched(((space, expr, bindings), match_result): ((Rc<GroundingSpace>, Atom, Bindings), InterpreterResult)) -> StepResult<(), InterpreterResult> {
     match match_result {
-        Ok(vec) if vec.is_empty() =>
-            StepResult::execute(ApplyPlan::new(reduct_first_op, (space, expr, bindings))),
+        Err(_) => StepResult::execute(ApplyPlan::new(reduct_first_op, (space, expr, bindings))),
         _ => StepResult::ret(match_result),
     }
 }
@@ -123,6 +122,8 @@ fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<Groundin
     log::debug!("interpret_if_reducted_op: reduction_result: {:?}", reduction_result);
     match reduction_result {
         Err(_) => StepResult::ret(reduction_result),
+        // interpret_op() and interpret_reducted_op() return same atom if
+        // interpretation is not successful
         Ok(mut vec) if vec.len() == 1 && vec[0].0 == *(iter.get_mut()) => {
             let (_, bindings) = vec.pop().unwrap();
             if let Some(next_sub) = iter.next().cloned() {
@@ -132,7 +133,7 @@ fn interpret_if_reducted_op(((space, mut iter), reduction_result): ((Rc<Groundin
                         PartialApplyPlan::new(interpret_if_reducted_op, (space, iter))
                 ))
             } else {
-                StepResult::ret(Ok(vec![(iter.into_atom(), bindings)]))
+                StepResult::ret(Err(format!("No results for reducted found")))
             }
         },
         Ok(mut vec) => {
@@ -225,30 +226,27 @@ fn match_op((space, expr, prev_bindings): (Rc<GroundingSpace>, Atom, Bindings)) 
     // TODO: unique variable?
     let atom_x = Atom::Variable(var_x.clone());
     let mut local_bindings = space.query(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
-    if local_bindings.is_empty() {
+    let results: Vec<(Atom, Bindings)> = local_bindings
+        .drain(0..)
+        .map(|mut binding| {
+            let result = binding.get(&var_x).unwrap(); 
+            let result = apply_bindings_to_atom(result, &binding);
+            let bindings = apply_bindings_to_bindings(&binding, &prev_bindings);
+            let bindings = bindings.map(|mut bindings| {
+                binding.drain().for_each(|(k, v)| { bindings.insert(k, v); });
+                bindings
+            });
+            log::debug!("match_op: query: {}, binding: {:?}, result: {}", expr, bindings, result);
+            (result, bindings)
+        })
+        .filter(|(_, bindings)| bindings.is_ok())
+        .map(|(result, bindings)| (result, bindings.unwrap()))
+        .collect();
+    if results.is_empty() {
         log::debug!("match_op: no matches found");
-        StepResult::ret(Ok(vec![]))
+        StepResult::ret(Err(format!("Match is not found")))
     } else {
-        let plan = local_bindings
-            .drain(0..)
-            .map(|mut binding| {
-                let result = binding.get(&var_x).unwrap(); 
-                let result = apply_bindings_to_atom(result, &binding);
-                let bindings = apply_bindings_to_bindings(&binding, &prev_bindings);
-                let bindings = bindings.map(|mut bindings| {
-                    binding.drain().for_each(|(k, v)| { bindings.insert(k, v); });
-                    bindings
-                });
-                log::debug!("match_op: query: {}, binding: {:?}, result: {}", expr, bindings, result);
-                (result, bindings)
-            })
-            .filter(|(_, bindings)| bindings.is_ok())
-            .map(|(result, bindings)| (result, bindings.unwrap()))
-            .into_parallel_plan(Ok(vec![]),
-                |(result, bindings)| Box::new(
-                    ApplyPlan::new(interpret_op, (Rc::clone(&space), result, bindings))),
-                merge_results);
-        StepResult::Execute(plan)
+        StepResult::ret(Ok(results))
     }
 }
 
