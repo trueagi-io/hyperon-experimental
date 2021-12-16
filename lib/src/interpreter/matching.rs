@@ -233,12 +233,9 @@ fn execute_op((atom, bindings): (Atom, Bindings)) -> StepResult<(), InterpreterR
     if let Atom::Expression(mut expr) = atom {
         let op = expr.children().get(0).cloned();
         if let Some(Atom::Grounded(op)) = op {
-            // TODO: change API, remove boilerplate
-            let mut ops: Vec<Atom> = Vec::new();
-            let mut data :Vec<Atom> = Vec::new();
-            expr.children_mut().drain(1..).into_iter().rev().for_each(|atom| data.push(atom));
-            match op.execute(&mut ops, &mut data) {
-                Ok(()) => StepResult::ret(Ok(data.drain(0..).map(|atom| (atom, bindings.clone())).collect())),
+            let mut args = expr.children_mut().drain(1..).collect();
+            match op.execute(&mut args) {
+                Ok(mut vec) => StepResult::ret(Ok(vec.drain(0..).map(|atom| (atom, bindings.clone())).collect())),
                 Err(msg) => StepResult::ret(Err(msg)),
             }
         } else {

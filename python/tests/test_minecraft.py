@@ -10,9 +10,8 @@ class InInventoryAtom(OpGroundedAtom):
         super().__init__()
         self.inventory = inventory
 
-    def execute(self, ops, data):
-        obj = data.pop()
-        data.push(ValueAtom(obj in self.inventory))
+    def execute(self, obj):
+        return [ValueAtom(obj in self.inventory)]
 
     def __repr__(self):
         return "in-inventory"
@@ -23,13 +22,10 @@ class CraftAtom(OpGroundedAtom):
         super().__init__()
         self.inventory = inventory
 
-    def execute(self, ops, data):
-        obj = data.pop()
-        where = data.pop()
-        comp = data.pop()
+    def execute(self, obj, where, comp):
         print(str(obj) + " crafted in " + str(where) + " from " + str(comp))
         self.inventory.append(obj)
-        data.push(obj)
+        return [obj]
 
     def __repr__(self):
         return "craft"
@@ -40,12 +36,10 @@ class MineAtom(OpGroundedAtom):
         super().__init__()
         self.inventory = inventory
 
-    def execute(self, ops, data):
-        obj = data.pop()
-        tool = data.pop()
+    def execute(self, obj, tool):
         print(str(obj) + " mined by " + str(tool))
         self.inventory.append(obj)
-        data.push(obj)
+        return [obj]
 
     def __repr__(self):
         return "mine"

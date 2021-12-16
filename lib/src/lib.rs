@@ -142,7 +142,7 @@ impl Display for VariableAtom {
 // Grounded atom
 
 pub trait GroundedAtom : Debug + mopa::Any {
-    fn execute(&self, _ops: &mut Vec<Atom>, _data: &mut Vec<Atom>) -> Result<(), String> {
+    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
         Err(format!("{:?} is not executable", self))
     }
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;

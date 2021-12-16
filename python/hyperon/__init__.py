@@ -8,6 +8,7 @@ class Atom:
         self.catom = catom
 
     def __del__(self):
+        #import sys; sys.stderr.write("Atom._del_(" + str(self) + ")\n"); sys.stderr.flush()
         hp.atom_free(self.catom)
 
     def __eq__(self, other):
@@ -74,6 +75,10 @@ class GroundedAtom(Atom):
 
 def G(object):
     return GroundedAtom(hp.atom_gnd(object))
+
+def call_execute_on_grounded_atom(gnd, args):
+    args = [Atom._from_catom(catom) for catom in args]
+    return gnd.execute(*args)
 
 class BaseVecAtom:
 

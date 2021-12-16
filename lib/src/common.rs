@@ -37,11 +37,11 @@ pub struct Operation {
     pub execute: ExecuteFunc,
 }
 
-pub type ExecuteFunc = fn(&mut Vec<Atom>, &mut Vec<Atom>) -> Result<(), String>;
+pub type ExecuteFunc = fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>;
 
 impl GroundedAtom for &'static Operation {
-    fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
-        (self.execute)(ops, data)
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+        (self.execute)(args)
     }
 
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
@@ -66,8 +66,8 @@ impl Debug for &'static Operation {
 mod tests {
     use super::*;
 
-    fn test(_ops: &mut Vec<Atom>, _data: &mut Vec<Atom>) -> Result<(), String> {
-        Ok(())
+    fn test(_args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+        Ok(vec![])
     }
 
     #[test]
