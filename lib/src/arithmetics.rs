@@ -1,18 +1,17 @@
 use crate::*;
 use crate::common::*;
 
-pub static SUM: &Operation = &Operation{ name: "+", execute: |ops, data| bin_op(ops, data, |a, b| a + b) };
-pub static SUB: &Operation = &Operation{ name: "-", execute: |ops, data| bin_op(ops, data, |a, b| a - b) };
-pub static MUL: &Operation = &Operation{ name: "*", execute: |ops, data| bin_op(ops, data, |a, b| a * b) };
+pub static SUM: &Operation = &Operation{ name: "+", execute: |args| bin_op(args, |a, b| a + b) };
+pub static SUB: &Operation = &Operation{ name: "-", execute: |args| bin_op(args, |a, b| a - b) };
+pub static MUL: &Operation = &Operation{ name: "*", execute: |args| bin_op(args, |a, b| a * b) };
 
-fn bin_op(_ops: &mut Vec<Atom>, data: &mut Vec<Atom>, op: fn(i32, i32) -> i32) -> Result<(), String> {
+fn bin_op(args: &mut Vec<Atom>, op: fn(i32, i32) -> i32) -> Result<Vec<Atom>, String> {
     // TODO: getting arguments from stack and checking their type can be
     // done in separate helper function or macros.
-    let arg1 = data.pop().expect("Sum operation called without arguments"); 
-    let arg2 = data.pop().expect("Sum operation called with only argument");
+    let arg1 = args.get(0).ok_or_else(|| format!("Sum operation called without arguments"))?; 
+    let arg2 = args.get(1).ok_or_else(|| format!("Sum operation called with only argument"))?;
     if let (Some(arg1), Some(arg2)) = (arg1.as_gnd::<i32>(), arg2.as_gnd::<i32>()) {
-        data.push(Atom::gnd(op(*arg1, *arg2)));
-        Ok(())
+        Ok(vec![Atom::gnd(op(*arg1, *arg2))])
     } else {
         Err(format!("One of the arguments is not integer: ({}, {})", arg1, arg2))
     }
@@ -67,6 +66,7 @@ mod tests {
         assert_eq!(space.query(&expr!("=", ("fac", {3}), X)), vec![expected]);
     }
 
+    // TODO: reimplement using grounded if to prevent infinite loop
     //#[test]
     fn test_factorial() {
         init();

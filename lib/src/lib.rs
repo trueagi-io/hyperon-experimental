@@ -76,10 +76,6 @@ impl ExpressionAtom {
         self.children.iter().all(|atom| ! matches!(atom, Atom::Expression(_)))
     }
 
-    pub fn sub_expr_iter(&self) -> SubexpressionStream {
-        SubexpressionStream::from(self)
-    }
-
     pub fn children(&self) -> &Vec<Atom> {
         &self.children
     }
@@ -109,75 +105,6 @@ impl Display for ExpressionAtom {
             .and_then(|_| self.children.iter().skip(1).fold(Ok(()),
                 |res, atom| res.and_then(|_| write!(f, " {}", atom))))
             .and_then(|_| write!(f, ")"))
-    }
-}
-
-#[derive(Clone)]
-pub struct SubexpressionStream {
-    expr: Atom,
-    levels: Vec<usize>,
-}
-
-impl SubexpressionStream {
-    fn from(expr: &ExpressionAtom) -> Self {
-        Self{ expr: Atom::Expression((*expr).clone()), levels: vec![0] }
-    }
-
-    fn next_rec(levels: &mut Vec<usize>, expr: &ExpressionAtom, level: usize) {
-        if level < levels.len() - 1 {
-            Self::next_rec(levels, expr.children()[levels[level] - 1].as_expr().unwrap(), level + 1);
-            return;
-        }
-        loop {
-            let idx = levels[level];
-            if idx >= expr.children().len() {
-                levels.pop();
-                return;
-            }
-            let child = &expr.children()[idx];
-            levels[level] = idx + 1;
-            if let Atom::Expression(ref child_expr) = child {
-                levels.push(0);
-                Self::next_rec(levels, child_expr, level + 1);
-                return;
-            }
-        }
-    }
-
-    fn next(&mut self) {
-        if let Atom::Expression(ref expr) = self.expr {
-            Self::next_rec(&mut self.levels, expr, 0);
-        }
-    }
-
-    fn has_next(&self) -> bool {
-        self.levels.len() > 0
-    }
-
-    fn get_mut_rec<'a>(levels: &'a Vec<usize>, atom: &'a mut Atom, level: usize) -> &'a mut Atom {
-        if level >= levels.len() {
-            atom
-        } else {
-            let child = &mut (atom.as_expr_mut().unwrap().children_mut()[levels[level] - 1]);
-            Self::get_mut_rec(levels, child, level + 1)
-        }
-    }
-
-    fn get_mut(&mut self) -> &mut Atom {
-        Self::get_mut_rec(&self.levels, &mut self.expr, 0)
-    }
-}
-
-impl Iterator for SubexpressionStream {
-    type Item = Atom;
-    
-    fn next(&mut self) -> Option<Self::Item> {
-        if !self.has_next() {
-            None
-        } else {
-            self.next();
-            Some(self.get_mut().clone())
-        }
     }
 }
 
@@ -215,7 +142,7 @@ impl Display for VariableAtom {
 // Grounded atom
 
 pub trait GroundedAtom : Debug + mopa::Any {
-    fn execute(&self, _ops: &mut Vec<Atom>, _data: &mut Vec<Atom>) -> Result<(), String> {
+    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
         Err(format!("{:?} is not executable", self))
     }
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
@@ -270,20 +197,6 @@ impl Atom {
 
     pub fn gnd<T: GroundedAtom>(gnd: T) -> Atom {
         Self::Grounded(Box::new(gnd))
-    }
-
-    pub fn as_expr(&self) -> Option<&ExpressionAtom> {
-        match self {
-            Atom::Expression(ref expr) => Some(expr),
-            _ => None,
-        }
-    }
-
-    pub fn as_expr_mut(&mut self) -> Option<&mut ExpressionAtom> {
-        match self {
-            Atom::Expression(ref mut expr) => Some(expr),
-            _ => None,
-        }
     }
 
     pub fn as_gnd<T: GroundedAtom>(&self) -> Option<&T> {
@@ -418,3 +331,4 @@ impl From<&SExprSpace> for GroundingSpace {
         space
     }
 }
+

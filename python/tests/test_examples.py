@@ -57,13 +57,16 @@ class ExamplesTest(unittest.TestCase):
         # self.assertEqual(ValueAtom('Hello world'),
                 # interpret(kb, atomese.parse_single("(+ 'Hello ' 'world')")))
 
-    def _test_grounded_functions(self):
+    def test_grounded_functions(self):
         atomese = Atomese()
+        obj = SomeObject()
+        atomese.add_atom("obj", ValueAtom(obj))
 
-        atomese.add_atom("obj", ValueAtom(SomeObject()))
-        target = atomese.parse('(call:foo obj)')
+        target = atomese.parse_single('(call:foo obj)')
+        result = interpret(GroundingSpace(), target)
 
-        interpret_and_print_results(target, GroundingSpace())
+        self.assertTrue(obj.called)
+        self.assertEqual(result, [])
 
     def test_frog_reasoning(self):
         atomese = Atomese()
@@ -142,6 +145,7 @@ class ExamplesTest(unittest.TestCase):
 
         kb = atomese.parse('''
            (= (if True $then) $then)
+           (= (if False $then) nop)
 
            (= (bin) 0)
            (= (bin) 1)
@@ -155,7 +159,8 @@ class ExamplesTest(unittest.TestCase):
         target = atomese.parse_single('''(let $t (gen 3)
             (if (== (subsum (:: 3 (:: 5 (:: 7 nil))) $t) 8) $t))''')
         output = interpret(kb, target)
-        self.assertEqual(output, atomese.parse_single('(:: 1 (:: 1 (:: 0 nil)))'))
+        expected = atomese.parse_single('(:: 1 (:: 1 (:: 0 nil)))')
+        self.assertEqual(output, [expected])
 
     def test_infer_function_application_type(self):
         atomese = Atomese()
@@ -258,8 +263,11 @@ class ExamplesTest(unittest.TestCase):
 
 class SomeObject():
 
+    def __init__(self):
+        self.called = False
+
     def foo(self):
-        print("foo called")
+        self.called = True
 
 init_logger()
 if __name__ == "__main__":

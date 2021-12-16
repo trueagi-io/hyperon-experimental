@@ -30,7 +30,7 @@ void copy_atoms_to_list(atom_t const* const* atoms, size_t size, void* context) 
 }
 
 extern "C" {
-	const char *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* ops, struct vec_atom_t* data);
+	const char *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* args, struct vec_atom_t* ret);
 	bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
 	struct gnd_t *py_clone(const struct gnd_t* _gnd);
 	size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
@@ -56,17 +56,25 @@ py::object inc_ref(py::object obj) {
 	return obj;
 }
 
-const char *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _ops, struct vec_atom_t* _data) {
+const char *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, struct vec_atom_t* ret) {
 	// Increment module reference counter otherwise SIGSEGV happens on exit
 	static py::object hyperon = inc_ref(py::module_::import("hyperon"));
-	static py::object BaseVecAtom = hyperon.attr("BaseVecAtom");
+	static py::object call_execute_on_grounded_atom = hyperon.attr("call_execute_on_grounded_atom");
 	py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
 	try {
-		pyobj.attr("execute")(BaseVecAtom(CVecAtom(_ops)), BaseVecAtom(CVecAtom(_data)));
+		py::list args;
+		for (size_t i = 0; i < vec_atom_size(_args); ++i) {
+			args.append(CAtom(atom_copy(vec_atom_get(_args, i))));
+		}
+		py::list result = call_execute_on_grounded_atom(pyobj, args);
+		for (auto& atom:  result) {
+			vec_atom_push(ret, atom_copy(atom.attr("catom").cast<CAtom>().ptr));
+		}
 		return nullptr;	
 	} catch (py::error_already_set &e) {
 		// TODO: implement returning error description without static buffer
-		static char error[4096] = "Exception caught";
+		static char error[4096];
+ 	 	strcpy(error, "Exception caught:\n");
 		strncat(error, e.what(), sizeof(error) / sizeof(error[0]) - 1);
 		return error;
 	}
@@ -138,7 +146,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     		size_t size = py::len(_children);
     		atom_t* children[size];
     		int idx = 0;
-    		for (auto atom : _children) {
+    		for (auto& atom : _children) {
     			// Copying atom is required because atom_expr() moves children
     			// catoms inside new expression atom.
     			children[idx++] = atom_copy(atom.cast<CAtom&>().ptr);
@@ -167,6 +175,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 	py::class_<CVecAtom>(m, "CVecAtom");
 	m.def("vec_atom_new", []() { return CVecAtom(vec_atom_new()); }, "New vector of atoms");
 	m.def("vec_atom_free", [](CVecAtom vec) { vec_atom_free(vec.ptr); }, "Free vector of atoms");
+	m.def("vec_atom_size", [](CVecAtom vec) { return vec_atom_size(vec.ptr); }, "Return size of the vector");
 	m.def("vec_atom_push", [](CVecAtom vec, CAtom atom) { vec_atom_push(vec.ptr, atom_copy(atom.ptr)); }, "Push atom into vector");
 	m.def("vec_atom_pop", [](CVecAtom vec) { return CAtom(vec_atom_pop(vec.ptr)); }, "Push atom into vector");
 

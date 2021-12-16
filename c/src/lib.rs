@@ -31,6 +31,7 @@ pub struct atom_t {
 #[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct gnd_api_t {
+    // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
     execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *const c_char>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
@@ -216,6 +217,11 @@ pub unsafe extern "C" fn vec_atom_free(vec: *mut vec_atom_t) {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn vec_atom_size(vec: *mut vec_atom_t) -> usize {
+    (*vec).0.len()
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> *mut atom_t {
     atom_to_ptr((*vec).0.pop().expect("Vector is empty"))
 }
@@ -337,15 +343,16 @@ impl CGroundedAtom {
         }
     }
 
-    unsafe fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
+    unsafe fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
         let execute = self.api().execute;
         match execute {
             Some(execute) => {
+                let mut ret = Vec::new();
                 let res = execute(self.as_ptr(),
-                    (ops as *mut Vec<Atom>).cast::<vec_atom_t>(),
-                    (data as *mut Vec<Atom>).cast::<vec_atom_t>());
+                    (args as *mut Vec<Atom>).cast::<vec_atom_t>(),
+                    (&mut ret as *mut Vec<Atom>).cast::<vec_atom_t>());
                 if res.is_null() {
-                    Ok(())
+                    Ok(ret)
                 } else {
                     Err(cstr_as_str(res).to_string())
                 }
@@ -376,9 +383,9 @@ impl CGroundedAtom {
 
 impl GroundedAtom for CGroundedAtom {
 
-    fn execute(&self, ops: &mut Vec<Atom>, data: &mut Vec<Atom>) -> Result<(), String> {
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
         unsafe {
-            self.execute(ops, data)
+            self.execute(args)
         }
     }
 

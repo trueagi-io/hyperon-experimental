@@ -48,10 +48,8 @@ class AtomTest(unittest.TestCase):
             # VecAtom()), "1.0 is not executable")
 
     def test_grounded_execute(self):
-        data = VecAtom()
-        data.push(ValueAtom(1.0))
-        X2Atom().get_object().execute(VecAtom(), data)
-        self.assertEqual(data.pop(), ValueAtom(2.0))
+        res = X2Atom().get_object().execute(ValueAtom(1.0))
+        self.assertEqual(res, [ValueAtom(2.0)])
 
     def test_expr_equals(self):
         self.assertEqual(E(S("+"), S("1"), S("2")),
@@ -121,10 +119,8 @@ class X2(OpGroundedAtom):
     def __init__(self):
         super().__init__()
 
-    def execute(self, ops, data):
-        arg = data.pop()
-        data.push(ValueAtom(2 * arg.get_object().value))
-        return None
+    def execute(self, arg):
+        return [ValueAtom(2 * arg.get_object().value)]
 
     def __str__(self):
         return "*2"

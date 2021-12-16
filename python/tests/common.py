@@ -12,9 +12,8 @@ class SpaceCollection(ConstGroundedAtom):
         super().__init__()
         self.spaces = spaces
 
-    def execute(self, ops, data):
-        name = data.pop().get_symbol()
-        data.push(ValueAtom(self.spaces[name]))
+    def execute(self, name):
+        return [ValueAtom(self.spaces[name.get_symbol()])]
 
     def __eq__(self, other):
         return isinstance(other, SpacesAtom) and self.spaces == other.spaces
@@ -27,11 +26,9 @@ class MatchAtom(OpGroundedAtom):
     def __init__(self):
         super().__init__()
 
-    def execute(self, ops, data):
-        space = data.pop().get_object().value
-        pattern = data.pop()
+    def execute(self, space, pattern, templ_op):
+        space = space.get_object().value
         # TODO: hack to make both quoted and unquoted expression work
-        templ_op = data.pop()
         if (templ_op.get_type() == AtomType.EXPR and
             templ_op.get_children()[0].get_type() == AtomType.SYMBOL and
             templ_op.get_children()[0].get_symbol() == 'q'):
@@ -39,8 +36,7 @@ class MatchAtom(OpGroundedAtom):
             templ = E(*quoted)
         else:
             templ = templ_op
-        for m in space.subst(pattern, templ):
-            data.push(m)
+        return space.subst(pattern, templ)
 
     def __repr__(self):
         return "match"
@@ -52,9 +48,8 @@ class UnaryOpAtom(OpGroundedAtom):
         self.name = name
         self.op = op
 
-    def execute(self, ops, data):
-        arg = data.pop().get_object()
-        data.push(ValueAtom(self.op(arg.value)))
+    def execute(self, arg):
+        return [ValueAtom(self.op(arg.get_object().value))]
 
     def __eq__(self, other):
         return isinstance(other, UnaryOpAtom) and self.name == self.name
@@ -69,10 +64,9 @@ class BinaryOpAtom(OpGroundedAtom):
         self.name = name
         self.op = op
 
-    def execute(self, ops, data):
-        a = data.pop().get_object()
-        b = data.pop().get_object()
-        data.push(ValueAtom(self.op(a.value, b.value)))
+    def execute(self, a, b):
+        return [ValueAtom(self.op(a.get_object().value,
+            b.get_object().value))]
 
     def __eq__(self, other):
         return isinstance(other, BinaryOpAtom) and self.name == self.name
@@ -126,11 +120,11 @@ class CallAtom(OpGroundedAtom):
         super().__init__()
         self.method_name = method_name
 
-    def execute(self, ops, data):
-        obj = data.pop().get_object().value
-        args = data.pop().get_children()
+    def execute(self, obj, *args):
+        obj = obj.get_object().value
         method = getattr(obj, self.method_name)
         method(*args)
+        return []
 
     def __eq__(self, other):
         if isinstance(other, CallAtom):
@@ -140,15 +134,26 @@ class CallAtom(OpGroundedAtom):
     def __repr__(self):
         return "call:" + self.method_name
 
+class LetAtom(OpGroundedAtom):
+
+    def __init__(self):
+        super().__init__()
+
+    def execute(self, pattern, atom, templ):
+        space = GroundingSpace()
+        space.add_atom(atom)
+        return space.subst(pattern, templ)
+
+    def __repr__(self):
+        return "let"
+
 class CommaAtom(OpGroundedAtom):
 
     def __init__(self):
         super().__init__()
 
-    def execute(self, ops, data):
-        args = data.pop().get_children()
-        for arg in args:
-            data.push(arg)
+    def execute(self, args):
+        return args.get_children()
 
     def __repr__(self):
         return ","
@@ -186,7 +191,7 @@ class Atomese:
         parser.register_token(r"match", lambda token: G(MatchAtom()))
         parser.register_token(r"call:[^\\s)]+", lambda token: G(CallAtom(token[5:])))
         parser.register_token(r",", lambda token: G(CommaAtom()))
-        #parser.register_token(r"let", lambda token: IFMATCH)
+        parser.register_token(r"let", lambda token: G(LetAtom()))
         for regexp in self.tokens.keys():
             parser.register_token(regexp, self.tokens[regexp])
         return parser
@@ -215,3 +220,5 @@ class Atomese:
 
     def add_atom(self, name, symbol):
         self.add_token(name, lambda _: symbol)
+
+

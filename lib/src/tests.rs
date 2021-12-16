@@ -126,32 +126,3 @@ fn test_match_if_then_with_X() {
     assert_eq!(space.query(&expr!("=", ("if", "True", "42"), X)),
         vec![bind!{X: expr!("42")}]);
 }
-
-#[test]
-fn test_subexpression_iterator() {
-    let expr = expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3"));
-
-    let iter = expr.as_expr().unwrap().sub_expr_iter();
-
-    assert_eq!(iter.collect::<Vec<_>>(),
-        vec![
-            expr!("+", "1", n),
-            expr!("*", "3", ("+", "1", n)),
-            expr!("-", "4", "3"),
-            expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3")),
-        ]);
-}
-
-#[test]
-fn test_subexpression_iterator_two_sub_expr() {
-    let expr = expr!("*", ("+", "3", "4"), ("-", "5", "2"));
-
-    let iter = expr.as_expr().unwrap().sub_expr_iter();
-
-    assert_eq!(iter.collect::<Vec<_>>(),
-        vec![
-            expr!("+", "3", "4"),
-            expr!("-", "5", "2"),
-            expr!("*", ("+", "3", "4"), ("-", "5", "2")),
-        ]);
-}
