@@ -254,6 +254,8 @@ impl Display for Atom {
 
 pub type Bindings = HashMap<VariableAtom, Atom>;
 
+pub type Unifications = Vec<matcher::UnificationPair>;
+
 pub struct GroundingSpace {
     content: Vec<Atom>,
 }
@@ -291,6 +293,34 @@ impl GroundingSpace {
         self.query(pattern).drain(0..)
             .map(| bindings | matcher::apply_bindings_to_atom(template, &bindings))
             .collect()
+    }
+
+    // TODO: for now we have separate methods query() and unify() but
+    // they probably can be merged. One way of doing it is designating
+    // in the query which part of query should be unified and which matched.
+    // For example for the typical query in a form (= (+ a b) $X) the
+    // (= (...) $X) level should not be unified otherwise we will recursively
+    // infer that we need calculating (+ a b) again which is equal to original
+    // query. Another option is designating this in the data itself.
+    // After combining match and unification we could leave only single
+    // universal method.
+    pub fn unify(&self, pattern: &Atom) -> Vec<(Bindings, Unifications)> {
+        log::debug!("unify: pattern: {}", pattern);
+        let mut result = Vec::new();
+        for next in &self.content {
+            match matcher::unify_atoms(next, pattern) {
+                Some(res) => {
+                    let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
+                    if let Ok(bindings) = bindings {
+                        // TODO: implement Display for bindings
+                        log::debug!("unify: push result: {}, bindings: {:?}", next, bindings);
+                        result.push((bindings, res.unifications));
+                    }
+                },
+                None => continue,
+            }
+        }
+        result
     }
 
     pub fn as_vec(&self) -> &Vec<Atom> {

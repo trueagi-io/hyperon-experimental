@@ -74,6 +74,85 @@ pub fn match_atoms(candidate: &Atom, pattern: &Atom) -> Option<MatchResult> {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct UnificationPair {
+    pub candidate: Atom,
+    pub pattern: Atom,
+}
+
+impl From<(Atom, Atom)> for UnificationPair {
+    fn from((candidate, pattern): (Atom, Atom)) -> Self {
+        Self { candidate, pattern }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct UnifyResult {
+    pub candidate_bindings: Bindings,
+    pub pattern_bindings: Bindings,
+    pub unifications: Vec<UnificationPair>,
+}
+
+impl UnifyResult {
+    fn new() -> Self {
+        UnifyResult {
+            candidate_bindings: Bindings::new(),
+            pattern_bindings: Bindings::new(),
+            unifications: Vec::new(),
+        }
+    }
+}
+
+fn unify_atoms_recursively(candidate: &Atom, pattern: &Atom, res: &mut UnifyResult, depth: u32) -> bool {
+    match (candidate, pattern) {
+        (Atom::Symbol(a), Atom::Symbol(b)) => a == b,
+        (Atom::Grounded(a), Atom::Grounded(b)) => a.eq_gnd(&**b),
+        (Atom::Variable(_), Atom::Variable(v)) => {
+            // We stick to prioritize pattern bindings in this case
+            // because otherwise the $X in (= (...) $X) will not be matched with
+            // (= (if True $then) $then)
+            log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, candidate);
+            check_and_insert_binding(&mut res.pattern_bindings, v, candidate)
+        }
+        (Atom::Variable(v), b) => {
+            log::trace!("check_and_insert_binding for candidate({:?}, {}, {})", res.candidate_bindings, v, b);
+            check_and_insert_binding(&mut res.candidate_bindings, v, b)
+        }
+        (a, Atom::Variable(v)) => {
+            log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, a);
+            check_and_insert_binding(&mut res.pattern_bindings, v, a)
+        },
+        (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b })) => {
+            if a.len() != b.len() {
+                if depth == 1 {
+                    false
+                } else {
+                    res.unifications.push((candidate.clone(), pattern.clone()).into());
+                    true
+                }
+            } else {
+                a.iter().zip(b.iter()).fold(true,
+                    |succ, pair| succ && unify_atoms_recursively(pair.0, pair.1, res, depth + 1))
+            }
+        },
+        (Atom::Expression(_), _) | (_, Atom::Expression(_)) => {
+            res.unifications.push((candidate.clone(), pattern.clone()).into());
+            true
+        }
+        _ => false,
+    }
+}
+
+pub fn unify_atoms(candidate: &Atom, pattern: &Atom) -> Option<UnifyResult> {
+    log::trace!("unify_atoms: candidate: {}, pattern: {}", candidate, pattern);
+    let mut res = UnifyResult::new();
+    if unify_atoms_recursively(candidate, pattern, &mut res, 0) {
+        Some(res)
+    } else {
+        None
+    }
+}
+
 pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
     match atom {
         Atom::Symbol(_)|Atom::Grounded(_) => atom.clone(),

@@ -275,6 +275,62 @@ fn match_op((space, expr, prev_bindings): (Rc<GroundingSpace>, Atom, Bindings)) 
     }
 }
 
+fn unify_op((space, expr, prev_bindings): (Rc<GroundingSpace>, Atom, Bindings)) -> StepResult<(), InterpreterResult> {
+    log::debug!("unify_op: {}", expr);
+    let var_x = VariableAtom::from("X");
+    // TODO: unique variable?
+    let atom_x = Atom::Variable(var_x.clone());
+    let mut unifications = space.unify(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
+    let mut results: Vec<(Atom, Bindings, Unifications)>  = unifications
+        .drain(0..)
+        .map(|(mut binding, unifications)| {
+            let result = binding.get(&var_x).unwrap(); 
+            let result = apply_bindings_to_atom(result, &binding);
+            let bindings = apply_bindings_to_bindings(&binding, &prev_bindings);
+            let bindings = bindings.map(|mut bindings| {
+                binding.drain().for_each(|(k, v)| { bindings.insert(k, v); });
+                bindings
+            });
+            log::debug!("unify_op: query: {}, binding: {:?}, result: {}", expr, bindings, result);
+            (result, bindings, unifications)
+        })
+        .filter(|(_, bindings, _)| bindings.is_ok())
+        .map(|(result, bindings, unifications)| (result, bindings.unwrap(), unifications))
+        .collect();
+    if results.is_empty() {
+        StepResult::ret(Err(format!("Match is not found")))
+    } else {
+        let plan: Box<dyn Plan<(), InterpreterResult>>  = 
+            results.drain(0..).into_parallel_plan(Ok(vec![]),
+                |(result, bindings, mut unifications)| {
+                    unifications.drain(0..).fold(
+                        Box::new(|_: ()| StepResult::ret(Ok(vec![(result, bindings)]))),
+                        |plan, pair| {
+                            let candidate = pair.candidate;
+                            let pattern = pair.pattern;
+                            let space = Rc::clone(&space);
+                            Box::new(SequencePlan::new(
+                                plan,
+                                move |step_result: InterpreterResult| match step_result {
+                                    Err(_) => StepResult::ret(step_result),
+                                    Ok(mut vec) => {
+                                        StepResult::execute(vec.drain(0..).into_parallel_plan(Ok(vec![]),
+                                            move |(result, bindings)| Box::new(
+                                                StepResult::execute(ApplyPlan::new(interpret_op, (Rc::clone(&space), pattern.clone(), bindings.clone())))
+                                                //StepResult::ret(Err(format!("Not implemented")))
+                                            ),
+                                            merge_results))
+                                    },
+                                },
+                            ))
+                        }
+                    )
+                },
+                merge_results);
+        StepResult::execute(plan)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
