@@ -1,16 +1,16 @@
 // Generic plan infrastructure
 
 /// Result of a single step of a plan
-pub enum StepResult<T, R> {
+pub enum StepResult<R> {
     /// New plan to be executed to get a result
-    Execute(Box<dyn Plan<T, R>>),
+    Execute(Box<dyn Plan<(), R>>),
     /// Result returned
     Return(R),
 }
 
-impl<T, R> StepResult<T, R> {
+impl<R> StepResult<R> {
     /// New result from a value which has the Plan trait
-    pub fn execute<P>(next: P) -> Self where P: 'static + Plan<T, R> {
+    pub fn execute<P>(next: P) -> Self where P: 'static + Plan<(), R> {
         Self::Execute(Box::new(next))
     }
 
@@ -27,7 +27,7 @@ pub trait Plan<T, R> {
     // We cannot use `self: Self` because it will be called via `dyn Plan`
     // which doesn't know anything about original type and cannot move it.
     /// Execute one step of the plan
-    fn step(self: Box<Self>, arg: T) -> StepResult<(), R>;
+    fn step(self: Box<Self>, arg: T) -> StepResult<R>;
 }
 
 /// Execute the plan using given input value and return result
@@ -43,29 +43,20 @@ pub fn execute_plan<T, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R>
 
 // Specific plans to form calculations graph
 
+/// Operator from T to StepResult<R> is a plan which calls itself when executed
 // It is not possible to have Plan implementation for both:
-// `Fn(&I) -> O` and `Fn(&I) -> StepResult<(), O>`
+// `FnOnce(T) -> R` and `FnOnce(T) -> StepResult<R>`
 // so latter is used as more universal
-impl<T, R, F> Plan<T, R> for F where F: FnOnce(T) -> StepResult<(), R> {
-    fn step(self: Box<Self>, arg: T) -> StepResult<(), R> {
+impl<T, R, F> Plan<T, R> for F where F: FnOnce(T) -> StepResult<R> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<R> {
         self(arg)
     }
 }
 
-impl<T, R> Plan<T, R> for StepResult<T, R> {
-    fn step(self: Box<Self>, arg: T) -> StepResult<(), R> {
-        match *self {
-            StepResult::Execute(plan) => plan.step(arg),
-            StepResult::Return(result) => StepResult::Return(result),
-        }
-    }
-}
-
-// This is to be able use `Box<dyn Plan<T, R>>` where `P: Plan<T, R>` is expected.
-// For example it is used in the `iterator_into_parallel_plan()` test.
-impl<T, R> Plan<T, R> for Box<dyn Plan<T, R>> {
-    fn step(self: Box<Self>, arg: T) -> StepResult<(), R> {
-        (*self).step(arg)
+/// StepResult itself is a trivial plan which returns itself when executed
+impl<R> Plan<(), R> for StepResult<R> {
+    fn step(self: Box<Self>, _:()) -> StepResult<R> {
+        *self
     }
 }
 
@@ -83,7 +74,7 @@ impl<T, R> ApplyPlan<T, R> {
 }
 
 impl<T, R> Plan<(), R> for ApplyPlan<T, R> {
-    fn step(self: Box<Self>, _: ()) -> StepResult<(), R> {
+    fn step(self: Box<Self>, _: ()) -> StepResult<R> {
         Plan::step(self.plan, self.arg)
     }
 }
@@ -106,7 +97,7 @@ impl<T1, T2, R> Plan<T2, R> for PartialApplyPlan<T1, T2, R>
     where T1: 'static + Clone,
           T2: 'static + Clone,
           R: 'static {
-    fn step(self: Box<Self>, arg: T2) -> StepResult<(), R> {
+    fn step(self: Box<Self>, arg: T2) -> StepResult<R> {
         self.plan.step((self.arg.clone(), arg.clone()))
     }
 }
@@ -126,7 +117,7 @@ impl<T1, T2, R> SequencePlan<T1, T2, R> {
 }
 
 impl<T1: 'static, T2: 'static, R: 'static> Plan<T1, R> for SequencePlan<T1, T2, R> {
-    fn step(self: Box<Self>, arg: T1) -> StepResult<(), R> {
+    fn step(self: Box<Self>, arg: T1) -> StepResult<R> {
         match self.first.step(arg) {
             StepResult::Execute(next) => StepResult::execute(SequencePlan{
                 first: next,
@@ -161,7 +152,7 @@ impl<T1, T2> ParallelPlan<T1, T2> {
 impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2> 
     where T1: 'static + Clone,
           T2: 'static + Clone {
-    fn step(self: Box<Self>, _: ()) -> StepResult<(), (T1, T2)> {
+    fn step(self: Box<Self>, _: ()) -> StepResult<(T1, T2)> {
         match self.first.step(()) {
             StepResult::Execute(next) => StepResult::execute(ParallelPlan{
                 first: next,
@@ -243,7 +234,7 @@ mod tests {
                 Box::new(ApplyPlan::new(|n: &str| StepResult::ret(n.parse::<u32>().unwrap() + 1), *n))
             },
             |mut a, b| {a.push(b); a});
-        assert_eq!(execute_plan(plan, ()), vec![2, 3, 4, 5]);
+        assert_eq!(execute_plan(StepResult::Execute(plan), ()), vec![2, 3, 4, 5]);
         assert_eq!(*step_counter, 4);
     }
 }
