@@ -151,6 +151,12 @@ pub trait GroundedAtom : Debug + mopa::Any {
 
 mopafy!(GroundedAtom);
 
+// FIXME: one cannot implement custom execute() for the type which
+// have derived Clone, PartialEq and Debug at the same time because
+// it automatically have GroundedAtom implemented from the impl below.
+// This is a Rust restriction: there is not method overriding and
+// trait can be implemented only once for each type.
+
 // GroundedAtom implementation for all "regular" types
 // to allow using them as GroundedAtoms
 // 'static is required because mopa::Any requires it
@@ -256,6 +262,8 @@ pub type Bindings = HashMap<VariableAtom, Atom>;
 
 pub type Unifications = Vec<matcher::UnificationPair>;
 
+// TODO: Clone is required by C API
+#[derive(Clone)]
 pub struct GroundingSpace {
     content: Vec<Atom>,
 }
