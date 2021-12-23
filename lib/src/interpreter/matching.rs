@@ -4,6 +4,20 @@ use crate::matcher::*;
 
 use std::rc::Rc;
 
+static INTERPRET_OR_DEFAULT_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_or_default_op };
+static INTERPRET_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_op };
+static INTERPRET_REDUCTED_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_reducted_op };
+static REDUCT_ARGS_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: reduct_args_op };
+static MATCH_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: match_op };
+static REDUCT_FIRST_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: reduct_first_op };
+static REDUCT_NEXT_ARG_OP: FunctionPlan<((Rc<GroundingSpace>, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: reduct_next_arg_op };
+
+static EXECUTE_OP: FunctionPlan<(Atom, Bindings), InterpreterResult> = FunctionPlan{ func: execute_op };
+static RETURN_DEFAULT_IF_ERR_OP: FunctionPlan<((Atom, Bindings), InterpreterResult), InterpreterResult> = FunctionPlan{ func: return_default_if_err_op };
+static REDUCT_ARGS_IF_NOT_MATCHED: FunctionPlan<((Rc<GroundingSpace>, Atom, Bindings), InterpreterResult), InterpreterResult> = FunctionPlan{ func: reduct_args_if_not_matched };
+static INTERPRET_RESULTS_FURTHER_OP: FunctionPlan<(Rc<GroundingSpace>, InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_results_further_op };
+static INTERPRET_IF_REDUCTED_OP: FunctionPlan<((Rc<GroundingSpace>, SubexprStream, Bindings), InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_if_reducted_op };
+
 // TODO: error handing and logging can also be moved into Plan structures
 // or implemented atop of them
 type InterpreterResult = Result<Vec<(Atom, Bindings)>, String>;
@@ -31,7 +45,7 @@ fn merge_results(plan_res: InterpreterResult, step_res: InterpreterResult) -> In
 }
 
 pub fn interpret(space: Rc<GroundingSpace>, expr: &Atom) -> Result<Vec<Atom>, String> {
-    execute_plan(interpret_or_default_op, (space, expr.clone(), Bindings::new()))
+    execute_plan(INTERPRET_OR_DEFAULT_OP, (space, expr.clone(), Bindings::new()))
         .map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect())
 }
 
@@ -43,8 +57,8 @@ fn interpret_or_default_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, B
     log::debug!("interpret_or_default_op: {}", atom);
     let default = (atom.clone(), bindings.clone());
     StepResult::execute(SequencePlan::new(
-        ApplyPlan::new(interpret_op, (space, atom, bindings)),
-        PartialApplyPlan::new(return_default_if_err_op, default)
+        ApplyPlan::new(INTERPRET_OP, (space, atom, bindings)),
+        PartialApplyPlan::new(RETURN_DEFAULT_IF_ERR_OP, default)
     ))
 }
 
@@ -53,16 +67,16 @@ fn interpret_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bindings)) -
     log::debug!("interpret_op: {}", atom);
     if let Atom::Expression(ref expr) = atom {
         if expr.is_plain() {
-            StepResult::execute(ApplyPlan::new(interpret_reducted_op, (space,  atom, bindings)))
+            StepResult::execute(ApplyPlan::new(INTERPRET_REDUCTED_OP, (space,  atom, bindings)))
         } else {
             if is_grounded(expr) {
-                StepResult::execute(ApplyPlan::new(reduct_args_op, (space,  atom, bindings)))
+                StepResult::execute(ApplyPlan::new(REDUCT_ARGS_OP, (space,  atom, bindings)))
             } else {
                 StepResult::execute(SequencePlan::new(
                     SequencePlan::new(
-                        ApplyPlan::new(match_op, (Rc::clone(&space), atom.clone(), bindings.clone())),
-                        PartialApplyPlan::new(reduct_args_if_not_matched, (Rc::clone(&space), atom.clone(), bindings.clone()))),
-                    PartialApplyPlan::new(interpret_results_further_op, space),
+                        ApplyPlan::new(MATCH_OP, (Rc::clone(&space), atom.clone(), bindings.clone())),
+                        PartialApplyPlan::new(REDUCT_ARGS_IF_NOT_MATCHED, (Rc::clone(&space), atom.clone(), bindings.clone()))),
+                    PartialApplyPlan::new(INTERPRET_RESULTS_FURTHER_OP, space),
                 ))
             }
         }
@@ -95,13 +109,13 @@ fn interpret_reducted_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, Bin
     if let Atom::Expression(ref expr) = atom {
         if is_grounded(expr) {
             StepResult::execute(SequencePlan::new(
-                ApplyPlan::new(execute_op, (atom.clone(), bindings.clone())),
-                PartialApplyPlan::new(interpret_results_further_op, space)
+                ApplyPlan::new(EXECUTE_OP, (atom.clone(), bindings.clone())),
+                PartialApplyPlan::new(INTERPRET_RESULTS_FURTHER_OP, space)
             ))
         } else {
             StepResult::execute(SequencePlan::new(
-                ApplyPlan::new(match_op, (Rc::clone(&space), atom.clone(), bindings.clone())),
-                PartialApplyPlan::new(interpret_results_further_op, space)
+                ApplyPlan::new(MATCH_OP, (Rc::clone(&space), atom.clone(), bindings.clone())),
+                PartialApplyPlan::new(INTERPRET_RESULTS_FURTHER_OP, space)
             ))
         }
     } else {
@@ -117,7 +131,7 @@ fn interpret_results_further_op((space, result): (Rc<GroundingSpace>, Interprete
             // this operation. It should just process what was passed.
             vec.drain(0..).into_parallel_plan(Ok(vec![]),
             |(result, bindings)| Box::new(
-                ApplyPlan::new(interpret_or_default_op, (Rc::clone(&space), result, bindings))),
+                ApplyPlan::new(INTERPRET_OR_DEFAULT_OP, (Rc::clone(&space), result, bindings))),
                 merge_results)),
     }
 }
@@ -126,7 +140,7 @@ fn reduct_args_if_not_matched(((space, expr, bindings), match_result): ((Rc<Grou
     match match_result {
         Err(_) => {
             log::debug!("reduct_args_if_not_matched: match is not successful, trying to reduct");
-            StepResult::execute(ApplyPlan::new(reduct_first_op, (space, expr, bindings)))
+            StepResult::execute(ApplyPlan::new(REDUCT_FIRST_OP, (space, expr, bindings)))
         },
         _ => StepResult::ret(match_result),
     }
@@ -138,8 +152,8 @@ fn reduct_first_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings)
         let mut iter = SubexprStream::from_expr(expr, BOTTOM_UP_DEPTH_WALK);
         let sub = iter.next().expect("Non plain expression expected").clone();
         StepResult::execute(SequencePlan::new(
-                ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), sub, bindings.clone())),
-                PartialApplyPlan::new(interpret_if_reducted_op, (space, iter, bindings))
+                ApplyPlan::new(INTERPRET_REDUCTED_OP, (Rc::clone(&space), sub, bindings.clone())),
+                PartialApplyPlan::new(INTERPRET_IF_REDUCTED_OP, (space, iter, bindings))
         ))
     } else {
         StepResult::ret(Err(format!("Atom::Expression is expected as an argument, found: {}", expr)))
@@ -153,8 +167,8 @@ fn interpret_if_reducted_op(((space, mut iter, bindings), reduction_result): ((R
             if let Some(next_sub) = iter.next().cloned() {
                 log::debug!("interpret_if_reducted_op: trying to reduct next_sub: {}", next_sub);
                 StepResult::execute(SequencePlan::new(
-                        ApplyPlan::new(interpret_reducted_op, (Rc::clone(&space), next_sub, bindings.clone())),
-                        PartialApplyPlan::new(interpret_if_reducted_op, (space, iter, bindings))
+                        ApplyPlan::new(INTERPRET_REDUCTED_OP, (Rc::clone(&space), next_sub, bindings.clone())),
+                        PartialApplyPlan::new(INTERPRET_IF_REDUCTED_OP, (space, iter, bindings))
                 ))
             } else {
                 StepResult::ret(Err(format!("No results for reducted found")))
@@ -169,7 +183,7 @@ fn interpret_if_reducted_op(((space, mut iter, bindings), reduction_result): ((R
                     |(result, bindings)| {
                         let mut iter = iter.clone();
                         *iter.get_mut() = result;
-                        Box::new(ApplyPlan::new(interpret_or_default_op, (Rc::clone(&space), iter.into_atom(), bindings)))
+                        Box::new(ApplyPlan::new(INTERPRET_OR_DEFAULT_OP, (Rc::clone(&space), iter.into_atom(), bindings)))
                     },
                     merge_results);
             StepResult::Execute(plan)
@@ -183,8 +197,8 @@ fn reduct_args_op((space, expr, bindings): (Rc<GroundingSpace>, Atom, Bindings))
         let mut iter = SubexprStream::from_expr(expr, FIND_NEXT_SIBLING_WALK);
         let sub = iter.next().expect("Non plain expression expected").clone();
         StepResult::execute(SequencePlan::new(
-                ApplyPlan::new(interpret_or_default_op, (Rc::clone(&space), sub, bindings)),
-                PartialApplyPlan::new(reduct_next_arg_op, (space, iter))
+                ApplyPlan::new(INTERPRET_OR_DEFAULT_OP, (Rc::clone(&space), sub, bindings)),
+                PartialApplyPlan::new(REDUCT_NEXT_ARG_OP, (space, iter))
         ))
     } else {
         StepResult::ret(Err(format!("Atom::Expression is expected as an argument, found: {}", expr)))
@@ -213,12 +227,12 @@ fn reduct_next_arg_op(((space, iter), prev_result): ((Rc<GroundingSpace>, Subexp
                     |(next_sub, bindings, iter)| {
                         if let Some(next_sub) = next_sub {
                             Box::new(SequencePlan::new(
-                                    ApplyPlan::new(interpret_or_default_op, (Rc::clone(&space), next_sub, bindings)),
-                                    PartialApplyPlan::new(reduct_next_arg_op, (Rc::clone(&space), iter))
+                                    ApplyPlan::new(INTERPRET_OR_DEFAULT_OP, (Rc::clone(&space), next_sub, bindings)),
+                                    PartialApplyPlan::new(REDUCT_NEXT_ARG_OP, (Rc::clone(&space), iter))
                             ))
                         } else {
                             let expr = iter.into_atom();
-                            Box::new(ApplyPlan::new(interpret_reducted_op,
+                            Box::new(ApplyPlan::new(INTERPRET_REDUCTED_OP,
                                             (Rc::clone(&space), expr, bindings)))
                         }
                     },
@@ -304,24 +318,24 @@ fn unify_op((space, expr, prev_bindings): (Rc<GroundingSpace>, Atom, Bindings)) 
             results.drain(0..).into_parallel_plan(Ok(vec![]),
                 |(result, bindings, mut unifications)| {
                     unifications.drain(0..).fold(
-                        Box::new(|_: ()| StepResult::ret(Ok(vec![(result, bindings)]))),
+                        Box::new(StepResult::ret(Ok(vec![(result, bindings)]))),
                         |plan, pair| {
                             let candidate = pair.candidate;
                             let pattern = pair.pattern;
                             let space = Rc::clone(&space);
                             Box::new(SequencePlan::new(
                                 StepResult::Execute(plan),
-                                move |step_result: InterpreterResult| match step_result {
+                                OperatorPlan::new(move |step_result: InterpreterResult| match step_result {
                                     Err(_) => StepResult::ret(step_result),
                                     Ok(mut vec) => {
                                         StepResult::Execute(vec.drain(0..).into_parallel_plan(Ok(vec![]),
                                             move |(result, bindings)| Box::new(
-                                                StepResult::execute(ApplyPlan::new(interpret_op, (Rc::clone(&space), pattern.clone(), bindings.clone())))
+                                                StepResult::execute(ApplyPlan::new(INTERPRET_OP, (Rc::clone(&space), pattern.clone(), bindings.clone())))
                                                 //StepResult::ret(Err(format!("Not implemented")))
                                             ),
                                             merge_results))
                                     },
-                                },
+                                }),
                             ))
                         }
                     )

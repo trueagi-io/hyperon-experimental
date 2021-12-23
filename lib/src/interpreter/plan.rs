@@ -43,20 +43,52 @@ pub fn execute_plan<T, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R>
 
 // Specific plans to form calculations graph
 
-/// Operator from T to StepResult<R> is a plan which calls itself when executed
-// It is not possible to have Plan implementation for both:
-// `FnOnce(T) -> R` and `FnOnce(T) -> StepResult<R>`
-// so latter is used as more universal
-impl<T, R, F> Plan<T, R> for F where F: FnOnce(T) -> StepResult<R> {
-    fn step(self: Box<Self>, arg: T) -> StepResult<R> {
-        self(arg)
-    }
-}
-
 /// StepResult itself is a trivial plan which returns itself when executed
 impl<R> Plan<(), R> for StepResult<R> {
     fn step(self: Box<Self>, _:()) -> StepResult<R> {
         *self
+    }
+}
+
+/// Function from T to StepResult<R> is a plan which calls itself when executed
+pub struct FunctionPlan<T, R> {
+    pub func: fn(T) -> StepResult<R>,
+}
+
+impl<T, R> FunctionPlan<T, R> {
+    pub fn new(func: fn(T) -> StepResult<R>) -> Self {
+        Self { func }
+    }
+}
+
+impl<T, R> Plan<T, R> for FunctionPlan<T, R> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<R> {
+        (self.func)(arg)
+    }
+}
+
+impl<T, R> Clone for FunctionPlan<T, R> {
+    fn clone(&self) -> Self {
+        Self{ func: self.func }
+    }
+}
+
+impl<T, R> Copy for FunctionPlan<T, R> {}
+
+/// Operator from T to StepResult<R> is a plan which calls itself when executed
+pub struct OperatorPlan<T, R> {
+    operator: Box<dyn FnOnce(T) -> StepResult<R>>,
+}
+
+impl<T, R> OperatorPlan<T, R> {
+    pub fn new<F: 'static + FnOnce(T) -> StepResult<R>>(operator: F) -> Self {
+        Self { operator: Box::new(operator) }
+    }
+}
+
+impl<T, R> Plan<T, R> for OperatorPlan<T, R> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<R> {
+        (self.operator)(arg)
     }
 }
 
@@ -160,8 +192,8 @@ impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2>
             }),
             StepResult::Return(first_result) => StepResult::execute(SequencePlan{
                 first: self.second,
-                second: Box::new(|second_result|
-                    StepResult::ret((first_result, second_result)))
+                second: Box::new(OperatorPlan::new(|second_result|
+                    StepResult::ret((first_result, second_result))))
             }),
         }
     }
@@ -192,7 +224,7 @@ impl<I, T, R> FoldIntoParallelPlan<I, T, R> for I
           S: FnMut(I::Item) -> Box<dyn Plan<(), T>>,
           M: 'static + FnMut(R, T) -> R + Clone {
         let plan: Box<dyn Plan<(), R>> = self
-            .fold(Box::new(|_: ()| StepResult::ret(empty)),
+            .fold(Box::new(StepResult::ret(empty)),
                 |plan, step_result| {
                     let mut merge = merge.clone();
                     Box::new(SequencePlan::new(
@@ -200,7 +232,7 @@ impl<I, T, R> FoldIntoParallelPlan<I, T, R> for I
                             first: plan,
                             second: step(step_result),
                         },
-                        Box::new(move |(plan_res, step_res)|
+                        OperatorPlan::new(move |(plan_res, step_res)|
                             StepResult::ret(merge(plan_res, step_res))),
                     ))
                 }
@@ -217,9 +249,9 @@ mod tests {
     fn parallel_plan() {
         let mul = SequencePlan::new(
             ParallelPlan::new(
-                |_| StepResult::ret(7),
-                |_| StepResult::ret(6)),
-            |(a, b)| StepResult::ret(a * b),
+                StepResult::ret(7),
+                StepResult::ret(6)),
+            OperatorPlan::new(|(a, b)| StepResult::ret(a * b)),
         );
         assert_eq!(execute_plan(mul, ()), 42);
     }
@@ -231,7 +263,7 @@ mod tests {
         let plan = args.iter().into_parallel_plan(Vec::new(),
             |n| {
                 *step_counter += 1;
-                Box::new(ApplyPlan::new(|n: &str| StepResult::ret(n.parse::<u32>().unwrap() + 1), *n))
+                Box::new(ApplyPlan::new(OperatorPlan::new(|n: &str| StepResult::ret(n.parse::<u32>().unwrap() + 1)), *n))
             },
             |mut a, b| {a.push(b); a});
         assert_eq!(execute_plan(StepResult::Execute(plan), ()), vec![2, 3, 4, 5]);
