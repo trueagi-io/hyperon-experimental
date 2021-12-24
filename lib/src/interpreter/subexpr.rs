@@ -122,6 +122,18 @@ impl SubexprStream {
         Self::get_mut_rec(&self.levels, &mut self.expr, 0)
     }
 
+    fn get_rec<'a>(levels: &Vec<usize>, atom: &'a Atom, level: usize) -> &'a Atom {
+        if level >= levels.len() {
+            atom
+        } else {
+            let child = &(as_expr(atom).children()[levels[level] - 1]);
+            Self::get_rec(levels, child, level + 1)
+        }
+    }
+
+    pub fn get(&self) -> &Atom {
+        Self::get_rec(&self.levels, &self.expr, 0)
+    }
 }
 
 impl Iterator for SubexprStream {
@@ -129,6 +141,12 @@ impl Iterator for SubexprStream {
     
     fn next(&mut self) -> Option<Self::Item> {
         self.next().cloned()
+    }
+}
+
+impl Debug for SubexprStream {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "iter {} from {}", self.get(), self.expr)
     }
 }
 

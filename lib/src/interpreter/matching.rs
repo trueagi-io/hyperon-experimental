@@ -4,19 +4,19 @@ use crate::matcher::*;
 
 use std::rc::Rc;
 
-static INTERPRET_OR_DEFAULT_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_or_default_op };
-static INTERPRET_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_op };
-static INTERPRET_REDUCTED_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_reducted_op };
-static REDUCT_ARGS_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: reduct_args_op };
-static MATCH_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: match_op };
-static REDUCT_FIRST_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: reduct_first_op };
-static REDUCT_NEXT_ARG_OP: FunctionPlan<((Rc<GroundingSpace>, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: reduct_next_arg_op };
+static INTERPRET_OR_DEFAULT_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_or_default_op, name: "interpret_or_default_op" };
+static INTERPRET_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_op, name: "interpret_op" };
+static INTERPRET_REDUCTED_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_reducted_op, name: "interpret_reducted_op" };
+static REDUCT_ARGS_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: reduct_args_op, name: "reduct_args_op" };
+static MATCH_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: match_op, name: "match_op" };
+static REDUCT_FIRST_OP: FunctionPlan<(Rc<GroundingSpace>, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: reduct_first_op, name: "reduct_first_op" };
+static REDUCT_NEXT_ARG_OP: FunctionPlan<((Rc<GroundingSpace>, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: reduct_next_arg_op, name: "reduct_next_arg_op" };
 
-static EXECUTE_OP: FunctionPlan<(Atom, Bindings), InterpreterResult> = FunctionPlan{ func: execute_op };
-static RETURN_DEFAULT_IF_ERR_OP: FunctionPlan<((Atom, Bindings), InterpreterResult), InterpreterResult> = FunctionPlan{ func: return_default_if_err_op };
-static REDUCT_ARGS_IF_NOT_MATCHED: FunctionPlan<((Rc<GroundingSpace>, Atom, Bindings), InterpreterResult), InterpreterResult> = FunctionPlan{ func: reduct_args_if_not_matched };
-static INTERPRET_RESULTS_FURTHER_OP: FunctionPlan<(Rc<GroundingSpace>, InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_results_further_op };
-static INTERPRET_IF_REDUCTED_OP: FunctionPlan<((Rc<GroundingSpace>, SubexprStream, Bindings), InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_if_reducted_op };
+static EXECUTE_OP: FunctionPlan<(Atom, Bindings), InterpreterResult> = FunctionPlan{ func: execute_op, name: "execute_op" };
+static RETURN_DEFAULT_IF_ERR_OP: FunctionPlan<((Atom, Bindings), InterpreterResult), InterpreterResult> = FunctionPlan{ func: return_default_if_err_op, name: "return_default_if_err_op" };
+static REDUCT_ARGS_IF_NOT_MATCHED: FunctionPlan<((Rc<GroundingSpace>, Atom, Bindings), InterpreterResult), InterpreterResult> = FunctionPlan{ func: reduct_args_if_not_matched, name: "reduct_args_if_not_matched" };
+static INTERPRET_RESULTS_FURTHER_OP: FunctionPlan<(Rc<GroundingSpace>, InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_results_further_op, name: "interpret_results_further_op" };
+static INTERPRET_IF_REDUCTED_OP: FunctionPlan<((Rc<GroundingSpace>, SubexprStream, Bindings), InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_if_reducted_op, name: "interpret_if_reducted_op" };
 
 // TODO: error handing and logging can also be moved into Plan structures
 // or implemented atop of them
@@ -335,7 +335,7 @@ fn unify_op((space, expr, prev_bindings): (Rc<GroundingSpace>, Atom, Bindings)) 
                                             ),
                                             merge_results))
                                     },
-                                }),
+                                }, "interpret_op"),
                             ))
                         }
                     )
