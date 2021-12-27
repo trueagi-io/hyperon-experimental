@@ -15,6 +15,8 @@ use text::{SExprSpace};
 use std::fmt::{Display, Debug};
 use std::collections::HashMap;
 
+use delegate::delegate;
+
 // Macros to simplify expression writing
 
 #[macro_export]
@@ -29,8 +31,8 @@ macro_rules! expr {
 
 #[macro_export]
 macro_rules! bind {
-    ($($k:ident: $v:expr),*) => { vec![$( (VariableAtom::from(stringify!($k)), $v), )*]
-        .iter().cloned().collect() };
+    ($($k:ident: $v:expr),*) => { Bindings(vec![$( (VariableAtom::from(stringify!($k)), $v), )*]
+        .iter().cloned().collect()) };
 }
 
 // Symbol atom
@@ -263,7 +265,51 @@ impl Debug for Atom {
 
 // Grounding space
 
-pub type Bindings = HashMap<VariableAtom, Atom>;
+#[derive(Clone, PartialEq, Eq)]
+pub struct Bindings(HashMap<VariableAtom, Atom>);
+
+impl Bindings {
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    delegate! {
+        to self.0 {
+            pub fn get(&self, k: &VariableAtom) -> Option<&Atom>;
+            pub fn drain(&mut self) -> std::collections::hash_map::Drain<'_, VariableAtom, Atom>;
+            pub fn insert(&mut self, k: VariableAtom, v: Atom) -> Option<Atom>;
+            pub fn iter(&self) -> std::collections::hash_map::Iter<'_, VariableAtom, Atom>;
+            pub fn remove(&mut self, k: &VariableAtom) -> Option<Atom>;
+        }
+    }
+}
+
+impl<'a> IntoIterator for &'a Bindings {
+    type Item = (&'a VariableAtom, &'a Atom);
+    type IntoIter = std::collections::hash_map::Iter<'a, VariableAtom, Atom>;
+
+    #[inline]
+    fn into_iter(self) -> std::collections::hash_map::Iter<'a, VariableAtom, Atom> {
+        self.0.iter()
+    }
+}
+
+impl Display for Bindings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{")
+            .and_then(|_| self.0.iter().take(1).fold(Ok(()),
+                |res, (k, v)| res.and_then(|_| write!(f, "{}: {}", k, v))))
+            .and_then(|_| self.0.iter().skip(1).fold(Ok(()),
+                |res, (k, v)| res.and_then(|_| write!(f, ", {}: {}", k, v))))
+            .and_then(|_| write!(f, "}}"))
+    }
+}
+
+impl Debug for Bindings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
 
 pub type Unifications = Vec<matcher::UnificationPair>;
 

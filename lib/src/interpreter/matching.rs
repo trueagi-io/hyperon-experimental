@@ -269,8 +269,8 @@ fn match_op((space, expr, prev_bindings): (Rc<GroundingSpace>, Atom, Bindings)) 
     let results: Vec<(Atom, Bindings)> = local_bindings
         .drain(0..)
         .map(|mut binding| {
-            let result = binding.get(&var_x).unwrap(); 
-            let result = apply_bindings_to_atom(result, &binding);
+            let result = binding.remove(&var_x).unwrap(); 
+            let result = apply_bindings_to_atom(&result, &binding);
             let bindings = apply_bindings_to_bindings(&binding, &prev_bindings);
             let bindings = bindings.map(|mut bindings| {
                 binding.drain().for_each(|(k, v)| { bindings.insert(k, v); });

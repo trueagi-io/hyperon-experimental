@@ -133,7 +133,7 @@ impl<T: Debug, R> Plan<(), R> for ApplyPlan<T, R> {
 
 impl<T: Debug, R> Debug for ApplyPlan<T, R> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:?} -> ({:?})", self.arg, self.plan)
+        write!(f, "{:?}({:?})", self.plan, self.arg)
     }
 }
 
@@ -162,7 +162,7 @@ impl<T1: Debug, T2, R> Plan<T2, R> for PartialApplyPlan<T1, T2, R>
 
 impl<T1: Debug, T2, R> Debug for PartialApplyPlan<T1, T2, R> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:?} -> ({:?})", self.arg, self.plan)
+        write!(f, "{:?}({:?}, ...)", self.plan, self.arg)
     }
 }
 
@@ -197,7 +197,7 @@ impl<T1: 'static, T2: 'static + Debug, R: 'static> Plan<T1, R> for SequencePlan<
 
 impl<T1, T2, R> Debug for SequencePlan<T1, T2, R> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:?};\n{:?}", self.first, self.second)
+        write!(f, "{:?} -> {:?}", self.first, self.second)
     }
 }
 
@@ -243,7 +243,7 @@ impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2>
 
 impl<T1, T2> Debug for ParallelPlan<T1, T2> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{{\n{:?}\n}}\n{{\n{:?}\n}}", self.first, self.second)
+        write!(f, "{:?}\n{:?}", self.first, self.second)
     }
 }
 
