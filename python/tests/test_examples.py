@@ -30,7 +30,7 @@ class ExamplesTest(unittest.TestCase):
         result = interpret(kb, atomese.parse_single('(match kb (isa $color color) $color)'))
         self.assertEqual([S('red'), S('green'), S('blue')], result)
 
-    def _test_create_semantic_triple(self):
+    def test_create_semantic_triple(self):
         atomese = Atomese()
 
         kb = atomese.parse('''
@@ -43,7 +43,7 @@ class ExamplesTest(unittest.TestCase):
             (match kb (obj $verb $var0)
                 (q match kb (from $verb $var1) (make_from $var0 $var1)))
         '''))
-        self.assertEqual(atomese.parse_single('(make_from pottery clay)'), result)
+        self.assertEqual([atomese.parse_single('(make_from pottery clay)')], result)
 
     def test_grounded_arithmetics(self):
         atomese = Atomese()

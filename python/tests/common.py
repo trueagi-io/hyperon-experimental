@@ -13,7 +13,7 @@ class SpaceCollection(ConstGroundedAtom):
         self.spaces = spaces
 
     def execute(self, name):
-        return [ValueAtom(self.spaces[name.get_symbol()])]
+        return [ValueAtom(self.spaces[name.get_name()])]
 
     def __eq__(self, other):
         return isinstance(other, SpacesAtom) and self.spaces == other.spaces
@@ -31,8 +31,8 @@ class MatchAtom(OpGroundedAtom):
         # TODO: hack to make both quoted and unquoted expression work
         if (templ_op.get_type() == AtomType.EXPR and
             templ_op.get_children()[0].get_type() == AtomType.SYMBOL and
-            templ_op.get_children()[0].get_symbol() == 'q'):
-            quoted = content[3].get_children()[1:]
+            templ_op.get_children()[0].get_name() == 'q'):
+            quoted = templ_op.get_children()[1:]
             templ = E(*quoted)
         else:
             templ = templ_op
