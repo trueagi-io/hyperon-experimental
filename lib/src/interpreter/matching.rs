@@ -57,6 +57,8 @@ fn interpret_or_default_op((space, atom, bindings): (Rc<GroundingSpace>, Atom, B
     log::debug!("interpret_or_default_op: {}", atom);
     let default = (atom.clone(), bindings.clone());
     StepResult::execute(SequencePlan::new(
+        // TODO: we could simplify calculations for non expression by returning
+        // result immediately
         ApplyPlan::new(INTERPRET_OP, (space, atom, bindings)),
         PartialApplyPlan::new(RETURN_DEFAULT_IF_ERR_OP, default)
     ))
@@ -164,20 +166,16 @@ fn interpret_if_reducted_op(((space, mut iter, bindings), reduction_result): ((R
     log::debug!("interpret_if_reducted_op: reduction_result: {:?}", reduction_result);
     match reduction_result {
         Err(_) => {
-            if let Some(next_sub) = iter.next().cloned() {
-                log::debug!("interpret_if_reducted_op: trying to reduct next_sub: {}", next_sub);
-                StepResult::execute(SequencePlan::new(
-                        ApplyPlan::new(INTERPRET_REDUCTED_OP, (Rc::clone(&space), next_sub, bindings.clone())),
-                        PartialApplyPlan::new(INTERPRET_IF_REDUCTED_OP, (space, iter, bindings))
-                ))
-            } else {
-                StepResult::ret(Err(format!("No results for reducted found")))
-            }
+            reduct_next_arg_plan(space, iter, bindings)
+        },
+        Ok(vec) if vec.is_empty() => {
+            //panic!("Unexpected empty result while reducting: {}, it should be either error or non-empty, full expression: {}", iter.get(), iter.as_atom());
+            // Reducting next argument instead of panic allows creating grounded
+            // atom NOP which is not reducted when met inside expression but
+            // returns nothing when executed.
+            reduct_next_arg_plan(space, iter, bindings)
         },
         Ok(mut vec) => {
-            if vec.is_empty() {
-                panic!("Unexpected empty result, it should be either error or non-empty, atom: {}", iter.as_atom());
-            }
             let plan = vec.drain(0..)
                 .into_parallel_plan(Ok(vec![]),
                     |(result, bindings)| {
@@ -188,6 +186,18 @@ fn interpret_if_reducted_op(((space, mut iter, bindings), reduction_result): ((R
                     merge_results);
             StepResult::Execute(plan)
         },
+    }
+}
+
+fn reduct_next_arg_plan(space: Rc<GroundingSpace>, mut iter: SubexprStream, bindings: Bindings) -> StepResult<InterpreterResult> {
+    if let Some(next_sub) = iter.next().cloned() {
+        log::debug!("interpret_if_reducted_op: trying to reduct next_sub: {}", next_sub);
+        StepResult::execute(SequencePlan::new(
+                ApplyPlan::new(INTERPRET_REDUCTED_OP, (Rc::clone(&space), next_sub, bindings.clone())),
+                PartialApplyPlan::new(INTERPRET_IF_REDUCTED_OP, (space, iter, bindings))
+        ))
+    } else {
+        StepResult::ret(Err(format!("No results for reducted found")))
     }
 }
 

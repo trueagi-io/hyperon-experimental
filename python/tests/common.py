@@ -147,6 +147,17 @@ class LetAtom(OpGroundedAtom):
     def __repr__(self):
         return "let"
 
+class NopAtom(OpGroundedAtom):
+
+    def __init__(self):
+        super().__init__()
+
+    def execute(self, args):
+        return []
+
+    def __repr__(self):
+        return "nop"
+
 class CommaAtom(OpGroundedAtom):
 
     def __init__(self):
@@ -192,6 +203,7 @@ class Atomese:
         parser.register_token(r"call:[^\\s)]+", lambda token: G(CallAtom(token[5:])))
         parser.register_token(r",", lambda token: G(CommaAtom()))
         parser.register_token(r"let", lambda token: G(LetAtom()))
+        parser.register_token(r"nop", lambda token: G(NopAtom()))
         for regexp in self.tokens.keys():
             parser.register_token(regexp, self.tokens[regexp])
         return parser

@@ -140,24 +140,23 @@ class ExamplesTest(unittest.TestCase):
                 (stop kettle)
                 '''))
 
-    def _test_subset_sum_problem(self):
+    def test_subset_sum_problem(self):
         atomese = Atomese()
 
         kb = atomese.parse('''
-           (= (if True $then) $then)
-           (= (if False $then) nop)
+           (= (if True $then $else) $then)
+           (= (if False $then $else) $else)
 
            (= (bin) 0)
            (= (bin) 1)
-           (= (gen 0) nil)
-           (= (gen $n) (if (> $n 0) (:: (bin) (gen (- $n 1)))))
+           (= (gen $n) (if (> $n 0) (:: (bin) (gen (- $n 1))) nil))
 
            (= (subsum nil nil) 0)
            (= (subsum (:: $x $xs) (:: $b $bs)) (+ (* $x $b) (subsum $xs $bs)))
         ''')
 
         target = atomese.parse_single('''(let $t (gen 3)
-            (if (== (subsum (:: 3 (:: 5 (:: 7 nil))) $t) 8) $t))''')
+            (if (== (subsum (:: 3 (:: 5 (:: 7 nil))) $t) 8) $t (nop ())))''')
         output = interpret(kb, target)
         expected = atomese.parse_single('(:: 1 (:: 1 (:: 0 nil)))')
         self.assertEqual(output, [expected])
