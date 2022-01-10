@@ -62,6 +62,10 @@ class ExpressionAtom(Atom):
     def __init__(self, catom):
         super().__init__(catom)
 
+    def get_children(self):
+        return [Atom._from_catom(catom) for catom in
+                hp.atom_get_children(self.catom)]
+
 def E(*args):
     return ExpressionAtom(hp.atom_expr([atom.catom for atom in args]))
 

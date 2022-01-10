@@ -171,6 +171,11 @@ PYBIND11_MODULE(hyperonpy, m) {
 	m.def("atom_get_object", [](CAtom atom) {
 			return static_cast<GroundedObject const*>(atom_get_object(atom.ptr))->pyobj;
 		}, "Get object of the grounded atom");
+	m.def("atom_get_children", [](CAtom atom) {
+			py::list results;
+			atom_get_children(atom.ptr, &copy_atoms_to_list, &results);
+			return results;
+		}, "Get children atoms of the expression");
 
 	py::class_<CVecAtom>(m, "CVecAtom");
 	m.def("vec_atom_new", []() { return CVecAtom(vec_atom_new()); }, "New vector of atoms");

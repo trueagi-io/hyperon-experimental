@@ -1,16 +1,18 @@
+use std::fmt::{Debug, Formatter};
+
 // Generic plan infrastructure
 
 /// Result of a single step of a plan
-pub enum StepResult<T, R> {
+pub enum StepResult<R> {
     /// New plan to be executed to get a result
-    Execute(Box<dyn Plan<T, R>>),
+    Execute(Box<dyn Plan<(), R>>),
     /// Result returned
     Return(R),
 }
 
-impl<T, R> StepResult<T, R> {
+impl<R> StepResult<R> {
     /// New result from a value which has the Plan trait
-    pub fn execute<P>(next: P) -> Self where P: 'static + Plan<T, R> {
+    pub fn execute<P>(next: P) -> Self where P: 'static + Plan<(), R> {
         Self::Execute(Box::new(next))
     }
 
@@ -22,18 +24,19 @@ impl<T, R> StepResult<T, R> {
 
 /// Plan which gets a value of T type as an input and returns a result of
 /// R type as an output after execution
-pub trait Plan<T, R> {
+pub trait Plan<T, R> : Debug {
     // `self: Box<Self>` allows moving content of the step into the next step.
     // We cannot use `self: Self` because it will be called via `dyn Plan`
     // which doesn't know anything about original type and cannot move it.
     /// Execute one step of the plan
-    fn step(self: Box<Self>, arg: T) -> StepResult<(), R>;
+    fn step(self: Box<Self>, arg: T) -> StepResult<R>;
 }
 
 /// Execute the plan using given input value and return result
-pub fn execute_plan<T, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R> {
+pub fn execute_plan<T: Debug, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R> {
     let mut step: Box<dyn Plan<(), R>>  = Box::new(ApplyPlan::new(plan, arg));
     loop {
+        log::debug!("current plan:\n{:?}", step);
         match step.step(()) {
             StepResult::Execute(next) => step = next,
             StepResult::Return(result) => return result,
@@ -43,29 +46,69 @@ pub fn execute_plan<T, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R>
 
 // Specific plans to form calculations graph
 
-// It is not possible to have Plan implementation for both:
-// `Fn(&I) -> O` and `Fn(&I) -> StepResult<(), O>`
-// so latter is used as more universal
-impl<T, R, F> Plan<T, R> for F where F: FnOnce(T) -> StepResult<(), R> {
-    fn step(self: Box<Self>, arg: T) -> StepResult<(), R> {
-        self(arg)
+/// StepResult itself is a trivial plan which returns itself when executed
+impl<R: Debug> Plan<(), R> for StepResult<R> {
+    fn step(self: Box<Self>, _:()) -> StepResult<R> {
+        *self
     }
 }
 
-impl<T, R> Plan<T, R> for StepResult<T, R> {
-    fn step(self: Box<Self>, arg: T) -> StepResult<(), R> {
-        match *self {
-            StepResult::Execute(plan) => plan.step(arg),
-            StepResult::Return(result) => StepResult::Return(result),
+impl<R: Debug> Debug for StepResult<R> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Self::Execute(plan) => write!(f, "{:?}", plan),
+            Self::Return(result) => write!(f, "{:?}", result),
         }
     }
 }
 
-// This is to be able use `Box<dyn Plan<T, R>>` where `P: Plan<T, R>` is expected.
-// For example it is used in the `iterator_into_parallel_plan()` test.
-impl<T, R> Plan<T, R> for Box<dyn Plan<T, R>> {
-    fn step(self: Box<Self>, arg: T) -> StepResult<(), R> {
-        (*self).step(arg)
+/// Function from T to StepResult<R> is a plan which calls itself when executed
+pub struct FunctionPlan<T, R> {
+    pub func: fn(T) -> StepResult<R>,
+    pub name: &'static str,
+}
+
+impl<T, R> Plan<T, R> for FunctionPlan<T, R> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<R> {
+        (self.func)(arg)
+    }
+}
+
+impl<T, R> Debug for FunctionPlan<T, R> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.name)
+    }
+}
+
+impl<T, R> Clone for FunctionPlan<T, R> {
+    fn clone(&self) -> Self {
+        Self{ func: self.func, name: self.name }
+    }
+}
+
+impl<T, R> Copy for FunctionPlan<T, R> {}
+
+/// Operator from T to StepResult<R> is a plan which calls itself when executed
+pub struct OperatorPlan<T, R> {
+    operator: Box<dyn FnOnce(T) -> StepResult<R>>,
+    name: String,
+}
+
+impl<T, R> OperatorPlan<T, R> {
+    pub fn new<F: 'static + FnOnce(T) -> StepResult<R>, N: Into<String>>(operator: F, name: N) -> Self {
+        Self { operator: Box::new(operator), name: name.into() }
+    }
+}
+
+impl<T, R> Plan<T, R> for OperatorPlan<T, R> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<R> {
+        (self.operator)(arg)
+    }
+}
+
+impl<T, R> Debug for OperatorPlan<T, R> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{}", self.name)
     }
 }
 
@@ -82,9 +125,15 @@ impl<T, R> ApplyPlan<T, R> {
     }
 }
 
-impl<T, R> Plan<(), R> for ApplyPlan<T, R> {
-    fn step(self: Box<Self>, _: ()) -> StepResult<(), R> {
+impl<T: Debug, R> Plan<(), R> for ApplyPlan<T, R> {
+    fn step(self: Box<Self>, _: ()) -> StepResult<R> {
         Plan::step(self.plan, self.arg)
+    }
+}
+
+impl<T: Debug, R> Debug for ApplyPlan<T, R> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{:?}({:?})", self.plan, self.arg)
     }
 }
 
@@ -102,12 +151,18 @@ impl<T1, T2, R> PartialApplyPlan<T1, T2, R> {
     }
 }
 
-impl<T1, T2, R> Plan<T2, R> for PartialApplyPlan<T1, T2, R>
+impl<T1: Debug, T2, R> Plan<T2, R> for PartialApplyPlan<T1, T2, R>
     where T1: 'static + Clone,
           T2: 'static + Clone,
           R: 'static {
-    fn step(self: Box<Self>, arg: T2) -> StepResult<(), R> {
+    fn step(self: Box<Self>, arg: T2) -> StepResult<R> {
         self.plan.step((self.arg.clone(), arg.clone()))
+    }
+}
+
+impl<T1: Debug, T2, R> Debug for PartialApplyPlan<T1, T2, R> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{:?}({:?}, ...)", self.plan, self.arg)
     }
 }
 
@@ -125,8 +180,8 @@ impl<T1, T2, R> SequencePlan<T1, T2, R> {
     }
 }
 
-impl<T1: 'static, T2: 'static, R: 'static> Plan<T1, R> for SequencePlan<T1, T2, R> {
-    fn step(self: Box<Self>, arg: T1) -> StepResult<(), R> {
+impl<T1: 'static, T2: 'static + Debug, R: 'static> Plan<T1, R> for SequencePlan<T1, T2, R> {
+    fn step(self: Box<Self>, arg: T1) -> StepResult<R> {
         match self.first.step(arg) {
             StepResult::Execute(next) => StepResult::execute(SequencePlan{
                 first: next,
@@ -137,6 +192,12 @@ impl<T1: 'static, T2: 'static, R: 'static> Plan<T1, R> for SequencePlan<T1, T2, 
                 plan: self.second,
             }),
         }
+    }
+}
+
+impl<T1, T2, R> Debug for SequencePlan<T1, T2, R> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{:?} -> {:?}", self.first, self.second)
     }
 }
 
@@ -159,20 +220,30 @@ impl<T1, T2> ParallelPlan<T1, T2> {
 }
 
 impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2> 
-    where T1: 'static + Clone,
-          T2: 'static + Clone {
-    fn step(self: Box<Self>, _: ()) -> StepResult<(), (T1, T2)> {
+    where T1: 'static + Clone + Debug,
+          T2: 'static + Clone + Debug {
+    fn step(self: Box<Self>, _: ()) -> StepResult<(T1, T2)> {
         match self.first.step(()) {
             StepResult::Execute(next) => StepResult::execute(ParallelPlan{
                 first: next,
                 second: self.second,
             }),
-            StepResult::Return(first_result) => StepResult::execute(SequencePlan{
-                first: self.second,
-                second: Box::new(|second_result|
-                    StepResult::ret((first_result, second_result)))
-            }),
+            StepResult::Return(first_result) => {
+                let descr = format!("({:?}, ...)", first_result);
+                StepResult::execute(SequencePlan{
+                    first: self.second,
+                    second: Box::new(OperatorPlan::new(|second_result|
+                        StepResult::ret((first_result, second_result)),
+                        descr))
+                })
+            },
         }
+    }
+}
+
+impl<T1, T2> Debug for ParallelPlan<T1, T2> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{:?}\n{:?}", self.first, self.second)
     }
 }
 
@@ -194,14 +265,14 @@ pub trait FoldIntoParallelPlan<I, T, R>
 
 impl<I, T, R> FoldIntoParallelPlan<I, T, R> for I
     where I: Iterator,
-          T: 'static + Clone,
-          R: 'static + Clone {
+          T: 'static + Clone + Debug,
+          R: 'static + Clone + Debug {
     fn into_parallel_plan<S, M>(self, empty: R, mut step: S, merge: M) -> Box<dyn Plan<(), R>>
         where
           S: FnMut(I::Item) -> Box<dyn Plan<(), T>>,
           M: 'static + FnMut(R, T) -> R + Clone {
         let plan: Box<dyn Plan<(), R>> = self
-            .fold(Box::new(|_: ()| StepResult::ret(empty)),
+            .fold(Box::new(StepResult::ret(empty)),
                 |plan, step_result| {
                     let mut merge = merge.clone();
                     Box::new(SequencePlan::new(
@@ -209,8 +280,9 @@ impl<I, T, R> FoldIntoParallelPlan<I, T, R> for I
                             first: plan,
                             second: step(step_result),
                         },
-                        Box::new(move |(plan_res, step_res)|
-                            StepResult::ret(merge(plan_res, step_res))),
+                        OperatorPlan::new(move |(plan_res, step_res)|
+                            StepResult::ret(merge(plan_res, step_res)),
+                            "merge_results"),
                     ))
                 }
             );
@@ -226,9 +298,9 @@ mod tests {
     fn parallel_plan() {
         let mul = SequencePlan::new(
             ParallelPlan::new(
-                |_| StepResult::ret(7),
-                |_| StepResult::ret(6)),
-            |(a, b)| StepResult::ret(a * b),
+                StepResult::ret(7),
+                StepResult::ret(6)),
+            OperatorPlan::new(|(a, b)| StepResult::ret(a * b), "*"),
         );
         assert_eq!(execute_plan(mul, ()), 42);
     }
@@ -240,10 +312,10 @@ mod tests {
         let plan = args.iter().into_parallel_plan(Vec::new(),
             |n| {
                 *step_counter += 1;
-                Box::new(ApplyPlan::new(|n: &str| StepResult::ret(n.parse::<u32>().unwrap() + 1), *n))
+                Box::new(ApplyPlan::new(OperatorPlan::new(|n: &str| StepResult::ret(n.parse::<u32>().unwrap() + 1), format!("* {}", n)), *n))
             },
             |mut a, b| {a.push(b); a});
-        assert_eq!(execute_plan(plan, ()), vec![2, 3, 4, 5]);
+        assert_eq!(execute_plan(StepResult::Execute(plan), ()), vec![2, 3, 4, 5]);
         assert_eq!(*step_counter, 4);
     }
 }

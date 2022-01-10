@@ -61,8 +61,8 @@ mod tests {
         // (= (fac n) (* n (fac (- n 1))))
         space.add(expr!("=", ("fac", n), ({MUL}, n, ("fac", ({SUB}, n, {1})))));
 
-        let expected: Bindings = [(VariableAtom::from("X"),
-            expr!({MUL}, {3}, ("fac", ({SUB}, {3}, {1}))))].iter().cloned().collect();
+        let expected: Bindings = Bindings([(VariableAtom::from("X"),
+            expr!({MUL}, {3}, ("fac", ({SUB}, {3}, {1}))))].iter().cloned().collect());
         assert_eq!(space.query(&expr!("=", ("fac", {3}), X)), vec![expected]);
     }
 
