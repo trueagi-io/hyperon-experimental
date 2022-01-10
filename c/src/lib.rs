@@ -114,6 +114,16 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn atom_get_children(atom: *const atom_t,
+        callback: atoms_callback_t, data: *mut c_void) {
+    if let Atom::Expression(ref e) = (*atom).atom {
+        return_atoms(e.children(), callback, data);
+    } else {
+        panic!("Only Expression has children!");
+    }
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn atom_free(atom: *mut atom_t) {
     // drop() does nothing actually, but it is used here for clarity
     drop(Box::from_raw(atom));
