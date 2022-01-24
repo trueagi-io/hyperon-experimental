@@ -313,26 +313,28 @@ impl Debug for Bindings {
 
 pub type Unifications = Vec<matcher::UnificationPair>;
 
+use std::rc::Rc;
+
 // TODO: Clone is required by C API
 #[derive(Clone)]
 pub struct GroundingSpace {
-    content: Vec<Atom>,
+    content: Rc<Vec<Atom>>,
 }
 
 impl GroundingSpace {
 
     pub fn new() -> Self {
-        Self{ content: Vec::new() }
+        Self{ content: Rc::new(Vec::new()) }
     }
     
     pub fn add(&mut self, atom: Atom) {
-        self.content.push(atom)
+        Rc::get_mut(&mut self.content).expect("Cannot mutate shared atomspace").push(atom)
     }
 
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
         log::debug!("query: pattern: {}", pattern);
         let mut result = Vec::new();
-        for next in &self.content {
+        for next in &(*self.content) {
             match matcher::match_atoms(next, pattern) {
                 Some(res) => {
                     let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
@@ -366,7 +368,7 @@ impl GroundingSpace {
     pub fn unify(&self, pattern: &Atom) -> Vec<(Bindings, Unifications)> {
         log::debug!("unify: pattern: {}", pattern);
         let mut result = Vec::new();
-        for next in &self.content {
+        for next in &(*self.content) {
             match matcher::unify_atoms(next, pattern) {
                 Some(res) => {
                     let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);

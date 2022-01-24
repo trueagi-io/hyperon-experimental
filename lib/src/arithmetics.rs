@@ -23,38 +23,36 @@ mod tests {
 
     use super::*;
     use crate::interpreter::*;
-    use std::rc::Rc;
-
     // Aliases to have a shorter notation
     fn G<T: GroundedAtom>(value: T) -> Atom { Atom::gnd(value) }
 
-    fn init() {
+    fn init_logger() {
         let _ = env_logger::builder().is_test(true).try_init();
     }
 
     #[test]
     fn test_sum_ints() {
-        init();
+        init_logger();
         let space = GroundingSpace::new();
         // (+ 3 5)
         let expr = expr!({SUM}, {3}, {5});
 
-        assert_eq!(interpret(Rc::new(space), &expr), Ok(vec![G(8)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![G(8)]));
     }
 
     #[test]
     fn test_sum_ints_recursively() {
-        init();
+        init_logger();
         let space = GroundingSpace::new();
         // (+ 4 (+ 3 5))
         let expr = expr!({SUM}, {4}, ({SUM}, {3}, {5}));
 
-        assert_eq!(interpret(Rc::new(space), &expr), Ok(vec![G(12)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![G(12)]));
     }
 
     #[test]
     fn test_match_factorial() {
-        init();
+        init_logger();
         let mut space = GroundingSpace::new();
         // (= (fac 0) 1)
         space.add(expr!("=", ("fac", {0}), {1}));
@@ -69,7 +67,7 @@ mod tests {
     // TODO: reimplement using grounded if to prevent infinite loop
     //#[test]
     fn test_factorial() {
-        init();
+        init_logger();
         let mut space = GroundingSpace::new();
         // (= (fac n) (* n (fac (- n 1))))
         space.add(expr!("=", ("fac", n), ({MUL}, n, ("fac", ({SUB}, n, {1})))));
@@ -77,6 +75,6 @@ mod tests {
         space.add(expr!("=", ("fac", {0}), {1}));
 
         let expr = expr!("fac", {3});
-        assert_eq!(interpret(Rc::new(space), &expr), Ok(vec![G(6)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![G(6)]));
     }
 }
