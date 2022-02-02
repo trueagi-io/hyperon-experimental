@@ -151,12 +151,9 @@ impl<T1, T2, R> PartialApplyPlan<T1, T2, R> {
     }
 }
 
-impl<T1: Debug, T2, R> Plan<T2, R> for PartialApplyPlan<T1, T2, R>
-    where T1: 'static + Clone,
-          T2: 'static + Clone,
-          R: 'static {
+impl<T1: Debug, T2, R> Plan<T2, R> for PartialApplyPlan<T1, T2, R> {
     fn step(self: Box<Self>, arg: T2) -> StepResult<R> {
-        self.plan.step((self.arg.clone(), arg.clone()))
+        self.plan.step((self.arg, arg))
     }
 }
 
@@ -220,8 +217,8 @@ impl<T1, T2> ParallelPlan<T1, T2> {
 }
 
 impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2> 
-    where T1: 'static + Clone + Debug,
-          T2: 'static + Clone + Debug {
+    where T1: 'static + Debug,
+          T2: 'static + Debug {
     fn step(self: Box<Self>, _: ()) -> StepResult<(T1, T2)> {
         match self.first.step(()) {
             StepResult::Execute(next) => StepResult::execute(ParallelPlan{
@@ -251,8 +248,8 @@ impl<T1, T2> Debug for ParallelPlan<T1, T2> {
 /// which processes each sub-value in parallel and merges the results.
 pub trait FoldIntoParallelPlan<I, T, R>
     where I: Iterator,
-          T: 'static + Clone,
-          R: 'static + Clone {
+          T: 'static,
+          R: 'static {
     /// Method converts the `self` value into parallel plan. It starts from
     /// the `empty` return value. It applies `step` to each sub-value to get
     /// a plan to calculate result. It applies `merge` to plan result and
@@ -265,8 +262,8 @@ pub trait FoldIntoParallelPlan<I, T, R>
 
 impl<I, T, R> FoldIntoParallelPlan<I, T, R> for I
     where I: Iterator,
-          T: 'static + Clone + Debug,
-          R: 'static + Clone + Debug {
+          T: 'static + Debug,
+          R: 'static + Debug {
     fn into_parallel_plan<S, M>(self, empty: R, mut step: S, merge: M) -> Box<dyn Plan<(), R>>
         where
           S: FnMut(I::Item) -> Box<dyn Plan<(), T>>,
