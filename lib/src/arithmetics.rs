@@ -1,19 +1,30 @@
 use crate::*;
 use crate::common::*;
 
-pub static SUM: &Operation = &Operation{ name: "+", execute: |args| bin_op(args, |a, b| a + b) };
-pub static SUB: &Operation = &Operation{ name: "-", execute: |args| bin_op(args, |a, b| a - b) };
-pub static MUL: &Operation = &Operation{ name: "*", execute: |args| bin_op(args, |a, b| a * b) };
+use std::fmt::Debug;
 
-fn bin_op(args: &mut Vec<Atom>, op: fn(i32, i32) -> i32) -> Result<Vec<Atom>, String> {
+macro_rules! def_op {
+    ($x:ident, $o:tt, $t1:ty, $t2:ty) => { pub static $x: &Operation =
+            &Operation{ name: stringify!($o), execute: |args| bin_ops::<$t1,$t2>(args, |a, b| a $o b) }; };
+}
+
+def_op!(SUM, +, i32, i32);
+def_op!(SUB, -, i32, i32);
+def_op!(MUL, *, i32, i32);
+
+def_op!(LT, <, i32, bool);
+def_op!(GT, >, i32, bool);
+
+fn bin_ops<A:'static+Clone+Copy+Debug+Eq,R:'static+Clone+Debug+Eq>
+        (args: &mut Vec<Atom>, op: fn(A, A) -> R) -> Result<Vec<Atom>, String> {
     // TODO: getting arguments from stack and checking their type can be
     // done in separate helper function or macros.
-    let arg1 = args.get(0).ok_or_else(|| format!("Sum operation called without arguments"))?; 
-    let arg2 = args.get(1).ok_or_else(|| format!("Sum operation called with only argument"))?;
-    if let (Some(arg1), Some(arg2)) = (arg1.as_gnd::<i32>(), arg2.as_gnd::<i32>()) {
+    let arg1 = args.get(0).ok_or_else(|| format!("Binary operation called without arguments"))?; 
+    let arg2 = args.get(1).ok_or_else(|| format!("Binary operation called with only argument"))?;
+    if let (Some(arg1), Some(arg2)) = (arg1.as_gnd::<A>(), arg2.as_gnd::<A>()) {
         Ok(vec![Atom::gnd(op(*arg1, *arg2))])
     } else {
-        Err(format!("One of the arguments is not integer: ({}, {})", arg1, arg2))
+        Err(format!("One of the arguments has wrong type: ({}, {})", arg1, arg2))
     }
 }
 
@@ -64,15 +75,23 @@ mod tests {
         assert_eq!(space.query(&expr!("=", ("fac", {3}), X)), vec![expected]);
     }
 
-    // TODO: reimplement using grounded if to prevent infinite loop
-    //#[test]
+    #[test]
     fn test_factorial() {
         init_logger();
         let mut space = GroundingSpace::new();
-        // (= (fac n) (* n (fac (- n 1))))
-        space.add(expr!("=", ("fac", n), ({MUL}, n, ("fac", ({SUB}, n, {1})))));
-        // (= (fac 0) 1)
-        space.add(expr!("=", ("fac", {0}), {1}));
+        // NOTE: multiple matches are treated non-deterministically.
+        // ATM, we don't have means to describe mutually exclusive ordered lists
+        // of cases for recursive functions typical for FP. This code
+        //   space.add(expr!("=", ("fac", n), ({MUL}, n, ("fac", ({SUB}, n, {1})))));
+        //   space.add(expr!("=", ("fac", {0}), {1}));
+        // should not work. For now, we have to resort to explicit
+        // termination conditions:
+        space.add(expr!("=", ("if", {true}, a, b), a));
+        space.add(expr!("=", ("if", {false}, a, b), b));
+        space.add(expr!("=", ("fac", n),
+            ("if", ({GT}, n, {0}),
+                   ({MUL}, n, ("fac", ({SUB}, n, {1}))),
+                   {1})));
 
         let expr = expr!("fac", {3});
         assert_eq!(interpret(space, &expr), Ok(vec![G(6)]));
