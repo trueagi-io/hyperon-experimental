@@ -1,20 +1,20 @@
 use crate::*;
 use crate::common::*;
 
-macro_rules! def_op {
+macro_rules! def_bin_op {
     ($x:ident, $o:tt, $t1:ty, $r:ty) => { pub static $x: &Operation =
             &Operation{ name: stringify!($o), execute: |args| bin_op::<$t1,$t1,$r>(args, |a, b| a $o b) }; };
 }
 
-def_op!(SUM, +, i32, i32);
-def_op!(SUB, -, i32, i32);
-def_op!(MUL, *, i32, i32);
+def_bin_op!(SUM, +, i32, i32);
+def_bin_op!(SUB, -, i32, i32);
+def_bin_op!(MUL, *, i32, i32);
 
-def_op!(LT, <, i32, bool);
-def_op!(GT, >, i32, bool);
+def_bin_op!(LT, <, i32, bool);
+def_bin_op!(GT, >, i32, bool);
 
-def_op!(AND, &&, bool, bool);
-def_op!(OR, ||, bool, bool);
+def_bin_op!(AND, &&, bool, bool);
+def_bin_op!(OR, ||, bool, bool);
 
 pub static NOT: &Operation = &Operation{ name: "!", execute: |args| unary_op(args, |a: bool| !a) };
 
