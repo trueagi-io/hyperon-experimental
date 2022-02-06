@@ -1,9 +1,13 @@
 use crate::*;
 use crate::common::*;
 
+macro_rules! def_op {
+    ($x:ident, $o:tt, $e:expr) => { pub static $x: &Operation =
+            &Operation{ name: stringify!($o), execute: $e }; };
+}
+
 macro_rules! def_bin_op {
-    ($x:ident, $o:tt, $t1:ty, $r:ty) => { pub static $x: &Operation =
-            &Operation{ name: stringify!($o), execute: |args| bin_op::<$t1,$t1,$r>(args, |a, b| a $o b) }; };
+    ($x:ident, $o:tt, $t1:ty, $r:ty) => { def_op!($x, $o, |args| bin_op::<$t1,$t1,$r>(args, |a, b| a $o b)); };
 }
 
 def_bin_op!(SUM, +, i32, i32);
@@ -15,8 +19,10 @@ def_bin_op!(GT, >, i32, bool);
 
 def_bin_op!(AND, &&, bool, bool);
 def_bin_op!(OR, ||, bool, bool);
+def_op!(NOT, !, |args| unary_op(args, |a: bool| !a));
 
-pub static NOT: &Operation = &Operation{ name: "!", execute: |args| unary_op(args, |a: bool| !a) };
+def_op!(NOP, nop, |_| Ok(vec![]));
+def_op!(ERR, err, |_| Err("Error".into()));
 
 pub static IS_INT: &Operation = &Operation{ name: "int", execute: |args| check_type(args,
     // TODO: it is ugly, but I cannot do something more clear without downcasting
@@ -24,8 +30,6 @@ pub static IS_INT: &Operation = &Operation{ name: "int", execute: |args| check_t
     || is_instance::<i64>(a) || is_instance::<u64>(a)
     || is_instance::<i128>(a) || is_instance::<u128>(a)
 )};
-
-pub static NOP: &Operation = &Operation{ name: "nop", execute: |_| Ok(vec![]) };
 
 fn check_type(args: &mut Vec<Atom>, op: fn(&Atom) -> bool) -> Result<Vec<Atom>, String> {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
