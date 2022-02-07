@@ -1,30 +1,73 @@
 use crate::*;
 use crate::common::*;
 
-use std::fmt::Debug;
-
 macro_rules! def_op {
-    ($x:ident, $o:tt, $t1:ty, $t2:ty) => { pub static $x: &Operation =
-            &Operation{ name: stringify!($o), execute: |args| bin_ops::<$t1,$t2>(args, |a, b| a $o b) }; };
+    ($x:ident, $o:tt, $e:expr) => { pub static $x: &Operation =
+            &Operation{ name: stringify!($o), execute: $e }; };
 }
 
-def_op!(SUM, +, i32, i32);
-def_op!(SUB, -, i32, i32);
-def_op!(MUL, *, i32, i32);
+macro_rules! def_bin_op {
+    ($x:ident, $o:tt, $t1:ty, $r:ty) => { def_op!($x, $o, |args| bin_op::<$t1,$t1,$r>(args, |a, b| a $o b)); };
+}
 
-def_op!(LT, <, i32, bool);
-def_op!(GT, >, i32, bool);
+def_bin_op!(SUM, +, i32, i32);
+def_bin_op!(SUB, -, i32, i32);
+def_bin_op!(MUL, *, i32, i32);
 
-fn bin_ops<A:'static+Clone+Copy+Debug+Eq,R:'static+Clone+Debug+Eq>
-        (args: &mut Vec<Atom>, op: fn(A, A) -> R) -> Result<Vec<Atom>, String> {
-    // TODO: getting arguments from stack and checking their type can be
-    // done in separate helper function or macros.
+def_bin_op!(LT, <, i32, bool);
+def_bin_op!(GT, >, i32, bool);
+
+def_bin_op!(AND, &&, bool, bool);
+def_bin_op!(OR, ||, bool, bool);
+def_op!(NOT, !, |args| unary_op(args, |a: bool| !a));
+
+def_op!(NOP, nop, |_| Ok(vec![]));
+def_op!(ERR, err, |_| Err("Error".into()));
+
+pub static IS_INT: &Operation = &Operation{ name: "int", execute: |args| check_type(args,
+    // TODO: it is ugly, but I cannot do something more clear without downcasting
+    |a| is_instance::<i32>(a) || is_instance::<u32>(a)
+    || is_instance::<i64>(a) || is_instance::<u64>(a)
+    || is_instance::<i128>(a) || is_instance::<u128>(a)
+)};
+
+fn check_type(args: &mut Vec<Atom>, op: fn(&Atom) -> bool) -> Result<Vec<Atom>, String> {
+    let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
+    Ok(vec![Atom::gnd(op(arg))])
+}
+
+fn is_instance<T>(arg: &Atom) -> bool
+where
+    T: GroundedAtom,
+{
+    matches!(arg.as_gnd::<T>(), Some(_))
+}
+
+fn unary_op<T, R>(args: &mut Vec<Atom>, op: fn(T) -> R) -> Result<Vec<Atom>, String>
+where
+    T: GroundedAtom + Copy,
+    R: GroundedAtom,
+{
+    let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
+    if let Some(arg) = arg.as_gnd::<T>() {
+        Ok(vec![Atom::gnd(op(*arg))])
+    } else {
+        Err(format!("Incorrect type of the unary operation argument: ({})", arg))
+    }
+}
+
+fn bin_op<T1, T2, R>(args: &mut Vec<Atom>, op: fn(T1, T2) -> R) -> Result<Vec<Atom>, String>
+where
+    T1: GroundedAtom + Copy,
+    T2: GroundedAtom + Copy,
+    R: GroundedAtom,
+{
     let arg1 = args.get(0).ok_or_else(|| format!("Binary operation called without arguments"))?; 
     let arg2 = args.get(1).ok_or_else(|| format!("Binary operation called with only argument"))?;
-    if let (Some(arg1), Some(arg2)) = (arg1.as_gnd::<A>(), arg2.as_gnd::<A>()) {
+    if let (Some(arg1), Some(arg2)) = (arg1.as_gnd::<T1>(), arg2.as_gnd::<T2>()) {
         Ok(vec![Atom::gnd(op(*arg1, *arg2))])
     } else {
-        Err(format!("One of the arguments has wrong type: ({}, {})", arg1, arg2))
+        Err(format!("Incorrect type of the binary operation argument: ({}, {})", arg1, arg2))
     }
 }
 
