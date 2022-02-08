@@ -4,6 +4,7 @@ pub mod interpreter;
 pub mod arithmetics;
 
 mod matcher;
+mod types;
 #[cfg(test)]
 mod tests;
 mod examples;
