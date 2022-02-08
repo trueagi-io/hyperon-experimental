@@ -6,6 +6,7 @@ pub mod arithmetics;
 mod matcher;
 #[cfg(test)]
 mod tests;
+mod examples;
 
 #[macro_use]
 extern crate mopa;

@@ -16,6 +16,7 @@ def_bin_op!(MUL, *, i32, i32);
 
 def_bin_op!(LT, <, i32, bool);
 def_bin_op!(GT, >, i32, bool);
+def_bin_op!(EQ, ==, i32, bool);
 
 def_bin_op!(AND, &&, bool, bool);
 def_bin_op!(OR, ||, bool, bool);
