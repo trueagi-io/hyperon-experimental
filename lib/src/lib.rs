@@ -15,7 +15,7 @@ extern crate mopa;
 use text::{SExprSpace};
 
 use std::fmt::{Display, Debug};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 use delegate::delegate;
 
@@ -286,17 +286,12 @@ impl Bindings {
     }
 
     fn merge_bindings(prev: &Bindings, next: &Bindings) -> Option<Bindings> {
-        let move_value = | to: &mut Bindings, from: &Bindings, k: &VariableAtom | {
-           to.insert(k.clone(), from.get(k).unwrap().clone()); };
+        let (prev, next) = (&prev.0, &next.0);
         let mut res = Bindings::new();
-        for k in prev.0.keys().chain(next.0.keys()).collect::<HashSet<&VariableAtom>>() {
-            match (prev.0.contains_key(k), next.0.contains_key(k)) {
-                (true, true) if prev.get(k) == next.get(k) => move_value(&mut res, prev, k),
-                (true, false) => move_value(&mut res, prev, k),
-                (false, true) => move_value(&mut res, next, k),
-                _ => return None,
-            }
-        }
+        prev.iter().filter(|(k, v)| !next.contains_key(k) || next[*k] == **v)
+            .for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
+        next.iter().filter(|(k, _)| !prev.contains_key(k))
+            .for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
         Some(res) 
     }
 }
@@ -338,6 +333,16 @@ pub struct GroundingSpace {
     content: Rc<Vec<Atom>>,
 }
 
+fn split_expr(expr: &Atom) -> Option<(&Atom, std::slice::Iter<Atom>)> {
+    match expr {
+        Atom::Expression(expr) => {
+            let mut args = expr.children().iter();
+            args.next().map_or(None, |op| Some((op, args)))
+        },
+        _ => None,
+    }
+}
+
 impl GroundingSpace {
 
     pub fn new() -> Self {
@@ -349,26 +354,18 @@ impl GroundingSpace {
     }
 
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
-        match pattern {
-            Atom::Expression(expr)
-                if expr.children().len() > 0
-                    && expr.children()[0] == Atom::sym(",") => {
-                        let mut children = expr.children().iter().skip(1);
-                        let first = children.next();
-                        if let Some(first) = first {
-                            children.fold(self.query(first),
-                                |acc, pattern| {
-                                    if acc.len() == 0 {
-                                        acc
-                                    } else {
-                                        let res = self.query(pattern);
-                                        Self::merge_results(acc, res)
-                                    }
-                                })
+        match split_expr(pattern) {
+            Some((Atom::Symbol(SymbolAtom{ name }), args)) if name == "," => {
+                args.fold(vec![bind!{}],
+                    |acc, pattern| {
+                        if acc.is_empty() {
+                            acc
                         } else {
-                            Vec::new()
+                            let res = self.query(pattern);
+                            Self::merge_results(acc, res)
                         }
-                },
+                    })
+            },
             _ => self.single_query(pattern),
         }
     }
@@ -380,7 +377,7 @@ impl GroundingSpace {
     }
     
     fn single_query(&self, pattern: &Atom) -> Vec<Bindings> {
-        log::debug!("query: pattern: {}", pattern);
+        log::debug!("single_query: pattern: {}", pattern);
         let mut result = Vec::new();
         for next in &(*self.content) {
             match matcher::match_atoms(next, pattern) {
@@ -388,7 +385,7 @@ impl GroundingSpace {
                     let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
                     if let Ok(bindings) = bindings {
                         // TODO: implement Display for bindings
-                        log::debug!("query: push result: {}, bindings: {:?}", next, bindings);
+                        log::debug!("single_query: push result: {}, bindings: {:?}", next, bindings);
                         result.push(bindings);
                     }
                 },
