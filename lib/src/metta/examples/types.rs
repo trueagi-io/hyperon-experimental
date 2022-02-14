@@ -1,6 +1,6 @@
 use crate::*;
+use crate::common::*;
 use crate::metta::interpreter::*;
-use crate::metta::common::*;
 use crate::space::grounding::GroundingSpace;
 
 fn init_logger() {
