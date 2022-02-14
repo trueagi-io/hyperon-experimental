@@ -11,6 +11,7 @@ macro_rules! expr {
 }
 
 pub mod matcher;
+pub mod subexpr;
 
 use std::fmt::{Display, Debug};
 
