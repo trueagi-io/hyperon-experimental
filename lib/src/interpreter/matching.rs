@@ -16,6 +16,9 @@ static REDUCT_ARGS_IF_NOT_MATCHED: FunctionPlan<((GroundingSpace, Atom, Bindings
 static INTERPRET_RESULTS_FURTHER_OP: FunctionPlan<(GroundingSpace, InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_results_further_op, name: "interpret_results_further_op" };
 static INTERPRET_IF_REDUCTED_OP: FunctionPlan<((GroundingSpace, SubexprStream, Bindings), InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_if_reducted_op, name: "interpret_if_reducted_op" };
 
+static UNIFY_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: unify_op, name: "unify_op" };
+static RETURN_IF_EQUAL_OP: FunctionPlan<(StepResult<InterpreterResult>, (InterpreterResult, InterpreterResult)), InterpreterResult> = FunctionPlan{ func: return_if_equal_op, name: "return_if_equal_op" };
+
 // TODO: error handing and logging can also be moved into Plan structures
 // or implemented atop of them
 type InterpreterResult = Result<Vec<(Atom, Bindings)>, String>;
@@ -325,32 +328,32 @@ fn unify_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> S
         let plan: Box<dyn Plan<(), InterpreterResult>>  = 
             results.drain(0..).into_parallel_plan(Ok(vec![]),
                 |(result, bindings, mut unifications)| {
-                    unifications.drain(0..).fold(
-                        Box::new(StepResult::ret(Ok(vec![(result, bindings)]))),
+                    Box::new(unifications.drain(0..).fold(
+                        StepResult::ret(Ok(vec![(result, bindings.clone())])),
                         |plan, pair| {
-                            let _candidate = pair.candidate;
+                            let candidate = pair.candidate;
                             let pattern = pair.pattern;
-                            let space = space.clone();
-                            Box::new(SequencePlan::new(
-                                StepResult::Execute(plan),
-                                OperatorPlan::new(move |step_result: InterpreterResult| match step_result {
-                                    Err(_) => StepResult::ret(step_result),
-                                    Ok(mut vec) => {
-                                        StepResult::Execute(vec.drain(0..).into_parallel_plan(Ok(vec![]),
-                                            move |(_result, bindings)| Box::new(
-                                                StepResult::execute(ApplyPlan::new(INTERPRET_OP, (space.clone(), pattern.clone(), bindings.clone())))
-                                                //StepResult::ret(Err(format!("Not implemented")))
-                                            ),
-                                            merge_results))
-                                    },
-                                }, "interpret_op"),
-                            ))
+                            StepResult::execute(
+                                SequencePlan::new(
+                                    ParallelPlan::new(
+                                        ApplyPlan::new(INTERPRET_OP, (space.clone(), pattern, bindings.clone())),
+                                        ApplyPlan::new(INTERPRET_OP, (space.clone(), candidate, bindings.clone())),
+                                    ),
+                                    PartialApplyPlan::new(RETURN_IF_EQUAL_OP, plan),
+                                )
+                            )
                         }
-                    )
+                    ))
                 },
                 merge_results);
         StepResult::Execute(plan)
     }
+}
+
+fn return_if_equal_op((plan, (pattern_res, candidate_res)):
+    (StepResult<InterpreterResult>, (InterpreterResult, InterpreterResult))) -> StepResult<InterpreterResult> {
+    log::debug!("return_if_equal_op: pattern_res: {:?}, candidate_res: {:?}", pattern_res, candidate_res);
+    panic!("Not implemented");
 }
 
 #[cfg(test)]
