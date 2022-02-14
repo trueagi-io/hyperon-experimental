@@ -1,10 +1,10 @@
+pub mod plan;
 mod arithmetics;
 
 pub use arithmetics::*;
 
 use crate::*;
 use std::cell::RefCell;
-
 use std::fmt::Debug;
 
 // GndRefCell is used to keep pointer to the data located on heap as GroundedAtom.
