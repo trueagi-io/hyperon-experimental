@@ -7,34 +7,6 @@ use crate::*;
 use std::cell::RefCell;
 use std::fmt::Debug;
 
-// GndRefCell is used to keep pointer to the data located on heap as GroundedAtom.
-// RefCell itself doesn't implement Display, and forwards PartialEq to internal
-// data even when kept type doesn't implement PartialEq. GndRefCell fixes this
-// by implementing dummy Display and implementing PartialEq via comparing
-// pointers to the data.
-pub struct GndRefCell<T>(RefCell<T>);
-
-impl<T> GndRefCell<T> {
-    pub const fn new(value: T) -> Self {
-        Self(RefCell::new(value))
-    }
-    pub fn raw(&self) -> &RefCell<T> {
-        &self.0
-    }
-}
-
-impl<T> PartialEq for GndRefCell<T> {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.as_ptr() == other.0.as_ptr()
-    }
-}
-
-impl<T> Debug for GndRefCell<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GndRefCell")
-    }
-}
-
 // Operation implements stateless operations as GroundedAtom.
 // Each operation has the only instance which is identified by unique name.
 // The instance has 'static lifetime and not copied when cloned.
@@ -65,6 +37,34 @@ impl GroundedAtom for &'static Operation {
 impl Debug for &'static Operation {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)
+    }
+}
+
+// GndRefCell is used to keep pointer to the data located on heap as GroundedAtom.
+// RefCell itself doesn't implement Display, and forwards PartialEq to internal
+// data even when kept type doesn't implement PartialEq. GndRefCell fixes this
+// by implementing dummy Display and implementing PartialEq via comparing
+// pointers to the data.
+pub struct GndRefCell<T>(RefCell<T>);
+
+impl<T> GndRefCell<T> {
+    pub const fn new(value: T) -> Self {
+        Self(RefCell::new(value))
+    }
+    pub fn raw(&self) -> &RefCell<T> {
+        &self.0
+    }
+}
+
+impl<T> PartialEq for GndRefCell<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.as_ptr() == other.0.as_ptr()
+    }
+}
+
+impl<T> Debug for GndRefCell<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "GndRefCell")
     }
 }
 
