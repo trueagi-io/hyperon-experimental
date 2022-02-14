@@ -1,5 +1,7 @@
 use crate::*;
 
+use std::fmt::Debug;
+
 fn get_expr<'a>(levels: &Vec<usize>, expr: &'a ExpressionAtom, level: usize) -> &'a ExpressionAtom {
     as_expr(&expr.children()[levels[level] - 1])
 }

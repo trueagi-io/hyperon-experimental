@@ -1,5 +1,6 @@
 use hyperon::*;
 use hyperon::text::*;
+use hyperon::space::grounding::*;
 
 use std::ffi::*;
 use std::os::raw::*;

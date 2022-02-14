@@ -1,16 +1,90 @@
+// Macros to simplify bindings writing
+
+#[macro_export]
+macro_rules! bind {
+    ($($k:ident: $v:expr),*) => {
+        Bindings::from( vec![$( (VariableAtom::from(stringify!($k)), $v), )*])
+    };
+}
+
 use super::*;
 
-fn check_and_insert_binding(bindings: &mut Bindings, var: &VariableAtom,
-        value: &Atom) -> bool{
-    let compatible = match bindings.get(var){
-        Some(prev) => prev == value,
-        None => true,
-    };
-    if compatible {
-        bindings.insert(var.clone(), value.clone());
+use std::collections::HashMap;
+use delegate::delegate;
+
+#[derive(Clone, PartialEq, Eq)]
+pub struct Bindings(HashMap<VariableAtom, Atom>);
+
+impl Bindings {
+    pub fn new() -> Self {
+        Self(HashMap::new())
     }
-    compatible
+
+    delegate! {
+        to self.0 {
+            pub fn get(&self, k: &VariableAtom) -> Option<&Atom>;
+            pub fn drain(&mut self) -> std::collections::hash_map::Drain<'_, VariableAtom, Atom>;
+            pub fn insert(&mut self, k: VariableAtom, v: Atom) -> Option<Atom>;
+            pub fn iter(&self) -> std::collections::hash_map::Iter<'_, VariableAtom, Atom>;
+            pub fn remove(&mut self, k: &VariableAtom) -> Option<Atom>;
+        }
+    }
+
+    pub fn check_and_insert_binding(&mut self, var: &VariableAtom, value: &Atom) -> bool{
+        let compatible = match self.get(var){
+            Some(prev) => prev == value,
+            None => true,
+        };
+        if compatible {
+            self.insert(var.clone(), value.clone());
+        }
+        compatible
+    }
+
+    pub fn merge_bindings(prev: &Bindings, next: &Bindings) -> Option<Bindings> {
+        let (prev, next) = (&prev.0, &next.0);
+        let mut res = Bindings::new();
+        prev.iter().filter(|(k, v)| !next.contains_key(k) || next[*k] == **v)
+            .for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
+        next.iter().filter(|(k, _)| !prev.contains_key(k))
+            .for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
+        Some(res) 
+    }
 }
+
+impl From<Vec<(VariableAtom, Atom)>> for Bindings {
+    fn from(mut pairs: Vec<(VariableAtom, Atom)>) -> Self {
+        Bindings(pairs.drain(0..).collect())
+    }
+}
+
+impl<'a> IntoIterator for &'a Bindings {
+    type Item = (&'a VariableAtom, &'a Atom);
+    type IntoIter = std::collections::hash_map::Iter<'a, VariableAtom, Atom>;
+
+    #[inline]
+    fn into_iter(self) -> std::collections::hash_map::Iter<'a, VariableAtom, Atom> {
+        self.0.iter()
+    }
+}
+
+impl Display for Bindings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{")
+            .and_then(|_| self.0.iter().take(1).fold(Ok(()),
+                |res, (k, v)| res.and_then(|_| write!(f, "{}: {}", k, v))))
+            .and_then(|_| self.0.iter().skip(1).fold(Ok(()),
+                |res, (k, v)| res.and_then(|_| write!(f, ", {}: {}", k, v))))
+            .and_then(|_| write!(f, "}}"))
+    }
+}
+
+impl Debug for Bindings {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
+
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct MatchResult {
@@ -42,15 +116,15 @@ fn match_atoms_recursively(candidate: &Atom, pattern: &Atom, res: &mut MatchResu
             // because otherwise the $X in (= (...) $X) will not be matched with
             // (= (if True $then) $then)
             log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, candidate);
-            check_and_insert_binding(&mut res.pattern_bindings, v, candidate)
+            res.pattern_bindings.check_and_insert_binding(v, candidate)
         }
         (Atom::Variable(v), b) => {
             log::trace!("check_and_insert_binding for candidate({:?}, {}, {})", res.candidate_bindings, v, b);
-            check_and_insert_binding(&mut res.candidate_bindings, v, b)
+            res.candidate_bindings.check_and_insert_binding(v, b)
         }
         (a, Atom::Variable(v)) => {
             log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, a);
-            check_and_insert_binding(&mut res.pattern_bindings, v, a)
+            res.pattern_bindings.check_and_insert_binding(v, a)
         },
         (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b })) => {
             if a.len() != b.len() {
@@ -112,15 +186,15 @@ fn unify_atoms_recursively(candidate: &Atom, pattern: &Atom, res: &mut UnifyResu
             // because otherwise the $X in (= (...) $X) will not be matched with
             // (= (if True $then) $then)
             log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, candidate);
-            check_and_insert_binding(&mut res.pattern_bindings, v, candidate)
+            res.pattern_bindings.check_and_insert_binding(v, candidate)
         }
         (Atom::Variable(v), b) => {
             log::trace!("check_and_insert_binding for candidate({:?}, {}, {})", res.candidate_bindings, v, b);
-            check_and_insert_binding(&mut res.candidate_bindings, v, b)
+            res.candidate_bindings.check_and_insert_binding(v, b)
         }
         (a, Atom::Variable(v)) => {
             log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, a);
-            check_and_insert_binding(&mut res.pattern_bindings, v, a)
+            res.pattern_bindings.check_and_insert_binding(v, a)
         },
         (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b })) => {
             if a.len() != b.len() {
@@ -188,7 +262,7 @@ pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bind
         if !matches!(applied, Atom::Variable(_)) && atom_contains_variable(&applied, key) {
             return Err(())
         }
-        if !check_and_insert_binding(&mut res, key, &applied) {
+        if !res.check_and_insert_binding(key, &applied) {
             return Err(())
         }
     }

@@ -1,5 +1,7 @@
 use crate::*;
 use std::ops::Not;
+use crate::atom::matcher::Bindings;
+use crate::space::grounding::GroundingSpace;
 
 #[derive(Debug, PartialEq, Eq)]
 enum AtomType {
@@ -45,7 +47,7 @@ fn check_specific_type(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> bool 
             query_super_type(space, atom, typ).is_empty().not()
                 || check_sub_types(space, atom, typ),
         (Atom::Expression(expr), Atom::Expression(typ_expr)) =>
-            match_type_slice(space, expr.children.as_slice(), typ_expr.children.as_slice()),
+            match_type_slice(space, expr.children().as_slice(), typ_expr.children().as_slice()),
         _ => false,
     };
     log::debug!("check_specific_type: result: {}", result);
@@ -62,7 +64,7 @@ fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
 fn first_arg_typ(fn_typ: &Atom) -> (AtomType, Option<&Atom>) {
     match fn_typ {
         Atom::Expression(expr) => {
-            let children = &expr.children;
+            let children = expr.children();
             assert_eq!(children[0], Atom::sym("->"));
             let typ = children[1].clone();
             let fn_typ = if children.len() == 3 { Option::from(&children[2]) } else { None };
@@ -91,14 +93,14 @@ fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
 }
 
 fn get_op(expr: &ExpressionAtom) -> &Atom {
-    expr.children.get(0).expect("Non-empty expression is expected")
+    expr.children().get(0).expect("Non-empty expression is expected")
 }
 
 fn validate_expr(space: &GroundingSpace, atom: &Atom) -> bool {
     match atom {
         Atom::Expression(expr) => {
             let op = get_op(expr);
-            let args = &expr.children.as_slice()[1..];
+            let args = &expr.children().as_slice()[1..];
             get_types(space, op).iter().map(|typ| check_arg_types(space, args, typ))
                 .any(std::convert::identity)
         },

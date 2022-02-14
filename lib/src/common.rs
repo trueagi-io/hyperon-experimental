@@ -1,6 +1,8 @@
 use super::*;
 use std::cell::RefCell;
 
+use std::fmt::Debug;
+
 // GndRefCell is used to keep pointer to the data located on heap as GroundedAtom.
 // RefCell itself doesn't implement Display, and forwards PartialEq to internal
 // data even when kept type doesn't implement PartialEq. GndRefCell fixes this

@@ -1,6 +1,7 @@
 use super::*;
 use crate::*;
-use crate::matcher::*;
+use crate::atom::matcher::*;
+use crate::space::grounding::*;
 
 static INTERPRET_OR_DEFAULT_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_or_default_op, name: "interpret_or_default_op" };
 static INTERPRET_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_op, name: "interpret_op" };
