@@ -4,8 +4,10 @@ pub mod interpreter;
 pub mod arithmetics;
 
 mod matcher;
+mod types;
 #[cfg(test)]
 mod tests;
+mod examples;
 
 #[macro_use]
 extern crate mopa;
@@ -282,6 +284,16 @@ impl Bindings {
             pub fn remove(&mut self, k: &VariableAtom) -> Option<Atom>;
         }
     }
+
+    fn merge_bindings(prev: &Bindings, next: &Bindings) -> Option<Bindings> {
+        let (prev, next) = (&prev.0, &next.0);
+        let mut res = Bindings::new();
+        prev.iter().filter(|(k, v)| !next.contains_key(k) || next[*k] == **v)
+            .for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
+        next.iter().filter(|(k, _)| !prev.contains_key(k))
+            .for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
+        Some(res) 
+    }
 }
 
 impl<'a> IntoIterator for &'a Bindings {
@@ -321,6 +333,16 @@ pub struct GroundingSpace {
     content: Rc<Vec<Atom>>,
 }
 
+fn split_expr(expr: &Atom) -> Option<(&Atom, std::slice::Iter<Atom>)> {
+    match expr {
+        Atom::Expression(expr) => {
+            let mut args = expr.children().iter();
+            args.next().map_or(None, |op| Some((op, args)))
+        },
+        _ => None,
+    }
+}
+
 impl GroundingSpace {
 
     pub fn new() -> Self {
@@ -332,7 +354,30 @@ impl GroundingSpace {
     }
 
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
-        log::debug!("query: pattern: {}", pattern);
+        match split_expr(pattern) {
+            Some((Atom::Symbol(SymbolAtom{ name }), args)) if name == "," => {
+                args.fold(vec![bind!{}],
+                    |acc, pattern| {
+                        if acc.is_empty() {
+                            acc
+                        } else {
+                            let res = self.query(pattern);
+                            Self::merge_results(acc, res)
+                        }
+                    })
+            },
+            _ => self.single_query(pattern),
+        }
+    }
+
+    fn merge_results(prev: Vec<Bindings>, next: Vec<Bindings>) -> Vec<Bindings> {
+        prev.iter().flat_map(|p| -> Vec<Option<Bindings>> {
+            next.iter().map(|n| Bindings::merge_bindings(p, n)).collect()
+        }).filter(Option::is_some).map(Option::unwrap).collect()
+    }
+    
+    fn single_query(&self, pattern: &Atom) -> Vec<Bindings> {
+        log::debug!("single_query: pattern: {}", pattern);
         let mut result = Vec::new();
         for next in &(*self.content) {
             match matcher::match_atoms(next, pattern) {
@@ -340,7 +385,7 @@ impl GroundingSpace {
                     let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
                     if let Ok(bindings) = bindings {
                         // TODO: implement Display for bindings
-                        log::debug!("query: push result: {}, bindings: {:?}", next, bindings);
+                        log::debug!("single_query: push result: {}, bindings: {:?}", next, bindings);
                         result.push(bindings);
                     }
                 },

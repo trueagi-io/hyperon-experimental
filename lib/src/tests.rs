@@ -126,3 +126,27 @@ fn test_match_if_then_with_X() {
     assert_eq!(space.query(&expr!("=", ("if", "True", "42"), X)),
         vec![bind!{X: expr!("42")}]);
 }
+
+#[test]
+fn test_match_combined_query() {
+    let mut space = GroundingSpace::new();
+    space.add(expr!("posesses", "Sam", "baloon"));
+    space.add(expr!("likes", "Sam", ("blue", "stuff")));
+    space.add(expr!("has-color", "baloon", "blue"));
+
+    let result = space.query(&expr!(",", ("posesses", "Sam", object),
+        ("likes", "Sam", (color, "stuff")),
+        ("has-color", object, color)));
+    assert_eq!(result, vec![bind!{object: expr!("baloon"), color: expr!("blue")}]);
+}
+
+#[test]
+fn test_type_check_in_query() {
+    let mut space = GroundingSpace::new();
+    space.add(expr!(":", "Human", "Type"));
+    space.add(expr!(":", "Socrates", "Human"));
+    space.add(expr!("Cons", "Socrates", "Nil"));
+    
+    let result = space.query(&expr!(",", (":", h, "Human"), ("Cons", h, t)));
+    assert_eq!(result, vec![bind!{h: expr!("Socrates"), t: expr!("Nil")}]);
+}
