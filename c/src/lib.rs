@@ -1,5 +1,5 @@
 use hyperon::*;
-use hyperon::text::*;
+use hyperon::metta::text::*;
 use hyperon::space::grounding::*;
 
 use std::ffi::*;
@@ -255,7 +255,7 @@ pub unsafe extern "C" fn vec_atom_get(vec: *mut vec_atom_t, idx: usize) -> *mut 
 #[no_mangle]
 pub extern "C" fn interpret(space: *mut grounding_space_t, expr: *const atom_t,
         callback: atoms_callback_t, data: *mut c_void) {
-    let res = unsafe { hyperon::interpreter::interpret((*space).space.clone(), &(*expr).atom) };
+    let res = unsafe { hyperon::metta::interpreter::interpret((*space).space.clone(), &(*expr).atom) };
     match res {
         Ok(vec) => return_atoms(&vec, callback, data),
         Err(_) => return_atoms(&vec![], callback, data),

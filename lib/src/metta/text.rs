@@ -109,6 +109,14 @@ fn next_token<I: Iterator<Item=char>>(it: &mut std::iter::Peekable<I>) -> String
     token 
 }
 
+impl From<&SExprSpace> for GroundingSpace {
+    fn from(other: &SExprSpace) -> Self {
+        let mut space = GroundingSpace::new();
+        other.into_grounding_space(&mut space);
+        space
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

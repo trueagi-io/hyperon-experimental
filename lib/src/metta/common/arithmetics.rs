@@ -1,5 +1,5 @@
 use crate::*;
-use crate::common::*;
+use super::*;
 
 macro_rules! def_op {
     ($x:ident, $o:tt, $e:expr) => { pub static $x: &Operation =
@@ -77,7 +77,7 @@ mod tests {
     #![allow(non_snake_case)]
 
     use super::*;
-    use crate::interpreter::*;
+    use crate::metta::interpreter::*;
     use crate::atom::matcher::Bindings;
     use crate::space::grounding::GroundingSpace;
 

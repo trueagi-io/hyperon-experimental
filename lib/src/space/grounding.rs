@@ -1,7 +1,6 @@
 use crate::*;
 use crate::atom::*;
 use crate::atom::matcher::Bindings;
-use crate::text::SExprSpace;
 
 use std::fmt::{Display, Debug};
 
@@ -140,14 +139,6 @@ impl Display for GroundingSpace {
     }
 }
 
-impl From<&SExprSpace> for GroundingSpace {
-    fn from(other: &SExprSpace) -> Self {
-        let mut space = GroundingSpace::new();
-        other.into_grounding_space(&mut space);
-        space
-    }
-}
-
 #[cfg(test)]
 mod test {
     use super::*;
@@ -203,7 +194,7 @@ mod test {
     }
 
     #[test]
-    fn test_match_if_then_with_X() {
+    fn test_match_if_then_with_x() {
         let mut space = GroundingSpace::new();
         space.add(expr!("=", ("if", "True", then), then));
         assert_eq!(space.query(&expr!("=", ("if", "True", "42"), X)),
