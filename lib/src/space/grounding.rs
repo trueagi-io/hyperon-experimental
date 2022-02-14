@@ -1,6 +1,7 @@
 use crate::*;
 use crate::atom::*;
 use crate::atom::matcher::Bindings;
+use crate::atom::subexpr::split_expr;
 
 use std::fmt::{Display, Debug};
 
@@ -14,16 +15,6 @@ use std::rc::Rc;
 #[derive(Clone)]
 pub struct GroundingSpace {
     content: Rc<Vec<Atom>>,
-}
-
-fn split_expr(expr: &Atom) -> Option<(&Atom, std::slice::Iter<Atom>)> {
-    match expr {
-        Atom::Expression(expr) => {
-            let mut args = expr.children().iter();
-            args.next().map_or(None, |op| Some((op, args)))
-        },
-        _ => None,
-    }
 }
 
 impl GroundingSpace {
