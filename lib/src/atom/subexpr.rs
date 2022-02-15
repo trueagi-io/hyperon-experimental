@@ -1,5 +1,7 @@
 use crate::*;
 
+use std::fmt::Debug;
+
 fn get_expr<'a>(levels: &Vec<usize>, expr: &'a ExpressionAtom, level: usize) -> &'a ExpressionAtom {
     as_expr(&expr.children()[levels[level] - 1])
 }
@@ -163,6 +165,17 @@ fn as_expr_mut(atom: &mut Atom) -> &mut ExpressionAtom {
         _ => panic!("Atom::Expression is expected"),
     }
 }
+
+pub fn split_expr(expr: &Atom) -> Option<(&Atom, std::slice::Iter<Atom>)> {
+    match expr {
+        Atom::Expression(expr) => {
+            let mut args = expr.children().iter();
+            args.next().map_or(None, |op| Some((op, args)))
+        },
+        _ => None,
+    }
+}
+
 
 #[derive(Clone)]
 pub struct TopSubexprStream {

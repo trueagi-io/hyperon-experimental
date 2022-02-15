@@ -1,6 +1,7 @@
 use crate::*;
-use crate::interpreter::*;
-use crate::arithmetics::*;
+use crate::common::*;
+use crate::metta::interpreter::*;
+use crate::space::grounding::GroundingSpace;
 
 fn init_logger() {
     let _ = env_logger::builder().is_test(true).try_init();
