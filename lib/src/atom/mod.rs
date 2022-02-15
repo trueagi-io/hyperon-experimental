@@ -129,6 +129,15 @@ pub trait GroundedAtom : Debug + mopa::Any {
     }
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
     fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
+    fn match_gnd(&self, other: &Atom) -> Box<dyn Iterator<Item=matcher::MatchResult>> {
+        if let Atom::Grounded(other) = other {
+            if self.eq_gnd(&**other) {
+                return Box::new(std::iter::once(matcher::MatchResult::new()))
+            }
+        }
+        Box::new(std::iter::empty())
+    }
+
 }
 
 mopafy!(GroundedAtom);
@@ -136,7 +145,7 @@ mopafy!(GroundedAtom);
 // FIXME: one cannot implement custom execute() for the type which
 // have derived Clone, PartialEq and Debug at the same time because
 // it automatically have GroundedAtom implemented from the impl below.
-// This is a Rust restriction: there is not method overriding and
+// This is a Rust restriction: there is no method overriding and
 // trait can be implemented only once for each type.
 
 // GroundedAtom implementation for all "regular" types

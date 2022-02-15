@@ -41,14 +41,24 @@ impl Bindings {
         compatible
     }
 
-    pub fn merge_bindings(prev: &Bindings, next: &Bindings) -> Option<Bindings> {
+    pub fn merge(prev: &Bindings, next: &Bindings) -> Option<Bindings> {
+        log::trace!("Bindings::merge: {} and {}", prev, next);
         let (prev, next) = (&prev.0, &next.0);
-        let mut res = Bindings::new();
-        prev.iter().filter(|(k, v)| !next.contains_key(k) || next[*k] == **v)
-            .for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
-        next.iter().filter(|(k, _)| !prev.contains_key(k))
-            .for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
-        Some(res) 
+        if !prev.iter().all(|(k, v)| !next.contains_key(k) || next[k] == *v) {
+            None
+        } else {
+            let mut res = Bindings::new();
+            prev.iter().for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
+            next.iter().filter(|(k, _)| !prev.contains_key(k))
+                .for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
+            Some(res) 
+        }
+    }
+
+    pub fn product(prev: Vec<Bindings>, next: Vec<Bindings>) -> Vec<Bindings> {
+        prev.iter().flat_map(|p| -> Vec<Option<Bindings>> {
+            next.iter().map(|n| Self::merge(p, n)).collect()
+        }).filter(Option::is_some).map(Option::unwrap).collect()
     }
 }
 
@@ -85,7 +95,6 @@ impl Debug for Bindings {
     }
 }
 
-
 #[derive(Debug, PartialEq, Eq)]
 pub struct MatchResult {
     pub candidate_bindings: Bindings,
@@ -93,10 +102,20 @@ pub struct MatchResult {
 }
 
 impl MatchResult {
-    fn new() -> Self {
+    pub fn new() -> Self {
         MatchResult {
             candidate_bindings: Bindings::new(),
             pattern_bindings: Bindings::new()
+        }
+    }
+
+    pub fn merge(prev: &MatchResult, next: &MatchResult) -> Option<MatchResult> {
+        let candidate_bindings = Bindings::merge(&prev.candidate_bindings, &next.candidate_bindings);
+        let pattern_bindings = Bindings::merge(&prev.pattern_bindings, &next.pattern_bindings);
+        if let (Some(candidate_bindings), Some(pattern_bindings)) = (candidate_bindings, pattern_bindings) {
+            Some(MatchResult::from((candidate_bindings, pattern_bindings)))
+        } else {
+            None
         }
     }
 }
@@ -107,6 +126,51 @@ impl From<(Bindings, Bindings)> for MatchResult {
     }
 }
 
+pub trait WithMatch {
+    fn do_match<'a>(&self, other: &Atom) -> Box<dyn Iterator<Item=MatchResult> + 'a>;
+}
+
+impl WithMatch for Atom {
+    fn do_match<'a>(&self, other: &Atom) -> Box<dyn Iterator<Item=MatchResult> + 'a> {
+        match (self, other) {
+            (Atom::Symbol(a), Atom::Symbol(b)) if a == b => Box::new(std::iter::once(MatchResult::new())),
+            (Atom::Grounded(a), Atom::Grounded(_)) => a.match_gnd(other),
+            (Atom::Variable(_), Atom::Variable(v)) => {
+                // We stick to prioritize pattern bindings in this case
+                // because otherwise the $X in (= (...) $X) will not be matched with
+                // (= (if True $then) $then)
+                log::trace!("do_match bind a pattern's variable: {} = {}", v, self);
+                Box::new(std::iter::once(MatchResult::from((Bindings::new(), Bindings::from(vec![(v.clone(), self.clone())])))))
+            }
+            (Atom::Variable(v), b) => {
+                log::trace!("do_match bind a candidate's variable: {} = {}", v, b);
+                Box::new(std::iter::once(MatchResult::from((Bindings::from(vec![(v.clone(), b.clone())]), Bindings::new()))))
+            }
+            (a, Atom::Variable(v)) => {
+                log::trace!("do_match bind a pattern's variable: {} = {}", v, a);
+                Box::new(std::iter::once(MatchResult::from((Bindings::new(), Bindings::from(vec![(v.clone(), a.clone())])))))
+            },
+            (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b }))
+                if a.len() == b.len() => {
+                a.iter().zip(b.iter()).fold(Box::new(std::iter::once(MatchResult::new())),
+                    |acc, (a, b)| {
+                        product_iter(acc, a.do_match(b))
+                    })
+            },
+            _ => Box::new(std::iter::empty()),
+        }
+    }
+}
+
+pub fn product_iter<'a>(prev: Box<dyn Iterator<Item=MatchResult>>,
+    next: Box<dyn Iterator<Item=MatchResult>>) -> Box<dyn Iterator<Item=MatchResult> + 'a> {
+    let next : Vec<MatchResult> = next.collect();
+    log::trace!("product_iter, next: {:?}", next);
+    Box::new(prev.flat_map(move |p| -> Vec<Option<MatchResult>> {
+        next.iter().map(|n| MatchResult::merge(&p, n)).collect()
+    }).filter(Option::is_some).map(Option::unwrap))
+}
+    
 fn match_atoms_recursively(candidate: &Atom, pattern: &Atom, res: &mut MatchResult) -> bool {
     match (candidate, pattern) {
         (Atom::Symbol(a), Atom::Symbol(b)) => a == b,
@@ -287,5 +351,23 @@ mod test {
         assert_eq!(
             match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
             None);
+    }
+
+    #[test]
+    fn test_bindings_merge_different_values() {
+        assert_eq!(Bindings::merge(&bind!{ a: expr!("A") },
+            &bind!{ a: expr!("C"), b: expr!("B") }), None);
+        assert_eq!(Bindings::merge(&bind!{ a: expr!("C"), b: expr!("B") },
+            &bind!{ a: expr!("A") }), None);
+    }
+
+    #[test]
+    fn test_bindings_merge() {
+        assert_eq!(Bindings::merge(&bind!{ a: expr!("A") },
+            &bind!{ a: expr!("A"), b: expr!("B") }),
+            Some(bind!{ a: expr!("A"), b: expr!("B") }));
+        assert_eq!(Bindings::merge(&bind!{ a: expr!("A"), b: expr!("B") },
+            &bind!{ a: expr!("A") }),
+            Some(bind!{ a: expr!("A"), b: expr!("B") }));
     }
 }
