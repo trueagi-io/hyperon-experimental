@@ -160,11 +160,13 @@ impl From<(Atom, Atom)> for UnificationPair {
     }
 }
 
+pub type Unifications = Vec<matcher::UnificationPair>;
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct UnifyResult {
     pub candidate_bindings: Bindings,
     pub pattern_bindings: Bindings,
-    pub unifications: Vec<UnificationPair>,
+    pub unifications: Unifications,
 }
 
 impl UnifyResult {

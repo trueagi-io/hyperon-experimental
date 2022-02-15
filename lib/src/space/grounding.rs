@@ -1,13 +1,11 @@
 use crate::*;
 use crate::atom::*;
-use crate::atom::matcher::Bindings;
+use crate::atom::matcher::{Bindings, Unifications};
 use crate::atom::subexpr::split_expr;
 
 use std::fmt::{Display, Debug};
 
 // Grounding space
-
-pub type Unifications = Vec<matcher::UnificationPair>;
 
 use std::rc::Rc;
 
