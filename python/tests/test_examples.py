@@ -68,6 +68,55 @@ class ExamplesTest(unittest.TestCase):
         self.assertTrue(obj.called)
         self.assertEqual(result, [])
 
+    def test_new_object(self):
+        atomese = Atomese()
+        pglob = Global(10)
+        ploc = 10
+        atomese.add_token("pglob", lambda _: ValueAtom(pglob))
+        atomese.add_token("ploc", lambda _: ValueAtom(ploc))
+        atomese.add_token("Setter", lambda _: G(NewAtom(Setter)))
+        atomese.add_token("SetAtom", lambda _: G(NewAtom(Setter, False)))
+        kb = GroundingSpace()
+        # Just checking that interpretation of "pglob" gives us
+        # a grounded atom that stores 10
+        pglobt = atomese.parse_single("pglob")
+        self.assertEqual(interpret(kb, pglobt)[0].get_object().value.get(), 10)
+        # Checking that:
+        # - we create an atom on fly
+        # - we change the value stored by the Python object
+        # - interpretation of "pglob" will also give us this new value
+        target = atomese.parse_single("(call:act (Setter pglob 5))")
+        interpret(kb, target)
+        self.assertEqual(pglob.get(), 5)
+        self.assertEqual(interpret(kb, pglobt)[0].get_object().value.get(), 5)
+        # Now check that "ploc" will not change, since
+        # it is passed by value - not reference
+        target = atomese.parse_single("(call:let (Setter ploc 5))")
+        interpret(kb, target)
+        self.assertEqual(ploc, 10)
+        ploct = atomese.parse_single("ploc")
+        self.assertEqual(interpret(kb, ploct)[0].get_object().value, 10)
+        # Now we try to change the grounded atom value directly
+        target = atomese.parse_single("(call:latom (SetAtom ploc 5))")
+        interpret(kb, target)
+        # "ploc" value in the "target" is changed
+        self.assertEqual(target.get_children()[1].get_children()[1].get_object().value, 5)
+        # But it is still not changed in another target, because
+        # "ploc" creates ValueAtom(ploc) on each occurrence
+        self.assertEqual(interpret(kb, ploct)[0].get_object().value, 10)
+        # Another way is to return the same atom each time
+        ploca = ValueAtom(ploc)
+        atomese.add_token("ploc", lambda _: ploca)
+        ploct = atomese.parse_single("ploc")
+        # It will be not affected by assigning unwrapped values
+        target = atomese.parse_single("(call:let (Setter ploc 5))")
+        interpret(kb, target)
+        self.assertEqual(interpret(kb, ploct)[0].get_object().value, 10)
+        # However, it will be affected by assigning atom values
+        target = atomese.parse_single("(call:latom (SetAtom ploc 5))")
+        interpret(kb, target)
+        self.assertEqual(interpret(kb, ploct)[0].get_object().value, 5)
+
     def test_frog_reasoning(self):
         atomese = Atomese()
 
@@ -267,6 +316,50 @@ class SomeObject():
 
     def foo(self):
         self.called = True
+
+# New object example
+
+class NewAtom(OpGroundedAtom):
+
+    def __init__(self, klass, unwrap=True):
+        super().__init__()
+        self.klass = klass
+        self.unwrap = unwrap
+
+    def execute(self, *params):
+        if self.unwrap:
+            unwrap = [param.get_object().value for param in params]
+            return [ValueAtom(self.klass(*unwrap))]
+        else:
+            return [ValueAtom(self.klass(*params))]
+
+class Global:
+
+    def __init__(self, x):
+        self.set(x)
+    
+    def set(self, x):
+        self.x = x
+
+    def get(self):
+        return self.x
+
+class Setter:
+
+    def __init__(self, var, val):
+        self.var = var
+        self.val = val
+
+    def act(self):
+        self.var.set(self.val)
+
+    def let(self):
+        self.var = self.val
+
+    def latom(self):
+        # if var/val are not unwrapped
+        self.var.get_object().value = self.val.get_object().value
+
 
 init_logger()
 if __name__ == "__main__":
