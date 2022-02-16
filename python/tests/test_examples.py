@@ -108,14 +108,17 @@ class ExamplesTest(unittest.TestCase):
         ploca = ValueAtom(ploc)
         atomese.add_token("ploc", lambda _: ploca)
         ploct = atomese.parse_single("ploc")
-        # It will be not affected by assigning unwrapped values
+        # It will be not affected by assigning unwrapped values:
+        # we are still copying values while unwrapping
         target = atomese.parse_single("(call:let (Setter ploc 5))")
         interpret(kb, target)
         self.assertEqual(interpret(kb, ploct)[0].get_object().value, 10)
+        self.assertEqual(ploca.get_object().value, 10)
         # However, it will be affected by assigning atom values
         target = atomese.parse_single("(call:latom (SetAtom ploc 5))")
         interpret(kb, target)
         self.assertEqual(interpret(kb, ploct)[0].get_object().value, 5)
+        self.assertEqual(ploca.get_object().value, 5)
 
     def test_frog_reasoning(self):
         atomese = Atomese()
