@@ -200,7 +200,7 @@ class Atomese:
         parser.register_token(r"'[^']*'", lambda token: ValueAtom(str(token[1:-1])))
         parser.register_token(r"True|False", lambda token: ValueAtom(token == 'True'))
         parser.register_token(r"match", lambda token: G(MatchAtom()))
-        parser.register_token(r"call:[^\\s)]+", lambda token: G(CallAtom(token[5:])))
+        parser.register_token(r"call:[^\s]+", lambda token: G(CallAtom(token[5:])))
         parser.register_token(r",", lambda token: G(CommaAtom()))
         parser.register_token(r"let", lambda token: G(LetAtom()))
         parser.register_token(r"nop", lambda token: G(NopAtom()))
