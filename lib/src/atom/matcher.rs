@@ -126,12 +126,14 @@ impl From<(Bindings, Bindings)> for MatchResult {
     }
 }
 
+pub type MatchResultIter = Box<dyn Iterator<Item=matcher::MatchResult>>;
+
 pub trait WithMatch {
-    fn do_match<'a>(&self, other: &Atom) -> Box<dyn Iterator<Item=MatchResult> + 'a>;
+    fn do_match(&self, other: &Atom) -> MatchResultIter;
 }
 
 impl WithMatch for Atom {
-    fn do_match<'a>(&self, other: &Atom) -> Box<dyn Iterator<Item=MatchResult> + 'a> {
+    fn do_match(&self, other: &Atom) -> MatchResultIter {
         match (self, other) {
             (Atom::Symbol(a), Atom::Symbol(b)) if a == b => Box::new(std::iter::once(MatchResult::new())),
             (Atom::Grounded(a), Atom::Grounded(_)) => a.match_gnd(other),
@@ -162,8 +164,7 @@ impl WithMatch for Atom {
     }
 }
 
-pub fn product_iter<'a>(prev: Box<dyn Iterator<Item=MatchResult>>,
-    next: Box<dyn Iterator<Item=MatchResult>>) -> Box<dyn Iterator<Item=MatchResult> + 'a> {
+pub fn product_iter(prev: MatchResultIter, next: MatchResultIter) -> MatchResultIter {
     let next : Vec<MatchResult> = next.collect();
     log::trace!("product_iter, next: {:?}", next);
     Box::new(prev.flat_map(move |p| -> Vec<Option<MatchResult>> {
