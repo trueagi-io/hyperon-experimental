@@ -17,7 +17,7 @@ use std::fmt::{Display, Debug};
 
 // Symbol atom
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SymbolAtom {
     name: String,
 }
@@ -124,11 +124,20 @@ impl Display for VariableAtom {
 // Grounded atom
 
 pub trait GroundedAtom : Debug + mopa::Any {
+    fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
+    fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
+
     fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
         Err(format!("{:?} is not executable", self))
     }
-    fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
-    fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
+    fn match_gnd(&self, other: &Atom) -> matcher::MatchResultIter {
+        if let Atom::Grounded(other) = other {
+            if self.eq_gnd(&**other) {
+                return Box::new(std::iter::once(matcher::MatchResult::new()))
+            }
+        }
+        Box::new(std::iter::empty())
+    }
 }
 
 mopafy!(GroundedAtom);
@@ -136,7 +145,7 @@ mopafy!(GroundedAtom);
 // FIXME: one cannot implement custom execute() for the type which
 // have derived Clone, PartialEq and Debug at the same time because
 // it automatically have GroundedAtom implemented from the impl below.
-// This is a Rust restriction: there is not method overriding and
+// This is a Rust restriction: there is no method overriding and
 // trait can be implemented only once for each type.
 
 // GroundedAtom implementation for all "regular" types
@@ -315,6 +324,74 @@ mod test {
         assert_eq!(
             format!("{}", Atom::gnd(HashMap::from([("hello", "world")]))),
             "{\"hello\": \"world\"}");
+    }
+
+    #[derive(Debug)]
+    struct TestDict(Vec<(Atom, Atom)>);
+
+    impl TestDict {
+        fn new() -> Self {
+            TestDict(Vec::new())
+        }
+
+        fn get(&self, key: &Atom) -> Option<&Atom> {
+            self.0.iter().filter(|(k, _)| { k == key }).nth(0).map(|(_, v)| { v })
+        }
+        fn remove(&mut self, key: &Atom) -> Option<Atom> {
+            let v = self.get(key).map(Atom::clone);
+            self.0 = self.0.drain(..).filter(|(k, _)| { k != key }).collect();
+            v
+        }
+        fn put(&mut self, key: Atom, value: Atom) -> Option<Atom> {
+            let v = self.remove(&key);
+            self.0.push((key, value));
+            v
+        }
+    }
+
+    use crate::*;
+    use crate::atom::matcher::*;
+
+    impl GroundedAtom for TestDict {
+        fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
+            match other.downcast_ref::<TestDict>() {
+                Some(o) => self.0.eq(&o.0),
+                None => false,
+            }
+        }
+        fn clone_gnd(&self) -> Box<dyn GroundedAtom> {
+            Box::new(Self(self.0.clone()))
+        }
+        fn match_gnd(&self, other: &Atom) -> MatchResultIter {
+            if let Some(other) = other.as_gnd::<TestDict>() {
+                other.0.iter().map(|(ko, vo)| {
+                    self.0.iter().map(|(k, v)| {
+                            Atom::expr(&[k.clone(), v.clone()]).do_match(&Atom::expr(&[ko.clone(), vo.clone()]))
+                    }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
+                        Box::new(acc.chain(i))
+                    })
+                }).fold(Box::new(std::iter::once(MatchResult::new())), |acc, i| { matcher::product_iter(acc, i) })
+            } else {
+                Box::new(std::iter::empty())
+            }
+        }
+    }
+
+    #[test]
+    fn test_custom_matching() {
+        let mut dict = TestDict::new();
+        dict.put(expr!("x"), expr!({2}, {5}));
+        dict.put(expr!("y"), expr!({5}));
+        let dict = expr!({dict}); 
+
+        let mut query = TestDict::new();
+        query.put(expr!(b), expr!(y));
+        query.put(expr!(a), expr!({2}, y));
+        let query = expr!({query});
+
+        let result: Vec<MatchResult> = dict.do_match(&query).collect();
+        assert_eq!(result, vec![MatchResult::from((bind!{},
+                    bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}))]);
     }
 
 }

@@ -1,6 +1,6 @@
 use crate::*;
 use crate::atom::*;
-use crate::atom::matcher::{Bindings, Unifications};
+use crate::atom::matcher::{Bindings, Unifications, WithMatch};
 use crate::atom::subexpr::split_expr;
 
 use std::fmt::{Display, Debug};
@@ -34,7 +34,7 @@ impl GroundingSpace {
                             acc
                         } else {
                             let res = self.query(pattern);
-                            Self::merge_results(acc, res)
+                            Bindings::product(acc, res)
                         }
                     })
             },
@@ -42,26 +42,17 @@ impl GroundingSpace {
         }
     }
 
-    fn merge_results(prev: Vec<Bindings>, next: Vec<Bindings>) -> Vec<Bindings> {
-        prev.iter().flat_map(|p| -> Vec<Option<Bindings>> {
-            next.iter().map(|n| Bindings::merge_bindings(p, n)).collect()
-        }).filter(Option::is_some).map(Option::unwrap).collect()
-    }
-    
     fn single_query(&self, pattern: &Atom) -> Vec<Bindings> {
         log::debug!("single_query: pattern: {}", pattern);
         let mut result = Vec::new();
         for next in &(*self.content) {
-            match matcher::match_atoms(next, pattern) {
-                Some(res) => {
-                    let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
-                    if let Ok(bindings) = bindings {
-                        // TODO: implement Display for bindings
-                        log::debug!("single_query: push result: {}, bindings: {:?}", next, bindings);
-                        result.push(bindings);
-                    }
-                },
-                None => continue,
+            for res in next.do_match(pattern) {
+                let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
+                if let Ok(bindings) = bindings {
+                    // FIXME: why compiler cannot see Display is implemented for Bindings
+                    log::debug!("single_query: push result: {}, bindings: {:?}", next, bindings);
+                    result.push(bindings);
+                }
             }
         }
         result
