@@ -25,6 +25,11 @@ impl GroundingSpace {
         Rc::get_mut(&mut self.content).expect("Cannot mutate shared atomspace").push(atom)
     }
 
+    pub fn remove(&mut self, atom: &Atom) {
+        let position = self.content.iter().position(|other| other == atom).unwrap();
+        Rc::get_mut(&mut self.content).expect("Cannot mutate shared atomspace").remove(position);
+    }
+
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
         match split_expr(pattern) {
             Some((Atom::Symbol(sym), args)) if *sym == SymbolAtom::from(",") => {
@@ -122,6 +127,25 @@ impl Display for GroundingSpace {
 #[cfg(test)]
 mod test {
     use super::*;
+
+    #[test]
+    fn add_atom() {
+        let mut space = GroundingSpace::new();
+        let expr = expr!("fac", ("-", n, {5}));
+        space.add(expr.clone());
+        assert_eq!(*space.as_vec(), vec![expr]);
+    }
+
+    #[test]
+    fn remove_atom() {
+        let mut space = GroundingSpace::new();
+        let expr1 = expr!("fac", ("-", n, {4}));
+        let expr2 = expr!("fac", ("-", n, {5}));
+        space.add(expr1.clone());
+        space.add(expr2.clone());
+        space.remove(&expr1);
+        assert_eq!(*space.as_vec(), vec![expr2]);
+    }
 
     #[test]
     fn test_match_symbol() {
