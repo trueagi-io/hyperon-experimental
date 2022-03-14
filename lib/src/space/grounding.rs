@@ -136,30 +136,30 @@ mod test {
     #[test]
     fn add_atom() {
         let mut space = GroundingSpace::new();
-        let expr = expr!("fac", ("-", n, {5}));
-        space.add(expr.clone());
-        assert_eq!(*space.as_vec(), vec![expr]);
+        space.add(expr!("a"));
+        space.add(expr!("b"));
+        space.add(expr!("c"));
+        assert_eq!(*space.as_vec(), vec![expr!("a"), expr!("b"), expr!("c")]);
     }
 
     #[test]
     fn remove_atom() {
         let mut space = GroundingSpace::new();
-        let expr1 = expr!("fac", ("-", n, {4}));
-        let expr2 = expr!("fac", ("-", n, {5}));
-        space.add(expr1.clone());
-        space.add(expr2.clone());
-        space.remove(&expr1);
-        assert_eq!(*space.as_vec(), vec![expr2]);
+        space.add(expr!("a"));
+        space.add(expr!("b"));
+        space.add(expr!("c"));
+        space.remove(&expr!("b"));
+        assert_eq!(*space.as_vec(), vec![expr!("a"), expr!("c")]);
     }
 
     #[test]
     fn replace_atom() {
         let mut space = GroundingSpace::new();
-        let expr1 = expr!("fac", ("-", n, {4}));
-        let expr2 = expr!("fac", ("-", n, {5}));
-        space.add(expr1.clone());
-        space.replace(&expr1, expr2.clone());
-        assert_eq!(*space.as_vec(), vec![expr2]);
+        space.add(expr!("a"));
+        space.add(expr!("b"));
+        space.add(expr!("c"));
+        space.replace(&expr!("b"), expr!("d"));
+        assert_eq!(*space.as_vec(), vec![expr!("a"), expr!("d"), expr!("c")]);
     }
 
     #[test]
