@@ -46,6 +46,54 @@ START_TEST (test_query)
 }
 END_TEST
 
+START_TEST (test_add)
+{
+	grounding_space_t* space = grounding_space_new();
+	atom_t* atom = expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0);
+
+	grounding_space_add(space, atom_copy(atom));
+
+	ck_assert_int_eq(grounding_space_len(space), 1);
+	ck_assert(atom_eq(grounding_space_get(space, 0), atom));
+
+	atom_free(atom);
+	grounding_space_free(space);
+}
+END_TEST
+
+START_TEST (test_remove)
+{
+	grounding_space_t* space = grounding_space_new();
+	atom_t* atom = expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0);
+	grounding_space_add(space, atom_copy(atom));
+
+	grounding_space_remove(space, atom);
+
+	ck_assert_int_eq(grounding_space_len(space), 0);
+
+	atom_free(atom);
+	grounding_space_free(space);
+}
+END_TEST
+
+START_TEST (test_replace)
+{
+	grounding_space_t* space = grounding_space_new();
+	atom_t* atom1 = expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0);
+	atom_t* atom2 = expr(atom_sym("+"), atom_var("b"), atom_sym("A"), 0);
+	grounding_space_add(space, atom_copy(atom1));
+
+	grounding_space_replace(space, atom1, atom_copy(atom2));
+
+	ck_assert_int_eq(grounding_space_len(space), 1);
+	ck_assert(atom_eq(grounding_space_get(space, 0), atom2));
+
+	atom_free(atom1);
+	atom_free(atom2);
+	grounding_space_free(space);
+}
+END_TEST
+
 Suite * capi_suite(void)
 {
     Suite *s;
@@ -58,6 +106,9 @@ Suite * capi_suite(void)
 
     tcase_add_checked_fixture(tc_core, setup, teardown);
     tcase_add_test(tc_core, test_query);
+    tcase_add_test(tc_core, test_add);
+    tcase_add_test(tc_core, test_remove);
+    tcase_add_test(tc_core, test_replace);
     suite_add_tcase(s, tc_core);
 
     return s;
