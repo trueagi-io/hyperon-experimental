@@ -234,3 +234,17 @@ class Atomese:
         self.add_token(name, lambda _: symbol)
 
 
+class MeTTa(Atomese):
+
+    def __init__(self, space=None):
+        super().__init__()
+        self.space = GroundingSpace() if space is None else space
+        #self.add_atom(r"&self", ValueAtom(self.space))
+        self.add_atom(r"&self", G(AtomspaceAtom(self.space, '&self')))
+
+    def add_parse(self, program):
+        return super().parse(program, self.space)
+
+    def interpret(self, program):
+        target = self.parse_single(program)
+        return interpret(self.space, target)
