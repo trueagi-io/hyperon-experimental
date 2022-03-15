@@ -18,8 +18,10 @@ static REDUCT_ARGS_IF_NOT_MATCHED: FunctionPlan<((GroundingSpace, Atom, Bindings
 static INTERPRET_RESULTS_FURTHER_OP: FunctionPlan<(GroundingSpace, InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_results_further_op, name: "interpret_results_further_op" };
 static INTERPRET_IF_REDUCTED_OP: FunctionPlan<((GroundingSpace, SubexprStream, Bindings), InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_if_reducted_op, name: "interpret_if_reducted_op" };
 
+/*
 static UNIFY_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: unify_op, name: "unify_op" };
 static RETURN_IF_EQUAL_OP: FunctionPlan<(StepResult<InterpreterResult>, (InterpreterResult, InterpreterResult)), InterpreterResult> = FunctionPlan{ func: return_if_equal_op, name: "return_if_equal_op" };
+*/
 
 // TODO: error handing and logging can also be moved into Plan structures
 // or implemented atop of them
@@ -302,6 +304,7 @@ fn match_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> S
     }
 }
 
+/*
 fn unify_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
     log::debug!("unify_op: {}", expr);
     let var_x = VariableAtom::from("X");
@@ -352,11 +355,12 @@ fn unify_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> S
     }
 }
 
-fn return_if_equal_op((plan, (pattern_res, candidate_res)):
+fn return_if_equal_op((_plan, (pattern_res, candidate_res)):
     (StepResult<InterpreterResult>, (InterpreterResult, InterpreterResult))) -> StepResult<InterpreterResult> {
     log::debug!("return_if_equal_op: pattern_res: {:?}, candidate_res: {:?}", pattern_res, candidate_res);
-    panic!("Not implemented");
+    todo!("Not implemented");
 }
+*/
 
 #[cfg(test)]
 mod tests {
