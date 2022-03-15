@@ -2,7 +2,7 @@ import unittest
 import re
 
 from hyperon import *
-from common import interpret_until_result, Atomese, MeTTa
+from common import MeTTa
 
 class InInventoryAtom(OpGroundedAtom):
 
@@ -80,15 +80,14 @@ class MinecraftTest(unittest.TestCase):
 
         metta.interpret('(wooden-pickaxe)')
 
-    @unittest.skip("not ready yet")
     def test_minecraft_planning_with_abstractions(self):
-        atomese = Atomese()
+        metta = MeTTa()
 
         inventory = [S('inventory'), S('hands'), S('crafting-table'), S('stick'),
--                  S('iron-ingot'), S('iron-pickaxe')]
-        atomese.add_token("in-inventory", lambda _: InInventoryAtom(inventory))
+                     S('iron-ingot'), S('iron-pickaxe')]
+        metta.add_token("in-inventory", lambda _: G(InInventoryAtom(inventory)))
 
-        kb = atomese.parse('''
+        metta.add_parse('''
             (= (can-be-mined diamond) True)
             (= (can-be-made diamond) False)
             (= (diamond mined-using iron-pickaxe) True)
@@ -108,7 +107,6 @@ class MinecraftTest(unittest.TestCase):
             (= (can-be-made inventory) False)
             (= (can-be-mined inventory) False)
 
-
             (= (if True $then $else) $then)
             (= (if False $then $else) $else)
 
@@ -122,9 +120,9 @@ class MinecraftTest(unittest.TestCase):
             (= (get $x) (if (and (not (in-inventory $x)) (can-be-made $x)) (make $x) nop))
         ''')
 
-        target = atomese.parse('(get diamond)')
-
-        interpret_and_print_results(target, kb)
+        metta.interpret('(get diamond)')
+        # (, (get iron-pickaxe) (find diamond-ore)
+        #    (do-mine diamond diamond-ore iron-pickaxe))
 
 init_logger()
 if __name__ == "__main__":

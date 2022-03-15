@@ -11,8 +11,8 @@ class MinelogyTest(unittest.TestCase):
         # A nearly direct reimplementation of minelogy as it
         # was in the minecraft demo. Not optimal representation -
         # just testing.
-        atomese = Atomese()
-        mines = atomese.parse('''
+        mines = MeTTa()
+        mines.add_parse('''
             (((: log type) (: $x variant))
              (: (stone_axe wooden_axe None) tools)
              ((: log type) (: $x variant))
@@ -34,7 +34,8 @@ class MinelogyTest(unittest.TestCase):
              ((: stone type) (: $x variant))
             )
             ''')
-        crafts = atomese.parse('''
+        crafts = MeTTa()
+        crafts.add_parse('''
             (((: log type) (: $x variant) (: 1 quantity))
              ((: planks type) (: $x variant) (: 4 quantity)))
             (((: planks type) (: $x variant) (: 2 quantity))
@@ -43,13 +44,14 @@ class MinelogyTest(unittest.TestCase):
                   ((: planks type) (: $y variant) (: 3 quantity))))
              ((: wooden_pickaxe type) (: $_ variant) (: 1 quantity)))
             ''')
-        # atomese.add_token("mines", ValueAtom(mines))
-        # atomese.add_atom("mines", AtomspaceAtom(mines, "mines"))
-        atomese.add_atom("mines", G(AtomspaceAtom(mines, "mines")))
-        atomese.add_atom("crafts", G(AtomspaceAtom(crafts, "crafts")))
-        utils = atomese.parse('''
+        utils = MeTTa()
+        # utils.add_token("&mines", ValueAtom(mines.space))
+        # utils.add_atom("&mines", AtomspaceAtom(mines.space, "&mines"))
+        utils.add_atom("&mines", G(AtomspaceAtom(mines.space, "&mines")))
+        utils.add_atom("&crafts", G(AtomspaceAtom(crafts.space, "&crafts")))
+        utils.add_parse('''
             (= (get-mine-block $ent-type $ent-var)
-               (match mines
+               (match &mines
                       (((: $block type) (: $variant variant))
                        (: $tools tools)
                        ((: $ent-type type) (: $ent-var variant)))
@@ -57,7 +59,7 @@ class MinelogyTest(unittest.TestCase):
                )
             )
             (= (get-mine-block $ent-type)
-               (match mines
+               (match &mines
                       ((:: $xs)
                        (: $tools tools)
                        (: $ent-type type))
@@ -67,7 +69,7 @@ class MinelogyTest(unittest.TestCase):
             (= (get-mine-block $ent-type)
                (get-mine-block $ent-type $any))
             (= (get-mine-tools $ent-type $ent-var)
-               (match mines
+               (match &mines
                       (((: $block type) (: $variant variant))
                        (: $tools tools)
                        ((: $ent-type type) (: $ent-var variant)))
@@ -75,7 +77,7 @@ class MinelogyTest(unittest.TestCase):
                )
             )
             (= (get-mine-tools $ent-type)
-               (match mines
+               (match &mines
                       ((:: $any)
                        (: $tools tools)
                        (: $ent-type type))
@@ -85,14 +87,14 @@ class MinelogyTest(unittest.TestCase):
             (= (get-mine-tools $ent-type)
                (get-mine-tools $ent-type $any))
             (= (get-ingredients $ent-type $variant)
-               (match crafts
+               (match &crafts
                       (((: $ent type) (: $var variant) (: $quant quantity))
                        ((: $ent-type type) (: $variant variant) (: $_ quantity)))
                       ((: $ent type) (: $var variant) (: $quant quantity))
                )
             )
             (= (get-ingredients $ent-type $variant)
-               (match crafts
+               (match &crafts
                       ((:: $ingredients)
                        ((: $ent-type type) (: $variant variant) (: $_ quantity)))
                       (:: $ingredients)
@@ -110,19 +112,17 @@ class MinelogyTest(unittest.TestCase):
                     (do-mine $t))
             )
             ''')
-        target = atomese.parse_single('(how-get cobblestone)')
-        output = interpret(utils, target)
+        output = utils.interpret('(how-get cobblestone)')
         self.assertEqual(repr(output[0]),
             '(do-mine ((: stone type) (: stone variant)))')
-        target = atomese.parse_single('(how-get stick)')
-        output = interpret(utils, target)
+        output = utils.interpret('(how-get stick)')
         self.assertEqual(repr(output[0]),
             '(do-craft ((: planks type) (: $x variant) (: 2 quantity)))')
 
     def test_minelogy_wtypes(self):
         # TODO: revisit this example, when types are automatically checked
-        atomese = Atomese()
-        kb = atomese.parse('''
+        kb = MeTTa()
+        kb.add_parse('''
             (: BlockT Type)
             (: log BlockT)
             (: grass BlockT)
@@ -172,42 +172,42 @@ class MinelogyTest(unittest.TestCase):
                             ((CEntityV planks $_) 3)))
                ((CEntityT wooden_pickaxe) 1))
             ''')
-        atomese.add_atom("kb", G(AtomspaceAtom(kb, "kb")))
-        utils = atomese.parse('''
+        utils = MeTTa()
+        utils.add_atom("&kb", G(AtomspaceAtom(kb.space, "&kb")))
+        utils.add_parse('''
             (= (get-mine-block $t)
-               (match kb
+               (match &kb
                       (= (mine $block $tool) (CEntityT $t))
                       $block))
             (= (get-mine-block $t $v)
-               (match kb
+               (match &kb
                       (= (mine $block $tool) (CEntityV $t $v))
                       $block))
             (= (get-ingredients $t)
-               (match kb
+               (match &kb
                       (= (craft $ingred) ((CEntityT $t) $_))
                       $ingred))
             (= (get-ingredients $t $v)
-               (match kb
+               (match &kb
                       (= (craft $ingred) ((CEntityV $t $v) $_))
                       $ingred))
         ''')
-        target = atomese.parse_single('(mine (CBlockV log oak) $_)')
-        output = interpret(kb, target)
+        # REM: utils.interpret will not work here, because
+        # utils.space doesn't contain equalities for `mine` and `craft`
+        output = kb.interpret('(mine (CBlockV log oak) $_)')
         self.assertEqual(repr(output[0]), '(CEntityV log oak)')
-        target = atomese.parse_single('(craft (list ((CEntityV log oak) $_)))')
-        output = interpret(kb, target)
+        output = kb.interpret('(craft (list ((CEntityV log oak) $_)))')
         self.assertEqual(repr(output[0]), '((CEntityV planks oak) 4)')
-        target = atomese.parse_single('(get-mine-block log oak)')
-        output = interpret(utils, target)
+        # REM: interpretation is done until end, because
+        # `match &kb` switches the context, so equalities for `mine` and `craft`
+        # are found even we start with `utils` - not `kb`
+        output = utils.interpret('(get-mine-block log oak)')
         self.assertEqual(repr(output[0]), '(CBlockV log oak)')
-        target = atomese.parse_single('(get-mine-block cobblestone)')
-        output = interpret(utils, target)
+        output = utils.interpret('(get-mine-block cobblestone)')
         self.assertEqual(repr(output[0]), '(CBlockV stone stone)')
-        target = atomese.parse_single('(get-ingredients planks oak)')
-        output = interpret(utils, target)
+        output = utils.interpret('(get-ingredients planks oak)')
         self.assertEqual(repr(output[0]), '(list ((CEntityV log oak) 1))')
-        target = atomese.parse_single('(get-ingredients wooden_pickaxe)')
-        output = interpret(utils, target)
+        output = utils.interpret('(get-ingredients wooden_pickaxe)')
         self.assertEqual(repr(output[0]), '(list ((CEntityT stick) 2) ((CEntityV planks $_) 3))')
 
 
