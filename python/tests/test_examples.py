@@ -1,7 +1,7 @@
 import unittest
 
 from hyperon import *
-from common import interpret_until_result, Atomese, AtomspaceAtom
+from common import interpret_until_result, Atomese, MeTTa, AtomspaceAtom
 
 def interpret_and_print_results(target, kb, add_results_to_kb=False):
     output = ""
@@ -121,9 +121,9 @@ class ExamplesTest(unittest.TestCase):
         self.assertEqual(ploca.get_object().value, 5)
 
     def test_frog_reasoning(self):
-        atomese = Atomese()
+        metta = MeTTa()
 
-        kb = atomese.parse('''
+        metta.add_parse('''
             (= (if True $then $else) $then)
             (= (if False $then $else) $else)
             (= (Fritz croaks) True)
@@ -133,19 +133,17 @@ class ExamplesTest(unittest.TestCase):
             (= (Fritz eats_flies) True)
         ''')
 
-        target = atomese.parse_single('(if (and ($x croaks) ($x eats_flies)) (= ($x frog) True) nop)')
-        fritz_frog = interpret(kb, target)
-        self.assertEqual([atomese.parse_single('(= (Fritz frog) True)')], fritz_frog)
-        kb.add_atom(fritz_frog[0])
+        fritz_frog = metta.interpret('(if (and ($x croaks) ($x eats_flies)) (= ($x frog) True) nop)')
+        self.assertEqual([metta.parse_single('(= (Fritz frog) True)')], fritz_frog)
+        metta.space.add_atom(fritz_frog[0])
 
-        target = atomese.parse_single('(if ($x frog) (= ($x green) True) nop)')
-        self.assertEqual([atomese.parse_single('(= (Fritz green) True)')],
-                interpret(kb, target))
+        self.assertEqual([metta.parse_single('(= (Fritz green) True)')],
+                metta.interpret('(if ($x frog) (= ($x green) True) nop)'))
 
     def test_frog_unification(self):
-        atomese = Atomese()
+        metta = MeTTa()
 
-        kb = atomese.parse('''
+        metta.add_parse('''
            (= (if True $then) $then)
            (= (frog $x) (and (croaks $x) (eat_flies $x)))
            (= (croaks Fritz) True)
@@ -153,14 +151,13 @@ class ExamplesTest(unittest.TestCase):
            (= (green $x) (frog $x))
         ''')
 
-        target = atomese.parse_single('(if (green $x) $x)')
-        expected = atomese.parse_single('Fritz')
-        self.assertEqual([expected], interpret(kb, target))
+        self.assertEqual([metta.parse_single('Fritz')],
+                metta.interpret('(if (green $x) $x)'))
 
     def test_air_humidity_regulator(self):
-        atomese = Atomese()
+        metta = MeTTa()
 
-        kb = atomese.parse('''
+        metta.add_parse('''
            (= (if True $then) $then)
            (= (make $x) (if (makes $y $x) (start $y)))
            (= (make $x) (if (and (prevents (making $y) (making $x))
@@ -176,26 +173,24 @@ class ExamplesTest(unittest.TestCase):
            (= (makes ventilation (air dry)) True)
         ''')
 
-        target = atomese.parse_single('(is (air dry))')
-        output = interpret(kb, target)
-        self.assertEqual(output, atomese.parse_single('''
+        output = metta.interpret('(is (air dry))')
+        self.assertEqual(output, metta.parse_single('''
                 (start humidifier)
                 (start kettle)
                 (stop ventilation)
                 '''))
 
-        target = atomese.parse_single('(is (air wet))')
-        output = interpret(kb, target)
-        self.assertEqual(output, atomese.parse_single('''
+        output = metta.interpret('(is (air wet))')
+        self.assertEqual(output, metta.parse_single('''
                 (start ventilation)
                 (stop humidifier)
                 (stop kettle)
                 '''))
 
     def test_subset_sum_problem(self):
-        atomese = Atomese()
+        metta = MeTTa()
 
-        kb = atomese.parse('''
+        metta.add_parse('''
            (= (if True $then $else) $then)
            (= (if False $then $else) $else)
 
@@ -207,16 +202,17 @@ class ExamplesTest(unittest.TestCase):
            (= (subsum (:: $x $xs) (:: $b $bs)) (+ (* $x $b) (subsum $xs $bs)))
         ''')
 
-        target = atomese.parse_single('''(let $t (gen 3)
-            (if (== (subsum (:: 3 (:: 5 (:: 7 nil))) $t) 8) $t (nop ())))''')
-        output = interpret(kb, target)
-        expected = atomese.parse_single('(:: 1 (:: 1 (:: 0 nil)))')
+        output = metta.interpret('''
+            (let $t (gen 3)
+                 (if (== (subsum (:: 3 (:: 5 (:: 7 nil))) $t) 8) $t (nop ())))
+            ''')
+        expected = metta.parse_single('(:: 1 (:: 1 (:: 0 nil)))')
         self.assertEqual(output, [expected])
 
     def test_infer_function_application_type(self):
-        atomese = Atomese()
+        metta = MeTTa()
 
-        kb = atomese.parse('''
+        metta.add_parse('''
            (= (if True $then) $then)
 
            (= (: (apply $f $x) $r) (and (: $f (=> $a $r)) (: $x $a)))
@@ -225,34 +221,29 @@ class ExamplesTest(unittest.TestCase):
            (= (: "Hello" String) True)
         ''')
 
-        target = atomese.parse_single('(if (: (apply reverse "Hello") $t) $t)')
-        output = interpret(kb, target)
+        output = metta.interpret('(if (: (apply reverse "Hello") $t) $t)')
         self.assertEqual(output, [S('String')])
 
     def test_plus_reduces_Z(self):
-        atomese = Atomese()
+        metta = MeTTa()
 
-        kb = atomese.parse('''
+        metta.add_parse('''
            (= (eq $x $x) True)
            (= (plus Z $y) $y)
            (= (plus (S $k) $y) (S (plus $k $y)))
         ''')
 
-        target = atomese.parse_single('(eq (+ 2 2) 4)')
-        output = interpret(kb, target)
+        output = metta.interpret('(eq (+ 2 2) 4)')
         self.assertEqual(output, [ValueAtom(True)])
 
-        target = atomese.parse_single('(eq (+ 2 3) 4)')
-        output = interpret(kb, target)
-        self.assertEqual(output, [atomese.parse_single('(eq 5 4)')])
+        output = metta.interpret('(eq (+ 2 3) 4)')
+        self.assertEqual(output, [metta.parse_single('(eq 5 4)')])
 
-        target = atomese.parse_single('(eq (plus Z $n) $n)')
-        output = interpret(kb, target)
+        output = metta.interpret('(eq (plus Z $n) $n)')
         self.assertEqual(output, [ValueAtom(True)])
 
-        target = atomese.parse_single('(eq (plus (S Z) $n) $n)')
-        output = interpret(kb, target)
-        self.assertEqual(output, [atomese.parse_single('(eq (S $y) $y)')])
+        output = metta.interpret('(eq (plus (S Z) $n) $n)')
+        self.assertEqual(output, [metta.parse_single('(eq (S $y) $y)')])
 
 
     def _test_visit_kim(self):

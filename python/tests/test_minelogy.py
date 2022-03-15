@@ -2,7 +2,7 @@ import unittest
 import re
 
 from hyperon import *
-from common import Atomese, AtomspaceAtom
+from common import Atomese, MeTTa, AtomspaceAtom
 
 
 class MinelogyTest(unittest.TestCase):

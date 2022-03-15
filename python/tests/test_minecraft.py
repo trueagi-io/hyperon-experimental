@@ -2,7 +2,7 @@ import unittest
 import re
 
 from hyperon import *
-from common import interpret_until_result, Atomese
+from common import interpret_until_result, Atomese, MeTTa
 
 class InInventoryAtom(OpGroundedAtom):
 
@@ -47,13 +47,13 @@ class MineAtom(OpGroundedAtom):
 class MinecraftTest(unittest.TestCase):
 
     def test_minecraft_planning(self):
-        atomese = Atomese()
+        metta = MeTTa()
         inventory = [S('inventory'), S('hands')]
-        atomese.add_token("in-inventory", lambda _: G(InInventoryAtom(inventory)))
-        atomese.add_token("craft", lambda _: G(CraftAtom(inventory)))
-        atomese.add_token("mine", lambda _: G(MineAtom(inventory)))
+        metta.add_token("in-inventory", lambda _: G(InInventoryAtom(inventory)))
+        metta.add_token("craft", lambda _: G(CraftAtom(inventory)))
+        metta.add_token("mine", lambda _: G(MineAtom(inventory)))
 
-        kb = atomese.parse('''
+        metta.add_parse('''
             (= (if True $then $else) $then)
             (= (if False $then $else) $else)
 
@@ -78,9 +78,7 @@ class MinecraftTest(unittest.TestCase):
                            (allof (pack 3 cobblestones) (pack 2 sticks))))
         ''')
 
-        target = atomese.parse_single('(wooden-pickaxe)')
-
-        interpret(kb, target)
+        metta.interpret('(wooden-pickaxe)')
 
     @unittest.skip("not ready yet")
     def test_minecraft_planning_with_abstractions(self):
