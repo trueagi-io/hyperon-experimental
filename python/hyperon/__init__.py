@@ -192,3 +192,39 @@ class SExprSpace:
 def interpret(gnd_space, expr):
     return [Atom._from_catom(catom) for catom in
             hp.interpret(gnd_space.cspace, expr.catom)]
+
+class AtomType:
+
+    _UNDEFINED = None
+
+    @staticmethod
+    def undefined():
+        if AtomType._UNDEFINED is None:
+            AtomType._UNDEFINED = AtomType(hp.CAtomType.UNDEFINED)
+        return AtomType._UNDEFINED
+
+    @staticmethod
+    def specific(atom):
+        return AtomType(hp.atom_type_specific(atom.catom))
+
+    def __init__(self, ctype):
+        self.ctype = ctype
+
+    def __del__(self):
+        hp.atom_type_free(self.ctype)
+
+    # def __eq__(self, other):
+        # return (isinstance(other, AtomType) and
+                # hp.atom_type_eq(self.ctype, other.ctype))
+
+    # def __repr__(self):
+        # return hp.atom_type_to_str(self.ctype)
+
+    # def get_type(self):
+        # return hp.atom_type_get_type(self.ctype)
+
+def check_type(gnd_space, atom, type):
+    return hp.check_type(gnd_space.cspace, atom.catom, type.ctype)
+
+def validate_expr(gnd_space, expr):
+    return hp.validate_expr(gnd_space.cspace, expr.catom)

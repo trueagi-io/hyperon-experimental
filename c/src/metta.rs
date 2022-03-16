@@ -81,8 +81,10 @@ pub unsafe extern "C" fn atom_type_specific(atom: *mut atom_t) -> *mut atom_type
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_type_free(typ: *mut atom_type_t) {
-    drop(Box::from_raw(typ)) 
+pub unsafe extern "C" fn atom_type_free(typ: *const atom_type_t) {
+    if typ != ATOM_TYPE_UNDEFINED {
+        drop(Box::from_raw(typ as *mut atom_type_t)) 
+    }
 }
 
 #[no_mangle]
