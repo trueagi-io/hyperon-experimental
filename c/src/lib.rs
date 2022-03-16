@@ -168,14 +168,14 @@ pub unsafe extern "C" fn grounding_space_add(space: *mut grounding_space_t, atom
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn grounding_space_remove(space: *mut grounding_space_t, atom: *const atom_t) {
-    (*space).space.remove(&(*atom).atom);
+pub unsafe extern "C" fn grounding_space_remove(space: *mut grounding_space_t, atom: *const atom_t) -> bool {
+    (*space).space.remove(&(*atom).atom)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn grounding_space_replace(space: *mut grounding_space_t, from: *const atom_t, to: *mut atom_t) {
+pub unsafe extern "C" fn grounding_space_replace(space: *mut grounding_space_t, from: *const atom_t, to: *mut atom_t) -> bool {
     let c_to = Box::from_raw(to);
-    (*space).space.replace(&(*from).atom, c_to.atom);
+    (*space).space.replace(&(*from).atom, c_to.atom)
 }
 
 #[no_mangle]

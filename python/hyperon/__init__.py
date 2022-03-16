@@ -155,10 +155,10 @@ class GroundingSpace:
         hp.grounding_space_add(self.cspace, atom.catom)
 
     def remove_atom(self, atom):
-        hp.grounding_space_remove(self.cspace, atom.catom)
+        return hp.grounding_space_remove(self.cspace, atom.catom)
 
     def replace_atom(self, atom, replacement):
-        hp.grounding_space_replace(self.cspace, atom.catom, replacement.catom)
+        return hp.grounding_space_replace(self.cspace, atom.catom, replacement.catom)
 
     def get_atoms(self):
         return [Atom._from_catom(hp.grounding_space_get(self.cspace, i))
