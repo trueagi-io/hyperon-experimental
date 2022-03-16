@@ -1,6 +1,6 @@
 import hyperonpy as hp
 
-from hyperonpy import AtomType, init_logger
+from hyperonpy import AtomKind, init_logger
 
 class Atom:
 
@@ -24,13 +24,13 @@ class Atom:
     @staticmethod
     def _from_catom(catom):
         type = hp.atom_get_type(catom)
-        if type == AtomType.SYMBOL:
+        if type == AtomKind.SYMBOL:
             return SymbolAtom(catom)
-        elif type == AtomType.VARIABLE:
+        elif type == AtomKind.VARIABLE:
             return VariableAtom(catom)
-        elif type == AtomType.EXPR:
+        elif type == AtomKind.EXPR:
             return ExpressionAtom(catom)
-        elif type == AtomType.GROUNDED:
+        elif type == AtomKind.GROUNDED:
             return GroundedAtom(catom)
         else:
             raise Exception("Unexpected type of the atom: " + str(type))

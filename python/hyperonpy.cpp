@@ -131,7 +131,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 	// TODO: integrate Rust logs with Python logger
 	m.def("init_logger", &init_logger, "Initialize Hyperon library logger");
 
-	py::enum_<atom_type_t>(m, "AtomType")
+	py::enum_<atom_type_t>(m, "AtomKind")
 		.value("SYMBOL", atom_type_t::SYMBOL)
 		.value("VARIABLE", atom_type_t::VARIABLE)
 		.value("EXPR", atom_type_t::EXPR)
