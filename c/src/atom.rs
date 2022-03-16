@@ -4,6 +4,7 @@ use crate::util::*;
 
 use std::os::raw::*;
 use std::fmt::Debug;
+use std::sync::atomic::{AtomicPtr, Ordering};
 
 // Atom
 
@@ -64,7 +65,7 @@ pub unsafe extern "C" fn atom_var(name: *const c_char) -> *mut atom_t {
 
 #[no_mangle]
 pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> *mut atom_t {
-    atom_to_ptr(Atom::gnd(CGroundedAtom(gnd)))
+    atom_to_ptr(Atom::gnd(CGroundedAtom(AtomicPtr::new(gnd))))
 }
 
 #[no_mangle]
@@ -97,8 +98,8 @@ pub unsafe extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_call
 #[no_mangle]
 pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
     if let Atom::Grounded(ref g) = (*atom).atom {
-        match (**g).downcast_ref::<CGroundedAtom>() {
-            Some(g) => g.as_ptr(),
+        match (*g).downcast_ref::<CGroundedAtom>() {
+            Some(g) => g.get_mut_ptr(),
             None => panic!("Returning non C grounded objects is not implemented yet!"),
         }
     } else {
@@ -195,17 +196,21 @@ pub fn return_atoms(atoms: &Vec<Atom>, callback: atoms_callback_t, data: *mut c_
 
 // C grounded atom wrapper
 
-struct CGroundedAtom(*mut gnd_t);
+struct CGroundedAtom(AtomicPtr<gnd_t>);
 
 impl CGroundedAtom {
 
-    fn as_ptr(&self) -> *mut gnd_t {
-        self.0
+    fn get_mut_ptr(&self) -> *mut gnd_t {
+        self.0.load(Ordering::Acquire)
+    }
+
+    fn get_ptr(&self) -> *const gnd_t {
+        self.0.load(Ordering::Acquire)
     }
 
     fn api(&self) -> &gnd_api_t {
         unsafe {
-            &*(*self.as_ptr()).api
+            &*(*self.get_ptr()).api
         }
     }
 
@@ -214,7 +219,7 @@ impl CGroundedAtom {
         match execute {
             Some(execute) => {
                 let mut ret = Vec::new();
-                let res = execute(self.as_ptr(),
+                let res = execute(self.get_ptr(),
                     (args as *mut Vec<Atom>).cast::<vec_atom_t>(),
                     (&mut ret as *mut Vec<Atom>).cast::<vec_atom_t>());
                 if res.is_null() {
@@ -228,21 +233,21 @@ impl CGroundedAtom {
     }
 
     fn eq(&self, other: &Self) -> bool {
-        (self.api().eq)(self.as_ptr(), other.as_ptr())
+        (self.api().eq)(self.get_ptr(), other.get_ptr())
     }
 
     fn clone(&self) -> Self {
-        CGroundedAtom((self.api().clone)(self.as_ptr()))
+        CGroundedAtom(AtomicPtr::new((self.api().clone)(self.get_ptr())))
     }
 
     unsafe fn display(&self) -> String {
         let mut buffer = [0u8; 4096];
-        (self.api().display)(self.as_ptr(), buffer.as_mut_ptr().cast::<c_char>(), 4096);
+        (self.api().display)(self.get_ptr(), buffer.as_mut_ptr().cast::<c_char>(), 4096);
         cstr_into_string(buffer.as_ptr().cast::<c_char>())
     }
 
-    fn free(&self) {
-        (self.api().free)(self.as_ptr());
+    fn free(&mut self) {
+        (self.api().free)(self.get_mut_ptr());
     }
 
 }
