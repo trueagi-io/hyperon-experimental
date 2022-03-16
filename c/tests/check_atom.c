@@ -1,11 +1,10 @@
-#include <check.h>
 #include <hyperon/hyperon.h>
 
+#include "test.h"
 #include "util.h"
 #include "int_gnd.h"
 
 void setup(void) {
-	init_logger();
 }
 
 void teardown(void) {
@@ -33,34 +32,10 @@ START_TEST (test_expr)
 }
 END_TEST
 
-Suite * capi_suite(void) {
-    Suite *s;
-    TCase *tc_core;
-    TCase *tc_limits;
-
-    s = suite_create("Suite");
-
-    tc_core = tcase_create("Core");
-
-    tcase_add_checked_fixture(tc_core, setup, teardown);
-    tcase_add_test(tc_core, test_sym);
-    tcase_add_test(tc_core, test_expr);
-    suite_add_tcase(s, tc_core);
-
-    return s;
+void init_test(TCase* test_case) {
+    tcase_add_checked_fixture(test_case, setup, teardown);
+    tcase_add_test(test_case, test_sym);
+    tcase_add_test(test_case, test_expr);
 }
 
-int main(void) {
-	int number_failed;
-    Suite *s;
-    SRunner *sr;
-
-    s = capi_suite();
-    sr = srunner_create(s);
-
-    srunner_run_all(sr, CK_NORMAL);
-    number_failed = srunner_ntests_failed(sr);
-    srunner_free(sr);
-    return (number_failed == 0) ? EXIT_SUCCESS : EXIT_FAILURE;
-}
-
+TEST_MAIN(init_test);

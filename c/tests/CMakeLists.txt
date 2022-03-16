@@ -1,4 +1,5 @@
 set(TEST_SOURCES
+	test.c
 	int_gnd.c
 	util.c
 )
