@@ -129,7 +129,7 @@ mod tests {
         text.add_str("$n").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![expr!(n)], space.atom_iter().cloned().collect::<Vec<_>>());
+        assert_eq!(vec![expr!(n)], *space.borrow_vec());
     }
 
     #[test]
@@ -139,7 +139,7 @@ mod tests {
         text.add_str("test").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![expr!("test")], space.atom_iter().cloned().collect::<Vec<_>>());
+        assert_eq!(vec![expr!("test")], *space.borrow_vec());
     }
 
     #[test]
@@ -151,8 +151,7 @@ mod tests {
         text.add_str("ab").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![expr!("ab")],
-            space.atom_iter().cloned().collect::<Vec<_>>());
+        assert_eq!(vec![expr!("ab")], *space.borrow_vec());
     }
 
     #[test]
@@ -164,7 +163,8 @@ mod tests {
         text.add_str("(3d 42)").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![Atom::expr(&[Atom::sym("3d"), Atom::gnd(42)])], space.atom_iter().cloned().collect::<Vec<_>>());
+        assert_eq!(vec![Atom::expr(&[Atom::sym("3d"), Atom::gnd(42)])],
+            *space.borrow_vec());
     }
 
     #[test]
@@ -175,7 +175,7 @@ mod tests {
         let space = GroundingSpace::from(&text);
 
         assert_eq!(vec![expr!("=", ("fac", n), ("*", n, ("fac", ("-", n, "1"))))],
-            space.atom_iter().cloned().collect::<Vec<_>>());
+            *space.borrow_vec());
     }
 
     #[test]

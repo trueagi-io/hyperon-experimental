@@ -4,35 +4,35 @@ use crate::atom::matcher::{Bindings, Unifications, WithMatch};
 use crate::atom::subexpr::split_expr;
 
 use std::fmt::{Display, Debug};
+use std::rc::Rc;
+use std::cell::{RefCell, Ref};
 
 // Grounding space
-
-use std::rc::Rc;
 
 // TODO: Clone is required by C API
 #[derive(Clone)]
 pub struct GroundingSpace {
-    content: Rc<Vec<Atom>>,
+    content: Rc<RefCell<Vec<Atom>>>,
 }
 
 impl GroundingSpace {
 
     pub fn new() -> Self {
-        Self{ content: Rc::new(Vec::new()) }
+        Self{ content: Rc::new(RefCell::new(Vec::new())) }
     }
     
     pub fn add(&mut self, atom: Atom) {
-        Rc::get_mut(&mut self.content).expect("Cannot mutate shared atomspace").push(atom)
+        self.content.borrow_mut().push(atom)
     }
 
     pub fn remove(&mut self, atom: &Atom) {
-        let position = self.content.iter().position(|other| other == atom).unwrap();
-        Rc::get_mut(&mut self.content).expect("Cannot mutate shared atomspace").remove(position);
+        let position = self.borrow_vec().iter().position(|other| other == atom).unwrap();
+        self.content.borrow_mut().remove(position);
     }
 
     pub fn replace(&mut self, from: &Atom, to: Atom) {
-        let position = self.content.iter().position(|other| other == from).unwrap();
-        Rc::get_mut(&mut self.content).expect("Cannot mutate shared atomspace").as_mut_slice()[position] = to;
+        let position = self.borrow_vec().iter().position(|other| other == from).unwrap();
+        self.content.borrow_mut().as_mut_slice()[position] = to;
     }
 
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
@@ -55,7 +55,7 @@ impl GroundingSpace {
     fn single_query(&self, pattern: &Atom) -> Vec<Bindings> {
         log::debug!("single_query: pattern: {}", pattern);
         let mut result = Vec::new();
-        for next in &(*self.content) {
+        for next in &(*self.borrow_vec()) {
             for res in next.do_match(pattern) {
                 let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
                 if let Ok(bindings) = bindings {
@@ -86,7 +86,7 @@ impl GroundingSpace {
     pub fn unify(&self, pattern: &Atom) -> Vec<(Bindings, Unifications)> {
         log::debug!("unify: pattern: {}", pattern);
         let mut result = Vec::new();
-        for next in &(*self.content) {
+        for next in &(*self.borrow_vec()) {
             match matcher::unify_atoms(next, pattern) {
                 Some(res) => {
                     let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
@@ -102,12 +102,8 @@ impl GroundingSpace {
         result
     }
 
-    pub fn as_vec(&self) -> &Vec<Atom> {
-        &self.content
-    }
-
-    pub fn atom_iter(&self) -> std::slice::Iter<Atom>{
-        self.content.iter()
+    pub fn borrow_vec(&self) -> Ref<Vec<Atom>> {
+        self.content.borrow()
     }
 }
 
@@ -139,7 +135,7 @@ mod test {
         space.add(expr!("a"));
         space.add(expr!("b"));
         space.add(expr!("c"));
-        assert_eq!(*space.as_vec(), vec![expr!("a"), expr!("b"), expr!("c")]);
+        assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("b"), expr!("c")]);
     }
 
     #[test]
@@ -149,7 +145,7 @@ mod test {
         space.add(expr!("b"));
         space.add(expr!("c"));
         space.remove(&expr!("b"));
-        assert_eq!(*space.as_vec(), vec![expr!("a"), expr!("c")]);
+        assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("c")]);
     }
 
     #[test]
@@ -159,7 +155,19 @@ mod test {
         space.add(expr!("b"));
         space.add(expr!("c"));
         space.replace(&expr!("b"), expr!("d"));
-        assert_eq!(*space.as_vec(), vec![expr!("a"), expr!("d"), expr!("c")]);
+        assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("d"), expr!("c")]);
+    }
+
+    #[test]
+    fn mut_shared_atomspace() {
+        let mut first = GroundingSpace::new();
+        let mut second = first.clone(); 
+
+        first.add(expr!("b"));
+        second.replace(&expr!("b"), expr!("d"));
+
+        assert_eq!(*first.borrow_vec(), vec![expr!("d")]);
+        assert_eq!(*second.borrow_vec(), vec![expr!("d")]);
     }
 
     #[test]
@@ -243,4 +251,5 @@ mod test {
         let result = space.query(&expr!(",", (":", h, "Human"), ("Cons", h, t)));
         assert_eq!(result, vec![bind!{h: expr!("Socrates"), t: expr!("Nil")}]);
     }
+
 }
