@@ -4,12 +4,11 @@
 
 #include "util.h"
 
-void setup(void)
-{
+void setup(void) {
+	init_logger();
 }
 
-void teardown(void)
-{
+void teardown(void) {
 }
 
 struct output_t {
@@ -94,8 +93,7 @@ START_TEST (test_replace)
 }
 END_TEST
 
-Suite * capi_suite(void)
-{
+Suite * capi_suite(void) {
     Suite *s;
     TCase *tc_core;
     TCase *tc_limits;

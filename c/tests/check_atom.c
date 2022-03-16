@@ -4,12 +4,11 @@
 #include "util.h"
 #include "int_gnd.h"
 
-void setup(void)
-{
+void setup(void) {
+	init_logger();
 }
 
-void teardown(void)
-{
+void teardown(void) {
 }
 
 START_TEST (test_sym)
@@ -34,8 +33,7 @@ START_TEST (test_expr)
 }
 END_TEST
 
-Suite * capi_suite(void)
-{
+Suite * capi_suite(void) {
     Suite *s;
     TCase *tc_core;
     TCase *tc_limits;
