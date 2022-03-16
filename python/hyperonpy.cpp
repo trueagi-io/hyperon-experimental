@@ -188,8 +188,8 @@ PYBIND11_MODULE(hyperonpy, m) {
 	m.def("grounding_space_new", []() { return CGroundingSpace(grounding_space_new()); }, "New grounding space instance");
 	m.def("grounding_space_free", [](CGroundingSpace space) { grounding_space_free(space.ptr); }, "Free grounding space");
 	m.def("grounding_space_add", [](CGroundingSpace space, CAtom atom) { grounding_space_add(space.ptr, atom_copy(atom.ptr)); }, "Add atom into grounding space");
-	m.def("grounding_space_remove", [](CGroundingSpace space, CAtom atom) { grounding_space_remove(space.ptr, atom.ptr); }, "Remove atom from grounding space");
-	m.def("grounding_space_replace", [](CGroundingSpace space, CAtom from, CAtom to) { grounding_space_replace(space.ptr, from.ptr, atom_copy(to.ptr)); }, "Replace atom from grounding space");
+	m.def("grounding_space_remove", [](CGroundingSpace space, CAtom atom) { return grounding_space_remove(space.ptr, atom.ptr); }, "Remove atom from grounding space");
+	m.def("grounding_space_replace", [](CGroundingSpace space, CAtom from, CAtom to) { return grounding_space_replace(space.ptr, from.ptr, atom_copy(to.ptr)); }, "Replace atom from grounding space");
 	m.def("grounding_space_eq", [](CGroundingSpace a, CGroundingSpace b) { return grounding_space_eq(a.ptr, b.ptr); }, "Check if two grounding spaces are equal");
 	m.def("grounding_space_len", [](CGroundingSpace space) { return grounding_space_len(space.ptr); }, "Return number of atoms in grounding space");
 	m.def("grounding_space_get", [](CGroundingSpace space, size_t idx) { return CAtom(grounding_space_get(space.ptr, idx)); }, "Get atom by index from grounding space");

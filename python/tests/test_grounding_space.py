@@ -18,7 +18,7 @@ class GroundingSpaceTest(unittest.TestCase):
         kb.add_atom(S("b"))
         kb.add_atom(S("c"))
 
-        kb.remove_atom(S("b"))
+        self.assertTrue(kb.remove_atom(S("b")))
 
         self.assertEqual(kb.get_atoms(), [S("a"), S("c")])
 
@@ -28,6 +28,6 @@ class GroundingSpaceTest(unittest.TestCase):
         kb.add_atom(S("b"))
         kb.add_atom(S("c"))
 
-        kb.replace_atom(S("b"), S("d"))
+        self.assertTrue(kb.replace_atom(S("b"), S("d")))
 
         self.assertEqual(kb.get_atoms(), [S("a"), S("d"), S("c")])

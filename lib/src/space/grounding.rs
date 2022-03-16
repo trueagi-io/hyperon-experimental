@@ -25,14 +25,26 @@ impl GroundingSpace {
         self.content.borrow_mut().push(atom)
     }
 
-    pub fn remove(&mut self, atom: &Atom) {
-        let position = self.borrow_vec().iter().position(|other| other == atom).unwrap();
-        self.content.borrow_mut().remove(position);
+    pub fn remove(&mut self, atom: &Atom) -> bool {
+        let position = self.borrow_vec().iter().position(|other| other == atom);
+        match position {
+            Some(position) => {
+                self.content.borrow_mut().remove(position);
+                true
+            },
+            None => false, 
+        }
     }
 
-    pub fn replace(&mut self, from: &Atom, to: Atom) {
-        let position = self.borrow_vec().iter().position(|other| other == from).unwrap();
-        self.content.borrow_mut().as_mut_slice()[position] = to;
+    pub fn replace(&mut self, from: &Atom, to: Atom) -> bool {
+        let position = self.borrow_vec().iter().position(|other| other == from);
+        match position {
+            Some(position) => {
+                self.content.borrow_mut().as_mut_slice()[position] = to;
+                true
+            },
+            None => false, 
+        }
     }
 
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
@@ -144,8 +156,16 @@ mod test {
         space.add(expr!("a"));
         space.add(expr!("b"));
         space.add(expr!("c"));
-        space.remove(&expr!("b"));
+        assert_eq!(space.remove(&expr!("b")), true);
         assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("c")]);
+    }
+
+    #[test]
+    fn remove_atom_not_found() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("a"));
+        assert_eq!(space.remove(&expr!("b")), false);
+        assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
     }
 
     #[test]
@@ -154,8 +174,16 @@ mod test {
         space.add(expr!("a"));
         space.add(expr!("b"));
         space.add(expr!("c"));
-        space.replace(&expr!("b"), expr!("d"));
+        assert_eq!(space.replace(&expr!("b"), expr!("d")), true);
         assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("d"), expr!("c")]);
+    }
+
+    #[test]
+    fn replace_atom_not_found() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("a"));
+        assert_eq!(space.replace(&expr!("b"), expr!("d")), false);
+        assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
     }
 
     #[test]
