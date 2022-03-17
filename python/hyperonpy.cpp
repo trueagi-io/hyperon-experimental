@@ -16,6 +16,7 @@ using CAtom = CPtr<atom_t>;
 using CVecAtom = CPtr<vec_atom_t>;
 using CGroundingSpace = CPtr<grounding_space_t>;
 using CSExprSpace = CPtr<sexpr_space_t>;
+using CAtomType = CPtr<const atom_type_t>;
 
 void copy_to_string(char const* cstr, void* context) {
 	std::string* cppstr = static_cast<std::string*>(context);
@@ -131,7 +132,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 	// TODO: integrate Rust logs with Python logger
 	m.def("init_logger", &init_logger, "Initialize Hyperon library logger");
 
-	py::enum_<atom_type_t>(m, "AtomType")
+	py::enum_<atom_type_t>(m, "AtomKind")
 		.value("SYMBOL", atom_type_t::SYMBOL)
 		.value("VARIABLE", atom_type_t::VARIABLE)
 		.value("EXPR", atom_type_t::EXPR)
@@ -230,5 +231,18 @@ PYBIND11_MODULE(hyperonpy, m) {
 			interpret(space.ptr, expr.ptr, &copy_atoms_to_list, &results);
 			return results;
 		}, "Run interpreter on expression and return result");
+
+	py::class_<CAtomType>(m, "CAtomType")
+		.def_property_readonly_static("UNDEFINED", [](py::object) { return CAtomType(ATOM_TYPE_UNDEFINED); }, "Undefined type instance");
+	m.def("atom_type_specific", [](CAtom atom) { return CAtomType(atom_type_specific(atom_copy(atom.ptr))); },
+			"Return specific type instance");
+	m.def("atom_type_free", [](CAtomType type) { atom_type_free(type.ptr); },
+			"Deallocate type instance");
+	m.def("check_type", [](CGroundingSpace space, CAtom atom, CAtomType type) { 
+			return check_type(space.ptr, atom.ptr, type.ptr);
+		}, "Check if atom is an instance of the passed type");
+	m.def("validate_expr", [](CGroundingSpace space, CAtom expr) { 
+			return validate_expr(space.ptr, expr.ptr);
+		}, "Validate expression arguments correspond to the operation type");
 }
 

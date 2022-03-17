@@ -12,7 +12,7 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(str(S("a")), "a")
 
     def test_symbol_type(self):
-        self.assertEqual(S("a").get_type(), AtomType.SYMBOL)
+        self.assertEqual(S("a").get_type(), AtomKind.SYMBOL)
 
     def test_symbol_get_symbol(self):
         self.assertEqual(S("a").get_name(), "a")
@@ -28,7 +28,7 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(str(V("x")), "$x")
 
     def test_variable_type(self):
-        self.assertEqual(V("x").get_type(), AtomType.VARIABLE)
+        self.assertEqual(V("x").get_type(), AtomKind.VARIABLE)
 
     def test_variable_get_name(self):
         self.assertEqual(V("x").get_name(), "x")
@@ -41,7 +41,7 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(str(ValueAtom(1.0)), "1.0")
 
     def test_grounded_type(self):
-        self.assertEqual(ValueAtom(1.0).get_type(), AtomType.GROUNDED)
+        self.assertEqual(ValueAtom(1.0).get_type(), AtomKind.GROUNDED)
 
     # def test_grounded_execute_default(self):
         # self.assertEqual(ValueAtom(1.0).get_object().execute(VecAtom(),
@@ -63,7 +63,7 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(str(E(X2Atom(), ValueAtom(1.0))), "(*2 1.0)")
 
     def test_expr_type(self):
-        self.assertEqual(E(X2Atom(), ValueAtom(1.0)).get_type(), AtomType.EXPR)
+        self.assertEqual(E(X2Atom(), ValueAtom(1.0)).get_type(), AtomKind.EXPR)
 
     # def test_expr_get_children(self):
         # self.assertEqual(E(X2Atom(), ValueAtom(1.0)).get_children(),

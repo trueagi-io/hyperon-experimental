@@ -4,7 +4,7 @@ use crate::atom::matcher::Bindings;
 use crate::space::grounding::GroundingSpace;
 
 #[derive(Debug, PartialEq, Eq)]
-enum AtomType {
+pub enum AtomType {
     Undefined,
     Specific(Atom),
 }
@@ -54,7 +54,7 @@ fn check_specific_type(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> bool 
     result
 }
 
-fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
+pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
     match typ {
         AtomType::Undefined => true,
         AtomType::Specific(typ) => check_specific_type(space, atom, typ),
@@ -96,7 +96,7 @@ fn get_op(expr: &ExpressionAtom) -> &Atom {
     expr.children().get(0).expect("Non-empty expression is expected")
 }
 
-fn validate_expr(space: &GroundingSpace, atom: &Atom) -> bool {
+pub fn validate_expr(space: &GroundingSpace, atom: &Atom) -> bool {
     match atom {
         Atom::Expression(expr) => {
             let op = get_op(expr);

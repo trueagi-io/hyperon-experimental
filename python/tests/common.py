@@ -29,8 +29,8 @@ class MatchAtom(OpGroundedAtom):
     def execute(self, space, pattern, templ_op):
         space = space.get_object().value
         # TODO: hack to make both quoted and unquoted expression work
-        if (templ_op.get_type() == AtomType.EXPR and
-            templ_op.get_children()[0].get_type() == AtomType.SYMBOL and
+        if (templ_op.get_type() == AtomKind.EXPR and
+            templ_op.get_children()[0].get_type() == AtomKind.SYMBOL and
             templ_op.get_children()[0].get_name() == 'q'):
             quoted = templ_op.get_children()[1:]
             templ = E(*quoted)
