@@ -1,4 +1,5 @@
 from hyperon import *
+import itertools
 
 def interpret_until_result(target, kb):
     return interpret(kb, target)
@@ -183,48 +184,51 @@ class Atomese:
     def __init__(self):
         self.tokens = {}
 
-    def _parser(self):
-        parser = SExprSpace()
-        parser.register_token(r"\+", lambda token: G(AddAtom()))
-        parser.register_token(r"-", lambda token: G(SubAtom()))
-        parser.register_token(r"\*", lambda token: G(MulAtom()))
-        parser.register_token(r"/", lambda token: G(DivAtom()))
-        parser.register_token(r"==", lambda token: G(EqualAtom()))
-        parser.register_token(r"<", lambda token: G(LessAtom()))
-        parser.register_token(r">", lambda token: G(GreaterAtom()))
-        parser.register_token(r"or", lambda token: G(OrAtom()))
-        parser.register_token(r"and", lambda token: G(AndAtom()))
-        parser.register_token(r"not", lambda token: G(NotAtom()))
-        parser.register_token(r"\d+(\.\d+)", lambda token: ValueAtom(float(token)))
-        parser.register_token(r"\d+", lambda token: ValueAtom(int(token)))
-        parser.register_token(r"'[^']*'", lambda token: ValueAtom(str(token[1:-1])))
-        parser.register_token(r"True|False", lambda token: ValueAtom(token == 'True'))
-        parser.register_token(r"match", lambda token: G(MatchAtom()))
-        parser.register_token(r"call:[^\s]+", lambda token: G(CallAtom(token[5:])))
-        parser.register_token(r",", lambda token: G(CommaAtom()))
-        parser.register_token(r"let", lambda token: G(LetAtom()))
-        parser.register_token(r"nop", lambda token: G(NopAtom()))
+    def _tokenizer(self):
+        tokenizer = Tokenizer()
+        tokenizer.register_token(r"\+", lambda token: G(AddAtom()))
+        tokenizer.register_token(r"-", lambda token: G(SubAtom()))
+        tokenizer.register_token(r"\*", lambda token: G(MulAtom()))
+        tokenizer.register_token(r"/", lambda token: G(DivAtom()))
+        tokenizer.register_token(r"==", lambda token: G(EqualAtom()))
+        tokenizer.register_token(r"<", lambda token: G(LessAtom()))
+        tokenizer.register_token(r">", lambda token: G(GreaterAtom()))
+        tokenizer.register_token(r"or", lambda token: G(OrAtom()))
+        tokenizer.register_token(r"and", lambda token: G(AndAtom()))
+        tokenizer.register_token(r"not", lambda token: G(NotAtom()))
+        tokenizer.register_token(r"\d+(\.\d+)", lambda token: ValueAtom(float(token)))
+        tokenizer.register_token(r"\d+", lambda token: ValueAtom(int(token)))
+        tokenizer.register_token(r"'[^']*'", lambda token: ValueAtom(str(token[1:-1])))
+        tokenizer.register_token(r"True|False", lambda token: ValueAtom(token == 'True'))
+        tokenizer.register_token(r"match", lambda token: G(MatchAtom()))
+        tokenizer.register_token(r"call:[^\s]+", lambda token: G(CallAtom(token[5:])))
+        tokenizer.register_token(r",", lambda token: G(CommaAtom()))
+        tokenizer.register_token(r"let", lambda token: G(LetAtom()))
+        tokenizer.register_token(r"nop", lambda token: G(NopAtom()))
         for regexp in self.tokens.keys():
-            parser.register_token(regexp, self.tokens[regexp])
-        return parser
+            tokenizer.register_token(regexp, self.tokens[regexp])
+        return tokenizer
+
+    def _parse_all(self, program):
+        tokenizer = self._tokenizer()
+        parser = SExprParser(program)
+        while True:
+            atom = parser.parse(tokenizer)
+            if atom is None:
+                break
+            yield atom
+
+    def parse_all(self, program):
+        return list(self._parse_all(program))
 
     def parse_single(self, program):
-        kb = GroundingSpace()
-        text = self._parser()
-        text.add_string(program)
-        text.add_to(kb)
-        exprs = list(kb.get_atoms())
-        if len(exprs) == 1:
-            return exprs[0]
-        else:
-            return exprs
+        return next(itertools.islice(self._parse_all(program), 1))
 
     def parse(self, program, kb=None):
         if not kb:
             kb = GroundingSpace()
-        text = self._parser()
-        text.add_string(program)
-        text.add_to(kb)
+        for atom in self._parse_all(program):
+            kb.add_atom(atom)
         return kb
 
     def add_token(self, regexp, constr):

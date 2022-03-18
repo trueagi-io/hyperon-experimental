@@ -43,10 +43,8 @@ pub struct sexpr_parser_t<'a> {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sexpr_parser_new<'a>(tokenizer: *const tokenizer_t,
-        text: *const c_char) -> *mut sexpr_parser_t<'a> {
-    Box::into_raw(Box::new(sexpr_parser_t{
-        parser: SExprParser::new(&(*tokenizer).tokenizer, cstr_as_str(text)) }))
+pub unsafe extern "C" fn sexpr_parser_new<'a>(text: *const c_char) -> *mut sexpr_parser_t<'a> {
+    Box::into_raw(Box::new(sexpr_parser_t{ parser: SExprParser::new(cstr_as_str(text)) }))
 }
 
 #[no_mangle]
@@ -55,8 +53,10 @@ pub unsafe extern "C" fn sexpr_parser_free(parser: *mut sexpr_parser_t) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sexpr_parser_next(parser: *mut sexpr_parser_t) -> *mut atom_t {
-    (*parser).parser.next().map_or(std::ptr::null_mut(), |atom| atom_to_ptr(atom))
+pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
+        tokenizer: *const tokenizer_t) -> *mut atom_t {
+    (*parser).parser.parse(&(*tokenizer).tokenizer)
+        .map_or(std::ptr::null_mut(), |atom| { atom_to_ptr(atom) })
 }
 
 // SExprSpace

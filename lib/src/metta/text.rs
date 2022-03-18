@@ -39,16 +39,15 @@ impl Tokenizer {
 }
 
 pub struct SExprParser<'a> {
-    tokenizer: &'a Tokenizer,
     it: Peekable<Chars<'a>>,
 }
 
 impl<'a> SExprParser<'a> {
-    pub fn new(tokenizer: &'a Tokenizer, text: &'a str) -> Self {
-        Self{ tokenizer: tokenizer, it: text.chars().peekable() }
+    pub fn new(text: &'a str) -> Self {
+        Self{ it: text.chars().peekable() }
     }
 
-    fn parse(&mut self) -> Option<Atom> {
+    pub fn parse(&mut self, tokenizer: &Tokenizer) -> Option<Atom> {
         while let Some(c) = self.it.peek() {
             match c {
                 _ if c.is_whitespace() => { self.it.next(); },
@@ -59,11 +58,11 @@ impl<'a> SExprParser<'a> {
                 },
                 '(' => {
                     self.it.next();
-                    return Some(self.parse_expr());
+                    return Some(self.parse_expr(tokenizer));
                 },
                 _ => {
                     let token = next_token(&mut self.it);
-                    let constr = self.tokenizer.find_token(token.as_str());
+                    let constr = tokenizer.find_token(token.as_str());
                     if let Some(constr) = constr {
                         return Some(constr(token.as_str()));
                     } else {
@@ -75,7 +74,7 @@ impl<'a> SExprParser<'a> {
         None
     }
 
-    fn parse_expr(&mut self) -> Atom {
+    fn parse_expr(&mut self, tokenizer: &Tokenizer) -> Atom {
         let mut children: Vec<Atom> = Vec::new();
         while let Some(c) = self.it.peek() {
             match c {
@@ -86,7 +85,7 @@ impl<'a> SExprParser<'a> {
                     return expr;
                 },
                 _ => {
-                    children.push(self.parse().expect("Unexpected end of expression member"));
+                    children.push(self.parse(tokenizer).expect("Unexpected end of expression member"));
                 },
             }
         }
@@ -108,14 +107,6 @@ fn next_token(it: &mut Peekable<Chars<'_>>) -> String {
         it.next();
     }
     token 
-}
-
-impl Iterator for SExprParser<'_> {
-    type Item = Atom;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.parse()
-    }
 }
 
 pub struct SExprSpace {
@@ -146,8 +137,14 @@ impl SExprSpace {
     }
 
     pub fn into_grounding_space(&self, other: &mut GroundingSpace) {
-        for atom in SExprParser::new(&self.tokenizer, &self.content) {
-            other.add(atom);
+        let mut parser = SExprParser::new(&self.content);
+        loop {
+            let atom = parser.parse(&self.tokenizer);
+            if let Some(atom) = atom {
+                other.add(atom);
+            } else {
+                break;
+            }
         }
     }
 }
