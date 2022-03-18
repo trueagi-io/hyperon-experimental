@@ -8,6 +8,57 @@ use crate::space::*;
 use std::os::raw::*;
 use regex::Regex;
 
+// Tokenizer
+
+#[allow(non_camel_case_types)]
+pub struct tokenizer_t {
+    tokenizer: Tokenizer, 
+}
+
+#[no_mangle]
+pub extern "C" fn tokenizer_new() -> *mut tokenizer_t {
+    Box::into_raw(Box::new(tokenizer_t{ tokenizer: Tokenizer::new() })) 
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tokenizer_free(tokenizer: *mut tokenizer_t) {
+    drop(Box::from_raw(tokenizer)); 
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn tokenizer_register_token(tokenizer: *mut tokenizer_t,
+    regex: *const c_char, constr: atom_constr_t, context: droppable_t) {
+    let regex = Regex::new(cstr_as_str(regex)).unwrap();
+    (*tokenizer).tokenizer.register_token(regex, move |token| {
+        let catom = Box::from_raw(constr(str_as_cstr(token).as_ptr(), context.ptr));
+        catom.atom
+    });
+}
+
+// SExprParser
+
+#[allow(non_camel_case_types)]
+pub struct sexpr_parser_t<'a> {
+    parser: SExprParser<'a>, 
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sexpr_parser_new<'a>(tokenizer: *const tokenizer_t,
+        text: *const c_char) -> *mut sexpr_parser_t<'a> {
+    Box::into_raw(Box::new(sexpr_parser_t{
+        parser: SExprParser::new(&(*tokenizer).tokenizer, cstr_as_str(text)) }))
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sexpr_parser_free(parser: *mut sexpr_parser_t) {
+    drop(Box::from_raw(parser)) 
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn sexpr_parser_next(parser: *mut sexpr_parser_t) -> *mut atom_t {
+    (*parser).parser.next().map_or(std::ptr::null_mut(), |atom| atom_to_ptr(atom))
+}
+
 // SExprSpace
 
 #[allow(non_camel_case_types)]
