@@ -1,5 +1,4 @@
 from hyperon import *
-import itertools
 
 def interpret_until_result(target, kb):
     return interpret(kb, target)
@@ -222,7 +221,7 @@ class Atomese:
         return list(self._parse_all(program))
 
     def parse_single(self, program):
-        return next(itertools.islice(self._parse_all(program), 1))
+        return next(self._parse_all(program))
 
     def parse(self, program, kb=None):
         if not kb:
