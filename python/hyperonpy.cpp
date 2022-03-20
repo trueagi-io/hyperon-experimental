@@ -15,6 +15,7 @@ struct CPtr {
 using CAtom = CPtr<atom_t>;
 using CVecAtom = CPtr<vec_atom_t>;
 using CGroundingSpace = CPtr<grounding_space_t>;
+using CTokenizer = CPtr<tokenizer_t>;
 using CSExprSpace = CPtr<sexpr_space_t>;
 using CAtomType = CPtr<const atom_type_t>;
 
@@ -126,6 +127,25 @@ struct CConstr {
 	}
 };
 
+struct CSExprParser {
+
+	std::string text;
+	sexpr_parser_t* ptr;
+
+	CSExprParser(std::string text) : text(text) {
+		ptr = sexpr_parser_new(this->text.c_str());
+	}
+
+	virtual ~CSExprParser() {
+		sexpr_parser_free(ptr);
+	}
+
+	py::object parse(CTokenizer tokenizer) {
+		atom_t* atom = sexpr_parser_parse(this->ptr, tokenizer.ptr);
+		return atom ? py::cast(CAtom(atom)) : py::none();
+	}
+};
+
 PYBIND11_MODULE(hyperonpy, m) {
 	m.doc() = "Python API of the Hyperon library";
 
@@ -215,6 +235,18 @@ PYBIND11_MODULE(hyperonpy, m) {
 			grounding_space_subst(space.ptr, pattern.ptr, templ.ptr, &copy_atoms_to_list, &results);
 			return results;
 		}, "Get bindings for pattern and apply to template");
+
+	py::class_<CTokenizer>(m, "CTokenizer");
+	m.def("tokenizer_new", []() { return CTokenizer(tokenizer_new()); }, "New tokenizer");
+	m.def("tokenizer_free", [](CTokenizer tokenizer) { tokenizer_free(tokenizer.ptr); }, "Free tokenizer");
+	m.def("tokenizer_register_token", [](CTokenizer tokenizer, char const* regex, py::object constr) {
+			droppable_t context = { new CConstr(constr), CConstr::free };
+			tokenizer_register_token(tokenizer.ptr, regex, &CConstr::apply, context);
+		}, "Register token");
+
+	py::class_<CSExprParser>(m, "CSExprParser")
+		.def(py::init<std::string>())
+		.def("parse", &CSExprParser::parse,  "Return next parser atom or None");
 
 	py::class_<CSExprSpace>(m, "CSExprSpace");
 	m.def("sexpr_space_new", []() { return CSExprSpace(sexpr_space_new()); }, "New sexpr space");

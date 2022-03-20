@@ -171,14 +171,14 @@ class ExamplesTest(unittest.TestCase):
         ''')
 
         output = metta.interpret('(is (air dry))')
-        self.assertEqual(output, metta.parse_single('''
+        self.assertEqual(output, metta.parse_all('''
                 (start humidifier)
                 (start kettle)
                 (stop ventilation)
                 '''))
 
         output = metta.interpret('(is (air wet))')
-        self.assertEqual(output, metta.parse_single('''
+        self.assertEqual(output, metta.parse_all('''
                 (start ventilation)
                 (stop humidifier)
                 (stop kettle)

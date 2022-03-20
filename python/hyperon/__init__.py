@@ -172,6 +172,26 @@ class GroundingSpace:
                 hp.grounding_space_subst(self.cspace, pattern.catom,
                                          templ.catom)]
 
+class Tokenizer:
+
+    def __init__(self):
+        self.ctokenizer = hp.tokenizer_new()
+
+    def __del__(self):
+        hp.tokenizer_free(self.ctokenizer)
+
+    def register_token(self, regex, constr):
+        hp.tokenizer_register_token(self.ctokenizer, regex, constr)
+
+class SExprParser:
+
+    def __init__(self, text):
+        self.cparser = hp.CSExprParser(text)
+
+    def parse(self, tokenizer):
+        catom = self.cparser.parse(tokenizer.ctokenizer)
+        return Atom._from_catom(catom) if catom is not None else None
+
 class SExprSpace:
 
     def __init__(self):
