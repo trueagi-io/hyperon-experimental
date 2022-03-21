@@ -2,8 +2,10 @@ use hyperon::*;
 use hyperon::space::grounding::*;
 
 use crate::atom::*;
+use crate::util::str_as_cstr;
 
 use std::os::raw::*;
+use std::ffi::CString;
 
 // GroundingSpace
 
@@ -66,13 +68,19 @@ pub struct binding_t {
 pub type bindings_callback_t = extern "C" fn(*const binding_t, size: usize, data: *mut c_void);
 
 #[no_mangle]
-pub unsafe extern "C" fn grounding_space_query(space: *const grounding_space_t,
+pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
         pattern: *const atom_t, callback: bindings_callback_t, data: *mut c_void) {
-    let results = (*space).space.query(&((*pattern).atom));
+    let results;
+    unsafe { results = (*space).space.query(&((*pattern).atom)); }
     for result in results {
-        let vec = result.iter().map(|(k, v)| binding_t{
-                var: k.name().as_ptr().cast::<c_char>(),
-                atom: (v as *const Atom).cast::<atom_t>()
+        let mut vars : Vec<CString> = Vec::new();
+        let vec = result.iter().map(|(k, v)| {
+                // prevent C string from deallocation before callback is called
+                vars.push(str_as_cstr(k.name()));
+                binding_t{
+                    var: vars.last().unwrap().as_ptr(),
+                    atom: (v as *const Atom).cast::<atom_t>()
+                }
             }).collect::<Vec<binding_t>>();
         callback(vec.as_ptr(), vec.len(), data);
     }

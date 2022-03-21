@@ -22,7 +22,6 @@ void copy_to_output(char const* str, void* context) {
 
 void query_callback(binding_t const* results, uintptr_t size, void* data) {
 	struct output_t *output = data;
-	char atom_str[1024];
 	for (int i = 0; i < size; ++i) {
 		binding_t const* result = results + i;
 		output->len += snprintf(output->str + output->len, 1024 - output->len, "%s: ", results->var);
