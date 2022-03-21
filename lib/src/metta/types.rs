@@ -107,7 +107,7 @@ pub fn validate_atom(space: &GroundingSpace, atom: &Atom) -> bool {
                 }
             }).any(std::convert::identity)
         },
-        _ => panic!("Atom::Expression is expected as an argument"),
+        _ => true,
     }
 }
 
@@ -193,6 +193,12 @@ mod tests {
     }
 
     #[test]
+    fn validate_symbol() {
+        let space = GroundingSpace::new();
+        assert!(validate_atom(&space, &Atom::sym("a")));
+    }
+
+    #[test]
     fn simple_types() {
         init_logger();
         let space = metta_space("
@@ -257,4 +263,5 @@ mod tests {
 
         assert!(validate_atom(&space, &atom("(h a)")));
     }
+
 }
