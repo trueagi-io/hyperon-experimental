@@ -273,8 +273,8 @@ PYBIND11_MODULE(hyperonpy, m) {
 	m.def("check_type", [](CGroundingSpace space, CAtom atom, CAtomType type) { 
 			return check_type(space.ptr, atom.ptr, type.ptr);
 		}, "Check if atom is an instance of the passed type");
-	m.def("validate_expr", [](CGroundingSpace space, CAtom expr) { 
-			return validate_expr(space.ptr, expr.ptr);
+	m.def("validate_atom", [](CGroundingSpace space, CAtom expr) { 
+			return validate_atom(space.ptr, expr.ptr);
 		}, "Validate expression arguments correspond to the operation type");
 }
 

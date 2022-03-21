@@ -25,7 +25,7 @@ START_TEST (test_check_type)
 }
 END_TEST
 
-START_TEST (test_validate_expr)
+START_TEST (test_validate_atom)
 {
 	grounding_space_t* space = grounding_space_new();
 	grounding_space_add(space, expr(atom_sym(":"), atom_sym("a"), atom_sym("A"), 0));
@@ -33,7 +33,7 @@ START_TEST (test_validate_expr)
 	grounding_space_add(space, expr(atom_sym(":"), atom_sym("foo"), expr(atom_sym("->"), atom_sym("A"), atom_sym("B"), 0), 0));
 
     atom_t* foo = expr(atom_sym("foo"), atom_sym("a"), 0);
-    ck_assert(validate_expr(space, foo));
+    ck_assert(validate_atom(space, foo));
     atom_free(foo);
 }
 END_TEST
@@ -41,7 +41,7 @@ END_TEST
 void init_test(TCase* test_case) {
     tcase_add_checked_fixture(test_case, setup, teardown);
     tcase_add_test(test_case, test_check_type);
-    tcase_add_test(test_case, test_validate_expr);
+    tcase_add_test(test_case, test_validate_atom);
 }
 
 TEST_MAIN(init_test);

@@ -12,10 +12,10 @@ class AtomTest(unittest.TestCase):
         self.assertTrue(check_type(space, S("a"), AtomType.specific(S("A"))))
         self.assertFalse(check_type(space, S("a"), AtomType.specific(S("B"))))
 
-    def test_validate_expr(self):
+    def test_validate_atom(self):
         space = GroundingSpace()
         space.add_atom(E(S(":"), S("a"), S("A")))
         space.add_atom(E(S(":"), S("b"), S("B")))
         space.add_atom(E(S(":"), S("foo"), E(S("->"), S("A"), S("B"))))
 
-        self.assertTrue(validate_expr(space, E(S("foo"), S("a"))))
+        self.assertTrue(validate_atom(space, E(S("foo"), S("a"))))

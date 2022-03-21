@@ -117,6 +117,10 @@ impl GroundingSpace {
     pub fn borrow_vec(&self) -> Ref<Vec<Atom>> {
         self.content.borrow()
     }
+
+    pub fn leak(self) -> Vec<Atom> {
+        self.content.take()
+    }
 }
 
 impl PartialEq for GroundingSpace {
