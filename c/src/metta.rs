@@ -144,6 +144,6 @@ pub unsafe extern "C" fn check_type(space: *const grounding_space_t, atom: *cons
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn validate_expr(space: *const grounding_space_t, atom: *const atom_t) -> bool {
-    hyperon::metta::types::validate_expr(&(*space).space, &(*atom).atom)
+pub unsafe extern "C" fn validate_atom(space: *const grounding_space_t, atom: *const atom_t) -> bool {
+    hyperon::metta::types::validate_atom(&(*space).space, &(*atom).atom)
 }

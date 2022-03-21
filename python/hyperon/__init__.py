@@ -246,5 +246,5 @@ class AtomType:
 def check_type(gnd_space, atom, type):
     return hp.check_type(gnd_space.cspace, atom.catom, type.ctype)
 
-def validate_expr(gnd_space, expr):
-    return hp.validate_expr(gnd_space.cspace, expr.catom)
+def validate_atom(gnd_space, expr):
+    return hp.validate_atom(gnd_space.cspace, expr.catom)

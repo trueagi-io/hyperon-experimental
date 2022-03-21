@@ -90,7 +90,7 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
     &expr.children().as_slice()[1..]
 }
 
-pub fn validate_expr(space: &GroundingSpace, atom: &Atom) -> bool {
+pub fn validate_atom(space: &GroundingSpace, atom: &Atom) -> bool {
     match atom {
         Atom::Expression(expr) => {
             let op = get_op(expr);
@@ -184,12 +184,12 @@ mod tests {
     }
 
     #[test]
-    fn test_validate_expr() {
+    fn test_validate_atom() {
         init_logger();
         let space = grammar_space();
         let expr = expr!("answer", ("do", "you", "like", ("a", "pizza")));
 
-        assert_eq!(validate_expr(&space, &expr), true);
+        assert_eq!(validate_atom(&space, &expr), true);
     }
 
     #[test]
@@ -222,7 +222,7 @@ mod tests {
             (: b B)
         ");
 
-        assert!(validate_expr(&space, &atom("(a b)")));
+        assert!(validate_atom(&space, &atom("(a b)")));
     }
 
     #[test]
@@ -232,7 +232,7 @@ mod tests {
             (: a (-> B A))
         ");
 
-        assert!(validate_expr(&space, &atom("(a b)")));
+        assert!(validate_atom(&space, &atom("(a b)")));
     }
 
     #[ignore]
@@ -255,6 +255,6 @@ mod tests {
             (: h (-> (-> B A) C))
         ");
 
-        assert!(validate_expr(&space, &atom("(h a)")));
+        assert!(validate_atom(&space, &atom("(h a)")));
     }
 }
