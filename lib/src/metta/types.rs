@@ -43,7 +43,7 @@ fn check_sub_types(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> bool {
 fn check_specific_type(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> bool {
     log::debug!("check_specific_type: atom: {:?}, typ: {:?}", atom, typ);
     let result = match (atom, typ) {
-        (_, Atom::Symbol(_)) =>
+        (_, Atom::Symbol(_)) | (Atom::Symbol(_), _) =>
             query_super_type(space, atom, typ).is_empty().not()
                 || check_sub_types(space, atom, typ),
         (Atom::Expression(expr), Atom::Expression(typ_expr)) =>
@@ -61,48 +61,51 @@ pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
     }
 }
 
-fn first_arg_typ(fn_typ: &Atom) -> (AtomType, Option<&Atom>) {
-    match fn_typ {
-        Atom::Expression(expr) => {
-            let children = expr.children();
-            assert_eq!(children[0], Atom::sym("->"));
-            let typ = children[1].clone();
-            let fn_typ = if children.len() == 3 { Option::from(&children[2]) } else { None };
-            (AtomType::Specific(typ), fn_typ)
-        },
-        _ => panic!("Non function type")
-    }
-}
-
-fn check_arg_types(space: &GroundingSpace, args: &[Atom], fn_typ: &Atom) -> bool {
-    log::debug!("check_args_type:, args: {:?}, fn_typ: {:?}", args, fn_typ);
-    let is_expr = matches!(fn_typ, Atom::Expression(_));
-    let args_empty = args.is_empty();
-    if is_expr && !args_empty {
-        let (typ, fn_typ) = first_arg_typ(fn_typ);
-        check_type(space, &args[0], &typ) && check_arg_types(space, &args[1..], fn_typ.unwrap_or(&Atom::expr(&[])))
-    } else {
-        !is_expr && args_empty
-    }
-}
-
 fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     let var_x = VariableAtom::from("X");
     let mut types = query_super_type(space, atom, &Atom::Variable(var_x.clone()));
     types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect()
 }
 
+fn get_arg_types(fn_typ: &Atom) -> Vec<AtomType> {
+    let fn_typ = fn_typ.clone();
+    match fn_typ {
+        Atom::Expression(mut expr) => {
+            let len = expr.children().len();
+            assert!(len > 0);
+            let mut children = expr.children_mut()
+                .drain(0..(len - 1));
+            assert_eq!(children.next().unwrap(), Atom::sym("->"));
+            children.map(|typ| AtomType::Specific(typ)).collect()
+        },
+        _ => panic!("Non function type")
+    }
+}
+
 fn get_op(expr: &ExpressionAtom) -> &Atom {
     expr.children().get(0).expect("Non-empty expression is expected")
+}
+
+fn get_args(expr: &ExpressionAtom) -> &[Atom] {
+    &expr.children().as_slice()[1..]
 }
 
 pub fn validate_expr(space: &GroundingSpace, atom: &Atom) -> bool {
     match atom {
         Atom::Expression(expr) => {
             let op = get_op(expr);
-            let args = &expr.children().as_slice()[1..];
-            get_types(space, op).iter().map(|typ| check_arg_types(space, args, typ))
-                .any(std::convert::identity)
+            let args = get_args(expr);
+            get_types(space, op).iter().map(|fn_typ| {
+                let arg_types = get_arg_types(fn_typ);
+                log::trace!("arg_types: {:?}", arg_types);
+                if args.len() == arg_types.len() {
+                    std::iter::zip(args, arg_types).map(|(arg, typ)| {
+                        get_types(space, arg).len() == 0 || check_type(space, arg, &typ)
+                    }).all(std::convert::identity)
+                } else {
+                    false
+                }
+            }).any(std::convert::identity)
         },
         _ => panic!("Atom::Expression is expected as an argument"),
     }
@@ -111,6 +114,8 @@ pub fn validate_expr(space: &GroundingSpace, atom: &Atom) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metta::metta_space;
+    use crate::metta::metta_atom as atom;
     
     fn init_logger() {
         let _ = env_logger::builder().is_test(true).try_init();
@@ -181,10 +186,75 @@ mod tests {
     #[test]
     fn test_validate_expr() {
         init_logger();
-
         let space = grammar_space();
         let expr = expr!("answer", ("do", "you", "like", ("a", "pizza")));
 
         assert_eq!(validate_expr(&space, &expr), true);
+    }
+
+    #[test]
+    fn simple_types() {
+        init_logger();
+        let space = metta_space("
+            (: blue Color)
+            (: balloon Object)
+        ");
+
+        assert!(check_type(&space, &atom("(blue balloon)"),
+            &AtomType::Specific(atom("(Color Object)"))));
+    }
+
+    #[test]
+    fn arrow_type() {
+        init_logger();
+        let space = metta_space("
+            (: a (-> B A))
+        ");
+
+        assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("(-> B A)"))));
+    }
+
+    #[test]
+    fn arrow_allows_specific_type() {
+        init_logger();
+        let space = metta_space("
+            (: a (-> B A))
+            (: b B)
+        ");
+
+        assert!(validate_expr(&space, &atom("(a b)")));
+    }
+
+    #[test]
+    fn arrow_allows_undefined_type() {
+        init_logger();
+        let space = metta_space("
+            (: a (-> B A))
+        ");
+
+        assert!(validate_expr(&space, &atom("(a b)")));
+    }
+
+    #[ignore]
+    #[test]
+    fn arrow_has_type_of_returned_value() {
+        init_logger();
+        let space = metta_space("
+            (: a (-> B A))
+            (: b B)
+        ");
+
+        assert!(check_type(&space, &atom("(a b)"), &AtomType::Specific(atom("A"))));
+    }
+
+    #[test]
+    fn nested_arrow_type() {
+        init_logger();
+        let space = metta_space("
+            (: a (-> B A))
+            (: h (-> (-> B A) C))
+        ");
+
+        assert!(validate_expr(&space, &atom("(h a)")));
     }
 }

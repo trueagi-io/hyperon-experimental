@@ -176,13 +176,6 @@ pub fn split_expr(expr: &Atom) -> Option<(&Atom, std::slice::Iter<Atom>)> {
     }
 }
 
-
-#[derive(Clone)]
-pub struct TopSubexprStream {
-    expr: Atom,
-    levels: Vec<usize>,
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
