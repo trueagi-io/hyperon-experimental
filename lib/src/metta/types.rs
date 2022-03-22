@@ -13,15 +13,21 @@ fn type_query(atom: &Atom, typ: &Atom) -> Atom {
     Atom::expr(&[Atom::sym(":"), atom.clone(), typ.clone()])
 }
 
-fn query_super_type(space: &GroundingSpace, sub: &Atom, sup: &Atom) -> Vec<Bindings> {
-    space.query(&type_query(sub, sup))
+fn query_super_type(space: &GroundingSpace, sub_type: &Atom, super_type: &Atom) -> Vec<Bindings> {
+    space.query(&type_query(sub_type, super_type))
 }
 
-fn query_sub_type(space: &GroundingSpace, typ: &Atom) -> Vec<Atom> {
+fn query_sub_type(space: &GroundingSpace, super_type: &Atom) -> Vec<Atom> {
     // TODO: query should check that sub type is a type and not another typed symbol
-    let var_x = VariableAtom::from("X");
-    let mut types = space.query(&type_query(&Atom::Variable(var_x.clone()), &typ));
-    types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect()
+    let var_x = VariableAtom::from("%X%");
+    let mut sub_types = space.query(&type_query(&Atom::Variable(var_x.clone()), &super_type));
+    sub_types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect()
+}
+
+fn check_sub_types(space: &GroundingSpace, atom: &Atom, super_type: &Atom) -> bool {
+    query_sub_type(space, super_type).iter()
+        .map(|typ| check_specific_type(space, atom, &typ))
+        .any(std::convert::identity)
 }
 
 fn match_type_slice(space: &GroundingSpace, atoms: &[Atom], types: &[Atom]) -> bool {
@@ -34,21 +40,46 @@ fn match_type_slice(space: &GroundingSpace, atoms: &[Atom], types: &[Atom]) -> b
     }
 }
 
-fn check_sub_types(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> bool {
-    query_sub_type(space, typ).iter()
-        .map(|typ| check_specific_type(space, atom, &typ))
-        .any(std::convert::identity)
+fn is_func(typ: &Atom) -> bool {
+    match typ {
+        Atom::Expression(expr) => {
+            expr.children().first() == Some(&Atom::sym("->"))
+        },
+        _ => false,
+    }
 }
 
 fn check_specific_type(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> bool {
     log::debug!("check_specific_type: atom: {:?}, typ: {:?}", atom, typ);
     let result = match (atom, typ) {
-        (_, Atom::Symbol(_)) | (Atom::Symbol(_), _) =>
-            query_super_type(space, atom, typ).is_empty().not()
-                || check_sub_types(space, atom, typ),
+        // expression type case
         (Atom::Expression(expr), Atom::Expression(typ_expr)) =>
             match_type_slice(space, expr.children().as_slice(), typ_expr.children().as_slice()),
-        _ => false,
+        // expression atom case
+        (Atom::Expression(expr), typ) => {
+            let op = get_op(expr);
+            let args = get_args(expr);
+            get_types(space, op).iter()
+                .map(|fn_typ| {
+                    is_func(fn_typ) && {
+                        let (arg_types, ret) = get_arg_types(fn_typ);
+                        //log::trace!("check_specific_type: arg_types: {:?}, ret: {:?}", arg_types, ret);
+                        match_type_slice(space, args, arg_types) && (
+                            typ == ret
+                            || query_super_type(space, ret, typ).is_empty().not()
+                            || check_sub_types(space, ret, typ)
+                    )}
+                }).any(std::convert::identity)
+            || query_super_type(space, atom, typ).is_empty().not()
+            || check_sub_types(space, atom, typ)
+        },
+        // single atom case
+        (atom, typ) => {
+            let types = get_types(space, atom);
+            types.is_empty()
+                || types.contains(typ)
+                || check_sub_types(space, atom, typ)
+        },
     };
     log::debug!("check_specific_type: result: {}", result);
     result
@@ -67,18 +98,17 @@ fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect()
 }
 
-fn get_arg_types(fn_typ: &Atom) -> Vec<AtomType> {
-    let fn_typ = fn_typ.clone();
+fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
+    //log::trace!("get_arg_types: {}", fn_typ);
     match fn_typ {
-        Atom::Expression(mut expr) => {
-            let len = expr.children().len();
-            assert!(len > 0);
-            let mut children = expr.children_mut()
-                .drain(0..(len - 1));
-            assert_eq!(children.next().unwrap(), Atom::sym("->"));
-            children.map(|typ| AtomType::Specific(typ)).collect()
+        Atom::Expression(expr) => {
+            let children = expr.children().as_slice();
+            match children {
+                [op,  args @ .., res] if *op == Atom::sym("->") => (args, res),
+                _ => panic!("Incorrect function type: {}", fn_typ)
+            }
         },
-        _ => panic!("Non function type")
+        _ => panic!("Incorrect function type: {}", fn_typ)
     }
 }
 
@@ -91,21 +121,18 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 }
 
 pub fn validate_atom(space: &GroundingSpace, atom: &Atom) -> bool {
+    log::debug!("validate_atom: atom: {}", atom);
     match atom {
         Atom::Expression(expr) => {
             let op = get_op(expr);
             let args = get_args(expr);
-            get_types(space, op).iter().map(|fn_typ| {
-                let arg_types = get_arg_types(fn_typ);
-                log::trace!("arg_types: {:?}", arg_types);
-                if args.len() == arg_types.len() {
-                    std::iter::zip(args, arg_types).map(|(arg, typ)| {
-                        get_types(space, arg).len() == 0 || check_type(space, arg, &typ)
-                    }).all(std::convert::identity)
-                } else {
-                    false
-                }
-            }).any(std::convert::identity)
+            get_types(space, op).iter()
+                .map(|fn_typ| {
+                    //log::trace!("try type: {}", fn_typ);
+                    let (arg_types, _) = get_arg_types(fn_typ);
+                    match_type_slice(space, args, arg_types)
+                })
+                .any(std::convert::identity)
         },
         _ => true,
     }
@@ -151,19 +178,19 @@ mod tests {
         let verb = AtomType::Specific(Atom::sym("Verb"));
 
         let nonsense = Atom::sym("nonsense");
-        assert_eq!(check_type(&space, &nonsense, &AtomType::Undefined), true);
-        assert_eq!(check_type(&space, &nonsense, &aux), false);
+        assert!(check_type(&space, &nonsense, &AtomType::Undefined));
+        assert!(!check_type(&space, &nonsense, &aux));
 
         let _do = Atom::sym("do");
-        assert_eq!(check_type(&space, &_do, &AtomType::Undefined), true);
-        assert_eq!(check_type(&space, &_do, &aux), true);
-        assert_eq!(check_type(&space, &_do, &verb), true);
-        assert_eq!(check_type(&space, &_do, &AtomType::Specific(Atom::sym("Noun"))), false);
+        assert!(check_type(&space, &_do, &AtomType::Undefined));
+        assert!(check_type(&space, &_do, &aux));
+        assert!(check_type(&space, &_do, &verb));
+        assert!(!check_type(&space, &_do, &AtomType::Specific(Atom::sym("Noun"))));
 
         let var = Atom::var("var");
-        assert_eq!(check_type(&space, &var, &AtomType::Undefined), true);
-        assert_eq!(check_type(&space, &var, &aux), true);
-        assert_eq!(check_type(&space, &var, &verb), true);
+        assert!(check_type(&space, &var, &AtomType::Undefined));
+        assert!(check_type(&space, &var, &aux));
+        assert!(check_type(&space, &var, &verb));
     }
 
     #[test]
@@ -176,11 +203,37 @@ mod tests {
         space.add(expr!(":", ("Pron", "Verb", "Noun"), "Statement"));
 
         let i_like_music = expr!("i", "like", "music");
-        assert_eq!(check_type(&space, &i_like_music, &AtomType::Undefined), true);
-        assert_eq!(check_type(&space, &i_like_music, &AtomType::Specific(expr!("Pron", "Verb", "Noun"))), true);
-        assert_eq!(check_type(&space, &i_like_music, &AtomType::Specific(Atom::sym("Statement"))), true);
+        assert!(check_type(&space, &i_like_music, &AtomType::Undefined));
+        assert!(check_type(&space, &i_like_music, &AtomType::Specific(expr!("Pron", "Verb", "Noun"))));
+        assert!(check_type(&space, &i_like_music, &AtomType::Specific(Atom::sym("Statement"))));
 
-        assert_eq!(check_type(&space, &expr!("do", "you", "like", "music"), &AtomType::Specific(Atom::sym("Quest"))), true);
+        assert!(check_type(&space, &expr!("do", "you", "like", "music"), &AtomType::Specific(Atom::sym("Quest"))));
+    }
+
+    #[test]
+    fn nested_type() {
+        init_logger();
+        let space = metta_space("
+            (: a A)
+            (: A B)
+            (: B C)
+            (: C D)
+        ");
+
+        assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("D"))));
+    }
+
+    #[test]
+    fn nested_loop_type() {
+        init_logger();
+        let space = metta_space("
+            (: B A)
+            (: a A)
+            (: A B)
+            (: B C)
+        ");
+
+        assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("C"))));
     }
 
     #[test]
@@ -189,7 +242,7 @@ mod tests {
         let space = grammar_space();
         let expr = expr!("answer", ("do", "you", "like", ("a", "pizza")));
 
-        assert_eq!(validate_atom(&space, &expr), true);
+        assert!(validate_atom(&space, &expr));
     }
 
     #[test]
@@ -241,7 +294,6 @@ mod tests {
         assert!(validate_atom(&space, &atom("(a b)")));
     }
 
-    #[ignore]
     #[test]
     fn arrow_has_type_of_returned_value() {
         init_logger();
@@ -264,4 +316,15 @@ mod tests {
         assert!(validate_atom(&space, &atom("(h a)")));
     }
 
+    #[test]
+    fn nested_return_type() {
+        init_logger();
+        let space = metta_space("
+            (: a (-> B A))
+            (: b B)
+            (: h (-> A C))
+        ");
+
+        assert!(validate_atom(&space, &atom("(h (a b))")));
+    }
 }
