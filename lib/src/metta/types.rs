@@ -37,7 +37,7 @@ fn check_types(space: &GroundingSpace, atoms: &[Atom], types: &[Atom]) -> bool {
             .all(std::convert::identity)
 }
 
-fn is_func(typ: &Atom) -> bool {
+fn is_func(typ: &&Atom) -> bool {
     match typ {
         Atom::Expression(expr) => {
             expr.children().first() == Some(&Atom::sym("->"))
@@ -56,16 +56,16 @@ fn check_specific_type(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> bool 
         (Atom::Expression(expr), typ) => {
             let op = get_op(expr);
             let args = get_args(expr);
-            get_types(space, op).iter()
+            let types = get_types(space, op);
+            types.iter().filter(is_func)
                 .map(|fn_typ| {
-                    is_func(fn_typ) && {
-                        let (arg_types, ret) = get_arg_types(fn_typ);
-                        //log::trace!("check_specific_type: arg_types: {:?}, ret: {:?}", arg_types, ret);
-                        check_types(space, args, arg_types) && (
-                            typ == ret
-                            || query_super_type(space, ret, typ).is_empty().not()
-                            || check_sub_types(space, ret, typ)
-                    )}
+                    let (arg_types, ret) = get_arg_types(fn_typ);
+                    //log::trace!("check_specific_type: arg_types: {:?}, ret: {:?}", arg_types, ret);
+                    check_types(space, args, arg_types) && (
+                        typ == ret
+                        || query_super_type(space, ret, typ).is_empty().not()
+                        || check_sub_types(space, ret, typ)
+                    )
                 }).any(std::convert::identity)
             || query_super_type(space, atom, typ).is_empty().not()
             || check_sub_types(space, atom, typ)
@@ -123,13 +123,15 @@ pub fn validate_atom(space: &GroundingSpace, atom: &Atom) -> bool {
         Atom::Expression(expr) => {
             let op = get_op(expr);
             let args = get_args(expr);
-            get_types(space, op).iter()
-                .map(|fn_typ| {
-                    //log::trace!("try type: {}", fn_typ);
-                    let (arg_types, _) = get_arg_types(fn_typ);
-                    check_types(space, args, arg_types)
-                })
-                .any(std::convert::identity)
+            let types = get_types(space, op);
+            let mut fn_types = types.iter().filter(is_func).peekable();
+            
+            fn_types.peek() == None
+                || fn_types.map(|fn_typ| {
+                        //log::trace!("try type: {}", fn_typ);
+                        let (arg_types, _) = get_arg_types(fn_typ);
+                        check_types(space, args, arg_types)
+                    }).any(std::convert::identity)
         },
         _ => true,
     }
@@ -344,5 +346,16 @@ mod tests {
         ");
 
         assert!(validate_atom(&space, &atom("(h (a b))")));
+    }
+
+    #[test]
+    fn validate_non_functional_expression() {
+        init_logger();
+        let space = metta_space("
+            (: a A)
+            (: b B)
+        ");
+
+        assert!(validate_atom(&space, &atom("(a b)")));
     }
 }
