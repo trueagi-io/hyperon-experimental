@@ -354,6 +354,24 @@ mod tests {
         //assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Time))")));
     }
 
+    #[ignore]
+    #[test]
+    fn dep_types_prop() {
+        init_logger();
+        let space = metta_space("
+            (: Sam Entity)
+            (: Frog (-> Entity Prop))
+            (: Green (-> Entity Prop))
+            (: Croaks (-> Entity Prop))
+            (: GreenAndCroaksIsFrog (-> (Green $t) (Croaks $t) (Frog $t)))
+            (: SamIsGreen (Green Sam))
+            (: SamCroaks (Croaks Sam))
+        ");
+        assert!(validate_atom(&space, &atom("(GreenAndCroaksIsFrog SamIsGreen SamCroaks)")));
+        assert!(check_type(&space, &atom("(GreenAndCroaksIsFrog SamIsGreen SamCroaks)"),
+                           &AtomType::Specific(atom("(Frog Sam)"))));
+    }
+
     #[test]
     fn arrow_allows_undefined_type() {
         init_logger();
