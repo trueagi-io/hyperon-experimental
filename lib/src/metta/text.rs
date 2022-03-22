@@ -60,6 +60,7 @@ impl<'a> SExprParser<'a> {
                     self.it.next();
                     return Some(self.parse_expr(tokenizer));
                 },
+                ')' => panic!("Unexpected right bracket"),
                 _ => {
                     let token = next_token(&mut self.it);
                     let constr = tokenizer.find_token(token.as_str());
@@ -234,5 +235,12 @@ mod tests {
 
         assert_eq!("n".to_string(), next_token(&mut it));
         assert_eq!(Some(')'), it.next());
+    }
+
+    #[test]
+    #[should_panic(expected = "Unexpected right bracket")]
+    fn test_panic_on_unbalanced_brackets() {
+        let mut parser = SExprParser::new("(a))");
+        while let Some(_) = parser.parse(&Tokenizer::new()) {}
     }
 }
