@@ -430,4 +430,16 @@ mod tests {
 
         assert!(validate_atom(&space, &atom("(a b)")));
     }
+
+    #[test]
+    fn check_type_non_functional_expression() {
+        init_logger();
+        let space = metta_space("
+            (: a (-> C D))
+            (: a A)
+            (: b B)
+        ");
+
+        assert!(check_type(&space, &atom("(a b)"), &AtomType::Specific(atom("(A B)"))));
+    }
 }
