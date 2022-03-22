@@ -18,7 +18,7 @@ START_TEST (test_check_type)
 
     atom_t* nonsense = atom_sym("nonsense");
     ck_assert(check_type(space, nonsense, ATOM_TYPE_UNDEFINED));
-    ck_assert(!check_type(space, nonsense, verb));
+    ck_assert(check_type(space, nonsense, verb));
     atom_free(nonsense);
 
     atom_type_free(verb);
