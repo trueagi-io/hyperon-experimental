@@ -299,9 +299,20 @@ mod tests {
         let space = metta_space("
             (: a (-> B A))
             (: b B)
+            (: c C)
         ");
 
         assert!(validate_atom(&space, &atom("(a b)")));
+        assert!(!validate_atom(&space, &atom("(a c)")));
+    }
+
+    #[test]
+    fn validate_basic_expr() {
+        init_logger();
+        let space = GroundingSpace::new();
+        assert!(validate_atom(&space, &expr!({5})));
+        assert!(validate_atom(&space, &expr!("+", {3}, {5})));
+        assert!(validate_atom(&space, &expr!("=", ("f", x), x)));
     }
 
     #[test]
