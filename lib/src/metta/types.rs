@@ -316,6 +316,63 @@ mod tests {
     }
 
     #[test]
+    fn simple_dep_types() {
+        init_logger();
+        let space = metta_space("
+            (: = (-> $t $t Prop))
+            (: Entity Prop)
+            (: Human (-> Entity Prop))
+            (: Socrates Entity)
+            (: (Human Socrates) Prop)
+            (: Plato Entity)
+            (: Mortal (-> Entity Prop))
+            (: HumansAreMortal (-> (Human $t) (Mortal $t)))
+            (: Time NotEntity)
+            (: SocratesIsHuman (Human Socrates))
+        ");
+        let t = &AtomType::Specific(atom("Prop"));
+        assert!(check_type(&space, &atom("(Human Socrates)"), t));
+        assert!(check_type(&space, &atom("(Human Plato)"), t));
+        assert!(!check_type(&space, &atom("(Human Time)"), t));
+        assert!(!validate_atom(&space, &atom("(Human Time)")));
+        assert!(check_type(&space, &atom("(= Socrates Socrates)"), t));
+        assert!(check_type(&space, &atom("(= Socrates Plato)"), t));
+        assert!(check_type(&space, &atom("(= Socrates Untyped)"), t)); //?
+        assert!(!check_type(&space, &atom("(= Socrates Time)"), t));
+        //assert!(validate_atom(&space, &atom("(HumansAreMortal SocratesIsHuman)")));
+        //assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Socrates))")));
+        //assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Plato))")));
+        //assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Time))")));
+        //assert!(!validate_atom(&space, &atom("(HumansAreMortal Human)")));
+        //assert!(check_type(&space, &atom("(HumansAreMortal (Human Socrates))"),
+        //                   &AtomType::Specific(atom("(Mortal Socrates)"))));
+        //assert!(check_type(&space, &atom("(HumansAreMortal SocratesIsHuman)"),
+        //                   &AtomType::Specific(atom("(Mortal Socrates)"))));
+        //assert!(validate_atom(&space, &atom("(= SocratesIsHuman (Human Socrates))")));
+        //assert!(validate_atom(&space, &atom("(= SocratesIsHuman (Human Plato))")));
+        //assert!(check_type(&space, &atom("(= SocratesIsHuman (Human Socrates))"), t));
+        //assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Time))")));
+    }
+
+    #[ignore]
+    #[test]
+    fn dep_types_prop() {
+        init_logger();
+        let space = metta_space("
+            (: Sam Entity)
+            (: Frog (-> Entity Prop))
+            (: Green (-> Entity Prop))
+            (: Croaks (-> Entity Prop))
+            (: GreenAndCroaksIsFrog (-> (Green $t) (Croaks $t) (Frog $t)))
+            (: SamIsGreen (Green Sam))
+            (: SamCroaks (Croaks Sam))
+        ");
+        assert!(validate_atom(&space, &atom("(GreenAndCroaksIsFrog SamIsGreen SamCroaks)")));
+        assert!(check_type(&space, &atom("(GreenAndCroaksIsFrog SamIsGreen SamCroaks)"),
+                           &AtomType::Specific(atom("(Frog Sam)"))));
+    }
+
+    #[test]
     fn arrow_allows_undefined_type() {
         init_logger();
         let space = metta_space("
