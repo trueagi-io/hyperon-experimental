@@ -12,7 +12,7 @@ become familiar with Hyperon features.
 
 # Prerequisites
 
-Install Rust v1.55, see [Rust installation
+Install latest stable Rust, see [Rust installation
 page](https://www.rust-lang.org/tools/install)
 
 # Hyperon library
