@@ -27,12 +27,19 @@ fn query_super_types(space: &GroundingSpace, sub_type: &Atom) -> Vec<Atom> {
     super_types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect()
 }
 
-fn add_super_types(space: &GroundingSpace, sub_types: &mut Vec<Atom>) {
+fn add_super_types(space: &GroundingSpace, sub_types: &mut Vec<Atom>, from: usize) {
     let mut types = Vec::new();
-    sub_types.iter().for_each(|typ| types.append(&mut query_super_types(space, typ)));
+    sub_types.iter().skip(from).for_each(|typ| {
+        for typ in query_super_types(space, typ) {
+            if !sub_types.contains(&typ) {
+                types.push(typ);
+            }
+        }
+    });
     if !types.is_empty() {
-        add_super_types(space, &mut types);
-        sub_types.append(&mut types);
+        let from = sub_types.len();
+        sub_types.append(&mut types.clone());
+        add_super_types(space, sub_types, from);
     }
 }
 
@@ -63,7 +70,7 @@ fn query_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     let var_x = VariableAtom::from("%X%");
     let mut types = query_has_type(space, atom, &Atom::Variable(var_x.clone()));
     let mut types = types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect();
-    add_super_types(space, &mut types);
+    add_super_types(space, &mut types, 0);
     types
 }
 
@@ -121,7 +128,7 @@ fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
                 }).collect();
             }
             types.append(&mut query_types(space, atom));
-            add_super_types(space, &mut types);
+            add_super_types(space, &mut types, 0);
 
             // functional types
             let op = get_op(expr);
@@ -245,32 +252,6 @@ mod tests {
 
     }
 
-    #[ignore]
-    #[test]
-    fn check_var_type() {
-        init_logger();
-        let space = metta_space("
-            (: $x A)
-            (: A B)
-        ");
-        
-        let x = Atom::var("x");
-        assert!(check_type(&space, &x, &AtomType::Undefined));
-        assert!(check_type(&space, &x, &AtomType::Specific(Atom::sym("A"))));
-        assert!(check_type(&space, &x, &AtomType::Specific(Atom::sym("B"))));
-    }
-
-    #[ignore]
-    #[test]
-    fn var_type_does_not_match_other_atoms() {
-        init_logger();
-        let space = metta_space("
-            (: $x A)
-        ");
-        
-        assert!(!check_type(&space, &Atom::sym("a"), &AtomType::Specific(Atom::sym("A"))));
-    }
-
     #[test]
     fn test_check_expr_type() {
         let mut space = GroundingSpace::new();
@@ -301,7 +282,6 @@ mod tests {
         assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("D"))));
     }
 
-    #[ignore]
     #[test]
     fn nested_loop_type() {
         init_logger();
