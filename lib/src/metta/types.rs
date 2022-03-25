@@ -157,7 +157,7 @@ pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings)
         (Atom::Expression(expr1), Atom::Expression(expr2)) => {
             std::iter::zip(expr1.children().iter(), expr2.children().iter())
                 .map(|(child1, child2)| match_reducted_types(child1, child2, bindings))
-                .reduce(|a, b| a || b)
+                .reduce(|a, b| a && b)
                 .unwrap_or(true)
         },
         (Atom::Expression(_), Atom::Symbol(sym))
@@ -404,7 +404,7 @@ mod tests {
         assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Socrates))")));
         assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Plato))")));
         assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Time))")));
-        //assert!(!validate_atom(&space, &atom("(HumansAreMortal Human)")));
+        assert!(!validate_atom(&space, &atom("(HumansAreMortal Human)")));
         assert!(!check_type(&space, &atom("(HumansAreMortal (Human Socrates))"),
                            &AtomType::Specific(atom("(Mortal Socrates)"))));
         assert!(check_type(&space, &atom("(HumansAreMortal SocratesIsHuman)"),
