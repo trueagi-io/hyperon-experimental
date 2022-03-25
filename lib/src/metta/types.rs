@@ -393,6 +393,7 @@ mod tests {
         assert!(check_type(&space, &atom("(Human Socrates)"), t));
         assert!(check_type(&space, &atom("(Human Plato)"), t));
         assert!(!check_type(&space, &atom("(Human Time)"), t));
+        assert!(!validate_atom(&space, &atom("(Human Time)")));
         assert!(!check_type(&space, &atom("(Human Time)"), &AtomType::Specific(atom("((-> Entity Prop) NotEntity)"))));
         assert!(check_type(&space, &atom("(= Socrates Socrates)"), t));
         assert!(check_type(&space, &atom("(= Socrates Plato)"), t));
