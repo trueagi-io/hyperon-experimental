@@ -276,6 +276,62 @@ class ExamplesTest(unittest.TestCase):
         self.assertEqual(metta2.interpret('(borrow &space1 (how-it-works?))'), [S('success')])
         self.assertEqual(metta1.interpret('(how-it-works?)'), [S('failure')])
 
+    def test_custom_deptypes(self):
+        metta = MeTTa()
+        metta.add_parse('''
+            (= (:? $c)
+               (match &self (:= $c $t) $t))
+            (= (:? ($c $a))
+               (match &self (:= ($c (:? $a)) $t) $t))
+            (= (:? ($c $a $b))
+               (match &self (:= ($c (:? $a) (:? $b)) $t) $t))
+
+            (= (:check $c $t)
+               (match &self (:= $c $t) T))
+            (= (:check ($c $a) $t)
+               (match &self (:= ($c (:? $a)) $t) T))
+
+            (:= Entity Prop)
+            (:= (Human Entity) Prop)
+            (:= Socrates Entity)
+            (:= Plato Entity)
+            (:= (Mortal Entity) Prop)
+            (:= (HumansAreMortal (Human $t)) (Mortal $t))
+            (:= SocratesIsHuman (Human Socrates))
+
+            (:= Sam Entity)
+            (:= (Frog Entity) Prop)
+            (:= (Green Entity) Prop)
+            (:= (Croaks Entity) Prop)
+            (:= (GreenAndCroaksIsFrog (Green $t) (Croaks $t)) (Frog $t))
+            (:= SamIsGreen (Green Sam))
+            (:= SamCroaks (Croaks Sam))
+        ''')
+        self.assertEqual(metta.interpret("(:? (HumansAreMortal SocratesIsHuman))"),
+                                        [E(S('Mortal'), S('Socrates'))])
+        self.assertEqual(metta.interpret("(:check (HumansAreMortal SocratesIsHuman) (Mortal Socrates))"),
+                                        [S('T')])
+        self.assertEqual(metta.interpret("(:? (GreenAndCroaksIsFrog SamIsGreen SamCroaks))"),
+                                        [E(S('Frog'), S('Sam'))])
+        # Another syntax
+        metta = MeTTa()
+        metta.add_parse('''
+            (= (:? $c)
+               (match &self (:: $c $t) $t))
+            (= (:? ($c $a))
+               (match &self (:: $c (-> (:? $a) $t)) $t))
+
+            (:: Entity Prop)
+            (:: Human (-> Entity Prop))
+            (:: Socrates Entity)
+            (:: Plato Entity)
+            (:: Mortal (-> Entity Prop))
+            (:: HumansAreMortal (-> (Human $t) (Mortal $t)))
+            (:: SocratesIsHuman (Human Socrates))
+        ''')
+        self.assertEqual(metta.interpret("(:? (HumansAreMortal SocratesIsHuman))"),
+                                        [E(S('Mortal'), S('Socrates'))])
+
     def _test_visit_kim(self):
         atomese = Atomese()
         kb = GroundingSpace()
