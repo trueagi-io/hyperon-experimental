@@ -91,13 +91,13 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     log::trace!("get_reducted_types: atom: {}", atom);
     let types = match atom {
-        Atom::Variable(_) | Atom::Grounded(_) => vec![Atom::sym("Undefined")],
+        Atom::Variable(_) | Atom::Grounded(_) => vec![Atom::sym("%Undefined%")],
         Atom::Symbol(_) => {
             let types = query_types(space, atom);
             if !types.is_empty() {
                 types
             } else {
-                vec![Atom::sym("Undefined")]
+                vec![Atom::sym("%Undefined%")]
             }
         },
         Atom::Expression(expr) => {
@@ -149,7 +149,7 @@ pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings)
         (Atom::Variable(_), Atom::Variable(_)) => false,
         (Atom::Grounded(_), _) | (_, Atom::Grounded(_)) => false,
         (Atom::Symbol(sym1), Atom::Symbol(sym2)) => {
-            type1 == type2 || sym1.name() == "Undefined" || sym2.name() == "Undefined"
+            type1 == type2 || sym1.name() == "%Undefined%" || sym2.name() == "%Undefined%"
         },
         (Atom::Variable(var), typ) | (typ, Atom::Variable(var)) => {
             bindings.check_and_insert_binding(var, typ)
@@ -162,7 +162,7 @@ pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings)
         },
         (Atom::Expression(_), Atom::Symbol(sym))
             | (Atom::Symbol(sym), Atom::Expression(_))
-            if sym.name() == "Undefined" => true,
+            if sym.name() == "%Undefined%" => true,
         _ => false,
     };
     log::trace!("match_reducted_types: type1: {}, type2: {}, bindings: {} return {}", type1, type2, bindings, result);
@@ -182,7 +182,7 @@ fn get_matched_types(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(At
 }
 
 pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
-    let undefined = Atom::sym("Undefined");
+    let undefined = Atom::sym("%Undefined%");
     let typ = match typ {
         AtomType::Undefined => &undefined,
         AtomType::Specific(atom) => atom,
