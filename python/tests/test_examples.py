@@ -290,6 +290,10 @@ class ExamplesTest(unittest.TestCase):
                (match &self (:= $c $t) T))
             (= (:check ($c $a) $t)
                (match &self (:= ($c (:? $a)) $t) T))
+            (= (:check ($c $a $b) $t)
+               (match &self (:= ($c (:? $a) (:? $b)) $t) T))
+
+            (:= (= $t $t) Prop)
 
             (:= Entity Prop)
             (:= (Human Entity) Prop)
@@ -298,6 +302,7 @@ class ExamplesTest(unittest.TestCase):
             (:= (Mortal Entity) Prop)
             (:= (HumansAreMortal (Human $t)) (Mortal $t))
             (:= SocratesIsHuman (Human Socrates))
+            (:= SocratesIsMortal (Mortal Socrates))
 
             (:= Sam Entity)
             (:= (Frog Entity) Prop)
@@ -310,6 +315,10 @@ class ExamplesTest(unittest.TestCase):
         self.assertEqual(metta.interpret("(:? (HumansAreMortal SocratesIsHuman))"),
                                         [E(S('Mortal'), S('Socrates'))])
         self.assertEqual(metta.interpret("(:check (HumansAreMortal SocratesIsHuman) (Mortal Socrates))"),
+                                        [S('T')])
+        self.assertEqual(metta.interpret("(:? (= SocratesIsMortal (HumansAreMortal SocratesIsHuman)))"),
+                                        [S('Prop')])
+        self.assertEqual(metta.interpret("(:check (= (Mortal Plato) (Mortal Socrates)) Prop)"),
                                         [S('T')])
         self.assertEqual(metta.interpret("(:? (GreenAndCroaksIsFrog SamIsGreen SamCroaks))"),
                                         [E(S('Frog'), S('Sam'))])

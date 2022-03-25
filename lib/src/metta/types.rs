@@ -368,6 +368,7 @@ mod tests {
             (: HumansAreMortal (-> (Human $t) (Mortal $t)))
             (: Time NotEntity)
             (: SocratesIsHuman (Human Socrates))
+            (: SocratesIsMortal (Mortal Socrates))
         ");
         let t = &AtomType::Specific(atom("Prop"));
         assert!(check_type(&space, &atom("(Human Socrates)"), t));
@@ -395,6 +396,8 @@ mod tests {
         assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Plato))")));
         assert!(!check_type(&space, &atom("(= SocratesIsHuman (Human Socrates))"), t));
         assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Time))")));
+        //assert!(validate_atom(&space, &atom("(= SocratesIsMortal (HumansAreMortal SocratesIsHuman))")));
+        assert!(validate_atom(&space, &atom("(= (Mortal Socrates) (Mortal Plato))")));
     }
 
     #[test]
