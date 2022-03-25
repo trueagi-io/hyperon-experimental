@@ -103,12 +103,14 @@ fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
         Atom::Expression(expr) => {
             // tuple type
             let mut types = vec![Atom::expr(&[])];
-            for child in expr.children() {
+            for (i, child) in expr.children().iter().enumerate() {
                 let child_types = get_reducted_types(space, child);
+                let child_types = child_types.iter()
+                    .filter(|typ| i != 0 || !is_func(typ));
                 types = types.drain(0..).flat_map(|prev| -> Vec<Atom> {
                     match prev {
                         Atom::Expression(expr) => {
-                            child_types.iter().map(|typ| {
+                            child_types.clone().map(|typ| {
                                 let mut children = expr.children().clone();
                                 children.push(typ.clone());
                                 Atom::expr(children.as_slice())
@@ -137,7 +139,7 @@ fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             types
         },
     };
-    log::trace!("get_reducted_types: atom: {} -> {:?}", atom, types);
+    log::trace!("get_reducted_types: atom: {} return {:?}", atom, types);
     types
 }
 
@@ -163,7 +165,7 @@ pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings)
             if sym.name() == "Undefined" => true,
         _ => false,
     };
-    log::trace!("match_reducted_types: type1: {}, type2: {}, bindings: {} -> {}", type1, type2, bindings, result);
+    log::trace!("match_reducted_types: type1: {}, type2: {}, bindings: {} return {}", type1, type2, bindings, result);
     result
 }
 
@@ -350,7 +352,6 @@ mod tests {
         assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("(-> B A)"))));
     }
 
-    #[ignore]
     #[test]
     fn arrow_allows_specific_type() {
         init_logger();
@@ -362,7 +363,6 @@ mod tests {
 
         assert!(validate_atom(&space, &atom("(a b)")));
         assert!(!validate_atom(&space, &atom("(a c)")));
-        //assert!(check_type(&space, &atom("(a c)"), &AtomType::Specific(atom("((-> B A) C)"))));
     }
 
     #[test]
@@ -393,26 +393,27 @@ mod tests {
         assert!(check_type(&space, &atom("(Human Socrates)"), t));
         assert!(check_type(&space, &atom("(Human Plato)"), t));
         assert!(!check_type(&space, &atom("(Human Time)"), t));
-        assert!(check_type(&space, &atom("(Human Time)"), &AtomType::Specific(atom("((-> Entity Prop) NotEntity)"))));
+        assert!(!check_type(&space, &atom("(Human Time)"), &AtomType::Specific(atom("((-> Entity Prop) NotEntity)"))));
         assert!(check_type(&space, &atom("(= Socrates Socrates)"), t));
         assert!(check_type(&space, &atom("(= Socrates Plato)"), t));
-        //assert!(check_type(&space, &atom("(= Socrates Untyped)"), t)); //?
+        // TODO: should we type check this as (= Any Any) or (= Atom Atom)?
+        assert!(!check_type(&space, &atom("(= Socrates Untyped)"), t));
         assert!(!check_type(&space, &atom("(= Socrates Time)"), t));
 
         assert!(validate_atom(&space, &atom("(HumansAreMortal SocratesIsHuman)")));
-        //assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Socrates))")));
-        //assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Plato))")));
-        //assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Time))")));
+        assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Socrates))")));
+        assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Plato))")));
+        assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Time))")));
         //assert!(!validate_atom(&space, &atom("(HumansAreMortal Human)")));
-        assert!(check_type(&space, &atom("(HumansAreMortal (Human Socrates))"),
+        assert!(!check_type(&space, &atom("(HumansAreMortal (Human Socrates))"),
                            &AtomType::Specific(atom("(Mortal Socrates)"))));
         assert!(check_type(&space, &atom("(HumansAreMortal SocratesIsHuman)"),
                            &AtomType::Specific(atom("(Mortal Socrates)"))));
 
-        assert!(validate_atom(&space, &atom("(= SocratesIsHuman (Human Socrates))")));
-        assert!(validate_atom(&space, &atom("(= SocratesIsHuman (Human Plato))")));
-        //assert!(check_type(&space, &atom("(= SocratesIsHuman (Human Socrates))"), t));
-        //assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Time))")));
+        assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Socrates))")));
+        assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Plato))")));
+        assert!(!check_type(&space, &atom("(= SocratesIsHuman (Human Socrates))"), t));
+        assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Time))")));
     }
 
     #[test]
