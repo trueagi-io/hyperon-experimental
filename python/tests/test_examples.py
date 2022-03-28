@@ -290,14 +290,20 @@ class ExamplesTest(unittest.TestCase):
                (match &self (:= $c $t) T))
             (= (:check ($c $a) $t)
                (match &self (:= ($c (:? $a)) $t) T))
+            (= (:check ($c $a $b) $t)
+               (match &self (:= ($c (:? $a) (:? $b)) $t) T))
+
+            (:= (= $t $t) Prop)
 
             (:= Entity Prop)
             (:= (Human Entity) Prop)
             (:= Socrates Entity)
             (:= Plato Entity)
+            (: Time NotEntity)
             (:= (Mortal Entity) Prop)
             (:= (HumansAreMortal (Human $t)) (Mortal $t))
             (:= SocratesIsHuman (Human Socrates))
+            (:= SocratesIsMortal (Mortal Socrates))
 
             (:= Sam Entity)
             (:= (Frog Entity) Prop)
@@ -311,8 +317,22 @@ class ExamplesTest(unittest.TestCase):
                                         [E(S('Mortal'), S('Socrates'))])
         self.assertEqual(metta.interpret("(:check (HumansAreMortal SocratesIsHuman) (Mortal Socrates))"),
                                         [S('T')])
+        self.assertEqual(metta.interpret("(:? (= SocratesIsMortal (HumansAreMortal SocratesIsHuman)))"),
+                                        [S('Prop')])
+        self.assertEqual(metta.interpret("(:check (= (Mortal Plato) (Mortal Socrates)) Prop)"),
+                                        [S('T')])
+        self.assertEqual(metta.interpret("(:check (= (Human Socrates) (Mortal Socrates)) Prop)"),
+                                        [S('T')]) # they are both of Prop type and can be equated
         self.assertEqual(metta.interpret("(:? (GreenAndCroaksIsFrog SamIsGreen SamCroaks))"),
                                         [E(S('Frog'), S('Sam'))])
+        # some negative examples
+        self.assertEqual(metta.interpret("(:check (= SocratesIsHuman SocratesIsMortal) Prop)"), [])
+        self.assertEqual(metta.interpret("(:? (SocratesIsHuman (Human Socrates)))"), [])
+        self.assertEqual(metta.interpret("(:? (Human Time))"), [])
+        # TODO: doesn't work, because the expression is matched agains type definition of HumansAreMortal
+        #       with grounding $t <- Time before trying to reduce the time of (Human Time)
+        #self.assertEqual(metta.interpret("(:? (HumansAreMortal (Human Time)))"),
+        #                                [])
         # Another syntax
         metta = MeTTa()
         metta.add_parse('''

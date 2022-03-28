@@ -1,5 +1,5 @@
 use crate::*;
-use crate::atom::matcher::Bindings;
+use crate::atom::matcher::{Bindings, apply_bindings_to_atom};
 use crate::space::grounding::GroundingSpace;
 
 #[derive(Debug, PartialEq, Eq)]
@@ -138,8 +138,9 @@ fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             let fn_types = fn_types.iter().filter(is_func);
             for fn_type in fn_types {
                 let (expected_arg_types, ret) = get_arg_types(fn_type);
-                if check_types(actual_arg_types.as_slice(), expected_arg_types, &mut Bindings::new()) {
-                    types.push(ret.clone());
+                let mut bindings = Bindings::new();
+                if check_types(actual_arg_types.as_slice(), expected_arg_types, &mut bindings) {
+                    types.push(apply_bindings_to_atom(ret, &bindings));
                 }
             }
 
@@ -368,6 +369,7 @@ mod tests {
             (: HumansAreMortal (-> (Human $t) (Mortal $t)))
             (: Time NotEntity)
             (: SocratesIsHuman (Human Socrates))
+            (: SocratesIsMortal (Mortal Socrates))
         ");
         let t = &AtomType::Specific(atom("Prop"));
         assert!(check_type(&space, &atom("(Human Socrates)"), t));
@@ -395,6 +397,8 @@ mod tests {
         assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Plato))")));
         assert!(!check_type(&space, &atom("(= SocratesIsHuman (Human Socrates))"), t));
         assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Time))")));
+        assert!(validate_atom(&space, &atom("(= SocratesIsMortal (HumansAreMortal SocratesIsHuman))")));
+        assert!(validate_atom(&space, &atom("(= (Mortal Socrates) (Mortal Plato))")));
     }
 
     #[test]
