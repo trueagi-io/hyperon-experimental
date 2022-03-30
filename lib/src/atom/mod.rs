@@ -165,6 +165,79 @@ impl<T: 'static + Clone + PartialEq + Debug + Sync> GroundedAtom for T {
     }
 }
 
+// Grounded value
+
+pub trait GroundedValue : mopa::Any + Debug + Sync {
+    fn eq_gnd(&self, other: &dyn GroundedValue) -> bool;
+    fn clone_gnd(&self) -> Box<dyn GroundedValue>;
+    fn match_gnd(&self, other: &Atom) -> matcher::MatchResultIter {
+        if let Atom::Value(other) = other {
+            if self.eq_gnd(&**other) {
+                return Box::new(std::iter::once(matcher::MatchResult::new()))
+            }
+        }
+        Box::new(std::iter::empty())
+    }
+}
+
+mopafy!(GroundedValue);
+
+// GroundedValue implementation for all "regular" types
+// to allow using them as Atoms
+// 'static is required because mopa::Any requires it
+impl<T: 'static + Clone + PartialEq + Debug + Sync> GroundedValue for T {
+    fn eq_gnd(&self, other: &dyn GroundedValue) -> bool {
+        match other.downcast_ref::<T>() {
+            Some(o) => self.eq(o),
+            None => false,
+        }
+    }
+
+    fn clone_gnd(&self) -> Box<dyn GroundedValue> {
+        Box::new(self.clone())
+    }
+}
+
+// Grounded function
+
+type GroundedFunction = fn(&mut[Atom]) -> Result<Vec<Atom>, String>;
+
+#[derive(Clone)]
+pub struct FunctionAtom {
+    func: GroundedFunction,
+    name: String,
+}
+
+impl FunctionAtom {
+    pub fn new(name: &str, func: GroundedFunction) -> Self {
+        Self{ func, name: name.into() }
+    }
+    pub fn execute(&self, args: &mut[Atom]) -> Result<Vec<Atom>, String> {
+        (self.func)(args)
+    }
+}
+
+impl Debug for FunctionAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+impl Display for FunctionAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)
+    }
+}
+
+impl PartialEq for FunctionAtom {
+    fn eq(&self, other: &Self) -> bool {
+        self.func as usize == other.func as usize
+            && self.name == other.name
+    }
+}
+
+impl Eq for FunctionAtom {}
+
 // Atom enum
 
 pub enum Atom {
@@ -177,6 +250,9 @@ pub enum Atom {
     // - other smart pointers like Rc doesn't allow choosing whether value should
     //   be copied or shared between two atoms when clone() is called
     Grounded(Box<dyn GroundedAtom>),
+
+    Value(Box<dyn GroundedValue>),
+    Function(FunctionAtom),
 }
 
 impl Atom {
@@ -218,7 +294,9 @@ impl PartialEq for Atom {
             (Atom::Expression(expr1), Atom::Expression(expr2)) => expr1 == expr2,
             (Atom::Variable(var1), Atom::Variable(var2)) => var1 == var2,
             (Atom::Grounded(gnd1), Atom::Grounded(gnd2)) => gnd1.eq_gnd(&**gnd2),
-            _ => false,
+            (Atom::Value(val1), Atom::Value(val2)) => val1.eq_gnd(&**val2),
+            (Atom::Function(func1), Atom::Function(func2)) => func1 == func2,
+             _ => false,
         }
     }
 }
@@ -232,6 +310,8 @@ impl Clone for Atom {
             Atom::Expression(expr) => Atom::Expression(expr.clone()),
             Atom::Variable(var) => Atom::Variable(var.clone()),
             Atom::Grounded(gnd) => Atom::Grounded((*gnd).clone_gnd()),
+            Atom::Value(val) => Atom::Value((*val).clone_gnd()),
+            Atom::Function(func) => Atom::Function(func.clone()),
         }
     }
 }
@@ -243,6 +323,8 @@ impl Display for Atom {
             Atom::Expression(expr) => Display::fmt(expr, f),
             Atom::Variable(var) => Display::fmt(var, f),
             Atom::Grounded(gnd) => Debug::fmt(gnd, f),
+            Atom::Value(val) => Debug::fmt(val, f),
+            Atom::Function(func) => Display::fmt(func, f),
         }
     }
 }
@@ -393,6 +475,22 @@ mod test {
         let result: Vec<MatchResult> = dict.do_match(&query).collect();
         assert_eq!(result, vec![MatchResult::from((bind!{},
                     bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}))]);
+    }
+
+    #[test]
+    fn function_atom_equality() {
+        fn foo(_args: &mut[Atom]) -> Result<Vec<Atom>, String> {
+            Result::Err("Don't call me".into())
+        }
+        fn bar(_args: &mut[Atom]) -> Result<Vec<Atom>, String> {
+            Result::Err("Don't call me".into())
+        }
+        let foo1_atom = Atom::Function(FunctionAtom::new("foo", foo));
+        let foo2_atom = Atom::Function(FunctionAtom::new("foo", foo));
+        let bar_atom = Atom::Function(FunctionAtom::new("bar", bar));
+
+        assert!(foo1_atom == foo2_atom);
+        assert!(foo1_atom != bar_atom);
     }
 
 }

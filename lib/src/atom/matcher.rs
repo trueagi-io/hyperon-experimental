@@ -296,7 +296,7 @@ pub fn unify_atoms(candidate: &Atom, pattern: &Atom) -> Option<UnifyResult> {
 
 pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
     match atom {
-        Atom::Symbol(_)|Atom::Grounded(_) => atom.clone(),
+        Atom::Symbol(_)|Atom::Grounded(_)|Atom::Value(_)|Atom::Function(_) => atom.clone(),
         Atom::Variable(v) => {
             if let Some(binding) = bindings.get(v) {
                 binding.clone()
