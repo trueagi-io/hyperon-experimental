@@ -90,7 +90,9 @@ class Atomese:
         tokenizer.register_token(r"call:[^\s]+", newCallAtom)
         tokenizer.register_token(r",", lambda _: commaAtom)
         tokenizer.register_token(r"let", lambda _: letAtom)
-        tokenizer.register_token(r"nop", lambda _: nopAtom)
+        # Any number of arguments for `nop` instead of one
+        tokenizer.register_token(r"nop", lambda *args: nopAtom)
+        # tokenizer.register_token(r"nop", lambda _: nopAtom)
         for regexp in self.tokens.keys():
             tokenizer.register_token(regexp, self.tokens[regexp])
         return tokenizer
