@@ -2,7 +2,7 @@ import unittest
 import re
 
 from hyperon import *
-from common import Atomese, MeTTa, AtomspaceAtom
+from common import Atomese, MeTTa, SpaceAtom
 
 
 class MinelogyTest(unittest.TestCase):
@@ -45,10 +45,8 @@ class MinelogyTest(unittest.TestCase):
              ((: wooden_pickaxe type) (: $_ variant) (: 1 quantity)))
             ''')
         utils = MeTTa()
-        # utils.add_token("&mines", ValueAtom(mines.space))
-        # utils.add_atom("&mines", AtomspaceAtom(mines.space, "&mines"))
-        utils.add_atom("&mines", G(AtomspaceAtom(mines.space, "&mines")))
-        utils.add_atom("&crafts", G(AtomspaceAtom(crafts.space, "&crafts")))
+        utils.add_atom("&mines", SpaceAtom(mines.space, "&mines"))
+        utils.add_atom("&crafts", SpaceAtom(crafts.space, "&crafts"))
         utils.add_parse('''
             (= (get-mine-block $ent-type $ent-var)
                (match &mines
@@ -173,7 +171,7 @@ class MinelogyTest(unittest.TestCase):
                ((CEntityT wooden_pickaxe) 1))
             ''')
         utils = MeTTa()
-        utils.add_atom("&kb", G(AtomspaceAtom(kb.space, "&kb")))
+        utils.add_atom("&kb", SpaceAtom(kb.space, "&kb"))
         utils.add_parse('''
             (= (get-mine-block $t)
                (match &kb

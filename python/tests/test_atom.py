@@ -48,7 +48,7 @@ class AtomTest(unittest.TestCase):
             # VecAtom()), "1.0 is not executable")
 
     def test_grounded_execute(self):
-        res = X2Atom().get_object().execute(ValueAtom(1.0))
+        res = x2Atom.get_object().execute(ValueAtom(1.0))
         self.assertEqual(res, [ValueAtom(2.0)])
 
     def test_expr_equals(self):
@@ -56,14 +56,14 @@ class AtomTest(unittest.TestCase):
                 E(S("+"), S("1"), S("2")))
 
     def test_expr_equals_grounded(self):
-        self.assertEqual(E(X2Atom(), ValueAtom(1.0)),
-                E(X2Atom(), ValueAtom(1.0)))
+        self.assertEqual(E(x2Atom, ValueAtom(1.0)),
+                E(x2Atom, ValueAtom(1.0)))
 
     def test_expr_str(self):
-        self.assertEqual(str(E(X2Atom(), ValueAtom(1.0))), "(*2 1.0)")
+        self.assertEqual(str(E(x2Atom, ValueAtom(1.0))), "(*2 1.0)")
 
     def test_expr_type(self):
-        self.assertEqual(E(X2Atom(), ValueAtom(1.0)).get_type(), AtomKind.EXPR)
+        self.assertEqual(E(x2Atom, ValueAtom(1.0)).get_type(), AtomKind.EXPR)
 
     # def test_expr_get_children(self):
         # self.assertEqual(E(X2Atom(), ValueAtom(1.0)).get_children(),
@@ -108,19 +108,10 @@ class AtomTest(unittest.TestCase):
 
     def test_interpret(self):
         space = GroundingSpace()
-        self.assertEqual(interpret(space, E(X2Atom(), ValueAtom(1))),
+        self.assertEqual(interpret(space, E(x2Atom, ValueAtom(1))),
                 [ValueAtom(2)])
 
-def X2Atom():
-    return G(X2())
-
-class X2(OpGroundedAtom):
-
-    def __init__(self):
-        super().__init__()
-
-    def execute(self, arg):
-        return [ValueAtom(2 * arg.get_object().value)]
-
-    def __str__(self):
-        return "*2"
+# No unwrap
+def x2_op(atom):
+    return [ValueAtom(2 * atom.get_object().value)]
+x2Atom = OperationAtom('*2', x2_op, unwrap=False)

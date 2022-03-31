@@ -3,180 +3,63 @@ from hyperon import *
 def interpret_until_result(target, kb):
     return interpret(kb, target)
 
-def SpacesAtom(spaces):
-    return G(SpaceCollection(spaces))
 
-class SpaceCollection(ConstGroundedAtom):
+def match_op(space, pattern, templ_op):
+    space = space.get_object().value
+    # TODO: hack to make both quoted and unquoted expression work
+    if (templ_op.get_type() == AtomKind.EXPR and
+        templ_op.get_children()[0].get_type() == AtomKind.SYMBOL and
+        templ_op.get_children()[0].get_name() == 'q'):
+        quoted = templ_op.get_children()[1:]
+        templ = E(*quoted)
+    else:
+        templ = templ_op
+    return space.subst(pattern, templ)
 
-    def __init__(self, spaces):
-        super().__init__()
-        self.spaces = spaces
+def let_op(pattern, atom, templ):
+    space = GroundingSpace()
+    space.add_atom(atom)
+    return space.subst(pattern, templ)
 
-    def execute(self, name):
-        return [ValueAtom(self.spaces[name.get_name()])]
+def call_atom_op(atom, method_str, *args):
+    obj = atom.get_object().value
+    method = getattr(obj, method_str)
+    method(*args)
+    return []
 
-    def __eq__(self, other):
-        return isinstance(other, SpacesAtom) and self.spaces == other.spaces
+subAtom = G(TypedOperation('-', lambda a, b: a - b, ['Number', 'Number', 'Number']))
+mulAtom = G(TypedOperation('*', lambda a, b: a * b, ['Number', 'Number', 'Number']))
+addAtom = G(TypedOperation('+', lambda a, b: a + b, ['Number', 'Number', 'Number']))
+divAtom = G(TypedOperation('/', lambda a, b: a / b, ['Number', 'Number', 'Number']))
+equalAtom = G(TypedOperation('==', lambda a, b: a == b, ['Number', 'Number', 'Bool']))
+greaterAtom = G(TypedOperation('>', lambda a, b: a > b, ['Number', 'Number', 'Bool']))
+lessAtom = G(TypedOperation('<', lambda a, b: a < b, ['Number', 'Number', 'Bool']))
+orAtom = G(TypedOperation('or', lambda a, b: a or b, ['Bool', 'Bool', 'Bool']))
+andAtom = G(TypedOperation('and', lambda a, b: a and b, ['Bool', 'Bool', 'Bool']))
+notAtom = G(TypedOperation('not', lambda a: not a, ['Bool', 'Bool']))
 
-    def __repr__(self):
-        return "spaces"
+nopAtom = OperationAtom('nop', lambda _: [], unwrap=False)
+commaAtom = OperationAtom(',', lambda args: args.get_children(), unwrap=False)
 
-class MatchAtom(OpGroundedAtom):
+letAtom = OperationAtom('let', let_op, unwrap=False)
+matchAtom = OperationAtom('match', match_op, unwrap=False)
 
-    def __init__(self):
-        super().__init__()
+def newCallAtom(token):
+    # REM: we could use "call" as a plain symbol (insted of "call:...")
+    #      with the method name as the parameter of call_atom_op
+    #      (but this parameter should be unwrapped)
+    # "call:..." is an interesting example of families of tokens for ops, though
+    return OperationAtom(
+                token,
+                lambda obj, *args: call_atom_op(obj, token[5:], *args),
+                unwrap=False)
 
-    def execute(self, space, pattern, templ_op):
-        space = space.get_object().value
-        # TODO: hack to make both quoted and unquoted expression work
-        if (templ_op.get_type() == AtomKind.EXPR and
-            templ_op.get_children()[0].get_type() == AtomKind.SYMBOL and
-            templ_op.get_children()[0].get_name() == 'q'):
-            quoted = templ_op.get_children()[1:]
-            templ = E(*quoted)
-        else:
-            templ = templ_op
-        return space.subst(pattern, templ)
-
-    def __repr__(self):
-        return "match"
-
-class UnaryOpAtom(OpGroundedAtom):
-
-    def __init__(self, name, op):
-        super().__init__()
-        self.name = name
-        self.op = op
-
-    def execute(self, arg):
-        return [ValueAtom(self.op(arg.get_object().value))]
-
-    def __eq__(self, other):
-        return isinstance(other, UnaryOpAtom) and self.name == self.name
-
-    def __repr__(self):
-        return self.name
-
-class BinaryOpAtom(OpGroundedAtom):
-
-    def __init__(self, name, op):
-        super().__init__()
-        self.name = name
-        self.op = op
-
-    def execute(self, a, b):
-        return [ValueAtom(self.op(a.get_object().value,
-            b.get_object().value))]
-
-    def __eq__(self, other):
-        return isinstance(other, BinaryOpAtom) and self.name == self.name
-
-    def __repr__(self):
-        return self.name
-
-class SubAtom(BinaryOpAtom):
-    def __init__(self):
-        super().__init__("-", lambda a, b: a - b)
-
-class MulAtom(BinaryOpAtom):
-    def __init__(self):
-        super().__init__("*", lambda a, b: a * b)
-
-class AddAtom(BinaryOpAtom):
-    def __init__(self):
-        super().__init__("+", lambda a, b: a + b)
-
-class DivAtom(BinaryOpAtom):
-    def __init__(self):
-        super().__init__("/", lambda a, b: a / b)
-
-class EqualAtom(BinaryOpAtom):
-    def __init__(self):
-        super().__init__("==", lambda a, b: a == b)
-
-class GreaterAtom(BinaryOpAtom):
-    def __init__(self):
-        super().__init__(">", lambda a, b: a > b)
-
-class LessAtom(BinaryOpAtom):
-    def __init__(self):
-        super().__init__("<", lambda a, b: a < b)
-
-class OrAtom(BinaryOpAtom):
-    def __init__(self):
-        super().__init__("or", lambda a, b: a or b)
-
-class AndAtom(BinaryOpAtom):
-    def __init__(self):
-        super().__init__("and", lambda a, b: a and b)
-
-class NotAtom(UnaryOpAtom):
-    def __init__(self):
-        super().__init__("not", lambda a: not a)
-
-class CallAtom(OpGroundedAtom):
-
-    def __init__(self, method_name):
-        super().__init__()
-        self.method_name = method_name
-
-    def execute(self, obj, *args):
-        obj = obj.get_object().value
-        method = getattr(obj, self.method_name)
-        method(*args)
-        return []
-
-    def __eq__(self, other):
-        if isinstance(other, CallAtom):
-            return self.method_name == other.method_name
-        return False
-
-    def __repr__(self):
-        return "call:" + self.method_name
-
-class LetAtom(OpGroundedAtom):
-
-    def __init__(self):
-        super().__init__()
-
-    def execute(self, pattern, atom, templ):
-        space = GroundingSpace()
-        space.add_atom(atom)
-        return space.subst(pattern, templ)
-
-    def __repr__(self):
-        return "let"
-
-class NopAtom(OpGroundedAtom):
-
-    def __init__(self):
-        super().__init__()
-
-    def execute(self, args):
-        return []
-
-    def __repr__(self):
-        return "nop"
-
-class CommaAtom(OpGroundedAtom):
-
-    def __init__(self):
-        super().__init__()
-
-    def execute(self, args):
-        return args.get_children()
-
-    def __repr__(self):
-        return ","
-
-class AtomspaceAtom(Value):
-
-    def __init__(self, value, name):
-        super().__init__(value)
-        self.name = name
-
-    def __repr__(self):
-        return self.name
+def SpaceAtom(grounding_space, repr_name=None):
+    # Overriding grounding_space.repr_name here
+    # It will be changed in all occurences of this Space
+    if repr_name is not None:
+        grounding_space.repr_name = repr_name
+    return G(TypedValue(grounding_space, 'Space'))
 
 class Atomese:
 
@@ -185,25 +68,31 @@ class Atomese:
 
     def _tokenizer(self):
         tokenizer = Tokenizer()
-        tokenizer.register_token(r"\+", lambda token: G(AddAtom()))
-        tokenizer.register_token(r"-", lambda token: G(SubAtom()))
-        tokenizer.register_token(r"\*", lambda token: G(MulAtom()))
-        tokenizer.register_token(r"/", lambda token: G(DivAtom()))
-        tokenizer.register_token(r"==", lambda token: G(EqualAtom()))
-        tokenizer.register_token(r"<", lambda token: G(LessAtom()))
-        tokenizer.register_token(r">", lambda token: G(GreaterAtom()))
-        tokenizer.register_token(r"or", lambda token: G(OrAtom()))
-        tokenizer.register_token(r"and", lambda token: G(AndAtom()))
-        tokenizer.register_token(r"not", lambda token: G(NotAtom()))
-        tokenizer.register_token(r"\d+(\.\d+)", lambda token: ValueAtom(float(token)))
-        tokenizer.register_token(r"\d+", lambda token: ValueAtom(int(token)))
-        tokenizer.register_token(r"'[^']*'", lambda token: ValueAtom(str(token[1:-1])))
-        tokenizer.register_token(r"True|False", lambda token: ValueAtom(token == 'True'))
-        tokenizer.register_token(r"match", lambda token: G(MatchAtom()))
-        tokenizer.register_token(r"call:[^\s]+", lambda token: G(CallAtom(token[5:])))
-        tokenizer.register_token(r",", lambda token: G(CommaAtom()))
-        tokenizer.register_token(r"let", lambda token: G(LetAtom()))
-        tokenizer.register_token(r"nop", lambda token: G(NopAtom()))
+        tokenizer.register_token(r"\+", lambda _: addAtom)
+        tokenizer.register_token(r"-", lambda _: subAtom)
+        tokenizer.register_token(r"\*", lambda _: mulAtom)
+        tokenizer.register_token(r"/", lambda _: divAtom)
+        tokenizer.register_token(r"==", lambda _: equalAtom)
+        tokenizer.register_token(r"<", lambda _: lessAtom)
+        tokenizer.register_token(r">", lambda _: greaterAtom)
+        tokenizer.register_token(r"or", lambda _: orAtom)
+        tokenizer.register_token(r"and", lambda _: andAtom)
+        tokenizer.register_token(r"not", lambda _: notAtom)
+        tokenizer.register_token(r"\d+(\.\d+)",
+                                 lambda token: G(TypedValue(float(token), 'Number')))
+        tokenizer.register_token(r"\d+",
+                                 lambda token: G(TypedValue(int(token), 'Number')))
+        tokenizer.register_token(r"'[^']*'",
+                                 lambda token: G(TypedValue(str(token[1:-1]), 'String')))
+        tokenizer.register_token(r"True|False",
+                                 lambda token: G(TypedValue(token == 'True', 'Bool')))
+        tokenizer.register_token(r"match", lambda _: matchAtom)
+        tokenizer.register_token(r"call:[^\s]+", newCallAtom)
+        tokenizer.register_token(r",", lambda _: commaAtom)
+        tokenizer.register_token(r"let", lambda _: letAtom)
+        # Any number of arguments for `nop` instead of one
+        tokenizer.register_token(r"nop", lambda *args: nopAtom)
+        # tokenizer.register_token(r"nop", lambda _: nopAtom)
         for regexp in self.tokens.keys():
             tokenizer.register_token(regexp, self.tokens[regexp])
         return tokenizer
@@ -241,9 +130,8 @@ class MeTTa(Atomese):
 
     def __init__(self, space=None):
         super().__init__()
-        self.space = GroundingSpace() if space is None else space
-        #self.add_atom(r"&self", ValueAtom(self.space))
-        self.add_atom(r"&self", G(AtomspaceAtom(self.space, '&self')))
+        self.space = GroundingSpace("&self") if space is None else space
+        self.add_atom(r"&self", SpaceAtom(self.space))
 
     def add_parse(self, program):
         return super().parse(program, self.space)

@@ -4,54 +4,42 @@ import re
 from hyperon import *
 from common import MeTTa
 
-class InInventoryAtom(OpGroundedAtom):
+def newInInventory(inventory):
+    return OperationAtom(
+        "in-inventory",
+        lambda obj: [ValueAtom(obj in inventory)],
+        unwrap=False)
 
-    def __init__(self, inventory):
-        super().__init__()
-        self.inventory = inventory
+def craft_op(inventory, obj, where, comp):
+    print(str(obj) + " crafted in " + str(where) + " from " + str(comp))
+    inventory.append(obj)
+    return [obj]
 
-    def execute(self, obj):
-        return [ValueAtom(obj in self.inventory)]
+def newCraftOp(inventory):
+    return OperationAtom(
+        "craft",
+        lambda obj, where, comp: craft_op(inventory, obj, where, comp),
+        unwrap=False)
 
-    def __repr__(self):
-        return "in-inventory"
+def mine_op(inventory, obj, tool):
+    print(str(obj) + " mined by " + str(tool))
+    inventory.append(obj)
+    return [obj]
 
-class CraftAtom(OpGroundedAtom):
-
-    def __init__(self, inventory):
-        super().__init__()
-        self.inventory = inventory
-
-    def execute(self, obj, where, comp):
-        print(str(obj) + " crafted in " + str(where) + " from " + str(comp))
-        self.inventory.append(obj)
-        return [obj]
-
-    def __repr__(self):
-        return "craft"
-
-class MineAtom(OpGroundedAtom):
-
-    def __init__(self, inventory):
-        super().__init__()
-        self.inventory = inventory
-
-    def execute(self, obj, tool):
-        print(str(obj) + " mined by " + str(tool))
-        self.inventory.append(obj)
-        return [obj]
-
-    def __repr__(self):
-        return "mine"
+def newMineOp(inventory):
+    return OperationAtom(
+        "mine",
+        lambda obj, tool: mine_op(inventory, obj, tool),
+        unwrap=False)
 
 class MinecraftTest(unittest.TestCase):
 
     def test_minecraft_planning(self):
         metta = MeTTa()
         inventory = [S('inventory'), S('hands')]
-        metta.add_token("in-inventory", lambda _: G(InInventoryAtom(inventory)))
-        metta.add_token("craft", lambda _: G(CraftAtom(inventory)))
-        metta.add_token("mine", lambda _: G(MineAtom(inventory)))
+        metta.add_token("in-inventory", lambda _: newInInventory(inventory))
+        metta.add_token("craft", lambda _: newCraftOp(inventory))
+        metta.add_token("mine", lambda _: newMineOp(inventory))
 
         metta.add_parse('''
             (= (if True $then $else) $then)
@@ -78,14 +66,18 @@ class MinecraftTest(unittest.TestCase):
                            (allof (pack 3 cobblestones) (pack 2 sticks))))
         ''')
 
+        self.assertFalse(S('wooden-pickaxe') in inventory)
         metta.interpret('(wooden-pickaxe)')
+        self.assertTrue(S('four-planks') in inventory)
+        self.assertTrue(S('crafting-table') in inventory)
+        self.assertTrue(S('wooden-pickaxe') in inventory)
 
     def test_minecraft_planning_with_abstractions(self):
         metta = MeTTa()
 
         inventory = [S('inventory'), S('hands'), S('crafting-table'), S('stick'),
                      S('iron-ingot'), S('iron-pickaxe')]
-        metta.add_token("in-inventory", lambda _: G(InInventoryAtom(inventory)))
+        metta.add_token("in-inventory", lambda _: newInInventory(inventory))
 
         metta.add_parse('''
             (= (can-be-mined diamond) True)

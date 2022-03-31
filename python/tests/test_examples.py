@@ -1,7 +1,7 @@
 import unittest
 
 from hyperon import *
-from common import interpret_until_result, Atomese, MeTTa, AtomspaceAtom
+from common import interpret_until_result, Atomese, MeTTa, SpaceAtom
 
 def interpret_and_print_results(target, kb, add_results_to_kb=False):
     output = ""
@@ -37,7 +37,7 @@ class ExamplesTest(unittest.TestCase):
             (from make clay)
         ''')
         # Test a custom symbol for the space as well
-        metta.add_atom("&kb", ValueAtom(kb))
+        metta.add_atom("&kb", SpaceAtom(kb, "&kb"))
 
         result = metta.interpret('''
             (match &kb (obj $verb $var0)
@@ -77,8 +77,8 @@ class ExamplesTest(unittest.TestCase):
         ploc = 10
         metta.add_token("pglob", lambda _: ValueAtom(pglob))
         metta.add_token("ploc", lambda _: ValueAtom(ploc))
-        metta.add_token("Setter", lambda _: G(NewAtom(Setter)))
-        metta.add_token("SetAtom", lambda _: G(NewAtom(Setter, False)))
+        metta.add_token("Setter", lambda token: newNewAtom(token, Setter))
+        metta.add_token("SetAtom", lambda token: newNewAtom(token, Setter, False))
         kb = GroundingSpace()
         # Just checking that interpretation of "pglob" gives us
         # a grounded atom that stores 10
@@ -257,7 +257,7 @@ class ExamplesTest(unittest.TestCase):
             (= (inverse $x) (match &self (= $y $x) $y))
         ''')
         metta2 = MeTTa()
-        metta2.add_atom("&space1", ValueAtom(metta1.space))
+        metta2.add_atom("&space1", SpaceAtom(metta1.space, "&space1"))
         metta2.add_parse('''
             (= C B)
             (= (f-in-s2) success)
@@ -354,8 +354,8 @@ class ExamplesTest(unittest.TestCase):
 
     def _test_visit_kim(self):
         atomese = Atomese()
-        kb = GroundingSpace()
-        atomese.add_atom("kb", AtomspaceAtom(kb, "kb"))
+        kb = GroundingSpace("kb")
+        atomese.add_atom("kb", SpaceAtom(kb))
 
         # it's questionable if the representation of (health-check Kim)
         # which can be interpreted as a functional call is correct,
@@ -419,19 +419,18 @@ class SomeObject():
 
 # New object example
 
-class NewAtom(OpGroundedAtom):
+def new_atom_op(klass, unwrap, *params):
+    if unwrap:
+        unwrapped = [param.get_object().value for param in params]
+        return [ValueAtom(klass(*unwrapped))]
+    else:
+        return [ValueAtom(klass(*params))]
 
-    def __init__(self, klass, unwrap=True):
-        super().__init__()
-        self.klass = klass
-        self.unwrap = unwrap
-
-    def execute(self, *params):
-        if self.unwrap:
-            unwrap = [param.get_object().value for param in params]
-            return [ValueAtom(self.klass(*unwrap))]
-        else:
-            return [ValueAtom(self.klass(*params))]
+def newNewAtom(token, klass, unwrap=True):
+    return OperationAtom(
+        token,
+        lambda *params: new_atom_op(klass, unwrap, *params),
+        unwrap=False)
 
 class Global:
 

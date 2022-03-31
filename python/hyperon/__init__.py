@@ -84,65 +84,72 @@ def call_execute_on_grounded_atom(gnd, args):
     args = [Atom._from_catom(catom) for catom in args]
     return gnd.execute(*args)
 
-class BaseVecAtom:
 
-    def __init__(self, cvec):
-        self.cvec = cvec
 
-    def size(self):
-        return hp.vec_atom_size(self.cvec)
-
-    def is_empty(self):
-        return self.size() == 0
-
-    def push(self, atom):
-        hp.vec_atom_push(self.cvec, atom.catom)
-
-    def pop(self):
-        return Atom._from_catom(hp.vec_atom_pop(self.cvec))
-
-class VecAtom(BaseVecAtom):
-
-    def __init__(self):
-        super().__init__(hp.vec_atom_new())
-
-    def __del__(self):
-        hp.vec_atom_free(self.cvec)
-
-class ConstGroundedAtom:
+# =========================================
+class ConstGroundedObject:
 
     def copy(self):
         return self
 
-class OpGroundedAtom(ConstGroundedAtom):
+class TypedObject(ConstGroundedObject):
 
-    def __init__(self):
+    def __init__(self, atype):
         super().__init__()
+        self.atype = atype
 
-    def __eq__(self, other):
-        return self.__class__ == other.__class__
+class TypedValue(TypedObject):
 
-def ValueAtom(value):
-    return G(Value(value))
-
-class Value(ConstGroundedAtom):
-
-    def __init__(self, value):
-        super().__init__()
+    def __init__(self, value, type_name):
+        #super().__init__(S(type_name))
+        super().__init__(type_name)
         self.value = value
 
     def __eq__(self, other):
-        if isinstance(other, Value):
+        # TODO: ?typecheck
+        if isinstance(other, TypedValue):
             return self.value == other.value
         return False
 
     def __repr__(self):
         return str(self.value)
 
+class TypedOperation(TypedObject):
+
+    def __init__(self, name, op, type_names, unwrap=True):
+        # TODO: if we want to have arbitrary expressions as types
+        super().__init__(type_names)
+        self.name = name
+        self.op = op
+        self.unwrap = unwrap
+
+    def execute(self, *args):
+        # type-check?
+        if self.unwrap:
+            args = [arg.get_object().value for arg in args]
+            return [G(TypedValue(self.op(*args), self.atype[-1]))]
+        else:
+            return self.op(*args)
+
+    def __eq__(self, other):
+        # TODO: instance
+        return isinstance(other, TypedOperation) and self.name == other.name
+
+    def __repr__(self):
+        return self.name
+
+def OperationAtom(name, op, type_names=['?'], unwrap=True):
+    return G(TypedOperation(name, op, type_names, unwrap))
+
+def ValueAtom(value, type_name='?'):
+    return G(TypedValue(value, type_name))
+
 class GroundingSpace:
 
-    def __init__(self):
+    def __init__(self, repr_name=None):
         self.cspace = hp.grounding_space_new()
+        # This name is used only for __repr__ now
+        self.repr_name = repr_name
 
     def __del__(self):
         hp.grounding_space_free(self.cspace)
@@ -150,6 +157,9 @@ class GroundingSpace:
     def __eq__(self, other):
         return (isinstance(other, GroundingSpace) and
                 hp.grounding_space_eq(self.cspace, other.cspace))
+
+    def __repr__(self):
+        return super().__repr__() if self.repr_name is None else self.repr_name
 
     def add_atom(self, atom):
         hp.grounding_space_add(self.cspace, atom.catom)
