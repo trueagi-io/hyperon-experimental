@@ -299,7 +299,7 @@ class ExamplesTest(unittest.TestCase):
             (:= (Human Entity) Prop)
             (:= Socrates Entity)
             (:= Plato Entity)
-            (: Time NotEntity)
+            (:= Time NotEntity)
             (:= (Mortal Entity) Prop)
             (:= (HumansAreMortal (Human $t)) (Mortal $t))
             (:= SocratesIsHuman (Human Socrates))
@@ -329,10 +329,15 @@ class ExamplesTest(unittest.TestCase):
         self.assertEqual(metta.interpret("(:check (= SocratesIsHuman SocratesIsMortal) Prop)"), [])
         self.assertEqual(metta.interpret("(:? (SocratesIsHuman (Human Socrates)))"), [])
         self.assertEqual(metta.interpret("(:? (Human Time))"), [])
-        # TODO: doesn't work, because the expression is matched agains type definition of HumansAreMortal
-        #       with grounding $t <- Time before trying to reduce the time of (Human Time)
-        #self.assertEqual(metta.interpret("(:? (HumansAreMortal (Human Time)))"),
-        #                                [])
+        # The following doesn't work: `(:? (HumansAreMortal (Human Time)))` is matched against `(:? $c)`
+        # Then, `(:= $c $t)` is matched against `(:= (HumansAreMortal (Human $t)) (Mortal $t))`
+        # immediately resulting in `(Mortal Time)`. Thus, it doesn't matter that matching against
+        # `(= (:? ($c $a))` doesn't work (since `(:? $a)` is incorrect).
+        # self.assertEqual(metta.interpret("(:? (HumansAreMortal (Human Time)))"),
+        #                                  [])
+        # It should be noted that `(HumansAreMortal (Human Socrates))` is also an incorrectly typed
+        # expression, since HumansAreMortal expects an element of (Human Socrates) - not the type itself
+
         # Another syntax
         metta = MeTTa()
         metta.add_parse('''
@@ -340,17 +345,40 @@ class ExamplesTest(unittest.TestCase):
                (match &self (:: $c $t) $t))
             (= (:? ($c $a))
                (match &self (:: $c (-> (:? $a) $t)) $t))
+            (= (:? ($c $a $b))
+               (match &self (:: $c (-> (:? $a) (:? $b) $t)) $t))
 
-            (:: Entity Prop)
-            (:: Human (-> Entity Prop))
+            (:: = (-> $t $t Type))
+
+            (:: Entity Type)
+            (:: Human (-> Entity Type))
             (:: Socrates Entity)
             (:: Plato Entity)
-            (:: Mortal (-> Entity Prop))
+            (:: Mortal (-> Entity Type))
             (:: HumansAreMortal (-> (Human $t) (Mortal $t)))
             (:: SocratesIsHuman (Human Socrates))
+            (:: SocratesIsMortal (Mortal Socrates))
         ''')
+        # :? just infers the type of the expression - not its inhabitance
+        self.assertEqual(metta.interpret("(:? (Human Plato))"), [S('Type')])
+        self.assertEqual(metta.interpret("(:? (Human Time))"), [])
         self.assertEqual(metta.interpret("(:? (HumansAreMortal SocratesIsHuman))"),
                                         [E(S('Mortal'), S('Socrates'))])
+        self.assertEqual(metta.interpret("(:? (= SocratesIsMortal (HumansAreMortal SocratesIsHuman)))"),
+                                        [S('Type')])
+        self.assertEqual(metta.interpret("(:? (= Human Entity))"), [])
+        self.assertEqual(metta.interpret("(:? (= (Human Socrates) Plato))"), [])
+        self.assertEqual(metta.interpret("(:? (= SocratesIsHuman SocratesIsMortal))"), [])
+        # `(Human Socrates)` and `(Human Plato)` are different types, but they are elements
+        # of the same Type, so they can be equated
+        self.assertEqual(metta.interpret("(:? (= (Human Socrates) (Human Plato)))"),
+                                        [S('Type')])
+        self.assertEqual(metta.interpret("(:? (= Human Mortal))"),
+                                        [S('Type')])
+        self.assertEqual(metta.interpret("(:? (= HumanAreMortal Mortal))"), [])
+        # Interestingly, the following example works correctly in this syntax, because
+        # application `(Human Socrates)` is not mixed up with dependent type definition
+        self.assertEqual(metta.interpret("(:? (HumansAreMortal (Human Socrates)))"), [])
 
     def _test_visit_kim(self):
         atomese = Atomese()
