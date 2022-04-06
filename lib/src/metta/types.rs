@@ -98,7 +98,7 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     log::trace!("get_reducted_types: atom: {}", atom);
     let types = match atom {
-        Atom::Variable(_) | Atom::Grounded(_) | Atom::Value(_) | Atom::Function(_) => vec![Atom::sym("%Undefined%")],
+        Atom::Variable(_) | Atom::Grounded(_) => vec![Atom::sym("%Undefined%")],
         Atom::Symbol(_) => {
             let types = query_types(space, atom);
             if !types.is_empty() {

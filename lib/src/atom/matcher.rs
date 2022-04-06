@@ -136,7 +136,7 @@ impl WithMatch for Atom {
     fn do_match(&self, other: &Atom) -> MatchResultIter {
         match (self, other) {
             (Atom::Symbol(a), Atom::Symbol(b)) if a == b => Box::new(std::iter::once(MatchResult::new())),
-            (Atom::Grounded(a), Atom::Grounded(_)) => a.match_gnd(other),
+            (Atom::Grounded(a), Atom::Grounded(_)) => a.do_match(other),
             (Atom::Variable(_), Atom::Variable(v)) => {
                 // We stick to prioritize pattern bindings in this case
                 // because otherwise the $X in (= (...) $X) will not be matched with
@@ -175,7 +175,7 @@ pub fn product_iter(prev: MatchResultIter, next: MatchResultIter) -> MatchResult
 fn match_atoms_recursively(candidate: &Atom, pattern: &Atom, res: &mut MatchResult) -> bool {
     match (candidate, pattern) {
         (Atom::Symbol(a), Atom::Symbol(b)) => a == b,
-        (Atom::Grounded(a), Atom::Grounded(b)) => a.eq_gnd(&**b),
+        (Atom::Grounded(a), Atom::Grounded(b)) => a == b,
         (Atom::Variable(_), Atom::Variable(v)) => {
             // We stick to prioritize pattern bindings in this case
             // because otherwise the $X in (= (...) $X) will not be matched with
@@ -247,7 +247,7 @@ impl UnifyResult {
 fn unify_atoms_recursively(candidate: &Atom, pattern: &Atom, res: &mut UnifyResult, depth: u32) -> bool {
     match (candidate, pattern) {
         (Atom::Symbol(a), Atom::Symbol(b)) => a == b,
-        (Atom::Grounded(a), Atom::Grounded(b)) => a.eq_gnd(&**b),
+        (Atom::Grounded(a), Atom::Grounded(b)) => a == b,
         (Atom::Variable(_), Atom::Variable(v)) => {
             // We stick to prioritize pattern bindings in this case
             // because otherwise the $X in (= (...) $X) will not be matched with
@@ -296,7 +296,7 @@ pub fn unify_atoms(candidate: &Atom, pattern: &Atom) -> Option<UnifyResult> {
 
 pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
     match atom {
-        Atom::Symbol(_)|Atom::Grounded(_)|Atom::Value(_)|Atom::Function(_) => atom.clone(),
+        Atom::Symbol(_)|Atom::Grounded(_) => atom.clone(),
         Atom::Variable(v) => {
             if let Some(binding) = bindings.get(v) {
                 binding.clone()
