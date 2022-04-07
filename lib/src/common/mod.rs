@@ -12,7 +12,7 @@ use std::fmt::Debug;
 // The instance has 'static lifetime and not copied when cloned.
 pub struct Operation {
     pub name: &'static str,
-    pub execute: ExecuteFn,
+    pub execute: fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>,
 }
 
 impl GroundedValue for &'static Operation {

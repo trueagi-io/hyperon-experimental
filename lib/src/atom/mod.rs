@@ -14,6 +14,7 @@ pub mod matcher;
 pub mod subexpr;
 
 use std::fmt::{Display, Debug};
+use std::sync::Arc;
 
 // Symbol atom
 
@@ -155,8 +156,8 @@ impl<T: GroundedValue> GroundedValueToGroundedAtom for Wrap<T> {
     fn to_atom(&self) -> Atom {
         Atom::Grounded(GroundedAtom{
             value: self.0.clone_gnd(),
-            do_match: default_match,
-            do_execute: default_execute
+            do_match: Arc::new(default_match),
+            do_execute: Arc::new(default_execute)
         })
     }
 }
@@ -168,7 +169,9 @@ impl<T: Clone + Into<Atom>> ExplicitToGroundedAtom for &Wrap<T> {
     }
 }
 
-pub type MatchFn = fn(this: &dyn GroundedValue, other: &Atom) -> matcher::MatchResultIter;
+// See https://users.rust-lang.org/t/lifetime-error-while-trying-to-simulate-trait-alias-in-a-stable-version-of-compiler/73912/2
+//pub trait MatchFn : 'static + Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter {}
+//impl<T: 'static + Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter> MatchFn for T {}
 
 pub fn default_match(this: &dyn GroundedValue, other: &Atom) -> matcher::MatchResultIter {
     match other {
@@ -178,7 +181,9 @@ pub fn default_match(this: &dyn GroundedValue, other: &Atom) -> matcher::MatchRe
     }
 }
 
-pub type ExecuteFn = fn(args: &mut Vec<Atom>) -> Result<Vec<Atom>, String>;
+// See https://users.rust-lang.org/t/lifetime-error-while-trying-to-simulate-trait-alias-in-a-stable-version-of-compiler/73912/2
+//pub trait ExecuteFn : 'static + Sync + Send + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String> {}
+//impl<T: 'static + Sync + Send + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>> ExecuteFn for T {}
 
 pub fn default_execute(_args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
     Err(format!("Execute is not implemented"))
@@ -191,19 +196,19 @@ pub struct GroundedAtom {
     // - other smart pointers like Rc doesn't allow choosing whether value should
     //   be copied or shared between two atoms when clone() is called
     value: Box<dyn GroundedValue>,
-    do_match: MatchFn,
-    do_execute: ExecuteFn,
+    do_match: Arc<dyn Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter>,
+    do_execute: Arc<dyn Sync + Send + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>>,
 }
 
 impl GroundedAtom {
     pub fn new_value<T: GroundedValue>(value: T) -> Self {
-        Self{ value: Box::new(value), do_match: default_match, do_execute: default_execute }
+        Self{ value: Box::new(value), do_match: Arc::new(default_match), do_execute: Arc::new(default_execute) }
     }
-    pub fn new_matchable<T: GroundedValue>(value: T, do_match: MatchFn) -> Self {
-        Self{ value: Box::new(value), do_match, do_execute: default_execute }
+    pub fn new_matchable<T: GroundedValue, M: 'static + Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter>(value: T, do_match: M) -> Self {
+        Self{ value: Box::new(value), do_match: Arc::new(do_match), do_execute: Arc::new(default_execute) }
     }
-    pub fn new_function<T: GroundedValue>(value: T, do_execute: ExecuteFn) -> Self {
-        Self{ value: Box::new(value), do_match: default_match, do_execute }
+    pub fn new_function<T: GroundedValue, E: 'static + Sync + Send + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>>(value: T, do_execute: E) -> Self {
+        Self{ value: Box::new(value), do_match: Arc::new(default_match), do_execute: Arc::new(do_execute) }
     }
 
     pub fn do_match(&self, other: &Atom) -> matcher::MatchResultIter {
@@ -224,9 +229,9 @@ impl GroundedAtom {
 
 impl PartialEq for GroundedAtom {
     fn eq(&self, other: &Self) -> bool {
+        // TODO: it is temporal implementation before GroundedAtom is splitted
+        // on GroundedValue and GroundedFunction
         self.value.eq_gnd(&*other.value)
-            && self.do_match as usize == other.do_match as usize
-            && self.do_execute as usize == other.do_execute as usize
     }
 }
 
@@ -236,8 +241,8 @@ impl Clone for GroundedAtom {
     fn clone(&self) -> Self {
         Self{
             value: self.value.clone_gnd(),
-            do_match: self.do_match,
-            do_execute: self.do_execute,
+            do_match: self.do_match.clone(),
+            do_execute: self.do_execute.clone(),
         }
     }
 }
@@ -278,11 +283,7 @@ impl Atom {
     }
 
     pub fn value<T: GroundedValue>(value: T) -> Atom {
-        Self::Grounded(GroundedAtom{
-            value: Box::new(value),
-            do_match: default_match,
-            do_execute: default_execute,
-        })
+        Self::Grounded(GroundedAtom::new_value(value))
     }
 
     pub fn as_gnd<T: GroundedValue>(&self) -> Option<&T> {
