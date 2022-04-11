@@ -157,7 +157,7 @@ impl<T: GroundedValue> GroundedValueToGroundedAtom for Wrap<T> {
         Atom::Grounded(GroundedAtom{
             value: self.0.clone_gnd(),
             do_match: Arc::new(default_match),
-            do_execute: Arc::new(default_execute)
+            do_execute: Box::new(default_execute)
         })
     }
 }
@@ -189,6 +189,23 @@ pub fn default_execute(_args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
     Err(format!("Execute is not implemented"))
 }
 
+// Grounded function
+
+pub trait GroundedFunction : Sync {
+    fn clone_gnd(&self) -> Box<dyn GroundedFunction>;
+    fn call(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String>;
+}
+
+impl<F> GroundedFunction for F where F: 'static + Sync + Clone + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+    fn clone_gnd(&self) -> Box<dyn GroundedFunction> {
+        Box::new(self.clone())
+    }
+
+    fn call(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+        (*self)(args)
+    }
+}
+
 pub struct GroundedAtom {
     // We need using Box here because:
     // - we cannot use GroundedValue because trait size is not known at compile time
@@ -197,18 +214,18 @@ pub struct GroundedAtom {
     //   be copied or shared between two atoms when clone() is called
     value: Box<dyn GroundedValue>,
     do_match: Arc<dyn Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter>,
-    do_execute: Arc<dyn Sync + Send + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>>,
+    do_execute: Box<dyn GroundedFunction>,
 }
 
 impl GroundedAtom {
     pub fn new_value<T: GroundedValue>(value: T) -> Self {
-        Self{ value: Box::new(value), do_match: Arc::new(default_match), do_execute: Arc::new(default_execute) }
+        Self{ value: Box::new(value), do_match: Arc::new(default_match), do_execute: Box::new(default_execute) }
     }
     pub fn new_matchable<T: GroundedValue, M: 'static + Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter>(value: T, do_match: M) -> Self {
-        Self{ value: Box::new(value), do_match: Arc::new(do_match), do_execute: Arc::new(default_execute) }
+        Self{ value: Box::new(value), do_match: Arc::new(do_match), do_execute: Box::new(default_execute) }
     }
-    pub fn new_function<T: GroundedValue, E: 'static + Sync + Send + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>>(value: T, do_execute: E) -> Self {
-        Self{ value: Box::new(value), do_match: Arc::new(default_match), do_execute: Arc::new(do_execute) }
+    pub fn new_function<T: GroundedValue, E: 'static + GroundedFunction>(value: T, do_execute: E) -> Self {
+        Self{ value: Box::new(value), do_match: Arc::new(default_match), do_execute: Box::new(do_execute) }
     }
 
     pub fn do_match(&self, other: &Atom) -> matcher::MatchResultIter {
@@ -216,7 +233,7 @@ impl GroundedAtom {
     }
 
     pub fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
-        (self.do_execute)(args)
+        self.do_execute.call(args)
     }
     pub fn downcast_ref<T: GroundedValue>(&self) -> Option<&T> {
         self.value.downcast_ref::<T>()
@@ -242,7 +259,7 @@ impl Clone for GroundedAtom {
         Self{
             value: self.value.clone_gnd(),
             do_match: self.do_match.clone(),
-            do_execute: self.do_execute.clone(),
+            do_execute: self.do_execute.clone_gnd(),
         }
     }
 }

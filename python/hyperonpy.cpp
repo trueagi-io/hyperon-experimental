@@ -31,6 +31,17 @@ void copy_atoms_to_list(atom_t const* const* atoms, size_t size, void* context) 
 	}
 }
 
+py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
+	if (py::hasattr(pyobj, attr)) {
+		return pyobj.attr(attr)();
+	} else {
+		std::string message = "Python object doesn't have a \"";
+		message += attr;
+		message += "\" attribute";
+		throw std::runtime_error(message);
+	}
+}
+
 extern "C" {
 	const char *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* args, struct vec_atom_t* ret);
 	bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
@@ -39,17 +50,18 @@ extern "C" {
 	void py_free(struct gnd_t* _gnd);
 }
 
-const gnd_api_t PY_GROUNDED_API = { &py_execute, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_EXECUTABLE_API = { &py_execute, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_VALUE_API = { nullptr, &py_eq, &py_clone, &py_display, &py_free };
 
 struct GroundedObject : gnd_t {
-	GroundedObject(py::object pyobj) : self(this), pyobj(pyobj) {
-		this->api = &PY_GROUNDED_API;
-		pyobj.inc_ref();
+	GroundedObject(py::object pyobj) : pyobj(pyobj) {
+		if (py::hasattr(pyobj, "execute")) {
+			this->api = &PY_EXECUTABLE_API;
+		} else {
+			this->api = &PY_VALUE_API;
+		}
 	}
-	~GroundedObject() {
-		pyobj.dec_ref();
-	}
-	GroundedObject* self;
+	virtual ~GroundedObject() { }
 	py::object pyobj;
 };
 
@@ -103,20 +115,17 @@ size_t py_display(const struct gnd_t* _cgnd, char* buffer, size_t size) {
 }
 
 void py_free(struct gnd_t* _cgnd) {
-	delete _cgnd;
+	delete static_cast<GroundedObject const*>(_cgnd);
 }
 
 struct CConstr {
 
 	py::object pyconstr;
 
-	CConstr(py::object pyconstr) : pyconstr(pyconstr) {
-		pyconstr.inc_ref();
-	}
+	CConstr(py::object pyconstr) : pyconstr(pyconstr) { }
 
 	static void free(void* ptr) {
 		CConstr* self = static_cast<CConstr*>(ptr);
-		self->pyconstr.dec_ref();
 		delete self;
 	}
 
