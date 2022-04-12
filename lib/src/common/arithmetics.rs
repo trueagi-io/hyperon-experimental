@@ -34,24 +34,24 @@ pub static IS_INT: &Operation = &Operation{ name: "int", execute: |args| check_t
 
 fn check_type(args: &mut Vec<Atom>, op: fn(&Atom) -> bool) -> Result<Vec<Atom>, String> {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
-    Ok(vec![Atom::gnd(op(arg))])
+    Ok(vec![Atom::value(op(arg))])
 }
 
 fn is_instance<T>(arg: &Atom) -> bool
 where
-    T: GroundedAtom,
+    T: GroundedValue,
 {
     matches!(arg.as_gnd::<T>(), Some(_))
 }
 
 fn unary_op<T, R>(args: &mut Vec<Atom>, op: fn(T) -> R) -> Result<Vec<Atom>, String>
 where
-    T: GroundedAtom + Copy,
-    R: GroundedAtom,
+    T: GroundedValue + Copy,
+    R: GroundedValue,
 {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
     if let Some(arg) = arg.as_gnd::<T>() {
-        Ok(vec![Atom::gnd(op(*arg))])
+        Ok(vec![Atom::value(op(*arg))])
     } else {
         Err(format!("Incorrect type of the unary operation argument: ({})", arg))
     }
@@ -59,14 +59,14 @@ where
 
 fn bin_op<T1, T2, R>(args: &mut Vec<Atom>, op: fn(T1, T2) -> R) -> Result<Vec<Atom>, String>
 where
-    T1: GroundedAtom + Copy,
-    T2: GroundedAtom + Copy,
-    R: GroundedAtom,
+    T1: GroundedValue + Copy,
+    T2: GroundedValue + Copy,
+    R: GroundedValue,
 {
     let arg1 = args.get(0).ok_or_else(|| format!("Binary operation called without arguments"))?; 
     let arg2 = args.get(1).ok_or_else(|| format!("Binary operation called with only argument"))?;
     if let (Some(arg1), Some(arg2)) = (arg1.as_gnd::<T1>(), arg2.as_gnd::<T2>()) {
-        Ok(vec![Atom::gnd(op(*arg1, *arg2))])
+        Ok(vec![Atom::value(op(*arg1, *arg2))])
     } else {
         Err(format!("Incorrect type of the binary operation argument: ({}, {})", arg1, arg2))
     }
@@ -82,7 +82,7 @@ mod tests {
     use crate::space::grounding::GroundingSpace;
 
     // Aliases to have a shorter notation
-    fn G<T: GroundedAtom>(value: T) -> Atom { Atom::gnd(value) }
+    fn G<T: GroundedValue>(value: T) -> Atom { Atom::value(value) }
 
     fn init_logger() {
         let _ = env_logger::builder().is_test(true).try_init();

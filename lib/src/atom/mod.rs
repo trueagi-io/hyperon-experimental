@@ -5,7 +5,7 @@ macro_rules! expr {
     () => { Atom::expr(&[]) };
     ($x:ident) => { Atom::var(stringify!($x)) };
     ($x:literal) => { Atom::sym($x) };
-    ({$x:tt}) => { Atom::gnd($x) };
+    ({$x:tt}) => { (&&Wrap($x)).to_atom() };
     (($($x:tt),*)) => { Atom::expr(&[ $( expr!($x) , )* ]) };
     ($($x:tt),*) => { Atom::expr(&[ $( expr!($x) , )* ]) };
 }
@@ -14,6 +14,7 @@ pub mod matcher;
 pub mod subexpr;
 
 use std::fmt::{Display, Debug};
+use std::sync::Arc;
 
 // Symbol atom
 
@@ -124,59 +125,179 @@ impl Display for VariableAtom {
 // Grounded atom
 
 // Sync is required to make creating static Atom declarations possible
-pub trait GroundedAtom : Debug + mopa::Any + Sync {
-    fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
-    fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
-
-    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
-        Err(format!("{:?} is not executable", self))
-    }
-    fn match_gnd(&self, other: &Atom) -> matcher::MatchResultIter {
-        if let Atom::Grounded(other) = other {
-            if self.eq_gnd(&**other) {
-                return Box::new(std::iter::once(matcher::MatchResult::new()))
-            }
-        }
-        Box::new(std::iter::empty())
-    }
+pub trait GroundedValue : mopa::Any + Sync + Debug {
+    fn eq_gnd(&self, other: &dyn GroundedValue) -> bool;
+    fn clone_gnd(&self) -> Box<dyn GroundedValue>;
 }
 
-mopafy!(GroundedAtom);
+mopafy!(GroundedValue);
 
-// FIXME: one cannot implement custom execute() for the type which
-// have derived Clone, PartialEq and Debug at the same time because
-// it automatically have GroundedAtom implemented from the impl below.
-// This is a Rust restriction: there is no method overriding and
-// trait can be implemented only once for each type.
-
-// GroundedAtom implementation for all "regular" types
+// GroundedValue implementation for all "regular" types
 // to allow using them as GroundedAtoms
 // 'static is required because mopa::Any requires it
-impl<T: 'static + Clone + PartialEq + Debug + Sync> GroundedAtom for T {
-    fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
+impl<T: 'static + Clone + PartialEq + Debug + Sync> GroundedValue for T {
+    fn eq_gnd(&self, other: &dyn GroundedValue) -> bool {
         match other.downcast_ref::<T>() {
             Some(o) => self.eq(o),
             None => false,
         }
     }
 
-    fn clone_gnd(&self) -> Box<dyn GroundedAtom> {
+    fn clone_gnd(&self) -> Box<dyn GroundedValue> {
         Box::new(self.clone())
+    }
+}
+
+// see https://lukaskalbertodt.github.io/2019/12/05/generalized-autoref-based-specialization.html
+pub struct Wrap<T>(pub T);
+
+pub trait GroundedValueToGroundedAtom { fn to_atom(&self) -> Atom; }
+impl<T: GroundedValue> GroundedValueToGroundedAtom for Wrap<T> {
+    fn to_atom(&self) -> Atom {
+        Atom::Grounded(GroundedAtom{
+            value: self.0.clone_gnd(),
+            do_match: Arc::new(default_match),
+            do_execute: Box::new(DEFAULT_EXECUTE)
+        })
+    }
+}
+
+pub trait ExplicitToGroundedAtom { fn to_atom(&self) -> Atom; }
+impl<T: Clone + Into<Atom>> ExplicitToGroundedAtom for &Wrap<T> {
+    fn to_atom(&self) -> Atom {
+        self.0.clone().into()
+    }
+}
+
+// See https://users.rust-lang.org/t/lifetime-error-while-trying-to-simulate-trait-alias-in-a-stable-version-of-compiler/73912/2
+//pub trait MatchFn : 'static + Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter {}
+//impl<T: 'static + Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter> MatchFn for T {}
+
+fn default_match(this: &dyn GroundedValue, other: &Atom) -> matcher::MatchResultIter {
+    match other {
+        Atom::Grounded(other) if other.value.as_ref().eq_gnd(this) =>
+            Box::new(std::iter::once(matcher::MatchResult::new())),
+        _ => Box::new(std::iter::empty()),
+    }
+}
+
+// See https://users.rust-lang.org/t/lifetime-error-while-trying-to-simulate-trait-alias-in-a-stable-version-of-compiler/73912/2
+//pub trait ExecuteFn : 'static + Sync + Send + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String> {}
+//impl<T: 'static + Sync + Send + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>> ExecuteFn for T {}
+
+fn default_execute_impl(_args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+    Err(format!("Execute is not implemented"))
+}
+static DEFAULT_EXECUTE: ExecuteFn = default_execute_impl;
+
+// Grounded function
+
+pub trait GroundedFunction : mopa::Any + Sync {
+    fn eq_trait(&self, other: &dyn GroundedFunction) -> bool;
+    fn clone_trait(&self) -> Box<dyn GroundedFunction>;
+    fn call(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String>;
+}
+
+mopafy!(GroundedFunction);
+
+type ExecuteFn = fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>;
+
+impl GroundedFunction for ExecuteFn {
+    fn eq_trait(&self, other: &dyn GroundedFunction) -> bool {
+        match other.downcast_ref::<ExecuteFn>() {
+            Some(other) => (*self as usize) == (*other as usize),
+            _ => false,
+        }
+    }
+
+    fn clone_trait(&self) -> Box<dyn GroundedFunction> {
+        Box::new(self.clone())
+    }
+
+    fn call(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+        (*self)(args)
+    }
+}
+
+pub struct GroundedAtom {
+    // We need using Box here because:
+    // - we cannot use GroundedValue because trait size is not known at compile time
+    // - reference to trait does not allow heap allocated values
+    // - other smart pointers like Rc doesn't allow choosing whether value should
+    //   be copied or shared between two atoms when clone() is called
+    value: Box<dyn GroundedValue>,
+    do_match: Arc<dyn Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter>,
+    do_execute: Box<dyn GroundedFunction>,
+}
+
+impl GroundedAtom {
+    pub fn new_value<T: GroundedValue>(value: T) -> Self {
+        Self{ value: Box::new(value), do_match: Arc::new(default_match), do_execute: Box::new(DEFAULT_EXECUTE) }
+    }
+    pub fn new_matchable<T: GroundedValue, M: 'static + Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter>(value: T, do_match: M) -> Self {
+        Self{ value: Box::new(value), do_match: Arc::new(do_match), do_execute: Box::new(DEFAULT_EXECUTE) }
+    }
+    pub fn new_function<T: GroundedValue, E: 'static + GroundedFunction>(value: T, do_execute: E) -> Self {
+        Self{ value: Box::new(value), do_match: Arc::new(default_match), do_execute: Box::new(do_execute) }
+    }
+
+    pub fn do_match(&self, other: &Atom) -> matcher::MatchResultIter {
+        (self.do_match)(self.value.as_ref(), other)
+    }
+
+    pub fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+        self.do_execute.call(args)
+    }
+    pub fn downcast_ref<T: GroundedValue>(&self) -> Option<&T> {
+        self.value.downcast_ref::<T>()
+    }
+
+    pub fn downcast_mut<T: GroundedValue>(&mut self) -> Option<&mut T> {
+        self.value.downcast_mut::<T>()
+    }
+}
+
+impl PartialEq for GroundedAtom {
+    fn eq(&self, other: &Self) -> bool {
+        // TODO: it is temporal implementation before GroundedAtom is splitted
+        // on GroundedValue and GroundedFunction
+        self.value.eq_gnd(&*other.value)
+            && self.do_execute.eq_trait(&*other.do_execute)
+    }
+}
+
+impl Eq for GroundedAtom {}
+
+impl Clone for GroundedAtom {
+    fn clone(&self) -> Self {
+        Self{
+            value: self.value.clone_gnd(),
+            do_match: self.do_match.clone(),
+            do_execute: self.do_execute.clone_trait(),
+        }
+    }
+}
+
+impl Display for GroundedAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&*self.value, f)
+    }
+}
+
+impl Debug for GroundedAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
     }
 }
 
 // Atom enum
 
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum Atom {
     Symbol(SymbolAtom),
     Expression(ExpressionAtom),
     Variable(VariableAtom),
-    // We need using Box here because:
-    // - we cannot use GroundedAtom because trait size is not known at compile time
-    // - reference to trait does not allow heap allocated values
-    // - other smart pointers like Rc doesn't allow choosing whether value should
-    //   be copied or shared between two atoms when clone() is called
-    Grounded(Box<dyn GroundedAtom>),
+    Grounded(GroundedAtom),
 }
 
 impl Atom {
@@ -192,46 +313,21 @@ impl Atom {
         Self::Variable(VariableAtom::from(name))
     }
 
-    pub fn gnd<T: GroundedAtom>(gnd: T) -> Atom {
-        Self::Grounded(Box::new(gnd))
+    pub fn value<T: GroundedValue>(value: T) -> Atom {
+        Self::Grounded(GroundedAtom::new_value(value))
     }
 
-    pub fn as_gnd<T: GroundedAtom>(&self) -> Option<&T> {
+    pub fn as_gnd<T: GroundedValue>(&self) -> Option<&T> {
         match self {
-            Atom::Grounded(gnd) => gnd.downcast_ref::<T>(),
+            Atom::Grounded(gnd) => gnd.value.downcast_ref::<T>(),
             _ => None,
         }
     }
 
-    pub fn as_gnd_mut<T: GroundedAtom>(&mut self) -> Option<&mut T> {
+    pub fn as_gnd_mut<T: GroundedValue>(&mut self) -> Option<&mut T> {
         match self {
-            Atom::Grounded(gnd) => gnd.downcast_mut::<T>(),
+            Atom::Grounded(gnd) => gnd.value.downcast_mut::<T>(),
             _ => None,
-        }
-    }
-}
-
-impl PartialEq for Atom {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Atom::Symbol(sym1), Atom::Symbol(sym2)) => sym1 == sym2,
-            (Atom::Expression(expr1), Atom::Expression(expr2)) => expr1 == expr2,
-            (Atom::Variable(var1), Atom::Variable(var2)) => var1 == var2,
-            (Atom::Grounded(gnd1), Atom::Grounded(gnd2)) => gnd1.eq_gnd(&**gnd2),
-            _ => false,
-        }
-    }
-}
-
-impl Eq for Atom {}
-
-impl Clone for Atom {
-    fn clone(&self) -> Self {
-        match self {
-            Atom::Symbol(sym) => Atom::Symbol(sym.clone()),
-            Atom::Expression(expr) => Atom::Expression(expr.clone()),
-            Atom::Variable(var) => Atom::Variable(var.clone()),
-            Atom::Grounded(gnd) => Atom::Grounded((*gnd).clone_gnd()),
         }
     }
 }
@@ -247,12 +343,6 @@ impl Display for Atom {
     }
 }
 
-impl Debug for Atom {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(self, f)
-    }
-}
-
 #[cfg(test)]
 mod test {
     #![allow(non_snake_case)]
@@ -264,7 +354,11 @@ mod test {
     fn S(name: &str) -> Atom { Atom::sym(name) }
     fn E(children: &[Atom]) -> Atom { Atom::expr(children) }
     fn V(name: &str) -> Atom { Atom::var(name) }
-    fn G<T: GroundedAtom>(gnd: T) -> Atom { Atom::gnd(gnd) }
+    fn G<T: GroundedValue>(gnd: T) -> Atom { Atom::value(gnd) }
+
+    fn init_logger() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
 
     #[test]
     fn test_expr_symbol() {
@@ -291,14 +385,14 @@ mod test {
 
     #[test]
     fn test_grounded() {
-        assert_eq!(Atom::gnd(3), Atom::Grounded(Box::new(3)));
+        assert_eq!(Atom::value(3), Atom::Grounded(GroundedAtom::new_value(3)));
         assert_eq!(G(42).as_gnd::<i32>().unwrap(), &42);
-        assert_eq!(G("Data string"), Atom::Grounded(Box::new("Data string")));
-        assert_eq!(G(vec![1, 2, 3]), Atom::Grounded(Box::new(vec![1, 2, 3])));
+        assert_eq!(G("Data string"), Atom::Grounded(GroundedAtom::new_value("Data string")));
+        assert_eq!(G(vec![1, 2, 3]), Atom::Grounded(GroundedAtom::new_value(vec![1, 2, 3])));
         assert_eq!(G([42, -42]).as_gnd::<[i32; 2]>().unwrap(), &[42, -42]);
         assert_eq!(G((-42, "42")).as_gnd::<(i32, &str)>().unwrap(), &(-42, "42"));
         assert_eq!(G(HashMap::from([("q", 0), ("a", 42),])),
-        Atom::Grounded(Box::new(HashMap::from([("q", 0), ("a", 42),]))));
+            Atom::Grounded(GroundedAtom::new_value(HashMap::from([("q", 0), ("a", 42),]))));
     }
 
     #[test]
@@ -320,14 +414,14 @@ mod test {
 
     #[test]
     fn test_display_grounded() {
-        assert_eq!(format!("{}", Atom::gnd(42)), "42");
-        assert_eq!(format!("{}", Atom::gnd([1, 2, 3])), "[1, 2, 3]");
+        assert_eq!(format!("{}", Atom::value(42)), "42");
+        assert_eq!(format!("{}", Atom::value([1, 2, 3])), "[1, 2, 3]");
         assert_eq!(
-            format!("{}", Atom::gnd(HashMap::from([("hello", "world")]))),
+            format!("{}", Atom::value(HashMap::from([("hello", "world")]))),
             "{\"hello\": \"world\"}");
     }
 
-    #[derive(Debug)]
+    #[derive(Debug, Clone)]
     struct TestDict(Vec<(Atom, Atom)>);
 
     impl TestDict {
@@ -353,33 +447,41 @@ mod test {
     use crate::*;
     use crate::atom::matcher::*;
 
-    impl GroundedAtom for TestDict {
-        fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
+    impl GroundedValue for TestDict {
+        fn eq_gnd(&self, other: &dyn GroundedValue) -> bool {
             match other.downcast_ref::<TestDict>() {
                 Some(o) => self.0.eq(&o.0),
                 None => false,
             }
         }
-        fn clone_gnd(&self) -> Box<dyn GroundedAtom> {
+        fn clone_gnd(&self) -> Box<dyn GroundedValue> {
             Box::new(Self(self.0.clone()))
         }
-        fn match_gnd(&self, other: &Atom) -> MatchResultIter {
-            if let Some(other) = other.as_gnd::<TestDict>() {
-                other.0.iter().map(|(ko, vo)| {
-                    self.0.iter().map(|(k, v)| {
-                            Atom::expr(&[k.clone(), v.clone()]).do_match(&Atom::expr(&[ko.clone(), vo.clone()]))
-                    }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
-                        Box::new(acc.chain(i))
-                    })
-                }).fold(Box::new(std::iter::once(MatchResult::new())), |acc, i| { matcher::product_iter(acc, i) })
-            } else {
-                Box::new(std::iter::empty())
-            }
+    }
+
+    fn test_dict_match(this: &dyn GroundedValue, other: &Atom) -> MatchResultIter {
+        if let (Some(this), Some(other)) = (this.downcast_ref::<TestDict>(), other.as_gnd::<TestDict>()) {
+            other.0.iter().map(|(ko, vo)| {
+                this.0.iter().map(|(k, v)| {
+                        Atom::expr(&[k.clone(), v.clone()]).do_match(&Atom::expr(&[ko.clone(), vo.clone()]))
+                }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
+                    Box::new(acc.chain(i))
+                })
+            }).fold(Box::new(std::iter::once(MatchResult::new())), |acc, i| { matcher::product_iter(acc, i) })
+        } else {
+            Box::new(std::iter::empty())
+        }
+    }
+
+    impl From<TestDict> for Atom {
+        fn from(dict: TestDict) -> Self {
+            Atom::Grounded(GroundedAtom::new_matchable(dict, test_dict_match))
         }
     }
 
     #[test]
     fn test_custom_matching() {
+        init_logger();
         let mut dict = TestDict::new();
         dict.put(expr!("x"), expr!({2}, {5}));
         dict.put(expr!("y"), expr!({5}));

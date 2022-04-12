@@ -187,7 +187,7 @@ mod tests {
     fn test_text_recognize_full_token() {
         let mut text = SExprSpace::new();
         text.register_token(Regex::new(r"b").unwrap(),
-            |_| Atom::gnd("b"));
+            |_| Atom::value("b"));
 
         text.add_str("ab").unwrap();
         let space = GroundingSpace::from(&text);
@@ -199,12 +199,12 @@ mod tests {
     fn test_text_gnd() {
         let mut text = SExprSpace::new();
         text.register_token(Regex::new(r"\d+").unwrap(),
-            |token| Atom::gnd(token.parse::<i32>().unwrap()));
+            |token| Atom::value(token.parse::<i32>().unwrap()));
 
         text.add_str("(3d 42)").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![Atom::expr(&[Atom::sym("3d"), Atom::gnd(42)])],
+        assert_eq!(vec![Atom::expr(&[Atom::sym("3d"), Atom::value(42)])],
             *space.borrow_vec());
     }
 
