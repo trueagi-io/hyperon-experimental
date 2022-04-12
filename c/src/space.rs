@@ -94,14 +94,4 @@ pub extern "C" fn grounding_space_subst(space: *const grounding_space_t,
     return_atoms(&results, callback, data);
 }
 
-#[no_mangle]
-pub extern "C" fn interpret(space: *mut grounding_space_t, expr: *const atom_t,
-        callback: atoms_callback_t, data: *mut c_void) {
-    let res = unsafe { hyperon::metta::interpreter::interpret((*space).space.clone(), &(*expr).atom) };
-    match res {
-        Ok(vec) => return_atoms(&vec, callback, data),
-        Err(_) => return_atoms(&vec![], callback, data),
-    }
-}
-
 

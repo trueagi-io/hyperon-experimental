@@ -18,6 +18,7 @@ using CGroundingSpace = CPtr<grounding_space_t>;
 using CTokenizer = CPtr<tokenizer_t>;
 using CSExprSpace = CPtr<sexpr_space_t>;
 using CAtomType = CPtr<const atom_type_t>;
+using CStepResult = CPtr<step_result_t>;
 
 void copy_to_string(char const* cstr, void* context) {
 	std::string* cppstr = static_cast<std::string*>(context);
@@ -272,6 +273,21 @@ PYBIND11_MODULE(hyperonpy, m) {
 			interpret(space.ptr, expr.ptr, &copy_atoms_to_list, &results);
 			return results;
 		}, "Run interpreter on expression and return result");
+	py::class_<CStepResult>(m, "CStepResult");
+	m.def("interpret_init", [](CGroundingSpace space, CAtom expr) {
+			return CStepResult(interpret_init(space.ptr, expr.ptr));
+		}, "Initialize interpreter of the expression");
+	m.def("interpret_step", [](CStepResult step) {
+			return CStepResult(interpret_step(step.ptr));
+		}, "Do next step of the interpretataion");
+	m.def("interpret_has_next", [](CStepResult step) {
+			return interpret_has_next(step.ptr);
+		}, "Check whether next step of interpretation is posible");
+	m.def("interpret_return", [](CStepResult step) {
+			py::list results;
+			interpret_return(step.ptr, &copy_atoms_to_list, &results);
+			return results;
+		}, "Return result of the interpretation");
 
 	py::class_<CAtomType>(m, "CAtomType")
 		.def_property_readonly_static("UNDEFINED", [](py::object) { return CAtomType(ATOM_TYPE_UNDEFINED); }, "Undefined type instance");

@@ -220,8 +220,11 @@ class SExprSpace:
         hp.sexpr_space_into_grounding_space(self.cspace, gspace.cspace)
 
 def interpret(gnd_space, expr):
+    step = hp.interpret_init(gnd_space.cspace, expr.catom)
+    while (hp.interpret_has_next(step)):
+        step = hp.interpret_step(step)
     return [Atom._from_catom(catom) for catom in
-            hp.interpret(gnd_space.cspace, expr.catom)]
+            hp.interpret_return(step)]
 
 class AtomType:
 

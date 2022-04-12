@@ -25,7 +25,7 @@ static RETURN_IF_EQUAL_OP: FunctionPlan<(StepResult<InterpreterResult>, (Interpr
 
 // TODO: error handing and logging can also be moved into Plan structures
 // or implemented atop of them
-type InterpreterResult = Result<Vec<(Atom, Bindings)>, String>;
+pub type InterpreterResult = Result<Vec<(Atom, Bindings)>, String>;
 
 // Merge results:
 // - if at least one result is Ok() it will be returned
@@ -49,9 +49,26 @@ fn merge_results(plan_res: InterpreterResult, step_res: InterpreterResult) -> In
     }
 }
 
+pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<InterpreterResult> {
+    StepResult::execute(ApplyPlan::new(INTERPRET_OR_DEFAULT_OP, (space, expr.clone(), Bindings::new())))
+}
+
+pub fn interpret_step(step: StepResult<InterpreterResult>) -> StepResult<InterpreterResult> {
+    match step {
+        StepResult::Execute(step) => step.step(()),
+        StepResult::Return(_) => panic!("Plan execution is finished already"),
+    }
+}
+
 pub fn interpret(space: GroundingSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
-    execute_plan(INTERPRET_OR_DEFAULT_OP, (space, expr.clone(), Bindings::new()))
-        .map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect())
+    let mut next = interpret_init(space, expr);
+    loop {
+        match next {
+            StepResult::Execute(step) => next = step.step(()),
+            StepResult::Return(result) => return result
+                .map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect()),
+        }
+    }
 }
 
 fn is_grounded(expr: &ExpressionAtom) -> bool {
