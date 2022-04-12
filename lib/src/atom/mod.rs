@@ -157,7 +157,7 @@ impl<T: GroundedValue> GroundedValueToGroundedAtom for Wrap<T> {
         Atom::Grounded(GroundedAtom{
             value: self.0.clone_gnd(),
             do_match: Arc::new(default_match),
-            do_execute: Box::new(default_execute)
+            do_execute: Box::new(DEFAULT_EXECUTE)
         })
     }
 }
@@ -173,7 +173,7 @@ impl<T: Clone + Into<Atom>> ExplicitToGroundedAtom for &Wrap<T> {
 //pub trait MatchFn : 'static + Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter {}
 //impl<T: 'static + Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter> MatchFn for T {}
 
-pub fn default_match(this: &dyn GroundedValue, other: &Atom) -> matcher::MatchResultIter {
+fn default_match(this: &dyn GroundedValue, other: &Atom) -> matcher::MatchResultIter {
     match other {
         Atom::Grounded(other) if other.value.as_ref().eq_gnd(this) =>
             Box::new(std::iter::once(matcher::MatchResult::new())),
@@ -185,19 +185,32 @@ pub fn default_match(this: &dyn GroundedValue, other: &Atom) -> matcher::MatchRe
 //pub trait ExecuteFn : 'static + Sync + Send + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String> {}
 //impl<T: 'static + Sync + Send + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>> ExecuteFn for T {}
 
-pub fn default_execute(_args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+fn default_execute_impl(_args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
     Err(format!("Execute is not implemented"))
 }
+static DEFAULT_EXECUTE: ExecuteFn = default_execute_impl;
 
 // Grounded function
 
-pub trait GroundedFunction : Sync {
-    fn clone_gnd(&self) -> Box<dyn GroundedFunction>;
+pub trait GroundedFunction : mopa::Any + Sync {
+    fn eq_trait(&self, other: &dyn GroundedFunction) -> bool;
+    fn clone_trait(&self) -> Box<dyn GroundedFunction>;
     fn call(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String>;
 }
 
-impl<F> GroundedFunction for F where F: 'static + Sync + Clone + Fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String> {
-    fn clone_gnd(&self) -> Box<dyn GroundedFunction> {
+mopafy!(GroundedFunction);
+
+type ExecuteFn = fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>;
+
+impl GroundedFunction for ExecuteFn {
+    fn eq_trait(&self, other: &dyn GroundedFunction) -> bool {
+        match other.downcast_ref::<ExecuteFn>() {
+            Some(other) => (*self as usize) == (*other as usize),
+            _ => false,
+        }
+    }
+
+    fn clone_trait(&self) -> Box<dyn GroundedFunction> {
         Box::new(self.clone())
     }
 
@@ -219,10 +232,10 @@ pub struct GroundedAtom {
 
 impl GroundedAtom {
     pub fn new_value<T: GroundedValue>(value: T) -> Self {
-        Self{ value: Box::new(value), do_match: Arc::new(default_match), do_execute: Box::new(default_execute) }
+        Self{ value: Box::new(value), do_match: Arc::new(default_match), do_execute: Box::new(DEFAULT_EXECUTE) }
     }
     pub fn new_matchable<T: GroundedValue, M: 'static + Sync + Send + Fn(&dyn GroundedValue, &Atom) -> matcher::MatchResultIter>(value: T, do_match: M) -> Self {
-        Self{ value: Box::new(value), do_match: Arc::new(do_match), do_execute: Box::new(default_execute) }
+        Self{ value: Box::new(value), do_match: Arc::new(do_match), do_execute: Box::new(DEFAULT_EXECUTE) }
     }
     pub fn new_function<T: GroundedValue, E: 'static + GroundedFunction>(value: T, do_execute: E) -> Self {
         Self{ value: Box::new(value), do_match: Arc::new(default_match), do_execute: Box::new(do_execute) }
@@ -249,6 +262,7 @@ impl PartialEq for GroundedAtom {
         // TODO: it is temporal implementation before GroundedAtom is splitted
         // on GroundedValue and GroundedFunction
         self.value.eq_gnd(&*other.value)
+            && self.do_execute.eq_trait(&*other.do_execute)
     }
 }
 
@@ -259,7 +273,7 @@ impl Clone for GroundedAtom {
         Self{
             value: self.value.clone_gnd(),
             do_match: self.do_match.clone(),
-            do_execute: self.do_execute.clone_gnd(),
+            do_execute: self.do_execute.clone_trait(),
         }
     }
 }

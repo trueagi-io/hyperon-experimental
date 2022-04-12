@@ -293,7 +293,14 @@ impl CGroundedFunction {
 }
 
 impl GroundedFunction for CGroundedFunction {
-    fn clone_gnd(&self) -> Box<dyn GroundedFunction> {
+    fn eq_trait(&self, other: &dyn GroundedFunction) -> bool {
+        match other.downcast_ref::<CGroundedFunction>() {
+            Some(other) => self.api().execute == other.api().execute,
+            _ => false,
+        }
+    }
+
+    fn clone_trait(&self) -> Box<dyn GroundedFunction> {
         Box::new(self.clone())
     }
 
