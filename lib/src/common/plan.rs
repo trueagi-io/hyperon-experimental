@@ -46,18 +46,6 @@ pub trait Plan<T, R> : Debug {
     fn step(self: Box<Self>, arg: T) -> StepResult<R>;
 }
 
-/// Execute the plan using given input value and return result
-pub fn execute_plan<T: Debug, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R> {
-    let mut step: Box<dyn Plan<(), R>>  = Box::new(ApplyPlan::new(plan, arg));
-    loop {
-        log::debug!("current plan:\n{:?}", step);
-        match step.step(()) {
-            StepResult::Execute(next) => step = next,
-            StepResult::Return(result) => return result,
-        }
-    }
-}
-
 // Specific plans to form calculations graph
 
 /// StepResult itself is a trivial plan which returns itself when executed
@@ -304,6 +292,18 @@ impl<I, T, R> FoldIntoParallelPlan<I, T, R> for I
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Execute the plan using given input value and return result
+    pub fn execute_plan<T: Debug, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R> {
+        let mut step: Box<dyn Plan<(), R>>  = Box::new(ApplyPlan::new(plan, arg));
+        loop {
+            log::debug!("current plan:\n{:?}", step);
+            match step.step(()) {
+                StepResult::Execute(next) => step = next,
+                StepResult::Return(result) => return result,
+            }
+        }
+    }
 
     #[test]
     fn parallel_plan() {
