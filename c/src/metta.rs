@@ -196,3 +196,8 @@ pub extern "C" fn step_get_result(step: *mut step_result_t,
         Err(_) => return_atoms(&vec![], callback, data),
     }
 }
+
+#[no_mangle]
+pub extern "C" fn step_to_str(step: *const step_result_t, callback: c_str_callback_t, context: *mut c_void) {
+    callback(str_as_cstr(format!("{:?}", unsafe{ &(*step).result }).as_str()).as_ptr(), context);
+}

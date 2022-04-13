@@ -288,6 +288,11 @@ PYBIND11_MODULE(hyperonpy, m) {
 			step_get_result(step.ptr, &copy_atoms_to_list, &results);
 			return results;
 		}, "Return result of the interpretation");
+    m.def("step_to_str", [](CStepResult step) {
+			std::string str;
+    		step_to_str(step.ptr, &copy_to_string, &str);
+    		return str;
+    	}, "Convert step to human readable string");
 
 	py::class_<CAtomType>(m, "CAtomType")
 		.def_property_readonly_static("UNDEFINED", [](py::object) { return CAtomType(ATOM_TYPE_UNDEFINED); }, "Undefined type instance");

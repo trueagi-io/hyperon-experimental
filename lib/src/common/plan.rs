@@ -294,7 +294,7 @@ mod tests {
     use super::*;
 
     /// Execute the plan using given input value and return result
-    pub fn execute_plan<T: Debug, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R> {
+    fn execute_plan<T: Debug, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R> {
         let mut step: Box<dyn Plan<(), R>>  = Box::new(ApplyPlan::new(plan, arg));
         loop {
             log::debug!("current plan:\n{:?}", step);
