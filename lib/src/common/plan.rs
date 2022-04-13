@@ -20,6 +20,20 @@ impl<R> StepResult<R> {
     pub fn ret(result: R) -> Self {
         Self::Return(result)
     }
+
+    pub fn has_next(&self) -> bool {
+        match self {
+            StepResult::Execute(_) => true,
+            StepResult::Return(_) => false,
+        }
+    }
+
+    pub fn get_result(self) -> R {
+        match self {
+            StepResult::Execute(_) => panic!("Plan is not finished yet"),
+            StepResult::Return(result) => result,
+        }
+    }
 }
 
 /// Plan which gets a value of T type as an input and returns a result of

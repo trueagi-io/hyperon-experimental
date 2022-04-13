@@ -55,20 +55,17 @@ pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<Interpre
 
 pub fn interpret_step(step: StepResult<InterpreterResult>) -> StepResult<InterpreterResult> {
     match step {
-        StepResult::Execute(step) => step.step(()),
+        StepResult::Execute(plan) => plan.step(()),
         StepResult::Return(_) => panic!("Plan execution is finished already"),
     }
 }
 
 pub fn interpret(space: GroundingSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
-    let mut next = interpret_init(space, expr);
-    loop {
-        match next {
-            StepResult::Execute(step) => next = step.step(()),
-            StepResult::Return(result) => return result
-                .map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect()),
-        }
+    let mut step = interpret_init(space, expr);
+    while step.has_next() {
+        step = interpret_step(step);
     }
+    step.get_result().map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect())
 }
 
 fn is_grounded(expr: &ExpressionAtom) -> bool {

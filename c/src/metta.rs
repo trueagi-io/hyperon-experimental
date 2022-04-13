@@ -182,22 +182,17 @@ pub extern "C" fn interpret_step(step: *mut step_result_t) -> *mut step_result_t
 }
 
 #[no_mangle]
-pub extern "C" fn interpret_has_next(step: *const step_result_t) -> bool {
-    match unsafe{ &(*step).result } {
-        StepResult::Execute(_) => true,
-        StepResult::Return(_) => false,
-    }
+pub extern "C" fn step_has_next(step: *const step_result_t) -> bool {
+    unsafe{ (*step).result.has_next() }
 }
 
 #[no_mangle]
-pub extern "C" fn interpret_return(step: *mut step_result_t,
+pub extern "C" fn step_get_result(step: *mut step_result_t,
         callback: atoms_callback_t, data: *mut c_void) {
     let step = unsafe{ Box::from_raw(step) };
-    if let StepResult::Return(result) = step.result {
-        let res = result.map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect());
-        match res {
-            Ok(vec) => return_atoms(&vec, callback, data),
-            Err(_) => return_atoms(&vec![], callback, data),
-        }
+    let res = step.result.get_result().map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect());
+    match res {
+        Ok(vec) => return_atoms(&vec, callback, data),
+        Err(_) => return_atoms(&vec![], callback, data),
     }
 }

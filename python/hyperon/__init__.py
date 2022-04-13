@@ -221,10 +221,10 @@ class SExprSpace:
 
 def interpret(gnd_space, expr):
     step = hp.interpret_init(gnd_space.cspace, expr.catom)
-    while (hp.interpret_has_next(step)):
+    while (hp.step_has_next(step)):
         step = hp.interpret_step(step)
     return [Atom._from_catom(catom) for catom in
-            hp.interpret_return(step)]
+            hp.step_get_result(step)]
 
 class AtomType:
 

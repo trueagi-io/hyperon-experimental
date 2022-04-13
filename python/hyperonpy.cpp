@@ -280,12 +280,12 @@ PYBIND11_MODULE(hyperonpy, m) {
 	m.def("interpret_step", [](CStepResult step) {
 			return CStepResult(interpret_step(step.ptr));
 		}, "Do next step of the interpretataion");
-	m.def("interpret_has_next", [](CStepResult step) {
-			return interpret_has_next(step.ptr);
+	m.def("step_has_next", [](CStepResult step) {
+			return step_has_next(step.ptr);
 		}, "Check whether next step of interpretation is posible");
-	m.def("interpret_return", [](CStepResult step) {
+	m.def("step_get_result", [](CStepResult step) {
 			py::list results;
-			interpret_return(step.ptr, &copy_atoms_to_list, &results);
+			step_get_result(step.ptr, &copy_atoms_to_list, &results);
 			return results;
 		}, "Return result of the interpretation");
 
