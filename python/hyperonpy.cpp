@@ -268,12 +268,17 @@ PYBIND11_MODULE(hyperonpy, m) {
 	m.def("sexpr_space_add_str", [](CSExprSpace space, char const* str) { sexpr_space_add_str(space.ptr, str); }, "Add text to the sexpr space");
 	m.def("sexpr_space_into_grounding_space", [](CSExprSpace tspace, CGroundingSpace gspace) { sexpr_space_into_grounding_space(tspace.ptr, gspace.ptr); }, "Add content of the sexpr space to the grounding space");
 
+	py::class_<CStepResult>(m, "CStepResult")
+		.def("__str__", [](CStepResult step) {
+			std::string str;
+    		step_to_str(step.ptr, &copy_to_string, &str);
+    		return str;
+    	}, "Convert step to human readable string");
 	m.def("interpret", [](CGroundingSpace space, CAtom expr) { 
 			py::list results;
 			interpret(space.ptr, expr.ptr, &copy_atoms_to_list, &results);
 			return results;
 		}, "Run interpreter on expression and return result");
-	py::class_<CStepResult>(m, "CStepResult");
 	m.def("interpret_init", [](CGroundingSpace space, CAtom expr) {
 			return CStepResult(interpret_init(space.ptr, expr.ptr));
 		}, "Initialize interpreter of the expression");
@@ -288,11 +293,6 @@ PYBIND11_MODULE(hyperonpy, m) {
 			step_get_result(step.ptr, &copy_atoms_to_list, &results);
 			return results;
 		}, "Return result of the interpretation");
-    m.def("step_to_str", [](CStepResult step) {
-			std::string str;
-    		step_to_str(step.ptr, &copy_to_string, &str);
-    		return str;
-    	}, "Convert step to human readable string");
 
 	py::class_<CAtomType>(m, "CAtomType")
 		.def_property_readonly_static("UNDEFINED", [](py::object) { return CAtomType(ATOM_TYPE_UNDEFINED); }, "Undefined type instance");

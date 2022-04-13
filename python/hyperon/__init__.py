@@ -219,12 +219,33 @@ class SExprSpace:
     def add_to(self, gspace):
         hp.sexpr_space_into_grounding_space(self.cspace, gspace.cspace)
 
+class Interpreter:
+
+    def __init__(self, gnd_space, expr):
+        self.step_result = hp.interpret_init(gnd_space.cspace, expr.catom)
+
+    def has_next(self):
+        return hp.step_has_next(self.step_result)
+
+    def next(self):
+        if not self.has_next():
+            raise StopIteration()
+        self.step_result = hp.interpret_step(self.step_result)
+
+    def get_result(self):
+        if self.has_next():
+            raise RuntimeError("Plan execution is not finished")
+        return hp.step_get_result(self.step_result)
+
+    def get_step_result(self):
+        return self.step_result
+
+
 def interpret(gnd_space, expr):
-    step = hp.interpret_init(gnd_space.cspace, expr.catom)
-    while (hp.step_has_next(step)):
-        step = hp.interpret_step(step)
-    return [Atom._from_catom(catom) for catom in
-            hp.step_get_result(step)]
+    interpreter = Interpreter(gnd_space, expr)
+    while interpreter.has_next():
+        interpreter.next()
+    return [Atom._from_catom(catom) for catom in interpreter.get_result()]
 
 class AtomType:
 
