@@ -111,6 +111,12 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(interpret(space, E(x2Atom, ValueAtom(1))),
                 [ValueAtom(2)])
 
+    def test_plan(self):
+        space = GroundingSpace()
+        interpreter = Interpreter(space, E(x2Atom, ValueAtom(1)))
+        self.assertEqual(str(interpreter.get_step_result()),
+                "interpret_or_default_op((GroundingSpace, Expression(ExpressionAtom { children: [Grounded(*2), Grounded(1)] }), {}))")
+
 # No unwrap
 def x2_op(atom):
     return [ValueAtom(2 * atom.get_object().value)]

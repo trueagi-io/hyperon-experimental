@@ -89,9 +89,6 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
     }
 }
 
-#[allow(non_camel_case_types)]
-type c_str_callback_t = extern "C" fn(str: *const c_char, context: *mut c_void) -> ();
-
 #[no_mangle]
 pub unsafe extern "C" fn atom_to_str(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
     callback(str_as_cstr(format!("{}", (*atom).atom).as_str()).as_ptr(), context);
