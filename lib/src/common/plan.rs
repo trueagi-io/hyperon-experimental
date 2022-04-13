@@ -20,6 +20,20 @@ impl<R> StepResult<R> {
     pub fn ret(result: R) -> Self {
         Self::Return(result)
     }
+
+    pub fn has_next(&self) -> bool {
+        match self {
+            StepResult::Execute(_) => true,
+            StepResult::Return(_) => false,
+        }
+    }
+
+    pub fn get_result(self) -> R {
+        match self {
+            StepResult::Execute(_) => panic!("Plan is not finished yet"),
+            StepResult::Return(result) => result,
+        }
+    }
 }
 
 /// Plan which gets a value of T type as an input and returns a result of
@@ -30,18 +44,6 @@ pub trait Plan<T, R> : Debug {
     // which doesn't know anything about original type and cannot move it.
     /// Execute one step of the plan
     fn step(self: Box<Self>, arg: T) -> StepResult<R>;
-}
-
-/// Execute the plan using given input value and return result
-pub fn execute_plan<T: Debug, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R> {
-    let mut step: Box<dyn Plan<(), R>>  = Box::new(ApplyPlan::new(plan, arg));
-    loop {
-        log::debug!("current plan:\n{:?}", step);
-        match step.step(()) {
-            StepResult::Execute(next) => step = next,
-            StepResult::Return(result) => return result,
-        }
-    }
 }
 
 // Specific plans to form calculations graph
@@ -290,6 +292,18 @@ impl<I, T, R> FoldIntoParallelPlan<I, T, R> for I
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Execute the plan using given input value and return result
+    pub fn execute_plan<T: Debug, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R> {
+        let mut step: Box<dyn Plan<(), R>>  = Box::new(ApplyPlan::new(plan, arg));
+        loop {
+            log::debug!("current plan:\n{:?}", step);
+            match step.step(()) {
+                StepResult::Execute(next) => step = next,
+                StepResult::Return(result) => return result,
+            }
+        }
+    }
 
     #[test]
     fn parallel_plan() {

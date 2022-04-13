@@ -1,5 +1,8 @@
 use hyperon::metta::text::*;
 use hyperon::metta::types::AtomType;
+use hyperon::metta::interpreter;
+use hyperon::metta::interpreter::InterpreterResult;
+use hyperon::common::plan::StepResult;
 
 use crate::util::*;
 use crate::atom::*;
@@ -146,4 +149,50 @@ pub unsafe extern "C" fn check_type(space: *const grounding_space_t, atom: *cons
 #[no_mangle]
 pub unsafe extern "C" fn validate_atom(space: *const grounding_space_t, atom: *const atom_t) -> bool {
     hyperon::metta::types::validate_atom(&(*space).space, &(*atom).atom)
+}
+
+// MeTTa interpreter API
+
+#[no_mangle]
+pub extern "C" fn interpret(space: *mut grounding_space_t, expr: *const atom_t,
+        callback: atoms_callback_t, data: *mut c_void) {
+    let res = unsafe { hyperon::metta::interpreter::interpret((*space).space.clone(), &(*expr).atom) };
+    match res {
+        Ok(vec) => return_atoms(&vec, callback, data),
+        Err(_) => return_atoms(&vec![], callback, data),
+    }
+}
+
+#[allow(non_camel_case_types)]
+pub struct step_result_t {
+    result: StepResult<InterpreterResult>,
+}
+
+#[no_mangle]
+pub extern "C" fn interpret_init(space: *mut grounding_space_t, expr: *const atom_t) -> *mut step_result_t {
+    let step = unsafe { interpreter::interpret_init((*space).space.clone(), &(*expr).atom) };
+    Box::into_raw(Box::new(step_result_t{ result: step }))
+}
+
+#[no_mangle]
+pub extern "C" fn interpret_step(step: *mut step_result_t) -> *mut step_result_t {
+    let step = unsafe { Box::from_raw(step) };
+    let next = interpreter::interpret_step(step.result);
+    Box::into_raw(Box::new(step_result_t{ result: next }))
+}
+
+#[no_mangle]
+pub extern "C" fn step_has_next(step: *const step_result_t) -> bool {
+    unsafe{ (*step).result.has_next() }
+}
+
+#[no_mangle]
+pub extern "C" fn step_get_result(step: *mut step_result_t,
+        callback: atoms_callback_t, data: *mut c_void) {
+    let step = unsafe{ Box::from_raw(step) };
+    let res = step.result.get_result().map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect());
+    match res {
+        Ok(vec) => return_atoms(&vec, callback, data),
+        Err(_) => return_atoms(&vec![], callback, data),
+    }
 }
