@@ -74,7 +74,8 @@ fn is_grounded(expr: &ExpressionAtom) -> bool {
 }
 
 fn interpret_or_default_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
-    log::debug!("interpret_or_default_op: {}", atom);
+    log::debug!("interpret_or_default_op: {}, {}", atom, bindings);
+    let atom = apply_bindings_to_atom(&atom, &bindings);
     let default = (atom.clone(), bindings.clone());
     StepResult::execute(SequencePlan::new(
         // TODO: we could simplify calculations for non expression by returning
@@ -85,8 +86,7 @@ fn interpret_or_default_op((space, atom, bindings): (GroundingSpace, Atom, Bindi
 }
 
 fn interpret_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
-    let atom = apply_bindings_to_atom(&atom, &bindings);
-    log::debug!("interpret_op: {}", atom);
+    log::debug!("interpret_op: {}, {}", atom, bindings);
     if let Atom::Expression(ref expr) = atom {
         if expr.is_plain() {
             StepResult::execute(ApplyPlan::new(INTERPRET_REDUCTED_OP, (space,  atom, bindings)))
@@ -118,7 +118,6 @@ fn return_default_if_err_op(((atom, bindings), result): ((Atom, Bindings), Inter
     match result {
         Err(msg) => {
             log::debug!("return_default_if_err_op: return original atom: {} with bindings: {:?}, because of error: {}", atom, bindings, msg);
-            let atom = apply_bindings_to_atom(&atom, &bindings);
             StepResult::ret(Ok(vec![(atom, bindings)]))
         },
         Ok(_) => StepResult::ret(result),
