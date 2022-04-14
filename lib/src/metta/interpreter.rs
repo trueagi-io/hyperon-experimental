@@ -343,64 +343,6 @@ fn match_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> S
     }
 }
 
-/*
-fn unify_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
-    log::debug!("unify_op: {}", expr);
-    let var_x = VariableAtom::from("X");
-    // TODO: unique variable?
-    let atom_x = Atom::Variable(var_x.clone());
-    let mut unifications = space.unify(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
-    let mut results: Vec<(Atom, Bindings, Unifications)>  = unifications
-        .drain(0..)
-        .map(|(mut binding, unifications)| {
-            let result = binding.get(&var_x).unwrap(); 
-            let result = apply_bindings_to_atom(result, &binding);
-            let bindings = apply_bindings_to_bindings(&binding, &prev_bindings);
-            let bindings = bindings.map(|mut bindings| {
-                binding.drain().for_each(|(k, v)| { bindings.insert(k, v); });
-                bindings
-            });
-            log::debug!("unify_op: query: {}, binding: {:?}, result: {}", expr, bindings, result);
-            (result, bindings, unifications)
-        })
-        .filter(|(_, bindings, _)| bindings.is_ok())
-        .map(|(result, bindings, unifications)| (result, bindings.unwrap(), unifications))
-        .collect();
-    if results.is_empty() {
-        StepResult::ret(Err(format!("Match is not found")))
-    } else {
-        let plan: Box<dyn Plan<(), InterpreterResult>>  = 
-            results.drain(0..).into_parallel_plan(Ok(vec![]),
-                |(result, bindings, mut unifications)| {
-                    Box::new(unifications.drain(0..).fold(
-                        StepResult::ret(Ok(vec![(result, bindings.clone())])),
-                        |plan, pair| {
-                            let candidate = pair.candidate;
-                            let pattern = pair.pattern;
-                            StepResult::execute(
-                                SequencePlan::new(
-                                    ParallelPlan::new(
-                                        ApplyPlan::new(INTERPRET_OP, (space.clone(), pattern, bindings.clone())),
-                                        ApplyPlan::new(INTERPRET_OP, (space.clone(), candidate, bindings.clone())),
-                                    ),
-                                    PartialApplyPlan::new(RETURN_IF_EQUAL_OP, plan),
-                                )
-                            )
-                        }
-                    ))
-                },
-                merge_results);
-        StepResult::Execute(plan)
-    }
-}
-
-fn return_if_equal_op((_plan, (pattern_res, candidate_res)):
-    (StepResult<InterpreterResult>, (InterpreterResult, InterpreterResult))) -> StepResult<InterpreterResult> {
-    log::debug!("return_if_equal_op: pattern_res: {:?}, candidate_res: {:?}", pattern_res, candidate_res);
-    todo!("Not implemented");
-}
-*/
-
 #[cfg(test)]
 mod tests {
     use super::*;
