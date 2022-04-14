@@ -2,7 +2,7 @@ import unittest
 import re
 
 from hyperon import *
-from common import interpret_until_result, MeTTa
+from common import MeTTa
 
 class UnificationTest(unittest.TestCase):
 
