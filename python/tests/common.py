@@ -1,9 +1,5 @@
 from hyperon import *
 
-def interpret_until_result(target, kb):
-    return interpret(kb, target)
-
-
 def match_op(space, pattern, templ_op):
     space = space.get_object().value
     # TODO: hack to make both quoted and unquoted expression work
@@ -27,6 +23,10 @@ def call_atom_op(atom, method_str, *args):
     method(*args)
     return []
 
+def print_op(atom):
+    print(atom)
+    return []
+
 subAtom = G(TypedOperation('-', lambda a, b: a - b, ['Number', 'Number', 'Number']))
 mulAtom = G(TypedOperation('*', lambda a, b: a * b, ['Number', 'Number', 'Number']))
 addAtom = G(TypedOperation('+', lambda a, b: a + b, ['Number', 'Number', 'Number']))
@@ -43,6 +43,8 @@ commaAtom = OperationAtom(',', lambda args: args.get_children(), unwrap=False)
 
 letAtom = OperationAtom('let', let_op, unwrap=False)
 matchAtom = OperationAtom('match', match_op, unwrap=False)
+
+printAtom = G(TypedOperation('println!', print_op, ['?', 'IO'], unwrap=False))
 
 def newCallAtom(token):
     # REM: we could use "call" as a plain symbol (insted of "call:...")
@@ -93,6 +95,7 @@ class Atomese:
         # Any number of arguments for `nop` instead of one
         tokenizer.register_token(r"nop", lambda *args: nopAtom)
         # tokenizer.register_token(r"nop", lambda _: nopAtom)
+        tokenizer.register_token(r"println!", lambda _: printAtom)
         for regexp in self.tokens.keys():
             tokenizer.register_token(regexp, self.tokens[regexp])
         return tokenizer

@@ -1,19 +1,7 @@
 import unittest
 
 from hyperon import *
-from common import interpret_until_result, Atomese, MeTTa, SpaceAtom
-
-def interpret_and_print_results(target, kb, add_results_to_kb=False):
-    output = ""
-    while True:
-        next = interpret_until_result(target, kb)
-        if next == S('eos'):
-            break
-        print(next)
-        output = output + str(next) + "\n"
-        if add_results_to_kb:
-            kb.add_atom(next)
-    return output
+from common import Atomese, MeTTa, SpaceAtom
 
 class ExamplesTest(unittest.TestCase):
 
@@ -410,13 +398,13 @@ class ExamplesTest(unittest.TestCase):
 
         # simple functional way to produce subgoals in target
         target = atomese.parse('(perform (visit Kim))')
-        result = interpret_until_result(target, kb)
+        result = interpret(kb, target)
         # returned now as output because there is no further interpretation of this expression
         # it could be expanded further into subgoals or external actions
         self.assertEqual(repr(result), '(perform (health-check Kim))')
         # the next subgoal is produced in the consequent interpretation of the initial
         # nondeterministic expression
-        result = interpret_until_result(target, kb)
+        result = interpret(kb, target)
         self.assertEqual(repr(result), '(perform (lunch-order Kim))')
 
         # Higher-order matching:
@@ -425,7 +413,7 @@ class ExamplesTest(unittest.TestCase):
         # $subgoal[1,2] <- (is-achieved ([lunch-order, health-check] Kim))
         # checking if such two-side unification works:
         target = atomese.parse('(achieve (visit Kim))')
-        result = interpret_until_result(target, kb)
+        result = interpret(kb, target)
         self.assertEqual(repr(result), '(do (lunch-order Kim) (health-check Kim))')
 
         # Extending the program
@@ -434,7 +422,7 @@ class ExamplesTest(unittest.TestCase):
         target = atomese.parse('(achieve (visit Kim))')
         # (achieve (visit Kim)) --> (do (lunch-order Kim) (health-check Kim))
         # --> (achieve (health-check Kim)) ... --> True
-        result = interpret_until_result(target, kb)
+        result = interpret(kb, target)
         self.assertEqual(repr(result), 'True')
 
 class SomeObject():
