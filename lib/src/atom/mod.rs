@@ -292,7 +292,7 @@ impl Debug for GroundedAtom {
 
 // Atom enum
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone)]
 pub enum Atom {
     Symbol(SymbolAtom),
     Expression(ExpressionAtom),
@@ -340,6 +340,12 @@ impl Display for Atom {
             Atom::Variable(var) => Display::fmt(var, f),
             Atom::Grounded(gnd) => Debug::fmt(gnd, f),
         }
+    }
+}
+
+impl Debug for Atom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(self, f)
     }
 }
 
