@@ -8,18 +8,18 @@ pub struct  array_t<T> {
 }
 
 #[repr(C)]
-pub struct callback_t<T> {
+pub struct lambda_t<T> {
     pub func: extern "C" fn(data: T, context: *mut c_void),
     pub context: *mut c_void,
 }
 
-impl<T> callback_t<T> {
+impl<T> lambda_t<T> {
     pub fn call(&self, arg: T) {
         (self.func)(arg, self.context)
     }
 }
 
-pub type c_str_callback_t = callback_t<*const c_char>;
+pub type c_str_callback_t = lambda_t<*const c_char>;
 
 pub unsafe fn cstr_as_str<'a>(s: *const c_char) -> &'a str {
     CStr::from_ptr(s).to_str().expect("Incorrect UTF-8 sequence")

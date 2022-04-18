@@ -181,7 +181,7 @@ pub unsafe extern "C" fn vec_atom_get(vec: *mut vec_atom_t, idx: usize) -> *mut 
 }
 
 pub type atoms_array_t = array_t<*const atom_t>;
-pub type c_atoms_callback_t = callback_t<atoms_array_t>;
+pub type c_atoms_callback_t = lambda_t<atoms_array_t>;
 
 /////////////////////////////////////////////////////////////////
 // Code below is a boilerplate code to implement C API correctly.
