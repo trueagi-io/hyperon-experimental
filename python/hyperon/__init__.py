@@ -175,7 +175,8 @@ class GroundingSpace:
                 for i in range(0, hp.grounding_space_len(self.cspace))]
 
     def query(self, pattern):
-        return hp.grounding_space_query(self.cspace, pattern.catom)
+        result = hp.grounding_space_query(self.cspace, pattern.catom)
+        return [{k: Atom._from_catom(v) for k, v in bindings.items()} for bindings in result]
 
     def subst(self, pattern, templ):
         return [Atom._from_catom(catom) for catom in

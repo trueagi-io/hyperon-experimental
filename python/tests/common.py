@@ -39,7 +39,6 @@ andAtom = G(TypedOperation('and', lambda a, b: a and b, ['Bool', 'Bool', 'Bool']
 notAtom = G(TypedOperation('not', lambda a: not a, ['Bool', 'Bool']))
 
 nopAtom = OperationAtom('nop', lambda _: [], unwrap=False)
-commaAtom = OperationAtom(',', lambda args: args.get_children(), unwrap=False)
 
 letAtom = OperationAtom('let', let_op, unwrap=False)
 matchAtom = OperationAtom('match', match_op, unwrap=False)
@@ -90,7 +89,6 @@ class Atomese:
                                  lambda token: G(TypedValue(token == 'True', 'Bool')))
         tokenizer.register_token(r"match", lambda _: matchAtom)
         tokenizer.register_token(r"call:[^\s]+", newCallAtom)
-        tokenizer.register_token(r",", lambda _: commaAtom)
         tokenizer.register_token(r"let", lambda _: letAtom)
         # Any number of arguments for `nop` instead of one
         tokenizer.register_token(r"nop", lambda *args: nopAtom)

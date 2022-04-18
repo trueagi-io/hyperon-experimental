@@ -21,3 +21,14 @@ class MeTTaTest(unittest.TestCase):
         result = run_metta(program)
         self.assertEqual('[[red, green, blue], [5]]', repr(result))
 
+    def test_run_complex_query(self):
+        program = '''
+            (A B)
+            (C B)
+
+            !(match &self (, (A $x) (C $x)) $x)
+        '''
+
+        result = run_metta(program)
+        self.assertEqual('[[B]]', repr(result))
+
