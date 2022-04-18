@@ -221,10 +221,34 @@ fn reduct_next_arg_plan(space: GroundingSpace, mut iter: SubexprStream, bindings
     }
 }
 
+fn find_next_sibling_skip_last<'a>(levels: &mut Vec<usize>, expr: &'a ExpressionAtom, level: usize) -> Option<&'a Atom> {
+    let mut idx = levels[level];
+    while idx < expr.children().len() - 1 {
+        let child = &expr.children()[idx];
+        if let Atom::Expression(_) = child {
+            levels[level] = idx + 1;
+            log::trace!("find_next_sibling_expr: return: {}", child);
+            return Some(child);
+        }
+        idx += 1;
+    }
+    levels.pop();
+    log::trace!("find_next_sibling_expr: return None");
+    return None;
+}
+
+
 fn reduct_args_op((space, expr, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
     log::debug!("reduct_args_op: {}", expr);
-    if let Atom::Expression(_) = expr {
-        let mut iter = SubexprStream::from_expr(expr, FIND_NEXT_SIBLING_WALK);
+    if let Atom::Expression(ref e) = expr {
+        // TODO: remove this hack when it is possible to use types in order
+        // to prevent reducing of the last argument of the match
+        let mut iter = if format!("{}", e.children()[0]) == "match" {
+            log::trace!("skip reducing the last argument of the match");
+            SubexprStream::from_expr(expr, find_next_sibling_skip_last)
+        } else {
+            SubexprStream::from_expr(expr, FIND_NEXT_SIBLING_WALK)
+        };
         let sub = iter.next().expect("Non plain expression expected").clone();
         StepResult::execute(SequencePlan::new(
                 ApplyPlan::new(INTERPRET_OR_DEFAULT_OP, (space.clone(), sub, bindings)),
