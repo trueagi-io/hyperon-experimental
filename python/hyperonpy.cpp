@@ -20,10 +20,20 @@ using CSExprSpace = CPtr<sexpr_space_t>;
 using CAtomType = CPtr<const atom_type_t>;
 using CStepResult = CPtr<step_result_t>;
 
-void copy_to_string(char const* cstr, void* context) {
-	std::string* cppstr = static_cast<std::string*>(context);
-	cppstr->assign(cstr);
-}
+struct string_callback_t : public c_str_callback_t {
+	std::string str;
+
+	string_callback_t() {
+		this->func = string_callback_t::copy_to_string;
+		this->context = this;
+	}
+
+	static void copy_to_string(char const* cstr, void* context) {
+		std::string& cppstr = static_cast<string_callback_t*>(context)->str;
+		cppstr.assign(cstr);
+	}
+};
+
 
 void copy_atoms_to_list(atom_t const* const* atoms, size_t size, void* context) {
 	py::list& list = *(py::list*) context;
@@ -189,15 +199,15 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     m.def("atom_eq", [](CAtom a, CAtom b) -> bool { return atom_eq(a.ptr, b.ptr); }, "Test if two atoms are equal");
     m.def("atom_to_str", [](CAtom atom) {
-			std::string str;
-    		atom_to_str(atom.ptr, &copy_to_string, &str);
-    		return str;
+    		string_callback_t callback;
+    		atom_to_str(atom.ptr, &callback);
+    		return callback.str;
     	}, "Convert atom to human readable string");
     m.def("atom_get_type", [](CAtom atom) { return atom_get_type(atom.ptr); }, "Get type of the atom");
     m.def("atom_get_name", [](CAtom atom) {
-			std::string str;
-    		atom_get_name(atom.ptr, &copy_to_string, &str);
-    		return str;
+    		string_callback_t callback;
+    		atom_get_name(atom.ptr, &callback);
+    		return callback.str;
     	}, "Get name of the Symbol or Variable atom");
 	m.def("atom_get_object", [](CAtom atom) {
 			return static_cast<GroundedObject const*>(atom_get_object(atom.ptr))->pyobj;
@@ -270,9 +280,9 @@ PYBIND11_MODULE(hyperonpy, m) {
 
 	py::class_<CStepResult>(m, "CStepResult")
 		.def("__str__", [](CStepResult step) {
-			std::string str;
-    		step_to_str(step.ptr, &copy_to_string, &str);
-    		return str;
+    		string_callback_t callback;
+    		step_to_str(step.ptr, &callback);
+    		return callback.str;
     	}, "Convert step to human readable string");
 	m.def("interpret", [](CGroundingSpace space, CAtom expr) { 
 			py::list results;

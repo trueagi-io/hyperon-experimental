@@ -12,7 +12,8 @@ void return_string(char const* value, void* context) {
 }
 
 char const* stratom(atom_t const* atom) {
-	atom_to_str(atom, return_string, 0);
+	c_str_callback_t callback = { return_string };
+	atom_to_str(atom, &callback);
 	return buffer;
 }
 

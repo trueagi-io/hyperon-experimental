@@ -86,15 +86,19 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_to_str(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
-    callback(str_as_cstr(format!("{}", (*atom).atom).as_str()).as_ptr(), context);
+pub extern "C" fn atom_to_str(atom: *const atom_t, callback: *mut c_str_callback_t) {
+    let callback = unsafe{ &mut *callback };
+    let atom = unsafe{ &(*atom).atom };
+    callback.call(str_as_cstr(format!("{}", atom).as_str()).as_ptr());
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
-    match &((*atom).atom) {
-        Atom::Symbol(s) => callback(str_as_cstr(s.name()).as_ptr(), context),
-        Atom::Variable(v) => callback(str_as_cstr(v.name()).as_ptr(), context),
+pub extern "C" fn atom_get_name(atom: *const atom_t, callback: *mut c_str_callback_t) {
+    let callback = unsafe{ &mut *callback };
+    let atom = unsafe{ &(*atom).atom };
+    match atom {
+        Atom::Symbol(s) => callback.call(str_as_cstr(s.name()).as_ptr()),
+        Atom::Variable(v) => callback.call(str_as_cstr(v.name()).as_ptr()),
         _ => panic!("Only Symbol and Variable has name attribute!"),
     }
 }

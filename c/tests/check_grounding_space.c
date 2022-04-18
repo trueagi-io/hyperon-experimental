@@ -25,7 +25,8 @@ void query_callback(binding_t const* results, uintptr_t size, void* data) {
 	for (int i = 0; i < size; ++i) {
 		binding_t const* result = results + i;
 		output->len += snprintf(output->str + output->len, 1024 - output->len, "%s: ", results->var);
-		atom_to_str(result->atom, copy_to_output, output);
+		c_str_callback_t callback = { copy_to_output, output };
+		atom_to_str(result->atom, &callback);
 	}
 }
 

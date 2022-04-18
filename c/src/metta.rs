@@ -191,6 +191,8 @@ pub extern "C" fn step_get_result(step: *mut step_result_t,
 }
 
 #[no_mangle]
-pub extern "C" fn step_to_str(step: *const step_result_t, callback: c_str_callback_t, context: *mut c_void) {
-    callback(str_as_cstr(format!("{:?}", unsafe{ &(*step).result }).as_str()).as_ptr(), context);
+pub extern "C" fn step_to_str(step: *const step_result_t, callback: *mut c_str_callback_t) {
+    let callback = unsafe{ &mut *callback };
+    let result = unsafe{ &(*step).result };
+    callback.call(str_as_cstr(format!("{:?}", result).as_str()).as_ptr());
 }
