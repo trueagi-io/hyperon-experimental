@@ -34,7 +34,7 @@ class PLNTVTest(unittest.TestCase):
         self.assertEqual(
             repr(metta.interpret("(get-tv (AndLink (PA) (PB)))")[0]),
             '(stv 0.3 0.8)')
-        # FixMe: (get-tv (PA)) stops working after:
+
         metta.add_parse('''
             (= (get-tv $x)
                (match &self (.tv (Implication $y $x) (stv $str $conf))
@@ -44,7 +44,9 @@ class PLNTVTest(unittest.TestCase):
                               (Evaluation (Predicate F) (Concept A)))
                  (stv 0.9 0.9))
         ''')
-
+        self.assertEqual(
+            repr(metta.interpret("(get-tv (PA))")[0]),
+            '(stv 0.5 0.8)')
 
     def test_fuzzy_conjunction_fn(self):
         metta = MeTTa()
@@ -78,3 +80,8 @@ class PLNTVTest(unittest.TestCase):
         self.assertEqual(
             repr(metta.interpret("(pln (And (P A) (P $x)))")),
             '[((And (P A) (P A)) (stv 0.5 0.8)), ((And (P A) (P B)) (stv 0.3 0.8))]')
+
+
+init_logger()
+if __name__ == "__main__":
+    unittest.main()
