@@ -180,8 +180,8 @@ pub unsafe extern "C" fn vec_atom_get(vec: *mut vec_atom_t, idx: usize) -> *mut 
     atom_to_ptr((*vec).0[idx].clone())
 }
 
-pub type atoms_array_t = array_t<*const atom_t>;
-pub type c_atoms_callback_t = lambda_t<atoms_array_t>;
+pub type atom_array_t = array_t<*const atom_t>;
+pub type c_atoms_callback_t = lambda_t<atom_array_t>;
 
 /////////////////////////////////////////////////////////////////
 // Code below is a boilerplate code to implement C API correctly.
@@ -199,7 +199,7 @@ pub fn return_atoms(atoms: &Vec<Atom>, callback: *const c_atoms_callback_t) {
     let results: Vec<*const atom_t> = atoms.iter()
         .map(|atom| (atom as *const Atom).cast::<atom_t>()).collect();
     let callback = unsafe{ &*callback };
-    callback.call(atoms_array_t{ atoms: results.as_ptr(), size: results.len() });
+    callback.call(atom_array_t{ atoms: results.as_ptr(), size: results.len() });
 }
 
 // C grounded atom wrapper

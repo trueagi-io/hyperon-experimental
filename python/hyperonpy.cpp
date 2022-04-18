@@ -43,7 +43,7 @@ struct atoms_callback_t : public c_atoms_callback_t {
 		this->context = this;
 	}
 
-	static void copy(atoms_array_t atoms, void* context) {
+	static void copy(atom_array_t atoms, void* context) {
 		py::list& list = static_cast<atoms_callback_t*>(context)->list;
 		for (size_t i = 0; i < atoms.size; ++i) {
 			list.append(CAtom(atom_copy(atoms.atoms[i])));
