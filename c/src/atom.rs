@@ -86,19 +86,17 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
 }
 
 #[no_mangle]
-pub extern "C" fn atom_to_str(atom: *const atom_t, callback: *const c_str_callback_t) {
-    let callback = unsafe{ &*callback };
+pub extern "C" fn atom_to_str(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
     let atom = unsafe{ &(*atom).atom };
-    callback.call(str_as_cstr(format!("{}", atom).as_str()).as_ptr());
+    callback(str_as_cstr(format!("{}", atom).as_str()).as_ptr(), context);
 }
 
 #[no_mangle]
-pub extern "C" fn atom_get_name(atom: *const atom_t, callback: *const c_str_callback_t) {
-    let callback = unsafe{ &*callback };
+pub extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
     let atom = unsafe{ &(*atom).atom };
     match atom {
-        Atom::Symbol(s) => callback.call(str_as_cstr(s.name()).as_ptr()),
-        Atom::Variable(v) => callback.call(str_as_cstr(v.name()).as_ptr()),
+        Atom::Symbol(s) => callback(str_as_cstr(s.name()).as_ptr(), context),
+        Atom::Variable(v) => callback(str_as_cstr(v.name()).as_ptr(), context),
         _ => panic!("Only Symbol and Variable has name attribute!"),
     }
 }
@@ -117,9 +115,9 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_get_children(atom: *const atom_t,
-        callback: *const c_atoms_callback_t) {
+        callback: c_atoms_callback_t, context: *mut c_void) {
     if let Atom::Expression(ref e) = (*atom).atom {
-        return_atoms(e.children(), callback);
+        return_atoms(e.children(), callback, context);
     } else {
         panic!("Only Expression has children!");
     }
@@ -195,11 +193,10 @@ fn vec_atom_to_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {
     Box::into_raw(Box::new(vec_atom_t(vec)))
 }
 
-pub fn return_atoms(atoms: &Vec<Atom>, callback: *const c_atoms_callback_t) {
+pub fn return_atoms(atoms: &Vec<Atom>, callback: c_atoms_callback_t, context: *mut c_void) {
     let results: Vec<*const atom_t> = atoms.iter()
         .map(|atom| (atom as *const Atom).cast::<atom_t>()).collect();
-    let callback = unsafe{ &*callback };
-    callback.call(atom_array_t{ atoms: results.as_ptr(), size: results.len() });
+    callback((&results).into(), context);
 }
 
 // C grounded atom wrapper

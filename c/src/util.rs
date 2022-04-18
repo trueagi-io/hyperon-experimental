@@ -2,22 +2,18 @@ use std::ffi::*;
 use std::os::raw::*;
 
 #[repr(C)]
-pub struct  array_t<T> {
-    pub atoms: *const T,
+pub struct array_t<T> {
+    pub items: *const T,
     pub size: usize,
 }
 
-#[repr(C)]
-pub struct lambda_t<T> {
-    pub func: extern "C" fn(data: T, context: *mut c_void),
-    pub context: *mut c_void,
-}
-
-impl<T> lambda_t<T> {
-    pub fn call(&self, arg: T) {
-        (self.func)(arg, self.context)
+impl<T> From<&Vec<T>> for array_t<T> {
+    fn from(vec: &Vec<T>) -> Self {
+        Self{ items: vec.as_ptr(), size: vec.len() }
     }
 }
+
+pub type lambda_t<T> = extern "C" fn(data: T, context: *mut c_void);
 
 pub type c_str_callback_t = lambda_t<*const c_char>;
 

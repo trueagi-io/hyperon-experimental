@@ -2,7 +2,7 @@ use hyperon::*;
 use hyperon::space::grounding::*;
 
 use crate::atom::*;
-use crate::util::str_as_cstr;
+use crate::util::*;
 
 use std::os::raw::*;
 use std::ffi::CString;
@@ -61,14 +61,12 @@ pub struct binding_t {
     atom: *const atom_t,
 }
 
-// TODO: use this idiom in other API calls which work with C strings
-pub type bindings_callback_t = extern "C" fn(*const binding_t, size: usize, data: *mut c_void);
+pub type binding_array_t = array_t<binding_t>;
 
 #[no_mangle]
 pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
-        pattern: *const atom_t, callback: bindings_callback_t, data: *mut c_void) {
-    let results;
-    unsafe { results = (*space).space.query(&((*pattern).atom)); }
+        pattern: *const atom_t, callback: lambda_t<binding_array_t>, context: *mut c_void) {
+    let results = unsafe { (*space).space.query(&((*pattern).atom)) };
     for result in results {
         let mut vars : Vec<CString> = Vec::new();
         let vec = result.iter().map(|(k, v)| {
@@ -79,16 +77,16 @@ pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
                     atom: (v as *const Atom).cast::<atom_t>()
                 }
             }).collect::<Vec<binding_t>>();
-        callback(vec.as_ptr(), vec.len(), data);
+        callback((&vec).into(), context);
     }
 }
 
 #[no_mangle]
 pub extern "C" fn grounding_space_subst(space: *const grounding_space_t,
         pattern: *const atom_t, templ: *const atom_t,
-        callback: *const c_atoms_callback_t) {
+        callback: c_atoms_callback_t, context: *mut c_void) {
     let results = unsafe { (*space).space.subst(&((*pattern).atom), &((*templ).atom)) };
-    return_atoms(&results, callback);
+    return_atoms(&results, callback, context);
 }
 
 
