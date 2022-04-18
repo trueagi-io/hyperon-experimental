@@ -86,15 +86,15 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
 }
 
 #[no_mangle]
-pub extern "C" fn atom_to_str(atom: *const atom_t, callback: *mut c_str_callback_t) {
-    let callback = unsafe{ &mut *callback };
+pub extern "C" fn atom_to_str(atom: *const atom_t, callback: *const c_str_callback_t) {
+    let callback = unsafe{ &*callback };
     let atom = unsafe{ &(*atom).atom };
     callback.call(str_as_cstr(format!("{}", atom).as_str()).as_ptr());
 }
 
 #[no_mangle]
-pub extern "C" fn atom_get_name(atom: *const atom_t, callback: *mut c_str_callback_t) {
-    let callback = unsafe{ &mut *callback };
+pub extern "C" fn atom_get_name(atom: *const atom_t, callback: *const c_str_callback_t) {
+    let callback = unsafe{ &*callback };
     let atom = unsafe{ &(*atom).atom };
     match atom {
         Atom::Symbol(s) => callback.call(str_as_cstr(s.name()).as_ptr()),
@@ -117,9 +117,9 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_get_children(atom: *const atom_t,
-        callback: atoms_callback_t, data: *mut c_void) {
+        callback: *const c_atoms_callback_t) {
     if let Atom::Expression(ref e) = (*atom).atom {
-        return_atoms(e.children(), callback, data);
+        return_atoms(e.children(), callback);
     } else {
         panic!("Only Expression has children!");
     }
@@ -180,7 +180,8 @@ pub unsafe extern "C" fn vec_atom_get(vec: *mut vec_atom_t, idx: usize) -> *mut 
     atom_to_ptr((*vec).0[idx].clone())
 }
 
-pub type atoms_callback_t = extern "C" fn(*const *const atom_t, size: usize, data: *mut c_void);
+pub type atoms_array_t = array_t<*const atom_t>;
+pub type c_atoms_callback_t = callback_t<atoms_array_t>;
 
 /////////////////////////////////////////////////////////////////
 // Code below is a boilerplate code to implement C API correctly.
@@ -194,10 +195,11 @@ fn vec_atom_to_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {
     Box::into_raw(Box::new(vec_atom_t(vec)))
 }
 
-pub fn return_atoms(atoms: &Vec<Atom>, callback: atoms_callback_t, data: *mut c_void) {
+pub fn return_atoms(atoms: &Vec<Atom>, callback: *const c_atoms_callback_t) {
     let results: Vec<*const atom_t> = atoms.iter()
         .map(|atom| (atom as *const Atom).cast::<atom_t>()).collect();
-    callback(results.as_ptr(), results.len(), data);
+    let callback = unsafe{ &*callback };
+    callback.call(atoms_array_t{ atoms: results.as_ptr(), size: results.len() });
 }
 
 // C grounded atom wrapper

@@ -2,6 +2,12 @@ use std::ffi::*;
 use std::os::raw::*;
 
 #[repr(C)]
+pub struct  array_t<T> {
+    pub atoms: *const T,
+    pub size: usize,
+}
+
+#[repr(C)]
 pub struct callback_t<T> {
     pub func: extern "C" fn(data: T, context: *mut c_void),
     pub context: *mut c_void,

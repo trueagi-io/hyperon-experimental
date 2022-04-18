@@ -24,23 +24,32 @@ struct string_callback_t : public c_str_callback_t {
 	std::string str;
 
 	string_callback_t() {
-		this->func = string_callback_t::copy_to_string;
+		this->func = string_callback_t::copy;
 		this->context = this;
 	}
 
-	static void copy_to_string(char const* cstr, void* context) {
+	static void copy(char const* cstr, void* context) {
 		std::string& cppstr = static_cast<string_callback_t*>(context)->str;
 		cppstr.assign(cstr);
 	}
 };
 
 
-void copy_atoms_to_list(atom_t const* const* atoms, size_t size, void* context) {
-	py::list& list = *(py::list*) context;
-	for (size_t i = 0; i < size; ++i) {
-		list.append(CAtom(atom_copy(atoms[i])));
+struct atoms_callback_t : public c_atoms_callback_t {
+	py::list list;
+
+	atoms_callback_t() {
+		this->func = atoms_callback_t::copy;
+		this->context = this;
 	}
-}
+
+	static void copy(atoms_array_t atoms, void* context) {
+		py::list& list = static_cast<atoms_callback_t*>(context)->list;
+		for (size_t i = 0; i < atoms.size; ++i) {
+			list.append(CAtom(atom_copy(atoms.atoms[i])));
+		}
+	}
+};
 
 py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 	if (py::hasattr(pyobj, attr)) {
@@ -213,9 +222,9 @@ PYBIND11_MODULE(hyperonpy, m) {
 			return static_cast<GroundedObject const*>(atom_get_object(atom.ptr))->pyobj;
 		}, "Get object of the grounded atom");
 	m.def("atom_get_children", [](CAtom atom) {
-			py::list results;
-			atom_get_children(atom.ptr, &copy_atoms_to_list, &results);
-			return results;
+			atoms_callback_t callback;
+			atom_get_children(atom.ptr, &callback);
+			return callback.list;
 		}, "Get children atoms of the expression");
 
 	py::class_<CVecAtom>(m, "CVecAtom");
@@ -251,9 +260,9 @@ PYBIND11_MODULE(hyperonpy, m) {
 
 
 	m.def("grounding_space_subst", [](CGroundingSpace space, CAtom pattern, CAtom templ) {
-			py::list results;
-			grounding_space_subst(space.ptr, pattern.ptr, templ.ptr, &copy_atoms_to_list, &results);
-			return results;
+			atoms_callback_t callback;
+			grounding_space_subst(space.ptr, pattern.ptr, templ.ptr, &callback);
+			return callback.list;
 		}, "Get bindings for pattern and apply to template");
 
 	py::class_<CTokenizer>(m, "CTokenizer");
@@ -285,9 +294,9 @@ PYBIND11_MODULE(hyperonpy, m) {
     		return callback.str;
     	}, "Convert step to human readable string");
 	m.def("interpret", [](CGroundingSpace space, CAtom expr) { 
-			py::list results;
-			interpret(space.ptr, expr.ptr, &copy_atoms_to_list, &results);
-			return results;
+			atoms_callback_t callback;
+			interpret(space.ptr, expr.ptr, &callback);
+			return callback.list;
 		}, "Run interpreter on expression and return result");
 	m.def("interpret_init", [](CGroundingSpace space, CAtom expr) {
 			return CStepResult(interpret_init(space.ptr, expr.ptr));
@@ -299,9 +308,9 @@ PYBIND11_MODULE(hyperonpy, m) {
 			return step_has_next(step.ptr);
 		}, "Check whether next step of interpretation is posible");
 	m.def("step_get_result", [](CStepResult step) {
-			py::list results;
-			step_get_result(step.ptr, &copy_atoms_to_list, &results);
-			return results;
+			atoms_callback_t callback;
+			step_get_result(step.ptr, &callback);
+			return callback.list;
 		}, "Return result of the interpretation");
 
 	py::class_<CAtomType>(m, "CAtomType")

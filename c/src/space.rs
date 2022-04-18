@@ -86,9 +86,9 @@ pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
 #[no_mangle]
 pub extern "C" fn grounding_space_subst(space: *const grounding_space_t,
         pattern: *const atom_t, templ: *const atom_t,
-        callback: atoms_callback_t, data: *mut c_void) {
+        callback: *const c_atoms_callback_t) {
     let results = unsafe { (*space).space.subst(&((*pattern).atom), &((*templ).atom)) };
-    return_atoms(&results, callback, data);
+    return_atoms(&results, callback);
 }
 
 

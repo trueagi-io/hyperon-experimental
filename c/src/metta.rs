@@ -149,11 +149,11 @@ pub unsafe extern "C" fn validate_atom(space: *const grounding_space_t, atom: *c
 
 #[no_mangle]
 pub extern "C" fn interpret(space: *mut grounding_space_t, expr: *const atom_t,
-        callback: atoms_callback_t, data: *mut c_void) {
+        callback: *const c_atoms_callback_t) {
     let res = unsafe { hyperon::metta::interpreter::interpret((*space).space.clone(), &(*expr).atom) };
     match res {
-        Ok(vec) => return_atoms(&vec, callback, data),
-        Err(_) => return_atoms(&vec![], callback, data),
+        Ok(vec) => return_atoms(&vec, callback),
+        Err(_) => return_atoms(&vec![], callback),
     }
 }
 
@@ -181,18 +181,18 @@ pub extern "C" fn step_has_next(step: *const step_result_t) -> bool {
 
 #[no_mangle]
 pub extern "C" fn step_get_result(step: *mut step_result_t,
-        callback: atoms_callback_t, data: *mut c_void) {
+        callback: *const c_atoms_callback_t) {
     let step = unsafe{ Box::from_raw(step) };
     let res = step.result.get_result().map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect());
     match res {
-        Ok(vec) => return_atoms(&vec, callback, data),
-        Err(_) => return_atoms(&vec![], callback, data),
+        Ok(vec) => return_atoms(&vec, callback),
+        Err(_) => return_atoms(&vec![], callback),
     }
 }
 
 #[no_mangle]
-pub extern "C" fn step_to_str(step: *const step_result_t, callback: *mut c_str_callback_t) {
-    let callback = unsafe{ &mut *callback };
+pub extern "C" fn step_to_str(step: *const step_result_t, callback: *const c_str_callback_t) {
+    let callback = unsafe{ &*callback };
     let result = unsafe{ &(*step).result };
     callback.call(str_as_cstr(format!("{:?}", result).as_str()).as_ptr());
 }
