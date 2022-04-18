@@ -125,7 +125,7 @@ impl Display for VariableAtom {
 // Grounded atom
 
 // Sync is required to make creating static Atom declarations possible
-pub trait GroundedValue : mopa::Any + Sync + Debug {
+pub trait GroundedValue : mopa::Any + Sync + Send + Debug {
     fn eq_gnd(&self, other: &dyn GroundedValue) -> bool;
     fn clone_gnd(&self) -> Box<dyn GroundedValue>;
 }
@@ -135,7 +135,7 @@ mopafy!(GroundedValue);
 // GroundedValue implementation for all "regular" types
 // to allow using them as GroundedAtoms
 // 'static is required because mopa::Any requires it
-impl<T: 'static + Clone + PartialEq + Debug + Sync> GroundedValue for T {
+impl<T: 'static + Clone + PartialEq + Debug + Sync + Send> GroundedValue for T {
     fn eq_gnd(&self, other: &dyn GroundedValue) -> bool {
         match other.downcast_ref::<T>() {
             Some(o) => self.eq(o),
@@ -192,7 +192,7 @@ static DEFAULT_EXECUTE: ExecuteFn = default_execute_impl;
 
 // Grounded function
 
-pub trait GroundedFunction : mopa::Any + Sync {
+pub trait GroundedFunction : mopa::Any + Sync + Send {
     fn eq_trait(&self, other: &dyn GroundedFunction) -> bool;
     fn clone_trait(&self) -> Box<dyn GroundedFunction>;
     fn call(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String>;
