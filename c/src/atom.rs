@@ -8,7 +8,6 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 
 // Atom
 
-#[allow(non_camel_case_types)]
 #[repr(C)]
 pub enum atom_type_t {
     SYMBOL,
@@ -17,12 +16,10 @@ pub enum atom_type_t {
     GROUNDED,
 }
 
-#[allow(non_camel_case_types)]
 pub struct atom_t {
     pub atom: Atom,
 }
 
-#[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
@@ -34,7 +31,6 @@ pub struct gnd_api_t {
     free: extern "C" fn(*mut gnd_t),
 }
 
-#[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct gnd_t {
     api: *const gnd_api_t,
@@ -142,7 +138,6 @@ pub unsafe extern "C" fn atom_eq(atoma: *const atom_t, atomb: *const atom_t) -> 
 }
 
 // TODO: make a macros to generate Vec<T> definitions for C API
-#[allow(non_camel_case_types)]
 pub struct vec_atom_t(Vec<Atom>);
 
 #[no_mangle]
@@ -181,7 +176,6 @@ pub unsafe extern "C" fn vec_atom_get(vec: *mut vec_atom_t, idx: usize) -> *mut 
     atom_to_ptr((*vec).0[idx].clone())
 }
 
-#[allow(non_camel_case_types)]
 pub type atoms_callback_t = extern "C" fn(*const *const atom_t, size: usize, data: *mut c_void);
 
 /////////////////////////////////////////////////////////////////

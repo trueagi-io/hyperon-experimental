@@ -9,7 +9,6 @@ use std::ffi::CString;
 
 // GroundingSpace
 
-#[allow(non_camel_case_types)]
 pub struct grounding_space_t {
     pub space: GroundingSpace,
 }
@@ -56,7 +55,6 @@ pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, id
     atom_to_ptr((*space).space.borrow_vec()[idx].clone())
 }
 
-#[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct binding_t {
     var: *const c_char,
@@ -64,7 +62,6 @@ pub struct binding_t {
 }
 
 // TODO: use this idiom in other API calls which work with C strings
-#[allow(non_camel_case_types)]
 pub type bindings_callback_t = extern "C" fn(*const binding_t, size: usize, data: *mut c_void);
 
 #[no_mangle]

@@ -13,7 +13,6 @@ use regex::Regex;
 
 // Tokenizer
 
-#[allow(non_camel_case_types)]
 pub struct tokenizer_t {
     tokenizer: Tokenizer, 
 }
@@ -40,7 +39,6 @@ pub unsafe extern "C" fn tokenizer_register_token(tokenizer: *mut tokenizer_t,
 
 // SExprParser
 
-#[allow(non_camel_case_types)]
 pub struct sexpr_parser_t<'a> {
     parser: SExprParser<'a>, 
 }
@@ -64,7 +62,6 @@ pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
 
 // SExprSpace
 
-#[allow(non_camel_case_types)]
 pub struct sexpr_space_t {
     space: SExprSpace, 
 }
@@ -85,10 +82,8 @@ pub unsafe extern "C" fn sexpr_space_add_str(space: *mut sexpr_space_t, text: *c
     Ok(()) == (*space).space.add_str(cstr_as_str(text))
 }
 
-#[allow(non_camel_case_types)]
 type atom_constr_t = extern "C" fn(*const c_char, *mut c_void) -> *mut atom_t;
 
-#[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct droppable_t {
     ptr: *mut c_void,
@@ -120,7 +115,6 @@ pub unsafe extern "C" fn sexpr_space_into_grounding_space(sexpr: *const sexpr_sp
     (*sexpr).space.into_grounding_space(&mut (*gnd).space);
 }
 
-#[allow(non_camel_case_types)]
 pub struct atom_type_t {
     pub typ: AtomType,
 }
@@ -163,7 +157,6 @@ pub extern "C" fn interpret(space: *mut grounding_space_t, expr: *const atom_t,
     }
 }
 
-#[allow(non_camel_case_types)]
 pub struct step_result_t {
     result: StepResult<InterpreterResult>,
 }

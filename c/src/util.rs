@@ -1,7 +1,6 @@
 use std::ffi::*;
 use std::os::raw::*;
 
-#[allow(non_camel_case_types)]
 pub type c_str_callback_t = extern "C" fn(str: *const c_char, context: *mut c_void) -> ();
 
 pub unsafe fn cstr_as_str<'a>(s: *const c_char) -> &'a str {
