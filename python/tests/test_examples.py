@@ -94,15 +94,15 @@ class ExamplesTest(unittest.TestCase):
         self.assertEqual(metta.interpret('ploc')[0].get_object().value, 10)
         # Another way is to return the same atom each time
         ploca = ValueAtom(ploc)
-        metta.add_token("ploc", lambda _: ploca)
+        metta.add_token("ploca", lambda _: ploca)
         # It will be not affected by assigning unwrapped values:
         # we are still copying values while unwrapping
-        metta.interpret('(call:let (Setter ploc 5))')
-        self.assertEqual(metta.interpret('ploc')[0].get_object().value, 10)
+        metta.interpret('(call:let (Setter ploca 5))')
+        self.assertEqual(metta.interpret('ploca')[0].get_object().value, 10)
         self.assertEqual(ploca.get_object().value, 10)
         # However, it will be affected by assigning atom values
-        metta.interpret('(call:latom (SetAtom ploc 5))')
-        self.assertEqual(metta.interpret('ploc')[0].get_object().value, 5)
+        metta.interpret('(call:latom (SetAtom ploca 5))')
+        self.assertEqual(metta.interpret('ploca')[0].get_object().value, 5)
         self.assertEqual(ploca.get_object().value, 5)
 
     def test_frog_reasoning(self):
@@ -189,7 +189,7 @@ class ExamplesTest(unittest.TestCase):
 
         output = metta.interpret('''
             (let $t (gen 3)
-                 (if (== (subsum (:: 3 (:: 5 (:: 7 nil))) $t) 8) $t (nop ())))
+                 (if (== (subsum (:: 3 (:: 5 (:: 7 nil))) $t) 8) $t (nop)))
             ''')
         expected = metta.parse_single('(:: 1 (:: 1 (:: 0 nil)))')
         self.assertEqual(output, [expected])
