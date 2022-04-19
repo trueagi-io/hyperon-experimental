@@ -48,6 +48,13 @@ pub trait Plan<T, R> : Debug {
 
 // Specific plans to form calculations graph
 
+/// Boxed plan is a plan
+impl<T, R> Plan<T, R> for Box<dyn Plan<T, R>> {
+    fn step(self: Box<Self>, arg:T) -> StepResult<R> {
+        (*self).step(arg)
+    }
+}
+
 /// StepResult itself is a trivial plan which returns itself when executed
 impl<R: Debug> Plan<(), R> for StepResult<R> {
     fn step(self: Box<Self>, _:()) -> StepResult<R> {

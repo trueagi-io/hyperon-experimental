@@ -8,7 +8,6 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 
 // Atom
 
-#[allow(non_camel_case_types)]
 #[repr(C)]
 pub enum atom_type_t {
     SYMBOL,
@@ -17,12 +16,10 @@ pub enum atom_type_t {
     GROUNDED,
 }
 
-#[allow(non_camel_case_types)]
 pub struct atom_t {
     pub atom: Atom,
 }
 
-#[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
@@ -34,7 +31,6 @@ pub struct gnd_api_t {
     free: extern "C" fn(*mut gnd_t),
 }
 
-#[allow(non_camel_case_types)]
 #[repr(C)]
 pub struct gnd_t {
     api: *const gnd_api_t,
@@ -90,13 +86,15 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_to_str(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
-    callback(str_as_cstr(format!("{}", (*atom).atom).as_str()).as_ptr(), context);
+pub extern "C" fn atom_to_str(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
+    let atom = unsafe{ &(*atom).atom };
+    callback(str_as_cstr(format!("{}", atom).as_str()).as_ptr(), context);
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
-    match &((*atom).atom) {
+pub extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
+    let atom = unsafe{ &(*atom).atom };
+    match atom {
         Atom::Symbol(s) => callback(str_as_cstr(s.name()).as_ptr(), context),
         Atom::Variable(v) => callback(str_as_cstr(v.name()).as_ptr(), context),
         _ => panic!("Only Symbol and Variable has name attribute!"),
@@ -117,9 +115,9 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_get_children(atom: *const atom_t,
-        callback: atoms_callback_t, data: *mut c_void) {
+        callback: c_atoms_callback_t, context: *mut c_void) {
     if let Atom::Expression(ref e) = (*atom).atom {
-        return_atoms(e.children(), callback, data);
+        return_atoms(e.children(), callback, context);
     } else {
         panic!("Only Expression has children!");
     }
@@ -142,7 +140,6 @@ pub unsafe extern "C" fn atom_eq(atoma: *const atom_t, atomb: *const atom_t) -> 
 }
 
 // TODO: make a macros to generate Vec<T> definitions for C API
-#[allow(non_camel_case_types)]
 pub struct vec_atom_t(Vec<Atom>);
 
 #[no_mangle]
@@ -181,8 +178,8 @@ pub unsafe extern "C" fn vec_atom_get(vec: *mut vec_atom_t, idx: usize) -> *mut 
     atom_to_ptr((*vec).0[idx].clone())
 }
 
-#[allow(non_camel_case_types)]
-pub type atoms_callback_t = extern "C" fn(*const *const atom_t, size: usize, data: *mut c_void);
+pub type atom_array_t = array_t<*const atom_t>;
+pub type c_atoms_callback_t = lambda_t<atom_array_t>;
 
 /////////////////////////////////////////////////////////////////
 // Code below is a boilerplate code to implement C API correctly.
@@ -196,10 +193,10 @@ fn vec_atom_to_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {
     Box::into_raw(Box::new(vec_atom_t(vec)))
 }
 
-pub fn return_atoms(atoms: &Vec<Atom>, callback: atoms_callback_t, data: *mut c_void) {
+pub fn return_atoms(atoms: &Vec<Atom>, callback: c_atoms_callback_t, context: *mut c_void) {
     let results: Vec<*const atom_t> = atoms.iter()
         .map(|atom| (atom as *const Atom).cast::<atom_t>()).collect();
-    callback(results.as_ptr(), results.len(), data);
+    callback((&results).into(), context);
 }
 
 // C grounded atom wrapper
