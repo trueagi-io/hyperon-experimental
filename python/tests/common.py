@@ -86,7 +86,7 @@ class Atomese:
                                  lambda token: G(TypedValue(int(token), 'Number')))
         #tokenizer.register_token(r"'[^']*'",
         #                         lambda token: G(TypedValue(str(token[1:-1]), 'String')))
-        tokenizer.register_token("\"[^']*\"",
+        tokenizer.register_token("\"[^\"]*\"",
                                  lambda token: G(TypedValue(str(token[1:-1]), 'String')))
         tokenizer.register_token(r"True|False",
                                  lambda token: G(TypedValue(token == 'True', 'Bool')))
