@@ -57,6 +57,7 @@ pub fn interpret_step(step: StepResult<InterpreterResult>) -> StepResult<Interpr
     match step {
         StepResult::Execute(plan) => plan.step(()),
         StepResult::Return(_) => panic!("Plan execution is finished already"),
+        StepResult::Error(_) => panic!("Plan execution is finished with error"),
     }
 }
 
@@ -66,7 +67,10 @@ pub fn interpret(space: GroundingSpace, expr: &Atom) -> Result<Vec<Atom>, String
         log::debug!("current plan:\n{:?}", step);
         step = interpret_step(step);
     }
-    step.get_result().map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect())
+    match step.get_result() {
+        Ok(result) => result.map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect()),
+        Err(message) => Err(message),
+    }
 }
 
 fn is_grounded(expr: &ExpressionAtom) -> bool {

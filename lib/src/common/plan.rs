@@ -8,6 +8,8 @@ pub enum StepResult<R> {
     Execute(Box<dyn Plan<(), R>>),
     /// Result returned
     Return(R),
+    /// Plan execution error message
+    Error(String),
 }
 
 impl<R> StepResult<R> {
@@ -21,17 +23,26 @@ impl<R> StepResult<R> {
         Self::Return(result)
     }
 
+    /// New error result
+    pub fn err(message: String) -> Self {
+        Self::Error(message)
+    }
+
+    /// Return true if plan can be executed further
     pub fn has_next(&self) -> bool {
         match self {
             StepResult::Execute(_) => true,
             StepResult::Return(_) => false,
+            StepResult::Error(_) => false,
         }
     }
 
-    pub fn get_result(self) -> R {
+    /// Get result of the execution
+    pub fn get_result(self) -> Result<R, String> {
         match self {
             StepResult::Execute(_) => panic!("Plan is not finished yet"),
-            StepResult::Return(result) => result,
+            StepResult::Return(result) => Ok(result),
+            StepResult::Error(message) => Err(message),
         }
     }
 }
@@ -67,6 +78,7 @@ impl<R: Debug> Debug for StepResult<R> {
         match self {
             Self::Execute(plan) => write!(f, "{:?}", plan),
             Self::Return(result) => write!(f, "{:?}", result),
+            Self::Error(message) => write!(f, "{:?}", message),
         }
     }
 }
@@ -197,6 +209,7 @@ impl<T1: 'static, T2: 'static + Debug, R: 'static> Plan<T1, R> for SequencePlan<
                 arg: result,
                 plan: self.second,
             }),
+            StepResult::Error(message) => StepResult::err(message),
         }
     }
 }
@@ -225,6 +238,7 @@ impl<T1, T2> ParallelPlan<T1, T2> {
     }
 }
 
+/// Return error if any of sub-plans returned error
 impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2> 
     where T1: 'static + Debug,
           T2: 'static + Debug {
@@ -243,6 +257,7 @@ impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2>
                         descr))
                 })
             },
+            StepResult::Error(message) => StepResult::Error(message),
         }
     }
 }
@@ -250,6 +265,28 @@ impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2>
 impl<T1, T2> Debug for ParallelPlan<T1, T2> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{:?}\n{:?}", self.first, self.second)
+    }
+}
+
+/// Plan which ignores error and returns optional result
+struct NoErrorPlan<T, R> {
+    delegate: Box<dyn Plan<T, R>>,
+}
+
+impl<T, R: 'static> Plan<T, Option<R>> for NoErrorPlan<T, R> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<Option<R>> {
+        match self.delegate.step(arg) {
+            StepResult::Execute(next) => StepResult::execute(
+                NoErrorPlan{ delegate: next }),
+            StepResult::Return(result) => StepResult::Return(Some(result)),
+            StepResult::Error(_) => StepResult::Return(None),
+        }
+    }
+}
+
+impl<T, R> Debug for NoErrorPlan<T, R> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{:?}", self.delegate)
     }
 }
 
@@ -301,13 +338,14 @@ mod tests {
     use super::*;
 
     /// Execute the plan using given input value and return result
-    fn execute_plan<T: Debug, R, P>(plan: P, arg: T) -> R where P: 'static + Plan<T, R> {
+    fn execute_plan<T: Debug, R, P>(plan: P, arg: T) -> Result<R, String> where P: 'static + Plan<T, R> {
         let mut step: Box<dyn Plan<(), R>>  = Box::new(ApplyPlan::new(plan, arg));
         loop {
             log::debug!("current plan:\n{:?}", step);
             match step.step(()) {
                 StepResult::Execute(next) => step = next,
-                StepResult::Return(result) => return result,
+                StepResult::Return(result) => return Ok(result),
+                StepResult::Error(message) => return Err(message),
             }
         }
     }
@@ -320,7 +358,7 @@ mod tests {
                 StepResult::ret(6)),
             OperatorPlan::new(|(a, b)| StepResult::ret(a * b), "*"),
         );
-        assert_eq!(execute_plan(mul, ()), 42);
+        assert_eq!(execute_plan(mul, ()), Ok(42));
     }
 
     #[test]
@@ -333,7 +371,7 @@ mod tests {
                 Box::new(ApplyPlan::new(OperatorPlan::new(|n: &str| StepResult::ret(n.parse::<u32>().unwrap() + 1), format!("* {}", n)), *n))
             },
             |mut a, b| {a.push(b); a});
-        assert_eq!(execute_plan(StepResult::Execute(plan), ()), vec![2, 3, 4, 5]);
+        assert_eq!(execute_plan(StepResult::Execute(plan), ()), Ok(vec![2, 3, 4, 5]));
         assert_eq!(*step_counter, 4);
     }
 }
