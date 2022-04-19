@@ -20,13 +20,13 @@ def import_op(metta, space, fname):
         metta.add_atom(name, SpaceAtom(space, name))
     else:
         space = space.get_object().value
-    # A tricky part (FixMe or is it indended behavior?):
+    # A tricky part (FixMe or is this behavior indended?):
     # * `run_metta` will create another MeTTa object,
     #   which will resolve `&self` as `space`, all
     #   other syntax modification will not be inherited,
     #   so the file should not know that it is imported,
     #   but it will not be able to use parent's tokens
-    # * tokens introduced in the file, we be resolved
+    # * tokens introduced in the file, will be resolved
     #   during its processing, and will be lost after it,
     #   so we cannot import syntax this way - only spaces
     # (another operation is needed for importing syntax)
