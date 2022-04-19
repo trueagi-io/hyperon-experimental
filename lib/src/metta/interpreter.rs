@@ -74,7 +74,8 @@ fn is_grounded(expr: &ExpressionAtom) -> bool {
 }
 
 fn interpret_or_default_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
-    log::debug!("interpret_or_default_op: {}", atom);
+    log::debug!("interpret_or_default_op: {}, {}", atom, bindings);
+    let atom = apply_bindings_to_atom(&atom, &bindings);
     let default = (atom.clone(), bindings.clone());
     StepResult::execute(SequencePlan::new(
         // TODO: we could simplify calculations for non expression by returning
@@ -85,8 +86,7 @@ fn interpret_or_default_op((space, atom, bindings): (GroundingSpace, Atom, Bindi
 }
 
 fn interpret_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
-    let atom = apply_bindings_to_atom(&atom, &bindings);
-    log::debug!("interpret_op: {}", atom);
+    log::debug!("interpret_op: {}, {}", atom, bindings);
     if let Atom::Expression(ref expr) = atom {
         if expr.is_plain() {
             StepResult::execute(ApplyPlan::new(INTERPRET_REDUCTED_OP, (space,  atom, bindings)))
@@ -118,7 +118,6 @@ fn return_default_if_err_op(((atom, bindings), result): ((Atom, Bindings), Inter
     match result {
         Err(msg) => {
             log::debug!("return_default_if_err_op: return original atom: {} with bindings: {:?}, because of error: {}", atom, bindings, msg);
-            let atom = apply_bindings_to_atom(&atom, &bindings);
             StepResult::ret(Ok(vec![(atom, bindings)]))
         },
         Ok(_) => StepResult::ret(result),
@@ -342,64 +341,6 @@ fn match_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> S
         StepResult::ret(Ok(results))
     }
 }
-
-/*
-fn unify_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
-    log::debug!("unify_op: {}", expr);
-    let var_x = VariableAtom::from("X");
-    // TODO: unique variable?
-    let atom_x = Atom::Variable(var_x.clone());
-    let mut unifications = space.unify(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
-    let mut results: Vec<(Atom, Bindings, Unifications)>  = unifications
-        .drain(0..)
-        .map(|(mut binding, unifications)| {
-            let result = binding.get(&var_x).unwrap(); 
-            let result = apply_bindings_to_atom(result, &binding);
-            let bindings = apply_bindings_to_bindings(&binding, &prev_bindings);
-            let bindings = bindings.map(|mut bindings| {
-                binding.drain().for_each(|(k, v)| { bindings.insert(k, v); });
-                bindings
-            });
-            log::debug!("unify_op: query: {}, binding: {:?}, result: {}", expr, bindings, result);
-            (result, bindings, unifications)
-        })
-        .filter(|(_, bindings, _)| bindings.is_ok())
-        .map(|(result, bindings, unifications)| (result, bindings.unwrap(), unifications))
-        .collect();
-    if results.is_empty() {
-        StepResult::ret(Err(format!("Match is not found")))
-    } else {
-        let plan: Box<dyn Plan<(), InterpreterResult>>  = 
-            results.drain(0..).into_parallel_plan(Ok(vec![]),
-                |(result, bindings, mut unifications)| {
-                    Box::new(unifications.drain(0..).fold(
-                        StepResult::ret(Ok(vec![(result, bindings.clone())])),
-                        |plan, pair| {
-                            let candidate = pair.candidate;
-                            let pattern = pair.pattern;
-                            StepResult::execute(
-                                SequencePlan::new(
-                                    ParallelPlan::new(
-                                        ApplyPlan::new(INTERPRET_OP, (space.clone(), pattern, bindings.clone())),
-                                        ApplyPlan::new(INTERPRET_OP, (space.clone(), candidate, bindings.clone())),
-                                    ),
-                                    PartialApplyPlan::new(RETURN_IF_EQUAL_OP, plan),
-                                )
-                            )
-                        }
-                    ))
-                },
-                merge_results);
-        StepResult::Execute(plan)
-    }
-}
-
-fn return_if_equal_op((_plan, (pattern_res, candidate_res)):
-    (StepResult<InterpreterResult>, (InterpreterResult, InterpreterResult))) -> StepResult<InterpreterResult> {
-    log::debug!("return_if_equal_op: pattern_res: {:?}, candidate_res: {:?}", pattern_res, candidate_res);
-    todo!("Not implemented");
-}
-*/
 
 #[cfg(test)]
 mod tests {
