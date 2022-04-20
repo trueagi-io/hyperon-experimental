@@ -183,12 +183,13 @@ pub extern "C" fn step_has_next(step: *const step_result_t) -> bool {
 pub extern "C" fn step_get_result(step: *mut step_result_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
     let step = unsafe{ Box::from_raw(step) };
-    let result = step.result.get_result();
-    assert!(result.is_ok());
-    let res = result.unwrap().map(|mut res| res.drain(0..).map(|(atom, _)| atom).collect());
-    match res {
-        Ok(vec) => return_atoms(&vec, callback, context),
-        Err(_) => return_atoms(&vec![], callback, context),
+    match step.result {
+        StepResult::Return(mut res) => {
+            let res = res.drain(0..).map(|(atom, _)| atom).collect();
+            return_atoms(&res, callback, context);
+        },
+        StepResult::Error(_) => return_atoms(&vec![], callback, context),
+        _ => panic!("Not expected step result: {:?}", step.result),
     }
 }
 
