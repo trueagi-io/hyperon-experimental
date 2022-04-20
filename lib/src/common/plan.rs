@@ -24,8 +24,8 @@ impl<R> StepResult<R> {
     }
 
     /// New error result
-    pub fn err(message: String) -> Self {
-        Self::Error(message)
+    pub fn err<M: Into<String>>(message: M) -> Self {
+        Self::Error(message.into())
     }
 
     /// Return true if plan can be executed further
@@ -268,28 +268,6 @@ impl<T1, T2> Debug for ParallelPlan<T1, T2> {
     }
 }
 
-/// Plan which ignores error and returns optional result
-struct NoErrorPlan<T, R> {
-    delegate: Box<dyn Plan<T, R>>,
-}
-
-impl<T, R: 'static> Plan<T, Option<R>> for NoErrorPlan<T, R> {
-    fn step(self: Box<Self>, arg: T) -> StepResult<Option<R>> {
-        match self.delegate.step(arg) {
-            StepResult::Execute(next) => StepResult::execute(
-                NoErrorPlan{ delegate: next }),
-            StepResult::Return(result) => StepResult::Return(Some(result)),
-            StepResult::Error(_) => StepResult::Return(None),
-        }
-    }
-}
-
-impl<T, R> Debug for NoErrorPlan<T, R> {  
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:?}", self.delegate)
-    }
-}
-
 /// Trait to fold the value (typically sequence of sub-values) to the plan
 /// which processes each sub-value in parallel and merges the results.
 pub trait FoldIntoParallelPlan<I, T, R>
@@ -330,6 +308,71 @@ impl<I, T, R> FoldIntoParallelPlan<I, T, R> for I
                 }
             );
         plan
+    }
+}
+
+/// Plan which ignores error and returns optional result
+pub struct NoErrorPlan<T, R> {
+    delegate: Box<dyn Plan<T, R>>,
+}
+
+impl<T, R> NoErrorPlan<T, R> {
+    pub fn new<P>(delegate: P) -> Self
+        where P: 'static + Plan<T, R> {
+        Self{ delegate: Box::new(delegate) }
+    }
+}
+
+impl<T, R: 'static> Plan<T, Option<R>> for NoErrorPlan<T, R> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<Option<R>> {
+        match self.delegate.step(arg) {
+            StepResult::Execute(next) => StepResult::execute(
+                NoErrorPlan{ delegate: next }),
+            StepResult::Return(result) => StepResult::Return(Some(result)),
+            StepResult::Error(_) => StepResult::Return(None),
+        }
+    }
+}
+
+impl<T, R> Debug for NoErrorPlan<T, R> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{:?}", self.delegate)
+    }
+}
+
+/// Plan returns the first plan which returned non-error result
+pub struct OrPlan<R> {
+    first: Box<dyn Plan<(), R>>,
+    second: Box<dyn Plan<(), R>>,
+}
+
+impl<R> OrPlan<R> {
+    pub fn new<P1, P2>(first: P1, second: P2) -> Self
+        where P1: 'static + Plan<(), R>,
+              P2: 'static + Plan<(), R> {
+        Self{
+            first: Box::new(first),
+            second: Box::new(second)
+        }
+    }
+}
+
+impl<R: 'static> Plan<(), R> for OrPlan<R> {
+    fn step(self: Box<Self>, _: ()) -> StepResult<R> {
+        match self.first.step(()) {
+            StepResult::Execute(next) => StepResult::execute(OrPlan{
+                first: next,
+                second: self.second,
+            }),
+            StepResult::Return(first_result) => StepResult::ret(first_result),
+            StepResult::Error(_) => StepResult::execute(self.second),
+        }
+    }
+}
+
+impl<R> Debug for OrPlan<R> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "{:?} or {:?}", self.first, self.second)
     }
 }
 

@@ -25,7 +25,7 @@ def_op!(NOT, !, |args| unary_op(args, |a: bool| !a));
 def_op!(NOP, nop, |_| Ok(vec![]));
 def_op!(ERR, err, |_| Err("Error".into()));
 
-pub static IS_INT: &Operation = &Operation{ name: "int", execute: |args| check_type(args,
+pub static IS_INT: &Operation = &Operation{ name: "is_int", execute: |args| check_type(args,
     // TODO: it is ugly, but I cannot do something more clear without downcasting
     |a| is_instance::<i32>(a) || is_instance::<u32>(a)
     || is_instance::<i64>(a) || is_instance::<u64>(a)
