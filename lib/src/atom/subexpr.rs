@@ -136,6 +136,29 @@ impl SubexprStream {
     pub fn get(&self) -> &Atom {
         Self::get_rec(&self.levels, &self.expr, 0)
     }
+
+    fn fmt_rec(levels: &Vec<usize>, atom: &Atom, level: usize, current: bool, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let emphasize = current && level == levels.len();
+        log::debug!("emphasize: {}, current: {}, level: {}, levels: {:?}", emphasize, current, level, levels);
+        let mut res = Ok(());
+        res = res.and_then(|_| write!(f, "{}", if emphasize { ">" } else { "" }));
+        res = match atom {
+            Atom::Expression(expr) => {
+                res = res.and_then(|_| write!(f, "("));
+                for (i, child) in expr.children().iter().enumerate() {
+                    if i > 0 {
+                        res = res.and_then(|_| write!(f, " "));
+                    }
+                    let current = current && level < levels.len() && levels[level] == i + 1;
+                    log::debug!("child: emphasize: {}, current: {}, level: {}, levels.len(): {}, i: {}", emphasize, current, level, levels.len(), i);
+                    res = res.and_then(|_| Self::fmt_rec(levels, child, level + 1, current, f));
+                }
+                res.and_then(|_| write!(f, ")"))
+            },
+            _ => res.and_then(|_| write!(f, "{}", atom)),
+        };
+        res.and_then(|_| write!(f, "{}", if emphasize { "<" } else { "" }))
+    }
 }
 
 impl Iterator for SubexprStream {
@@ -147,8 +170,8 @@ impl Iterator for SubexprStream {
 }
 
 impl Debug for SubexprStream {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "iter {} from {}", self.get(), self.expr)
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        SubexprStream::fmt_rec(&self.levels, &self.expr, 0, true, f)
     }
 }
 
@@ -179,6 +202,10 @@ pub fn split_expr(expr: &Atom) -> Option<(&Atom, std::slice::Iter<Atom>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn init_logger() {
+        let _ = env_logger::builder().is_test(true).try_init();
+    }
 
     #[test]
     fn bottom_up_depth_walk() {
@@ -232,5 +259,17 @@ mod tests {
         expr!("+", "3", "4"),
         expr!("-", "5", "2"),
         ]);
+    }
+
+    #[test]
+    fn string_formatting() {
+        init_logger();
+        let expr = expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3"));
+        let mut iter = SubexprStream::from_expr(expr, TOP_DOWN_DEPTH_WALK);
+
+        iter.next();
+        iter.next();
+
+        assert_eq!(format!("{:?}", iter), "(+ (* 3 >(+ 1 $n)<) (- 4 3))");
     }
 }
