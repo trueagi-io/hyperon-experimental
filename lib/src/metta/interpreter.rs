@@ -9,7 +9,6 @@ static MATCH_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResul
 static EXECUTE_OP: FunctionPlan<(Atom, Bindings), InterpreterResult> = FunctionPlan{ func: execute_op, name: "execute_op" };
 static INTERPRET_RESULTS_FURTHER_OP: FunctionPlan<(GroundingSpace, InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_results_further_op, name: "interpret_results_further_op" };
 
-static REDUCT_ARGS_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: reduct_args_op, name: "reduct_args_op" };
 static REDUCT_NEXT_ARG_OP: FunctionPlan<((GroundingSpace, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: reduct_next_arg_op, name: "reduct_next_arg_op" };
 static TRY_REDUCT_NEXT_ARG_OP: FunctionPlan<(GroundingSpace, SubexprStream, Bindings), InterpreterResult> = FunctionPlan{ func: try_reduct_next_arg_op, name: "try_reduct_next_arg_op" };
 static REPLACE_ARG_AND_INTERPRET_OP: FunctionPlan<((GroundingSpace, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: replace_arg_and_interpret_op, name: "replace_arg_and_interpret_op" };
@@ -68,7 +67,7 @@ fn interpret_expression_plan(space: GroundingSpace, atom: Atom, bindings: Bindin
         Atom::Expression(ref expr) if expr.is_plain() => 
             interpret_reducted_plan(space,  atom, bindings),
         Atom::Expression(ref expr) if is_grounded(expr) => 
-            StepResult::execute(ApplyPlan::new(REDUCT_ARGS_OP, (space,  atom, bindings))),
+            reduct_args_plan(space, atom, bindings),
         Atom::Expression(_) => {
             StepResult::execute(SequencePlan::new(
                     OrPlan::new(
@@ -169,8 +168,8 @@ fn find_next_sibling_skip_last<'a>(levels: &mut Vec<usize>, expr: &'a Expression
 }
 
 
-fn reduct_args_op((space, expr, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
-    log::debug!("reduct_args_op: {}", expr);
+fn reduct_args_plan(space: GroundingSpace, expr: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
+    log::debug!("reduct_args_plan: {}", expr);
     if let Atom::Expression(ref e) = expr {
         // TODO: remove this hack when it is possible to use types in order
         // to prevent reducing of the last argument of the match
