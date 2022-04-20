@@ -4,7 +4,6 @@ use crate::atom::subexpr::*;
 use crate::atom::matcher::*;
 use crate::space::grounding::*;
 
-static INTERPRET_OR_DEFAULT_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_or_default_op, name: "interpret_or_default_op" };
 static INTERPRET_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_op, name: "interpret_op" };
 static INTERPRET_REDUCTED_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_reducted_op, name: "interpret_reducted_op" };
 static REDUCT_ARGS_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: reduct_args_op, name: "reduct_args_op" };
@@ -24,7 +23,7 @@ fn merge_results(mut plan_res: InterpreterResult, mut step_res: InterpreterResul
 }
 
 pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<InterpreterResult> {
-    StepResult::execute(ApplyPlan::new(INTERPRET_OR_DEFAULT_OP, (space, expr.clone(), Bindings::new())))
+    StepResult::execute(ApplyPlan::new(INTERPRET_OP, (space, expr.clone(), Bindings::new())))
 }
 
 pub fn interpret_step(step: StepResult<InterpreterResult>) -> StepResult<InterpreterResult> {
@@ -52,35 +51,34 @@ fn is_grounded(expr: &ExpressionAtom) -> bool {
     matches!(expr.children().get(0), Some(Atom::Grounded(_)))
 }
 
-fn interpret_or_default_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
-    log::debug!("interpret_or_default_op: {}, {}", atom, bindings);
-    let atom = apply_bindings_to_atom(&atom, &bindings);
-    let default = (atom.clone(), bindings.clone());
-    StepResult::execute(OrPlan::new(
-            ApplyPlan::new(INTERPRET_OP, (space, atom, bindings)),
-            StepResult::ret(vec![default]),
-    ))
-}
-
 fn interpret_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
     log::debug!("interpret_op: {}, {}", atom, bindings);
-    if let Atom::Expression(ref expr) = atom {
-        if expr.is_plain() {
-            StepResult::execute(ApplyPlan::new(INTERPRET_REDUCTED_OP, (space,  atom, bindings)))
-        } else {
-            if is_grounded(expr) {
-                StepResult::execute(ApplyPlan::new(REDUCT_ARGS_OP, (space,  atom, bindings)))
-            } else {
-                StepResult::execute(SequencePlan::new(
+    let atom = apply_bindings_to_atom(&atom, &bindings);
+    if let Atom::Expression(_) = atom {
+        StepResult::execute(OrPlan::new(
+                interpret_expression(space, atom.clone(), bindings.clone()),
+                StepResult::ret(vec![(atom, bindings)]),
+        ))
+    } else {
+        StepResult::ret(vec![(atom, bindings)])
+    }
+}
+
+fn interpret_expression(space: GroundingSpace, atom: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
+    match atom {
+        Atom::Expression(ref expr) if expr.is_plain() => 
+            StepResult::execute(ApplyPlan::new(INTERPRET_REDUCTED_OP, (space,  atom, bindings))),
+        Atom::Expression(ref expr) if is_grounded(expr) => 
+            StepResult::execute(ApplyPlan::new(REDUCT_ARGS_OP, (space,  atom, bindings))),
+        Atom::Expression(_) => {
+            StepResult::execute(SequencePlan::new(
                     OrPlan::new(
                         ApplyPlan::new(MATCH_OP, (space.clone(), atom.clone(), bindings.clone())),
                         reduct_arg_by_arg_plan((space.clone(), atom.clone(), bindings.clone()))),
-                    PartialApplyPlan::new(INTERPRET_RESULTS_FURTHER_OP, space),
-                ))
-            }
+                        PartialApplyPlan::new(INTERPRET_RESULTS_FURTHER_OP, space),
+            ))
         }
-    } else {
-        StepResult::ret(vec![(atom, bindings)])
+        _ => panic!("Atom is not expected: {}", atom),
     }
 }
 
@@ -110,7 +108,7 @@ fn interpret_results_further_op((space, mut result): (GroundingSpace, Interprete
         // this operation. It should just process what was passed.
         result.drain(0..).into_parallel_plan(vec![],
         |(result, bindings)| Box::new(
-            ApplyPlan::new(INTERPRET_OR_DEFAULT_OP, (space.clone(), result, bindings))),
+            ApplyPlan::new(INTERPRET_OP, (space.clone(), result, bindings))),
             merge_results))
 }
 
@@ -151,7 +149,7 @@ fn interpret_after_arg_reduction_op(((space, iter), mut reduction_result): ((Gro
             |(result, bindings)| {
                 let mut iter = iter.clone();
                 *iter.get_mut() = result;
-                Box::new(ApplyPlan::new(INTERPRET_OR_DEFAULT_OP, (space.clone(), iter.into_atom(), bindings)))
+                Box::new(ApplyPlan::new(INTERPRET_OP, (space.clone(), iter.into_atom(), bindings)))
             },
             merge_results);
         StepResult::Execute(plan)
@@ -188,7 +186,7 @@ fn reduct_args_op((space, expr, bindings): (GroundingSpace, Atom, Bindings)) -> 
         };
         let sub = iter.next().expect("Non plain expression expected").clone();
         StepResult::execute(SequencePlan::new(
-                ApplyPlan::new(INTERPRET_OR_DEFAULT_OP, (space.clone(), sub, bindings)),
+                ApplyPlan::new(INTERPRET_OP, (space.clone(), sub, bindings)),
                 PartialApplyPlan::new(REDUCT_NEXT_ARG_OP, (space, iter))
         ))
     } else {
@@ -215,7 +213,7 @@ fn reduct_next_arg_op(((space, iter), mut prev_result): ((GroundingSpace, Subexp
     |(next_sub, bindings, iter)| {
         if let Some(next_sub) = next_sub {
             Box::new(SequencePlan::new(
-                    ApplyPlan::new(INTERPRET_OR_DEFAULT_OP, (space.clone(), next_sub, bindings)),
+                    ApplyPlan::new(INTERPRET_OP, (space.clone(), next_sub, bindings)),
                     PartialApplyPlan::new(REDUCT_NEXT_ARG_OP, (space.clone(), iter))
             ))
         } else {
