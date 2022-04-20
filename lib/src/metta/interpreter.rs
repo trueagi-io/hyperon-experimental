@@ -5,14 +5,14 @@ use crate::atom::matcher::*;
 use crate::space::grounding::*;
 
 static INTERPRET_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_op, name: "interpret_op" };
-static REDUCT_ARGS_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: reduct_args_op, name: "reduct_args_op" };
 static MATCH_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: match_op, name: "match_op" };
-static REDUCT_NEXT_ARG_OP: FunctionPlan<((GroundingSpace, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: reduct_next_arg_op, name: "reduct_next_arg_op" };
-
 static EXECUTE_OP: FunctionPlan<(Atom, Bindings), InterpreterResult> = FunctionPlan{ func: execute_op, name: "execute_op" };
 static INTERPRET_RESULTS_FURTHER_OP: FunctionPlan<(GroundingSpace, InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_results_further_op, name: "interpret_results_further_op" };
-static REDUCT_ARG_BY_ARG_OP: FunctionPlan<(GroundingSpace, SubexprStream, Bindings), InterpreterResult> = FunctionPlan{ func: reduct_arg_by_arg_op, name: "reduct_arg_by_arg_op" };
-static INTERPRET_AFTER_ARG_REDUCTION_OP: FunctionPlan<((GroundingSpace, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_after_arg_reduction_op, name: "interpret_after_arg_reduction_op" };
+
+static REDUCT_ARGS_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: reduct_args_op, name: "reduct_args_op" };
+static REDUCT_NEXT_ARG_OP: FunctionPlan<((GroundingSpace, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: reduct_next_arg_op, name: "reduct_next_arg_op" };
+static TRY_REDUCT_NEXT_ARG_OP: FunctionPlan<(GroundingSpace, SubexprStream, Bindings), InterpreterResult> = FunctionPlan{ func: try_reduct_next_arg_op, name: "try_reduct_next_arg_op" };
+static REPLACE_ARG_AND_INTERPRET_OP: FunctionPlan<((GroundingSpace, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: replace_arg_and_interpret_op, name: "replace_arg_and_interpret_op" };
 
 pub type InterpreterResult = Vec<(Atom, Bindings)>;
 
@@ -112,27 +112,27 @@ fn reduct_arg_by_arg_plan((space, expr, bindings): (GroundingSpace, Atom, Bindin
     log::debug!("reduct_arg_by_arg_plan: {}", expr);
     if let Atom::Expression(_) = expr {
         let iter = SubexprStream::from_expr(expr, BOTTOM_UP_DEPTH_WALK);
-        reduct_arg_by_arg_op((space, iter, bindings))
+        try_reduct_next_arg_op((space, iter, bindings))
     } else {
         panic!("Atom::Expression is expected as an argument, found: {}", expr)
     }
 }
 
-fn reduct_arg_by_arg_op((space, mut iter, bindings): (GroundingSpace, SubexprStream, Bindings)) -> StepResult<InterpreterResult> {
+fn try_reduct_next_arg_op((space, mut iter, bindings): (GroundingSpace, SubexprStream, Bindings)) -> StepResult<InterpreterResult> {
     if let Some(arg) = iter.next().cloned() {
         StepResult::execute(OrPlan::new(
                 SequencePlan::new(
                     interpret_reducted_plan(space.clone(), arg, bindings.clone()),
-                    PartialApplyPlan::new(INTERPRET_AFTER_ARG_REDUCTION_OP, (space.clone(), iter.clone()))),
-                ApplyPlan::new(REDUCT_ARG_BY_ARG_OP, (space, iter, bindings))
+                    PartialApplyPlan::new(REPLACE_ARG_AND_INTERPRET_OP, (space.clone(), iter.clone()))),
+                ApplyPlan::new(TRY_REDUCT_NEXT_ARG_OP, (space, iter, bindings))
         ))
     } else {
         StepResult::err("No results for reducted found")
     }
 }
 
-fn interpret_after_arg_reduction_op(((space, iter), mut reduction_result): ((GroundingSpace, SubexprStream), InterpreterResult)) -> StepResult<InterpreterResult> {
-    log::debug!("interpret_after_arg_reduction_op: reduction_result: {:?}", reduction_result);
+fn replace_arg_and_interpret_op(((space, iter), mut reduction_result): ((GroundingSpace, SubexprStream), InterpreterResult)) -> StepResult<InterpreterResult> {
+    log::debug!("replace_arg_and_interpret_op: reduction_result: {:?}", reduction_result);
     if reduction_result.is_empty() {
         //panic!("Unexpected empty result while reducting: {}, it should be either error or non-empty, full expression: {}", iter.get(), iter.as_atom());
         // TODO: Reducting next argument instead of panic allows creating
