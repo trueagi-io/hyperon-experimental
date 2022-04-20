@@ -6,8 +6,7 @@ use crate::space::grounding::*;
 
 static INTERPRET_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_op, name: "interpret_op" };
 static MATCH_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: match_op, name: "match_op" };
-static EXECUTE_OP: FunctionPlan<(Atom, Bindings), InterpreterResult> = FunctionPlan{ func: execute_op, name: "execute_op" };
-static INTERPRET_RESULTS_FURTHER_OP: FunctionPlan<(GroundingSpace, InterpreterResult), InterpreterResult> = FunctionPlan{ func: interpret_results_further_op, name: "interpret_results_further_op" };
+static EXECUTE_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: execute_op, name: "execute_op" };
 
 static REDUCT_NEXT_ARG_OP: FunctionPlan<((GroundingSpace, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: reduct_next_arg_op, name: "reduct_next_arg_op" };
 static TRY_REDUCT_NEXT_ARG_OP: FunctionPlan<(GroundingSpace, SubexprStream, Bindings), InterpreterResult> = FunctionPlan{ func: try_reduct_next_arg_op, name: "try_reduct_next_arg_op" };
@@ -69,11 +68,9 @@ fn interpret_expression_plan(space: GroundingSpace, atom: Atom, bindings: Bindin
         Atom::Expression(ref expr) if is_grounded(expr) => 
             reduct_args_plan(space, atom, bindings),
         Atom::Expression(_) => {
-            StepResult::execute(SequencePlan::new(
-                    OrPlan::new(
-                        ApplyPlan::new(MATCH_OP, (space.clone(), atom.clone(), bindings.clone())),
-                        reduct_arg_by_arg_plan((space.clone(), atom, bindings))),
-                        PartialApplyPlan::new(INTERPRET_RESULTS_FURTHER_OP, space),
+            StepResult::execute(OrPlan::new(
+                    ApplyPlan::new(MATCH_OP, (space.clone(), atom.clone(), bindings.clone())),
+                    reduct_arg_by_arg_plan((space, atom, bindings))
             ))
         }
         _ => panic!("Atom is not expected: {}", atom),
@@ -84,27 +81,13 @@ fn interpret_reducted_plan(space: GroundingSpace, atom: Atom, bindings: Bindings
     let atom = apply_bindings_to_atom(&atom, &bindings);
     if let Atom::Expression(ref expr) = atom {
         if is_grounded(expr) {
-            StepResult::execute(SequencePlan::new(
-                ApplyPlan::new(EXECUTE_OP, (atom, bindings)),
-                PartialApplyPlan::new(INTERPRET_RESULTS_FURTHER_OP, space)
-            ))
+            StepResult::execute(ApplyPlan::new(EXECUTE_OP, (space, atom, bindings)))
         } else {
-            StepResult::execute(SequencePlan::new(
-                ApplyPlan::new(MATCH_OP, (space.clone(), atom, bindings)),
-                PartialApplyPlan::new(INTERPRET_RESULTS_FURTHER_OP, space)
-            ))
+            StepResult::execute(ApplyPlan::new(MATCH_OP, (space, atom, bindings)))
         }
     } else {
         StepResult::err("Expression is expected")
     }
-}
-
-fn interpret_results_further_op((space, mut result): (GroundingSpace, InterpreterResult)) -> StepResult<InterpreterResult> {
-    StepResult::Execute(
-        result.drain(0..).into_parallel_plan(vec![],
-            |(result, bindings)| {
-                Box::new(ApplyPlan::new(INTERPRET_OP, (space.clone(), result, bindings)))
-            }, merge_results))
 }
 
 fn reduct_arg_by_arg_plan((space, expr, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
@@ -220,14 +203,17 @@ fn reduct_next_arg_op(((space, iter), mut prev_result): ((GroundingSpace, Subexp
     StepResult::Execute(plan)
 }
 
-fn execute_op((atom, bindings): (Atom, Bindings)) -> StepResult<InterpreterResult> {
+fn execute_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
     log::debug!("execute_op: {}", atom);
     if let Atom::Expression(mut expr) = atom {
         let op = expr.children().get(0).cloned();
         if let Some(Atom::Grounded(op)) = op {
             let mut args = expr.children_mut().drain(1..).collect();
             match op.execute(&mut args) {
-                Ok(mut vec) => StepResult::ret(vec.drain(0..).map(|atom| (atom, bindings.clone())).collect()),
+                Ok(mut vec) => {
+                    let results = vec.drain(0..).map(|atom| (atom, bindings.clone())).collect();
+                    interpret_results_plan(space, results)
+                },
                 Err(msg) => StepResult::err(msg),
             }
         } else {
@@ -263,8 +249,16 @@ fn match_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> S
     if results.is_empty() {
         StepResult::err("Match is not found")
     } else {
-        StepResult::ret(results)
+        interpret_results_plan(space, results)
     }
+}
+
+fn interpret_results_plan(space: GroundingSpace, mut result: InterpreterResult) -> StepResult<InterpreterResult> {
+    StepResult::Execute(
+        result.drain(0..).into_parallel_plan(vec![],
+            |(result, bindings)| {
+                Box::new(ApplyPlan::new(INTERPRET_OP, (space.clone(), result, bindings)))
+            }, merge_results))
 }
 
 #[cfg(test)]
