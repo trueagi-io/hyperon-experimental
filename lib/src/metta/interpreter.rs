@@ -61,32 +61,32 @@ fn interpret_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> St
     }
 }
 
-fn interpret_expression_plan(space: GroundingSpace, atom: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
+fn interpret_expression_plan(space: GroundingSpace, atom: Atom, bindings: Bindings) -> Box<dyn Plan<(), InterpreterResult>> {
     match atom {
         Atom::Expression(ref expr) if expr.is_plain() => 
             interpret_reducted_plan(space,  atom, bindings),
         Atom::Expression(ref expr) if is_grounded(expr) => 
             reduct_args_plan(space, atom, bindings),
         Atom::Expression(_) => {
-            StepResult::execute(OrPlan::new(
+            Box::new(OrPlan::new(
                     ApplyPlan::new(MATCH_OP, (space.clone(), atom.clone(), bindings.clone())),
                     reduct_arg_by_arg_plan((space, atom, bindings))
             ))
         }
-        _ => panic!("Atom is not expected: {}", atom),
+        _ => panic!("Only expression is expected, received: {}", atom),
     }
 }
 
-fn interpret_reducted_plan(space: GroundingSpace, atom: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
+fn interpret_reducted_plan(space: GroundingSpace, atom: Atom, bindings: Bindings) -> Box<dyn Plan<(), InterpreterResult>> {
     let atom = apply_bindings_to_atom(&atom, &bindings);
     if let Atom::Expression(ref expr) = atom {
         if is_grounded(expr) {
-            StepResult::execute(ApplyPlan::new(EXECUTE_OP, (space, atom, bindings)))
+            Box::new(ApplyPlan::new(EXECUTE_OP, (space, atom, bindings)))
         } else {
-            StepResult::execute(ApplyPlan::new(MATCH_OP, (space, atom, bindings)))
+            Box::new(ApplyPlan::new(MATCH_OP, (space, atom, bindings)))
         }
     } else {
-        StepResult::err("Expression is expected")
+        panic!("Only expression is expected, received: {}", atom);
     }
 }
 
@@ -151,7 +151,7 @@ fn find_next_sibling_skip_last<'a>(levels: &mut Vec<usize>, expr: &'a Expression
 }
 
 
-fn reduct_args_plan(space: GroundingSpace, expr: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
+fn reduct_args_plan(space: GroundingSpace, expr: Atom, bindings: Bindings) -> Box<dyn Plan<(), InterpreterResult>> {
     log::debug!("reduct_args_plan: {}", expr);
     if let Atom::Expression(ref e) = expr {
         // TODO: remove this hack when it is possible to use types in order
@@ -163,12 +163,12 @@ fn reduct_args_plan(space: GroundingSpace, expr: Atom, bindings: Bindings) -> St
             SubexprStream::from_expr(expr, FIND_NEXT_SIBLING_WALK)
         };
         let sub = iter.next().expect("Non plain expression expected").clone();
-        StepResult::execute(SequencePlan::new(
+        Box::new(SequencePlan::new(
                 ApplyPlan::new(INTERPRET_OP, (space.clone(), sub, bindings)),
                 PartialApplyPlan::new(REDUCT_NEXT_ARG_OP, (space, iter))
         ))
     } else {
-        StepResult::err(format!("Atom::Expression is expected as an argument, found: {}", expr))
+        panic!("Only expression is expected, received: {}", expr);
     }
 }
 
@@ -212,15 +212,15 @@ fn execute_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> Step
             match op.execute(&mut args) {
                 Ok(mut vec) => {
                     let results = vec.drain(0..).map(|atom| (atom, bindings.clone())).collect();
-                    interpret_results_plan(space, results)
+                    StepResult::execute(interpret_results_plan(space, results))
                 },
                 Err(msg) => StepResult::err(msg),
             }
         } else {
-            StepResult::err(format!("Trying to execute non grounded atom: {}", expr))
+            panic!("Trying to execute non grounded atom: {}", expr)
         }
     } else {
-        StepResult::err(format!("Unexpected non expression argument: {}", atom))
+        panic!("Unexpected non expression argument: {}", atom)
     }
 }
 
@@ -249,16 +249,15 @@ fn match_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> S
     if results.is_empty() {
         StepResult::err("Match is not found")
     } else {
-        interpret_results_plan(space, results)
+        StepResult::execute(interpret_results_plan(space, results))
     }
 }
 
-fn interpret_results_plan(space: GroundingSpace, mut result: InterpreterResult) -> StepResult<InterpreterResult> {
-    StepResult::Execute(
-        result.drain(0..).into_parallel_plan(vec![],
-            |(result, bindings)| {
-                Box::new(ApplyPlan::new(INTERPRET_OP, (space.clone(), result, bindings)))
-            }, merge_results))
+fn interpret_results_plan(space: GroundingSpace, mut result: InterpreterResult) -> Box<dyn Plan<(), InterpreterResult>> {
+    result.drain(0..).into_parallel_plan(vec![],
+        |(result, bindings)| {
+            Box::new(ApplyPlan::new(INTERPRET_OP, (space.clone(), result, bindings)))
+        }, merge_results)
 }
 
 #[cfg(test)]
