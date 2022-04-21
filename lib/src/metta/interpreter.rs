@@ -4,26 +4,14 @@ use crate::atom::subexpr::*;
 use crate::atom::matcher::*;
 use crate::space::grounding::*;
 
-static INTERPRET_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: interpret_op, name: "interpret_op" };
-static MATCH_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: match_op, name: "match_op" };
-static EXECUTE_OP: FunctionPlan<(GroundingSpace, Atom, Bindings), InterpreterResult> = FunctionPlan{ func: execute_op, name: "execute_op" };
-
-static REDUCT_NEXT_ARG_OP: FunctionPlan<((GroundingSpace, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: reduct_next_arg_op, name: "reduct_next_arg_op" };
-static TRY_REDUCT_NEXT_ARG_OP: FunctionPlan<(GroundingSpace, SubexprStream, Bindings), InterpreterResult> = FunctionPlan{ func: try_reduct_next_arg_op, name: "try_reduct_next_arg_op" };
-static REPLACE_ARG_AND_INTERPRET_OP: FunctionPlan<((GroundingSpace, SubexprStream), InterpreterResult), InterpreterResult> = FunctionPlan{ func: replace_arg_and_interpret_op, name: "replace_arg_and_interpret_op" };
-
 pub type InterpreterResult = Vec<(Atom, Bindings)>;
 
-fn merge_results(mut plan_res: InterpreterResult, mut step_res: InterpreterResult) -> InterpreterResult {
-    plan_res.append(&mut step_res);
-    plan_res
-}
-
 pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<InterpreterResult> {
-    StepResult::execute(ApplyPlan::new(INTERPRET_OP, (space, expr.clone(), Bindings::new())))
+    StepResult::execute(interpret_plan(space, expr.clone(), Bindings::new()))
 }
 
 pub fn interpret_step(step: StepResult<InterpreterResult>) -> StepResult<InterpreterResult> {
+    log::debug!("current plan:\n{:?}", step);
     match step {
         StepResult::Execute(plan) => plan.step(()),
         StepResult::Return(_) => panic!("Plan execution is finished already"),
@@ -34,7 +22,6 @@ pub fn interpret_step(step: StepResult<InterpreterResult>) -> StepResult<Interpr
 pub fn interpret(space: GroundingSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
     let mut step = interpret_init(space, expr);
     while step.has_next() {
-        log::debug!("current plan:\n{:?}", step);
         step = interpret_step(step);
     }
     match step {
@@ -48,7 +35,12 @@ fn is_grounded(expr: &ExpressionAtom) -> bool {
     matches!(expr.children().get(0), Some(Atom::Grounded(_)))
 }
 
-fn interpret_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
+pub fn interpret_plan(space: GroundingSpace, atom: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
+    let descr = format!("interpret {}", atom);
+    OperatorPlan::new(|_| interpret_op(space, atom, bindings), descr)
+}
+
+fn interpret_op(space: GroundingSpace, atom: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
     log::debug!("interpret_op: {}, {}", atom, bindings);
     let atom = apply_bindings_to_atom(&atom, &bindings);
     if let Atom::Expression(_) = atom {
@@ -69,8 +61,8 @@ fn interpret_expression_plan(space: GroundingSpace, atom: Atom, bindings: Bindin
             reduct_args_plan(space, atom, bindings),
         Atom::Expression(_) => {
             Box::new(OrPlan::new(
-                    ApplyPlan::new(MATCH_OP, (space.clone(), atom.clone(), bindings.clone())),
-                    reduct_arg_by_arg_plan((space, atom, bindings))
+                    match_plan(space.clone(), atom.clone(), bindings.clone()),
+                    reduct_arg_by_arg_plan(space, atom, bindings)
             ))
         }
         _ => panic!("Only expression is expected, received: {}", atom),
@@ -81,39 +73,54 @@ fn interpret_reducted_plan(space: GroundingSpace, atom: Atom, bindings: Bindings
     let atom = apply_bindings_to_atom(&atom, &bindings);
     if let Atom::Expression(ref expr) = atom {
         if is_grounded(expr) {
-            Box::new(ApplyPlan::new(EXECUTE_OP, (space, atom, bindings)))
+            Box::new(execute_plan(space, atom, bindings))
         } else {
-            Box::new(ApplyPlan::new(MATCH_OP, (space, atom, bindings)))
+            Box::new(match_plan(space, atom, bindings))
         }
     } else {
         panic!("Only expression is expected, received: {}", atom);
     }
 }
 
-fn reduct_arg_by_arg_plan((space, expr, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
-    log::debug!("reduct_arg_by_arg_plan: {}", expr);
+fn reduct_arg_by_arg_plan(space: GroundingSpace, expr: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
+    let descr = format!("reduct expression arg by arg {}", expr);
+    OperatorPlan::new(|_| reduct_arg_by_arg_op(space, expr, bindings), descr)
+}
+
+fn reduct_arg_by_arg_op(space: GroundingSpace, expr: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
+    log::debug!("reduct_arg_by_arg_op: {}", expr);
     if let Atom::Expression(_) = expr {
         let iter = SubexprStream::from_expr(expr, BOTTOM_UP_DEPTH_WALK);
-        try_reduct_next_arg_op((space, iter, bindings))
+        try_reduct_next_arg_op(space, iter, bindings)
     } else {
         panic!("Atom::Expression is expected as an argument, found: {}", expr)
     }
 }
 
-fn try_reduct_next_arg_op((space, mut iter, bindings): (GroundingSpace, SubexprStream, Bindings)) -> StepResult<InterpreterResult> {
+fn try_reduct_next_arg_plan(space: GroundingSpace, iter: SubexprStream, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
+    let descr = format!("try reducting next arg in {:?}", iter);
+    OperatorPlan::new(|_| try_reduct_next_arg_op(space, iter, bindings), descr)
+}
+
+fn try_reduct_next_arg_op(space: GroundingSpace, mut iter: SubexprStream, bindings: Bindings) -> StepResult<InterpreterResult> {
     if let Some(arg) = iter.next().cloned() {
         StepResult::execute(OrPlan::new(
                 SequencePlan::new(
                     interpret_reducted_plan(space.clone(), arg, bindings.clone()),
-                    PartialApplyPlan::new(REPLACE_ARG_AND_INTERPRET_OP, (space.clone(), iter.clone()))),
-                ApplyPlan::new(TRY_REDUCT_NEXT_ARG_OP, (space, iter, bindings))
+                    replace_arg_and_interpret_plan(space.clone(), iter.clone())),
+                try_reduct_next_arg_plan(space, iter, bindings)
         ))
     } else {
         StepResult::err("No results for reducted found")
     }
 }
 
-fn replace_arg_and_interpret_op(((space, iter), mut reduction_result): ((GroundingSpace, SubexprStream), InterpreterResult)) -> StepResult<InterpreterResult> {
+fn replace_arg_and_interpret_plan(space: GroundingSpace, iter: SubexprStream) -> OperatorPlan<InterpreterResult, InterpreterResult> {
+    let descr = format!("interpret after reduction of {:?}", iter);
+    OperatorPlan::new(|reduction_result| replace_arg_and_interpret_op(space, iter, reduction_result), descr)
+}
+
+fn replace_arg_and_interpret_op(space: GroundingSpace, iter: SubexprStream, mut reduction_result: InterpreterResult) -> StepResult<InterpreterResult> {
     log::debug!("replace_arg_and_interpret_op: reduction_result: {:?}", reduction_result);
     if reduction_result.is_empty() {
         //panic!("Unexpected empty result while reducting: {}, it should be either error or non-empty, full expression: {}", iter.get(), iter.as_atom());
@@ -123,14 +130,12 @@ fn replace_arg_and_interpret_op(((space, iter), mut reduction_result): ((Groundi
         StepResult::err("NOP special case")
     } else {
         let plan = reduction_result.drain(0..)
-            .into_parallel_plan(vec![],
-            |(result, bindings)| {
+            .map(|(result, bindings)| -> Box<dyn Plan<(), InterpreterResult>> {
                 let mut iter = iter.clone();
                 *iter.get_mut() = result;
-                Box::new(ApplyPlan::new(INTERPRET_OP, (space.clone(), iter.into_atom(), bindings)))
-            },
-            merge_results);
-        StepResult::Execute(plan)
+                Box::new(interpret_plan(space.clone(), iter.into_atom(), bindings))
+            }).collect();
+        StepResult::execute(AlternativeInterpretationsPlan::new(iter.into_atom(), plan))
     }
 }
 
@@ -164,15 +169,20 @@ fn reduct_args_plan(space: GroundingSpace, expr: Atom, bindings: Bindings) -> Bo
         };
         let sub = iter.next().expect("Non plain expression expected").clone();
         Box::new(SequencePlan::new(
-                ApplyPlan::new(INTERPRET_OP, (space.clone(), sub, bindings)),
-                PartialApplyPlan::new(REDUCT_NEXT_ARG_OP, (space, iter))
+                interpret_plan(space.clone(), sub, bindings),
+                reduct_next_arg_plan(space, iter)
         ))
     } else {
         panic!("Only expression is expected, received: {}", expr);
     }
 }
 
-fn reduct_next_arg_op(((space, iter), mut prev_result): ((GroundingSpace, SubexprStream), InterpreterResult)) -> StepResult<InterpreterResult> {
+fn reduct_next_arg_plan(space: GroundingSpace, iter: SubexprStream) -> OperatorPlan<InterpreterResult, InterpreterResult> {
+    let descr = format!("reduct next arg in {:?}", iter);
+    OperatorPlan::new(|prev_result| reduct_next_arg_op(space, iter, prev_result), descr)
+}
+
+fn reduct_next_arg_op(space: GroundingSpace, iter: SubexprStream, mut prev_result: InterpreterResult) -> StepResult<InterpreterResult> {
     let plan = prev_result.drain(0..)
         .map(|(reducted, bindings)| {
             let mut iter = iter.clone();
@@ -187,32 +197,35 @@ fn reduct_next_arg_op(((space, iter), mut prev_result): ((GroundingSpace, Subexp
 
             (next_sub, bindings, iter)
         })
-    .into_parallel_plan(vec![],
-    |(next_sub, bindings, iter)| {
-        if let Some(next_sub) = next_sub {
-            Box::new(SequencePlan::new(
-                    ApplyPlan::new(INTERPRET_OP, (space.clone(), next_sub, bindings)),
-                    PartialApplyPlan::new(REDUCT_NEXT_ARG_OP, (space.clone(), iter))
-            ))
-        } else {
-            let expr = iter.into_atom();
-            Box::new(interpret_reducted_plan(space.clone(), expr, bindings))
-        }
-    },
-    merge_results);
-    StepResult::Execute(plan)
+        .map(|(next_sub, bindings, iter)| -> Box<dyn Plan<(), InterpreterResult>> {
+            if let Some(next_sub) = next_sub {
+                Box::new(SequencePlan::new(
+                        interpret_plan(space.clone(), next_sub, bindings),
+                        reduct_next_arg_plan(space.clone(), iter)
+                ))
+            } else {
+                let expr = iter.into_atom();
+                Box::new(interpret_reducted_plan(space.clone(), expr, bindings))
+            }
+        }).collect();
+    StepResult::execute(AlternativeInterpretationsPlan::new(iter.into_atom().clone(), plan))
 }
 
-fn execute_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
+fn execute_plan(space: GroundingSpace, atom: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
+    let descr = format!("execute {}", atom);
+    OperatorPlan::new(|_| execute_op(space, atom, bindings), descr)
+}
+
+fn execute_op(space: GroundingSpace, atom: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
     log::debug!("execute_op: {}", atom);
-    if let Atom::Expression(mut expr) = atom {
+    if let Atom::Expression(mut expr) = atom.clone() {
         let op = expr.children().get(0).cloned();
         if let Some(Atom::Grounded(op)) = op {
             let mut args = expr.children_mut().drain(1..).collect();
             match op.execute(&mut args) {
                 Ok(mut vec) => {
                     let results = vec.drain(0..).map(|atom| (atom, bindings.clone())).collect();
-                    StepResult::execute(interpret_results_plan(space, results))
+                    StepResult::execute(interpret_results_plan(space, atom, results))
                 },
                 Err(msg) => StepResult::err(msg),
             }
@@ -224,7 +237,12 @@ fn execute_op((space, atom, bindings): (GroundingSpace, Atom, Bindings)) -> Step
     }
 }
 
-fn match_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
+fn match_plan(space: GroundingSpace, expr: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
+    let descr = format!("match {}", expr);
+    OperatorPlan::new(|_| match_op(space, expr, bindings), descr)
+}
+
+fn match_op(space: GroundingSpace, expr: Atom, prev_bindings: Bindings) -> StepResult<InterpreterResult> {
     log::debug!("match_op: {}", expr);
     let var_x = VariableAtom::from("X");
     // TODO: unique variable?
@@ -240,7 +258,7 @@ fn match_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> S
                 binding.drain().for_each(|(k, v)| { bindings.insert(k, v); });
                 bindings
             });
-            log::debug!("match_op: query: {}, binding: {:?}, result: {}", expr, bindings, result);
+            log::debug!("match_op: query: {}, binding: {:?}, result: {}", expr.clone(), bindings, result);
             (result, bindings)
         })
         .filter(|(_, bindings)| bindings.is_ok())
@@ -249,16 +267,78 @@ fn match_op((space, expr, prev_bindings): (GroundingSpace, Atom, Bindings)) -> S
     if results.is_empty() {
         StepResult::err("Match is not found")
     } else {
-        StepResult::execute(interpret_results_plan(space, results))
+        StepResult::execute(interpret_results_plan(space, expr, results))
     }
 }
 
-fn interpret_results_plan(space: GroundingSpace, mut result: InterpreterResult) -> Box<dyn Plan<(), InterpreterResult>> {
-    result.drain(0..).into_parallel_plan(vec![],
-        |(result, bindings)| {
-            Box::new(ApplyPlan::new(INTERPRET_OP, (space.clone(), result, bindings)))
-        }, merge_results)
+fn interpret_results_plan(space: GroundingSpace, atom: Atom, mut result: InterpreterResult) -> Box<dyn Plan<(), InterpreterResult>> {
+    match result.len() {
+        0 => Box::new(StepResult::ret(result)),
+        1 => {
+            let (result, binding) = result.pop().unwrap();
+            Box::new(interpret_plan(space, result, binding))
+        },
+        _ => {
+        Box::new(AlternativeInterpretationsPlan::new(atom,
+                result.drain(0..).map(|(result, bindings)| -> Box<dyn Plan<(), InterpreterResult>> {
+                    Box::new(interpret_plan(space.clone(), result, bindings))
+                }).collect()))
+        },
+    }
 }
+
+use std::fmt::{Debug, Formatter};
+use std::collections::VecDeque;
+
+pub struct AlternativeInterpretationsPlan<T> {
+    atom: Atom,
+    plans: VecDeque<Box<dyn Plan<(), Vec<T>>>>,
+    results: Vec<T>,
+}
+
+impl<T> AlternativeInterpretationsPlan<T> {
+    pub fn new(atom: Atom, plans: Vec<Box<dyn Plan<(), Vec<T>>>>) -> Self {
+        Self{ atom, plans: plans.into(), results: Vec::new() }
+    }
+}
+
+impl<T: 'static> Plan<(), Vec<T>> for AlternativeInterpretationsPlan<T> {
+    fn step(mut self: Box<Self>, _: ()) -> StepResult<Vec<T>> {
+        if self.plans.len() == 0 {
+            StepResult::ret(self.results)
+        } else {
+            let plan = self.plans.pop_front().unwrap();
+            match plan.step(()) {
+                StepResult::Execute(next) => {
+                    self.plans.push_front(next);
+                    StepResult::Execute(self)
+                },
+                StepResult::Return(mut result) => {
+                    self.results.append(&mut result);
+                    StepResult::Execute(self)
+                },
+                StepResult::Error(message) => StepResult::Error(message),
+            }
+        }
+    }
+}
+
+impl<T> Debug for AlternativeInterpretationsPlan<T> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut res = write!(f, "interpret alternatives for {}:\n", self.atom);
+        for (i, plan) in self.plans.iter().enumerate() {
+            let plan_str = format!("{:?}", plan);
+            let mut lines = plan_str.lines();
+            res = res.and_then(|_| write!(f, "  {} {}\n",
+                    if i == 0 { ">" } else { "-" }, lines.next().unwrap()));
+            for line in lines {
+                res = res.and_then(|_| write!(f, "    {}\n", line));
+            }
+        }
+        res
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
