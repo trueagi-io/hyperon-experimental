@@ -67,7 +67,7 @@ fn interpret_expression_plan(space: GroundingSpace, atom: Atom, bindings: Bindin
         Atom::Expression(_) => {
             Box::new(OrPlan::new(
                     match_plan(space.clone(), atom.clone(), bindings.clone()),
-                    reduct_arg_by_arg_plan((space, atom, bindings))
+                    reduct_arg_by_arg_plan(space, atom, bindings)
             ))
         }
         _ => panic!("Only expression is expected, received: {}", atom),
@@ -87,8 +87,13 @@ fn interpret_reducted_plan(space: GroundingSpace, atom: Atom, bindings: Bindings
     }
 }
 
-fn reduct_arg_by_arg_plan((space, expr, bindings): (GroundingSpace, Atom, Bindings)) -> StepResult<InterpreterResult> {
-    log::debug!("reduct_arg_by_arg_plan: {}", expr);
+fn reduct_arg_by_arg_plan(space: GroundingSpace, expr: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
+    let descr = format!("reduct expression arg by arg {}", expr);
+    OperatorPlan::new(|_| reduct_arg_by_arg_op(space, expr, bindings), descr)
+}
+
+fn reduct_arg_by_arg_op(space: GroundingSpace, expr: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
+    log::debug!("reduct_arg_by_arg_op: {}", expr);
     if let Atom::Expression(_) = expr {
         let iter = SubexprStream::from_expr(expr, BOTTOM_UP_DEPTH_WALK);
         try_reduct_next_arg_op(space, iter, bindings)
