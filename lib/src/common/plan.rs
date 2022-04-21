@@ -76,9 +76,9 @@ impl<R: Debug> Plan<(), R> for StepResult<R> {
 impl<R: Debug> Debug for StepResult<R> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
-            Self::Execute(plan) => write!(f, "{:?}", plan),
-            Self::Return(result) => write!(f, "{:?}", result),
-            Self::Error(message) => write!(f, "{:?}", message),
+            Self::Execute(plan) => write!(f, "execute {:?}", plan),
+            Self::Return(result) => write!(f, "return {:?}", result),
+            Self::Error(message) => write!(f, "error {:?}", message),
         }
     }
 }
@@ -216,7 +216,7 @@ impl<T1: 'static, T2: 'static + Debug, R: 'static> Plan<T1, R> for SequencePlan<
 
 impl<T1, T2, R> Debug for SequencePlan<T1, T2, R> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:?} -> {:?}", self.first, self.second)
+        write!(f, "{:?}, {:?}", self.first, self.second)
     }
 }
 
@@ -372,7 +372,7 @@ impl<R: 'static> Plan<(), R> for OrPlan<R> {
 
 impl<R> Debug for OrPlan<R> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "({:?} or {:?})", self.first, self.second)
+        write!(f, "{:?} (or {:?})", self.first, self.second)
     }
 }
 
