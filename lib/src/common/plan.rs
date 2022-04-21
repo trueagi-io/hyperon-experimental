@@ -372,7 +372,7 @@ impl<R: 'static> Plan<(), R> for OrPlan<R> {
 
 impl<R> Debug for OrPlan<R> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:?} or {:?}", self.first, self.second)
+        write!(f, "({:?} or {:?})", self.first, self.second)
     }
 }
 
