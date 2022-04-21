@@ -139,7 +139,6 @@ impl SubexprStream {
 
     fn fmt_rec(levels: &Vec<usize>, atom: &Atom, level: usize, current: bool, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let emphasize = current && level == levels.len();
-        log::debug!("emphasize: {}, current: {}, level: {}, levels: {:?}", emphasize, current, level, levels);
         let mut res = Ok(());
         res = res.and_then(|_| write!(f, "{}", if emphasize { ">" } else { "" }));
         res = match atom {
@@ -150,7 +149,6 @@ impl SubexprStream {
                         res = res.and_then(|_| write!(f, " "));
                     }
                     let current = current && level < levels.len() && levels[level] == i + 1;
-                    log::debug!("child: emphasize: {}, current: {}, level: {}, levels.len(): {}, i: {}", emphasize, current, level, levels.len(), i);
                     res = res.and_then(|_| Self::fmt_rec(levels, child, level + 1, current, f));
                 }
                 res.and_then(|_| write!(f, ")"))
