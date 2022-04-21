@@ -20,8 +20,26 @@ def let_op(pattern, atom, templ):
 def call_atom_op(atom, method_str, *args):
     obj = atom.get_object().value
     method = getattr(obj, method_str)
-    method(*args)
-    return []
+    result = method(*args)
+    if result is None:
+        return []
+    # Fixme? getting results from call_atom raises some issues but convenient.
+    # Running example is call:... &self (or another imported space)
+    # However if we need to wrap the result into GroundedAtom, we don't know
+    # its type. Also, if the method returns list, we can wrap it as whole or
+    # can interpret it as multiple results.
+    # Here, we don't wrap the list as whole, but wrap its elements even they
+    # are atoms, for get_atoms to work nicely (wrapped list is not printed
+    # nicely, while not wrapping atoms results in their further reduction)
+    # This functionality can be improved/changed based on other more
+    # important examples (e.g. dealing with DNN models) in the future,
+    # while the core functions like &self.get_atoms can be dealt with
+    # separately
+    if not isinstance(result, list):
+        result = [result]
+    result = [ValueAtom(r) for r in result]
+    #result = [r if isinstance(r, Atom) else ValueAtom(r) for r in result]
+    return result
 
 def print_op(atom):
     print(atom)
