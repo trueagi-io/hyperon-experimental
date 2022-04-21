@@ -59,6 +59,26 @@ class ExamplesTest(unittest.TestCase):
         self.assertTrue(obj.called)
         self.assertEqual(result, [])
 
+    def test_self_modify(self):
+        metta = MeTTa()
+        metta.add_parse(
+        '''
+            (= (remove-state $var)
+               (match &self (state $var $y)
+                  (call:remove_atom &self (state $var $y))))
+            (= (change-state $var $value)
+               (, (remove-state $var)
+                  (call:add_atom &self (state $var $value))))
+            (= (get-state $var)
+               (match &self (state $var $value) $value))
+        ''')
+        metta.interpret('(change-state (name id-001) Fritz)')
+        self.assertEqual(metta.interpret('(get-state (name id-001))'),
+                         [S('Fritz')])
+        metta.interpret('(change-state (name id-001) Sam)')
+        self.assertEqual(metta.interpret('(get-state (name id-001))'),
+                         [S('Sam')])
+
     def test_new_object(self):
         metta = MeTTa()
         pglob = Global(10)
