@@ -11,6 +11,7 @@ pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<Interpre
 }
 
 pub fn interpret_step(step: StepResult<InterpreterResult>) -> StepResult<InterpreterResult> {
+    log::debug!("current plan:\n{:?}", step);
     match step {
         StepResult::Execute(plan) => plan.step(()),
         StepResult::Return(_) => panic!("Plan execution is finished already"),
@@ -21,7 +22,6 @@ pub fn interpret_step(step: StepResult<InterpreterResult>) -> StepResult<Interpr
 pub fn interpret(space: GroundingSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
     let mut step = interpret_init(space, expr);
     while step.has_next() {
-        log::debug!("current plan:\n{:?}", step);
         step = interpret_step(step);
     }
     match step {
