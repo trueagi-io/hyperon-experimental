@@ -6,11 +6,6 @@ use crate::space::grounding::*;
 
 pub type InterpreterResult = Vec<(Atom, Bindings)>;
 
-fn merge_results(mut plan_res: InterpreterResult, mut step_res: InterpreterResult) -> InterpreterResult {
-    plan_res.append(&mut step_res);
-    plan_res
-}
-
 pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<InterpreterResult> {
     StepResult::execute(interpret_plan(space, expr.clone(), Bindings::new()))
 }
@@ -135,14 +130,12 @@ fn replace_arg_and_interpret_op(space: GroundingSpace, iter: SubexprStream, mut 
         StepResult::err("NOP special case")
     } else {
         let plan = reduction_result.drain(0..)
-            .into_parallel_plan(vec![],
-            |(result, bindings)| {
+            .map(|(result, bindings)| -> Box<dyn Plan<(), InterpreterResult>> {
                 let mut iter = iter.clone();
                 *iter.get_mut() = result;
                 Box::new(interpret_plan(space.clone(), iter.into_atom(), bindings))
-            },
-            merge_results);
-        StepResult::Execute(plan)
+            }).collect();
+        StepResult::execute(AlternativeInterpretationsPlan::new(iter.into_atom(), plan))
     }
 }
 
@@ -204,20 +197,18 @@ fn reduct_next_arg_op(space: GroundingSpace, iter: SubexprStream, mut prev_resul
 
             (next_sub, bindings, iter)
         })
-    .into_parallel_plan(vec![],
-    |(next_sub, bindings, iter)| {
-        if let Some(next_sub) = next_sub {
-            Box::new(SequencePlan::new(
-                    interpret_plan(space.clone(), next_sub, bindings),
-                    reduct_next_arg_plan(space.clone(), iter)
-            ))
-        } else {
-            let expr = iter.into_atom();
-            Box::new(interpret_reducted_plan(space.clone(), expr, bindings))
-        }
-    },
-    merge_results);
-    StepResult::Execute(plan)
+        .map(|(next_sub, bindings, iter)| -> Box<dyn Plan<(), InterpreterResult>> {
+            if let Some(next_sub) = next_sub {
+                Box::new(SequencePlan::new(
+                        interpret_plan(space.clone(), next_sub, bindings),
+                        reduct_next_arg_plan(space.clone(), iter)
+                ))
+            } else {
+                let expr = iter.into_atom();
+                Box::new(interpret_reducted_plan(space.clone(), expr, bindings))
+            }
+        }).collect();
+    StepResult::execute(AlternativeInterpretationsPlan::new(iter.into_atom().clone(), plan))
 }
 
 fn execute_plan(space: GroundingSpace, atom: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
@@ -227,14 +218,14 @@ fn execute_plan(space: GroundingSpace, atom: Atom, bindings: Bindings) -> Operat
 
 fn execute_op(space: GroundingSpace, atom: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
     log::debug!("execute_op: {}", atom);
-    if let Atom::Expression(mut expr) = atom {
+    if let Atom::Expression(mut expr) = atom.clone() {
         let op = expr.children().get(0).cloned();
         if let Some(Atom::Grounded(op)) = op {
             let mut args = expr.children_mut().drain(1..).collect();
             match op.execute(&mut args) {
                 Ok(mut vec) => {
                     let results = vec.drain(0..).map(|atom| (atom, bindings.clone())).collect();
-                    StepResult::execute(interpret_results_plan(space, results))
+                    StepResult::execute(interpret_results_plan(space, atom, results))
                 },
                 Err(msg) => StepResult::err(msg),
             }
@@ -267,7 +258,7 @@ fn match_op(space: GroundingSpace, expr: Atom, prev_bindings: Bindings) -> StepR
                 binding.drain().for_each(|(k, v)| { bindings.insert(k, v); });
                 bindings
             });
-            log::debug!("match_op: query: {}, binding: {:?}, result: {}", expr, bindings, result);
+            log::debug!("match_op: query: {}, binding: {:?}, result: {}", expr.clone(), bindings, result);
             (result, bindings)
         })
         .filter(|(_, bindings)| bindings.is_ok())
@@ -276,16 +267,78 @@ fn match_op(space: GroundingSpace, expr: Atom, prev_bindings: Bindings) -> StepR
     if results.is_empty() {
         StepResult::err("Match is not found")
     } else {
-        StepResult::execute(interpret_results_plan(space, results))
+        StepResult::execute(interpret_results_plan(space, expr, results))
     }
 }
 
-fn interpret_results_plan(space: GroundingSpace, mut result: InterpreterResult) -> Box<dyn Plan<(), InterpreterResult>> {
-    result.drain(0..).into_parallel_plan(vec![],
-        |(result, bindings)| {
-            Box::new(interpret_plan(space.clone(), result, bindings))
-        }, merge_results)
+fn interpret_results_plan(space: GroundingSpace, atom: Atom, mut result: InterpreterResult) -> Box<dyn Plan<(), InterpreterResult>> {
+    match result.len() {
+        0 => Box::new(StepResult::ret(result)),
+        1 => {
+            let (result, binding) = result.pop().unwrap();
+            Box::new(interpret_plan(space, result, binding))
+        },
+        _ => {
+        Box::new(AlternativeInterpretationsPlan::new(atom,
+                result.drain(0..).map(|(result, bindings)| -> Box<dyn Plan<(), InterpreterResult>> {
+                    Box::new(interpret_plan(space.clone(), result, bindings))
+                }).collect()))
+        },
+    }
 }
+
+use std::fmt::{Debug, Formatter};
+use std::collections::VecDeque;
+
+pub struct AlternativeInterpretationsPlan<T> {
+    atom: Atom,
+    plans: VecDeque<Box<dyn Plan<(), Vec<T>>>>,
+    results: Vec<T>,
+}
+
+impl<T> AlternativeInterpretationsPlan<T> {
+    pub fn new(atom: Atom, plans: Vec<Box<dyn Plan<(), Vec<T>>>>) -> Self {
+        Self{ atom, plans: plans.into(), results: Vec::new() }
+    }
+}
+
+impl<T: 'static> Plan<(), Vec<T>> for AlternativeInterpretationsPlan<T> {
+    fn step(mut self: Box<Self>, _: ()) -> StepResult<Vec<T>> {
+        if self.plans.len() == 0 {
+            StepResult::ret(self.results)
+        } else {
+            let plan = self.plans.pop_front().unwrap();
+            match plan.step(()) {
+                StepResult::Execute(next) => {
+                    self.plans.push_front(next);
+                    StepResult::Execute(self)
+                },
+                StepResult::Return(mut result) => {
+                    self.results.append(&mut result);
+                    StepResult::Execute(self)
+                },
+                StepResult::Error(message) => StepResult::Error(message),
+            }
+        }
+    }
+}
+
+impl<T> Debug for AlternativeInterpretationsPlan<T> {  
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let mut res = write!(f, "interpret alternatives for {}:\n", self.atom);
+        for (i, plan) in self.plans.iter().enumerate() {
+            let plan_str = format!("{:?}", plan);
+            let mut lines = plan_str.lines();
+            res = res.and_then(|_| write!(f, "  {} {}\n",
+                    if i == 0 { ">" } else { "-" }, lines.next().unwrap()));
+            for line in lines {
+                res = res.and_then(|_| write!(f, "    {}\n", line));
+            }
+        }
+        res
+    }
+}
+
 
 #[cfg(test)]
 mod tests {
