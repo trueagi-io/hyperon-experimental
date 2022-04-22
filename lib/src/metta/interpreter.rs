@@ -35,8 +35,16 @@ fn is_grounded(expr: &ExpressionAtom) -> bool {
     matches!(expr.children().get(0), Some(Atom::Grounded(_)))
 }
 
+fn format_bindings(bindings: &Bindings) -> String {
+    if bindings.is_empty() {
+        "".into()
+    } else {
+        format!(", bindings {}", bindings)
+    }
+}
+
 pub fn interpret_plan(space: GroundingSpace, atom: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
-    let descr = format!("interpret {}", atom);
+    let descr = format!("interpret {}{}", atom, format_bindings(&bindings));
     OperatorPlan::new(|_| interpret_op(space, atom, bindings), descr)
 }
 
@@ -238,7 +246,7 @@ fn execute_op(space: GroundingSpace, atom: Atom, bindings: Bindings) -> StepResu
 }
 
 fn match_plan(space: GroundingSpace, expr: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
-    let descr = format!("match {}", expr);
+    let descr = format!("match {}{}", expr, format_bindings(&bindings));
     OperatorPlan::new(|_| match_op(space, expr, bindings), descr)
 }
 

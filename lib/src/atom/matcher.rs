@@ -27,6 +27,7 @@ impl Bindings {
             pub fn insert(&mut self, k: VariableAtom, v: Atom) -> Option<Atom>;
             pub fn iter(&self) -> std::collections::hash_map::Iter<'_, VariableAtom, Atom>;
             pub fn remove(&mut self, k: &VariableAtom) -> Option<Atom>;
+            pub fn is_empty(&self) -> bool;
         }
     }
 
