@@ -2,18 +2,15 @@
 
 # Overview
 
-This is reimplementation of the [C++ Hyperon
-prototype](https://github.com/trueagi-io/hyperon) from scratch in a Rust
-programming language. The goal of the project is to replace the previous
-prototype. Work is in progress so some features are absent.  Please see [Python
-examples](./python/tests) and [Python examples of previous
-version](https://github.com/trueagi-io/hyperon/tree/master/python/tests) to
-become familiar with Hyperon features.
+This is reimplementation of the C++ Hyperon prototype from scratch in a Rust
+programming language. This project replaces the [previous
+prototype](https://github.com/trueagi-io/hyperon/tree/master).
+See [Python examples](./python/tests) to become familiar with Hyperon features.
 
 # Prerequisites
 
 Install latest stable Rust, see [Rust installation
-page](https://www.rust-lang.org/tools/install)
+page](https://www.rust-lang.org/tools/install).
 
 # Hyperon library
 
@@ -29,7 +26,7 @@ To enable logging during tests execute:
 RUST_LOG=hyperon=debug cargo test
 ```
 
-# C, Python, C++ API
+# C and Python API
 
 Prerequisites:
 ```
