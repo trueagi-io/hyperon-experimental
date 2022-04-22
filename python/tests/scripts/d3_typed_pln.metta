@@ -13,13 +13,15 @@
 (= (Human Plato) T)
 (= (Mortal Socrates) T)
 
-!(HumanAreMortal (Human Socrates))
+!(HumansAreMortal (Human Socrates))
 !(= (Human Socrates) (Human Plato))
 
 (: HumansAreMortal (-> (Human $t) (Mortal $t)))
+;!(HumansAreMortal (Human Socrates))
+
 (: SocratesIsHuman (Human Socrates))
 (: SocratesIsMortal (Mortal Socrates))
-!(println! (HumansAreMortal SocratesIsHuman))
+;!(println! (HumansAreMortal SocratesIsHuman))
 ;!(println! (= SocratesIsMortal (HumansAreMortal SocratesIsHuman)))
 
 (= (Mortal $x) (Human $x))
@@ -28,5 +30,3 @@
 (: if (-> Type $t $t))
 (= (if T $then) $then)
 ;!(println! (if (Mortal $x) $x))
-
-!(pragma! type-check none)

@@ -18,7 +18,7 @@
 (= (deduce (Evaluation ($P $x)))
    (match &self
      (Implication $a (Evaluation ($P $x)))
-     ($x proven by (deduce $a))))
+     (($P $x) proven by (deduce $a))))
 
 (= (deduce (And $a $b))
    (And (deduce $a) (deduce $b)))
