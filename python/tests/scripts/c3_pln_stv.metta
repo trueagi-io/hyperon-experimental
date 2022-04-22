@@ -46,4 +46,6 @@
   (stv 0.9 1.0)
 )
 
+!(println! (TV (croaks Fritz)))
+!(println! (TV (frog Fritz)))
 !(println! (TV (green Fritz)))

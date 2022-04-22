@@ -14,5 +14,6 @@
 !(HumansAreMortal SocratesIsHuman)
 !(HumanAreMortal (Human Socrates))
 !(= SocratesIsMortal (HumansAreMortal SocratesIsHuman))
-!(= SamIsGreen (HumansAreMortal SocratesIsHuman))
+(: PlatoIsHuman (Human Plato))
+!(= SocratesIsMortal (HumansAreMortal PlatoIsHuman))
 !(= (Human Socrates) (Human Plato))

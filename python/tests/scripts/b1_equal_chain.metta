@@ -5,13 +5,13 @@
 
 !(println! (S K K x))
 
-;'------------------------------'
+!(println! "------------------------------")
 
 (= (Add $x Z) $x)
 (= (Add $x (S $y)) (Add (S $x) $y))
 
 !(println! (Add (S Z) (S Z)))
 
-;(In the current implementation, it will be reduced)
+;(In the current implementation, the argument will be reduced)
 !(println! (Something? (Add (S Z) (S Z))))
 
