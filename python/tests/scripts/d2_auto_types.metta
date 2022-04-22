@@ -12,7 +12,7 @@
 (: SocratesIsMortal (Mortal Socrates))
 
 !(HumansAreMortal SocratesIsHuman)
-!(HumanAreMortal (Human Socrates))
+!(HumansAreMortal (Human Socrates))
 !(= SocratesIsMortal (HumansAreMortal SocratesIsHuman))
 (: PlatoIsHuman (Human Plato))
 !(= SocratesIsMortal (HumansAreMortal PlatoIsHuman))

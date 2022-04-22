@@ -85,8 +85,6 @@ def call_execute_on_grounded_atom(gnd, args):
     return gnd.execute(*args)
 
 
-
-# =========================================
 class ConstGroundedObject:
 
     def copy(self):

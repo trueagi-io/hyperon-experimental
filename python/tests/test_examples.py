@@ -1,7 +1,7 @@
 import unittest
 
 from hyperon import *
-from common import Atomese, MeTTa, SpaceAtom
+from common import MeTTa, SpaceAtom
 
 class ExamplesTest(unittest.TestCase):
 
@@ -19,8 +19,9 @@ class ExamplesTest(unittest.TestCase):
 
     def test_create_semantic_triple(self):
         metta = MeTTa()
+        kb = metta.space
 
-        kb = metta.add_parse('''
+        metta.add_parse('''
             (obj make pottery)
             (from make clay)
         ''')
@@ -31,7 +32,7 @@ class ExamplesTest(unittest.TestCase):
             (match &kb (obj $verb $var0)
                 (q match &kb (from $verb $var1) (make_from $var0 $var1)))
         ''')
-        self.assertEqual([metta.parse_single('(make_from pottery clay)')], result)
+        self.assertEqual(metta.parse_all('(make_from pottery clay)'), result)
 
     def test_grounded_arithmetics(self):
         metta = MeTTa()
@@ -54,10 +55,13 @@ class ExamplesTest(unittest.TestCase):
         target = metta.parse_single('(call:foo &obj)')
         # interpreting this target in another space still works,
         # because substitution '&obj' -> obj is done by metta
-        result = interpret(GroundingSpace(), target)
-
+        metta2 = MeTTa()
+        result = interpret(metta2.space, target)
         self.assertTrue(obj.called)
         self.assertEqual(result, [])
+        # But it will not work if &obj is parsed in another space
+        result = metta2.interpret('(call:foo &obj)')
+        self.assertEqual(repr(result[0]), '(call:foo &obj)')
 
     def test_self_modify(self):
         metta = MeTTa()
@@ -139,10 +143,10 @@ class ExamplesTest(unittest.TestCase):
         ''')
 
         fritz_frog = metta.interpret('(if (and ($x croaks) ($x eats_flies)) (= ($x frog) True) nop)')
-        self.assertEqual([metta.parse_single('(= (Fritz frog) True)')], fritz_frog)
+        self.assertEqual(metta.parse_all('(= (Fritz frog) True)'), fritz_frog)
         metta.space.add_atom(fritz_frog[0])
 
-        self.assertEqual([metta.parse_single('(= (Fritz green) True)')],
+        self.assertEqual(metta.parse_all('(= (Fritz green) True)'),
                 metta.interpret('(if ($x frog) (= ($x green) True) nop)'))
 
     def test_frog_unification(self):
@@ -156,7 +160,7 @@ class ExamplesTest(unittest.TestCase):
            (= (green $x) (frog $x))
         ''')
 
-        self.assertEqual([metta.parse_single('Fritz')],
+        self.assertEqual(metta.parse_all('Fritz'),
                 metta.interpret('(if (green $x) $x)'))
 
     def test_air_humidity_regulator(self):
@@ -211,8 +215,8 @@ class ExamplesTest(unittest.TestCase):
             (let $t (gen 3)
                  (if (== (subsum (:: 3 (:: 5 (:: 7 nil))) $t) 8) $t (nop)))
             ''')
-        expected = metta.parse_single('(:: 1 (:: 1 (:: 0 nil)))')
-        self.assertEqual(output, [expected])
+        expected = metta.parse_all('(:: 1 (:: 1 (:: 0 nil)))')
+        self.assertEqual(output, expected)
 
     def test_infer_function_application_type(self):
         metta = MeTTa()
@@ -242,13 +246,13 @@ class ExamplesTest(unittest.TestCase):
         self.assertEqual(output, [ValueAtom(True)])
 
         output = metta.interpret('(eq (+ 2 3) 4)')
-        self.assertEqual(output, [metta.parse_single('(eq 5 4)')])
+        self.assertEqual(output, metta.parse_all('(eq 5 4)'))
 
         output = metta.interpret('(eq (plus Z $n) $n)')
         self.assertEqual(output, [ValueAtom(True)])
 
         output = metta.interpret('(eq (plus (S Z) $n) $n)')
-        self.assertEqual(output, [metta.parse_single('(eq (S $y) $y)')])
+        self.assertEqual(output, metta.parse_all('(eq (S $y) $y)'))
 
     def test_multi_space(self):
         # REM: it is not recommended to split code into multiple spaces, because

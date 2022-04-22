@@ -81,48 +81,52 @@ def SpaceAtom(grounding_space, repr_name=None):
         grounding_space.repr_name = repr_name
     return G(TypedValue(grounding_space, 'Space'))
 
-class Atomese:
 
-    def __init__(self):
-        self.tokens = {}
+class MeTTa:
+
+    def __init__(self, space=None):
+        self.space = GroundingSpace("&self") if space is None else space
+        self.tokenizer = Tokenizer()
+        self._tokenizer()
 
     def _tokenizer(self):
-        tokenizer = Tokenizer()
-        tokenizer.register_token(r"\+", lambda _: addAtom)
-        tokenizer.register_token(r"-", lambda _: subAtom)
-        tokenizer.register_token(r"\*", lambda _: mulAtom)
-        tokenizer.register_token(r"/", lambda _: divAtom)
-        tokenizer.register_token(r"==", lambda _: equalAtom)
-        tokenizer.register_token(r"<", lambda _: lessAtom)
-        tokenizer.register_token(r">", lambda _: greaterAtom)
-        tokenizer.register_token(r"or", lambda _: orAtom)
-        tokenizer.register_token(r"and", lambda _: andAtom)
-        tokenizer.register_token(r"not", lambda _: notAtom)
-        tokenizer.register_token(r"\d+(\.\d+)",
-                                 lambda token: G(TypedValue(float(token), 'Number')))
-        tokenizer.register_token(r"\d+",
-                                 lambda token: G(TypedValue(int(token), 'Number')))
-        #tokenizer.register_token(r"'[^']*'",
-        #                         lambda token: G(TypedValue(str(token[1:-1]), 'String')))
-        tokenizer.register_token("\"[^\"]*\"",
-                                 lambda token: G(TypedValue(str(token[1:-1]), 'String')))
-        tokenizer.register_token(r"True|False",
-                                 lambda token: G(TypedValue(token == 'True', 'Bool')))
-        tokenizer.register_token(r"match", lambda _: matchAtom)
-        tokenizer.register_token(r"call:[^\s]+", newCallAtom)
-        tokenizer.register_token(r"let", lambda _: letAtom)
-        tokenizer.register_token(r"nop", lambda _: nopAtom)
-        tokenizer.register_token(r"println!", lambda _: printAtom)
-        for regexp in self.tokens.keys():
-            tokenizer.register_token(regexp, self.tokens[regexp])
-        return tokenizer
+        self.add_atom(r"\+", addAtom)
+        self.add_atom(r"-", subAtom)
+        self.add_atom(r"\*", mulAtom)
+        self.add_atom(r"/", divAtom)
+        self.add_atom(r"==", equalAtom)
+        self.add_atom(r"<", lessAtom)
+        self.add_atom(r">", greaterAtom)
+        self.add_atom(r"or", orAtom)
+        self.add_atom(r"and", andAtom)
+        self.add_atom(r"not", notAtom)
+        self.add_token(r"\d+(\.\d+)",
+                       lambda token: G(TypedValue(float(token), 'Number')))
+        self.add_token(r"\d+",
+                       lambda token: G(TypedValue(int(token), 'Number')))
+        #self.add_token(r"'[^']*'",
+        #               lambda token: G(TypedValue(str(token[1:-1]), 'String')))
+        self.add_token("\"[^\"]*\"",
+                       lambda token: G(TypedValue(str(token[1:-1]), 'String')))
+        self.add_token(r"True|False",
+                       lambda token: G(TypedValue(token == 'True', 'Bool')))
+        self.add_atom(r"match", matchAtom)
+        self.add_token(r"call:[^\s]+", newCallAtom)
+        self.add_atom(r"let", letAtom)
+        self.add_atom(r"nop", nopAtom)
+        self.add_atom(r"println!", printAtom)
+        self.add_atom(r"&self", SpaceAtom(self.space))
 
-    def _parse_all(self, program, tokenizer=None):
-        if tokenizer is None:
-            tokenizer = self._tokenizer()
+    def add_token(self, regexp, constr):
+        self.tokenizer.register_token(regexp, constr)
+
+    def add_atom(self, name, symbol):
+        self.add_token(name, lambda _: symbol)
+
+    def _parse_all(self, program):
         parser = SExprParser(program)
         while True:
-            atom = parser.parse(tokenizer)
+            atom = parser.parse(self.tokenizer)
             if atom is None:
                 break
             yield atom
@@ -133,47 +137,11 @@ class Atomese:
     def parse_single(self, program):
         return next(self._parse_all(program))
 
-    def parse(self, program, kb=None):
-        if not kb:
-            kb = GroundingSpace()
-        for atom in self._parse_all(program):
-            kb.add_atom(atom)
-        return kb
-
-    def add_token(self, regexp, constr):
-        self.tokens[regexp] = constr
-
-    def add_atom(self, name, symbol):
-        self.add_token(name, lambda _: symbol)
-
-
-class MeTTa(Atomese):
-
-    def __init__(self, space=None):
-        super().__init__()
-        self.space = GroundingSpace("&self") if space is None else space
-        self.tokenizer = super()._tokenizer()
-        self.add_atom(r"&self", SpaceAtom(self.space))
-
-    def _parse_all(self, program):
-        return super()._parse_all(program, self.tokenizer)
-
     def add_parse(self, program):
-        return super().parse(program, self.space)
+        for atom in self._parse_all(program):
+            self.space.add_atom(atom)
 
     def interpret(self, program):
         target = self.parse_single(program)
         return interpret(self.space, target)
-
-    def add_token(self, regexp, constr):
-        # We don't register tokens in super().tokens to keep it clean if we need
-        # to reset the tokenizer (this behavior can be changed if needed)
-        # We may need this list to check if the token being added is already there.
-        # In this case, we would like to have all predefined tokens also, while
-        # now they are directly added to the tokenizer as well.
-        # FixMe? Basically, self.tokens will always be normally empty now unless
-        # Atomese class is used instead of MeTTa
-        #super().add_token(regexp, constr)
-        # We only directly update self.tokenizer
-        self.tokenizer.register_token(regexp, constr)
 

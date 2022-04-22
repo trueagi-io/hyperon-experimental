@@ -2,7 +2,7 @@ import os
 import sys
 
 from hyperon import *
-from common import Atomese, MeTTa, SpaceAtom
+from common import MeTTa, SpaceAtom
 
 def import_file(fname, space=None):
     f = open(fname, "r")
