@@ -2,16 +2,18 @@ use crate::*;
 
 use std::fmt::Debug;
 
+const MINUS_ONE: usize = usize::MAX;
+
 fn get_expr<'a>(levels: &Vec<usize>, expr: &'a ExpressionAtom, level: usize) -> &'a ExpressionAtom {
-    as_expr(&expr.children()[levels[level] - 1])
+    as_expr(&expr.children()[levels[level]])
 }
 
 fn find_next_sibling_expr<'a>(levels: &mut Vec<usize>, expr: &'a ExpressionAtom, level: usize) -> Option<&'a Atom> {
-    let mut idx = levels[level];
+    let mut idx = usize::wrapping_add(levels[level], 1);
     while idx < expr.children().len() {
         let child = &expr.children()[idx];
         if let Atom::Expression(_) = child {
-            levels[level] = idx + 1;
+            levels[level] = idx;
             log::trace!("find_next_sibling_expr: return: {}", child);
             return Some(child);
         }
@@ -33,11 +35,11 @@ fn move_top_down_depth<'a>(levels: &mut Vec<usize>, expr: &'a ExpressionAtom, le
         }
     } else {
         let idx = levels[level];
-        if idx == 0 {
+        if idx == MINUS_ONE {
             find_next_sibling_expr(levels, expr, level)
         } else {
-            levels.push(0);
-            let child = as_expr(&expr.children()[idx - 1]);
+            levels.push(MINUS_ONE);
+            let child = as_expr(&expr.children()[idx]);
             let found = move_top_down_depth(levels, child, level + 1);
             if found == None {
                 find_next_sibling_expr(levels, expr, level)
@@ -51,7 +53,7 @@ fn move_top_down_depth<'a>(levels: &mut Vec<usize>, expr: &'a ExpressionAtom, le
 fn move_bottom_up_depth<'a>(levels: &mut Vec<usize>, expr: &'a ExpressionAtom, level: usize) -> Option<&'a Atom> {
     log::trace!("move_bottom_up_depth: expr: {}, level: {}, levels.len(): {}, idx: {}", expr, level, levels.len(), levels[level]);
     if level < levels.len() - 1 {
-        let subexpr = &expr.children()[levels[level] - 1];
+        let subexpr = &expr.children()[levels[level]];
         let found = move_bottom_up_depth(levels, as_expr(subexpr), level + 1);
         if found == None {
             log::trace!("move_bottom_up_depth: return: {}", subexpr);
@@ -63,7 +65,7 @@ fn move_bottom_up_depth<'a>(levels: &mut Vec<usize>, expr: &'a ExpressionAtom, l
         loop {
             let found = find_next_sibling_expr(levels, expr, level);
             if let Some(child) = found {
-                levels.push(0);
+                levels.push(MINUS_ONE);
                 let found = move_bottom_up_depth(levels, as_expr(child), level + 1);
                 if found == None {
                     log::trace!("move_bottom_up_depth: return: {}, levels.len(): {}", child, levels.len());
@@ -95,7 +97,7 @@ impl SubexprStream {
     pub fn from_expr(expr: Atom, walk: WalkStrategy) -> Self {
         Self{
             expr: expr,
-            levels: vec![0],
+            levels: vec![MINUS_ONE],
             walk: walk,
         }
     }
@@ -115,7 +117,7 @@ impl SubexprStream {
         if level >= levels.len() {
             atom
         } else {
-            let child = &mut (as_expr_mut(atom).children_mut()[levels[level] - 1]);
+            let child = &mut (as_expr_mut(atom).children_mut()[levels[level]]);
             Self::get_mut_rec(levels, child, level + 1)
         }
     }
@@ -128,7 +130,7 @@ impl SubexprStream {
         if level >= levels.len() {
             atom
         } else {
-            let child = &(as_expr(atom).children()[levels[level] - 1]);
+            let child = &(as_expr(atom).children()[levels[level]]);
             Self::get_rec(levels, child, level + 1)
         }
     }
@@ -139,7 +141,6 @@ impl SubexprStream {
 
     fn fmt_rec(levels: &Vec<usize>, atom: &Atom, level: usize, current: bool, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let emphasize = current && level == levels.len();
-        log::debug!("emphasize: {}, current: {}, level: {}, levels: {:?}", emphasize, current, level, levels);
         let mut res = Ok(());
         res = res.and_then(|_| write!(f, "{}", if emphasize { ">" } else { "" }));
         res = match atom {
@@ -149,8 +150,7 @@ impl SubexprStream {
                     if i > 0 {
                         res = res.and_then(|_| write!(f, " "));
                     }
-                    let current = current && level < levels.len() && levels[level] == i + 1;
-                    log::debug!("child: emphasize: {}, current: {}, level: {}, levels.len(): {}, i: {}", emphasize, current, level, levels.len(), i);
+                    let current = current && level < levels.len() && levels[level] == i;
                     res = res.and_then(|_| Self::fmt_rec(levels, child, level + 1, current, f));
                 }
                 res.and_then(|_| write!(f, ")"))

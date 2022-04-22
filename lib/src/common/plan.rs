@@ -77,8 +77,8 @@ impl<R: Debug> Debug for StepResult<R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::Execute(plan) => write!(f, "{:?}", plan),
-            Self::Return(result) => write!(f, "{:?}", result),
-            Self::Error(message) => write!(f, "{:?}", message),
+            Self::Return(result) => write!(f, "return {:?}", result),
+            Self::Error(message) => write!(f, "error {:?}", message),
         }
     }
 }
@@ -216,12 +216,12 @@ impl<T1: 'static, T2: 'static + Debug, R: 'static> Plan<T1, R> for SequencePlan<
 
 impl<T1, T2, R> Debug for SequencePlan<T1, T2, R> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:?} -> {:?}", self.first, self.second)
+        write!(f, "{:?} then {:?}", self.first, self.second)
     }
 }
 
-/// The plan to execute two underlying plans and return the pair formed from
-/// their their results.
+/// The plan to execute two underlying plans and return a pair formed from
+/// their results.
 pub struct ParallelPlan<T1, T2> {
     first: Box<dyn Plan<(), T1>>,
     second: Box<dyn Plan<(), T2>>,
@@ -231,7 +231,7 @@ impl<T1, T2> ParallelPlan<T1, T2> {
     pub fn new<P1, P2>(first: P1, second: P2) -> Self
         where P1: 'static + Plan<(), T1>,
               P2: 'static + Plan<(), T2> {
-        ParallelPlan{
+        Self{
             first: Box::new(first),
             second: Box::new(second)
         }
@@ -372,7 +372,7 @@ impl<R: 'static> Plan<(), R> for OrPlan<R> {
 
 impl<R> Debug for OrPlan<R> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:?} or {:?}", self.first, self.second)
+        write!(f, "{:?} (or {:?})", self.first, self.second)
     }
 }
 
