@@ -1,0 +1,21 @@
+;(some expressions)
+((leaf1 leaf2) leaf3)
+(((leaf0 leaf1) leaf2) leaf3)
+;(this one will not be matched)
+(top ((leaf1 leaf2) leaf3))
+!(println! (match &self (($x leaf2) leaf3) $x))
+
+;(symbols can be arranged in arbitrary expressions)
+(Sam is a frog)
+(Tom is a cat)
+(Sophia is a robot)
+;!(println! (match &self ($who is a $what) ($who the $what)))
+
+(:= (Green Sam) True)
+(:= (White Tom) True)
+(:= (Green Tom) False)
+;!(println! (match &self (:= (Green $who) True) ($who is really green)))
+;!(println! (match &self (:= ($color $who) True) ($who is really $color)))
+;!(println! (match &self (:= ($color $who) $tv) (It's $tv that $who is $color)))
+;!(println! (match &self (:= (Green Tom) $tv) $tv))
+

@@ -1,0 +1,18 @@
+!(pragma! type-check auto)
+
+(: = (-> $t $t Type))
+
+(: Entity Type)
+(: Human (-> Entity Type))
+(: Socrates Entity)
+(: Plato Entity)
+(: Mortal (-> Entity Type))
+(: HumansAreMortal (-> (Human $t) (Mortal $t)))
+(: SocratesIsHuman (Human Socrates))
+(: SocratesIsMortal (Mortal Socrates))
+
+!(HumansAreMortal SocratesIsHuman)
+!(HumanAreMortal (Human Socrates))
+!(= SocratesIsMortal (HumansAreMortal SocratesIsHuman))
+!(= SamIsGreen (HumansAreMortal SocratesIsHuman))
+!(= (Human Socrates) (Human Plato))
