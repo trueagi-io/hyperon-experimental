@@ -140,11 +140,11 @@ fn replace_arg_and_interpret_op(space: GroundingSpace, iter: SubexprStream, mut 
 }
 
 fn find_next_sibling_skip_last<'a>(levels: &mut Vec<usize>, expr: &'a ExpressionAtom, level: usize) -> Option<&'a Atom> {
-    let mut idx = levels[level];
+    let mut idx = usize::wrapping_add(levels[level], 1);
     while idx < expr.children().len() - 1 {
         let child = &expr.children()[idx];
         if let Atom::Expression(_) = child {
-            levels[level] = idx + 1;
+            levels[level] = idx;
             log::trace!("find_next_sibling_expr: return: {}", child);
             return Some(child);
         }
