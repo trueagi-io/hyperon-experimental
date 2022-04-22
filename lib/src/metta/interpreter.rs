@@ -35,8 +35,16 @@ fn is_grounded(expr: &ExpressionAtom) -> bool {
     matches!(expr.children().get(0), Some(Atom::Grounded(_)))
 }
 
+fn format_bindings(bindings: &Bindings) -> String {
+    if bindings.is_empty() {
+        "".into()
+    } else {
+        format!(", bindings {}", bindings)
+    }
+}
+
 pub fn interpret_plan(space: GroundingSpace, atom: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
-    let descr = format!("interpret {}", atom);
+    let descr = format!("interpret {}{}", atom, format_bindings(&bindings));
     OperatorPlan::new(|_| interpret_op(space, atom, bindings), descr)
 }
 
@@ -140,11 +148,11 @@ fn replace_arg_and_interpret_op(space: GroundingSpace, iter: SubexprStream, mut 
 }
 
 fn find_next_sibling_skip_last<'a>(levels: &mut Vec<usize>, expr: &'a ExpressionAtom, level: usize) -> Option<&'a Atom> {
-    let mut idx = levels[level];
+    let mut idx = usize::wrapping_add(levels[level], 1);
     while idx < expr.children().len() - 1 {
         let child = &expr.children()[idx];
         if let Atom::Expression(_) = child {
-            levels[level] = idx + 1;
+            levels[level] = idx;
             log::trace!("find_next_sibling_expr: return: {}", child);
             return Some(child);
         }
@@ -238,7 +246,7 @@ fn execute_op(space: GroundingSpace, atom: Atom, bindings: Bindings) -> StepResu
 }
 
 fn match_plan(space: GroundingSpace, expr: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
-    let descr = format!("match {}", expr);
+    let descr = format!("match {}{}", expr, format_bindings(&bindings));
     OperatorPlan::new(|_| match_op(space, expr, bindings), descr)
 }
 
