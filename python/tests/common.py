@@ -82,6 +82,50 @@ def SpaceAtom(grounding_space, repr_name=None):
     return G(TypedValue(grounding_space, 'Space'))
 
 
+def import_op(metta, space, fname):
+    # Check if space wasn't resolved
+    if space.get_type() == AtomKind.SYMBOL:
+        # Create new space
+        name = space.get_name()
+        space = GroundingSpace()
+        # Register this space under name `name`
+        metta.add_atom(name, SpaceAtom(space, name))
+    else:
+        space = space.get_object().value
+    # A tricky part (FixMe or is this behavior indended?):
+    # * `run` will create another MeTTa object,
+    #   which will resolve `&self` as `space`, all
+    #   other syntax modification will not be inherited,
+    #   so the file should not know that it is imported,
+    #   but it will not be able to use parent's tokens
+    # * tokens introduced in the file, will be resolved
+    #   during its processing, and will be lost after it,
+    #   so we cannot import syntax this way - only spaces
+    # (another operation is needed for importing syntax)
+    return MeTTa(space).import_file(fname.get_object().value)
+
+def newImportOp(metta):
+    # unwrap=False, because space name can remain
+    # an unresolved symbol atom
+    return OperationAtom(
+        'import!',
+        lambda s, f: import_op(metta, s, f),
+        unwrap=False)
+
+def pragma_op(metta, key, *args):
+    # TODO: add support for Grounded values when needed
+    metta.settings[key.get_name()] = \
+        args[0].get_name() if len(args) == 1 else \
+        [arg.get_name() for arg in args]
+    return []
+
+def newPragmaOp(metta):
+    return OperationAtom(
+        'pragma!',
+        lambda key, *args: pragma_op(metta, key, *args),
+        unwrap=False)
+
+
 class MeTTa:
 
     def __init__(self, space=None):
@@ -116,6 +160,8 @@ class MeTTa:
         self.add_atom(r"nop", nopAtom)
         self.add_atom(r"println!", printAtom)
         self.add_atom(r"&self", SpaceAtom(self.space))
+        self.add_atom(r"import!", newImportOp(self))
+        self.add_atom(r"pragma!", newPragmaOp(self))
 
     def add_token(self, regexp, constr):
         self.tokenizer.register_token(regexp, constr)
@@ -145,3 +191,32 @@ class MeTTa:
         target = self.parse_single(program)
         return interpret(self.space, target)
 
+    def import_file(self, fname):
+        f = open(fname, "r")
+        program = f.read()
+        f.close()
+        return self.run(program)
+
+    def run(self, program):
+        self.settings = {'type-check': None}
+        status = "normal"
+        result = []
+        for expr in self._parse_all(program):
+            if expr == S('!'):
+                status = "interp"
+                continue
+            if expr.get_type() == AtomKind.SYMBOL and expr.get_name()[0] == ';':
+                status = "comment"
+                continue
+            if status != "comment":
+                if self.settings['type-check'] == 'auto':
+                    if not validate_atom(self.space, expr):
+                        print("Type error in ", expr)
+                        break
+                if status == "interp":
+                    r = interpret(self.space, expr)
+                    if r != []: result += [r]
+                else:
+                    self.space.add_atom(expr)
+            status = "normal"
+        return result
