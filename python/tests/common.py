@@ -81,48 +81,98 @@ def SpaceAtom(grounding_space, repr_name=None):
         grounding_space.repr_name = repr_name
     return G(TypedValue(grounding_space, 'Space'))
 
-class Atomese:
 
-    def __init__(self):
-        self.tokens = {}
+def import_op(metta, space, fname):
+    # Check if space wasn't resolved
+    if space.get_type() == AtomKind.SYMBOL:
+        # Create new space
+        name = space.get_name()
+        space = GroundingSpace()
+        # Register this space under name `name`
+        metta.add_atom(name, SpaceAtom(space, name))
+    else:
+        space = space.get_object().value
+    # A tricky part (FixMe or is this behavior indended?):
+    # * `run` will create another MeTTa object,
+    #   which will resolve `&self` as `space`, all
+    #   other syntax modification will not be inherited,
+    #   so the file should not know that it is imported,
+    #   but it will not be able to use parent's tokens
+    # * tokens introduced in the file, will be resolved
+    #   during its processing, and will be lost after it,
+    #   so we cannot import syntax this way - only spaces
+    # (another operation is needed for importing syntax)
+    return MeTTa(space).import_file(fname.get_object().value)
+
+def newImportOp(metta):
+    # unwrap=False, because space name can remain
+    # an unresolved symbol atom
+    return OperationAtom(
+        'import!',
+        lambda s, f: import_op(metta, s, f),
+        unwrap=False)
+
+def pragma_op(metta, key, *args):
+    # TODO: add support for Grounded values when needed
+    metta.settings[key.get_name()] = \
+        args[0].get_name() if len(args) == 1 else \
+        [arg.get_name() for arg in args]
+    return []
+
+def newPragmaOp(metta):
+    return OperationAtom(
+        'pragma!',
+        lambda key, *args: pragma_op(metta, key, *args),
+        unwrap=False)
+
+
+class MeTTa:
+
+    def __init__(self, space=None):
+        self.space = GroundingSpace("&self") if space is None else space
+        self.tokenizer = Tokenizer()
+        self._tokenizer()
 
     def _tokenizer(self):
-        tokenizer = Tokenizer()
-        tokenizer.register_token(r"\+", lambda _: addAtom)
-        tokenizer.register_token(r"-", lambda _: subAtom)
-        tokenizer.register_token(r"\*", lambda _: mulAtom)
-        tokenizer.register_token(r"/", lambda _: divAtom)
-        tokenizer.register_token(r"==", lambda _: equalAtom)
-        tokenizer.register_token(r"<", lambda _: lessAtom)
-        tokenizer.register_token(r">", lambda _: greaterAtom)
-        tokenizer.register_token(r"or", lambda _: orAtom)
-        tokenizer.register_token(r"and", lambda _: andAtom)
-        tokenizer.register_token(r"not", lambda _: notAtom)
-        tokenizer.register_token(r"\d+(\.\d+)",
-                                 lambda token: G(TypedValue(float(token), 'Number')))
-        tokenizer.register_token(r"\d+",
-                                 lambda token: G(TypedValue(int(token), 'Number')))
-        #tokenizer.register_token(r"'[^']*'",
-        #                         lambda token: G(TypedValue(str(token[1:-1]), 'String')))
-        tokenizer.register_token("\"[^\"]*\"",
-                                 lambda token: G(TypedValue(str(token[1:-1]), 'String')))
-        tokenizer.register_token(r"True|False",
-                                 lambda token: G(TypedValue(token == 'True', 'Bool')))
-        tokenizer.register_token(r"match", lambda _: matchAtom)
-        tokenizer.register_token(r"call:[^\s]+", newCallAtom)
-        tokenizer.register_token(r"let", lambda _: letAtom)
-        tokenizer.register_token(r"nop", lambda _: nopAtom)
-        tokenizer.register_token(r"println!", lambda _: printAtom)
-        for regexp in self.tokens.keys():
-            tokenizer.register_token(regexp, self.tokens[regexp])
-        return tokenizer
+        self.add_atom(r"\+", addAtom)
+        self.add_atom(r"-", subAtom)
+        self.add_atom(r"\*", mulAtom)
+        self.add_atom(r"/", divAtom)
+        self.add_atom(r"==", equalAtom)
+        self.add_atom(r"<", lessAtom)
+        self.add_atom(r">", greaterAtom)
+        self.add_atom(r"or", orAtom)
+        self.add_atom(r"and", andAtom)
+        self.add_atom(r"not", notAtom)
+        self.add_token(r"\d+(\.\d+)",
+                       lambda token: G(TypedValue(float(token), 'Number')))
+        self.add_token(r"\d+",
+                       lambda token: G(TypedValue(int(token), 'Number')))
+        #self.add_token(r"'[^']*'",
+        #               lambda token: G(TypedValue(str(token[1:-1]), 'String')))
+        self.add_token("\"[^\"]*\"",
+                       lambda token: G(TypedValue(str(token[1:-1]), 'String')))
+        self.add_token(r"True|False",
+                       lambda token: G(TypedValue(token == 'True', 'Bool')))
+        self.add_atom(r"match", matchAtom)
+        self.add_token(r"call:[^\s]+", newCallAtom)
+        self.add_atom(r"let", letAtom)
+        self.add_atom(r"nop", nopAtom)
+        self.add_atom(r"println!", printAtom)
+        self.add_atom(r"&self", SpaceAtom(self.space))
+        self.add_atom(r"import!", newImportOp(self))
+        self.add_atom(r"pragma!", newPragmaOp(self))
 
-    def _parse_all(self, program, tokenizer=None):
-        if tokenizer is None:
-            tokenizer = self._tokenizer()
+    def add_token(self, regexp, constr):
+        self.tokenizer.register_token(regexp, constr)
+
+    def add_atom(self, name, symbol):
+        self.add_token(name, lambda _: symbol)
+
+    def _parse_all(self, program):
         parser = SExprParser(program)
         while True:
-            atom = parser.parse(tokenizer)
+            atom = parser.parse(self.tokenizer)
             if atom is None:
                 break
             yield atom
@@ -133,47 +183,40 @@ class Atomese:
     def parse_single(self, program):
         return next(self._parse_all(program))
 
-    def parse(self, program, kb=None):
-        if not kb:
-            kb = GroundingSpace()
-        for atom in self._parse_all(program):
-            kb.add_atom(atom)
-        return kb
-
-    def add_token(self, regexp, constr):
-        self.tokens[regexp] = constr
-
-    def add_atom(self, name, symbol):
-        self.add_token(name, lambda _: symbol)
-
-
-class MeTTa(Atomese):
-
-    def __init__(self, space=None):
-        super().__init__()
-        self.space = GroundingSpace("&self") if space is None else space
-        self.tokenizer = super()._tokenizer()
-        self.add_atom(r"&self", SpaceAtom(self.space))
-
-    def _parse_all(self, program):
-        return super()._parse_all(program, self.tokenizer)
-
     def add_parse(self, program):
-        return super().parse(program, self.space)
+        for atom in self._parse_all(program):
+            self.space.add_atom(atom)
 
     def interpret(self, program):
         target = self.parse_single(program)
         return interpret(self.space, target)
 
-    def add_token(self, regexp, constr):
-        # We don't register tokens in super().tokens to keep it clean if we need
-        # to reset the tokenizer (this behavior can be changed if needed)
-        # We may need this list to check if the token being added is already there.
-        # In this case, we would like to have all predefined tokens also, while
-        # now they are directly added to the tokenizer as well.
-        # FixMe? Basically, self.tokens will always be normally empty now unless
-        # Atomese class is used instead of MeTTa
-        #super().add_token(regexp, constr)
-        # We only directly update self.tokenizer
-        self.tokenizer.register_token(regexp, constr)
+    def import_file(self, fname):
+        f = open(fname, "r")
+        program = f.read()
+        f.close()
+        return self.run(program)
 
+    def run(self, program):
+        self.settings = {'type-check': None}
+        status = "normal"
+        result = []
+        for expr in self._parse_all(program):
+            if expr == S('!'):
+                status = "interp"
+                continue
+            if expr.get_type() == AtomKind.SYMBOL and expr.get_name()[0] == ';':
+                status = "comment"
+                continue
+            if status != "comment":
+                if self.settings['type-check'] == 'auto':
+                    if not validate_atom(self.space, expr):
+                        print("Type error in ", expr)
+                        break
+                if status == "interp":
+                    r = interpret(self.space, expr)
+                    if r != []: result += [r]
+                else:
+                    self.space.add_atom(expr)
+            status = "normal"
+        return result

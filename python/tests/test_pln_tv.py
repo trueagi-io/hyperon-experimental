@@ -32,8 +32,8 @@ class PLNTVTest(unittest.TestCase):
                 (= (PB) (Evaluation (Predicate P) (Concept B)))
         ''')
         self.assertEqual(
-            repr(metta.interpret("(get-tv (AndLink (PA) (PB)))")[0]),
-            '(stv 0.3 0.8)')
+            metta.interpret('(get-tv (AndLink (PA) (PB)))'),
+            metta.parse_all('(stv 0.3 0.8)'))
 
         metta.add_parse('''
             (= (get-tv $x)
@@ -45,8 +45,8 @@ class PLNTVTest(unittest.TestCase):
                  (stv 0.9 0.9))
         ''')
         self.assertEqual(
-            repr(metta.interpret("(get-tv (PA))")[0]),
-            '(stv 0.5 0.8)')
+            metta.interpret('(get-tv (PA))'),
+            metta.parse_all('(stv 0.5 0.8)'))
 
     def test_fuzzy_conjunction_fn(self):
         metta = MeTTa()
@@ -71,15 +71,18 @@ class PLNTVTest(unittest.TestCase):
                 (: P Predicate)
         ''')
         self.assertEqual(
-            repr(metta.interpret("(stv (And (P A) (P B)))")[0]),
-            '(stv 0.3 0.8)')
+            metta.interpret('(stv (And (P A) (P B)))'),
+            metta.parse_all('(stv 0.3 0.8)'))
         metta.add_parse('''
                 (= (pln $expr) ($expr (stv $expr)))
         ''')
         # (would actually count (stv (P A)) twice for probabilistic version)
         self.assertEqual(
-            repr(metta.interpret("(pln (And (P A) (P $x)))")),
-            '[((And (P A) (P A)) (stv 0.5 0.8)), ((And (P A) (P B)) (stv 0.3 0.8))]')
+            metta.interpret('(pln (And (P A) (P $x)))'),
+            metta.parse_all('''
+                ((And (P A) (P A)) (stv 0.5 0.8))
+                ((And (P A) (P B)) (stv 0.3 0.8))
+            '''))
 
 
 init_logger()
