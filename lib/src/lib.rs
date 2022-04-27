@@ -7,3 +7,10 @@ pub mod space;
 pub mod metta;
 
 pub use atom::*;
+
+use ctor::ctor;
+
+#[ctor]
+fn on_load() {
+    common::init_logger(false);
+}
