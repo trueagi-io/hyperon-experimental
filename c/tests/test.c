@@ -18,8 +18,6 @@ static Suite * capi_suite(void (*init_test)(TCase* test_case)) {
 }
 
 int test_main(void (*init_test)(TCase* test_case)) {
-	init_logger();
-
 	int number_failed;
     Suite *s;
     SRunner *sr;

@@ -352,13 +352,8 @@ impl<T> Debug for AlternativeInterpretationsPlan<T> {
 mod tests {
     use super::*;
     
-    fn init_logger() {
-        let _ = env_logger::builder().is_test(true).try_init();
-    }
-
     #[test]
     fn test_match_all() {
-        init_logger();
         let mut space = GroundingSpace::new();
         space.add(expr!("=", ("color"), "blue"));
         space.add(expr!("=", ("color"), "red"));
@@ -371,7 +366,6 @@ mod tests {
 
     #[test]
     fn test_frog_reasoning() {
-        init_logger();
         let mut space = GroundingSpace::new();
         space.add(expr!("=", ("and", "True", "True"), "True"));
         space.add(expr!("=", ("if", "True", then, else), then));
@@ -390,7 +384,6 @@ mod tests {
 
     #[test]
     fn test_variable_keeps_value_in_different_sub_expressions() {
-        init_logger();
         let mut space = GroundingSpace::new();
         space.add(expr!("=", ("eq", x, x), "True"));
         space.add(expr!("=", ("plus", "Z", y), y));

@@ -116,6 +116,5 @@ class MinecraftTest(unittest.TestCase):
         # (, (get iron-pickaxe) (find diamond-ore)
         #    (do-mine diamond diamond-ore iron-pickaxe))
 
-init_logger()
 if __name__ == "__main__":
     unittest.main()

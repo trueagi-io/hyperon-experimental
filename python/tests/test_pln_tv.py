@@ -85,6 +85,5 @@ class PLNTVTest(unittest.TestCase):
             '''))
 
 
-init_logger()
 if __name__ == "__main__":
     unittest.main()

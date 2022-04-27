@@ -209,6 +209,5 @@ class MinelogyTest(unittest.TestCase):
         self.assertEqual(repr(output[0]), '(list ((CEntityT stick) 2) ((CEntityV planks $_) 3))')
 
 
-init_logger()
 if __name__ == "__main__":
     unittest.main()

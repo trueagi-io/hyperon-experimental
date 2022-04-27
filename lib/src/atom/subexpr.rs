@@ -203,10 +203,6 @@ pub fn split_expr(expr: &Atom) -> Option<(&Atom, std::slice::Iter<Atom>)> {
 mod tests {
     use super::*;
 
-    fn init_logger() {
-        let _ = env_logger::builder().is_test(true).try_init();
-    }
-
     #[test]
     fn bottom_up_depth_walk() {
         let expr = expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3"));
@@ -263,7 +259,6 @@ mod tests {
 
     #[test]
     fn string_formatting() {
-        init_logger();
         let expr = expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3"));
         let mut iter = SubexprStream::from_expr(expr, TOP_DOWN_DEPTH_WALK);
 

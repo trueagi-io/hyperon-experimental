@@ -500,6 +500,5 @@ class Setter:
         self.var.get_object().value = self.val.get_object().value
 
 
-init_logger()
 if __name__ == "__main__":
     unittest.main()
