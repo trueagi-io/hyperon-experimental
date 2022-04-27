@@ -92,7 +92,8 @@ impl GroundingSpace {
                     |acc, pattern| {
                         if acc.is_empty() {
                             acc
-                        } else { let res = self.query(pattern);
+                        } else {
+                            let res = self.query(pattern);
                             Bindings::product(acc, res)
                         }
                     })

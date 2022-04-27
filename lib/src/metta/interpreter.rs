@@ -37,6 +37,8 @@ pub fn interpret(space: GroundingSpace, expr: &Atom) -> Result<Vec<Atom>, String
     }
 }
 
+// TODO: ListMap is not effective but we cannot use HashMap here without
+// requiring hash functions for the grounded atoms.
 struct InterpreterCache(ListMap<Atom, InterpreterResult>);
 
 impl InterpreterCache {
