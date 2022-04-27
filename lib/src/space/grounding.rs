@@ -4,25 +4,61 @@ use crate::atom::matcher::{Bindings, Unifications, WithMatch};
 use crate::atom::subexpr::split_expr;
 
 use std::fmt::{Display, Debug};
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref};
 
 // Grounding space
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum SpaceEvent {
+    Add(Atom),
+    Remove(Atom),
+    Replace(Atom, Atom),
+}
+
+pub trait SpaceObserver {
+    fn notify(&mut self, event: &SpaceEvent);
+}
 
 // TODO: Clone is required by C API
 #[derive(Clone)]
 pub struct GroundingSpace {
     content: Rc<RefCell<Vec<Atom>>>,
+    observers: Rc<RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>>,
 }
 
 impl GroundingSpace {
 
     pub fn new() -> Self {
-        Self{ content: Rc::new(RefCell::new(Vec::new())) }
+        Self{
+            content: Rc::new(RefCell::new(Vec::new())),
+            observers: Rc::new(RefCell::new(Vec::new())),
+        }
     }
-    
+
+    pub fn register_observer<T>(&mut self, observer: Rc<RefCell<T>>)
+        where T: SpaceObserver + 'static
+    {
+        self.observers.borrow_mut().push(Rc::downgrade(&observer) as Weak<RefCell<dyn SpaceObserver>>);
+    }
+
+    fn notify(&self, event: &SpaceEvent) {
+        let mut cleanup = false;
+        for observer in self.observers.borrow_mut().iter() {
+            if let Some(observer) = observer.upgrade() {
+                observer.borrow_mut().notify(event);
+            } else {
+                cleanup = true;
+            }
+        }
+        if cleanup {
+            self.observers.borrow_mut().retain(|w| w.strong_count() > 0);
+        }
+    }
+
     pub fn add(&mut self, atom: Atom) {
-        self.content.borrow_mut().push(atom)
+        self.content.borrow_mut().push(atom.clone());
+        self.notify(&SpaceEvent::Add(atom));
     }
 
     pub fn remove(&mut self, atom: &Atom) -> bool {
@@ -30,6 +66,7 @@ impl GroundingSpace {
         match position {
             Some(position) => {
                 self.content.borrow_mut().remove(position);
+                self.notify(&SpaceEvent::Remove(atom.clone()));
                 true
             },
             None => false, 
@@ -40,7 +77,8 @@ impl GroundingSpace {
         let position = self.borrow_vec().iter().position(|other| other == from);
         match position {
             Some(position) => {
-                self.content.borrow_mut().as_mut_slice()[position] = to;
+                self.content.borrow_mut().as_mut_slice()[position] = to.clone();
+                self.notify(&SpaceEvent::Replace(from.clone(), to));
                 true
             },
             None => false, 
@@ -145,49 +183,95 @@ impl Display for GroundingSpace {
 mod test {
     use super::*;
 
+    struct SpaceEventCollector {
+        events: Vec<SpaceEvent>,
+    }
+
+    impl SpaceEventCollector {
+        fn new() -> Self {
+            Self{ events: Vec::new() }
+        }
+    }
+
+    impl SpaceObserver for SpaceEventCollector {
+        fn notify(&mut self, event: &SpaceEvent) {
+            self.events.push(event.clone());
+        }
+    }
+
     #[test]
     fn add_atom() {
         let mut space = GroundingSpace::new();
+        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
+        space.register_observer(Rc::clone(&observer));
+
         space.add(expr!("a"));
         space.add(expr!("b"));
         space.add(expr!("c"));
+
         assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("b"), expr!("c")]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(Atom::sym("a")),
+            SpaceEvent::Add(Atom::sym("b")), SpaceEvent::Add(Atom::sym("c"))]);
     }
 
     #[test]
     fn remove_atom() {
         let mut space = GroundingSpace::new();
+        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
+        space.register_observer(Rc::clone(&observer));
+
         space.add(expr!("a"));
         space.add(expr!("b"));
         space.add(expr!("c"));
         assert_eq!(space.remove(&expr!("b")), true);
+
         assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("c")]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(Atom::sym("a")),
+            SpaceEvent::Add(Atom::sym("b")), SpaceEvent::Add(Atom::sym("c")),
+            SpaceEvent::Remove(Atom::sym("b"))]);
     }
 
     #[test]
     fn remove_atom_not_found() {
         let mut space = GroundingSpace::new();
+        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
+        space.register_observer(Rc::clone(&observer));
+
         space.add(expr!("a"));
         assert_eq!(space.remove(&expr!("b")), false);
+
         assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(Atom::sym("a"))]);
     }
 
     #[test]
     fn replace_atom() {
         let mut space = GroundingSpace::new();
+        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
+        space.register_observer(Rc::clone(&observer));
+
         space.add(expr!("a"));
         space.add(expr!("b"));
         space.add(expr!("c"));
         assert_eq!(space.replace(&expr!("b"), expr!("d")), true);
+
         assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("d"), expr!("c")]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(Atom::sym("a")),
+            SpaceEvent::Add(Atom::sym("b")), SpaceEvent::Add(Atom::sym("c")),
+            SpaceEvent::Replace(Atom::sym("b"), Atom::sym("d"))]);
     }
 
     #[test]
     fn replace_atom_not_found() {
         let mut space = GroundingSpace::new();
+        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
+        space.register_observer(Rc::clone(&observer));
+
         space.add(expr!("a"));
         assert_eq!(space.replace(&expr!("b"), expr!("d")), false);
+
         assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(Atom::sym("a"))]);
     }
 
     #[test]
@@ -284,4 +368,18 @@ mod test {
         assert_eq!(result, vec![bind!{h: expr!("Socrates"), t: expr!("Nil")}]);
     }
 
+    #[test]
+    fn cleanup_observer() {
+        let mut space = GroundingSpace::new();
+        {
+            let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
+            space.register_observer(Rc::clone(&observer));
+            assert_eq!(space.observers.borrow().len(), 1);
+        }
+
+        space.add(expr!("a"));
+
+        assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
+        assert_eq!(space.observers.borrow().len(), 0);
+    }
 }
