@@ -367,4 +367,18 @@ mod test {
         assert_eq!(result, vec![bind!{h: expr!("Socrates"), t: expr!("Nil")}]);
     }
 
+    #[test]
+    fn cleanup_observer() {
+        let mut space = GroundingSpace::new();
+        {
+            let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
+            space.register_observer(Rc::clone(&observer));
+            assert_eq!(space.observers.borrow().len(), 1);
+        }
+
+        space.add(expr!("a"));
+
+        assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
+        assert_eq!(space.observers.borrow().len(), 0);
+    }
 }

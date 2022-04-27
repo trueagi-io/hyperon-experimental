@@ -69,12 +69,16 @@ impl InterpreterCache {
     fn insert(&mut self, key: Atom, value: InterpreterResult) {
         self.0.insert(key, value)
     }
+
+    fn reset(&mut self) {
+        self.0.clear();
+    }
 }
 
 impl SpaceObserver for InterpreterCache {
     fn notify(&mut self, _event: &SpaceEvent) {
         // TODO: implement more specific cache cleanup for each event
-        self.0.clear();
+        self.reset();
     }
 }
 
@@ -106,6 +110,15 @@ fn is_grounded(expr: &ExpressionAtom) -> bool {
     matches!(expr.children().get(0), Some(Atom::Grounded(_)))
 }
 
+fn has_grounded_sub_expr(expr: &Atom) -> bool {
+    return SubexprStream::from_expr(expr.clone(), TOP_DOWN_DEPTH_WALK)
+        .any(|sub| if let Atom::Expression(sub) = sub {
+            is_grounded(&sub)
+        } else {
+            panic!("Expression is expected");
+        });
+}
+
 fn format_bindings(bindings: &Bindings) -> String {
     if bindings.is_empty() {
         "".into()
@@ -129,11 +142,17 @@ fn interpret_op(context: InterpreterContextRef, atom: Atom, bindings: Bindings) 
         return_cached_result_plan(result)
     } else {
         if let Atom::Expression(_) = input.0 {
-            StepResult::execute(SequencePlan::new(
-                OrPlan::new(interpret_expression_plan(context.clone(), input.clone()),
-                    StepResult::ret(vec![input.clone()])),
-                save_result_in_cache_plan(context, input.0)
-            ))
+            if !has_grounded_sub_expr(&input.0) {
+                StepResult::execute(SequencePlan::new(
+                    OrPlan::new(interpret_expression_plan(context.clone(), input.clone()),
+                        StepResult::ret(vec![input.clone()])),
+                    save_result_in_cache_plan(context, input.0)
+                ))
+            } else {
+                StepResult::execute(OrPlan::new(
+                        interpret_expression_plan(context.clone(), input.clone()),
+                        StepResult::ret(vec![input.clone()])))
+            }
         } else {
             StepResult::ret(vec![input])
         }
@@ -487,7 +506,6 @@ mod tests {
         space.add(expr!("=", ("eq", x, x), "True"));
         space.add(expr!("=", ("plus", "Z", y), y));
         space.add(expr!("=", ("plus", ("S", k), y), ("S", ("plus", k, y))));
-        let space = space;
 
         assert_eq!(interpret(space.clone(), &expr!("eq", ("plus", "Z", n), n)),
             Ok(vec![expr!("True")]));
