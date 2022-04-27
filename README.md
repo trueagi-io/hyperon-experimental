@@ -96,6 +96,6 @@ rustup update stable
 ## Other issues
 
 Docker image can be used to run reproducible environment. See instructions
-inside [./.github/Dockerfile](Dockerfile). If docker image doesn't work please
+inside [Dockerfile](./.github/Dockerfile). If docker image doesn't work please
 raise the
-[https://github.com/trueagi-io/hyperon-experimental/issues](issue).
+[issue](https://github.com/trueagi-io/hyperon-experimental/issues).
