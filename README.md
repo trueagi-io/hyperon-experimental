@@ -31,7 +31,7 @@ RUST_LOG=hyperon=debug cargo test
 Prerequisites:
 ```
 cargo install cbindgen
-python -m pip install conan
+python -m pip install conan==1.47
 python -m pip install -e ./python[dev]
 ```
 
@@ -41,10 +41,6 @@ mkdir -p build
 cd build
 cmake ..
 ```
-
-If `Conan` claims it cannot find out the version of the C compiler you can
-workaround it by adding `compiler=` and `compiler.version=` into
-`.conan/profiles/default`.
 
 Build and run tests:
 ```
@@ -65,3 +61,41 @@ In order to use clangd server generate compile commands using cmake var:
 ```
 cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=Y ..
 ```
+
+# Troubleshooting
+
+## Conan claims it cannot find out the version of the C compiler
+
+If you see the following `cmake` output:
+```
+ERROR: Not able to automatically detect '/usr/bin/cc' version
+ERROR: Unable to find a working compiler
+WARN: Remotes registry file missing, creating default one in /root/.conan/remotes.json
+ERROR: libcheck/0.15.2: 'settings.compiler' value not defined
+```
+Try to create the default Canon profile manually:
+```
+conan profile new --detect default
+```
+If it doesn't help then try manually add `compiler`, `compiler.version` and
+`compiler.libcxx` values into default Conan profile
+(`.conan/profiles/default`). For example:
+```
+conan profile update settings.compiler=gcc default
+conan profile update settings.compiler.version=7 default
+conan profile update settings.compiler.libcxx=libstdc++ default
+```
+
+## Rust compiler shows errors
+
+Please ensure you are using the latest stable version:
+```
+rustup update stable
+```
+
+## Other issues
+
+Docker image can be used to run reproducible environment. See instructions
+inside [./.github/Dockerfile](Dockerfile). If docker image doesn't work please
+raise the
+[https://github.com/trueagi-io/hyperon-experimental/issues](issue).
