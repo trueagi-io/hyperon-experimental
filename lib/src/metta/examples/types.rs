@@ -3,14 +3,8 @@ use crate::common::*;
 use crate::metta::interpreter::*;
 use crate::space::grounding::GroundingSpace;
 
-fn init_logger() {
-    let _ = env_logger::builder().is_test(true).try_init();
-}
-
 #[test]
 fn test_types_in_metta() {
-    init_logger();
-
     let mut space = GroundingSpace::new();
     space.add(expr!("=", ("check", (":", n, "Int")), ({IS_INT}, n)));
     space.add(expr!("=", ("check", (":", n, "Nat")), ({AND}, ("check", (":", n, "Int")), ({GT}, n, {0}))));

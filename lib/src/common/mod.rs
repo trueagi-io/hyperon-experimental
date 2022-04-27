@@ -8,6 +8,10 @@ use crate::*;
 use std::cell::RefCell;
 use std::fmt::Debug;
 
+pub fn init_logger(is_test: bool) {
+   let _ = env_logger::builder().is_test(is_test).try_init();
+}
+
 // Operation implements stateless operations as GroundedAtom.
 // Each operation has the only instance which is identified by unique name.
 // The instance has 'static lifetime and not copied when cloned.

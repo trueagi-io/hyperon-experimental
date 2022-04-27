@@ -84,13 +84,8 @@ mod tests {
     // Aliases to have a shorter notation
     fn G<T: GroundedValue>(value: T) -> Atom { Atom::value(value) }
 
-    fn init_logger() {
-        let _ = env_logger::builder().is_test(true).try_init();
-    }
-
     #[test]
     fn test_sum_ints() {
-        init_logger();
         let space = GroundingSpace::new();
         // (+ 3 5)
         let expr = expr!({SUM}, {3}, {5});
@@ -100,7 +95,6 @@ mod tests {
 
     #[test]
     fn test_sum_ints_recursively() {
-        init_logger();
         let space = GroundingSpace::new();
         // (+ 4 (+ 3 5))
         let expr = expr!({SUM}, {4}, ({SUM}, {3}, {5}));
@@ -110,7 +104,6 @@ mod tests {
 
     #[test]
     fn test_match_factorial() {
-        init_logger();
         let mut space = GroundingSpace::new();
         // (= (fac 0) 1)
         space.add(expr!("=", ("fac", {0}), {1}));
@@ -123,7 +116,6 @@ mod tests {
 
     #[test]
     fn test_factorial() {
-        init_logger();
         let mut space = GroundingSpace::new();
         // NOTE: multiple matches are treated non-deterministically.
         // ATM, we don't have means to describe mutually exclusive ordered lists

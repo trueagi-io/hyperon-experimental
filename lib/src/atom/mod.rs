@@ -362,10 +362,6 @@ mod test {
     fn V(name: &str) -> Atom { Atom::var(name) }
     fn G<T: GroundedValue>(gnd: T) -> Atom { Atom::value(gnd) }
 
-    fn init_logger() {
-        let _ = env_logger::builder().is_test(true).try_init();
-    }
-
     #[test]
     fn test_expr_symbol() {
         assert_eq!(expr!("="), S("="));
@@ -487,7 +483,6 @@ mod test {
 
     #[test]
     fn test_custom_matching() {
-        init_logger();
         let mut dict = TestDict::new();
         dict.put(expr!("x"), expr!({2}, {5}));
         dict.put(expr!("y"), expr!({5}));

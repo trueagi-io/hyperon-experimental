@@ -208,10 +208,6 @@ mod tests {
     use crate::metta::metta_space;
     use crate::metta::metta_atom as atom;
     
-    fn init_logger() {
-        let _ = env_logger::builder().is_test(true).try_init();
-    }
-
     fn grammar_space() -> GroundingSpace {
         let mut space = GroundingSpace::new();
         space.add(expr!(":", "answer", ("->", "Sent", "Sent")));
@@ -233,7 +229,6 @@ mod tests {
 
     #[test]
     fn test_check_type() {
-        init_logger();
         let mut space = GroundingSpace::new();
         space.add(expr!(":", "do", "Verb"));
         space.add(expr!(":", "do", "Aux"));
@@ -272,7 +267,6 @@ mod tests {
 
     #[test]
     fn nested_type() {
-        init_logger();
         let space = metta_space("
             (: a A)
             (< A B)
@@ -285,7 +279,6 @@ mod tests {
 
     #[test]
     fn nested_loop_type() {
-        init_logger();
         let space = metta_space("
             (< B A)
             (: a A)
@@ -298,7 +291,6 @@ mod tests {
 
     #[test]
     fn test_validate_atom() {
-        init_logger();
         let space = grammar_space();
         let expr = expr!("answer", ("do", "you", "like", ("a", "pizza")));
 
@@ -313,7 +305,6 @@ mod tests {
 
     #[test]
     fn simple_types() {
-        init_logger();
         let space = metta_space("
             (: blue Color)
             (: balloon Object)
@@ -325,7 +316,6 @@ mod tests {
 
     #[test]
     fn arrow_type() {
-        init_logger();
         let space = metta_space("
             (: a (-> B A))
         ");
@@ -335,7 +325,6 @@ mod tests {
 
     #[test]
     fn arrow_allows_specific_type() {
-        init_logger();
         let space = metta_space("
             (: a (-> B A))
             (: b B)
@@ -348,7 +337,6 @@ mod tests {
 
     #[test]
     fn validate_basic_expr() {
-        init_logger();
         let space = GroundingSpace::new();
         assert!(validate_atom(&space, &expr!({5})));
         assert!(validate_atom(&space, &expr!("+", {3}, {5})));
@@ -357,7 +345,6 @@ mod tests {
 
     #[test]
     fn simple_dep_types() {
-        init_logger();
         let space = metta_space("
             (: = (-> $t $t Prop))
             (: Entity Prop)
@@ -403,7 +390,6 @@ mod tests {
 
     #[test]
     fn dep_types_prop() {
-        init_logger();
         let space = metta_space("
             (: Sam Entity)
             (: Frog (-> Entity Prop))
@@ -420,7 +406,6 @@ mod tests {
 
     #[test]
     fn arrow_allows_undefined_type() {
-        init_logger();
         let space = metta_space("
             (: a (-> B A))
         ");
@@ -430,7 +415,6 @@ mod tests {
 
     #[test]
     fn arrow_has_type_of_returned_value() {
-        init_logger();
         let space = metta_space("
             (: a (-> B A))
             (: b B)
@@ -441,7 +425,6 @@ mod tests {
 
     #[test]
     fn nested_arrow_type() {
-        init_logger();
         let space = metta_space("
             (: a (-> B A))
             (: h (-> (-> B A) C))
@@ -452,7 +435,6 @@ mod tests {
 
     #[test]
     fn nested_return_type() {
-        init_logger();
         let space = metta_space("
             (: a (-> B A))
             (: b B)
@@ -464,7 +446,6 @@ mod tests {
 
     #[test]
     fn validate_non_functional_expression() {
-        init_logger();
         let space = metta_space("
             (: a A)
             (: b B)
@@ -475,7 +456,6 @@ mod tests {
 
     #[test]
     fn check_type_non_functional_expression() {
-        init_logger();
         let space = metta_space("
             (: a (-> C D))
             (: a A)

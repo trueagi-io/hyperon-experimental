@@ -7,6 +7,6 @@ pub mod metta;
 
 #[no_mangle]
 pub extern "C" fn init_logger() {
-   let _ = env_logger::builder().is_test(true).try_init();
+   hyperon::common::init_logger(false);
 }
 
