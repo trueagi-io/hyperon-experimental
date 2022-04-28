@@ -7,7 +7,7 @@ programming language. This project replaces the [previous
 prototype](https://github.com/trueagi-io/hyperon/tree/master).
 See [Python examples](./python/tests) to become familiar with Hyperon features.
 
-If you find troubles with the installation, see the `Troubleshooting` section below.
+If you find troubles with the installation, see the "Troubleshooting" section below.
 
 # Prerequisites
 
@@ -55,11 +55,11 @@ To run release build use following instead of `cmake ..`:
 cmake -DCMAKE_BUILD_TYPE=Release ..
 ```
 
-# Setup IDE
+# Setup for IDE
 
 Different IDEs may require different tweaks to support the languages
-of the codebase. Below one can find the language servers which we use 
-for development:
+used in the codebase. The language servers which we use 
+for development are:
 - [Rust Language Server](https://github.com/rust-lang/rls#setup);
 - [clangd](https://clangd.llvm.org/installation), generate compile 
   commands for the `clangd` using `cmake` variable:
@@ -102,7 +102,8 @@ rustup update stable
 
 ## Other issues
 
-Docker image can be used to run reproducible environment. See instructions
-inside [Dockerfile](./.github/Dockerfile). If docker image doesn't work please
-raise the
+A docker image can be used to run a reproducible environment. See instructions
+inside the [Dockerfile](./.github/Dockerfile). 
+If the docker image doesn't work, please
+raise an
 [issue](https://github.com/trueagi-io/hyperon-experimental/issues).
