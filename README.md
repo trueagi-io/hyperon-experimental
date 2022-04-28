@@ -2,10 +2,12 @@
 
 # Overview
 
-This is reimplementation of the C++ Hyperon prototype from scratch in a Rust
+This is a reimplementation from scratch of the C++ Hyperon prototype in the Rust
 programming language. This project replaces the [previous
 prototype](https://github.com/trueagi-io/hyperon/tree/master).
 See [Python examples](./python/tests) to become familiar with Hyperon features.
+
+If you find troubles with the installation, see the `Troubleshooting` section below.
 
 # Prerequisites
 
@@ -28,7 +30,7 @@ RUST_LOG=hyperon=debug cargo test
 
 # C and Python API
 
-Prerequisites:
+Prerequisites (must be executed in the top directory of the repository):
 ```
 cargo install cbindgen
 python -m pip install conan==1.47
@@ -73,13 +75,14 @@ ERROR: Unable to find a working compiler
 WARN: Remotes registry file missing, creating default one in /root/.conan/remotes.json
 ERROR: libcheck/0.15.2: 'settings.compiler' value not defined
 ```
-Try to create the default Canon profile manually:
+Try to create the default Conan profile manually:
 ```
 conan profile new --detect default
 ```
-If it doesn't help then try manually add `compiler`, `compiler.version` and
-`compiler.libcxx` values into default Conan profile
-(`.conan/profiles/default`). For example:
+If it doesn't help, then try to manually add `compiler`, `compiler.version` and
+`compiler.libcxx` values in the default Conan profile
+(`~/.conan/profiles/default`). 
+For example:
 ```
 conan profile update settings.compiler=gcc default
 conan profile update settings.compiler.version=7 default
