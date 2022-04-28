@@ -55,7 +55,7 @@ To run release build use following instead of `cmake ..`:
 cmake -DCMAKE_BUILD_TYPE=Release ..
 ```
 
-# Setup for IDE
+# Language support for IDEs [optional]
 
 Different IDEs may require different tweaks to support the languages
 used in the codebase. The language servers which we use 
