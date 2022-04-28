@@ -57,12 +57,16 @@ cmake -DCMAKE_BUILD_TYPE=Release ..
 
 # Setup IDE
 
-See [Rust Language Server](https://github.com/rust-lang/rls) page.
-
-In order to use clangd server generate compile commands using cmake var:
-```
-cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=Y ..
-```
+Different IDEs may require different tweaks to support the languages
+of the codebase. Below one can find the language servers which we use 
+for development:
+- [Rust Language Server](https://github.com/rust-lang/rls#setup);
+- [clangd](https://clangd.llvm.org/installation), generate compile 
+  commands for the `clangd` using `cmake` variable:
+  ```
+  cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=Y ..
+  ```
+- [Python LSP server](https://github.com/python-lsp/python-lsp-server#installation).
 
 # Troubleshooting
 
