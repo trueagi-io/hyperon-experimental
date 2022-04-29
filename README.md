@@ -53,6 +53,15 @@ To run release build use following instead of `cmake ..`:
 cmake -DCMAKE_BUILD_TYPE=Release ..
 ```
 
+# Running Python examples from command line
+
+In order to run Python examples you need adding Python libraries into the `PYTHONPATH`
+after compilation:
+```
+cd build
+export PYTHONPATH=$PYTHONPATH:`pwd`/python:`pwd`/../python
+```
+
 # Setup IDE
 
 Different IDEs may require different tweaks to support the languages
