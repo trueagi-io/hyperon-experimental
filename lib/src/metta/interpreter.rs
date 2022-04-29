@@ -365,7 +365,7 @@ fn match_plan(context: InterpreterContextRef, expr: Atom, bindings: Bindings) ->
 
 fn match_op(context: InterpreterContextRef, expr: Atom, prev_bindings: Bindings) -> StepResult<InterpreterResult> {
     log::debug!("match_op: {}", expr);
-    let var_x = VariableAtom::from("X");
+    let var_x = VariableAtom::from("%X%");
     // TODO: unique variable?
     let atom_x = Atom::Variable(var_x.clone());
     let mut local_bindings = context.space.query(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
