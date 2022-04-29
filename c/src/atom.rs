@@ -41,7 +41,7 @@ pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
     // cstr_as_str() keeps pointer ownership, but Atom::sym() copies resulting
     // String into Atom::Symbol::symbol field. atom_to_ptr() moves value to the
     // heap and gives ownership to the caller.
-    atom_to_ptr(Atom::Symbol(cstr_as_str(name).into()))
+    atom_to_ptr(Atom::sym(cstr_as_str(name)))
 }
 
 #[no_mangle]
@@ -51,7 +51,7 @@ pub unsafe extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) ->
         let c_atom = Box::from_raw(*atom);
         c_atom.atom
     }).collect();
-    atom_to_ptr(Atom::Expression(children.into()))
+    atom_to_ptr(Atom::expr(children))
 }
 
 #[no_mangle]

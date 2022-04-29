@@ -18,11 +18,11 @@ pub enum AtomType {
 }
 
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
-    Atom::expr(&[has_type_symbol(), atom.clone(), typ.clone()])
+    Atom::expr(vec![has_type_symbol(), atom.clone(), typ.clone()])
 }
 
 fn isa_query(sub_type: &Atom, super_type: &Atom) -> Atom {
-    Atom::expr(&[sub_type_symbol(), sub_type.clone(), super_type.clone()])
+    Atom::expr(vec![sub_type_symbol(), sub_type.clone(), super_type.clone()])
 }
 
 fn query_has_type(space: &GroundingSpace, sub_type: &Atom, super_type: &Atom) -> Vec<Bindings> {
@@ -118,7 +118,7 @@ fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
         },
         Atom::Expression(expr) => {
             // tuple type
-            let mut types = vec![Atom::expr(&[])];
+            let mut types = vec![Atom::expr([])];
             for (i, child) in expr.children().iter().enumerate() {
                 let child_types = get_reducted_types(space, child);
                 let child_types = child_types.iter()
@@ -129,7 +129,7 @@ fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
                             child_types.clone().map(|typ| {
                                 let mut children = expr.children().clone();
                                 children.push(typ.clone());
-                                Atom::expr(children.as_slice())
+                                Atom::expr(children)
                             }).collect()
                         },
                         _ => vec![prev],

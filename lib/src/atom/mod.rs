@@ -2,17 +2,17 @@
 
 #[macro_export]
 macro_rules! expr {
-    () => { Atom::expr(&[]) };
+    () => { Atom::expr(vec![]) };
     ($x:ident) => { Atom::var(stringify!($x)) };
     ($x:literal) => { sym!($x) };
     ({$x:tt}) => { (&&Wrap($x)).to_atom() };
-    (($($x:tt),*)) => { Atom::expr(&[ $( expr!($x) , )* ]) };
-    ($($x:tt),*) => { Atom::expr(&[ $( expr!($x) , )* ]) };
+    (($($x:tt),*)) => { Atom::expr(vec![ $( expr!($x) , )* ]) };
+    ($($x:tt),*) => { Atom::expr(vec![ $( expr!($x) , )* ]) };
 }
 
 #[macro_export]
 macro_rules! sym {
-    ($x:literal) => { Atom::Symbol($x.into()) };
+    ($x:literal) => { Atom::sym($x) };
 }
 
 pub mod matcher;
@@ -29,6 +29,10 @@ pub struct SymbolAtom {
 }
 
 impl SymbolAtom {
+    fn new(name: String) -> Self {
+        Self{ name }
+    }
+
     pub fn name(&self) -> &str {
         self.name.as_ref()
     }
@@ -40,18 +44,6 @@ impl Display for SymbolAtom {
     }
 }
 
-impl From<String> for SymbolAtom {
-    fn from(name: String) -> Self {
-        Self{ name }
-    }
-}
-
-impl From<&'_ str> for SymbolAtom {
-    fn from(name: &'_ str) -> Self {
-        Self{ name: name.to_string() }
-    }
-}
-
 // Expression atom
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,6 +52,10 @@ pub struct ExpressionAtom {
 }
 
 impl ExpressionAtom {
+    fn new(children: Vec<Atom>) -> Self {
+        Self{ children }
+    }
+
     pub fn is_plain(&self) -> bool {
         self.children.iter().all(|atom| ! matches!(atom, Atom::Expression(_)))
     }
@@ -70,18 +66,6 @@ impl ExpressionAtom {
 
     pub fn children_mut(&mut self) -> &mut Vec<Atom> {
         &mut self.children
-    }
-}
-
-impl From<Vec<Atom>> for ExpressionAtom {
-    fn from(children: Vec<Atom>) -> Self {
-        ExpressionAtom{ children }
-    }
-}
-
-impl From<&[Atom]> for ExpressionAtom {
-    fn from(children: &[Atom]) -> Self {
-        ExpressionAtom::from(children.to_vec())
     }
 }
 
@@ -306,8 +290,12 @@ pub enum Atom {
 }
 
 impl Atom {
-    pub fn expr(children: &[Atom]) -> Self {
-        Self::Expression(ExpressionAtom::from(children))
+    pub fn sym<T: Into<String>>(name: T) -> Self {
+        Self::Symbol(SymbolAtom::new(name.into()))
+    }
+
+    pub fn expr<T: Into<Vec<Atom>>>(children: T) -> Self {
+        Self::Expression(ExpressionAtom::new(children.into()))
     }
 
     pub fn var(name: &str) -> Self {
@@ -358,16 +346,25 @@ mod test {
     use std::collections::HashMap;
 
     // Aliases to have a shorter notation
-    fn E(children: &[Atom]) -> Atom { Atom::expr(children) }
     fn V(name: &str) -> Atom { Atom::var(name) }
     fn G<T: GroundedValue>(gnd: T) -> Atom { Atom::value(gnd) }
 
+    #[inline]
+    fn symbol(name: &'static str) -> Atom {
+        Atom::Symbol(SymbolAtom{ name: name.to_string() })
+    }
+
+    #[inline]
+    fn expression(children: Vec<Atom>) -> Atom {
+        Atom::Expression(ExpressionAtom{ children })
+    }
+
     #[test]
     fn test_expr_symbol() {
-        assert_eq!(expr!("="), sym!("="));
-        assert_eq!(expr!("1"), sym!("1"));
-        assert_eq!(expr!("*"), sym!("*"));
-        assert_eq!(expr!("foo"), sym!("foo"));
+        assert_eq!(expr!("="), symbol("="));
+        assert_eq!(expr!("1"), symbol("1"));
+        assert_eq!(expr!("*"), symbol("*"));
+        assert_eq!(expr!("foo"), symbol("foo"));
     }
 
     #[test]
@@ -379,10 +376,12 @@ mod test {
     #[test]
     fn test_expr_expression() {
         assert_eq!(expr!("=", ("fact", n), ("*", n, ("-", n, "1"))), 
-            E(&[sym!("="), E(&[sym!("fact"), V("n")]),
-            E(&[ sym!("*"), V("n"), E(&[ sym!("-"), V("n"), sym!("1") ]) ]) ]));
-        assert_eq!(expr!("=", n, {[1, 2, 3]}), E(&[sym!("="), V("n"), G([1, 2, 3])]));
-        assert_eq!(expr!("=", {6}, ("fact", n)), E(&[sym!("="), G(6), E(&[sym!("fact"), V("n")])]));
+            expression(vec![symbol("="), expression(vec![symbol("fact"), V("n")]),
+            expression(vec![symbol("*"), V("n"), expression(vec![symbol("-"), V("n"), symbol("1") ]) ]) ]));
+        assert_eq!(expr!("=", n, {[1, 2, 3]}),
+            expression(vec![symbol("="), V("n"), G([1, 2, 3])]));
+        assert_eq!(expr!("=", {6}, ("fact", n)),
+            expression(vec![symbol("="), G(6), expression(vec![symbol("fact"), V("n")])]));
     }
 
     #[test]
@@ -465,7 +464,7 @@ mod test {
         if let (Some(this), Some(other)) = (this.downcast_ref::<TestDict>(), other.as_gnd::<TestDict>()) {
             other.0.iter().map(|(ko, vo)| {
                 this.0.iter().map(|(k, v)| {
-                        Atom::expr(&[k.clone(), v.clone()]).do_match(&Atom::expr(&[ko.clone(), vo.clone()]))
+                        Atom::expr(vec![k.clone(), v.clone()]).do_match(&Atom::expr(vec![ko.clone(), vo.clone()]))
                 }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
                     Box::new(acc.chain(i))
                 })

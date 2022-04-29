@@ -306,8 +306,10 @@ pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
             }
         },
         Atom::Expression(ExpressionAtom{ children }) => {
-            let children = children.iter().map(|a| apply_bindings_to_atom(a, bindings)).collect::<Vec<Atom>>();
-            Atom::expr(&children[..])
+            let children = children.iter()
+                .map(|a| apply_bindings_to_atom(a, bindings))
+                .collect::<Vec<Atom>>();
+            Atom::expr(children)
         },
     }
 }

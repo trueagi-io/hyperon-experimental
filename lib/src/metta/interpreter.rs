@@ -371,7 +371,8 @@ fn match_op(context: InterpreterContextRef, expr: Atom, prev_bindings: Bindings)
     let var_x = VariableAtom::from("%X%");
     // TODO: unique variable?
     let atom_x = Atom::Variable(var_x.clone());
-    let mut local_bindings = context.space.query(&Atom::expr(&[equal_symbol(), expr.clone(), atom_x]));
+    let query = Atom::expr(vec![equal_symbol(), expr.clone(), atom_x]);
+    let mut local_bindings = context.space.query(&query);
     let results: Vec<(Atom, Bindings)> = local_bindings
         .drain(0..)
         .map(|mut binding| {
