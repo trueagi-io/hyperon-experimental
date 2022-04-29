@@ -54,7 +54,7 @@ impl<'a> SExprParser<'a> {
                 '$' => {
                     self.it.next();
                     let token = next_token(&mut self.it);
-                    return Some(Atom::Variable(token.into()));
+                    return Some(Atom::var(token));
                 },
                 '(' => {
                     self.it.next();

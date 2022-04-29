@@ -87,19 +87,11 @@ pub struct VariableAtom {
     name: String,
 }
 
-impl From<String> for VariableAtom {
-    fn from(name: String) -> Self {
-        VariableAtom{ name }
-    }
-}
-
-impl From<&str> for VariableAtom {
-    fn from(name: &str) -> Self {
-        VariableAtom::from(name.to_string())
-    }
-}
-
 impl VariableAtom {
+    fn new(name: String) -> Self {
+        Self{ name }
+    }
+
     pub fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -108,6 +100,12 @@ impl VariableAtom {
 impl Display for VariableAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "${}", self.name)
+    }
+}
+
+impl From<&str> for VariableAtom {
+    fn from(name: &str) -> Self {
+        VariableAtom::new(name.to_string())
     }
 }
 
@@ -298,8 +296,8 @@ impl Atom {
         Self::Expression(ExpressionAtom::new(children.into()))
     }
 
-    pub fn var(name: &str) -> Self {
-        Self::Variable(VariableAtom::from(name))
+    pub fn var<T: Into<String>>(name: T) -> Self {
+        Self::Variable(VariableAtom::new(name.into()))
     }
 
     pub fn value<T: GroundedValue>(value: T) -> Atom {
@@ -346,7 +344,6 @@ mod test {
     use std::collections::HashMap;
 
     // Aliases to have a shorter notation
-    fn V(name: &str) -> Atom { Atom::var(name) }
     fn G<T: GroundedValue>(gnd: T) -> Atom { Atom::value(gnd) }
 
     #[inline]
@@ -359,6 +356,11 @@ mod test {
         Atom::Expression(ExpressionAtom{ children })
     }
 
+    #[inline]
+    fn variable(name: &'static str) -> Atom {
+        Atom::Variable(VariableAtom{ name: name.to_string() })
+    }
+
     #[test]
     fn test_expr_symbol() {
         assert_eq!(expr!("="), symbol("="));
@@ -369,19 +371,20 @@ mod test {
 
     #[test]
     fn test_expr_variable() {
-        assert_eq!(expr!(n), V("n"));
-        assert_eq!(expr!(self), V("self"));
+        assert_eq!(expr!(n), variable("n"));
+        assert_eq!(expr!(self), variable("self"));
     }
 
     #[test]
     fn test_expr_expression() {
         assert_eq!(expr!("=", ("fact", n), ("*", n, ("-", n, "1"))), 
-            expression(vec![symbol("="), expression(vec![symbol("fact"), V("n")]),
-            expression(vec![symbol("*"), V("n"), expression(vec![symbol("-"), V("n"), symbol("1") ]) ]) ]));
+            expression(vec![symbol("="), expression(vec![symbol("fact"), variable("n")]),
+            expression(vec![symbol("*"), variable("n"),
+            expression(vec![symbol("-"), variable("n"), symbol("1") ]) ]) ]));
         assert_eq!(expr!("=", n, {[1, 2, 3]}),
-            expression(vec![symbol("="), V("n"), G([1, 2, 3])]));
+            expression(vec![symbol("="), variable("n"), G([1, 2, 3])]));
         assert_eq!(expr!("=", {6}, ("fact", n)),
-            expression(vec![symbol("="), G(6), expression(vec![symbol("fact"), V("n")])]));
+            expression(vec![symbol("="), G(6), expression(vec![symbol("fact"), variable("n")])]));
     }
 
     #[test]

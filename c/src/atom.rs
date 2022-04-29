@@ -56,7 +56,7 @@ pub unsafe extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) ->
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_var(name: *const c_char) -> *mut atom_t {
-    atom_to_ptr(Atom::Variable(cstr_as_str(name).into()))
+    atom_to_ptr(Atom::var(cstr_as_str(name)))
 }
 
 #[no_mangle]
