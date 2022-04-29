@@ -9,6 +9,9 @@ use std::cell::{RefCell, Ref};
 
 // Grounding space
 
+#[inline]
+fn comma_symbol() -> Atom { sym!(",") }
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum SpaceEvent {
     Add(Atom),
@@ -87,7 +90,7 @@ impl GroundingSpace {
 
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
         match split_expr(pattern) {
-            Some((Atom::Symbol(sym), args)) if *sym == SymbolAtom::from(",") => {
+            Some((sym @ Atom::Symbol(_), args)) if *sym == comma_symbol() => {
                 args.fold(vec![bind!{}],
                     |acc, pattern| {
                         if acc.is_empty() {
@@ -210,8 +213,8 @@ mod test {
         space.add(expr!("c"));
 
         assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("b"), expr!("c")]);
-        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(Atom::sym("a")),
-            SpaceEvent::Add(Atom::sym("b")), SpaceEvent::Add(Atom::sym("c"))]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
+            SpaceEvent::Add(sym!("b")), SpaceEvent::Add(sym!("c"))]);
     }
 
     #[test]
@@ -226,9 +229,9 @@ mod test {
         assert_eq!(space.remove(&expr!("b")), true);
 
         assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("c")]);
-        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(Atom::sym("a")),
-            SpaceEvent::Add(Atom::sym("b")), SpaceEvent::Add(Atom::sym("c")),
-            SpaceEvent::Remove(Atom::sym("b"))]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
+            SpaceEvent::Add(sym!("b")), SpaceEvent::Add(sym!("c")),
+            SpaceEvent::Remove(sym!("b"))]);
     }
 
     #[test]
@@ -241,7 +244,7 @@ mod test {
         assert_eq!(space.remove(&expr!("b")), false);
 
         assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
-        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(Atom::sym("a"))]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a"))]);
     }
 
     #[test]
@@ -256,9 +259,9 @@ mod test {
         assert_eq!(space.replace(&expr!("b"), expr!("d")), true);
 
         assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("d"), expr!("c")]);
-        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(Atom::sym("a")),
-            SpaceEvent::Add(Atom::sym("b")), SpaceEvent::Add(Atom::sym("c")),
-            SpaceEvent::Replace(Atom::sym("b"), Atom::sym("d"))]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
+            SpaceEvent::Add(sym!("b")), SpaceEvent::Add(sym!("c")),
+            SpaceEvent::Replace(sym!("b"), sym!("d"))]);
     }
 
     #[test]
@@ -271,7 +274,7 @@ mod test {
         assert_eq!(space.replace(&expr!("b"), expr!("d")), false);
 
         assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
-        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(Atom::sym("a"))]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a"))]);
     }
 
     #[test]

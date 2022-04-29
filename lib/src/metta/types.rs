@@ -2,6 +2,15 @@ use crate::*;
 use crate::atom::matcher::{Bindings, apply_bindings_to_atom};
 use crate::space::grounding::GroundingSpace;
 
+#[inline]
+fn has_type_symbol() -> Atom { sym!(":") }
+#[inline]
+fn sub_type_symbol() -> Atom { sym!("<") }
+#[inline]
+fn undefined_symbol() -> Atom { sym!("%Undefined%") }
+#[inline]
+fn arrow_symbol() -> Atom { sym!("->") }
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum AtomType {
     Undefined,
@@ -9,11 +18,11 @@ pub enum AtomType {
 }
 
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
-    Atom::expr(&[Atom::sym(":"), atom.clone(), typ.clone()])
+    Atom::expr(&[has_type_symbol(), atom.clone(), typ.clone()])
 }
 
 fn isa_query(sub_type: &Atom, super_type: &Atom) -> Atom {
-    Atom::expr(&[Atom::sym("<"), sub_type.clone(), super_type.clone()])
+    Atom::expr(&[sub_type_symbol(), sub_type.clone(), super_type.clone()])
 }
 
 fn query_has_type(space: &GroundingSpace, sub_type: &Atom, super_type: &Atom) -> Vec<Bindings> {
@@ -60,7 +69,7 @@ fn check_types(actual: &[Vec<Atom>], expected: &[Atom], bindings: &mut Bindings)
 fn is_func(typ: &&Atom) -> bool {
     match typ {
         Atom::Expression(expr) => {
-            expr.children().first() == Some(&Atom::sym("->"))
+            expr.children().first() == Some(&arrow_symbol())
         },
         _ => false,
     }
@@ -79,7 +88,7 @@ fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
         Atom::Expression(expr) => {
             let children = expr.children().as_slice();
             match children {
-                [op,  args @ .., res] if *op == Atom::sym("->") => (args, res),
+                [op,  args @ .., res] if *op == arrow_symbol() => (args, res),
                 _ => panic!("Incorrect function type: {}", fn_typ)
             }
         },
@@ -98,13 +107,13 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     log::trace!("get_reducted_types: atom: {}", atom);
     let types = match atom {
-        Atom::Variable(_) | Atom::Grounded(_) => vec![Atom::sym("%Undefined%")],
+        Atom::Variable(_) | Atom::Grounded(_) => vec![undefined_symbol()],
         Atom::Symbol(_) => {
             let types = query_types(space, atom);
             if !types.is_empty() {
                 types
             } else {
-                vec![Atom::sym("%Undefined%")]
+                vec![undefined_symbol()]
             }
         },
         Atom::Expression(expr) => {
@@ -190,7 +199,7 @@ fn get_matched_types(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(At
 }
 
 pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
-    let undefined = Atom::sym("%Undefined%");
+    let undefined = undefined_symbol();
     let typ = match typ {
         AtomType::Undefined => &undefined,
         AtomType::Specific(atom) => atom,
@@ -233,18 +242,18 @@ mod tests {
         space.add(expr!(":", "do", "Verb"));
         space.add(expr!(":", "do", "Aux"));
 
-        let aux = AtomType::Specific(Atom::sym("Aux"));
-        let verb = AtomType::Specific(Atom::sym("Verb"));
+        let aux = AtomType::Specific(sym!("Aux"));
+        let verb = AtomType::Specific(sym!("Verb"));
 
-        let nonsense = Atom::sym("nonsense");
+        let nonsense = sym!("nonsense");
         assert!(check_type(&space, &nonsense, &AtomType::Undefined));
         assert!(check_type(&space, &nonsense, &aux));
 
-        let _do = Atom::sym("do");
+        let _do = sym!("do");
         assert!(check_type(&space, &_do, &AtomType::Undefined));
         assert!(check_type(&space, &_do, &aux));
         assert!(check_type(&space, &_do, &verb));
-        assert!(!check_type(&space, &_do, &AtomType::Specific(Atom::sym("Noun"))));
+        assert!(!check_type(&space, &_do, &AtomType::Specific(sym!("Noun"))));
 
     }
 
@@ -260,9 +269,9 @@ mod tests {
         let i_like_music = expr!("i", "like", "music");
         assert!(check_type(&space, &i_like_music, &AtomType::Undefined));
         assert!(check_type(&space, &i_like_music, &AtomType::Specific(expr!("Pron", "Verb", "Noun"))));
-        assert!(check_type(&space, &i_like_music, &AtomType::Specific(Atom::sym("Statement"))));
+        assert!(check_type(&space, &i_like_music, &AtomType::Specific(sym!("Statement"))));
 
-        assert!(check_type(&space, &expr!("do", "you", "like", "music"), &AtomType::Specific(Atom::sym("Quest"))));
+        assert!(check_type(&space, &expr!("do", "you", "like", "music"), &AtomType::Specific(sym!("Quest"))));
     }
 
     #[test]
@@ -300,7 +309,7 @@ mod tests {
     #[test]
     fn validate_symbol() {
         let space = GroundingSpace::new();
-        assert!(validate_atom(&space, &Atom::sym("a")));
+        assert!(validate_atom(&space, &sym!("a")));
     }
 
     #[test]

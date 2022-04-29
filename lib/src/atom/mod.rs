@@ -4,10 +4,15 @@
 macro_rules! expr {
     () => { Atom::expr(&[]) };
     ($x:ident) => { Atom::var(stringify!($x)) };
-    ($x:literal) => { Atom::sym($x) };
+    ($x:literal) => { sym!($x) };
     ({$x:tt}) => { (&&Wrap($x)).to_atom() };
     (($($x:tt),*)) => { Atom::expr(&[ $( expr!($x) , )* ]) };
     ($($x:tt),*) => { Atom::expr(&[ $( expr!($x) , )* ]) };
+}
+
+#[macro_export]
+macro_rules! sym {
+    ($x:literal) => { Atom::Symbol($x.into()) };
 }
 
 pub mod matcher;
@@ -23,27 +28,27 @@ pub struct SymbolAtom {
     name: String,
 }
 
-impl From<String> for SymbolAtom {
-    fn from(name: String) -> Self {
-        SymbolAtom{ name }
-    }
-}
-
-impl From<&str> for SymbolAtom {
-    fn from(name: &str) -> Self {
-        SymbolAtom::from(name.to_string())
-    }
-}
-
 impl SymbolAtom {
     pub fn name(&self) -> &str {
-        self.name.as_str()
+        self.name.as_ref()
     }
 }
 
 impl Display for SymbolAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.name)
+    }
+}
+
+impl From<String> for SymbolAtom {
+    fn from(name: String) -> Self {
+        Self{ name }
+    }
+}
+
+impl From<&'_ str> for SymbolAtom {
+    fn from(name: &'_ str) -> Self {
+        Self{ name: name.to_string() }
     }
 }
 
@@ -301,10 +306,6 @@ pub enum Atom {
 }
 
 impl Atom {
-    pub fn sym(name: &str) -> Self {
-        Self::Symbol(SymbolAtom::from(name))
-    }
-
     pub fn expr(children: &[Atom]) -> Self {
         Self::Expression(ExpressionAtom::from(children))
     }
@@ -357,17 +358,16 @@ mod test {
     use std::collections::HashMap;
 
     // Aliases to have a shorter notation
-    fn S(name: &str) -> Atom { Atom::sym(name) }
     fn E(children: &[Atom]) -> Atom { Atom::expr(children) }
     fn V(name: &str) -> Atom { Atom::var(name) }
     fn G<T: GroundedValue>(gnd: T) -> Atom { Atom::value(gnd) }
 
     #[test]
     fn test_expr_symbol() {
-        assert_eq!(expr!("="), S("="));
-        assert_eq!(expr!("1"), S("1"));
-        assert_eq!(expr!("*"), S("*"));
-        assert_eq!(expr!("foo"), S("foo"));
+        assert_eq!(expr!("="), sym!("="));
+        assert_eq!(expr!("1"), sym!("1"));
+        assert_eq!(expr!("*"), sym!("*"));
+        assert_eq!(expr!("foo"), sym!("foo"));
     }
 
     #[test]
@@ -379,10 +379,10 @@ mod test {
     #[test]
     fn test_expr_expression() {
         assert_eq!(expr!("=", ("fact", n), ("*", n, ("-", n, "1"))), 
-            E(&[S("="), E(&[S("fact"), V("n")]),
-            E(&[ S("*"), V("n"), E(&[ S("-"), V("n"), S("1") ]) ]) ]));
-        assert_eq!(expr!("=", n, {[1, 2, 3]}), E(&[S("="), V("n"), G([1, 2, 3])]));
-        assert_eq!(expr!("=", {6}, ("fact", n)), E(&[S("="), G(6), E(&[S("fact"), V("n")])]));
+            E(&[sym!("="), E(&[sym!("fact"), V("n")]),
+            E(&[ sym!("*"), V("n"), E(&[ sym!("-"), V("n"), sym!("1") ]) ]) ]));
+        assert_eq!(expr!("=", n, {[1, 2, 3]}), E(&[sym!("="), V("n"), G([1, 2, 3])]));
+        assert_eq!(expr!("=", {6}, ("fact", n)), E(&[sym!("="), G(6), E(&[sym!("fact"), V("n")])]));
     }
 
     #[test]
@@ -399,7 +399,7 @@ mod test {
 
     #[test]
     fn test_display_symbol() {
-        assert_eq!(format!("{}", Atom::sym("test")), "test");
+        assert_eq!(format!("{}", sym!("test")), "test");
     }
 
     #[test]

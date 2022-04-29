@@ -204,7 +204,7 @@ mod tests {
         text.add_str("(3d 42)").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![Atom::expr(&[Atom::sym("3d"), Atom::value(42)])],
+        assert_eq!(vec![Atom::expr(&[sym!("3d"), Atom::value(42)])],
             *space.borrow_vec());
     }
 
