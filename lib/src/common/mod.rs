@@ -17,7 +17,7 @@ pub fn init_logger(is_test: bool) {
 // The instance has 'static lifetime and not copied when cloned.
 pub struct Operation {
     pub name: &'static str,
-    pub execute: fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>,
+    pub execute: fn(&dyn GroundedValue, &mut Vec<Atom>) -> Result<Vec<Atom>, String>,
 }
 
 impl GroundedValue for &'static Operation {
@@ -77,7 +77,7 @@ impl<T> Debug for GndRefCell<T> {
 mod tests {
     use super::*;
 
-    fn test(_args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+    fn test(_this: &dyn GroundedValue, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
         Ok(vec![])
     }
 

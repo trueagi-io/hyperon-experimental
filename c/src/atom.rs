@@ -63,12 +63,7 @@ pub unsafe extern "C" fn atom_var(name: *const c_char) -> *mut atom_t {
 pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> *mut atom_t {
     unsafe {
         if let Some(_) = (*(*gnd).api).execute {
-            let ctx = AtomicPtr::new(gnd);
-            atom_to_ptr(Atom::Grounded(
-                    GroundedAtom::new_function(
-                        CGroundedValue(AtomicPtr::new(gnd)),
-                        CGroundedFunction(ctx))
-            ))
+            atom_to_ptr(Atom::function(CGroundedValue(AtomicPtr::new(gnd)), call_execute))
         } else {
             atom_to_ptr(Atom::value(CGroundedValue(AtomicPtr::new(gnd))))
         }
@@ -268,53 +263,18 @@ impl Drop for CGroundedValue {
     }
 }
 
-struct CGroundedFunction(AtomicPtr<gnd_t>);
-
-impl CGroundedFunction {
-    fn get_ptr(&self) -> *const gnd_t {
-        self.0.load(Ordering::Acquire)
-    }
-
-    fn api(&self) -> &gnd_api_t {
-        unsafe {
-            &*(*self.get_ptr()).api
-        }
-    }
-
-    fn clone(&self) -> Self {
-        CGroundedFunction(AtomicPtr::new((self.api().clone)(self.get_ptr())))
-    }
-}
-
-impl GroundedFunction for CGroundedFunction {
-    fn eq_trait(&self, other: &dyn GroundedFunction) -> bool {
-        match other.downcast_ref::<CGroundedFunction>() {
-            Some(other) => self.api().execute == other.api().execute,
-            _ => false,
-        }
-    }
-
-    fn clone_trait(&self) -> Box<dyn GroundedFunction> {
-        Box::new(self.clone())
-    }
-
-    fn call(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
-        unsafe {
-            execute(&self.0, args)
-        }
-    }
-}
-
-unsafe fn execute(gnd: &AtomicPtr<gnd_t>, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+fn call_execute(this: &dyn GroundedValue, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+    let gnd = this.downcast_ref::<CGroundedValue>()
+        .expect("Only GroundedValue can be used as a first argument")
+        .get_ptr();
     let mut ret = Vec::new();
-    let gnd = gnd.load(Ordering::Acquire);
-    let func = (*(*gnd).api).execute.unwrap();
+    let func = unsafe{ (*(*gnd).api).execute }.unwrap();
     let res = func(gnd, (args as *mut Vec<Atom>).cast::<vec_atom_t>(),
     (&mut ret as *mut Vec<Atom>).cast::<vec_atom_t>());
     if res.is_null() {
         Ok(ret)
     } else {
-        Err(cstr_as_str(res).to_string())
+        Err(unsafe{ cstr_as_str(res) }.to_string())
     }
 }
 

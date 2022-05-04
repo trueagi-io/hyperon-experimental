@@ -7,7 +7,7 @@ macro_rules! def_op {
 }
 
 macro_rules! def_bin_op {
-    ($x:ident, $o:tt, $t1:ty, $r:ty) => { def_op!($x, $o, |args| bin_op::<$t1,$t1,$r>(args, |a, b| a $o b)); };
+    ($x:ident, $o:tt, $t1:ty, $r:ty) => { def_op!($x, $o, |_, args| bin_op::<$t1,$t1,$r>(args, |a, b| a $o b)); };
 }
 
 def_bin_op!(SUM, +, i32, i32);
@@ -20,12 +20,12 @@ def_bin_op!(EQ, ==, i32, bool);
 
 def_bin_op!(AND, &&, bool, bool);
 def_bin_op!(OR, ||, bool, bool);
-def_op!(NOT, !, |args| unary_op(args, |a: bool| !a));
+def_op!(NOT, !, |_, args| unary_op(args, |a: bool| !a));
 
-def_op!(NOP, nop, |_| Ok(vec![]));
-def_op!(ERR, err, |_| Err("Error".into()));
+def_op!(NOP, nop, |_, _| Ok(vec![]));
+def_op!(ERR, err, |_, _| Err("Error".into()));
 
-pub static IS_INT: &Operation = &Operation{ name: "is_int", execute: |args| check_type(args,
+pub static IS_INT: &Operation = &Operation{ name: "is_int", execute: |_, args| check_type(args,
     // TODO: it is ugly, but I cannot do something more clear without downcasting
     |a| is_instance::<i32>(a) || is_instance::<u32>(a)
     || is_instance::<i64>(a) || is_instance::<u64>(a)
