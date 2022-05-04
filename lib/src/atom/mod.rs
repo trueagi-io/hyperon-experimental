@@ -88,8 +88,8 @@ pub struct VariableAtom {
 }
 
 impl VariableAtom {
-    fn new(name: String) -> Self {
-        Self{ name }
+    pub fn new<T: Into<String>>(name: T) -> Self {
+        Self{ name: name.into() }
     }
 
     pub fn name(&self) -> &str {
@@ -100,12 +100,6 @@ impl VariableAtom {
 impl Display for VariableAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "${}", self.name)
-    }
-}
-
-impl From<&str> for VariableAtom {
-    fn from(name: &str) -> Self {
-        VariableAtom::new(name.to_string())
     }
 }
 
@@ -297,7 +291,7 @@ impl Atom {
     }
 
     pub fn var<T: Into<String>>(name: T) -> Self {
-        Self::Variable(VariableAtom::new(name.into()))
+        Self::Variable(VariableAtom::new(name))
     }
 
     pub fn value<T: GroundedValue>(value: T) -> Atom {

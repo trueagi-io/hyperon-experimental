@@ -31,7 +31,7 @@ fn query_has_type(space: &GroundingSpace, sub_type: &Atom, super_type: &Atom) ->
 
 fn query_super_types(space: &GroundingSpace, sub_type: &Atom) -> Vec<Atom> {
     // TODO: query should check that sub type is a type and not another typed symbol
-    let var_x = VariableAtom::from("%X%");
+    let var_x = VariableAtom::new("%X%");
     let mut super_types = space.query(&isa_query(&sub_type, &Atom::Variable(var_x.clone())));
     super_types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect()
 }
@@ -76,7 +76,7 @@ fn is_func(typ: &&Atom) -> bool {
 }
 
 fn query_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
-    let var_x = VariableAtom::from("%X%");
+    let var_x = VariableAtom::new("%X%");
     let mut types = query_has_type(space, atom, &Atom::Variable(var_x.clone()));
     let mut types = types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect();
     add_super_types(space, &mut types, 0);

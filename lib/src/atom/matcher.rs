@@ -3,7 +3,7 @@
 #[macro_export]
 macro_rules! bind {
     ($($k:ident: $v:expr),*) => {
-        Bindings::from( vec![$( (VariableAtom::from(stringify!($k)), $v), )*])
+        Bindings::from( vec![$( (VariableAtom::new(stringify!($k)), $v), )*])
     };
 }
 
