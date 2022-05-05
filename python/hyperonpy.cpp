@@ -61,6 +61,7 @@ struct GroundedObject : gnd_t {
 		} else {
 			this->api = &PY_VALUE_API;
 		}
+		this->typ = pyobj.attr("atype").attr("catom").cast<CAtom>().ptr;
 	}
 	virtual ~GroundedObject() { }
 	py::object pyobj;
@@ -102,7 +103,8 @@ bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b) {
 }
 
 struct gnd_t *py_clone(const struct gnd_t* _cgnd) {
-	py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
+	GroundedObject const* cgnd = static_cast<GroundedObject const*>(_cgnd);
+	py::object pyobj = cgnd->pyobj;
 	py::object copy = pyobj.attr("copy")();
 	return new GroundedObject(copy);
 }

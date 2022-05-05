@@ -137,6 +137,7 @@ impl<T: GroundedValue> GroundedValueToGroundedAtom for Wrap<T> {
     fn to_atom(&self) -> Atom {
         Atom::Grounded(GroundedAtom{
             value: self.0.clone_gnd(),
+            typ: Box::new(rust_type_atom::<T>()),
             match_: Arc::new(default_match),
             execute: Arc::new(default_execute)
         })
@@ -172,27 +173,28 @@ fn default_execute(_this: &dyn GroundedValue, _args: &mut Vec<Atom>) -> Result<V
 
 pub struct GroundedAtom {
     value: Box<dyn GroundedValue>,
+    typ: Box<Atom>,
     match_: Arc<dyn MatchFn>,
     execute: Arc<dyn ExecuteFn>,
 }
 
 impl GroundedAtom {
-    pub fn new_value<T>(value: T) -> Self
+    pub fn new_value<T>(value: T, typ: Atom) -> Self
         where T: GroundedValue,
     {
-        Self{ value: Box::new(value), match_: Arc::new(default_match), execute: Arc::new(default_execute) }
+        Self{ value: Box::new(value), typ: Box::new(typ), match_: Arc::new(default_match), execute: Arc::new(default_execute) }
     }
-    pub fn new_matchable<T, M>(value: T, match_: M) -> Self
+    pub fn new_matchable<T, M>(value: T, match_: M, typ: Atom) -> Self
         where T: GroundedValue,
               M: 'static + MatchFn,
     {
-        Self{ value: Box::new(value), match_: Arc::new(match_), execute: Arc::new(default_execute) }
+        Self{ value: Box::new(value), typ: Box::new(typ), match_: Arc::new(match_), execute: Arc::new(default_execute) }
     }
-    pub fn new_function<T, E>(value: T, execute: E) -> Self
+    pub fn new_function<T, E>(value: T, execute: E, typ: Atom) -> Self
         where T: GroundedValue,
               E: 'static + ExecuteFn,
     {
-        Self{ value: Box::new(value), match_: Arc::new(default_match), execute: Arc::new(execute) }
+        Self{ value: Box::new(value), typ: Box::new(typ), match_: Arc::new(default_match), execute: Arc::new(execute) }
     }
 
     pub fn do_match(&self, other: &Atom) -> matcher::MatchResultIter {
@@ -224,6 +226,9 @@ impl Clone for GroundedAtom {
     fn clone(&self) -> Self {
         Self{
             value: self.value.clone_gnd(),
+            // TODO: choose proper container for typ: Box, Rc or Arc
+            // it may affect performance significally
+            typ: Box::new((*self.typ).clone()),
             match_: self.match_.clone(),
             execute: self.execute.clone(),
         }
@@ -238,8 +243,12 @@ impl Display for GroundedAtom {
 
 impl Debug for GroundedAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(self, f)
+        write!(f, "{:?}({})", self.value, self.typ)
     }
+}
+
+pub fn rust_type_atom<T>() -> Atom {
+    Atom::sym(std::any::type_name::<T>())
 }
 
 // Atom enum
@@ -265,12 +274,16 @@ impl Atom {
         Self::Variable(VariableAtom::new(name))
     }
 
-    pub fn value<T: GroundedValue>(value: T) -> Atom {
-        Self::Grounded(GroundedAtom::new_value(value))
+    pub fn value<T: GroundedValue>(value: T, typ: Atom) -> Atom {
+        Self::Grounded(GroundedAtom::new_value(value, typ))
     }
 
-    pub fn function<T: GroundedValue, E: ExecuteFn>(value: T, execute: E) -> Atom {
-        Self::Grounded(GroundedAtom::new_function(value, execute))
+    pub fn rust_value<T: GroundedValue>(value: T) -> Atom {
+        Self::Grounded(GroundedAtom::new_value(value, rust_type_atom::<T>()))
+    }
+
+    pub fn function<T: GroundedValue, E: ExecuteFn>(value: T, execute: E, typ: Atom) -> Atom {
+        Self::Grounded(GroundedAtom::new_function(value, execute, typ))
     }
 
     pub fn as_gnd<T: GroundedValue>(&self) -> Option<&T> {
@@ -294,7 +307,7 @@ impl Display for Atom {
             Atom::Symbol(sym) => Display::fmt(sym, f),
             Atom::Expression(expr) => Display::fmt(expr, f),
             Atom::Variable(var) => Display::fmt(var, f),
-            Atom::Grounded(gnd) => Debug::fmt(gnd, f),
+            Atom::Grounded(gnd) => Display::fmt(gnd, f),
         }
     }
 }
@@ -312,9 +325,8 @@ mod test {
     use super::*;
     use std::collections::HashMap;
 
-    // Aliases to have a shorter notation
-    fn G<T: GroundedValue>(gnd: T) -> Atom { Atom::value(gnd) }
-
+    // Expected atom constructors to make test checks
+    
     #[inline]
     fn symbol(name: &'static str) -> Atom {
         Atom::Symbol(SymbolAtom{ name: name.to_string() })
@@ -328,6 +340,16 @@ mod test {
     #[inline]
     fn variable(name: &'static str) -> Atom {
         Atom::Variable(VariableAtom{ name: name.to_string() })
+    }
+
+    #[inline]
+    fn value<T: GroundedValue>(value: T, typ: &'static str) -> Atom {
+        Atom::Grounded(GroundedAtom{
+            value: Box::new(value),
+            typ: Box::new(Atom::sym(typ)),
+            match_: Arc::new(default_match),
+            execute: Arc::new(default_execute),
+        })
     }
 
     #[test]
@@ -351,21 +373,22 @@ mod test {
             expression(vec![symbol("*"), variable("n"),
             expression(vec![symbol("-"), variable("n"), symbol("1") ]) ]) ]));
         assert_eq!(expr!("=", n, {[1, 2, 3]}),
-            expression(vec![symbol("="), variable("n"), G([1, 2, 3])]));
+            expression(vec![symbol("="), variable("n"), value([1, 2, 3], "[i32; 3]")]));
         assert_eq!(expr!("=", {6}, ("fact", n)),
-            expression(vec![symbol("="), G(6), expression(vec![symbol("fact"), variable("n")])]));
+            expression(vec![symbol("="), value(6, "i32"), expression(vec![symbol("fact"), variable("n")])]));
     }
 
     #[test]
     fn test_grounded() {
-        assert_eq!(Atom::value(3), Atom::Grounded(GroundedAtom::new_value(3)));
-        assert_eq!(G(42).as_gnd::<i32>().unwrap(), &42);
-        assert_eq!(G("Data string"), Atom::Grounded(GroundedAtom::new_value("Data string")));
-        assert_eq!(G(vec![1, 2, 3]), Atom::Grounded(GroundedAtom::new_value(vec![1, 2, 3])));
-        assert_eq!(G([42, -42]).as_gnd::<[i32; 2]>().unwrap(), &[42, -42]);
-        assert_eq!(G((-42, "42")).as_gnd::<(i32, &str)>().unwrap(), &(-42, "42"));
-        assert_eq!(G(HashMap::from([("q", 0), ("a", 42),])),
-            Atom::Grounded(GroundedAtom::new_value(HashMap::from([("q", 0), ("a", 42),]))));
+        assert_eq!(Atom::rust_value(3), value(3, "i32"));
+        assert_eq!(Atom::rust_value(42).as_gnd::<i32>().unwrap(), &42);
+        assert_eq!(Atom::rust_value("Data string"), value("Data string", "&str"));
+        assert_eq!(Atom::rust_value(vec![1, 2, 3]), value(vec![1, 2, 3], "Vec<i32>"));
+        assert_eq!(Atom::rust_value([42, -42]).as_gnd::<[i32; 2]>().unwrap(), &[42, -42]);
+        assert_eq!(Atom::rust_value((-42, "42")).as_gnd::<(i32, &str)>().unwrap(), &(-42, "42"));
+        assert_eq!(Atom::rust_value(HashMap::from([("q", 0), ("a", 42),])),
+            value(HashMap::from([("q", 0), ("a", 42),]), "HashMap<&str, i32>"));
+        assert_eq!(Atom::value(3, Atom::sym("Integer")), value(3, "Integer"));
     }
 
     #[test]
@@ -387,11 +410,22 @@ mod test {
 
     #[test]
     fn test_display_grounded() {
-        assert_eq!(format!("{}", Atom::value(42)), "42");
-        assert_eq!(format!("{}", Atom::value([1, 2, 3])), "[1, 2, 3]");
-        assert_eq!(
-            format!("{}", Atom::value(HashMap::from([("hello", "world")]))),
+        assert_eq!(format!("{}", Atom::rust_value(42)), "42");
+        assert_eq!(format!("{}", Atom::rust_value([1, 2, 3])), "[1, 2, 3]");
+        assert_eq!(format!("{}", Atom::rust_value(HashMap::from([("hello", "world")]))),
             "{\"hello\": \"world\"}");
+        assert_eq!(format!("{}", Atom::value(42, Atom::sym("Integer"))), "42");
+    }
+
+    // FIXME: have both Display and Debug for grounded atoms
+    #[ignore]
+    #[test]
+    fn test_debug_grounded() {
+        assert_eq!(format!("{:?}", Atom::rust_value(42)), "42(i32)");
+        assert_eq!(format!("{:?}", Atom::rust_value([1, 2, 3])), "[1, 2, 3]([i32; 3])");
+        assert_eq!(format!("{:?}", Atom::rust_value(HashMap::from([("hello", "world")]))),
+            "{\"hello\": \"world\"}(std::collections::hash::map::HashMap<&str, &str>)");
+        assert_eq!(format!("{:?}", Atom::value(42, Atom::sym("Integer"))), "42(Integer)");
     }
 
     #[derive(Debug, Clone)]
@@ -448,7 +482,7 @@ mod test {
 
     impl From<TestDict> for Atom {
         fn from(dict: TestDict) -> Self {
-            Atom::Grounded(GroundedAtom::new_matchable(dict, test_dict_match))
+            Atom::Grounded(GroundedAtom::new_matchable(dict, test_dict_match, Atom::sym("Dict")))
         }
     }
 

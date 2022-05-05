@@ -6,7 +6,7 @@ mod examples;
 
 use crate::Atom;
 use crate::space::grounding::GroundingSpace;
-use text::SExprSpace;
+use text::{SExprParser, Tokenizer, SExprSpace};
 
 pub fn metta_space(text: &str) -> GroundingSpace {
     let mut parser = SExprSpace::new();
@@ -15,11 +15,13 @@ pub fn metta_space(text: &str) -> GroundingSpace {
 }
 
 pub fn metta_atom(atom: &str) -> Atom {
-    let space = metta_space(atom);
-    if space.borrow_vec().len() != 1 {
-        panic!("Single atom is expected");
+    let tokenizer = Tokenizer::new();
+    let mut parser = SExprParser::new(atom);
+    let atom = parser.parse(&tokenizer);
+    if let Some(atom) = atom {
+        atom
     } else {
-        space.leak().pop().unwrap()
+        panic!("Single atom is expected");
     }
 }
 

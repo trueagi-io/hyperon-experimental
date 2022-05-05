@@ -34,6 +34,7 @@ pub struct gnd_api_t {
 #[repr(C)]
 pub struct gnd_t {
     api: *const gnd_api_t,
+    typ: *const atom_t,
 }
 
 #[no_mangle]
@@ -62,10 +63,11 @@ pub unsafe extern "C" fn atom_var(name: *const c_char) -> *mut atom_t {
 #[no_mangle]
 pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> *mut atom_t {
     unsafe {
+        let typ = (*(*gnd).typ).atom.clone();
         if let Some(_) = (*(*gnd).api).execute {
-            atom_to_ptr(Atom::function(CGroundedValue(AtomicPtr::new(gnd)), call_execute))
+            atom_to_ptr(Atom::function(CGroundedValue(AtomicPtr::new(gnd)), call_execute, typ))
         } else {
-            atom_to_ptr(Atom::value(CGroundedValue(AtomicPtr::new(gnd))))
+            atom_to_ptr(Atom::value(CGroundedValue(AtomicPtr::new(gnd)), typ))
         }
     }
 }
@@ -271,10 +273,12 @@ fn call_execute(this: &dyn GroundedValue, args: &mut Vec<Atom>) -> Result<Vec<At
     let func = unsafe{ (*(*gnd).api).execute }.unwrap();
     let res = func(gnd, (args as *mut Vec<Atom>).cast::<vec_atom_t>(),
     (&mut ret as *mut Vec<Atom>).cast::<vec_atom_t>());
-    if res.is_null() {
+    let ret = if res.is_null() {
         Ok(ret)
     } else {
         Err(unsafe{ cstr_as_str(res) }.to_string())
-    }
+    };
+    log::trace!("call_execute: atom: {:?}, args: {:?}, ret: {:?}", this, args, ret);
+    ret
 }
 
