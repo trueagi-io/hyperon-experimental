@@ -111,6 +111,15 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
 }
 
 #[no_mangle]
+pub extern "C" fn atom_get_grounded_type(atom: *const atom_t) -> *const atom_t {
+    if let Atom::Grounded(ref g) = unsafe{ &(*atom) }.atom {
+        (g.get_type() as *const Atom).cast::<atom_t>()
+    } else {
+        panic!("Only Grounded atoms has grounded type attribute!");
+    }
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn atom_get_children(atom: *const atom_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
     if let Atom::Expression(ref e) = (*atom).atom {
