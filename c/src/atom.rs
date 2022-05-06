@@ -34,7 +34,7 @@ pub struct gnd_api_t {
 #[repr(C)]
 pub struct gnd_t {
     api: *const gnd_api_t,
-    typ: *const atom_t,
+    typ: *mut atom_t,
 }
 
 #[no_mangle]
