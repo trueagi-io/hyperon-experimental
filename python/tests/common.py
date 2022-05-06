@@ -45,16 +45,17 @@ def print_op(atom):
     print(atom)
     return []
 
-subAtom = G(TypedOperation('-', lambda a, b: a - b, ['Number', 'Number', 'Number']))
-mulAtom = G(TypedOperation('*', lambda a, b: a * b, ['Number', 'Number', 'Number']))
-addAtom = G(TypedOperation('+', lambda a, b: a + b, ['Number', 'Number', 'Number']))
-divAtom = G(TypedOperation('/', lambda a, b: a / b, ['Number', 'Number', 'Number']))
-equalAtom = G(TypedOperation('==', lambda a, b: a == b, ['Number', 'Number', 'Bool']))
-greaterAtom = G(TypedOperation('>', lambda a, b: a > b, ['Number', 'Number', 'Bool']))
-lessAtom = G(TypedOperation('<', lambda a, b: a < b, ['Number', 'Number', 'Bool']))
-orAtom = G(TypedOperation('or', lambda a, b: a or b, ['Bool', 'Bool', 'Bool']))
-andAtom = G(TypedOperation('and', lambda a, b: a and b, ['Bool', 'Bool', 'Bool']))
-notAtom = G(TypedOperation('not', lambda a: not a, ['Bool', 'Bool']))
+#E(S('->'), S('Number'), S('Number'), S('Number'))
+subAtom = OperationAtom('-', lambda a, b: a - b, ['Number', 'Number', 'Number'])
+mulAtom = OperationAtom('*', lambda a, b: a * b, ['Number', 'Number', 'Number'])
+addAtom = OperationAtom('+', lambda a, b: a + b, ['Number', 'Number', 'Number'])
+divAtom = OperationAtom('/', lambda a, b: a / b, ['Number', 'Number', 'Number'])
+equalAtom = OperationAtom('==', lambda a, b: a == b, ['Number', 'Number', 'Bool'])
+greaterAtom = OperationAtom('>', lambda a, b: a > b, ['Number', 'Number', 'Bool'])
+lessAtom = OperationAtom('<', lambda a, b: a < b, ['Number', 'Number', 'Bool'])
+orAtom = OperationAtom('or', lambda a, b: a or b, ['Bool', 'Bool', 'Bool'])
+andAtom = OperationAtom('and', lambda a, b: a and b, ['Bool', 'Bool', 'Bool'])
+notAtom = OperationAtom('not', lambda a: not a, ['Bool', 'Bool'])
 
 # Any number of arguments for `nop` (including zero) due to *args
 nopAtom = OperationAtom('nop', lambda *args: [], unwrap=False)
@@ -62,7 +63,7 @@ nopAtom = OperationAtom('nop', lambda *args: [], unwrap=False)
 letAtom = OperationAtom('let', let_op, unwrap=False)
 matchAtom = OperationAtom('match', match_op, unwrap=False)
 
-printAtom = G(TypedOperation('println!', print_op, ['?', 'IO'], unwrap=False))
+printAtom = OperationAtom('println!', print_op, ['?', 'IO'], unwrap=False)
 
 def newCallAtom(token):
     # REM: we could use "call" as a plain symbol (insted of "call:...")
@@ -79,7 +80,7 @@ def SpaceAtom(grounding_space, repr_name=None):
     # It will be changed in all occurences of this Space
     if repr_name is not None:
         grounding_space.repr_name = repr_name
-    return G(TypedValue(grounding_space, 'Space'))
+    return ValueAtom(grounding_space, 'Space')
 
 
 def import_op(metta, space, fname):
@@ -145,15 +146,15 @@ class MeTTa:
         self.add_atom(r"and", andAtom)
         self.add_atom(r"not", notAtom)
         self.add_token(r"\d+(\.\d+)",
-                       lambda token: G(TypedValue(float(token), 'Number')))
+                       lambda token: ValueAtom(float(token), 'Number'))
         self.add_token(r"\d+",
-                       lambda token: G(TypedValue(int(token), 'Number')))
+                       lambda token: ValueAtom(int(token), 'Number'))
         #self.add_token(r"'[^']*'",
-        #               lambda token: G(TypedValue(str(token[1:-1]), 'String')))
+        #               lambda token: ValueAtom(str(token[1:-1]), 'String'))
         self.add_token("\"[^\"]*\"",
-                       lambda token: G(TypedValue(str(token[1:-1]), 'String')))
+                       lambda token: ValueAtom(str(token[1:-1]), 'String'))
         self.add_token(r"True|False",
-                       lambda token: G(TypedValue(token == 'True', 'Bool')))
+                       lambda token: ValueAtom(token == 'True', 'Bool'))
         self.add_atom(r"match", matchAtom)
         self.add_token(r"call:[^\s]+", newCallAtom)
         self.add_atom(r"let", letAtom)
