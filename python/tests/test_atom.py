@@ -43,6 +43,10 @@ class AtomTest(unittest.TestCase):
     def test_grounded_type(self):
         self.assertEqual(ValueAtom(1.0).get_type(), AtomKind.GROUNDED)
 
+    def test_grounded_grounded_type(self):
+        atom = G(ConstGroundedObject(), S("Float"))
+        self.assertEqual(atom.get_grounded_type(), S("Float"))
+
     # def test_grounded_execute_default(self):
         # self.assertEqual(ValueAtom(1.0).get_object().execute(VecAtom(),
             # VecAtom()), "1.0 is not executable")

@@ -71,21 +71,30 @@ def E(*args):
 
 class GroundedAtom(Atom):
 
+    UNDEFINED_TYPE = S("Undefined")
+
     def __init__(self, catom):
         super().__init__(catom)
 
     def get_object(self):
         return hp.atom_get_object(self.catom)
 
-def G(object):
-    return GroundedAtom(hp.atom_gnd(object))
+    def get_grounded_type(self):
+        return Atom._from_catom(hp.atom_get_grounded_type(self.catom))
+
+def G(object, type=GroundedAtom.UNDEFINED_TYPE):
+    return GroundedAtom(hp.atom_gnd(object, type.catom))
 
 def call_execute_on_grounded_atom(gnd, args):
     args = [Atom._from_catom(catom) for catom in args]
     return gnd.execute(*args)
 
+class ConstGroundedObject:
 
-class TypedObject:
+    def copy(self):
+        return self
+
+class TypedObject(ConstGroundedObject):
 
     def __init__(self, atype):
         super().__init__()

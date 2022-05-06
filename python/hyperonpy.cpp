@@ -55,15 +55,17 @@ const gnd_api_t PY_EXECUTABLE_API = { &py_execute, &py_eq, &py_clone, &py_displa
 const gnd_api_t PY_VALUE_API = { nullptr, &py_eq, &py_clone, &py_display, &py_free };
 
 struct GroundedObject : gnd_t {
-	GroundedObject(py::object pyobj) : pyobj(pyobj) {
+	GroundedObject(py::object pyobj, atom_t* typ) : pyobj(pyobj) {
 		if (py::hasattr(pyobj, "execute")) {
 			this->api = &PY_EXECUTABLE_API;
 		} else {
 			this->api = &PY_VALUE_API;
 		}
-		this->typ = pyobj.attr("atype").attr("catom").cast<CAtom>().ptr;
+		this->typ = typ;
 	}
-	virtual ~GroundedObject() { }
+	virtual ~GroundedObject() {
+		atom_free(this->typ);
+	}
 	py::object pyobj;
 };
 
@@ -106,7 +108,8 @@ struct gnd_t *py_clone(const struct gnd_t* _cgnd) {
 	GroundedObject const* cgnd = static_cast<GroundedObject const*>(_cgnd);
 	py::object pyobj = cgnd->pyobj;
 	py::object copy = pyobj.attr("copy")();
-	return new GroundedObject(copy);
+	atom_t* typ = atom_copy(cgnd->typ);
+	return new GroundedObject(copy, typ);
 }
 
 size_t py_display(const struct gnd_t* _cgnd, char* buffer, size_t size) {
@@ -186,7 +189,10 @@ PYBIND11_MODULE(hyperonpy, m) {
     		}
     		return CAtom(atom_expr(children, size));
     	}, "Create expression atom");
-    m.def("atom_gnd", [](py::object object) { return CAtom(atom_gnd(new GroundedObject(object))); }, "Create grounded atom");
+    m.def("atom_gnd", [](py::object object, CAtom ctyp) {
+    		atom_t* typ = atom_copy(ctyp.ptr);
+    		return CAtom(atom_gnd(new GroundedObject(object, typ)));
+    		}, "Create grounded atom");
     m.def("atom_free", [](CAtom atom) { atom_free(atom.ptr); }, "Free C atom");
 
     m.def("atom_eq", [](CAtom a, CAtom b) -> bool { return atom_eq(a.ptr, b.ptr); }, "Test if two atoms are equal");
@@ -203,6 +209,9 @@ PYBIND11_MODULE(hyperonpy, m) {
     	}, "Get name of the Symbol or Variable atom");
 	m.def("atom_get_object", [](CAtom atom) {
 			return static_cast<GroundedObject const*>(atom_get_object(atom.ptr))->pyobj;
+		}, "Get object of the grounded atom");
+	m.def("atom_get_grounded_type", [](CAtom atom) {
+			return CAtom(atom_copy(atom_get_grounded_type(atom.ptr)));
 		}, "Get object of the grounded atom");
 	m.def("atom_get_children", [](CAtom atom) {
 			py::list atoms;

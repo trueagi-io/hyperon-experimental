@@ -34,7 +34,7 @@ pub struct gnd_api_t {
 #[repr(C)]
 pub struct gnd_t {
     api: *const gnd_api_t,
-    typ: *const atom_t,
+    typ: *mut atom_t,
 }
 
 #[no_mangle]
@@ -107,6 +107,15 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
         }
     } else {
         panic!("Only Grounded has object attribute!");
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn atom_get_grounded_type(atom: *const atom_t) -> *const atom_t {
+    if let Atom::Grounded(ref g) = unsafe{ &(*atom) }.atom {
+        (g.get_type() as *const Atom).cast::<atom_t>()
+    } else {
+        panic!("Only Grounded atoms has grounded type attribute!");
     }
 }
 

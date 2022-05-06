@@ -212,6 +212,10 @@ impl GroundedAtom {
     pub fn downcast_mut<T: GroundedValue>(&mut self) -> Option<&mut T> {
         self.value.downcast_mut::<T>()
     }
+
+    pub fn get_type(&self) -> &Atom {
+        &*self.typ
+    }
 }
 
 impl PartialEq for GroundedAtom {
@@ -389,6 +393,23 @@ mod test {
         assert_eq!(Atom::rust_value(HashMap::from([("q", 0), ("a", 42),])),
             value(HashMap::from([("q", 0), ("a", 42),]), "HashMap<&str, i32>"));
         assert_eq!(Atom::value(3, Atom::sym("Integer")), value(3, "Integer"));
+    }
+
+    #[test]
+    fn test_grounded_type() {
+        let atom = Atom::rust_value(42);
+        if let Atom::Grounded(gnd) = atom {
+            assert_eq!(*gnd.get_type(), Atom::sym("i32"));
+        } else {
+            assert!(false, "GroundedAtom is expected");
+        }
+
+        let atom = Atom::value(3, Atom::sym("Integer"));
+        if let Atom::Grounded(gnd) = atom {
+            assert_eq!(*gnd.get_type(), Atom::sym("Integer"));
+        } else {
+            assert!(false, "GroundedAtom is expected");
+        }
     }
 
     #[test]
