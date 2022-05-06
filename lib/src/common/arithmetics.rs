@@ -2,12 +2,17 @@ use crate::*;
 use super::*;
 
 macro_rules! def_op {
-    ($x:ident, $o:tt, $e:expr) => { pub static $x: &Operation =
-            &Operation{ name: stringify!($o), execute: $e }; };
+    ($x:ident, $o:tt, $e:expr, $t: expr) => {
+        pub static $x: &Operation =
+            &Operation{ name: stringify!($o), execute: $e, typ: $t };
+    };
 }
 
 macro_rules! def_bin_op {
-    ($x:ident, $o:tt, $t1:ty, $r:ty) => { def_op!($x, $o, |args| bin_op::<$t1,$t1,$r>(args, |a, b| a $o b)); };
+    ($x:ident, $o:tt, $t:ty, $r:ty) => {
+        def_op!($x, $o, |_, args| bin_op::<$t,$t,$r>(args, |a, b| a $o b),
+            concat!("(-> ", stringify!($t), " ", stringify!($t), " ", stringify!($r), ")"));
+    };
 }
 
 def_bin_op!(SUM, +, i32, i32);
@@ -20,21 +25,26 @@ def_bin_op!(EQ, ==, i32, bool);
 
 def_bin_op!(AND, &&, bool, bool);
 def_bin_op!(OR, ||, bool, bool);
-def_op!(NOT, !, |args| unary_op(args, |a: bool| !a));
+def_op!(NOT, !, |_, args| unary_op(args, |a: bool| !a), "(-> bool bool)");
 
-def_op!(NOP, nop, |_| Ok(vec![]));
-def_op!(ERR, err, |_| Err("Error".into()));
+// FIXME: find out correct types for nop and err
+def_op!(NOP, nop, |_, _| Ok(vec![]), "(-> ())");
+def_op!(ERR, err, |_, _| Err("Error".into()), "(-> !)");
 
-pub static IS_INT: &Operation = &Operation{ name: "is_int", execute: |args| check_type(args,
-    // TODO: it is ugly, but I cannot do something more clear without downcasting
-    |a| is_instance::<i32>(a) || is_instance::<u32>(a)
-    || is_instance::<i64>(a) || is_instance::<u64>(a)
-    || is_instance::<i128>(a) || is_instance::<u128>(a)
-)};
+pub static IS_INT: &Operation = &Operation{
+    name: "is_int",
+    execute: |_, args| check_type(args,
+        // TODO: it is ugly, but I cannot do something more clear without downcasting
+        |a| is_instance::<i32>(a) || is_instance::<u32>(a)
+        || is_instance::<i64>(a) || is_instance::<u64>(a)
+        || is_instance::<i128>(a) || is_instance::<u128>(a)
+    ),
+    typ: "(-> Grounded bool)",
+};
 
 fn check_type(args: &mut Vec<Atom>, op: fn(&Atom) -> bool) -> Result<Vec<Atom>, String> {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
-    Ok(vec![Atom::value(op(arg))])
+    Ok(vec![Atom::rust_value(op(arg))])
 }
 
 fn is_instance<T>(arg: &Atom) -> bool
@@ -51,7 +61,7 @@ where
 {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
     if let Some(arg) = arg.as_gnd::<T>() {
-        Ok(vec![Atom::value(op(*arg))])
+        Ok(vec![Atom::rust_value(op(*arg))])
     } else {
         Err(format!("Incorrect type of the unary operation argument: ({})", arg))
     }
@@ -66,7 +76,7 @@ where
     let arg1 = args.get(0).ok_or_else(|| format!("Binary operation called without arguments"))?; 
     let arg2 = args.get(1).ok_or_else(|| format!("Binary operation called with only argument"))?;
     if let (Some(arg1), Some(arg2)) = (arg1.as_gnd::<T1>(), arg2.as_gnd::<T2>()) {
-        Ok(vec![Atom::value(op(*arg1, *arg2))])
+        Ok(vec![Atom::rust_value(op(*arg1, *arg2))])
     } else {
         Err(format!("Incorrect type of the binary operation argument: ({}, {})", arg1, arg2))
     }
@@ -82,7 +92,7 @@ mod tests {
     use crate::space::grounding::GroundingSpace;
 
     // Aliases to have a shorter notation
-    fn G<T: GroundedValue>(value: T) -> Atom { Atom::value(value) }
+    fn G<T: GroundedValue>(value: T) -> Atom { Atom::rust_value(value) }
 
     #[test]
     fn test_sum_ints() {

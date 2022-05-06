@@ -54,7 +54,7 @@ impl<'a> SExprParser<'a> {
                 '$' => {
                     self.it.next();
                     let token = next_token(&mut self.it);
-                    return Some(Atom::Variable(token.into()));
+                    return Some(Atom::var(token));
                 },
                 '(' => {
                     self.it.next();
@@ -67,7 +67,7 @@ impl<'a> SExprParser<'a> {
                     if let Some(constr) = constr {
                         return Some(constr(token.as_str()));
                     } else {
-                        return Some(Atom::Symbol(token.into()));
+                        return Some(Atom::sym(token));
                     }
                 },
             }
@@ -82,7 +82,7 @@ impl<'a> SExprParser<'a> {
                 _ if c.is_whitespace() => { self.it.next(); },
                 ')' => {
                     self.it.next();
-                    let expr = Atom::Expression(children.into());
+                    let expr = Atom::expr(children);
                     return expr;
                 },
                 _ => {
@@ -187,7 +187,7 @@ mod tests {
     fn test_text_recognize_full_token() {
         let mut text = SExprSpace::new();
         text.register_token(Regex::new(r"b").unwrap(),
-            |_| Atom::value("b"));
+            |_| Atom::rust_value("b"));
 
         text.add_str("ab").unwrap();
         let space = GroundingSpace::from(&text);
@@ -199,13 +199,12 @@ mod tests {
     fn test_text_gnd() {
         let mut text = SExprSpace::new();
         text.register_token(Regex::new(r"\d+").unwrap(),
-            |token| Atom::value(token.parse::<i32>().unwrap()));
+            |token| Atom::rust_value(token.parse::<i32>().unwrap()));
 
         text.add_str("(3d 42)").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![Atom::expr(&[Atom::sym("3d"), Atom::value(42)])],
-            *space.borrow_vec());
+        assert_eq!(vec![expr!("3d", {42})], *space.borrow_vec());
     }
 
     #[test]

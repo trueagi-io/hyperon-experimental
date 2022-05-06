@@ -3,7 +3,7 @@
 #[macro_export]
 macro_rules! bind {
     ($($k:ident: $v:expr),*) => {
-        Bindings::from( vec![$( (VariableAtom::from(stringify!($k)), $v), )*])
+        Bindings::from( vec![$( (VariableAtom::new(stringify!($k)), $v), )*])
     };
 }
 
@@ -306,8 +306,10 @@ pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
             }
         },
         Atom::Expression(ExpressionAtom{ children }) => {
-            let children = children.iter().map(|a| apply_bindings_to_atom(a, bindings)).collect::<Vec<Atom>>();
-            Atom::expr(&children[..])
+            let children = children.iter()
+                .map(|a| apply_bindings_to_atom(a, bindings))
+                .collect::<Vec<Atom>>();
+            Atom::expr(children)
         },
     }
 }

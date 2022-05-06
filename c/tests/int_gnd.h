@@ -5,6 +5,7 @@
 
 typedef struct _int_gnd_t {
 	gnd_api_t const* api;
+	atom_t const* typ;
 	int n;
 } int_gnd_t;
 

@@ -85,22 +85,19 @@ def call_execute_on_grounded_atom(gnd, args):
     return gnd.execute(*args)
 
 
-class ConstGroundedObject:
-
-    def copy(self):
-        return self
-
-class TypedObject(ConstGroundedObject):
+class TypedObject:
 
     def __init__(self, atype):
         super().__init__()
         self.atype = atype
 
+    def copy(self):
+        return self
+
 class TypedValue(TypedObject):
 
     def __init__(self, value, type_name):
-        #super().__init__(S(type_name))
-        super().__init__(type_name)
+        super().__init__(S(type_name))
         self.value = value
 
     def __eq__(self, other):
@@ -116,7 +113,8 @@ class TypedOperation(TypedObject):
 
     def __init__(self, name, op, type_names, unwrap=True):
         # TODO: if we want to have arbitrary expressions as types
-        super().__init__(type_names)
+        super().__init__(E(S("->"), *[S(n) for n in type_names]))
+        self.res_type_name = type_names[-1]
         self.name = name
         self.op = op
         self.unwrap = unwrap
@@ -125,7 +123,7 @@ class TypedOperation(TypedObject):
         # type-check?
         if self.unwrap:
             args = [arg.get_object().value for arg in args]
-            return [G(TypedValue(self.op(*args), self.atype[-1]))]
+            return [G(TypedValue(self.op(*args), self.res_type_name))]
         else:
             return self.op(*args)
 

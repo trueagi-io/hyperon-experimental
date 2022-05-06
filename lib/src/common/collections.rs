@@ -25,4 +25,3 @@ impl<K: PartialEq, V> ListMap<K, V> {
         self.list.clear()
     }
 }
-

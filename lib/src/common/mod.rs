@@ -8,16 +8,22 @@ use crate::*;
 use std::cell::RefCell;
 use std::fmt::Debug;
 
+use crate::metta::metta_atom;
+
 pub fn init_logger(is_test: bool) {
    let _ = env_logger::builder().is_test(is_test).try_init();
 }
 
+type OperationFn = fn(&dyn GroundedValue, &mut Vec<Atom>) -> Result<Vec<Atom>, String>;
+
+// TODO: move Operation and arithmetics under metta package as it uses metta_atom
 // Operation implements stateless operations as GroundedAtom.
 // Each operation has the only instance which is identified by unique name.
 // The instance has 'static lifetime and not copied when cloned.
 pub struct Operation {
     pub name: &'static str,
-    pub execute: fn(&mut Vec<Atom>) -> Result<Vec<Atom>, String>,
+    pub execute: OperationFn,
+    pub typ: &'static str,
 }
 
 impl GroundedValue for &'static Operation {
@@ -41,7 +47,7 @@ impl Debug for &'static Operation {
 
 impl From<&'static Operation> for Atom {
     fn from(op: &'static Operation) -> Self {
-        Atom::Grounded(GroundedAtom::new_function(op, op.execute))
+        Atom::Grounded(GroundedAtom::new_function(op, op.execute, metta_atom(op.typ)))
     }
 }
 
@@ -77,28 +83,36 @@ impl<T> Debug for GndRefCell<T> {
 mod tests {
     use super::*;
 
-    fn test(_args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+    fn test(_this: &dyn GroundedValue, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
         Ok(vec![])
     }
 
     #[test]
     fn test_operation_display() {
-        let op = &Operation{ name: "test", execute: test };
+        let op = &Operation{ name: "test", execute: test, typ: "(-> ())" };
         assert_eq!(format!("{}", Atom::from(op)), "test");
+    }
+
+    // FIXME: have both Display and Debug for grounded atoms
+    #[ignore]
+    #[test]
+    fn test_operation_debug() {
+        let op = &Operation{ name: "test", execute: test, typ: "(-> ())" };
+        assert_eq!(format!("{:?}", Atom::from(op)), "test((-> ()))");
     }
 
     #[test]
     fn test_operation_eq() {
-        let a = Atom::from(&Operation{ name: "a", execute: test });
-        let aa = Atom::from(&Operation{ name: "a", execute: test });
-        let b = Atom::from(&Operation{ name: "b", execute: test });
+        let a = Atom::from(&Operation{ name: "a", execute: test, typ: "(-> ())" });
+        let aa = Atom::from(&Operation{ name: "a", execute: test, typ: "(-> ())" });
+        let b = Atom::from(&Operation{ name: "b", execute: test, typ: "(-> ())" });
         assert!(a == aa);
         assert!(a != b);
     }
 
     #[test]
     fn test_operation_clone() {
-        let opa = Atom::from(&Operation{ name: "a", execute: test });
+        let opa = Atom::from(&Operation{ name: "a", execute: test, typ: "(-> ())" });
         let opc = opa.clone();
         if let (Atom::Grounded(boxa), Atom::Grounded(boxc)) = (opa, opc) {
             let ptra: *const Operation = *(boxa.downcast_ref::<&Operation>().unwrap());

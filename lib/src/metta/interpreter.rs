@@ -9,6 +9,9 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::cell::RefCell;
 
+#[inline]
+fn equal_symbol() -> Atom { sym!("=") }
+
 pub type InterpreterResult = Vec<(Atom, Bindings)>;
 
 pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<InterpreterResult> {
@@ -365,10 +368,11 @@ fn match_plan(context: InterpreterContextRef, expr: Atom, bindings: Bindings) ->
 
 fn match_op(context: InterpreterContextRef, expr: Atom, prev_bindings: Bindings) -> StepResult<InterpreterResult> {
     log::debug!("match_op: {}", expr);
-    let var_x = VariableAtom::from("%X%");
+    let var_x = VariableAtom::new("%X%");
     // TODO: unique variable?
     let atom_x = Atom::Variable(var_x.clone());
-    let mut local_bindings = context.space.query(&Atom::expr(&[Atom::sym("="), expr.clone(), atom_x]));
+    let query = Atom::expr(vec![equal_symbol(), expr.clone(), atom_x]);
+    let mut local_bindings = context.space.query(&query);
     let results: Vec<(Atom, Bindings)> = local_bindings
         .drain(0..)
         .map(|mut binding| {
