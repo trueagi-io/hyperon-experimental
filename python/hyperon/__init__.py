@@ -85,69 +85,61 @@ class GroundedAtom(Atom):
 def G(object, type=GroundedAtom.UNDEFINED_TYPE):
     return GroundedAtom(hp.atom_gnd(object, type.catom))
 
-def call_execute_on_grounded_atom(gnd, args):
+def call_execute_on_grounded_atom(gnd, typ, args):
+    # ... if hp.atom_to_str(typ) == GroundedAtom.UNDEFINED_TYPE
+    res_typ = GroundedAtom.UNDEFINED_TYPE if hp.atom_get_type(typ) != AtomKind.EXPR \
+        else Atom._from_catom(hp.atom_get_children(typ)[-1])
     args = [Atom._from_catom(catom) for catom in args]
-    return gnd.execute(*args)
+    return gnd.execute(*args, res_typ=res_typ)
 
 class ConstGroundedObject:
 
     def copy(self):
         return self
 
-class TypedObject(ConstGroundedObject):
+class ValueObject(ConstGroundedObject):
 
-    def __init__(self, atype):
-        super().__init__()
-        self.atype = atype
-
-    def copy(self):
-        return self
-
-class TypedValue(TypedObject):
-
-    def __init__(self, value, type_name):
-        super().__init__(S(type_name))
+    def __init__(self, value):
         self.value = value
 
     def __eq__(self, other):
         # TODO: ?typecheck
-        if isinstance(other, TypedValue):
+        if isinstance(other, ValueObject):
             return self.value == other.value
         return False
 
     def __repr__(self):
         return str(self.value)
 
-class TypedOperation(TypedObject):
+class OperationObject(ConstGroundedObject):
 
-    def __init__(self, name, op, type_names, unwrap=True):
-        # TODO: if we want to have arbitrary expressions as types
-        super().__init__(E(S("->"), *[S(n) for n in type_names]))
-        self.res_type_name = type_names[-1]
+    def __init__(self, name, op, unwrap=True):
         self.name = name
         self.op = op
         self.unwrap = unwrap
 
-    def execute(self, *args):
+    def execute(self, *args, res_typ=GroundedAtom.UNDEFINED_TYPE):
         # type-check?
         if self.unwrap:
             args = [arg.get_object().value for arg in args]
-            return [G(TypedValue(self.op(*args), self.res_type_name))]
+            return [G(ValueObject(self.op(*args)), res_typ)]
         else:
             return self.op(*args)
 
     def __eq__(self, other):
         # TODO: instance
-        return isinstance(other, TypedOperation) and self.name == other.name
+        return isinstance(other, OperationObject) and self.name == other.name
 
     def __repr__(self):
         return self.name
 
-def OperationAtom(name, op, type_names=['?'], unwrap=True):
-    return G(TypedOperation(name, op, type_names, unwrap))
+def OperationAtom(name, op, type_names=['Undefined'], unwrap=True):
+    # TODO: nested arrows
+    typ = E(S("->"), *[S(n) for n in type_names])
+    return G(OperationObject(name, op, unwrap), typ)
 
-def ValueAtom(value, type_name='?'):
-    return G(TypedValue(value, type_name))
+def ValueAtom(value, type_name='Undefined'):
+    return G(ValueObject(value), S(type_name))
 
 class GroundingSpace:
 
