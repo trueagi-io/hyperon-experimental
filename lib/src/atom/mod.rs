@@ -133,7 +133,7 @@ impl Display for VariableAtom {
 // - execute() to represent functions as atoms;
 // - match_() to implement custom matching behaviour.
 
-// default_match() method allows reusing default match_() implementation in
+// match_by_equality() method allows reusing default match_() implementation in
 // 3rd party code when it is not needed to be customized. 
 
 // FIXME: try implementing eq_gnd/clone_gnd and as_any_ref on the trait level
@@ -157,7 +157,7 @@ pub trait Grounded : Display {
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
 }
 
-pub fn default_match<T: 'static + PartialEq>(this: &T, other: &Atom) -> matcher::MatchResultIter {
+pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matcher::MatchResultIter {
     match other {
         Atom::Grounded(other) => {
             if let Some(other) = other.as_any_ref().downcast_ref::<T>() {
@@ -172,6 +172,10 @@ pub fn default_match<T: 'static + PartialEq>(this: &T, other: &Atom) -> matcher:
         },
         _ => Box::new(std::iter::empty()),
     }
+}
+
+pub fn execute_not_executable<T: Debug>(this: &T) -> Result<Vec<Atom>, String> {
+    Err(format!("Grounded type is not executable: {:?}", this))
 }
 
 #[derive(PartialEq, Clone, Debug)]
@@ -202,11 +206,11 @@ impl<T: 'static + PartialEq + Clone + Debug + Sync> GroundedAtom for DefaultGrou
     }
 
     fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
-        Err(format!("Execute is not implemented"))
+        execute_not_executable(self)
     }
 
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        default_match(&self.0, other)
+        match_by_equality(&self.0, other)
     }
 }
 
@@ -439,11 +443,10 @@ mod test {
             Atom::sym("Integer")
         }
         fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
-            // FIXME: replace by default_execute()
-            todo!("Not implemented");
+            execute_not_executable(self)
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-            default_match(self, other)
+            match_by_equality(self, other)
         }
     }
 
@@ -561,8 +564,7 @@ mod test {
         }
 
         fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
-            // FIXME: replace by default_execute() call
-            panic!("Not implemented")
+            execute_not_executable(self)
         }
     }
     

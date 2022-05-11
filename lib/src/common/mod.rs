@@ -34,7 +34,7 @@ impl Grounded for &'static Operation {
     }
 
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        default_match(self, other)
+        match_by_equality(self, other)
     }
 }
 
