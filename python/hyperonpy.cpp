@@ -211,7 +211,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 			return static_cast<GroundedObject const*>(atom_get_object(atom.ptr))->pyobj;
 		}, "Get object of the grounded atom");
 	m.def("atom_get_grounded_type", [](CAtom atom) {
-			return CAtom(atom_copy(atom_get_grounded_type(atom.ptr)));
+			return CAtom(atom_get_grounded_type(atom.ptr));
 		}, "Get object of the grounded atom");
 	m.def("atom_get_children", [](CAtom atom) {
 			py::list atoms;

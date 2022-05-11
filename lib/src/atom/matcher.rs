@@ -137,7 +137,7 @@ impl WithMatch for Atom {
     fn do_match(&self, other: &Atom) -> MatchResultIter {
         match (self, other) {
             (Atom::Symbol(a), Atom::Symbol(b)) if a == b => Box::new(std::iter::once(MatchResult::new())),
-            (Atom::Grounded(a), Atom::Grounded(_)) => a.do_match(other),
+            (Atom::Grounded(a), Atom::Grounded(_)) => a.match_(other),
             (Atom::Variable(_), Atom::Variable(v)) => {
                 // We stick to prioritize pattern bindings in this case
                 // because otherwise the $X in (= (...) $X) will not be matched with

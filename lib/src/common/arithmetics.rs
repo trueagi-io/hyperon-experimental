@@ -47,17 +47,15 @@ fn check_type(args: &mut Vec<Atom>, op: fn(&Atom) -> bool) -> Result<Vec<Atom>, 
     Ok(vec![Atom::rust_value(op(arg))])
 }
 
-fn is_instance<T>(arg: &Atom) -> bool
-where
-    T: GroundedValue,
+fn is_instance<T: 'static>(arg: &Atom) -> bool
 {
     matches!(arg.as_gnd::<T>(), Some(_))
 }
 
 fn unary_op<T, R>(args: &mut Vec<Atom>, op: fn(T) -> R) -> Result<Vec<Atom>, String>
 where
-    T: GroundedValue + Copy,
-    R: GroundedValue,
+    T: 'static + Copy,
+    R: 'static + PartialEq + Clone + Debug + Sync,
 {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
     if let Some(arg) = arg.as_gnd::<T>() {
@@ -69,9 +67,9 @@ where
 
 fn bin_op<T1, T2, R>(args: &mut Vec<Atom>, op: fn(T1, T2) -> R) -> Result<Vec<Atom>, String>
 where
-    T1: GroundedValue + Copy,
-    T2: GroundedValue + Copy,
-    R: GroundedValue,
+    T1: 'static + Copy,
+    T2: 'static + Copy,
+    R: 'static + PartialEq + Clone + Debug + Sync,
 {
     let arg1 = args.get(0).ok_or_else(|| format!("Binary operation called without arguments"))?; 
     let arg2 = args.get(1).ok_or_else(|| format!("Binary operation called with only argument"))?;
@@ -91,16 +89,13 @@ mod tests {
     use crate::atom::matcher::Bindings;
     use crate::space::grounding::GroundingSpace;
 
-    // Aliases to have a shorter notation
-    fn G<T: GroundedValue>(value: T) -> Atom { Atom::rust_value(value) }
-
     #[test]
     fn test_sum_ints() {
         let space = GroundingSpace::new();
         // (+ 3 5)
         let expr = expr!({SUM}, {3}, {5});
 
-        assert_eq!(interpret(space, &expr), Ok(vec![G(8)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![Atom::rust_value(8)]));
     }
 
     #[test]
@@ -109,7 +104,7 @@ mod tests {
         // (+ 4 (+ 3 5))
         let expr = expr!({SUM}, {4}, ({SUM}, {3}, {5}));
 
-        assert_eq!(interpret(space, &expr), Ok(vec![G(12)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![Atom::rust_value(12)]));
     }
 
     #[test]
@@ -142,6 +137,6 @@ mod tests {
                    {1})));
 
         let expr = expr!("fac", {3});
-        assert_eq!(interpret(space, &expr), Ok(vec![G(6)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![Atom::rust_value(6)]));
     }
 }
