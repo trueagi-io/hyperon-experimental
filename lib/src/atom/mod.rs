@@ -325,8 +325,7 @@ impl Atom {
         Self::Grounded(Box::new(CustomGrounded(gnd)))
     }
 
-    // FIXME: rename into value()
-    pub fn rust_value<T: 'static + PartialEq + Clone + Debug + Sync>(value: T) -> Atom {
+    pub fn value<T: 'static + PartialEq + Clone + Debug + Sync>(value: T) -> Atom {
         Self::Grounded(Box::new(DefaultGrounded(value)))
     }
 
@@ -456,20 +455,20 @@ mod test {
 
     #[test]
     fn test_grounded() {
-        assert_eq!(Atom::rust_value(3), value(3));
-        assert_eq!(Atom::rust_value(42).as_gnd::<i32>().unwrap(), &42);
-        assert_eq!(Atom::rust_value("Data string"), value("Data string"));
-        assert_eq!(Atom::rust_value(vec![1, 2, 3]), value(vec![1, 2, 3]));
-        assert_eq!(Atom::rust_value([42, -42]).as_gnd::<[i32; 2]>().unwrap(), &[42, -42]);
-        assert_eq!(Atom::rust_value((-42, "42")).as_gnd::<(i32, &str)>().unwrap(), &(-42, "42"));
-        assert_eq!(Atom::rust_value(HashMap::from([("q", 0), ("a", 42),])),
+        assert_eq!(Atom::value(3), value(3));
+        assert_eq!(Atom::value(42).as_gnd::<i32>().unwrap(), &42);
+        assert_eq!(Atom::value("Data string"), value("Data string"));
+        assert_eq!(Atom::value(vec![1, 2, 3]), value(vec![1, 2, 3]));
+        assert_eq!(Atom::value([42, -42]).as_gnd::<[i32; 2]>().unwrap(), &[42, -42]);
+        assert_eq!(Atom::value((-42, "42")).as_gnd::<(i32, &str)>().unwrap(), &(-42, "42"));
+        assert_eq!(Atom::value(HashMap::from([("q", 0), ("a", 42),])),
             value(HashMap::from([("q", 0), ("a", 42),])));
         assert_eq!(Atom::gnd(TestGrounded(42)), gnd(TestGrounded(42)));
     }
 
     #[test]
     fn test_grounded_type() {
-        let atom = Atom::rust_value(42);
+        let atom = Atom::value(42);
         if let Atom::Grounded(gnd) = atom {
             assert_eq!(gnd.type_(), Atom::sym("i32"));
         } else {
@@ -503,17 +502,17 @@ mod test {
 
     #[test]
     fn test_display_grounded() {
-        assert_eq!(format!("{}", Atom::rust_value(42)), "42");
-        assert_eq!(format!("{}", Atom::rust_value([1, 2, 3])), "[1, 2, 3]");
-        assert_eq!(format!("{}", Atom::rust_value(HashMap::from([("hello", "world")]))),
+        assert_eq!(format!("{}", Atom::value(42)), "42");
+        assert_eq!(format!("{}", Atom::value([1, 2, 3])), "[1, 2, 3]");
+        assert_eq!(format!("{}", Atom::value(HashMap::from([("hello", "world")]))),
             "{\"hello\": \"world\"}");
     }
 
     #[test]
     fn test_debug_grounded() {
-        assert_eq!(format!("{:?}", Atom::rust_value(42)), "Grounded(DefaultGrounded(42))");
-        assert_eq!(format!("{:?}", Atom::rust_value([1, 2, 3])), "Grounded(DefaultGrounded([1, 2, 3]))");
-        assert_eq!(format!("{:?}", Atom::rust_value(HashMap::from([("hello", "world")]))),
+        assert_eq!(format!("{:?}", Atom::value(42)), "Grounded(DefaultGrounded(42))");
+        assert_eq!(format!("{:?}", Atom::value([1, 2, 3])), "Grounded(DefaultGrounded([1, 2, 3]))");
+        assert_eq!(format!("{:?}", Atom::value(HashMap::from([("hello", "world")]))),
             "Grounded(DefaultGrounded({\"hello\": \"world\"}))");
     }
 

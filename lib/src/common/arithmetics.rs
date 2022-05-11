@@ -44,7 +44,7 @@ pub static IS_INT: &Operation = &Operation{
 
 fn check_type(args: &mut Vec<Atom>, op: fn(&Atom) -> bool) -> Result<Vec<Atom>, String> {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
-    Ok(vec![Atom::rust_value(op(arg))])
+    Ok(vec![Atom::value(op(arg))])
 }
 
 fn is_instance<T: 'static>(arg: &Atom) -> bool
@@ -59,7 +59,7 @@ where
 {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
     if let Some(arg) = arg.as_gnd::<T>() {
-        Ok(vec![Atom::rust_value(op(*arg))])
+        Ok(vec![Atom::value(op(*arg))])
     } else {
         Err(format!("Incorrect type of the unary operation argument: ({})", arg))
     }
@@ -74,7 +74,7 @@ where
     let arg1 = args.get(0).ok_or_else(|| format!("Binary operation called without arguments"))?; 
     let arg2 = args.get(1).ok_or_else(|| format!("Binary operation called with only argument"))?;
     if let (Some(arg1), Some(arg2)) = (arg1.as_gnd::<T1>(), arg2.as_gnd::<T2>()) {
-        Ok(vec![Atom::rust_value(op(*arg1, *arg2))])
+        Ok(vec![Atom::value(op(*arg1, *arg2))])
     } else {
         Err(format!("Incorrect type of the binary operation argument: ({}, {})", arg1, arg2))
     }
@@ -95,7 +95,7 @@ mod tests {
         // (+ 3 5)
         let expr = expr!({SUM}, {3}, {5});
 
-        assert_eq!(interpret(space, &expr), Ok(vec![Atom::rust_value(8)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(8)]));
     }
 
     #[test]
@@ -104,7 +104,7 @@ mod tests {
         // (+ 4 (+ 3 5))
         let expr = expr!({SUM}, {4}, ({SUM}, {3}, {5}));
 
-        assert_eq!(interpret(space, &expr), Ok(vec![Atom::rust_value(12)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(12)]));
     }
 
     #[test]
@@ -137,6 +137,6 @@ mod tests {
                    {1})));
 
         let expr = expr!("fac", {3});
-        assert_eq!(interpret(space, &expr), Ok(vec![Atom::rust_value(6)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(6)]));
     }
 }
