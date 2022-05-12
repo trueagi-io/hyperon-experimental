@@ -43,15 +43,17 @@ impl Bindings {
     }
 
     pub fn merge(prev: &Bindings, next: &Bindings) -> Option<Bindings> {
-        log::trace!("Bindings::merge: {} and {}", prev, next);
-        let (prev, next) = (&prev.0, &next.0);
-        if !prev.iter().all(|(k, v)| !next.contains_key(k) || next[k] == *v) {
+        if !prev.iter().all(|(k, v)| !next.0.contains_key(k)
+                || next.0[k] == *v
+                || matches!(next.0[k], Atom::Variable(_))) {
+            log::trace!("Bindings::merge: {} ^ {} = None", prev, next);
             None
         } else {
             let mut res = Bindings::new();
             prev.iter().for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
-            next.iter().filter(|(k, _)| !prev.contains_key(k))
+            next.iter().filter(|(k, _)| !prev.0.contains_key(k))
                 .for_each(|(k, v)| { res.insert(k.clone(), v.clone()); });
+            log::trace!("Bindings::merge: {} ^ {} = {}", prev, next, res);
             Some(res) 
         }
     }
