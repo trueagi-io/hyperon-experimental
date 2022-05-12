@@ -5,7 +5,7 @@ macro_rules! expr {
     () => { Atom::expr(vec![]) };
     ($x:ident) => { Atom::var(stringify!($x)) };
     ($x:literal) => { sym!($x) };
-    ({$x:tt}) => { (&&Wrap($x)).to_atom() };
+    ({$x:expr}) => { (&&Wrap($x)).to_atom() };
     (($($x:tt),*)) => { Atom::expr(vec![ $( expr!($x) , )* ]) };
     ($($x:tt),*) => { Atom::expr(vec![ $( expr!($x) , )* ]) };
 }
@@ -402,42 +402,14 @@ mod test {
     }
 
     #[inline]
-    fn gnd<T: CustomGroundedType>(value: T) -> Atom {
+    fn grounded<T: CustomGroundedType>(value: T) -> Atom {
         Atom::Grounded(Box::new(CustomGroundedAtom(value)))
     }
 
-    #[test]
-    fn test_expr_symbol() {
-        assert_eq!(expr!("="), symbol("="));
-        assert_eq!(expr!("1"), symbol("1"));
-        assert_eq!(expr!("*"), symbol("*"));
-        assert_eq!(expr!("foo"), symbol("foo"));
-    }
-
-    #[test]
-    fn test_expr_variable() {
-        assert_eq!(expr!(n), variable("n"));
-        assert_eq!(expr!(self), variable("self"));
-    }
-
-    #[test]
-    fn test_expr_expression() {
-        assert_eq!(expr!("=", ("fact", n), ("*", n, ("-", n, "1"))), 
-            expression(vec![symbol("="), expression(vec![symbol("fact"), variable("n")]),
-            expression(vec![symbol("*"), variable("n"),
-            expression(vec![symbol("-"), variable("n"), symbol("1") ]) ]) ]));
-        assert_eq!(expr!("=", n, {[1, 2, 3]}),
-            expression(vec![symbol("="), variable("n"), value([1, 2, 3])]));
-        assert_eq!(expr!("=", {6}, ("fact", n)),
-            expression(vec![symbol("="), value(6), expression(vec![symbol("fact"), variable("n")])]));
-    }
-
-    // FIXME: write tests for Atom PartialEq, Clone, Display, Debug for all
-    // kinds of atoms
     #[derive(PartialEq, Clone, Debug)]
-    struct TestGrounded(i32);
+    struct TestInteger(i32);
 
-    impl Grounded for TestGrounded {
+    impl Grounded for TestInteger {
         fn type_(&self) -> Atom {
             Atom::sym("Integer")
         }
@@ -449,73 +421,10 @@ mod test {
         }
     }
 
-    impl Display for TestGrounded {
+    impl Display for TestInteger {
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             write!(f, "{}", self.0)
         }
-    }
-
-    #[test]
-    fn test_grounded() {
-        assert_eq!(Atom::value(3), value(3));
-        assert_eq!(Atom::value(42).as_gnd::<i32>().unwrap(), &42);
-        assert_eq!(Atom::value("Data string"), value("Data string"));
-        assert_eq!(Atom::value(vec![1, 2, 3]), value(vec![1, 2, 3]));
-        assert_eq!(Atom::value([42, -42]).as_gnd::<[i32; 2]>().unwrap(), &[42, -42]);
-        assert_eq!(Atom::value((-42, "42")).as_gnd::<(i32, &str)>().unwrap(), &(-42, "42"));
-        assert_eq!(Atom::value(HashMap::from([("q", 0), ("a", 42),])),
-            value(HashMap::from([("q", 0), ("a", 42),])));
-        assert_eq!(Atom::gnd(TestGrounded(42)), gnd(TestGrounded(42)));
-    }
-
-    #[test]
-    fn test_grounded_type() {
-        let atom = Atom::value(42);
-        if let Atom::Grounded(gnd) = atom {
-            assert_eq!(gnd.type_(), Atom::sym("i32"));
-        } else {
-            assert!(false, "GroundedAtom is expected");
-        }
-
-        let atom = Atom::gnd(TestGrounded(42));
-        if let Atom::Grounded(gnd) = atom {
-            assert_eq!(gnd.type_(), Atom::sym("Integer"));
-        } else {
-            assert!(false, "GroundedAtom is expected");
-        }
-    }
-
-    #[test]
-    fn test_display_symbol() {
-        assert_eq!(format!("{}", sym!("test")), "test");
-    }
-
-    #[test]
-    fn test_display_variable() {
-        assert_eq!(format!("{}", Atom::var("x")), "$x");
-    }
-
-    #[test]
-    fn test_display_expression() {
-        assert_eq!(format!("{}", expr!("=", ("fact", n), ("*", n, ("-", n, "1")))),
-        "(= (fact $n) (* $n (- $n 1)))");
-        assert_eq!(format!("{}", expr!()), "()");
-    }
-
-    #[test]
-    fn test_display_grounded() {
-        assert_eq!(format!("{}", Atom::value(42)), "42");
-        assert_eq!(format!("{}", Atom::value([1, 2, 3])), "[1, 2, 3]");
-        assert_eq!(format!("{}", Atom::value(HashMap::from([("hello", "world")]))),
-            "{\"hello\": \"world\"}");
-    }
-
-    #[test]
-    fn test_debug_grounded() {
-        assert_eq!(format!("{:?}", Atom::value(42)), "Grounded(AutoGroundedAtom(42))");
-        assert_eq!(format!("{:?}", Atom::value([1, 2, 3])), "Grounded(AutoGroundedAtom([1, 2, 3]))");
-        assert_eq!(format!("{:?}", Atom::value(HashMap::from([("hello", "world")]))),
-            "Grounded(AutoGroundedAtom({\"hello\": \"world\"}))");
     }
 
     #[derive(PartialEq, Clone, Debug)]
@@ -525,7 +434,6 @@ mod test {
         fn new() -> Self {
             TestDict(Vec::new())
         }
-
         fn get(&self, key: &Atom) -> Option<&Atom> {
             self.0.iter().filter(|(k, _)| { k == key }).nth(0).map(|(_, v)| { v })
         }
@@ -545,6 +453,12 @@ mod test {
     use crate::atom::matcher::*;
 
     impl Grounded for TestDict {
+        fn type_(&self) -> Atom {
+            Atom::sym("Dict")
+        }
+        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+            execute_not_executable(self)
+        }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
             if let Some(other) = other.as_gnd::<TestDict>() {
                 other.0.iter().map(|(ko, vo)| {
@@ -558,18 +472,148 @@ mod test {
                 Box::new(std::iter::empty())
             }
         }
-        fn type_(&self) -> Atom {
-            Atom::sym("Dict")
-        }
-
-        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
-            execute_not_executable(self)
-        }
     }
     
     impl Display for TestDict {
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            Debug::fmt(self, f)
+            write!(f, "{{ ").and_then(|_| self.0.iter().fold(Ok(()),
+                |ret, (key, val)| ret.and_then(
+                    |_| write!(f, "{}: {}, ", key, val))))
+                .and_then(|_| write!(f, "}}"))
+        }
+    }
+
+    #[derive(PartialEq, Clone, Debug)]
+    struct TestMulX(i32);
+
+    impl Grounded for TestMulX {
+        fn type_(&self) -> Atom {
+            Atom::sym("(-> i32 i32)")
+        }
+        fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+            Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])
+        }
+        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    impl Display for TestMulX {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "x{}", self.0)
+        }
+    }
+
+    #[test]
+    fn test_expr_symbol() {
+        assert_eq!(expr!("="), symbol("="));
+        assert_eq!(expr!("1"), symbol("1"));
+        assert_eq!(expr!("*"), symbol("*"));
+        assert_eq!(expr!("foo"), symbol("foo"));
+    }
+
+    #[test]
+    fn test_expr_variable() {
+        assert_eq!(expr!(n), variable("n"));
+        assert_eq!(expr!(self), variable("self"));
+    }
+
+    #[test]
+    fn test_expr_grounded() {
+        assert_eq!(expr!({42}), value(42));
+        assert_eq!(expr!({TestInteger(42)}), grounded(TestInteger(42)));
+        assert_eq!(expr!({TestDict::new()}), grounded(TestDict::new()));
+        assert_eq!(expr!({TestMulX(3)}), grounded(TestMulX(3)));
+    }
+
+    #[test]
+    fn test_expr_expression() {
+        assert_eq!(expr!("=", ("fact", n), ("*", n, ("-", n, "1"))), 
+            expression(vec![symbol("="), expression(vec![symbol("fact"), variable("n")]),
+            expression(vec![symbol("*"), variable("n"),
+            expression(vec![symbol("-"), variable("n"), symbol("1") ]) ]) ]));
+        assert_eq!(expr!("=", n, {[1, 2, 3]}),
+            expression(vec![symbol("="), variable("n"), value([1, 2, 3])]));
+        assert_eq!(expr!("=", {6}, ("fact", n)),
+            expression(vec![symbol("="), value(6), expression(vec![symbol("fact"), variable("n")])]));
+        assert_eq!(expr!({TestMulX(3)}, {TestInteger(6)}),
+            expression(vec![grounded(TestMulX(3)), grounded(TestInteger(6))]));
+    }
+
+
+    #[test]
+    fn test_grounded() {
+        assert_eq!(Atom::value(3), value(3));
+        assert_eq!(Atom::value(42).as_gnd::<i32>().unwrap(), &42);
+        assert_eq!(Atom::value("Data string"), value("Data string"));
+        assert_eq!(Atom::value(vec![1, 2, 3]), value(vec![1, 2, 3]));
+        assert_eq!(Atom::value([42, -42]).as_gnd::<[i32; 2]>().unwrap(), &[42, -42]);
+        assert_eq!(Atom::value((-42, "42")).as_gnd::<(i32, &str)>().unwrap(), &(-42, "42"));
+        assert_eq!(Atom::value(HashMap::from([("q", 0), ("a", 42),])),
+            value(HashMap::from([("q", 0), ("a", 42),])));
+        assert_eq!(Atom::gnd(TestInteger(42)), grounded(TestInteger(42)));
+        assert_eq!(Atom::gnd(TestInteger(42)).as_gnd::<i32>(), None);
+        assert_eq!(Atom::gnd(TestInteger(42)).as_gnd::<TestInteger>(), Some(&TestInteger(42)));
+    }
+
+    #[test]
+    fn test_display_atom() {
+        assert_eq!(format!("{}", Atom::sym("test")), "test");
+        assert_eq!(format!("{}", Atom::var("x")), "$x");
+        assert_eq!(format!("{}", Atom::value(42)), "42");
+        assert_eq!(format!("{}", Atom::value([1, 2, 3])), "[1, 2, 3]");
+        assert_eq!(format!("{}", Atom::value(HashMap::from([("hello", "world")]))),
+            "{\"hello\": \"world\"}");
+        assert_eq!(format!("{}", Atom::gnd(TestInteger(42))), "42");
+        assert_eq!(format!("{}", Atom::gnd(TestMulX(3))), "x3");
+        assert_eq!(format!("{}", Atom::gnd(TestDict(vec![(Atom::sym("A"), Atom::sym("b"))]))),
+            "{ A: b, }");
+        assert_eq!(format!("{}", expr!("=", ("fact", n), ("*", n, ("-", n, "1")))),
+            "(= (fact $n) (* $n (- $n 1)))");
+        assert_eq!(format!("{}", expr!()), "()");
+    }
+
+    #[test]
+    fn test_debug_atom() {
+        assert_eq!(format!("{:?}", Atom::sym("test")), "Symbol(SymbolAtom { name: \"test\" })");
+        assert_eq!(format!("{:?}", Atom::var("x")), "Variable(VariableAtom { name: \"x\" })");
+        assert_eq!(format!("{:?}", Atom::value(42)), "Grounded(AutoGroundedAtom(42))");
+        assert_eq!(format!("{:?}", Atom::value([1, 2, 3])), "Grounded(AutoGroundedAtom([1, 2, 3]))");
+        assert_eq!(format!("{:?}", Atom::value(HashMap::from([("hello", "world")]))),
+            "Grounded(AutoGroundedAtom({\"hello\": \"world\"}))");
+        assert_eq!(format!("{:?}", Atom::gnd(TestInteger(42))), "Grounded(CustomGroundedAtom(TestInteger(42)))");
+        assert_eq!(format!("{:?}", Atom::gnd(TestMulX(3))), "Grounded(CustomGroundedAtom(TestMulX(3)))");
+        assert_eq!(format!("{:?}", Atom::gnd(TestDict(vec![(Atom::sym("A"), Atom::sym("b"))]))),
+            "Grounded(CustomGroundedAtom(TestDict([(Symbol(SymbolAtom { name: \"A\" }), Symbol(SymbolAtom { name: \"b\" }))])))");
+    }
+
+    #[test]
+    fn test_clone_atom() {
+        assert_eq!(Atom::sym("test").clone(), symbol("test"));
+        assert_eq!(Atom::var("x").clone(), variable("x"));
+        assert_eq!(Atom::value(HashMap::from([("hello", "world")])).clone(),
+            value(HashMap::from([("hello", "world")])));
+        assert_eq!(Atom::gnd(TestMulX(3)).clone(), grounded(TestMulX(3)));
+        assert_eq!(Atom::expr([Atom::sym("="), Atom::value(6),
+            Atom::expr([Atom::sym("fact"), Atom::var("n")])]).clone(),
+            expression(vec![symbol("="), value(6),
+                expression(vec![symbol("fact"), variable("n")])]));
+    }
+
+    #[test]
+    fn test_custom_type() {
+        let atom = Atom::value(42);
+        if let Atom::Grounded(gnd) = atom {
+            assert_eq!(gnd.type_(), Atom::sym("i32"));
+        } else {
+            assert!(false, "GroundedAtom is expected");
+        }
+
+        let atom = Atom::gnd(TestInteger(42));
+        if let Atom::Grounded(gnd) = atom {
+            assert_eq!(gnd.type_(), Atom::sym("Integer"));
+        } else {
+            assert!(false, "GroundedAtom is expected");
         }
     }
 
@@ -588,6 +632,17 @@ mod test {
         let result: Vec<MatchResult> = dict.do_match(&query).collect();
         assert_eq!(result, vec![MatchResult::from((bind!{},
                     bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}))]);
+    }
+
+    #[test]
+    fn test_custom_execution() {
+        let mul3 = Atom::gnd(TestMulX(3));
+        if let Atom::Grounded(gnd) = mul3 {
+            let res = gnd.execute(&mut vec![Atom::value(14)]);
+            assert_eq!(res, Ok(vec![Atom::value(42)]));
+        } else {
+            assert!(false, "GroundedAtom is expected");
+        }
     }
 
 }

@@ -130,6 +130,7 @@ impl From<(Bindings, Bindings)> for MatchResult {
 pub type MatchResultIter = Box<dyn Iterator<Item=matcher::MatchResult>>;
 
 pub trait WithMatch {
+    // FIXME: rename to match_()
     fn do_match(&self, other: &Atom) -> MatchResultIter;
 }
 
