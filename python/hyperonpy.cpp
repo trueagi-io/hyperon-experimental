@@ -79,16 +79,17 @@ const char *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, stru
 	static py::object hyperon = inc_ref(py::module_::import("hyperon"));
 	static py::object call_execute_on_grounded_atom = hyperon.attr("call_execute_on_grounded_atom");
 	py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
+	CAtom pytyp = static_cast<GroundedObject const*>(_cgnd)->typ;
 	try {
 		py::list args;
 		for (size_t i = 0; i < vec_atom_size(_args); ++i) {
 			args.append(CAtom(atom_copy(vec_atom_get(_args, i))));
 		}
-		py::list result = call_execute_on_grounded_atom(pyobj, args);
+		py::list result = call_execute_on_grounded_atom(pyobj, pytyp, args);
 		for (auto& atom:  result) {
 			vec_atom_push(ret, atom_copy(atom.attr("catom").cast<CAtom>().ptr));
 		}
-		return nullptr;	
+		return nullptr;
 	} catch (py::error_already_set &e) {
 		// TODO: implement returning error description without static buffer
 		static char error[4096];
