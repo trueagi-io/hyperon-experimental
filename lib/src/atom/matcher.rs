@@ -130,34 +130,34 @@ impl From<(Bindings, Bindings)> for MatchResult {
 pub type MatchResultIter = Box<dyn Iterator<Item=matcher::MatchResult>>;
 
 pub trait WithMatch {
-    fn do_match(&self, other: &Atom) -> MatchResultIter;
+    fn match_(&self, other: &Atom) -> MatchResultIter;
 }
 
 impl WithMatch for Atom {
-    fn do_match(&self, other: &Atom) -> MatchResultIter {
+    fn match_(&self, other: &Atom) -> MatchResultIter {
         match (self, other) {
             (Atom::Symbol(a), Atom::Symbol(b)) if a == b => Box::new(std::iter::once(MatchResult::new())),
-            (Atom::Grounded(a), Atom::Grounded(_)) => a.do_match(other),
+            (Atom::Grounded(a), Atom::Grounded(_)) => a.match_(other),
             (Atom::Variable(_), Atom::Variable(v)) => {
                 // We stick to prioritize pattern bindings in this case
                 // because otherwise the $X in (= (...) $X) will not be matched with
                 // (= (if True $then) $then)
-                log::trace!("do_match bind a pattern's variable: {} = {}", v, self);
+                log::trace!("match_(): bind a pattern's variable: {} = {}", v, self);
                 Box::new(std::iter::once(MatchResult::from((Bindings::new(), Bindings::from(vec![(v.clone(), self.clone())])))))
             }
             (Atom::Variable(v), b) => {
-                log::trace!("do_match bind a candidate's variable: {} = {}", v, b);
+                log::trace!("match_(): bind a candidate's variable: {} = {}", v, b);
                 Box::new(std::iter::once(MatchResult::from((Bindings::from(vec![(v.clone(), b.clone())]), Bindings::new()))))
             }
             (a, Atom::Variable(v)) => {
-                log::trace!("do_match bind a pattern's variable: {} = {}", v, a);
+                log::trace!("match_(): bind a pattern's variable: {} = {}", v, a);
                 Box::new(std::iter::once(MatchResult::from((Bindings::new(), Bindings::from(vec![(v.clone(), a.clone())])))))
             },
             (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b }))
                 if a.len() == b.len() => {
                 a.iter().zip(b.iter()).fold(Box::new(std::iter::once(MatchResult::new())),
                     |acc, (a, b)| {
-                        product_iter(acc, a.do_match(b))
+                        product_iter(acc, a.match_(b))
                     })
             },
             _ => Box::new(std::iter::empty()),

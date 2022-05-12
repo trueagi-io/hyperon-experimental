@@ -27,7 +27,7 @@ def_bin_op!(AND, &&, bool, bool);
 def_bin_op!(OR, ||, bool, bool);
 def_op!(NOT, !, |_, args| unary_op(args, |a: bool| !a), "(-> bool bool)");
 
-// FIXME: find out correct types for nop and err
+// TODO: find out correct types for nop and err
 def_op!(NOP, nop, |_, _| Ok(vec![]), "(-> ())");
 def_op!(ERR, err, |_, _| Err("Error".into()), "(-> !)");
 
@@ -44,24 +44,22 @@ pub static IS_INT: &Operation = &Operation{
 
 fn check_type(args: &mut Vec<Atom>, op: fn(&Atom) -> bool) -> Result<Vec<Atom>, String> {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
-    Ok(vec![Atom::rust_value(op(arg))])
+    Ok(vec![Atom::value(op(arg))])
 }
 
-fn is_instance<T>(arg: &Atom) -> bool
-where
-    T: GroundedValue,
+fn is_instance<T: 'static>(arg: &Atom) -> bool
 {
     matches!(arg.as_gnd::<T>(), Some(_))
 }
 
 fn unary_op<T, R>(args: &mut Vec<Atom>, op: fn(T) -> R) -> Result<Vec<Atom>, String>
 where
-    T: GroundedValue + Copy,
-    R: GroundedValue,
+    T: 'static + Copy,
+    R: AutoGroundedType,
 {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
     if let Some(arg) = arg.as_gnd::<T>() {
-        Ok(vec![Atom::rust_value(op(*arg))])
+        Ok(vec![Atom::value(op(*arg))])
     } else {
         Err(format!("Incorrect type of the unary operation argument: ({})", arg))
     }
@@ -69,14 +67,14 @@ where
 
 fn bin_op<T1, T2, R>(args: &mut Vec<Atom>, op: fn(T1, T2) -> R) -> Result<Vec<Atom>, String>
 where
-    T1: GroundedValue + Copy,
-    T2: GroundedValue + Copy,
-    R: GroundedValue,
+    T1: 'static + Copy,
+    T2: 'static + Copy,
+    R: AutoGroundedType,
 {
     let arg1 = args.get(0).ok_or_else(|| format!("Binary operation called without arguments"))?; 
     let arg2 = args.get(1).ok_or_else(|| format!("Binary operation called with only argument"))?;
     if let (Some(arg1), Some(arg2)) = (arg1.as_gnd::<T1>(), arg2.as_gnd::<T2>()) {
-        Ok(vec![Atom::rust_value(op(*arg1, *arg2))])
+        Ok(vec![Atom::value(op(*arg1, *arg2))])
     } else {
         Err(format!("Incorrect type of the binary operation argument: ({}, {})", arg1, arg2))
     }
@@ -91,16 +89,13 @@ mod tests {
     use crate::atom::matcher::Bindings;
     use crate::space::grounding::GroundingSpace;
 
-    // Aliases to have a shorter notation
-    fn G<T: GroundedValue>(value: T) -> Atom { Atom::rust_value(value) }
-
     #[test]
     fn test_sum_ints() {
         let space = GroundingSpace::new();
         // (+ 3 5)
         let expr = expr!({SUM}, {3}, {5});
 
-        assert_eq!(interpret(space, &expr), Ok(vec![G(8)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(8)]));
     }
 
     #[test]
@@ -109,7 +104,7 @@ mod tests {
         // (+ 4 (+ 3 5))
         let expr = expr!({SUM}, {4}, ({SUM}, {3}, {5}));
 
-        assert_eq!(interpret(space, &expr), Ok(vec![G(12)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(12)]));
     }
 
     #[test]
@@ -142,6 +137,6 @@ mod tests {
                    {1})));
 
         let expr = expr!("fac", {3});
-        assert_eq!(interpret(space, &expr), Ok(vec![G(6)]));
+        assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(6)]));
     }
 }

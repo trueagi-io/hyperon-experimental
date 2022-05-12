@@ -3,7 +3,7 @@ use hyperon::*;
 use crate::util::*;
 
 use std::os::raw::*;
-use std::fmt::Debug;
+use std::fmt::Display;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 // Atom
@@ -62,14 +62,7 @@ pub unsafe extern "C" fn atom_var(name: *const c_char) -> *mut atom_t {
 
 #[no_mangle]
 pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> *mut atom_t {
-    unsafe {
-        let typ = (*(*gnd).typ).atom.clone();
-        if let Some(_) = (*(*gnd).api).execute {
-            atom_to_ptr(Atom::function(CGroundedValue(AtomicPtr::new(gnd)), call_execute, typ))
-        } else {
-            atom_to_ptr(Atom::value(CGroundedValue(AtomicPtr::new(gnd)), typ))
-        }
-    }
+    atom_to_ptr(Atom::gnd(CGrounded(AtomicPtr::new(gnd))))
 }
 
 #[no_mangle]
@@ -101,7 +94,7 @@ pub extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t,
 #[no_mangle]
 pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
     if let Atom::Grounded(ref g) = (*atom).atom {
-        match (*g).downcast_ref::<CGroundedValue>() {
+        match (*g).as_any_ref().downcast_ref::<CGrounded>() {
             Some(g) => g.get_mut_ptr(),
             None => panic!("Returning non C grounded objects is not implemented yet!"),
         }
@@ -111,9 +104,9 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
 }
 
 #[no_mangle]
-pub extern "C" fn atom_get_grounded_type(atom: *const atom_t) -> *const atom_t {
+pub extern "C" fn atom_get_grounded_type(atom: *const atom_t) -> *mut atom_t {
     if let Atom::Grounded(ref g) = unsafe{ &(*atom) }.atom {
-        (g.get_type() as *const Atom).cast::<atom_t>()
+        atom_to_ptr(g.type_())
     } else {
         panic!("Only Grounded atoms has grounded type attribute!");
     }
@@ -207,10 +200,10 @@ pub fn return_atoms(atoms: &Vec<Atom>, callback: c_atoms_callback_t, context: *m
 
 // C grounded atom wrapper
 
-struct CGroundedValue(AtomicPtr<gnd_t>);
+#[derive(Debug)]
+struct CGrounded(AtomicPtr<gnd_t>);
 
-impl CGroundedValue {
-
+impl CGrounded {
     fn get_mut_ptr(&self) -> *mut gnd_t {
         self.0.load(Ordering::Acquire)
     }
@@ -225,69 +218,63 @@ impl CGroundedValue {
         }
     }
 
-    fn eq(&self, other: &Self) -> bool {
-        (self.api().eq)(self.get_ptr(), other.get_ptr())
-    }
-
-    fn clone(&self) -> Self {
-        CGroundedValue(AtomicPtr::new((self.api().clone)(self.get_ptr())))
-    }
-
-    unsafe fn display(&self) -> String {
-        let mut buffer = [0u8; 4096];
-        (self.api().display)(self.get_ptr(), buffer.as_mut_ptr().cast::<c_char>(), 4096);
-        cstr_into_string(buffer.as_ptr().cast::<c_char>())
-    }
-
     fn free(&mut self) {
         (self.api().free)(self.get_mut_ptr());
     }
-
 }
 
-impl GroundedValue for CGroundedValue {
+impl Grounded for CGrounded {
+    fn type_(&self) -> Atom {
+        unsafe{ &*(*self.get_ptr()).typ }.atom.clone()
+    }
 
-    fn eq_gnd(&self, other: &dyn GroundedValue) -> bool {
-        match other.downcast_ref::<CGroundedValue>() {
-            Some(o) => self.eq(o),
-            None => false,
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+        let mut ret = Vec::new();
+        match self.api().execute {
+            Some(func) => {
+                let res = func(self.get_ptr(), (args as *mut Vec<Atom>).cast::<vec_atom_t>(),
+                (&mut ret as *mut Vec<Atom>).cast::<vec_atom_t>());
+                let ret = if res.is_null() {
+                    Ok(ret)
+                } else {
+                    Err(cstr_as_str(res).into())
+                };
+                log::trace!("CGrounded::execute: atom: {:?}, args: {:?}, ret: {:?}", self, args, ret);
+                ret
+            },
+            None => Err("Trying to execute non executable atom".into()),
         }
     }
 
-    fn clone_gnd(&self) -> Box<dyn GroundedValue> {
-        Box::new(self.clone())
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        match_by_equality(self, other)
     }
-
 }
 
-impl Debug for CGroundedValue {
+impl PartialEq for CGrounded {
+    fn eq(&self, other: &CGrounded) -> bool {
+        (self.api().eq)(self.get_ptr(), other.get_ptr())
+    }
+}
+
+impl Clone for CGrounded {
+    fn clone(&self) -> Self {
+        CGrounded(AtomicPtr::new((self.api().clone)(self.get_ptr())))
+    }
+}
+
+impl Display for CGrounded {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        unsafe {
-            write!(f, "{}", self.display())
-        }
+        let mut buffer = [0u8; 4096];
+        (self.api().display)(self.get_ptr(), buffer.as_mut_ptr().cast::<c_char>(), 4096);
+        let text = cstr_into_string(buffer.as_ptr().cast::<c_char>());
+        write!(f, "{}", text)
     }
 }
 
-impl Drop for CGroundedValue {
+impl Drop for CGrounded {
     fn drop(&mut self) {
         self.free();
     }
-}
-
-fn call_execute(this: &dyn GroundedValue, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
-    let gnd = this.downcast_ref::<CGroundedValue>()
-        .expect("Only GroundedValue can be used as a first argument")
-        .get_ptr();
-    let mut ret = Vec::new();
-    let func = unsafe{ (*(*gnd).api).execute }.unwrap();
-    let res = func(gnd, (args as *mut Vec<Atom>).cast::<vec_atom_t>(),
-    (&mut ret as *mut Vec<Atom>).cast::<vec_atom_t>());
-    let ret = if res.is_null() {
-        Ok(ret)
-    } else {
-        Err(unsafe{ cstr_as_str(res) }.to_string())
-    };
-    log::trace!("call_execute: atom: {:?}, args: {:?}, ret: {:?}", this, args, ret);
-    ret
 }
 
