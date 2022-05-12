@@ -196,7 +196,7 @@ impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
     }
 
     fn type_(&self) -> Atom {
-        Atom::sym(std::any::type_name::<T>())
+        rust_type_atom::<T>()
     }
 
     fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
