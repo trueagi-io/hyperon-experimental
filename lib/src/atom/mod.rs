@@ -108,21 +108,21 @@ impl Display for VariableAtom {
 // The main idea is to keep grounded atom behaviour implementation inside
 // type rather then in type instance. To allow default behaviour overriding
 // two wrappers for grounded values are introduced:
-// - DefaultGrounded<T> for intrinsic Rust types;
-// - CustomGrounded<T> for customized grounded types.
+// - AutoGroundedAtom<T> for intrinsic Rust types;
+// - CustomGroundedAtom<T> for customized grounded types.
 //
 // Both of them implement GroundedAtom trait which serves for type erasure
 // and has all necessary methods to implement traits required by Atom:
-// PartialEq, Clone, Debug, Display. DefaultGrounded<T> implements
+// PartialEq, Clone, Debug, Display. AutoGroundedAtom<T> implements
 // default behaviour (match via equality, no execution) and doesn't
-// expect any specific traits implemented. And CustomGrounded<T> expects
+// expect any specific traits implemented. And CustomGroundedAtom<T> expects
 // Grounded trait to be implemented and delegates calls to it.
 
 // Both grounded atom wrappers expect grounded type implements PartialEq,
 // Clone, Debug, Sync and Any traits and use them to implement eq_gnd(),
 // clone_gnd() and as_any_...() methods. This allows reusing standard
-// behaviour as much as possible. CustomGrounded<T> also expects Display is
-// implemented. DefaultGrounded<T> implements Display via Debug because not
+// behaviour as much as possible. CustomGroundedAtom<T> also expects Display is
+// implemented. AutoGroundedAtom<T> implements Display via Debug because not
 // all standard Rust types implement Display (HashMap for example).
 // as_any_...() method are used to transparently convert grounded atom to
 // original Rust type.
@@ -137,7 +137,6 @@ impl Display for VariableAtom {
 // 3rd party code when it is not needed to be customized. 
 
 // FIXME: try implementing eq_gnd/clone_gnd and as_any_ref on the trait level
-// FIXME: replace list of traits by alias trait in all locations
 pub trait GroundedAtom : mopa::Any + Debug + Display + Sync {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
     fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
@@ -178,10 +177,15 @@ pub fn execute_not_executable<T: Debug>(this: &T) -> Result<Vec<Atom>, String> {
     Err(format!("Grounded type is not executable: {:?}", this))
 }
 
-#[derive(PartialEq, Clone, Debug)]
-struct DefaultGrounded<T: 'static + PartialEq + Clone + Debug + Sync>(T);
+/// Alias for the list of traits required for the standard Rust types to be
+/// automatically wrapped into GroundedAtom.
+pub trait AutoGroundedType: 'static + PartialEq + Clone + Debug + Sync {}
+impl<T> AutoGroundedType for T where T: 'static + PartialEq + Clone + Debug + Sync {}
 
-impl<T: 'static + PartialEq + Clone + Debug + Sync> GroundedAtom for DefaultGrounded<T> {
+#[derive(PartialEq, Clone, Debug)]
+struct AutoGroundedAtom<T: AutoGroundedType>(T);
+
+impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
         match other.downcast_ref::<Self>() {
             Some(other) => self == other,
@@ -214,16 +218,21 @@ impl<T: 'static + PartialEq + Clone + Debug + Sync> GroundedAtom for DefaultGrou
     }
 }
 
-impl<T: 'static + PartialEq + Clone + Debug + Sync> Display for DefaultGrounded<T> {
+impl<T: AutoGroundedType> Display for AutoGroundedAtom<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Debug::fmt(&self.0, f)
     }
 }
 
-#[derive(PartialEq, Clone, Debug)]
-struct CustomGrounded<T: 'static + PartialEq + Clone + Debug + Display + Sync + Grounded>(T);
+/// Alias for the list of traits required for a custom Rust grounded type
+/// to be successfully wrapped into GroundedAtom.
+pub trait CustomGroundedType: AutoGroundedType + Display + Grounded {}
+impl<T> CustomGroundedType for T where T: AutoGroundedType + Display + Grounded {}
 
-impl<T: 'static + PartialEq + Clone + Debug + Display + Sync + Grounded> GroundedAtom for CustomGrounded<T> {
+#[derive(PartialEq, Clone, Debug)]
+struct CustomGroundedAtom<T: CustomGroundedType>(T);
+
+impl<T: CustomGroundedType> GroundedAtom for CustomGroundedAtom<T> {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
         match other.downcast_ref::<Self>() {
             Some(other) => self == other,
@@ -232,7 +241,7 @@ impl<T: 'static + PartialEq + Clone + Debug + Display + Sync + Grounded> Grounde
     }
 
     fn clone_gnd(&self) -> Box<dyn GroundedAtom> {
-        Box::new(CustomGrounded(self.0.clone()))
+        Box::new(CustomGroundedAtom(self.0.clone()))
     }
 
     fn as_any_ref(&self) -> &dyn Any {
@@ -256,7 +265,7 @@ impl<T: 'static + PartialEq + Clone + Debug + Display + Sync + Grounded> Grounde
     }
 }
 
-impl<T: 'static + PartialEq + Clone + Debug + Display + Sync + Grounded> Display for CustomGrounded<T> {
+impl<T: CustomGroundedType> Display for CustomGroundedAtom<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(&self.0, f)
     }
@@ -270,17 +279,17 @@ impl<T: 'static + PartialEq + Clone + Debug + Display + Sync + Grounded> Display
 
 pub struct Wrap<T>(pub T);
 
-pub trait DefaultGroundedToAtom { fn to_atom(&self) -> Atom; }
-impl<T: 'static + PartialEq + Clone + Debug + Sync> DefaultGroundedToAtom for Wrap<T> {
+pub trait AutoGroundedTypeToAtom { fn to_atom(&self) -> Atom; }
+impl<T: AutoGroundedType> AutoGroundedTypeToAtom for Wrap<T> {
     fn to_atom(&self) -> Atom {
-        Atom::Grounded(Box::new(DefaultGrounded(self.0.clone())))
+        Atom::Grounded(Box::new(AutoGroundedAtom(self.0.clone())))
     }
 }
 
-pub trait CustomGroundedToAtom { fn to_atom(&self) -> Atom; }
-impl<T: 'static + PartialEq + Clone + Debug + Display + Sync + Grounded> CustomGroundedToAtom for &Wrap<T> {
+pub trait CustomGroundedTypeToAtom { fn to_atom(&self) -> Atom; }
+impl<T: CustomGroundedType> CustomGroundedTypeToAtom for &Wrap<T> {
     fn to_atom(&self) -> Atom {
-        Atom::Grounded(Box::new(CustomGrounded(self.0.clone())))
+        Atom::Grounded(Box::new(CustomGroundedAtom(self.0.clone())))
     }
 }
 
@@ -325,12 +334,12 @@ impl Atom {
         Self::Variable(VariableAtom::new(name))
     }
 
-    pub fn gnd<T: 'static + PartialEq + Clone + Debug + Display + Sync + Grounded>(gnd: T) -> Atom {
-        Self::Grounded(Box::new(CustomGrounded(gnd)))
+    pub fn gnd<T: CustomGroundedType>(gnd: T) -> Atom {
+        Self::Grounded(Box::new(CustomGroundedAtom(gnd)))
     }
 
-    pub fn value<T: 'static + PartialEq + Clone + Debug + Sync>(value: T) -> Atom {
-        Self::Grounded(Box::new(DefaultGrounded(value)))
+    pub fn value<T: AutoGroundedType>(value: T) -> Atom {
+        Self::Grounded(Box::new(AutoGroundedAtom(value)))
     }
 
     pub fn as_gnd<T: 'static>(&self) -> Option<&T> {
@@ -398,13 +407,13 @@ mod test {
     }
 
     #[inline]
-    fn value<T: 'static + PartialEq + Clone + Debug + Sync>(value: T) -> Atom {
-        Atom::Grounded(Box::new(DefaultGrounded(value)))
+    fn value<T: AutoGroundedType>(value: T) -> Atom {
+        Atom::Grounded(Box::new(AutoGroundedAtom(value)))
     }
 
     #[inline]
-    fn gnd<T: 'static + PartialEq + Clone + Debug + Display + Sync + Grounded>(value: T) -> Atom {
-        Atom::Grounded(Box::new(CustomGrounded(value)))
+    fn gnd<T: CustomGroundedType>(value: T) -> Atom {
+        Atom::Grounded(Box::new(CustomGroundedAtom(value)))
     }
 
     #[test]
@@ -513,10 +522,10 @@ mod test {
 
     #[test]
     fn test_debug_grounded() {
-        assert_eq!(format!("{:?}", Atom::value(42)), "Grounded(DefaultGrounded(42))");
-        assert_eq!(format!("{:?}", Atom::value([1, 2, 3])), "Grounded(DefaultGrounded([1, 2, 3]))");
+        assert_eq!(format!("{:?}", Atom::value(42)), "Grounded(AutoGroundedAtom(42))");
+        assert_eq!(format!("{:?}", Atom::value([1, 2, 3])), "Grounded(AutoGroundedAtom([1, 2, 3]))");
         assert_eq!(format!("{:?}", Atom::value(HashMap::from([("hello", "world")]))),
-            "Grounded(DefaultGrounded({\"hello\": \"world\"}))");
+            "Grounded(AutoGroundedAtom({\"hello\": \"world\"}))");
     }
 
     #[derive(PartialEq, Clone, Debug)]

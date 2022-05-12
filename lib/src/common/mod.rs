@@ -105,7 +105,7 @@ mod tests {
     #[test]
     fn test_operation_debug() {
         let op = &Operation{ name: "test_op", execute: test_op, typ: "(-> ())" };
-        assert_eq!(format!("{:?}", Atom::gnd(op)), "Grounded(CustomGrounded(Operation { name: \"test_op\", typ: \"(-> ())\" }))");
+        assert_eq!(format!("{:?}", Atom::gnd(op)), "Grounded(CustomGroundedAtom(Operation { name: \"test_op\", typ: \"(-> ())\" }))");
     }
 
     #[test]

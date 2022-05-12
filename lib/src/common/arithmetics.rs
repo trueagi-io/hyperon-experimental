@@ -55,7 +55,7 @@ fn is_instance<T: 'static>(arg: &Atom) -> bool
 fn unary_op<T, R>(args: &mut Vec<Atom>, op: fn(T) -> R) -> Result<Vec<Atom>, String>
 where
     T: 'static + Copy,
-    R: 'static + PartialEq + Clone + Debug + Sync,
+    R: AutoGroundedType,
 {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
     if let Some(arg) = arg.as_gnd::<T>() {
@@ -69,7 +69,7 @@ fn bin_op<T1, T2, R>(args: &mut Vec<Atom>, op: fn(T1, T2) -> R) -> Result<Vec<At
 where
     T1: 'static + Copy,
     T2: 'static + Copy,
-    R: 'static + PartialEq + Clone + Debug + Sync,
+    R: AutoGroundedType,
 {
     let arg1 = args.get(0).ok_or_else(|| format!("Binary operation called without arguments"))?; 
     let arg2 = args.get(1).ok_or_else(|| format!("Binary operation called with only argument"))?;
