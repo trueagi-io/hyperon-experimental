@@ -96,8 +96,13 @@ impl GroundingSpace {
                         if acc.is_empty() {
                             acc
                         } else {
-                            let res = self.query(pattern);
-                            Bindings::product(acc, res)
+                            let mut next_bindings = vec![];
+                            for prev_bindings in &acc {
+                                let pattern = matcher::apply_bindings_to_atom(pattern, prev_bindings);
+                                let res = self.query(&pattern);
+                                next_bindings.append(&mut Bindings::product(&acc, res));
+                            }
+                            next_bindings
                         }
                     })
             },
@@ -112,8 +117,7 @@ impl GroundingSpace {
             for res in next.match_(pattern) {
                 let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
                 if let Ok(bindings) = bindings {
-                    // TODO: why compiler cannot see Display is implemented for Bindings
-                    log::debug!("single_query: push result: {}, bindings: {:?}", next, bindings);
+                    log::debug!("single_query: push result: {}, bindings: {}", next, bindings);
                     result.push(bindings);
                 }
             }
@@ -358,6 +362,19 @@ mod test {
         ("likes", "Sam", (color, "stuff")),
         ("has-color", object, color)));
         assert_eq!(result, vec![bind!{object: expr!("baloon"), color: expr!("blue")}]);
+    }
+
+    #[test]
+    fn test_unify_variables_inside_conjunction_query() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("lst1", ("Cons", "a1", ("Cons", "b2", "b3"))));
+        space.add(expr!("lst2", ("Cons", "a2", ("Cons", "b3", "b4"))));
+        space.add(expr!("Concat", x1, x2, x3));
+
+        let result = space.subst(
+            &expr!(",", ("lst1", l1), ("lst2", l2), ("Concat", l1, "a2", "a3")),
+            &expr!(l2));
+        assert_eq!(result, vec![expr!("Cons", "a2", ("Cons", "b3", "b4"))]);
     }
 
     #[test]

@@ -56,7 +56,7 @@ impl Bindings {
         }
     }
 
-    pub fn product(prev: Vec<Bindings>, next: Vec<Bindings>) -> Vec<Bindings> {
+    pub fn product(prev: &Vec<Bindings>, next: Vec<Bindings>) -> Vec<Bindings> {
         prev.iter().flat_map(|p| -> Vec<Option<Bindings>> {
             next.iter().map(|n| Self::merge(p, n)).collect()
         }).filter(Option::is_some).map(Option::unwrap).collect()
