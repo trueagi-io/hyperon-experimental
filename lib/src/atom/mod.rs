@@ -136,7 +136,6 @@ impl Display for VariableAtom {
 // match_by_equality() method allows reusing default match_() implementation in
 // 3rd party code when it is not needed to be customized. 
 
-// FIXME: try implementing eq_gnd/clone_gnd and as_any_ref on the trait level
 pub trait GroundedAtom : mopa::Any + Debug + Display + Sync {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
     fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
@@ -157,18 +156,9 @@ pub trait Grounded : Display {
 }
 
 pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matcher::MatchResultIter {
-    match other {
-        Atom::Grounded(other) => {
-            if let Some(other) = other.as_any_ref().downcast_ref::<T>() {
-                if *this == *other {
-                    Box::new(std::iter::once(matcher::MatchResult::new()))
-                } else {
-                    Box::new(std::iter::empty())
-                }
-            } else {
-                Box::new(std::iter::empty())
-            }
-        },
+    match other.as_gnd::<T>() {
+        Some(other) if *this == *other => 
+            Box::new(std::iter::once(matcher::MatchResult::new())),
         _ => Box::new(std::iter::empty()),
     }
 }

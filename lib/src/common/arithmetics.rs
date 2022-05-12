@@ -27,7 +27,7 @@ def_bin_op!(AND, &&, bool, bool);
 def_bin_op!(OR, ||, bool, bool);
 def_op!(NOT, !, |_, args| unary_op(args, |a: bool| !a), "(-> bool bool)");
 
-// FIXME: find out correct types for nop and err
+// TODO: find out correct types for nop and err
 def_op!(NOP, nop, |_, _| Ok(vec![]), "(-> ())");
 def_op!(ERR, err, |_, _| Err("Error".into()), "(-> !)");
 

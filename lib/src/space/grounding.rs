@@ -112,7 +112,7 @@ impl GroundingSpace {
             for res in next.do_match(pattern) {
                 let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
                 if let Ok(bindings) = bindings {
-                    // FIXME: why compiler cannot see Display is implemented for Bindings
+                    // TODO: why compiler cannot see Display is implemented for Bindings
                     log::debug!("single_query: push result: {}, bindings: {:?}", next, bindings);
                     result.push(bindings);
                 }
