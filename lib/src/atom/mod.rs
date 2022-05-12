@@ -463,7 +463,7 @@ mod test {
             if let Some(other) = other.as_gnd::<TestDict>() {
                 other.0.iter().map(|(ko, vo)| {
                     self.0.iter().map(|(k, v)| {
-                        Atom::expr(vec![k.clone(), v.clone()]).do_match(&Atom::expr(vec![ko.clone(), vo.clone()]))
+                        Atom::expr(vec![k.clone(), v.clone()]).match_(&Atom::expr(vec![ko.clone(), vo.clone()]))
                     }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
                         Box::new(acc.chain(i))
                     })
@@ -629,7 +629,7 @@ mod test {
         query.put(expr!(a), expr!({2}, y));
         let query = expr!({query});
 
-        let result: Vec<MatchResult> = dict.do_match(&query).collect();
+        let result: Vec<MatchResult> = dict.match_(&query).collect();
         assert_eq!(result, vec![MatchResult::from((bind!{},
                     bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}))]);
     }

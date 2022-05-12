@@ -109,7 +109,7 @@ impl GroundingSpace {
         log::debug!("single_query: pattern: {}", pattern);
         let mut result = Vec::new();
         for next in &(*self.borrow_vec()) {
-            for res in next.do_match(pattern) {
+            for res in next.match_(pattern) {
                 let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
                 if let Ok(bindings) = bindings {
                     // TODO: why compiler cannot see Display is implemented for Bindings
