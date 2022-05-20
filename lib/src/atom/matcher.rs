@@ -309,7 +309,7 @@ pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
 
 fn apply_bindings_to_atom_recurse(atom: &Atom, bindings: &Bindings) -> Atom {
     match atom {
-        Atom::Symbol(_) | Atom::Grounded(_) => atom.clone(),
+        Atom::Symbol(_)|Atom::Grounded(_) => atom.clone(),
         Atom::Variable(v) => {
             if let Some(binding) = bindings.get(v) {
                 binding.clone()
