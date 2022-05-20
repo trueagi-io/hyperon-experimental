@@ -298,8 +298,18 @@ pub fn unify_atoms(candidate: &Atom, pattern: &Atom) -> Option<UnifyResult> {
 }
 
 pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
+    if bindings.0.is_empty() {
+        atom.clone()
+    } else {
+        let result = apply_bindings_to_atom_recurse(atom, bindings);
+        log::trace!("applied bindings to {} result: {}", atom, result);
+        return result;
+    }
+}
+
+fn apply_bindings_to_atom_recurse(atom: &Atom, bindings: &Bindings) -> Atom {
     match atom {
-        Atom::Symbol(_)|Atom::Grounded(_) => atom.clone(),
+        Atom::Symbol(_) | Atom::Grounded(_) => atom.clone(),
         Atom::Variable(v) => {
             if let Some(binding) = bindings.get(v) {
                 binding.clone()
@@ -307,9 +317,9 @@ pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
                 Atom::Variable(v.clone())
             }
         },
-        Atom::Expression(ExpressionAtom{ children }) => {
+        Atom::Expression(ExpressionAtom { children }) => {
             let children = children.iter()
-                .map(|a| apply_bindings_to_atom(a, bindings))
+                .map(|a| apply_bindings_to_atom_recurse(a, bindings))
                 .collect::<Vec<Atom>>();
             Atom::expr(children)
         },
