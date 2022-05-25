@@ -67,10 +67,10 @@ export PYTHONPATH=$PYTHONPATH:`pwd`/python:`pwd`/../python
 # Language support for IDEs [optional]
 
 Different IDEs may require different tweaks to support the languages
-used in the codebase. The language servers which we use 
+used in the codebase. The language servers which we use
 for development are:
 - [Rust Language Server](https://github.com/rust-lang/rls#setup);
-- [clangd](https://clangd.llvm.org/installation), generate compile 
+- [clangd](https://clangd.llvm.org/installation), generate compile
   commands for the `clangd` using `cmake` variable:
   ```
   cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=Y ..
