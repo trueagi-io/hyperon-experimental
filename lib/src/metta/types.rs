@@ -140,7 +140,7 @@ pub fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
                 // TODO: it is not straightforward, if (: a (-> B C)) then
                 // what should we return for (d (a b)): (D (-> B C)) or
                 // (D C) or both? Same question for a function call.
-                let child_types = get_types(space, child);
+                let child_types = get_reducted_types(space, child);
                 let child_types = child_types.iter()
                     .filter(|typ| i != 0 || !is_func(typ));
                 tuples = child_types.flat_map(|typ| -> Vec<Vec<Atom>> {
@@ -157,6 +157,7 @@ pub fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
                 .map(Atom::expr).collect();
             types.append(&mut query_types(space, atom));
             add_super_types(space, &mut types, 0);
+            log::trace!("get_types: tuple {} types {:?}", atom, types);
 
             // functional types
             let op = get_op(expr);
@@ -173,6 +174,7 @@ pub fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
                     types.push(apply_bindings_to_atom(&fn_type, &bindings));
                 }
             }
+            log::trace!("get_types: tuple + function {} types {:?}", atom, types);
 
             // TODO: Three cases here:
             // - tuple type
@@ -190,7 +192,7 @@ pub fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             types
         },
     };
-    log::trace!("get_types: atom: {} return {:?}", atom, types);
+    log::trace!("get_types: return atom {} types {:?}", atom, types);
     types
 }
 
