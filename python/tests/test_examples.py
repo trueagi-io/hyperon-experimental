@@ -133,6 +133,7 @@ class ExamplesTest(unittest.TestCase):
         metta = MeTTa()
 
         metta.add_parse('''
+            (: if (-> Bool Atom Atom Atom))
             (= (if True $then $else) $then)
             (= (if False $then $else) $else)
             (= (Fritz croaks) True)
@@ -200,6 +201,7 @@ class ExamplesTest(unittest.TestCase):
         metta = MeTTa()
 
         metta.add_parse('''
+           (: if (-> Bool Atom Atom Atom))
            (= (if True $then $else) $then)
            (= (if False $then $else) $else)
 

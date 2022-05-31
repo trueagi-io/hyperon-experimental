@@ -494,7 +494,7 @@ mod test {
 
     impl Grounded for TestMulX {
         fn type_(&self) -> Atom {
-            Atom::sym("(-> i32 i32)")
+            expr!("->", "i32", "i32")
         }
         fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
             Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])

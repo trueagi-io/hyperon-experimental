@@ -122,10 +122,14 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
     &expr.children().as_slice()[1..]
 }
 
-pub fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
+fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     log::trace!("get_types: atom: {}", atom);
     let types = match atom {
-        Atom::Variable(_) | Atom::Grounded(_) => vec![undefined_symbol()],
+        Atom::Variable(_) => vec![undefined_symbol()],
+        Atom::Grounded(gnd) => {
+            let types = vec![gnd.type_()];
+            types
+        },
         Atom::Symbol(_) => {
             let mut types = query_types(space, atom);
             if types.is_empty() {
@@ -197,6 +201,7 @@ pub fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
 }
 
 
+// FIXME: merge with get_types, remove get_types function
 pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     get_types(space, atom).drain(0..).map(|typ| {
         if matches!(atom, Atom::Expression(_)) && is_func(&typ) {
@@ -252,7 +257,15 @@ pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
         AtomType::Undefined => &undefined,
         AtomType::Specific(atom) => atom,
     };
-    !get_matched_types(space, atom, typ).is_empty()
+    !get_matched_types(space, atom, typ).is_empty() || 
+        //FIXME: temporary hack to implement meta types check
+        *typ == Atom::sym("Atom") ||
+        match atom {
+            Atom::Symbol(_) => *typ == Atom::sym("Symbol"),
+            Atom::Variable(_) => *typ == Atom::sym("Variable"),
+            Atom::Grounded(_) => *typ == Atom::sym("Grounded"),
+            Atom::Expression(_) => *typ == Atom::sym("Expression"),
+        }
 }
 
 pub fn validate_atom(space: &GroundingSpace, atom: &Atom) -> bool {
@@ -565,5 +578,11 @@ mod tests {
             (: b B)
         ");
         assert_eq!(get_types(&space, &atom("(a b)")), vec![atom("(A B)"), atom("(-> B C)")]);
+    }
+
+    #[test]
+    fn get_type_grounded_atom() {
+        let space = GroundingSpace::new();
+        assert_eq!(get_types(&space, &Atom::value(3)), vec![atom("i32")]);
     }
 }
