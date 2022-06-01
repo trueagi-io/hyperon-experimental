@@ -66,11 +66,14 @@ impl<T, R> Plan<T, R> for Box<dyn Plan<T, R>> {
     }
 }
 
-/// StepResult itself is a trivial plan which returns itself when executed
+/// StepResult itself is a trivial plan which executes step of the plan or 
+/// itself when executed
 impl<R: Debug> Plan<(), R> for StepResult<R> {
     fn step(self: Box<Self>, _:()) -> StepResult<R> {
-        // FIXME: try execute next step here
-        *self
+        match *self {
+            StepResult::Execute(plan) => plan.step(()),
+            _ => *self,
+        }
     }
 }
 
@@ -420,6 +423,21 @@ mod tests {
             |mut a, b| {a.push(b); a});
         assert_eq!(execute_plan(StepResult::Execute(plan), ()), Ok(vec![2, 3, 4, 5]));
         assert_eq!(*step_counter, 4);
+    }
+
+    #[test]
+    fn step_result_plan() {
+        let plan = Box::new(StepResult::execute(OperatorPlan::new(
+                    |_| StepResult::ret("Successful"), "return string")));
+
+        let result = plan.step(());
+
+        if let StepResult::Return(result) = result {
+            assert_eq!(result, "Successful");
+        } else {
+            assert!(false, "Immediate result is expected");
+        }
+
     }
 }
 
