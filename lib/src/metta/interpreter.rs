@@ -147,7 +147,6 @@ fn interpret_as_type_plan(context: InterpreterContextRef, (atom, bindings):
         Atom::Expression(ref expr) => {
             let op = &expr.children()[0];
             StepResult::execute(SequencePlan::new(
-                    // FIXME: replace context.clone() by copying
                     get_type_of_atom_plan(context.clone(), op.clone()),
                     interpret_expression_as_type_plan(context, (atom, bindings), typ)
             ))
