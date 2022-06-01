@@ -122,8 +122,8 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
     &expr.children().as_slice()[1..]
 }
 
-fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
-    log::trace!("get_types: atom: {}", atom);
+pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
+    log::trace!("get_reducted_types: atom: {}", atom);
     let types = match atom {
         Atom::Variable(_) => vec![undefined_symbol()],
         Atom::Grounded(gnd) => {
@@ -161,24 +161,24 @@ fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
                 .map(Atom::expr).collect();
             types.append(&mut query_types(space, atom));
             add_super_types(space, &mut types, 0);
-            log::trace!("get_types: tuple {} types {:?}", atom, types);
+            log::trace!("get_reducted_types: tuple {} types {:?}", atom, types);
 
             // functional types
             let op = get_op(expr);
             let args = get_args(expr);
             let actual_arg_types: Vec<Vec<Atom>> = args.iter().map(|arg| get_reducted_types(space, arg)).collect();
-            let mut fn_types = get_types(space, op);
+            let mut fn_types = get_reducted_types(space, op);
             let fn_types = fn_types.drain(0..).filter(is_func);
             let mut only_tuple = true;
             for fn_type in fn_types {
                 only_tuple = false;
-                let (expected_arg_types, _) = get_arg_types(&fn_type);
+                let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
                 let mut bindings = Bindings::new();
                 if check_types(actual_arg_types.as_slice(), expected_arg_types, &mut bindings) {
-                    types.push(apply_bindings_to_atom(&fn_type, &bindings));
+                    types.push(apply_bindings_to_atom(&ret_typ, &bindings));
                 }
             }
-            log::trace!("get_types: tuple + function {} types {:?}", atom, types);
+            log::trace!("get_reducted_types: tuple + function {} types {:?}", atom, types);
 
             // TODO: Three cases here:
             // - tuple type
@@ -196,22 +196,10 @@ fn get_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             types
         },
     };
-    log::trace!("get_types: return atom {} types {:?}", atom, types);
+    log::trace!("get_reducted_types: return atom {} types {:?}", atom, types);
     types
 }
 
-
-// FIXME: merge with get_types, remove get_types function
-pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
-    get_types(space, atom).drain(0..).map(|typ| {
-        if matches!(atom, Atom::Expression(_)) && is_func(&typ) {
-            let (_, ret) = get_arg_types(&typ);
-            ret.clone()
-        } else {
-            typ
-        }
-    }).collect()
-}
 
 pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings) -> bool {
     log::trace!("match_reducted_types: type1: {}, type2: {}, bindings: {}", type1, type2, bindings);
@@ -536,53 +524,53 @@ mod tests {
     }
 
     #[test]
-    fn get_type_undefined_expression_type() {
+    fn get_reducted_types_undefined_expression_type() {
         let space = metta_space("
             (: a A)
         ");
-        assert_eq!(get_types(&space, &atom("(a b)")), vec![atom("(A %Undefined%)")]);
+        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![atom("(A %Undefined%)")]);
 
         let space = metta_space("");
-        assert_eq!(get_types(&space, &atom("(a b)")), vec![undefined_symbol()]);
+        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![undefined_symbol()]);
 
         let space = metta_space("
             (: a (-> C D))
             (: b B)
         ");
-        assert_eq!(get_types(&space, &atom("(a b)")), vec![]);
+        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![]);
     }
 
     #[test]
-    fn get_type_function_call() {
+    fn get_reducted_types_function_call() {
         let space = metta_space("
             (: a (-> B C))
             (: b B)
         ");
-        assert_eq!(get_types(&space, &atom("(a b)")), vec![atom("(-> B C)")]);
+        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![atom("C")]);
     }
 
     #[test]
-    fn get_type_tuple() {
+    fn get_reducted_types_tuple() {
         let space = metta_space("
             (: a A)
             (: b B)
         ");
-        assert_eq!(get_types(&space, &atom("(a b)")), vec![atom("(A B)")]);
+        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![atom("(A B)")]);
     }
 
     #[test]
-    fn get_type_function_call_and_tuple() {
+    fn get_reducted_types_function_call_and_tuple() {
         let space = metta_space("
             (: a (-> B C))
             (: a A)
             (: b B)
         ");
-        assert_eq!(get_types(&space, &atom("(a b)")), vec![atom("(A B)"), atom("(-> B C)")]);
+        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![atom("(A B)"), atom("C")]);
     }
 
     #[test]
-    fn get_type_grounded_atom() {
+    fn get_reducted_types_grounded_atom() {
         let space = GroundingSpace::new();
-        assert_eq!(get_types(&space, &Atom::value(3)), vec![atom("i32")]);
+        assert_eq!(get_reducted_types(&space, &Atom::value(3)), vec![atom("i32")]);
     }
 }
