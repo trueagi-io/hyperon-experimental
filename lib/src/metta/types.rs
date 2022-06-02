@@ -15,6 +15,8 @@ fn arrow_symbol() -> Atom { sym!("->") }
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum AtomType {
+    // TODO: Need to introduce common Undefined type symbol. For now types.rs
+    // uses %Undefined%, and Undefined is used in Python code
     Undefined,
     Specific(Atom),
 }

@@ -63,8 +63,6 @@ nopAtom = OperationAtom('nop', lambda *args: [], unwrap=False)
 # TODO: Any for the argument is necessary to make argument reductable.
 letAtom = OperationAtom('let', let_op,
     type_names=["Variable", "Any", "Atom", "Atom"], unwrap=False)
-# FIXME: Need to introduce common Undefined type symbol. For now types.rs
-# uses %Undefined%, and Undefined is used in Python code
 matchAtom = OperationAtom('match', match_op,
     type_names=["Space", "Any", "Atom", "Atom"], unwrap=False)
 
