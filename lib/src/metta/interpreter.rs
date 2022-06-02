@@ -247,7 +247,6 @@ fn interpret_expression_as_type_op(context: InterpreterContextRef,
             ret_typ == AtomType::Specific(Atom::sym("Expression")) {
         Box::new(StepResult::ret(vec![input]))
     } else if is_func(&op_typ) {
-        // FIXME: replace get_arg_types by decompose_op_type
         let (op_arg_types, op_ret_typ) = get_arg_types(&op_typ);
         // TODO: supertypes should be checked as well
         if !ret_typ.map_or(|typ| *op_ret_typ == *typ, true) {
