@@ -25,9 +25,6 @@ class GroundedTypeTest(unittest.TestCase):
             metta.interpret("(untop)")[0].get_grounded_type(),
             metta.parse_single("untyped").get_grounded_type())
         self.assertNotEqual(
-            metta.parse_single("untop").get_grounded_type(),
-            metta.parse_single("untyped").get_grounded_type())
-        self.assertNotEqual(
             metta.interpret("(untop)")[0].get_grounded_type(),
             metta.interpret("(+ 1 1)")[0].get_grounded_type())
         self.assertNotEqual(

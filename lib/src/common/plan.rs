@@ -66,10 +66,14 @@ impl<T, R> Plan<T, R> for Box<dyn Plan<T, R>> {
     }
 }
 
-/// StepResult itself is a trivial plan which returns itself when executed
+/// StepResult itself is a trivial plan which executes step of the plan or 
+/// itself when executed
 impl<R: Debug> Plan<(), R> for StepResult<R> {
     fn step(self: Box<Self>, _:()) -> StepResult<R> {
-        *self
+        match *self {
+            StepResult::Execute(plan) => plan.step(()),
+            _ => *self,
+        }
     }
 }
 
@@ -154,7 +158,7 @@ impl<T: Debug, R> Plan<(), R> for ApplyPlan<T, R> {
 
 impl<T: Debug, R> Debug for ApplyPlan<T, R> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:?}({:?})", self.plan, self.arg)
+        write!(f, "apply \"{:?}\" to \"{:?}\"", self.plan, self.arg)
     }
 }
 
@@ -180,7 +184,7 @@ impl<T1: Debug, T2, R> Plan<T2, R> for PartialApplyPlan<T1, T2, R> {
 
 impl<T1: Debug, T2, R> Debug for PartialApplyPlan<T1, T2, R> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
-        write!(f, "{:?}({:?}, ...)", self.plan, self.arg)
+        write!(f, "partially apply \"{:?}\" to \"{:?}\"", self.plan, self.arg)
     }
 }
 
@@ -249,7 +253,7 @@ impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2>
                 second: self.second,
             }),
             StepResult::Return(first_result) => {
-                let descr = format!("({:?}, ...)", first_result);
+                let descr = format!("return tuple ({:?}, ?)", first_result);
                 StepResult::execute(SequencePlan{
                     first: self.second,
                     second: Box::new(OperatorPlan::new(|second_result|
@@ -365,7 +369,10 @@ impl<R: 'static> Plan<(), R> for OrPlan<R> {
                 second: self.second,
             }),
             StepResult::Return(first_result) => StepResult::ret(first_result),
-            StepResult::Error(_) => StepResult::execute(self.second),
+            StepResult::Error(err) => {
+                log::debug!("OrPlan: returned second path: {:?} because of error: {}", self.second, err);
+                StepResult::execute(self.second)
+            },
         }
     }
 }
@@ -416,6 +423,21 @@ mod tests {
             |mut a, b| {a.push(b); a});
         assert_eq!(execute_plan(StepResult::Execute(plan), ()), Ok(vec![2, 3, 4, 5]));
         assert_eq!(*step_counter, 4);
+    }
+
+    #[test]
+    fn step_result_plan() {
+        let plan = Box::new(StepResult::execute(OperatorPlan::new(
+                    |_| StepResult::ret("Successful"), "return string")));
+
+        let result = plan.step(());
+
+        if let StepResult::Return(result) = result {
+            assert_eq!(result, "Successful");
+        } else {
+            assert!(false, "Immediate result is expected");
+        }
+
     }
 }
 

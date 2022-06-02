@@ -42,6 +42,7 @@ class MinecraftTest(unittest.TestCase):
         metta.add_token("mine", lambda _: newMineOp(inventory))
 
         metta.add_parse('''
+            (: if (-> Bool Atom Atom Atom))
             (= (if True $then $else) $then)
             (= (if False $then $else) $else)
 
@@ -99,6 +100,7 @@ class MinecraftTest(unittest.TestCase):
             (= (can-be-made inventory) False)
             (= (can-be-mined inventory) False)
 
+            (: if (-> Bool Atom Atom Atom))
             (= (if True $then $else) $then)
             (= (if False $then $else) $else)
 

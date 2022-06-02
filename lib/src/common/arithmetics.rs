@@ -129,6 +129,7 @@ mod tests {
         //   space.add(expr!("=", ("fac", {0}), {1}));
         // should not work. For now, we have to resort to explicit
         // termination conditions:
+        space.add(expr!(":", "if", ("->", "bool", "Atom", "Atom", "Atom")));
         space.add(expr!("=", ("if", {true}, a, b), a));
         space.add(expr!("=", ("if", {false}, a, b), b));
         space.add(expr!("=", ("fac", n),

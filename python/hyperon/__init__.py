@@ -133,9 +133,12 @@ class OperationObject(ConstGroundedObject):
     def __repr__(self):
         return self.name
 
-def OperationAtom(name, op, type_names=['Undefined'], unwrap=True):
+def OperationAtom(name, op, type_names=None, unwrap=True):
     # TODO: nested arrows
-    typ = E(S("->"), *[S(n) for n in type_names])
+    if type_names is not None:
+        typ = E(S("->"), *[S(n) for n in type_names])
+    else:
+        typ = S("Undefined")
     return G(OperationObject(name, op, unwrap), typ)
 
 def ValueAtom(value, type_name='Undefined'):

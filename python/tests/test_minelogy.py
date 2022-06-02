@@ -111,11 +111,11 @@ class MinelogyTest(unittest.TestCase):
             )
             ''')
         output = utils.interpret('(how-get cobblestone)')
-        self.assertEqual(repr(output[0]),
-            '(do-mine ((: stone type) (: stone variant)))')
+        self.assertEqual(repr(output),
+            '[(let $t (get-ingredients cobblestone) (do-craft $t)), (do-mine ((: stone type) (: stone variant)))]')
         output = utils.interpret('(how-get stick)')
-        self.assertEqual(repr(output[0]),
-            '(do-craft ((: planks type) (: $x variant) (: 2 quantity)))')
+        self.assertEqual(repr(output),
+            '[(do-craft ((: planks type) (: $x variant) (: 2 quantity))), (let $t (get-mine-block stick) (do-mine $t))]')
 
     def test_minelogy_wtypes(self):
         # TODO: revisit this example, when types are automatically checked
@@ -133,9 +133,9 @@ class MinelogyTest(unittest.TestCase):
             (: CBlockT (-> BlockT Block))
             (: CBlockV (-> BlockT BlockV Block))
             (: EntityT Type)
-            (: log EntitytT)
-            (: dirt EntitytT)
-            (: sand EntitytT)
+            (: log EntityT)
+            (: dirt EntityT)
+            (: sand EntityT)
             (: planks EntityT)
             (: stick EntityT)
             (: wooden_pickaxe EntityT)

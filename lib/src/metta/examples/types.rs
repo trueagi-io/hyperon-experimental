@@ -10,6 +10,7 @@ fn test_types_in_metta() {
     space.add(expr!("=", ("check", (":", n, "Nat")), ({AND}, ("check", (":", n, "Int")), ({GT}, n, {0}))));
     space.add(expr!("=", ("if", {true}, then, else), then));
     space.add(expr!("=", ("if", {false}, then, else), else));
+    space.add(expr!(":", "if", ("->", "bool", "Atom", "Atom", "Atom")));
     space.add(expr!("=", ("fac", n), ("if", ("check", (":", n, "Nat")), ("if", ({EQ}, n, {1}), {1}, ({MUL}, n, ("fac", ({SUB}, n, {1})))), ({ERR}))));
     let space = space;
 

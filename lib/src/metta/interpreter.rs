@@ -4,22 +4,68 @@ use crate::atom::subexpr::*;
 use crate::atom::matcher::*;
 use crate::space::grounding::*;
 use crate::common::collections::ListMap;
+use crate::metta::types::{AtomType, is_func, get_arg_types, check_type, get_reducted_types};
 
 use std::ops::Deref;
 use std::rc::Rc;
 use std::cell::RefCell;
+use std::fmt::{Debug, Display, Formatter};
 
 #[inline]
 fn equal_symbol() -> Atom { sym!("=") }
 
-pub type InterpreterResult = Vec<(Atom, Bindings)>;
 
-pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<InterpreterResult> {
-    let context = InterpreterContextRef::new(space);
-    StepResult::execute(interpret_plan(context, expr.clone(), Bindings::new()))
+#[derive(Clone)]
+pub struct InterpretedAtom(Atom, Bindings);
+
+impl InterpretedAtom {
+    fn atom(&self) -> &Atom {
+        &self.0
+    }
+
+    fn bindings(&self) -> &Bindings {
+        &self.1
+    }
+    
+    pub fn into_tuple(self) -> (Atom, Bindings) {
+        (self.0, self.1)
+    }
 }
 
-pub fn interpret_step(step: StepResult<InterpreterResult>) -> StepResult<InterpreterResult> {
+impl Display for InterpretedAtom {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        if self.1.is_empty() {
+            write!(f, "{}", self.0)
+        } else {
+            // TODO: it is possible to cleanup all bindings for nested
+            // expressions which were introduced by matching when all
+            // sub-expressions are interpreted. This will simplify
+            // textual representation. For example in test_air_humidity_regulator
+            // (make air wet) leads to (start kettle), {$y: kettle}) result
+            // but $y is not present in the expression after interpreting
+            // (make air wet) and can be removed.
+            write!(f, "{}|{}", self.0, self.1)
+        }
+    }
+}
+
+impl Debug for InterpretedAtom {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        Display::fmt(self, f)
+    }
+}
+
+type Results = Vec<InterpretedAtom>;
+type NoInputPlan = Box<dyn Plan<(), Results>>;
+
+pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<Vec<InterpretedAtom>> {
+    let context = InterpreterContextRef::new(space);
+    interpret_as_type_plan(context,
+        InterpretedAtom(expr.clone(), Bindings::new()),
+        AtomType::Undefined)
+}
+
+pub fn interpret_step(step: StepResult<Vec<InterpretedAtom>>) -> StepResult<Vec<InterpretedAtom>> {
     log::debug!("current plan:\n{:?}", step);
     match step {
         StepResult::Execute(plan) => plan.step(()),
@@ -34,7 +80,8 @@ pub fn interpret(space: GroundingSpace, expr: &Atom) -> Result<Vec<Atom>, String
         step = interpret_step(step);
     }
     match step {
-        StepResult::Return(mut result) => Ok(result.drain(0..).map(|(atom, _)| atom).collect()),
+        StepResult::Return(mut result) => Ok(result.drain(0..)
+            .map(|InterpretedAtom(atom, _)| atom).collect()),
         StepResult::Error(message) => Err(message),
         _ => panic!("Not expected step result: {:?}", step),
     }
@@ -42,23 +89,23 @@ pub fn interpret(space: GroundingSpace, expr: &Atom) -> Result<Vec<Atom>, String
 
 // TODO: ListMap is not effective but we cannot use HashMap here without
 // requiring hash functions for the grounded atoms.
-struct InterpreterCache(ListMap<Atom, InterpreterResult>);
+struct InterpreterCache(ListMap<Atom, Results>);
 
 impl InterpreterCache {
     fn new() -> Self {
         Self(ListMap::new())
     }
 
-    fn get(&self, key: &Atom, current_bindings: &Bindings) -> Option<InterpreterResult> {
-        self.0.get(key).map(|res| -> Option<InterpreterResult> {
+    fn get(&self, key: &Atom, current_bindings: &Bindings) -> Option<Results> {
+        self.0.get(key).map(|results| -> Option<Results> {
                 let mut inconsistent = Vec::new();
                 let mut result = Vec::new();
-                for (atom, bindings) in res {
-                    let merged = Bindings::merge(&bindings, &current_bindings);
+                for res in results {
+                    let merged = Bindings::merge(res.bindings(), &current_bindings);
                     if let Some(merged) = merged {
-                        result.push((atom.clone(), merged));
+                        result.push(InterpretedAtom(res.atom().clone(), merged));
                     } else {
-                        inconsistent.push((atom, bindings));
+                        inconsistent.push(res);
                     }
                 }
                 if inconsistent.is_empty() {
@@ -71,7 +118,7 @@ impl InterpreterCache {
             }).flatten()
     }
 
-    fn insert(&mut self, key: Atom, value: InterpreterResult) {
+    fn insert(&mut self, key: Atom, value: Results) {
         self.0.insert(key, value)
     }
 
@@ -124,313 +171,333 @@ fn has_grounded_sub_expr(expr: &Atom) -> bool {
         });
 }
 
-fn format_bindings(bindings: &Bindings) -> String {
-    if bindings.is_empty() {
-        "".into()
-    } else {
-        format!(", bindings {}", bindings)
-    }
-}
+fn interpret_as_type_plan(context: InterpreterContextRef,
+        input: InterpretedAtom, typ: AtomType) -> StepResult<Results> {
+    log::debug!("interpret_as_type_plan: input: {}, type: {}", input, typ);
+    match input.atom() {
+        Atom::Symbol(_) | Atom::Grounded(_) =>
+            cast_atom_to_type_plan(context, input, typ),
 
-fn interpret_plan(context: InterpreterContextRef, atom: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
-    let descr = format!("interpret {}{}", atom, format_bindings(&bindings));
-    OperatorPlan::new(|_| interpret_op(context, atom, bindings), descr)
-}
+        Atom::Expression(ref expr) if expr.children().is_empty() =>
+            cast_atom_to_type_plan(context, input, typ),
 
-fn interpret_op(context: InterpreterContextRef, atom: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
-    log::debug!("interpret_op: {}, {}", atom, bindings);
-    let atom = apply_bindings_to_atom(&atom, &bindings);
-    let input = (atom, bindings);
+        Atom::Expression(ref expr) => {
+            let op = &expr.children()[0];
+            StepResult::execute(SequencePlan::new(
+                    get_type_of_atom_plan(context.clone(), op.clone()),
+                    interpret_expression_as_type_plan(context, input, typ)
+            ))
+        },
 
-    let cached = context.cache.borrow().get(&input.0, &input.1);
-    if let Some(result) = cached {
-        return_cached_result_plan(result)
-    } else {
-        if let Atom::Expression(_) = input.0 {
-            if !has_grounded_sub_expr(&input.0) {
-                StepResult::execute(SequencePlan::new(
-                    OrPlan::new(interpret_expression_plan(context.clone(), input.clone()),
-                        StepResult::ret(vec![input.clone()])),
-                    save_result_in_cache_plan(context, input.0)
-                ))
-            } else {
-                StepResult::execute(OrPlan::new(
-                        interpret_expression_plan(context.clone(), input.clone()),
-                        StepResult::ret(vec![input.clone()])))
-            }
-        } else {
+        Atom::Variable(_) => {
             StepResult::ret(vec![input])
-        }
+        },
     }
 }
 
-fn return_cached_result_plan(result: InterpreterResult) -> StepResult<InterpreterResult> {
-    let descr = format!("return cached result {:?}", result);
-    StepResult::execute(OperatorPlan::new(|_| StepResult::ret(result), descr))
+fn cast_atom_to_type_plan(context: InterpreterContextRef,
+        input: InterpretedAtom, typ: AtomType) -> StepResult<Results> {
+    // TODO: implement this via interpreting of the (:cast atom typ) expression
+    if check_type(&context.space, input.atom(), &typ) {
+        log::debug!("cast_atom_to_type_plan: input: {} is casted to type: {}", input, typ);
+        StepResult::ret(vec![input])
+    } else {
+        log::debug!("cast_atom_to_type_plan: input: {} cannot be casted to type: {}", input, typ);
+        StepResult::err(format!("Incorrect type, input: {}, type: {}", input, typ))
+    }
 }
 
-fn save_result_in_cache_plan(context: InterpreterContextRef, key: Atom) -> OperatorPlan<InterpreterResult, InterpreterResult> {
-    let descr = format!("save result in cache for key {}", key);
-    OperatorPlan::new(move |result: InterpreterResult| {
-        context.cache.borrow_mut().insert(key, result.clone());
-        StepResult::ret(result)
+fn get_type_of_atom_plan(context: InterpreterContextRef, atom: Atom) -> StepResult<Vec<Atom>> {
+    // TODO: implement this via interpreting of the (:? atom)
+    StepResult::ret(get_reducted_types(&context.space, &atom))
+}
+
+fn interpret_expression_as_type_plan(context: InterpreterContextRef,
+        input: InterpretedAtom, typ: AtomType) -> OperatorPlan<Vec<Atom>, Results> {
+    let descr = format!("form alternative plans for expression {} using types", input);
+    OperatorPlan::new(move |op_types: Vec<Atom>| {
+        make_alternives_plan(input.clone(), op_types, move |op_typ| {
+            interpret_expression_as_type_op(context.clone(),
+                input.clone(), op_typ, typ.clone())
+        })
     }, descr)
 }
 
-fn interpret_expression_plan(context: InterpreterContextRef, (atom, bindings): (Atom, Bindings)) -> Box<dyn Plan<(), InterpreterResult>> {
+fn get_expr(atom: &Atom) -> &ExpressionAtom {
     match atom {
-        Atom::Expression(ref expr) if expr.is_plain() => 
-            interpret_reducted_plan(context,  atom, bindings),
-        Atom::Expression(ref expr) if is_grounded(expr) => 
-            reduct_args_plan(context, atom, bindings),
-        Atom::Expression(_) => {
-            Box::new(OrPlan::new(
-                    match_plan(context.clone(), atom.clone(), bindings.clone()),
-                    reduct_arg_by_arg_plan(context, atom, bindings)
+        Atom::Expression(expr) => expr,
+        _ => panic!("Atom::Expression is expected, recieved: {}", atom),
+    }
+}
+
+fn get_expr_mut(atom: &mut Atom) -> &mut ExpressionAtom {
+    match atom {
+        Atom::Expression(expr) => expr,
+        _ => panic!("Atom::Expression is expected, recieved: {}", atom),
+    }
+}
+
+fn interpret_expression_as_type_op(context: InterpreterContextRef,
+        input: InterpretedAtom, op_typ: Atom, ret_typ: AtomType) -> NoInputPlan {
+    log::debug!("interpret_expression_as_type_op: input: {}, operation type: {}, expected return type: {}", input, op_typ, ret_typ);
+    let expr = get_expr(input.atom());
+    if ret_typ == AtomType::Specific(Atom::sym("Atom")) ||
+            ret_typ == AtomType::Specific(Atom::sym("Expression")) {
+        Box::new(StepResult::ret(vec![input]))
+    } else if is_func(&op_typ) {
+        let (op_arg_types, op_ret_typ) = get_arg_types(&op_typ);
+        // TODO: supertypes should be checked as well
+        if !ret_typ.map_or(|typ| *op_ret_typ == *typ, true) {
+            Box::new(StepResult::err(format!("Operation returns wrong type: {}, expected: {}", op_ret_typ, ret_typ)))
+        } else if op_arg_types.len() != (expr.children().len() - 1) {
+            Box::new(StepResult::err(format!("Operation arity is not equal to call arity: operation type, {}, call: {}", op_typ, expr)))
+        } else {
+            assert!(!expr.children().is_empty(), "Empty expression is not expected");
+            let mut plan: NoInputPlan = Box::new(StepResult::ret(vec![input.clone()]));
+            for expr_idx in 1..(expr.children().len()) {
+                let arg = expr.children()[expr_idx].clone();
+                let arg_typ = AtomType::Specific(op_arg_types[expr_idx - 1].clone());
+                plan = Box::new(SequencePlan::new(
+                    ParallelPlan::new(
+                        plan,
+                        interpret_as_type_plan(context.clone(),
+                            InterpretedAtom(arg, input.bindings().clone()),
+                            arg_typ)),
+                    insert_reducted_arg_plan(expr_idx)
+                ))
+            }
+            call_alternatives_plan(plan, context, input)
+        }
+    } else {
+        let mut plan: NoInputPlan = Box::new(StepResult::ret(vec![input.clone()]));
+        for expr_idx in 0..(expr.children().len()) {
+            let arg = expr.children()[expr_idx].clone();
+            plan = Box::new(SequencePlan::new(
+                ParallelPlan::new(
+                    plan,
+                    interpret_as_type_plan(context.clone(),
+                        InterpretedAtom(arg, input.bindings().clone()),
+                        AtomType::Undefined)),
+                insert_reducted_arg_plan(expr_idx)
             ))
         }
-        _ => panic!("Only expression is expected, received: {}", atom),
+        call_alternatives_plan(plan, context, input)
     }
 }
 
-fn interpret_reducted_plan(context: InterpreterContextRef, atom: Atom, bindings: Bindings) -> Box<dyn Plan<(), InterpreterResult>> {
-    let atom = apply_bindings_to_atom(&atom, &bindings);
-    if let Atom::Expression(ref expr) = atom {
-        if is_grounded(expr) {
-            Box::new(execute_plan(context, atom, bindings))
-        } else {
-            Box::new(match_plan(context, atom, bindings))
-        }
-    } else {
-        panic!("Only expression is expected, received: {}", atom);
-    }
-}
-
-fn reduct_arg_by_arg_plan(context: InterpreterContextRef, expr: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
-    let descr = format!("reduct expression arg by arg {}", expr);
-    OperatorPlan::new(|_| reduct_arg_by_arg_op(context, expr, bindings), descr)
-}
-
-fn reduct_arg_by_arg_op(context: InterpreterContextRef, expr: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
-    log::debug!("reduct_arg_by_arg_op: {}", expr);
-    if let Atom::Expression(_) = expr {
-        let iter = SubexprStream::from_expr(expr, BOTTOM_UP_DEPTH_WALK);
-        try_reduct_next_arg_op(context, iter, bindings)
-    } else {
-        panic!("Atom::Expression is expected as an argument, found: {}", expr)
-    }
-}
-
-fn try_reduct_next_arg_plan(context: InterpreterContextRef, iter: SubexprStream, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
-    let descr = format!("try reducting next arg in {:?}", iter);
-    OperatorPlan::new(|_| try_reduct_next_arg_op(context, iter, bindings), descr)
-}
-
-fn try_reduct_next_arg_op(context: InterpreterContextRef, mut iter: SubexprStream, bindings: Bindings) -> StepResult<InterpreterResult> {
-    if let Some(arg) = iter.next().cloned() {
-        StepResult::execute(OrPlan::new(
-                SequencePlan::new(
-                    interpret_reducted_plan(context.clone(), arg, bindings.clone()),
-                    replace_arg_and_interpret_plan(context.clone(), iter.clone())),
-                try_reduct_next_arg_plan(context, iter, bindings)
-        ))
-    } else {
-        StepResult::err("No results for reducted found")
-    }
-}
-
-fn replace_arg_and_interpret_plan(context: InterpreterContextRef, iter: SubexprStream) -> OperatorPlan<InterpreterResult, InterpreterResult> {
-    let descr = format!("interpret after reduction of {:?}", iter);
-    OperatorPlan::new(|reduction_result| replace_arg_and_interpret_op(context, iter, reduction_result), descr)
-}
-
-fn replace_arg_and_interpret_op(context: InterpreterContextRef, iter: SubexprStream, mut reduction_result: InterpreterResult) -> StepResult<InterpreterResult> {
-    log::debug!("replace_arg_and_interpret_op: reduction_result: {:?}", reduction_result);
-    if reduction_result.is_empty() {
-        //panic!("Unexpected empty result while reducting: {}, it should be either error or non-empty, full expression: {}", iter.get(), iter.as_atom());
-        // TODO: Reducting next argument instead of panic allows creating
-        // grounded atom NOP which is not reducted when met inside
-        // expression but returns nothing when executed.
-        StepResult::err("NOP special case")
-    } else {
-        let plan = reduction_result.drain(0..)
-            .map(|(result, bindings)| -> Box<dyn Plan<(), InterpreterResult>> {
-                let mut iter = iter.clone();
-                *iter.get_mut() = result;
-                Box::new(interpret_plan(context.clone(), iter.into_atom(), bindings))
-            }).collect();
-        StepResult::execute(AlternativeInterpretationsPlan::new(iter.into_atom(), plan))
-    }
-}
-
-fn find_next_sibling_skip_last<'a>(levels: &mut Vec<usize>, expr: &'a ExpressionAtom, level: usize) -> Option<&'a Atom> {
-    let mut idx = usize::wrapping_add(levels[level], 1);
-    while idx < expr.children().len() - 1 {
-        let child = &expr.children()[idx];
-        if let Atom::Expression(_) = child {
-            levels[level] = idx;
-            log::trace!("find_next_sibling_expr: return: {}", child);
-            return Some(child);
-        }
-        idx += 1;
-    }
-    levels.pop();
-    log::trace!("find_next_sibling_expr: return None");
-    return None;
-}
-
-
-fn reduct_args_plan(context: InterpreterContextRef, expr: Atom, bindings: Bindings) -> Box<dyn Plan<(), InterpreterResult>> {
-    log::debug!("reduct_args_plan: {}", expr);
-    if let Atom::Expression(ref e) = expr {
-        // TODO: remove this hack when it is possible to use types in order
-        // to prevent reducing of the last argument of the match
-        let mut iter = if format!("{}", e.children()[0]) == "match" {
-            log::trace!("skip reducing the last argument of the match");
-            SubexprStream::from_expr(expr, find_next_sibling_skip_last)
-        } else {
-            SubexprStream::from_expr(expr, FIND_NEXT_SIBLING_WALK)
-        };
-        let sub = iter.next().expect("Non plain expression expected").clone();
-        Box::new(SequencePlan::new(
-                interpret_plan(context.clone(), sub, bindings),
-                reduct_next_arg_plan(context, iter)
-        ))
-    } else {
-        panic!("Only expression is expected, received: {}", expr);
-    }
-}
-
-fn reduct_next_arg_plan(context: InterpreterContextRef, iter: SubexprStream) -> OperatorPlan<InterpreterResult, InterpreterResult> {
-    let descr = format!("reduct next arg in {:?}", iter);
-    OperatorPlan::new(|prev_result| reduct_next_arg_op(context, iter, prev_result), descr)
-}
-
-fn reduct_next_arg_op(context: InterpreterContextRef, iter: SubexprStream, mut prev_result: InterpreterResult) -> StepResult<InterpreterResult> {
-    let plan = prev_result.drain(0..)
-        .map(|(reducted, bindings)| {
-            let mut iter = iter.clone();
-            log::debug!("reduct_next_arg_op: reducted: {}, bindings: {:?}", reducted, bindings);
-            *iter.get_mut() = reducted;
-            log::debug!("reduct_next_arg_op: expression: {}", iter.as_atom());
-
-            let next_sub = if let Some(next_sub) = iter.next().cloned() {
-                log::debug!("reduct_next_arg_op: next_sub after reduction: {}", next_sub);
-                Some(next_sub)
-            } else { None };
-
-            (next_sub, bindings, iter)
+fn call_alternatives_plan(plan: NoInputPlan, context: InterpreterContextRef,
+    input: InterpretedAtom) -> NoInputPlan {
+    Box::new(SequencePlan::new(plan, OperatorPlan::new(move |results: Results| {
+        make_alternives_plan(input, results, move |result| {
+            call_plan(context.clone(), result)
         })
-        .map(|(next_sub, bindings, iter)| -> Box<dyn Plan<(), InterpreterResult>> {
-            if let Some(next_sub) = next_sub {
-                Box::new(SequencePlan::new(
-                        interpret_plan(context.clone(), next_sub, bindings),
-                        reduct_next_arg_plan(context.clone(), iter)
+    }, "interpret each alternative")))
+}
+
+fn insert_reducted_arg_plan(atom_idx: usize) -> OperatorPlan<(Results, Results), Results> {
+    let descr = format!("insert right element as child {} of left element", atom_idx);
+    OperatorPlan::new(move |prev_result| insert_reducted_arg_op(atom_idx, prev_result), descr)
+}
+
+fn insert_reducted_arg_op(atom_idx: usize, (mut atoms, args): (Results, Results)) -> StepResult<Results> {
+    let result = atoms.drain(0..).flat_map(|interpreted_atom| {
+        args.iter().map(move |arg| {
+            let mut atom = interpreted_atom.atom().clone();
+            get_expr_mut(&mut atom).children_mut()[atom_idx] = arg.atom().clone();
+            let applied_bindings = apply_bindings_to_bindings(arg.bindings(),
+                interpreted_atom.bindings());
+            if let Result::Ok(atom_bindings) = applied_bindings {
+                Bindings::merge(&atom_bindings, arg.bindings())
+                    .map(|bindings| InterpretedAtom(apply_bindings_to_atom(&atom, &bindings), bindings))
+            } else {
+                log::debug!("insert_reducted_arg_op: skip bindings: {} which cannot be applied to atom bindings: {}, reason: {:?}",
+                    arg.bindings(), interpreted_atom.bindings(), applied_bindings);
+                None
+            }
+        })
+    }).filter(Option::is_some).map(Option::unwrap).collect();
+    log::debug!("insert_reducted_arg_op: result: {:?}", result);
+    StepResult::ret(result)
+}
+
+fn call_plan(context: InterpreterContextRef, input: InterpretedAtom) -> NoInputPlan {
+    let descr = format!("call {}", input);
+    Box::new(OperatorPlan::new(|_| call_op(context, input), descr))
+}
+
+fn call_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepResult<Results> {
+    log::debug!("call_op: {}", input);
+
+    let cached = context.cache.borrow().get(input.atom(), input.bindings());
+    if let Some(result) = cached {
+        return_cached_result_plan(result)
+    } else {
+        if let Atom::Expression(_) = input.atom() {
+            if !has_grounded_sub_expr(input.atom()) {
+                let key = input.atom().clone();
+                StepResult::execute(SequencePlan::new(
+                    OrPlan::new(
+                        interpret_reducted_plan(context.clone(), input.clone()),
+                        StepResult::ret(vec![input])),
+                    save_result_in_cache_plan(context, key)
                 ))
             } else {
-                let expr = iter.into_atom();
-                Box::new(interpret_reducted_plan(context.clone(), expr, bindings))
-            }
-        }).collect();
-    StepResult::execute(AlternativeInterpretationsPlan::new(iter.into_atom().clone(), plan))
-}
-
-fn execute_plan(context: InterpreterContextRef, atom: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
-    let descr = format!("execute {}", atom);
-    OperatorPlan::new(|_| execute_op(context, atom, bindings), descr)
-}
-
-fn execute_op(context: InterpreterContextRef, atom: Atom, bindings: Bindings) -> StepResult<InterpreterResult> {
-    log::debug!("execute_op: {}", atom);
-    if let Atom::Expression(mut expr) = atom.clone() {
-        let op = expr.children().get(0).cloned();
-        if let Some(Atom::Grounded(op)) = op {
-            let mut args = expr.children_mut().drain(1..).collect();
-            match op.execute(&mut args) {
-                Ok(mut vec) => {
-                    let results = vec.drain(0..).map(|atom| (atom, bindings.clone())).collect();
-                    StepResult::execute(interpret_results_plan(context, atom, results))
-                },
-                Err(msg) => StepResult::err(msg),
+                StepResult::execute(OrPlan::new(
+                        interpret_reducted_plan(context.clone(), input.clone()),
+                        StepResult::ret(vec![input])))
             }
         } else {
-            panic!("Trying to execute non grounded atom: {}", expr)
+            panic!("Only expressions are expected to be called");
         }
-    } else {
-        panic!("Unexpected non expression argument: {}", atom)
     }
 }
 
-fn match_plan(context: InterpreterContextRef, expr: Atom, bindings: Bindings) -> OperatorPlan<(), InterpreterResult> {
-    let descr = format!("match {}{}", expr, format_bindings(&bindings));
-    OperatorPlan::new(|_| match_op(context, expr, bindings), descr)
+fn return_cached_result_plan(results: Results) -> StepResult<Results> {
+    let descr = format!("return cached results {:?}", results);
+    StepResult::execute(OperatorPlan::new(|_| StepResult::ret(results), descr))
 }
 
-fn match_op(context: InterpreterContextRef, expr: Atom, prev_bindings: Bindings) -> StepResult<InterpreterResult> {
-    log::debug!("match_op: {}", expr);
+fn save_result_in_cache_plan(context: InterpreterContextRef, key: Atom) -> OperatorPlan<Results, Results> {
+    let descr = format!("save results in cache for key {}", key);
+    OperatorPlan::new(move |results: Results| {
+        context.cache.borrow_mut().insert(key, results.clone());
+        StepResult::ret(results)
+    }, descr)
+}
+
+fn interpret_reducted_plan(context: InterpreterContextRef,
+        input: InterpretedAtom) -> NoInputPlan {
+    if let Atom::Expression(ref expr) = input.atom() {
+        if is_grounded(expr) {
+            Box::new(execute_plan(context, input))
+        } else {
+            Box::new(match_plan(context, input))
+        }
+    } else {
+        panic!("Only expression is expected, received: {}", input);
+    }
+}
+
+
+fn execute_plan(context: InterpreterContextRef, input: InterpretedAtom) -> OperatorPlan<(), Results> {
+    let descr = format!("execute {}", input);
+    OperatorPlan::new(|_| execute_op(context, input), descr)
+}
+
+fn execute_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepResult<Results> {
+    log::debug!("execute_op: {}", input);
+    match input {
+        InterpretedAtom(Atom::Expression(ref expr), ref bindings) => {
+            let mut expr = expr.clone();
+            let op = expr.children().get(0).cloned();
+            if let Some(Atom::Grounded(op)) = op {
+                let mut args = expr.children_mut().drain(1..).collect();
+                match op.execute(&mut args) {
+                    Ok(mut vec) => {
+                        let results: Vec<InterpretedAtom> = vec.drain(0..)
+                            .map(|atom| InterpretedAtom(atom, bindings.clone()))
+                            .collect();
+                        if results.is_empty() {
+                            StepResult::ret(results)
+                        } else {
+                            make_alternives_plan(input, results, move |result| {
+                                interpret_as_type_plan(context.clone(),
+                                    result, AtomType::Undefined)
+                            })
+                        }
+                    },
+                    Err(msg) => StepResult::err(msg),
+                }
+            } else {
+                panic!("Trying to execute non grounded atom: {}", expr)
+            }
+        },
+        _ => panic!("Unexpected non expression argument: {}", input),
+    }
+}
+
+fn match_plan(context: InterpreterContextRef, input: InterpretedAtom) -> OperatorPlan<(), Results> {
+    let descr = format!("match {}", input);
+    OperatorPlan::new(|_| match_op(context, input), descr)
+}
+
+fn match_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepResult<Results> {
+    log::debug!("match_op: {}", input);
     let var_x = VariableAtom::new("%X%");
     // TODO: unique variable?
     let atom_x = Atom::Variable(var_x.clone());
-    let query = Atom::expr(vec![equal_symbol(), expr.clone(), atom_x]);
+    let query = Atom::expr(vec![equal_symbol(), input.atom().clone(), atom_x]);
     let mut local_bindings = context.space.query(&query);
-    let results: Vec<(Atom, Bindings)> = local_bindings
+    let results: Vec<InterpretedAtom> = local_bindings
         .drain(0..)
         .map(|mut binding| {
             let result = binding.remove(&var_x).unwrap(); 
             let result = apply_bindings_to_atom(&result, &binding);
-            let bindings = apply_bindings_to_bindings(&binding, &prev_bindings);
+            // TODO: sometimes we apply bindings twice: first time here,
+            // second time when inserting matched argument into nesting
+            // expression.  It should be enough doing it only once.
+            let bindings = apply_bindings_to_bindings(&binding, input.bindings());
             let bindings = bindings.map(|mut bindings| {
                 binding.drain().for_each(|(k, v)| { bindings.insert(k, v); });
                 bindings
             });
-            log::debug!("match_op: query: {}, binding: {:?}, result: {}", expr.clone(), bindings, result);
+            log::debug!("match_op: query: {}, binding: {:?}, result: {}", input, bindings, result);
             (result, bindings)
         })
         .filter(|(_, bindings)| bindings.is_ok())
-        .map(|(result, bindings)| (result, bindings.unwrap()))
+        .map(|(result, bindings)| InterpretedAtom(result, bindings.unwrap()))
         .collect();
     if results.is_empty() {
         StepResult::err("Match is not found")
     } else {
-        StepResult::execute(interpret_results_plan(context, expr, results))
+        make_alternives_plan(input, results, move |result| {
+            interpret_as_type_plan(context.clone(), result, AtomType::Undefined)
+        })
     }
 }
 
-fn interpret_results_plan(context: InterpreterContextRef, atom: Atom, mut result: InterpreterResult) -> Box<dyn Plan<(), InterpreterResult>> {
-    match result.len() {
-        0 => Box::new(StepResult::ret(result)),
-        1 => {
-            let (result, binding) = result.pop().unwrap();
-            Box::new(interpret_plan(context, result, binding))
-        },
+fn make_alternives_plan<T, F, P>(input: InterpretedAtom, mut results: Vec<T>,
+    plan: F) -> StepResult<Results>
+where
+    F: Fn(T) -> P,
+    P: 'static + Plan<(), Results>
+{
+    match results.len() {
+        0 => StepResult::ret(vec![input]),
+        1 => StepResult::execute(plan(results.pop().unwrap())),
         _ => {
-        Box::new(AlternativeInterpretationsPlan::new(atom,
-                result.drain(0..).map(|(result, bindings)| -> Box<dyn Plan<(), InterpreterResult>> {
-                    Box::new(interpret_plan(context.clone(), result, bindings))
-                }).collect()))
+            StepResult::execute(AlternativeInterpretationsPlan::new(
+                input.0,
+                results.drain(0..)
+                    .map(|result| -> NoInputPlan { Box::new(plan(result)) })
+                    .collect()))
         },
     }
 }
 
-use std::fmt::{Debug, Formatter};
 use std::collections::VecDeque;
 
 pub struct AlternativeInterpretationsPlan<T> {
     atom: Atom,
     plans: VecDeque<Box<dyn Plan<(), Vec<T>>>>,
     results: Vec<T>,
+    success: bool,
 }
 
 impl<T> AlternativeInterpretationsPlan<T> {
     pub fn new(atom: Atom, plans: Vec<Box<dyn Plan<(), Vec<T>>>>) -> Self {
-        Self{ atom, plans: plans.into(), results: Vec::new() }
+        Self{ atom, plans: plans.into(), results: Vec::new(), success: false }
     }
 }
 
-impl<T: 'static> Plan<(), Vec<T>> for AlternativeInterpretationsPlan<T> {
+impl<T: 'static + Debug> Plan<(), Vec<T>> for AlternativeInterpretationsPlan<T> {
     fn step(mut self: Box<Self>, _: ()) -> StepResult<Vec<T>> {
         if self.plans.len() == 0 {
-            StepResult::ret(self.results)
+            if self.success {
+                StepResult::ret(self.results)
+            } else {
+                StepResult::err("No successful alternatives")
+            }
         } else {
             let plan = self.plans.pop_front().unwrap();
             match plan.step(()) {
@@ -440,17 +507,21 @@ impl<T: 'static> Plan<(), Vec<T>> for AlternativeInterpretationsPlan<T> {
                 },
                 StepResult::Return(mut result) => {
                     self.results.append(&mut result);
+                    self.success = true;
                     StepResult::Execute(self)
                 },
-                StepResult::Error(message) => StepResult::Error(message),
+                StepResult::Error(message) => {
+                    log::debug!("skip alternative because of error returned: {}", message);
+                    StepResult::Execute(self)
+                },
             }
         }
     }
 }
 
-impl<T> Debug for AlternativeInterpretationsPlan<T> {  
+impl<T: Debug> Debug for AlternativeInterpretationsPlan<T> {  
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let mut res = write!(f, "interpret alternatives for {}:\n", self.atom);
+        let mut res = write!(f, "interpret alternatives for {} (current results: {:?}):\n", self.atom, self.results);
         for (i, plan) in self.plans.iter().enumerate() {
             let plan_str = format!("{:?}", plan);
             let mut lines = plan_str.lines();
@@ -510,6 +581,73 @@ mod tests {
             Ok(vec![expr!("True")]));
         assert_eq!(interpret(space.clone(), &expr!("eq", ("plus", ("S", "Z"), n), n)),
             Ok(vec![expr!("eq", ("S", y), y)]));
+    }
+
+    fn test_interpret<T, R, P: Plan<T, R>>(plan: P, arg: T) -> Result<R, String> {
+        let mut step = Box::new(plan).step(arg);
+        loop {
+            match step {
+                StepResult::Execute(plan) => step = plan.step(()),
+                StepResult::Return(result) => return Ok(result),
+                StepResult::Error(message) => return Err(message),
+            }
+        }
+    }
+
+    #[test]
+    fn test_alternatives_plan_single_alternative() {
+        let plan = AlternativeInterpretationsPlan::new(sym!("Test"),
+            vec![Box::new(StepResult::ret(vec!["A", "B"]))]);
+
+        let result = test_interpret(plan, ());
+
+        assert_eq!(Ok(vec!["A", "B"]), result);
+    }
+
+    #[test]
+    fn test_alternatives_plan_few_alternatives() {
+        let plan = AlternativeInterpretationsPlan::new(sym!("Test"),
+            vec![Box::new(StepResult::ret(vec!["A", "B"])),
+                Box::new(StepResult::ret(vec!["C", "D"]))]);
+
+        let result = test_interpret(plan, ());
+
+        assert_eq!(Ok(vec!["A", "B", "C", "D"]), result);
+    }
+
+    #[test]
+    fn test_alternatives_plan_error_present() {
+        let plan = AlternativeInterpretationsPlan::new(sym!("Test"),
+            vec![Box::new(StepResult::err("Expected error")),
+                Box::new(StepResult::ret(vec!["C", "D"]))]);
+
+        let result = test_interpret(plan, ());
+
+        assert_eq!(Ok(vec!["C", "D"]), result);
+    }
+
+    #[test]
+    fn test_alternatives_plan_only_errors() {
+        let plan: AlternativeInterpretationsPlan<&'static str> =
+            AlternativeInterpretationsPlan::new(sym!("Test"),
+            vec![Box::new(StepResult::err("Expected error")),
+                Box::new(StepResult::err("Another expected error"))]);
+
+        let result = test_interpret(plan, ());
+
+        assert_eq!(Err("No successful alternatives".into()), result);
+    }
+
+    #[test]
+    fn test_variable_defined_via_variable() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("=", ("if", "True", y), y));
+        space.add(expr!("=", ("not", "False"), "True"));
+        space.add(expr!("=", ("a", z), ("not", ("b", z))));
+        space.add(expr!("=", ("b", "d"), "False"));
+        let expr = expr!("if", ("a", x), x);
+
+        assert_eq!(interpret(space, &expr), Ok(vec![expr!("d")]));
     }
 }
 
