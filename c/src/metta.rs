@@ -147,16 +147,6 @@ pub unsafe extern "C" fn validate_atom(space: *const grounding_space_t, atom: *c
 
 // MeTTa interpreter API
 
-#[no_mangle]
-pub extern "C" fn interpret(space: *mut grounding_space_t, expr: *const atom_t,
-        callback: c_atoms_callback_t, context: *mut c_void) {
-    let res = unsafe { hyperon::metta::interpreter::interpret((*space).space.clone(), &(*expr).atom) };
-    match res {
-        Ok(vec) => return_atoms(&vec, callback, context),
-        Err(_) => return_atoms(&vec![], callback, context),
-    }
-}
-
 pub struct step_result_t {
     result: StepResult<Vec<InterpretedAtom>>,
 }

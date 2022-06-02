@@ -286,11 +286,6 @@ PYBIND11_MODULE(hyperonpy, m) {
     		step_to_str(step.ptr, copy_to_string, &str);
     		return str;
     	}, "Convert step to human readable string");
-	m.def("interpret", [](CGroundingSpace space, CAtom expr) { 
-			py::list atoms;
-			interpret(space.ptr, expr.ptr, copy_atoms, &atoms);
-			return atoms;
-		}, "Run interpreter on expression and return result");
 	m.def("interpret_init", [](CGroundingSpace space, CAtom expr) {
 			return CStepResult(interpret_init(space.ptr, expr.ptr));
 		}, "Initialize interpreter of the expression");

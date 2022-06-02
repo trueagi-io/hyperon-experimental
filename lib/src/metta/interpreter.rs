@@ -304,8 +304,6 @@ fn insert_reducted_arg_op(atom_idx: usize, (mut atoms, args): (Results, Results)
         args.iter().map(move |arg| {
             let mut atom = interpreted_atom.atom().clone();
             get_expr_mut(&mut atom).children_mut()[atom_idx] = arg.atom().clone();
-            // TODO: after variables conflicts are fixed apply_bindings_to_bindings
-            // call can be removed and only Bindings::merge should be left
             let applied_bindings = apply_bindings_to_bindings(arg.bindings(),
                 interpreted_atom.bindings());
             if let Result::Ok(atom_bindings) = applied_bindings {
@@ -435,6 +433,9 @@ fn match_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepResul
         .map(|mut binding| {
             let result = binding.remove(&var_x).unwrap(); 
             let result = apply_bindings_to_atom(&result, &binding);
+            // TODO: sometimes we apply bindings twice: first time here,
+            // second time when inserting matched argument into nesting
+            // expression.  It should be enough doing it only once.
             let bindings = apply_bindings_to_bindings(&binding, input.bindings());
             let bindings = bindings.map(|mut bindings| {
                 binding.drain().for_each(|(k, v)| { bindings.insert(k, v); });
@@ -637,7 +638,16 @@ mod tests {
         assert_eq!(Err("No successful alternatives".into()), result);
     }
 
-    // FIXME: add unit test on variable x(1) is bounded to variable x(2) then
-    // new binding is found for variable x(2).
+    #[test]
+    fn test_variable_defined_via_variable() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("=", ("if", "True", y), y));
+        space.add(expr!("=", ("not", "False"), "True"));
+        space.add(expr!("=", ("a", z), ("not", ("b", z))));
+        space.add(expr!("=", ("b", "d"), "False"));
+        let expr = expr!("if", ("a", x), x);
+
+        assert_eq!(interpret(space, &expr), Ok(vec![expr!("d")]));
+    }
 }
 
