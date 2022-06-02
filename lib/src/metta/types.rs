@@ -245,9 +245,11 @@ pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
         AtomType::Undefined => &undefined,
         AtomType::Specific(atom) => atom,
     };
-    !get_matched_types(space, atom, typ).is_empty() || 
-        //FIXME: temporary hack to implement meta types check
-        *typ == Atom::sym("Atom") ||
+    !get_matched_types(space, atom, typ).is_empty() || check_meta_type(atom, typ)
+}
+
+fn check_meta_type(atom: &Atom, typ: &Atom) -> bool {
+    *typ == Atom::sym("Atom") ||
         match atom {
             Atom::Symbol(_) => *typ == Atom::sym("Symbol"),
             Atom::Variable(_) => *typ == Atom::sym("Variable"),
