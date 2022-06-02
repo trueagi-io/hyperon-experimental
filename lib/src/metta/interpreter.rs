@@ -215,13 +215,11 @@ fn get_type_of_atom_plan(context: InterpreterContextRef, atom: Atom) -> StepResu
 fn interpret_expression_as_type_plan(context: InterpreterContextRef,
         input: InterpretedAtom, typ: AtomType) -> OperatorPlan<Vec<Atom>, Results> {
     let descr = format!("form alternative plans for expression {} using types", input);
-    OperatorPlan::new(move |mut op_types: Vec<Atom>| {
-        let alts = op_types.drain(0..)
-            .map(|op_typ| {
-                interpret_expression_as_type_op(context.clone(),
-                    input.clone(), op_typ, typ.clone())
-            }).collect();
-        StepResult::execute(AlternativeInterpretationsPlan::new(input.0, alts))
+    OperatorPlan::new(move |op_types: Vec<Atom>| {
+        make_alternives_plan(input.clone(), op_types, move |op_typ| {
+            interpret_expression_as_type_op(context.clone(),
+                input.clone(), op_typ, typ.clone())
+        })
     }, descr)
 }
 
@@ -288,19 +286,12 @@ fn interpret_expression_as_type_op(context: InterpreterContextRef,
 }
 
 fn call_alternatives_plan(plan: NoInputPlan, context: InterpreterContextRef,
-        input: InterpretedAtom) -> NoInputPlan {
-    Box::new(SequencePlan::new(plan, OperatorPlan::new(
-        move |mut results: Results| {
-            if !results.is_empty() {
-                let alts = results.drain(0..).map(|result| -> NoInputPlan {
-                    Box::new(call_plan(context.clone(), result))
-                }).collect();
-                StepResult::execute(AlternativeInterpretationsPlan::new(input.0, alts))
-            } else {
-                StepResult::ret(vec![input])
-            }
-        }, "interpret each alternative")
-    ))
+    input: InterpretedAtom) -> NoInputPlan {
+    Box::new(SequencePlan::new(plan, OperatorPlan::new(move |results: Results| {
+        make_alternives_plan(input, results, move |result| {
+            call_plan(context.clone(), result)
+        })
+    }, "interpret each alternative")))
 }
 
 fn insert_reducted_arg_plan(atom_idx: usize) -> OperatorPlan<(Results, Results), Results> {
@@ -331,9 +322,9 @@ fn insert_reducted_arg_op(atom_idx: usize, (mut atoms, args): (Results, Results)
     StepResult::ret(result)
 }
 
-fn call_plan(context: InterpreterContextRef, input: InterpretedAtom) -> OperatorPlan<(), Results> {
+fn call_plan(context: InterpreterContextRef, input: InterpretedAtom) -> NoInputPlan {
     let descr = format!("call {}", input);
-    OperatorPlan::new(|_| call_op(context, input), descr)
+    Box::new(OperatorPlan::new(|_| call_op(context, input), descr))
 }
 
 fn call_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepResult<Results> {
@@ -377,7 +368,7 @@ fn save_result_in_cache_plan(context: InterpreterContextRef, key: Atom) -> Opera
 }
 
 fn interpret_reducted_plan(context: InterpreterContextRef,
-        input: InterpretedAtom) -> Box<dyn Plan<(), Results>> {
+        input: InterpretedAtom) -> NoInputPlan {
     if let Atom::Expression(ref expr) = input.atom() {
         if is_grounded(expr) {
             Box::new(execute_plan(context, input))
@@ -405,11 +396,17 @@ fn execute_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepRes
                 let mut args = expr.children_mut().drain(1..).collect();
                 match op.execute(&mut args) {
                     Ok(mut vec) => {
-                        let results = vec.drain(0..)
+                        let results: Vec<InterpretedAtom> = vec.drain(0..)
                             .map(|atom| InterpretedAtom(atom, bindings.clone()))
                             .collect();
-                        StepResult::execute(interpret_results_plan(context,
-                            input, results))
+                        if results.is_empty() {
+                            StepResult::ret(results)
+                        } else {
+                            make_alternives_plan(input, results, move |result| {
+                                interpret_as_type_plan(context.clone(),
+                                    result, AtomType::Undefined)
+                            })
+                        }
                     },
                     Err(msg) => StepResult::err(msg),
                 }
@@ -452,25 +449,27 @@ fn match_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepResul
     if results.is_empty() {
         StepResult::err("Match is not found")
     } else {
-        StepResult::execute(interpret_results_plan(context, input, results))
+        make_alternives_plan(input, results, move |result| {
+            interpret_as_type_plan(context.clone(), result, AtomType::Undefined)
+        })
     }
 }
 
-// FIXME: this plan looks like pattern: get results from prev step, apply
-// operation to each item and from instance of AlternativeInterpretationsPlan
-fn interpret_results_plan(context: InterpreterContextRef, input: InterpretedAtom,
-        mut result: Results) -> Box<dyn Plan<(), Results>> {
-    match result.len() {
-        0 => Box::new(StepResult::ret(result)),
-        1 => {
-            let result = result.pop().unwrap();
-            Box::new(interpret_as_type_plan(context, result, AtomType::Undefined))
-        },
+fn make_alternives_plan<T, F, P>(input: InterpretedAtom, mut results: Vec<T>,
+    plan: F) -> StepResult<Results>
+where
+    F: Fn(T) -> P,
+    P: 'static + Plan<(), Results>
+{
+    match results.len() {
+        0 => StepResult::ret(vec![input]),
+        1 => StepResult::execute(plan(results.pop().unwrap())),
         _ => {
-        Box::new(AlternativeInterpretationsPlan::new(input.0,
-                result.drain(0..).map(|result| -> Box<dyn Plan<(), Results>> {
-                    Box::new(interpret_as_type_plan(context.clone(), result, AtomType::Undefined))
-                }).collect()))
+            StepResult::execute(AlternativeInterpretationsPlan::new(
+                input.0,
+                results.drain(0..)
+                    .map(|result| -> NoInputPlan { Box::new(plan(result)) })
+                    .collect()))
         },
     }
 }
