@@ -1,3 +1,8 @@
+;; In this example a custom inhabitation operator :: is introduced.
+;; Here :: only differs from : to underline that this is not a
+;; built-in typing operator, but rather defined by custom expressions
+;; in pure MeTTa.
+
 (= (:? $c)
    (match &self (:: $c $t) $t))
 (= (:? ($c $a))

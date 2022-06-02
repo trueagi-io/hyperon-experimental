@@ -94,7 +94,7 @@ conan profile new --detect default
 ```
 If it doesn't help, then try to manually add `compiler`, `compiler.version` and
 `compiler.libcxx` values in the default Conan profile
-(`~/.conan/profiles/default`). 
+(`~/.conan/profiles/default`).
 For example:
 ```
 conan profile update settings.compiler=gcc default
@@ -112,7 +112,7 @@ rustup update stable
 ## Other issues
 
 A docker image can be used to run a reproducible environment. See instructions
-inside the [Dockerfile](./.github/Dockerfile). 
+inside the [Dockerfile](./.github/Dockerfile).
 If the docker image doesn't work, please
 raise an
 [issue](https://github.com/trueagi-io/hyperon-experimental/issues).
