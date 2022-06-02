@@ -1,7 +1,7 @@
 use hyperon::metta::text::*;
 use hyperon::metta::types::AtomType;
 use hyperon::metta::interpreter;
-use hyperon::metta::interpreter::InterpreterResult;
+use hyperon::metta::interpreter::InterpretedAtom;
 use hyperon::common::plan::StepResult;
 
 use crate::util::*;
@@ -158,7 +158,7 @@ pub extern "C" fn interpret(space: *mut grounding_space_t, expr: *const atom_t,
 }
 
 pub struct step_result_t {
-    result: StepResult<InterpreterResult>,
+    result: StepResult<Vec<InterpretedAtom>>,
 }
 
 #[no_mangle]
@@ -185,7 +185,7 @@ pub extern "C" fn step_get_result(step: *mut step_result_t,
     let step = unsafe{ Box::from_raw(step) };
     match step.result {
         StepResult::Return(mut res) => {
-            let res = res.drain(0..).map(|(atom, _)| atom).collect();
+            let res = res.drain(0..).map(|res| res.into_tuple().0).collect();
             return_atoms(&res, callback, context);
         },
         StepResult::Error(_) => return_atoms(&vec![], callback, context),
