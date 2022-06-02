@@ -7,7 +7,7 @@ programming language. This project replaces the [previous
 prototype](https://github.com/trueagi-io/hyperon/tree/master).
 See [Python examples](./python/tests) to become familiar with Hyperon features.
 
-If you find troubles with the installation, see the "Troubleshooting" section below.
+If you find troubles with the installation, see the [Troubleshooting](#troubleshooting) section below.
 
 # Prerequisites
 
@@ -67,10 +67,10 @@ export PYTHONPATH=$PYTHONPATH:`pwd`/python:`pwd`/../python
 # Language support for IDEs [optional]
 
 Different IDEs may require different tweaks to support the languages
-used in the codebase. The language servers which we use 
+used in the codebase. The language servers which we use
 for development are:
 - [Rust Language Server](https://github.com/rust-lang/rls#setup);
-- [clangd](https://clangd.llvm.org/installation), generate compile 
+- [clangd](https://clangd.llvm.org/installation), generate compile
   commands for the `clangd` using `cmake` variable:
   ```
   cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=Y ..
@@ -94,7 +94,7 @@ conan profile new --detect default
 ```
 If it doesn't help, then try to manually add `compiler`, `compiler.version` and
 `compiler.libcxx` values in the default Conan profile
-(`~/.conan/profiles/default`). 
+(`~/.conan/profiles/default`).
 For example:
 ```
 conan profile update settings.compiler=gcc default
@@ -112,7 +112,7 @@ rustup update stable
 ## Other issues
 
 A docker image can be used to run a reproducible environment. See instructions
-inside the [Dockerfile](./.github/Dockerfile). 
+inside the [Dockerfile](./.github/Dockerfile).
 If the docker image doesn't work, please
 raise an
 [issue](https://github.com/trueagi-io/hyperon-experimental/issues).

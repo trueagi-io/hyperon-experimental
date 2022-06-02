@@ -1,5 +1,7 @@
-use std::ffi::*;
-use std::os::raw::*;
+use std::ffi::c_void;
+use std::ffi::CString;
+use std::os::raw::c_char;
+use std::ffi::CStr;
 
 #[repr(C)]
 pub struct array_t<T> {
