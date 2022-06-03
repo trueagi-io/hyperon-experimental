@@ -15,7 +15,7 @@ use std::fmt::{Debug, Display, Formatter};
 fn equal_symbol() -> Atom { sym!("=") }
 
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct InterpretedAtom(Atom, Bindings);
 
 impl InterpretedAtom {
@@ -450,13 +450,9 @@ fn match_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepResul
         .filter(|(_, bindings)| bindings.is_ok())
         .map(|(result, bindings)| InterpretedAtom(result, bindings.unwrap()))
         .collect();
-    if results.is_empty() {
-        StepResult::err("Match is not found")
-    } else {
-        make_alternives_plan(input, results, move |result| {
-            interpret_as_type_plan(context.clone(), result, AtomType::Undefined)
-        })
-    }
+    make_alternives_plan(input, results, move |result| {
+        interpret_as_type_plan(context.clone(), result, AtomType::Undefined)
+    })
 }
 
 fn make_alternives_plan<T, F, P>(input: InterpretedAtom, mut results: Vec<T>,
@@ -466,7 +462,7 @@ where
     P: 'static + Plan<(), Results>
 {
     match results.len() {
-        0 => StepResult::ret(vec![input]),
+        0 => StepResult::err("No alternatives to interpret further"),
         1 => StepResult::execute(plan(results.pop().unwrap())),
         _ => {
             StepResult::execute(AlternativeInterpretationsPlan::new(
@@ -595,6 +591,16 @@ mod tests {
                 StepResult::Error(message) => return Err(message),
             }
         }
+    }
+
+    #[test]
+    fn test_make_alternatives_plan_no_alternative() {
+        let plan = make_alternives_plan(InterpretedAtom(sym!("Test"), Bindings::new()),
+            vec![], |_res: InterpretedAtom| StepResult::ret(vec![]));
+
+        let result = test_interpret(plan, ());
+
+        assert_eq!(Err("No alternatives to interpret further".into()), result);
     }
 
     #[test]
