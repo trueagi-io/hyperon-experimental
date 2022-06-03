@@ -2,6 +2,7 @@ import unittest
 
 from hyperon import *
 from common import MeTTa, SpaceAtom
+from test_common import *
 
 class ExamplesTest(unittest.TestCase):
 
@@ -254,7 +255,7 @@ class ExamplesTest(unittest.TestCase):
         self.assertEqual(output, [ValueAtom(True)])
 
         output = metta.interpret('(eq (plus (S Z) $n) $n)')
-        self.assertEqual(output, metta.parse_all('(eq (S $y) $y)'))
+        assert_atoms_are_equivalent(self, output, metta.parse_all('(eq (S $y) $y)'))
 
     def test_multi_space(self):
         # REM: it is not recommended to split code into multiple spaces, because

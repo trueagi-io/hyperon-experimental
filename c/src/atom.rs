@@ -180,6 +180,11 @@ pub unsafe extern "C" fn vec_atom_get(vec: *mut vec_atom_t, idx: usize) -> *mut 
 pub type atom_array_t = array_t<*const atom_t>;
 pub type c_atoms_callback_t = lambda_t<atom_array_t>;
 
+#[no_mangle]
+pub extern "C" fn atoms_are_equivalent(first: *const atom_t, second: *const atom_t) -> bool {
+    crate::atom::matcher::atoms_are_equivalent(&unsafe{ &*first }.atom, &unsafe{ &*second }.atom)
+}
+
 /////////////////////////////////////////////////////////////////
 // Code below is a boilerplate code to implement C API correctly.
 // It is not a part of C API.

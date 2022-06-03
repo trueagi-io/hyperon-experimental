@@ -354,6 +354,27 @@ pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bind
     return Ok(res);
 }
 
+pub fn atoms_are_equivalent(first: &Atom, second: &Atom) -> bool {
+    atoms_are_equivalent_with_bindings(first, second, &mut Bindings::new(), &mut Bindings::new())
+}
+
+fn atoms_are_equivalent_with_bindings(first: &Atom, second: &Atom,
+        direct_bindings: &mut Bindings, reverse_bindings: &mut Bindings) -> bool {
+    match (first, second) {
+        (Atom::Variable(f), Atom::Variable(s)) =>
+            direct_bindings.check_and_insert_binding(f, second) &&
+                reverse_bindings.check_and_insert_binding(s, first),
+        (Atom::Symbol(first), Atom::Symbol(second)) => first == second,
+        (Atom::Grounded(first), Atom::Grounded(second)) => first == second,
+        (Atom::Expression(first), Atom::Expression(second)) =>
+            first.children().len() == second.children().len() &&
+            first.children().iter().zip(second.children().iter())
+                .all(|(first, second)| atoms_are_equivalent_with_bindings(
+                        first, second, direct_bindings, reverse_bindings)),
+        _ => false,
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
@@ -394,5 +415,15 @@ mod test {
     fn test_variable_name_conflict() {
         assert_eq!(expr!("a", (W)).match_(&expr!("a", W)).collect::<Vec<MatchResult>>(),
             vec![MatchResult::from((bind!{}, bind!{ W: expr!((W)) }))]);
+    }
+
+    #[test]
+    fn test_are_equivalent() {
+        assert!(atoms_are_equivalent(&expr!(a, "b", {"c"}), &expr!(x, "b", {"c"})));
+        assert!(atoms_are_equivalent(&expr!(a, b), &expr!(c, d)));
+        assert!(!atoms_are_equivalent(&expr!(a, "b", {"c"}), &expr!(a, "x", {"c"})));
+        assert!(!atoms_are_equivalent(&expr!(a, "b", {"c"}), &expr!(a, "b", {"x"})));
+        assert!(!atoms_are_equivalent(&expr!(a, a), &expr!(c, d)));
+        assert!(!atoms_are_equivalent(&expr!(a, b), &expr!(b, b)));
     }
 }

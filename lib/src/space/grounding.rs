@@ -110,6 +110,7 @@ impl GroundingSpace {
         let mut result = Vec::new();
         for next in &(*self.borrow_vec()) {
             log::trace!("single_query: match next: {}", next);
+            let next = replace_variables(next);
             for res in next.match_(pattern) {
                 let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
                 if let Ok(bindings) = bindings {
@@ -325,11 +326,19 @@ mod test {
         assert_eq!(space.query(&expr!("+", a, ("*", a, c))), vec![]);
     }
 
+    fn get_var<'a>(bindings: &'a Bindings, name: &str) -> &'a Atom {
+        bindings.get(&VariableAtom::new(name)).unwrap()
+    }
+
     #[test]
     fn test_match_query_variable_has_priority() {
         let mut space = GroundingSpace::new();
         space.add(expr!("equals", x, x));
-        assert_eq!(space.query(&expr!("equals", y, z)), vec![bind!{y: expr!(x), z: expr!(x)}]);
+        
+        let result = space.query(&expr!("equals", y, z));
+        assert_eq!(result.len(), 1);
+        assert!(matches!(get_var(&result[0], "y"), Atom::Variable(_)));
+        assert!(matches!(get_var(&result[0], "z"), Atom::Variable(_)));
     }
 
     #[test]
