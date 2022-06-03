@@ -20,6 +20,7 @@ pub mod subexpr;
 
 use std::any::Any;
 use std::fmt::{Display, Debug};
+use std::collections::HashMap;
 
 // Symbol atom
 
@@ -105,8 +106,8 @@ impl VariableAtom {
         self.name.as_str()
     }
 
-    pub fn into_unique(self) -> Self {
-        VariableAtom{ name: self.name, id: next_variable_id() }
+    pub fn make_unique(&self) -> Self {
+        VariableAtom{ name: self.name.clone(), id: next_variable_id() }
     }
 }
 
@@ -117,6 +118,28 @@ impl Display for VariableAtom {
         } else {
             write!(f, "${}-{}", self.name, self.id)
         }
+    }
+}
+
+pub fn replace_variables(atom: &Atom) -> Atom {
+    replace_variables_recursively(atom, &mut HashMap::new())
+}
+
+fn replace_variables_recursively(atom: &Atom, vars: &mut HashMap<VariableAtom, Atom>) -> Atom {
+    match atom {
+        Atom::Variable(var) => {
+            if !vars.contains_key(var) {
+                vars.insert(var.clone(), Atom::Variable(var.make_unique()));
+            }
+            vars[var].clone()
+        },
+        Atom::Expression(expr) => {
+            let children: Vec<Atom> = expr.children().iter()
+                .map(|atom| replace_variables_recursively(&atom, vars))
+                .collect();
+            Atom::expr(children)
+        }
+        _ => atom.clone(),
     }
 }
 

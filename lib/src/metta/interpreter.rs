@@ -539,6 +539,7 @@ impl<T: Debug> Debug for AlternativeInterpretationsPlan<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metta::*;
     
     #[test]
     fn test_match_all() {
@@ -650,7 +651,6 @@ mod tests {
         assert_eq!(interpret(space, &expr), Ok(vec![expr!("d")]));
     }
 
-    #[ignore]
     #[test]
     fn test_variable_name_conflict() {
         let mut space = GroundingSpace::new();
@@ -658,6 +658,17 @@ mod tests {
         let expr = expr!("a", W);
 
         assert_eq!(interpret(space, &expr), Ok(vec![expr!({true})]));
+    }
+
+    #[test]
+    fn test_variable_name_conflict_renaming() {
+        let space = metta_space("
+            (= (b ($x $y)) (c $x $y))
+        ");
+        let expr = metta_atom("(a (b $a) $x $y)");
+
+        assert_eq!(interpret(space, &expr),
+            Ok(vec![metta_atom("(a (c $a $b) $c $d)")]));
     }
 }
 
