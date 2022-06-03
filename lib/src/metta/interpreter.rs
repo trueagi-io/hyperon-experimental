@@ -369,6 +369,9 @@ fn interpret_reducted_plan(context: InterpreterContextRef,
         input: InterpretedAtom) -> NoInputPlan {
     if let Atom::Expression(ref expr) = input.atom() {
         if is_grounded(expr) {
+            // TODO: there is no sense in passing variables as an arguments to
+            // the grounded atoms, so when grounded atom has a variable as an
+            // argument it probably should be matched instead.            
             Box::new(execute_plan(context, input))
         } else {
             Box::new(match_plan(context, input))
