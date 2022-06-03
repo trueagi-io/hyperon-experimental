@@ -745,5 +745,15 @@ mod tests {
 
         assert_eq!(interpret(space, &expr), Ok(vec![expr!("d")]));
     }
+
+    #[ignore]
+    #[test]
+    fn test_variable_name_conflict() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("=", ("a", (W)), {true}));
+        let expr = expr!("a", W);
+
+        assert_eq!(interpret(space, &expr), Ok(vec![expr!({true})]));
+    }
 }
 

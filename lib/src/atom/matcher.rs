@@ -132,14 +132,14 @@ impl From<(Bindings, Bindings)> for MatchResult {
 pub type MatchResultIter = Box<dyn Iterator<Item=matcher::MatchResult>>;
 
 pub trait WithMatch {
-    fn match_(&self, other: &Atom) -> MatchResultIter;
+    fn match_(&self, pattern: &Atom) -> MatchResultIter;
 }
 
 impl WithMatch for Atom {
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match (self, other) {
+    fn match_(&self, pattern: &Atom) -> MatchResultIter {
+        match (self, pattern) {
             (Atom::Symbol(a), Atom::Symbol(b)) if a == b => Box::new(std::iter::once(MatchResult::new())),
-            (Atom::Grounded(a), Atom::Grounded(_)) => a.match_(other),
+            (Atom::Grounded(a), Atom::Grounded(_)) => a.match_(pattern),
             (Atom::Variable(_), Atom::Variable(v)) => {
                 // We stick to prioritize pattern bindings in this case
                 // because otherwise the $X in (= (...) $X) will not be matched with
@@ -206,7 +206,7 @@ fn match_atoms_recursively(candidate: &Atom, pattern: &Atom, res: &mut MatchResu
     }
 }
 
-pub fn match_atoms(candidate: &Atom, pattern: &Atom) -> Option<MatchResult> {
+fn match_atoms(candidate: &Atom, pattern: &Atom) -> Option<MatchResult> {
     log::trace!("match_atoms: candidate: {}, pattern: {}", candidate, pattern);
     let mut res = MatchResult::new();
     if match_atoms_recursively(candidate, pattern, &mut res) {
@@ -336,15 +336,18 @@ fn atom_contains_variable(atom: &Atom, var: &VariableAtom) -> bool {
 }
 
 pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bindings, ()> {
+    log::trace!("apply_bindings_to_bindings: from: {}, to: {}", from, to);
     let mut res = Bindings::new();
     for (key, value) in to {
         let applied = apply_bindings_to_atom(value, from);
         // Check that variable is not expressed via itself, if so it is
         // a task for unification not for matching
         if !matches!(applied, Atom::Variable(_)) && atom_contains_variable(&applied, key) {
+            log::trace!("apply_bindings_to_bindings: self expression: key: {}, applied: {}", key, applied);
             return Err(())
         }
         if !res.check_and_insert_binding(key, &applied) {
+            log::trace!("apply_bindings_to_bindings: cannot insert: ({}, {}) into {}", res, key, value);
             return Err(())
         }
     }
@@ -385,5 +388,11 @@ mod test {
         assert_eq!(Bindings::merge(&bind!{ a: expr!("A"), b: expr!("B") },
             &bind!{ a: expr!("A") }),
             Some(bind!{ a: expr!("A"), b: expr!("B") }));
+    }
+
+    #[test]
+    fn test_variable_name_conflict() {
+        assert_eq!(expr!("a", (W)).match_(&expr!("a", W)).collect::<Vec<MatchResult>>(),
+            vec![MatchResult::from((bind!{}, bind!{ W: expr!((W)) }))]);
     }
 }

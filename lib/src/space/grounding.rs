@@ -109,6 +109,7 @@ impl GroundingSpace {
         log::debug!("single_query: pattern: {}", pattern);
         let mut result = Vec::new();
         for next in &(*self.borrow_vec()) {
+            log::trace!("single_query: match next: {}", next);
             for res in next.match_(pattern) {
                 let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
                 if let Ok(bindings) = bindings {
