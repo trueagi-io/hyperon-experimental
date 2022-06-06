@@ -1,3 +1,62 @@
+//! # Algorithm
+//!
+//! For an atom and type on input (when type is not set `Undefined` is used):
+//! * [Atom::Variable] is returned as is.
+//! * [Atom::Symbol] and [Atom::Grounded] are type checked:
+//!   * If type is corrent then atom is returned as is.
+//!   * If type is incorrect then error result is returned.
+//! * First atom (operation) of [Atom::Expression] is extracted and plan to
+//!   calculate its type is returned. After type is calculated the expression
+//!   is interpreted according its operation type. Notice: that few alternative
+//!   interpretations may be found here one for each type of the operation.
+//!
+//! For and expression atom and its operation type:
+//! * If expected type is `Atom` or `Expression` then expression is returned as is.
+//! * If operation type is function:
+//!   * Check arity and return type of the function, if check fails then return
+//!     error result.
+//!   * Return a sequence plan which interprets each argument using
+//!     corresponding type and calls resulting expression. If any argument
+//!     cannot be casted to type then error result is returned. If argument's
+//!     bindings are not compatible with bindings of the expression such
+//!     result is skipped if no options to interpret argument left then error
+//!     is returned.
+//!   * Notice that this step may return more than one result because each
+//!     argument can be interpreted by more than one way.
+//! * If operation type is not function:
+//!   * Return a sequence plan which interprets each member using
+//!     `Undefined` type and calls resulting expression. If member's
+//!     bindings are not compatible with bindings of the expression such
+//!     result is skipped if no options to interpret member left then error
+//!     is returned.
+//!
+//! Call the expression:
+//! * If there is a cached result for this expression then return it
+//! * If operation is instance of [Atom::Grounded] then operation is executed:
+//!   * If result is error then error is returned
+//!   * If result is empty then it is returned as is
+//!   * If result is not empty plan to interpret each alternative further is
+//!     returned. Notice: if each alternative returns error then the result
+//!     of execution is also error.
+//! * If operation is not [Atom::Grounded] then expression is matched.
+//!   Atomspace is queried for `(= <expr> $X)` and expression is replaced by $X.
+//!   * If no results returned then error is returned
+//!   * If result is not empty plan to interpret each alternative further is
+//!     returned. Notice: if each alternative returns error then the result
+//!     of execution is also error.
+//! * If one of previous steps returned error then original expresion is
+//!   returned. Otherwise the result of the interpretation is returned.
+//!   It may be empty if one of expression is grounded expression which
+//!   returns empty result.
+//!
+//! Summary on possible results:
+//! * empty result for expression is returned only when grounded operation
+//!   returns empty result
+//! * error is returned when atom cannot be casted to the type expected
+//!   or all alternative interpretations are errors; the overall result includes
+//!   successfuly interpreted alternatives only
+//! * call of the expression returns either succesful result or original expression
+
 use crate::*;
 use crate::common::plan::*;
 use crate::atom::subexpr::*;
@@ -14,7 +73,7 @@ use std::fmt::{Debug, Display, Formatter};
 #[inline]
 fn equal_symbol() -> Atom { sym!("=") }
 
-
+/// Result of atom interpretation plus variable bindings found
 #[derive(Clone, PartialEq)]
 pub struct InterpretedAtom(Atom, Bindings);
 
@@ -27,7 +86,7 @@ impl InterpretedAtom {
         &self.1
     }
     
-    pub fn into_tuple(self) -> (Atom, Bindings) {
+    fn into_tuple(self) -> (Atom, Bindings) {
         (self.0, self.1)
     }
 }
@@ -58,6 +117,13 @@ impl Debug for InterpretedAtom {
 type Results = Vec<InterpretedAtom>;
 type NoInputPlan = Box<dyn Plan<(), Results>>;
 
+/// Initialize interpreter and returns the result of the zero step.
+/// It can be error, immediate result or interpretation plan to be executed.
+/// See [crate::metta::interpreter] for algorithm explanation.
+///
+/// # Arguments
+/// * `space` - atomspace to query for interpretation
+/// * `expr` - atom to interpret
 pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<Vec<InterpretedAtom>> {
     let context = InterpreterContextRef::new(space);
     interpret_as_type_plan(context,
@@ -65,6 +131,12 @@ pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<Vec<Inte
         AtomType::Undefined)
 }
 
+/// Perform next step of the interpretation plan and return the result. Panics
+/// when [StepResult::Return] or [StepResult::Error] are passed as input.
+/// See [crate::metta::interpreter] for algorithm explanation.
+///
+/// # Arguments
+/// * `step` - [StepResult::Execute] result from the previous step.
 pub fn interpret_step(step: StepResult<Vec<InterpretedAtom>>) -> StepResult<Vec<InterpretedAtom>> {
     log::debug!("current plan:\n{:?}", step);
     match step {
@@ -74,6 +146,12 @@ pub fn interpret_step(step: StepResult<Vec<InterpretedAtom>>) -> StepResult<Vec<
     }
 }
 
+/// Interpret passed atom and return a new plan, result or error. This function
+/// blocks until result is calculated. For step by step interpretation one
+/// should use [interpret_init] and [interpret_step] functions.
+/// # Arguments
+/// * `space` - atomspace to query for interpretation
+/// * `expr` - atom to interpret
 pub fn interpret(space: GroundingSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
     let mut step = interpret_init(space, expr);
     while step.has_next() {
@@ -476,6 +554,9 @@ where
 
 use std::collections::VecDeque;
 
+/// Plan which interprets in parallel alternatives of the expression.
+/// Each successful result is appended to the overall result of the plan.
+/// If no alternatives returned successful result the plan returns error. 
 pub struct AlternativeInterpretationsPlan<T> {
     atom: Atom,
     plans: VecDeque<Box<dyn Plan<(), Vec<T>>>>,
@@ -484,6 +565,11 @@ pub struct AlternativeInterpretationsPlan<T> {
 }
 
 impl<T> AlternativeInterpretationsPlan<T> {
+    /// Create new instance of [AlternativeInterpretationsPlan]. 
+    ///
+    /// # Arguments
+    /// `atom` - atom to be printed as root of the alternative interpretations
+    /// `plan` - altenative plans for the atom
     pub fn new(atom: Atom, plans: Vec<Box<dyn Plan<(), Vec<T>>>>) -> Self {
         Self{ atom, plans: plans.into(), results: Vec::new(), success: false }
     }
