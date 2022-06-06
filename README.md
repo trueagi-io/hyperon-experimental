@@ -28,6 +28,13 @@ To enable logging during tests execute:
 RUST_LOG=hyperon=debug cargo test
 ```
 
+Generate docs:
+```
+cd ./lib
+cargo doc
+```
+Docs can be found at `./lib/target/doc/hyperon/index.html`.
+
 # C and Python API
 
 Prerequisites (must be executed in the top directory of the repository):
