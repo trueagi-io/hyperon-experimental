@@ -64,9 +64,9 @@ nopAtom = OperationAtom('nop', lambda *args: [], unwrap=False)
 letAtom = OperationAtom('let', let_op,
     type_names=["Variable", "Any", "Atom", "Atom"], unwrap=False)
 matchAtom = OperationAtom('match', match_op,
-    type_names=["Space", "Any", "Atom", "Atom"], unwrap=False)
+    type_names=["Space", "Any", "Atom", "Any"], unwrap=False)
 
-printAtom = OperationAtom('println!', print_op, ['?', 'IO'], unwrap=False)
+printAtom = OperationAtom('println!', print_op, ['Any', 'IO'], unwrap=False)
 
 def newCallAtom(token):
     # REM: we could use "call" as a plain symbol (insted of "call:...")
