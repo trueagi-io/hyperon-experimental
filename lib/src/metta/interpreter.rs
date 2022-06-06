@@ -86,7 +86,8 @@ impl InterpretedAtom {
         &self.1
     }
     
-    fn into_tuple(self) -> (Atom, Bindings) {
+    /// Convert the instance into tuple of [Atom] and [Bindings]
+    pub fn into_tuple(self) -> (Atom, Bindings) {
         (self.0, self.1)
     }
 }
