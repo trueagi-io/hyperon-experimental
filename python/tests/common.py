@@ -207,7 +207,8 @@ class MeTTa:
         result = []
         for expr in self._parse_all(program):
             if expr == S('!'):
-                status = "interp"
+                if status != "comment":
+                    status = "interp"
                 continue
             if expr.get_type() == AtomKind.SYMBOL and expr.get_name()[0] == ';':
                 status = "comment"
