@@ -159,7 +159,7 @@ impl WithMatch for Atom {
                 if a.len() == b.len() => {
                 a.iter().zip(b.iter()).fold(Box::new(std::iter::once(MatchResult::new())),
                     |acc, (a, b)| {
-                        product_iter(acc, a.match_(b))
+                        match_result_product_iter(acc, a.match_(b))
                     })
             },
             _ => Box::new(std::iter::empty()),
@@ -167,55 +167,14 @@ impl WithMatch for Atom {
     }
 }
 
-pub fn product_iter(prev: MatchResultIter, next: MatchResultIter) -> MatchResultIter {
+pub fn match_result_product_iter(prev: MatchResultIter, next: MatchResultIter) -> MatchResultIter {
     let next : Vec<MatchResult> = next.collect();
-    log::trace!("product_iter, next: {:?}", next);
+    log::trace!("match_result_product_iter, next: {:?}", next);
     Box::new(prev.flat_map(move |p| -> Vec<Option<MatchResult>> {
         next.iter().map(|n| MatchResult::merge(&p, n)).collect()
     }).filter(Option::is_some).map(Option::unwrap))
 }
     
-fn match_atoms_recursively(candidate: &Atom, pattern: &Atom, res: &mut MatchResult) -> bool {
-    match (candidate, pattern) {
-        (Atom::Symbol(a), Atom::Symbol(b)) => a == b,
-        (Atom::Grounded(a), Atom::Grounded(b)) => a == b,
-        (Atom::Variable(_), Atom::Variable(v)) => {
-            // We stick to prioritize pattern bindings in this case
-            // because otherwise the $X in (= (...) $X) will not be matched with
-            // (= (if True $then) $then)
-            log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, candidate);
-            res.pattern_bindings.check_and_insert_binding(v, candidate)
-        }
-        (Atom::Variable(v), b) => {
-            log::trace!("check_and_insert_binding for candidate({:?}, {}, {})", res.candidate_bindings, v, b);
-            res.candidate_bindings.check_and_insert_binding(v, b)
-        }
-        (a, Atom::Variable(v)) => {
-            log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, a);
-            res.pattern_bindings.check_and_insert_binding(v, a)
-        },
-        (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b })) => {
-            if a.len() != b.len() {
-                false
-            } else {
-                a.iter().zip(b.iter()).fold(true,
-                    |succ, pair| succ && match_atoms_recursively(pair.0, pair.1, res))
-            }
-        },
-        _ => false,
-    }
-}
-
-fn match_atoms(candidate: &Atom, pattern: &Atom) -> Option<MatchResult> {
-    log::trace!("match_atoms: candidate: {}, pattern: {}", candidate, pattern);
-    let mut res = MatchResult::new();
-    if match_atoms_recursively(candidate, pattern, &mut res) {
-        Some(res)
-    } else {
-        None
-    }
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub struct UnificationPair {
     pub candidate: Atom,
@@ -382,15 +341,15 @@ mod test {
     #[test]
     fn test_match_variables_in_data() {
         assert_eq!(
-            match_atoms(&expr!("+", a, ("*", b, c)), &expr!("+", "A", ("*", "B", "C"))),
-            Some(MatchResult::from((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{}))));
+            expr!("+", a, ("*", b, c)).match_(&expr!("+", "A", ("*", "B", "C"))).collect::<Vec<MatchResult>>(),
+            vec![MatchResult::from((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{}))]);
     }
 
     #[test]
     fn test_match_different_value_for_variable_in_data() {
         assert_eq!(
-            match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
-            None);
+            expr!("+", a, ("*", a, c)).match_(&expr!("+", "A", ("*", "B", "C"))).collect::<Vec<MatchResult>>(),
+            vec![]);
     }
 
     #[test]

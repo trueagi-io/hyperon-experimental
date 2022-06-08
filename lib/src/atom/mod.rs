@@ -513,7 +513,8 @@ mod test {
                     }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
                         Box::new(acc.chain(i))
                     })
-                }).fold(Box::new(std::iter::once(MatchResult::new())), |acc, i| { matcher::product_iter(acc, i) })
+                }).fold(Box::new(std::iter::once(MatchResult::new())),
+                    |acc, i| { matcher::match_result_product_iter(acc, i) })
             } else {
                 Box::new(std::iter::empty())
             }
