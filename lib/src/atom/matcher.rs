@@ -302,11 +302,11 @@ pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bind
         // Check that variable is not expressed via itself, if so it is
         // a task for unification not for matching
         if !matches!(applied, Atom::Variable(_)) && atom_contains_variable(&applied, key) {
-            log::trace!("apply_bindings_to_bindings: self expression: key: {}, applied: {}", key, applied);
+            log::trace!("apply_bindings_to_bindings: rejecting binding, variable is expressed via itself: key: {}, applied: {}", key, applied);
             return Err(())
         }
         if !res.check_and_insert_binding(key, &applied) {
-            log::trace!("apply_bindings_to_bindings: cannot insert: ({}, {}) into {}", res, key, value);
+            log::trace!("apply_bindings_to_bindings: rejecting binding, new value is not equal to previous one: ({}, {}) into {}", res, key, value);
             return Err(())
         }
     }
