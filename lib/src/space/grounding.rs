@@ -92,12 +92,16 @@ impl GroundingSpace {
         match split_expr(pattern) {
             Some((sym @ Atom::Symbol(_), args)) if *sym == comma_symbol() => {
                 args.fold(vec![bind!{}],
-                    |acc, pattern| {
+                    |mut acc, pattern| {
                         if acc.is_empty() {
                             acc
                         } else {
-                            let res = self.query(pattern);
-                            Bindings::product(&acc, res)
+                            acc.drain(0..).flat_map(|prev| -> Vec<Bindings> {
+                                let pattern = matcher::apply_bindings_to_atom(&pattern, &prev);
+                                let mut res = self.query(&pattern);
+                                res.drain(0..).map(|next| Bindings::merge(&prev, &next))
+                                    .filter(Option::is_some).map(Option::unwrap).collect()
+                            }).collect()
                         }
                     })
             },
@@ -109,6 +113,8 @@ impl GroundingSpace {
         log::debug!("single_query: pattern: {}", pattern);
         let mut result = Vec::new();
         for next in &(*self.borrow_vec()) {
+            log::trace!("single_query: match next: {}", next);
+            let next = replace_variables(next);
             for res in next.match_(pattern) {
                 let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
                 if let Ok(bindings) = bindings {
@@ -324,11 +330,19 @@ mod test {
         assert_eq!(space.query(&expr!("+", a, ("*", a, c))), vec![]);
     }
 
+    fn get_var<'a>(bindings: &'a Bindings, name: &str) -> &'a Atom {
+        bindings.get(&VariableAtom::new(name)).unwrap()
+    }
+
     #[test]
     fn test_match_query_variable_has_priority() {
         let mut space = GroundingSpace::new();
         space.add(expr!("equals", x, x));
-        assert_eq!(space.query(&expr!("equals", y, z)), vec![bind!{y: expr!(x), z: expr!(x)}]);
+        
+        let result = space.query(&expr!("equals", y, z));
+        assert_eq!(result.len(), 1);
+        assert!(matches!(get_var(&result[0], "y"), Atom::Variable(_)));
+        assert!(matches!(get_var(&result[0], "z"), Atom::Variable(_)));
     }
 
     #[test]
@@ -396,5 +410,16 @@ mod test {
 
         assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
         assert_eq!(space.observers.borrow().len(), 0);
+    }
+
+    #[test]
+    fn complex_request_applying_bindings_to_next_pattern() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!(":=", ("sum", a, b), ("+", a, b)));
+        space.add(expr!(":=", "a", {4}));
+
+        let result = space.query(&expr!(",", (":=", "a", b), (":=", ("sum", {3}, b), W)));
+
+        assert_eq!(result, vec![bind!{b: expr!({4}), W: expr!("+", {3}, {4})}]);
     }
 }

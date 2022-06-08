@@ -1,6 +1,7 @@
 import unittest
 import re
 
+from test_common import assert_atoms_are_equivalent
 from hyperon import *
 from common import MeTTa, SpaceAtom
 
@@ -114,8 +115,8 @@ class MinelogyTest(unittest.TestCase):
         self.assertEqual(repr(output),
             '[(do-mine ((: stone type) (: stone variant)))]')
         output = utils.interpret('(how-get stick)')
-        self.assertEqual(repr(output),
-            '[(do-craft ((: planks type) (: $x variant) (: 2 quantity)))]')
+        assert_atoms_are_equivalent(self, output,
+                MeTTa().parse_all('(do-craft ((: planks type) (: $x variant) (: 2 quantity)))'))
 
     def test_minelogy_wtypes(self):
         # TODO: revisit this example, when types are automatically checked
@@ -206,7 +207,8 @@ class MinelogyTest(unittest.TestCase):
         output = utils.interpret('(get-ingredients planks oak)')
         self.assertEqual(repr(output[0]), '(list ((CEntityV log oak) 1))')
         output = utils.interpret('(get-ingredients wooden_pickaxe)')
-        self.assertEqual(repr(output[0]), '(list ((CEntityT stick) 2) ((CEntityV planks $_) 3))')
+        assert_atoms_are_equivalent(self, output,
+                MeTTa().parse_all('(list ((CEntityT stick) 2) ((CEntityV planks $_) 3))'))
 
 
 if __name__ == "__main__":

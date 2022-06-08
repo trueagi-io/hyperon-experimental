@@ -219,6 +219,9 @@ PYBIND11_MODULE(hyperonpy, m) {
 			atom_get_children(atom.ptr, copy_atoms, &atoms);
 			return atoms;
 		}, "Get children atoms of the expression");
+    m.def("atoms_are_equivalent", [](CAtom first, CAtom second) {
+    		return atoms_are_equivalent(first.ptr, second.ptr); },
+    		"Check atom for equivalence");
 
 	py::class_<CVecAtom>(m, "CVecAtom");
 	m.def("vec_atom_new", []() { return CVecAtom(vec_atom_new()); }, "New vector of atoms");

@@ -58,7 +58,7 @@ impl Bindings {
         }
     }
 
-    pub fn product(prev: &Vec<Bindings>, next: Vec<Bindings>) -> Vec<Bindings> {
+    pub fn product(prev: &Vec<Bindings>, next: &Vec<Bindings>) -> Vec<Bindings> {
         prev.iter().flat_map(|p| -> Vec<Option<Bindings>> {
             next.iter().map(|n| Self::merge(p, n)).collect()
         }).filter(Option::is_some).map(Option::unwrap).collect()
@@ -132,14 +132,14 @@ impl From<(Bindings, Bindings)> for MatchResult {
 pub type MatchResultIter = Box<dyn Iterator<Item=matcher::MatchResult>>;
 
 pub trait WithMatch {
-    fn match_(&self, other: &Atom) -> MatchResultIter;
+    fn match_(&self, pattern: &Atom) -> MatchResultIter;
 }
 
 impl WithMatch for Atom {
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match (self, other) {
+    fn match_(&self, pattern: &Atom) -> MatchResultIter {
+        match (self, pattern) {
             (Atom::Symbol(a), Atom::Symbol(b)) if a == b => Box::new(std::iter::once(MatchResult::new())),
-            (Atom::Grounded(a), Atom::Grounded(_)) => a.match_(other),
+            (Atom::Grounded(a), Atom::Grounded(_)) => a.match_(pattern),
             (Atom::Variable(_), Atom::Variable(v)) => {
                 // We stick to prioritize pattern bindings in this case
                 // because otherwise the $X in (= (...) $X) will not be matched with
@@ -159,7 +159,7 @@ impl WithMatch for Atom {
                 if a.len() == b.len() => {
                 a.iter().zip(b.iter()).fold(Box::new(std::iter::once(MatchResult::new())),
                     |acc, (a, b)| {
-                        product_iter(acc, a.match_(b))
+                        match_result_product_iter(acc, a.match_(b))
                     })
             },
             _ => Box::new(std::iter::empty()),
@@ -167,55 +167,14 @@ impl WithMatch for Atom {
     }
 }
 
-pub fn product_iter(prev: MatchResultIter, next: MatchResultIter) -> MatchResultIter {
+pub fn match_result_product_iter(prev: MatchResultIter, next: MatchResultIter) -> MatchResultIter {
     let next : Vec<MatchResult> = next.collect();
-    log::trace!("product_iter, next: {:?}", next);
+    log::trace!("match_result_product_iter, next: {:?}", next);
     Box::new(prev.flat_map(move |p| -> Vec<Option<MatchResult>> {
         next.iter().map(|n| MatchResult::merge(&p, n)).collect()
     }).filter(Option::is_some).map(Option::unwrap))
 }
     
-fn match_atoms_recursively(candidate: &Atom, pattern: &Atom, res: &mut MatchResult) -> bool {
-    match (candidate, pattern) {
-        (Atom::Symbol(a), Atom::Symbol(b)) => a == b,
-        (Atom::Grounded(a), Atom::Grounded(b)) => a == b,
-        (Atom::Variable(_), Atom::Variable(v)) => {
-            // We stick to prioritize pattern bindings in this case
-            // because otherwise the $X in (= (...) $X) will not be matched with
-            // (= (if True $then) $then)
-            log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, candidate);
-            res.pattern_bindings.check_and_insert_binding(v, candidate)
-        }
-        (Atom::Variable(v), b) => {
-            log::trace!("check_and_insert_binding for candidate({:?}, {}, {})", res.candidate_bindings, v, b);
-            res.candidate_bindings.check_and_insert_binding(v, b)
-        }
-        (a, Atom::Variable(v)) => {
-            log::trace!("check_and_insert_binding for pattern({:?}, {}, {})", res.pattern_bindings, v, a);
-            res.pattern_bindings.check_and_insert_binding(v, a)
-        },
-        (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b })) => {
-            if a.len() != b.len() {
-                false
-            } else {
-                a.iter().zip(b.iter()).fold(true,
-                    |succ, pair| succ && match_atoms_recursively(pair.0, pair.1, res))
-            }
-        },
-        _ => false,
-    }
-}
-
-pub fn match_atoms(candidate: &Atom, pattern: &Atom) -> Option<MatchResult> {
-    log::trace!("match_atoms: candidate: {}, pattern: {}", candidate, pattern);
-    let mut res = MatchResult::new();
-    if match_atoms_recursively(candidate, pattern, &mut res) {
-        Some(res)
-    } else {
-        None
-    }
-}
-
 #[derive(Debug, PartialEq, Eq)]
 pub struct UnificationPair {
     pub candidate: Atom,
@@ -336,19 +295,43 @@ fn atom_contains_variable(atom: &Atom, var: &VariableAtom) -> bool {
 }
 
 pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bindings, ()> {
+    log::trace!("apply_bindings_to_bindings: from: {}, to: {}", from, to);
     let mut res = Bindings::new();
     for (key, value) in to {
         let applied = apply_bindings_to_atom(value, from);
         // Check that variable is not expressed via itself, if so it is
         // a task for unification not for matching
         if !matches!(applied, Atom::Variable(_)) && atom_contains_variable(&applied, key) {
+            log::trace!("apply_bindings_to_bindings: rejecting binding, variable is expressed via itself: key: {}, applied: {}", key, applied);
             return Err(())
         }
         if !res.check_and_insert_binding(key, &applied) {
+            log::trace!("apply_bindings_to_bindings: rejecting binding, new value is not equal to previous one: ({}, {}) into {}", res, key, value);
             return Err(())
         }
     }
     return Ok(res);
+}
+
+pub fn atoms_are_equivalent(first: &Atom, second: &Atom) -> bool {
+    atoms_are_equivalent_with_bindings(first, second, &mut Bindings::new(), &mut Bindings::new())
+}
+
+fn atoms_are_equivalent_with_bindings(first: &Atom, second: &Atom,
+        direct_bindings: &mut Bindings, reverse_bindings: &mut Bindings) -> bool {
+    match (first, second) {
+        (Atom::Variable(f), Atom::Variable(s)) =>
+            direct_bindings.check_and_insert_binding(f, second) &&
+                reverse_bindings.check_and_insert_binding(s, first),
+        (Atom::Symbol(first), Atom::Symbol(second)) => first == second,
+        (Atom::Grounded(first), Atom::Grounded(second)) => first == second,
+        (Atom::Expression(first), Atom::Expression(second)) =>
+            first.children().len() == second.children().len() &&
+            first.children().iter().zip(second.children().iter())
+                .all(|(first, second)| atoms_are_equivalent_with_bindings(
+                        first, second, direct_bindings, reverse_bindings)),
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -358,15 +341,15 @@ mod test {
     #[test]
     fn test_match_variables_in_data() {
         assert_eq!(
-            match_atoms(&expr!("+", a, ("*", b, c)), &expr!("+", "A", ("*", "B", "C"))),
-            Some(MatchResult::from((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{}))));
+            expr!("+", a, ("*", b, c)).match_(&expr!("+", "A", ("*", "B", "C"))).collect::<Vec<MatchResult>>(),
+            vec![MatchResult::from((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{}))]);
     }
 
     #[test]
     fn test_match_different_value_for_variable_in_data() {
         assert_eq!(
-            match_atoms(&expr!("+", a, ("*", a, c)), &expr!("+", "A", ("*", "B", "C"))),
-            None);
+            expr!("+", a, ("*", a, c)).match_(&expr!("+", "A", ("*", "B", "C"))).collect::<Vec<MatchResult>>(),
+            vec![]);
     }
 
     #[test]
@@ -385,5 +368,21 @@ mod test {
         assert_eq!(Bindings::merge(&bind!{ a: expr!("A"), b: expr!("B") },
             &bind!{ a: expr!("A") }),
             Some(bind!{ a: expr!("A"), b: expr!("B") }));
+    }
+
+    #[test]
+    fn test_variable_name_conflict() {
+        assert_eq!(expr!("a", (W)).match_(&expr!("a", W)).collect::<Vec<MatchResult>>(),
+            vec![MatchResult::from((bind!{}, bind!{ W: expr!((W)) }))]);
+    }
+
+    #[test]
+    fn test_are_equivalent() {
+        assert!(atoms_are_equivalent(&expr!(a, "b", {"c"}), &expr!(x, "b", {"c"})));
+        assert!(atoms_are_equivalent(&expr!(a, b), &expr!(c, d)));
+        assert!(!atoms_are_equivalent(&expr!(a, "b", {"c"}), &expr!(a, "x", {"c"})));
+        assert!(!atoms_are_equivalent(&expr!(a, "b", {"c"}), &expr!(a, "b", {"x"})));
+        assert!(!atoms_are_equivalent(&expr!(a, a), &expr!(c, d)));
+        assert!(!atoms_are_equivalent(&expr!(a, b), &expr!(b, b)));
     }
 }

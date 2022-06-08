@@ -20,6 +20,7 @@ pub mod subexpr;
 
 use std::any::Any;
 use std::fmt::{Display, Debug};
+use std::collections::HashMap;
 
 // Symbol atom
 
@@ -82,24 +83,63 @@ impl Display for ExpressionAtom {
 
 // Variable atom
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+static NEXT_VARIABLE_ID: AtomicUsize = AtomicUsize::new(1);
+
+fn next_variable_id() -> usize {
+    NEXT_VARIABLE_ID.fetch_add(1, Ordering::Relaxed)
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct VariableAtom {
     name: String,
+    id: usize,
 }
 
 impl VariableAtom {
     pub fn new<T: Into<String>>(name: T) -> Self {
-        Self{ name: name.into() }
+        Self{ name: name.into(), id: 0 }
     }
 
     pub fn name(&self) -> &str {
         self.name.as_str()
     }
+
+    pub fn make_unique(&self) -> Self {
+        VariableAtom{ name: self.name.clone(), id: next_variable_id() }
+    }
 }
 
 impl Display for VariableAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "${}", self.name)
+        if self.id == 0 {
+            write!(f, "${}", self.name)
+        } else {
+            write!(f, "${}-{}", self.name, self.id)
+        }
+    }
+}
+
+pub fn replace_variables(atom: &Atom) -> Atom {
+    replace_variables_recursively(atom, &mut HashMap::new())
+}
+
+fn replace_variables_recursively(atom: &Atom, vars: &mut HashMap<VariableAtom, Atom>) -> Atom {
+    match atom {
+        Atom::Variable(var) => {
+            if !vars.contains_key(var) {
+                vars.insert(var.clone(), Atom::Variable(var.make_unique()));
+            }
+            vars[var].clone()
+        },
+        Atom::Expression(expr) => {
+            let children: Vec<Atom> = expr.children().iter()
+                .map(|atom| replace_variables_recursively(&atom, vars))
+                .collect();
+            Atom::expr(children)
+        }
+        _ => atom.clone(),
     }
 }
 
@@ -399,7 +439,7 @@ mod test {
 
     #[inline]
     fn variable(name: &'static str) -> Atom {
-        Atom::Variable(VariableAtom{ name: name.to_string() })
+        Atom::Variable(VariableAtom{ name: name.to_string(), id: 0 })
     }
 
     #[inline]
@@ -473,7 +513,8 @@ mod test {
                     }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
                         Box::new(acc.chain(i))
                     })
-                }).fold(Box::new(std::iter::once(MatchResult::new())), |acc, i| { matcher::product_iter(acc, i) })
+                }).fold(Box::new(std::iter::once(MatchResult::new())),
+                    |acc, i| { matcher::match_result_product_iter(acc, i) })
             } else {
                 Box::new(std::iter::empty())
             }

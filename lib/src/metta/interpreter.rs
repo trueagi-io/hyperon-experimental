@@ -625,6 +625,7 @@ impl<T: Debug> Debug for AlternativeInterpretationsPlan<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metta::*;
     
     #[test]
     fn test_match_all() {
@@ -656,6 +657,18 @@ mod tests {
             Ok(vec![expr!("=", ("Fritz", "frog"), "True")]));
     }
 
+    fn results_are_equivalent(actual: &Result<Vec<Atom>, String>,
+            expected: &Result<Vec<Atom>, String>) -> bool {
+        match (actual, expected) {
+            (Ok(actual), Ok(expected)) =>
+                actual.len() == expected.len() &&
+                actual.iter().zip(expected.iter()).all(|(actual, expected)| {
+                    atoms_are_equivalent(actual, expected) }),
+            (Err(actual), Err(expected)) => actual == expected,
+            _ => false,
+        }
+    }
+
     #[test]
     fn test_variable_keeps_value_in_different_sub_expressions() {
         let mut space = GroundingSpace::new();
@@ -665,8 +678,9 @@ mod tests {
 
         assert_eq!(interpret(space.clone(), &expr!("eq", ("plus", "Z", n), n)),
             Ok(vec![expr!("True")]));
-        assert_eq!(interpret(space.clone(), &expr!("eq", ("plus", ("S", "Z"), n), n)),
-            Ok(vec![expr!("eq", ("S", y), y)]));
+        assert!(results_are_equivalent(
+            &interpret(space.clone(), &expr!("eq", ("plus", ("S", "Z"), n), n)),
+            &Ok(vec![expr!("eq", ("S", y), y)])));
     }
 
     fn test_interpret<T, R, P: Plan<T, R>>(plan: P, arg: T) -> Result<R, String> {
@@ -744,6 +758,28 @@ mod tests {
         let expr = expr!("if", ("a", x), x);
 
         assert_eq!(interpret(space, &expr), Ok(vec![expr!("d")]));
+    }
+
+    #[test]
+    fn test_variable_name_conflict() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("=", ("a", (W)), {true}));
+        let expr = expr!("a", W);
+
+        assert_eq!(interpret(space, &expr), Ok(vec![expr!({true})]));
+    }
+
+    #[test]
+    fn test_variable_name_conflict_renaming() {
+        let space = metta_space("
+            (= (b ($x $y)) (c $x $y))
+        ");
+        let expr = metta_atom("(a (b $a) $x $y)");
+
+        let result = interpret(space, &expr);
+
+        assert!(results_are_equivalent(&result,
+            &Ok(vec![metta_atom("(a (c $a $b) $c $d)")])));
     }
 }
 
