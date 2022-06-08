@@ -39,7 +39,7 @@ Docs can be found at `./lib/target/doc/hyperon/index.html`.
 
 Prerequisites (must be executed in the top directory of the repository):
 ```
-cargo install cbindgen
+cargo install --force cbindgen
 python -m pip install conan==1.47
 python -m pip install -e ./python[dev]
 ```
