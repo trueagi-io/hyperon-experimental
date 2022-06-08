@@ -92,12 +92,16 @@ impl GroundingSpace {
         match split_expr(pattern) {
             Some((sym @ Atom::Symbol(_), args)) if *sym == comma_symbol() => {
                 args.fold(vec![bind!{}],
-                    |acc, pattern| {
+                    |mut acc, pattern| {
                         if acc.is_empty() {
                             acc
                         } else {
-                            let res = self.query(pattern);
-                            Bindings::product(&acc, res)
+                            acc.drain(0..).flat_map(|prev| -> Vec<Bindings> {
+                                let pattern = matcher::apply_bindings_to_atom(&pattern, &prev);
+                                let mut res = self.query(&pattern);
+                                res.drain(0..).map(|next| Bindings::merge(&prev, &next))
+                                    .filter(Option::is_some).map(Option::unwrap).collect()
+                            }).collect()
                         }
                     })
             },
@@ -406,5 +410,16 @@ mod test {
 
         assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
         assert_eq!(space.observers.borrow().len(), 0);
+    }
+
+    #[test]
+    fn complex_request_applying_bindings_to_next_pattern() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!(":=", ("sum", a, b), ("+", a, b)));
+        space.add(expr!(":=", "a", {4}));
+
+        let result = space.query(&expr!(",", (":=", "a", b), (":=", ("sum", {3}, b), W)));
+
+        assert_eq!(result, vec![bind!{b: expr!({4}), W: expr!("+", {3}, {4})}]);
     }
 }
