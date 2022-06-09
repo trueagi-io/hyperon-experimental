@@ -4,6 +4,7 @@ use crate::space::grounding::GroundingSpace;
 use std::io::Read;
 use std::str::Chars;
 use std::iter::Peekable;
+use mopa::Any;
 use regex::Regex;
 
 pub struct Tokenizer {
@@ -51,23 +52,24 @@ impl<'a> SExprParser<'a> {
         while let Some(c) = self.it.peek() {
             match c {
                 ';' => {
+                    let c1 = c.clone();
                     // ; = skip line ;; = skip sexpr
                     self.it.next();
-                    while let Some(n) = self.it.peek() {
-                        match n {
-                            ';' => {
-                                return self.parse_atom(tokenizer)
+                    let next = self.it.peek();
+                    match next {
+                        Some(n) => {
+                            if *n == c1 {
+                                // found ;; parse sexpr and skip it
+                                self.skip_sexpr(tokenizer);
+                            } else {
+                                // it's just ; iterate until \n
+                                self.skip_line()
                             }
-                            '\n' => {
-                                break;
-                            }
-                            _ => {
-                                self.it.next();
-                                continue;
-                            }
+                        },
+                        None => {
+                            return None;
                         }
                     }
-                    continue;
                 },
                 _ if c.is_whitespace() => { self.it.next(); },
                 '$' => {
@@ -77,7 +79,7 @@ impl<'a> SExprParser<'a> {
                 },
                 '(' => {
                     self.it.next();
-                    return Some(self.parse_expr(tokenizer));
+                    return Some(self.parse_expr(tokenizer))
                 },
                 ')' => panic!("Unexpected right bracket"),
                 _ => {
@@ -86,6 +88,41 @@ impl<'a> SExprParser<'a> {
             }
         }
         None
+    }
+
+    fn skip_line(&mut self) {
+        self.it.next();
+        while let Some(n) = self.it.peek() {
+            match n {
+                '\n' => {
+                    break;
+                }
+                _ => {
+                    self.it.next();
+                }
+            }
+        }
+    }
+
+    fn skip_sexpr(&mut self, tokenizer: &Tokenizer) {
+        self.it.next();
+        // parse s-expression and skip it
+        let res: Option<Atom> = self.parse(tokenizer);
+        match res {
+            // res might be a ! symbol
+            Some(atom) => {
+                match atom {
+                    Atom::Symbol(s) => {
+                        if s.name() == "!" {
+                            self.parse(tokenizer);
+                            return;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            _ => {}
+        }
     }
 
     fn parse_atom(&mut self, tokenizer: &Tokenizer) -> Option<Atom> {
