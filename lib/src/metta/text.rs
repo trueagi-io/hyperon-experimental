@@ -4,7 +4,6 @@ use crate::space::grounding::GroundingSpace;
 use std::io::Read;
 use std::str::Chars;
 use std::iter::Peekable;
-use mopa::Any;
 use regex::Regex;
 
 pub struct Tokenizer {
