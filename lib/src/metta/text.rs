@@ -50,6 +50,25 @@ impl<'a> SExprParser<'a> {
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Option<Atom> {
         while let Some(c) = self.it.peek() {
             match c {
+                ';' => {
+                    // ; = skip line ;; = skip sexpr
+                    self.it.next();
+                    while let Some(n) = self.it.peek() {
+                        match n {
+                            ';' => {
+                                return self.parse_atom(tokenizer)
+                            }
+                            '\n' => {
+                                break;
+                            }
+                            _ => {
+                                self.it.next();
+                                continue;
+                            }
+                        }
+                    }
+                    continue;
+                },
                 _ if c.is_whitespace() => { self.it.next(); },
                 '$' => {
                     self.it.next();
@@ -62,17 +81,21 @@ impl<'a> SExprParser<'a> {
                 },
                 ')' => panic!("Unexpected right bracket"),
                 _ => {
-                    let token = next_token(&mut self.it);
-                    let constr = tokenizer.find_token(token.as_str());
-                    if let Some(constr) = constr {
-                        return Some(constr(token.as_str()));
-                    } else {
-                        return Some(Atom::sym(token));
-                    }
+                    return self.parse_atom(tokenizer);
                 },
             }
         }
         None
+    }
+
+    fn parse_atom(&mut self, tokenizer: &Tokenizer) -> Option<Atom> {
+        let token = next_token(&mut self.it);
+        let constr = tokenizer.find_token(token.as_str());
+        if let Some(constr) = constr {
+            return Some(constr(token.as_str()));
+        } else {
+            return Some(Atom::sym(token));
+        }
     }
 
     fn parse_expr(&mut self, tokenizer: &Tokenizer) -> Atom {
