@@ -207,21 +207,16 @@ class MeTTa:
         result = []
         for expr in self._parse_all(program):
             if expr == S('!'):
-                if status != "comment":
-                    status = "interp"
+                status = "interp"
                 continue
-            if expr.get_type() == AtomKind.SYMBOL and expr.get_name()[0] == ';':
-                status = "comment"
-                continue
-            if status != "comment":
-                if self.settings['type-check'] == 'auto':
-                    if not validate_atom(self.space, expr):
-                        print("Type error in ", expr)
-                        break
-                if status == "interp":
-                    r = interpret(self.space, expr)
-                    if r != []: result += [r]
-                else:
-                    self.space.add_atom(expr)
+            if self.settings['type-check'] == 'auto':
+                if not validate_atom(self.space, expr):
+                    print("Type error in ", expr)
+                    break
+            if status == "interp":
+                r = interpret(self.space, expr)
+                if r != []: result += [r]
+            else:
+                self.space.add_atom(expr)
             status = "normal"
         return result
