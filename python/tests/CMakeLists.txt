@@ -1,5 +1,3 @@
-find_program(NOSETESTS_EXECUTABLE NAMES nosetests nosetests3 REQUIRED)
-
 set(TEST_ENVIRONMENT
     "PYTHONPATH=${PYTHONPATH}")
 
