@@ -51,24 +51,8 @@ impl<'a> SExprParser<'a> {
         while let Some(c) = self.it.peek() {
             match c {
                 ';' => {
-                    let c1 = c.clone();
-                    // ; = skip line ;; = skip sexpr
-                    self.it.next();
-                    let next = self.it.peek();
-                    match next {
-                        Some(n) => {
-                            if *n == c1 {
-                                // found ;; parse sexpr and skip it
-                                self.skip_sexpr(tokenizer);
-                            } else {
-                                // it's just ; iterate until \n
-                                self.skip_line()
-                            }
-                        },
-                        None => {
-                            return None;
-                        }
-                    }
+                    self.handle_comments(tokenizer);
+                    continue
                 },
                 _ if c.is_whitespace() => { self.it.next(); },
                 '$' => {
@@ -89,16 +73,29 @@ impl<'a> SExprParser<'a> {
         None
     }
 
-    fn skip_line(&mut self) {
+    fn handle_comments(&mut self, tokenizer: &Tokenizer) {
+        // ; = skip line ;; = skip sexpr
         self.it.next();
+        let next = self.it.peek();
+        match next {
+            Some(n) => {
+                if *n == ';' {
+                    // found ;; parse sexpr and skip it
+                    self.skip_sexpr(tokenizer);
+                } else {
+                    // it's just ; iterate until \n
+                    self.skip_line()
+                }
+            },
+            None => {}
+        }
+    }
+
+    fn skip_line(&mut self) -> () {
         while let Some(n) = self.it.peek() {
             match n {
-                '\n' => {
-                    break;
-                }
-                _ => {
-                    self.it.next();
-                }
+                '\n' => break,
+                _ => { let _  = self.it.next(); }
             }
         }
     }
@@ -106,21 +103,10 @@ impl<'a> SExprParser<'a> {
     fn skip_sexpr(&mut self, tokenizer: &Tokenizer) {
         self.it.next();
         // parse s-expression and skip it
-        let res: Option<Atom> = self.parse(tokenizer);
-        match res {
-            // res might be a ! symbol
-            Some(atom) => {
-                match atom {
-                    Atom::Symbol(s) => {
-                        if s.name() == "!" {
-                            self.parse(tokenizer);
-                            return;
-                        }
-                    }
-                    _ => {}
-                }
-            }
-            _ => {}
+        match self.parse(tokenizer) {
+                // res might be a ! symbol
+                Some(Atom::Symbol(s)) if s.name() == "!" =>  { self.parse(tokenizer); }
+                _ => ()
         }
     }
 
