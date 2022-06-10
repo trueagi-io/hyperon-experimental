@@ -78,3 +78,13 @@ class MeTTaTest(unittest.TestCase):
  
         result = MeTTa().run(program)
         self.assertEqual('[]', repr(result))    
+
+        program = '''
+               (a  1);
+               !(match 
+                        &self (a $W) $W)
+           '''
+
+        result = MeTTa().run(program)
+        self.assertEqual('[[1]]', repr(result))
+

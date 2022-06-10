@@ -52,7 +52,6 @@ impl<'a> SExprParser<'a> {
             match c {
                 ';' => {
                     self.handle_comments(tokenizer);
-                    continue
                 },
                 _ if c.is_whitespace() => { self.it.next(); },
                 '$' => {
@@ -95,7 +94,7 @@ impl<'a> SExprParser<'a> {
         while let Some(n) = self.it.peek() {
             match n {
                 '\n' => break,
-                _ => { let _  = self.it.next(); }
+                _ => { self.it.next(); }
             }
         }
     }
@@ -286,5 +285,59 @@ mod tests {
     fn test_panic_on_unbalanced_brackets() {
         let mut parser = SExprParser::new("(a))");
         while let Some(_) = parser.parse(&Tokenizer::new()) {}
+    }
+    
+    #[test]
+    fn test_parser_comments(){
+        println!("test_parser_comments");
+        let mut i = 0;
+        let program = " (a ; 4)
+                  5)
+                !(match &self (a $W)   $W)";
+        let expected = vec!("(a 5)", "!", "(match &self (a $W) $W)");
+        println!("running test {}", i); i+=1;
+        parse_compare(program, &expected);
+
+
+        let program = "(a  4)
+                ;;(a  1)
+                !(match &self (a $W) $W)";
+        let expected = vec!("(a 4)", "!", "(match &self (a $W) $W)");
+        println!("running test {}", i); i+=1;
+        parse_compare(program, &expected);
+
+        let program = "               (a  1)
+               ;; !(match
+                        &self (a $W) $W)";
+        let expected = vec!("(a 1)");
+        println!("running test {}", i); i+=1;
+        parse_compare(program, &expected);
+
+
+        let program = "               (a  1)
+               ;; !(match
+                        &self (a $W) $W)";
+        let expected = vec!("(a 1)");
+        println!("running test {}", i); i+=1;
+        parse_compare(program, &expected);
+
+        let program = "
+            (a                                  1);
+                !(match
+                &self (a $W) $W)";
+        println!("running test {}", i); i+=1;
+        let expected = vec!("(a 1)", "!", "(match &self (a $W) $W)");
+        parse_compare(program, &expected);
+    }
+
+    fn parse_compare(program: &str, expected: &Vec<&str>){
+        let mut i = 0;
+        let mut parser = SExprParser::new(program);
+        while let Some(atom) = parser.parse(&Tokenizer::new()) {
+            println!("{}", atom.to_string());
+            assert_eq!(expected[i], atom.to_string());
+            i += 1;
+        }
+        assert_eq!(i, expected.len());
     }
 }
