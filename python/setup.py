@@ -12,10 +12,10 @@ class CoverageCommand(Command):
 
     def run(self):
         import sys, subprocess
-        subprocess.run(shlex.split("coverage run --source hyperon -m unittest discover"), check=True,
+        result = subprocess.run(shlex.split("coverage run --source hyperon -m unittest discover"), check=False,
                        cwd='./tests')
         subprocess.run(shlex.split("coverage html"), check=True)
-        raise SystemExit(0)
+        raise SystemExit(result.returncode)
 
 
 setup(name='hyperon',
