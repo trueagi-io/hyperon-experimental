@@ -14,7 +14,7 @@ class CoverageCommand(Command):
         import sys, subprocess
         result = subprocess.run(shlex.split("coverage run --source hyperon -m unittest discover"), check=False,
                        cwd='./tests')
-        subprocess.run(shlex.split("coverage html"), check=True)
+        subprocess.run(shlex.split("coverage html"), check=True, cwd='./tests')
         raise SystemExit(result.returncode)
 
 
