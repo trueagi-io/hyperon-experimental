@@ -48,3 +48,22 @@ class MeTTaTest(unittest.TestCase):
         result = MeTTa().run(program)
         self.assertEqual('[[(Cons a1 (Cons a2 (Cons b1 (Cons b2 Nil))))]]', repr(result))
 
+    def test_comments(self):
+        program = '''
+                (a ; 4)
+                  5)
+                !(match &self (a $W) $W)
+            '''
+     
+        result = MeTTa().run(program)
+        self.assertEqual('[[5]]', repr(result))
+
+        program = '''
+               (a  1);
+               !(match 
+                        &self (a $W) $W)
+           '''
+
+        result = MeTTa().run(program)
+        self.assertEqual('[[1]]', repr(result))
+
