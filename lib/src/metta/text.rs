@@ -51,7 +51,7 @@ impl<'a> SExprParser<'a> {
         while let Some(c) = self.it.peek() {
             match c {
                 ';' => {
-                    self.handle_comments(tokenizer);
+                    self.skip_line();
                 },
                 _ if c.is_whitespace() => { self.it.next(); },
                 '$' => {
@@ -72,40 +72,12 @@ impl<'a> SExprParser<'a> {
         None
     }
 
-    fn handle_comments(&mut self, tokenizer: &Tokenizer) {
-        // ; = skip line ;; = skip sexpr
-        self.it.next();
-        let next = self.it.peek();
-        match next {
-            Some(n) => {
-                if *n == ';' {
-                    // found ;; parse sexpr and skip it
-                    self.skip_sexpr(tokenizer);
-                } else {
-                    // it's just ; iterate until \n
-                    self.skip_line()
-                }
-            },
-            None => {}
-        }
-    }
-
     fn skip_line(&mut self) -> () {
         while let Some(n) = self.it.peek() {
             match n {
                 '\n' => break,
                 _ => { self.it.next(); }
             }
-        }
-    }
-
-    fn skip_sexpr(&mut self, tokenizer: &Tokenizer) {
-        self.it.next();
-        // parse s-expression and skip it
-        match self.parse(tokenizer) {
-                // res might be a ! symbol
-                Some(Atom::Symbol(s)) if s.name() == "!" =>  { self.parse(tokenizer); }
-                _ => ()
         }
     }
 
@@ -286,58 +258,41 @@ mod tests {
         let mut parser = SExprParser::new("(a))");
         while let Some(_) = parser.parse(&Tokenizer::new()) {}
     }
-    
+
     #[test]
-    fn test_parser_comments(){
-        println!("test_parser_comments");
-        let mut i = 0;
-        let program = " (a ; 4)
-                  5)
-                !(match &self (a $W)   $W)";
-        let expected = vec!("(a 5)", "!", "(match &self (a $W) $W)");
-        println!("running test {}", i); i+=1;
-        parse_compare(program, &expected);
-
-
-        let program = "(a  4)
-                ;;(a  1)
-                !(match &self (a $W) $W)";
-        let expected = vec!("(a 4)", "!", "(match &self (a $W) $W)");
-        println!("running test {}", i); i+=1;
-        parse_compare(program, &expected);
-
-        let program = "               (a  1)
-               ;; !(match
-                        &self (a $W) $W)";
-        let expected = vec!("(a 1)");
-        println!("running test {}", i); i+=1;
-        parse_compare(program, &expected);
-
-
-        let program = "               (a  1)
-               ;; !(match
-                        &self (a $W) $W)";
-        let expected = vec!("(a 1)");
-        println!("running test {}", i); i+=1;
-        parse_compare(program, &expected);
-
-        let program = "
-            (a                                  1);
-                !(match
-                &self (a $W) $W)";
-        println!("running test {}", i); i+=1;
-        let expected = vec!("(a 1)", "!", "(match &self (a $W) $W)");
-        parse_compare(program, &expected);
+    fn test_comment_base() {
+        let program = ";(a 4)
+                  (b 5)";
+        let expected = vec![expr!("b", "5")];
+        let res = parse(program);
+        assert_eq!(res, expected);
     }
 
-    fn parse_compare(program: &str, expected: &Vec<&str>){
-        let mut i = 0;
+    #[test]
+    fn test_comment_in_sexpr() {
+        let program = " (a ; 4)
+                  5)";
+        let expected = vec![expr!("a", "5")];
+        let res = parse(program);
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn test_comment_endl() {
+        let program = " (a 4);
+                  (b 5)";
+        let expected = vec![expr!("a", "4"), expr!("b", "5")];
+        let res = parse(program);
+        assert_eq!(res, expected);
+    }
+
+    fn parse(program: &str) -> Vec<Atom> {
+        let tokenizer = Tokenizer::new();
         let mut parser = SExprParser::new(program);
-        while let Some(atom) = parser.parse(&Tokenizer::new()) {
-            println!("{}", atom.to_string());
-            assert_eq!(expected[i], atom.to_string());
-            i += 1;
+        let mut result = Vec::new();
+        while let Some(atom) = parser.parse(&tokenizer) {
+            result.push(atom);
         }
-        assert_eq!(i, expected.len());
+        result
     }
 }
