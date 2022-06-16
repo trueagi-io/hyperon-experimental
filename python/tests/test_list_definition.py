@@ -43,6 +43,9 @@ class ListDefinitionTest(unittest.TestCase):
         self.assertEqual(
             metta.interpret('(insert 2 (insert 1 Nil))'),
             metta.parse_all('(Cons 1 (Cons 2 Nil))'))
+        self.assertEqual(
+            metta.interpret('(insert 3 (insert 2 (insert 1 Nil)))'),
+            metta.parse_all('(Cons 1 (Cons 2 (Cons 3 Nil)))'))
 
         # Test sort
         self.assertEqual(
