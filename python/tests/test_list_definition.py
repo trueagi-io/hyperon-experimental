@@ -11,6 +11,7 @@ class ListDefinitionTest(unittest.TestCase):
     #
     # Test if adding type declaration to List data structure does
     # not interfere with executing functions operating on List.
+    @unittest.skip("Not implemented")
     def test_list_definition(self):
         metta = MeTTa()
         metta.add_parse('''
