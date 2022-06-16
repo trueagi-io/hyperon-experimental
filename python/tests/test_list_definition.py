@@ -30,13 +30,30 @@ class ListDefinitionTest(unittest.TestCase):
                   (if (< $x $head)
                       (Cons $x (Cons $head (Cons $tail)))
                       (Cons $head (insert $x $tail))))
+
+                ;; Sort a list
+                (= (sort Nil) Nil)
+                (= (sort (Cons $head $tail)) (insert $head (sort $tail)))
         ''')
+
+        # Test insert
         self.assertEqual(
             metta.interpret('(insert 1 Nil)'),
             metta.parse_all('(Cons 1 Nil)'))
         self.assertEqual(
             metta.interpret('(insert 2 (insert 1 Nil))'),
             metta.parse_all('(Cons 1 (Cons 2 Nil))'))
+
+        # Test sort
+        self.assertEqual(
+            metta.interpret('(sort (Cons 1 Nil))'),
+            metta.parse_all('(Cons 1 Nil)'))
+        self.assertEqual(
+            metta.interpret('(sort (Cons 2 (Cons 1 Nil)))'),
+            metta.parse_all('(Cons 1 (Cons 2 Nil))'))
+        self.assertEqual(
+            metta.interpret('(sort (Cons 3 (Cons 1 (Cons 2 Nil))))'),
+            metta.parse_all('(Cons 1 (Cons 2 (Cons 3 Nil)))'))
 
 
 if __name__ == "__main__":
