@@ -50,6 +50,9 @@ impl<'a> SExprParser<'a> {
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Option<Atom> {
         while let Some(c) = self.it.peek() {
             match c {
+                ';' => {
+                    self.skip_line();
+                },
                 _ if c.is_whitespace() => { self.it.next(); },
                 '$' => {
                     self.it.next();
@@ -58,21 +61,34 @@ impl<'a> SExprParser<'a> {
                 },
                 '(' => {
                     self.it.next();
-                    return Some(self.parse_expr(tokenizer));
+                    return Some(self.parse_expr(tokenizer))
                 },
                 ')' => panic!("Unexpected right bracket"),
                 _ => {
-                    let token = next_token(&mut self.it);
-                    let constr = tokenizer.find_token(token.as_str());
-                    if let Some(constr) = constr {
-                        return Some(constr(token.as_str()));
-                    } else {
-                        return Some(Atom::sym(token));
-                    }
+                    return self.parse_atom(tokenizer);
                 },
             }
         }
         None
+    }
+
+    fn skip_line(&mut self) -> () {
+        while let Some(n) = self.it.peek() {
+            match n {
+                '\n' => break,
+                _ => { self.it.next(); }
+            }
+        }
+    }
+
+    fn parse_atom(&mut self, tokenizer: &Tokenizer) -> Option<Atom> {
+        let token = next_token(&mut self.it);
+        let constr = tokenizer.find_token(token.as_str());
+        if let Some(constr) = constr {
+            return Some(constr(token.as_str()));
+        } else {
+            return Some(Atom::sym(token));
+        }
     }
 
     fn parse_expr(&mut self, tokenizer: &Tokenizer) -> Atom {
@@ -241,5 +257,42 @@ mod tests {
     fn test_panic_on_unbalanced_brackets() {
         let mut parser = SExprParser::new("(a))");
         while let Some(_) = parser.parse(&Tokenizer::new()) {}
+    }
+
+    #[test]
+    fn test_comment_base() {
+        let program = ";(a 4)
+                  (b 5)";
+        let expected = vec![expr!("b", "5")];
+        let res = parse(program);
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn test_comment_in_sexpr() {
+        let program = " (a ; 4)
+                  5)";
+        let expected = vec![expr!("a", "5")];
+        let res = parse(program);
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn test_comment_endl() {
+        let program = " (a 4);
+                  (b 5)";
+        let expected = vec![expr!("a", "4"), expr!("b", "5")];
+        let res = parse(program);
+        assert_eq!(res, expected);
+    }
+
+    fn parse(program: &str) -> Vec<Atom> {
+        let tokenizer = Tokenizer::new();
+        let mut parser = SExprParser::new(program);
+        let mut result = Vec::new();
+        while let Some(atom) = parser.parse(&tokenizer) {
+            result.push(atom);
+        }
+        result
     }
 }
