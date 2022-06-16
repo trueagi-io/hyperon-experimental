@@ -1,3 +1,4 @@
+import shlex
 from setuptools import setup, Command
 
 class CoverageCommand(Command):
@@ -11,9 +12,11 @@ class CoverageCommand(Command):
 
     def run(self):
         import sys, subprocess
-        raise SystemExit(subprocess.run([ sys.executable, "-m", "nose",
-            "--with-coverage", "--cover-erase", "--cover-package=hyperon",
-            "--cover-html", "./tests" ]))
+        result = subprocess.run(shlex.split("coverage run --source hyperon -m unittest discover"), check=False,
+                       cwd='./tests')
+        subprocess.run(shlex.split("coverage html"), check=True, cwd='./tests')
+        raise SystemExit(result.returncode)
+
 
 setup(name='hyperon',
       version='0.1',
@@ -22,7 +25,6 @@ setup(name='hyperon',
       install_requires=[],
       extras_require={
           'dev': [
-              'nose',
               'coverage'
           ]
       },
