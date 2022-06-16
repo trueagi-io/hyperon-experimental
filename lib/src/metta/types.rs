@@ -7,7 +7,7 @@ use std::fmt::{Debug, Display};
 #[inline]
 fn has_type_symbol() -> Atom { sym!(":") }
 #[inline]
-fn sub_type_symbol() -> Atom { sym!("<") }
+fn sub_type_symbol() -> Atom { sym!(":<") }
 #[inline]
 fn undefined_symbol() -> Atom { sym!("%Undefined%") }
 #[inline]
@@ -273,13 +273,13 @@ mod tests {
     fn grammar_space() -> GroundingSpace {
         let mut space = GroundingSpace::new();
         space.add(expr!(":", "answer", ("->", "Sent", "Sent")));
-        space.add(expr!("<", "Quest", "Sent"));
-        space.add(expr!("<", ("Aux", "Subj", "Verb", "Obj"), "Quest"));
-        space.add(expr!("<", "Pron", "Subj"));
-        space.add(expr!("<", "NG", "Subj"));
-        space.add(expr!("<", "Pron", "Obj"));
-        space.add(expr!("<", "NG", "Obj"));
-        space.add(expr!("<", ("Det", "Noun"), "NG"));
+        space.add(expr!(":<", "Quest", "Sent"));
+        space.add(expr!(":<", ("Aux", "Subj", "Verb", "Obj"), "Quest"));
+        space.add(expr!(":<", "Pron", "Subj"));
+        space.add(expr!(":<", "NG", "Subj"));
+        space.add(expr!(":<", "Pron", "Obj"));
+        space.add(expr!(":<", "NG", "Obj"));
+        space.add(expr!(":<", ("Det", "Noun"), "NG"));
         space.add(expr!(":", "you", "Pron"));
         space.add(expr!(":", "do", "Aux"));
         space.add(expr!(":", "do", "Verb"));
@@ -317,7 +317,7 @@ mod tests {
         space.add(expr!(":", "like", "Verb"));
         space.add(expr!(":", "music", "Noun"));
         space.add(expr!(":", ("do", "you", "like", "music"), "Quest"));
-        space.add(expr!("<", ("Pron", "Verb", "Noun"), "Statement"));
+        space.add(expr!(":<", ("Pron", "Verb", "Noun"), "Statement"));
 
         let i_like_music = expr!("i", "like", "music");
         assert!(check_type(&space, &i_like_music, &AtomType::Undefined));
@@ -331,9 +331,9 @@ mod tests {
     fn nested_type() {
         let space = metta_space("
             (: a A)
-            (< A B)
-            (< B C)
-            (< C D)
+            (:< A B)
+            (:< B C)
+            (:< C D)
         ");
 
         assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("D"))));
@@ -342,10 +342,10 @@ mod tests {
     #[test]
     fn nested_loop_type() {
         let space = metta_space("
-            (< B A)
+            (:< B A)
             (: a A)
-            (< A B)
-            (< B C)
+            (:< A B)
+            (:< B C)
         ");
 
         assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("C"))));
