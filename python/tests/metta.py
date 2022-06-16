@@ -1,7 +1,5 @@
 import os
 import sys
-from hyperonpy import init_logger
-
 
 from common import MeTTa
 
