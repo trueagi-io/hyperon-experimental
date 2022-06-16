@@ -28,7 +28,7 @@ class ListDefinitionTest(unittest.TestCase):
                 (= (insert $x Nil) (Cons $x Nil))
                 (= (insert $x (Cons $head $tail))
                   (if (< $x $head)
-                      (Cons $x (Cons $head (Cons $tail)))
+                      (Cons $x (Cons $head $tail))
                       (Cons $head (insert $x $tail))))
 
                 ;; Sort a list
