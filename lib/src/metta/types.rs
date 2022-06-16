@@ -250,6 +250,25 @@ pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
     !get_matched_types(space, atom, typ).is_empty() || check_meta_type(atom, typ)
 }
 
+pub fn check_type_bindings(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> Vec<(Atom, Bindings)> {
+    let undefined = undefined_symbol();
+    let typ = match typ {
+        AtomType::Undefined => &undefined,
+        AtomType::Specific(atom) => atom,
+    };
+    let mut result = Vec::new();
+    if check_meta_type(atom, typ) {
+        result.push((typ.clone(), Bindings::new()));
+    }
+    result.append(&mut get_matched_types(space, atom, typ));
+    // FIXME: workaround to remove unnecessary %Undefined% when 
+    // there are normal types
+    if result.len() > 1 {
+        result = result.drain(0..).filter(|(typ, _)| *typ != undefined_symbol()).collect();
+    }
+    result
+}
+
 fn check_meta_type(atom: &Atom, typ: &Atom) -> bool {
     *typ == Atom::sym("Atom") ||
         match atom {

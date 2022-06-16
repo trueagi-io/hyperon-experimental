@@ -11,7 +11,6 @@ class ListDefinitionTest(unittest.TestCase):
     #
     # Test if adding type declaration to List data structure does
     # not interfere with executing functions operating on List.
-    @unittest.skip("Not implemented")
     def test_list_definition(self):
         metta = MeTTa()
         metta.add_parse('''
@@ -20,10 +19,9 @@ class ListDefinitionTest(unittest.TestCase):
                 (= (if False $x $y) $y)
 
                 ;; Declaration of List data structure
-                ;; [TODO: uncomment the 3 lines below once the bug is fixed]
-                ;; (: List (-> $a Type))
-                ;; (: Nil (List $a))
-                ;; (: Cons (-> $a (List $a) (List $a)))
+                (: List (-> $a Type))
+                (: Nil (List $a))
+                (: Cons (-> $a (List $a) (List $a)))
 
                 ;; Insert an element in a presumably sorted list
                 (= (insert $x Nil) (Cons $x Nil))
