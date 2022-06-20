@@ -209,14 +209,11 @@ class SExprParser:
 
 class SExprSpace:
 
-    def __init__(self):
-        self.cspace = hp.sexpr_space_new()
+    def __init__(self, tokenizer):
+        self.cspace = hp.sexpr_space_new(tokenizer.ctokenizer)
 
     def __del__(self):
         hp.sexpr_space_free(self.cspace)
-
-    def register_token(self, regex, constr):
-        hp.sexpr_space_register_token(self.cspace, regex, constr)
 
     def add_string(self, text):
         hp.sexpr_space_add_str(self.cspace, text)

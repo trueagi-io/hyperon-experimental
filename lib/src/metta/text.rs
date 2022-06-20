@@ -5,14 +5,17 @@ use std::io::Read;
 use std::str::Chars;
 use std::iter::Peekable;
 use regex::Regex;
+use std::rc::Rc;
 
+#[derive(Clone)]
 pub struct Tokenizer {
     tokens: Vec<TokenDescr>,
 }
 
+#[derive(Clone)]
 struct TokenDescr {
     regex: Regex,
-    constr: Box<AtomConstr>,
+    constr: Rc<AtomConstr>,
 }
 
 type AtomConstr = dyn Fn(&str) -> Atom;
@@ -24,7 +27,7 @@ impl Tokenizer {
     }
 
     pub fn register_token<C: 'static + Fn(&str) -> Atom>(&mut self, regex: Regex, constr: C) {
-        self.tokens.push(TokenDescr{ regex, constr: Box::new(constr) });
+        self.tokens.push(TokenDescr{ regex, constr: Rc::new(constr) });
     }
 
     fn find_token(&self, token: &str) -> Option<&AtomConstr> {
@@ -132,8 +135,8 @@ pub struct SExprSpace {
 }
 
 impl SExprSpace {
-    pub fn new() -> Self {
-        Self{ tokenizer: Tokenizer::new(), content: String::new() }
+    pub fn new(tokenizer: Tokenizer) -> Self {
+        Self{ tokenizer, content: String::new() }
     }
 
     pub fn add_str(&mut self, text: &str) -> Result<(), String> {
@@ -146,11 +149,6 @@ impl SExprSpace {
         // TODO: add a check that buffer contains valid Metta code and 
         // return proper Result
         Ok(())
-    }
-
-
-    pub fn register_token<C: 'static + Fn(&str) -> Atom>(&mut self, regex: Regex, constr: C) {
-        self.tokenizer.register_token(regex, constr)
     }
 
     pub fn into_grounding_space(&self, other: &mut GroundingSpace) {
@@ -181,7 +179,7 @@ mod tests {
 
     #[test]
     fn test_text_var() {
-        let mut text = SExprSpace::new();
+        let mut text = SExprSpace::new(Tokenizer::new());
 
         text.add_str("$n").unwrap();
         let space = GroundingSpace::from(&text);
@@ -191,7 +189,7 @@ mod tests {
 
     #[test]
     fn test_text_sym() {
-        let mut text = SExprSpace::new();
+        let mut text = SExprSpace::new(Tokenizer::new());
 
         text.add_str("test").unwrap();
         let space = GroundingSpace::from(&text);
@@ -201,9 +199,10 @@ mod tests {
 
     #[test]
     fn test_text_recognize_full_token() {
-        let mut text = SExprSpace::new();
-        text.register_token(Regex::new(r"b").unwrap(),
+        let mut tokenizer = Tokenizer::new();
+        tokenizer.register_token(Regex::new(r"b").unwrap(),
             |_| Atom::value("b"));
+        let mut text = SExprSpace::new(tokenizer);
 
         text.add_str("ab").unwrap();
         let space = GroundingSpace::from(&text);
@@ -213,9 +212,10 @@ mod tests {
 
     #[test]
     fn test_text_gnd() {
-        let mut text = SExprSpace::new();
-        text.register_token(Regex::new(r"\d+").unwrap(),
+        let mut tokenizer = Tokenizer::new();
+        tokenizer.register_token(Regex::new(r"\d+").unwrap(),
             |token| Atom::value(token.parse::<i32>().unwrap()));
+        let mut text = SExprSpace::new(tokenizer);
 
         text.add_str("(3d 42)").unwrap();
         let space = GroundingSpace::from(&text);
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn test_text_expr() {
-        let mut text = SExprSpace::new();
+        let mut text = SExprSpace::new(Tokenizer::new());
 
         text.add_str("(= (fac $n) (* $n (fac (- $n 1))))").unwrap();
         let space = GroundingSpace::from(&text);
@@ -236,7 +236,7 @@ mod tests {
 
     #[test]
     fn test_text_few_expr() {
-        let mut text = SExprSpace::new();
+        let mut text = SExprSpace::new(Tokenizer::new());
 
         text.add_str("(a) (b)").unwrap();
         let space = GroundingSpace::from(&text);

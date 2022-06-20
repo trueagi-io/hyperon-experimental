@@ -264,6 +264,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 	py::class_<CTokenizer>(m, "CTokenizer");
 	m.def("tokenizer_new", []() { return CTokenizer(tokenizer_new()); }, "New tokenizer");
 	m.def("tokenizer_free", [](CTokenizer tokenizer) { tokenizer_free(tokenizer.ptr); }, "Free tokenizer");
+	m.def("tokenizer_clone", [](CTokenizer tokenizer) { tokenizer_clone(tokenizer.ptr); }, "Clone tokenizer");
 	m.def("tokenizer_register_token", [](CTokenizer tokenizer, char const* regex, py::object constr) {
 			droppable_t context = { new CConstr(constr), CConstr::free };
 			tokenizer_register_token(tokenizer.ptr, regex, &CConstr::apply, context);
@@ -274,12 +275,8 @@ PYBIND11_MODULE(hyperonpy, m) {
 		.def("parse", &CSExprParser::parse,  "Return next parser atom or None");
 
 	py::class_<CSExprSpace>(m, "CSExprSpace");
-	m.def("sexpr_space_new", []() { return CSExprSpace(sexpr_space_new()); }, "New sexpr space");
+	m.def("sexpr_space_new", [](CTokenizer tokenizer) { return CSExprSpace(sexpr_space_new(tokenizer_clone(tokenizer.ptr))); }, "New sexpr space");
 	m.def("sexpr_space_free", [](CSExprSpace space) { sexpr_space_free(space.ptr); }, "Free sexpr space");
-	m.def("sexpr_space_register_token", [](CSExprSpace space, char const* regex, py::object constr) {
-			droppable_t context = { new CConstr(constr), CConstr::free };
-			sexpr_space_register_token(space.ptr, regex, &CConstr::apply, context);
-		}, "Register sexpr space token");
 	m.def("sexpr_space_add_str", [](CSExprSpace space, char const* str) { sexpr_space_add_str(space.ptr, str); }, "Add text to the sexpr space");
 	m.def("sexpr_space_into_grounding_space", [](CSExprSpace tspace, CGroundingSpace gspace) { sexpr_space_into_grounding_space(tspace.ptr, gspace.ptr); }, "Add content of the sexpr space to the grounding space");
 

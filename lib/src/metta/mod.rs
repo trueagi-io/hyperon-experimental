@@ -11,21 +11,17 @@ use crate::common::*;
 use regex::Regex;
 
 pub fn metta_space(text: &str) -> GroundingSpace {
-    let mut parser = SExprSpace::new();
-    parser.register_token(Regex::new(r"\d+").unwrap(),
-        |n| Atom::value(n.parse::<i32>().unwrap()));
-    parser.register_token(Regex::new(r"true|false").unwrap(),
-        |b| Atom::value(b.parse::<bool>().unwrap()));
-    parser.register_token(Regex::new(r"<").unwrap(), |_| Atom::gnd(LT));
+    let mut parser = SExprSpace::new(common_tokenizer());
     parser.add_str(text).unwrap();
     GroundingSpace::from(&parser)
 }
 
 fn common_tokenizer() -> Tokenizer {
     let mut tokenizer = Tokenizer::new();
-    // FIXME: this code is duplicated in metta_space()
     tokenizer.register_token(Regex::new(r"\d+").unwrap(),
-        |num| Atom::value(num.parse::<i32>().unwrap()));
+        |n| Atom::value(n.parse::<i32>().unwrap()));
+    tokenizer.register_token(Regex::new(r"true|false").unwrap(),
+        |b| Atom::value(b.parse::<bool>().unwrap()));
     tokenizer.register_token(Regex::new(r"<").unwrap(), |_| Atom::gnd(LT));
     tokenizer
 }

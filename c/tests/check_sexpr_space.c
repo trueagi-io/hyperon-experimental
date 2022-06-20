@@ -12,11 +12,12 @@ void teardown(void) {
 
 START_TEST (test_parsing_expr)
 {
-	sexpr_space_t* text = sexpr_space_new();
+	tokenizer_t* tokenizer = tokenizer_new();
+	droppable_t empty_context = { 0, 0 };
+	tokenizer_register_token(tokenizer, "\\d+", int_atom_from_str, empty_context);
+	sexpr_space_t* text = sexpr_space_new(tokenizer);
 	grounding_space_t* space = grounding_space_new();
 
-	droppable_t empty_context = { 0, 0 };
-	sexpr_space_register_token(text, "\\d+", int_atom_from_str, empty_context);
 	ck_assert(sexpr_space_add_str(text, "(= (fac $n) (* $n (fac (- $n 1))))"));
 	sexpr_space_into_grounding_space(text, space);
 
