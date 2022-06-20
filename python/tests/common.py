@@ -62,11 +62,11 @@ nopAtom = OperationAtom('nop', lambda *args: [], unwrap=False)
 
 # TODO: Any for the argument is necessary to make argument reductable.
 letAtom = OperationAtom('let', let_op,
-    type_names=["Variable", "Any", "Atom", "Atom"], unwrap=False)
+    type_names=["Variable", "%Undefined%", "Atom", "Atom"], unwrap=False)
 matchAtom = OperationAtom('match', match_op,
-    type_names=["Space", "Any", "Atom", "Any"], unwrap=False)
+    type_names=["Space", "%Undefined%", "Atom", "%Undefined%"], unwrap=False)
 
-printAtom = OperationAtom('println!', print_op, ['Any', 'IO'], unwrap=False)
+printAtom = OperationAtom('println!', print_op, ['%Undefined%', 'IO'], unwrap=False)
 
 def newCallAtom(token):
     # REM: we could use "call" as a plain symbol (insted of "call:...")

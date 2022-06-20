@@ -1,6 +1,6 @@
 import hyperonpy as hp
 
-from hyperonpy import AtomKind, init_logger
+from hyperonpy import AtomKind
 
 class Atom:
 
@@ -71,7 +71,7 @@ def E(*args):
 
 class GroundedAtom(Atom):
 
-    UNDEFINED_TYPE = S("Undefined")
+    UNDEFINED_TYPE = S("%Undefined%")
 
     def __init__(self, catom):
         super().__init__(catom)
@@ -141,11 +141,12 @@ def OperationAtom(name, op, type_names=None, unwrap=True):
     if type_names is not None:
         typ = E(S("->"), *[S(n) for n in type_names])
     else:
-        typ = S("Undefined")
+        typ = GroundedAtom.UNDEFINED_TYPE
     return G(OperationObject(name, op, unwrap), typ)
 
-def ValueAtom(value, type_name='Undefined'):
-    return G(ValueObject(value), S(type_name))
+def ValueAtom(value, type_name=None):
+    return G(ValueObject(value),
+             GroundedAtom.UNDEFINED_TYPE if type_name is None else S(type_name))
 
 class GroundingSpace:
 
