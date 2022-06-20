@@ -31,6 +31,22 @@ class GroundedTypeTest(unittest.TestCase):
             metta.interpret("(> 1 1)")[0].get_grounded_type(),
             metta.interpret("(+ 1 1)")[0].get_grounded_type())
 
+    def test_higher_func(self):
+        metta = MeTTa()
+        metta.add_atom(
+            r"curry_num",
+            OperationAtom(
+                "curry_num",
+                lambda op, x: [OperationAtom(
+                    'lmd',
+                    lambda y: op.get_object().op(x.get_object().value, y),
+                    ['Number', 'Number'])],
+                #FIXME: interpreter refuses to execute typed curry_num
+                #[['Number', 'Number', 'Number'], 'Number', ['Number', 'Number']],
+                unwrap=False))
+        self.assertEqual(metta.interpret("((curry_num + 1) 2)"),
+                         metta.interpret("3"))
+
     def test_meta_types(self):
         metta = MeTTa()
         ### Basic functional types
