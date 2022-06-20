@@ -343,13 +343,12 @@ fn get_expr_mut(atom: &mut Atom) -> &mut ExpressionAtom {
 fn interpret_expression_as_type_op(context: InterpreterContextRef,
         input: InterpretedAtom, op_typ: Atom, ret_typ: AtomType) -> NoInputPlan {
     log::debug!("interpret_expression_as_type_op: input: {}, operation type: {}, expected return type: {}", input, op_typ, ret_typ);
-    let expr = get_expr(input.atom());
     if ret_typ == AtomType::Specific(Atom::sym("Atom")) ||
             ret_typ == AtomType::Specific(Atom::sym("Expression")) {
         Box::new(StepResult::ret(vec![input]))
     } else if is_func(&op_typ) {
-        // FIXME: clone() is not necessary here
-        let InterpretedAtom(_, mut input_bindings) = input.clone();
+        let InterpretedAtom(input_atom, mut input_bindings) = input;
+        let expr = get_expr(&input_atom);
         let (op_arg_types, op_ret_typ) = get_arg_types(&op_typ);
         // TODO: supertypes should be checked as well
         if !ret_typ.map_or(|typ| match_reducted_types(op_ret_typ, typ, &mut input_bindings), true) {
@@ -357,6 +356,8 @@ fn interpret_expression_as_type_op(context: InterpreterContextRef,
         } else if op_arg_types.len() != (expr.children().len() - 1) {
             Box::new(StepResult::err(format!("Operation arity is not equal to call arity: operation type, {}, call: {}", op_typ, expr)))
         } else {
+            let input = InterpretedAtom(input_atom, input_bindings);
+            let expr = get_expr(input.atom());
             assert!(!expr.children().is_empty(), "Empty expression is not expected");
             let mut plan: NoInputPlan = Box::new(StepResult::ret(vec![input.clone()]));
             for expr_idx in 1..(expr.children().len()) {
@@ -381,6 +382,7 @@ fn interpret_expression_as_type_op(context: InterpreterContextRef,
             call_alternatives_plan(plan, context, input)
         }
     } else {
+        let expr = get_expr(input.atom());
         let mut plan: NoInputPlan = Box::new(StepResult::ret(vec![input.clone()]));
         for expr_idx in 0..(expr.children().len()) {
             let arg = expr.children()[expr_idx].clone();
