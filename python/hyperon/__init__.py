@@ -136,17 +136,20 @@ class OperationObject(ConstGroundedObject):
     def __repr__(self):
         return self.name
 
+def type_sugar(type_names):
+    if type_names is None:
+        return GroundedAtom.UNDEFINED_TYPE
+    if isinstance(type_names, list):
+        return E(S("->"), *[type_sugar(n) for n in type_names])
+    if isinstance(type_names, str):
+        return V(type_names) if type_names[0] == '$' else S(type_names)
+    return type_names
+
 def OperationAtom(name, op, type_names=None, unwrap=True):
-    # TODO: nested arrows
-    if type_names is not None:
-        typ = E(S("->"), *[S(n) for n in type_names])
-    else:
-        typ = GroundedAtom.UNDEFINED_TYPE
-    return G(OperationObject(name, op, unwrap), typ)
+    return G(OperationObject(name, op, unwrap), type_sugar(type_names))
 
 def ValueAtom(value, type_name=None):
-    return G(ValueObject(value),
-             GroundedAtom.UNDEFINED_TYPE if type_name is None else S(type_name))
+    return G(ValueObject(value), type_sugar(type_name))
 
 class GroundingSpace:
 
