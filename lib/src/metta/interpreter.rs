@@ -294,7 +294,7 @@ fn cast_atom_to_type_plan(context: InterpreterContextRef,
         log::debug!("cast_atom_to_type_plan: input: {} is casted to type: {}", input, typ);
         StepResult::ret(results.drain(0..).map(|(_match_typ, typ_bindings)| {
             let InterpretedAtom(atom, bindings) = input.clone();
-            // FIXME: need to understand if it is needed to apply bindings
+            // TODO: need to understand if it is needed to apply bindings
             // should we apply bindings to bindings?
             let bindings = Bindings::merge(&bindings, &typ_bindings);
             if let Some(bindings) = bindings {
