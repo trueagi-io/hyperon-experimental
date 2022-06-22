@@ -7,7 +7,7 @@ use std::fmt::{Debug, Display};
 #[inline]
 fn has_type_symbol() -> Atom { sym!(":") }
 #[inline]
-fn sub_type_symbol() -> Atom { sym!("<") }
+fn sub_type_symbol() -> Atom { sym!(":<") }
 #[inline]
 fn undefined_symbol() -> Atom { sym!("%Undefined%") }
 #[inline]
@@ -144,11 +144,11 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             let mut tuples = vec![vec![]];
             for (i, child) in expr.children().iter().enumerate() {
                 // TODO: it is not straightforward, if (: a (-> B C)) then
-                // what should we return for (d (a b)): (D (-> B C)) or
+                // what should we return for (d (a b)): (D ((-> B C) B)) or
                 // (D C) or both? Same question for a function call.
                 let child_types = get_reducted_types(space, child);
-                let child_types = child_types.iter()
-                    .filter(|typ| i != 0 || !is_func(typ));
+                let not_a_function_call = |typ: &&Atom| { i != 0 || !is_func(typ) };
+                let child_types = child_types.iter().filter(not_a_function_call);
                 tuples = child_types.flat_map(|typ| -> Vec<Vec<Atom>> {
                     tuples.iter().map(|prev| {
                         let mut next = prev.clone();
@@ -207,7 +207,7 @@ pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings)
     log::trace!("match_reducted_types: type1: {}, type2: {}, bindings: {}", type1, type2, bindings);
     let result = match (type1, type2) {
         (Atom::Variable(_), Atom::Variable(_)) => false,
-        (Atom::Grounded(_), _) | (_, Atom::Grounded(_)) => false,
+        (Atom::Grounded(_), _) | (_, Atom::Grounded(_)) => panic!("GroundedAtom is not expected at type's place: {}, {}", type1, type2),
         (Atom::Symbol(sym1), Atom::Symbol(sym2)) => {
             type1 == type2 || sym1.name() == "%Undefined%" || sym2.name() == "%Undefined%"
         },
@@ -245,9 +245,26 @@ pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
     let undefined = undefined_symbol();
     let typ = match typ {
         AtomType::Undefined => &undefined,
+        AtomType::Specific(typ) => typ,
+    };
+    check_meta_type(atom, typ) || !get_matched_types(space, atom, typ).is_empty()
+}
+
+pub fn check_type_bindings(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> Vec<(Atom, Bindings)> {
+    let undefined = undefined_symbol();
+    let typ = match typ {
+        AtomType::Undefined => &undefined,
         AtomType::Specific(atom) => atom,
     };
-    !get_matched_types(space, atom, typ).is_empty() || check_meta_type(atom, typ)
+    let mut result = Vec::new();
+    if check_meta_type(atom, typ) {
+        result.push((typ.clone(), Bindings::new()));
+    }
+    result.append(&mut get_matched_types(space, atom, typ));
+    if result.len() > 1 {
+        result = result.drain(0..).filter(|(typ, _)| *typ != undefined_symbol()).collect();
+    }
+    result
 }
 
 fn check_meta_type(atom: &Atom, typ: &Atom) -> bool {
@@ -273,13 +290,13 @@ mod tests {
     fn grammar_space() -> GroundingSpace {
         let mut space = GroundingSpace::new();
         space.add(expr!(":", "answer", ("->", "Sent", "Sent")));
-        space.add(expr!("<", "Quest", "Sent"));
-        space.add(expr!("<", ("Aux", "Subj", "Verb", "Obj"), "Quest"));
-        space.add(expr!("<", "Pron", "Subj"));
-        space.add(expr!("<", "NG", "Subj"));
-        space.add(expr!("<", "Pron", "Obj"));
-        space.add(expr!("<", "NG", "Obj"));
-        space.add(expr!("<", ("Det", "Noun"), "NG"));
+        space.add(expr!(":<", "Quest", "Sent"));
+        space.add(expr!(":<", ("Aux", "Subj", "Verb", "Obj"), "Quest"));
+        space.add(expr!(":<", "Pron", "Subj"));
+        space.add(expr!(":<", "NG", "Subj"));
+        space.add(expr!(":<", "Pron", "Obj"));
+        space.add(expr!(":<", "NG", "Obj"));
+        space.add(expr!(":<", ("Det", "Noun"), "NG"));
         space.add(expr!(":", "you", "Pron"));
         space.add(expr!(":", "do", "Aux"));
         space.add(expr!(":", "do", "Verb"));
@@ -317,7 +334,7 @@ mod tests {
         space.add(expr!(":", "like", "Verb"));
         space.add(expr!(":", "music", "Noun"));
         space.add(expr!(":", ("do", "you", "like", "music"), "Quest"));
-        space.add(expr!("<", ("Pron", "Verb", "Noun"), "Statement"));
+        space.add(expr!(":<", ("Pron", "Verb", "Noun"), "Statement"));
 
         let i_like_music = expr!("i", "like", "music");
         assert!(check_type(&space, &i_like_music, &AtomType::Undefined));
@@ -331,9 +348,9 @@ mod tests {
     fn nested_type() {
         let space = metta_space("
             (: a A)
-            (< A B)
-            (< B C)
-            (< C D)
+            (:< A B)
+            (:< B C)
+            (:< C D)
         ");
 
         assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("D"))));
@@ -342,10 +359,10 @@ mod tests {
     #[test]
     fn nested_loop_type() {
         let space = metta_space("
-            (< B A)
+            (:< B A)
             (: a A)
-            (< A B)
-            (< B C)
+            (:< A B)
+            (:< B C)
         ");
 
         assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("C"))));
@@ -394,7 +411,9 @@ mod tests {
         ");
 
         assert!(validate_atom(&space, &atom("(a b)")));
+        assert!(check_type(&space, &atom("(a b)"), &AtomType::Undefined));
         assert!(!validate_atom(&space, &atom("(a c)")));
+        assert!(!check_type(&space, &atom("(a c)"), &AtomType::Undefined));
     }
 
     #[test]

@@ -15,6 +15,8 @@ macro_rules! def_bin_op {
     };
 }
 
+// TODO: make proper signatures for functions to be compatible with all integer types.
+// i32 is kind of simplification for now.
 def_bin_op!(SUM, +, i32, i32);
 def_bin_op!(SUB, -, i32, i32);
 def_bin_op!(MUL, *, i32, i32);
@@ -38,6 +40,7 @@ pub static IS_INT: &Operation = &Operation{
         |a| is_instance::<i32>(a) || is_instance::<u32>(a)
         || is_instance::<i64>(a) || is_instance::<u64>(a)
         || is_instance::<i128>(a) || is_instance::<u128>(a)
+        || is_instance::<isize>(a) || is_instance::<usize>(a)
     ),
     typ: "(-> Grounded bool)",
 };

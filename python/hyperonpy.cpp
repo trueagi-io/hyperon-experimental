@@ -28,7 +28,7 @@ static void copy_to_string(char const* cstr, void* context) {
 static void copy_atoms(atom_array_t atoms, void* context) {
 	py::list* list = static_cast<py::list*>(context);
 	for (size_t i = 0; i < atoms.size; ++i) {
-		list->append(CAtom(atom_copy(atoms.items[i])));
+		list->append(CAtom(atom_clone(atoms.items[i])));
 	}
 }
 
@@ -83,11 +83,11 @@ const char *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, stru
 	try {
 		py::list args;
 		for (size_t i = 0; i < vec_atom_size(_args); ++i) {
-			args.append(CAtom(atom_copy(vec_atom_get(_args, i))));
+			args.append(CAtom(atom_clone(vec_atom_get(_args, i))));
 		}
 		py::list result = call_execute_on_grounded_atom(pyobj, pytyp, args);
 		for (auto& atom:  result) {
-			vec_atom_push(ret, atom_copy(atom.attr("catom").cast<CAtom>().ptr));
+			vec_atom_push(ret, atom_clone(atom.attr("catom").cast<CAtom>().ptr));
 		}
 		return nullptr;
 	} catch (py::error_already_set &e) {
@@ -109,7 +109,7 @@ struct gnd_t *py_clone(const struct gnd_t* _cgnd) {
 	GroundedObject const* cgnd = static_cast<GroundedObject const*>(_cgnd);
 	py::object pyobj = cgnd->pyobj;
 	py::object copy = pyobj.attr("copy")();
-	atom_t* typ = atom_copy(cgnd->typ);
+	atom_t* typ = atom_clone(cgnd->typ);
 	return new GroundedObject(copy, typ);
 }
 
@@ -139,7 +139,7 @@ struct CConstr {
 	static atom_t* apply(char const* token, void* context) {
 		CConstr* self = static_cast<CConstr*>(context);
 		py::object atom = self->pyconstr(token);
-		return atom_copy(atom.attr("catom").cast<CAtom>().ptr);
+		return atom_clone(atom.attr("catom").cast<CAtom>().ptr);
 	}
 };
 
@@ -186,12 +186,12 @@ PYBIND11_MODULE(hyperonpy, m) {
     		for (auto& atom : _children) {
     			// Copying atom is required because atom_expr() moves children
     			// catoms inside new expression atom.
-    			children[idx++] = atom_copy(atom.cast<CAtom&>().ptr);
+    			children[idx++] = atom_clone(atom.cast<CAtom&>().ptr);
     		}
     		return CAtom(atom_expr(children, size));
     	}, "Create expression atom");
     m.def("atom_gnd", [](py::object object, CAtom ctyp) {
-    		atom_t* typ = atom_copy(ctyp.ptr);
+    		atom_t* typ = atom_clone(ctyp.ptr);
     		return CAtom(atom_gnd(new GroundedObject(object, typ)));
     		}, "Create grounded atom");
     m.def("atom_free", [](CAtom atom) { atom_free(atom.ptr); }, "Free C atom");
@@ -227,15 +227,15 @@ PYBIND11_MODULE(hyperonpy, m) {
 	m.def("vec_atom_new", []() { return CVecAtom(vec_atom_new()); }, "New vector of atoms");
 	m.def("vec_atom_free", [](CVecAtom vec) { vec_atom_free(vec.ptr); }, "Free vector of atoms");
 	m.def("vec_atom_size", [](CVecAtom vec) { return vec_atom_size(vec.ptr); }, "Return size of the vector");
-	m.def("vec_atom_push", [](CVecAtom vec, CAtom atom) { vec_atom_push(vec.ptr, atom_copy(atom.ptr)); }, "Push atom into vector");
+	m.def("vec_atom_push", [](CVecAtom vec, CAtom atom) { vec_atom_push(vec.ptr, atom_clone(atom.ptr)); }, "Push atom into vector");
 	m.def("vec_atom_pop", [](CVecAtom vec) { return CAtom(vec_atom_pop(vec.ptr)); }, "Push atom into vector");
 
 	py::class_<CGroundingSpace>(m, "CGroundingSpace");
 	m.def("grounding_space_new", []() { return CGroundingSpace(grounding_space_new()); }, "New grounding space instance");
 	m.def("grounding_space_free", [](CGroundingSpace space) { grounding_space_free(space.ptr); }, "Free grounding space");
-	m.def("grounding_space_add", [](CGroundingSpace space, CAtom atom) { grounding_space_add(space.ptr, atom_copy(atom.ptr)); }, "Add atom into grounding space");
+	m.def("grounding_space_add", [](CGroundingSpace space, CAtom atom) { grounding_space_add(space.ptr, atom_clone(atom.ptr)); }, "Add atom into grounding space");
 	m.def("grounding_space_remove", [](CGroundingSpace space, CAtom atom) { return grounding_space_remove(space.ptr, atom.ptr); }, "Remove atom from grounding space");
-	m.def("grounding_space_replace", [](CGroundingSpace space, CAtom from, CAtom to) { return grounding_space_replace(space.ptr, from.ptr, atom_copy(to.ptr)); }, "Replace atom from grounding space");
+	m.def("grounding_space_replace", [](CGroundingSpace space, CAtom from, CAtom to) { return grounding_space_replace(space.ptr, from.ptr, atom_clone(to.ptr)); }, "Replace atom from grounding space");
 	m.def("grounding_space_eq", [](CGroundingSpace a, CGroundingSpace b) { return grounding_space_eq(a.ptr, b.ptr); }, "Check if two grounding spaces are equal");
 	m.def("grounding_space_len", [](CGroundingSpace space) { return grounding_space_len(space.ptr); }, "Return number of atoms in grounding space");
 	m.def("grounding_space_get", [](CGroundingSpace space, size_t idx) { return CAtom(grounding_space_get(space.ptr, idx)); }, "Get atom by index from grounding space");
@@ -246,7 +246,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 						py::list& results = *(py::list*)context;
 						py::dict pybindings;
 						for (size_t i = 0; i < cbindings.size; ++i) {
-							pybindings[cbindings.items[i].var] = CAtom(atom_copy(cbindings.items[i].atom));
+							pybindings[cbindings.items[i].var] = CAtom(atom_clone(cbindings.items[i].atom));
 						}
 						results.append(pybindings);
 					}, &results);
@@ -264,6 +264,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 	py::class_<CTokenizer>(m, "CTokenizer");
 	m.def("tokenizer_new", []() { return CTokenizer(tokenizer_new()); }, "New tokenizer");
 	m.def("tokenizer_free", [](CTokenizer tokenizer) { tokenizer_free(tokenizer.ptr); }, "Free tokenizer");
+	m.def("tokenizer_clone", [](CTokenizer tokenizer) { tokenizer_clone(tokenizer.ptr); }, "Clone tokenizer");
 	m.def("tokenizer_register_token", [](CTokenizer tokenizer, char const* regex, py::object constr) {
 			droppable_t context = { new CConstr(constr), CConstr::free };
 			tokenizer_register_token(tokenizer.ptr, regex, &CConstr::apply, context);
@@ -274,12 +275,8 @@ PYBIND11_MODULE(hyperonpy, m) {
 		.def("parse", &CSExprParser::parse,  "Return next parser atom or None");
 
 	py::class_<CSExprSpace>(m, "CSExprSpace");
-	m.def("sexpr_space_new", []() { return CSExprSpace(sexpr_space_new()); }, "New sexpr space");
+	m.def("sexpr_space_new", [](CTokenizer tokenizer) { return CSExprSpace(sexpr_space_new(tokenizer_clone(tokenizer.ptr))); }, "New sexpr space");
 	m.def("sexpr_space_free", [](CSExprSpace space) { sexpr_space_free(space.ptr); }, "Free sexpr space");
-	m.def("sexpr_space_register_token", [](CSExprSpace space, char const* regex, py::object constr) {
-			droppable_t context = { new CConstr(constr), CConstr::free };
-			sexpr_space_register_token(space.ptr, regex, &CConstr::apply, context);
-		}, "Register sexpr space token");
 	m.def("sexpr_space_add_str", [](CSExprSpace space, char const* str) { sexpr_space_add_str(space.ptr, str); }, "Add text to the sexpr space");
 	m.def("sexpr_space_into_grounding_space", [](CSExprSpace tspace, CGroundingSpace gspace) { sexpr_space_into_grounding_space(tspace.ptr, gspace.ptr); }, "Add content of the sexpr space to the grounding space");
 
@@ -306,7 +303,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 
 	py::class_<CAtomType>(m, "CAtomType")
 		.def_property_readonly_static("UNDEFINED", [](py::object) { return CAtomType(ATOM_TYPE_UNDEFINED); }, "Undefined type instance");
-	m.def("atom_type_specific", [](CAtom atom) { return CAtomType(atom_type_specific(atom_copy(atom.ptr))); },
+	m.def("atom_type_specific", [](CAtom atom) { return CAtomType(atom_type_specific(atom_clone(atom.ptr))); },
 			"Return specific type instance");
 	m.def("atom_type_free", [](CAtomType type) { atom_type_free(type.ptr); },
 			"Deallocate type instance");

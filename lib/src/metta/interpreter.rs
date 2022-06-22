@@ -2,26 +2,31 @@
 //!
 //! For an atom and type on input (when type is not set `Undefined` is used):
 //! * [Atom::Variable] is returned as is.
-//! * [Atom::Symbol] and [Atom::Grounded] are type checked:
+//! * [Atom::Symbol] and [Atom::Grounded] are type checked; each applicable
+//!   type of the atom is checked vs expected type:
 //!   * If type is corrent then atom is returned as is.
 //!   * If type is incorrect then error result is returned.
+//!   * Note: cast may return as many results as many types were casted
+//!     successfully, each result may have its own variable bindings if
+//!     types are parameterized.
 //! * First atom (operation) of [Atom::Expression] is extracted and plan to
-//!   calculate its type is returned. After type is calculated the expression
-//!   is interpreted according its operation type. Notice: that few alternative
+//!   calculate its type is returned. When type is calculated the expression
+//!   is interpreted according its operation type. Note: few alternative
 //!   interpretations may be found here one for each type of the operation.
 //!
 //! For and expression atom and its operation type:
 //! * If expected type is `Atom` or `Expression` then expression is returned as is.
-//! * If operation type is function:
+//! * If operation type is a function:
 //!   * Check arity and return type of the function, if check fails then return
 //!     error result.
-//!   * Return a sequence plan which interprets each argument using
-//!     corresponding type and calls resulting expression. If any argument
+//!   * Return a sequence plan which interprets each argument one by one using
+//!     corresponding types and calls resulting expression. If any argument
 //!     cannot be casted to type then error result is returned. If argument's
 //!     bindings are not compatible with bindings of the expression such
 //!     result is skipped if no options to interpret argument left then error
-//!     is returned.
-//!   * Notice that this step may return more than one result because each
+//!     is returned. If argument returns empty value after interpretation
+//!     then the whole expression is not interpreted further.
+//!   * Note: this step may return more than one result because each
 //!     argument can be interpreted by more than one way.
 //! * If operation type is not function:
 //!   * Return a sequence plan which interprets each member using
@@ -36,13 +41,13 @@
 //!   * If result is error then error is returned
 //!   * If result is empty then it is returned as is
 //!   * If result is not empty plan to interpret each alternative further is
-//!     returned. Notice: if each alternative returns error then the result
+//!     returned. Note: if each alternative returns error then the result
 //!     of execution is also error.
 //! * If operation is not [Atom::Grounded] then expression is matched.
 //!   Atomspace is queried for `(= <expr> $X)` and expression is replaced by $X.
 //!   * If no results returned then error is returned
 //!   * If result is not empty plan to interpret each alternative further is
-//!     returned. Notice: if each alternative returns error then the result
+//!     returned. Note: if each alternative returns error then the result
 //!     of execution is also error.
 //! * If one of previous steps returned error then original expresion is
 //!   returned. Otherwise the result of the interpretation is returned.
@@ -50,8 +55,8 @@
 //!   returns empty result.
 //!
 //! Summary on possible results:
-//! * empty result for expression is returned only when grounded operation
-//!   returns empty result
+//! * empty result for expression is returned when grounded operation
+//!   returns empty result, or one of the arguments returned empty result
 //! * error is returned when atom cannot be casted to the type expected
 //!   or all alternative interpretations are errors; the overall result includes
 //!   successfuly interpreted alternatives only
@@ -63,7 +68,8 @@ use crate::atom::subexpr::*;
 use crate::atom::matcher::*;
 use crate::space::grounding::*;
 use crate::common::collections::ListMap;
-use crate::metta::types::{AtomType, is_func, get_arg_types, check_type, get_reducted_types};
+use crate::metta::types::{AtomType, is_func, get_arg_types, check_type_bindings,
+    get_reducted_types, match_reducted_types};
 
 use std::ops::Deref;
 use std::rc::Rc;
@@ -277,9 +283,27 @@ fn interpret_as_type_plan(context: InterpreterContextRef,
 fn cast_atom_to_type_plan(context: InterpreterContextRef,
         input: InterpretedAtom, typ: AtomType) -> StepResult<Results> {
     // TODO: implement this via interpreting of the (:cast atom typ) expression
-    if check_type(&context.space, input.atom(), &typ) {
+    let typ = if let AtomType::Specific(typ) = typ {
+            AtomType::Specific(apply_bindings_to_atom(&typ, input.bindings()))
+        } else {
+            typ
+        };
+    let mut results = check_type_bindings(&context.space, input.atom(), &typ);
+    log::debug!("cast_atom_to_type_plan: type check results: {:?}", results);
+    if !results.is_empty() {
         log::debug!("cast_atom_to_type_plan: input: {} is casted to type: {}", input, typ);
-        StepResult::ret(vec![input])
+        StepResult::ret(results.drain(0..).map(|(_match_typ, typ_bindings)| {
+            let InterpretedAtom(atom, bindings) = input.clone();
+            // TODO: need to understand if it is needed to apply bindings
+            // should we apply bindings to bindings?
+            let bindings = Bindings::merge(&bindings, &typ_bindings);
+            if let Some(bindings) = bindings {
+                let atom = apply_bindings_to_atom(&atom, &bindings);
+                Some(InterpretedAtom(atom, bindings))
+            } else {
+                None
+            }
+        }).filter(Option::is_some).map(Option::unwrap).collect())
     } else {
         log::debug!("cast_atom_to_type_plan: input: {} cannot be casted to type: {}", input, typ);
         StepResult::err(format!("Incorrect type, input: {}, type: {}", input, typ))
@@ -319,45 +343,62 @@ fn get_expr_mut(atom: &mut Atom) -> &mut ExpressionAtom {
 fn interpret_expression_as_type_op(context: InterpreterContextRef,
         input: InterpretedAtom, op_typ: Atom, ret_typ: AtomType) -> NoInputPlan {
     log::debug!("interpret_expression_as_type_op: input: {}, operation type: {}, expected return type: {}", input, op_typ, ret_typ);
-    let expr = get_expr(input.atom());
     if ret_typ == AtomType::Specific(Atom::sym("Atom")) ||
             ret_typ == AtomType::Specific(Atom::sym("Expression")) {
         Box::new(StepResult::ret(vec![input]))
     } else if is_func(&op_typ) {
+        let InterpretedAtom(input_atom, mut input_bindings) = input;
+        let expr = get_expr(&input_atom);
         let (op_arg_types, op_ret_typ) = get_arg_types(&op_typ);
         // TODO: supertypes should be checked as well
-        if !ret_typ.map_or(|typ| *op_ret_typ == *typ, true) {
+        if !ret_typ.map_or(|typ| match_reducted_types(op_ret_typ, typ, &mut input_bindings), true) {
             Box::new(StepResult::err(format!("Operation returns wrong type: {}, expected: {}", op_ret_typ, ret_typ)))
         } else if op_arg_types.len() != (expr.children().len() - 1) {
             Box::new(StepResult::err(format!("Operation arity is not equal to call arity: operation type, {}, call: {}", op_typ, expr)))
         } else {
+            let input = InterpretedAtom(input_atom, input_bindings);
+            let expr = get_expr(input.atom());
             assert!(!expr.children().is_empty(), "Empty expression is not expected");
             let mut plan: NoInputPlan = Box::new(StepResult::ret(vec![input.clone()]));
             for expr_idx in 1..(expr.children().len()) {
                 let arg = expr.children()[expr_idx].clone();
-                let arg_typ = AtomType::Specific(op_arg_types[expr_idx - 1].clone());
+                let arg_typ = op_arg_types[expr_idx - 1].clone();
+                let context = context.clone();
                 plan = Box::new(SequencePlan::new(
-                    ParallelPlan::new(
-                        plan,
-                        interpret_as_type_plan(context.clone(),
-                            InterpretedAtom(arg, input.bindings().clone()),
-                            arg_typ)),
-                    insert_reducted_arg_plan(expr_idx)
+                    plan,
+                    OperatorPlan::new(move |mut results: Results| {
+                        let alternatives = results.drain(0..).map(|result| -> NoInputPlan {
+                            let arg_typ = apply_bindings_to_atom(&arg_typ, result.bindings());
+                            Box::new(SequencePlan::new(
+                                interpret_as_type_plan(context.clone(),
+                                    InterpretedAtom(arg.clone(), result.bindings().clone()),
+                                    AtomType::Specific(arg_typ)),
+                                insert_reducted_arg_plan(result, expr_idx)))
+                        }).collect();
+                        StepResult::execute(AlternativeInterpretationsPlan::new(arg, alternatives))
+                    }, format!("Interpret {} argument", expr_idx))
                 ))
             }
             call_alternatives_plan(plan, context, input)
         }
     } else {
+        let expr = get_expr(input.atom());
         let mut plan: NoInputPlan = Box::new(StepResult::ret(vec![input.clone()]));
         for expr_idx in 0..(expr.children().len()) {
             let arg = expr.children()[expr_idx].clone();
+            let context = context.clone();
             plan = Box::new(SequencePlan::new(
-                ParallelPlan::new(
-                    plan,
-                    interpret_as_type_plan(context.clone(),
-                        InterpretedAtom(arg, input.bindings().clone()),
-                        AtomType::Undefined)),
-                insert_reducted_arg_plan(expr_idx)
+                plan,
+                OperatorPlan::new(move |mut results: Results| {
+                    let alternatives = results.drain(0..).map(|result| -> NoInputPlan {
+                        Box::new(SequencePlan::new(
+                            interpret_as_type_plan(context.clone(),
+                                InterpretedAtom(arg.clone(), result.bindings().clone()),
+                                AtomType::Undefined),
+                            insert_reducted_arg_plan(result, expr_idx)))
+                    }).collect();
+                    StepResult::execute(AlternativeInterpretationsPlan::new(arg, alternatives))
+                }, format!("Interpret {} argument", expr_idx))
             ))
         }
         call_alternatives_plan(plan, context, input)
@@ -373,28 +414,18 @@ fn call_alternatives_plan(plan: NoInputPlan, context: InterpreterContextRef,
     }, "interpret each alternative")))
 }
 
-fn insert_reducted_arg_plan(atom_idx: usize) -> OperatorPlan<(Results, Results), Results> {
+fn insert_reducted_arg_plan(expr: InterpretedAtom, atom_idx: usize) -> OperatorPlan<Results, Results> {
     let descr = format!("insert right element as child {} of left element", atom_idx);
-    OperatorPlan::new(move |prev_result| insert_reducted_arg_op(atom_idx, prev_result), descr)
+    OperatorPlan::new(move |arg_variants| insert_reducted_arg_op(expr, atom_idx, arg_variants), descr)
 }
 
-fn insert_reducted_arg_op(atom_idx: usize, (mut atoms, args): (Results, Results)) -> StepResult<Results> {
-    let result = atoms.drain(0..).flat_map(|interpreted_atom| {
-        args.iter().map(move |arg| {
-            let mut atom = interpreted_atom.atom().clone();
-            get_expr_mut(&mut atom).children_mut()[atom_idx] = arg.atom().clone();
-            let applied_bindings = apply_bindings_to_bindings(arg.bindings(),
-                interpreted_atom.bindings());
-            if let Result::Ok(atom_bindings) = applied_bindings {
-                Bindings::merge(&atom_bindings, arg.bindings())
-                    .map(|bindings| InterpretedAtom(apply_bindings_to_atom(&atom, &bindings), bindings))
-            } else {
-                log::debug!("insert_reducted_arg_op: skip bindings: {} which cannot be applied to atom bindings: {}, reason: {:?}",
-                    arg.bindings(), interpreted_atom.bindings(), applied_bindings);
-                None
-            }
-        })
-    }).filter(Option::is_some).map(Option::unwrap).collect();
+fn insert_reducted_arg_op(expr: InterpretedAtom, atom_idx: usize, mut arg_variants: Results) -> StepResult<Results> {
+    let result = arg_variants.drain(0..).map(|arg| {
+        let InterpretedAtom(arg, bindings) = arg;
+        let mut expr_with_arg = expr.atom().clone();
+        get_expr_mut(&mut expr_with_arg).children_mut()[atom_idx] = arg;
+        InterpretedAtom(apply_bindings_to_atom(&expr_with_arg, &bindings), bindings)
+    }).collect();
     log::debug!("insert_reducted_arg_op: result: {:?}", result);
     StepResult::ret(result)
 }

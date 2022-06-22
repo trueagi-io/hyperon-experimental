@@ -27,6 +27,23 @@ pub unsafe extern "C" fn tokenizer_free(tokenizer: *mut tokenizer_t) {
     drop(Box::from_raw(tokenizer)); 
 }
 
+type atom_constr_t = extern "C" fn(*const c_char, *mut c_void) -> *mut atom_t;
+
+#[repr(C)]
+pub struct droppable_t {
+    ptr: *mut c_void,
+    free: Option<extern "C" fn(ptr: *mut c_void)>,
+}
+
+impl Drop for droppable_t {
+    fn drop(&mut self) {
+        let free = (*self).free;
+        if let Some(free) = free {
+            free(self.ptr);
+        }
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn tokenizer_register_token(tokenizer: *mut tokenizer_t,
     regex: *const c_char, constr: atom_constr_t, context: droppable_t) {
@@ -35,6 +52,12 @@ pub unsafe extern "C" fn tokenizer_register_token(tokenizer: *mut tokenizer_t,
         let catom = Box::from_raw(constr(str_as_cstr(token).as_ptr(), context.ptr));
         catom.atom
     });
+}
+
+#[no_mangle]
+pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> *mut tokenizer_t {
+    let tokenizer = unsafe { (*tokenizer).tokenizer.clone() };
+    Box::into_raw(Box::new(tokenizer_t{ tokenizer })) 
 }
 
 // SExprParser
@@ -67,8 +90,9 @@ pub struct sexpr_space_t {
 }
 
 #[no_mangle]
-pub extern "C" fn sexpr_space_new() -> *mut sexpr_space_t {
-    Box::into_raw(Box::new(sexpr_space_t{ space: SExprSpace::new() })) 
+pub extern "C" fn sexpr_space_new(tokenizer: *mut tokenizer_t) -> *mut sexpr_space_t {
+    let tokenizer = unsafe{ Box::from_raw(tokenizer) };
+    Box::into_raw(Box::new(sexpr_space_t{ space: SExprSpace::new(tokenizer.tokenizer) })) 
 }
 
 #[no_mangle]
@@ -80,33 +104,6 @@ pub unsafe extern "C" fn sexpr_space_free(space: *mut sexpr_space_t) {
 #[no_mangle]
 pub unsafe extern "C" fn sexpr_space_add_str(space: *mut sexpr_space_t, text: *const c_char) -> bool {
     Ok(()) == (*space).space.add_str(cstr_as_str(text))
-}
-
-type atom_constr_t = extern "C" fn(*const c_char, *mut c_void) -> *mut atom_t;
-
-#[repr(C)]
-pub struct droppable_t {
-    ptr: *mut c_void,
-    free: Option<extern "C" fn(ptr: *mut c_void)>,
-}
-
-impl Drop for droppable_t {
-    fn drop(&mut self) {
-        let free = (*self).free;
-        if let Some(free) = free {
-            free(self.ptr);
-        }
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn sexpr_space_register_token(space: *mut sexpr_space_t,
-    regex: *const c_char, constr: atom_constr_t, context: droppable_t) {
-    let regex = Regex::new(cstr_as_str(regex)).unwrap();
-    (*space).space.register_token(regex, move |token| {
-        let catom = Box::from_raw(constr(str_as_cstr(token).as_ptr(), context.ptr));
-        catom.atom
-    });
 }
 
 #[no_mangle]
