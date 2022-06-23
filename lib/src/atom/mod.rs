@@ -12,7 +12,7 @@ macro_rules! expr {
 
 #[macro_export]
 macro_rules! sym {
-    ($x:literal) => { Atom::sym($x) };
+    ($x:literal) => { Atom::Symbol(SymbolAtom::new(crate::common::collections::ImmutableString::Literal($x))) };
 }
 
 pub mod matcher;
@@ -22,26 +22,28 @@ use std::any::Any;
 use std::fmt::{Display, Debug};
 use std::collections::HashMap;
 
+use crate::common::collections::ImmutableString;
+
 // Symbol atom
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SymbolAtom {
-    name: String,
+    name: ImmutableString,
 }
 
 impl SymbolAtom {
-    fn new(name: String) -> Self {
+    pub const fn new(name: ImmutableString) -> Self {
         Self{ name }
     }
 
     pub fn name(&self) -> &str {
-        self.name.as_ref()
+        self.name.as_str()
     }
 }
 
 impl Display for SymbolAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)
+        write!(f, "{}", self.name())
     }
 }
 
@@ -353,7 +355,7 @@ pub enum Atom {
 
 impl Atom {
     pub fn sym<T: Into<String>>(name: T) -> Self {
-        Self::Symbol(SymbolAtom::new(name.into()))
+        Self::Symbol(SymbolAtom::new(ImmutableString::Allocated(name.into())))
     }
 
     pub fn expr<T: Into<Vec<Atom>>>(children: T) -> Self {
@@ -429,7 +431,7 @@ mod test {
     
     #[inline]
     fn symbol(name: &'static str) -> Atom {
-        Atom::Symbol(SymbolAtom{ name: name.to_string() })
+        Atom::Symbol(SymbolAtom::new(ImmutableString::Literal(name)))
     }
 
     #[inline]
@@ -605,7 +607,8 @@ mod test {
 
     #[test]
     fn test_display_atom() {
-        assert_eq!(format!("{}", Atom::sym("test")), "test");
+        assert_eq!(format!("{}", Atom::Symbol(SymbolAtom::new(ImmutableString::Literal("test")))), "test");
+        assert_eq!(format!("{}", Atom::Symbol(SymbolAtom::new(ImmutableString::Allocated("test".into())))), "test");
         assert_eq!(format!("{}", Atom::var("x")), "$x");
         assert_eq!(format!("{}", Atom::value(42)), "42");
         assert_eq!(format!("{}", Atom::value([1, 2, 3])), "[1, 2, 3]");

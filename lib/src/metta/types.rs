@@ -1,48 +1,13 @@
-use crate::*;
+use super::*;
 use crate::atom::matcher::{Bindings, apply_bindings_to_atom};
 use crate::space::grounding::GroundingSpace;
 
-use std::fmt::{Debug, Display};
-
-#[inline]
-fn has_type_symbol() -> Atom { sym!(":") }
-#[inline]
-fn sub_type_symbol() -> Atom { sym!(":<") }
-#[inline]
-fn undefined_symbol() -> Atom { sym!("%Undefined%") }
-#[inline]
-fn arrow_symbol() -> Atom { sym!("->") }
-
-#[derive(Debug, PartialEq, Eq, Clone)]
-pub enum AtomType {
-    // TODO: Need to introduce common Undefined type symbol. For now types.rs
-    // uses %Undefined%, and Undefined is used in Python code
-    Undefined,
-    Specific(Atom),
-}
-
-impl AtomType {
-    pub fn map_or<R, F>(&self, f: F, default: R) -> R where
-            F: FnOnce(&Atom) -> R {
-        match self {
-            AtomType::Specific(ref typ) => f(typ),
-            AtomType::Undefined => default,
-        }
-    }
-}
-
-impl Display for AtomType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        Debug::fmt(self, f)
-    }
-}
-
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
-    Atom::expr(vec![has_type_symbol(), atom.clone(), typ.clone()])
+    Atom::expr(vec![HAS_TYPE_SYMBOL, atom.clone(), typ.clone()])
 }
 
 fn isa_query(sub_type: &Atom, super_type: &Atom) -> Atom {
-    Atom::expr(vec![sub_type_symbol(), sub_type.clone(), super_type.clone()])
+    Atom::expr(vec![SUB_TYPE_SYMBOL, sub_type.clone(), super_type.clone()])
 }
 
 fn query_has_type(space: &GroundingSpace, sub_type: &Atom, super_type: &Atom) -> Vec<Bindings> {
@@ -89,7 +54,7 @@ fn check_types(actual: &[Vec<Atom>], expected: &[Atom], bindings: &mut Bindings)
 pub fn is_func(typ: &Atom) -> bool {
     match typ {
         Atom::Expression(expr) => {
-            expr.children().first() == Some(&arrow_symbol())
+            expr.children().first() == Some(&ATOM_TYPE_FUNCTION)
         },
         _ => false,
     }
@@ -108,7 +73,7 @@ pub fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
         Atom::Expression(expr) => {
             let children = expr.children().as_slice();
             match children {
-                [op,  args @ .., res] if *op == arrow_symbol() => (args, res),
+                [op,  args @ .., res] if *op == ATOM_TYPE_FUNCTION => (args, res),
                 _ => panic!("Incorrect function type: {}", fn_typ)
             }
         },
@@ -127,7 +92,7 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     log::trace!("get_reducted_types: atom: {}", atom);
     let types = match atom {
-        Atom::Variable(_) => vec![undefined_symbol()],
+        Atom::Variable(_) => vec![ATOM_TYPE_UNDEFINED],
         Atom::Grounded(gnd) => {
             let types = vec![gnd.type_()];
             types
@@ -135,7 +100,7 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
         Atom::Symbol(_) => {
             let mut types = query_types(space, atom);
             if types.is_empty() {
-                types.push(undefined_symbol())
+                types.push(ATOM_TYPE_UNDEFINED)
             }
             types
         },
@@ -159,7 +124,7 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             }
             // if all members of tuple is Undefined then whole tuple is Undefined
             let mut types: Vec<Atom> = tuples.drain(0..)
-                .filter(|children| children.iter().any(|child| *child != undefined_symbol()))
+                .filter(|children| children.iter().any(|child| *child != ATOM_TYPE_UNDEFINED))
                 .map(Atom::expr).collect();
             types.append(&mut query_types(space, atom));
             add_super_types(space, &mut types, 0);
@@ -193,7 +158,7 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             // separate tuples and calls in separate Atom types. Or use
             // embedded atom to designate function call.
             if only_tuple && types.is_empty() {
-                types.push(undefined_symbol())
+                types.push(ATOM_TYPE_UNDEFINED)
             }
             types
         },
@@ -241,28 +206,18 @@ fn get_matched_types(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(At
     }).collect()
 }
 
-pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
-    let undefined = undefined_symbol();
-    let typ = match typ {
-        AtomType::Undefined => &undefined,
-        AtomType::Specific(typ) => typ,
-    };
+pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> bool {
     check_meta_type(atom, typ) || !get_matched_types(space, atom, typ).is_empty()
 }
 
-pub fn check_type_bindings(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> Vec<(Atom, Bindings)> {
-    let undefined = undefined_symbol();
-    let typ = match typ {
-        AtomType::Undefined => &undefined,
-        AtomType::Specific(atom) => atom,
-    };
+pub fn check_type_bindings(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
     let mut result = Vec::new();
     if check_meta_type(atom, typ) {
         result.push((typ.clone(), Bindings::new()));
     }
     result.append(&mut get_matched_types(space, atom, typ));
     if result.len() > 1 {
-        result = result.drain(0..).filter(|(typ, _)| *typ != undefined_symbol()).collect();
+        result = result.drain(0..).filter(|(typ, _)| *typ != ATOM_TYPE_UNDEFINED).collect();
     }
     result
 }
@@ -312,18 +267,18 @@ mod tests {
         space.add(expr!(":", "do", "Verb"));
         space.add(expr!(":", "do", "Aux"));
 
-        let aux = AtomType::Specific(sym!("Aux"));
-        let verb = AtomType::Specific(sym!("Verb"));
+        let aux = sym!("Aux");
+        let verb = sym!("Verb");
 
         let nonsense = sym!("nonsense");
-        assert!(check_type(&space, &nonsense, &AtomType::Undefined));
+        assert!(check_type(&space, &nonsense, &ATOM_TYPE_UNDEFINED));
         assert!(check_type(&space, &nonsense, &aux));
 
         let _do = sym!("do");
-        assert!(check_type(&space, &_do, &AtomType::Undefined));
+        assert!(check_type(&space, &_do, &ATOM_TYPE_UNDEFINED));
         assert!(check_type(&space, &_do, &aux));
         assert!(check_type(&space, &_do, &verb));
-        assert!(!check_type(&space, &_do, &AtomType::Specific(sym!("Noun"))));
+        assert!(!check_type(&space, &_do, &sym!("Noun")));
 
     }
 
@@ -337,11 +292,11 @@ mod tests {
         space.add(expr!(":<", ("Pron", "Verb", "Noun"), "Statement"));
 
         let i_like_music = expr!("i", "like", "music");
-        assert!(check_type(&space, &i_like_music, &AtomType::Undefined));
-        assert!(check_type(&space, &i_like_music, &AtomType::Specific(expr!("Pron", "Verb", "Noun"))));
-        assert!(check_type(&space, &i_like_music, &AtomType::Specific(sym!("Statement"))));
+        assert!(check_type(&space, &i_like_music, &ATOM_TYPE_UNDEFINED));
+        assert!(check_type(&space, &i_like_music, &expr!("Pron", "Verb", "Noun")));
+        assert!(check_type(&space, &i_like_music, &sym!("Statement")));
 
-        assert!(check_type(&space, &expr!("do", "you", "like", "music"), &AtomType::Specific(sym!("Quest"))));
+        assert!(check_type(&space, &expr!("do", "you", "like", "music"), &sym!("Quest")));
     }
 
     #[test]
@@ -353,7 +308,7 @@ mod tests {
             (:< C D)
         ");
 
-        assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("D"))));
+        assert!(check_type(&space, &atom("a"), &atom("D")));
     }
 
     #[test]
@@ -365,7 +320,7 @@ mod tests {
             (:< B C)
         ");
 
-        assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("C"))));
+        assert!(check_type(&space, &atom("a"), &atom("C")));
     }
 
     #[test]
@@ -390,7 +345,7 @@ mod tests {
         ");
 
         assert!(check_type(&space, &atom("(blue balloon)"),
-            &AtomType::Specific(atom("(Color Object)"))));
+            &atom("(Color Object)")));
     }
 
     #[test]
@@ -399,7 +354,7 @@ mod tests {
             (: a (-> B A))
         ");
 
-        assert!(check_type(&space, &atom("a"), &AtomType::Specific(atom("(-> B A)"))));
+        assert!(check_type(&space, &atom("a"), &atom("(-> B A)")));
     }
 
     #[test]
@@ -411,9 +366,9 @@ mod tests {
         ");
 
         assert!(validate_atom(&space, &atom("(a b)")));
-        assert!(check_type(&space, &atom("(a b)"), &AtomType::Undefined));
+        assert!(check_type(&space, &atom("(a b)"), &ATOM_TYPE_UNDEFINED));
         assert!(!validate_atom(&space, &atom("(a c)")));
-        assert!(!check_type(&space, &atom("(a c)"), &AtomType::Undefined));
+        assert!(!check_type(&space, &atom("(a c)"), &ATOM_TYPE_UNDEFINED));
     }
 
     #[test]
@@ -439,12 +394,12 @@ mod tests {
             (: SocratesIsHuman (Human Socrates))
             (: SocratesIsMortal (Mortal Socrates))
         ");
-        let t = &AtomType::Specific(atom("Prop"));
+        let t = &atom("Prop");
         assert!(check_type(&space, &atom("(Human Socrates)"), t));
         assert!(check_type(&space, &atom("(Human Plato)"), t));
         assert!(!check_type(&space, &atom("(Human Time)"), t));
         assert!(!validate_atom(&space, &atom("(Human Time)")));
-        assert!(!check_type(&space, &atom("(Human Time)"), &AtomType::Specific(atom("((-> Entity Prop) NotEntity)"))));
+        assert!(!check_type(&space, &atom("(Human Time)"), &atom("((-> Entity Prop) NotEntity)")));
         assert!(check_type(&space, &atom("(= Socrates Socrates)"), t));
         assert!(check_type(&space, &atom("(= Socrates Plato)"), t));
         // TODO: should we type check this as (= Any Any) or (= Atom Atom)?
@@ -457,9 +412,9 @@ mod tests {
         assert!(!validate_atom(&space, &atom("(HumansAreMortal (Human Time))")));
         assert!(!validate_atom(&space, &atom("(HumansAreMortal Human)")));
         assert!(!check_type(&space, &atom("(HumansAreMortal (Human Socrates))"),
-                           &AtomType::Specific(atom("(Mortal Socrates)"))));
+                           &atom("(Mortal Socrates)")));
         assert!(check_type(&space, &atom("(HumansAreMortal SocratesIsHuman)"),
-                           &AtomType::Specific(atom("(Mortal Socrates)"))));
+                           &atom("(Mortal Socrates)")));
 
         assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Socrates))")));
         assert!(!validate_atom(&space, &atom("(= SocratesIsHuman (Human Plato))")));
@@ -482,7 +437,7 @@ mod tests {
         ");
         assert!(validate_atom(&space, &atom("(GreenAndCroaksIsFrog SamIsGreen SamCroaks)")));
         assert!(check_type(&space, &atom("(GreenAndCroaksIsFrog SamIsGreen SamCroaks)"),
-                           &AtomType::Specific(atom("(Frog Sam)"))));
+                           &atom("(Frog Sam)")));
     }
 
     #[test]
@@ -501,7 +456,7 @@ mod tests {
             (: b B)
         ");
 
-        assert!(check_type(&space, &atom("(a b)"), &AtomType::Specific(atom("A"))));
+        assert!(check_type(&space, &atom("(a b)"), &atom("A")));
     }
 
     #[test]
@@ -543,7 +498,7 @@ mod tests {
             (: b B)
         ");
 
-        assert!(check_type(&space, &atom("(a b)"), &AtomType::Specific(atom("(A B)"))));
+        assert!(check_type(&space, &atom("(a b)"), &atom("(A B)")));
     }
 
     #[test]
@@ -554,7 +509,7 @@ mod tests {
         assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![atom("(A %Undefined%)")]);
 
         let space = metta_space("");
-        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![undefined_symbol()]);
+        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![ATOM_TYPE_UNDEFINED]);
 
         let space = metta_space("
             (: a (-> C D))

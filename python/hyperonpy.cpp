@@ -17,7 +17,6 @@ using CVecAtom = CPtr<vec_atom_t>;
 using CGroundingSpace = CPtr<grounding_space_t>;
 using CTokenizer = CPtr<tokenizer_t>;
 using CSExprSpace = CPtr<sexpr_space_t>;
-using CAtomType = CPtr<const atom_type_t>;
 using CStepResult = CPtr<step_result_t>;
 
 static void copy_to_string(char const* cstr, void* context) {
@@ -301,13 +300,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 			return atoms;
 		}, "Return result of the interpretation");
 
-	py::class_<CAtomType>(m, "CAtomType")
-		.def_property_readonly_static("UNDEFINED", [](py::object) { return CAtomType(ATOM_TYPE_UNDEFINED); }, "Undefined type instance");
-	m.def("atom_type_specific", [](CAtom atom) { return CAtomType(atom_type_specific(atom_clone(atom.ptr))); },
-			"Return specific type instance");
-	m.def("atom_type_free", [](CAtomType type) { atom_type_free(type.ptr); },
-			"Deallocate type instance");
-	m.def("check_type", [](CGroundingSpace space, CAtom atom, CAtomType type) { 
+	m.def("check_type", [](CGroundingSpace space, CAtom atom, CAtom type) { 
 			return check_type(space.ptr, atom.ptr, type.ptr);
 		}, "Check if atom is an instance of the passed type");
 	m.def("validate_atom", [](CGroundingSpace space, CAtom expr) { 

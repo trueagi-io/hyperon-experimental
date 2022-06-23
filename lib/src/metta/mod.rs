@@ -4,11 +4,25 @@ pub mod types;
 
 mod examples;
 
-use crate::Atom;
-use crate::space::grounding::GroundingSpace;
 use text::{SExprParser, Tokenizer, SExprSpace};
-use crate::common::*;
 use regex::Regex;
+
+use crate::*;
+use crate::common::*;
+use crate::space::grounding::GroundingSpace;
+
+pub const ATOM_TYPE_UNDEFINED : Atom = sym!("%Undefined%");
+pub const ATOM_TYPE_FUNCTION : Atom = sym!("->");
+pub const ATOM_TYPE_TYPE : Atom = sym!("Type");
+pub const ATOM_TYPE_ATOM : Atom = sym!("Atom");
+pub const ATOM_TYPE_SYMBOL : Atom = sym!("Symbol");
+pub const ATOM_TYPE_VARIABLE : Atom = sym!("Variable");
+pub const ATOM_TYPE_EXPRESSION : Atom = sym!("Expression");
+pub const ATOM_TYPE_GROUNDED : Atom = sym!("Grounded");
+
+pub const HAS_TYPE_SYMBOL : Atom = sym!(":");
+pub const SUB_TYPE_SYMBOL : Atom = sym!(":<");
+pub const EQUAL_SYMBOL : Atom = sym!("=");
 
 pub fn metta_space(text: &str) -> GroundingSpace {
     let mut parser = SExprSpace::new(common_tokenizer());

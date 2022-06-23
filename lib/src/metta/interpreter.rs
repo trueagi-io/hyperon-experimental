@@ -68,16 +68,14 @@ use crate::atom::subexpr::*;
 use crate::atom::matcher::*;
 use crate::space::grounding::*;
 use crate::common::collections::ListMap;
-use crate::metta::types::{AtomType, is_func, get_arg_types, check_type_bindings,
+use crate::metta::*;
+use crate::metta::types::{is_func, get_arg_types, check_type_bindings,
     get_reducted_types, match_reducted_types};
 
 use std::ops::Deref;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
-
-#[inline]
-fn equal_symbol() -> Atom { sym!("=") }
 
 /// Result of atom interpretation plus variable bindings found
 #[derive(Clone, PartialEq)]
@@ -135,7 +133,7 @@ pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<Vec<Inte
     let context = InterpreterContextRef::new(space);
     interpret_as_type_plan(context,
         InterpretedAtom(expr.clone(), Bindings::new()),
-        AtomType::Undefined)
+        ATOM_TYPE_UNDEFINED)
 }
 
 /// Perform next step of the interpretation plan and return the result. Panics
@@ -257,7 +255,7 @@ fn has_grounded_sub_expr(expr: &Atom) -> bool {
 }
 
 fn interpret_as_type_plan(context: InterpreterContextRef,
-        input: InterpretedAtom, typ: AtomType) -> StepResult<Results> {
+        input: InterpretedAtom, typ: Atom) -> StepResult<Results> {
     log::debug!("interpret_as_type_plan: input: {}, type: {}", input, typ);
     match input.atom() {
         Atom::Symbol(_) | Atom::Grounded(_) =>
@@ -281,13 +279,9 @@ fn interpret_as_type_plan(context: InterpreterContextRef,
 }
 
 fn cast_atom_to_type_plan(context: InterpreterContextRef,
-        input: InterpretedAtom, typ: AtomType) -> StepResult<Results> {
+        input: InterpretedAtom, typ: Atom) -> StepResult<Results> {
     // TODO: implement this via interpreting of the (:cast atom typ) expression
-    let typ = if let AtomType::Specific(typ) = typ {
-            AtomType::Specific(apply_bindings_to_atom(&typ, input.bindings()))
-        } else {
-            typ
-        };
+    let typ = apply_bindings_to_atom(&typ, input.bindings());
     let mut results = check_type_bindings(&context.space, input.atom(), &typ);
     log::debug!("cast_atom_to_type_plan: type check results: {:?}", results);
     if !results.is_empty() {
@@ -316,7 +310,7 @@ fn get_type_of_atom_plan(context: InterpreterContextRef, atom: Atom) -> StepResu
 }
 
 fn interpret_expression_as_type_plan(context: InterpreterContextRef,
-        input: InterpretedAtom, typ: AtomType) -> OperatorPlan<Vec<Atom>, Results> {
+        input: InterpretedAtom, typ: Atom) -> OperatorPlan<Vec<Atom>, Results> {
     let descr = format!("form alternative plans for expression {} using types", input);
     OperatorPlan::new(move |op_types: Vec<Atom>| {
         make_alternives_plan(input.clone(), op_types, move |op_typ| {
@@ -341,17 +335,16 @@ fn get_expr_mut(atom: &mut Atom) -> &mut ExpressionAtom {
 }
 
 fn interpret_expression_as_type_op(context: InterpreterContextRef,
-        input: InterpretedAtom, op_typ: Atom, ret_typ: AtomType) -> NoInputPlan {
+        input: InterpretedAtom, op_typ: Atom, ret_typ: Atom) -> NoInputPlan {
     log::debug!("interpret_expression_as_type_op: input: {}, operation type: {}, expected return type: {}", input, op_typ, ret_typ);
-    if ret_typ == AtomType::Specific(Atom::sym("Atom")) ||
-            ret_typ == AtomType::Specific(Atom::sym("Expression")) {
+    if ret_typ == ATOM_TYPE_ATOM || ret_typ == ATOM_TYPE_EXPRESSION {
         Box::new(StepResult::ret(vec![input]))
     } else if is_func(&op_typ) {
         let InterpretedAtom(input_atom, mut input_bindings) = input;
         let expr = get_expr(&input_atom);
         let (op_arg_types, op_ret_typ) = get_arg_types(&op_typ);
         // TODO: supertypes should be checked as well
-        if !ret_typ.map_or(|typ| match_reducted_types(op_ret_typ, typ, &mut input_bindings), true) {
+        if !match_reducted_types(op_ret_typ, &ret_typ, &mut input_bindings) {
             Box::new(StepResult::err(format!("Operation returns wrong type: {}, expected: {}", op_ret_typ, ret_typ)))
         } else if op_arg_types.len() != (expr.children().len() - 1) {
             Box::new(StepResult::err(format!("Operation arity is not equal to call arity: operation type, {}, call: {}", op_typ, expr)))
@@ -372,7 +365,7 @@ fn interpret_expression_as_type_op(context: InterpreterContextRef,
                             Box::new(SequencePlan::new(
                                 interpret_as_type_plan(context.clone(),
                                     InterpretedAtom(arg.clone(), result.bindings().clone()),
-                                    AtomType::Specific(arg_typ)),
+                                    arg_typ),
                                 insert_reducted_arg_plan(result, expr_idx)))
                         }).collect();
                         StepResult::execute(AlternativeInterpretationsPlan::new(arg, alternatives))
@@ -394,7 +387,7 @@ fn interpret_expression_as_type_op(context: InterpreterContextRef,
                         Box::new(SequencePlan::new(
                             interpret_as_type_plan(context.clone(),
                                 InterpretedAtom(arg.clone(), result.bindings().clone()),
-                                AtomType::Undefined),
+                                ATOM_TYPE_UNDEFINED),
                             insert_reducted_arg_plan(result, expr_idx)))
                     }).collect();
                     StepResult::execute(AlternativeInterpretationsPlan::new(arg, alternatives))
@@ -515,7 +508,7 @@ fn execute_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepRes
                         } else {
                             make_alternives_plan(input, results, move |result| {
                                 interpret_as_type_plan(context.clone(),
-                                    result, AtomType::Undefined)
+                                    result, ATOM_TYPE_UNDEFINED)
                             })
                         }
                     },
@@ -539,7 +532,7 @@ fn match_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepResul
     let var_x = VariableAtom::new("%X%");
     // TODO: unique variable?
     let atom_x = Atom::Variable(var_x.clone());
-    let query = Atom::expr(vec![equal_symbol(), input.atom().clone(), atom_x]);
+    let query = Atom::expr(vec![EQUAL_SYMBOL, input.atom().clone(), atom_x]);
     let mut local_bindings = context.space.query(&query);
     let results: Vec<InterpretedAtom> = local_bindings
         .drain(0..)
@@ -561,7 +554,7 @@ fn match_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepResul
         .map(|(result, bindings)| InterpretedAtom(result, bindings.unwrap()))
         .collect();
     make_alternives_plan(input, results, move |result| {
-        interpret_as_type_plan(context.clone(), result, AtomType::Undefined)
+        interpret_as_type_plan(context.clone(), result, ATOM_TYPE_UNDEFINED)
     })
 }
 
@@ -656,7 +649,6 @@ impl<T: Debug> Debug for AlternativeInterpretationsPlan<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::*;
     
     #[test]
     fn test_match_all() {

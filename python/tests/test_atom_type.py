@@ -7,10 +7,10 @@ class AtomTest(unittest.TestCase):
     def test_check_type(self):
         space = GroundingSpace()
         space.add_atom(E(S(":"), S("a"), S("A")))
-        
-        self.assertTrue(check_type(space, S("a"), AtomType.undefined()))
-        self.assertTrue(check_type(space, S("a"), AtomType.specific(S("A"))))
-        self.assertFalse(check_type(space, S("a"), AtomType.specific(S("B"))))
+
+        self.assertTrue(check_type(space, S("a"), ATOM_TYPE_UNDEFINED))
+        self.assertTrue(check_type(space, S("a"), S("A")))
+        self.assertFalse(check_type(space, S("a"), S("B")))
 
     def test_validate_atom(self):
         space = GroundingSpace()

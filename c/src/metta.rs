@@ -1,5 +1,4 @@
 use hyperon::metta::text::*;
-use hyperon::metta::types::AtomType;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpretedAtom;
 use hyperon::common::plan::StepResult;
@@ -112,29 +111,12 @@ pub unsafe extern "C" fn sexpr_space_into_grounding_space(sexpr: *const sexpr_sp
     (*sexpr).space.into_grounding_space(&mut (*gnd).space);
 }
 
-pub struct atom_type_t {
-    pub typ: AtomType,
-}
+#[no_mangle]
+pub static ATOM_TYPE_UNDEFINED: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_UNDEFINED };
 
 #[no_mangle]
-pub static ATOM_TYPE_UNDEFINED: &atom_type_t = &atom_type_t{ typ: AtomType::Undefined };
-
-#[no_mangle]
-pub unsafe extern "C" fn atom_type_specific(atom: *mut atom_t) -> *mut atom_type_t {
-    let c_atom = Box::from_raw(atom);
-    Box::into_raw(Box::new(atom_type_t{ typ: AtomType::Specific(c_atom.atom) })) 
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn atom_type_free(typ: *const atom_type_t) {
-    if typ != ATOM_TYPE_UNDEFINED {
-        drop(Box::from_raw(typ as *mut atom_type_t)) 
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn check_type(space: *const grounding_space_t, atom: *const atom_t, typ: *const atom_type_t) -> bool {
-    hyperon::metta::types::check_type(&(*space).space, &(*atom).atom, &(*typ).typ)
+pub unsafe extern "C" fn check_type(space: *const grounding_space_t, atom: *const atom_t, typ: *const atom_t) -> bool {
+    hyperon::metta::types::check_type(&(*space).space, &(*atom).atom, &(*typ).atom)
 }
 
 #[no_mangle]

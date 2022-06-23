@@ -14,14 +14,14 @@ START_TEST (test_check_type)
 {
 	grounding_space_t* space = grounding_space_new();
 	grounding_space_add(space, expr(atom_sym(":"), atom_sym("do"), atom_sym("Verb"), 0));
-    atom_type_t* verb = atom_type_specific(atom_sym("Verb"));
+    atom_t* verb = atom_sym("Verb");
 
     atom_t* nonsense = atom_sym("nonsense");
     ck_assert(check_type(space, nonsense, ATOM_TYPE_UNDEFINED));
     ck_assert(check_type(space, nonsense, verb));
     atom_free(nonsense);
 
-    atom_type_free(verb);
+    atom_free(verb);
 }
 END_TEST
 

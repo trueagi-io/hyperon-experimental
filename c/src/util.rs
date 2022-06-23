@@ -27,6 +27,6 @@ pub fn cstr_into_string(s: *const c_char) -> String {
     String::from(cstr_as_str(s))
 }
 
-pub fn str_as_cstr<'a>(s: &str) -> CString {
+pub fn str_as_cstr(s: &str) -> CString {
     CString::new(s).expect("CString::new failed")
 }
