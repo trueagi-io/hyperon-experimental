@@ -69,9 +69,9 @@ class ExpressionAtom(Atom):
 def E(*args):
     return ExpressionAtom(hp.atom_expr([atom.catom for atom in args]))
 
-class GroundedAtom(Atom):
+UNDEFINED_TYPE = S("%Undefined%")
 
-    UNDEFINED_TYPE = S("%Undefined%")
+class GroundedAtom(Atom):
 
     def __init__(self, catom):
         super().__init__(catom)
@@ -82,12 +82,12 @@ class GroundedAtom(Atom):
     def get_grounded_type(self):
         return Atom._from_catom(hp.atom_get_grounded_type(self.catom))
 
-def G(object, type=GroundedAtom.UNDEFINED_TYPE):
+def G(object, type=UNDEFINED_TYPE):
     return GroundedAtom(hp.atom_gnd(object, type.catom))
 
 def call_execute_on_grounded_atom(gnd, typ, args):
-    # ... if hp.atom_to_str(typ) == GroundedAtom.UNDEFINED_TYPE
-    res_typ = GroundedAtom.UNDEFINED_TYPE if hp.atom_get_type(typ) != AtomKind.EXPR \
+    # ... if hp.atom_to_str(typ) == UNDEFINED_TYPE
+    res_typ = UNDEFINED_TYPE if hp.atom_get_type(typ) != AtomKind.EXPR \
         else Atom._from_catom(hp.atom_get_children(typ)[-1])
     args = [Atom._from_catom(catom) for catom in args]
     return gnd.execute(*args, res_typ=res_typ)
@@ -121,7 +121,7 @@ class OperationObject(ConstGroundedObject):
         self.op = op
         self.unwrap = unwrap
 
-    def execute(self, *args, res_typ=GroundedAtom.UNDEFINED_TYPE):
+    def execute(self, *args, res_typ=UNDEFINED_TYPE):
         # type-check?
         if self.unwrap:
             args = [arg.get_object().value for arg in args]
@@ -138,7 +138,7 @@ class OperationObject(ConstGroundedObject):
 
 def type_sugar(type_names):
     if type_names is None:
-        return GroundedAtom.UNDEFINED_TYPE
+        return UNDEFINED_TYPE
     if isinstance(type_names, list):
         return E(S("->"), *[type_sugar(n) for n in type_names])
     if isinstance(type_names, str):
@@ -252,38 +252,8 @@ def interpret(gnd_space, expr):
         interpreter.next()
     return [Atom._from_catom(catom) for catom in interpreter.get_result()]
 
-class AtomType:
-
-    _UNDEFINED = None
-
-    @staticmethod
-    def undefined():
-        if AtomType._UNDEFINED is None:
-            AtomType._UNDEFINED = AtomType(hp.CAtomType.UNDEFINED)
-        return AtomType._UNDEFINED
-
-    @staticmethod
-    def specific(atom):
-        return AtomType(hp.atom_type_specific(atom.catom))
-
-    def __init__(self, ctype):
-        self.ctype = ctype
-
-    def __del__(self):
-        hp.atom_type_free(self.ctype)
-
-    # def __eq__(self, other):
-        # return (isinstance(other, AtomType) and
-                # hp.atom_type_eq(self.ctype, other.ctype))
-
-    # def __repr__(self):
-        # return hp.atom_type_to_str(self.ctype)
-
-    # def get_type(self):
-        # return hp.atom_type_get_type(self.ctype)
-
 def check_type(gnd_space, atom, type):
-    return hp.check_type(gnd_space.cspace, atom.catom, type.ctype)
+    return hp.check_type(gnd_space.cspace, atom.catom, type.catom)
 
 def validate_atom(gnd_space, expr):
     return hp.validate_atom(gnd_space.cspace, expr.catom)
