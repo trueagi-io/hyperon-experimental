@@ -4,14 +4,11 @@ use crate::space::grounding::GroundingSpace;
 
 use std::fmt::{Debug, Display};
 
-#[inline]
-fn has_type_symbol() -> Atom { sym!(":") }
-#[inline]
-fn sub_type_symbol() -> Atom { sym!(":<") }
-#[inline]
-fn undefined_symbol() -> Atom { sym!("%Undefined%") }
-#[inline]
-fn arrow_symbol() -> Atom { sym!("->") }
+pub const UNDEFINED_TYPE : Atom = sym!("%Undefined%");
+pub const FUNCTION_TYPE : Atom = sym!("->");
+
+pub const HAS_TYPE_SYMBOL : Atom = sym!(":");
+pub const SUB_TYPE_SYMBOL : Atom = sym!(":<");
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum AtomType {
@@ -38,11 +35,11 @@ impl Display for AtomType {
 }
 
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
-    Atom::expr(vec![has_type_symbol(), atom.clone(), typ.clone()])
+    Atom::expr(vec![HAS_TYPE_SYMBOL, atom.clone(), typ.clone()])
 }
 
 fn isa_query(sub_type: &Atom, super_type: &Atom) -> Atom {
-    Atom::expr(vec![sub_type_symbol(), sub_type.clone(), super_type.clone()])
+    Atom::expr(vec![SUB_TYPE_SYMBOL, sub_type.clone(), super_type.clone()])
 }
 
 fn query_has_type(space: &GroundingSpace, sub_type: &Atom, super_type: &Atom) -> Vec<Bindings> {
@@ -89,7 +86,7 @@ fn check_types(actual: &[Vec<Atom>], expected: &[Atom], bindings: &mut Bindings)
 pub fn is_func(typ: &Atom) -> bool {
     match typ {
         Atom::Expression(expr) => {
-            expr.children().first() == Some(&arrow_symbol())
+            expr.children().first() == Some(&FUNCTION_TYPE)
         },
         _ => false,
     }
@@ -108,7 +105,7 @@ pub fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
         Atom::Expression(expr) => {
             let children = expr.children().as_slice();
             match children {
-                [op,  args @ .., res] if *op == arrow_symbol() => (args, res),
+                [op,  args @ .., res] if *op == FUNCTION_TYPE => (args, res),
                 _ => panic!("Incorrect function type: {}", fn_typ)
             }
         },
@@ -127,7 +124,7 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     log::trace!("get_reducted_types: atom: {}", atom);
     let types = match atom {
-        Atom::Variable(_) => vec![undefined_symbol()],
+        Atom::Variable(_) => vec![UNDEFINED_TYPE],
         Atom::Grounded(gnd) => {
             let types = vec![gnd.type_()];
             types
@@ -135,7 +132,7 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
         Atom::Symbol(_) => {
             let mut types = query_types(space, atom);
             if types.is_empty() {
-                types.push(undefined_symbol())
+                types.push(UNDEFINED_TYPE)
             }
             types
         },
@@ -159,7 +156,7 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             }
             // if all members of tuple is Undefined then whole tuple is Undefined
             let mut types: Vec<Atom> = tuples.drain(0..)
-                .filter(|children| children.iter().any(|child| *child != undefined_symbol()))
+                .filter(|children| children.iter().any(|child| *child != UNDEFINED_TYPE))
                 .map(Atom::expr).collect();
             types.append(&mut query_types(space, atom));
             add_super_types(space, &mut types, 0);
@@ -193,7 +190,7 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             // separate tuples and calls in separate Atom types. Or use
             // embedded atom to designate function call.
             if only_tuple && types.is_empty() {
-                types.push(undefined_symbol())
+                types.push(UNDEFINED_TYPE)
             }
             types
         },
@@ -242,7 +239,7 @@ fn get_matched_types(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(At
 }
 
 pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
-    let undefined = undefined_symbol();
+    let undefined = UNDEFINED_TYPE;
     let typ = match typ {
         AtomType::Undefined => &undefined,
         AtomType::Specific(typ) => typ,
@@ -251,7 +248,7 @@ pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> bool {
 }
 
 pub fn check_type_bindings(space: &GroundingSpace, atom: &Atom, typ: &AtomType) -> Vec<(Atom, Bindings)> {
-    let undefined = undefined_symbol();
+    let undefined = UNDEFINED_TYPE;
     let typ = match typ {
         AtomType::Undefined => &undefined,
         AtomType::Specific(atom) => atom,
@@ -262,7 +259,7 @@ pub fn check_type_bindings(space: &GroundingSpace, atom: &Atom, typ: &AtomType) 
     }
     result.append(&mut get_matched_types(space, atom, typ));
     if result.len() > 1 {
-        result = result.drain(0..).filter(|(typ, _)| *typ != undefined_symbol()).collect();
+        result = result.drain(0..).filter(|(typ, _)| *typ != UNDEFINED_TYPE).collect();
     }
     result
 }
@@ -554,7 +551,7 @@ mod tests {
         assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![atom("(A %Undefined%)")]);
 
         let space = metta_space("");
-        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![undefined_symbol()]);
+        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![UNDEFINED_TYPE]);
 
         let space = metta_space("
             (: a (-> C D))
