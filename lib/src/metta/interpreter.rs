@@ -68,6 +68,7 @@ use crate::atom::subexpr::*;
 use crate::atom::matcher::*;
 use crate::space::grounding::*;
 use crate::common::collections::ListMap;
+use crate::metta::*;
 use crate::metta::types::{AtomType, is_func, get_arg_types, check_type_bindings,
     get_reducted_types, match_reducted_types};
 
@@ -75,9 +76,6 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
-
-#[inline]
-fn equal_symbol() -> Atom { sym!("=") }
 
 /// Result of atom interpretation plus variable bindings found
 #[derive(Clone, PartialEq)]
@@ -343,8 +341,8 @@ fn get_expr_mut(atom: &mut Atom) -> &mut ExpressionAtom {
 fn interpret_expression_as_type_op(context: InterpreterContextRef,
         input: InterpretedAtom, op_typ: Atom, ret_typ: AtomType) -> NoInputPlan {
     log::debug!("interpret_expression_as_type_op: input: {}, operation type: {}, expected return type: {}", input, op_typ, ret_typ);
-    if ret_typ == AtomType::Specific(Atom::sym("Atom")) ||
-            ret_typ == AtomType::Specific(Atom::sym("Expression")) {
+    if ret_typ == AtomType::Specific(ATOM_TYPE) ||
+            ret_typ == AtomType::Specific(EXPRESSION_TYPE) {
         Box::new(StepResult::ret(vec![input]))
     } else if is_func(&op_typ) {
         let InterpretedAtom(input_atom, mut input_bindings) = input;
@@ -539,7 +537,7 @@ fn match_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepResul
     let var_x = VariableAtom::new("%X%");
     // TODO: unique variable?
     let atom_x = Atom::Variable(var_x.clone());
-    let query = Atom::expr(vec![equal_symbol(), input.atom().clone(), atom_x]);
+    let query = Atom::expr(vec![EQUAL_SYMBOL, input.atom().clone(), atom_x]);
     let mut local_bindings = context.space.query(&query);
     let results: Vec<InterpretedAtom> = local_bindings
         .drain(0..)
@@ -656,7 +654,6 @@ impl<T: Debug> Debug for AlternativeInterpretationsPlan<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::*;
     
     #[test]
     fn test_match_all() {

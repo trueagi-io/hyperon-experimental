@@ -1,14 +1,8 @@
-use crate::*;
+use super::*;
 use crate::atom::matcher::{Bindings, apply_bindings_to_atom};
 use crate::space::grounding::GroundingSpace;
 
 use std::fmt::{Debug, Display};
-
-pub const UNDEFINED_TYPE : Atom = sym!("%Undefined%");
-pub const FUNCTION_TYPE : Atom = sym!("->");
-
-pub const HAS_TYPE_SYMBOL : Atom = sym!(":");
-pub const SUB_TYPE_SYMBOL : Atom = sym!(":<");
 
 #[derive(Debug, PartialEq, Eq, Clone)]
 pub enum AtomType {
