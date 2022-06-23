@@ -116,7 +116,7 @@ class AtomTest(unittest.TestCase):
         space = GroundingSpace()
         interpreter = Interpreter(space, E(x2Atom, ValueAtom(1)))
         self.assertEqual(str(interpreter.get_step_result()),
-                "return [" + UNDEFINED_TYPE.get_name() + "] then form alternative plans for expression (*2 1) using types")
+                "return [" + ATOM_TYPE_UNDEFINED.get_name() + "] then form alternative plans for expression (*2 1) using types")
 
 # No unwrap
 def x2_op(atom):

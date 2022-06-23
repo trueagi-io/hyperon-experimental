@@ -133,7 +133,7 @@ pub fn interpret_init(space: GroundingSpace, expr: &Atom) -> StepResult<Vec<Inte
     let context = InterpreterContextRef::new(space);
     interpret_as_type_plan(context,
         InterpretedAtom(expr.clone(), Bindings::new()),
-        UNDEFINED_TYPE)
+        ATOM_TYPE_UNDEFINED)
 }
 
 /// Perform next step of the interpretation plan and return the result. Panics
@@ -337,7 +337,7 @@ fn get_expr_mut(atom: &mut Atom) -> &mut ExpressionAtom {
 fn interpret_expression_as_type_op(context: InterpreterContextRef,
         input: InterpretedAtom, op_typ: Atom, ret_typ: Atom) -> NoInputPlan {
     log::debug!("interpret_expression_as_type_op: input: {}, operation type: {}, expected return type: {}", input, op_typ, ret_typ);
-    if ret_typ == ATOM_TYPE || ret_typ == EXPRESSION_TYPE {
+    if ret_typ == ATOM_TYPE_ATOM || ret_typ == ATOM_TYPE_EXPRESSION {
         Box::new(StepResult::ret(vec![input]))
     } else if is_func(&op_typ) {
         let InterpretedAtom(input_atom, mut input_bindings) = input;
@@ -387,7 +387,7 @@ fn interpret_expression_as_type_op(context: InterpreterContextRef,
                         Box::new(SequencePlan::new(
                             interpret_as_type_plan(context.clone(),
                                 InterpretedAtom(arg.clone(), result.bindings().clone()),
-                                UNDEFINED_TYPE),
+                                ATOM_TYPE_UNDEFINED),
                             insert_reducted_arg_plan(result, expr_idx)))
                     }).collect();
                     StepResult::execute(AlternativeInterpretationsPlan::new(arg, alternatives))
@@ -508,7 +508,7 @@ fn execute_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepRes
                         } else {
                             make_alternives_plan(input, results, move |result| {
                                 interpret_as_type_plan(context.clone(),
-                                    result, UNDEFINED_TYPE)
+                                    result, ATOM_TYPE_UNDEFINED)
                             })
                         }
                     },
@@ -554,7 +554,7 @@ fn match_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepResul
         .map(|(result, bindings)| InterpretedAtom(result, bindings.unwrap()))
         .collect();
     make_alternives_plan(input, results, move |result| {
-        interpret_as_type_plan(context.clone(), result, UNDEFINED_TYPE)
+        interpret_as_type_plan(context.clone(), result, ATOM_TYPE_UNDEFINED)
     })
 }
 

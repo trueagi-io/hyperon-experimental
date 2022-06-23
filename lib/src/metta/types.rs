@@ -54,7 +54,7 @@ fn check_types(actual: &[Vec<Atom>], expected: &[Atom], bindings: &mut Bindings)
 pub fn is_func(typ: &Atom) -> bool {
     match typ {
         Atom::Expression(expr) => {
-            expr.children().first() == Some(&FUNCTION_TYPE)
+            expr.children().first() == Some(&ATOM_TYPE_FUNCTION)
         },
         _ => false,
     }
@@ -73,7 +73,7 @@ pub fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
         Atom::Expression(expr) => {
             let children = expr.children().as_slice();
             match children {
-                [op,  args @ .., res] if *op == FUNCTION_TYPE => (args, res),
+                [op,  args @ .., res] if *op == ATOM_TYPE_FUNCTION => (args, res),
                 _ => panic!("Incorrect function type: {}", fn_typ)
             }
         },
@@ -92,7 +92,7 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     log::trace!("get_reducted_types: atom: {}", atom);
     let types = match atom {
-        Atom::Variable(_) => vec![UNDEFINED_TYPE],
+        Atom::Variable(_) => vec![ATOM_TYPE_UNDEFINED],
         Atom::Grounded(gnd) => {
             let types = vec![gnd.type_()];
             types
@@ -100,7 +100,7 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
         Atom::Symbol(_) => {
             let mut types = query_types(space, atom);
             if types.is_empty() {
-                types.push(UNDEFINED_TYPE)
+                types.push(ATOM_TYPE_UNDEFINED)
             }
             types
         },
@@ -124,7 +124,7 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             }
             // if all members of tuple is Undefined then whole tuple is Undefined
             let mut types: Vec<Atom> = tuples.drain(0..)
-                .filter(|children| children.iter().any(|child| *child != UNDEFINED_TYPE))
+                .filter(|children| children.iter().any(|child| *child != ATOM_TYPE_UNDEFINED))
                 .map(Atom::expr).collect();
             types.append(&mut query_types(space, atom));
             add_super_types(space, &mut types, 0);
@@ -158,7 +158,7 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             // separate tuples and calls in separate Atom types. Or use
             // embedded atom to designate function call.
             if only_tuple && types.is_empty() {
-                types.push(UNDEFINED_TYPE)
+                types.push(ATOM_TYPE_UNDEFINED)
             }
             types
         },
@@ -217,7 +217,7 @@ pub fn check_type_bindings(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> V
     }
     result.append(&mut get_matched_types(space, atom, typ));
     if result.len() > 1 {
-        result = result.drain(0..).filter(|(typ, _)| *typ != UNDEFINED_TYPE).collect();
+        result = result.drain(0..).filter(|(typ, _)| *typ != ATOM_TYPE_UNDEFINED).collect();
     }
     result
 }
@@ -271,11 +271,11 @@ mod tests {
         let verb = sym!("Verb");
 
         let nonsense = sym!("nonsense");
-        assert!(check_type(&space, &nonsense, &UNDEFINED_TYPE));
+        assert!(check_type(&space, &nonsense, &ATOM_TYPE_UNDEFINED));
         assert!(check_type(&space, &nonsense, &aux));
 
         let _do = sym!("do");
-        assert!(check_type(&space, &_do, &UNDEFINED_TYPE));
+        assert!(check_type(&space, &_do, &ATOM_TYPE_UNDEFINED));
         assert!(check_type(&space, &_do, &aux));
         assert!(check_type(&space, &_do, &verb));
         assert!(!check_type(&space, &_do, &sym!("Noun")));
@@ -292,7 +292,7 @@ mod tests {
         space.add(expr!(":<", ("Pron", "Verb", "Noun"), "Statement"));
 
         let i_like_music = expr!("i", "like", "music");
-        assert!(check_type(&space, &i_like_music, &UNDEFINED_TYPE));
+        assert!(check_type(&space, &i_like_music, &ATOM_TYPE_UNDEFINED));
         assert!(check_type(&space, &i_like_music, &expr!("Pron", "Verb", "Noun")));
         assert!(check_type(&space, &i_like_music, &sym!("Statement")));
 
@@ -366,9 +366,9 @@ mod tests {
         ");
 
         assert!(validate_atom(&space, &atom("(a b)")));
-        assert!(check_type(&space, &atom("(a b)"), &UNDEFINED_TYPE));
+        assert!(check_type(&space, &atom("(a b)"), &ATOM_TYPE_UNDEFINED));
         assert!(!validate_atom(&space, &atom("(a c)")));
-        assert!(!check_type(&space, &atom("(a c)"), &UNDEFINED_TYPE));
+        assert!(!check_type(&space, &atom("(a c)"), &ATOM_TYPE_UNDEFINED));
     }
 
     #[test]
@@ -509,7 +509,7 @@ mod tests {
         assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![atom("(A %Undefined%)")]);
 
         let space = metta_space("");
-        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![UNDEFINED_TYPE]);
+        assert_eq!(get_reducted_types(&space, &atom("(a b)")), vec![ATOM_TYPE_UNDEFINED]);
 
         let space = metta_space("
             (: a (-> C D))

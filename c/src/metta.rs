@@ -1,4 +1,3 @@
-use hyperon::metta::*;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpretedAtom;
@@ -113,7 +112,7 @@ pub unsafe extern "C" fn sexpr_space_into_grounding_space(sexpr: *const sexpr_sp
 }
 
 #[no_mangle]
-pub static ATOM_TYPE_UNDEFINED: &atom_t = &atom_t{ atom: UNDEFINED_TYPE };
+pub static ATOM_TYPE_UNDEFINED: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_UNDEFINED };
 
 #[no_mangle]
 pub unsafe extern "C" fn check_type(space: *const grounding_space_t, atom: *const atom_t, typ: *const atom_t) -> bool {

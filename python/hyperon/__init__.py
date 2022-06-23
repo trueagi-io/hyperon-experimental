@@ -69,7 +69,7 @@ class ExpressionAtom(Atom):
 def E(*args):
     return ExpressionAtom(hp.atom_expr([atom.catom for atom in args]))
 
-UNDEFINED_TYPE = S("%Undefined%")
+ATOM_TYPE_UNDEFINED = S("%Undefined%")
 
 class GroundedAtom(Atom):
 
@@ -82,12 +82,12 @@ class GroundedAtom(Atom):
     def get_grounded_type(self):
         return Atom._from_catom(hp.atom_get_grounded_type(self.catom))
 
-def G(object, type=UNDEFINED_TYPE):
+def G(object, type=ATOM_TYPE_UNDEFINED):
     return GroundedAtom(hp.atom_gnd(object, type.catom))
 
 def call_execute_on_grounded_atom(gnd, typ, args):
-    # ... if hp.atom_to_str(typ) == UNDEFINED_TYPE
-    res_typ = UNDEFINED_TYPE if hp.atom_get_type(typ) != AtomKind.EXPR \
+    # ... if hp.atom_to_str(typ) == ATOM_TYPE_UNDEFINED
+    res_typ = ATOM_TYPE_UNDEFINED if hp.atom_get_type(typ) != AtomKind.EXPR \
         else Atom._from_catom(hp.atom_get_children(typ)[-1])
     args = [Atom._from_catom(catom) for catom in args]
     return gnd.execute(*args, res_typ=res_typ)
@@ -121,7 +121,7 @@ class OperationObject(ConstGroundedObject):
         self.op = op
         self.unwrap = unwrap
 
-    def execute(self, *args, res_typ=UNDEFINED_TYPE):
+    def execute(self, *args, res_typ=ATOM_TYPE_UNDEFINED):
         # type-check?
         if self.unwrap:
             args = [arg.get_object().value for arg in args]
@@ -138,7 +138,7 @@ class OperationObject(ConstGroundedObject):
 
 def type_sugar(type_names):
     if type_names is None:
-        return UNDEFINED_TYPE
+        return ATOM_TYPE_UNDEFINED
     if isinstance(type_names, list):
         return E(S("->"), *[type_sugar(n) for n in type_names])
     if isinstance(type_names, str):

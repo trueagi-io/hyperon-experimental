@@ -8,7 +8,7 @@ class AtomTest(unittest.TestCase):
         space = GroundingSpace()
         space.add_atom(E(S(":"), S("a"), S("A")))
 
-        self.assertTrue(check_type(space, S("a"), UNDEFINED_TYPE))
+        self.assertTrue(check_type(space, S("a"), ATOM_TYPE_UNDEFINED))
         self.assertTrue(check_type(space, S("a"), S("A")))
         self.assertFalse(check_type(space, S("a"), S("B")))
 

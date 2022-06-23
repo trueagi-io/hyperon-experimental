@@ -11,14 +11,14 @@ use crate::*;
 use crate::common::*;
 use crate::space::grounding::GroundingSpace;
 
-pub const UNDEFINED_TYPE : Atom = sym!("%Undefined%");
-pub const FUNCTION_TYPE : Atom = sym!("->");
-pub const TYPE_TYPE : Atom = sym!("Type");
-pub const ATOM_TYPE : Atom = sym!("Atom");
-pub const SYMBOL_TYPE : Atom = sym!("Symbol");
-pub const VARIABLE_TYPE : Atom = sym!("Variable");
-pub const EXPRESSION_TYPE : Atom = sym!("Expression");
-pub const GROUNDED_TYPE : Atom = sym!("Grounded");
+pub const ATOM_TYPE_UNDEFINED : Atom = sym!("%Undefined%");
+pub const ATOM_TYPE_FUNCTION : Atom = sym!("->");
+pub const ATOM_TYPE_TYPE : Atom = sym!("Type");
+pub const ATOM_TYPE_ATOM : Atom = sym!("Atom");
+pub const ATOM_TYPE_SYMBOL : Atom = sym!("Symbol");
+pub const ATOM_TYPE_VARIABLE : Atom = sym!("Variable");
+pub const ATOM_TYPE_EXPRESSION : Atom = sym!("Expression");
+pub const ATOM_TYPE_GROUNDED : Atom = sym!("Grounded");
 
 pub const HAS_TYPE_SYMBOL : Atom = sym!(":");
 pub const SUB_TYPE_SYMBOL : Atom = sym!(":<");
