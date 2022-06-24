@@ -67,7 +67,8 @@ class GroundedTypeTest(unittest.TestCase):
         ### Grounded functions over Atom
         ### (should use unwrap=False to deal with non-grounded atoms)
         # All grounded and ungrounded, typed and untyped symbols should be processed
-        metta.add_atom(r"id_atom", OperationAtom("id_atom", lambda x: [x], ['Atom', 'Atom'], unwrap=False))
+        metta.add_atom(r"id_atom", OperationAtom("id_atom",
+            lambda x: [x], [AtomType.ATOM, AtomType.ATOM], unwrap=False))
         self.assertEqual(metta.interpret("(id_atom 1)"), metta.parse_all("1"))
         self.assertEqual(metta.interpret("(id_atom myAtom)"), metta.parse_all("myAtom"))
         self.assertEqual(metta.interpret("(id_atom untyp)"), metta.parse_all("untyp"))
@@ -89,7 +90,7 @@ class GroundedTypeTest(unittest.TestCase):
         metta.add_atom(r"id_poly_u", OperationAtom("id_poly_u", lambda x: x, ['$t', '$t']))
         ### Undefined arguments
         # It is a bad idea to have an undefined result with automatic wrapping, but it's ok here
-        metta.add_atom(r"id_undef", OperationAtom("id_undef", lambda x: x, ['%Undefined%', '%Undefined%']))
+        metta.add_atom(r"id_undef", OperationAtom("id_undef", lambda x: x, [AtomType.UNDEFINED, AtomType.UNDEFINED]))
         self.assertEqual(metta.interpret("(id_undef 1)"), metta.parse_all("1"))
         self.assertEqual(metta.interpret("(id_undef False)"), metta.parse_all("False"))
         # This will not be reduced, because unwrapping expects a grounded atom
