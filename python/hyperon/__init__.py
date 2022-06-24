@@ -72,6 +72,12 @@ def E(*args):
 class AtomType:
 
     UNDEFINED = Atom._from_catom(hp.CAtomType.UNDEFINED)
+    TYPE = Atom._from_catom(hp.CAtomType.TYPE)
+    ATOM = Atom._from_catom(hp.CAtomType.ATOM)
+    SYMBOL = Atom._from_catom(hp.CAtomType.SYMBOL)
+    VARIABLE = Atom._from_catom(hp.CAtomType.VARIABLE)
+    EXPRESSION = Atom._from_catom(hp.CAtomType.EXPRESSION)
+    GROUNDED = Atom._from_catom(hp.CAtomType.GROUNDED)
 
 class GroundedAtom(Atom):
 
