@@ -24,8 +24,11 @@
   (ln (+ 2 2))
 )
 
-;(grounded symbols work with non-determinism based "reasoning")
+; (grounded symbols work with non-determinism based "reasoning")
 
+; `$then`, `$else` should be of `Atom` type to avoid evaluation
+; and infinite cycle in inference
+(: if (-> Bool Atom Atom $t))
 (= (if True $then $else) $then)
 (= (if False $then $else) $else)
 (= (bin) 0)
@@ -41,4 +44,4 @@
 
 !(println!
    (let $t (gen 3)
-      (if (== (subsum (:: 3 (:: 7 (:: 5 nil))) $t) 8) $t (nop ()))))
+      (if (== (subsum (:: 3 (:: 7 (:: 5 nil))) $t) 8) $t (nop))))
