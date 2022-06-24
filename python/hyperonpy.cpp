@@ -161,6 +161,8 @@ struct CSExprParser {
 	}
 };
 
+struct CAtomType {};
+
 PYBIND11_MODULE(hyperonpy, m) {
 	m.doc() = "Python API of the Hyperon library";
 
@@ -300,6 +302,8 @@ PYBIND11_MODULE(hyperonpy, m) {
 			return atoms;
 		}, "Return result of the interpretation");
 
+	py::class_<CAtomType>(m, "CAtomType")
+		.def_property_readonly_static("UNDEFINED", [](py::object) { return CAtom(atom_clone(ATOM_TYPE_UNDEFINED)); }, "Undefined type of the atom");
 	m.def("check_type", [](CGroundingSpace space, CAtom atom, CAtom type) { 
 			return check_type(space.ptr, atom.ptr, type.ptr);
 		}, "Check if atom is an instance of the passed type");
