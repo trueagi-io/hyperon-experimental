@@ -69,9 +69,9 @@ matchAtom = OperationAtom('match', match_op,
 printAtom = OperationAtom('println!', print_op, ['%Undefined%', 'IO'], unwrap=False)
 
 def newCallAtom(token):
-    # REM: we could use "call" as a plain symbol (insted of "call:...")
-    #      with the method name as the parameter of call_atom_op
-    #      (but this parameter should be unwrapped)
+    # NOTE: we could use "call" as a plain symbol (insted of "call:...")
+    #       with the method name as the parameter of call_atom_op
+    #       (but this parameter should be unwrapped)
     # "call:..." is an interesting example of families of tokens for ops, though
     return OperationAtom(
                 token,

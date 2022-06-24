@@ -263,11 +263,11 @@ class ExamplesTest(unittest.TestCase):
         assert_atoms_are_equivalent(self, output, metta.parse_all('(eq (S $y) $y)'))
 
     def test_multi_space(self):
-        # REM: it is not recommended to split code into multiple spaces, because
+        # NOTE: it is not recommended to split code into multiple spaces, because
         # query chaining by the interpreter can behave in a tricky way
         # (putting data without equalities in a separate space and querying it
         # explicitly from another space should be safe, though)
-        # REM: these tests are not indended to remain valid, but are needed to
+        # NOTE: these tests are not indended to remain valid, but are needed to
         # detect, if something is changes in the interpreter
         metta1 = MeTTa()
         metta1.add_parse('''
