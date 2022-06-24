@@ -11,7 +11,7 @@ class PLNTVTest(unittest.TestCase):
         # in OpenCog Classic style... kind of
         # .tv serves as a special type of equality that requires
         # `get-tv` "metarule" based on `match` to run
-        # FixMe? `(PA)` and `(PB)` are used because otherwise
+        # FIXME? `(PA)` and `(PB)` are used because otherwise
         # substitution wasn't invoked (atm of test creation)
         metta.add_parse('''
                 (= (if True $then $else) $then)

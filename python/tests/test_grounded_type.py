@@ -81,9 +81,8 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertEqual(metta.interpret("(id_poly_w 1)"), metta.parse_all("1"))
         self.assertEqual(metta.interpret("(id_poly_w myAtom)"), metta.parse_all("myAtom"))
         self.assertEqual(metta.interpret("(id_poly_w untyp)"), metta.parse_all("untyp"))
-        # TODO: doesn't work ATM
-        # self.assertEqual(metta.interpret("(id_poly_w (+ 1 1))"), metta.parse_all("2"))
-        # self.assertEqual(metta.interpret("(+ 1 (id_poly_w 2))"), metta.parse_all("3"))
+        self.assertEqual(metta.interpret("(id_poly_w (+ 1 1))"), metta.parse_all("2"))
+        self.assertEqual(metta.interpret("(+ 1 (id_poly_w 2))"), metta.parse_all("3"))
         ### Polymorphic with unwrapping
         # TODO: automatic unwrapping of arguments of grounded polymorphic function
         #       is not supported on the Python side
@@ -96,8 +95,7 @@ class GroundedTypeTest(unittest.TestCase):
         # This will not be reduced, because unwrapping expects a grounded atom
         self.assertEqual(metta.interpret("(id_undef myAtom)"), metta.parse_all("(id_undef myAtom)"))
         self.assertEqual(metta.interpret("(id_undef untyp)"), metta.parse_all("(id_undef untyp)"))
-        # FIXME: why it is not reduced?
-        # self.assertEqual(metta.interpret("(id_undef (+ 1 1))"), metta.parse_all("2"))
+        self.assertEqual(metta.interpret("(id_undef (+ 1 1))"), metta.parse_all("2"))
 
     # TODO: For now OperationAtom without type has Undefined type. We discussed
     # that it would be nice to have something like *args in the future. The

@@ -5,8 +5,8 @@ from common import MeTTa
 class MeTTaTest(unittest.TestCase):
 
     def test_run_metta(self):
-        # REM: this is the initial implementation, which can be
-        #      moved to MeTTa class later or changed
+        # NOTE: this is the initial implementation, which can be
+        #       moved to MeTTa class later or changed
         program = '''
             (isa red color)
             (isa green color)

@@ -191,13 +191,13 @@ class MinelogyTest(unittest.TestCase):
                       (= (craft $ingred) ((CEntityV $t $v) $_))
                       $ingred))
         ''')
-        # REM: utils.interpret will not work here, because
+        # NOTE: utils.interpret will not work here, because
         # utils.space doesn't contain equalities for `mine` and `craft`
         output = kb.interpret('(mine (CBlockV log oak) $_)')
         self.assertEqual(repr(output[0]), '(CEntityV log oak)')
         output = kb.interpret('(craft (list ((CEntityV log oak) $_)))')
         self.assertEqual(repr(output[0]), '((CEntityV planks oak) 4)')
-        # REM: interpretation is done until end, because
+        # NOTE: interpretation is done until end, because
         # `match &kb` switches the context, so equalities for `mine` and `craft`
         # are found even we start with `utils` - not `kb`
         output = utils.interpret('(get-mine-block log oak)')
