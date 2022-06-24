@@ -54,7 +54,7 @@ fn check_types(actual: &[Vec<Atom>], expected: &[Atom], bindings: &mut Bindings)
 pub fn is_func(typ: &Atom) -> bool {
     match typ {
         Atom::Expression(expr) => {
-            expr.children().first() == Some(&ATOM_TYPE_FUNCTION)
+            expr.children().first() == Some(&ARROW_SYMBOL)
         },
         _ => false,
     }
@@ -73,7 +73,7 @@ pub fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
         Atom::Expression(expr) => {
             let children = expr.children().as_slice();
             match children {
-                [op,  args @ .., res] if *op == ATOM_TYPE_FUNCTION => (args, res),
+                [op,  args @ .., res] if *op == ARROW_SYMBOL => (args, res),
                 _ => panic!("Incorrect function type: {}", fn_typ)
             }
         },
