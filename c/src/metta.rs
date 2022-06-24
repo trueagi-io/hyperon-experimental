@@ -111,8 +111,13 @@ pub unsafe extern "C" fn sexpr_space_into_grounding_space(sexpr: *const sexpr_sp
     (*sexpr).space.into_grounding_space(&mut (*gnd).space);
 }
 
-#[no_mangle]
-pub static ATOM_TYPE_UNDEFINED: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_UNDEFINED };
+#[no_mangle] pub static ATOM_TYPE_UNDEFINED: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_UNDEFINED };
+#[no_mangle] pub static ATOM_TYPE_TYPE: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_TYPE };
+#[no_mangle] pub static ATOM_TYPE_ATOM: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_ATOM };
+#[no_mangle] pub static ATOM_TYPE_SYMBOL: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_SYMBOL };
+#[no_mangle] pub static ATOM_TYPE_VARIABLE: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_VARIABLE };
+#[no_mangle] pub static ATOM_TYPE_EXPRESSION: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_EXPRESSION };
+#[no_mangle] pub static ATOM_TYPE_GROUNDED: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_GROUNDED };
 
 #[no_mangle]
 pub unsafe extern "C" fn check_type(space: *const grounding_space_t, atom: *const atom_t, typ: *const atom_t) -> bool {
