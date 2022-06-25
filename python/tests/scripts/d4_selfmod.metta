@@ -14,11 +14,14 @@
 (= (answer $x)
    (println! $x))
 
+(: if (-> Bool Atom Atom $t))
 (= (if True $x $y) $x)
 (= (if False $x $y) $y)
 
-!(change-state greeted False)
-!(change-state (person name) "None")
+!(call:add_atom &memory (state greeted False))
+!(call:add_atom &memory (state (person name) "None"))
+;!(change-state greeted False)
+;!(change-state (person name) "None")
 
 (= (listen (My name is $x))
    (if (== (get-state (person name)) "None")
@@ -43,7 +46,7 @@
    (nop (change-state greeted True)))
 
 ;!(answer (listen (Hello)))
-!(answer (listen (My name is "Alexey")))
+!(answer (listen (My name is "Alexey"))) ;doesn't work correctly now due to caching?
 ;!(answer (listen (My name is "Alexey")))
 ;!(answer (listen (My name is "Ben")))
 

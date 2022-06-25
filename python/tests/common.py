@@ -2,15 +2,7 @@ from hyperon import *
 
 def match_op(space, pattern, templ_op):
     space = space.get_object().value
-    # TODO: hack to make both quoted and unquoted expression work
-    if (templ_op.get_type() == AtomKind.EXPR and
-        templ_op.get_children()[0].get_type() == AtomKind.SYMBOL and
-        templ_op.get_children()[0].get_name() == 'q'):
-        quoted = templ_op.get_children()[1:]
-        templ = E(*quoted)
-    else:
-        templ = templ_op
-    return space.subst(pattern, templ)
+    return space.subst(pattern, templ_op)
 
 def let_op(pattern, atom, templ):
     space = GroundingSpace()
@@ -50,7 +42,7 @@ subAtom = OperationAtom('-', lambda a, b: a - b, ['Number', 'Number', 'Number'])
 mulAtom = OperationAtom('*', lambda a, b: a * b, ['Number', 'Number', 'Number'])
 addAtom = OperationAtom('+', lambda a, b: a + b, ['Number', 'Number', 'Number'])
 divAtom = OperationAtom('/', lambda a, b: a / b, ['Number', 'Number', 'Number'])
-equalAtom = OperationAtom('==', lambda a, b: a == b, ['Number', 'Number', 'Bool'])
+equalAtom = OperationAtom('==', lambda a, b: a == b, ['$t', '$t', 'Bool'])
 greaterAtom = OperationAtom('>', lambda a, b: a > b, ['Number', 'Number', 'Bool'])
 lessAtom = OperationAtom('<', lambda a, b: a < b, ['Number', 'Number', 'Bool'])
 orAtom = OperationAtom('or', lambda a, b: a or b, ['Bool', 'Bool', 'Bool'])
@@ -62,11 +54,11 @@ nopAtom = OperationAtom('nop', lambda *args: [], unwrap=False)
 
 # TODO: Any for the argument is necessary to make argument reductable.
 letAtom = OperationAtom('let', let_op,
-    type_names=["Variable", "%Undefined%", "Atom", "Atom"], unwrap=False)
+    type_names=[AtomType.VARIABLE, AtomType.UNDEFINED, AtomType.ATOM, AtomType.ATOM], unwrap=False)
 matchAtom = OperationAtom('match', match_op,
-    type_names=["Space", "%Undefined%", "Atom", "%Undefined%"], unwrap=False)
+    type_names=["Space", AtomType.UNDEFINED, AtomType.ATOM, AtomType.UNDEFINED], unwrap=False)
 
-printAtom = OperationAtom('println!', print_op, ['%Undefined%', 'IO'], unwrap=False)
+printAtom = OperationAtom('println!', print_op, [AtomType.UNDEFINED, 'IO'], unwrap=False)
 
 def newCallAtom(token):
     # NOTE: we could use "call" as a plain symbol (insted of "call:...")

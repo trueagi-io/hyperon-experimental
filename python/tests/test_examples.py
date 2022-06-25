@@ -31,7 +31,7 @@ class ExamplesTest(unittest.TestCase):
 
         result = metta.interpret('''
             (match &kb (obj $verb $var0)
-                (q match &kb (from $verb $var1) (make_from $var0 $var1)))
+                (match &kb (from $verb $var1) (make_from $var0 $var1)))
         ''')
         self.assertEqual(metta.parse_all('(make_from pottery clay)'), result)
 
@@ -139,7 +139,7 @@ class ExamplesTest(unittest.TestCase):
         metta = MeTTa()
 
         metta.add_parse('''
-            (: if (-> Bool Atom Atom Atom))
+            (: if (-> Bool Atom Atom $t))
             (= (if True $then $else) $then)
             (= (if False $then $else) $else)
             (= (Fritz croaks) True)
