@@ -805,5 +805,35 @@ mod tests {
         assert!(results_are_equivalent(&result,
             &Ok(vec![metta_atom("(a (c $a $b) $c $d)")])));
     }
+
+    #[derive(PartialEq, Clone, Debug)]
+    struct ThrowError();
+
+    impl Grounded for ThrowError {
+        fn type_(&self) -> Atom {
+            expr!("->", "&str", "Error")
+        }
+        fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+            Err(args[0].as_gnd::<&str>().unwrap().deref().into())
+        }
+        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    impl Display for ThrowError {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "throw-error")
+        }
+    }
+
+    #[test]
+    fn test_return_runtime_error_from_grounded_atom() {
+        let space = GroundingSpace::new();
+        let expr = Atom::expr([Atom::gnd(ThrowError()), Atom::value("Runtime test error")]);
+
+        assert_eq!(interpret(space, &expr), 
+            Ok(vec![Atom::expr([ERROR_SYMBOL, expr, Atom::sym("Runtime test error")])]));
+    }
 }
 
