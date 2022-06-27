@@ -23,4 +23,4 @@
 (= (deduce (And $a $b))
    (And (deduce $a) (deduce $b)))
 
-!(println! (deduce (Evaluation (mortal $x))))
+!(deduce (Evaluation (mortal $x)))

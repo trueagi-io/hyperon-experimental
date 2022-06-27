@@ -1,3 +1,4 @@
+;TODO not a good way to create an Atomspace
 !(import! &memory "memory.metta")
 
 (= (remove-state $var)
@@ -50,5 +51,5 @@
 ;!(answer (listen (My name is "Alexey")))
 ;!(answer (listen (My name is "Ben")))
 
-;!(println! (call:get_atoms &memory))
+;!(call:get_atoms &memory)
 
