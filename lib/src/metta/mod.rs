@@ -23,6 +23,7 @@ pub const HAS_TYPE_SYMBOL : Atom = sym!(":");
 pub const SUB_TYPE_SYMBOL : Atom = sym!(":<");
 pub const EQUAL_SYMBOL : Atom = sym!("=");
 pub const ARROW_SYMBOL : Atom = sym!("->");
+pub const ERROR_SYMBOL : Atom = sym!("Error");
 
 pub fn metta_space(text: &str) -> GroundingSpace {
     let mut parser = SExprSpace::new(common_tokenizer());

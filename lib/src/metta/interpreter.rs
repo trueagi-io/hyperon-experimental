@@ -512,7 +512,8 @@ fn execute_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepRes
                             })
                         }
                     },
-                    Err(msg) => StepResult::err(msg),
+                    Err(msg) => StepResult::ret(vec![InterpretedAtom(
+                           Atom::expr([ERROR_SYMBOL, input.0, Atom::sym(msg)]), input.1)]),
                 }
             } else {
                 panic!("Trying to execute non grounded atom: {}", expr)
