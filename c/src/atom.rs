@@ -242,7 +242,7 @@ impl Grounded for CGrounded {
                 let ret = if res.is_null() {
                     Ok(ret)
                 } else {
-                    Err(cstr_as_str(res).into())
+                    Ok(vec![Atom::sym(cstr_into_string(res))])
                 };
                 log::trace!("CGrounded::execute: atom: {:?}, args: {:?}, ret: {:?}", self, args, ret);
                 ret
