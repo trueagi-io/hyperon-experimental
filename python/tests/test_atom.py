@@ -118,7 +118,16 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(str(interpreter.get_step_result()),
                 "return [" + AtomType.UNDEFINED.get_name() + "] then form alternative plans for expression (*2 1) using types")
 
+    def test_no_reduce(self):
+        space = GroundingSpace()
+        self.assertEqual(interpret(space, E(noReduceAtom, ValueAtom(1))),
+                [E(noReduceAtom, ValueAtom(1))])
+
 # No unwrap
 def x2_op(atom):
     return [ValueAtom(2 * atom.get_object().value)]
 x2Atom = OperationAtom('*2', x2_op, unwrap=False)
+
+def no_reduce_op(atom):
+    raise NoReduceError()
+noReduceAtom = OperationAtom('no-reduce', no_reduce_op, unwrap=False)

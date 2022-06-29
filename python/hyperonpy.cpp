@@ -77,6 +77,7 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
 	// Increment module reference counter otherwise SIGSEGV happens on exit
 	static py::object hyperon = inc_ref(py::module_::import("hyperon"));
 	static py::object call_execute_on_grounded_atom = hyperon.attr("call_execute_on_grounded_atom");
+	static py::handle NoReduceError = hyperon.attr("NoReduceError");
 	py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
 	CAtom pytyp = static_cast<GroundedObject const*>(_cgnd)->typ;
 	try {
@@ -90,10 +91,14 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
 		}
 		return nullptr;
 	} catch (py::error_already_set &e) {
-		char error[4096];
- 	 	strcpy(error, "Exception caught:\n");
-		strncat(error, e.what(), sizeof(error) / sizeof(error[0]) - 1);
-		return exec_error_runtime(error);
+		if (e.matches(NoReduceError)) {
+			return exec_error_no_reduce();
+		} else {
+			char error[4096];
+ 	 		strcpy(error, "Exception caught:\n");
+			strncat(error, e.what(), sizeof(error) / sizeof(error[0]) - 1);
+			return exec_error_runtime(error);
+		}
 	}
 }
 
