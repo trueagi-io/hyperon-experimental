@@ -45,7 +45,7 @@ pub static IS_INT: &Operation = &Operation{
     typ: "(-> Grounded bool)",
 };
 
-fn check_type(args: &mut Vec<Atom>, op: fn(&Atom) -> bool) -> Result<Vec<Atom>, String> {
+fn check_type(args: &mut Vec<Atom>, op: fn(&Atom) -> bool) -> Result<Vec<Atom>, ExecError> {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
     Ok(vec![Atom::value(op(arg))])
 }
@@ -55,7 +55,7 @@ fn is_instance<T: 'static>(arg: &Atom) -> bool
     matches!(arg.as_gnd::<T>(), Some(_))
 }
 
-fn unary_op<T, R>(args: &mut Vec<Atom>, op: fn(T) -> R) -> Result<Vec<Atom>, String>
+fn unary_op<T, R>(args: &mut Vec<Atom>, op: fn(T) -> R) -> Result<Vec<Atom>, ExecError>
 where
     T: 'static + Copy,
     R: AutoGroundedType,
@@ -64,11 +64,11 @@ where
     if let Some(arg) = arg.as_gnd::<T>() {
         Ok(vec![Atom::value(op(*arg))])
     } else {
-        Err(format!("Incorrect type of the unary operation argument: ({})", arg))
+        Err(format!("Incorrect type of the unary operation argument: ({})", arg))?
     }
 }
 
-fn bin_op<T1, T2, R>(args: &mut Vec<Atom>, op: fn(T1, T2) -> R) -> Result<Vec<Atom>, String>
+fn bin_op<T1, T2, R>(args: &mut Vec<Atom>, op: fn(T1, T2) -> R) -> Result<Vec<Atom>, ExecError>
 where
     T1: 'static + Copy,
     T2: 'static + Copy,
@@ -79,7 +79,7 @@ where
     if let (Some(arg1), Some(arg2)) = (arg1.as_gnd::<T1>(), arg2.as_gnd::<T2>()) {
         Ok(vec![Atom::value(op(*arg1, *arg2))])
     } else {
-        Err(format!("Incorrect type of the binary operation argument: ({}, {})", arg1, arg2))
+        Err(format!("Incorrect type of the binary operation argument: ({}, {})", arg1, arg2))?
     }
 }
 

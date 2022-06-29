@@ -178,6 +178,24 @@ fn replace_variables_recursively(atom: &Atom, vars: &mut HashMap<VariableAtom, A
 // match_by_equality() method allows reusing default match_() implementation in
 // 3rd party code when it is not needed to be customized. 
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ExecError {
+    Runtime(String),
+    NoReduce,
+}
+
+impl From<String> for ExecError {
+    fn from(msg: String) -> Self {
+        Self::Runtime(msg)
+    }
+}
+
+impl From<&str> for ExecError {
+    fn from(msg: &str) -> Self {
+        Self::Runtime(msg.into())
+    }
+}
+
 pub trait GroundedAtom : mopa::Any + Debug + Display + Sync {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
     fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
@@ -185,7 +203,7 @@ pub trait GroundedAtom : mopa::Any + Debug + Display + Sync {
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
     fn type_(&self) -> Atom;
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String>;
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError>;
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
 }
 
@@ -193,7 +211,7 @@ mopafy!(GroundedAtom);
 
 pub trait Grounded : Display {
     fn type_(&self) -> Atom;
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String>;
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError>;
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
 }
 
@@ -205,8 +223,8 @@ pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matc
     }
 }
 
-pub fn execute_not_executable<T: Debug>(this: &T) -> Result<Vec<Atom>, String> {
-    Err(format!("Grounded type is not executable: {:?}", this))
+pub fn execute_not_executable<T: Debug>(this: &T) -> Result<Vec<Atom>, ExecError> {
+    Err(format!("Grounded type is not executable: {:?}", this).into())
 }
 
 /// Alias for the list of traits required for the standard Rust types to be
@@ -241,7 +259,7 @@ impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
         rust_type_atom::<T>()
     }
 
-    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
     }
 
@@ -288,7 +306,7 @@ impl<T: CustomGroundedType> GroundedAtom for CustomGroundedAtom<T> {
         Grounded::type_(&self.0)
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         Grounded::execute(&self.0, args)
     }
 
@@ -461,7 +479,7 @@ mod test {
         fn type_(&self) -> Atom {
             Atom::sym("Integer")
         }
-        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
@@ -504,7 +522,7 @@ mod test {
         fn type_(&self) -> Atom {
             Atom::sym("Dict")
         }
-        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
@@ -539,7 +557,7 @@ mod test {
         fn type_(&self) -> Atom {
             expr!("->", "i32", "i32")
         }
-        fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+        fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {

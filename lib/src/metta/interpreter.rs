@@ -512,7 +512,9 @@ fn execute_op(context: InterpreterContextRef, input: InterpretedAtom) -> StepRes
                             })
                         }
                     },
-                    Err(msg) => StepResult::err(msg),
+                    Err(ExecError::Runtime(msg)) => StepResult::ret(vec![InterpretedAtom(
+                           Atom::expr([ERROR_SYMBOL, input.0, Atom::sym(msg)]), input.1)]),
+                    Err(ExecError::NoReduce) => StepResult::err("Grounded operation is not reducible"),
                 }
             } else {
                 panic!("Trying to execute non grounded atom: {}", expr)
@@ -803,6 +805,65 @@ mod tests {
 
         assert!(results_are_equivalent(&result,
             &Ok(vec![metta_atom("(a (c $a $b) $c $d)")])));
+    }
+
+    #[derive(PartialEq, Clone, Debug)]
+    struct ThrowError();
+
+    impl Grounded for ThrowError {
+        fn type_(&self) -> Atom {
+            expr!("->", "&str", "Error")
+        }
+        fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+            Err(args[0].as_gnd::<&str>().unwrap().deref().into())
+        }
+        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    impl Display for ThrowError {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "throw-error")
+        }
+    }
+
+    #[test]
+    fn test_return_runtime_error_from_grounded_atom() {
+        let space = GroundingSpace::new();
+        let expr = Atom::expr([Atom::gnd(ThrowError()), Atom::value("Runtime test error")]);
+
+        assert_eq!(interpret(space, &expr), 
+            Ok(vec![Atom::expr([ERROR_SYMBOL, expr, Atom::sym("Runtime test error")])]));
+    }
+
+    #[derive(PartialEq, Clone, Debug)]
+    struct NonReducible();
+
+    impl Grounded for NonReducible {
+        fn type_(&self) -> Atom {
+            expr!("->", "&str", "u32")
+        }
+        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+            Err(ExecError::NoReduce)
+        }
+        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    impl Display for NonReducible {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "non-reducible")
+        }
+    }
+
+    #[test]
+    fn test_execute_non_reducible_atom() {
+        let space = GroundingSpace::new();
+        let expr = Atom::expr([Atom::gnd(NonReducible()), Atom::value("32")]);
+
+        assert_eq!(interpret(space, &expr), Ok(vec![expr]));
     }
 }
 

@@ -43,7 +43,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 }
 
 extern "C" {
-	const char *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* args, struct vec_atom_t* ret);
+	exec_error_t *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* args, struct vec_atom_t* ret);
 	bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
 	struct gnd_t *py_clone(const struct gnd_t* _gnd);
 	size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
@@ -73,10 +73,11 @@ py::object inc_ref(py::object obj) {
 	return obj;
 }
 
-const char *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, struct vec_atom_t* ret) {
+exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, struct vec_atom_t* ret) {
 	// Increment module reference counter otherwise SIGSEGV happens on exit
 	static py::object hyperon = inc_ref(py::module_::import("hyperon"));
 	static py::object call_execute_on_grounded_atom = hyperon.attr("call_execute_on_grounded_atom");
+	static py::handle NoReduceError = hyperon.attr("NoReduceError");
 	py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
 	CAtom pytyp = static_cast<GroundedObject const*>(_cgnd)->typ;
 	try {
@@ -90,11 +91,14 @@ const char *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, stru
 		}
 		return nullptr;
 	} catch (py::error_already_set &e) {
-		// TODO: implement returning error description without static buffer
-		static char error[4096];
- 	 	strcpy(error, "Exception caught:\n");
-		strncat(error, e.what(), sizeof(error) / sizeof(error[0]) - 1);
-		return error;
+		if (e.matches(NoReduceError)) {
+			return exec_error_no_reduce();
+		} else {
+			char error[4096];
+ 	 		strcpy(error, "Exception caught:\n");
+			strncat(error, e.what(), sizeof(error) / sizeof(error[0]) - 1);
+			return exec_error_runtime(error);
+		}
 	}
 }
 

@@ -100,6 +100,9 @@ def call_execute_on_grounded_atom(gnd, typ, args):
     args = [Atom._from_catom(catom) for catom in args]
     return gnd.execute(*args, res_typ=res_typ)
 
+class NoReduceError(Exception):
+    pass
+
 def atoms_are_equivalent(first, second):
     return hp.atoms_are_equivalent(first.catom, second.catom)
 
@@ -132,6 +135,9 @@ class OperationObject(ConstGroundedObject):
     def execute(self, *args, res_typ=AtomType.UNDEFINED):
         # type-check?
         if self.unwrap:
+            for arg in args:
+                if not isinstance(arg, GroundedAtom):
+                    raise NoReduceError()
             args = [arg.get_object().value for arg in args]
             return [G(ValueObject(self.op(*args)), res_typ)]
         else:
