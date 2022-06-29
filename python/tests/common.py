@@ -209,7 +209,10 @@ class MeTTa:
                     break
             if status == "interp":
                 r = interpret(self.space, expr)
-                if r != []: result += [r]
+                # Empty results are also results.
+                # Can be filtered later if needed.
+                # if r != []: result += [r]
+                result += [r]
             else:
                 self.space.add_atom(expr)
             status = "normal"

@@ -10,7 +10,7 @@
 (= (green $x)
    (frog $x))
 
-!(println! (green Fritz))
+!(green Fritz)
 
 ;(= (if True $then) $then)
-;!(println! (if (green $x) $x))
+;!(if (green $x) $x)
