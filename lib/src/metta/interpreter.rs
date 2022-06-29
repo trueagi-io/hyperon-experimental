@@ -655,9 +655,9 @@ mod tests {
     #[test]
     fn test_match_all() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("=", ("color"), "blue"));
-        space.add(expr!("=", ("color"), "red"));
-        space.add(expr!("=", ("color"), "green"));
+        space.add(expr!("=" ("color") "blue"));
+        space.add(expr!("=" ("color") "red"));
+        space.add(expr!("=" ("color") "green"));
         let expr = expr!(("color"));
 
         assert_eq!(interpret(space, &expr),
@@ -667,19 +667,19 @@ mod tests {
     #[test]
     fn test_frog_reasoning() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("=", ("and", "True", "True"), "True"));
-        space.add(expr!("=", ("if", "True", then, else), then));
-        space.add(expr!("=", ("if", "False", then, else), else));
-        space.add(expr!("=", ("Fritz", "croaks"), "True"));
-        space.add(expr!("=", ("Fritz", "eats-flies"), "True"));
-        space.add(expr!("=", ("Tweety", "chirps"), "True"));
-        space.add(expr!("=", ("Tweety", "yellow"), "True"));
-        space.add(expr!("=", ("Tweety", "eats-flies"), "True"));
-        let expr = expr!("if", ("and", (x, "croaks"), (x, "eats-flies")),
-            ("=", (x, "frog"), "True"), "nop");
+        space.add(expr!("=" ("and" "True" "True") "True"));
+        space.add(expr!("=" ("if" "True" then else) then));
+        space.add(expr!("=" ("if" "False" then else) else));
+        space.add(expr!("=" ("Fritz" "croaks") "True"));
+        space.add(expr!("=" ("Fritz" "eats-flies") "True"));
+        space.add(expr!("=" ("Tweety" "chirps") "True"));
+        space.add(expr!("=" ("Tweety" "yellow") "True"));
+        space.add(expr!("=" ("Tweety" "eats-flies") "True"));
+        let expr = expr!("if" ("and" (x "croaks") (x "eats-flies"))
+            ("=" (x "frog") "True") "nop");
 
         assert_eq!(interpret(space, &expr),
-            Ok(vec![expr!("=", ("Fritz", "frog"), "True")]));
+            Ok(vec![expr!("=" ("Fritz" "frog") "True")]));
     }
 
     fn results_are_equivalent(actual: &Result<Vec<Atom>, String>,
@@ -697,15 +697,15 @@ mod tests {
     #[test]
     fn test_variable_keeps_value_in_different_sub_expressions() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("=", ("eq", x, x), "True"));
-        space.add(expr!("=", ("plus", "Z", y), y));
-        space.add(expr!("=", ("plus", ("S", k), y), ("S", ("plus", k, y))));
+        space.add(expr!("=" ("eq" x x) "True"));
+        space.add(expr!("=" ("plus" "Z" y) y));
+        space.add(expr!("=" ("plus" ("S" k) y) ("S" ("plus" k y))));
 
-        assert_eq!(interpret(space.clone(), &expr!("eq", ("plus", "Z", n), n)),
+        assert_eq!(interpret(space.clone(), &expr!("eq" ("plus" "Z" n) n)),
             Ok(vec![expr!("True")]));
         assert!(results_are_equivalent(
-            &interpret(space.clone(), &expr!("eq", ("plus", ("S", "Z"), n), n)),
-            &Ok(vec![expr!("eq", ("S", y), y)])));
+            &interpret(space.clone(), &expr!("eq" ("plus" ("S" "Z") n) n)),
+            &Ok(vec![expr!("eq" ("S" y) y)])));
     }
 
     fn test_interpret<T, R, P: Plan<T, R>>(plan: P, arg: T) -> Result<R, String> {
@@ -776,11 +776,11 @@ mod tests {
     #[test]
     fn test_variable_defined_via_variable() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("=", ("if", "True", y), y));
-        space.add(expr!("=", ("not", "False"), "True"));
-        space.add(expr!("=", ("a", z), ("not", ("b", z))));
-        space.add(expr!("=", ("b", "d"), "False"));
-        let expr = expr!("if", ("a", x), x);
+        space.add(expr!("=" ("if" "True" y) y));
+        space.add(expr!("=" ("not" "False") "True"));
+        space.add(expr!("=" ("a" z) ("not" ("b" z))));
+        space.add(expr!("=" ("b" "d") "False"));
+        let expr = expr!("if" ("a" x) x);
 
         assert_eq!(interpret(space, &expr), Ok(vec![expr!("d")]));
     }
@@ -788,8 +788,8 @@ mod tests {
     #[test]
     fn test_variable_name_conflict() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("=", ("a", (W)), {true}));
-        let expr = expr!("a", W);
+        space.add(expr!("=" ("a" (W)) {true}));
+        let expr = expr!("a" W);
 
         assert_eq!(interpret(space, &expr), Ok(vec![expr!({true})]));
     }
@@ -812,7 +812,7 @@ mod tests {
 
     impl Grounded for ThrowError {
         fn type_(&self) -> Atom {
-            expr!("->", "&str", "Error")
+            expr!("->" "&str" "Error")
         }
         fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
             Err(args[0].as_gnd::<&str>().unwrap().deref().into())
@@ -842,7 +842,7 @@ mod tests {
 
     impl Grounded for NonReducible {
         fn type_(&self) -> Atom {
-            expr!("->", "&str", "u32")
+            expr!("->" "&str" "u32")
         }
         fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
             Err(ExecError::NoReduce)

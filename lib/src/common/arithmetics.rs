@@ -96,7 +96,7 @@ mod tests {
     fn test_sum_ints() {
         let space = GroundingSpace::new();
         // (+ 3 5)
-        let expr = expr!({SUM}, {3}, {5});
+        let expr = expr!({SUM} {3} {5});
 
         assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(8)]));
     }
@@ -105,7 +105,7 @@ mod tests {
     fn test_sum_ints_recursively() {
         let space = GroundingSpace::new();
         // (+ 4 (+ 3 5))
-        let expr = expr!({SUM}, {4}, ({SUM}, {3}, {5}));
+        let expr = expr!({SUM} {4} ({SUM} {3} {5}));
 
         assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(12)]));
     }
@@ -114,12 +114,12 @@ mod tests {
     fn test_match_factorial() {
         let mut space = GroundingSpace::new();
         // (= (fac 0) 1)
-        space.add(expr!("=", ("fac", {0}), {1}));
+        space.add(expr!("=" ("fac" {0}) {1}));
         // (= (fac n) (* n (fac (- n 1))))
-        space.add(expr!("=", ("fac", n), ({MUL}, n, ("fac", ({SUB}, n, {1})))));
+        space.add(expr!("=" ("fac" n) ({MUL} n ("fac" ({SUB} n {1})))));
 
-        let expected = bind!{X: expr!({MUL}, {3}, ("fac", ({SUB}, {3}, {1})))};
-        assert_eq!(space.query(&expr!("=", ("fac", {3}), X)), vec![expected]);
+        let expected = bind!{X: expr!({MUL} {3} ("fac" ({SUB} {3} {1})))};
+        assert_eq!(space.query(&expr!("=" ("fac" {3}) X)), vec![expected]);
     }
 
     #[test]
@@ -128,19 +128,19 @@ mod tests {
         // NOTE: multiple matches are treated non-deterministically.
         // ATM, we don't have means to describe mutually exclusive ordered lists
         // of cases for recursive functions typical for FP. This code
-        //   space.add(expr!("=", ("fac", n), ({MUL}, n, ("fac", ({SUB}, n, {1})))));
-        //   space.add(expr!("=", ("fac", {0}), {1}));
+        //   space.add(expr!("=" ("fac" n) ({MUL} n ("fac" ({SUB} n {1})))));
+        //   space.add(expr!("=" ("fac" {0}) {1}));
         // should not work. For now, we have to resort to explicit
         // termination conditions:
-        space.add(expr!(":", "if", ("->", "bool", "Atom", "Atom", "Atom")));
-        space.add(expr!("=", ("if", {true}, a, b), a));
-        space.add(expr!("=", ("if", {false}, a, b), b));
-        space.add(expr!("=", ("fac", n),
-            ("if", ({GT}, n, {0}),
-                   ({MUL}, n, ("fac", ({SUB}, n, {1}))),
+        space.add(expr!(":" "if" ("->" "bool" "Atom" "Atom" "Atom")));
+        space.add(expr!("=" ("if" {true} a b) a));
+        space.add(expr!("=" ("if" {false} a b) b));
+        space.add(expr!("=" ("fac" n)
+            ("if" ({GT} n {0})
+                   ({MUL} n ("fac" ({SUB} n {1})))
                    {1})));
 
-        let expr = expr!("fac", {3});
+        let expr = expr!("fac" {3});
         assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(6)]));
     }
 }

@@ -205,61 +205,61 @@ mod tests {
 
     #[test]
     fn bottom_up_depth_walk() {
-        let expr = expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3"));
+        let expr = expr!("+" ("*" "3" ("+" "1" n)) ("-" "4" "3"));
 
         let iter = SubexprStream::from_expr(expr, BOTTOM_UP_DEPTH_WALK);
 
         assert_eq!(iter.collect::<Vec<_>>(),
         vec![
-        expr!("+", "1", n),
-        expr!("*", "3", ("+", "1", n)),
-        expr!("-", "4", "3"),
+        expr!("+" "1" n),
+        expr!("*" "3" ("+" "1" n)),
+        expr!("-" "4" "3"),
         ]);
     }
 
     #[test]
     fn bottom_up_depth_walk_two_sub_expr() {
-        let expr = expr!("*", ("+", "3", "4"), ("-", "5", "2"));
+        let expr = expr!("*" ("+" "3" "4") ("-" "5" "2"));
 
         let iter = SubexprStream::from_expr(expr, BOTTOM_UP_DEPTH_WALK);
 
         assert_eq!(iter.collect::<Vec<_>>(),
         vec![
-        expr!("+", "3", "4"),
-        expr!("-", "5", "2"),
+        expr!("+" "3" "4"),
+        expr!("-" "5" "2"),
         ]);
     }
 
     #[test]
     fn top_down_depth_walk() {
-        let expr = expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3"));
+        let expr = expr!("+" ("*" "3" ("+" "1" n)) ("-" "4" "3"));
 
         let iter = SubexprStream::from_expr(expr, TOP_DOWN_DEPTH_WALK);
 
         assert_eq!(iter.collect::<Vec<_>>(),
         vec![
-        expr!("*", "3", ("+", "1", n)),
-        expr!("+", "1", n),
-        expr!("-", "4", "3"),
+        expr!("*" "3" ("+" "1" n)),
+        expr!("+" "1" n),
+        expr!("-" "4" "3"),
         ]);
     }
 
     #[test]
     fn top_down_depth_walk_two_sub_expr() {
-        let expr = expr!("*", ("+", "3", "4"), ("-", "5", "2"));
+        let expr = expr!("*" ("+" "3" "4") ("-" "5" "2"));
 
         let iter = SubexprStream::from_expr(expr, TOP_DOWN_DEPTH_WALK);
 
         assert_eq!(iter.collect::<Vec<_>>(),
         vec![
-        expr!("+", "3", "4"),
-        expr!("-", "5", "2"),
+        expr!("+" "3" "4"),
+        expr!("-" "5" "2"),
         ]);
     }
 
     #[test]
     fn string_formatting() {
-        let expr = expr!("+", ("*", "3", ("+", "1", n)), ("-", "4", "3"));
+        let expr = expr!("+" ("*" "3" ("+" "1" n)) ("-" "4" "3"));
         let mut iter = SubexprStream::from_expr(expr, TOP_DOWN_DEPTH_WALK);
 
         iter.next();
