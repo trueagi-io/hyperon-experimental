@@ -20,11 +20,15 @@ pub struct atom_t {
     pub atom: Atom,
 }
 
+pub struct exec_error_t {
+    pub error: ExecError,
+}
+
 #[repr(C)]
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
-    execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *const c_char>,
+    execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
     display: extern "C" fn(*const gnd_t, *mut c_char, usize) -> usize,
@@ -35,6 +39,21 @@ pub struct gnd_api_t {
 pub struct gnd_t {
     api: *const gnd_api_t,
     typ: *mut atom_t,
+}
+
+#[no_mangle]
+pub extern "C" fn exec_error_runtime(message: *const c_char) -> *mut exec_error_t {
+    Box::into_raw(Box::new(exec_error_t{ error: ExecError::Runtime(cstr_into_string(message)) }))
+}
+
+#[no_mangle]
+pub extern "C" fn exec_error_no_reduce() -> *mut exec_error_t {
+    Box::into_raw(Box::new(exec_error_t{ error: ExecError::NoReduce }))
+}
+
+#[no_mangle]
+pub extern "C" fn exec_error_free(error: *mut exec_error_t) {
+    unsafe{ drop(Box::from_raw(error)); }
 }
 
 #[no_mangle]
@@ -237,12 +256,13 @@ impl Grounded for CGrounded {
         let mut ret = Vec::new();
         match self.api().execute {
             Some(func) => {
-                let res = func(self.get_ptr(), (args as *mut Vec<Atom>).cast::<vec_atom_t>(),
+                let error = func(self.get_ptr(), (args as *mut Vec<Atom>).cast::<vec_atom_t>(),
                 (&mut ret as *mut Vec<Atom>).cast::<vec_atom_t>());
-                let ret = if res.is_null() {
+                let ret = if error.is_null() {
                     Ok(ret)
                 } else {
-                    Err(cstr_as_str(res).into())
+                    let error = unsafe{ Box::from_raw(error) };
+                    Err(error.error)
                 };
                 log::trace!("CGrounded::execute: atom: {:?}, args: {:?}, ret: {:?}", self, args, ret);
                 ret
