@@ -233,7 +233,7 @@ impl Grounded for CGrounded {
         unsafe{ &*(*self.get_ptr()).typ }.atom.clone()
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         let mut ret = Vec::new();
         match self.api().execute {
             Some(func) => {
@@ -247,7 +247,7 @@ impl Grounded for CGrounded {
                 log::trace!("CGrounded::execute: atom: {:?}, args: {:?}, ret: {:?}", self, args, ret);
                 ret
             },
-            None => Err("Trying to execute non executable atom".into()),
+            None => panic!("Trying to execute non executable atom"),
         }
     }
 

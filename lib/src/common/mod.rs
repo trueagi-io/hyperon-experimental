@@ -20,7 +20,7 @@ pub fn init_logger(is_test: bool) {
 // The instance has 'static lifetime and not copied when cloned.
 pub struct Operation {
     pub name: &'static str,
-    pub execute: fn(&Operation, &mut Vec<Atom>) -> Result<Vec<Atom>, String>,
+    pub execute: fn(&Operation, &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError>,
     pub typ: &'static str,
 }
 
@@ -29,7 +29,7 @@ impl Grounded for &'static Operation {
         metta_atom(self.typ)
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         (self.execute)(self, args)
     }
 
@@ -92,7 +92,7 @@ impl<T> Display for GndRefCell<T> {
 mod tests {
     use super::*;
 
-    fn test_op(_this: &Operation, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, String> {
+    fn test_op(_this: &Operation, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         Ok(vec![])
     }
 
