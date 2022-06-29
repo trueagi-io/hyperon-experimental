@@ -135,6 +135,9 @@ class OperationObject(ConstGroundedObject):
     def execute(self, *args, res_typ=AtomType.UNDEFINED):
         # type-check?
         if self.unwrap:
+            for arg in args:
+                if not isinstance(arg, GroundedAtom):
+                    raise NoReduceError()
             args = [arg.get_object().value for arg in args]
             return [G(ValueObject(self.op(*args)), res_typ)]
         else:

@@ -10,6 +10,8 @@ def let_op(pattern, atom, templ):
     return space.subst(pattern, templ)
 
 def call_atom_op(atom, method_str, *args):
+    if not isinstance(atom, GroundedAtom):
+        raise NoReduceError()
     obj = atom.get_object().value
     method = getattr(obj, method_str)
     result = method(*args)
