@@ -6,8 +6,8 @@ macro_rules! expr {
     ($x:ident) => { Atom::var(stringify!($x)) };
     ($x:literal) => { sym!($x) };
     ({$x:expr}) => { (&&Wrap($x)).to_atom() };
-    (($($x:tt),*)) => { Atom::expr(vec![ $( expr!($x) , )* ]) };
-    ($($x:tt),*) => { Atom::expr(vec![ $( expr!($x) , )* ]) };
+    (($($x:tt)*)) => { Atom::expr(vec![ $( expr!($x) , )* ]) };
+    ($($x:tt)*) => { Atom::expr(vec![ $( expr!($x) , )* ]) };
 }
 
 #[macro_export]
@@ -555,7 +555,7 @@ mod test {
 
     impl Grounded for TestMulX {
         fn type_(&self) -> Atom {
-            expr!("->", "i32", "i32")
+            expr!("->" "i32" "i32")
         }
         fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])
@@ -595,15 +595,15 @@ mod test {
 
     #[test]
     fn test_expr_expression() {
-        assert_eq!(expr!("=", ("fact", n), ("*", n, ("-", n, "1"))), 
+        assert_eq!(expr!("=" ("fact" n) ("*" n ("-" n "1"))), 
             expression(vec![symbol("="), expression(vec![symbol("fact"), variable("n")]),
             expression(vec![symbol("*"), variable("n"),
             expression(vec![symbol("-"), variable("n"), symbol("1") ]) ]) ]));
-        assert_eq!(expr!("=", n, {[1, 2, 3]}),
+        assert_eq!(expr!("=" n {[1, 2, 3]}),
             expression(vec![symbol("="), variable("n"), value([1, 2, 3])]));
-        assert_eq!(expr!("=", {6}, ("fact", n)),
+        assert_eq!(expr!("=" {6} ("fact" n)),
             expression(vec![symbol("="), value(6), expression(vec![symbol("fact"), variable("n")])]));
-        assert_eq!(expr!({TestMulX(3)}, {TestInteger(6)}),
+        assert_eq!(expr!({TestMulX(3)} {TestInteger(6)}),
             expression(vec![grounded(TestMulX(3)), grounded(TestInteger(6))]));
     }
 
@@ -636,7 +636,7 @@ mod test {
         assert_eq!(format!("{}", Atom::gnd(TestMulX(3))), "x3");
         assert_eq!(format!("{}", Atom::gnd(TestDict(vec![(Atom::sym("A"), Atom::sym("b"))]))),
             "{ A: b, }");
-        assert_eq!(format!("{}", expr!("=", ("fact", n), ("*", n, ("-", n, "1")))),
+        assert_eq!(format!("{}", expr!("=" ("fact" n) ("*" n ("-" n "1")))),
             "(= (fact $n) (* $n (- $n 1)))");
         assert_eq!(format!("{}", expr!()), "()");
     }
@@ -689,13 +689,13 @@ mod test {
     #[test]
     fn test_custom_matching() {
         let mut dict = TestDict::new();
-        dict.put(expr!("x"), expr!({2}, {5}));
+        dict.put(expr!("x"), expr!({2} {5}));
         dict.put(expr!("y"), expr!({5}));
         let dict = expr!({dict}); 
 
         let mut query = TestDict::new();
         query.put(expr!(b), expr!(y));
-        query.put(expr!(a), expr!({2}, y));
+        query.put(expr!(a), expr!({2} y));
         let query = expr!({query});
 
         let result: Vec<MatchResult> = dict.match_(&query).collect();

@@ -244,28 +244,28 @@ mod tests {
     
     fn grammar_space() -> GroundingSpace {
         let mut space = GroundingSpace::new();
-        space.add(expr!(":", "answer", ("->", "Sent", "Sent")));
-        space.add(expr!(":<", "Quest", "Sent"));
-        space.add(expr!(":<", ("Aux", "Subj", "Verb", "Obj"), "Quest"));
-        space.add(expr!(":<", "Pron", "Subj"));
-        space.add(expr!(":<", "NG", "Subj"));
-        space.add(expr!(":<", "Pron", "Obj"));
-        space.add(expr!(":<", "NG", "Obj"));
-        space.add(expr!(":<", ("Det", "Noun"), "NG"));
-        space.add(expr!(":", "you", "Pron"));
-        space.add(expr!(":", "do", "Aux"));
-        space.add(expr!(":", "do", "Verb"));
-        space.add(expr!(":", "like", "Verb"));
-        space.add(expr!(":", "a", "Det"));
-        space.add(expr!(":", "pizza", "Noun"));
+        space.add(expr!(":" "answer" ("->" "Sent" "Sent")));
+        space.add(expr!(":<" "Quest" "Sent"));
+        space.add(expr!(":<" ("Aux" "Subj" "Verb" "Obj") "Quest"));
+        space.add(expr!(":<" "Pron" "Subj"));
+        space.add(expr!(":<" "NG" "Subj"));
+        space.add(expr!(":<" "Pron" "Obj"));
+        space.add(expr!(":<" "NG" "Obj"));
+        space.add(expr!(":<" ("Det" "Noun") "NG"));
+        space.add(expr!(":" "you" "Pron"));
+        space.add(expr!(":" "do" "Aux"));
+        space.add(expr!(":" "do" "Verb"));
+        space.add(expr!(":" "like" "Verb"));
+        space.add(expr!(":" "a" "Det"));
+        space.add(expr!(":" "pizza" "Noun"));
         space
     }
 
     #[test]
     fn test_check_type() {
         let mut space = GroundingSpace::new();
-        space.add(expr!(":", "do", "Verb"));
-        space.add(expr!(":", "do", "Aux"));
+        space.add(expr!(":" "do" "Verb"));
+        space.add(expr!(":" "do" "Aux"));
 
         let aux = sym!("Aux");
         let verb = sym!("Verb");
@@ -285,18 +285,18 @@ mod tests {
     #[test]
     fn test_check_expr_type() {
         let mut space = GroundingSpace::new();
-        space.add(expr!(":", "i", "Pron"));
-        space.add(expr!(":", "like", "Verb"));
-        space.add(expr!(":", "music", "Noun"));
-        space.add(expr!(":", ("do", "you", "like", "music"), "Quest"));
-        space.add(expr!(":<", ("Pron", "Verb", "Noun"), "Statement"));
+        space.add(expr!(":" "i" "Pron"));
+        space.add(expr!(":" "like" "Verb"));
+        space.add(expr!(":" "music" "Noun"));
+        space.add(expr!(":" ("do" "you" "like" "music") "Quest"));
+        space.add(expr!(":<" ("Pron" "Verb" "Noun") "Statement"));
 
-        let i_like_music = expr!("i", "like", "music");
+        let i_like_music = expr!("i" "like" "music");
         assert!(check_type(&space, &i_like_music, &ATOM_TYPE_UNDEFINED));
-        assert!(check_type(&space, &i_like_music, &expr!("Pron", "Verb", "Noun")));
+        assert!(check_type(&space, &i_like_music, &expr!("Pron" "Verb" "Noun")));
         assert!(check_type(&space, &i_like_music, &sym!("Statement")));
 
-        assert!(check_type(&space, &expr!("do", "you", "like", "music"), &sym!("Quest")));
+        assert!(check_type(&space, &expr!("do" "you" "like" "music"), &sym!("Quest")));
     }
 
     #[test]
@@ -326,7 +326,7 @@ mod tests {
     #[test]
     fn test_validate_atom() {
         let space = grammar_space();
-        let expr = expr!("answer", ("do", "you", "like", ("a", "pizza")));
+        let expr = expr!("answer" ("do" "you" "like" ("a" "pizza")));
 
         assert!(validate_atom(&space, &expr));
     }
@@ -375,8 +375,8 @@ mod tests {
     fn validate_basic_expr() {
         let space = GroundingSpace::new();
         assert!(validate_atom(&space, &expr!({5})));
-        assert!(validate_atom(&space, &expr!("+", {3}, {5})));
-        assert!(validate_atom(&space, &expr!("=", ("f", x), x)));
+        assert!(validate_atom(&space, &expr!("+" {3} {5})));
+        assert!(validate_atom(&space, &expr!("=" ("f" x) x)));
     }
 
     #[test]

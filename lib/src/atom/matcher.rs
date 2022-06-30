@@ -341,14 +341,14 @@ mod test {
     #[test]
     fn test_match_variables_in_data() {
         assert_eq!(
-            expr!("+", a, ("*", b, c)).match_(&expr!("+", "A", ("*", "B", "C"))).collect::<Vec<MatchResult>>(),
+            expr!("+" a ("*" b c)).match_(&expr!("+" "A" ("*" "B" "C"))).collect::<Vec<MatchResult>>(),
             vec![MatchResult::from((bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }, bind!{}))]);
     }
 
     #[test]
     fn test_match_different_value_for_variable_in_data() {
         assert_eq!(
-            expr!("+", a, ("*", a, c)).match_(&expr!("+", "A", ("*", "B", "C"))).collect::<Vec<MatchResult>>(),
+            expr!("+" a ("*" a c)).match_(&expr!("+" "A" ("*" "B" "C"))).collect::<Vec<MatchResult>>(),
             vec![]);
     }
 
@@ -372,17 +372,17 @@ mod test {
 
     #[test]
     fn test_variable_name_conflict() {
-        assert_eq!(expr!("a", (W)).match_(&expr!("a", W)).collect::<Vec<MatchResult>>(),
+        assert_eq!(expr!("a" (W)).match_(&expr!("a" W)).collect::<Vec<MatchResult>>(),
             vec![MatchResult::from((bind!{}, bind!{ W: expr!((W)) }))]);
     }
 
     #[test]
     fn test_are_equivalent() {
-        assert!(atoms_are_equivalent(&expr!(a, "b", {"c"}), &expr!(x, "b", {"c"})));
-        assert!(atoms_are_equivalent(&expr!(a, b), &expr!(c, d)));
-        assert!(!atoms_are_equivalent(&expr!(a, "b", {"c"}), &expr!(a, "x", {"c"})));
-        assert!(!atoms_are_equivalent(&expr!(a, "b", {"c"}), &expr!(a, "b", {"x"})));
-        assert!(!atoms_are_equivalent(&expr!(a, a), &expr!(c, d)));
-        assert!(!atoms_are_equivalent(&expr!(a, b), &expr!(b, b)));
+        assert!(atoms_are_equivalent(&expr!(a "b" {"c"}), &expr!(x "b" {"c"})));
+        assert!(atoms_are_equivalent(&expr!(a b), &expr!(c d)));
+        assert!(!atoms_are_equivalent(&expr!(a "b" {"c"}), &expr!(a "x" {"c"})));
+        assert!(!atoms_are_equivalent(&expr!(a "b" {"c"}), &expr!(a "b" {"x"})));
+        assert!(!atoms_are_equivalent(&expr!(a a), &expr!(c d)));
+        assert!(!atoms_are_equivalent(&expr!(a b), &expr!(b b)));
     }
 }

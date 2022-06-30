@@ -220,7 +220,7 @@ mod tests {
         text.add_str("(3d 42)").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![expr!("3d", {42})], *space.borrow_vec());
+        assert_eq!(vec![expr!("3d" {42})], *space.borrow_vec());
     }
 
     #[test]
@@ -230,7 +230,7 @@ mod tests {
         text.add_str("(= (fac $n) (* $n (fac (- $n 1))))").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![expr!("=", ("fac", n), ("*", n, ("fac", ("-", n, "1"))))],
+        assert_eq!(vec![expr!("=" ("fac" n) ("*" n ("fac" ("-" n "1"))))],
             *space.borrow_vec());
     }
 
@@ -263,7 +263,7 @@ mod tests {
     fn test_comment_base() {
         let program = ";(a 4)
                   (b 5)";
-        let expected = vec![expr!("b", "5")];
+        let expected = vec![expr!("b" "5")];
         let res = parse(program);
         assert_eq!(res, expected);
     }
@@ -272,7 +272,7 @@ mod tests {
     fn test_comment_in_sexpr() {
         let program = " (a ; 4)
                   5)";
-        let expected = vec![expr!("a", "5")];
+        let expected = vec![expr!("a" "5")];
         let res = parse(program);
         assert_eq!(res, expected);
     }
@@ -281,7 +281,7 @@ mod tests {
     fn test_comment_endl() {
         let program = " (a 4);
                   (b 5)";
-        let expected = vec![expr!("a", "4"), expr!("b", "5")];
+        let expected = vec![expr!("a" "4"), expr!("b" "5")];
         let res = parse(program);
         assert_eq!(res, expected);
     }

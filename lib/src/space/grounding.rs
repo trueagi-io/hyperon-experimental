@@ -311,23 +311,23 @@ mod test {
     #[test]
     fn test_match_expression() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("+", "a", ("*", "b", "c")));
-        assert_eq!(space.query(&expr!("+", "a", ("*", "b", "c"))), vec![bind!{}]);
+        space.add(expr!("+" "a" ("*" "b" "c")));
+        assert_eq!(space.query(&expr!("+" "a" ("*" "b" "c"))), vec![bind!{}]);
     }
 
     #[test]
     fn test_match_expression_with_variables() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("+", "A", ("*", "B", "C")));
-        assert_eq!(space.query(&expr!("+", a, ("*", b, c))),
+        space.add(expr!("+" "A" ("*" "B" "C")));
+        assert_eq!(space.query(&expr!("+" a ("*" b c))),
         vec![bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }]);
     }
 
     #[test]
     fn test_match_different_value_for_variable() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("+", "A", ("*", "B", "C")));
-        assert_eq!(space.query(&expr!("+", a, ("*", a, c))), vec![]);
+        space.add(expr!("+" "A" ("*" "B" "C")));
+        assert_eq!(space.query(&expr!("+" a ("*" a c))), vec![]);
     }
 
     fn get_var<'a>(bindings: &'a Bindings, name: &str) -> &'a Atom {
@@ -337,9 +337,9 @@ mod test {
     #[test]
     fn test_match_query_variable_has_priority() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("equals", x, x));
+        space.add(expr!("equals" x x));
         
-        let result = space.query(&expr!("equals", y, z));
+        let result = space.query(&expr!("equals" y z));
         assert_eq!(result.len(), 1);
         assert!(matches!(get_var(&result[0], "y"), Atom::Variable(_)));
         assert!(matches!(get_var(&result[0], "z"), Atom::Variable(_)));
@@ -348,52 +348,52 @@ mod test {
     #[test]
     fn test_match_query_variable_via_data_variable() {
         let mut space = GroundingSpace::new();
-        space.add(expr!(x, x));
-        assert_eq!(space.query(&expr!(y, (z))), vec![bind!{y: expr!((z))}]);
+        space.add(expr!(x x));
+        assert_eq!(space.query(&expr!(y (z))), vec![bind!{y: expr!((z))}]);
     }
 
     #[test]
     fn test_match_if_then_with_x() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("=", ("if", "True", then), then));
-        assert_eq!(space.query(&expr!("=", ("if", "True", "42"), X)),
+        space.add(expr!("=" ("if" "True" then) then));
+        assert_eq!(space.query(&expr!("=" ("if" "True" "42") X)),
         vec![bind!{X: expr!("42")}]);
     }
 
     #[test]
     fn test_match_combined_query() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("posesses", "Sam", "baloon"));
-        space.add(expr!("likes", "Sam", ("blue", "stuff")));
-        space.add(expr!("has-color", "baloon", "blue"));
+        space.add(expr!("posesses" "Sam" "baloon"));
+        space.add(expr!("likes" "Sam" ("blue" "stuff")));
+        space.add(expr!("has-color" "baloon" "blue"));
 
-        let result = space.query(&expr!(",", ("posesses", "Sam", object),
-        ("likes", "Sam", (color, "stuff")),
-        ("has-color", object, color)));
+        let result = space.query(&expr!("," ("posesses" "Sam" object)
+        ("likes" "Sam" (color "stuff"))
+        ("has-color" object color)));
         assert_eq!(result, vec![bind!{object: expr!("baloon"), color: expr!("blue")}]);
     }
 
     #[test]
     fn test_unify_variables_inside_conjunction_query() {
         let mut space = GroundingSpace::new();
-        space.add(expr!("lst1", ("Cons", "a1", ("Cons", "b2", "b3"))));
-        space.add(expr!("lst2", ("Cons", "a2", ("Cons", "b3", "b4"))));
-        space.add(expr!("Concat", x1, x2, x3));
+        space.add(expr!("lst1" ("Cons" "a1" ("Cons" "b2" "b3"))));
+        space.add(expr!("lst2" ("Cons" "a2" ("Cons" "b3" "b4"))));
+        space.add(expr!("Concat" x1 x2 x3));
 
         let result = space.subst(
-            &expr!(",", ("lst1", l1), ("lst2", l2), ("Concat", l1, "a2", "a3")),
+            &expr!("," ("lst1" l1) ("lst2" l2) ("Concat" l1 "a2" "a3")),
             &expr!(l1));
-        assert_eq!(result, vec![expr!("Cons", "a1", ("Cons", "b2", "b3"))]);
+        assert_eq!(result, vec![expr!("Cons" "a1" ("Cons" "b2" "b3"))]);
     }
 
     #[test]
     fn test_type_check_in_query() {
         let mut space = GroundingSpace::new();
-        space.add(expr!(":", "Human", "Type"));
-        space.add(expr!(":", "Socrates", "Human"));
-        space.add(expr!("Cons", "Socrates", "Nil"));
+        space.add(expr!(":" "Human" "Type"));
+        space.add(expr!(":" "Socrates" "Human"));
+        space.add(expr!("Cons" "Socrates" "Nil"));
 
-        let result = space.query(&expr!(",", (":", h, "Human"), ("Cons", h, t)));
+        let result = space.query(&expr!("," (":" h "Human") ("Cons" h t)));
         assert_eq!(result, vec![bind!{h: expr!("Socrates"), t: expr!("Nil")}]);
     }
 
@@ -415,11 +415,11 @@ mod test {
     #[test]
     fn complex_request_applying_bindings_to_next_pattern() {
         let mut space = GroundingSpace::new();
-        space.add(expr!(":=", ("sum", a, b), ("+", a, b)));
-        space.add(expr!(":=", "a", {4}));
+        space.add(expr!(":=" ("sum" a b) ("+" a b)));
+        space.add(expr!(":=" "a" {4}));
 
-        let result = space.query(&expr!(",", (":=", "a", b), (":=", ("sum", {3}, b), W)));
+        let result = space.query(&expr!("," (":=" "a" b) (":=" ("sum" {3} b) W)));
 
-        assert_eq!(result, vec![bind!{b: expr!({4}), W: expr!("+", {3}, {4})}]);
+        assert_eq!(result, vec![bind!{b: expr!({4}), W: expr!("+" {3} {4})}]);
     }
 }
