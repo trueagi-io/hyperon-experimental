@@ -39,6 +39,11 @@ def print_op(atom):
     print(atom)
     return []
 
+def assertEqual_op(x, y):
+    if x == y:
+        return []
+    raise RuntimeError("\n" + str(x) + "\nis not equal to\n" + str(y))
+
 #E(S('->'), S('Number'), S('Number'), S('Number'))
 subAtom = OperationAtom('-', lambda a, b: a - b, ['Number', 'Number', 'Number'])
 mulAtom = OperationAtom('*', lambda a, b: a * b, ['Number', 'Number', 'Number'])
@@ -50,6 +55,7 @@ lessAtom = OperationAtom('<', lambda a, b: a < b, ['Number', 'Number', 'Bool'])
 orAtom = OperationAtom('or', lambda a, b: a or b, ['Bool', 'Bool', 'Bool'])
 andAtom = OperationAtom('and', lambda a, b: a and b, ['Bool', 'Bool', 'Bool'])
 notAtom = OperationAtom('not', lambda a: not a, ['Bool', 'Bool'])
+assertEqualAtom = OperationAtom('assertEqual', assertEqual_op, unwrap=False)
 
 # Any number of arguments for `nop` (including zero) due to *args
 nopAtom = OperationAtom('nop', lambda *args: [], unwrap=False)
@@ -123,6 +129,19 @@ def newPragmaOp(metta):
         lambda key, *args: pragma_op(metta, key, *args),
         unwrap=False)
 
+def newCollapseAtom(metta):
+    # FIXME? Calling interpreter inside the operation is not too good
+    #        Could it be done via StepResult?
+    return OperationAtom(
+        'collapse',
+        lambda atom: [E(*interpret(metta.space, atom))],
+        ['Atom', 'Atom'],
+        unwrap=False)
+
+def superpose_op(*args):
+    return [arg for arg in args]
+
+superposeAtom = OperationAtom('superpose', superpose_op, unwrap=False)
 
 class MeTTa:
 
@@ -156,10 +175,13 @@ class MeTTa:
         self.add_token(r"call:[^\s]+", newCallAtom)
         self.add_atom(r"let", letAtom)
         self.add_atom(r"nop", nopAtom)
+        self.add_atom(r"assertEqual", assertEqualAtom)
         self.add_atom(r"println!", printAtom)
         self.add_atom(r"&self", SpaceAtom(self.space))
         self.add_atom(r"import!", newImportOp(self))
         self.add_atom(r"pragma!", newPragmaOp(self))
+        self.add_atom(r"collapse", newCollapseAtom(self))
+        self.add_atom(r"superpose", superposeAtom)
 
     def add_token(self, regexp, constr):
         self.tokenizer.register_token(regexp, constr)

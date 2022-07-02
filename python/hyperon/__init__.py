@@ -141,7 +141,10 @@ class OperationObject(ConstGroundedObject):
             args = [arg.get_object().value for arg in args]
             return [G(ValueObject(self.op(*args)), res_typ)]
         else:
-            return self.op(*args)
+            result = self.op(*args)
+            if not isinstance(result, list):
+                raise RuntimeError("Grounded operation `" + self.name + "` should return list")
+            return result
 
     def __eq__(self, other):
         # TODO: instance
