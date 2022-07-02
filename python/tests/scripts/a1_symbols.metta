@@ -1,20 +1,49 @@
-;(some expressions)
+; Some expressions to be matched
 ((leaf1 leaf2) leaf3)
 (((leaf0 leaf1) leaf2) leaf3)
-;(this one will not be matched)
+; This one will not be matched
 (top ((leaf1 leaf2) leaf3))
-!(match &self (($x leaf2) leaf3) $x)
+; `match` doesn't search in subexpressions
+!(assertEqual
+  (collapse
+   (match &self (($x leaf2) leaf3) $x))
+  (leaf1
+   (leaf0 leaf1)))
 
-;(symbols can be arranged in arbitrary expressions)
+; Symbols can be arranged in arbitrary expressions
 (Sam is a frog)
 (Tom is a cat)
 (Sophia is a robot)
-!(match &self ($who is a $what) ($who the $what))
+; `match` can bind more that one variable
+!(assertEqual
+  (collapse
+   (match &self ($who is a $what) ($who the $what)))
+  ((Sam the frog)
+   (Tom the cat)
+   (Sophia the robot)))
 
-(:= (Green Sam) True)
-(:= (White Tom) True)
-(:= (Green Tom) False)
-;!(match &self (:= (Green $who) True) ($who is really green))
-;!(match &self (:= ($color $who) True) ($who is really $color))
-;!(match &self (:= ($color $who) $tv) (It's $tv that $who is $color))
-;!(match &self (:= (Green Tom) $tv) $tv)
+; `:=` is a custom symbol. These are still purely symbolic expressions
+(:= (Green Sam) T)
+(:= (White Tom) T)
+(:= (Green Tom) F)
+; More examples of pattern matching
+!(assertEqual
+  (collapse
+   (match &self (:= (Green $who) T) ($who is really green)))
+  ((Sam is really green)))
+!(assertEqual
+  (collapse
+   (match &self (:= ($color $who) T) ($who is really $color)))
+  ((Sam is really Green)
+   (Tom is really White)))
+!(assertEqual
+  (collapse
+   (match &self (:= ($color $who) $tv) (It's $tv that $who is $color)))
+  ((It's T that Sam is Green)
+   (It's T that Tom is White)
+   (It's F that Tom is Green)))
+; This type of query works as a sort of evaluation/reduction
+!(assertEqual
+  (collapse
+   (match &self (:= (Green Tom) $tv) $tv))
+  (F))

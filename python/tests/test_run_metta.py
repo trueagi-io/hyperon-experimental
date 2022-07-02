@@ -5,8 +5,6 @@ from common import MeTTa
 class MeTTaTest(unittest.TestCase):
 
     def test_run_metta(self):
-        # NOTE: this is the initial implementation, which can be
-        #       moved to MeTTa class later or changed
         program = '''
             (isa red color)
             (isa green color)
@@ -67,3 +65,9 @@ class MeTTaTest(unittest.TestCase):
         result = MeTTa().run(program)
         self.assertEqual('[[1]]', repr(result))
 
+    def process_exceptions(self, results):
+        for result in results:
+            self.assertEqual(result, [])
+
+    def test_scripts(self):
+        self.process_exceptions(MeTTa().import_file("scripts/a1_symbols.metta"))
