@@ -21,12 +21,29 @@ jobs:
             toolchain: stable
             override: true
 
+      - name: Install additional tools
+        run: |
+          cargo install grcov
+          rustup component add llvm-tools-preview
+
       - name: Build and test
         working-directory: ./lib
-        run: |
-          cargo check
-          cargo build
-          RUST_LOG=hyperon=debug cargo test
+        run: cargo test
+        env:
+          CARGO_INCREMENTAL: '0'
+          RUSTFLAGS: '-Cinstrument-coverage'
+          RUST_LOG: 'hyperon=debug'
+          LLVM_PROFILE_FILE: "hyperon-%p-%m.profraw"
+
+      - name: Make coverage report
+        working-directory: ./lib
+        run: grcov . -s . --binary-path ./target/debug --branch --ignore-not-existing --llvm --output-type lcov --output-path ./lcov.info --prefix-dir /home/runner/work --ignore "../*"
+
+      - name: Coveralls upload
+        uses: coverallsapp/github-action@master
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path-to-lcov: ./lib/lcov.info
 
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.0
