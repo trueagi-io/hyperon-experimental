@@ -73,3 +73,5 @@ class MeTTaTest(unittest.TestCase):
         self.process_exceptions(MeTTa().import_file("scripts/a1_symbols.metta"))
         self.process_exceptions(MeTTa().import_file("scripts/a2_opencoggy.metta"))
         self.process_exceptions(MeTTa().import_file("scripts/a3_twoside.metta"))
+        self.process_exceptions(MeTTa().import_file("scripts/b0_chaining_prelim.metta"))
+
