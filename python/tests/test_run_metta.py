@@ -75,3 +75,4 @@ class MeTTaTest(unittest.TestCase):
         self.process_exceptions(MeTTa().import_file("scripts/a3_twoside.metta"))
         self.process_exceptions(MeTTa().import_file("scripts/b0_chaining_prelim.metta"))
         self.process_exceptions(MeTTa().import_file("scripts/b1_equal_chain.metta"))
+        self.process_exceptions(MeTTa().import_file("scripts/b2_backchain.metta"))

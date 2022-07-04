@@ -1,6 +1,6 @@
 ; Equality sign is specially treated by the interpreter
 (= (I $x) $x)
-(= ((K $x) $y) $x)
+(= ((K $x) $y) $x) ; Note that `(K $x)` is allowed here
 (= (K $x $y) $x)
 (= (S $x $y $z) ($x $z ($y $z)))
 
