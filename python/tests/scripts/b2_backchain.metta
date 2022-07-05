@@ -19,6 +19,8 @@
 
 ; The result of matching is also chained
 ; Example from OpenCog Classic wiki on PLN Backward Chaining
+; `And` and `T` are custom symbols (they are used here
+; to avoid mixing them up with symbols from common lib)
 
 (Evaluation (philosopher Plato))
 (Evaluation (likes-to-wrestle Plato))
@@ -47,8 +49,8 @@
   (T))
 
 ; TODO : Some variagles are not substituted
-(= (if! T $x) $x)
-(if! (deduce (Evaluation (mortal $x))) $x)
+(= (ift T $then) $then)
+(ift (deduce (Evaluation (mortal $x))) $x)
 
 
 (= (explain (Evaluation ($P $x)))

@@ -47,3 +47,12 @@
   (collapse
    (match &self (:= (Green Tom) $tv) $tv))
   (F))
+
+; One more example
+(isa red color)
+(isa green color)
+(isa blue color)
+!(assertEqual
+  (collapse
+    (match &self (isa $color color) $color))
+  (red green blue))

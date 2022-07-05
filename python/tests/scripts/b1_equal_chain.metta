@@ -30,3 +30,13 @@
 !(assertEqual
   (Something? (Add (S Z) (S Z)))
   (Something? (S (S Z))))
+
+; Note that the same variable can be used multiple time on the left
+; side of expression, and the "function" can be "non-total"
+(= (eq $x $x) T)
+!(assertEqual
+  (eq (S K K x) x)
+  T)
+!(assertEqual
+  (eq Green Blue)
+  (eq Green Blue))
