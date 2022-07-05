@@ -6,18 +6,6 @@ from test_common import *
 
 class ExamplesTest(unittest.TestCase):
 
-    def test_show_all_color_names(self):
-        metta = MeTTa()
-
-        metta.add_parse('''
-            (isa red color)
-            (isa green color)
-            (isa blue color)
-        ''')
-
-        result = metta.interpret('(match &self (isa $color color) $color)')
-        self.assertEqual([S('red'), S('green'), S('blue')], result)
-
     def test_create_semantic_triple(self):
         metta = MeTTa()
         kb = metta.space
@@ -155,53 +143,6 @@ class ExamplesTest(unittest.TestCase):
 
         self.assertEqual(metta.parse_all('(= (Fritz green) True)'),
                 metta.interpret('(if ($x frog) (= ($x green) True) nop)'))
-
-    def test_frog_unification(self):
-        metta = MeTTa()
-
-        metta.add_parse('''
-           (= (if True $then) $then)
-           (= (frog $x) (and (croaks $x) (eat_flies $x)))
-           (= (croaks Fritz) True)
-           (= (eat_flies Fritz) True)
-           (= (green $x) (frog $x))
-        ''')
-
-        self.assertEqual(metta.parse_all('Fritz'),
-                metta.interpret('(if (green $x) $x)'))
-
-    def test_air_humidity_regulator(self):
-        metta = MeTTa()
-
-        metta.add_parse('''
-           (= (if True $then) $then)
-           (= (make $x) (if (makes $y $x) (start $y)))
-           (= (make $x) (if (and (prevents (making $y) (making $x))
-                                   (makes $z $y)) (stop $z)))
-
-           (= (is (air dry)) (make (air wet)))
-           (= (is (air wet)) (make (air dry)))
-           (= (prevents (making (air dry)) (making (air wet))) True)
-           (= (prevents (making (air wet)) (making (air dry))) True)
-
-           (= (makes humidifier (air wet)) True)
-           (= (makes kettle (air wet)) True)
-           (= (makes ventilation (air dry)) True)
-        ''')
-
-        output = metta.interpret('(is (air dry))')
-        self.assertEqual(output, metta.parse_all('''
-                (start humidifier)
-                (start kettle)
-                (stop ventilation)
-                '''))
-
-        output = metta.interpret('(is (air wet))')
-        self.assertEqual(output, metta.parse_all('''
-                (start ventilation)
-                (stop humidifier)
-                (stop kettle)
-                '''))
 
     def test_subset_sum_problem(self):
         metta = MeTTa()
@@ -400,62 +341,35 @@ class ExamplesTest(unittest.TestCase):
         # application `(Human Socrates)` is not mixed up with dependent type definition
         self.assertEqual(metta.interpret("(:? (HumansAreMortal (Human Socrates)))"), [])
 
-    def _test_visit_kim(self):
-        atomese = Atomese()
-        kb = GroundingSpace("kb")
-        atomese.add_atom("kb", SpaceAtom(kb))
-
-        # it's questionable if the representation of (health-check Kim)
-        # which can be interpreted as a functional call is correct,
-        # but these tests pass for now
-        program = '''
+    def test_visit_kim(self):
+        # legacy test
+        # can be moved to b4_nondeterm.metta or removed
+        metta = MeTTa()
+        metta.add_parse('''
             (= (perform (visit $x)) (perform (lunch-order $x)))
             (= (perform (visit $x)) (perform (health-check $x)))
 
             (impl (is-achieved (visit $x))
-                  (And (is-achieved (lunch-order $x)) (is-achieved (health-check $x))))
+                (And (is-achieved (lunch-order $x)) (is-achieved (health-check $x))))
 
             (= (achieve $goal)
-               (match kb (impl (is-achieved $goal)
-                               (And (is-achieved $subgoal1) (is-achieved $subgoal2)))
-                      (do $subgoal1 $subgoal2)))
+                (match &self (impl (is-achieved $goal)
+                                (And (is-achieved $subgoal1) (is-achieved $subgoal2)))
+                    (do $subgoal1 $subgoal2)))
 
             (= (achieve (health-check Kim)) True)
             (= (achieve (lunch-order Kim)) False)
-            '''
-        # (do $subgoal1 $subgoal2) --> (do (achieve $subgoal1) (achieve $subgoal2)))) --
-        # -- will try to execute 'achieve' and produce (do True True) as output...
-
-        atomese.parse(program, kb)
-
-        # simple functional way to produce subgoals in target
-        target = atomese.parse('(perform (visit Kim))')
-        result = interpret(kb, target)
-        # returned now as output because there is no further interpretation of this expression
-        # it could be expanded further into subgoals or external actions
-        self.assertEqual(repr(result), '(perform (health-check Kim))')
-        # the next subgoal is produced in the consequent interpretation of the initial
-        # nondeterministic expression
-        result = interpret(kb, target)
-        self.assertEqual(repr(result), '(perform (lunch-order Kim))')
-
-        # Higher-order matching:
-        # (visit Kim) -> $goal in (achieve $goal)
-        # Kim -> $x in (impl (is-achieved (visit $x)) ...
-        # $subgoal[1,2] <- (is-achieved ([lunch-order, health-check] Kim))
-        # checking if such two-side unification works:
-        target = atomese.parse('(achieve (visit Kim))')
-        result = interpret(kb, target)
-        self.assertEqual(repr(result), '(do (lunch-order Kim) (health-check Kim))')
-
-        # Extending the program
-        atomese.parse('(= (do $goal1 $goal2) (achieve $goal1))', kb)
-        atomese.parse('(= (do $goal1 $goal2) (achieve $goal2))', kb)
-        target = atomese.parse('(achieve (visit Kim))')
-        # (achieve (visit Kim)) --> (do (lunch-order Kim) (health-check Kim))
-        # --> (achieve (health-check Kim)) ... --> True
-        result = interpret(kb, target)
-        self.assertEqual(repr(result), 'True')
+        ''')
+        self.assertEqual(metta.interpret('(perform (visit Kim))'),
+            metta.parse_all('(perform (lunch-order Kim)) (perform (health-check Kim))'))
+        self.assertEqual(metta.interpret('(achieve (visit Kim))'),
+            metta.parse_all('(do (lunch-order Kim) (health-check Kim))'))
+        metta.add_parse('''
+            (= (do $goal1 $goal2) (achieve $goal1))
+            (= (do $goal1 $goal2) (achieve $goal2))
+        ''')
+        self.assertEqual(metta.interpret('(achieve (visit Kim))'),
+            metta.parse_all('False True'))
 
 class SomeObject():
 
