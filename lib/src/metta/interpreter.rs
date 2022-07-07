@@ -865,5 +865,13 @@ mod tests {
 
         assert_eq!(interpret(space, &expr), Ok(vec![expr]));
     }
+
+    #[test]
+    fn test_interpret_empty_expression() {
+        let space = GroundingSpace::new();
+        let expr = Atom::expr([]);
+
+        assert_eq!(interpret(space, &expr), Ok(vec![expr]));
+    }
 }
 
