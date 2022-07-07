@@ -11,8 +11,7 @@
   (collapse
     (match &self (= (color) $x) $x))
   (green yellow red))
-; FIXME: add to tests when `()` is fixed
-(assertEqual
+!(assertEqual
   (collapse
     (match &self (= (shape) $x) $x))
   ())

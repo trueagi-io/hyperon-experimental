@@ -1,4 +1,4 @@
-;(a few basic grounded operations)
+; Standard library contains a few basic grounded operations
 
 !(+ 2 (* 3 5.5))
 

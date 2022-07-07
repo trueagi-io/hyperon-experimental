@@ -11,8 +11,7 @@
 !(assertEqual
   (frog Sam)
   T)
-; TODO: () doesn't work
-(assertEqual
+!(assertEqual
   (collapse (frog Fritz))
   ())
 
