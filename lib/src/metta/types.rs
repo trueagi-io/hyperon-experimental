@@ -131,21 +131,23 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             log::trace!("get_reducted_types: tuple {} types {:?}", atom, types);
 
             // functional types
-            let op = get_op(expr);
-            let args = get_args(expr);
-            let actual_arg_types: Vec<Vec<Atom>> = args.iter().map(|arg| get_reducted_types(space, arg)).collect();
-            let mut fn_types = get_reducted_types(space, op);
-            let fn_types = fn_types.drain(0..).filter(is_func);
             let mut only_tuple = true;
-            for fn_type in fn_types {
-                only_tuple = false;
-                let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
-                let mut bindings = Bindings::new();
-                if check_types(actual_arg_types.as_slice(), expected_arg_types, &mut bindings) {
-                    types.push(apply_bindings_to_atom(&ret_typ, &bindings));
+            if !expr.children().is_empty() {
+                let op = get_op(expr);
+                let args = get_args(expr);
+                let actual_arg_types: Vec<Vec<Atom>> = args.iter().map(|arg| get_reducted_types(space, arg)).collect();
+                let mut fn_types = get_reducted_types(space, op);
+                let fn_types = fn_types.drain(0..).filter(is_func);
+                for fn_type in fn_types {
+                    only_tuple = false;
+                    let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
+                    let mut bindings = Bindings::new();
+                    if check_types(actual_arg_types.as_slice(), expected_arg_types, &mut bindings) {
+                        types.push(apply_bindings_to_atom(&ret_typ, &bindings));
+                    }
                 }
+                log::trace!("get_reducted_types: tuple + function {} types {:?}", atom, types);
             }
-            log::trace!("get_reducted_types: tuple + function {} types {:?}", atom, types);
 
             // TODO: Three cases here:
             // - tuple type
@@ -550,5 +552,11 @@ mod tests {
     fn get_reducted_types_grounded_atom() {
         let space = GroundingSpace::new();
         assert_eq!(get_reducted_types(&space, &Atom::value(3)), vec![atom("i32")]);
+    }
+
+    #[test]
+    fn get_reducted_types_empty_expression() {
+        let space = GroundingSpace::new();
+        assert_eq!(get_reducted_types(&space, &Atom::expr([])), vec![ATOM_TYPE_UNDEFINED]);
     }
 }
