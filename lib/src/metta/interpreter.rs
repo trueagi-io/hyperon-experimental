@@ -241,14 +241,18 @@ impl Deref for InterpreterContextRef {
     }
 }
 
-fn is_grounded(expr: &ExpressionAtom) -> bool {
-    matches!(expr.children().get(0), Some(Atom::Grounded(_)))
+fn is_grounded_op(expr: &ExpressionAtom) -> bool {
+    match expr.children().get(0) { 
+        Some(Atom::Grounded(op)) if is_func(&op.type_())
+            || op.type_() == ATOM_TYPE_UNDEFINED => true,
+        _ => false,
+    }
 }
 
 fn has_grounded_sub_expr(expr: &Atom) -> bool {
     return SubexprStream::from_expr(expr.clone(), TOP_DOWN_DEPTH_WALK)
         .any(|sub| if let Atom::Expression(sub) = sub {
-            is_grounded(&sub)
+            is_grounded_op(&sub)
         } else {
             panic!("Expression is expected");
         });
@@ -471,10 +475,7 @@ fn save_result_in_cache_plan(context: InterpreterContextRef, key: Atom) -> Opera
 fn interpret_reducted_plan(context: InterpreterContextRef,
         input: InterpretedAtom) -> NoInputPlan {
     if let Atom::Expression(ref expr) = input.atom() {
-        if is_grounded(expr) {
-            // TODO: there is no sense in passing variables as an arguments to
-            // the grounded atoms, so when grounded atom has a variable as an
-            // argument it probably should be matched instead.            
+        if is_grounded_op(expr) {
             Box::new(execute_plan(context, input))
         } else {
             Box::new(match_plan(context, input))
@@ -872,6 +873,43 @@ mod tests {
         let expr = Atom::expr([]);
 
         assert_eq!(interpret(space, &expr), Ok(vec![expr]));
+    }
+
+    #[test]
+    fn test_interpret_non_executable_grounded_atom() {
+        let space = GroundingSpace::new();
+        let expr = Atom::expr([Atom::value(1)]);
+
+        assert_eq!(interpret(space, &expr), Ok(vec![expr]));
+    }
+
+    #[derive(PartialEq, Clone, Debug)]
+    struct MulXUndefinedType(i32);
+
+    impl Grounded for MulXUndefinedType {
+        fn type_(&self) -> Atom {
+            ATOM_TYPE_UNDEFINED
+        }
+        fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+            Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])
+        }
+        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    impl Display for MulXUndefinedType {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "x{}", self.0)
+        }
+    }
+
+    #[test]
+    fn test_interpret_undefined_grounded_atom() {
+        let space = GroundingSpace::new();
+        let expr = expr!({MulXUndefinedType(3)} {2});
+
+        assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(6)]));
     }
 }
 
