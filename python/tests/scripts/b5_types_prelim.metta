@@ -19,8 +19,7 @@
 (: S (-> Nat Nat))
 (: Add (-> Nat Nat Nat))
 ; Now the result of its evaluation will be empty, because `S` is not `Nat`
-; TODO: add test after fixing ()
-(assertEqual
+!(assertEqual
   (collapse (Add S Z))
   ())
 ; This will still work, because `Something` is of undefined type,
@@ -50,8 +49,7 @@
   (collapse (Cons (S Z) (Cons Z Nil)))
   ((Cons (S Z) (Cons Z Nil))))
 ; This list is badly typed
-; FIXME ()
-(assertEqual
+!(assertEqual
   (collapse (Cons S (Cons Z Nil)))
   ())
 
@@ -68,8 +66,7 @@
   (collapse (eq Z (S Z)))
   ((eq Z (S Z))))
 ; Not accepted
-; FIXME ()
-(assertEqual
+!(assertEqual
   (collapse (eq Z S))
   ())
 
@@ -91,12 +88,11 @@
   (collapse
     (of-same-type Green Red))
   (T))
-; FIXME ()
-(assertEqual
+!(assertEqual
   (collapse
     (of-same-type Green Color))
   ())
-(assertEqual
+!(assertEqual
   (collapse
     (of-same-type Green Circle))
   ())
