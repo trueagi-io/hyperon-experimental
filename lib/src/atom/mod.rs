@@ -413,6 +413,10 @@ impl PartialEq for Atom {
             (Atom::Symbol(sym), Atom::Symbol(other)) => PartialEq::eq(sym, other),
             (Atom::Expression(expr), Atom::Expression(other)) => PartialEq::eq(expr, other),
             (Atom::Variable(var), Atom::Variable(other)) => PartialEq::eq(var, other),
+            // TODO: PartialEq cannot be derived for the Box<dyn GroundedAtom>
+            // because of strange compiler error which requires Copy trait
+            // to be implemented. It prevents using constant atoms as patterns
+            // for matching (see COMMA_SYMBOL in grounding.rs for instance).
             (Atom::Grounded(gnd), Atom::Grounded(other)) => PartialEq::eq(gnd, other),
             _ => false,
         }
