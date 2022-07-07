@@ -63,6 +63,11 @@ impl Bindings {
             next.iter().map(|n| Self::merge(p, n)).collect()
         }).filter(Option::is_some).map(Option::unwrap).collect()
     }
+
+    pub fn filter<F>(&mut self, mut pred: F)
+        where F: FnMut(&VariableAtom, &Atom) -> bool {
+        self.0 = self.0.drain().filter(|(k, v)| pred(k, v)).collect();
+    }
 }
 
 impl From<Vec<(VariableAtom, Atom)>> for Bindings {
@@ -141,9 +146,11 @@ impl WithMatch for Atom {
             (Atom::Symbol(a), Atom::Symbol(b)) if a == b => Box::new(std::iter::once(MatchResult::new())),
             (Atom::Grounded(a), Atom::Grounded(_)) => a.match_(pattern),
             (Atom::Variable(_), Atom::Variable(v)) => {
-                // We stick to prioritize pattern bindings in this case
-                // because otherwise the $X in (= (...) $X) will not be matched with
-                // (= (if True $then) $then)
+                // We stick to prioritize pattern bindings in this case.
+                // This logic allows us propagate value of `$then` in `(= (if T $then) $then)` when
+                // it is matched with `(= (if T (do-something)) $X)` during interpretation. Finally
+                // `$X` bound to `(do-something)`  because `$X` is bound to `$then` and `$then` is
+                // bound to `(do-something)`.
                 log::trace!("match_(): bind a pattern's variable: {} = {}", v, self);
                 Box::new(std::iter::once(MatchResult::from((Bindings::new(), Bindings::from(vec![(v.clone(), self.clone())])))))
             }
@@ -310,6 +317,7 @@ pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bind
             return Err(())
         }
     }
+    log::trace!("apply_bindings_to_bindings: result: {}", res);
     return Ok(res);
 }
 

@@ -6,11 +6,11 @@ use crate::atom::subexpr::split_expr;
 use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref};
+use std::collections::HashSet;
 
 // Grounding space
 
-#[inline]
-fn comma_symbol() -> Atom { sym!(",") }
+const COMMA_SYMBOL : Atom = sym!(",");
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum SpaceEvent {
@@ -90,8 +90,11 @@ impl GroundingSpace {
 
     pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
         match split_expr(pattern) {
-            Some((sym @ Atom::Symbol(_), args)) if *sym == comma_symbol() => {
-                args.fold(vec![bind!{}],
+            // Cannot match with COMMA_SYMBOL here, because Rust allows
+            // it only when Atom has PartialEq and Eq derived.
+            Some((sym @ Atom::Symbol(_), args)) if *sym == COMMA_SYMBOL => {
+                let vars = collect_variables(&pattern);
+                let mut result = args.fold(vec![bind!{}],
                     |mut acc, pattern| {
                         if acc.is_empty() {
                             acc
@@ -99,11 +102,17 @@ impl GroundingSpace {
                             acc.drain(0..).flat_map(|prev| -> Vec<Bindings> {
                                 let pattern = matcher::apply_bindings_to_atom(&pattern, &prev);
                                 let mut res = self.query(&pattern);
-                                res.drain(0..).map(|next| Bindings::merge(&prev, &next))
-                                    .filter(Option::is_some).map(Option::unwrap).collect()
+                                res.drain(0..)
+                                    .map(|next| Bindings::merge(&prev, &next))
+                                    .filter(Option::is_some).map(Option::unwrap)
+                                    .map(|next| matcher::apply_bindings_to_bindings(&next, &next)
+                                        .expect("Self consistent bindings are expected"))
+                                    .collect()
                             }).collect()
                         }
-                    })
+                    });
+                result.iter_mut().for_each(|bindings| bindings.filter(|k, _v| vars.contains(k)));
+                result
             },
             _ => self.single_query(pattern),
         }
@@ -186,6 +195,22 @@ impl Display for GroundingSpace {
         write!(f, "GroundingSpace")
     }
 }
+
+fn collect_variables(atom: &Atom) -> HashSet<VariableAtom> {
+    fn recursion(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
+        match atom {
+            Atom::Variable(var) => { vars.insert(var.clone()); },
+            Atom::Expression(expr) => {
+                expr.children().iter().for_each(|child| recursion(child, vars));
+            }
+            _ => {},
+        }
+    }
+    let mut vars = HashSet::new();
+    recursion(atom, &mut vars);
+    vars
+}
+
 
 #[cfg(test)]
 mod test {
@@ -413,7 +438,7 @@ mod test {
     }
 
     #[test]
-    fn complex_request_applying_bindings_to_next_pattern() {
+    fn complex_query_applying_bindings_to_next_pattern() {
         let mut space = GroundingSpace::new();
         space.add(expr!(":=" ("sum" a b) ("+" a b)));
         space.add(expr!(":=" "a" {4}));
@@ -421,5 +446,16 @@ mod test {
         let result = space.query(&expr!("," (":=" "a" b) (":=" ("sum" {3} b) W)));
 
         assert_eq!(result, vec![bind!{b: expr!({4}), W: expr!("+" {3} {4})}]);
+    }
+
+    #[test]
+    fn complex_query_chain_of_bindings() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("implies" ("B" x) ("C" x)));
+        space.add(expr!("implies" ("A" x) ("B" x)));
+        space.add(expr!("A" "Sam"));
+
+        let result = space.query(&expr!("," ("implies" ("B" x) z) ("implies" ("A" x) y) ("A" x)));
+        assert_eq!(result, vec![bind!{x: sym!("Sam"), y: expr!("B" "Sam"), z: expr!("C" "Sam")}]);
     }
 }
