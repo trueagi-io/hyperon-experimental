@@ -1,4 +1,5 @@
 from hyperon import *
+import os
 
 def match_op(space, pattern, templ_op):
     space = space.get_object().value
@@ -39,10 +40,33 @@ def print_op(atom):
     print(atom)
     return []
 
-def assertEqual_op(x, y):
-    if x == y:
-        return []
-    raise RuntimeError("\n" + str(x) + "\nis not equal to\n" + str(y))
+def assertResultsEqual(result, expected):
+    report = "Expected: " + str(expected) + "\nGot: " + str(result)
+    for r in result:
+        if not r in expected:
+            raise RuntimeError(report + "\nExcessive result: " + str(r))
+    for e in expected:
+        if not e in result:
+            raise RuntimeError(report + "\nMissed result: " + str(e))
+    if len(expected) != len(result):
+        # NOTE: (1 1 2) vs (1 2 2) will pass
+        raise RuntimeError(report + "\nDifferent number of eleemnt")
+    return []
+
+def newAssertEqualAtom(metta):
+    return OperationAtom(
+        'assertEqual',
+        lambda e1, e2: assertResultsEqual(interpret(metta.space, e1), interpret(metta.space, e2)),
+        [AtomType.ATOM, AtomType.ATOM, AtomType.ATOM],
+        unwrap=False)
+
+def newAssertEqualToResultAtom(metta):
+    return OperationAtom(
+        'assertEqualToResult',
+        lambda expr, expected: assertResultsEqual(interpret(metta.space, expr), expected.get_children()),
+        [AtomType.ATOM, AtomType.ATOM, AtomType.ATOM],
+        unwrap=False)
+
 
 #E(S('->'), S('Number'), S('Number'), S('Number'))
 subAtom = OperationAtom('-', lambda a, b: a - b, ['Number', 'Number', 'Number'])
@@ -55,7 +79,6 @@ lessAtom = OperationAtom('<', lambda a, b: a < b, ['Number', 'Number', 'Bool'])
 orAtom = OperationAtom('or', lambda a, b: a or b, ['Bool', 'Bool', 'Bool'])
 andAtom = OperationAtom('and', lambda a, b: a and b, ['Bool', 'Bool', 'Bool'])
 notAtom = OperationAtom('not', lambda a: not a, ['Bool', 'Bool'])
-assertEqualAtom = OperationAtom('assertEqual', assertEqual_op, unwrap=False)
 
 # Any number of arguments for `nop` (including zero) due to *args
 nopAtom = OperationAtom('nop', lambda *args: [], unwrap=False)
@@ -106,7 +129,9 @@ def import_op(metta, space, fname):
     #   during its processing, and will be lost after it,
     #   so we cannot import syntax this way - only spaces
     # (another operation is needed for importing syntax)
-    return MeTTa(space).import_file(fname.get_object().value)
+    metta2 = MeTTa(space)
+    metta2.cwd = metta.cwd # inherit current working directory
+    return metta2.import_file(fname.get_object().value)
 
 def newImportOp(metta):
     # unwrap=False, because space name can remain
@@ -135,11 +160,13 @@ def newCollapseAtom(metta):
     return OperationAtom(
         'collapse',
         lambda atom: [E(*interpret(metta.space, atom))],
-        ['Atom', 'Atom'],
+        [AtomType.ATOM, AtomType.ATOM],
         unwrap=False)
 
-def superpose_op(*args):
-    return [arg for arg in args]
+# `superpose` receives one atom (expression) in order to make composition
+# `(superpose (collapse ...))` possible
+def superpose_op(expr):
+    return [arg for arg in expr.get_children()]
 
 superposeAtom = OperationAtom('superpose', superpose_op, unwrap=False)
 
@@ -148,6 +175,7 @@ class MeTTa:
     def __init__(self, space=None):
         self.space = GroundingSpace("&self") if space is None else space
         self.tokenizer = Tokenizer()
+        self.cwd = [] # current working directory as an array
         self._tokenizer()
 
     def _tokenizer(self):
@@ -175,7 +203,8 @@ class MeTTa:
         self.add_token(r"call:[^\s]+", newCallAtom)
         self.add_atom(r"let", letAtom)
         self.add_atom(r"nop", nopAtom)
-        self.add_atom(r"assertEqual", assertEqualAtom)
+        self.add_atom(r"assertEqual", newAssertEqualAtom(self))
+        self.add_atom(r"assertEqualToResult", newAssertEqualToResultAtom(self))
         self.add_atom(r"println!", printAtom)
         self.add_atom(r"&self", SpaceAtom(self.space))
         self.add_atom(r"import!", newImportOp(self))
@@ -212,10 +241,17 @@ class MeTTa:
         return interpret(self.space, target)
 
     def import_file(self, fname):
-        f = open(fname, "r")
+        path = fname.split(os.sep)
+        f = open(os.sep.join(self.cwd + path), "r")
         program = f.read()
         f.close()
-        return self.run(program)
+        # changing cwd
+        prev_cwd = self.cwd
+        self.cwd += path[:-1]
+        result = self.run(program)
+        # restoring cwd
+        self.cwd = prev_cwd
+        return result
 
     def run(self, program):
         self.settings = {'type-check': None}

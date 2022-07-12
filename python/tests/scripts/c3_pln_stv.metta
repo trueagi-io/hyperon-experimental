@@ -46,6 +46,12 @@
   (stv 0.9 1.0)
 )
 
-!(TV (croaks Fritz))
-!(TV (frog Fritz))
-!(TV (green Fritz))
+!(assertEqual
+  (TV (croaks Fritz))
+  (stv 0.95 0.85))
+!(assertEqual
+  (TV (frog Fritz))
+  (stv 0.783 0.68))
+!(assertEqual
+  (TV (green Fritz))
+  (stv 0.7047 0.68))

@@ -4,15 +4,15 @@
 (Frog Sam)
 (= (frog $x) (match &self (Frog $x) T))
 ; `(Frog Sam)` is not reduced; it is just a declaration
-!(assertEqual
-  (Frog Sam)
-  (Frog Sam))
+!(assertEqualToResult
+   (Frog Sam)
+  ((Frog Sam)))
 ; `frog` uses this declaration
 !(assertEqual
   (frog Sam)
   T)
-!(assertEqual
-  (collapse (frog Fritz))
+!(assertEqualToResult
+  (frog Fritz)
   ())
 
 
@@ -44,8 +44,8 @@
 (= (And T T) T)
 
 !(assertEqual
-  (collapse (deduce (Evaluation (mortal Plato))))
-  (T))
+  (deduce (Evaluation (mortal Plato)))
+  T)
 
 ; TODO : Some variagles are not substituted
 (= (ift T $then) $then)

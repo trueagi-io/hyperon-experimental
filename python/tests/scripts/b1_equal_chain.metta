@@ -9,13 +9,18 @@
 ; The result $r is then evaluated in the same way
 ; until the match is not empty (if equality match is
 ; empty, the expression is evaluated to itself)
+; `assertEqual` compares (sets of) results of evaluation
+; of two expressions (both expressions can have empty
+; sets of results, so `assertEqualToResult` is safer)
 !(assertEqual
   (S K K x)
   x)
 
-!(assertEqual
-  (expression without known equalities)
-  (expression without known equalities))
+; Here, we use `assertEqualToResult` to make sure
+; that the expression is evaluated to itself
+!(assertEqualToResult
+   (expression without known equalities)
+  ((expression without known equalities)))
 
 
 ; Another example
@@ -37,6 +42,6 @@
 !(assertEqual
   (eq (S K K x) x)
   T)
-!(assertEqual
-  (eq Green Blue)
-  (eq Green Blue))
+!(assertEqualToResult
+   (eq Green Blue)
+  ((eq Green Blue)))
