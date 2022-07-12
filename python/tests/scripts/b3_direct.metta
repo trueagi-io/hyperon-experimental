@@ -18,8 +18,8 @@
 ; because we can do inference
 (= (ift T $then) $then)
 !(assertEqual
-  (collapse (ift (green $x) $x))
-  (Fritz))
+  (ift (green $x) $x)
+  Fritz)
 
 ; We can also use expressions with `=` in `match`
 ; TODO: for it to work now, we need to specify type of `=`
@@ -27,7 +27,6 @@
 ; NOTE: `=` is not an ordinary symbol, and declarative reasoning over expressions
 ; with it may work differently from that over purely symbolic expressions
 (: = (-> Atom Atom Atom))
-!(assertEqual
-  (collapse
-    (match &self (= ($p Fritz) T) $p))
+!(assertEqualToResult
+  (match &self (= ($p Fritz) T) $p)
   (croaks eat_flies))
