@@ -704,9 +704,10 @@ mod tests {
 
         assert_eq!(interpret(space.clone(), &expr!("eq" ("plus" "Z" n) n)),
             Ok(vec![expr!("True")]));
-        assert!(results_are_equivalent(
-            &interpret(space.clone(), &expr!("eq" ("plus" ("S" "Z") n) n)),
-            &Ok(vec![expr!("eq" ("S" y) y)])));
+        let actual = interpret(space.clone(), &expr!("eq" ("plus" ("S" "Z") n) n));
+        let expected = Ok(vec![expr!("eq" ("S" y) y)]);
+        assert!(results_are_equivalent(&actual, &expected),
+            "actual: {:?} and expected: {:?} are not equivalent", actual, expected);
     }
 
     fn test_interpret<T, R, P: Plan<T, R>>(plan: P, arg: T) -> Result<R, String> {

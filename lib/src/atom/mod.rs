@@ -93,7 +93,7 @@ fn next_variable_id() -> usize {
     NEXT_VARIABLE_ID.fetch_add(1, Ordering::Relaxed)
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct VariableAtom {
     name: String,
     id: usize,
@@ -217,8 +217,7 @@ pub trait Grounded : Display {
 
 pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matcher::MatchResultIter {
     match other.as_gnd::<T>() {
-        Some(other) if *this == *other => 
-            Box::new(std::iter::once(matcher::MatchResult::new())),
+        Some(other) if *this == *other => Box::new(std::iter::once(matcher::Bindings::new())),
         _ => Box::new(std::iter::empty()),
     }
 }
@@ -537,8 +536,8 @@ mod test {
                     }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
                         Box::new(acc.chain(i))
                     })
-                }).fold(Box::new(std::iter::once(MatchResult::new())),
-                    |acc, i| { matcher::match_result_product_iter(acc, i) })
+                }).fold(Box::new(std::iter::once(Bindings::new())),
+                    |acc, i| { matcher::match_result_product(acc, i) })
             } else {
                 Box::new(std::iter::empty())
             }
@@ -702,9 +701,8 @@ mod test {
         query.put(expr!(a), expr!({2} y));
         let query = expr!({query});
 
-        let result: Vec<MatchResult> = dict.match_(&query).collect();
-        assert_eq!(result, vec![MatchResult::from((bind!{},
-                    bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}))]);
+        let result: Vec<Bindings> = dict.match_(&query).collect();
+        assert_eq!(result, vec![bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}]);
     }
 
     #[test]
