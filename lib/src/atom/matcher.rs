@@ -9,7 +9,7 @@ macro_rules! bind {
 
 use super::*;
 
-use std::collections::{HashMap, BTreeMap};
+use std::collections::{HashMap, HashSet};
 use delegate::delegate;
 
 #[derive(Clone, PartialEq, Eq)]
@@ -72,7 +72,8 @@ impl Bindings {
     fn into_variable_matcher(self) -> VariableMatcher {
         let mut var_matcher = VariableMatcher::new();
         for (k, v) in self.0 {
-            var_matcher.add_var_binding(Var::Pattern(k), &v);
+            var_matcher.add_pattern_var(&k);
+            var_matcher.add_var_binding(&k, &v);
         }
         var_matcher
     }
@@ -111,35 +112,26 @@ impl Debug for Bindings {
     }
 }
 
-#[derive(Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-enum Var {
-    Data(VariableAtom),
-    Pattern(VariableAtom),
-}
-
-impl Display for Var {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Data(var) => write!(f, "_{}", var),
-            Self::Pattern(var) => write!(f, "{}", var),
-        }
-    }
-}
-
 // FIXME: rename to AtomMatcher?
 #[derive(Clone)]
 struct VariableMatcher {
     next_var_set: u32,
-    vars: BTreeMap<Var, u32>,
+    vars: HashMap<VariableAtom, u32>,
     values: HashMap<u32, Atom>,
+    pattern_vars: HashSet<VariableAtom>,
 }
 
 impl VariableMatcher {
     fn new() -> Self {
-        Self{ next_var_set: 0, vars: BTreeMap::new(), values: HashMap::new() }
+        Self {
+            next_var_set: 0,
+            vars: HashMap::new(),
+            values: HashMap::new(),
+            pattern_vars: HashSet::new(),
+        }
     }
 
-    fn get(&self, var: &Var) -> Option<Atom> {
+    fn get(&self, var: &VariableAtom) -> Option<Atom> {
         self.vars.get(var).and_then(|set|
             match self.values.get(set) {
                 Some(value) => self.resolve_atom_vars(value, var),
@@ -147,17 +139,13 @@ impl VariableMatcher {
             })
     }
 
-    fn resolve_atom_vars(&self, atom: &Atom, root: &Var) -> Option<Atom> {
+    fn resolve_atom_vars(&self, atom: &Atom, root: &VariableAtom) -> Option<Atom> {
         match atom {
-            // FIXME: excessive cloning here
-            Atom::Variable(var) if Var::Pattern(var.clone()) == *root => None,
+            Atom::Variable(var) if var == root => None, // loop detected
             Atom::Variable(var) => {
-                match self.get(&Var::Pattern(var.clone())) {
+                match self.get(var) {
                     Some(atom) => Some(atom.clone()),
-                    None => match self.get(&Var::Data(var.clone())) {
-                        Some(atom) => Some(atom.clone()),
-                        None => Some(atom.clone()),
-                    },
+                    None => Some(atom.clone()),
                 }
             }
             Atom::Expression(expr) => {
@@ -181,14 +169,17 @@ impl VariableMatcher {
         }
     }
 
-    fn add_vars_equality(self, data_var: &VariableAtom,
-            pattern_var: &VariableAtom) -> Option<Self> {
-        self.add_any_vars_equality(Var::Data(data_var.clone()),
-            Var::Pattern(pattern_var.clone()))
+    fn add_pattern_var(&mut self, var: &VariableAtom) {
+        self.pattern_vars.insert(var.clone());
     }
 
-    fn add_any_vars_equality(mut self, a: Var, b: Var) -> Option<Self> {
-        match (self.vars.get(&a).copied(), self.vars.get(&b).copied()) {
+    fn with_vars_equality(self, data_var: &VariableAtom,
+            pattern_var: &VariableAtom) -> Option<Self> {
+        self.add_any_vars_equality(data_var, pattern_var)
+    }
+
+    fn add_any_vars_equality(mut self, a: &VariableAtom, b: &VariableAtom) -> Option<Self> {
+        match (self.vars.get(a).copied(), self.vars.get(b).copied()) {
             (Some(a_var_set), Some(b_var_set))  =>
                 if a_var_set != b_var_set {
                     self.merge_var_sets(a_var_set, b_var_set)
@@ -196,24 +187,24 @@ impl VariableMatcher {
                     true
                 }
             (Some(var_set), None) => {
-                self.vars.insert(b, var_set);
+                self.vars.insert(b.clone(), var_set);
                 true
             },
             (None, Some(var_set)) => {
-                self.vars.insert(a, var_set);
+                self.vars.insert(a.clone(), var_set);
                 true
             },
             (None, None) => {
                 let var_set = self.get_next_var_set();
-                self.vars.insert(a, var_set);
-                self.vars.insert(b, var_set);
+                self.vars.insert(a.clone(), var_set);
+                self.vars.insert(b.clone(), var_set);
                 true
             },
         }.then(|| self)
     }
 
     fn merge_var_sets(&mut self, a_var_set: u32, b_var_set: u32) -> bool {
-        fn move_set(vars: &mut BTreeMap<Var, u32>, from: u32, to: u32) {
+        fn move_set(vars: &mut HashMap<VariableAtom, u32>, from: u32, to: u32) {
             vars.iter_mut().for_each(|(_var, set)| {
                 if *set == from {
                     *set = to;
@@ -221,6 +212,7 @@ impl VariableMatcher {
             });
         }
         match (self.values.get(&a_var_set), self.values.get(&b_var_set)) {
+            // FIXME: one more place for matching?
             (Some(a_val), Some(b_val)) if a_val != b_val => false,
             (Some(_), None) => {
                 move_set(&mut self.vars, b_var_set, a_var_set);
@@ -239,29 +231,26 @@ impl VariableMatcher {
         next_var_set
     }
 
+    // FIXME: replace by add_var_binding()
     fn with_data_binding(mut self, data_var: &VariableAtom, value: &Atom) -> Option<Self> {
-        self.add_var_binding(Var::Data(data_var.clone()), value).then(|| self)
+        self.add_var_binding(data_var, value).then(|| self)
     }
 
     fn with_pattern_binding(mut self, pattern_var: &VariableAtom, value: &Atom) -> Option<Self> {
-        self.add_var_binding(Var::Pattern(pattern_var.clone()), value).then(|| self)
+        self.add_var_binding(pattern_var, value).then(|| self)
     }
 
-    fn add_var_binding(&mut self, var: Var, value: &Atom) -> bool {
-        let value_is_from_pattern = matches!(var, Var::Data(_));
-        match self.vars.get(&var) {
+    // FIXME: should we pass by ref or by val here?
+    fn add_var_binding(&mut self, var: &VariableAtom, value: &Atom) -> bool {
+        match self.vars.get(var) {
             Some(var_set) =>
                 match self.values.get(var_set) {
                     Some(current) => {
                         if current == value {
                             true
                         } else {
-                            let sub_match = if value_is_from_pattern {
-                                match_atoms_recursively(current, value)
-                            } else {
-                                match_atoms_recursively(value, current)
-                            };
-                            let sub_match: Vec<VariableMatcher> = sub_match.collect();
+                            let sub_match: Vec<VariableMatcher> =
+                                match_atoms_recursively(current, value).collect();
                             assert!(sub_match.len() <= 1, concat!(
                                     "Case when sub_match returns more than ",
                                     "one matcher because match_() is overloaded ",
@@ -283,14 +272,14 @@ impl VariableMatcher {
                 },
             None => {
                 let var_set = self.get_next_var_set();
-                self.vars.insert(var, var_set);
+                self.vars.insert(var.clone(), var_set);
                 self.values.insert(var_set, value.clone());
                 true
             },
         }
     }
 
-    fn add_var_no_value(mut self, var: Var) -> Self {
+    fn add_var_no_value(mut self, var: VariableAtom) -> Self {
         if !self.vars.contains_key(&var) {
             let var_set = self.get_next_var_set();
             self.vars.insert(var, var_set);
@@ -299,16 +288,16 @@ impl VariableMatcher {
     }
 
     fn merge(a: &VariableMatcher, b: &VariableMatcher) -> Option<VariableMatcher> {
-        let mut var_sets: HashMap<u32, Var> = HashMap::new();
-        let result = b.vars.iter().fold(Some(a.clone()),
+        let mut var_sets: HashMap<u32, VariableAtom> = HashMap::new();
+        let mut result = b.vars.iter().fold(Some(a.clone()),
             |result, (var, set)| match result {
                 Some(mut result) => {
                     if let Some(first_var) = var_sets.get(&set) {
-                        result.add_any_vars_equality(first_var.clone(), var.clone())
+                        result.add_any_vars_equality(first_var, var)
                     } else {
                         var_sets.insert(*set, var.clone());
                         if let Some(value) = b.values.get(set) {
-                            result.add_var_binding(var.clone(), value).then(|| result)
+                            result.add_var_binding(var, value).then(|| result)
                         } else {
                             Some(result.add_var_no_value(var.clone()))
                         }
@@ -316,12 +305,17 @@ impl VariableMatcher {
                 },
                 None => None,
             });
+        result.iter_mut().for_each(|result| {
+            for var in &b.pattern_vars {
+                result.pattern_vars.insert(var.clone());
+            }
+        });
         log::trace!("VariableMatcher::merge: {} ^ {} -> {:?}", a, b, result);
         result
     }
 
-    fn vars_by_set(&self) -> HashMap<&u32, Vec<&Var>> {
-        let mut var_sets: HashMap<&u32, Vec<&Var>> = HashMap::new();
+    fn vars_by_set(&self) -> HashMap<&u32, Vec<&VariableAtom>> {
+        let mut var_sets: HashMap<&u32, Vec<&VariableAtom>> = HashMap::new();
         self.vars.iter().for_each(|(var, set)| {
             match var_sets.get_mut(set) {
                 Some(vec) => vec.push(var),
@@ -342,13 +336,12 @@ impl VariableMatcher {
                 },
             }
         }
-        for var in self.vars.keys().filter(|var| matches!(var, Var::Pattern(_))) {
-            match (var, self.get(var)) {
-                (Var::Pattern(var), Some(value)) => {
+        for var in self.vars.keys().filter(|var| self.pattern_vars.contains(var)) {
+            match self.get(var) {
+                Some(value) => {
                     bindings.insert(var.clone(), value.clone());
                 },
-                (Var::Pattern(_var), None) => return None,
-                _ => {},
+                None => return None,
             }
         }
         Some(bindings)
@@ -388,9 +381,24 @@ pub trait WithMatch {
 }
 
 impl WithMatch for Atom {
-    fn match_(&self, pattern: &Atom) -> MatchResultIter {
+    fn match_<'a>(&'a self, pattern: &'a Atom) -> MatchResultIter {
+        fn find_vars(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
+            match atom {
+                Atom::Variable(var) => { vars.insert(var.clone()); },
+                Atom::Expression(expr) => expr.children.iter()
+                    .for_each(|child| find_vars(child, vars)),
+                _ => {},
+            }
+        }
+        let mut pattern_vars = HashSet::new();
+        find_vars(pattern, &mut pattern_vars);
         Box::new(match_atoms_recursively(self, pattern)
-            .map(VariableMatcher::into_bindings)
+            .map(move |mut matcher| {
+                for x in &pattern_vars {
+                    matcher.add_pattern_var(&x);
+                }
+                matcher.into_bindings()
+            })
             .filter(Option::is_some).map(Option::unwrap))
     }
 }
@@ -404,9 +412,11 @@ fn match_atoms_recursively(data: &Atom, pattern: &Atom) -> VarMatchIter {
 
     match (data, pattern) {
         (Atom::Symbol(a), Atom::Symbol(b)) if a == b => once(VariableMatcher::new()),
-        (Atom::Grounded(a), Atom::Grounded(_)) => Box::new(a.match_(pattern).map(Bindings::into_variable_matcher)),
+        (Atom::Grounded(a), Atom::Grounded(_)) => {
+            Box::new(a.match_(pattern).map(Bindings::into_variable_matcher))
+        },
         (Atom::Variable(dv), Atom::Variable(pv)) => {
-            VariableMatcher::new().add_vars_equality(dv, pv).map_or(empty(), once)
+            VariableMatcher::new().with_vars_equality(dv, pv).map_or(empty(), once)
         }
         (Atom::Variable(v), b) => {
             VariableMatcher::new().with_data_binding(v, b).map_or(empty(), once)
@@ -691,12 +701,12 @@ mod test {
             vec![bind!{x: sym!("v"), y: sym!("v")}]);
     }
 
+    // FIXME: enable test
     #[ignore]
     #[test]
     fn match_replace_variable_via_data_variable() {
         assert_match(
-            expr!(a a),
-            expr!(x y),
+            expr!(a a), expr!(x y),
             vec![bind!{x: expr!(u0), y: expr!(u0)}]);
     }
 
@@ -708,6 +718,7 @@ mod test {
             vec![]);
     }
 
+    // FIXME: enable test
     #[ignore]
     #[test]
     fn match_variable_with_unique_itself() {
@@ -729,7 +740,6 @@ mod test {
         assert_ne!(bindings_a.get(&x), bindings_b.get(&x));
     }
 
-    #[ignore]
     #[test]
     fn match_equality_of_pattern_variables_inside_expression() {
         assert_match(
@@ -738,7 +748,6 @@ mod test {
             vec![bind!{x: expr!("v"), y: expr!(("v"))}]);
     }
 
-    #[ignore]
     #[test]
     fn match_equality_of_data_variables_inside_expression() {
         assert_match(
@@ -746,4 +755,75 @@ mod test {
             expr!( x    x   y),
             vec![bind!{x: expr!(("v")), y: expr!("v")}]);
     }
+
+    #[derive(PartialEq, Clone, Debug)]
+    struct TestDict(Vec<(Atom, Atom)>);
+
+    impl TestDict {
+        fn new() -> Self {
+            TestDict(Vec::new())
+        }
+        fn get(&self, key: &Atom) -> Option<&Atom> {
+            self.0.iter().filter(|(k, _)| { k == key }).nth(0).map(|(_, v)| { v })
+        }
+        fn remove(&mut self, key: &Atom) -> Option<Atom> {
+            let v = self.get(key).map(Atom::clone);
+            self.0 = self.0.drain(..).filter(|(k, _)| { k != key }).collect();
+            v
+        }
+        fn put(&mut self, key: Atom, value: Atom) -> Option<Atom> {
+            let v = self.remove(&key);
+            self.0.push((key, value));
+            v
+        }
+    }
+
+    impl Grounded for TestDict {
+        fn type_(&self) -> Atom {
+            Atom::sym("Dict")
+        }
+        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+            execute_not_executable(self)
+        }
+        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+            if let Some(other) = other.as_gnd::<TestDict>() {
+                other.0.iter().map(|(ko, vo)| {
+                    self.0.iter().map(|(k, v)| {
+                        Atom::expr(vec![k.clone(), v.clone()]).match_(&Atom::expr(vec![ko.clone(), vo.clone()]))
+                    }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
+                        Box::new(acc.chain(i))
+                    })
+                }).fold(Box::new(std::iter::once(Bindings::new())),
+                    |acc, i| { matcher::match_result_product(acc, i) })
+            } else {
+                Box::new(std::iter::empty())
+            }
+        }
+    }
+    
+    impl Display for TestDict {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "{{ ").and_then(|_| self.0.iter().fold(Ok(()),
+                |ret, (key, val)| ret.and_then(
+                    |_| write!(f, "{}: {}, ", key, val))))
+                .and_then(|_| write!(f, "}}"))
+        }
+    }
+
+    #[test]
+    fn match_atoms_with_custom_matcher_implementation() {
+        let mut dict = TestDict::new();
+        dict.put(expr!("x"), expr!({2} {5}));
+        dict.put(expr!("y"), expr!({5}));
+        let dict = expr!({dict}); 
+
+        let mut query = TestDict::new();
+        query.put(expr!(b), expr!(y));
+        query.put(expr!(a), expr!({2} y));
+        let query = expr!({query});
+
+        let result: Vec<Bindings> = dict.match_(&query).collect();
+        assert_eq!(result, vec![bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}]);
+    }
+
 }
