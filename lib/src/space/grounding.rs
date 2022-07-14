@@ -96,7 +96,7 @@ impl GroundingSpace {
                 let vars = collect_variables(&pattern);
                 let mut result = args.fold(vec![bind!{}],
                     |mut acc, pattern| {
-                        if acc.is_empty() {
+                        let result = if acc.is_empty() {
                             acc
                         } else {
                             acc.drain(0..).flat_map(|prev| -> Vec<Bindings> {
@@ -109,7 +109,9 @@ impl GroundingSpace {
                                         .expect("Self consistent bindings are expected"))
                                     .collect()
                             }).collect()
-                        }
+                        };
+                        log::debug!("query: current result: {:?}", result);
+                        result
                     });
                 result.iter_mut().for_each(|bindings| bindings.filter(|k, _v| vars.contains(k)));
                 result

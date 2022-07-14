@@ -69,13 +69,13 @@ impl Bindings {
         self.0 = self.0.drain().filter(|(k, v)| pred(k, v)).collect();
     }
 
-    fn into_variable_matcher(self) -> VariableMatcher {
-        let mut var_matcher = VariableMatcher::new();
+    fn into_variable_match(self) -> VariableMatch {
+        let mut var_match = VariableMatch::new();
         for (k, v) in self.0 {
-            var_matcher.add_pattern_var(&k);
-            var_matcher.add_var_binding(&k, &v);
+            var_match.add_pattern_var(&k);
+            var_match.add_var_binding(&k, &v);
         }
-        var_matcher
+        var_match
     }
 }
 
@@ -112,16 +112,15 @@ impl Debug for Bindings {
     }
 }
 
-// FIXME: rename to AtomMatcher?
 #[derive(Clone)]
-struct VariableMatcher {
+struct VariableMatch {
     next_var_set: u32,
     vars: HashMap<VariableAtom, u32>,
     values: HashMap<u32, Atom>,
     pattern_vars: HashSet<VariableAtom>,
 }
 
-impl VariableMatcher {
+impl VariableMatch {
     fn new() -> Self {
         Self {
             next_var_set: 0,
@@ -173,12 +172,11 @@ impl VariableMatcher {
         self.pattern_vars.insert(var.clone());
     }
 
-    fn with_vars_equality(self, data_var: &VariableAtom,
-            pattern_var: &VariableAtom) -> Option<Self> {
-        self.add_any_vars_equality(data_var, pattern_var)
+    fn with_var_equality(mut self, a: &VariableAtom, b: &VariableAtom) -> Option<Self> {
+        self.add_var_equality(a, b).then(|| self)
     }
 
-    fn add_any_vars_equality(mut self, a: &VariableAtom, b: &VariableAtom) -> Option<Self> {
+    fn add_var_equality(&mut self, a: &VariableAtom, b: &VariableAtom) -> bool {
         match (self.vars.get(a).copied(), self.vars.get(b).copied()) {
             (Some(a_var_set), Some(b_var_set))  =>
                 if a_var_set != b_var_set {
@@ -200,7 +198,7 @@ impl VariableMatcher {
                 self.vars.insert(b.clone(), var_set);
                 true
             },
-        }.then(|| self)
+        }
     }
 
     fn merge_var_sets(&mut self, a_var_set: u32, b_var_set: u32) -> bool {
@@ -231,16 +229,10 @@ impl VariableMatcher {
         next_var_set
     }
 
-    // FIXME: replace by add_var_binding()
-    fn with_data_binding(mut self, data_var: &VariableAtom, value: &Atom) -> Option<Self> {
-        self.add_var_binding(data_var, value).then(|| self)
+    fn with_var_binding(mut self, var: &VariableAtom, value: &Atom) -> Option<Self> {
+        self.add_var_binding(var, value).then(|| self)
     }
 
-    fn with_pattern_binding(mut self, pattern_var: &VariableAtom, value: &Atom) -> Option<Self> {
-        self.add_var_binding(pattern_var, value).then(|| self)
-    }
-
-    // FIXME: should we pass by ref or by val here?
     fn add_var_binding(&mut self, var: &VariableAtom, value: &Atom) -> bool {
         match self.vars.get(var) {
             Some(var_set) =>
@@ -249,14 +241,14 @@ impl VariableMatcher {
                         if current == value {
                             true
                         } else {
-                            let sub_match: Vec<VariableMatcher> =
+                            let sub_match: Vec<VariableMatch> =
                                 match_atoms_recursively(current, value).collect();
                             assert!(sub_match.len() <= 1, concat!(
                                     "Case when sub_match returns more than ",
                                     "one matcher because match_() is overloaded ",
                                     "inside grounded atom is not implemented yet"));
                             if sub_match.len() == 1 {
-                                match VariableMatcher::merge(self, &sub_match[0]) {
+                                match VariableMatch::merge(self, &sub_match[0]) {
                                     Some(sub_match) => { *self = sub_match; true },
                                     None => false,
                                 }
@@ -287,17 +279,17 @@ impl VariableMatcher {
         self
     }
 
-    fn merge(a: &VariableMatcher, b: &VariableMatcher) -> Option<VariableMatcher> {
+    fn merge(a: &VariableMatch, b: &VariableMatch) -> Option<VariableMatch> {
         let mut var_sets: HashMap<u32, VariableAtom> = HashMap::new();
         let mut result = b.vars.iter().fold(Some(a.clone()),
             |result, (var, set)| match result {
-                Some(mut result) => {
+                Some(result) => {
                     if let Some(first_var) = var_sets.get(&set) {
-                        result.add_any_vars_equality(first_var, var)
+                        result.with_var_equality(first_var, var)
                     } else {
                         var_sets.insert(*set, var.clone());
                         if let Some(value) = b.values.get(set) {
-                            result.add_var_binding(var, value).then(|| result)
+                            result.with_var_binding(var, value)
                         } else {
                             Some(result.add_var_no_value(var.clone()))
                         }
@@ -310,7 +302,7 @@ impl VariableMatcher {
                 result.pattern_vars.insert(var.clone());
             }
         });
-        log::trace!("VariableMatcher::merge: {} ^ {} -> {:?}", a, b, result);
+        log::trace!("VariableMatch::merge: {} ^ {} -> {:?}", a, b, result);
         result
     }
 
@@ -348,27 +340,27 @@ impl VariableMatcher {
     }
 }
 
-impl Display for VariableMatcher {
+impl Display for VariableMatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let vars_by_set = self.vars_by_set();
-        // FIXME: rewrite in procedural style
-        write!(f, "{{")
-            .and_then(|_| vars_by_set.iter().take(1).fold(Ok(()),
-                |res, (set, vars)| vars.iter().fold(res,
-                    |res, var| res.and_then(|_| write!(f, "{} = ", var)))
-                .and_then(|_| write!(f, "{}", self.values.get(set)
-                        .map_or(&sym!("?"), std::convert::identity)))))
-            .and_then(|_| vars_by_set.iter().skip(1).fold(Ok(()),
-                |res, (set, vars)| write!(f, ", ")
-                .and_then(|_| vars.iter().fold(res,
-                        |res, var| res.and_then(|_| write!(f, "{} = ", var)))
-                    .and_then(|_| write!(f, "{}", self.values.get(set)
-                            .map_or(&sym!("?"), std::convert::identity))))))
-            .and_then(|_| write!(f, "}}"))
+        write!(f, "{{ ")?;
+        for (i, (set, vars)) in vars_by_set.iter().enumerate() {
+            let prefix = if i == 0 { "" } else { ", " };
+            write!(f, "{}", prefix)?;
+            for (i, var) in vars.iter().enumerate() {
+                let prefix = if i == 0 { "" } else { " = " };
+                write!(f, "{}{}", prefix, var)?;
+            }
+            match self.values.get(set) {
+                Some(value) => write!(f, " = {}", value)?,
+                None => {},
+            }
+        }
+        write!(f, " }}")
     }
 }
 
-impl Debug for VariableMatcher {
+impl Debug for VariableMatch {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(self, f)
     }
@@ -403,31 +395,30 @@ impl WithMatch for Atom {
     }
 }
 
-type VarMatchIter = Box<dyn Iterator<Item=VariableMatcher>>;
+type VarMatchIter = Box<dyn Iterator<Item=VariableMatch>>;
 
 fn match_atoms_recursively(data: &Atom, pattern: &Atom) -> VarMatchIter {
     log::trace!("match_atoms_recursively: {} ~ {}", data, pattern);
     fn empty() -> VarMatchIter { Box::new(std::iter::empty()) }
-    fn once(b: VariableMatcher) -> VarMatchIter { Box::new(std::iter::once(b)) }
+    fn once(b: VariableMatch) -> VarMatchIter { Box::new(std::iter::once(b)) }
 
     match (data, pattern) {
-        (Atom::Symbol(a), Atom::Symbol(b)) if a == b => once(VariableMatcher::new()),
+        (Atom::Symbol(a), Atom::Symbol(b)) if a == b => once(VariableMatch::new()),
         (Atom::Grounded(a), Atom::Grounded(_)) => {
-            Box::new(a.match_(pattern).map(Bindings::into_variable_matcher))
+            Box::new(a.match_(pattern).map(Bindings::into_variable_match))
         },
         (Atom::Variable(dv), Atom::Variable(pv)) => {
-            VariableMatcher::new().with_vars_equality(dv, pv).map_or(empty(), once)
+            VariableMatch::new().with_var_equality(dv, pv).map_or(empty(), once)
         }
         (Atom::Variable(v), b) => {
-            VariableMatcher::new().with_data_binding(v, b).map_or(empty(), once)
+            VariableMatch::new().with_var_binding(v, b).map_or(empty(), once)
         }
         (a, Atom::Variable(v)) => {
-            VariableMatcher::new().with_pattern_binding(v, a).map_or(empty(), once)
+            VariableMatch::new().with_var_binding(v, a).map_or(empty(), once)
         },
         (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b }))
                 if a.len() == b.len() => {
-            // FIXME: how to log it properly?
-            a.iter().zip(b.iter()).fold(once(VariableMatcher::new()),
+            a.iter().zip(b.iter()).fold(once(VariableMatch::new()),
                 |acc, (a, b)| {
                     variable_matcher_product(acc, match_atoms_recursively(a, b))
                 })
@@ -437,9 +428,9 @@ fn match_atoms_recursively(data: &Atom, pattern: &Atom) -> VarMatchIter {
 }
 
 fn variable_matcher_product(prev: VarMatchIter, next: VarMatchIter) -> VarMatchIter {
-    let next : Vec<VariableMatcher> = next.collect();
-    Box::new(prev.flat_map(move |p| -> Vec<Option<VariableMatcher>> {
-        next.iter().map(|n| VariableMatcher::merge(&p, n)).collect()
+    let next : Vec<VariableMatch> = next.collect();
+    Box::new(prev.flat_map(move |p| -> Vec<Option<VariableMatch>> {
+        next.iter().map(|n| VariableMatch::merge(&p, n)).collect()
     }).filter(Option::is_some).map(Option::unwrap))
 }
 
@@ -571,7 +562,6 @@ fn atom_contains_variable(atom: &Atom, var: &VariableAtom) -> bool {
 }
 
 pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bindings, ()> {
-    // FIXME: try removing this method
     let mut res = Bindings::new();
     for (key, value) in to {
         let applied = apply_bindings_to_atom(value, from);
@@ -615,9 +605,31 @@ fn atoms_are_equivalent_with_bindings(first: &Atom, second: &Atom,
 mod test {
     use super::*;
 
+    fn binding_eq(actual: &Bindings, expected: &Bindings) -> bool {
+        let actual_keys: HashSet<&VariableAtom> = actual.0.keys().collect();
+        let expected_keys: HashSet<&VariableAtom> = expected.0.keys().collect();
+        if actual_keys != expected_keys {
+            return false;
+        } 
+        let mut direct_bindings = Bindings::new();
+        let mut reverse_bindings = Bindings::new();
+        for (k, v) in actual {
+            if !atoms_are_equivalent_with_bindings(v, expected.get(k).unwrap(),
+                    &mut direct_bindings, &mut reverse_bindings) {
+                return false;
+            }
+        }
+        true
+    }
+
     fn assert_match(data: Atom, pattern: Atom, expected: Vec<Bindings>) {
         let actual: Vec<Bindings> = data.match_(&pattern).collect();
-        assert_eq!(actual, expected);
+        assert_eq!(actual.len(), expected.len(), "Actual and expected has different number of results:\n  actual: {:?}\nexpected: {:?}", actual, expected);
+        for (actual, expected) in actual.iter().zip(expected.iter()) {
+            if !binding_eq(actual, expected) {
+                assert!(false, "Bindings are different:\n  actual: {}\nexpected: {}", actual, expected);
+            }
+        }
     }
 
     #[test]
@@ -701,12 +713,11 @@ mod test {
             vec![bind!{x: sym!("v"), y: sym!("v")}]);
     }
 
-    // FIXME: enable test
-    #[ignore]
     #[test]
     fn match_replace_variable_via_data_variable() {
         assert_match(
-            expr!(a a), expr!(x y),
+            expr!(a a),
+            expr!(x y),
             vec![bind!{x: expr!(u0), y: expr!(u0)}]);
     }
 
@@ -718,8 +729,6 @@ mod test {
             vec![]);
     }
 
-    // FIXME: enable test
-    #[ignore]
     #[test]
     fn match_variable_with_unique_itself() {
         assert_match(
@@ -826,4 +835,14 @@ mod test {
         assert_eq!(result, vec![bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}]);
     }
 
+    #[ignore = "Requires sorting inside VariableMatch to be stable"]
+    #[test]
+    fn variable_match_display() {
+        let mut var_match = VariableMatch::new();
+        var_match.add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"));
+        var_match.add_var_binding(&VariableAtom::new("b"), &Atom::sym("v"));
+        var_match.add_var_equality(&VariableAtom::new("c"), &VariableAtom::new("d"));
+        
+        assert_eq!(var_match.to_string(), "{ $a = $b = v, $c = $d }");
+    }
 }
