@@ -201,6 +201,20 @@ impl VariableMatch {
         }
     }
 
+    fn match_values(&self, current: &Atom, value: &Atom) -> Option<VariableMatch> {
+        let sub_match: Vec<VariableMatch> =
+            match_atoms_recursively(current, value).collect();
+        assert!(sub_match.len() <= 1, concat!(
+                "Case when sub_match returns more than ",
+                "one matcher because match_() is overloaded ",
+                "inside grounded atom is not implemented yet"));
+        if sub_match.len() == 1 {
+            VariableMatch::merge(self, &sub_match[0])
+        } else {
+            None
+        }
+    }
+
     fn merge_var_sets(&mut self, a_var_set: u32, b_var_set: u32) -> bool {
         fn move_set(vars: &mut HashMap<VariableAtom, u32>, from: u32, to: u32) {
             vars.iter_mut().for_each(|(_var, set)| {
@@ -210,8 +224,12 @@ impl VariableMatch {
             });
         }
         match (self.values.get(&a_var_set), self.values.get(&b_var_set)) {
-            // FIXME: one more place for matching?
-            (Some(a_val), Some(b_val)) if a_val != b_val => false,
+            (Some(a_val), Some(b_val)) => {
+                match self.match_values(a_val, b_val) {
+                    Some(result) => { *self = result; true },
+                    None => false,
+                }
+            },
             (Some(_), None) => {
                 move_set(&mut self.vars, b_var_set, a_var_set);
                 true
@@ -238,23 +256,9 @@ impl VariableMatch {
             Some(var_set) =>
                 match self.values.get(var_set) {
                     Some(current) => {
-                        if current == value {
-                            true
-                        } else {
-                            let sub_match: Vec<VariableMatch> =
-                                match_atoms_recursively(current, value).collect();
-                            assert!(sub_match.len() <= 1, concat!(
-                                    "Case when sub_match returns more than ",
-                                    "one matcher because match_() is overloaded ",
-                                    "inside grounded atom is not implemented yet"));
-                            if sub_match.len() == 1 {
-                                match VariableMatch::merge(self, &sub_match[0]) {
-                                    Some(sub_match) => { *self = sub_match; true },
-                                    None => false,
-                                }
-                            } else {
-                                false
-                            }
+                        match self.match_values(current, value) {
+                            Some(result) => { *self = result; true },
+                            None => false,
                         }
                     },
                     None => {
@@ -762,6 +766,14 @@ mod test {
         assert_match(
             expr!((a) ("v") a),
             expr!( x    x   y),
+            vec![bind!{x: expr!(("v")), y: expr!("v")}]);
+    }
+
+    #[test]
+    fn match_match_values_when_merging_two_variable_sets() {
+        assert_match(
+            expr!((a)  b   b a),
+            expr!( x ("v") x y),
             vec![bind!{x: expr!(("v")), y: expr!("v")}]);
     }
 
