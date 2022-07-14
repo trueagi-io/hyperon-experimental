@@ -79,3 +79,7 @@ class MeTTaTest(unittest.TestCase):
         self.process_exceptions(MeTTa().import_file("scripts/b3_direct.metta"))
         self.process_exceptions(MeTTa().import_file("scripts/b4_nondeterm.metta"))
         self.process_exceptions(MeTTa().import_file("scripts/b5_types_prelim.metta"))
+        self.process_exceptions(MeTTa().import_file("scripts/c1_grounded_basic.metta"))
+        self.process_exceptions(MeTTa().import_file("scripts/c2_spaces.metta"))
+        self.process_exceptions(MeTTa().import_file("scripts/c3_pln_stv.metta"))
+

@@ -20,14 +20,13 @@
      (ConceptNode "Fritz")
      (ConceptNode "flies")))
 
-!(assertEqual
-  (collapse
-    (match &self
-      (EvaluationLink
-        (PredicateNode "eats")
-          (ListLink
-            $x
-            (ConceptNode "flies")))
-       $x))
+!(assertEqualToResult
+  (match &self
+    (EvaluationLink
+      (PredicateNode "eats")
+        (ListLink
+          $x
+          (ConceptNode "flies")))
+     $x)
   ((ConceptNode "Sam")
    (ConceptNode "Fritz")))

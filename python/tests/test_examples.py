@@ -6,35 +6,6 @@ from test_common import *
 
 class ExamplesTest(unittest.TestCase):
 
-    def test_create_semantic_triple(self):
-        metta = MeTTa()
-        kb = metta.space
-
-        metta.add_parse('''
-            (obj make pottery)
-            (from make clay)
-        ''')
-        # Test a custom symbol for the space as well
-        metta.add_atom("&kb", SpaceAtom(kb, "&kb"))
-
-        result = metta.interpret('''
-            (match &kb (obj $verb $var0)
-                (match &kb (from $verb $var1) (make_from $var0 $var1)))
-        ''')
-        self.assertEqual(metta.parse_all('(make_from pottery clay)'), result)
-
-    def test_grounded_arithmetics(self):
-        metta = MeTTa()
-
-        metta.add_parse('''
-            (= (foo $a $b) (* (+ $a $b) (+ $a $b)))
-        ''')
-
-        self.assertEqual([ValueAtom(49)],
-                metta.interpret('(foo 3 4)'))
-        # self.assertEqual(ValueAtom('Hello world'),
-        #         metta.interpret("(+ 'Hello ' 'world')"))
-
     def test_grounded_functions(self):
         metta = MeTTa()
         obj = SomeObject()
@@ -143,29 +114,6 @@ class ExamplesTest(unittest.TestCase):
 
         self.assertEqual(metta.parse_all('(= (Fritz green) True)'),
                 metta.interpret('(if ($x frog) (= ($x green) True) nop)'))
-
-    def test_subset_sum_problem(self):
-        metta = MeTTa()
-
-        metta.add_parse('''
-           (: if (-> Bool Atom Atom Atom))
-           (= (if True $then $else) $then)
-           (= (if False $then $else) $else)
-
-           (= (bin) 0)
-           (= (bin) 1)
-           (= (gen $n) (if (> $n 0) (:: (bin) (gen (- $n 1))) nil))
-
-           (= (subsum nil nil) 0)
-           (= (subsum (:: $x $xs) (:: $b $bs)) (+ (* $x $b) (subsum $xs $bs)))
-        ''')
-
-        output = metta.interpret('''
-            (let $t (gen 3)
-                 (if (== (subsum (:: 3 (:: 5 (:: 7 nil))) $t) 8) $t (nop)))
-            ''')
-        expected = metta.parse_all('(:: 1 (:: 1 (:: 0 nil)))')
-        self.assertEqual(output, expected)
 
     def test_infer_function_application_type(self):
         metta = MeTTa()

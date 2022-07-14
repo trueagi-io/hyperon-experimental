@@ -10,8 +10,8 @@
 
 ; `(Add S Z)` will be reduced to `S` without type definitions
 !(assertEqual
-  (collapse (Add S Z))
-  (S))
+  (Add S Z)
+  S)
 
 ; Adding type definitions. Arrow is a built-in symbol of the type system
 ; `Nat` is a custom symbol
@@ -19,25 +19,25 @@
 (: S (-> Nat Nat))
 (: Add (-> Nat Nat Nat))
 ; Now the result of its evaluation will be empty, because `S` is not `Nat`
-!(assertEqual
-  (collapse (Add S Z))
+!(assertEqualToResult
+  (Add S Z)
   ())
 ; This will still work, because `Something` is of undefined type,
 ; and it might be `Nat`
 !(assertEqual
-  (collapse (Add Something Z))
-  (Something))
+  (Add Something Z)
+  Something)
 ; This should work normally
 !(assertEqual
-  (collapse (Add Z (S Z)))
-  ((S Z)))
+  (Add Z (S Z))
+  (S Z))
 
 ; Types can be nondeterministic
 ; The following will be accepted by the interpreter
 (: Ten Nat)
 (: Ten Int)
-!(assertEqual
-  (collapse (Add Z Ten))
+!(assertEqualToResult
+   (Add Z Ten)
   ((Add Z Ten)))
 
 ; Types can be parameterized
@@ -45,12 +45,12 @@
 (: Nil (List $t))
 (: Cons (-> $t (List $t) (List $t)))
 ; This list is well typed and evaluated to itself
-!(assertEqual
-  (collapse (Cons (S Z) (Cons Z Nil)))
+!(assertEqualToResult
+   (Cons (S Z) (Cons Z Nil))
   ((Cons (S Z) (Cons Z Nil))))
 ; This list is badly typed
-!(assertEqual
-  (collapse (Cons S (Cons Z Nil)))
+!(assertEqualToResult
+  (Cons S (Cons Z Nil))
   ())
 
 ; Another example
@@ -59,15 +59,15 @@
 (= (eq $x $x) T)
 ; Accepted and reduced
 !(assertEqual
-  (collapse (eq (Add Z Z) Z))
-  (T))
+  (eq (Add Z Z) Z)
+  T)
 ; Accepted, not reduced
-!(assertEqual
-  (collapse (eq Z (S Z)))
+!(assertEqualToResult
+   (eq Z (S Z))
   ((eq Z (S Z))))
 ; Not accepted
-!(assertEqual
-  (collapse (eq Z S))
+!(assertEqualToResult
+  (eq Z S)
   ())
 
 ; Type (symbols) are not prohibited from being elements
@@ -81,18 +81,14 @@
 (: of-same-type (-> $t $t Type))
 (= (of-same-type $x $y) T)
 !(assertEqual
-  (collapse
-    (of-same-type Color Shape))
-  (T))
+  (of-same-type Color Shape)
+  T)
 !(assertEqual
-  (collapse
-    (of-same-type Green Red))
-  (T))
-!(assertEqual
-  (collapse
-    (of-same-type Green Color))
+  (of-same-type Green Red)
+  T)
+!(assertEqualToResult
+  (of-same-type Green Color)
   ())
-!(assertEqual
-  (collapse
-    (of-same-type Green Circle))
+!(assertEqualToResult
+  (of-same-type Green Circle)
   ())

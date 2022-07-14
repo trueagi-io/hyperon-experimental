@@ -19,6 +19,6 @@ class NondetermTest(unittest.TestCase):
         metta.add_parse('''
             (= (f $x) (+ $x 1))
         ''')
-        self.assertEqual(metta.interpret("(f (superpose 1 2))"),
+        self.assertEqual(metta.interpret("(f (superpose (1 2)))"),
                          metta.parse_all("2 3"))
 

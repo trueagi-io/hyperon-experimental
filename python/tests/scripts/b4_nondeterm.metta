@@ -21,39 +21,30 @@
 !(assertEqual
   (collapse (color))
   (green yellow red))
+; Instead of collapsing the result of nondeterministic expression,
+; one can create a nondeterministic result with `superpose`
+!(assertEqual
+  (color)
+  (superpose (green yellow red)))
 
 ; However, if the equality query returns an empty result
 ; the interpreter doesn't reduce a symbolic expression
 !(assertEqual
   (collapse (shape))
   ((shape)))
-; Symbolic expressions, which are evaluated to one result,
-; can be asserted without `collapse`
-!(assertEqual
-  (shape)
-  (shape))
+!(assertEqualToResult
+   (shape)
+  ((shape)))
+
 
 ; If the expression is composed over nondeterministic
 ; expressions, all combinations will be produced
 (= (bin) A)
 (= (bin) B)
 (= (pair $x $y) ($x $y))
-!(assertEqual
-  (collapse (pair (bin) (bin)))
+!(assertEqualToResult
+  (pair (bin) (bin))
   ((A A) (A B) (B A) (B B)))
-
-; NOTE: in the current implementation of assertEqual,
-; it will also be called on all pairs of evaluation
-; results of its arguments, and it will raise exception
-; if any pair is not equal.
-; NOTE: if one of evaluation results is empty, there will
-; be no exception, because empty result of subexpression
-; causes the interpreter to return empty result for the
-; whole expression (i.e. to abandon this execution branch)
-; unless this behavior is not modified
-!(assertEqual
-  (match &self (= (shape) $x) $x)
-  (anything can be here))
 
 ; For the ordinary symbolic expression, if its subexpressions
 ; are nondeterministic, and no reduction rule is available
@@ -67,15 +58,14 @@
 (= (find-equal $x $y)
    (match &self (= (eq $x $y) T) $x))
 !(assertEqual
-   (collapse (find-equal (color) (foo)))
-   (red))
+   (find-equal (color) (foo))
+   red)
 
 ; One can pass nondeterministic expressions to an ordinary
 ; function and get multiple results.
-; `superpose` turns its arguments into a nondeterministic result.
 (= (rev $x $y) ($y $x))
-!(assertEqual
-  (collapse (rev A (superpose B C D)))
+!(assertEqualToResult
+  (rev A (superpose (B C D)))
   ((B A) (C A) (D A)))
 
 ; Extended example
