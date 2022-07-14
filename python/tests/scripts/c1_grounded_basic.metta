@@ -7,6 +7,14 @@
   (18.5))
 
 !(assertEqualToResult
+  (- 8 (/ 4 6.4))
+  (7.375))
+
+!(assertEqualToResult
+  (% 21 17)
+  (4))
+
+!(assertEqualToResult
   (< 4 (+ 2 (* 3 5)))
   (True))
 
