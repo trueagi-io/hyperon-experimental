@@ -70,7 +70,7 @@ use crate::space::grounding::*;
 use crate::common::collections::ListMap;
 use crate::metta::*;
 use crate::metta::types::{is_func, get_arg_types, check_type_bindings,
-    get_reducted_types, match_reducted_types};
+    get_atom_types, match_reducted_types};
 
 use std::ops::Deref;
 use std::rc::Rc;
@@ -310,7 +310,7 @@ fn cast_atom_to_type_plan(context: InterpreterContextRef,
 
 fn get_type_of_atom_plan(context: InterpreterContextRef, atom: Atom) -> StepResult<Vec<Atom>> {
     // TODO: implement this via interpreting of the (:? atom)
-    StepResult::ret(get_reducted_types(&context.space, &atom))
+    StepResult::ret(get_atom_types(&context.space, &atom))
 }
 
 fn interpret_expression_as_type_plan(context: InterpreterContextRef,
