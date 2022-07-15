@@ -77,6 +77,7 @@ pub struct SymbolAtom {
 impl SymbolAtom {
     /// Constructs new symbol from `name`. Not intended to be used directly,
     /// use [sym!] or [Atom::sym] instead.
+    #[doc(hidden)]
     pub const fn new(name: ImmutableString) -> Self {
         Self{ name }
     }
@@ -104,6 +105,7 @@ pub struct ExpressionAtom {
 impl ExpressionAtom {
     /// Constructs new expression from vector of sub-atoms. Not intended to be
     /// used directly, use [Atom::expr] instead.
+    #[doc(hidden)]
     fn new(children: Vec<Atom>) -> Self {
         Self{ children }
     }
@@ -296,11 +298,11 @@ pub trait GroundedAtom : mopa::Any + Debug + Display + Sync {
 
 mopafy!(GroundedAtom);
 
-/// Trait allows implementing fully custom behaviour of the grounded atom.
-/// One can use [rust_type_atom], [match_by_equality] and [execute_not_executable]
-/// functions to implement default behavior. If no custom behavior
-/// is required it is simpler to use [Atom::value] function for automatic
-/// grounding.
+/// Trait allows implementing grounded atom with custom behaviour.
+/// [rust_type_atom], [match_by_equality] and [execute_not_executable]
+/// functions can be used to implement default behavior if requried.
+/// If no custom behavior is needed it is simpler to use [Atom::value]
+/// function for automatic grounding.
 ///
 /// # Examples
 ///
@@ -339,11 +341,11 @@ mopafy!(GroundedAtom);
 ///
 /// println!("{}", gnd.type_());
 ///
+/// assert_eq!(atom.to_string(), "MyGrounded");
+/// assert_ne!(atom, Atom::sym("MyGrounded"));
 /// assert_eq!(gnd.execute(&mut vec![]), Err("Grounded atom is not executable: MyGrounded".into()));
 /// assert_eq!(atom.match_(&other).collect::<Vec<Bindings>>(), vec![Bindings::new()]);
 /// assert_eq!(atom, other);
-/// assert_eq!(atom.to_string(), "MyGrounded");
-/// assert_ne!(atom, Atom::sym("MyGrounded"));
 /// ```
 ///
 pub trait Grounded : Display {
@@ -530,35 +532,133 @@ impl Clone for Box<dyn GroundedAtom> {
 
 // Atom enum
 
+/// Atom are main components of the atomspace. There are four meta-types of
+/// atoms: symbol, expression, variable and grounded.
 #[derive(Clone)]
 pub enum Atom {
+    /// Symbol represents some idea or concept. Two symbols having
+    /// the same name are considered equal and represent the same concept. Name
+    /// of the symbol can be arbitrary string. Use [Atom::sym] to construct
+    /// new symbol.
     Symbol(SymbolAtom),
+
+    /// An expression which may encapsulate other atoms including other
+    /// expressions. Use [Atom::expr] to construct new expression.
     Expression(ExpressionAtom),
+
+    /// Variable is used to create patterns. Such pattern can be matched with
+    /// other atom to assign some specific binding to the variable. Use
+    /// [Atom::Variable] to construct new variable.
     Variable(VariableAtom),
+
+    /// Grounded atom represents sub-symbolic data in the atomspace. It may
+    /// contain any binary object, for example operation, collection or value.
+    /// Grounded value type creator can define custom type, execution and
+    /// matching logic for the value (see [Grounded]). Use [Atom::gnd] and
+    /// [Atom::value] to construct new grounded atom.
     Grounded(Box<dyn GroundedAtom>),
 }
 
 impl Atom {
+    /// Constructs new symbol atom with given `name`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::Atom;
+    ///
+    /// let a = Atom::sym("A");
+    /// let aa = Atom::sym("A");
+    /// let b = Atom::sym("B");
+    ///
+    /// assert_eq!(a.to_string(), "A");
+    /// assert_eq!(a, aa);
+    /// assert_ne!(a, b);
+    /// ```
     pub fn sym<T: Into<String>>(name: T) -> Self {
         Self::Symbol(SymbolAtom::new(ImmutableString::Allocated(name.into())))
     }
 
+    /// Constructs expression from array of children.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::Atom;
+    ///
+    /// let expr = Atom::expr([Atom::sym("a"), Atom::sym("b")]);
+    /// let same_expr = Atom::expr([Atom::sym("a"), Atom::sym("b")]);
+    /// let other_expr = Atom::expr([Atom::sym("+"), Atom::var("x"),
+    ///     Atom::expr([Atom::sym("*"), Atom::value(5), Atom::value(8)])]);
+    ///
+    /// assert_eq!(expr.to_string(), "(a b)");
+    /// assert_eq!(other_expr.to_string(), "(+ $x (* 5 8))");
+    /// assert_eq!(expr, same_expr);
+    /// assert_ne!(expr, other_expr);
+    /// ```
     pub fn expr<T: Into<Vec<Atom>>>(children: T) -> Self {
         Self::Expression(ExpressionAtom::new(children.into()))
     }
 
+    /// Constructs variable from name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::Atom;
+    ///
+    /// let a = Atom::var("a");
+    /// let aa = Atom::var("a");
+    /// let b = Atom::var("b");
+    ///
+    /// assert_eq!(a.to_string(), "$a");
+    /// assert_eq!(a, aa);
+    /// assert_ne!(a, b);
+    /// ```
     pub fn var<T: Into<String>>(name: T) -> Self {
         Self::Variable(VariableAtom::new(name))
     }
 
+    /// Constructs grounded atom with customized behaviour.
+    /// See [Grounded] for examples.
     pub fn gnd<T: CustomGroundedType>(gnd: T) -> Atom {
         Self::Grounded(Box::new(CustomGroundedAtom(gnd)))
     }
 
+    /// Constructs grounded atom from Rust value automatically.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::Atom;
+    ///
+    /// let i = Atom::value(1);
+    /// let j = Atom::value(1);
+    /// let x = Atom::value("b");
+    ///
+    /// assert_eq!(i.to_string(), "1");
+    /// assert_eq!(x.to_string(), "\"b\"");
+    /// assert_eq!(i, j);
+    /// assert_ne!(i, x);
+    /// ```
     pub fn value<T: AutoGroundedType>(value: T) -> Atom {
         Self::Grounded(Box::new(AutoGroundedAtom(value)))
     }
 
+    /// Returns reference to the wrapped Rust value of type `T` if atom is 
+    /// grounded. `T` should be the exactly the type of the value inside atom.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::Atom;
+    ///
+    /// let x = Atom::value(1u32);
+    ///
+    /// assert_eq!(x.to_string(), "1");
+    /// assert_eq!(x.as_gnd::<u32>(), Some(&1u32));
+    /// assert_eq!(x.as_gnd::<String>(), None);
+    /// ```
     pub fn as_gnd<T: 'static>(&self) -> Option<&T> {
         match self {
             Atom::Grounded(gnd) => gnd.as_any_ref().downcast_ref::<T>(),
@@ -566,6 +666,21 @@ impl Atom {
         }
     }
 
+    /// Returns mutable reference to the wrapped Rust value of type `T`
+    /// if atom is grounded. `T` should be the exactly the type of the value
+    /// inside atom.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::Atom;
+    ///
+    /// let mut x = Atom::value(123u32);
+    /// assert_eq!(x.to_string(), "123");
+    ///
+    /// *(x.as_gnd_mut::<u32>().unwrap()) = 321u32;
+    /// assert_eq!(x.to_string(), "321");
+    /// ```
     pub fn as_gnd_mut<T: 'static>(&mut self) -> Option<&mut T> {
         match self {
             Atom::Grounded(gnd) => gnd.as_any_mut().downcast_mut::<T>(),
