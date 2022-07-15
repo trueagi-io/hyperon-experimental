@@ -10,6 +10,16 @@ def let_op(pattern, atom, templ):
     space.add_atom(atom)
     return space.subst(pattern, templ)
 
+def letrec_op(subs, body):
+    # just unsugaring `let*`` into `let` substitution by substitution
+    subs = subs.get_children()
+    if len(subs) == 0:
+        return [body]
+    next_sub = subs[0].get_children()
+    if len(subs) == 1:
+        return [E(letAtom, next_sub[0], next_sub[1], body)]
+    return [E(letAtom, next_sub[0], next_sub[1], E(letrecAtom, E(*subs[1:]), body))]
+
 def call_atom_op(atom, method_str, *args):
     if not isinstance(atom, GroundedAtom):
         raise NoReduceError()
@@ -84,11 +94,14 @@ notAtom = OperationAtom('not', lambda a: not a, ['Bool', 'Bool'])
 # Any number of arguments for `nop` (including zero) due to *args
 nopAtom = OperationAtom('nop', lambda *args: [], unwrap=False)
 
-# TODO: Any for the argument is necessary to make argument reductable.
+# FIXME? Undefined for the argument is necessary to make argument reductable.
 letAtom = OperationAtom('let', let_op,
     type_names=[AtomType.VARIABLE, AtomType.UNDEFINED, AtomType.ATOM, AtomType.ATOM], unwrap=False)
+# The first argument is an Atom, because it has to be evaluated iteratively
+letrecAtom = OperationAtom('let*', letrec_op,
+    type_names=[AtomType.ATOM, AtomType.ATOM, AtomType.ATOM], unwrap=False)
 matchAtom = OperationAtom('match', match_op,
-    type_names=["Space", AtomType.UNDEFINED, AtomType.ATOM, AtomType.UNDEFINED], unwrap=False)
+    type_names=["Space", AtomType.ATOM, AtomType.ATOM, AtomType.UNDEFINED], unwrap=False)
 
 printAtom = OperationAtom('println!', print_op, [AtomType.UNDEFINED, 'IO'], unwrap=False)
 
@@ -204,6 +217,7 @@ class MeTTa:
         self.add_atom(r"match", matchAtom)
         self.add_token(r"call:[^\s]+", newCallAtom)
         self.add_atom(r"let", letAtom)
+        self.add_atom(r"let\*", letrecAtom)
         self.add_atom(r"nop", nopAtom)
         self.add_atom(r"assertEqual", newAssertEqualAtom(self))
         self.add_atom(r"assertEqualToResult", newAssertEqualToResultAtom(self))
