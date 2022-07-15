@@ -224,6 +224,7 @@ pub fn make_variables_unique(atom: &Atom) -> Atom {
 
 // Grounded atom
 
+// FIXME: move this comment into common module documentation section
 // The main idea is to keep grounded atom behaviour implementation inside
 // type rather then in type instance. To allow default behaviour overriding
 // two wrappers for grounded values are introduced:
@@ -255,9 +256,15 @@ pub fn make_variables_unique(atom: &Atom) -> Atom {
 // match_by_equality() method allows reusing default match_() implementation in
 // 3rd party code when it is not required to be customized. 
 
+/// Grounded function execution error.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecError {
+    /// Unexpected runtime error thrown by code. When [crate::metta::interpreter]
+    /// algorithm receives this kind of error it interrupts the executon
+    /// and returns error expression atom.
     Runtime(String),
+    /// Returned intentionally to let [crate::metta::interpreter] algorithm
+    /// know that this expression should be returned "as is" without reducing.
     NoReduce,
 }
 
@@ -273,6 +280,9 @@ impl From<&str> for ExecError {
     }
 }
 
+/// A trait to erase an actual type of the grounded atom. Not intended to be
+/// implemented by users. Use [Atom::value] or implement [Grounded] and use
+/// [Atom::gnd] instead.
 pub trait GroundedAtom : mopa::Any + Debug + Display + Sync {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
     fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
@@ -286,12 +296,80 @@ pub trait GroundedAtom : mopa::Any + Debug + Display + Sync {
 
 mopafy!(GroundedAtom);
 
+/// Trait allows implementing fully custom behaviour of the grounded atom.
+/// One can use [rust_type_atom], [match_by_equality] and [execute_not_executable]
+/// functions to implement default behavior. If no custom behavior
+/// is required it is simpler to use [Atom::value] function for automatic
+/// grounding.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::*;
+/// use hyperon::matcher::{Bindings, WithMatch, MatchResultIter};
+/// use std::fmt::{Display, Formatter};
+/// use std::iter::once;
+///
+/// #[derive(Debug, PartialEq, Clone)]
+/// struct MyGrounded {}
+///
+/// impl Grounded for MyGrounded {
+///     fn type_(&self) -> Atom {
+///         rust_type_atom::<MyGrounded>()
+///     }
+///
+///     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+///         execute_not_executable(self)
+///     }
+///
+///     fn match_(&self, other: &Atom) -> MatchResultIter {
+///         match_by_equality(self, other)
+///     }
+/// }
+///
+/// impl Display for MyGrounded {
+///     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+///         write!(f, "MyGrounded")
+///     }
+/// }
+///
+/// let atom = Atom::gnd(MyGrounded{});
+/// let other = Atom::gnd(MyGrounded{});
+/// let gnd = if let Atom::Grounded(ref gnd) = atom { gnd } else { panic!("Non grounded atom"); };
+///
+/// println!("{}", gnd.type_());
+///
+/// assert_eq!(gnd.execute(&mut vec![]), Err("Grounded atom is not executable: MyGrounded".into()));
+/// assert_eq!(atom.match_(&other).collect::<Vec<Bindings>>(), vec![Bindings::new()]);
+/// assert_eq!(atom, other);
+/// assert_eq!(atom.to_string(), "MyGrounded");
+/// assert_ne!(atom, Atom::sym("MyGrounded"));
+/// ```
+///
 pub trait Grounded : Display {
+    /// Returns type of the grounded atom. Should return same type each time
+    /// it is called.
     fn type_(&self) -> Atom;
+    /// Executes grounded function on passed `args` and returns list of
+    /// results as `Vec<Atom>` or [ExecError].
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError>;
+    /// Implements custom matching logic of the grounded atom.
+    /// Gets `other` atom as input, returns the iterator of the
+    /// [matcher::Bindings] for the variables of the `other` atom.
+    /// See [matcher] for detailed explanation.
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
 }
 
+/// Returns the name of the Rust type wrapped into [Atom::Symbol]. This is a
+/// default implementation of `type_()` for the grounded types wrapped
+/// automatically.
+pub fn rust_type_atom<T>() -> Atom {
+    Atom::sym(std::any::type_name::<T>())
+}
+
+/// Returns either single emtpy [matcher::Bindings] instance if `self` and 
+/// `other` are equal or empty iterator if not. This is a default 
+/// implementation of `match_()` for the grounded types wrapped automatically.
 pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matcher::MatchResultIter {
     match other.as_gnd::<T>() {
         Some(other) if *this == *other => Box::new(std::iter::once(matcher::Bindings::new())),
@@ -299,15 +377,20 @@ pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matc
     }
 }
 
+/// Returns `ExecError::Runtime` instance with message that the atom is not
+/// executable. This is a default implementation of `execute()` for the
+/// grounded types wrapped automatically.
 pub fn execute_not_executable<T: Debug>(this: &T) -> Result<Vec<Atom>, ExecError> {
-    Err(format!("Grounded type is not executable: {:?}", this).into())
+    Err(format!("Grounded atom is not executable: {:?}", this).into())
 }
 
 /// Alias for the list of traits required for the standard Rust types to be
-/// automatically wrapped into GroundedAtom.
+/// automatically wrapped into [GroundedAtom].
+#[doc(hidden)]
 pub trait AutoGroundedType: 'static + PartialEq + Clone + Debug + Sync {}
 impl<T> AutoGroundedType for T where T: 'static + PartialEq + Clone + Debug + Sync {}
 
+/// Wrapper of the automatically implemented grounded atoms.
 #[derive(PartialEq, Clone, Debug)]
 struct AutoGroundedAtom<T: AutoGroundedType>(T);
 
@@ -351,10 +434,12 @@ impl<T: AutoGroundedType> Display for AutoGroundedAtom<T> {
 }
 
 /// Alias for the list of traits required for a custom Rust grounded type
-/// to be successfully wrapped into GroundedAtom.
+/// to be successfully wrapped into [GroundedAtom].
+#[doc(hidden)]
 pub trait CustomGroundedType: AutoGroundedType + Display + Grounded {}
 impl<T> CustomGroundedType for T where T: AutoGroundedType + Display + Grounded {}
 
+/// Wrapper of the custom grounded atom implementations.
 #[derive(PartialEq, Clone, Debug)]
 struct CustomGroundedAtom<T: CustomGroundedType>(T);
 
@@ -396,6 +481,7 @@ impl<T: CustomGroundedType> Display for CustomGroundedAtom<T> {
         Display::fmt(&self.0, f)
     }
 }
+
 // Convertors below implemented for macroses only. They are not effective
 // because require calling Clone. In manually written code one can always
 // choose more effective moving constructor.
@@ -403,8 +489,14 @@ impl<T: CustomGroundedType> Display for CustomGroundedAtom<T> {
 // See the explanation of the trick on the link below:
 // https://lukaskalbertodt.github.io/2019/12/05/generalized-autoref-based-specialization.html
 
+/// Allows selecting between custom and automatic wrapping of the grounded
+/// value. Only for using in [expr!] macro. Not intended to be used by library users.
+#[doc(hidden)]
 pub struct Wrap<T>(pub T);
 
+/// Converts Rust value into grounded atom using default behaviour.
+/// Only for using in [expr!] macro.  Not intended to be used by library users.
+#[doc(hidden)]
 pub trait AutoGroundedTypeToAtom { fn to_atom(&self) -> Atom; }
 impl<T: AutoGroundedType> AutoGroundedTypeToAtom for Wrap<T> {
     fn to_atom(&self) -> Atom {
@@ -412,6 +504,9 @@ impl<T: AutoGroundedType> AutoGroundedTypeToAtom for Wrap<T> {
     }
 }
 
+/// Converts Rust value into grounded atom using custom behaviour.
+/// Only for using in [expr!] macro.  Not intended to be used by library users.
+#[doc(hidden)]
 pub trait CustomGroundedTypeToAtom { fn to_atom(&self) -> Atom; }
 impl<T: CustomGroundedType> CustomGroundedTypeToAtom for &Wrap<T> {
     fn to_atom(&self) -> Atom {
@@ -431,10 +526,6 @@ impl Clone for Box<dyn GroundedAtom> {
     fn clone(&self) -> Self {
         self.clone_gnd()
     }
-}
-
-pub fn rust_type_atom<T>() -> Atom {
-    Atom::sym(std::any::type_name::<T>())
 }
 
 // Atom enum
