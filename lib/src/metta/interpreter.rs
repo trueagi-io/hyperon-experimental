@@ -70,7 +70,7 @@ use crate::space::grounding::*;
 use crate::common::collections::ListMap;
 use crate::metta::*;
 use crate::metta::types::{is_func, get_arg_types, check_type_bindings,
-    get_reducted_types, match_reducted_types};
+    get_atom_types, match_reducted_types};
 
 use std::ops::Deref;
 use std::rc::Rc;
@@ -310,7 +310,7 @@ fn cast_atom_to_type_plan(context: InterpreterContextRef,
 
 fn get_type_of_atom_plan(context: InterpreterContextRef, atom: Atom) -> StepResult<Vec<Atom>> {
     // TODO: implement this via interpreting of the (:? atom)
-    StepResult::ret(get_reducted_types(&context.space, &atom))
+    StepResult::ret(get_atom_types(&context.space, &atom))
 }
 
 fn interpret_expression_as_type_plan(context: InterpreterContextRef,
@@ -704,9 +704,10 @@ mod tests {
 
         assert_eq!(interpret(space.clone(), &expr!("eq" ("plus" "Z" n) n)),
             Ok(vec![expr!("True")]));
-        assert!(results_are_equivalent(
-            &interpret(space.clone(), &expr!("eq" ("plus" ("S" "Z") n) n)),
-            &Ok(vec![expr!("eq" ("S" y) y)])));
+        let actual = interpret(space.clone(), &expr!("eq" ("plus" ("S" "Z") n) n));
+        let expected = Ok(vec![expr!("eq" ("S" y) y)]);
+        assert!(results_are_equivalent(&actual, &expected),
+            "actual: {:?} and expected: {:?} are not equivalent", actual, expected);
     }
 
     fn test_interpret<T, R, P: Plan<T, R>>(plan: P, arg: T) -> Result<R, String> {

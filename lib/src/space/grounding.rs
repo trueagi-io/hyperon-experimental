@@ -96,7 +96,7 @@ impl GroundingSpace {
                 let vars = collect_variables(&pattern);
                 let mut result = args.fold(vec![bind!{}],
                     |mut acc, pattern| {
-                        if acc.is_empty() {
+                        let result = if acc.is_empty() {
                             acc
                         } else {
                             acc.drain(0..).flat_map(|prev| -> Vec<Bindings> {
@@ -109,7 +109,9 @@ impl GroundingSpace {
                                         .expect("Self consistent bindings are expected"))
                                     .collect()
                             }).collect()
-                        }
+                        };
+                        log::debug!("query: current result: {:?}", result);
+                        result
                     });
                 result.iter_mut().for_each(|bindings| bindings.filter(|k, _v| vars.contains(k)));
                 result
@@ -122,16 +124,14 @@ impl GroundingSpace {
         log::debug!("single_query: pattern: {}", pattern);
         let mut result = Vec::new();
         for next in &(*self.borrow_vec()) {
-            log::trace!("single_query: match next: {}", next);
             let next = replace_variables(next);
-            for res in next.match_(pattern) {
-                let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
-                if let Ok(bindings) = bindings {
-                    log::debug!("single_query: push result: {}, bindings: {}", next, bindings);
-                    result.push(bindings);
-                }
+            log::trace!("single_query: match next: {}", next);
+            for bindings in next.match_(pattern) {
+                log::trace!("single_query: push result: {}", bindings);
+                result.push(bindings);
             }
         }
+        log::debug!("single_query: result: {:?}", result);
         result
     }
 
@@ -156,7 +156,7 @@ impl GroundingSpace {
         for next in &(*self.borrow_vec()) {
             match matcher::unify_atoms(next, pattern) {
                 Some(res) => {
-                    let bindings = matcher::apply_bindings_to_bindings(&res.candidate_bindings, &res.pattern_bindings);
+                    let bindings = matcher::apply_bindings_to_bindings(&res.data_bindings, &res.pattern_bindings);
                     if let Ok(bindings) = bindings {
                         // TODO: implement Display for bindings
                         log::debug!("unify: push result: {}, bindings: {:?}", next, bindings);
