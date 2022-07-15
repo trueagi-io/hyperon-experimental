@@ -124,7 +124,7 @@ impl GroundingSpace {
         log::debug!("single_query: pattern: {}", pattern);
         let mut result = Vec::new();
         for next in &(*self.borrow_vec()) {
-            let next = replace_variables(next);
+            let next = make_variables_unique(next);
             log::trace!("single_query: match next: {}", next);
             for bindings in next.match_(pattern) {
                 log::trace!("single_query: push result: {}", bindings);
