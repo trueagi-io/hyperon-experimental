@@ -1,18 +1,60 @@
 // Macros to simplify expression writing
 
+/// Constructs new Atom using symplified syntax for expressions.
+/// Macro has a perfomance penalty because creates and uses an additional
+/// wrapper for grounded atoms. It is intended to use mainly inside of unit tests.
+/// Use string literals for symbols, identifiers for variables,
+/// braces for grounded symbols and S-expressions syntax for expressions.
+///
+/// # Examples
+///
+/// ```
+/// #[macro_use]
+/// use hyperon::expr;
+/// use hyperon::common::MUL;
+///
+/// let sym = expr!("A");
+/// let var = expr!(x);
+/// let gnd = expr!({42});
+/// let expr = expr!("=" ("*2" n) ({MUL} n {2}));
+///
+/// assert_eq!(sym.to_string(), "A");
+/// assert_eq!(var.to_string(), "$x");
+/// assert_eq!(gnd.to_string(), "42");
+/// assert_eq!(expr.to_string(), "(= (*2 $n) (* $n 2))");
+/// ```
 #[macro_export]
 macro_rules! expr {
-    () => { Atom::expr(vec![]) };
-    ($x:ident) => { Atom::var(stringify!($x)) };
-    ($x:literal) => { sym!($x) };
-    ({$x:expr}) => { (&&Wrap($x)).to_atom() };
-    (($($x:tt)*)) => { Atom::expr(vec![ $( expr!($x) , )* ]) };
-    ($($x:tt)*) => { Atom::expr(vec![ $( expr!($x) , )* ]) };
+    () => { $crate::Atom::expr(vec![]) };
+    ($x:ident) => { $crate::Atom::var(stringify!($x)) };
+    ($x:literal) => { $crate::sym!($x) };
+    ({$x:expr}) => {{
+        // required to resolve ..GroundedTypeToAtom traits
+        // without compiler warnings
+        use $crate::*;
+        (&&$crate::Wrap($x)).to_atom()
+    }};
+    (($($x:tt)*)) => { $crate::Atom::expr(vec![ $( expr!($x) , )* ]) };
+    ($($x:tt)*) => { $crate::Atom::expr(vec![ $( expr!($x) , )* ]) };
 }
 
+/// Constructs new symbol atom. Can be used to construct `const` instances.
+///
+/// # Examples
+///
+/// ```
+/// #[macro_use]
+/// use hyperon::{Atom, sym};
+///
+/// const SYM: Atom = sym!("const-symbol");
+/// let sym = sym!("some-symbol");
+///
+/// assert_eq!(SYM, Atom::sym("const-symbol"));
+/// assert_eq!(sym, Atom::sym("some-symbol"));
+/// ```
 #[macro_export]
 macro_rules! sym {
-    ($x:literal) => { Atom::Symbol(SymbolAtom::new(crate::common::collections::ImmutableString::Literal($x))) };
+    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new($crate::common::collections::ImmutableString::Literal($x))) };
 }
 
 pub mod matcher;
@@ -551,7 +593,6 @@ mod test {
         assert_eq!(expr!({TestMulX(3)} {TestInteger(6)}),
             expression(vec![grounded(TestMulX(3)), grounded(TestInteger(6))]));
     }
-
 
     #[test]
     fn test_grounded() {
