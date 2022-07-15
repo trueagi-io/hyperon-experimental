@@ -92,3 +92,78 @@
 !(assertEqualToResult
   (of-same-type Green Circle)
   ())
+
+; There are some meta-types, which may influence
+; the process of interpretation. One of them is `Atom`.
+; If a function expects `Atom` as its argument,
+; this argument is not reduced before passing to
+; the function, so the function can process the
+; original expression itself.
+
+; `match` expects the pattern of `Atom` type.
+; In the following example, `(Green $who)` is evaluated
+; to `F`. However, it is not reduced as `match` argument,
+; and the query returns `Sam`.
+(Green Sam)
+(= (Green Sam) T)
+!(assertEqual
+  (Green $who)
+  T)
+!(assertEqual
+  (match &self (Green $who) $who)
+  Sam)
+; It should be noted that the result of `match` will be
+; evaluated further. In the following, `match` first
+; returns `(Green Sam)`, which is then evaluated to `T`.
+!(assertEqual
+  (match &self (Green $who) (Green $who))
+  T)
+
+; If one wants to evaluate an expression before passing it
+; to `match`, `let` can be used:
+!(assertEqual
+  (let $r (Add (S Z) Z)
+    (match &self (= (eq $r (S Z)) $tv) $tv))
+  T)
+; It will not work inside `match`:
+!(assertEqualToResult
+  (match &self (= (eq (Add (S Z) Z) (S Z)) $tv) $tv)
+  ())
+; The second argument of `let` is not `Atom` and evaluated
+; by the interpreter before executing `let`, while
+; the third argument is `Atom`, which is transformed by `let`
+; as an expression and then returned for further evaluation
+; `match` and `let` are implemented as an ordinary grounded operations
+
+; One can use `let*` for convenience, when multiple consequent
+; substitutions are needed
+!(assertEqual
+  (let* (($r1 (Add Z Z))
+         ($r2 (Add $r1 (S Z)))
+         ($r3 (Add $r2 (S Z))))
+        (match &self (= (eq (S (S Z)) $r3) $tv) $tv))
+  T)
+
+; Atom type can be used in custom functions
+; `eqa` will compare expressions:
+(: eqa (-> Atom Atom Type))
+(= (eqa $x $x) T)
+; These expressions are identical:
+!(assertEqual
+   (eqa (Add Z Z) (Add Z Z))
+   T)
+; While this will not be reduced
+; (`eqa` is not total)
+!(assertEqualToResult
+    (eqa Z (Add Z Z))
+   ((eqa Z (Add Z Z))))
+; In contrast to this:
+!(assertEqual
+   (eq Z (Add Z Z))
+   T)
+; Or this:
+!(assertEqual
+   (let $z (Add Z Z)
+     (eqa Z $z))
+   T)
+
