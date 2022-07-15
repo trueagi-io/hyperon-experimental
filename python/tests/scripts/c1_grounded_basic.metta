@@ -79,8 +79,6 @@
   (+ 1 (bin))
   (1 2))
 
-; `let` is implemented as an ordinary grounded operation
-; (it is not built-in into the interpreter)
 !(assertEqualToResult
   (let $x (+ 2 3)
     (* $x $x))
