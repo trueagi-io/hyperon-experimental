@@ -191,16 +191,22 @@ class ExamplesTest(unittest.TestCase):
             (= (:? $c)
                (match &self (:= $c $t) $t))
             (= (:? ($c $a))
-               (match &self (:= ($c (:? $a)) $t) $t))
+               (let $at (:? $a)
+                    (match &self (:= ($c $at) $t) $t)))
             (= (:? ($c $a $b))
-               (match &self (:= ($c (:? $a) (:? $b)) $t) $t))
+               (let* (($at (:? $a))
+                      ($bt (:? $b)))
+                     (match &self (:= ($c $at $bt) $t) $t)))
 
             (= (:check $c $t)
                (match &self (:= $c $t) T))
             (= (:check ($c $a) $t)
-               (match &self (:= ($c (:? $a)) $t) T))
+               (let $at (:? $a)
+                    (match &self (:= ($c $at) $t) T)))
             (= (:check ($c $a $b) $t)
-               (match &self (:= ($c (:? $a) (:? $b)) $t) T))
+               (let* (($at (:? $a))
+                      ($bt (:? $b)))
+                     (match &self (:= ($c $at $bt) $t) T)))
 
             (:= (= $t $t) Prop)
 
@@ -253,9 +259,12 @@ class ExamplesTest(unittest.TestCase):
             (= (:? $c)
                (match &self (:: $c $t) $t))
             (= (:? ($c $a))
-               (match &self (:: $c (-> (:? $a) $t)) $t))
+               (let $at (:? $a)
+                    (match &self (:: $c (-> $at $t)) $t)))
             (= (:? ($c $a $b))
-               (match &self (:: $c (-> (:? $a) (:? $b) $t)) $t))
+               (let* (($at (:? $a))
+                      ($bt (:? $b)))
+                     (match &self (:: $c (-> $at $bt $t)) $t)))
 
             (:: = (-> $t $t Type))
 
@@ -284,7 +293,7 @@ class ExamplesTest(unittest.TestCase):
                                         [S('Type')])
         self.assertEqual(metta.interpret("(:? (= Human Mortal))"),
                                         [S('Type')])
-        self.assertEqual(metta.interpret("(:? (= HumanAreMortal Mortal))"), [])
+        self.assertEqual(metta.interpret("(:? (= HumansAreMortal Mortal))"), [])
         # Interestingly, the following example works correctly in this syntax, because
         # application `(Human Socrates)` is not mixed up with dependent type definition
         self.assertEqual(metta.interpret("(:? (HumansAreMortal (Human Socrates)))"), [])
