@@ -31,7 +31,7 @@ RUST_LOG=hyperon=debug cargo test
 Generate docs:
 ```
 cd ./lib
-cargo doc
+cargo doc --no-deps
 ```
 Docs can be found at `./lib/target/doc/hyperon/index.html`.
 
