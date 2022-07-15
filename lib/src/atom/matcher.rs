@@ -3,7 +3,7 @@
 #[macro_export]
 macro_rules! bind {
     ($($k:ident: $v:expr),*) => {
-        Bindings::from( vec![$( (VariableAtom::new(stringify!($k)), $v), )*])
+        $crate::atom::matcher::Bindings::from( vec![$( ($crate::VariableAtom::new(stringify!($k)), $v), )*])
     };
 }
 
@@ -736,8 +736,8 @@ mod test {
     #[test]
     fn match_variable_with_unique_itself() {
         assert_match(
-            replace_variables(&expr!(("A" x) ("B" x))),
-                               expr!(("A" x)    z   ),
+            make_variables_unique(&expr!(("A" x) ("B" x))),
+                                   expr!(("A" x)    z   ),
             vec![bind!{x: expr!(u0), z: expr!("B" u0)}]);
     }
 

@@ -68,16 +68,20 @@ use crate::common::collections::ImmutableString;
 
 // Symbol atom
 
+/// A symbol atom structure.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SymbolAtom {
     name: ImmutableString,
 }
 
 impl SymbolAtom {
+    /// Constructs new symbol from `name`. Not intended to be used directly,
+    /// use [sym!] or [Atom::sym] instead.
     pub const fn new(name: ImmutableString) -> Self {
         Self{ name }
     }
 
+    /// Returns name of the symbol.
     pub fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -91,24 +95,30 @@ impl Display for SymbolAtom {
 
 // Expression atom
 
+/// An expression atom structure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpressionAtom {
     children: Vec<Atom>,
 }
 
 impl ExpressionAtom {
+    /// Constructs new expression from vector of sub-atoms. Not intended to be
+    /// used directly, use [Atom::expr] instead.
     fn new(children: Vec<Atom>) -> Self {
         Self{ children }
     }
 
+    /// Returns true if expression doesn't contain sub-expressions.
     pub fn is_plain(&self) -> bool {
         self.children.iter().all(|atom| ! matches!(atom, Atom::Expression(_)))
     }
 
+    /// Returns a reference to a vector of sub-atoms.
     pub fn children(&self) -> &Vec<Atom> {
         &self.children
     }
 
+    /// Returns a mutable reference to a vector of sub-atoms.
     pub fn children_mut(&mut self) -> &mut Vec<Atom> {
         &mut self.children
     }
@@ -129,12 +139,15 @@ impl Display for ExpressionAtom {
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+/// Global variable id counter to provide unique variable id values.
 static NEXT_VARIABLE_ID: AtomicUsize = AtomicUsize::new(1);
 
+/// Returns next unique variable id and increments the global counter.
 fn next_variable_id() -> usize {
     NEXT_VARIABLE_ID.fetch_add(1, Ordering::Relaxed)
 }
 
+/// A variable atom structure
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 pub struct VariableAtom {
     name: String,
@@ -142,14 +155,35 @@ pub struct VariableAtom {
 }
 
 impl VariableAtom {
+    /// Constructs new variable using `name` provided. Usually [Atom::var]
+    /// should be preffered. But sometimes [VariableAtom] instance is required.
+    /// For example as a variable bindings instance.
     pub fn new<T: Into<String>>(name: T) -> Self {
         Self{ name: name.into(), id: 0 }
     }
 
+    // TODO: this method is likely to be removed as name is not
+    // unique and it may confuse users. `to_string()` can be used instead.
+    // The same may be true for a SymbolAtom.
+    /// Returns name of the variable.
     pub fn name(&self) -> &str {
         self.name.as_str()
     }
 
+    /// Returns an unique instance of the variable with the same name.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::VariableAtom;
+    ///
+    /// let x1 = VariableAtom::new("x");
+    /// let x2 = x1.make_unique();
+    ///
+    /// assert_eq!(x2.name(), "x");
+    /// assert_eq!(x1.name(), x2.name());
+    /// assert_ne!(x1, x2);
+    /// ```
     pub fn make_unique(&self) -> Self {
         VariableAtom{ name: self.name.clone(), id: next_variable_id() }
     }
@@ -165,26 +199,27 @@ impl Display for VariableAtom {
     }
 }
 
-pub fn replace_variables(atom: &Atom) -> Atom {
-    replace_variables_recursively(atom, &mut HashMap::new())
-}
-
-fn replace_variables_recursively(atom: &Atom, vars: &mut HashMap<VariableAtom, Atom>) -> Atom {
-    match atom {
-        Atom::Variable(var) => {
-            if !vars.contains_key(var) {
-                vars.insert(var.clone(), Atom::Variable(var.make_unique()));
+/// Returns a copy of `atom` with all variables replaced by unique instances.
+pub fn make_variables_unique(atom: &Atom) -> Atom {
+    fn recursion(atom: &Atom, vars: &mut HashMap<VariableAtom, Atom>) -> Atom {
+        match atom {
+            Atom::Variable(var) => {
+                if !vars.contains_key(var) {
+                    vars.insert(var.clone(), Atom::Variable(var.make_unique()));
+                }
+                vars[var].clone()
+            },
+            Atom::Expression(expr) => {
+                let children: Vec<Atom> = expr.children().iter()
+                    .map(|atom| recursion(&atom, vars))
+                    .collect();
+                Atom::expr(children)
             }
-            vars[var].clone()
-        },
-        Atom::Expression(expr) => {
-            let children: Vec<Atom> = expr.children().iter()
-                .map(|atom| replace_variables_recursively(&atom, vars))
-                .collect();
-            Atom::expr(children)
+            _ => atom.clone(),
         }
-        _ => atom.clone(),
     }
+
+    recursion(atom, &mut HashMap::new())
 }
 
 // Grounded atom
@@ -218,7 +253,7 @@ fn replace_variables_recursively(atom: &Atom, vars: &mut HashMap<VariableAtom, A
 // - match_() to implement custom matching behaviour.
 
 // match_by_equality() method allows reusing default match_() implementation in
-// 3rd party code when it is not needed to be customized. 
+// 3rd party code when it is not required to be customized. 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ExecError {
