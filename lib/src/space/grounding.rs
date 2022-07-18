@@ -1,3 +1,6 @@
+//! Simple implementation of space which uses in-memory vector of atoms as
+//! an underlying storage.
+
 use crate::*;
 use crate::atom::*;
 use crate::atom::matcher::{Bindings, Unifications, WithMatch};
@@ -25,6 +28,37 @@ pub enum SpaceEvent {
 }
 
 /// Space modification event observer trait.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::sym;
+/// use hyperon::space::grounding::*;
+/// use std::rc::Rc;
+/// use std::cell::RefCell;
+///
+/// struct MyObserver {
+///     events: Vec<SpaceEvent>
+/// }
+///
+/// impl SpaceObserver for MyObserver {
+///     fn notify(&mut self, event: &SpaceEvent) {
+///         self.events.push(event.clone());
+///     }
+/// }
+///
+/// let mut space = GroundingSpace::new();
+/// let observer = Rc::new(RefCell::new(MyObserver{ events: Vec::new() }));
+///
+/// space.register_observer(Rc::clone(&observer));
+/// space.add(sym!("A"));
+/// space.replace(&sym!("A"), sym!("B"));
+/// space.remove(&sym!("B"));
+///
+/// assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("A")),
+///     SpaceEvent::Replace(sym!("A"), sym!("B")),
+///     SpaceEvent::Remove(sym!("B"))]);
+/// ```
 pub trait SpaceObserver {
     /// Notifies about space modification.
     fn notify(&mut self, event: &SpaceEvent);
@@ -48,7 +82,17 @@ impl GroundingSpace {
         }
     }
 
-    /// Registers space modifications `observer`.
+    /// Constructs space from vector of atoms.
+    pub fn from_vec(atoms: Vec<Atom>) -> Self {
+        Self{
+            content: Rc::new(RefCell::new(atoms)),
+            observers: Rc::new(RefCell::new(Vec::new())),
+        }
+    }
+
+    /// Registers space modifications `observer`. Observer is automatically
+    /// deregistered when `Rc` counter reaches zero. See [SpaceObserver] for
+    /// examples.
     pub fn register_observer<T>(&mut self, observer: Rc<RefCell<T>>)
         where T: SpaceObserver + 'static
     {
@@ -71,6 +115,19 @@ impl GroundingSpace {
     }
 
     /// Adds `atom` into space.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::sym;
+    /// use hyperon::space::grounding::GroundingSpace;
+    ///
+    /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
+    /// 
+    /// space.add(sym!("B"));
+    ///
+    /// assert_eq!(space.into_vec(), vec![sym!("A"), sym!("B")]);
+    /// ```
     pub fn add(&mut self, atom: Atom) {
         self.content.borrow_mut().push(atom.clone());
         self.notify(&SpaceEvent::Add(atom));
@@ -78,6 +135,19 @@ impl GroundingSpace {
 
     /// Removes `atom` from space. Returns true if atom was found and removed,
     /// and false otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::sym;
+    /// use hyperon::space::grounding::GroundingSpace;
+    ///
+    /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
+    /// 
+    /// space.remove(&sym!("A"));
+    ///
+    /// assert!(space.into_vec().is_empty());
+    /// ```
     pub fn remove(&mut self, atom: &Atom) -> bool {
         let position = self.borrow_vec().iter().position(|other| other == atom);
         match position {
@@ -93,6 +163,19 @@ impl GroundingSpace {
     /// Replaces `from` atom to `to` atom inside space. Doesn't add `to` when
     /// `from` is not found. Returns true if atom was found and replaced, and
     /// false otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::sym;
+    /// use hyperon::space::grounding::GroundingSpace;
+    ///
+    /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
+    /// 
+    /// space.replace(&sym!("A"), sym!("B"));
+    ///
+    /// assert_eq!(space.into_vec(), vec![sym!("B")]);
+    /// ```
     pub fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         let position = self.borrow_vec().iter().position(|other| other == from);
         match position {
@@ -106,9 +189,23 @@ impl GroundingSpace {
     }
 
     /// Executes `query` on the space and returns variable bindings found.
-    /// Query may include few sub-queries glued by [COMMA_SYMBOL] symbol. Number of
-    /// results is equal to the length of the `Vec<Bindings>` returned.
+    /// Query may include sub-queries glued by [COMMA_SYMBOL] symbol. Number
+    /// of results is equal to the length of the `Vec<Bindings>` returned.
     /// Each [Bindings] instance represents single result.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::{expr, bind, sym};
+    /// use hyperon::space::grounding::GroundingSpace;
+    ///
+    /// let space = GroundingSpace::from_vec(vec![expr!("A" "B"), expr!("B" "C")]);
+    /// let query = expr!("," ("A" x) (x "C"));
+    ///
+    /// let result = space.query(&query);
+    ///
+    /// assert_eq!(result, vec![bind!{x: sym!("B")}]);
+    /// ```
     pub fn query(&self, query: &Atom) -> Vec<Bindings> {
         match split_expr(query) {
             // Cannot match with COMMA_SYMBOL here, because Rust allows
@@ -160,6 +257,19 @@ impl GroundingSpace {
     /// Executes `pattern` query on the space and for each result substitutes
     /// variables in `template` by the values from `pattern`. Returns results
     /// of the substitution.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::expr;
+    /// use hyperon::space::grounding::GroundingSpace;
+    ///
+    /// let space = GroundingSpace::from_vec(vec![expr!("A" "B"), expr!("A" "C")]);
+    ///
+    /// let result = space.subst(&expr!("A" x), &expr!("D" x));
+    ///
+    /// assert_eq!(result, vec![expr!("D" "B"), expr!("D" "C")]);
+    /// ```
     pub fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         self.query(pattern).drain(0..)
             .map(| bindings | matcher::apply_bindings_to_atom(template, &bindings))
