@@ -10,19 +10,27 @@ use std::collections::HashSet;
 
 // Grounding space
 
-const COMMA_SYMBOL : Atom = sym!(",");
+/// Symbol to concatenate queries to space.
+pub const COMMA_SYMBOL : Atom = sym!(",");
 
+/// Contains information about space modification event.
 #[derive(Clone, Debug, PartialEq)]
 pub enum SpaceEvent {
+    /// Atom is added into a space.
     Add(Atom),
+    /// Atom is removed from space.
     Remove(Atom),
+    /// First atom is replaced by the second one.
     Replace(Atom, Atom),
 }
 
+/// Space modification event observer trait.
 pub trait SpaceObserver {
+    /// Notifies about space modification.
     fn notify(&mut self, event: &SpaceEvent);
 }
 
+/// In-memory space which can contain grounded atoms.
 // TODO: Clone is required by C API
 #[derive(Clone)]
 pub struct GroundingSpace {
@@ -32,6 +40,7 @@ pub struct GroundingSpace {
 
 impl GroundingSpace {
 
+    /// Constructs new empty space.
     pub fn new() -> Self {
         Self{
             content: Rc::new(RefCell::new(Vec::new())),
@@ -39,12 +48,14 @@ impl GroundingSpace {
         }
     }
 
+    /// Registers space modifications `observer`.
     pub fn register_observer<T>(&mut self, observer: Rc<RefCell<T>>)
         where T: SpaceObserver + 'static
     {
         self.observers.borrow_mut().push(Rc::downgrade(&observer) as Weak<RefCell<dyn SpaceObserver>>);
     }
 
+    /// Notifies registered observers about space modification `event`.
     fn notify(&self, event: &SpaceEvent) {
         let mut cleanup = false;
         for observer in self.observers.borrow_mut().iter() {
@@ -59,11 +70,14 @@ impl GroundingSpace {
         }
     }
 
+    /// Adds `atom` into space.
     pub fn add(&mut self, atom: Atom) {
         self.content.borrow_mut().push(atom.clone());
         self.notify(&SpaceEvent::Add(atom));
     }
 
+    /// Removes `atom` from space. Returns true if atom was found and removed,
+    /// and false otherwise.
     pub fn remove(&mut self, atom: &Atom) -> bool {
         let position = self.borrow_vec().iter().position(|other| other == atom);
         match position {
@@ -76,6 +90,9 @@ impl GroundingSpace {
         }
     }
 
+    /// Replaces `from` atom to `to` atom inside space. Doesn't add `to` when
+    /// `from` is not found. Returns true if atom was found and replaced, and
+    /// false otherwise.
     pub fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         let position = self.borrow_vec().iter().position(|other| other == from);
         match position {
@@ -88,20 +105,24 @@ impl GroundingSpace {
         }
     }
 
-    pub fn query(&self, pattern: &Atom) -> Vec<Bindings> {
-        match split_expr(pattern) {
+    /// Executes `query` on the space and returns variable bindings found.
+    /// Query may include few sub-queries glued by [COMMA_SYMBOL] symbol. Number of
+    /// results is equal to the length of the `Vec<Bindings>` returned.
+    /// Each [Bindings] instance represents single result.
+    pub fn query(&self, query: &Atom) -> Vec<Bindings> {
+        match split_expr(query) {
             // Cannot match with COMMA_SYMBOL here, because Rust allows
             // it only when Atom has PartialEq and Eq derived.
             Some((sym @ Atom::Symbol(_), args)) if *sym == COMMA_SYMBOL => {
-                let vars = collect_variables(&pattern);
+                let vars = collect_variables(&query);
                 let mut result = args.fold(vec![bind!{}],
-                    |mut acc, pattern| {
+                    |mut acc, query| {
                         let result = if acc.is_empty() {
                             acc
                         } else {
                             acc.drain(0..).flat_map(|prev| -> Vec<Bindings> {
-                                let pattern = matcher::apply_bindings_to_atom(&pattern, &prev);
-                                let mut res = self.query(&pattern);
+                                let query = matcher::apply_bindings_to_atom(&query, &prev);
+                                let mut res = self.query(&query);
                                 res.drain(0..)
                                     .map(|next| Bindings::merge(&prev, &next))
                                     .filter(Option::is_some).map(Option::unwrap)
@@ -116,17 +137,18 @@ impl GroundingSpace {
                 result.iter_mut().for_each(|bindings| bindings.filter(|k, _v| vars.contains(k)));
                 result
             },
-            _ => self.single_query(pattern),
+            _ => self.single_query(query),
         }
     }
 
-    fn single_query(&self, pattern: &Atom) -> Vec<Bindings> {
-        log::debug!("single_query: pattern: {}", pattern);
+    /// Executes simple `query` without sub-queries on the space.
+    fn single_query(&self, query: &Atom) -> Vec<Bindings> {
+        log::debug!("single_query: query: {}", query);
         let mut result = Vec::new();
         for next in &(*self.borrow_vec()) {
             let next = make_variables_unique(next);
             log::trace!("single_query: match next: {}", next);
-            for bindings in next.match_(pattern) {
+            for bindings in next.match_(query) {
                 log::trace!("single_query: push result: {}", bindings);
                 result.push(bindings);
             }
@@ -135,6 +157,9 @@ impl GroundingSpace {
         result
     }
 
+    /// Executes `pattern` query on the space and for each result substitutes
+    /// variables in `template` by the values from `pattern`. Returns results
+    /// of the substitution.
     pub fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         self.query(pattern).drain(0..)
             .map(| bindings | matcher::apply_bindings_to_atom(template, &bindings))
@@ -150,6 +175,7 @@ impl GroundingSpace {
     // query. Another option is designating this in the data itself.
     // After combining match and unification we could leave only single
     // universal method.
+    #[doc(hidden)]
     pub fn unify(&self, pattern: &Atom) -> Vec<(Bindings, Unifications)> {
         log::debug!("unify: pattern: {}", pattern);
         let mut result = Vec::new();
@@ -169,11 +195,13 @@ impl GroundingSpace {
         result
     }
 
+    /// Borrows and returns the vector of the atoms in the space.
     pub fn borrow_vec(&self) -> Ref<Vec<Atom>> {
         self.content.borrow()
     }
 
-    pub fn leak(self) -> Vec<Atom> {
+    /// Converts space into a vector of atoms.
+    pub fn into_vec(self) -> Vec<Atom> {
         self.content.take()
     }
 }
