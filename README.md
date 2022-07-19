@@ -50,6 +50,7 @@ mkdir -p build
 cd build
 cmake ..
 ```
+To run release build use `-DCMAKE_BUILD_TYPE=Release` cmake flag.
 
 Build and run tests:
 ```
@@ -57,18 +58,26 @@ make
 make check
 ```
 
-To run release build use following instead of `cmake ..`:
+Install libraries:
 ```
-cmake -DCMAKE_BUILD_TYPE=Release ..
+make install
 ```
+Note: after installation you will need re-install Python library to apply
+changes in Python files.
 
-# Running Python examples from command line
+# Running Python and MeTTa examples from command line
 
-In order to run Python examples you need adding Python libraries into the `PYTHONPATH`
-after compilation:
+In order to run examples you need either install Python library or
+add Python libraries into the `PYTHONPATH` after compilation:
 ```
 cd build
 export PYTHONPATH=$PYTHONPATH:`pwd`/python:`pwd`/../python
+```
+
+Run MeTTa script from command line:
+```
+cd python\tests
+python metta.py ./scripts/<name>.metta
 ```
 
 # Language support for IDEs [optional]
