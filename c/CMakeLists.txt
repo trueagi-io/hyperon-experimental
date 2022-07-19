@@ -36,3 +36,10 @@ add_subdirectory(tests)
 
 install(FILES ${HYPERONC_LIB_FILE} DESTINATION lib)
 install(DIRECTORY ${HYPERONC_INCLUDE_DIR} DESTINATION include)
+if(UNIX AND NOT APPLE)
+	install(CODE
+		"message(STATUS \"Executing ldconfig\")
+		execute_process(COMMAND ldconfig)
+		message(STATUS \"Executing ldconfig ... done\")
+	")
+endif()
