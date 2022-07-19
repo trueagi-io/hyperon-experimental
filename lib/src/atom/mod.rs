@@ -626,6 +626,8 @@ impl Atom {
     /// assert_eq!(a, aa);
     /// assert_ne!(a, b);
     /// ```
+    // TODO: can be rewritten using Into<ImmutableString> to convert &str
+    // literasl into ImmutableString::Literal.
     pub fn sym<T: Into<String>>(name: T) -> Self {
         Self::Symbol(SymbolAtom::new(ImmutableString::Allocated(name.into())))
     }
