@@ -9,6 +9,15 @@ See [MeTTa scripts](./python/tests/scripts) and [Python examples](./python/tests
 
 If you find troubles with the installation, see the [Troubleshooting](#troubleshooting) section below.
 
+## Docker
+
+A docker image can be used to run a reproducible environment. See instructions
+inside the [Dockerfile](./.github/Dockerfile).
+If the docker image doesn't work, please
+raise an
+[issue](https://github.com/trueagi-io/hyperon-experimental/issues).
+
+
 # Prerequisites
 
 Install latest stable Rust, see [Rust installation
@@ -124,11 +133,3 @@ Please ensure you are using the latest stable version:
 ```
 rustup update stable
 ```
-
-## Other issues
-
-A docker image can be used to run a reproducible environment. See instructions
-inside the [Dockerfile](./.github/Dockerfile).
-If the docker image doesn't work, please
-raise an
-[issue](https://github.com/trueagi-io/hyperon-experimental/issues).
