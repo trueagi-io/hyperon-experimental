@@ -14,8 +14,9 @@ If you find troubles with the installation, see the [Troubleshooting](#troublesh
 ## Manual installation
 
 Install latest stable Rust, see [Rust installation
-page](https://www.rust-lang.org/tools/install).
-Python 3, GCC and CMake are required to build C and Python API.
+page](https://www.rust-lang.org/tools/install). Python 3 (3.6 or later), GCC
+(7.5 or later) and CMake (3.10 or later) are required to build C and Python
+API.
 
 Install cbindgen:
 ```
