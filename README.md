@@ -38,7 +38,7 @@ python3 -m pip install -e ./python[dev]
 ## Docker
 
 A docker image can be used to run a reproducible environment. See instructions
-inside the [Dockerfile](./.github/Dockerfile). If the docker image doesn't
+inside the [Dockerfile](./Dockerfile). If the docker image doesn't
 work, please raise an
 [issue](https://github.com/trueagi-io/hyperon-experimental/issues).
 
