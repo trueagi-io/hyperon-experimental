@@ -9,10 +9,38 @@ See [MeTTa scripts](./python/tests/scripts) and [Python examples](./python/tests
 
 If you find troubles with the installation, see the [Troubleshooting](#troubleshooting) section below.
 
-# Prerequisites
+# Prepare environment
+
+## Manual installation
 
 Install latest stable Rust, see [Rust installation
 page](https://www.rust-lang.org/tools/install).
+Python 3, GCC and CMake are required to build C and Python API.
+
+Execute following commands in the top directory of repository.
+
+Install cbindgen:
+```
+cargo install --force cbindgen
+```
+
+Install Conan and make default Conan profile:
+```
+python3 -m pip install conan==1.47
+conan profile new --detect default
+```
+
+Install Python library and dependencies in development mode:
+```
+python3 -m pip install -e ./python[dev]
+```
+
+## Docker
+
+A docker image can be used to run a reproducible environment. See instructions
+inside the [Dockerfile](./.github/Dockerfile). If the docker image doesn't
+work, please raise an
+[issue](https://github.com/trueagi-io/hyperon-experimental/issues).
 
 # Hyperon library
 
@@ -37,13 +65,6 @@ Docs can be found at `./lib/target/doc/hyperon/index.html`.
 
 # C and Python API
 
-Prerequisites (must be executed in the top directory of the repository):
-```
-cargo install --force cbindgen
-python -m pip install conan==1.47
-python -m pip install -e ./python[dev]
-```
-
 Setup build:
 ```
 mkdir -p build
@@ -58,26 +79,19 @@ make
 make check
 ```
 
-Install libraries:
-```
-make install
-```
-Note: after installation you will need re-install Python library to apply
-changes in Python files.
-
 # Running Python and MeTTa examples from command line
 
-In order to run examples you need either install Python library or
-add Python libraries into the `PYTHONPATH` after compilation:
+In order to run examples you need adding Python libraries into the `PYTHONPATH`
+after compilation:
 ```
 cd build
-export PYTHONPATH=$PYTHONPATH:`pwd`/python:`pwd`/../python
+export PYTHONPATH=$PYTHONPATH:`pwd`/python
 ```
 
 Run MeTTa script from command line:
 ```
-cd python\tests
-python metta.py ./scripts/<name>.metta
+cd python/tests
+python3 metta.py ./scripts/<name>.metta
 ```
 
 # Language support for IDEs [optional]
@@ -125,10 +139,3 @@ Please ensure you are using the latest stable version:
 rustup update stable
 ```
 
-## Other issues
-
-A docker image can be used to run a reproducible environment. See instructions
-inside the [Dockerfile](./.github/Dockerfile).
-If the docker image doesn't work, please
-raise an
-[issue](https://github.com/trueagi-io/hyperon-experimental/issues).
