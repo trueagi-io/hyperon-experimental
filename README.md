@@ -17,8 +17,6 @@ Install latest stable Rust, see [Rust installation
 page](https://www.rust-lang.org/tools/install).
 Python 3, GCC and CMake are required to build C and Python API.
 
-Execute following commands in the top directory of repository.
-
 Install cbindgen:
 ```
 cargo install --force cbindgen
@@ -30,7 +28,8 @@ python3 -m pip install conan==1.47
 conan profile new --detect default
 ```
 
-Install Python library and dependencies in development mode:
+Install Python library and dependencies in development mode (execute following
+command in the top directory of repository):
 ```
 python3 -m pip install -e ./python[dev]
 ```

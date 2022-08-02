@@ -14,7 +14,8 @@ RUN apt-get update && \
 
 RUN useradd -m -g users user
 USER user
-WORKDIR /home/user
+ENV HOME=/home/user
+WORKDIR ${HOME}
 
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
 RUN sh /tmp/rustup.sh -y && rm /tmp/rustup.sh
@@ -26,5 +27,18 @@ ENV PATH="${PATH}:/home/user/.local/bin"
 RUN conan profile new --detect default
 
 RUN git clone https://github.com/trueagi-io/hyperon-experimental.git
-WORKDIR ./hyperon-experimental
+WORKDIR ${HOME}/hyperon-experimental
 RUN python3 -m pip install -e ./python[dev]
+RUN mkdir build
+
+WORKDIR ${HOME}/hyperon-experimental/lib
+RUN cargo build
+RUN cargo test
+
+WORKDIR ${HOME}/hyperon-experimental/build
+RUN cmake ..
+RUN make
+RUN make check
+RUN echo "export PYTHONPATH=$PYTHONPATH:`pwd`/python" >>${HOME}/.bashrc
+
+WORKDIR ${HOME}/hyperon-experimental
