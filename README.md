@@ -81,7 +81,7 @@ make check
 
 # Running Python and MeTTa examples from command line
 
-In order to run examples you need adding Python libraries into the `PYTHONPATH`
+In order to run examples you need to add Python libraries into the `PYTHONPATH`
 after compilation:
 ```
 cd build
