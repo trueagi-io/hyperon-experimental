@@ -208,8 +208,6 @@ class MeTTa:
                        lambda token: ValueAtom(float(token), 'Number'))
         self.add_token(r"\d+",
                        lambda token: ValueAtom(int(token), 'Number'))
-        #self.add_token(r"'[^']*'",
-        #               lambda token: ValueAtom(str(token[1:-1]), 'String'))
         self.add_token("\"[^\"]*\"",
                        lambda token: ValueAtom(str(token[1:-1]), 'String'))
         self.add_token(r"True|False",
