@@ -56,10 +56,12 @@ impl<'a> SExprParser<'a> {
                 ';' => {
                     self.skip_line();
                 },
-                _ if c.is_whitespace() => { self.it.next(); },
+                _ if c.is_whitespace() => {
+                    self.it.next();
+                },
                 '$' => {
                     self.it.next();
-                    let token = next_token(&mut self.it);
+                    let token = next_word(&mut self.it);
                     return Some(Atom::var(token));
                 },
                 '(' => {
@@ -115,14 +117,42 @@ impl<'a> SExprParser<'a> {
 }
 
 fn next_token(it: &mut Peekable<Chars<'_>>) -> String {
+    match it.peek() {
+        Some('"') => next_string(it),
+        _ => next_word(it),
+    }
+}
+
+fn next_string(it: &mut Peekable<Chars<'_>>) -> String {
+    let mut token = String::new();
+    assert_eq!(Some('"'), it.next(), "Double quote expected");
+    token.push('"');
+    while let Some(&c) = it.peek() {
+        if c == '"' {
+            token.push('"');
+            it.next();
+            break;
+        }
+        let c = if c == '\\' {
+            match it.peek() {
+                Some(&c) => c,
+                None => panic!("Escaping sequence is not finished"),
+            }
+        } else {
+            c
+        };
+        token.push(c);
+        it.next();
+    }
+    token 
+}
+
+fn next_word(it: &mut Peekable<Chars<'_>>) -> String {
     let mut token = String::new();
     while let Some(&c) = it.peek() {
         if c.is_whitespace() || c == '(' || c == ')' {
             break;
         }
-        // TODO: it would be cool to not push chars one by one into token but
-        // create a string from two iterators (begin, end) as in C++. But it looks
-        // like Rust standard library doesn't allow it.
         token.push(c);
         it.next();
     }
@@ -198,6 +228,16 @@ mod tests {
     }
 
     #[test]
+    fn test_text_quoted_string() {
+        let mut text = SExprSpace::new(Tokenizer::new());
+
+        text.add_str("\"te st\"").unwrap();
+        let space = GroundingSpace::from(&text);
+
+        assert_eq!(vec![expr!("\"te st\"")], *space.borrow_vec());
+    }
+
+    #[test]
     fn test_text_recognize_full_token() {
         let mut tokenizer = Tokenizer::new();
         tokenizer.register_token(Regex::new(r"b").unwrap(),
@@ -264,7 +304,7 @@ mod tests {
         let program = ";(a 4)
                   (b 5)";
         let expected = vec![expr!("b" "5")];
-        let res = parse(program);
+        let res = parse_atoms(program);
         assert_eq!(res, expected);
     }
 
@@ -273,7 +313,7 @@ mod tests {
         let program = " (a ; 4)
                   5)";
         let expected = vec![expr!("a" "5")];
-        let res = parse(program);
+        let res = parse_atoms(program);
         assert_eq!(res, expected);
     }
 
@@ -282,11 +322,11 @@ mod tests {
         let program = " (a 4);
                   (b 5)";
         let expected = vec![expr!("a" "4"), expr!("b" "5")];
-        let res = parse(program);
+        let res = parse_atoms(program);
         assert_eq!(res, expected);
     }
 
-    fn parse(program: &str) -> Vec<Atom> {
+    fn parse_atoms(program: &str) -> Vec<Atom> {
         let tokenizer = Tokenizer::new();
         let mut parser = SExprParser::new(program);
         let mut result = Vec::new();
