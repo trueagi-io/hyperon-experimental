@@ -595,4 +595,15 @@ mod tests {
 
         assert!(check_type(&space, &atom("Nil"), &atom("(List $t)")));
     }
+
+    #[test]
+    fn check_type_simple_parameterized_mixed_vars() {
+        let space = metta_space("
+            (: Pair (-> $a $b Type))
+            (: A (Pair $a $b))
+        ");
+
+        assert!(check_type(&space, &atom("A"), &atom("(Pair $b $a)")));
+        assert!(!check_type(&space, &atom("A"), &atom("(Pair $a $a)")));
+    }
 }
