@@ -145,7 +145,8 @@ def import_op(metta, space, fname):
     # (another operation is needed for importing syntax)
     metta2 = MeTTa(space)
     metta2.cwd = metta.cwd # inherit current working directory
-    return metta2.import_file(fname.get_object().value)
+    # `import_file` returns a list of results, which should be flattened
+    return [r for result in metta2.import_file(fname.get_object().value) for r in result]
 
 def newImportOp(metta):
     # unwrap=False, because space name can remain
