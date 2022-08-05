@@ -180,27 +180,34 @@ fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
 
 
 pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings) -> bool {
-    log::trace!("match_reducted_types: type1: {}, type2: {}, bindings: {}", type1, type2, bindings);
-    let result = match (type1, type2) {
-        (Atom::Variable(_), Atom::Variable(_)) => false,
-        (Atom::Grounded(_), _) | (_, Atom::Grounded(_)) => panic!("GroundedAtom is not expected at type's place: {}, {}", type1, type2),
-        (Atom::Symbol(sym1), Atom::Symbol(sym2)) => {
-            type1 == type2 || sym1.name() == "%Undefined%" || sym2.name() == "%Undefined%"
-        },
-        (Atom::Variable(var), typ) | (typ, Atom::Variable(var)) => {
-            bindings.check_and_insert_binding(var, typ)
-        },
-        (Atom::Expression(expr1), Atom::Expression(expr2)) => {
-            std::iter::zip(expr1.children().iter(), expr2.children().iter())
-                .map(|(child1, child2)| match_reducted_types(child1, child2, bindings))
-                .reduce(|a, b| a && b)
-                .unwrap_or(true)
-        },
-        (Atom::Expression(_), Atom::Symbol(sym))
-            | (Atom::Symbol(sym), Atom::Expression(_))
-            if sym.name() == "%Undefined%" => true,
-        _ => false,
-    };
+    fn match_reducted_types_recursive(type1: &Atom, type2: &Atom,
+            bindings: &mut Bindings, reverse_bindings: &mut Bindings) -> bool {
+        let result = match (type1, type2) {
+            (Atom::Variable(f), Atom::Variable(s)) => {
+                bindings.check_and_insert_binding(f, type2) &&
+                    reverse_bindings.check_and_insert_binding(s, type1)
+            },
+            (Atom::Grounded(_), _) | (_, Atom::Grounded(_)) => panic!("GroundedAtom is not expected at type's place: {}, {}", type1, type2),
+            (Atom::Symbol(sym1), Atom::Symbol(sym2)) => {
+                type1 == type2 || sym1.name() == "%Undefined%" || sym2.name() == "%Undefined%"
+            },
+            (Atom::Variable(var), typ) | (typ, Atom::Variable(var)) => {
+                bindings.check_and_insert_binding(var, typ)
+            },
+            (Atom::Expression(expr1), Atom::Expression(expr2)) => {
+                std::iter::zip(expr1.children().iter(), expr2.children().iter())
+                    .map(|(child1, child2)| match_reducted_types_recursive(child1, child2, bindings, reverse_bindings))
+                    .reduce(|a, b| a && b)
+                    .unwrap_or(true)
+            },
+            (Atom::Expression(_), Atom::Symbol(sym))
+                | (Atom::Symbol(sym), Atom::Expression(_))
+                if sym.name() == "%Undefined%" => true,
+                    _ => false,
+        };
+        result
+    }
+    let result = match_reducted_types_recursive(type1, type2, bindings, &mut Bindings::new());
     log::trace!("match_reducted_types: type1: {}, type2: {}, bindings: {} return {}", type1, type2, bindings, result);
     result
 }
@@ -576,5 +583,27 @@ mod tests {
             (: b B)
         ");
         assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![ATOM_TYPE_UNDEFINED]);
+    }
+
+    #[test]
+    fn check_type_simple_parameterized() {
+        let space = metta_space("
+            (: List (-> $a Type))
+            (: Nil (List $a))
+            (: Cons (-> $a (List $a) (List $a)))
+        ");
+
+        assert!(check_type(&space, &atom("Nil"), &atom("(List $t)")));
+    }
+
+    #[test]
+    fn check_type_simple_parameterized_mixed_vars() {
+        let space = metta_space("
+            (: Pair (-> $a $b Type))
+            (: A (Pair $a $b))
+        ");
+
+        assert!(check_type(&space, &atom("A"), &atom("(Pair $b $a)")));
+        assert!(!check_type(&space, &atom("A"), &atom("(Pair $a $a)")));
     }
 }
