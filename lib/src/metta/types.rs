@@ -187,13 +187,14 @@ pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings)
                 bindings.check_and_insert_binding(f, type2) &&
                     reverse_bindings.check_and_insert_binding(s, type1)
             },
-            (Atom::Grounded(_), _) | (_, Atom::Grounded(_)) => panic!("GroundedAtom is not expected at type's place: {}, {}", type1, type2),
+            (Atom::Grounded(_), Atom::Grounded(_)) => type1 == type2,
             (Atom::Symbol(sym1), Atom::Symbol(sym2)) => {
                 type1 == type2 || sym1.name() == "%Undefined%" || sym2.name() == "%Undefined%"
             },
             (Atom::Variable(var), typ) | (typ, Atom::Variable(var)) => {
                 bindings.check_and_insert_binding(var, typ)
             },
+            (Atom::Grounded(_), _) | (_, Atom::Grounded(_)) => false,
             (Atom::Expression(expr1), Atom::Expression(expr2)) => {
                 std::iter::zip(expr1.children().iter(), expr2.children().iter())
                     .map(|(child1, child2)| match_reducted_types_recursive(child1, child2, bindings, reverse_bindings))
@@ -586,24 +587,51 @@ mod tests {
     }
 
     #[test]
-    fn check_type_simple_parameterized() {
+    fn check_type_parameterized_type_no_variable_bindings() {
         let space = metta_space("
-            (: List (-> $a Type))
-            (: Nil (List $a))
-            (: Cons (-> $a (List $a) (List $a)))
+            (: Pair (-> $a $b Type))
+            (: A (Pair $c $d))
         ");
 
-        assert!(check_type(&space, &atom("Nil"), &atom("(List $t)")));
+        assert!(check_type(&space, &atom("A"), &atom("(Pair $e $f)")));
+        assert!(!check_type(&space, &atom("A"), &atom("(Pair $f $f)")));
     }
 
     #[test]
-    fn check_type_simple_parameterized_mixed_vars() {
+    fn check_type_dependent_type_symbol_param() {
         let space = metta_space("
-            (: Pair (-> $a $b Type))
-            (: A (Pair $a $b))
+            (: === (-> $a $a Type))
+            (: Refl (-> $x (=== $x $x)))
+
+            (: TermSym A)
         ");
 
-        assert!(check_type(&space, &atom("A"), &atom("(Pair $b $a)")));
-        assert!(!check_type(&space, &atom("A"), &atom("(Pair $a $a)")));
+        assert!(check_type(&space, &atom("(Refl TermSym)"), &atom("(=== A A)")));
+        assert!(!check_type(&space, &atom("(Refl TermSym)"), &atom("(=== A B)")));
+        assert!(!check_type(&space, &atom("(Refl TermSym)"), &atom("(=== 42 A)")));
+        assert!(!check_type(&space, &atom("(Refl TermSym)"), &atom("(=== A 42)")));
+        assert!(check_type(&space, &atom("(Refl TermSym)"), &atom("(=== $a A)")));
+        assert!(check_type(&space, &atom("(Refl TermSym)"), &atom("(=== A $a)")));
+        assert!(check_type(&space, &atom("(Refl TermSym)"), &atom("(=== $a $a)")));
+        assert!(check_type(&space, &atom("(Refl TermSym)"), &atom("(=== $a $b)")));
+    }
+
+    #[test]
+    fn check_type_dependent_type_grounded_param() {
+        let space = metta_space("
+            (: === (-> $a $a Type))
+            (: Refl (-> $x (=== $x $x)))
+
+            (: TermGnd 42)
+        ");
+
+        assert!(check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== 42 42)")));
+        assert!(!check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== 42 24)")));
+        assert!(!check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== 42 A)")));
+        assert!(!check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== A 42)")));
+        assert!(check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== $a 42)")));
+        assert!(check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== 42 $a)")));
+        assert!(check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== $a $a)")));
+        assert!(check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== $a $b)")));
     }
 }
