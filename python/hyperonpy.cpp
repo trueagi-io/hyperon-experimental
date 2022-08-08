@@ -5,6 +5,9 @@
 
 namespace py = pybind11;
 
+template<class T, size_t N>
+constexpr size_t lenghtof(T (&)[N]) { return N; }
+
 template <typename T>
 struct CPtr {
 	using type = T;
@@ -94,10 +97,9 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
 		if (e.matches(NoReduceError)) {
 			return exec_error_no_reduce();
 		} else {
-			char error[4096];
- 	 		strcpy(error, "Exception caught:\n");
-			strncat(error, e.what(), sizeof(error) / sizeof(error[0]) - 1);
-			return exec_error_runtime(error);
+			char message[4096];
+			snprintf(message, lenghtof(message), "Exception caught:\n%s", e.what());
+			return exec_error_runtime(message);
 		}
 	}
 }
