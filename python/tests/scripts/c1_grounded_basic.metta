@@ -19,10 +19,6 @@
   (True))
 
 !(assertEqualToResult
-  (== 4 (+ 2 2))
-  (True))
-
-!(assertEqualToResult
   (and (> 4 2) (< 4 3))
   (False))
 
@@ -38,14 +34,35 @@
 ; operations will not cause errors and simply remain
 ; unreduced, if it type-checks.
 !(assertEqualToResult
-  (== 4 (+ ln 2))
-  ((== 4 (+ ln 2))))
+  (> 4 (+ ln 2))
+  ((> 4 (+ ln 2))))
 
 ; This will also remain unreduced unless
 ; grounded operations can do pattern matching
 !(assertEqualToResult
-  (== 4 (+ $x 2))
-  ((== 4 (+ $x 2))))
+  (> 4 (+ $x 2))
+  ((> 4 (+ $x 2))))
+
+; `==` is now implemented to work with both grounded and
+; symbolic atoms (while remaining a grounded operation)
+!(assertEqualToResult
+  (== 4 (+ 2 2))
+  (True))
+!(assertEqualToResult
+  (== 2 3)
+  (False))
+!(assertEqualToResult
+  (== (A B) (A B))
+  (True))
+!(assertEqualToResult
+  (== (A B) (A (B C)))
+  (False))
+; Unlike `<` or `>`, it will not remain unreduced if one
+; of its arguments is gounded, while another is not.
+; Instead, it will return `False`
+!(assertEqualToResult
+  (== 4 (+ ln 2))
+  (False))
 
 ; Grounded symbols have predefined types.
 ; If automatic type-checking is not turned on,
