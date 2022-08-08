@@ -6,9 +6,14 @@ execute_process(
 include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
 find_package(pybind11 REQUIRED)
 
-find_package(PythonInterp REQUIRED)
+find_package(PythonInterp 3.6 REQUIRED)
+# Python installation path should be modified via Python environment.
+# Following way of getting paths seems to be working (for Ubuntu as well)
+execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('platlib'), end='')" OUTPUT_VARIABLE Python3_SITEARCH)
+execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('purelib'), end='')" OUTPUT_VARIABLE Python3_SITELIB)
+message(STATUS "Python3_SITEARCH: ${Python3_SITEARCH}")
+message(STATUS "Python3_SITELIB: ${Python3_SITELIB}")
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR})
-include(FindPythonInstallPrefix)
 
 pybind11_add_module(hyperonpy hyperonpy.cpp)
 target_link_libraries(hyperonpy PRIVATE hyperonc)
@@ -16,5 +21,5 @@ target_link_libraries(hyperonpy PRIVATE hyperonc)
 set(PYTHONPATH "${CMAKE_CURRENT_BINARY_DIR}:${CMAKE_CURRENT_SOURCE_DIR}")
 add_subdirectory(tests)
 
-INSTALL(TARGETS hyperonpy DESTINATION "${PYTHON_INSTALL_PREFIX}")
-INSTALL(DIRECTORY hyperon DESTINATION "${PYTHON_INSTALL_PREFIX}")
+INSTALL(TARGETS hyperonpy DESTINATION "${Python3_SITEARCH}")
+INSTALL(DIRECTORY hyperon DESTINATION "${Python3_SITELIB}")
