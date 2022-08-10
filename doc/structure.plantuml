@@ -1,7 +1,5 @@
 @startuml
 
-title Structure of the codebase
-
 package "Rust ./lib/*" {
   [libhyperon.rlib] as libhyperon
 }

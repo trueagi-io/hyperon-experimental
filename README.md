@@ -133,17 +133,15 @@ rustup update stable
 ## Structure of the codebase
 
 Main library `libhyperon.rlib` is written in Rust language, it contains core
-API which can be used from other Rust programs. Source code of the library is
+API which can be used from other Rust projects. Source code of the library is
 located under [./lib](./lib) directory. It is a plain Rust project which can be
 built and tested using Cargo tool.
 
 In order to provide API for platforms and languages other than Rust there is a
 C API export library `libhyperonc`. Source code of the library is located under
 [./c](./c) directory. The library contains Rust C API bindings and depends on
-`libhyperon.rlib` library. Native library is compiled using Cargo and C headers
-are generated using cbindgen tool. The library building process is embedded
-into CMake project which is used to build all other parts of Hyperon
-repository.
+`libhyperon.rlib` library. Native library is compiled using Cargo, C headers
+are generated using cbindgen tool.
 
 Source code of the Python integration library is located under
 [./python](./python) directory. It contains two main parts. First part is a
@@ -152,9 +150,13 @@ native Python library `libhyperonpy` which is wrote using
 into C API calls and vice versa. Second part is a Python library `hyperon`
 which uses `libhyperonpy` as a proxy for a C API calls.
 
+All components which depend on `libhyperonc` are built using
+[CMake](https://cmake.org/) build tool in order to manage dependencies
+automatically.
+
 Diagram below demonstrates main components and dependencies between them:
-![Structure of the codebase](./doc/structure.svg)
-[Source code](./doc/structure.plantuml)
+![Diagram of the structure](./doc/structure.svg)
+[Source code of the diagram](./doc/structure.plantuml)
 
 ## Language support for IDEs
 
