@@ -42,7 +42,9 @@ inside the [Dockerfile](./Dockerfile). If the docker image doesn't
 work, please raise an
 [issue](https://github.com/trueagi-io/hyperon-experimental/issues).
 
-# Hyperon library
+# Build and run
+
+## Hyperon library
 
 Build and test the library:
 ```
@@ -63,7 +65,7 @@ cargo doc --no-deps
 ```
 Docs can be found at `./lib/target/doc/hyperon/index.html`.
 
-# C and Python API
+## C and Python API
 
 Setup build:
 ```
@@ -79,7 +81,7 @@ make
 make check
 ```
 
-# Running Python and MeTTa examples from command line
+## Running Python and MeTTa examples from command line
 
 In order to run examples you need to add Python libraries into the `PYTHONPATH`
 after compilation:
@@ -94,22 +96,9 @@ cd python/tests
 python3 metta.py ./scripts/<name>.metta
 ```
 
-# Language support for IDEs [optional]
+## Troubleshooting
 
-Different IDEs may require different tweaks to support the languages
-used in the codebase. The language servers which we use
-for development are:
-- [Rust Language Server](https://github.com/rust-lang/rls#setup);
-- [clangd](https://clangd.llvm.org/installation), generate compile
-  commands for the `clangd` using `cmake` variable:
-  ```
-  cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=Y ..
-  ```
-- [Python LSP server](https://github.com/python-lsp/python-lsp-server#installation).
-
-# Troubleshooting
-
-## Conan claims it cannot find out the version of the C compiler
+### Conan claims it cannot find out the version of the C compiler
 
 If you see the following `cmake` output:
 ```
@@ -132,10 +121,25 @@ conan profile update settings.compiler.version=7 default
 conan profile update settings.compiler.libcxx=libstdc++ default
 ```
 
-## Rust compiler shows errors
+### Rust compiler shows errors
 
 Please ensure you are using the latest stable version:
 ```
 rustup update stable
 ```
+
+# Development
+
+## Language support for IDEs
+
+Different IDEs may require different tweaks to support the languages
+used in the codebase. The language servers which we use
+for development are:
+- [Rust Language Server](https://github.com/rust-lang/rls#setup);
+- [clangd](https://clangd.llvm.org/installation), generate compile
+  commands for the `clangd` using `cmake` variable:
+  ```
+  cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=Y ..
+  ```
+- [Python LSP server](https://github.com/python-lsp/python-lsp-server#installation).
 
