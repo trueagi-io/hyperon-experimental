@@ -1,0 +1,22 @@
+@startuml
+
+title Structure of the codebase
+
+package "Rust ./lib/*" {
+  [libhyperon.rlib] as libhyperon
+}
+
+package "Rust, C ./c/*" {
+  [libhyperonc.so\nhyperon/hyperon.h] as libhyperonc
+}
+
+package "Python ./python/*" {
+  [libhyperonpy.so\n./python/libhyperon.cpp] as libhyperonpy
+  [hyperon\n./python/hyperon/*] as hyperonpy
+}
+
+libhyperonc -> libhyperon
+libhyperonpy -u-> libhyperonc
+hyperonpy -u-> libhyperonpy
+
+@enduml
