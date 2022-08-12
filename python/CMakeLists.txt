@@ -9,6 +9,8 @@ find_package(pybind11 REQUIRED)
 find_package(PythonInterp 3.6 REQUIRED)
 # Python installation path should be modified via Python environment.
 # Following way of getting paths seems to be working (for Ubuntu as well)
+# TODO: Starting from cmake 3.12 FindPython3 module can be used instead:
+# variable naming is compatible.
 execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('platlib'), end='')" OUTPUT_VARIABLE Python3_SITEARCH)
 execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('purelib'), end='')" OUTPUT_VARIABLE Python3_SITELIB)
 message(STATUS "Python3_SITEARCH: ${Python3_SITEARCH}")

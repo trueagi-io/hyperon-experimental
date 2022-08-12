@@ -13,7 +13,7 @@ conan_basic_setup(TARGETS)
 set(RUST_TARGET_DIR ${CMAKE_CURRENT_BINARY_DIR}/cargo)
 # Need to list release configurations explicitly here because $<CONFIG:Debug>
 # is FALSE by default (when CMAKE_BUILD_TYPE is unspecified).
-set(IS_RELEASE_BUILD $<IF:$<CONFIG:Release,RelWithDebInfo,MinSizeRel>,1,0>)
+set(IS_RELEASE_BUILD $<IF:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>,1,0>)
 set(RUST_BUILD_SUFFIX $<IF:${IS_RELEASE_BUILD},release,debug>)
 add_custom_target(show-build-type-vars COMMAND ${CMAKE_COMMAND} -E echo
 	"CMAKE_BUILD_TYPE:${BUILD_TYPE} IS_RELEASE_BUILD=${IS_RELEASE_BUILD} RUST_BUILD_SUFFIX=${RUST_BUILD_SUFFIX}")
