@@ -42,7 +42,9 @@ inside the [Dockerfile](./Dockerfile). If the docker image doesn't
 work, please raise an
 [issue](https://github.com/trueagi-io/hyperon-experimental/issues).
 
-# Hyperon library
+# Build and run
+
+## Hyperon library
 
 Build and test the library:
 ```
@@ -63,7 +65,7 @@ cargo doc --no-deps
 ```
 Docs can be found at `./lib/target/doc/hyperon/index.html`.
 
-# C and Python API
+## C and Python API
 
 Setup build:
 ```
@@ -79,7 +81,7 @@ make
 make check
 ```
 
-# Running Python and MeTTa examples from command line
+## Running Python and MeTTa examples from command line
 
 In order to run examples you need to add Python libraries into the `PYTHONPATH`
 after compilation:
@@ -94,22 +96,9 @@ cd python/tests
 python3 metta.py ./scripts/<name>.metta
 ```
 
-# Language support for IDEs [optional]
+## Troubleshooting
 
-Different IDEs may require different tweaks to support the languages
-used in the codebase. The language servers which we use
-for development are:
-- [Rust Language Server](https://github.com/rust-lang/rls#setup);
-- [clangd](https://clangd.llvm.org/installation), generate compile
-  commands for the `clangd` using `cmake` variable:
-  ```
-  cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=Y ..
-  ```
-- [Python LSP server](https://github.com/python-lsp/python-lsp-server#installation).
-
-# Troubleshooting
-
-## Conan claims it cannot find out the version of the C compiler
+### Conan claims it cannot find out the version of the C compiler
 
 If you see the following `cmake` output:
 ```
@@ -132,10 +121,53 @@ conan profile update settings.compiler.version=7 default
 conan profile update settings.compiler.libcxx=libstdc++ default
 ```
 
-## Rust compiler shows errors
+### Rust compiler shows errors
 
 Please ensure you are using the latest stable version:
 ```
 rustup update stable
 ```
+
+# Development
+
+## Structure of the codebase
+
+Main library `libhyperon.rlib` is written in Rust language, it contains core
+API which can be used from other Rust projects. Source code of the library is
+located under [./lib](./lib) directory. It is a plain Rust project which can be
+built and tested using Cargo tool.
+
+In order to provide API for platforms and languages other than Rust there is a
+C API export library `libhyperonc`. Source code of the library is located under
+[./c](./c) directory. The library contains Rust C API bindings and depends on
+`libhyperon.rlib` library. Native library is compiled using Cargo, C headers
+are generated using cbindgen tool.
+
+Source code of the Python integration library is located under
+[./python](./python) directory. It contains two main parts. First part is a
+native Python library `libhyperonpy` which is wrote using
+[pybind11](https://github.com/pybind/pybind11), it converts Python API calls
+into C API calls and vice versa. Second part is a Python library `hyperon`
+which uses `libhyperonpy` as a proxy for a C API calls.
+
+All components which depend on `libhyperonc` are built using
+[CMake](https://cmake.org/) build tool in order to manage dependencies
+automatically.
+
+Diagram below demonstrates main components and dependencies between them:
+![Diagram of the structure](./doc/structure.svg)
+[Source code of the diagram](./doc/structure.plantuml)
+
+## Language support for IDEs
+
+Different IDEs may require different tweaks to support the languages
+used in the codebase. The language servers which we use
+for development are:
+- [Rust Language Server](https://github.com/rust-lang/rls#setup);
+- [clangd](https://clangd.llvm.org/installation), generate compile
+  commands for the `clangd` using `cmake` variable:
+  ```
+  cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=Y ..
+  ```
+- [Python LSP server](https://github.com/python-lsp/python-lsp-server#installation).
 
