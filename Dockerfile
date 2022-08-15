@@ -9,8 +9,8 @@ FROM ubuntu:22.04
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
-	apt-get install -y git python3 python3-pip curl gcc cmake && \
-	rm -rf /var/lib/apt/lists/*
+    apt-get install -y git python3 python3-pip curl gcc cmake && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m -g users user
 USER user
