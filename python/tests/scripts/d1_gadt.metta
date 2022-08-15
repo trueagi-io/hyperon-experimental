@@ -8,7 +8,13 @@
 !(assertEqual
   (get-type +)
   (-> Number Number Number))
-
+; Types are an empty set for badly typed expressions
+!(assertEqualToResult
+  (get-type (+ 5 "4"))
+  ())
+!(assertEqualToResult
+  (get-type (+ -))
+  ())
 
 ; Custom types
 (: Either Type)
@@ -30,6 +36,9 @@
   (get-type (isLeft (Right 5)))
   Bool)
 
+!(assertEqualToResult
+  (get-type (isLeft 5))
+  ())
 
 ; Parameterized types
 (: EitherP (-> $t Type))
@@ -55,3 +64,6 @@
 !(assertEqual
   (get-type (Cons 5 (Cons 6 Nil)))
   (List Number))
+!(assertEqualToResult
+  (get-type (Cons 5 (Cons "6" Nil)))
+  ())
