@@ -90,10 +90,7 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 }
 
 pub fn get_atom_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
-    let mut types = get_reducted_types(space, atom);
-    if types.is_empty() {
-        types.push(ATOM_TYPE_UNDEFINED);
-    }
+    let types = get_reducted_types(space, atom);
     log::debug!("get_atom_types: atom: {}, types: {:?}", atom, types);
     types
 }
@@ -578,12 +575,12 @@ mod tests {
     }
 
     #[test]
-    fn get_atom_types_undefined_expression_type() {
+    fn get_atom_types_empty_expression_type() {
         let space = metta_space("
             (: a (-> C D))
             (: b B)
         ");
-        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![ATOM_TYPE_UNDEFINED]);
+        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![]);
     }
 
     #[test]
