@@ -77,6 +77,14 @@ def newAssertEqualToResultAtom(metta):
         [AtomType.ATOM, AtomType.ATOM, AtomType.ATOM],
         unwrap=False)
 
+def newGetAtomTypeAtom(metta):
+    return OperationAtom(
+        'get-type',
+        lambda atom: get_atom_types(metta.space, atom),
+        [AtomType.ATOM, AtomType.ATOM],
+        unwrap=False
+    )
+
 
 #E(S('->'), S('Number'), S('Number'), S('Number'))
 subAtom = OperationAtom('-', lambda a, b: a - b, ['Number', 'Number', 'Number'])
@@ -227,6 +235,7 @@ class MeTTa:
         self.add_atom(r"pragma!", newPragmaOp(self))
         self.add_atom(r"collapse", newCollapseAtom(self))
         self.add_atom(r"superpose", superposeAtom)
+        self.add_atom(r"get-type", newGetAtomTypeAtom(self))
 
     def add_token(self, regexp, constr):
         self.tokenizer.register_token(regexp, constr)
