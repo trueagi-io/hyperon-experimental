@@ -11,14 +11,14 @@ static Suite * capi_suite(void (*init_test)(TCase* test_case)) {
     s = suite_create("Suite");
 
     tc_core = tcase_create("Core");
-	init_test(tc_core);
+    init_test(tc_core);
     suite_add_tcase(s, tc_core);
 
     return s;
 }
 
 int test_main(void (*init_test)(TCase* test_case)) {
-	int number_failed;
+    int number_failed;
     Suite *s;
     SRunner *sr;
 

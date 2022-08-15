@@ -4,9 +4,9 @@
 #include <hyperon/hyperon.h>
 
 typedef struct _int_gnd_t {
-	gnd_api_t const* api;
-	atom_t const* typ;
-	int n;
+    gnd_api_t const* api;
+    atom_t const* typ;
+    int n;
 } int_gnd_t;
 
 gnd_t* int_new(int n);
