@@ -272,5 +272,9 @@ def interpret(gnd_space, expr):
 def check_type(gnd_space, atom, type):
     return hp.check_type(gnd_space.cspace, atom.catom, type.catom)
 
-def validate_atom(gnd_space, expr):
-    return hp.validate_atom(gnd_space.cspace, expr.catom)
+def validate_atom(gnd_space, atom):
+    return hp.validate_atom(gnd_space.cspace, atom.catom)
+
+def get_atom_types(gnd_space, atom):
+    result = hp.get_atom_types(gnd_space.cspace, atom.catom)
+    return [Atom._from_catom(catom) for catom in result]

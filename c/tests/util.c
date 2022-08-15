@@ -3,16 +3,17 @@
 
 #include "util.h"
 
-static char buffer[4096];
-const size_t buffer_size = sizeof(buffer)/sizeof(buffer[0]);
-
 void return_string(char const* value, void* context) {
-	strncpy(buffer, value, buffer_size - 1);
-	buffer[buffer_size - 1] = 0;
+	char** buffer = context;
+	size_t length = strlen(value);
+	*buffer = malloc(length + 1);
+	strncpy(*buffer, value, length);
+	(*buffer)[length] = 0;
 }
 
-char const* stratom(atom_t const* atom) {
-	atom_to_str(atom, return_string, 0);
+char* stratom(atom_t const* atom) {
+	char* buffer;
+	atom_to_str(atom, return_string, &buffer);
 	return buffer;
 }
 
