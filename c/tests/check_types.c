@@ -77,7 +77,7 @@ START_TEST (test_get_atom_types)
 
     atom_t const* call_a_c_types[] = { D, 0 };
     get_atom_types(space, call_a_c, &check_atoms, &call_a_c_types);
-    atom_t const* call_a_b_types[] = { ATOM_TYPE_UNDEFINED, 0 };
+    atom_t const* call_a_b_types[] = { 0 };
     get_atom_types(space, call_a_b, &check_atoms, &call_a_b_types);
     atom_t const* a_types[] = { a_type, 0 };
     get_atom_types(space, a, &check_atoms, &a_types);

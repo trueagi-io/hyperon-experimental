@@ -28,5 +28,5 @@ class AtomTest(unittest.TestCase):
 
         self.assertEqual(get_atom_types(space, E(S("foo"), S("a"))), [S("B")])
         self.assertEqual(get_atom_types(space, E(S("foo"), S("b"))),
-                [AtomType.UNDEFINED])
+                [])
         self.assertEqual(get_atom_types(space, S("foo")), [E(S("->"), S("A"), S("B"))])
