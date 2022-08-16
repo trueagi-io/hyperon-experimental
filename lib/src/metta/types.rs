@@ -642,7 +642,7 @@ mod tests {
     }
 
     #[test]
-    fn check_type_meta_types() {
+    fn check_type_meta_type_argument() {
         let type_r = &atom("R");
         let space = metta_space("
             (: R Type)
@@ -677,7 +677,7 @@ mod tests {
     }
 
     #[test]
-    fn validate_atom_meta_types() {
+    fn validate_atom_meta_type_argument() {
         let space = metta_space("
             (: R Type)
             (: a A)
