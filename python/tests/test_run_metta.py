@@ -83,4 +83,5 @@ class MeTTaTest(unittest.TestCase):
         self.process_exceptions(MeTTa().import_file("scripts/c2_spaces.metta"))
         self.process_exceptions(MeTTa().import_file("scripts/c3_pln_stv.metta"))
         self.process_exceptions(MeTTa().import_file("scripts/d1_gadt.metta"))
+        self.process_exceptions(MeTTa().import_file("scripts/d2_higherfunc.metta"))
 
