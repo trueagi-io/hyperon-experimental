@@ -89,7 +89,13 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
     &expr.children().as_slice()[1..]
 }
 
-pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
+pub fn get_atom_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
+    let types = get_reducted_types(space, atom);
+    log::debug!("get_atom_types: atom: {}, types: {:?}", atom, types);
+    types
+}
+
+fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     log::trace!("get_reducted_types: atom: {}", atom);
     let types = match atom {
         Atom::Variable(_) => vec![ATOM_TYPE_UNDEFINED],
@@ -131,21 +137,23 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
             log::trace!("get_reducted_types: tuple {} types {:?}", atom, types);
 
             // functional types
-            let op = get_op(expr);
-            let args = get_args(expr);
-            let actual_arg_types: Vec<Vec<Atom>> = args.iter().map(|arg| get_reducted_types(space, arg)).collect();
-            let mut fn_types = get_reducted_types(space, op);
-            let fn_types = fn_types.drain(0..).filter(is_func);
             let mut only_tuple = true;
-            for fn_type in fn_types {
-                only_tuple = false;
-                let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
-                let mut bindings = Bindings::new();
-                if check_types(actual_arg_types.as_slice(), expected_arg_types, &mut bindings) {
-                    types.push(apply_bindings_to_atom(&ret_typ, &bindings));
+            if !expr.children().is_empty() {
+                let op = get_op(expr);
+                let args = get_args(expr);
+                let actual_arg_types: Vec<Vec<Atom>> = args.iter().map(|arg| get_reducted_types(space, arg)).collect();
+                let mut fn_types = get_reducted_types(space, op);
+                let fn_types = fn_types.drain(0..).filter(is_func);
+                for fn_type in fn_types {
+                    only_tuple = false;
+                    let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
+                    let mut bindings = Bindings::new();
+                    if check_types(actual_arg_types.as_slice(), expected_arg_types, &mut bindings) {
+                        types.push(apply_bindings_to_atom(&ret_typ, &bindings));
+                    }
                 }
+                log::trace!("get_reducted_types: tuple + function {} types {:?}", atom, types);
             }
-            log::trace!("get_reducted_types: tuple + function {} types {:?}", atom, types);
 
             // TODO: Three cases here:
             // - tuple type
@@ -169,27 +177,35 @@ pub fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
 
 
 pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings) -> bool {
-    log::trace!("match_reducted_types: type1: {}, type2: {}, bindings: {}", type1, type2, bindings);
-    let result = match (type1, type2) {
-        (Atom::Variable(_), Atom::Variable(_)) => false,
-        (Atom::Grounded(_), _) | (_, Atom::Grounded(_)) => panic!("GroundedAtom is not expected at type's place: {}, {}", type1, type2),
-        (Atom::Symbol(sym1), Atom::Symbol(sym2)) => {
-            type1 == type2 || sym1.name() == "%Undefined%" || sym2.name() == "%Undefined%"
-        },
-        (Atom::Variable(var), typ) | (typ, Atom::Variable(var)) => {
-            bindings.check_and_insert_binding(var, typ)
-        },
-        (Atom::Expression(expr1), Atom::Expression(expr2)) => {
-            std::iter::zip(expr1.children().iter(), expr2.children().iter())
-                .map(|(child1, child2)| match_reducted_types(child1, child2, bindings))
-                .reduce(|a, b| a && b)
-                .unwrap_or(true)
-        },
-        (Atom::Expression(_), Atom::Symbol(sym))
-            | (Atom::Symbol(sym), Atom::Expression(_))
-            if sym.name() == "%Undefined%" => true,
-        _ => false,
-    };
+    fn match_reducted_types_recursive(type1: &Atom, type2: &Atom,
+            bindings: &mut Bindings, reverse_bindings: &mut Bindings) -> bool {
+        let result = match (type1, type2) {
+            (Atom::Variable(f), Atom::Variable(s)) => {
+                bindings.check_and_insert_binding(f, type2) &&
+                    reverse_bindings.check_and_insert_binding(s, type1)
+            },
+            (Atom::Grounded(_), Atom::Grounded(_)) => type1 == type2,
+            (Atom::Symbol(sym1), Atom::Symbol(sym2)) => {
+                type1 == type2 || sym1.name() == "%Undefined%" || sym2.name() == "%Undefined%"
+            },
+            (Atom::Variable(var), typ) | (typ, Atom::Variable(var)) => {
+                bindings.check_and_insert_binding(var, typ)
+            },
+            (Atom::Grounded(_), _) | (_, Atom::Grounded(_)) => false,
+            (Atom::Expression(expr1), Atom::Expression(expr2)) => {
+                std::iter::zip(expr1.children().iter(), expr2.children().iter())
+                    .map(|(child1, child2)| match_reducted_types_recursive(child1, child2, bindings, reverse_bindings))
+                    .reduce(|a, b| a && b)
+                    .unwrap_or(true)
+            },
+            (Atom::Expression(_), Atom::Symbol(sym))
+                | (Atom::Symbol(sym), Atom::Expression(_))
+                if sym.name() == "%Undefined%" => true,
+                    _ => false,
+        };
+        result
+    }
+    let result = match_reducted_types_recursive(type1, type2, bindings, &mut Bindings::new());
     log::trace!("match_reducted_types: type1: {}, type2: {}, bindings: {} return {}", type1, type2, bindings, result);
     result
 }
@@ -550,5 +566,69 @@ mod tests {
     fn get_reducted_types_grounded_atom() {
         let space = GroundingSpace::new();
         assert_eq!(get_reducted_types(&space, &Atom::value(3)), vec![atom("i32")]);
+    }
+
+    #[test]
+    fn get_reducted_types_empty_expression() {
+        let space = GroundingSpace::new();
+        assert_eq!(get_reducted_types(&space, &Atom::expr([])), vec![ATOM_TYPE_UNDEFINED]);
+    }
+
+    #[test]
+    fn get_atom_types_empty_expression_type() {
+        let space = metta_space("
+            (: a (-> C D))
+            (: b B)
+        ");
+        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![]);
+    }
+
+    #[test]
+    fn check_type_parameterized_type_no_variable_bindings() {
+        let space = metta_space("
+            (: Pair (-> $a $b Type))
+            (: A (Pair $c $d))
+        ");
+
+        assert!(check_type(&space, &atom("A"), &atom("(Pair $e $f)")));
+        assert!(!check_type(&space, &atom("A"), &atom("(Pair $f $f)")));
+    }
+
+    #[test]
+    fn check_type_dependent_type_symbol_param() {
+        let space = metta_space("
+            (: === (-> $a $a Type))
+            (: Refl (-> $x (=== $x $x)))
+
+            (: TermSym A)
+        ");
+
+        assert!(check_type(&space, &atom("(Refl TermSym)"), &atom("(=== A A)")));
+        assert!(!check_type(&space, &atom("(Refl TermSym)"), &atom("(=== A B)")));
+        assert!(!check_type(&space, &atom("(Refl TermSym)"), &atom("(=== 42 A)")));
+        assert!(!check_type(&space, &atom("(Refl TermSym)"), &atom("(=== A 42)")));
+        assert!(check_type(&space, &atom("(Refl TermSym)"), &atom("(=== $a A)")));
+        assert!(check_type(&space, &atom("(Refl TermSym)"), &atom("(=== A $a)")));
+        assert!(check_type(&space, &atom("(Refl TermSym)"), &atom("(=== $a $a)")));
+        assert!(check_type(&space, &atom("(Refl TermSym)"), &atom("(=== $a $b)")));
+    }
+
+    #[test]
+    fn check_type_dependent_type_grounded_param() {
+        let space = metta_space("
+            (: === (-> $a $a Type))
+            (: Refl (-> $x (=== $x $x)))
+
+            (: TermGnd 42)
+        ");
+
+        assert!(check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== 42 42)")));
+        assert!(!check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== 42 24)")));
+        assert!(!check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== 42 A)")));
+        assert!(!check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== A 42)")));
+        assert!(check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== $a 42)")));
+        assert!(check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== 42 $a)")));
+        assert!(check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== $a $a)")));
+        assert!(check_type(&space, &atom("(Refl TermGnd)"), &atom("(=== $a $b)")));
     }
 }

@@ -1,7 +1,7 @@
 set(TEST_SOURCES
-	test.c
-	int_gnd.c
-	util.c
+    test.c
+    int_gnd.c
+    util.c
 )
 add_executable(check_atom check_atom.c ${TEST_SOURCES})
 target_link_libraries(check_atom hyperonc CONAN_PKG::libcheck)

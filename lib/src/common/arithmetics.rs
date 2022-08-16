@@ -89,7 +89,6 @@ mod tests {
 
     use super::*;
     use crate::metta::interpreter::*;
-    use crate::atom::matcher::Bindings;
     use crate::space::grounding::GroundingSpace;
 
     #[test]

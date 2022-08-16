@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" contentStyleType="text/css" height="388px" preserveAspectRatio="none" style="width:448px;height:388px;background:#FFFFFF;" version="1.1" viewBox="0 0 448 388" width="448px" zoomAndPan="magnify"><defs/><g><!--MD5=[bb89bda416e4d88dfbc22d42d98ad16a]
+cluster Rust ./lib/*--><g id="cluster_Rust ./lib/*"><path d="M263.5,14.5 L349.5,14.5 A3.75,3.75 0 0 1 352,17 L359,36.7969 L438.5,36.7969 A2.5,2.5 0 0 1 441,39.2969 L441,109 A2.5,2.5 0 0 1 438.5,111.5 L263.5,111.5 A2.5,2.5 0 0 1 261,109 L261,17 A2.5,2.5 0 0 1 263.5,14.5 " style="stroke:#000000;stroke-width:1.5;fill:none;"/><line style="stroke:#000000;stroke-width:1.5;fill:none;" x1="261" x2="359" y1="36.7969" y2="36.7969"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="85" x="265" y="29.4951">Rust ./lib/*</text></g><!--MD5=[77f9429c4fc72cc3a98172e59b4fab2c]
+cluster Rust, C ./c/*--><g id="cluster_Rust, C ./c/*"><path d="M27.5,6 L122.5,6 A3.75,3.75 0 0 1 125,8.5 L132,28.2969 L234.5,28.2969 A2.5,2.5 0 0 1 237,30.7969 L237,117.5 A2.5,2.5 0 0 1 234.5,120 L27.5,120 A2.5,2.5 0 0 1 25,117.5 L25,8.5 A2.5,2.5 0 0 1 27.5,6 " style="stroke:#000000;stroke-width:1.5;fill:none;"/><line style="stroke:#000000;stroke-width:1.5;fill:none;" x1="25" x2="132" y1="28.2969" y2="28.2969"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="94" x="29" y="20.9951">Rust, C ./c/*</text></g><!--MD5=[3c862412591c861bd35a7186ba59a8ed]
+cluster Python ./python/*--><g id="cluster_Python ./python/*"><path d="M8.5,144 L150.5,144 A3.75,3.75 0 0 1 153,146.5 L160,166.2969 L253.5,166.2969 A2.5,2.5 0 0 1 256,168.7969 L256,378.5 A2.5,2.5 0 0 1 253.5,381 L8.5,381 A2.5,2.5 0 0 1 6,378.5 L6,146.5 A2.5,2.5 0 0 1 8.5,144 " style="stroke:#000000;stroke-width:1.5;fill:none;"/><line style="stroke:#000000;stroke-width:1.5;fill:none;" x1="6" x2="160" y1="166.2969" y2="166.2969"/><text fill="#000000" font-family="sans-serif" font-size="14" font-weight="bold" lengthAdjust="spacing" textLength="141" x="10" y="158.9951">Python ./python/*</text></g><!--MD5=[834a59e7cfa3e4fb726259acdc215d42]
+entity libhyperon--><g id="elem_libhyperon"><rect fill="#F1F1F1" height="46.2969" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="147" x="277.5" y="49.5"/><rect fill="#F1F1F1" height="10" style="stroke:#181818;stroke-width:0.5;" width="15" x="404.5" y="54.5"/><rect fill="#F1F1F1" height="2" style="stroke:#181818;stroke-width:0.5;" width="4" x="402.5" y="56.5"/><rect fill="#F1F1F1" height="2" style="stroke:#181818;stroke-width:0.5;" width="4" x="402.5" y="60.5"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="107" x="292.5" y="82.4951">libhyperon.rlib</text></g><!--MD5=[7a08443dea552a0f8c363654b9858a17]
+entity libhyperonc--><g id="elem_libhyperonc"><rect fill="#F1F1F1" height="62.5938" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="179" x="41.5" y="41"/><rect fill="#F1F1F1" height="10" style="stroke:#181818;stroke-width:0.5;" width="15" x="200.5" y="46"/><rect fill="#F1F1F1" height="2" style="stroke:#181818;stroke-width:0.5;" width="4" x="198.5" y="48"/><rect fill="#F1F1F1" height="2" style="stroke:#181818;stroke-width:0.5;" width="4" x="198.5" y="52"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="107" x="56.5" y="73.9951">libhyperonc.so</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="139" x="56.5" y="90.292">hyperon/hyperon.h</text></g><!--MD5=[3fd669f74ff1f0a847c6e4cf507c7a87]
+entity libhyperonpy--><g id="elem_libhyperonpy"><rect fill="#F1F1F1" height="62.5938" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="218" x="22" y="179"/><rect fill="#F1F1F1" height="10" style="stroke:#181818;stroke-width:0.5;" width="15" x="220" y="184"/><rect fill="#F1F1F1" height="2" style="stroke:#181818;stroke-width:0.5;" width="4" x="218" y="186"/><rect fill="#F1F1F1" height="2" style="stroke:#181818;stroke-width:0.5;" width="4" x="218" y="190"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="117" x="37" y="211.9951">libhyperonpy.so</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="178" x="37" y="228.292">./python/libhyperon.cpp</text></g><!--MD5=[f6c6312a3fafa8e7e970089319d66c90]
+entity hyperonpy--><g id="elem_hyperonpy"><rect fill="#F1F1F1" height="62.5938" rx="2.5" ry="2.5" style="stroke:#181818;stroke-width:0.5;" width="179" x="41.5" y="302"/><rect fill="#F1F1F1" height="10" style="stroke:#181818;stroke-width:0.5;" width="15" x="200.5" y="307"/><rect fill="#F1F1F1" height="2" style="stroke:#181818;stroke-width:0.5;" width="4" x="198.5" y="309"/><rect fill="#F1F1F1" height="2" style="stroke:#181818;stroke-width:0.5;" width="4" x="198.5" y="313"/><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="60" x="56.5" y="334.9951">hyperon</text><text fill="#000000" font-family="sans-serif" font-size="14" lengthAdjust="spacing" textLength="139" x="56.5" y="351.292">./python/hyperon/*</text></g><!--MD5=[d471532115256b5c2914b4adc147274c]
+link libhyperonc to libhyperon--><g id="link_libhyperonc_libhyperon"><path d="M220.805,72.5 C237.858,72.5 254.911,72.5 271.964,72.5 " fill="none" id="libhyperonc-to-libhyperon" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="277.257,72.5,268.257,68.5,272.257,72.5,268.257,76.5,277.257,72.5" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[c41b5206f37a388e165cc2f7c87a4128]
+reverse link libhyperonc to libhyperonpy--><g id="link_libhyperonc_libhyperonpy"><path d="M131,109.095 C131,130.676 131,157.941 131,178.61 " fill="none" id="libhyperonc-backto-libhyperonpy" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="131,104.021,127,113.021,131,109.021,135,113.021,131,104.021" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[8b654f5232e3823b4d7eb6aed286e3bb]
+reverse link libhyperonpy to hyperonpy--><g id="link_libhyperonpy_hyperonpy"><path d="M131,247.314 C131,264.694 131,285.355 131,301.9764 " fill="none" id="libhyperonpy-backto-hyperonpy" style="stroke:#181818;stroke-width:1.0;"/><polygon fill="#181818" points="131,242.033,127,251.033,131,247.033,135,251.033,131,242.033" style="stroke:#181818;stroke-width:1.0;"/></g><!--MD5=[8dc4967a185c4d3cb63e58206cdff0d9]
+@startuml
+package "Rust ./lib/*" {
+  [libhyperon.rlib] as libhyperon
+}
+
+package "Rust, C ./c/*" {
+  [libhyperonc.so\nhyperon/hyperon.h] as libhyperonc
+}
+
+package "Python ./python/*" {
+  [libhyperonpy.so\n./python/libhyperon.cpp] as libhyperonpy
+  [hyperon\n./python/hyperon/*] as hyperonpy
+}
+
+libhyperonc -> libhyperon
+libhyperonpy -u-> libhyperonc
+hyperonpy -u-> libhyperonpy
+@enduml
+
+PlantUML version 1.2022.7beta2(Unknown compile time)
+(GPL source distribution)
+Java Runtime: Java(TM) SE Runtime Environment
+JVM: Java HotSpot(TM) 64-Bit Server VM
+Default Encoding: UTF-8
+Language: en
+Country: US
+--></g></svg>
