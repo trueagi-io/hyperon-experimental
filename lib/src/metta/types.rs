@@ -642,12 +642,15 @@ mod tests {
     }
 
     #[test]
-    fn check_type_meta_type_argument() {
+    fn check_type_accept_meta_type() {
         let type_r = &atom("R");
         let space = metta_space("
             (: R Type)
+            (: A Type)
+            (: B Type)
             (: a A)
             (: b B)
+
             (: aF (-> A R))
             (: atomF (-> Atom R))
             (: exprF (-> Expression R))
@@ -677,11 +680,56 @@ mod tests {
     }
 
     #[test]
-    fn validate_atom_meta_type_argument() {
+    fn check_type_return_meta_type() {
+        let type_r = &atom("R");
         let space = metta_space("
             (: R Type)
+            (: A Type)
+            (: B Type)
             (: a A)
             (: b B)
+
+            (: atomR (-> A Atom))
+            (: exprR (-> A Expression))
+            (: gndR (-> A Grounded))
+            (: symR (-> A Symbol))
+            (: varR (-> A Variable))
+
+            (: atomF (-> Atom R))
+            (: exprF (-> Expression R))
+            (: gndF (-> Grounded R))
+            (: symF (-> Symbol R))
+            (: varF (-> Variable R))
+        ");
+
+        assert!(check_type(&space, &atom("(atomF (atomR a))"), type_r));
+        assert!(check_type(&space, &atom("(atomF (exprR a))"), type_r));
+        assert!(check_type(&space, &atom("(atomF (gndR a))"), type_r));
+        assert!(check_type(&space, &atom("(atomF (symR a))"), type_r));
+        assert!(check_type(&space, &atom("(atomF (varR a))"), type_r));
+
+        assert!(check_type(&space, &atom("(exprF (exprR a))"), type_r));
+        // TODO: it is incorrectly typed, but (atomR a) is an Expression and
+        // check_type returns True
+        assert!(check_type(&space, &atom("(exprF (atomR a))"), type_r));
+        
+        assert!(check_type(&space, &atom("(gndF (gndR a))"), type_r));
+        assert!(!check_type(&space, &atom("(gndF (atomR a))"), type_r));
+        assert!(check_type(&space, &atom("(symF (symR a))"), type_r));
+        assert!(!check_type(&space, &atom("(symF (atomR a))"), type_r));
+        assert!(check_type(&space, &atom("(varF (varR a))"), type_r));
+        assert!(!check_type(&space, &atom("(varF (atomR a))"), type_r));
+    }
+
+    #[test]
+    fn validate_atom_accept_meta_type() {
+        let space = metta_space("
+            (: R Type)
+            (: A Type)
+            (: B Type)
+            (: a A)
+            (: b B)
+
             (: aF (-> A R))
             (: atomF (-> Atom R))
             (: exprF (-> Expression R))
@@ -703,5 +751,46 @@ mod tests {
         assert!(!validate_atom(&space, &atom("(symF 1)")));
         assert!(validate_atom(&space, &atom("(varF $a)")));
         assert!(!validate_atom(&space, &atom("(varF a)")));
+    }
+
+    #[test]
+    fn validate_atom_return_meta_type() {
+        let space = metta_space("
+            (: R Type)
+            (: A Type)
+            (: B Type)
+            (: a A)
+            (: b B)
+
+            (: atomR (-> A Atom))
+            (: exprR (-> A Expression))
+            (: gndR (-> A Grounded))
+            (: symR (-> A Symbol))
+            (: varR (-> A Variable))
+
+            (: atomF (-> Atom R))
+            (: exprF (-> Expression R))
+            (: gndF (-> Grounded R))
+            (: symF (-> Symbol R))
+            (: varF (-> Variable R))
+        ");
+
+        assert!(validate_atom(&space, &atom("(atomF (atomR a))")));
+        assert!(validate_atom(&space, &atom("(atomF (exprR a))")));
+        assert!(validate_atom(&space, &atom("(atomF (gndR a))")));
+        assert!(validate_atom(&space, &atom("(atomF (symR a))")));
+        assert!(validate_atom(&space, &atom("(atomF (varR a))")));
+
+        assert!(validate_atom(&space, &atom("(exprF (exprR a))")));
+        // TODO: (exprF (atomR a)) is incorrectly typed, but (atomR a)
+        // is an Expression and validate_atom returns True
+        assert!(validate_atom(&space, &atom("(exprF (atomR a))")));
+        
+        assert!(validate_atom(&space, &atom("(gndF (gndR a))")));
+        assert!(!validate_atom(&space, &atom("(gndF (atomR a))")));
+        assert!(validate_atom(&space, &atom("(symF (symR a))")));
+        assert!(!validate_atom(&space, &atom("(symF (atomR a))")));
+        assert!(validate_atom(&space, &atom("(varF (varR a))")));
+        assert!(!validate_atom(&space, &atom("(varF (atomR a))")));
     }
 }
