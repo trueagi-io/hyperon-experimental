@@ -145,7 +145,7 @@ are generated using cbindgen tool.
 
 Source code of the Python integration library is located under
 [./python](./python) directory. It contains two main parts. First part is a
-native Python library `libhyperonpy` which is wrote using
+native Python library `libhyperonpy` which is written using
 [pybind11](https://github.com/pybind/pybind11), it converts Python API calls
 into C API calls and vice versa. Second part is a Python library `hyperon`
 which uses `libhyperonpy` as a proxy for a C API calls.
