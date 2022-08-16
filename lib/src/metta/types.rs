@@ -675,4 +675,33 @@ mod tests {
         assert!(check_type(&space, &atom("(varF $a)"), type_r));
         assert!(!check_type(&space, &atom("(varF a)"), type_r));
     }
+
+    #[test]
+    fn validate_atom_meta_types() {
+        let space = metta_space("
+            (: R Type)
+            (: a A)
+            (: b B)
+            (: aF (-> A R))
+            (: atomF (-> Atom R))
+            (: exprF (-> Expression R))
+            (: gndF (-> Grounded R))
+            (: symF (-> Symbol R))
+            (: varF (-> Variable R))
+        ");
+
+        assert!(validate_atom(&space, &atom("(aF a)")));
+        assert!(!validate_atom(&space, &atom("(aF b)")));
+
+        assert!(validate_atom(&space, &atom("(atomF a)")));
+        assert!(validate_atom(&space, &atom("(atomF ())")));
+        assert!(validate_atom(&space, &atom("(exprF ())")));
+        assert!(!validate_atom(&space, &atom("(exprF a)")));
+        assert!(validate_atom(&space, &atom("(gndF 1)")));
+        assert!(!validate_atom(&space, &atom("(gndF a)")));
+        assert!(validate_atom(&space, &atom("(symF a)")));
+        assert!(!validate_atom(&space, &atom("(symF 1)")));
+        assert!(validate_atom(&space, &atom("(varF $a)")));
+        assert!(!validate_atom(&space, &atom("(varF a)")));
+    }
 }
