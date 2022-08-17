@@ -209,7 +209,7 @@ pub struct VariableAtom {
 impl VariableAtom {
     /// Constructs new variable using `name` provided. Usually [Atom::var]
     /// should be preffered. But sometimes [VariableAtom] instance is required.
-    /// For example as a variable bindings instance.
+    /// For example for using as a key in variable bindings.
     pub fn new<T: Into<String>>(name: T) -> Self {
         Self{ name: name.into(), id: 0 }
     }
@@ -583,13 +583,13 @@ impl Clone for Box<dyn GroundedAtom> {
 
 // Atom enum
 
-/// Atom are main components of the atomspace. There are four meta-types of
+/// Atoms are main components of the atomspace. There are four meta-types of
 /// atoms: symbol, expression, variable and grounded.
 #[derive(Clone)]
 pub enum Atom {
     /// Symbol represents some idea or concept. Two symbols having
-    /// the same name are considered equal and represent the same concept. Name
-    /// of the symbol can be arbitrary string. Use [Atom::sym] to construct
+    /// the same name are considered equal and representing the same concept.
+    /// Name of the symbol can be arbitrary string. Use [Atom::sym] to construct
     /// new symbol.
     Symbol(SymbolAtom),
 
