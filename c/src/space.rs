@@ -70,8 +70,9 @@ pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
     for result in results {
         let mut vars : Vec<CString> = Vec::new();
         let vec = result.iter().map(|(k, v)| {
-                // prevent C string from deallocation before callback is called
-                vars.push(str_as_cstr(k.name()));
+                // put C string into collection which is external to closure
+                // to prevent its deallocation before callback is called
+                vars.push(string_as_cstr(k.name()));
                 binding_t{
                     var: vars.last().unwrap().as_ptr(),
                     atom: (v as *const Atom).cast::<atom_t>()

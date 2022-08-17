@@ -30,3 +30,7 @@ pub fn cstr_into_string(s: *const c_char) -> String {
 pub fn str_as_cstr(s: &str) -> CString {
     CString::new(s).expect("CString::new failed")
 }
+
+pub fn string_as_cstr(s: String) -> CString {
+    CString::new(s).expect("CString::new failed")
+}

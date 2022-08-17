@@ -105,7 +105,7 @@ pub extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t,
     let atom = unsafe{ &(*atom).atom };
     match atom {
         Atom::Symbol(s) => callback(str_as_cstr(s.name()).as_ptr(), context),
-        Atom::Variable(v) => callback(str_as_cstr(v.name()).as_ptr(), context),
+        Atom::Variable(v) => callback(string_as_cstr(v.name()).as_ptr(), context),
         _ => panic!("Only Symbol and Variable has name attribute!"),
     }
 }
