@@ -61,7 +61,7 @@ impl<'a> SExprParser<'a> {
                 },
                 '$' => {
                     self.it.next();
-                    let token = next_word(&mut self.it);
+                    let token = next_var(&mut self.it);
                     return Some(Atom::var(token));
                 },
                 '(' => {
@@ -152,6 +152,21 @@ fn next_word(it: &mut Peekable<Chars<'_>>) -> String {
     while let Some(&c) = it.peek() {
         if c.is_whitespace() || c == '(' || c == ')' {
             break;
+        }
+        token.push(c);
+        it.next();
+    }
+    token 
+}
+
+fn next_var(it: &mut Peekable<Chars<'_>>) -> String {
+    let mut token = String::new();
+    while let Some(&c) = it.peek() {
+        if c.is_whitespace() || c == '(' || c == ')' {
+            break;
+        }
+        if c == '#' {
+            panic!("'#' char is reserved for internal usage");
         }
         token.push(c);
         it.next();
@@ -334,5 +349,12 @@ mod tests {
             result.push(atom);
         }
         result
+    }
+
+    #[test]
+    #[should_panic(expected = "'#' char is reserved for internal usage")]
+    fn test_panic_on_lattice_in_var_name() {
+        let mut parser = SExprParser::new("$a#");
+        while let Some(_) = parser.parse(&Tokenizer::new()) {}
     }
 }

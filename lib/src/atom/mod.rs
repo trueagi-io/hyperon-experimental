@@ -246,7 +246,7 @@ impl Display for VariableAtom {
         if self.id == 0 {
             write!(f, "${}", self.name)
         } else {
-            write!(f, "${}-{}", self.name, self.id)
+            write!(f, "${}#{}", self.name, self.id)
         }
     }
 }
