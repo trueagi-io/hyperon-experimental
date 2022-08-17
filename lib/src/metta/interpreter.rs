@@ -69,7 +69,7 @@ use crate::atom::matcher::*;
 use crate::space::grounding::*;
 use crate::common::collections::ListMap;
 use crate::metta::*;
-use crate::metta::types::{is_func, get_arg_types, check_type_bindings,
+use crate::metta::types::{is_func, get_arg_types, get_type_bindings,
     get_atom_types, match_reducted_types};
 
 use std::ops::Deref;
@@ -286,7 +286,7 @@ fn cast_atom_to_type_plan(context: InterpreterContextRef,
         input: InterpretedAtom, typ: Atom) -> StepResult<Results> {
     // TODO: implement this via interpreting of the (:cast atom typ) expression
     let typ = apply_bindings_to_atom(&typ, input.bindings());
-    let mut results = check_type_bindings(&context.space, input.atom(), &typ);
+    let mut results = get_type_bindings(&context.space, input.atom(), &typ);
     log::debug!("cast_atom_to_type_plan: type check results: {:?}", results);
     if !results.is_empty() {
         log::debug!("cast_atom_to_type_plan: input: {} is casted to type: {}", input, typ);

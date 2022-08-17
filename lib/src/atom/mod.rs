@@ -1,4 +1,4 @@
-//! Atom module contains types and functions which are necessary to create and
+//! Contains types and functions which are necessary to create and
 //! manipulate separate atoms. There are four kinds or meta-types of atoms:
 //! [Atom::Symbol], [Atom::Variable], [Atom::Grounded] and [Atom::Expression].
 //!
