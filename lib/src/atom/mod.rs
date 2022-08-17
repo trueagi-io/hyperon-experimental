@@ -119,7 +119,7 @@ use crate::common::collections::ImmutableString;
 // Symbol atom
 
 /// A symbol atom structure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SymbolAtom {
     name: ImmutableString,
 }
@@ -200,7 +200,7 @@ fn next_variable_id() -> usize {
 }
 
 /// A variable atom structure
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableAtom {
     name: String,
     id: usize,
@@ -209,17 +209,22 @@ pub struct VariableAtom {
 impl VariableAtom {
     /// Constructs new variable using `name` provided. Usually [Atom::var]
     /// should be preffered. But sometimes [VariableAtom] instance is required.
-    /// For example as a variable bindings instance.
+    /// For example for using as a key in variable bindings.
     pub fn new<T: Into<String>>(name: T) -> Self {
         Self{ name: name.into(), id: 0 }
     }
 
-    // TODO: this method is likely to be removed as name is not
-    // unique and it may confuse users. `to_string()` can be used instead.
-    // The same may be true for a SymbolAtom.
+    // TODO: for now name() is used to expose keys of Bindings via C API as
+    // strings (which are variable names). Looks like better approach is using
+    // Atom as a key in Bindings structure but it requires implementing
+    // Hash trait for Atom.
     /// Returns name of the variable.
-    pub fn name(&self) -> &str {
-        self.name.as_str()
+    pub fn name(&self) -> String {
+        if self.id == 0 {
+            format!("{}", self.name)
+        } else {
+            format!("{}#{}", self.name, self.id)
+        }
     }
 
     /// Returns an unique instance of the variable with the same name.
@@ -232,8 +237,8 @@ impl VariableAtom {
     /// let x1 = VariableAtom::new("x");
     /// let x2 = x1.make_unique();
     ///
-    /// assert_eq!(x2.name(), "x");
-    /// assert_eq!(x1.name(), x2.name());
+    /// assert_eq!(x1.name(), "x");
+    /// assert_ne!(x1.name(), x2.name());
     /// assert_ne!(x1, x2);
     /// ```
     pub fn make_unique(&self) -> Self {
@@ -243,11 +248,7 @@ impl VariableAtom {
 
 impl Display for VariableAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        if self.id == 0 {
-            write!(f, "${}", self.name)
-        } else {
-            write!(f, "${}-{}", self.name, self.id)
-        }
+        write!(f, "${}", self.name())
     }
 }
 
@@ -583,13 +584,13 @@ impl Clone for Box<dyn GroundedAtom> {
 
 // Atom enum
 
-/// Atom are main components of the atomspace. There are four meta-types of
+/// Atoms are main components of the atomspace. There are four meta-types of
 /// atoms: symbol, expression, variable and grounded.
 #[derive(Clone)]
 pub enum Atom {
     /// Symbol represents some idea or concept. Two symbols having
-    /// the same name are considered equal and represent the same concept. Name
-    /// of the symbol can be arbitrary string. Use [Atom::sym] to construct
+    /// the same name are considered equal and representing the same concept.
+    /// Name of the symbol can be arbitrary string. Use [Atom::sym] to construct
     /// new symbol.
     Symbol(SymbolAtom),
 
