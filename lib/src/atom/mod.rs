@@ -1,4 +1,4 @@
-//! Atom module contains necessary structures and functions to create and
+//! Atom module contains types and functions which are necessary to create and
 //! manipulate separate atoms. There are four kinds or meta-types of atoms:
 //! [Atom::Symbol], [Atom::Variable], [Atom::Grounded] and [Atom::Expression].
 //!
@@ -13,8 +13,8 @@
 //! allows keeping data and behaviour inside an atom. There are three aspects
 //! of the grounded atom which can be customized:
 //! - the type of grounded atom is provided by the atom itself;
-//! - matching alrorithm of the atom can be modified by the user;
-//! - atom can be executable; such atom can be used to apply some 
+//! - matching algorithm of the atom can be modified by the user;
+//! - atom can be made executable; such atom can be used to apply some 
 //!   sub-symbolic operations to other atoms as arguments.
 //!
 //! [Atom::Expression] combines other kinds of atoms including expressions
@@ -35,9 +35,9 @@
 //! the values inside these atoms.
 //!
 //! To override any aspect of this predefined grounded atom behaviour, one
-//! should make [CustomGroundedType] implementable for the Rust value. It means
-//! one should implement two additional traits: [Grounded] and [Display].
-//! [Display] is used to represent grounded atom as string. Implementing
+//! should make [CustomGroundedType] implementable for the Rust value. In other
+//! words one should implement two additional traits: [Grounded] and [Display].
+//! [Display] is used to represent grounded atom as a string. By implementing
 //! [Grounded] one can make atom executable, implement custom matching logic
 //! or return a custom type of the atom. See example in [Grounded] section.
 //!
@@ -51,9 +51,9 @@
 // Macros to simplify expression writing
 
 /// Constructs new Atom using symplified syntax for expressions.
-/// Macro has a perfomance penalty because creates and uses an additional
-/// wrapper for grounded atoms. It is intended to use mainly inside of unit tests.
-/// Use string literals for symbols, identifiers for variables,
+/// Macros has a perfomance penalty because it creates and uses an additional
+/// wrapper for grounded atoms. It is intended for using mainly in the unit
+/// tests. Use string literals for symbols, identifiers for variables,
 /// braces for grounded symbols and S-expressions syntax for expressions.
 ///
 /// # Examples
@@ -132,7 +132,7 @@ impl SymbolAtom {
         Self{ name }
     }
 
-    /// Returns name of the symbol.
+    /// Returns the name of the symbol.
     pub fn name(&self) -> &str {
         self.name.as_str()
     }
@@ -209,7 +209,7 @@ pub struct VariableAtom {
 impl VariableAtom {
     /// Constructs new variable using `name` provided. Usually [Atom::var]
     /// should be preffered. But sometimes [VariableAtom] instance is required.
-    /// For example for using as a key in variable bindings.
+    /// For example for using as a key in variable bindings (see [matcher::Bindings]).
     pub fn new<T: Into<String>>(name: T) -> Self {
         Self{ name: name.into(), id: 0 }
     }
@@ -293,14 +293,14 @@ pub fn make_variables_unique(atom: &Atom) -> Atom {
 // Both grounded atom wrappers expect grounded type implements PartialEq,
 // Clone, Debug, Sync and Any traits and use them to implement eq_gnd(),
 // clone_gnd() and as_any_...() methods. This allows reusing standard
-// behaviour as much as possible. CustomGroundedAtom<T> also expects Display is
+// behaviour as much as possible. CustomGroundedAtom<T> also expects Display
 // implemented. AutoGroundedAtom<T> implements Display via Debug because not
 // all standard Rust types implement Display (HashMap for example).
-// as_any_...() method are used to transparently convert grounded atom to
+// as_any_...() methods are used to transparently convert grounded atom to
 // original Rust type.
 
-// Grounded trait contains three methods to implement customized behaviour
-// for grounded values:
+// Grounded trait contains three methods to customize behaviour of the grounded
+// values:
 // - type_() to return MeTTa type of the atom;
 // - execute() to represent functions as atoms;
 // - match_() to implement custom matching behaviour.
@@ -351,7 +351,7 @@ mopafy!(GroundedAtom);
 /// Trait allows implementing grounded atom with custom behaviour.
 /// [rust_type_atom], [match_by_equality] and [execute_not_executable]
 /// functions can be used to implement default behavior if requried.
-/// If no custom behavior is needed it is simpler to use [Atom::value]
+/// If no custom behavior is needed then simpler way is using [Atom::value]
 /// function for automatic grounding.
 ///
 /// # Examples
@@ -393,7 +393,7 @@ mopafy!(GroundedAtom);
 ///
 /// assert_eq!(atom.to_string(), "MyGrounded");
 /// assert_ne!(atom, Atom::sym("MyGrounded"));
-/// assert_eq!(gnd.execute(&mut vec![]), Err("Grounded atom is not executable: MyGrounded".into()));
+/// assert_eq!(gnd.execute(&mut vec![]), Err(ExecError::NoReduce));
 /// assert_eq!(atom.match_(&other).collect::<Vec<Bindings>>(), vec![Bindings::new()]);
 /// assert_eq!(atom, other);
 /// ```
@@ -402,9 +402,11 @@ pub trait Grounded : Display {
     /// Returns type of the grounded atom. Should return same type each time
     /// it is called.
     fn type_(&self) -> Atom;
+
     /// Executes grounded function on passed `args` and returns list of
     /// results as `Vec<Atom>` or [ExecError].
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError>;
+
     /// Implements custom matching logic of the grounded atom.
     /// Gets `other` atom as input, returns the iterator of the
     /// [matcher::Bindings] for the variables of the `other` atom.
@@ -429,11 +431,11 @@ pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matc
     }
 }
 
-/// Returns `ExecError::Runtime` instance with message that the atom is not
-/// executable. This is a default implementation of `execute()` for the
+/// Returns [ExecError::NoReduce] which means this atom should not be reduced
+/// further. This is a default implementation of `execute()` for the
 /// grounded types wrapped automatically.
-pub fn execute_not_executable<T: Debug>(this: &T) -> Result<Vec<Atom>, ExecError> {
-    Err(format!("Grounded atom is not executable: {:?}", this).into())
+pub fn execute_not_executable<T: Debug>(_this: &T) -> Result<Vec<Atom>, ExecError> {
+    Err(ExecError::NoReduce)
 }
 
 /// Alias for the list of traits required for the standard Rust types to be
@@ -536,7 +538,7 @@ impl<T: CustomGroundedType> Display for CustomGroundedAtom<T> {
     }
 }
 
-// Convertors below implemented for macroses only. They are not effective
+// Convertors below are implemented for macroses only. They are not effective
 // because require calling Clone. In manually written code one can always
 // choose more effective moving constructor.
 //
@@ -633,7 +635,7 @@ impl Atom {
         Self::Symbol(SymbolAtom::new(ImmutableString::Allocated(name.into())))
     }
 
-    /// Constructs expression from array of children.
+    /// Constructs expression out of array of children.
     ///
     /// # Examples
     ///
@@ -654,7 +656,7 @@ impl Atom {
         Self::Expression(ExpressionAtom::new(children.into()))
     }
 
-    /// Constructs variable from name.
+    /// Constructs variable out of name.
     ///
     /// # Examples
     ///
