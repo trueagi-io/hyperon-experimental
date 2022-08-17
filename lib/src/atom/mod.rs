@@ -119,7 +119,7 @@ use crate::common::collections::ImmutableString;
 // Symbol atom
 
 /// A symbol atom structure.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SymbolAtom {
     name: ImmutableString,
 }
@@ -200,7 +200,7 @@ fn next_variable_id() -> usize {
 }
 
 /// A variable atom structure
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct VariableAtom {
     name: String,
     id: usize,
@@ -216,7 +216,8 @@ impl VariableAtom {
 
     // TODO: for now name() is used to expose keys of Bindings via C API as
     // strings (which are variable names). Looks like better approach is using
-    // Atom as a key in Bindings structure.
+    // Atom as a key in Bindings structure but it requires implementing
+    // Hash trait for Atom.
     /// Returns name of the variable.
     pub fn name(&self) -> String {
         if self.id == 0 {
