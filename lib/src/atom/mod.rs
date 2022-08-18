@@ -358,7 +358,7 @@ mopafy!(GroundedAtom);
 ///
 /// ```
 /// use hyperon::*;
-/// use hyperon::matcher::{Bindings, WithMatch, MatchResultIter};
+/// use hyperon::matcher::{Bindings, MatchResultIter, match_atoms};
 /// use std::fmt::{Display, Formatter};
 /// use std::iter::once;
 ///
@@ -394,7 +394,7 @@ mopafy!(GroundedAtom);
 /// assert_eq!(atom.to_string(), "MyGrounded");
 /// assert_ne!(atom, Atom::sym("MyGrounded"));
 /// assert_eq!(gnd.execute(&mut vec![]), Err(ExecError::NoReduce));
-/// assert_eq!(atom.match_(&other).collect::<Vec<Bindings>>(), vec![Bindings::new()]);
+/// assert_eq!(match_atoms(&atom, &other).collect::<Vec<Bindings>>(), vec![Bindings::new()]);
 /// assert_eq!(atom, other);
 /// ```
 ///

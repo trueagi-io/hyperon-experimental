@@ -436,31 +436,25 @@ impl Debug for VariableMatch {
 /// Iterator over atom matching results. Each result is an instance of [Bindings].
 pub type MatchResultIter = Box<dyn Iterator<Item=matcher::Bindings>>;
 
-pub trait WithMatch {
-    fn match_(&self, pattern: &Atom) -> MatchResultIter;
-}
-
-impl WithMatch for Atom {
-    fn match_<'a>(&'a self, pattern: &'a Atom) -> MatchResultIter {
-        fn find_vars(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
-            match atom {
-                Atom::Variable(var) => { vars.insert(var.clone()); },
-                Atom::Expression(expr) => expr.children.iter()
-                    .for_each(|child| find_vars(child, vars)),
-                _ => {},
-            }
+pub fn match_atoms<'a>(data: &'a Atom, pattern: &'a Atom) -> MatchResultIter {
+    fn find_vars(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
+        match atom {
+            Atom::Variable(var) => { vars.insert(var.clone()); },
+            Atom::Expression(expr) => expr.children.iter()
+                .for_each(|child| find_vars(child, vars)),
+            _ => {},
         }
-        let mut pattern_vars = HashSet::new();
-        find_vars(pattern, &mut pattern_vars);
-        Box::new(match_atoms_recursively(self, pattern)
-            .map(move |mut matcher| {
-                for x in &pattern_vars {
-                    matcher.add_pattern_var(&x);
-                }
-                matcher.into_bindings()
-            })
-            .filter(Option::is_some).map(Option::unwrap))
     }
+    let mut pattern_vars = HashSet::new();
+    find_vars(pattern, &mut pattern_vars);
+    Box::new(match_atoms_recursively(data, pattern)
+        .map(move |mut matcher| {
+            for x in &pattern_vars {
+                matcher.add_pattern_var(&x);
+            }
+            matcher.into_bindings()
+        })
+        .filter(Option::is_some).map(Option::unwrap))
 }
 
 type VarMatchIter = Box<dyn Iterator<Item=VariableMatch>>;
@@ -691,7 +685,7 @@ mod test {
     }
 
     fn assert_match(data: Atom, pattern: Atom, expected: Vec<Bindings>) {
-        let actual: Vec<Bindings> = data.match_(&pattern).collect();
+        let actual: Vec<Bindings> = match_atoms(&data, &pattern).collect();
         assert_eq!(actual.len(), expected.len(), "Actual and expected has different number of results:\n  actual: {:?}\nexpected: {:?}", actual, expected);
         for (actual, expected) in actual.iter().zip(expected.iter()) {
             if !binding_eq(actual, expected) {
@@ -811,8 +805,8 @@ mod test {
         let pattern = expr!(x y);
         let x = VariableAtom::new("x");
 
-        let bindings_a = data.match_(&pattern).next().unwrap();
-        let bindings_b = data.match_(&pattern).next().unwrap();
+        let bindings_a = match_atoms(&data, &pattern).next().unwrap();
+        let bindings_b = match_atoms(&data, &pattern).next().unwrap();
 
         assert_ne!(bindings_a.get(&x), bindings_b.get(&x));
     }
@@ -874,7 +868,7 @@ mod test {
             if let Some(other) = other.as_gnd::<TestDict>() {
                 other.0.iter().map(|(ko, vo)| {
                     self.0.iter().map(|(k, v)| {
-                        Atom::expr(vec![k.clone(), v.clone()]).match_(&Atom::expr(vec![ko.clone(), vo.clone()]))
+                        match_atoms(&Atom::expr(vec![k.clone(), v.clone()]), &Atom::expr(vec![ko.clone(), vo.clone()]))
                     }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
                         Box::new(acc.chain(i))
                     })
@@ -907,7 +901,7 @@ mod test {
         query.put(expr!(a), expr!({2} y));
         let query = expr!({query});
 
-        let result: Vec<Bindings> = dict.match_(&query).collect();
+        let result: Vec<Bindings> = match_atoms(&dict, &query).collect();
         assert_eq!(result, vec![bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}]);
     }
 
