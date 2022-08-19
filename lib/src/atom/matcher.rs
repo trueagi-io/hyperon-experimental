@@ -1,5 +1,17 @@
-// Macros to simplify bindings writing
+//! Module contains functions to match atoms and work with variable bindings.
 
+/// Constructs new instance of the [Bindings] with predefined content.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::*;
+///
+/// let bindings = bind!{ a: expr!("A"), b: expr!("foo" "B") };
+///
+/// assert_eq!(bindings.get(&VariableAtom::new("a")), Some(&expr!("A")));
+/// assert_eq!(bindings.get(&VariableAtom::new("b")), Some(&expr!("foo" "B")));
+/// ```
 #[macro_export]
 macro_rules! bind {
     ($($k:ident: $v:expr),*) => {
@@ -12,25 +24,57 @@ use super::*;
 use std::collections::{HashMap, HashSet};
 use delegate::delegate;
 
+/// Structure contains bindings of the variables. Usually returned as result of
+/// atom matching. Also keeps variable values and passed with interpreted atom
+/// inside of [crate::metta::interpreter].
 #[derive(Clone, PartialEq, Eq)]
 pub struct Bindings(HashMap<VariableAtom, Atom>);
 
 impl Bindings {
+    /// Creates new empty [Bindings] instance.
     pub fn new() -> Self {
         Self(HashMap::new())
     }
 
     delegate! {
         to self.0 {
+            /// See [HashMap::get].
             pub fn get(&self, k: &VariableAtom) -> Option<&Atom>;
+            /// See [HashMap::drain].
             pub fn drain(&mut self) -> std::collections::hash_map::Drain<'_, VariableAtom, Atom>;
+            /// See [HashMap::insert].
             pub fn insert(&mut self, k: VariableAtom, v: Atom) -> Option<Atom>;
+            /// See [HashMap::iter].
             pub fn iter(&self) -> std::collections::hash_map::Iter<'_, VariableAtom, Atom>;
+            /// See [HashMap::remove].
             pub fn remove(&mut self, k: &VariableAtom) -> Option<Atom>;
+            /// See [HashMap::is_empty].
             pub fn is_empty(&self) -> bool;
         }
     }
 
+    /// Tries to insert `value` as a binding for the `var`. If `self` already
+    /// has binding for the `var` and it is not equal to the `value` then
+    /// function returns `false`. Otherwise it inserts binding and returns `true`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::*;
+    /// use hyperon::matcher::Bindings;
+    ///
+    /// let a = VariableAtom::new("a");
+    /// let b = VariableAtom::new("b");
+    /// let c = VariableAtom::new("c");
+    /// let mut binds = bind!{ a: expr!("A"), b: expr!("B") };
+    ///
+    /// assert!(binds.check_and_insert_binding(&a, &expr!("A")));
+    /// assert!(!binds.check_and_insert_binding(&b, &expr!("C")));
+    /// assert!(binds.check_and_insert_binding(&c, &expr!("C")));
+    /// assert_eq!(binds.get(&a), Some(&expr!("A")));
+    /// assert_eq!(binds.get(&b), Some(&expr!("B")));
+    /// assert_eq!(binds.get(&c), Some(&expr!("C")));
+    /// ```
     pub fn check_and_insert_binding(&mut self, var: &VariableAtom, value: &Atom) -> bool{
         let compatible = match self.get(var){
             Some(prev) => prev == value,
@@ -42,6 +86,22 @@ impl Bindings {
         compatible
     }
 
+    /// Merges `prev` and `next` bindings if they are compatible. Returns `None`
+    /// if incompatibility is found.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::*;
+    /// use hyperon::matcher::Bindings;
+    ///
+    /// let mut binds = bind!{ a: expr!("A") };
+    /// let mut comp = bind!{ b: expr!("B") };
+    /// let mut incomp = bind!{ a: expr!("B") };
+    ///
+    /// assert_eq!(Bindings::merge(&binds, &comp), Some(bind!{ a: expr!("A"), b: expr!("B") }));
+    /// assert_eq!(Bindings::merge(&binds, &incomp), None);
+    /// ```
     pub fn merge(prev: &Bindings, next: &Bindings) -> Option<Bindings> {
         if !prev.iter().all(|(k, v)| !next.0.contains_key(k)
                 || next.0[k] == *v
@@ -58,12 +118,15 @@ impl Bindings {
         }
     }
 
+    /// Merges each bindings from `prev` vector to each bindings from `next`
+    /// vector. The result is a list of successfully merged bindings.
     pub fn product(prev: &Vec<Bindings>, next: &Vec<Bindings>) -> Vec<Bindings> {
         prev.iter().flat_map(|p| -> Vec<Option<Bindings>> {
             next.iter().map(|n| Self::merge(p, n)).collect()
         }).filter(Option::is_some).map(Option::unwrap).collect()
     }
 
+    /// Removes variables when `pred` returns `true`.
     pub fn filter<F>(&mut self, mut pred: F)
         where F: FnMut(&VariableAtom, &Atom) -> bool {
         self.0 = self.0.drain().filter(|(k, v)| pred(k, v)).collect();
@@ -370,33 +433,58 @@ impl Debug for VariableMatch {
     }
 }
 
+/// Iterator over atom matching results. Each result is an instance of [Bindings].
 pub type MatchResultIter = Box<dyn Iterator<Item=matcher::Bindings>>;
 
-pub trait WithMatch {
-    fn match_(&self, pattern: &Atom) -> MatchResultIter;
-}
-
-impl WithMatch for Atom {
-    fn match_<'a>(&'a self, pattern: &'a Atom) -> MatchResultIter {
-        fn find_vars(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
-            match atom {
-                Atom::Variable(var) => { vars.insert(var.clone()); },
-                Atom::Expression(expr) => expr.children.iter()
-                    .for_each(|child| find_vars(child, vars)),
-                _ => {},
-            }
+/// Matches two atoms and returns an iterator over results. Two atoms are not
+/// treated identically. First argument is considered as a data matched
+/// by a pattern (second argument).
+///
+/// Both pattern and data can contain variables. But data variables are treated
+/// as equality restrictions for the parts of the pattern. If same variable
+/// occurs in data more than once it means the parts of the pattern matched
+/// by these occurences should be equal. Thus result of the matching contains
+/// bindings of the `pattern` variables filled by values from `data`
+/// or `pattern`.
+///
+/// Sometimes data states two variables from pattern are equal without
+/// assigning specific value to them. For instance `($x $x)` is being
+/// matched with pattern `($a $b)`. Effectively it means `$a` is equal to `$b`.
+/// In such case matching algorithm creates new variable `$x#1` and
+/// assigns it as a value to both `$a` and `$b`. Final bindings contain
+/// `{ $a: $x#1, $b: $x#1 }`.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::*;
+/// use hyperon::atom::matcher::*;
+///
+/// let data = expr!("v" a a);
+/// let pattern = expr!(x x y);
+/// let result: Vec<Bindings> = match_atoms(&data, &pattern).collect();
+///
+/// assert_eq!(result, vec![bind!{x: sym!("v"), y: sym!("v")}]);
+/// ```
+pub fn match_atoms<'a>(data: &'a Atom, pattern: &'a Atom) -> MatchResultIter {
+    fn find_vars(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
+        match atom {
+            Atom::Variable(var) => { vars.insert(var.clone()); },
+            Atom::Expression(expr) => expr.children.iter()
+                .for_each(|child| find_vars(child, vars)),
+            _ => {},
         }
-        let mut pattern_vars = HashSet::new();
-        find_vars(pattern, &mut pattern_vars);
-        Box::new(match_atoms_recursively(self, pattern)
-            .map(move |mut matcher| {
-                for x in &pattern_vars {
-                    matcher.add_pattern_var(&x);
-                }
-                matcher.into_bindings()
-            })
-            .filter(Option::is_some).map(Option::unwrap))
     }
+    let mut pattern_vars = HashSet::new();
+    find_vars(pattern, &mut pattern_vars);
+    Box::new(match_atoms_recursively(data, pattern)
+        .map(move |mut matcher| {
+            for x in &pattern_vars {
+                matcher.add_pattern_var(&x);
+            }
+            matcher.into_bindings()
+        })
+        .filter(Option::is_some).map(Option::unwrap))
 }
 
 type VarMatchIter = Box<dyn Iterator<Item=VariableMatch>>;
@@ -438,6 +526,8 @@ fn variable_matcher_product(prev: VarMatchIter, next: VarMatchIter) -> VarMatchI
     }).filter(Option::is_some).map(Option::unwrap))
 }
 
+/// Merges each bindings from `prev` iter to each bindings from `next`
+/// iter. The result is an iter over successfully merged bindings.
 pub fn match_result_product(prev: MatchResultIter, next: MatchResultIter) -> MatchResultIter {
     let next : Vec<Bindings> = next.collect();
     log::trace!("match_result_product_iter, next: {:?}", next);
@@ -446,6 +536,7 @@ pub fn match_result_product(prev: MatchResultIter, next: MatchResultIter) -> Mat
     }).filter(Option::is_some).map(Option::unwrap))
 }
 
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Eq)]
 pub struct UnificationPair {
     pub data: Atom,
@@ -458,8 +549,10 @@ impl From<(Atom, Atom)> for UnificationPair {
     }
 }
 
+#[doc(hidden)]
 pub type Unifications = Vec<matcher::UnificationPair>;
 
+#[doc(hidden)]
 #[derive(Debug, PartialEq, Eq)]
 pub struct UnifyResult {
     pub data_bindings: Bindings,
@@ -517,6 +610,7 @@ fn unify_atoms_recursively(data: &Atom, pattern: &Atom, res: &mut UnifyResult, d
     }
 }
 
+#[doc(hidden)]
 pub fn unify_atoms(data: &Atom, pattern: &Atom) -> Option<UnifyResult> {
     log::trace!("unify_atoms: data: {}, pattern: {}", data, pattern);
     let mut res = UnifyResult::new();
@@ -527,6 +621,20 @@ pub fn unify_atoms(data: &Atom, pattern: &Atom) -> Option<UnifyResult> {
     }
 }
 
+/// Applies bindings to atom. Function replaces all variables in atom by
+/// corresponding bindings.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::*;
+/// use hyperon::atom::matcher::apply_bindings_to_atom;
+///
+/// let binds = bind!{ y: expr!("Y") };
+/// let atom = apply_bindings_to_atom(&expr!("+" "X" y), &binds);
+///
+/// assert_eq!(atom, expr!("+" "X" "Y"));
+/// ```
 pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
     if bindings.0.is_empty() {
         atom.clone()
@@ -565,13 +673,32 @@ fn atom_contains_variable(atom: &Atom, var: &VariableAtom) -> bool {
     }
 }
 
+/// Applies bindings `from` to the each value from bindings `to`.
+/// Function also checks that resulting value is not expressed recursively
+/// via variable to which value is bound. Function returns error if such
+/// value is detected.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::*;
+/// use hyperon::atom::matcher::apply_bindings_to_bindings;
+///
+/// let from = bind!{ x: expr!("Y") };
+/// let to = bind!{ y: expr!(x) };
+/// let rec = bind!{ x: expr!(y) };
+/// let binds = apply_bindings_to_bindings(&from, &to);
+///
+/// assert_eq!(binds, Ok(bind!{ y: expr!("Y") }));
+/// assert_eq!(apply_bindings_to_bindings(&rec, &to), Err(()));
+/// ```
 pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bindings, ()> {
     let mut res = Bindings::new();
     for (key, value) in to {
         let applied = apply_bindings_to_atom(value, from);
         // Check that variable is not expressed via itself, if so it is
         // a task for unification not for matching
-        if !matches!(applied, Atom::Variable(_)) && atom_contains_variable(&applied, key) {
+        if atom_contains_variable(&applied, key) {
             log::trace!("apply_bindings_to_bindings: rejecting binding, variable is expressed via itself: key: {}, applied: {}", key, applied);
             return Err(())
         }
@@ -584,6 +711,21 @@ pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bind
     return Ok(res);
 }
 
+/// Checks if atoms are equal up to variables replacement.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::expr;
+/// use hyperon::atom::matcher::atoms_are_equivalent;
+///
+/// let atom = expr!(a "b" c);
+/// let eq = expr!(x "b" d);
+/// let neq = expr!(x "b" x);
+///
+/// assert!(atoms_are_equivalent(&atom, &eq));
+/// assert!(!atoms_are_equivalent(&atom, &neq));
+/// ```
 pub fn atoms_are_equivalent(first: &Atom, second: &Atom) -> bool {
     atoms_are_equivalent_with_bindings(first, second, &mut Bindings::new(), &mut Bindings::new())
 }
@@ -627,7 +769,7 @@ mod test {
     }
 
     fn assert_match(data: Atom, pattern: Atom, expected: Vec<Bindings>) {
-        let actual: Vec<Bindings> = data.match_(&pattern).collect();
+        let actual: Vec<Bindings> = match_atoms(&data, &pattern).collect();
         assert_eq!(actual.len(), expected.len(), "Actual and expected has different number of results:\n  actual: {:?}\nexpected: {:?}", actual, expected);
         for (actual, expected) in actual.iter().zip(expected.iter()) {
             if !binding_eq(actual, expected) {
@@ -747,8 +889,8 @@ mod test {
         let pattern = expr!(x y);
         let x = VariableAtom::new("x");
 
-        let bindings_a = data.match_(&pattern).next().unwrap();
-        let bindings_b = data.match_(&pattern).next().unwrap();
+        let bindings_a = match_atoms(&data, &pattern).next().unwrap();
+        let bindings_b = match_atoms(&data, &pattern).next().unwrap();
 
         assert_ne!(bindings_a.get(&x), bindings_b.get(&x));
     }
@@ -810,7 +952,7 @@ mod test {
             if let Some(other) = other.as_gnd::<TestDict>() {
                 other.0.iter().map(|(ko, vo)| {
                     self.0.iter().map(|(k, v)| {
-                        Atom::expr(vec![k.clone(), v.clone()]).match_(&Atom::expr(vec![ko.clone(), vo.clone()]))
+                        match_atoms(&Atom::expr(vec![k.clone(), v.clone()]), &Atom::expr(vec![ko.clone(), vo.clone()]))
                     }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
                         Box::new(acc.chain(i))
                     })
@@ -843,7 +985,7 @@ mod test {
         query.put(expr!(a), expr!({2} y));
         let query = expr!({query});
 
-        let result: Vec<Bindings> = dict.match_(&query).collect();
+        let result: Vec<Bindings> = match_atoms(&dict, &query).collect();
         assert_eq!(result, vec![bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}]);
     }
 

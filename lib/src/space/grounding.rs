@@ -3,7 +3,7 @@
 
 use crate::*;
 use crate::atom::*;
-use crate::atom::matcher::{Bindings, Unifications, WithMatch};
+use crate::atom::matcher::{Bindings, Unifications, match_atoms};
 use crate::atom::subexpr::split_expr;
 
 use std::fmt::{Display, Debug};
@@ -245,7 +245,7 @@ impl GroundingSpace {
         for next in &(*self.borrow_vec()) {
             let next = make_variables_unique(next);
             log::trace!("single_query: match next: {}", next);
-            for bindings in next.match_(query) {
+            for bindings in match_atoms(&next, query) {
                 log::trace!("single_query: push result: {}", bindings);
                 result.push(bindings);
             }

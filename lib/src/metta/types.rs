@@ -1,3 +1,23 @@
+//! Contains Rust functions working on types. All MeTTa
+//! specific constants are exported as a part of [metta] module.
+//!
+//! To designate the atom `a` has a type `A` one need add to the space the
+//! expression `(: a A)`. One can also assign a type to type, for example to
+//! designate `A` is a type add `(: A Type)`. `->` is used to create a function
+//! type, for example `(: foo (-> A B))`. Types can also be parameterized by
+//! type or by value. For example list of numbers can be represented as
+//! `(: ns (List Number))`.
+//!
+//! There are five special meta-types: `Atom`, `Symbol`, `Variable`, `Grounded`
+//! and `Expression`. Theese types should not be assigned explicitly, but they
+//! can be used in type expressions and will be checked. For example one can
+//! define a function which accepts `Atom` as an argument: `(: bar (-> Atom A))`.
+//! When such expression is interpreted the argument is accepted without 
+//! reduction (see [metta::interpreter] algorithm).
+//!
+//! When atom has no type assigned by user it has type `%Undefined%`. The value
+//! of `%Undefined%` type can be matched with any type required.
+
 use super::*;
 use crate::atom::matcher::{Bindings, apply_bindings_to_atom};
 use crate::space::grounding::GroundingSpace;
@@ -51,6 +71,17 @@ fn check_types(actual: &[Vec<Atom>], expected: &[Atom], bindings: &mut Bindings)
     }
 }
 
+/// Returns true if passed type is a type of function.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::expr;
+/// use hyperon::metta::types::is_func;
+///
+/// assert!(is_func(&expr!("->" "A" "B")));
+/// assert!(!is_func(&expr!("A")));
+/// ```
 pub fn is_func(typ: &Atom) -> bool {
     match typ {
         Atom::Expression(expr) => {
@@ -68,6 +99,20 @@ fn query_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     types
 }
 
+/// Splits function type on array of argument types and return type.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::expr;
+/// use hyperon::metta::types::get_arg_types;
+///
+/// let typ = expr!("->" "A" "B" "C");
+/// let (args, ret) = get_arg_types(&typ);
+///
+/// assert_eq!(args, (&[expr!("A"), expr!("B")][..]));
+/// assert_eq!(ret, &expr!("C"));
+/// ```
 pub fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
     match fn_typ {
         Atom::Expression(expr) => {
@@ -89,6 +134,21 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
     &expr.children().as_slice()[1..]
 }
 
+/// Returns vector of the types for the given `atom` in context of the given
+/// `space`.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::expr;
+/// use hyperon::metta::metta_space;
+/// use hyperon::metta::types::get_atom_types;
+///
+/// let space = metta_space("(: a A) (: a B)");
+/// let types = get_atom_types(&space, &expr!("a"));
+///
+/// assert_eq!(types, vec!(expr!("A"), expr!("B")));
+/// ```
 pub fn get_atom_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     let types = get_reducted_types(space, atom);
     log::debug!("get_atom_types: atom: {}, types: {:?}", atom, types);
@@ -181,7 +241,24 @@ fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     types
 }
 
-
+/// Matches two types and puts new variable bindings into `bindings`. Returns
+/// true when match is found. Function matches types using previous bindings
+/// passed. If match is not found some new bindings can still be added. If
+/// caller need bindings unchanged it should pass a copy.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::{expr, bind};
+/// use hyperon::matcher::Bindings;
+/// use hyperon::metta::types::match_reducted_types;
+///
+/// let mut bindings = Bindings::new();
+/// let is_matched = match_reducted_types(&expr!("List" t), &expr!("List" "A"), &mut bindings);
+///
+/// assert!(is_matched);
+/// assert_eq!(bindings, bind!{ t: expr!("A") });
+/// ```
 pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings) -> bool {
     fn match_reducted_types_recursive(type1: &Atom, type2: &Atom,
             bindings: &mut Bindings, reverse_bindings: &mut Bindings) -> bool {
@@ -228,11 +305,42 @@ fn get_matched_types(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(At
     }).collect()
 }
 
+/// Checks if passed `atom` has the given `typ` in context of the given `space`.
+/// This function can be used for a simple type check when there is no need
+/// to know type parameters.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::expr;
+/// use hyperon::metta::metta_space;
+/// use hyperon::metta::types::check_type;
+///
+/// let space = metta_space("(: a A) (: a B)");
+///
+/// assert!(check_type(&space, &expr!("a"), &expr!("B")));
+/// ```
 pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> bool {
     check_meta_type(atom, typ) || !get_matched_types(space, atom, typ).is_empty()
 }
 
-pub fn check_type_bindings(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
+/// Finds all types of the passed `atom` which matches the given `typ` in
+/// context of the given `space`. Returns vector of matched types with type
+/// parameter bindings.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::{expr, bind};
+/// use hyperon::metta::metta_space;
+/// use hyperon::metta::types::get_type_bindings;
+///
+/// let space = metta_space("(: a (List A))");
+/// let types = get_type_bindings(&space, &expr!("a"), &expr!("List" t));
+///
+/// assert_eq!(types, vec![(expr!("List" "A"), bind!{ t: expr!("A") })]);
+/// ```
+pub fn get_type_bindings(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
     let mut result = Vec::new();
     if check_meta_type(atom, typ) {
         result.push((typ.clone(), Bindings::new()));
@@ -257,6 +365,21 @@ fn check_meta_type(atom: &Atom, typ: &Atom) -> bool {
     *typ == ATOM_TYPE_ATOM || *typ == get_meta_type(atom)
 }
 
+/// Returns true if atom is typed correctly. For example it can be used to
+/// check if function arguments have correct types.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::expr;
+/// use hyperon::metta::metta_space;
+/// use hyperon::metta::types::validate_atom;
+///
+/// let space = metta_space("(: foo (-> A B)) (: a A) (: b B)");
+///
+/// assert!(validate_atom(&space, &expr!("foo" "a")));
+/// assert!(!validate_atom(&space, &expr!("foo" "b")));
+/// ```
 pub fn validate_atom(space: &GroundingSpace, atom: &Atom) -> bool {
     !get_reducted_types(space, atom).is_empty()
 }
