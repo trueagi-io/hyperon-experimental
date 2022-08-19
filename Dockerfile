@@ -1,9 +1,3 @@
-# This docker image simulates the GitHub build environment to check CI builds
-# locally.
-# Build image:
-#   docker build -t hyperon-ci -f Dockerfile .
-# Run image:
-#   docker run --rm -ti hyperon-ci
 FROM ubuntu:22.04
 
 RUN apt-get update && \

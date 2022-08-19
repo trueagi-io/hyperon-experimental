@@ -11,6 +11,24 @@ If you find troubles with the installation, see the [Troubleshooting](#troublesh
 
 # Prepare environment
 
+## Docker
+
+A docker image can be used as a ready to run environment.
+
+Build docker image running:
+```
+docker build -t hyperon https://raw.githubusercontent.com/trueagi-io/hyperon-experimental/main/Dockerfile
+```
+
+Run the image:
+```
+docker run --rm -ti hyperon
+```
+
+Resulting container contains the latest code from the repo compiled and ready
+to run.  If the docker image doesn't work, please raise an
+[issue](https://github.com/trueagi-io/hyperon-experimental/issues).
+
 ## Manual installation
 
 Install latest stable Rust (1.63 or later), see [Rust installation
@@ -34,13 +52,6 @@ command in the top directory of repository):
 ```
 python3 -m pip install -e ./python[dev]
 ```
-
-## Docker
-
-A docker image can be used to run a reproducible environment. See instructions
-inside the [Dockerfile](./Dockerfile). If the docker image doesn't
-work, please raise an
-[issue](https://github.com/trueagi-io/hyperon-experimental/issues).
 
 # Build and run
 
