@@ -1,3 +1,5 @@
+//! MeTTa parser implementation.
+
 use crate::*;
 use crate::space::grounding::GroundingSpace;
 

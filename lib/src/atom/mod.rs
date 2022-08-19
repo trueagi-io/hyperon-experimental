@@ -602,14 +602,14 @@ pub enum Atom {
 
     /// Variable is used to create patterns. Such pattern can be matched with
     /// other atom to assign some specific binding to the variable. Use
-    /// [Atom::Variable] to construct new variable.
+    /// [Atom::var] to construct new variable.
     Variable(VariableAtom),
 
     /// Grounded atom represents sub-symbolic data in the atomspace. It may
     /// contain any binary object, for example operation, collection or value.
     /// Grounded value type creator can define custom type, execution and
-    /// matching logic for the value (see [Grounded]). Use [Atom::gnd] and
-    /// [Atom::value] to construct new grounded atom.
+    /// matching logic for the value (see [Grounded]). Use [Atom::value] and
+    /// [Atom::gnd] to construct new grounded atom.
     Grounded(Box<dyn GroundedAtom>),
 }
 

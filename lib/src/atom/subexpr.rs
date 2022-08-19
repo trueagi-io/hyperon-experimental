@@ -1,3 +1,6 @@
+//! Contains algorithms to walk through subexpressions of expression in
+//! different ways.
+
 use crate::*;
 
 use std::fmt::Debug;
