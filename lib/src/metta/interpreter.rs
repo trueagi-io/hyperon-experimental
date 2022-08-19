@@ -1,3 +1,5 @@
+//! MeTTa interpreter implementation.
+//!
 //! # Algorithm
 //!
 //! For an atom and type on input (when type is not set `Undefined` is used):

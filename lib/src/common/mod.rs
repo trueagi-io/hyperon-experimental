@@ -1,3 +1,5 @@
+//! Common datastructures used in other modules. Common grounded atoms library.
+
 pub mod plan;
 pub mod collections;
 mod arithmetics;
