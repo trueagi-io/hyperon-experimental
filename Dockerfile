@@ -1,9 +1,3 @@
-# This docker image simulates the GitHub build environment to check CI builds
-# locally.
-# Build image:
-#   docker build -t hyperon-ci -f Dockerfile .
-# Run image:
-#   docker run --rm -ti hyperon-ci
 FROM ubuntu:22.04
 
 RUN apt-get update && \
@@ -22,7 +16,7 @@ RUN sh /tmp/rustup.sh -y && rm /tmp/rustup.sh
 ENV PATH="${PATH}:/home/user/.cargo/bin"
 RUN cargo install cbindgen
 
-RUN python3 -m pip install conan==1.47
+RUN python3 -m pip install conan==1.50
 ENV PATH="${PATH}:/home/user/.local/bin"
 RUN conan profile new --detect default
 
