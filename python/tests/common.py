@@ -125,12 +125,7 @@ def newCallAtom(token):
                 unwrap=False)
 
 def SpaceAtom(grounding_space, repr_name=None):
-    # Overriding grounding_space.repr_name here
-    # It will be changed in all occurences of this Space
-    if repr_name is not None:
-        grounding_space.repr_name = repr_name
-    return ValueAtom(grounding_space, 'Space')
-
+    return ValueAtom(grounding_space, 'Space', repr_name)
 
 def import_op(metta, space, fname):
     # Check if space wasn't resolved
@@ -165,6 +160,26 @@ def newImportOp(metta):
         lambda s, f: import_op(metta, s, f),
         unwrap=False)
 
+newSpaceAtom = OperationAtom(
+        'new-space',
+        lambda: [SpaceAtom(GroundingSpace())],
+        ['Space'],
+        unwrap=False)
+
+def bind_op(metta, token, atom):
+    id = token.get_name()
+    metta.add_atom(id, atom)
+    atom.get_object().id = id
+    return []
+
+def newBindOp(metta):
+    return OperationAtom(
+        'bind!',
+        lambda token, atom: bind_op(metta, token, atom),
+        [AtomType.SYMBOL, AtomType.UNDEFINED, AtomType.UNDEFINED],
+        unwrap=False
+    )
+
 def pragma_op(metta, key, *args):
     # TODO: add support for Grounded values when needed
     metta.settings[key.get_name()] = \
@@ -197,7 +212,7 @@ superposeAtom = OperationAtom('superpose', superpose_op, unwrap=False)
 class MeTTa:
 
     def __init__(self, space=None):
-        self.space = GroundingSpace("&self") if space is None else space
+        self.space = GroundingSpace() if space is None else space
         self.tokenizer = Tokenizer()
         self.cwd = [] # current working directory as an array
         self._tokenizer()
@@ -230,12 +245,14 @@ class MeTTa:
         self.add_atom(r"assertEqual", newAssertEqualAtom(self))
         self.add_atom(r"assertEqualToResult", newAssertEqualToResultAtom(self))
         self.add_atom(r"println!", printAtom)
-        self.add_atom(r"&self", SpaceAtom(self.space))
+        self.add_atom(r"&self", SpaceAtom(self.space, '&self'))
         self.add_atom(r"import!", newImportOp(self))
+        self.add_atom(r"bind!", newBindOp(self))
         self.add_atom(r"pragma!", newPragmaOp(self))
         self.add_atom(r"collapse", newCollapseAtom(self))
         self.add_atom(r"superpose", superposeAtom)
         self.add_atom(r"get-type", newGetAtomTypeAtom(self))
+        self.add_atom(r"new-space", newSpaceAtom)
 
     def add_token(self, regexp, constr):
         self.tokenizer.register_token(regexp, constr)

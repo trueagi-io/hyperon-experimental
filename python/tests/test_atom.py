@@ -44,7 +44,7 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(ValueAtom(1.0).get_type(), AtomKind.GROUNDED)
 
     def test_grounded_grounded_type(self):
-        atom = G(ConstGroundedObject(), S("Float"))
+        atom = G(GroundedObject(None), S("Float"))
         self.assertEqual(atom.get_grounded_type(), S("Float"))
 
     # def test_grounded_execute_default(self):

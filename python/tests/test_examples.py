@@ -376,7 +376,7 @@ class Setter:
 
     def latom(self):
         # if var/val are not unwrapped
-        self.var.get_object().value = self.val.get_object().value
+        self.var.get_object().content = self.val.get_object().content
 
 
 if __name__ == "__main__":
