@@ -67,3 +67,9 @@
 !(assertEqualToResult
   (get-type (Cons 5 (Cons "6" Nil)))
   ())
+
+; `let` can be convenient to extract information from `get-type` results
+!(assertEqual
+  (let (List $t) (get-type (Cons 5 (Cons 6 Nil)))
+       $t)
+  Number)
