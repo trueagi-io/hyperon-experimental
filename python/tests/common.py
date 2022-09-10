@@ -105,7 +105,7 @@ nopAtom = OperationAtom('nop', lambda *args: [], unwrap=False)
 
 # FIXME? Undefined for the argument is necessary to make argument reductable.
 letAtom = OperationAtom('let', let_op,
-    type_names=[AtomType.VARIABLE, AtomType.UNDEFINED, AtomType.ATOM, AtomType.ATOM], unwrap=False)
+    type_names=[AtomType.ATOM, AtomType.UNDEFINED, AtomType.ATOM, AtomType.ATOM], unwrap=False)
 # The first argument is an Atom, because it has to be evaluated iteratively
 letrecAtom = OperationAtom('let*', letrec_op,
     type_names=[AtomType.ATOM, AtomType.ATOM, AtomType.ATOM], unwrap=False)
