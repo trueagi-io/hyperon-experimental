@@ -274,14 +274,6 @@ class MeTTa:
     def parse_single(self, program):
         return next(self._parse_all(program))
 
-    def add_parse(self, program):
-        for atom in self._parse_all(program):
-            self.space.add_atom(atom)
-
-    def interpret(self, program):
-        target = self.parse_single(program)
-        return interpret(self.space, target)
-
     def import_file(self, fname):
         path = fname.split(os.sep)
         f = open(os.sep.join(self.cwd + path), "r")
@@ -295,7 +287,7 @@ class MeTTa:
         self.cwd = prev_cwd
         return result
 
-    def run(self, program):
+    def run(self, program, flat=False):
         self.settings = {'type-check': None}
         status = "normal"
         result = []
@@ -310,9 +302,8 @@ class MeTTa:
             if status == "interp":
                 r = interpret(self.space, expr)
                 # Empty results are also results.
-                # Can be filtered later if needed.
-                # if r != []: result += [r]
-                result += [r]
+                # They disappear if `flat` is `True`
+                result += r if flat else [r]
             else:
                 self.space.add_atom(expr)
             status = "normal"

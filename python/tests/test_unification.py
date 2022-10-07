@@ -8,12 +8,10 @@ class UnificationTest(unittest.TestCase):
 
     def test_factorial_via_unification(self):
         metta = MeTTa()
-        metta.add_parse('''
+        metta.run('''
             (: if (-> Bool Atom Atom Atom))
             (= (if True $then $else) $then)
             (= (if False $then $else) $else)
             (= (fact $n) (if (== $n 0) 1 (* (fact (- $n 1)) $n)))
         ''')
-        result = metta.interpret('(fact 5)')
-
-        self.assertEqual(result, [ValueAtom(120)])
+        self.assertEqual(metta.run('!(fact 5)'), [[ValueAtom(120)]])

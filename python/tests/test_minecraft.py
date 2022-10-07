@@ -41,7 +41,7 @@ class MinecraftTest(unittest.TestCase):
         metta.add_token("craft", lambda _: newCraftOp(inventory))
         metta.add_token("mine", lambda _: newMineOp(inventory))
 
-        metta.add_parse('''
+        metta.run('''
             (: if (-> Bool Atom Atom Atom))
             (= (if True $then $else) $then)
             (= (if False $then $else) $else)
@@ -68,7 +68,7 @@ class MinecraftTest(unittest.TestCase):
         ''')
 
         self.assertFalse(S('wooden-pickaxe') in inventory)
-        metta.interpret('(wooden-pickaxe)')
+        metta.run('!(wooden-pickaxe)')
         self.assertTrue(S('four-planks') in inventory)
         self.assertTrue(S('crafting-table') in inventory)
         self.assertTrue(S('wooden-pickaxe') in inventory)
@@ -80,7 +80,7 @@ class MinecraftTest(unittest.TestCase):
                      S('iron-ingot'), S('iron-pickaxe')]
         metta.add_token("in-inventory", lambda _: newInInventory(inventory))
 
-        metta.add_parse('''
+        metta.run('''
             (= (can-be-mined diamond) True)
             (= (can-be-made diamond) False)
             (= (diamond mined-using iron-pickaxe) True)
@@ -114,7 +114,7 @@ class MinecraftTest(unittest.TestCase):
             (= (get $x) (if (and (not (in-inventory $x)) (can-be-made $x)) (make $x) nop))
         ''')
 
-        metta.interpret('(get diamond)')
+        metta.run('!(get diamond)')
         # (, (get iron-pickaxe) (find diamond-ore)
         #    (do-mine diamond diamond-ore iron-pickaxe))
 
