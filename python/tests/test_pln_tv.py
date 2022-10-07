@@ -13,7 +13,7 @@ class PLNTVTest(unittest.TestCase):
         # `get-tv` "metarule" based on `match` to run
         # FIXME? `(PA)` and `(PB)` are used because otherwise
         # substitution wasn't invoked (atm of test creation)
-        metta.add_parse('''
+        metta.run('''
                 (= (if True $then $else) $then)
                 (= (if False $then $else) $else)
                 (= (min $a $b) (if (< $a $b) $a $b))
@@ -32,10 +32,10 @@ class PLNTVTest(unittest.TestCase):
                 (= (PB) (Evaluation (Predicate P) (Concept B)))
         ''')
         self.assertEqual(
-            metta.interpret('(get-tv (AndLink (PA) (PB)))'),
-            metta.parse_all('(stv 0.3 0.8)'))
+            metta.run('!(get-tv (AndLink (PA) (PB)))'),
+            [metta.parse_all('(stv 0.3 0.8)')])
 
-        metta.add_parse('''
+        metta.run('''
             (= (get-tv $x)
                (match &self (.tv (Implication $y $x) (stv $str $conf))
                             (stv (* (s-tv (get-tv $y)) $str)
@@ -45,14 +45,14 @@ class PLNTVTest(unittest.TestCase):
                  (stv 0.9 0.9))
         ''')
         self.assertEqual(
-            metta.interpret('(get-tv (PA))'),
-            metta.parse_all('(stv 0.5 0.8)'))
+            metta.run('!(get-tv (PA))'),
+            [metta.parse_all('(stv 0.5 0.8)')])
 
     def test_fuzzy_conjunction_fn(self):
         metta = MeTTa()
         # `stv` as a mix of function and constructor
         # working through ordinary equalities
-        metta.add_parse('''
+        metta.run('''
                 (= (if True $then $else) $then)
                 (= (if False $then $else) $else)
                 (= (min $a $b) (if (< $a $b) $a $b))
@@ -65,24 +65,24 @@ class PLNTVTest(unittest.TestCase):
                 (= (stv (P B)) (stv 0.3 0.9))
         ''')
         # JIC, if somebody wants "type annotations"
-        metta.add_parse('''
+        metta.run('''
                 (: A Concept)
                 (: B Concept)
                 (: P Predicate)
         ''')
         self.assertEqual(
-            metta.interpret('(stv (And (P A) (P B)))'),
-            metta.parse_all('(stv 0.3 0.8)'))
-        metta.add_parse('''
+            metta.run('!(stv (And (P A) (P B)))'),
+            [metta.parse_all('(stv 0.3 0.8)')])
+        metta.run('''
                 (= (pln $expr) ($expr (stv $expr)))
         ''')
         # (would actually count (stv (P A)) twice for probabilistic version)
         self.assertEqual(
-            metta.interpret('(pln (And (P A) (P $x)))'),
-            metta.parse_all('''
+            metta.run('!(pln (And (P A) (P $x)))'),
+            [metta.parse_all('''
                 ((And (P A) (P A)) (stv 0.5 0.8))
                 ((And (P A) (P B)) (stv 0.3 0.8))
-            '''))
+            ''')])
 
 
 if __name__ == "__main__":

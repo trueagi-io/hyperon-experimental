@@ -13,7 +13,7 @@ class MinelogyTest(unittest.TestCase):
         # was in the minecraft demo. Not optimal representation -
         # just testing.
         mines = MeTTa()
-        mines.add_parse('''
+        mines.run('''
             (((: log type) (: $x variant))
              (: (stone_axe wooden_axe None) tools)
              ((: log type) (: $x variant))
@@ -36,7 +36,7 @@ class MinelogyTest(unittest.TestCase):
             )
             ''')
         crafts = MeTTa()
-        crafts.add_parse('''
+        crafts.run('''
             (((: log type) (: $x variant) (: 1 quantity))
              ((: planks type) (: $x variant) (: 4 quantity)))
             (((: planks type) (: $x variant) (: 2 quantity))
@@ -48,7 +48,7 @@ class MinelogyTest(unittest.TestCase):
         utils = MeTTa()
         utils.add_atom("&mines", SpaceAtom(mines.space, "&mines"))
         utils.add_atom("&crafts", SpaceAtom(crafts.space, "&crafts"))
-        utils.add_parse('''
+        utils.run('''
             (= (get-mine-block $ent-type $ent-var)
                (match &mines
                       (((: $block type) (: $variant variant))
@@ -111,17 +111,17 @@ class MinelogyTest(unittest.TestCase):
                     (do-mine $t))
             )
             ''')
-        output = utils.interpret('(how-get cobblestone)')
+        output = utils.run('!(how-get cobblestone)')[0]
         self.assertEqual(repr(output),
             '[(do-mine ((: stone type) (: stone variant)))]')
-        output = utils.interpret('(how-get stick)')
+        output = utils.run('!(how-get stick)')[0]
         assert_atoms_are_equivalent(self, output,
                 MeTTa().parse_all('(do-craft ((: planks type) (: $x variant) (: 2 quantity)))'))
 
     def test_minelogy_wtypes(self):
         # TODO: revisit this example, when types are automatically checked
         kb = MeTTa()
-        kb.add_parse('''
+        kb.run('''
             (: BlockT Type)
             (: log BlockT)
             (: grass BlockT)
@@ -173,7 +173,7 @@ class MinelogyTest(unittest.TestCase):
             ''')
         utils = MeTTa()
         utils.add_atom("&kb", SpaceAtom(kb.space, "&kb"))
-        utils.add_parse('''
+        utils.run('''
             (= (get-mine-block $t)
                (match &kb
                       (= (mine $block $tool) (CEntityT $t))
@@ -191,22 +191,32 @@ class MinelogyTest(unittest.TestCase):
                       (= (craft $ingred) ((CEntityV $t $v) $_))
                       $ingred))
         ''')
-        # NOTE: utils.interpret will not work here, because
+        # NOTE: utils.run will not work here, because
         # utils.space doesn't contain equalities for `mine` and `craft`
-        output = kb.interpret('(mine (CBlockV log oak) $_)')
-        self.assertEqual(repr(output[0]), '(CEntityV log oak)')
-        output = kb.interpret('(craft (list ((CEntityV log oak) $_)))')
-        self.assertEqual(repr(output[0]), '((CEntityV planks oak) 4)')
+        self.assertEqual(kb.run('''
+            !(mine (CBlockV log oak) $_)
+            !(craft (list ((CEntityV log oak) $_)))
+            ''', flat=True),
+            kb.parse_all('''
+             (CEntityV log oak)
+             ((CEntityV planks oak) 4)
+            ''')
+        )
         # NOTE: interpretation is done until end, because
         # `match &kb` switches the context, so equalities for `mine` and `craft`
         # are found even we start with `utils` - not `kb`
-        output = utils.interpret('(get-mine-block log oak)')
-        self.assertEqual(repr(output[0]), '(CBlockV log oak)')
-        output = utils.interpret('(get-mine-block cobblestone)')
-        self.assertEqual(repr(output[0]), '(CBlockV stone stone)')
-        output = utils.interpret('(get-ingredients planks oak)')
-        self.assertEqual(repr(output[0]), '(list ((CEntityV log oak) 1))')
-        output = utils.interpret('(get-ingredients wooden_pickaxe)')
+        self.assertEqual(utils.run('''
+            !(get-mine-block log oak)
+            !(get-mine-block cobblestone)
+            !(get-ingredients planks oak)
+            ''', flat=True),
+            utils.parse_all('''
+             (CBlockV log oak)
+             (CBlockV stone stone)
+             (list ((CEntityV log oak) 1))
+            ''')
+        )
+        output = utils.run('!(get-ingredients wooden_pickaxe)')[0]
         assert_atoms_are_equivalent(self, output,
                 MeTTa().parse_all('(list ((CEntityT stick) 2) ((CEntityV planks $_) 3))'))
 

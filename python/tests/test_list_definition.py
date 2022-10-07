@@ -13,7 +13,7 @@ class ListDefinitionTest(unittest.TestCase):
     # not interfere with executing functions operating on List.
     def test_list_definition(self):
         metta = MeTTa()
-        metta.add_parse('''
+        metta.run('''
                 ;; Define conditional
                 (= (if True $x $y) $x)
                 (= (if False $x $y) $y)
@@ -36,26 +36,29 @@ class ListDefinitionTest(unittest.TestCase):
         ''')
 
         # Test insert
-        self.assertEqual(
-            metta.interpret('(insert 1 Nil)'),
-            metta.parse_all('(Cons 1 Nil)'))
-        self.assertEqual(
-            metta.interpret('(insert 2 (insert 1 Nil))'),
-            metta.parse_all('(Cons 1 (Cons 2 Nil))'))
-        self.assertEqual(
-            metta.interpret('(insert 3 (insert 2 (insert 1 Nil)))'),
-            metta.parse_all('(Cons 1 (Cons 2 (Cons 3 Nil)))'))
+        self.assertEqual(metta.run('''
+            !(insert 1 Nil)
+            !(insert 2 (insert 1 Nil))
+            !(insert 3 (insert 2 (insert 1 Nil)))
+            ''', flat=True),
+            metta.parse_all('''
+             (Cons 1 Nil)
+             (Cons 1 (Cons 2 Nil))
+             (Cons 1 (Cons 2 (Cons 3 Nil)))
+            '''))
 
         # Test sort
-        self.assertEqual(
-            metta.interpret('(sort (Cons 1 Nil))'),
-            metta.parse_all('(Cons 1 Nil)'))
-        self.assertEqual(
-            metta.interpret('(sort (Cons 2 (Cons 1 Nil)))'),
-            metta.parse_all('(Cons 1 (Cons 2 Nil))'))
-        self.assertEqual(
-            metta.interpret('(sort (Cons 3 (Cons 1 (Cons 2 Nil))))'),
-            metta.parse_all('(Cons 1 (Cons 2 (Cons 3 Nil)))'))
+        self.assertEqual(metta.run('''
+            !(sort (Cons 1 Nil))
+            !(sort (Cons 2 (Cons 1 Nil)))
+            !(sort (Cons 3 (Cons 1 (Cons 2 Nil))))
+            ''', flat=True),
+            metta.parse_all('''
+             (Cons 1 Nil)
+             (Cons 1 (Cons 2 Nil))
+             (Cons 1 (Cons 2 (Cons 3 Nil)))
+            ''')
+        )
 
 
 if __name__ == "__main__":
