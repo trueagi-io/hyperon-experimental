@@ -84,7 +84,7 @@
   (= SocratesIsMortal (HumansAreMortal SocratesIsHuman))
   T)
 !(assertEqual
-  !(= (+ 1 1) (- 3 1))
+  (= (+ 1 1) (- 3 1))
   T)
 ; One can also define an equality for directly inhabited types
 (= (= $type T)

@@ -37,8 +37,8 @@
 !(assertEqualToResult
   (match &self
     (:= (Add (S Z) (S Z)) $r)
-    $r))
-  ((Add (S (S Z)) Z))
+    $r)
+  ((Add (S (S Z)) Z)))
 
 ; Two steps
 !(assertEqualToResult

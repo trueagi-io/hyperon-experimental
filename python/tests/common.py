@@ -50,30 +50,30 @@ def print_op(atom):
     print(atom)
     return []
 
-def assertResultsEqual(result, expected):
-    report = "Expected: " + str(expected) + "\nGot: " + str(result)
+def assertResultsEqual(result, expected, atom):
+    report = "\nExpected: " + str(expected) + "\nGot: " + str(result)
     for r in result:
         if not r in expected:
-            raise RuntimeError(report + "\nExcessive result: " + str(r))
+            return [E(S('Error'), atom, S(report + "\nExcessive result: " + str(r)))]
     for e in expected:
         if not e in result:
-            raise RuntimeError(report + "\nMissed result: " + str(e))
+            return [E(S('Error'), atom, S(report + "\nMissed result: " + str(e)))]
     if len(expected) != len(result):
         # NOTE: (1 1 2) vs (1 2 2) will pass
-        raise RuntimeError(report + "\nDifferent number of eleemnt")
+        return [E(S('Error'), S(report + "\nDifferent number of elements"))]
     return []
 
 def newAssertEqualAtom(metta):
     return OperationAtom(
         'assertEqual',
-        lambda e1, e2: assertResultsEqual(interpret(metta.space, e1), interpret(metta.space, e2)),
+        lambda e1, e2: assertResultsEqual(metta.interp_atom(e1), metta.interp_atom(e2), e1),
         [AtomType.ATOM, AtomType.ATOM, AtomType.ATOM],
         unwrap=False)
 
 def newAssertEqualToResultAtom(metta):
     return OperationAtom(
         'assertEqualToResult',
-        lambda expr, expected: assertResultsEqual(interpret(metta.space, expr), expected.get_children()),
+        lambda expr, expected: assertResultsEqual(metta.interp_atom(expr), expected.get_children(), expr),
         [AtomType.ATOM, AtomType.ATOM, AtomType.ATOM],
         unwrap=False)
 
@@ -198,7 +198,7 @@ def newCollapseAtom(metta):
     #        Could it be done via StepResult?
     return OperationAtom(
         'collapse',
-        lambda atom: [E(*interpret(metta.space, atom))],
+        lambda atom: [E(*metta.interp_atom(atom))],
         [AtomType.ATOM, AtomType.ATOM],
         unwrap=False)
 
@@ -208,6 +208,11 @@ def superpose_op(expr):
     return [arg for arg in expr.get_children()]
 
 superposeAtom = OperationAtom('superpose', superpose_op, unwrap=False)
+
+class EvalMode:
+    INSERT = 1
+    INTERP = 2
+    ERROR  = 3
 
 class MeTTa:
 
@@ -287,24 +292,35 @@ class MeTTa:
         self.cwd = prev_cwd
         return result
 
+    def interp_atom(self, atom, mode=EvalMode.INTERP):
+        if self.settings['type-check'] == 'auto':
+            if not validate_atom(self.space, atom):
+                return [E(S('Error'), atom, S('BadType'))]
+        if mode == EvalMode.INTERP:
+            return interpret(self.space, atom)
+        else:
+            self.space.add_atom(atom)
+            return None
+
     def run(self, program, flat=False):
         self.settings = {'type-check': None}
-        status = "normal"
+        status = EvalMode.INSERT
         result = []
-        for expr in self._parse_all(program):
-            if expr == S('!'):
-                status = "interp"
+        for atom in self._parse_all(program):
+            if atom == S('!'):
+                status = EvalMode.INTERP
                 continue
-            if self.settings['type-check'] == 'auto':
-                if not validate_atom(self.space, expr):
-                    print("Type error in ", expr)
-                    break
-            if status == "interp":
-                r = interpret(self.space, expr)
+            rs = self.interp_atom(atom, status)
+            if rs is not None:
                 # Empty results are also results.
                 # They disappear if `flat` is `True`
-                result += r if flat else [r]
-            else:
-                self.space.add_atom(expr)
-            status = "normal"
+                result += rs if flat else [rs]
+                for r in rs:
+                    if r.get_type() == AtomKind.EXPR:
+                        ch = r.get_children()
+                        if len(ch) > 0 and ch[0] == S('Error'):
+                            status = EvalMode.ERROR
+            if status == EvalMode.ERROR:
+                break
+            status = EvalMode.INSERT
         return result
