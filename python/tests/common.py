@@ -20,6 +20,33 @@ def letrec_op(subs, body):
         return [E(letAtom, next_sub[0], next_sub[1], body)]
     return [E(letAtom, next_sub[0], next_sub[1], E(letrecAtom, E(*subs[1:]), body))]
 
+def case_op_core(e, cases):
+    space = GroundingSpace()
+    space.add_atom(e)
+    for c in cases:
+        next_case = c.get_children()
+        res = space.subst(next_case[0], next_case[1])
+        if res != []:
+            return res
+    return []
+
+def case_op(metta, expr, cases):
+    # expr is interpreted inside to catch empty results
+    exprs = metta.interp_atom(expr)
+    cases = cases.get_children()
+    if exprs != []:
+        res = []
+        for e in exprs:
+            res += case_op_core(e, cases)
+        return res
+    # special case for empty results
+    for c in cases:
+        next_case = c.get_children()
+        if next_case[0] == S('%void%'):
+            return [next_case[1]]
+
+
+
 def call_atom_op(atom, method_str, *args):
     if not isinstance(atom, GroundedAtom):
         raise NoReduceError()
@@ -111,6 +138,13 @@ letrecAtom = OperationAtom('let*', letrec_op,
     type_names=[AtomType.ATOM, AtomType.ATOM, AtomType.ATOM], unwrap=False)
 matchAtom = OperationAtom('match', match_op,
     type_names=["Space", AtomType.ATOM, AtomType.ATOM, AtomType.UNDEFINED], unwrap=False)
+
+def newCaseAtom(metta):
+    return OperationAtom(
+        'case',
+         lambda expr, cases: case_op(metta, expr, cases),
+         type_names=[AtomType.ATOM, AtomType.ATOM, AtomType.ATOM],
+         unwrap=False)
 
 printAtom = OperationAtom('println!', print_op, [AtomType.UNDEFINED, 'IO'], unwrap=False)
 
@@ -246,6 +280,7 @@ class MeTTa:
         self.add_token(r"call:[^\s]+", newCallAtom)
         self.add_atom(r"let", letAtom)
         self.add_atom(r"let\*", letrecAtom)
+        self.add_atom(r"case", newCaseAtom(self))
         self.add_atom(r"nop", nopAtom)
         self.add_atom(r"assertEqual", newAssertEqualAtom(self))
         self.add_atom(r"assertEqualToResult", newAssertEqualToResultAtom(self))
