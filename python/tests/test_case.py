@@ -25,14 +25,20 @@ class CaseTest(unittest.TestCase):
                   ((3 OK-3)
                    (4 OK-4)))
 
-                ; one case can produce multiple results, though
+                ; one case can produce multiple results
                 !(case (+ 1 (superpose (1 2 3)))
                   (($x (+ 1 $x))))
+
+                ; cases are not necessarily exhaustive,
+                ; and the result can be empty
+                !(case 5
+                  ((6 OK)))
             '''),
             [[S('OK')],
              [ValueAtom(7)],
              [S('OK-3'), S('OK-4')],
-             [ValueAtom(3), ValueAtom(4), ValueAtom(5)]])
+             [ValueAtom(3), ValueAtom(4), ValueAtom(5)],
+             []])
 
         self.assertEqual(
             metta.run('''
