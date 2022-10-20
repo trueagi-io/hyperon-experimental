@@ -44,6 +44,7 @@ def case_op(metta, expr, cases):
         next_case = c.get_children()
         if next_case[0] == S('%void%'):
             return [next_case[1]]
+    return []
 
 
 
