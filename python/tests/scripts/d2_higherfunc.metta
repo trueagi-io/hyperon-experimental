@@ -131,3 +131,27 @@
 !(assertEqualToResult
    (fmap-i (curry-a + 2) (Untyped 5))
   ((fmap-i (curry-a + 2) (Untyped 5))))
+
+; As per issue
+;
+; https://github.com/trueagi-io/hyperon-experimental/issues/104
+;
+; Test if adding type declaration to List data structure does
+; not interfere with executing functions operating on List.
+
+; Insert an element in a presumably sorted list
+(= (insert $x Nil) (Cons $x Nil))
+(= (insert $x (Cons $head $tail))
+  (case (< $x $head)
+      ((True  (Cons $x (Cons $head $tail)))
+       (False (Cons $head (insert $x $tail))))))
+
+; Sort a list
+(= (sort Nil) Nil)
+(= (sort (Cons $head $tail)) (insert $head (sort $tail)))
+!(assertEqual
+  (insert 3 (insert 2 (insert 1 Nil)))
+  (Cons 1 (Cons 2 (Cons 3 Nil))))
+!(assertEqual
+  (sort (Cons 3 (Cons 1 (Cons 2 Nil))))
+  (Cons 1 (Cons 2 (Cons 3 Nil))))
