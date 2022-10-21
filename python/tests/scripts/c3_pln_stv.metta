@@ -76,6 +76,3 @@
 !(assertEqual
   (TV (green Fritz))
   (stv 0.7047 0.68))
-
-(= (pln $expr) (.tv $expr (TV $expr)))
-!(pln (green $x))

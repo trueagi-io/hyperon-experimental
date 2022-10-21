@@ -34,8 +34,8 @@ class PLNTVTest(unittest.TestCase):
                 (= (pln $expr) ($expr (stv $expr)))
         ''')
         # Here, we successfully retrieve $x. It doesn't work for "declarative" .tv
-        # in c3_pln_stv.metta , but "functional" stv cannot process implications
-        # without `match` (see also b2_backchain.metta)`
+        # in c3_pln_stv.metta (e.g. `(pln (green $x))` will not substitute $x in the result`),
+        # but "functional" stv cannot process implications without `match` (see also b2_backchain.metta)`
         # (would actually count (stv (P A)) twice for probabilistic version)
         self.assertEqual(
             metta.run('!(pln (And (P A) (P $x)))'),
