@@ -108,6 +108,11 @@
 (: if (-> Bool Atom Atom $t))
 (= (if True $then $else) $then)
 (= (if False $then $else) $else)
+
+; basic recursion
+(= (fact $n) (if (== $n 0) 1 (* (fact (- $n 1)) $n)))
+!(assertEqual (fact 5) 120)
+
 (= (gen $n)
    (if (> $n 0)
        (:: (bin) (gen (- $n 1)))
