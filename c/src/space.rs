@@ -47,12 +47,12 @@ pub unsafe extern "C" fn grounding_space_replace(space: *mut grounding_space_t, 
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_len(space: *const grounding_space_t) -> usize {
-    (*space).space.borrow_vec().len()
+    (*space).space.content().len()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *mut atom_t {
-    atom_to_ptr((*space).space.borrow_vec()[idx].clone())
+    atom_to_ptr((*space).space.content()[idx].clone())
 }
 
 #[repr(C)]

@@ -8,7 +8,7 @@ use crate::atom::subexpr::split_expr;
 
 use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
-use std::cell::{RefCell, Ref};
+use std::cell::RefCell;
 use std::collections::HashSet;
 
 // Grounding space
@@ -68,25 +68,25 @@ pub trait SpaceObserver {
 // TODO: Clone is required by C API
 #[derive(Clone)]
 pub struct GroundingSpace {
-    content: Rc<RefCell<Vec<Atom>>>,
-    observers: Rc<RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>>,
+    content: Vec<Atom>,
+    observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>,
 }
 
 impl GroundingSpace {
 
     /// Constructs new empty space.
     pub fn new() -> Self {
-        Self{
-            content: Rc::new(RefCell::new(Vec::new())),
-            observers: Rc::new(RefCell::new(Vec::new())),
+        Self {
+            content: Vec::new(),
+            observers: RefCell::new(Vec::new()),
         }
     }
 
     /// Constructs space from vector of atoms.
     pub fn from_vec(atoms: Vec<Atom>) -> Self {
         Self{
-            content: Rc::new(RefCell::new(atoms)),
-            observers: Rc::new(RefCell::new(Vec::new())),
+            content: atoms,
+            observers: RefCell::new(Vec::new()),
         }
     }
 
@@ -129,7 +129,7 @@ impl GroundingSpace {
     /// assert_eq!(space.into_vec(), vec![sym!("A"), sym!("B")]);
     /// ```
     pub fn add(&mut self, atom: Atom) {
-        self.content.borrow_mut().push(atom.clone());
+        self.content.push(atom.clone());
         self.notify(&SpaceEvent::Add(atom));
     }
 
@@ -149,10 +149,10 @@ impl GroundingSpace {
     /// assert!(space.into_vec().is_empty());
     /// ```
     pub fn remove(&mut self, atom: &Atom) -> bool {
-        let position = self.borrow_vec().iter().position(|other| other == atom);
+        let position = self.content.iter().position(|other| other == atom);
         match position {
             Some(position) => {
-                self.content.borrow_mut().remove(position);
+                self.content.remove(position);
                 self.notify(&SpaceEvent::Remove(atom.clone()));
                 true
             },
@@ -177,10 +177,10 @@ impl GroundingSpace {
     /// assert_eq!(space.into_vec(), vec![sym!("B")]);
     /// ```
     pub fn replace(&mut self, from: &Atom, to: Atom) -> bool {
-        let position = self.borrow_vec().iter().position(|other| other == from);
+        let position = self.content.iter().position(|other| other == from);
         match position {
             Some(position) => {
-                self.content.borrow_mut().as_mut_slice()[position] = to.clone();
+                self.content.as_mut_slice()[position] = to.clone();
                 self.notify(&SpaceEvent::Replace(from.clone(), to));
                 true
             },
@@ -242,7 +242,7 @@ impl GroundingSpace {
     fn single_query(&self, query: &Atom) -> Vec<Bindings> {
         log::debug!("single_query: query: {}", query);
         let mut result = Vec::new();
-        for next in &(*self.borrow_vec()) {
+        for next in &self.content {
             let next = make_variables_unique(next);
             log::trace!("single_query: match next: {}", next);
             for bindings in match_atoms(&next, query) {
@@ -289,7 +289,7 @@ impl GroundingSpace {
     pub fn unify(&self, pattern: &Atom) -> Vec<(Bindings, Unifications)> {
         log::debug!("unify: pattern: {}", pattern);
         let mut result = Vec::new();
-        for next in &(*self.borrow_vec()) {
+        for next in &self.content {
             match matcher::unify_atoms(next, pattern) {
                 Some(res) => {
                     let bindings = matcher::apply_bindings_to_bindings(&res.data_bindings, &res.pattern_bindings);
@@ -305,14 +305,14 @@ impl GroundingSpace {
         result
     }
 
-    /// Borrows and returns the vector of the atoms in the space.
-    pub fn borrow_vec(&self) -> Ref<Vec<Atom>> {
-        self.content.borrow()
+    /// Returns the reference to the vector of the atoms in the space.
+    pub fn content(&self) -> &Vec<Atom> {
+        &self.content
     }
 
     /// Converts space into a vector of atoms.
     pub fn into_vec(self) -> Vec<Atom> {
-        self.content.take()
+        self.content.clone()
     }
 }
 
@@ -380,7 +380,7 @@ mod test {
         space.add(expr!("b"));
         space.add(expr!("c"));
 
-        assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("b"), expr!("c")]);
+        assert_eq!(*space.content, vec![expr!("a"), expr!("b"), expr!("c")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
             SpaceEvent::Add(sym!("b")), SpaceEvent::Add(sym!("c"))]);
     }
@@ -396,7 +396,7 @@ mod test {
         space.add(expr!("c"));
         assert_eq!(space.remove(&expr!("b")), true);
 
-        assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("c")]);
+        assert_eq!(*space.content, vec![expr!("a"), expr!("c")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
             SpaceEvent::Add(sym!("b")), SpaceEvent::Add(sym!("c")),
             SpaceEvent::Remove(sym!("b"))]);
@@ -411,7 +411,7 @@ mod test {
         space.add(expr!("a"));
         assert_eq!(space.remove(&expr!("b")), false);
 
-        assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
+        assert_eq!(*space.content, vec![expr!("a")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a"))]);
     }
 
@@ -426,7 +426,7 @@ mod test {
         space.add(expr!("c"));
         assert_eq!(space.replace(&expr!("b"), expr!("d")), true);
 
-        assert_eq!(*space.borrow_vec(), vec![expr!("a"), expr!("d"), expr!("c")]);
+        assert_eq!(*space.content, vec![expr!("a"), expr!("d"), expr!("c")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
             SpaceEvent::Add(sym!("b")), SpaceEvent::Add(sym!("c")),
             SpaceEvent::Replace(sym!("b"), sym!("d"))]);
@@ -441,20 +441,20 @@ mod test {
         space.add(expr!("a"));
         assert_eq!(space.replace(&expr!("b"), expr!("d")), false);
 
-        assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
+        assert_eq!(*space.content, vec![expr!("a")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a"))]);
     }
 
     #[test]
-    fn mut_shared_atomspace() {
+    fn mut_cloned_atomspace() {
         let mut first = GroundingSpace::new();
         let mut second = first.clone(); 
 
         first.add(expr!("b"));
-        second.replace(&expr!("b"), expr!("d"));
+        second.add(expr!("d"));
 
-        assert_eq!(*first.borrow_vec(), vec![expr!("d")]);
-        assert_eq!(*second.borrow_vec(), vec![expr!("d")]);
+        assert_eq!(*first.content, vec![expr!("b")]);
+        assert_eq!(*second.content, vec![expr!("d")]);
     }
 
     #[test]
@@ -571,7 +571,7 @@ mod test {
 
         space.add(expr!("a"));
 
-        assert_eq!(*space.borrow_vec(), vec![expr!("a")]);
+        assert_eq!(*space.content, vec![expr!("a")]);
         assert_eq!(space.observers.borrow().len(), 0);
     }
 

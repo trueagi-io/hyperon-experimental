@@ -231,7 +231,7 @@ mod tests {
         text.add_str("$n").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![expr!(n)], *space.borrow_vec());
+        assert_eq!(vec![expr!(n)], *space.content());
     }
 
     #[test]
@@ -241,7 +241,7 @@ mod tests {
         text.add_str("test").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![expr!("test")], *space.borrow_vec());
+        assert_eq!(vec![expr!("test")], *space.content());
     }
 
     #[test]
@@ -251,7 +251,7 @@ mod tests {
         text.add_str("\"te st\"").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![expr!("\"te st\"")], *space.borrow_vec());
+        assert_eq!(vec![expr!("\"te st\"")], *space.content());
     }
 
     #[test]
@@ -264,7 +264,7 @@ mod tests {
         text.add_str("ab").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![expr!("ab")], *space.borrow_vec());
+        assert_eq!(vec![expr!("ab")], *space.content());
     }
 
     #[test]
@@ -277,7 +277,7 @@ mod tests {
         text.add_str("(3d 42)").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![expr!("3d" {42})], *space.borrow_vec());
+        assert_eq!(vec![expr!("3d" {42})], *space.content());
     }
 
     #[test]
@@ -288,7 +288,7 @@ mod tests {
         let space = GroundingSpace::from(&text);
 
         assert_eq!(vec![expr!("=" ("fac" n) ("*" n ("fac" ("-" n "1"))))],
-            *space.borrow_vec());
+            *space.content());
     }
 
     #[test]
@@ -298,7 +298,7 @@ mod tests {
         text.add_str("(a) (b)").unwrap();
         let space = GroundingSpace::from(&text);
 
-        assert_eq!(vec![expr!(("a")), expr!(("b"))], *space.borrow_vec());
+        assert_eq!(vec![expr!(("a")), expr!(("b"))], *space.content());
     }
 
     #[test]
