@@ -1,25 +1,3 @@
-import sys
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/build/python')
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/build/python/CMakeFiles')
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/build/python/CMakeFiles/hyperonpy.dir')
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/python')
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/python/CMakeFiles')
-
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/build/c/cargo')
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/build/c/cargo/debug')
-
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/lib/target/debug')
-
-
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/build')
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental')
-
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/python/hyperon')
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/python')
-
-
-sys.path.append('/home/aleksei/Downloads/Child_AI/Hyperon/hyperon-experimental/build/c/cargo/hyperon')
-
 import hyperonpy as hp
 
 from hyperonpy import AtomKind
