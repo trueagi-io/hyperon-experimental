@@ -97,7 +97,7 @@ mod tests {
         // (+ 3 5)
         let expr = expr!({SUM} {3} {5});
 
-        assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(8)]));
+        assert_eq!(interpret(&space, &expr), Ok(vec![Atom::value(8)]));
     }
 
     #[test]
@@ -106,7 +106,7 @@ mod tests {
         // (+ 4 (+ 3 5))
         let expr = expr!({SUM} {4} ({SUM} {3} {5}));
 
-        assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(12)]));
+        assert_eq!(interpret(&space, &expr), Ok(vec![Atom::value(12)]));
     }
 
     #[test]
@@ -140,6 +140,6 @@ mod tests {
                    {1})));
 
         let expr = expr!("fac" {3});
-        assert_eq!(interpret(space, &expr), Ok(vec![Atom::value(6)]));
+        assert_eq!(interpret(&space, &expr), Ok(vec![Atom::value(6)]));
     }
 }

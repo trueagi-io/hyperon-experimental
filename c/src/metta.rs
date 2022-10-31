@@ -140,13 +140,20 @@ pub extern "C" fn get_atom_types(space: *const grounding_space_t, atom: *const a
 
 // MeTTa interpreter API
 
-pub struct step_result_t {
-    result: StepResult<Vec<InterpretedAtom>>,
+pub struct step_result_t<'a> {
+    result: StepResult<'a, Vec<InterpretedAtom>>,
 }
 
 #[no_mangle]
-pub extern "C" fn interpret_init(space: *mut grounding_space_t, expr: *const atom_t) -> *mut step_result_t {
-    let step = unsafe { interpreter::interpret_init((*space).space.clone(), &(*expr).atom) };
+pub extern "C" fn interpret_init<'a>(space: *mut grounding_space_t, expr: *const atom_t) -> *mut step_result_t<'a> {
+    let space = unsafe{ &(*space) };
+    let expr = unsafe{ &(*expr) };
+    // FIXME: here code works compiles because it is a C API and lifetime checker
+    // cannot verify that pointer to the space outlives pointer to the step result.
+    // Consequently C API can call interpret_init, free space and after that call
+    // interpret_step which will lead to panic as step_result_t contains a reference
+    // to the space.
+    let step = interpreter::interpret_init(&space.space, &expr.atom);
     Box::into_raw(Box::new(step_result_t{ result: step }))
 }
 

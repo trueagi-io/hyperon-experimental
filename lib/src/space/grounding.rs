@@ -93,7 +93,7 @@ impl GroundingSpace {
     /// Registers space modifications `observer`. Observer is automatically
     /// deregistered when `Rc` counter reaches zero. See [SpaceObserver] for
     /// examples.
-    pub fn register_observer<T>(&mut self, observer: Rc<RefCell<T>>)
+    pub fn register_observer<T>(&self, observer: Rc<RefCell<T>>)
         where T: SpaceObserver + 'static
     {
         self.observers.borrow_mut().push(Rc::downgrade(&observer) as Weak<RefCell<dyn SpaceObserver>>);

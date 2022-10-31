@@ -3,18 +3,18 @@ use std::fmt::{Debug, Formatter};
 // Generic plan infrastructure
 
 /// Result of a single step of a plan
-pub enum StepResult<R> {
+pub enum StepResult<'a, R: 'a> {
     /// New plan to be executed to get a result
-    Execute(Box<dyn Plan<(), R>>),
+    Execute(Box<dyn Plan<'a, (), R> + 'a>),
     /// Result returned
     Return(R),
     /// Plan execution error message
     Error(String),
 }
 
-impl<R> StepResult<R> {
+impl<'a, R: 'a> StepResult<'a, R> {
     /// New result from a value which has the Plan trait
-    pub fn execute<P>(next: P) -> Self where P: 'static + Plan<(), R> {
+    pub fn execute<P>(next: P) -> Self where P: 'a + Plan<'a, (), R> {
         Self::Execute(Box::new(next))
     }
 
@@ -49,27 +49,27 @@ impl<R> StepResult<R> {
 
 /// Plan which gets a value of T type as an input and returns a result of
 /// R type as an output after execution
-pub trait Plan<T, R> : Debug {
+pub trait Plan<'a, T, R: 'a> : Debug {
     // `self: Box<Self>` allows moving content of the step into the next step.
     // We cannot use `self: Self` because it will be called via `dyn Plan`
     // which doesn't know anything about original type and cannot move it.
     /// Execute one step of the plan
-    fn step(self: Box<Self>, arg: T) -> StepResult<R>;
+    fn step(self: Box<Self>, arg: T) -> StepResult<'a, R>;
 }
 
 // Specific plans to form calculations graph
 
 /// Boxed plan is a plan
-impl<T, R> Plan<T, R> for Box<dyn Plan<T, R>> {
-    fn step(self: Box<Self>, arg:T) -> StepResult<R> {
+impl<'a, T, R: 'a> Plan<'a, T, R> for Box<dyn Plan<'a, T, R> + '_> {
+    fn step(self: Box<Self>, arg:T) -> StepResult<'a, R> {
         (*self).step(arg)
     }
 }
 
 /// StepResult itself is a trivial plan which executes step of the plan or 
 /// itself when executed
-impl<R: Debug> Plan<(), R> for StepResult<R> {
-    fn step(self: Box<Self>, _:()) -> StepResult<R> {
+impl<'a, R: 'a + Debug> Plan<'a, (), R> for StepResult<'a, R> {
+    fn step(self: Box<Self>, _:()) -> StepResult<'a, R> {
         match *self {
             StepResult::Execute(plan) => plan.step(()),
             _ => *self,
@@ -77,7 +77,7 @@ impl<R: Debug> Plan<(), R> for StepResult<R> {
     }
 }
 
-impl<R: Debug> Debug for StepResult<R> {  
+impl<R: Debug> Debug for StepResult<'_, R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             Self::Execute(plan) => write!(f, "{:?}", plan),
@@ -88,50 +88,50 @@ impl<R: Debug> Debug for StepResult<R> {
 }
 
 /// Function from T to StepResult<R> is a plan which calls itself when executed
-pub struct FunctionPlan<T, R> {
-    pub func: fn(T) -> StepResult<R>,
-    pub name: &'static str,
+pub struct FunctionPlan<'a, T, R: 'a> {
+    pub func: fn(T) -> StepResult<'a, R>,
+    pub name: &'a str,
 }
 
-impl<T, R> Plan<T, R> for FunctionPlan<T, R> {
-    fn step(self: Box<Self>, arg: T) -> StepResult<R> {
+impl<'a, T, R: 'a> Plan<'a, T, R> for FunctionPlan<'a, T, R> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<'a, R> {
         (self.func)(arg)
     }
 }
 
-impl<T, R> Debug for FunctionPlan<T, R> {  
+impl<T, R> Debug for FunctionPlan<'_, T, R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.name)
     }
 }
 
-impl<T, R> Clone for FunctionPlan<T, R> {
+impl<T, R> Clone for FunctionPlan<'_, T, R> {
     fn clone(&self) -> Self {
         Self{ func: self.func, name: self.name }
     }
 }
 
-impl<T, R> Copy for FunctionPlan<T, R> {}
+impl<T, R> Copy for FunctionPlan<'_, T, R> {}
 
 /// Operator from T to StepResult<R> is a plan which calls itself when executed
-pub struct OperatorPlan<T, R> {
-    operator: Box<dyn FnOnce(T) -> StepResult<R>>,
+pub struct OperatorPlan<'a, T, R: 'a> {
+    operator: Box<dyn 'a + FnOnce(T) -> StepResult<'a, R>>,
     name: String,
 }
 
-impl<T, R> OperatorPlan<T, R> {
-    pub fn new<F: 'static + FnOnce(T) -> StepResult<R>, N: Into<String>>(operator: F, name: N) -> Self {
+impl<'a, T, R: 'a> OperatorPlan<'a, T, R> {
+    pub fn new<F: 'a + FnOnce(T) -> StepResult<'a, R>, N: Into<String>>(operator: F, name: N) -> Self {
         Self { operator: Box::new(operator), name: name.into() }
     }
 }
 
-impl<T, R> Plan<T, R> for OperatorPlan<T, R> {
-    fn step(self: Box<Self>, arg: T) -> StepResult<R> {
+impl<'a, T, R: 'a> Plan<'a, T, R> for OperatorPlan<'a, T, R> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<'a, R> {
         (self.operator)(arg)
     }
 }
 
-impl<T, R> Debug for OperatorPlan<T, R> {  
+impl<T, R> Debug for OperatorPlan<'_, T, R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{}", self.name)
     }
@@ -139,24 +139,24 @@ impl<T, R> Debug for OperatorPlan<T, R> {
 
 /// The plan applies an argument of T type to the underlying plan Plan<T, R>.
 /// Resulting plan has type Plan<(), R>.
-pub struct ApplyPlan<T, R> {
+pub struct ApplyPlan<'a, T: 'a, R: 'a> {
     arg: T,
-    plan: Box<dyn Plan<T, R>>,
+    plan: Box<dyn Plan<'a, T, R> + 'a>,
 }
 
-impl<T, R> ApplyPlan<T, R> {
-    pub fn new<P>(plan: P, arg: T) -> Self where P: 'static + Plan<T, R> {
+impl<'a, T: 'a, R: 'a> ApplyPlan<'a, T, R> {
+    pub fn new<P>(plan: P, arg: T) -> Self where P: 'a + Plan<'a, T, R> {
         ApplyPlan{ arg, plan: Box::new(plan) }
     }
 }
 
-impl<T: Debug, R> Plan<(), R> for ApplyPlan<T, R> {
-    fn step(self: Box<Self>, _: ()) -> StepResult<R> {
+impl<'a, T: 'a + Debug, R: 'a> Plan<'a, (), R> for ApplyPlan<'a, T, R> {
+    fn step(self: Box<Self>, _: ()) -> StepResult<'a, R> {
         Plan::step(self.plan, self.arg)
     }
 }
 
-impl<T: Debug, R> Debug for ApplyPlan<T, R> {  
+impl<T: Debug, R> Debug for ApplyPlan<'_, T, R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "apply \"{:?}\" to \"{:?}\"", self.plan, self.arg)
     }
@@ -165,45 +165,45 @@ impl<T: Debug, R> Debug for ApplyPlan<T, R> {
 /// The plan applies value of T1 type as a first argument to the underlying
 /// plan which consumes pair of (T1, T2). Resulting plan has type Plan<T2, R>
 /// and to be applied to the second argument.
-pub struct PartialApplyPlan<T1, T2, R> {
+pub struct PartialApplyPlan<'a, T1: 'a, T2, R: 'a> {
     arg: T1,
-    plan: Box<dyn Plan<(T1, T2), R>>,
+    plan: Box<dyn Plan<'a, (T1, T2), R> + 'a>,
 }
 
-impl<T1, T2, R> PartialApplyPlan<T1, T2, R> {
-    pub fn new<P>(plan: P, arg: T1) -> Self where P: 'static + Plan<(T1, T2), R> {
+impl<'a, T1: 'a, T2, R: 'a> PartialApplyPlan<'a, T1, T2, R> {
+    pub fn new<P>(plan: P, arg: T1) -> Self where P: 'a + Plan<'a, (T1, T2), R> {
         PartialApplyPlan{ arg, plan: Box::new(plan) }
     }
 }
 
-impl<T1: Debug, T2, R> Plan<T2, R> for PartialApplyPlan<T1, T2, R> {
-    fn step(self: Box<Self>, arg: T2) -> StepResult<R> {
+impl<'a, T1: 'a + Debug, T2, R: 'a> Plan<'a, T2, R> for PartialApplyPlan<'a, T1, T2, R> {
+    fn step(self: Box<Self>, arg: T2) -> StepResult<'a, R> {
         self.plan.step((self.arg, arg))
     }
 }
 
-impl<T1: Debug, T2, R> Debug for PartialApplyPlan<T1, T2, R> {  
+impl<T1: Debug, T2, R> Debug for PartialApplyPlan<'_, T1, T2, R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "partially apply \"{:?}\" to \"{:?}\"", self.plan, self.arg)
     }
 }
 
 /// The plan concatenates two underlying plans via middle value of T2 type.
-pub struct SequencePlan<T1, T2, R> {
-    first: Box<dyn Plan<T1, T2>>,
-    second: Box<dyn Plan<T2, R>>,
+pub struct SequencePlan<'a, T1, T2: 'a, R: 'a> {
+    first: Box<dyn Plan<'a, T1, T2> + 'a>,
+    second: Box<dyn Plan<'a, T2, R> + 'a>,
 }
 
-impl<T1, T2, R> SequencePlan<T1, T2, R> {
+impl<'a, T1, T2: 'a, R: 'a> SequencePlan<'a, T1, T2, R> {
     pub fn new<P1, P2>(first: P1, second: P2) -> Self
-        where P1: 'static + Plan<T1, T2>,
-              P2: 'static + Plan<T2, R> {
+        where P1: 'a + Plan<'a, T1, T2>,
+              P2: 'a + Plan<'a, T2, R> {
         SequencePlan{ first: Box::new(first), second: Box::new(second) }
     }
 }
 
-impl<T1: 'static, T2: 'static + Debug, R: 'static> Plan<T1, R> for SequencePlan<T1, T2, R> {
-    fn step(self: Box<Self>, arg: T1) -> StepResult<R> {
+impl<'a, T1, T2: 'a + Debug, R: 'a> Plan<'a, T1, R> for SequencePlan<'a, T1, T2, R> {
+    fn step(self: Box<Self>, arg: T1) -> StepResult<'a, R> {
         match self.first.step(arg) {
             StepResult::Execute(next) => StepResult::execute(SequencePlan{
                 first: next,
@@ -218,7 +218,7 @@ impl<T1: 'static, T2: 'static + Debug, R: 'static> Plan<T1, R> for SequencePlan<
     }
 }
 
-impl<T1, T2, R> Debug for SequencePlan<T1, T2, R> {  
+impl<T1, T2, R> Debug for SequencePlan<'_, T1, T2, R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{:?} then {:?}", self.first, self.second)
     }
@@ -226,15 +226,15 @@ impl<T1, T2, R> Debug for SequencePlan<T1, T2, R> {
 
 /// The plan to execute two underlying plans and return a pair formed from
 /// their results.
-pub struct ParallelPlan<T1, T2> {
-    first: Box<dyn Plan<(), T1>>,
-    second: Box<dyn Plan<(), T2>>,
+pub struct ParallelPlan<'a, T1: 'a, T2: 'a> {
+    first: Box<dyn Plan<'a, (), T1> + 'a>,
+    second: Box<dyn Plan<'a, (), T2> + 'a>,
 }
 
-impl<T1, T2> ParallelPlan<T1, T2> {
+impl<'a, T1: 'a, T2: 'a> ParallelPlan<'a, T1, T2> {
     pub fn new<P1, P2>(first: P1, second: P2) -> Self
-        where P1: 'static + Plan<(), T1>,
-              P2: 'static + Plan<(), T2> {
+        where P1: 'a + Plan<'a, (), T1>,
+              P2: 'a + Plan<'a, (), T2> {
         Self{
             first: Box::new(first),
             second: Box::new(second)
@@ -243,10 +243,8 @@ impl<T1, T2> ParallelPlan<T1, T2> {
 }
 
 /// Return error if any of sub-plans returned error
-impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2> 
-    where T1: 'static + Debug,
-          T2: 'static + Debug {
-    fn step(self: Box<Self>, _: ()) -> StepResult<(T1, T2)> {
+impl<'a, T1: 'a + Debug, T2: 'a + Debug> Plan<'a, (), (T1, T2)> for ParallelPlan<'a, T1, T2> {
+    fn step(self: Box<Self>, _: ()) -> StepResult<'a, (T1, T2)> {
         match self.first.step(()) {
             StepResult::Execute(next) => StepResult::execute(ParallelPlan{
                 first: next,
@@ -266,7 +264,7 @@ impl<T1, T2> Plan<(), (T1, T2)> for ParallelPlan<T1, T2>
     }
 }
 
-impl<T1, T2> Debug for ParallelPlan<T1, T2> {  
+impl<T1, T2> Debug for ParallelPlan<'_, T1, T2> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{:?}\n{:?}", self.first, self.second)
     }
@@ -274,29 +272,29 @@ impl<T1, T2> Debug for ParallelPlan<T1, T2> {
 
 /// Trait to fold the value (typically sequence of sub-values) to the plan
 /// which processes each sub-value in parallel and merges the results.
-pub trait FoldIntoParallelPlan<I, T, R>
-    where I: Iterator,
-          T: 'static,
-          R: 'static {
+pub trait FoldIntoParallelPlan<'a, I, T, R>
+    where I: 'a + Iterator,
+          T: 'a,
+          R: 'a {
     /// Method converts the `self` value into parallel plan. It starts from
     /// the `empty` return value. It applies `step` to each sub-value to get
     /// a plan to calculate result. It applies `merge` to plan result and
     /// step result to calculate the final result. Resulting plan is returned.
-    fn into_parallel_plan<S, M>(self, empty: R, step: S, merge: M) -> Box<dyn Plan<(), R>>
+    fn into_parallel_plan<S, M>(self, empty: R, step: S, merge: M) -> Box<dyn Plan<'a, (), R> + 'a>
         where
-          S: FnMut(I::Item) -> Box<dyn Plan<(), T>>,
-          M: 'static + FnMut(R, T) -> R + Clone;
+          S: FnMut(I::Item) -> Box<dyn Plan<'a, (), T> + 'a>,
+          M: 'a + FnMut(R, T) -> R + Clone;
 }
 
-impl<I, T, R> FoldIntoParallelPlan<I, T, R> for I
+impl<'a, I: 'a, T: 'a, R> FoldIntoParallelPlan<'a, I, T, R> for I
     where I: Iterator,
-          T: 'static + Debug,
-          R: 'static + Debug {
-    fn into_parallel_plan<S, M>(self, empty: R, mut step: S, merge: M) -> Box<dyn Plan<(), R>>
+          T: 'a + Debug,
+          R: 'a + Debug {
+    fn into_parallel_plan<S, M>(self, empty: R, mut step: S, merge: M) -> Box<dyn Plan<'a, (), R> + 'a>
         where
-          S: FnMut(I::Item) -> Box<dyn Plan<(), T>>,
-          M: 'static + FnMut(R, T) -> R + Clone {
-        let plan: Box<dyn Plan<(), R>> = self
+          S: FnMut(I::Item) -> Box<dyn Plan<'a, (), T> + 'a>,
+          M: 'a + FnMut(R, T) -> R + Clone {
+        let plan: Box<dyn Plan<'a, (), R> + 'a> = self
             .fold(Box::new(StepResult::ret(empty)),
                 |plan, step_result| {
                     let mut merge = merge.clone();
@@ -316,19 +314,19 @@ impl<I, T, R> FoldIntoParallelPlan<I, T, R> for I
 }
 
 /// Plan which ignores error and returns optional result
-pub struct NoErrorPlan<T, R> {
-    delegate: Box<dyn Plan<T, R>>,
+pub struct NoErrorPlan<'a, T, R> {
+    delegate: Box<dyn Plan<'a, T, R> + 'a>,
 }
 
-impl<T, R> NoErrorPlan<T, R> {
+impl<'a, T, R> NoErrorPlan<'a, T, R> {
     pub fn new<P>(delegate: P) -> Self
-        where P: 'static + Plan<T, R> {
+        where P: 'a + Plan<'a, T, R> {
         Self{ delegate: Box::new(delegate) }
     }
 }
 
-impl<T, R: 'static> Plan<T, Option<R>> for NoErrorPlan<T, R> {
-    fn step(self: Box<Self>, arg: T) -> StepResult<Option<R>> {
+impl<'a, T, R: 'a> Plan<'a, T, Option<R>> for NoErrorPlan<'a, T, R> {
+    fn step(self: Box<Self>, arg: T) -> StepResult<'a, Option<R>> {
         match self.delegate.step(arg) {
             StepResult::Execute(next) => StepResult::execute(
                 NoErrorPlan{ delegate: next }),
@@ -338,22 +336,22 @@ impl<T, R: 'static> Plan<T, Option<R>> for NoErrorPlan<T, R> {
     }
 }
 
-impl<T, R> Debug for NoErrorPlan<T, R> {  
+impl<T, R> Debug for NoErrorPlan<'_, T, R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{:?}", self.delegate)
     }
 }
 
 /// Plan returns the first plan which returned non-error result
-pub struct OrPlan<R> {
-    first: Box<dyn Plan<(), R>>,
-    second: Box<dyn Plan<(), R>>,
+pub struct OrPlan<'a, R> {
+    first: Box<dyn Plan<'a, (), R> + 'a>,
+    second: Box<dyn Plan<'a, (), R> + 'a>,
 }
 
-impl<R> OrPlan<R> {
+impl<'a, R> OrPlan<'a, R> {
     pub fn new<P1, P2>(first: P1, second: P2) -> Self
-        where P1: 'static + Plan<(), R>,
-              P2: 'static + Plan<(), R> {
+        where P1: 'a + Plan<'a, (), R>,
+              P2: 'a + Plan<'a, (), R> {
         Self{
             first: Box::new(first),
             second: Box::new(second)
@@ -361,8 +359,8 @@ impl<R> OrPlan<R> {
     }
 }
 
-impl<R: 'static> Plan<(), R> for OrPlan<R> {
-    fn step(self: Box<Self>, _: ()) -> StepResult<R> {
+impl<'a, R: 'a> Plan<'a, (), R> for OrPlan<'a, R> {
+    fn step(self: Box<Self>, _: ()) -> StepResult<'a, R> {
         match self.first.step(()) {
             StepResult::Execute(next) => StepResult::execute(OrPlan{
                 first: next,
@@ -377,7 +375,7 @@ impl<R: 'static> Plan<(), R> for OrPlan<R> {
     }
 }
 
-impl<R> Debug for OrPlan<R> {  
+impl<R> Debug for OrPlan<'_, R> {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
         write!(f, "{:?} (or {:?})", self.first, self.second)
     }
@@ -388,8 +386,8 @@ mod tests {
     use super::*;
 
     /// Execute the plan using given input value and return result
-    fn execute_plan<T: Debug, R, P>(plan: P, arg: T) -> Result<R, String> where P: 'static + Plan<T, R> {
-        let mut step: Box<dyn Plan<(), R>>  = Box::new(ApplyPlan::new(plan, arg));
+    fn execute_plan<'a, T: Debug + 'a, R: 'a, P>(plan: P, arg: T) -> Result<R, String> where P: 'a + Plan<'a, T, R> {
+        let mut step: Box<dyn Plan<'_, (), R>>  = Box::new(ApplyPlan::new(plan, arg));
         loop {
             log::debug!("current plan:\n{:?}", step);
             match step.step(()) {
