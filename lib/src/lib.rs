@@ -7,6 +7,7 @@ pub mod space;
 pub mod metta;
 
 pub use atom::*;
+pub mod child_ai;
 
 use ctor::ctor;
 

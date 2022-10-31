@@ -11,6 +11,7 @@ log = "0.4.0"
 env_logger = "0.8.4"
 delegate = "0.6.1"
 ctor = "0.1.22"
+ndarray = "0.15.6"
 
 [lib]
 name = "hyperon"
