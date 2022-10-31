@@ -52,7 +52,7 @@ Below are possible Atoms in MeTTa(5) format after execution of curiosity_behavio
 ((Object) (ObjectFor) (ReactionVisual)), ((Object) (ObjectFor) (ReactionHearing)), ((Object) (ObjectFor) (ReactionTouch))<br/>
 
 After concrete idea is proven or architecture is fixed we can move some functionality in Hyperon Rust library(5). It can increase performance and we can reuse Space / Atoms functionality. 
-I propose several functions to implement in Rust and its [Rust source code are placed here](graph_kb.rs).
+I propose several functions to implement in Rust and its [Rust source code are placed here](https://github.com/h555yand/hyperon-experimental/blob/dd1b7b02f58ce1a072ab0f3834c6032b4fc5ff18/lib/src/child_ai/graph_kb.rs).
 They duplicate similar functions in [Python](child_ai.py) and have the same names.
 
 Future architecture can look like: <br/>
