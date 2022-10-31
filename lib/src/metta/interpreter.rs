@@ -73,6 +73,7 @@ use crate::common::collections::ListMap;
 use crate::metta::*;
 use crate::metta::types::{is_func, get_arg_types, get_type_bindings,
     get_atom_types, match_reducted_types};
+use crate::common::ptr::SmartPtr;
 
 use std::ops::Deref;
 use std::rc::Rc;
@@ -123,6 +124,8 @@ impl Debug for InterpretedAtom {
 
 type Results = Vec<InterpretedAtom>;
 type NoInputPlan<'a> = Box<dyn Plan<'a, (), Results> + 'a>;
+trait GroundingSpacePtr : Clone + SmartPtr<GroundingSpace> {}
+impl<T: Clone + SmartPtr<GroundingSpace>> GroundingSpacePtr for T {}
 
 /// Initialize interpreter and returns the result of the zero step.
 /// It can be error, immediate result or interpretation plan to be executed.
@@ -131,7 +134,7 @@ type NoInputPlan<'a> = Box<dyn Plan<'a, (), Results> + 'a>;
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
-pub fn interpret_init<'a>(space: &'a GroundingSpace, expr: &Atom) -> StepResult<'a, Vec<InterpretedAtom>> {
+pub fn interpret_init<'a, T: Clone + SmartPtr<GroundingSpace> + 'a>(space: T, expr: &Atom) -> StepResult<'a, Vec<InterpretedAtom>> {
     let context = InterpreterContextRef::new(space);
     interpret_as_type_plan(context,
         InterpretedAtom(expr.clone(), Bindings::new()),
@@ -159,7 +162,7 @@ pub fn interpret_step<'a>(step: StepResult<'a, Vec<InterpretedAtom>>) -> StepRes
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
-pub fn interpret(space: &GroundingSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
+pub fn interpret<T: Clone + SmartPtr<GroundingSpace>>(space: T, expr: &Atom) -> Result<Vec<Atom>, String> {
     let mut step = interpret_init(space, expr);
     while step.has_next() {
         step = interpret_step(step);
@@ -219,24 +222,27 @@ impl SpaceObserver for InterpreterCache {
     }
 }
 
-struct InterpreterContext<'a> {
-    space: &'a GroundingSpace,
+use std::marker::PhantomData;
+
+struct InterpreterContext<'a, T: GroundingSpacePtr + 'a> {
+    space: T,
     cache: Rc<RefCell<InterpreterCache>>,
+    phantom: PhantomData<&'a GroundingSpace>,
 }
 
 #[derive(Clone)]
-struct InterpreterContextRef<'a>(Rc<InterpreterContext<'a>>);
+struct InterpreterContextRef<'a, T: GroundingSpacePtr + 'a>(Rc<InterpreterContext<'a, T>>);
 
-impl<'a> InterpreterContextRef<'a> {
-    fn new(space: &'a GroundingSpace) -> Self {
+impl<'a, T: GroundingSpacePtr + 'a> InterpreterContextRef<'a, T> {
+    fn new(space: T) -> Self {
         let cache = Rc::new(RefCell::new(InterpreterCache::new()));
-        space.register_observer(Rc::clone(&cache));
-        Self(Rc::new(InterpreterContext{ space, cache }))
+        space.borrow().register_observer(Rc::clone(&cache));
+        Self(Rc::new(InterpreterContext{ space, cache, phantom: PhantomData }))
     }
 }
 
-impl<'a> Deref for InterpreterContextRef<'a> {
-    type Target = InterpreterContext<'a>;
+impl<'a, T: GroundingSpacePtr + 'a> Deref for InterpreterContextRef<'a, T> {
+    type Target = InterpreterContext<'a, T>;
 
     fn deref(&self) -> &Self::Target {
         &self.0
@@ -260,7 +266,7 @@ fn has_grounded_sub_expr(expr: &Atom) -> bool {
         });
 }
 
-fn interpret_as_type_plan<'a>(context: InterpreterContextRef<'a>,
+fn interpret_as_type_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>,
         input: InterpretedAtom, typ: Atom) -> StepResult<'a, Results> {
     log::debug!("interpret_as_type_plan: input: {}, type: {}", input, typ);
     match input.atom() {
@@ -284,11 +290,11 @@ fn interpret_as_type_plan<'a>(context: InterpreterContextRef<'a>,
     }
 }
 
-fn cast_atom_to_type_plan<'a>(context: InterpreterContextRef<'a>,
+fn cast_atom_to_type_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>,
         input: InterpretedAtom, typ: Atom) -> StepResult<'a, Results> {
     // TODO: implement this via interpreting of the (:cast atom typ) expression
     let typ = apply_bindings_to_atom(&typ, input.bindings());
-    let mut results = get_type_bindings(&context.space, input.atom(), &typ);
+    let mut results = get_type_bindings(&context.space.borrow(), input.atom(), &typ);
     log::debug!("cast_atom_to_type_plan: type check results: {:?}", results);
     if !results.is_empty() {
         log::debug!("cast_atom_to_type_plan: input: {} is casted to type: {}", input, typ);
@@ -310,12 +316,12 @@ fn cast_atom_to_type_plan<'a>(context: InterpreterContextRef<'a>,
     }
 }
 
-fn get_type_of_atom_plan<'a>(context: InterpreterContextRef<'a>, atom: Atom) -> StepResult<'a, Vec<Atom>> {
+fn get_type_of_atom_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, atom: Atom) -> StepResult<'a, Vec<Atom>> {
     // TODO: implement this via interpreting of the (:? atom)
-    StepResult::ret(get_atom_types(&context.space, &atom))
+    StepResult::ret(get_atom_types(&context.space.borrow(), &atom))
 }
 
-fn interpret_expression_as_type_plan<'a>(context: InterpreterContextRef<'a>,
+fn interpret_expression_as_type_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>,
         input: InterpretedAtom, typ: Atom) -> OperatorPlan<'a, Vec<Atom>, Results> {
     let descr = format!("form alternative plans for expression {} using types", input);
     OperatorPlan::new(move |op_types: Vec<Atom>| {
@@ -340,7 +346,7 @@ fn get_expr_mut(atom: &mut Atom) -> &mut ExpressionAtom {
     }
 }
 
-fn interpret_expression_as_type_op<'a>(context: InterpreterContextRef<'a>,
+fn interpret_expression_as_type_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>,
         input: InterpretedAtom, op_typ: Atom, ret_typ: Atom) -> NoInputPlan<'a> {
     log::debug!("interpret_expression_as_type_op: input: {}, operation type: {}, expected return type: {}", input, op_typ, ret_typ);
     if ret_typ == ATOM_TYPE_ATOM || ret_typ == ATOM_TYPE_EXPRESSION {
@@ -404,7 +410,7 @@ fn interpret_expression_as_type_op<'a>(context: InterpreterContextRef<'a>,
     }
 }
 
-fn call_alternatives_plan<'a>(plan: NoInputPlan<'a>, context: InterpreterContextRef<'a>,
+fn call_alternatives_plan<'a, T: GroundingSpacePtr + 'a>(plan: NoInputPlan<'a>, context: InterpreterContextRef<'a, T>,
     input: InterpretedAtom) -> NoInputPlan<'a> {
     Box::new(SequencePlan::new(plan, OperatorPlan::new(move |results: Results| {
         make_alternives_plan(input, results, move |result| {
@@ -429,12 +435,12 @@ fn insert_reducted_arg_op<'a>(expr: InterpretedAtom, atom_idx: usize, mut arg_va
     StepResult::ret(result)
 }
 
-fn call_plan<'a>(context: InterpreterContextRef<'a>, input: InterpretedAtom) -> NoInputPlan<'a> {
+fn call_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> NoInputPlan<'a> {
     let descr = format!("call {}", input);
     Box::new(OperatorPlan::new(|_| call_op(context, input), descr))
 }
 
-fn call_op<'a>(context: InterpreterContextRef<'a>, input: InterpretedAtom) -> StepResult<'a, Results> {
+fn call_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results> {
     log::debug!("call_op: {}", input);
 
     let cached = context.cache.borrow().get(input.atom(), input.bindings());
@@ -466,7 +472,7 @@ fn return_cached_result_plan<'a>(results: Results) -> StepResult<'a, Results> {
     StepResult::execute(OperatorPlan::new(|_| StepResult::ret(results), descr))
 }
 
-fn save_result_in_cache_plan<'a>(context: InterpreterContextRef<'a>, key: Atom) -> OperatorPlan<'a, Results, Results> {
+fn save_result_in_cache_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, key: Atom) -> OperatorPlan<'a, Results, Results> {
     let descr = format!("save results in cache for key {}", key);
     OperatorPlan::new(move |results: Results| {
         context.cache.borrow_mut().insert(key, results.clone());
@@ -474,7 +480,7 @@ fn save_result_in_cache_plan<'a>(context: InterpreterContextRef<'a>, key: Atom) 
     }, descr)
 }
 
-fn interpret_reducted_plan<'a>(context: InterpreterContextRef<'a>,
+fn interpret_reducted_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>,
         input: InterpretedAtom) -> NoInputPlan<'a> {
     if let Atom::Expression(ref expr) = input.atom() {
         if is_grounded_op(expr) {
@@ -488,12 +494,12 @@ fn interpret_reducted_plan<'a>(context: InterpreterContextRef<'a>,
 }
 
 
-fn execute_plan<'a>(context: InterpreterContextRef<'a>, input: InterpretedAtom) -> OperatorPlan<'a, (), Results> {
+fn execute_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> OperatorPlan<'a, (), Results> {
     let descr = format!("execute {}", input);
     OperatorPlan::new(|_| execute_op(context, input), descr)
 }
 
-fn execute_op<'a>(context: InterpreterContextRef<'a>, input: InterpretedAtom) -> StepResult<'a, Results> {
+fn execute_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results> {
     log::debug!("execute_op: {}", input);
     match input {
         InterpretedAtom(Atom::Expression(ref expr), ref bindings) => {
@@ -527,18 +533,18 @@ fn execute_op<'a>(context: InterpreterContextRef<'a>, input: InterpretedAtom) ->
     }
 }
 
-fn match_plan<'a>(context: InterpreterContextRef<'a>, input: InterpretedAtom) -> OperatorPlan<'a, (), Results> {
+fn match_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> OperatorPlan<'a, (), Results> {
     let descr = format!("match {}", input);
     OperatorPlan::new(|_| match_op(context, input), descr)
 }
 
-fn match_op<'a>(context: InterpreterContextRef<'a>, input: InterpretedAtom) -> StepResult<'a, Results> {
+fn match_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results> {
     log::debug!("match_op: {}", input);
     let var_x = VariableAtom::new("%X%");
     // TODO: unique variable?
     let atom_x = Atom::Variable(var_x.clone());
     let query = Atom::expr(vec![EQUAL_SYMBOL, input.atom().clone(), atom_x]);
-    let mut local_bindings = context.space.query(&query);
+    let mut local_bindings = context.space.borrow().query(&query);
     let results: Vec<InterpretedAtom> = local_bindings
         .drain(0..)
         .map(|mut binding| {
