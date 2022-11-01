@@ -1,5 +1,6 @@
 use hyperon::*;
 use hyperon::space::grounding::*;
+use hyperon::common::ptr::ArcMutex;
 
 use crate::atom::*;
 use crate::util::*;
@@ -10,12 +11,12 @@ use std::ffi::CString;
 // GroundingSpace
 
 pub struct grounding_space_t {
-    pub space: GroundingSpace,
+    pub space: ArcMutex<GroundingSpace>,
 }
 
 #[no_mangle]
 pub extern "C" fn grounding_space_new() -> *mut grounding_space_t {
-    Box::into_raw(Box::new(grounding_space_t{ space: GroundingSpace::new() })) 
+    Box::into_raw(Box::new(grounding_space_t{ space: ArcMutex::new(GroundingSpace::new()) }))
 }
 
 #[no_mangle]
@@ -31,28 +32,28 @@ pub unsafe extern "C" fn grounding_space_eq(a: *const grounding_space_t, b: *con
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_add(space: *mut grounding_space_t, atom: *mut atom_t) {
     let c_atom = Box::from_raw(atom);
-    (*space).space.add(c_atom.atom);
+    (*space).space.borrow_mut().add(c_atom.atom);
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_remove(space: *mut grounding_space_t, atom: *const atom_t) -> bool {
-    (*space).space.remove(&(*atom).atom)
+    (*space).space.borrow_mut().remove(&(*atom).atom)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_replace(space: *mut grounding_space_t, from: *const atom_t, to: *mut atom_t) -> bool {
     let c_to = Box::from_raw(to);
-    (*space).space.replace(&(*from).atom, c_to.atom)
+    (*space).space.borrow_mut().replace(&(*from).atom, c_to.atom)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_len(space: *const grounding_space_t) -> usize {
-    (*space).space.borrow_vec().len()
+    (*space).space.borrow().content().len()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *mut atom_t {
-    atom_to_ptr((*space).space.borrow_vec()[idx].clone())
+    atom_to_ptr((*space).space.borrow().content()[idx].clone())
 }
 
 #[repr(C)]
@@ -66,7 +67,7 @@ pub type binding_array_t = array_t<binding_t>;
 #[no_mangle]
 pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
         pattern: *const atom_t, callback: lambda_t<binding_array_t>, context: *mut c_void) {
-    let results = unsafe { (*space).space.query(&((*pattern).atom)) };
+    let results = unsafe { (*space).space.borrow().query(&((*pattern).atom)) };
     for result in results {
         let mut vars : Vec<CString> = Vec::new();
         let vec = result.iter().map(|(k, v)| {
@@ -86,7 +87,7 @@ pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
 pub extern "C" fn grounding_space_subst(space: *const grounding_space_t,
         pattern: *const atom_t, templ: *const atom_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
-    let results = unsafe { (*space).space.subst(&((*pattern).atom), &((*templ).atom)) };
+    let results = unsafe { (*space).space.borrow().subst(&((*pattern).atom), &((*templ).atom)) };
     return_atoms(&results, callback, context);
 }
 

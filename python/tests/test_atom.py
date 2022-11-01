@@ -69,21 +69,19 @@ class AtomTest(unittest.TestCase):
     def test_expr_type(self):
         self.assertEqual(E(x2Atom, ValueAtom(1.0)).get_type(), AtomKind.EXPR)
 
-    # def test_expr_get_children(self):
-        # self.assertEqual(E(X2Atom(), ValueAtom(1.0)).get_children(),
-                # [X2Atom(), ValueAtom(1.0)])
-
-    # def test_groundingspace_str(self):
-        # kb = GroundingSpace()
-        # kb.add_atom(E(S("+"), S("1"), S("2")))
-        # self.assertEqual(str(kb), "<(+ 1 2)>")
+    def test_expr_get_children(self):
+        self.assertEqual(E(x2Atom, ValueAtom(1.0)).get_children(),
+                [x2Atom, ValueAtom(1.0)])
 
     def test_groundingspace_equals(self):
         kb_a = GroundingSpace()
         kb_a.add_atom(E(S("+"), S("1"), S("2")))
         kb_b = GroundingSpace()
         kb_b.add_atom(E(S("+"), S("1"), S("2")))
-        self.assertEqual(kb_a, kb_b)
+        kb_c = kb_a
+        self.assertEqual(kb_a.get_atoms(), kb_b.get_atoms())
+        self.assertEqual(kb_a, kb_c)
+        self.assertNotEqual(kb_a, kb_b)
 
     def test_sexprspace_symbol(self):
         text = SExprSpace(Tokenizer())
@@ -91,9 +89,8 @@ class AtomTest(unittest.TestCase):
         kb = GroundingSpace()
         text.add_to(kb)
 
-        expected = GroundingSpace()
-        expected.add_atom(E(S("+"), S("1"), S("2")))
-        self.assertEqual(kb, expected)
+        expected = [E(S("+"), S("1"), S("2"))]
+        self.assertEqual(kb.get_atoms(), expected)
 
     def test_sexprspace_token(self):
         tokenizer = Tokenizer()
@@ -103,9 +100,8 @@ class AtomTest(unittest.TestCase):
         kb = GroundingSpace()
         text.add_to(kb)
 
-        expected = GroundingSpace()
-        expected.add_atom(E(S("+"), ValueAtom(1), ValueAtom(2)))
-        self.assertEqual(kb, expected)
+        expected = [E(S("+"), ValueAtom(1), ValueAtom(2))]
+        self.assertEqual(kb.get_atoms(), expected)
 
     def test_interpret(self):
         space = GroundingSpace()
