@@ -108,7 +108,7 @@ pub unsafe extern "C" fn sexpr_space_add_str(space: *mut sexpr_space_t, text: *c
 #[no_mangle]
 pub unsafe extern "C" fn sexpr_space_into_grounding_space(sexpr: *const sexpr_space_t,
         gnd: *mut grounding_space_t) {
-    (*sexpr).space.into_grounding_space(&mut (*gnd).space);
+    (*sexpr).space.into_grounding_space(&mut (*gnd).space.borrow_mut());
 }
 
 #[no_mangle] pub static ATOM_TYPE_UNDEFINED: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_UNDEFINED };
@@ -121,18 +121,18 @@ pub unsafe extern "C" fn sexpr_space_into_grounding_space(sexpr: *const sexpr_sp
 
 #[no_mangle]
 pub unsafe extern "C" fn check_type(space: *const grounding_space_t, atom: *const atom_t, typ: *const atom_t) -> bool {
-    hyperon::metta::types::check_type(&(*space).space, &(*atom).atom, &(*typ).atom)
+    hyperon::metta::types::check_type(&(*space).space.borrow(), &(*atom).atom, &(*typ).atom)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn validate_atom(space: *const grounding_space_t, atom: *const atom_t) -> bool {
-    hyperon::metta::types::validate_atom(&(*space).space, &(*atom).atom)
+    hyperon::metta::types::validate_atom(&(*space).space.borrow(), &(*atom).atom)
 }
 
 #[no_mangle]
 pub extern "C" fn get_atom_types(space: *const grounding_space_t, atom: *const atom_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
-    let space = unsafe{ &(*space).space };
+    let space = unsafe{ &(*space).space.borrow() };
     let atom = unsafe{ &(*atom).atom };
     let types = hyperon::metta::types::get_atom_types(space, atom);
     return_atoms(&types, callback, context);
@@ -148,12 +148,7 @@ pub struct step_result_t<'a> {
 pub extern "C" fn interpret_init<'a>(space: *mut grounding_space_t, expr: *const atom_t) -> *mut step_result_t<'a> {
     let space = unsafe{ &(*space) };
     let expr = unsafe{ &(*expr) };
-    // FIXME: here code works compiles because it is a C API and lifetime checker
-    // cannot verify that pointer to the space outlives pointer to the step result.
-    // Consequently C API can call interpret_init, free space and after that call
-    // interpret_step which will lead to panic as step_result_t contains a reference
-    // to the space.
-    let step = interpreter::interpret_init(&space.space, &expr.atom);
+    let step = interpreter::interpret_init(space.space.clone(), &expr.atom);
     Box::into_raw(Box::new(step_result_t{ result: step }))
 }
 

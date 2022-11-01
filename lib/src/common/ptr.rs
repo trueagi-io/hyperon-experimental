@@ -100,17 +100,25 @@ impl<T> ArcMutex<T> {
     pub fn as_arc(&self) -> Arc<Mutex<T>> {
         self.0.clone()
     }
+
+    pub fn borrow(&self) -> Box<dyn Deref<Target=T> + '_> {
+        Box::new(self.0.lock().expect("Mutex is poisoned"))
+    }
+
+    pub fn borrow_mut(&mut self) -> Box<dyn DerefMut<Target=T> + '_> {
+        Box::new(self.0.lock().expect("Mutex is poisoned"))
+    }
 }
 
 impl<T> SmartPtr<T> for ArcMutex<T> {
     fn borrow(&self) -> Box<dyn Deref<Target=T> + '_> {
-        Box::new(self.0.lock().expect("Mutex is poisoned"))
+        self.borrow()
     }
 }
 
 impl<T> SmartPtrMut<T> for ArcMutex<T> {
     fn borrow_mut(&mut self) -> Box<dyn DerefMut<Target=T> + '_> {
-        Box::new(self.0.lock().expect("Mutex is poisoned"))
+        self.borrow_mut()
     }
 }
 
