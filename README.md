@@ -6,6 +6,7 @@ This is a reimplementation from scratch of the C++ Hyperon prototype in the Rust
 programming language. This project replaces the [previous
 prototype](https://github.com/trueagi-io/hyperon-cpp/tree/master).
 See [MeTTa scripts](./python/tests/scripts) and [Python examples](./python/tests) to become familiar with Hyperon features.
+More complex examples of using metta are located at [Metta examples repo](https://github.com/trueagi-io/metta-examples).
 
 If you find troubles with the installation, see the [Troubleshooting](#troubleshooting) section below.
 
