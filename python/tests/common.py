@@ -20,6 +20,34 @@ def letrec_op(subs, body):
         return [E(letAtom, next_sub[0], next_sub[1], body)]
     return [E(letAtom, next_sub[0], next_sub[1], E(letrecAtom, E(*subs[1:]), body))]
 
+def case_op_core(e, cases):
+    space = GroundingSpace()
+    space.add_atom(e)
+    for c in cases:
+        next_case = c.get_children()
+        res = space.subst(next_case[0], next_case[1])
+        if res != []:
+            return res
+    return []
+
+def case_op(metta, expr, cases):
+    # expr is interpreted inside to catch empty results
+    exprs = metta.interp_atom(expr)
+    cases = cases.get_children()
+    if exprs != []:
+        res = []
+        for e in exprs:
+            res += case_op_core(e, cases)
+        return res
+    # special case for empty results
+    for c in cases:
+        next_case = c.get_children()
+        if next_case[0] == S('%void%'):
+            return [next_case[1]]
+    return []
+
+
+
 def call_atom_op(atom, method_str, *args):
     if not isinstance(atom, GroundedAtom):
         raise NoReduceError()
@@ -50,30 +78,30 @@ def print_op(atom):
     print(atom)
     return []
 
-def assertResultsEqual(result, expected):
-    report = "Expected: " + str(expected) + "\nGot: " + str(result)
+def assertResultsEqual(result, expected, atom):
+    report = "\nExpected: " + str(expected) + "\nGot: " + str(result)
     for r in result:
         if not r in expected:
-            raise RuntimeError(report + "\nExcessive result: " + str(r))
+            return [E(S('Error'), atom, S(report + "\nExcessive result: " + str(r)))]
     for e in expected:
         if not e in result:
-            raise RuntimeError(report + "\nMissed result: " + str(e))
+            return [E(S('Error'), atom, S(report + "\nMissed result: " + str(e)))]
     if len(expected) != len(result):
         # NOTE: (1 1 2) vs (1 2 2) will pass
-        raise RuntimeError(report + "\nDifferent number of eleemnt")
+        return [E(S('Error'), S(report + "\nDifferent number of elements"))]
     return []
 
 def newAssertEqualAtom(metta):
     return OperationAtom(
         'assertEqual',
-        lambda e1, e2: assertResultsEqual(interpret(metta.space, e1), interpret(metta.space, e2)),
+        lambda e1, e2: assertResultsEqual(metta.interp_atom(e1), metta.interp_atom(e2), e1),
         [AtomType.ATOM, AtomType.ATOM, AtomType.ATOM],
         unwrap=False)
 
 def newAssertEqualToResultAtom(metta):
     return OperationAtom(
         'assertEqualToResult',
-        lambda expr, expected: assertResultsEqual(interpret(metta.space, expr), expected.get_children()),
+        lambda expr, expected: assertResultsEqual(metta.interp_atom(expr), expected.get_children(), expr),
         [AtomType.ATOM, AtomType.ATOM, AtomType.ATOM],
         unwrap=False)
 
@@ -105,12 +133,19 @@ nopAtom = OperationAtom('nop', lambda *args: [], unwrap=False)
 
 # FIXME? Undefined for the argument is necessary to make argument reductable.
 letAtom = OperationAtom('let', let_op,
-    type_names=[AtomType.VARIABLE, AtomType.UNDEFINED, AtomType.ATOM, AtomType.ATOM], unwrap=False)
+    type_names=[AtomType.ATOM, AtomType.UNDEFINED, AtomType.ATOM, AtomType.ATOM], unwrap=False)
 # The first argument is an Atom, because it has to be evaluated iteratively
 letrecAtom = OperationAtom('let*', letrec_op,
     type_names=[AtomType.ATOM, AtomType.ATOM, AtomType.ATOM], unwrap=False)
 matchAtom = OperationAtom('match', match_op,
     type_names=["Space", AtomType.ATOM, AtomType.ATOM, AtomType.UNDEFINED], unwrap=False)
+
+def newCaseAtom(metta):
+    return OperationAtom(
+        'case',
+         lambda expr, cases: case_op(metta, expr, cases),
+         type_names=[AtomType.ATOM, AtomType.ATOM, AtomType.ATOM],
+         unwrap=False)
 
 printAtom = OperationAtom('println!', print_op, [AtomType.UNDEFINED, 'IO'], unwrap=False)
 
@@ -125,12 +160,7 @@ def newCallAtom(token):
                 unwrap=False)
 
 def SpaceAtom(grounding_space, repr_name=None):
-    # Overriding grounding_space.repr_name here
-    # It will be changed in all occurences of this Space
-    if repr_name is not None:
-        grounding_space.repr_name = repr_name
-    return ValueAtom(grounding_space, 'Space')
-
+    return ValueAtom(grounding_space, 'Space', repr_name)
 
 def import_op(metta, space, fname):
     # Check if space wasn't resolved
@@ -165,6 +195,26 @@ def newImportOp(metta):
         lambda s, f: import_op(metta, s, f),
         unwrap=False)
 
+newSpaceAtom = OperationAtom(
+        'new-space',
+        lambda: [SpaceAtom(GroundingSpace())],
+        ['Space'],
+        unwrap=False)
+
+def bind_op(metta, token, atom):
+    id = token.get_name()
+    metta.add_atom(id, atom)
+    atom.get_object().id = id
+    return []
+
+def newBindOp(metta):
+    return OperationAtom(
+        'bind!',
+        lambda token, atom: bind_op(metta, token, atom),
+        [AtomType.SYMBOL, AtomType.UNDEFINED, AtomType.UNDEFINED],
+        unwrap=False
+    )
+
 def pragma_op(metta, key, *args):
     # TODO: add support for Grounded values when needed
     metta.settings[key.get_name()] = \
@@ -183,7 +233,7 @@ def newCollapseAtom(metta):
     #        Could it be done via StepResult?
     return OperationAtom(
         'collapse',
-        lambda atom: [E(*interpret(metta.space, atom))],
+        lambda atom: [E(*metta.interp_atom(atom))],
         [AtomType.ATOM, AtomType.ATOM],
         unwrap=False)
 
@@ -194,10 +244,15 @@ def superpose_op(expr):
 
 superposeAtom = OperationAtom('superpose', superpose_op, unwrap=False)
 
+class EvalMode:
+    INSERT = 1
+    INTERP = 2
+    ERROR  = 3
+
 class MeTTa:
 
     def __init__(self, space=None):
-        self.space = GroundingSpace("&self") if space is None else space
+        self.space = GroundingSpace() if space is None else space
         self.tokenizer = Tokenizer()
         self.cwd = [] # current working directory as an array
         self._tokenizer()
@@ -226,16 +281,19 @@ class MeTTa:
         self.add_token(r"call:[^\s]+", newCallAtom)
         self.add_atom(r"let", letAtom)
         self.add_atom(r"let\*", letrecAtom)
+        self.add_atom(r"case", newCaseAtom(self))
         self.add_atom(r"nop", nopAtom)
         self.add_atom(r"assertEqual", newAssertEqualAtom(self))
         self.add_atom(r"assertEqualToResult", newAssertEqualToResultAtom(self))
         self.add_atom(r"println!", printAtom)
-        self.add_atom(r"&self", SpaceAtom(self.space))
+        self.add_atom(r"&self", SpaceAtom(self.space, '&self'))
         self.add_atom(r"import!", newImportOp(self))
+        self.add_atom(r"bind!", newBindOp(self))
         self.add_atom(r"pragma!", newPragmaOp(self))
         self.add_atom(r"collapse", newCollapseAtom(self))
         self.add_atom(r"superpose", superposeAtom)
         self.add_atom(r"get-type", newGetAtomTypeAtom(self))
+        self.add_atom(r"new-space", newSpaceAtom)
 
     def add_token(self, regexp, constr):
         self.tokenizer.register_token(regexp, constr)
@@ -257,14 +315,6 @@ class MeTTa:
     def parse_single(self, program):
         return next(self._parse_all(program))
 
-    def add_parse(self, program):
-        for atom in self._parse_all(program):
-            self.space.add_atom(atom)
-
-    def interpret(self, program):
-        target = self.parse_single(program)
-        return interpret(self.space, target)
-
     def import_file(self, fname):
         path = fname.split(os.sep)
         f = open(os.sep.join(self.cwd + path), "r")
@@ -278,25 +328,35 @@ class MeTTa:
         self.cwd = prev_cwd
         return result
 
-    def run(self, program):
+    def interp_atom(self, atom, mode=EvalMode.INTERP):
+        if self.settings['type-check'] == 'auto':
+            if not validate_atom(self.space, atom):
+                return [E(S('Error'), atom, S('BadType'))]
+        if mode == EvalMode.INTERP:
+            return interpret(self.space, atom)
+        else:
+            self.space.add_atom(atom)
+            return None
+
+    def run(self, program, flat=False):
         self.settings = {'type-check': None}
-        status = "normal"
+        status = EvalMode.INSERT
         result = []
-        for expr in self._parse_all(program):
-            if expr == S('!'):
-                status = "interp"
+        for atom in self._parse_all(program):
+            if atom == S('!'):
+                status = EvalMode.INTERP
                 continue
-            if self.settings['type-check'] == 'auto':
-                if not validate_atom(self.space, expr):
-                    print("Type error in ", expr)
-                    break
-            if status == "interp":
-                r = interpret(self.space, expr)
+            rs = self.interp_atom(atom, status)
+            if rs is not None:
                 # Empty results are also results.
-                # Can be filtered later if needed.
-                # if r != []: result += [r]
-                result += [r]
-            else:
-                self.space.add_atom(expr)
-            status = "normal"
+                # They disappear if `flat` is `True`
+                result += rs if flat else [rs]
+                for r in rs:
+                    if r.get_type() == AtomKind.EXPR:
+                        ch = r.get_children()
+                        if len(ch) > 0 and ch[0] == S('Error'):
+                            status = EvalMode.ERROR
+            if status == EvalMode.ERROR:
+                break
+            status = EvalMode.INSERT
         return result

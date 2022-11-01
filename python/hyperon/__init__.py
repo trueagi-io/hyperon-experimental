@@ -106,31 +106,41 @@ class NoReduceError(Exception):
 def atoms_are_equivalent(first, second):
     return hp.atoms_are_equivalent(first.catom, second.catom)
 
-class ConstGroundedObject:
+class GroundedObject:
+
+    def __init__(self, content, id=None):
+        self.content = content
+        self.id = id
+
+    def __repr__(self):
+        return str(self.content) if self.id is None else self.id
 
     def copy(self):
         return self
 
-class ValueObject(ConstGroundedObject):
+class ValueObject(GroundedObject):
 
-    def __init__(self, value):
-        self.value = value
+    @property
+    def value(self):
+        return self.content
 
     def __eq__(self, other):
         # TODO: ?typecheck
-        if isinstance(other, ValueObject):
-            return self.value == other.value
-        return False
+        return isinstance(other, ValueObject) and self.content == other.content
 
-    def __repr__(self):
-        return str(self.value)
-
-class OperationObject(ConstGroundedObject):
+class OperationObject(GroundedObject):
 
     def __init__(self, name, op, unwrap=True):
-        self.name = name
-        self.op = op
+        super().__init__(op, name)
         self.unwrap = unwrap
+
+    @property
+    def op(self):
+        return self.content
+
+    @property
+    def name(self):
+        return self.id
 
     def execute(self, *args, res_typ=AtomType.UNDEFINED):
         # type-check?
@@ -138,7 +148,7 @@ class OperationObject(ConstGroundedObject):
             for arg in args:
                 if not isinstance(arg, GroundedAtom):
                     raise NoReduceError()
-            args = [arg.get_object().value for arg in args]
+            args = [arg.get_object().content for arg in args]
             return [G(ValueObject(self.op(*args)), res_typ)]
         else:
             result = self.op(*args)
@@ -147,11 +157,7 @@ class OperationObject(ConstGroundedObject):
             return result
 
     def __eq__(self, other):
-        # TODO: instance
         return isinstance(other, OperationObject) and self.name == other.name
-
-    def __repr__(self):
-        return self.name
 
 def type_sugar(type_names):
     if type_names is None:
@@ -165,15 +171,13 @@ def type_sugar(type_names):
 def OperationAtom(name, op, type_names=None, unwrap=True):
     return G(OperationObject(name, op, unwrap), type_sugar(type_names))
 
-def ValueAtom(value, type_name=None):
-    return G(ValueObject(value), type_sugar(type_name))
+def ValueAtom(value, type_name=None, atom_id=None):
+    return G(ValueObject(value, atom_id), type_sugar(type_name))
 
 class GroundingSpace:
 
-    def __init__(self, repr_name=None):
+    def __init__(self):
         self.cspace = hp.grounding_space_new()
-        # This name is used only for __repr__ now
-        self.repr_name = repr_name
 
     def __del__(self):
         hp.grounding_space_free(self.cspace)
@@ -181,9 +185,6 @@ class GroundingSpace:
     def __eq__(self, other):
         return (isinstance(other, GroundingSpace) and
                 hp.grounding_space_eq(self.cspace, other.cspace))
-
-    def __repr__(self):
-        return super().__repr__() if self.repr_name is None else self.repr_name
 
     def add_atom(self, atom):
         hp.grounding_space_add(self.cspace, atom.catom)

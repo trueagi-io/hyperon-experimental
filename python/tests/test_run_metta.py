@@ -85,4 +85,7 @@ class MeTTaTest(unittest.TestCase):
         self.process_exceptions(MeTTa().import_file("scripts/d1_gadt.metta"))
         self.process_exceptions(MeTTa().import_file("scripts/d2_higherfunc.metta"))
         self.process_exceptions(MeTTa().import_file("scripts/d3_deptypes.metta"))
+        self.process_exceptions(MeTTa().import_file("scripts/d4_type_prop.metta"))
+        self.process_exceptions(MeTTa().import_file("scripts/d5_auto_types.metta"))
+        self.process_exceptions(MeTTa().import_file("scripts/e1_kb_write.metta"))
 

@@ -135,6 +135,12 @@
 ; as an expression and then returned for further evaluation
 ; `match` and `let` are implemented as an ordinary grounded operations
 
+; In fact, one can use patterns instead of variables in `let`
+; in order to deconstruct the result immediately
+!(assertEqual
+  (let (S (S $r)) (Add (S Z) (S Z)) $r)
+  Z)
+
 ; One can use `let*` for convenience, when multiple consequent
 ; substitutions are needed
 !(assertEqual
