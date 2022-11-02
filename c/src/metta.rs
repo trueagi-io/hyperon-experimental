@@ -12,18 +12,16 @@ use regex::Regex;
 
 // Tokenizer
 
-pub struct tokenizer_t {
-    tokenizer: Tokenizer, 
-}
+pub type tokenizer_t = ArcMutexAdapter<Tokenizer>;
 
 #[no_mangle]
 pub extern "C" fn tokenizer_new() -> *mut tokenizer_t {
-    Box::into_raw(Box::new(tokenizer_t{ tokenizer: Tokenizer::new() })) 
+    tokenizer_t::new(Tokenizer::new())
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn tokenizer_free(tokenizer: *mut tokenizer_t) {
-    drop(Box::from_raw(tokenizer)); 
+pub extern "C" fn tokenizer_free(tokenizer: *mut tokenizer_t) {
+    tokenizer_t::drop(tokenizer)
 }
 
 type atom_constr_t = extern "C" fn(*const c_char, *mut c_void) -> *mut atom_t;
@@ -47,7 +45,7 @@ impl Drop for droppable_t {
 pub unsafe extern "C" fn tokenizer_register_token(tokenizer: *mut tokenizer_t,
     regex: *const c_char, constr: atom_constr_t, context: droppable_t) {
     let regex = Regex::new(cstr_as_str(regex)).unwrap();
-    (*tokenizer).tokenizer.register_token(regex, move |token| {
+    (*tokenizer).borrow_mut().register_token(regex, move |token| {
         let catom = Box::from_raw(constr(str_as_cstr(token).as_ptr(), context.ptr));
         catom.atom
     });
@@ -55,8 +53,8 @@ pub unsafe extern "C" fn tokenizer_register_token(tokenizer: *mut tokenizer_t,
 
 #[no_mangle]
 pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> *mut tokenizer_t {
-    let tokenizer = unsafe { (*tokenizer).tokenizer.clone() };
-    Box::into_raw(Box::new(tokenizer_t{ tokenizer })) 
+    let copy = unsafe { (*tokenizer).borrow().clone() };
+    tokenizer_t::new(copy)
 }
 
 // SExprParser
@@ -78,7 +76,7 @@ pub unsafe extern "C" fn sexpr_parser_free(parser: *mut sexpr_parser_t) {
 #[no_mangle]
 pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
         tokenizer: *const tokenizer_t) -> *mut atom_t {
-    (*parser).parser.parse(&(*tokenizer).tokenizer)
+    (*parser).parser.parse(&(*tokenizer).borrow())
         .map_or(std::ptr::null_mut(), |atom| { atom_to_ptr(atom) })
 }
 
