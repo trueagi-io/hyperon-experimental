@@ -2,7 +2,7 @@ use std::ffi::c_void;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use std::ffi::CStr;
-use hyperon::common::ptr::ArcMutex;
+use hyperon::common::shared::Shared;
 use std::ops::{Deref, DerefMut};
 
 #[repr(C)]
@@ -37,14 +37,18 @@ pub fn string_as_cstr(s: String) -> CString {
     CString::new(s).expect("CString::new failed")
 }
 
-// We cannot use imported ArcMutex in C API because it is not correctly
+// We cannot use imported Shared in C API because it is not correctly
 // converted int C header and header cannot be compiled. This wrapper just
 // solves the issue by shadowing original type.
-pub struct ArcMutexAdapter<T>(ArcMutex<T>);
+pub struct SharedApi<T>(Shared<T>);
 
-impl<T> ArcMutexAdapter<T> {
+impl<T> SharedApi<T> {
     pub fn new(value: T) -> *mut Self {
-        Box::into_raw(Box::new(Self(ArcMutex::new(value))))
+        Box::into_raw(Box::new(Self(Shared::new(value))))
+    }
+
+    pub fn from_shared(shared: Shared<T>) -> *mut Self {
+        Box::into_raw(Box::new(Self(shared)))
     }
 
     pub fn drop(ptr: *mut Self) {
@@ -59,7 +63,13 @@ impl<T> ArcMutexAdapter<T> {
         self.0.borrow_mut()
     }
 
-    pub fn arcmutex(&self) -> &ArcMutex<T> {
-        &self.0
+    pub fn shared(&self) -> Shared<T> {
+        self.0.clone()
+    }
+}
+
+impl<T> PartialEq for SharedApi<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
     }
 }

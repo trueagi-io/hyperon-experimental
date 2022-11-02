@@ -2,7 +2,7 @@
 
 pub mod plan;
 pub mod collections;
-pub mod ptr;
+pub mod shared;
 mod arithmetics;
 
 pub use arithmetics::*;

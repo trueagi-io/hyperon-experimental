@@ -12,7 +12,7 @@ use regex::Regex;
 
 // Tokenizer
 
-pub type tokenizer_t = ArcMutexAdapter<Tokenizer>;
+pub type tokenizer_t = SharedApi<Tokenizer>;
 
 #[no_mangle]
 pub extern "C" fn tokenizer_new() -> *mut tokenizer_t {
@@ -59,7 +59,7 @@ pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> *mut tokeniz
 
 // SExprParser
 
-pub type sexpr_parser_t<'a> = ArcMutexAdapter<SExprParser<'a>>;
+pub type sexpr_parser_t<'a> = SharedApi<SExprParser<'a>>;
 
 #[no_mangle]
 pub extern "C" fn sexpr_parser_new<'a>(text: *const c_char) -> *mut sexpr_parser_t<'a> {
@@ -115,7 +115,7 @@ pub struct step_result_t<'a> {
 pub extern "C" fn interpret_init<'a>(space: *mut grounding_space_t, expr: *const atom_t) -> *mut step_result_t<'a> {
     let space = unsafe{ &(*space) };
     let expr = unsafe{ &(*expr) };
-    let step = interpreter::interpret_init(space.arcmutex().clone(), &expr.atom);
+    let step = interpreter::interpret_init(space.shared(), &expr.atom);
     Box::into_raw(Box::new(step_result_t{ result: step }))
 }
 

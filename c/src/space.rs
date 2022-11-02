@@ -9,7 +9,7 @@ use std::ffi::CString;
 
 // GroundingSpace
 
-pub type grounding_space_t = ArcMutexAdapter<GroundingSpace>;
+pub type grounding_space_t = SharedApi<GroundingSpace>;
 
 #[no_mangle]
 pub extern "C" fn grounding_space_new() -> *mut grounding_space_t {
@@ -23,7 +23,7 @@ pub extern "C" fn grounding_space_free(space: *mut grounding_space_t) {
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_eq(a: *const grounding_space_t, b: *const grounding_space_t) -> bool {
-    (*a).arcmutex() == (*b).arcmutex()
+    *a == *b
 }
 
 #[no_mangle]
