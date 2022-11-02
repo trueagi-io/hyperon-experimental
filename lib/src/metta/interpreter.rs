@@ -73,7 +73,7 @@ use crate::common::collections::ListMap;
 use crate::metta::*;
 use crate::metta::types::{is_func, get_arg_types, get_type_bindings,
     get_atom_types, match_reducted_types};
-use crate::common::ptr::SmartPtr;
+use crate::common::shared::LockBorrow;
 
 use std::ops::Deref;
 use std::rc::Rc;
@@ -124,8 +124,8 @@ impl Debug for InterpretedAtom {
 
 type Results = Vec<InterpretedAtom>;
 type NoInputPlan<'a> = Box<dyn Plan<'a, (), Results> + 'a>;
-trait GroundingSpacePtr : Clone + SmartPtr<GroundingSpace> {}
-impl<T: Clone + SmartPtr<GroundingSpace>> GroundingSpacePtr for T {}
+trait GroundingSpacePtr : Clone + LockBorrow<GroundingSpace> {}
+impl<T: Clone + LockBorrow<GroundingSpace>> GroundingSpacePtr for T {}
 
 /// Initialize interpreter and returns the result of the zero step.
 /// It can be error, immediate result or interpretation plan to be executed.
@@ -134,7 +134,7 @@ impl<T: Clone + SmartPtr<GroundingSpace>> GroundingSpacePtr for T {}
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
-pub fn interpret_init<'a, T: Clone + SmartPtr<GroundingSpace> + 'a>(space: T, expr: &Atom) -> StepResult<'a, Vec<InterpretedAtom>> {
+pub fn interpret_init<'a, T: Clone + LockBorrow<GroundingSpace> + 'a>(space: T, expr: &Atom) -> StepResult<'a, Vec<InterpretedAtom>> {
     let context = InterpreterContextRef::new(space);
     interpret_as_type_plan(context,
         InterpretedAtom(expr.clone(), Bindings::new()),
@@ -162,7 +162,7 @@ pub fn interpret_step<'a>(step: StepResult<'a, Vec<InterpretedAtom>>) -> StepRes
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
-pub fn interpret<T: Clone + SmartPtr<GroundingSpace>>(space: T, expr: &Atom) -> Result<Vec<Atom>, String> {
+pub fn interpret<T: Clone + LockBorrow<GroundingSpace>>(space: T, expr: &Atom) -> Result<Vec<Atom>, String> {
     let mut step = interpret_init(space, expr);
     while step.has_next() {
         step = interpret_step(step);

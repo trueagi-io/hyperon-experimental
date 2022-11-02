@@ -3,10 +3,11 @@
 pub mod text;
 pub mod interpreter;
 pub mod types;
+pub mod runner;
 
 mod examples;
 
-use text::{SExprParser, Tokenizer, SExprSpace};
+use text::{SExprParser, Tokenizer};
 use regex::Regex;
 
 use crate::*;
@@ -28,9 +29,18 @@ pub const ARROW_SYMBOL : Atom = sym!("->");
 pub const ERROR_SYMBOL : Atom = sym!("Error");
 
 pub fn metta_space(text: &str) -> GroundingSpace {
-    let mut parser = SExprSpace::new(common_tokenizer());
-    parser.add_str(text).unwrap();
-    GroundingSpace::from(&parser)
+    let tokenizer = common_tokenizer();
+    let mut parser = SExprParser::new(text);
+    let mut space = GroundingSpace::new();
+    loop {
+        let atom = parser.parse(&tokenizer);
+        if let Some(atom) = atom {
+            space.add(atom);
+        } else {
+            break;
+        }
+    }
+    space
 }
 
 fn common_tokenizer() -> Tokenizer {

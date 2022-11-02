@@ -176,8 +176,15 @@ def ValueAtom(value, type_name=None, atom_id=None):
 
 class GroundingSpace:
 
-    def __init__(self):
-        self.cspace = hp.grounding_space_new()
+    def __init__(self, cspace = None):
+        if cspace is None:
+            self.cspace = hp.grounding_space_new()
+        else:
+            self.cspace = cspace
+
+    @staticmethod
+    def _from_cspace(cspace):
+        GroundingSpace(cspace)
 
     def __del__(self):
         hp.grounding_space_free(self.cspace)
@@ -210,8 +217,15 @@ class GroundingSpace:
 
 class Tokenizer:
 
-    def __init__(self):
-        self.ctokenizer = hp.tokenizer_new()
+    def __init__(self, ctokenizer = None):
+        if ctokenizer is None:
+            self.ctokenizer = hp.tokenizer_new()
+        else:
+            self.ctokenizer = ctokenizer
+
+    @staticmethod
+    def _from_ctokenizer(ctokenizer):
+        Tokenizer(ctokenizer)
 
     def __del__(self):
         hp.tokenizer_free(self.ctokenizer)
@@ -227,20 +241,6 @@ class SExprParser:
     def parse(self, tokenizer):
         catom = self.cparser.parse(tokenizer.ctokenizer)
         return Atom._from_catom(catom) if catom is not None else None
-
-class SExprSpace:
-
-    def __init__(self, tokenizer):
-        self.cspace = hp.sexpr_space_new(tokenizer.ctokenizer)
-
-    def __del__(self):
-        hp.sexpr_space_free(self.cspace)
-
-    def add_string(self, text):
-        hp.sexpr_space_add_str(self.cspace, text)
-
-    def add_to(self, gspace):
-        hp.sexpr_space_into_grounding_space(self.cspace, gspace.cspace)
 
 class Interpreter:
 
@@ -279,3 +279,24 @@ def validate_atom(gnd_space, atom):
 def get_atom_types(gnd_space, atom):
     result = hp.get_atom_types(gnd_space.cspace, atom.catom)
     return [Atom._from_catom(catom) for catom in result]
+
+class Metta:
+
+    def __init__(self, space = None, cwd = "."):
+        if space is None:
+            space = GroundingSpace()
+        self.cmetta = hp.metta_new(space.cspace, cwd)
+
+    def __del__(self):
+        hp.metta_free(self.cmetta)
+
+    def get_space(self):
+        return GroundingSpace._from_cspace(hp.metta_get_space(self.cmetta))
+
+    def get_tokenizer(self):
+        return Tokenizer._from_ctokenizer(hp.metta_get_tokenizer(self.cmetta))
+
+    def run(self, parser):
+        results = hp.metta_run(self.cmetta, parser.cparser)
+        return [[Atom._from_catom(catom) for catom in result] for result in results]
+

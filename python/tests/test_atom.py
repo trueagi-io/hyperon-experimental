@@ -83,26 +83,6 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(kb_a, kb_c)
         self.assertNotEqual(kb_a, kb_b)
 
-    def test_sexprspace_symbol(self):
-        text = SExprSpace(Tokenizer())
-        text.add_string("(+ 1 2)")
-        kb = GroundingSpace()
-        text.add_to(kb)
-
-        expected = [E(S("+"), S("1"), S("2"))]
-        self.assertEqual(kb.get_atoms(), expected)
-
-    def test_sexprspace_token(self):
-        tokenizer = Tokenizer()
-        tokenizer.register_token("\\d+", lambda token: ValueAtom(int(token)))
-        text = SExprSpace(tokenizer)
-        text.add_string("(+ 1 2)")
-        kb = GroundingSpace()
-        text.add_to(kb)
-
-        expected = [E(S("+"), ValueAtom(1), ValueAtom(2))]
-        self.assertEqual(kb.get_atoms(), expected)
-
     def test_interpret(self):
         space = GroundingSpace()
         self.assertEqual(interpret(space, E(x2Atom, ValueAtom(1))),

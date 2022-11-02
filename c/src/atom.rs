@@ -148,8 +148,8 @@ pub unsafe extern "C" fn atom_free(atom: *mut atom_t) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_clone(atom: *const atom_t) -> *mut atom_t {
-    atom_to_ptr((*atom).atom.clone())
+pub extern "C" fn atom_clone(atom: *const atom_t) -> *mut atom_t {
+    atom_to_ptr(unsafe{ &(*atom) }.atom.clone())
 }
 
 #[no_mangle]
