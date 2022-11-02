@@ -3,6 +3,7 @@
 pub mod text;
 pub mod interpreter;
 pub mod types;
+pub mod runner;
 
 mod examples;
 

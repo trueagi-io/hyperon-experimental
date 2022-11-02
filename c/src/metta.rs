@@ -2,6 +2,7 @@ use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpretedAtom;
 use hyperon::common::plan::StepResult;
+use hyperon::metta::runner::Metta;
 
 use crate::util::*;
 use crate::atom::*;
@@ -9,6 +10,7 @@ use crate::space::*;
 
 use std::os::raw::*;
 use regex::Regex;
+use std::path::PathBuf;
 
 // Tokenizer
 
@@ -149,4 +151,35 @@ pub extern "C" fn step_get_result(step: *mut step_result_t,
 pub extern "C" fn step_to_str(step: *const step_result_t, callback: c_str_callback_t, context: *mut c_void) {
     let result = unsafe{ &(*step).result };
     callback(str_as_cstr(format!("{:?}", result).as_str()).as_ptr(), context);
+}
+
+pub type metta_t = SharedApi<Metta>;
+
+#[no_mangle]
+pub extern "C" fn metta_new(space: *mut grounding_space_t, cwd: *const c_char) -> *mut metta_t {
+    let space = unsafe{ &mut *space }.shared();
+    metta_t::new(Metta::from_space_cwd(space, PathBuf::from(cstr_as_str(cwd))))
+}
+
+#[no_mangle]
+pub extern "C" fn metta_free(metta: *mut metta_t) {
+    metta_t::drop(metta);
+}
+
+#[no_mangle]
+pub extern "C" fn metta_space(metta: *mut metta_t) -> *mut grounding_space_t {
+    let space = unsafe{ &*metta }.borrow().space();
+    grounding_space_t::from_shared(space)
+}
+
+#[no_mangle]
+pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
+        output: c_atoms_callback_t, out_context: *mut c_void) {
+    let metta = unsafe{ &*metta }.borrow();
+    let mut parser = unsafe{ &mut *parser }.borrow_mut();
+    let results = metta.run(&mut parser);
+    // TODO: return erorrs properly after step_get_result() is changed to return errors.
+    for result in results.expect("Returning errors from C API is not implemented yet") {
+        return_atoms(&result, output, out_context);
+    }
 }

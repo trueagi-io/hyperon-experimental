@@ -20,6 +20,7 @@ using CVecAtom = CPtr<vec_atom_t>;
 using CGroundingSpace = CPtr<grounding_space_t>;
 using CTokenizer = CPtr<tokenizer_t>;
 using CStepResult = CPtr<step_result_t>;
+using CMetta = CPtr<metta_t>;
 
 static void copy_to_string(char const* cstr, void* context) {
     std::string* cppstr = static_cast<std::string*>(context);
@@ -31,6 +32,13 @@ static void copy_atoms(atom_array_t atoms, void* context) {
     for (size_t i = 0; i < atoms.size; ++i) {
         list->append(CAtom(atom_clone(atoms.items[i])));
     }
+}
+
+static void copy_lists_of_atom(atom_array_t atoms, void* context) {
+    py::list* list_of_lists = static_cast<py::list*>(context);
+    py::list list;
+    copy_atoms(atoms, &list);
+    list_of_lists->append(list);
 }
 
 py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
@@ -322,5 +330,14 @@ PYBIND11_MODULE(hyperonpy, m) {
             get_atom_types(space.ptr, atom.ptr, copy_atoms, &atoms);
             return atoms;
         }, "Get types of the given atom");
+
+    py::class_<CMetta>(m, "CMetta");
+    m.def("metta_new", [](CGroundingSpace space, char const* cwd) { return CMetta(metta_new(space.ptr, cwd)); }, "New MeTTa interpreter instance");
+    m.def("metta_free", [](CMetta metta) { metta_free(metta.ptr); }, "Free MeTTa interpreter");
+    m.def("metta_run", [](CMetta metta, CSExprParser& parser) {
+            py::list lists_of_atom;
+            metta_run(metta.ptr, parser.ptr, copy_lists_of_atom, &lists_of_atom);
+            return lists_of_atom;
+        }, "Run MeTTa interpreter on an input");
 }
 
