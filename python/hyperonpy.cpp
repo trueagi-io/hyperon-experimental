@@ -301,7 +301,7 @@ PYBIND11_MODULE(hyperonpy, m) {
             return atoms;
         }, "Return result of the interpretation");
 
-#define ADD_TYPE(t, d) .def_property_readonly_static(#t, [](py::object) { return CAtom(atom_clone(ATOM_TYPE_ ## t)); }, d " atom type")
+#define ADD_TYPE(t, d) .def_property_readonly_static(#t, [](py::object) { return CAtom(ATOM_TYPE_ ## t()); }, d " atom type")
 
     py::class_<CAtomType>(m, "CAtomType")
         ADD_TYPE(UNDEFINED, "Undefined")
