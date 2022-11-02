@@ -59,24 +59,22 @@ pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> *mut tokeniz
 
 // SExprParser
 
-pub struct sexpr_parser_t<'a> {
-    parser: SExprParser<'a>, 
+pub type sexpr_parser_t<'a> = ArcMutexAdapter<SExprParser<'a>>;
+
+#[no_mangle]
+pub extern "C" fn sexpr_parser_new<'a>(text: *const c_char) -> *mut sexpr_parser_t<'a> {
+    sexpr_parser_t::new(SExprParser::new(cstr_as_str(text)))
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sexpr_parser_new<'a>(text: *const c_char) -> *mut sexpr_parser_t<'a> {
-    Box::into_raw(Box::new(sexpr_parser_t{ parser: SExprParser::new(cstr_as_str(text)) }))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn sexpr_parser_free(parser: *mut sexpr_parser_t) {
-    drop(Box::from_raw(parser)) 
+pub extern "C" fn sexpr_parser_free(parser: *mut sexpr_parser_t) {
+    sexpr_parser_t::drop(parser)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
         tokenizer: *const tokenizer_t) -> *mut atom_t {
-    (*parser).parser.parse(&(*tokenizer).borrow())
+    (*parser).borrow_mut().parse(&(*tokenizer).borrow())
         .map_or(std::ptr::null_mut(), |atom| { atom_to_ptr(atom) })
 }
 
