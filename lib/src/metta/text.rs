@@ -1,9 +1,7 @@
 //! MeTTa parser implementation.
 
 use crate::*;
-use crate::space::grounding::GroundingSpace;
 
-use std::io::Read;
 use std::str::Chars;
 use std::iter::Peekable;
 use regex::Regex;
@@ -176,82 +174,23 @@ fn next_var(it: &mut Peekable<Chars<'_>>) -> String {
     token 
 }
 
-pub struct SExprSpace {
-    tokenizer: Tokenizer,
-    content: String,
-}
-
-impl SExprSpace {
-    pub fn new(tokenizer: Tokenizer) -> Self {
-        Self{ tokenizer, content: String::new() }
-    }
-
-    pub fn add_str(&mut self, text: &str) -> Result<(), String> {
-        self.add_reader(&mut text.as_bytes())
-    }
-
-    pub fn add_reader(&mut self, reader: &mut dyn Read) -> Result<(), String> {
-        reader.read_to_string(&mut self.content)
-            .map_err(|e| format!("Could not read text: {}", e))?;
-        // TODO: add a check that buffer contains valid Metta code and 
-        // return proper Result
-        Ok(())
-    }
-
-    pub fn into_grounding_space(&self, other: &mut GroundingSpace) {
-        let mut parser = SExprParser::new(&self.content);
-        loop {
-            let atom = parser.parse(&self.tokenizer);
-            if let Some(atom) = atom {
-                other.add(atom);
-            } else {
-                break;
-            }
-        }
-    }
-}
-
-impl From<&SExprSpace> for GroundingSpace {
-    fn from(other: &SExprSpace) -> Self {
-        let mut space = GroundingSpace::new();
-        other.into_grounding_space(&mut space);
-        space
-    }
-}
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn test_text_var() {
-        let mut text = SExprSpace::new(Tokenizer::new());
-
-        text.add_str("$n").unwrap();
-        let space = GroundingSpace::from(&text);
-
-        assert_eq!(vec![expr!(n)], *space.content());
+        assert_eq!(vec![expr!(n)], parse_atoms("$n"));
     }
 
     #[test]
     fn test_text_sym() {
-        let mut text = SExprSpace::new(Tokenizer::new());
-
-        text.add_str("test").unwrap();
-        let space = GroundingSpace::from(&text);
-
-        assert_eq!(vec![expr!("test")], *space.content());
+        assert_eq!(vec![expr!("test")], parse_atoms("test"));
     }
 
     #[test]
     fn test_text_quoted_string() {
-        let mut text = SExprSpace::new(Tokenizer::new());
-
-        text.add_str("\"te st\"").unwrap();
-        let space = GroundingSpace::from(&text);
-
-        assert_eq!(vec![expr!("\"te st\"")], *space.content());
+        assert_eq!(vec![expr!("\"te st\"")], parse_atoms("\"te st\""));
     }
 
     #[test]
@@ -259,12 +198,11 @@ mod tests {
         let mut tokenizer = Tokenizer::new();
         tokenizer.register_token(Regex::new(r"b").unwrap(),
             |_| Atom::value("b"));
-        let mut text = SExprSpace::new(tokenizer);
 
-        text.add_str("ab").unwrap();
-        let space = GroundingSpace::from(&text);
+        let mut parser = SExprParser::new("ab");
 
-        assert_eq!(vec![expr!("ab")], *space.content());
+        assert_eq!(Some(expr!("ab")), parser.parse(&tokenizer));
+        assert_eq!(None, parser.parse(&tokenizer));
     }
 
     #[test]
@@ -272,33 +210,23 @@ mod tests {
         let mut tokenizer = Tokenizer::new();
         tokenizer.register_token(Regex::new(r"\d+").unwrap(),
             |token| Atom::value(token.parse::<i32>().unwrap()));
-        let mut text = SExprSpace::new(tokenizer);
 
-        text.add_str("(3d 42)").unwrap();
-        let space = GroundingSpace::from(&text);
+        let mut parser = SExprParser::new("(3d 42)");
 
-        assert_eq!(vec![expr!("3d" {42})], *space.content());
+        assert_eq!(Some(expr!("3d" {42})), parser.parse(&tokenizer));
+        assert_eq!(None, parser.parse(&tokenizer));
     }
 
     #[test]
     fn test_text_expr() {
-        let mut text = SExprSpace::new(Tokenizer::new());
-
-        text.add_str("(= (fac $n) (* $n (fac (- $n 1))))").unwrap();
-        let space = GroundingSpace::from(&text);
-
         assert_eq!(vec![expr!("=" ("fac" n) ("*" n ("fac" ("-" n "1"))))],
-            *space.content());
+            parse_atoms("(= (fac $n) (* $n (fac (- $n 1))))"));
     }
 
     #[test]
     fn test_text_few_expr() {
-        let mut text = SExprSpace::new(Tokenizer::new());
-
-        text.add_str("(a) (b)").unwrap();
-        let space = GroundingSpace::from(&text);
-
-        assert_eq!(vec![expr!(("a")), expr!(("b"))], *space.content());
+        assert_eq!(vec![expr!(("a")), expr!(("b"))],
+            parse_atoms("(a) (b)"));
     }
 
     #[test]

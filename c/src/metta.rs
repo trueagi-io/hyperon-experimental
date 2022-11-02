@@ -82,35 +82,6 @@ pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
         .map_or(std::ptr::null_mut(), |atom| { atom_to_ptr(atom) })
 }
 
-// SExprSpace
-
-pub struct sexpr_space_t {
-    space: SExprSpace, 
-}
-
-#[no_mangle]
-pub extern "C" fn sexpr_space_new(tokenizer: *mut tokenizer_t) -> *mut sexpr_space_t {
-    let tokenizer = unsafe{ Box::from_raw(tokenizer) };
-    Box::into_raw(Box::new(sexpr_space_t{ space: SExprSpace::new(tokenizer.tokenizer) })) 
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn sexpr_space_free(space: *mut sexpr_space_t) {
-    drop(Box::from_raw(space)) 
-}
-
-// TODO: think how to return the result string in case of error
-#[no_mangle]
-pub unsafe extern "C" fn sexpr_space_add_str(space: *mut sexpr_space_t, text: *const c_char) -> bool {
-    Ok(()) == (*space).space.add_str(cstr_as_str(text))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn sexpr_space_into_grounding_space(sexpr: *const sexpr_space_t,
-        gnd: *mut grounding_space_t) {
-    (*sexpr).space.into_grounding_space(&mut (*gnd).borrow_mut());
-}
-
 #[no_mangle] pub static ATOM_TYPE_UNDEFINED: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_UNDEFINED };
 #[no_mangle] pub static ATOM_TYPE_TYPE: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_TYPE };
 #[no_mangle] pub static ATOM_TYPE_ATOM: &atom_t = &atom_t{ atom: hyperon::metta::ATOM_TYPE_ATOM };

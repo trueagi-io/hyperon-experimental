@@ -228,20 +228,6 @@ class SExprParser:
         catom = self.cparser.parse(tokenizer.ctokenizer)
         return Atom._from_catom(catom) if catom is not None else None
 
-class SExprSpace:
-
-    def __init__(self, tokenizer):
-        self.cspace = hp.sexpr_space_new(tokenizer.ctokenizer)
-
-    def __del__(self):
-        hp.sexpr_space_free(self.cspace)
-
-    def add_string(self, text):
-        hp.sexpr_space_add_str(self.cspace, text)
-
-    def add_to(self, gspace):
-        hp.sexpr_space_into_grounding_space(self.cspace, gspace.cspace)
-
 class Interpreter:
 
     def __init__(self, gnd_space, expr):

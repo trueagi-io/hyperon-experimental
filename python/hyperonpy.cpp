@@ -19,7 +19,6 @@ using CAtom = CPtr<atom_t>;
 using CVecAtom = CPtr<vec_atom_t>;
 using CGroundingSpace = CPtr<grounding_space_t>;
 using CTokenizer = CPtr<tokenizer_t>;
-using CSExprSpace = CPtr<sexpr_space_t>;
 using CStepResult = CPtr<step_result_t>;
 
 static void copy_to_string(char const* cstr, void* context) {
@@ -280,12 +279,6 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<CSExprParser>(m, "CSExprParser")
         .def(py::init<std::string>())
         .def("parse", &CSExprParser::parse,  "Return next parser atom or None");
-
-    py::class_<CSExprSpace>(m, "CSExprSpace");
-    m.def("sexpr_space_new", [](CTokenizer tokenizer) { return CSExprSpace(sexpr_space_new(tokenizer_clone(tokenizer.ptr))); }, "New sexpr space");
-    m.def("sexpr_space_free", [](CSExprSpace space) { sexpr_space_free(space.ptr); }, "Free sexpr space");
-    m.def("sexpr_space_add_str", [](CSExprSpace space, char const* str) { sexpr_space_add_str(space.ptr, str); }, "Add text to the sexpr space");
-    m.def("sexpr_space_into_grounding_space", [](CSExprSpace tspace, CGroundingSpace gspace) { sexpr_space_into_grounding_space(tspace.ptr, gspace.ptr); }, "Add content of the sexpr space to the grounding space");
 
     py::class_<CStepResult>(m, "CStepResult")
         .def("__str__", [](CStepResult step) {
