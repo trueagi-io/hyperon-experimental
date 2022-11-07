@@ -1,10 +1,10 @@
 use crate::*;
 use crate::common::shared::Shared;
 
+use super::*;
 use super::space::grounding::GroundingSpace;
 use super::text::{Tokenizer, SExprParser};
 use super::interpreter::interpret;
-use super::ATOM_TYPE_UNDEFINED;
 
 use regex::Regex;
 use std::path::PathBuf;
@@ -23,10 +23,23 @@ impl Metta {
 
     pub fn from_space_cwd(space: Shared<GroundingSpace>, cwd: PathBuf) -> Self {
         let tokenizer = Shared::new(Tokenizer::new());
-        let tokenizer_closure = tokenizer.clone();
-        let space_closure = space.clone();
-        tokenizer.borrow_mut().register_token(Regex::new(r"import!").unwrap(),
-            move |_| { Atom::gnd(ImportOp::new(cwd.clone(), space_closure.clone(), tokenizer_closure.clone())) });
+        {
+            fn regex(regex: &str) -> Regex {
+                Regex::new(regex).unwrap()
+            }
+
+            let mut tref = tokenizer.borrow_mut();
+            let match_op = Atom::gnd(MatchOp{});
+            tref.register_token(regex(r"match"), move |_| { match_op.clone() });
+            let space_val = Atom::value(space.clone());
+            tref.register_token(regex(r"&self"), move |_| { space_val.clone() });
+            let import_op = Atom::gnd(ImportOp::new(cwd.clone(), space.clone(), tokenizer.clone()));
+            tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+            let bind_op = Atom::gnd(BindOp::new(tokenizer.clone()));
+            tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
+            let new_space_op = Atom::gnd(NewSpaceOp{});
+            tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
+        }
         Self{ space, tokenizer }
     }
 
@@ -55,7 +68,7 @@ impl Metta {
                     } else {
                         match mode {
                             Mode::ADD => {
-                                log::trace!("Metta::run: adding atom: {}", atom);
+                                log::trace!("Metta::run: adding atom: {} into space: {:?}", atom, self.space);
                                 self.space.borrow_mut().add(atom)
                             },
                             Mode::EXEC => {
@@ -81,7 +94,7 @@ impl Metta {
 use crate::matcher::MatchResultIter;
 use std::fmt::Display;
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 struct ImportOp {
     cwd: PathBuf,
     space: Shared<GroundingSpace>,
@@ -94,24 +107,14 @@ impl ImportOp {
     }
 }
 
-impl std::fmt::Debug for ImportOp {
+impl Display for ImportOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ImportOp{{ cwd={:?} }}", self.cwd)
-    }
-}
-
-impl PartialEq for ImportOp {
-    fn eq(&self, other: &Self) -> bool {
-        self.cwd == other.cwd
-            && self.space == other.space
-            && self.tokenizer == other.tokenizer
+        write!(f, "import!")
     }
 }
 
 fn remove_quotes(text: &str) -> String {
-    let mut text = String::from(text).split_off(1);
-    text.pop();
-    text
+    text.chars().skip(1).take(text.len() - 2).collect()
 }
 
 impl Grounded for ImportOp {
@@ -160,9 +163,104 @@ impl Grounded for ImportOp {
     }
 }
 
-impl Display for ImportOp {
+#[derive(Clone, PartialEq, Debug)]
+struct MatchOp {}
+
+impl Display for MatchOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "import!")
+        write!(f, "match")
+    }
+}
+
+impl Grounded for MatchOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<GroundingSpace>>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("match expects three arguments: space, pattern and template");
+        let space = args.get(0).ok_or_else(arg_error)?;
+        let pattern = args.get(1).ok_or_else(arg_error)?;
+        let template = args.get(2).ok_or_else(arg_error)?;
+        log::trace!("match_op: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
+        let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("match expects a space as a second argument")?;
+        Ok(space.borrow().subst(&pattern, &template))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct BindOp {
+    tokenizer: Shared<Tokenizer>,
+}
+
+impl BindOp {
+    fn new(tokenizer: Shared<Tokenizer>) -> Self {
+        Self{ tokenizer }
+    }
+}
+
+impl Display for BindOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "bind!")
+    }
+}
+
+fn atom_as_sym(atom: &Atom) -> Option<&SymbolAtom> {
+    match atom {
+        Atom::Symbol(sym) => Some(sym),
+        _ => None,
+    }
+}
+
+impl Grounded for BindOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_UNDEFINED])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("bind! expects two arguments: token and atom");
+        let token = atom_as_sym(args.get(0).ok_or_else(arg_error)?).ok_or("bind! expects symbol atom as a token")?.name();
+        let atom = args.get(1).ok_or_else(arg_error)?.clone();
+
+        let token_regex = Regex::new(token).map_err(|err| format!("Could convert token {} into regex: {}", token, err))?;
+        self.tokenizer.borrow_mut().register_token(token_regex, move |_| { atom.clone() });
+        Ok(vec![])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct NewSpaceOp {}
+
+impl Display for NewSpaceOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "new-space")
+    }
+}
+
+impl Grounded for NewSpaceOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<GroundingSpace>>()])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        if args.len() == 0 {
+            let space = Atom::value(Shared::new(GroundingSpace::new()));
+            Ok(vec![space])
+        } else {
+            Err("new-space doesn't expect arguments".into())
+        }
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
     }
 }
 
@@ -186,5 +284,42 @@ mod tests {
         let metta = Metta::new(Shared::new(GroundingSpace::new()));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![Atom::sym("T")]]));
+    }
+
+    #[test]
+    fn test_match() {
+        let program = "
+            (A B)
+            !(match &self (A B) (B A))
+        ";
+
+        let metta = Metta::new(Shared::new(GroundingSpace::new()));
+        let result = metta.run(&mut SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!("B" "A")]]));
+    }
+
+    #[test]
+    fn new_space() {
+        let program = "
+            (A B)
+            !(match (new-space) (A B) (B A))
+        ";
+
+        let metta = Metta::new(Shared::new(GroundingSpace::new()));
+        let result = metta.run(&mut SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![]]));
+    }
+
+    #[test]
+    fn bind_new_space() {
+        let program = "
+            (A B)
+            !(bind! &my (new-space))
+            !(match &my (A B) (B A))
+        ";
+
+        let metta = Metta::new(Shared::new(GroundingSpace::new()));
+        let result = metta.run(&mut SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![], vec![]]));
     }
 }

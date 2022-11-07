@@ -296,7 +296,7 @@ class Metta:
     def get_tokenizer(self):
         return Tokenizer._from_ctokenizer(hp.metta_get_tokenizer(self.cmetta))
 
-    def run(self, parser):
+    def run(self, program):
+        parser = SExprParser(program)
         results = hp.metta_run(self.cmetta, parser.cparser)
         return [[Atom._from_catom(catom) for catom in result] for result in results]
-

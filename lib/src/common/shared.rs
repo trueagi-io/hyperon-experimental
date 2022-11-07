@@ -132,6 +132,6 @@ impl<T> Clone for Shared<T> {
 
 impl<T: Debug> Debug for Shared<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self.0)
+        write!(f, "{:?} addr {:?}", self.0, Rc::as_ptr(&self.0))
     }
 }

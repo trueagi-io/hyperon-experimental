@@ -7,7 +7,7 @@ use std::iter::Peekable;
 use regex::Regex;
 use std::rc::Rc;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Tokenizer {
     tokens: Vec<TokenDescr>,
 }
@@ -16,6 +16,12 @@ pub struct Tokenizer {
 struct TokenDescr {
     regex: Regex,
     constr: Rc<AtomConstr>,
+}
+
+impl std::fmt::Debug for TokenDescr {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "TokenDescr{{ regex: {:?}, constr: {:?} }}", self.regex, Rc::as_ptr(&self.constr))
+    }
 }
 
 type AtomConstr = dyn Fn(&str) -> Atom;
