@@ -45,6 +45,8 @@ impl Metta {
             tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
             let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
             tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
+            let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
+            tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
         }
         Self{ space, tokenizer }
     }
@@ -444,6 +446,42 @@ impl Grounded for AssertEqualToResultOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+struct CollapseOp {
+    space: Shared<GroundingSpace>,
+}
+
+impl CollapseOp {
+    fn new(space: Shared<GroundingSpace>) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for CollapseOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "collapse")
+    }
+}
+
+impl Grounded for CollapseOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("collapse expects single atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+
+        let result = interpret(self.space.clone(), atom)?;
+
+        Ok(vec![Atom::expr(result)])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -560,5 +598,18 @@ mod tests {
         let metta = Metta::new(Shared::new(GroundingSpace::new()));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![]]));
+    }
+
+    #[test]
+    fn collapse() {
+        let program = "
+            (= (foo) (A B))
+            (= (foo) (B C))
+            !(collapse (foo))
+        ";
+
+        let metta = Metta::new(Shared::new(GroundingSpace::new()));
+        let result = metta.run(&mut SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!(("A" "B") ("B" "C"))]]));
     }
 }
