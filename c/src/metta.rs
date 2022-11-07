@@ -173,6 +173,12 @@ pub extern "C" fn metta_space(metta: *mut metta_t) -> *mut grounding_space_t {
 }
 
 #[no_mangle]
+pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> *mut tokenizer_t {
+    let tokenizer = unsafe{ &*metta }.borrow().tokenizer();
+    tokenizer_t::from_shared(tokenizer)
+}
+
+#[no_mangle]
 pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
         output: c_atoms_callback_t, out_context: *mut c_void) {
     let metta = unsafe{ &*metta }.borrow();

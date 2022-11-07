@@ -184,7 +184,7 @@ class GroundingSpace:
 
     @staticmethod
     def _from_cspace(cspace):
-        GroundingSpace(cspace)
+        return GroundingSpace(cspace)
 
     def __del__(self):
         hp.grounding_space_free(self.cspace)
@@ -225,7 +225,7 @@ class Tokenizer:
 
     @staticmethod
     def _from_ctokenizer(ctokenizer):
-        Tokenizer(ctokenizer)
+        return Tokenizer(ctokenizer)
 
     def __del__(self):
         hp.tokenizer_free(self.ctokenizer)
@@ -291,10 +291,10 @@ class Metta:
         hp.metta_free(self.cmetta)
 
     def get_space(self):
-        return GroundingSpace._from_cspace(hp.metta_get_space(self.cmetta))
+        return GroundingSpace._from_cspace(hp.metta_space(self.cmetta))
 
     def get_tokenizer(self):
-        return Tokenizer._from_ctokenizer(hp.metta_get_tokenizer(self.cmetta))
+        return Tokenizer._from_ctokenizer(hp.metta_tokenizer(self.cmetta))
 
     def run(self, program):
         parser = SExprParser(program)
