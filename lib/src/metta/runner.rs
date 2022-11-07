@@ -5,15 +5,23 @@ use super::*;
 use super::space::grounding::GroundingSpace;
 use super::text::{Tokenizer, SExprParser};
 use super::interpreter::interpret;
+use super::types::validate_atom;
 
 use regex::Regex;
 use std::path::PathBuf;
+use std::collections::HashMap;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
 pub struct Metta {
     space: Shared<GroundingSpace>,
     tokenizer: Shared<Tokenizer>,
+    settings: Shared<HashMap<String, String>>,
+}
+
+enum Mode {
+    ADD,
+    INTERPRET,
 }
 
 impl Metta {
@@ -22,6 +30,7 @@ impl Metta {
     }
 
     pub fn from_space_cwd(space: Shared<GroundingSpace>, cwd: PathBuf) -> Self {
+        let settings = Shared::new(HashMap::new());
         let tokenizer = Shared::new(Tokenizer::new());
         {
             fn regex(regex: &str) -> Regex {
@@ -47,8 +56,10 @@ impl Metta {
             tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
             let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
             tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
+            let pragma_op = Atom::gnd(PragmaOp::new(settings.clone()));
+            tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
         }
-        Self{ space, tokenizer }
+        Self{ space, tokenizer, settings }
     }
 
     pub fn space(&self) -> Shared<GroundingSpace> {
@@ -59,11 +70,11 @@ impl Metta {
         self.tokenizer.clone()
     }
 
+    fn get_setting(&self, key: &str) -> Option<String> {
+        self.settings.borrow().get(key.into()).cloned()
+    }
+
     pub fn run(&self, parser: &mut SExprParser) -> Result<Vec<Vec<Atom>>, String> {
-        enum Mode {
-            ADD,
-            EXEC,
-        }
         let mut mode = Mode::ADD;
         let mut results: Vec<Vec<Atom>> = Vec::new();
 
@@ -72,31 +83,47 @@ impl Metta {
             match atom {
                 Some(atom) => {
                     if atom == EXEC_SYMBOL {
-                        mode = Mode::EXEC;
-                    } else {
-                        match mode {
-                            Mode::ADD => {
-                                log::trace!("Metta::run: adding atom: {} into space: {:?}", atom, self.space);
-                                self.space.borrow_mut().add(atom)
-                            },
-                            Mode::EXEC => {
-                                log::trace!("Metta::run: executing atom: {}", atom);
-                                let result = interpret(self.space.clone(), &atom);
-                                log::trace!("Metta::run: execution result {:?}", result);
-                                match result {
-                                    Ok(result) => results.push(result),
-                                    Err(message) => return Err(format!("Error: {}", message)),
-                                }
-                            },
-                        }
-                        mode = Mode::ADD;
+                        mode = Mode::INTERPRET;
+                        continue;
                     }
+                    match self.interp_atom(mode, atom) {
+                        Err(msg) => return Err(msg),
+                        Ok(Some(result)) => results.push(result),
+                        _ => {},
+                    }
+                    mode = Mode::ADD;
                 },
                 None => break,
             }
         }
         Ok(results)
     }
+
+    fn interp_atom(&self, mode: Mode, atom: Atom) -> Result<Option<Vec<Atom>>, String> {
+        // FIXME: how to make it look better?
+        if self.get_setting("type-check").as_ref().map(String::as_str) == Some("auto") {
+            if !validate_atom(&self.space.borrow(), &atom) {
+                return Ok(Some(vec![Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL])]))
+            }
+        }
+        match mode {
+            Mode::ADD => {
+                log::trace!("Metta::run: adding atom: {} into space: {:?}", atom, self.space);
+                self.space.borrow_mut().add(atom);
+                Ok(None) 
+            },
+            Mode::INTERPRET => {
+                log::trace!("Metta::run: interpreting atom: {}", atom);
+                let result = interpret(self.space.clone(), &atom);
+                log::trace!("Metta::run: interpretation result {:?}", result);
+                match result {
+                    Ok(result) => Ok(Some(result)),
+                    Err(message) => Err(format!("Error: {}", message)),
+                }
+            },
+        }
+    }
+
 }
 
 use crate::matcher::MatchResultIter;
@@ -323,7 +350,7 @@ impl Grounded for CaseOp {
         log::trace!("CaseOp::execute: atom: {}, cases: {}", atom, cases);
 
         let result = interpret(self.space.clone(), atom);
-        log::trace!("case: execution result {:?}", result);
+        log::trace!("case: interpretation result {:?}", result);
         match result {
             Ok(result) if result.is_empty() => {
                 for c in cases.children() {
@@ -475,6 +502,43 @@ impl Grounded for CollapseOp {
         let result = interpret(self.space.clone(), atom)?;
 
         Ok(vec![Atom::expr(result)])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct PragmaOp {
+    settings: Shared<HashMap<String, String>>,
+}
+
+impl PragmaOp {
+    fn new(settings: Shared<HashMap<String, String>>) -> Self {
+        Self{ settings }
+    }
+}
+
+impl Display for PragmaOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "pragma!")
+    }
+}
+
+impl Grounded for PragmaOp {
+    fn type_(&self) -> Atom {
+        ATOM_TYPE_UNDEFINED
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("pragma! expects key and value as arguments");
+        let key = atom_as_sym(args.get(0).ok_or_else(arg_error)?).ok_or("pragma! expects symbol atom as a key")?.name();
+        let value = atom_as_sym(args.get(1).ok_or_else(arg_error)?).ok_or("pragma! expects symbol atom as a value")?.name();
+
+        self.settings.borrow_mut().insert(key.into(), value.into());
+
+        Ok(vec![])
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
