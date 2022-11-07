@@ -39,6 +39,8 @@ impl Metta {
             tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
             let new_space_op = Atom::gnd(NewSpaceOp{});
             tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
+            let case_op = Atom::gnd(CaseOp::new(space.clone()));
+            tref.register_token(regex(r"case"), move |_| { case_op.clone() });
         }
         Self{ space, tokenizer }
     }
@@ -264,6 +266,84 @@ impl Grounded for NewSpaceOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+struct CaseOp {
+    space: Shared<GroundingSpace>,
+}
+
+impl CaseOp {
+    fn new(space: Shared<GroundingSpace>) -> Self {
+        Self{ space }
+    }
+
+    fn first_case_matched(atom: &Atom, cases: &ExpressionAtom) -> Result<Vec<Atom>, ExecError> {
+        let mut space = GroundingSpace::new();
+        space.add(atom.clone());
+        for c in cases.children() {
+            log::trace!("CaseOp::first_case_matched: next case: {}", c);
+            let next_case = atom_as_expr(c).ok_or("case expects expression of pairs as a second argument")?.children();
+            let result = space.subst(&next_case[0], &next_case[1]);
+            if !result.is_empty() {
+                return Ok(result)
+            }
+        }
+        return Ok(vec![])
+    }
+}
+
+impl Display for CaseOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "case")
+    }
+}
+
+// FIXME: move it into hyperon::atom module?
+fn atom_as_expr(atom: &Atom) -> Option<&ExpressionAtom> {
+    match atom {
+        Atom::Expression(expr) => Some(expr),
+        _ => None,
+    }
+}
+
+impl Grounded for CaseOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("case expects two arguments: atom and expression of cases");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        let cases = atom_as_expr(args.get(1).ok_or_else(arg_error)?).ok_or("case expects expression of cases as a second argument")?;
+        log::trace!("CaseOp::execute: atom: {}, cases: {}", atom, cases);
+
+        let result = interpret(self.space.clone(), atom);
+        log::trace!("case: execution result {:?}", result);
+        match result {
+            Ok(result) if result.is_empty() => {
+                for c in cases.children() {
+                    let next_case = atom_as_expr(c).ok_or("case expects expression of pairs as a second argument")?.children();
+                    if next_case[0] == VOID_SYMBOL {
+                        return Ok(vec![next_case[1].clone()])
+                    }
+                }
+                Ok(vec![])
+            },
+            Ok(result) => {
+                let mut triggered = vec![];
+                for atom in result {
+                    triggered.append(&mut CaseOp::first_case_matched(&atom, cases)?)
+                }
+                Ok(triggered)
+            },
+            Err(message) => Err(format!("Error: {}", message).into()),
+        }
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -321,5 +401,24 @@ mod tests {
         let metta = Metta::new(Shared::new(GroundingSpace::new()));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![], vec![]]));
+    }
+
+    #[test]
+    fn case() {
+        let program = "
+            (= (foo) (A B))
+            !(case (foo) (
+                (($n B) $n)
+                (%void% D)
+            ))
+            !(case (match &self (B C) (B C)) (
+                (($n C) $n)
+                (%void% D)
+            ))
+        ";
+
+        let metta = Metta::new(Shared::new(GroundingSpace::new()));
+        let result = metta.run(&mut SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![Atom::sym("A")], vec![Atom::sym("D")]]));
     }
 }
