@@ -41,6 +41,10 @@ impl Metta {
             tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
             let case_op = Atom::gnd(CaseOp::new(space.clone()));
             tref.register_token(regex(r"case"), move |_| { case_op.clone() });
+            let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
+            tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
+            let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
+            tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
         }
         Self{ space, tokenizer }
     }
@@ -344,6 +348,102 @@ impl Grounded for CaseOp {
     }
 }
 
+fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Vec<Atom> {
+    log::trace!("assert_results_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
+    let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
+    for r in actual {
+        if !expected.contains(r) {
+            return vec![Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::sym(format!("{}\nExcessive result: {}", report, r))])]
+        }
+    }
+    for r in expected {
+        if !actual.contains(r) {
+            return vec![Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::sym(format!("{}\nMissed result: {}", report, r))])]
+        }
+    }
+    if expected.len() != actual.len() {
+        return vec![Atom::expr([ERROR_SYMBOL, Atom::sym(format!("{}\nDifferent number of elements", report))])]
+    }
+    return vec![]
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct AssertEqualOp {
+    space: Shared<GroundingSpace>,
+}
+
+impl AssertEqualOp {
+    fn new(space: Shared<GroundingSpace>) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for AssertEqualOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "assertEqual")
+    }
+}
+
+impl Grounded for AssertEqualOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("assertEqual expects two atoms as arguments: actual and expected");
+        let actual_atom = args.get(0).ok_or_else(arg_error)?;
+        let expected_atom = args.get(1).ok_or_else(arg_error)?;
+
+        let actual = interpret(self.space.clone(), actual_atom)?;
+        let expected = interpret(self.space.clone(), expected_atom)?;
+
+        Ok(assert_results_equal(&actual, &expected, actual_atom))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+struct AssertEqualToResultOp {
+    space: Shared<GroundingSpace>,
+}
+
+impl AssertEqualToResultOp {
+    fn new(space: Shared<GroundingSpace>) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for AssertEqualToResultOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "assertEqualToResult")
+    }
+}
+
+impl Grounded for AssertEqualToResultOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("assertEqualToResult expects two atoms as arguments: actual and expected");
+        let actual_atom = args.get(0).ok_or_else(arg_error)?;
+        let expected = atom_as_expr(args.get(1).ok_or_else(arg_error)?)
+            .ok_or("assertEqualToResult expects expression of results as a second argument")?
+            .children();
+
+        let actual = interpret(self.space.clone(), actual_atom)?;
+
+        Ok(assert_results_equal(&actual, expected, actual_atom))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -420,5 +520,45 @@ mod tests {
         let metta = Metta::new(Shared::new(GroundingSpace::new()));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![Atom::sym("A")], vec![Atom::sym("D")]]));
+    }
+
+    fn assert_error(atom: Atom, message: &str) -> Atom {
+        Atom::expr([ERROR_SYMBOL, atom, Atom::sym(message)])
+    }
+
+    #[test]
+    fn assert_equal() {
+        let program = "
+            (= (foo) (A B))
+            (= (foo) (B C))
+            (= (bar) (B C))
+            (= (bar) (A B))
+            (= (err) (A B))
+            !(assertEqual (foo) (bar))
+            !(assertEqual (foo) (err))
+            !(assertEqual (err) (foo))
+        ";
+
+        let metta = Metta::new(Shared::new(GroundingSpace::new()));
+        let result = metta.run(&mut SExprParser::new(program));
+        assert_eq!(result, Ok(vec![
+            vec![],
+            vec![assert_error(expr!("A" "B"), "\nExpected: [(A B)]\nGot: [(A B), (B C)]\nExcessive result: (B C)"),
+                 assert_error(expr!("B" "C"), "\nExpected: [(A B)]\nGot: [(A B), (B C)]\nExcessive result: (B C)")],
+            vec![assert_error(expr!("A" "B"), "\nExpected: [(A B), (B C)]\nGot: [(A B)]\nMissed result: (B C)")]
+        ]));
+    }
+
+    #[test]
+    fn assert_equal_to_result() {
+        let program = "
+            (= (foo) (A B))
+            (= (foo) (B C))
+            !(assertEqualToResult (foo) ((B C) (A B)))
+        ";
+
+        let metta = Metta::new(Shared::new(GroundingSpace::new()));
+        let result = metta.run(&mut SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![]]));
     }
 }
