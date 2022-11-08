@@ -35,6 +35,6 @@ class MettaTest(unittest.TestCase):
         '''
         space = GroundingSpace()
         repl = Metta(space)
-        result = repl.run(SExprParser(program))
+        result = repl.run(program)
 
         self.assertEqual([[S('T')]], result)

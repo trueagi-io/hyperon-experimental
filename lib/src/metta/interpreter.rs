@@ -617,7 +617,7 @@ impl<'a, T: Debug> Plan<'a, (), Vec<T>> for AlternativeInterpretationsPlan<'a, T
             if self.success {
                 StepResult::ret(self.results)
             } else {
-                StepResult::err("No successful alternatives")
+                StepResult::err(format!("No successful alternatives for atom: {}", self.atom))
             }
         } else {
             let plan = self.plans.pop_front().unwrap();
@@ -780,7 +780,7 @@ mod tests {
 
         let result = test_interpret(plan, ());
 
-        assert_eq!(Err("No successful alternatives".into()), result);
+        assert_eq!(Err("No successful alternatives for atom: Test".into()), result);
     }
 
     #[test]
