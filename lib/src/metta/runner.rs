@@ -165,13 +165,13 @@ impl Grounded for ImportOp {
         let mut path = self.cwd.clone();
         // TODO: replace Symbol by grounded String?
         if let Atom::Symbol(file) = file {
-            path.push(remove_quotes(file.name()));
+            path.push(file.name());
             log::trace!("import! load file, full path: {}", path.display());
         } else {
             return Err("import! expects a file path as a second argument".into())
         }
 
-        match space {
+        let space: Result<Shared<GroundingSpace>, String> = match space {
             Atom::Symbol(space) => {
                 let name = space.name();
                 let space = Shared::new(GroundingSpace::new());
@@ -180,17 +180,22 @@ impl Grounded for ImportOp {
                     .map_err(|err| format!("Could convert space name {} into regex: {}", name, err))?;
                 self.tokenizer.borrow_mut()
                     .register_token(regex, move |_| { space_atom.clone() });
-                let mut next_cwd = path.clone();
-                next_cwd.pop();
-                let metta = Metta::from_space_cwd(space.clone(), next_cwd);
-                let program = std::fs::read_to_string(&path)
-                    .map_err(|err| format!("Could not read file {}: {}", path.display(), err))?;
-                let _result = metta.run(&mut SExprParser::new(program.as_str()))?;
-                Ok(vec![])
+                Ok(space)
             },
-            Atom::Grounded(_) => Err("import! for existing space is not implemented!".into()),
+            Atom::Grounded(_) => {
+                let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("import! expects a space as a first argument")?;
+                Ok(space.clone())
+            },
             _ => Err("import! expects space as a first argument".into()),
-        }
+        };
+        let space = space?;
+        let mut next_cwd = path.clone();
+        next_cwd.pop();
+        let metta = Metta::from_space_cwd(space.clone(), next_cwd);
+        let program = std::fs::read_to_string(&path)
+            .map_err(|err| format!("Could not read file {}: {}", path.display(), err))?;
+        let _result = metta.run(&mut SExprParser::new(program.as_str()))?;
+        Ok(vec![])
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
