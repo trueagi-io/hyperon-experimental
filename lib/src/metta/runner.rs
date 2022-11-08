@@ -148,10 +148,6 @@ impl Display for ImportOp {
     }
 }
 
-fn remove_quotes(text: &str) -> String {
-    text.chars().skip(1).take(text.len() - 2).collect()
-}
-
 impl Grounded for ImportOp {
     fn type_(&self) -> Atom {
         ATOM_TYPE_UNDEFINED
