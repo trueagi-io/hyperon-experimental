@@ -45,9 +45,9 @@
 (= (is-socrates) (curry-a is Socrates))
 !(assertEqualToResult
    (is-socrates)
-  ((curry is Socrates)))
+  ((curry-a is Socrates)))
 !(assertEqual
-  ((curry is Socrates) Human)
+  ((curry-a is Socrates) Human)
   (is Socrates Human))
 !(assertEqual
   ((is-socrates) Human)
