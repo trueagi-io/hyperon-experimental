@@ -270,6 +270,13 @@ fn interpret_as_type_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterCon
         input: InterpretedAtom, typ: Atom) -> StepResult<'a, Results> {
     log::debug!("interpret_as_type_plan: input: {}, type: {}", input, typ);
     match input.atom() {
+
+        _ if typ == ATOM_TYPE_ATOM => StepResult::ret(vec![input]),
+        Atom::Symbol(_) if typ == ATOM_TYPE_SYMBOL => StepResult::ret(vec![input]),
+        Atom::Variable(_) if typ == ATOM_TYPE_VARIABLE => StepResult::ret(vec![input]),
+        Atom::Expression(_) if typ == ATOM_TYPE_EXPRESSION => StepResult::ret(vec![input]),
+        Atom::Grounded(_) if typ == ATOM_TYPE_GROUNDED => StepResult::ret(vec![input]),
+
         Atom::Symbol(_) | Atom::Grounded(_) =>
             cast_atom_to_type_plan(context, input, typ),
 
