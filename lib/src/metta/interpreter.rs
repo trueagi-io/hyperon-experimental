@@ -80,6 +80,8 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
 
+type InterpreterError = (Atom, Atom);
+
 /// Result of atom interpretation plus variable bindings found
 #[derive(Clone, PartialEq)]
 pub struct InterpretedAtom(Atom, Bindings);
@@ -123,7 +125,7 @@ impl Debug for InterpretedAtom {
 }
 
 type Results = Vec<InterpretedAtom>;
-type NoInputPlan<'a> = Box<dyn Plan<'a, (), Results> + 'a>;
+type NoInputPlan<'a> = Box<dyn Plan<'a, (), Results, InterpreterError> + 'a>;
 trait GroundingSpacePtr : Clone + LockBorrow<GroundingSpace> {}
 impl<T: Clone + LockBorrow<GroundingSpace>> GroundingSpacePtr for T {}
 
@@ -134,7 +136,7 @@ impl<T: Clone + LockBorrow<GroundingSpace>> GroundingSpacePtr for T {}
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
-pub fn interpret_init<'a, T: Clone + LockBorrow<GroundingSpace> + 'a>(space: T, expr: &Atom) -> StepResult<'a, Vec<InterpretedAtom>> {
+pub fn interpret_init<'a, T: Clone + LockBorrow<GroundingSpace> + 'a>(space: T, expr: &Atom) -> StepResult<'a, Results, InterpreterError> {
     let context = InterpreterContextRef::new(space);
     interpret_as_type_plan(context,
         InterpretedAtom(expr.clone(), Bindings::new()),
@@ -147,7 +149,7 @@ pub fn interpret_init<'a, T: Clone + LockBorrow<GroundingSpace> + 'a>(space: T, 
 ///
 /// # Arguments
 /// * `step` - [StepResult::Execute] result from the previous step.
-pub fn interpret_step<'a>(step: StepResult<'a, Vec<InterpretedAtom>>) -> StepResult<'a, Vec<InterpretedAtom>> {
+pub fn interpret_step<'a>(step: StepResult<'a, Results, InterpreterError>) -> StepResult<'a, Results, InterpreterError> {
     log::debug!("current plan:\n{:?}", step);
     match step {
         StepResult::Execute(plan) => plan.step(()),
@@ -170,7 +172,9 @@ pub fn interpret<T: Clone + LockBorrow<GroundingSpace>>(space: T, expr: &Atom) -
     match step {
         StepResult::Return(mut result) => Ok(result.drain(0..)
             .map(|InterpretedAtom(atom, _)| atom).collect()),
-        StepResult::Error(message) => Err(message),
+        // TODO: return (Error atom err) expression
+        StepResult::Error((atom, err)) => Err(format!("Error {} on atom {}", err, atom)),
+                                          //Ok(vec![Atom::expr([ERROR_SYMBOL, atom, err])]),
         _ => panic!("Not expected step result: {:?}", step),
     }
 }
@@ -267,7 +271,7 @@ fn has_grounded_sub_expr(expr: &Atom) -> bool {
 }
 
 fn interpret_as_type_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>,
-        input: InterpretedAtom, typ: Atom) -> StepResult<'a, Results> {
+        input: InterpretedAtom, typ: Atom) -> StepResult<'a, Results, InterpreterError> {
     log::debug!("interpret_as_type_plan: input: {}, type: {}", input, typ);
     match input.atom() {
 
@@ -298,7 +302,7 @@ fn interpret_as_type_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterCon
 }
 
 fn cast_atom_to_type_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>,
-        input: InterpretedAtom, typ: Atom) -> StepResult<'a, Results> {
+        input: InterpretedAtom, typ: Atom) -> StepResult<'a, Results, InterpreterError> {
     // TODO: implement this via interpreting of the (:cast atom typ) expression
     let typ = apply_bindings_to_atom(&typ, input.bindings());
     let mut results = get_type_bindings(&context.space.borrow(), input.atom(), &typ);
@@ -319,17 +323,17 @@ fn cast_atom_to_type_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterCon
         }).filter(Option::is_some).map(Option::unwrap).collect())
     } else {
         log::debug!("cast_atom_to_type_plan: input: {} cannot be casted to type: {}", input, typ);
-        StepResult::err(format!("Incorrect type, input: {}, type: {}", input, typ))
+        StepResult::err((input.0, BAD_TYPE_SYMBOL))
     }
 }
 
-fn get_type_of_atom_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, atom: Atom) -> StepResult<'a, Vec<Atom>> {
+fn get_type_of_atom_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, atom: Atom) -> StepResult<'a, Vec<Atom>, InterpreterError> {
     // TODO: implement this via interpreting of the (:? atom)
     StepResult::ret(get_atom_types(&context.space.borrow(), &atom))
 }
 
 fn interpret_expression_as_type_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>,
-        input: InterpretedAtom, typ: Atom) -> OperatorPlan<'a, Vec<Atom>, Results> {
+        input: InterpretedAtom, typ: Atom) -> OperatorPlan<'a, Vec<Atom>, Results, InterpreterError> {
     let descr = format!("form alternative plans for expression {} using types", input);
     OperatorPlan::new(move |op_types: Vec<Atom>| {
         make_alternives_plan(input.clone(), op_types, move |op_typ| {
@@ -364,9 +368,9 @@ fn interpret_expression_as_type_op<'a, T: GroundingSpacePtr + 'a>(context: Inter
         let (op_arg_types, op_ret_typ) = get_arg_types(&op_typ);
         // TODO: supertypes should be checked as well
         if !match_reducted_types(op_ret_typ, &ret_typ, &mut input_bindings) {
-            Box::new(StepResult::err(format!("Operation returns wrong type: {}, expected: {}", op_ret_typ, ret_typ)))
+            Box::new(StepResult::err((input_atom, BAD_TYPE_SYMBOL)))
         } else if op_arg_types.len() != (expr.children().len() - 1) {
-            Box::new(StepResult::err(format!("Operation arity is not equal to call arity: operation type, {}, call: {}", op_typ, expr)))
+            Box::new(StepResult::err((input_atom, INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)))
         } else {
             let input = InterpretedAtom(input_atom, input_bindings);
             let expr = get_expr(input.atom());
@@ -426,12 +430,12 @@ fn call_alternatives_plan<'a, T: GroundingSpacePtr + 'a>(plan: NoInputPlan<'a>, 
     }, "interpret each alternative")))
 }
 
-fn insert_reducted_arg_plan<'a>(expr: InterpretedAtom, atom_idx: usize) -> OperatorPlan<'a, Results, Results> {
+fn insert_reducted_arg_plan<'a>(expr: InterpretedAtom, atom_idx: usize) -> OperatorPlan<'a, Results, Results, InterpreterError> {
     let descr = format!("insert right element as child {} of left element", atom_idx);
     OperatorPlan::new(move |arg_variants| insert_reducted_arg_op(expr, atom_idx, arg_variants), descr)
 }
 
-fn insert_reducted_arg_op<'a>(expr: InterpretedAtom, atom_idx: usize, mut arg_variants: Results) -> StepResult<'a, Results> {
+fn insert_reducted_arg_op<'a>(expr: InterpretedAtom, atom_idx: usize, mut arg_variants: Results) -> StepResult<'a, Results, InterpreterError> {
     let result = arg_variants.drain(0..).map(|arg| {
         let InterpretedAtom(arg, bindings) = arg;
         let mut expr_with_arg = expr.atom().clone();
@@ -447,7 +451,7 @@ fn call_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T
     Box::new(OperatorPlan::new(|_| call_op(context, input), descr))
 }
 
-fn call_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results> {
+fn call_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results, InterpreterError> {
     log::debug!("call_op: {}", input);
 
     let cached = context.cache.borrow().get(input.atom(), input.bindings());
@@ -474,12 +478,12 @@ fn call_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>,
     }
 }
 
-fn return_cached_result_plan<'a>(results: Results) -> StepResult<'a, Results> {
+fn return_cached_result_plan<'a>(results: Results) -> StepResult<'a, Results, InterpreterError> {
     let descr = format!("return cached results {:?}", results);
     StepResult::execute(OperatorPlan::new(|_| StepResult::ret(results), descr))
 }
 
-fn save_result_in_cache_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, key: Atom) -> OperatorPlan<'a, Results, Results> {
+fn save_result_in_cache_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, key: Atom) -> OperatorPlan<'a, Results, Results, InterpreterError> {
     let descr = format!("save results in cache for key {}", key);
     OperatorPlan::new(move |results: Results| {
         context.cache.borrow_mut().insert(key, results.clone());
@@ -501,12 +505,12 @@ fn interpret_reducted_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterCo
 }
 
 
-fn execute_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> OperatorPlan<'a, (), Results> {
+fn execute_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> OperatorPlan<'a, (), Results, InterpreterError> {
     let descr = format!("execute {}", input);
     OperatorPlan::new(|_| execute_op(context, input), descr)
 }
 
-fn execute_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results> {
+fn execute_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results, InterpreterError> {
     log::debug!("execute_op: {}", input);
     match input {
         InterpretedAtom(Atom::Expression(ref expr), ref bindings) => {
@@ -530,7 +534,7 @@ fn execute_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, 
                     },
                     Err(ExecError::Runtime(msg)) => StepResult::ret(vec![InterpretedAtom(
                            Atom::expr([ERROR_SYMBOL, input.0, Atom::sym(msg)]), input.1)]),
-                    Err(ExecError::NoReduce) => StepResult::err("Grounded operation is not reducible"),
+                    Err(ExecError::NoReduce) => StepResult::err((input.0, NOT_REDUCIBLE_SYMBOL)),
                 }
             } else {
                 panic!("Trying to execute non grounded atom: {}", expr)
@@ -540,12 +544,12 @@ fn execute_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, 
     }
 }
 
-fn match_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> OperatorPlan<'a, (), Results> {
+fn match_plan<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> OperatorPlan<'a, (), Results, InterpreterError> {
     let descr = format!("match {}", input);
     OperatorPlan::new(|_| match_op(context, input), descr)
 }
 
-fn match_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results> {
+fn match_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results, InterpreterError> {
     log::debug!("match_op: {}", input);
     let var_x = VariableAtom::new("%X%");
     // TODO: unique variable?
@@ -577,13 +581,13 @@ fn match_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>
 }
 
 fn make_alternives_plan<'a, T, F, P>(input: InterpretedAtom, mut results: Vec<T>,
-    plan: F) -> StepResult<'a, Results>
+    plan: F) -> StepResult<'a, Results, InterpreterError>
 where
     F: 'a + Fn(T) -> P,
-    P: 'a + Plan<'a, (), Results>
+    P: 'a + Plan<'a, (), Results, InterpreterError>
 {
     match results.len() {
-        0 => StepResult::err("No alternatives to interpret further"),
+        0 => StepResult::err((input.0, NO_VALID_ALTERNATIVES)),
         1 => StepResult::execute(plan(results.pop().unwrap())),
         _ => {
             StepResult::execute(AlternativeInterpretationsPlan::new(
@@ -602,7 +606,7 @@ use std::collections::VecDeque;
 /// If no alternatives returned successful result the plan returns error. 
 pub struct AlternativeInterpretationsPlan<'a, T> {
     atom: Atom,
-    plans: VecDeque<Box<dyn Plan<'a, (), Vec<T>> + 'a>>,
+    plans: VecDeque<Box<dyn Plan<'a, (), Vec<T>, InterpreterError> + 'a>>,
     results: Vec<T>,
     success: bool,
 }
@@ -613,18 +617,18 @@ impl<'a, T> AlternativeInterpretationsPlan<'a, T> {
     /// # Arguments
     /// `atom` - atom to be printed as root of the alternative interpretations
     /// `plan` - altenative plans for the atom
-    pub fn new(atom: Atom, plans: Vec<Box<dyn Plan<'a, (), Vec<T>> + 'a>>) -> Self {
+    pub fn new(atom: Atom, plans: Vec<Box<dyn Plan<'a, (), Vec<T>, InterpreterError> + 'a>>) -> Self {
         Self{ atom, plans: plans.into(), results: Vec::new(), success: false }
     }
 }
 
-impl<'a, T: Debug> Plan<'a, (), Vec<T>> for AlternativeInterpretationsPlan<'a, T> {
-    fn step(mut self: Box<Self>, _: ()) -> StepResult<'a, Vec<T>> {
+impl<'a, T: Debug> Plan<'a, (), Vec<T>, InterpreterError> for AlternativeInterpretationsPlan<'a, T> {
+    fn step(mut self: Box<Self>, _: ()) -> StepResult<'a, Vec<T>, InterpreterError> {
         if self.plans.len() == 0 {
             if self.success {
                 StepResult::ret(self.results)
             } else {
-                StepResult::err(format!("No successful alternatives for atom: {}", self.atom))
+                StepResult::err((self.atom, NO_VALID_ALTERNATIVES))
             }
         } else {
             let plan = self.plans.pop_front().unwrap();
@@ -638,8 +642,8 @@ impl<'a, T: Debug> Plan<'a, (), Vec<T>> for AlternativeInterpretationsPlan<'a, T
                     self.success = true;
                     StepResult::Execute(self)
                 },
-                StepResult::Error(message) => {
-                    log::debug!("skip alternative because of error returned: {}", message);
+                StepResult::Error(err) => {
+                    log::debug!("skip alternative because of error returned: {:?}", err);
                     StepResult::Execute(self)
                 },
             }
@@ -725,13 +729,13 @@ mod tests {
             "actual: {:?} and expected: {:?} are not equivalent", actual, expected);
     }
 
-    fn test_interpret<'a, T, R: 'a, P: Plan<'a, T, R> + 'a>(plan: P, arg: T) -> Result<R, String> {
+    fn test_interpret<'a, T, R: 'a, P: Plan<'a, T, R, InterpreterError> + 'a>(plan: P, arg: T) -> Result<R, InterpreterError> {
         let mut step = Box::new(plan).step(arg);
         loop {
             match step {
                 StepResult::Execute(plan) => step = plan.step(()),
                 StepResult::Return(result) => return Ok(result),
-                StepResult::Error(message) => return Err(message),
+                StepResult::Error(err) => return Err(err),
             }
         }
     }
@@ -743,7 +747,7 @@ mod tests {
 
         let result = test_interpret(plan, ());
 
-        assert_eq!(Err("No alternatives to interpret further".into()), result);
+        assert_eq!(Err((sym!("Test"), NO_VALID_ALTERNATIVES)), result);
     }
 
     #[test]
@@ -770,7 +774,7 @@ mod tests {
     #[test]
     fn test_alternatives_plan_error_present() {
         let plan = AlternativeInterpretationsPlan::new(sym!("Test"),
-            vec![Box::new(StepResult::err("Expected error")),
+            vec![Box::new(StepResult::err((sym!("Test"), BAD_TYPE_SYMBOL))),
                 Box::new(StepResult::ret(vec!["C", "D"]))]);
 
         let result = test_interpret(plan, ());
@@ -782,12 +786,12 @@ mod tests {
     fn test_alternatives_plan_only_errors() {
         let plan: AlternativeInterpretationsPlan<&'static str> =
             AlternativeInterpretationsPlan::new(sym!("Test"),
-            vec![Box::new(StepResult::err("Expected error")),
-                Box::new(StepResult::err("Another expected error"))]);
+            vec![Box::new(StepResult::err((sym!("Test"), sym!("Expected error")))),
+                Box::new(StepResult::err((sym!("Test"), sym!("Another expected error"))))]);
 
         let result = test_interpret(plan, ());
 
-        assert_eq!(Err("No successful alternatives for atom: Test".into()), result);
+        assert_eq!(Err((sym!("Test"), NO_VALID_ALTERNATIVES)), result);
     }
 
     #[test]

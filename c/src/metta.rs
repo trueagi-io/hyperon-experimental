@@ -1,3 +1,4 @@
+use hyperon::Atom;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpretedAtom;
@@ -110,7 +111,7 @@ pub extern "C" fn get_atom_types(space: *const grounding_space_t, atom: *const a
 // MeTTa interpreter API
 
 pub struct step_result_t<'a> {
-    result: StepResult<'a, Vec<InterpretedAtom>>,
+    result: StepResult<'a, Vec<InterpretedAtom>, (Atom, Atom)>,
 }
 
 #[no_mangle]
