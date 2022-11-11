@@ -405,6 +405,32 @@ impl Grounded for CollapseOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub struct SuperposeOp { }
+
+impl Display for SuperposeOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "collapse")
+    }
+}
+
+impl Grounded for SuperposeOp {
+    fn type_(&self) -> Atom {
+        ATOM_TYPE_UNDEFINED
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("superpose expects single expression as an argument");
+        let expr = atom_as_expr(args.get(0).ok_or_else(arg_error)?).ok_or(arg_error())?;
+
+        Ok(expr.children().clone())
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct PragmaOp {
     settings: Shared<HashMap<String, String>>,
 }
@@ -438,5 +464,17 @@ impl Grounded for PragmaOp {
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
         match_by_equality(self, other)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_superpose() {
+        let superpose = SuperposeOp{};
+        assert_eq!(superpose.execute(&mut vec![expr!("A" ("B" "C"))]),
+            Ok(vec![sym!("A"), expr!("B" "C")]));
     }
 }

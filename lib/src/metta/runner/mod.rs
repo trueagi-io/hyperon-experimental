@@ -59,6 +59,8 @@ impl Metta {
             tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
             let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
             tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
+            let superpose_op = Atom::gnd(SuperposeOp{});
+            tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
             let pragma_op = Atom::gnd(PragmaOp::new(settings.clone()));
             tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
         }
