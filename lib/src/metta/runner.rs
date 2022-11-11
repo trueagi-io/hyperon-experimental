@@ -24,6 +24,17 @@ enum Mode {
     INTERPRET,
 }
 
+// TODO: remove hiding errors completely after making it possible passing
+// them to the user
+fn interpret_no_error(space: Shared<GroundingSpace>, expr: &Atom) -> Result<Vec<Atom>, String> {
+    let result = interpret(space, expr);
+    log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
+    match result {
+        Ok(result) => Ok(result),
+        Err(_) => Ok(vec![]),
+    }
+}
+
 impl Metta {
     pub fn new(space: Shared<GroundingSpace>) -> Self {
         Metta::from_space_cwd(space, PathBuf::from("."))
@@ -114,7 +125,7 @@ impl Metta {
             },
             Mode::INTERPRET => {
                 log::trace!("Metta::run: interpreting atom: {}", atom);
-                let result = interpret(self.space.clone(), &atom);
+                let result = interpret_no_error(self.space.clone(), &atom);
                 log::trace!("Metta::run: interpretation result {:?}", result);
                 match result {
                     Ok(result) => Ok(Some(result)),
@@ -350,7 +361,7 @@ impl Grounded for CaseOp {
         let cases = atom_as_expr(args.get(1).ok_or_else(arg_error)?).ok_or("case expects expression of cases as a second argument")?;
         log::trace!("CaseOp::execute: atom: {}, cases: {}", atom, cases);
 
-        let result = interpret(self.space.clone(), atom);
+        let result = interpret_no_error(self.space.clone(), atom);
         log::trace!("case: interpretation result {:?}", result);
         match result {
             Ok(result) if result.is_empty() => {
@@ -424,8 +435,8 @@ impl Grounded for AssertEqualOp {
         let actual_atom = args.get(0).ok_or_else(arg_error)?;
         let expected_atom = args.get(1).ok_or_else(arg_error)?;
 
-        let actual = interpret(self.space.clone(), actual_atom)?;
-        let expected = interpret(self.space.clone(), expected_atom)?;
+        let actual = interpret_no_error(self.space.clone(), actual_atom)?;
+        let expected = interpret_no_error(self.space.clone(), expected_atom)?;
 
         Ok(assert_results_equal(&actual, &expected, actual_atom))
     }
@@ -464,7 +475,7 @@ impl Grounded for AssertEqualToResultOp {
             .ok_or("assertEqualToResult expects expression of results as a second argument")?
             .children();
 
-        let actual = interpret(self.space.clone(), actual_atom)?;
+        let actual = interpret_no_error(self.space.clone(), actual_atom)?;
 
         Ok(assert_results_equal(&actual, expected, actual_atom))
     }
@@ -500,7 +511,7 @@ impl Grounded for CollapseOp {
         let arg_error = || ExecError::from("collapse expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
 
-        let result = interpret(self.space.clone(), atom)?;
+        let result = interpret_no_error(self.space.clone(), atom)?;
 
         Ok(vec![Atom::expr(result)])
     }
