@@ -5,6 +5,7 @@ use crate::metta::space::grounding::GroundingSpace;
 use crate::metta::text::{Tokenizer, SExprParser};
 use crate::metta::interpreter::interpret;
 use crate::metta::runner::Metta;
+use crate::metta::types::get_atom_types;
 use crate::common::shared::Shared;
 
 use std::fmt::Display;
@@ -467,6 +468,40 @@ impl Grounded for PragmaOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct GetTypeOp {
+    space: Shared<GroundingSpace>,
+}
+
+impl GetTypeOp {
+    pub fn new(space: Shared<GroundingSpace>) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for GetTypeOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "get-type")
+    }
+}
+
+impl Grounded for GetTypeOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("get-type expects single atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+
+        Ok(get_atom_types(&self.space.borrow(), atom))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -570,9 +605,23 @@ mod tests {
     }
 
     #[test]
-    fn test_superpose() {
+    fn superpose() {
         let superpose = SuperposeOp{};
         assert_eq!(superpose.execute(&mut vec![expr!("A" ("B" "C"))]),
             Ok(vec![sym!("A"), expr!("B" "C")]));
+    }
+
+    #[test]
+    fn get_type() {
+        let space = Shared::new(metta_space("
+            (: B Type)
+            (: C Type)
+            (: A B)
+            (: A C)
+        "));
+
+        let get_type = GetTypeOp::new(space);
+        assert_eq!(get_type.execute(&mut vec![sym!("A")]),
+            Ok(vec![sym!("B"), sym!("C")]));
     }
 }
