@@ -556,25 +556,56 @@ impl Grounded for NopOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct LetOp {}
+
+impl Display for LetOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "let")
+    }
+}
+
+impl Grounded for LetOp {
+    fn type_(&self) -> Atom {
+        // TODO: Undefined for the argument is necessary to make argument reductable.
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("let expects three arguments: pattern, atom and template");
+        let pattern = args.get(0).ok_or_else(arg_error)?;
+        let atom = args.get(1).ok_or_else(arg_error)?;
+        let template = args.get(2).ok_or_else(arg_error)?;
+
+        let mut space = GroundingSpace::new();
+        space.add(atom.clone());
+        Ok(space.subst(pattern, template))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn test_match() {
+    fn match_op() {
         let space = Shared::new(metta_space("
             (A B)
             !(match &self (A B) (B A))
         "));
 
-        let match_ = MatchOp{};
+        let match_op = MatchOp{};
 
-        assert_eq!(match_.execute(&mut vec![expr!({space}), expr!("A" "B"), expr!("B" "A")]),
+        assert_eq!(match_op.execute(&mut vec![expr!({space}), expr!("A" "B"), expr!("B" "A")]),
             Ok(vec![expr!("B" "A")]));
     }
 
     #[test]
-    fn new_space() {
+    fn new_space_op() {
         let res = NewSpaceOp{}.execute(&mut vec![]).expect("No result returned");
         let space = res.get(0).expect("Result is empty");
         let space = space.as_gnd::<Shared<GroundingSpace>>().expect("Result is not space");
@@ -582,12 +613,12 @@ mod tests {
     }
 
     #[test]
-    fn bind_new_space() {
+    fn bind_new_space_op() {
         let tokenizer = Shared::new(Tokenizer::new());
 
-        let bind = BindOp::new(tokenizer.clone());
+        let bind_op = BindOp::new(tokenizer.clone());
 
-        assert_eq!(bind.execute(&mut vec![sym!("&my"), sym!("definition")]), Ok(vec![]));
+        assert_eq!(bind_op.execute(&mut vec![sym!("&my"), sym!("definition")]), Ok(vec![]));
         let borrowed = tokenizer.borrow();
         let constr = borrowed.find_token("&my");
         assert!(constr.is_some());
@@ -595,17 +626,17 @@ mod tests {
     }
 
     #[test]
-    fn case() {
+    fn case_op() {
         let space = Shared::new(metta_space("
             (= (foo) (A B))
         "));
 
-        let case = CaseOp::new(space.clone());
+        let case_op = CaseOp::new(space.clone());
 
-        assert_eq!(case.execute(&mut vec![expr!(("foo")),
+        assert_eq!(case_op.execute(&mut vec![expr!(("foo")),
                 expr!(((n "B") n) ("%void%" "D"))]),
             Ok(vec![Atom::sym("A")]));
-        assert_eq!(case.execute(&mut vec![expr!({MatchOp{}} {space} ("B" "C") ("C" "B")),
+        assert_eq!(case_op.execute(&mut vec![expr!({MatchOp{}} {space} ("B" "C") ("C" "B")),
                 expr!(((n "C") n) ("%void%" "D"))]),
             Ok(vec![Atom::sym("D")]));
     }
@@ -615,7 +646,7 @@ mod tests {
     }
 
     #[test]
-    fn assert_equal() {
+    fn assert_equal_op() {
         let space = Shared::new(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
@@ -624,49 +655,49 @@ mod tests {
             (= (err) (A B))
         "));
 
-        let assert_equal = AssertEqualOp::new(space);
+        let assert_equal_op = AssertEqualOp::new(space);
 
-        assert_eq!(assert_equal.execute(&mut vec![expr!(("foo")), expr!(("bar"))]), Ok(vec![]));
-        assert_eq!(assert_equal.execute(&mut vec![expr!(("foo")), expr!(("err"))]),
+        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]), Ok(vec![]));
+        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("err"))]),
             Ok(vec![assert_error(expr!(("foo")), "\nExpected: [(A B)]\nGot: [(A B), (B C)]\nExcessive result: (B C)")]));
-        assert_eq!(assert_equal.execute(&mut vec![expr!(("err")), expr!(("foo"))]),
+        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("err")), expr!(("foo"))]),
             Ok(vec![assert_error(expr!(("err")), "\nExpected: [(A B), (B C)]\nGot: [(A B)]\nMissed result: (B C)")]));
     }
 
     #[test]
-    fn assert_equal_to_result() {
+    fn assert_equal_to_result_op() {
         let space = Shared::new(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
         "));
-        let assert_equal_to_result = AssertEqualToResultOp::new(space);
+        let assert_equal_to_result_op = AssertEqualToResultOp::new(space);
 
-        assert_eq!(assert_equal_to_result.execute(&mut vec![
+        assert_eq!(assert_equal_to_result_op.execute(&mut vec![
                 expr!(("foo")), expr!(("B" "C") ("A" "B"))]),
                 Ok(vec![]));
     }
 
     #[test]
-    fn collapse() {
+    fn collapse_op() {
         let space = Shared::new(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
         "));
-        let collapse = CollapseOp::new(space);
+        let collapse_op = CollapseOp::new(space);
 
-        assert_eq!(collapse.execute(&mut vec![expr!(("foo"))]),
+        assert_eq!(collapse_op.execute(&mut vec![expr!(("foo"))]),
             Ok(vec![expr!(("A" "B") ("B" "C"))]));
     }
 
     #[test]
-    fn superpose() {
-        let superpose = SuperposeOp{};
-        assert_eq!(superpose.execute(&mut vec![expr!("A" ("B" "C"))]),
+    fn superpose_op() {
+        let superpose_op = SuperposeOp{};
+        assert_eq!(superpose_op.execute(&mut vec![expr!("A" ("B" "C"))]),
             Ok(vec![sym!("A"), expr!("B" "C")]));
     }
 
     #[test]
-    fn get_type() {
+    fn get_type_op() {
         let space = Shared::new(metta_space("
             (: B Type)
             (: C Type)
@@ -674,19 +705,24 @@ mod tests {
             (: A C)
         "));
 
-        let get_type = GetTypeOp::new(space);
-        assert_eq!(get_type.execute(&mut vec![sym!("A")]),
+        let get_type_op = GetTypeOp::new(space);
+        assert_eq!(get_type_op.execute(&mut vec![sym!("A")]),
             Ok(vec![sym!("B"), sym!("C")]));
     }
 
     #[test]
-    fn println() {
-        assert_eq!(PrintlnOp{}.execute(&mut vec![sym!("A")]),
-            Ok(vec![]));
+    fn println_op() {
+        assert_eq!(PrintlnOp{}.execute(&mut vec![sym!("A")]), Ok(vec![]));
     }
 
     #[test]
-    fn nop() {
+    fn nop_op() {
         assert_eq!(NopOp{}.execute(&mut vec![]), Ok(vec![]));
+    }
+
+    #[test]
+    fn let_op() {
+        assert_eq!(LetOp{}.execute(&mut vec![expr!(a b), expr!("A" "B"), expr!(b a)]),
+            Ok(vec![expr!("B" "A")]));
     }
 }
