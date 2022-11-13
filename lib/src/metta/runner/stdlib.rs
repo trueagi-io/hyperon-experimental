@@ -502,6 +502,32 @@ impl Grounded for GetTypeOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct PrintlnOp {}
+
+impl Display for PrintlnOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "println!")
+    }
+}
+
+impl Grounded for PrintlnOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, sym!("IO")])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("println! expects single atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        println!("{}", atom);
+        Ok(vec![])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -623,5 +649,11 @@ mod tests {
         let get_type = GetTypeOp::new(space);
         assert_eq!(get_type.execute(&mut vec![sym!("A")]),
             Ok(vec![sym!("B"), sym!("C")]));
+    }
+
+    #[test]
+    fn println() {
+        assert_eq!(PrintlnOp{}.execute(&mut vec![sym!("A")]),
+            Ok(vec![]));
     }
 }

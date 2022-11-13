@@ -65,6 +65,8 @@ impl Metta {
             tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
             let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
             tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
+            let println_op = Atom::gnd(PrintlnOp{});
+            tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
         }
         Self{ space, tokenizer, settings }
     }
