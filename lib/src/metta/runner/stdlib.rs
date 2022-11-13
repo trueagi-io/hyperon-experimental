@@ -391,7 +391,7 @@ impl Grounded for CollapseOp {
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("collapse expects single atom as an argument");
+        let arg_error = || ExecError::from("collapse expects single executable atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
 
         let result = interpret_no_error(self.space.clone(), atom)?;
@@ -470,6 +470,104 @@ impl Grounded for PragmaOp {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_match() {
+        let space = Shared::new(metta_space("
+            (A B)
+            !(match &self (A B) (B A))
+        "));
+
+        let match_ = MatchOp{};
+
+        assert_eq!(match_.execute(&mut vec![expr!({space}), expr!("A" "B"), expr!("B" "A")]),
+            Ok(vec![expr!("B" "A")]));
+    }
+
+    #[test]
+    fn new_space() {
+        let res = NewSpaceOp{}.execute(&mut vec![]).expect("No result returned");
+        let space = res.get(0).expect("Result is empty");
+        let space = space.as_gnd::<Shared<GroundingSpace>>().expect("Result is not space");
+        assert_eq!(*space.borrow().content(), vec![]);
+    }
+
+    #[test]
+    fn bind_new_space() {
+        let tokenizer = Shared::new(Tokenizer::new());
+
+        let bind = BindOp::new(tokenizer.clone());
+
+        assert_eq!(bind.execute(&mut vec![sym!("&my"), sym!("definition")]), Ok(vec![]));
+        let borrowed = tokenizer.borrow();
+        let constr = borrowed.find_token("&my");
+        assert!(constr.is_some());
+        assert_eq!(constr.unwrap()("&my"), sym!("definition"));
+    }
+
+    #[test]
+    fn case() {
+        let space = Shared::new(metta_space("
+            (= (foo) (A B))
+        "));
+
+        let case = CaseOp::new(space.clone());
+
+        assert_eq!(case.execute(&mut vec![expr!(("foo")),
+                expr!(((n "B") n) ("%void%" "D"))]),
+            Ok(vec![Atom::sym("A")]));
+        assert_eq!(case.execute(&mut vec![expr!({MatchOp{}} {space} ("B" "C") ("C" "B")),
+                expr!(((n "C") n) ("%void%" "D"))]),
+            Ok(vec![Atom::sym("D")]));
+    }
+
+    fn assert_error(atom: Atom, message: &str) -> Atom {
+        Atom::expr([ERROR_SYMBOL, atom, Atom::sym(message)])
+    }
+
+    #[test]
+    fn assert_equal() {
+        let space = Shared::new(metta_space("
+            (= (foo) (A B))
+            (= (foo) (B C))
+            (= (bar) (B C))
+            (= (bar) (A B))
+            (= (err) (A B))
+        "));
+
+        let assert_equal = AssertEqualOp::new(space);
+
+        assert_eq!(assert_equal.execute(&mut vec![expr!(("foo")), expr!(("bar"))]), Ok(vec![]));
+        assert_eq!(assert_equal.execute(&mut vec![expr!(("foo")), expr!(("err"))]),
+            Ok(vec![assert_error(expr!(("foo")), "\nExpected: [(A B)]\nGot: [(A B), (B C)]\nExcessive result: (B C)")]));
+        assert_eq!(assert_equal.execute(&mut vec![expr!(("err")), expr!(("foo"))]),
+            Ok(vec![assert_error(expr!(("err")), "\nExpected: [(A B), (B C)]\nGot: [(A B)]\nMissed result: (B C)")]));
+    }
+
+    #[test]
+    fn assert_equal_to_result() {
+        let space = Shared::new(metta_space("
+            (= (foo) (A B))
+            (= (foo) (B C))
+        "));
+        let assert_equal_to_result = AssertEqualToResultOp::new(space);
+
+        assert_eq!(assert_equal_to_result.execute(&mut vec![
+                expr!(("foo")), expr!(("B" "C") ("A" "B"))]),
+                Ok(vec![]));
+    }
+
+    #[test]
+    fn collapse() {
+        let space = Shared::new(metta_space("
+            (= (foo) (A B))
+            (= (foo) (B C))
+        "));
+        let collapse = CollapseOp::new(space);
+
+        assert_eq!(collapse.execute(&mut vec![expr!(("foo"))]),
+            Ok(vec![expr!(("A" "B") ("B" "C"))]));
+    }
 
     #[test]
     fn test_superpose() {
