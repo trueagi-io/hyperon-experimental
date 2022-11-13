@@ -577,9 +577,56 @@ impl Grounded for LetOp {
         let atom = args.get(1).ok_or_else(arg_error)?;
         let template = args.get(2).ok_or_else(arg_error)?;
 
+        log::trace!("LetOp::execute: pattern: {}, atom: {}, template: {}", pattern, atom, template);
+
         let mut space = GroundingSpace::new();
         space.add(atom.clone());
         Ok(space.subst(pattern, template))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct LetVarOp { }
+
+impl Display for LetVarOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "let*")
+    }
+}
+
+impl Grounded for LetVarOp {
+    fn type_(&self) -> Atom {
+        // The first argument is an Atom, because it has to be evaluated iteratively
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("let* list of couples and template as arguments");
+        let expr = atom_as_expr(args.get(0).ok_or_else(arg_error)?).ok_or(arg_error())?;
+        let template = args.get(1).ok_or_else(arg_error)?.clone();
+        log::trace!("LetVarOp::execute: expr: {}, template: {}", expr, template);
+
+        let children = expr.children().as_slice();
+        match children {
+            [] => Ok(vec![template]),
+            [couple] => {
+                let couple = atom_as_expr(couple).ok_or_else(arg_error)?.children();
+                let pattern = couple.get(0).ok_or_else(arg_error)?.clone();
+                let atom = couple.get(1).ok_or_else(arg_error)?.clone();
+                Ok(vec![Atom::expr([Atom::gnd(LetOp{}), pattern, atom, template])])
+            },
+            [couple, tail @ ..] => {
+                let couple = atom_as_expr(couple).ok_or_else(arg_error)?.children();
+                let pattern = couple.get(0).ok_or_else(arg_error)?.clone();
+                let atom = couple.get(1).ok_or_else(arg_error)?.clone();
+                Ok(vec![Atom::expr([Atom::gnd(LetOp{}), pattern, atom,
+                    Atom::expr([Atom::gnd(LetVarOp{}), Atom::expr(tail), template])])])
+            },
+        }
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -724,5 +771,15 @@ mod tests {
     fn let_op() {
         assert_eq!(LetOp{}.execute(&mut vec![expr!(a b), expr!("A" "B"), expr!(b a)]),
             Ok(vec![expr!("B" "A")]));
+    }
+
+    #[test]
+    fn let_var_op() {
+        assert_eq!(LetVarOp{}.execute(&mut vec![expr!(), sym!("B")]),
+            Ok(vec![sym!("B")]));
+        assert_eq!(LetVarOp{}.execute(&mut vec![expr!(((a "A"))), expr!(a)]),
+            Ok(vec![expr!({LetOp{}} a "A" a)]));
+        assert_eq!(LetVarOp{}.execute(&mut vec![expr!((a "A") (b "B")), expr!(b a)]),
+            Ok(vec![expr!({LetOp{}} a "A" ({LetVarOp{}} ((b "B")) (b a)))]));
     }
 }
