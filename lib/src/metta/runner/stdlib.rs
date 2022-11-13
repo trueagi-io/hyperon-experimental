@@ -528,6 +528,29 @@ impl Grounded for PrintlnOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct NopOp {}
+
+impl Display for NopOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "nop")
+    }
+}
+
+impl Grounded for NopOp {
+    fn type_(&self) -> Atom {
+        ATOM_TYPE_UNDEFINED
+    }
+
+    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        Ok(vec![])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -655,5 +678,10 @@ mod tests {
     fn println() {
         assert_eq!(PrintlnOp{}.execute(&mut vec![sym!("A")]),
             Ok(vec![]));
+    }
+
+    #[test]
+    fn nop() {
+        assert_eq!(NopOp{}.execute(&mut vec![]), Ok(vec![]));
     }
 }
