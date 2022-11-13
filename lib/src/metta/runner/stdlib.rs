@@ -395,6 +395,8 @@ impl Grounded for CollapseOp {
         let arg_error = || ExecError::from("collapse expects single executable atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
 
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
         let result = interpret_no_error(self.space.clone(), atom)?;
 
         Ok(vec![Atom::expr(result)])
@@ -421,6 +423,8 @@ impl Grounded for SuperposeOp {
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("superpose expects single expression as an argument");
+        // `superpose` receives one atom (expression) in order to make composition
+        // `(superpose (collapse ...))` possible
         let expr = atom_as_expr(args.get(0).ok_or_else(arg_error)?).ok_or(arg_error())?;
 
         Ok(expr.children().clone())
@@ -458,6 +462,7 @@ impl Grounded for PragmaOp {
         let key = atom_as_sym(args.get(0).ok_or_else(arg_error)?).ok_or("pragma! expects symbol atom as a key")?.name();
         let value = atom_as_sym(args.get(1).ok_or_else(arg_error)?).ok_or("pragma! expects symbol atom as a value")?.name();
 
+        // TODO: add support for Grounded values when needed
         self.settings.borrow_mut().insert(key.into(), value.into());
 
         Ok(vec![])
