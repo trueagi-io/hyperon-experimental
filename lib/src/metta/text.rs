@@ -33,11 +33,11 @@ impl Tokenizer {
     }
 
     pub fn register_token<C: 'static + Fn(&str) -> Atom>(&mut self, regex: Regex, constr: C) {
-        self.tokens.push(TokenDescr{ regex, constr: Rc::new(constr) });
+        self.tokens.push(TokenDescr{ regex, constr: Rc::new(constr) })
     }
 
     pub fn find_token(&self, token: &str) -> Option<&AtomConstr> {
-        self.tokens.iter().find(|descr| {
+        self.tokens.iter().rfind(|descr| {
             match descr.regex.find_at(token, 0) {
                 Some(m) => m.start() == 0 && m.end() == token.len(),
                 None => false,
@@ -292,5 +292,14 @@ mod tests {
     fn test_panic_on_lattice_in_var_name() {
         let mut parser = SExprParser::new("$a#");
         while let Some(_) = parser.parse(&Tokenizer::new()) {}
+    }
+
+    #[test]
+    fn override_token_definition() {
+        let mut tokenizer = Tokenizer::new();
+        tokenizer.register_token(Regex::new(r"A").unwrap(), |_| Atom::sym("A"));
+        assert_eq!(tokenizer.find_token("A").unwrap()("A"), Atom::sym("A"));
+        tokenizer.register_token(Regex::new(r"A").unwrap(), |_| Atom::sym("B"));
+        assert_eq!(tokenizer.find_token("A").unwrap()("A"), Atom::sym("B"));
     }
 }

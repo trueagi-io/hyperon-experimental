@@ -15,12 +15,9 @@ class MettaTest(unittest.TestCase):
         atom = metta.parse_single('(A B)')
         self.assertEqual(atom, E(S('C'), S('B')))
 
-        # NOTE: currently, adding another atom for the same token
-        #       doesn't change the previous binding
-        # This can be changed later
         metta.add_atom('A', S('F'))
         atom = metta.parse_single('(A B)')
-        self.assertEqual(atom, E(S('C'), S('B')))
+        self.assertEqual(atom, E(S('F'), S('B')))
 
     def test_metta_runner(self):
         program = '''
