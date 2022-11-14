@@ -1,7 +1,7 @@
 import unittest
 
 from hyperon import *
-from common import MeTTa, MeTTaPy, SpaceAtom
+from common import MeTTa
 from test_common import *
 
 class ExamplesTest(unittest.TestCase):
