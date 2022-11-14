@@ -1,6 +1,7 @@
 ; Spaces are also represented as grounded symbols in the program.
 ; Importing another script into a separate space
-!(import! &kb "c2_spaces_kb.metta")
+; TODO: replace symbol by string
+!(import! &kb c2_spaces_kb.metta)
 
 ; We can `match` over `&self` or another space
 !(assertEqualToResult
@@ -27,7 +28,8 @@
   (Ball))
 
 ; We can import into `&self`
-!(import! &self "c2_spaces_kb.metta")
+; TODO: replace symbol by string
+!(import! &self c2_spaces_kb.metta)
 !(assertEqualToResult
   (match &self
     (, ($obj is $prop)

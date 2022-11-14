@@ -1,7 +1,7 @@
 import unittest
 
 from hyperon import *
-from common import MeTTa
+from common import MeTTa, MeTTaPy
 
 class GroundedTypeTest(unittest.TestCase):
 
@@ -48,7 +48,7 @@ class GroundedTypeTest(unittest.TestCase):
                          metta.run("! 3"))
 
     def test_meta_types(self):
-        metta = MeTTa()
+        metta = MeTTaPy()
         ### Basic functional types
         metta.add_atom(r"id_num", OperationAtom("id_num", lambda x: x, ['Number', 'Number']))
         metta.add_atom(r"as_int", OperationAtom("as_int", lambda x: x, ['Number', 'Int']))
