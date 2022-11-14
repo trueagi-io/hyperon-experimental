@@ -27,7 +27,6 @@ pub const SUB_TYPE_SYMBOL : Atom = sym!(":<");
 pub const EQUAL_SYMBOL : Atom = sym!("=");
 pub const ARROW_SYMBOL : Atom = sym!("->");
 pub const ERROR_SYMBOL : Atom = sym!("Error");
-pub const VOID_SYMBOL : Atom = sym!("%void%");
 pub const BAD_TYPE_SYMBOL : Atom = sym!("BadType");
 pub const INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL : Atom = sym!("IncorrectNumberOfArguments");
 pub const NOT_REDUCIBLE_SYMBOL : Atom = sym!("NotReducible");

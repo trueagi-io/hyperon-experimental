@@ -13,6 +13,8 @@ use std::path::PathBuf;
 use std::collections::HashMap;
 use regex::Regex;
 
+pub const VOID_SYMBOL : Atom = sym!("%void%");
+
 // TODO: remove hiding errors completely after making it possible passing
 // them to the user
 fn interpret_no_error(space: Shared<GroundingSpace>, expr: &Atom) -> Result<Vec<Atom>, String> {
