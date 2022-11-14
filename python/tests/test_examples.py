@@ -1,7 +1,7 @@
 import unittest
 
 from hyperon import *
-from common import MeTTa, MeTTaPy, SpaceAtom
+from common import MeTTa
 from test_common import *
 
 class ExamplesTest(unittest.TestCase):
@@ -159,15 +159,15 @@ class ExamplesTest(unittest.TestCase):
         # explicitly from another space should be safe, though)
         # NOTE: these tests are not indended to remain valid, but are needed to
         # detect, if something is changes in the interpreter
-        metta1 = MeTTaPy()
+        metta1 = MeTTa()
         metta1.run('''
             (= A B)
             (= (f-in-s2) failure)
             (= (how-it-works?) (f-in-s2))
             (= (inverse $x) (match &self (= $y $x) $y))
         ''')
-        metta2 = MeTTaPy()
-        metta2.add_atom("&space1", SpaceAtom(metta1.space, "&space1"))
+        metta2 = MeTTa()
+        metta2.add_atom("&space1", metta1.run("! &self")[0][0])
         metta2.run('''
             (= C B)
             (= (f-in-s2) success)

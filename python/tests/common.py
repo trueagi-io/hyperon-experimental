@@ -70,4 +70,5 @@ class MeTTa:
         return result
 
     def run(self, program, flat=False):
-        return self.runner.run(program)
+        results = self.runner.run(program)
+        return [r for result in results for r in result] if flat else results
