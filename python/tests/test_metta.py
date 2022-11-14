@@ -33,8 +33,17 @@ class MettaTest(unittest.TestCase):
             (= (green $x) (frog $x))
             !(green Fritz)
         '''
-        space = GroundingSpace()
-        repl = Metta(space)
-        result = repl.run(program)
+        runner = Metta()
+        result = runner.run(program)
 
         self.assertEqual([[S('T')]], result)
+
+    @unittest.skip("TODO: panics because error cannot be returned from interpreter")
+    def test_no_successful_alternatives(self):
+        program = '''
+          !(+ 2 "String")
+        '''
+        runner = MeTTa()
+        result = runner.run(program)
+
+        self.assertEqual([[]], result)

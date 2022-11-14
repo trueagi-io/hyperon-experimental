@@ -1,7 +1,7 @@
 import unittest
 
 from hyperon import *
-from common import MeTTa, SpaceAtom
+from common import MeTTa, MeTTaPy, SpaceAtom
 from test_common import *
 
 class ExamplesTest(unittest.TestCase):
@@ -16,7 +16,7 @@ class ExamplesTest(unittest.TestCase):
         # interpreting this target in another space still works,
         # because substitution '&obj' -> obj is done by metta
         metta2 = MeTTa()
-        result = interpret(metta2.space, target)
+        result = interpret(metta2.space(), target)
         self.assertTrue(obj.called)
         self.assertEqual(result, [])
         # But it will not work if &obj is parsed in another space
@@ -75,7 +75,7 @@ class ExamplesTest(unittest.TestCase):
         # Now we try to change the grounded atom value directly
         # (equivalent to metta.run but keeping target)
         target = metta.parse_single('(call:latom (SetAtom ploc 5))')
-        interpret(metta.space, target)
+        interpret(metta.space(), target)
         # "ploc" value in the "target" is changed
         self.assertEqual(target.get_children()[1].get_children()[1].get_object().value, 5)
         # But it is still not changed in another target, because
@@ -110,7 +110,7 @@ class ExamplesTest(unittest.TestCase):
 
         fritz_frog = metta.run('!(if (and ($x croaks) ($x eats_flies)) (= ($x frog) True) nop)')[0]
         self.assertEqual(metta.parse_all('(= (Fritz frog) True)'), fritz_frog)
-        metta.space.add_atom(fritz_frog[0])
+        metta.space().add_atom(fritz_frog[0])
 
         self.assertEqual([metta.parse_all('(= (Fritz green) True)')],
                 metta.run('!(if ($x frog) (= ($x green) True) nop)'))
@@ -159,14 +159,14 @@ class ExamplesTest(unittest.TestCase):
         # explicitly from another space should be safe, though)
         # NOTE: these tests are not indended to remain valid, but are needed to
         # detect, if something is changes in the interpreter
-        metta1 = MeTTa()
+        metta1 = MeTTaPy()
         metta1.run('''
             (= A B)
             (= (f-in-s2) failure)
             (= (how-it-works?) (f-in-s2))
             (= (inverse $x) (match &self (= $y $x) $y))
         ''')
-        metta2 = MeTTa()
+        metta2 = MeTTaPy()
         metta2.add_atom("&space1", SpaceAtom(metta1.space, "&space1"))
         metta2.run('''
             (= C B)
