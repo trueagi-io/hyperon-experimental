@@ -1,9 +1,8 @@
 import unittest
-import re
 
 from test_common import assert_atoms_are_equivalent
 from hyperon import *
-from common import MeTTaPy, SpaceAtom
+from common import MeTTa
 
 
 class MinelogyTest(unittest.TestCase):
@@ -12,7 +11,7 @@ class MinelogyTest(unittest.TestCase):
         # A nearly direct reimplementation of minelogy as it
         # was in the minecraft demo. Not optimal representation -
         # just testing.
-        mines = MeTTaPy()
+        mines = MeTTa()
         mines.run('''
             (((: log type) (: $x variant))
              (: (stone_axe wooden_axe None) tools)
@@ -35,7 +34,7 @@ class MinelogyTest(unittest.TestCase):
              ((: stone type) (: $x variant))
             )
             ''')
-        crafts = MeTTaPy()
+        crafts = MeTTa()
         crafts.run('''
             (((: log type) (: $x variant) (: 1 quantity))
              ((: planks type) (: $x variant) (: 4 quantity)))
@@ -45,9 +44,9 @@ class MinelogyTest(unittest.TestCase):
                   ((: planks type) (: $y variant) (: 3 quantity))))
              ((: wooden_pickaxe type) (: $_ variant) (: 1 quantity)))
             ''')
-        utils = MeTTaPy()
-        utils.add_atom("&mines", SpaceAtom(mines.space, "&mines"))
-        utils.add_atom("&crafts", SpaceAtom(crafts.space, "&crafts"))
+        utils = MeTTa()
+        utils.add_atom("&mines", mines.run("! &self")[0][0])
+        utils.add_atom("&crafts", crafts.run("! &self")[0][0])
         utils.run('''
             (= (get-mine-block $ent-type $ent-var)
                (match &mines
@@ -116,11 +115,11 @@ class MinelogyTest(unittest.TestCase):
             '[(do-mine ((: stone type) (: stone variant)))]')
         output = utils.run('!(how-get stick)')[0]
         assert_atoms_are_equivalent(self, output,
-                MeTTaPy().parse_all('(do-craft ((: planks type) (: $x variant) (: 2 quantity)))'))
+                MeTTa().parse_all('(do-craft ((: planks type) (: $x variant) (: 2 quantity)))'))
 
     def test_minelogy_wtypes(self):
         # TODO: revisit this example, when types are automatically checked
-        kb = MeTTaPy()
+        kb = MeTTa()
         kb.run('''
             (: BlockT Type)
             (: log BlockT)
@@ -171,8 +170,8 @@ class MinelogyTest(unittest.TestCase):
                             ((CEntityV planks $_) 3)))
                ((CEntityT wooden_pickaxe) 1))
             ''')
-        utils = MeTTaPy()
-        utils.add_atom("&kb", SpaceAtom(kb.space, "&kb"))
+        utils = MeTTa()
+        utils.add_atom("&kb", kb.run("! &self")[0][0])
         utils.run('''
             (= (get-mine-block $t)
                (match &kb
@@ -218,7 +217,7 @@ class MinelogyTest(unittest.TestCase):
         )
         output = utils.run('!(get-ingredients wooden_pickaxe)')[0]
         assert_atoms_are_equivalent(self, output,
-                MeTTaPy().parse_all('(list ((CEntityT stick) 2) ((CEntityV planks $_) 3))'))
+                MeTTa().parse_all('(list ((CEntityT stick) 2) ((CEntityV planks $_) 3))'))
 
 
 if __name__ == "__main__":
