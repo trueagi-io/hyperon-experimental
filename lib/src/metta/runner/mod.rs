@@ -14,6 +14,9 @@ use std::collections::HashMap;
 mod stdlib;
 use stdlib::*;
 
+mod arithmetics;
+use arithmetics::*;
+
 const EXEC_SYMBOL : Atom = sym!("!");
 
 pub struct Metta {
@@ -41,6 +44,7 @@ impl Metta {
             }
 
             let mut tref = tokenizer.borrow_mut();
+
             let match_op = Atom::gnd(MatchOp{});
             tref.register_token(regex(r"match"), move |_| { match_op.clone() });
             let space_val = Atom::value(space.clone());
@@ -73,6 +77,13 @@ impl Metta {
             tref.register_token(regex(r"let"), move |_| { let_op.clone() });
             let let_var_op = Atom::gnd(LetVarOp{});
             tref.register_token(regex(r"let\*"), move |_| { let_var_op.clone() });
+
+            tref.register_token(regex(r"\d+"),
+                |token| { Atom::gnd(Number::from_int_str(token)) });
+            tref.register_token(regex(r"\d+(.\d+)([eE][\-\+]?\d+)?"),
+                |token| { Atom::gnd(Number::from_float_str(token)) });
+            tref.register_token(regex(r"True|False"),
+                |token| { Atom::gnd(Bool::from_str(token)) });
         }
         Self{ space, tokenizer, settings }
     }
