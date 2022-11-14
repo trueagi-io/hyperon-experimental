@@ -36,7 +36,7 @@ impl Tokenizer {
         self.tokens.push(TokenDescr{ regex, constr: Rc::new(constr) });
     }
 
-    fn find_token(&self, token: &str) -> Option<&AtomConstr> {
+    pub fn find_token(&self, token: &str) -> Option<&AtomConstr> {
         self.tokens.iter().find(|descr| {
             match descr.regex.find_at(token, 0) {
                 Some(m) => m.start() == 0 && m.end() == token.len(),

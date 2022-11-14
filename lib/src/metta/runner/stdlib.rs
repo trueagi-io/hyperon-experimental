@@ -1,143 +1,38 @@
 use crate::*;
+use crate::matcher::MatchResultIter;
+use crate::metta::*;
+use crate::metta::space::grounding::GroundingSpace;
+use crate::metta::text::{Tokenizer, SExprParser};
+use crate::metta::interpreter::interpret;
+use crate::metta::runner::Metta;
+use crate::metta::types::get_atom_types;
 use crate::common::shared::Shared;
 
-use super::*;
-use super::space::grounding::GroundingSpace;
-use super::text::{Tokenizer, SExprParser};
-use super::interpreter::interpret;
-use super::types::validate_atom;
-
-use regex::Regex;
+use std::fmt::Display;
 use std::path::PathBuf;
 use std::collections::HashMap;
+use regex::Regex;
 
-const EXEC_SYMBOL : Atom = sym!("!");
-
-pub struct Metta {
-    space: Shared<GroundingSpace>,
-    tokenizer: Shared<Tokenizer>,
-    settings: Shared<HashMap<String, String>>,
+// TODO: remove hiding errors completely after making it possible passing
+// them to the user
+fn interpret_no_error(space: Shared<GroundingSpace>, expr: &Atom) -> Result<Vec<Atom>, String> {
+    let result = interpret(space, expr);
+    log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
+    match result {
+        Ok(result) => Ok(result),
+        Err(_) => Ok(vec![]),
+    }
 }
-
-enum Mode {
-    ADD,
-    INTERPRET,
-}
-
-impl Metta {
-    pub fn new(space: Shared<GroundingSpace>) -> Self {
-        Metta::from_space_cwd(space, PathBuf::from("."))
-    }
-
-    pub fn from_space_cwd(space: Shared<GroundingSpace>, cwd: PathBuf) -> Self {
-        let settings = Shared::new(HashMap::new());
-        let tokenizer = Shared::new(Tokenizer::new());
-        {
-            fn regex(regex: &str) -> Regex {
-                Regex::new(regex).unwrap()
-            }
-
-            let mut tref = tokenizer.borrow_mut();
-            let match_op = Atom::gnd(MatchOp{});
-            tref.register_token(regex(r"match"), move |_| { match_op.clone() });
-            let space_val = Atom::value(space.clone());
-            tref.register_token(regex(r"&self"), move |_| { space_val.clone() });
-            let import_op = Atom::gnd(ImportOp::new(cwd.clone(), space.clone(), tokenizer.clone()));
-            tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
-            let bind_op = Atom::gnd(BindOp::new(tokenizer.clone()));
-            tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
-            let new_space_op = Atom::gnd(NewSpaceOp{});
-            tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
-            let case_op = Atom::gnd(CaseOp::new(space.clone()));
-            tref.register_token(regex(r"case"), move |_| { case_op.clone() });
-            let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
-            tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
-            let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
-            tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
-            let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
-            tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
-            let pragma_op = Atom::gnd(PragmaOp::new(settings.clone()));
-            tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
-        }
-        Self{ space, tokenizer, settings }
-    }
-
-    pub fn space(&self) -> Shared<GroundingSpace> {
-        self.space.clone()
-    }
-
-    pub fn tokenizer(&self) -> Shared<Tokenizer> {
-        self.tokenizer.clone()
-    }
-
-    fn get_setting(&self, key: &str) -> Option<String> {
-        self.settings.borrow().get(key.into()).cloned()
-    }
-
-    pub fn run(&self, parser: &mut SExprParser) -> Result<Vec<Vec<Atom>>, String> {
-        let mut mode = Mode::ADD;
-        let mut results: Vec<Vec<Atom>> = Vec::new();
-
-        loop {
-            let atom = parser.parse(&self.tokenizer.borrow());
-            match atom {
-                Some(atom) => {
-                    if atom == EXEC_SYMBOL {
-                        mode = Mode::INTERPRET;
-                        continue;
-                    }
-                    match self.interp_atom(mode, atom) {
-                        Err(msg) => return Err(msg),
-                        Ok(Some(result)) => results.push(result),
-                        _ => {},
-                    }
-                    mode = Mode::ADD;
-                },
-                None => break,
-            }
-        }
-        Ok(results)
-    }
-
-    fn interp_atom(&self, mode: Mode, atom: Atom) -> Result<Option<Vec<Atom>>, String> {
-        // FIXME: how to make it look better?
-        if self.get_setting("type-check").as_ref().map(String::as_str) == Some("auto") {
-            if !validate_atom(&self.space.borrow(), &atom) {
-                return Ok(Some(vec![Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL])]))
-            }
-        }
-        match mode {
-            Mode::ADD => {
-                log::trace!("Metta::run: adding atom: {} into space: {:?}", atom, self.space);
-                self.space.borrow_mut().add(atom);
-                Ok(None) 
-            },
-            Mode::INTERPRET => {
-                log::trace!("Metta::run: interpreting atom: {}", atom);
-                let result = interpret(self.space.clone(), &atom);
-                log::trace!("Metta::run: interpretation result {:?}", result);
-                match result {
-                    Ok(result) => Ok(Some(result)),
-                    Err(message) => Err(format!("Error: {}", message)),
-                }
-            },
-        }
-    }
-
-}
-
-use crate::matcher::MatchResultIter;
-use std::fmt::Display;
 
 #[derive(Clone, PartialEq, Debug)]
-struct ImportOp {
+pub struct ImportOp {
     cwd: PathBuf,
     space: Shared<GroundingSpace>,
     tokenizer: Shared<Tokenizer>,
 }
 
 impl ImportOp {
-    fn new(cwd: PathBuf, space: Shared<GroundingSpace>, tokenizer: Shared<Tokenizer>) -> Self {
+    pub fn new(cwd: PathBuf, space: Shared<GroundingSpace>, tokenizer: Shared<Tokenizer>) -> Self {
         Self{ cwd, space, tokenizer }
     }
 }
@@ -200,7 +95,7 @@ impl Grounded for ImportOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-struct MatchOp {}
+pub struct MatchOp {}
 
 impl Display for MatchOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -229,12 +124,12 @@ impl Grounded for MatchOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-struct BindOp {
+pub struct BindOp {
     tokenizer: Shared<Tokenizer>,
 }
 
 impl BindOp {
-    fn new(tokenizer: Shared<Tokenizer>) -> Self {
+    pub fn new(tokenizer: Shared<Tokenizer>) -> Self {
         Self{ tokenizer }
     }
 }
@@ -273,7 +168,7 @@ impl Grounded for BindOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-struct NewSpaceOp {}
+pub struct NewSpaceOp {}
 
 impl Display for NewSpaceOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -301,12 +196,12 @@ impl Grounded for NewSpaceOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-struct CaseOp {
+pub struct CaseOp {
     space: Shared<GroundingSpace>,
 }
 
 impl CaseOp {
-    fn new(space: Shared<GroundingSpace>) -> Self {
+    pub fn new(space: Shared<GroundingSpace>) -> Self {
         Self{ space }
     }
 
@@ -350,7 +245,7 @@ impl Grounded for CaseOp {
         let cases = atom_as_expr(args.get(1).ok_or_else(arg_error)?).ok_or("case expects expression of cases as a second argument")?;
         log::trace!("CaseOp::execute: atom: {}, cases: {}", atom, cases);
 
-        let result = interpret(self.space.clone(), atom);
+        let result = interpret_no_error(self.space.clone(), atom);
         log::trace!("case: interpretation result {:?}", result);
         match result {
             Ok(result) if result.is_empty() => {
@@ -398,12 +293,12 @@ fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -
 }
 
 #[derive(Clone, PartialEq, Debug)]
-struct AssertEqualOp {
+pub struct AssertEqualOp {
     space: Shared<GroundingSpace>,
 }
 
 impl AssertEqualOp {
-    fn new(space: Shared<GroundingSpace>) -> Self {
+    pub fn new(space: Shared<GroundingSpace>) -> Self {
         Self{ space }
     }
 }
@@ -424,8 +319,8 @@ impl Grounded for AssertEqualOp {
         let actual_atom = args.get(0).ok_or_else(arg_error)?;
         let expected_atom = args.get(1).ok_or_else(arg_error)?;
 
-        let actual = interpret(self.space.clone(), actual_atom)?;
-        let expected = interpret(self.space.clone(), expected_atom)?;
+        let actual = interpret_no_error(self.space.clone(), actual_atom)?;
+        let expected = interpret_no_error(self.space.clone(), expected_atom)?;
 
         Ok(assert_results_equal(&actual, &expected, actual_atom))
     }
@@ -436,12 +331,12 @@ impl Grounded for AssertEqualOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-struct AssertEqualToResultOp {
+pub struct AssertEqualToResultOp {
     space: Shared<GroundingSpace>,
 }
 
 impl AssertEqualToResultOp {
-    fn new(space: Shared<GroundingSpace>) -> Self {
+    pub fn new(space: Shared<GroundingSpace>) -> Self {
         Self{ space }
     }
 }
@@ -464,7 +359,7 @@ impl Grounded for AssertEqualToResultOp {
             .ok_or("assertEqualToResult expects expression of results as a second argument")?
             .children();
 
-        let actual = interpret(self.space.clone(), actual_atom)?;
+        let actual = interpret_no_error(self.space.clone(), actual_atom)?;
 
         Ok(assert_results_equal(&actual, expected, actual_atom))
     }
@@ -475,12 +370,12 @@ impl Grounded for AssertEqualToResultOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-struct CollapseOp {
+pub struct CollapseOp {
     space: Shared<GroundingSpace>,
 }
 
 impl CollapseOp {
-    fn new(space: Shared<GroundingSpace>) -> Self {
+    pub fn new(space: Shared<GroundingSpace>) -> Self {
         Self{ space }
     }
 }
@@ -497,10 +392,12 @@ impl Grounded for CollapseOp {
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("collapse expects single atom as an argument");
+        let arg_error = || ExecError::from("collapse expects single executable atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
 
-        let result = interpret(self.space.clone(), atom)?;
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let result = interpret_no_error(self.space.clone(), atom)?;
 
         Ok(vec![Atom::expr(result)])
     }
@@ -511,12 +408,40 @@ impl Grounded for CollapseOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-struct PragmaOp {
+pub struct SuperposeOp { }
+
+impl Display for SuperposeOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "collapse")
+    }
+}
+
+impl Grounded for SuperposeOp {
+    fn type_(&self) -> Atom {
+        ATOM_TYPE_UNDEFINED
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("superpose expects single expression as an argument");
+        // `superpose` receives one atom (expression) in order to make composition
+        // `(superpose (collapse ...))` possible
+        let expr = atom_as_expr(args.get(0).ok_or_else(arg_error)?).ok_or(arg_error())?;
+
+        Ok(expr.children().clone())
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct PragmaOp {
     settings: Shared<HashMap<String, String>>,
 }
 
 impl PragmaOp {
-    fn new(settings: Shared<HashMap<String, String>>) -> Self {
+    pub fn new(settings: Shared<HashMap<String, String>>) -> Self {
         Self{ settings }
     }
 }
@@ -537,9 +462,171 @@ impl Grounded for PragmaOp {
         let key = atom_as_sym(args.get(0).ok_or_else(arg_error)?).ok_or("pragma! expects symbol atom as a key")?.name();
         let value = atom_as_sym(args.get(1).ok_or_else(arg_error)?).ok_or("pragma! expects symbol atom as a value")?.name();
 
+        // TODO: add support for Grounded values when needed
         self.settings.borrow_mut().insert(key.into(), value.into());
 
         Ok(vec![])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct GetTypeOp {
+    space: Shared<GroundingSpace>,
+}
+
+impl GetTypeOp {
+    pub fn new(space: Shared<GroundingSpace>) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for GetTypeOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "get-type")
+    }
+}
+
+impl Grounded for GetTypeOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("get-type expects single atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+
+        Ok(get_atom_types(&self.space.borrow(), atom))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct PrintlnOp {}
+
+impl Display for PrintlnOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "println!")
+    }
+}
+
+impl Grounded for PrintlnOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, sym!("IO")])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("println! expects single atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        println!("{}", atom);
+        Ok(vec![])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct NopOp {}
+
+impl Display for NopOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "nop")
+    }
+}
+
+impl Grounded for NopOp {
+    fn type_(&self) -> Atom {
+        ATOM_TYPE_UNDEFINED
+    }
+
+    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        Ok(vec![])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct LetOp {}
+
+impl Display for LetOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "let")
+    }
+}
+
+impl Grounded for LetOp {
+    fn type_(&self) -> Atom {
+        // TODO: Undefined for the argument is necessary to make argument reductable.
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("let expects three arguments: pattern, atom and template");
+        let pattern = args.get(0).ok_or_else(arg_error)?;
+        let atom = args.get(1).ok_or_else(arg_error)?;
+        let template = args.get(2).ok_or_else(arg_error)?;
+
+        log::trace!("LetOp::execute: pattern: {}, atom: {}, template: {}", pattern, atom, template);
+
+        let mut space = GroundingSpace::new();
+        space.add(atom.clone());
+        Ok(space.subst(pattern, template))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct LetVarOp { }
+
+impl Display for LetVarOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "let*")
+    }
+}
+
+impl Grounded for LetVarOp {
+    fn type_(&self) -> Atom {
+        // The first argument is an Atom, because it has to be evaluated iteratively
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("let* list of couples and template as arguments");
+        let expr = atom_as_expr(args.get(0).ok_or_else(arg_error)?).ok_or(arg_error())?;
+        let template = args.get(1).ok_or_else(arg_error)?.clone();
+        log::trace!("LetVarOp::execute: expr: {}, template: {}", expr, template);
+
+        let children = expr.children().as_slice();
+        match children {
+            [] => Ok(vec![template]),
+            [couple] => {
+                let couple = atom_as_expr(couple).ok_or_else(arg_error)?.children();
+                let pattern = couple.get(0).ok_or_else(arg_error)?.clone();
+                let atom = couple.get(1).ok_or_else(arg_error)?.clone();
+                Ok(vec![Atom::expr([Atom::gnd(LetOp{}), pattern, atom, template])])
+            },
+            [couple, tail @ ..] => {
+                let couple = atom_as_expr(couple).ok_or_else(arg_error)?.children();
+                let pattern = couple.get(0).ok_or_else(arg_error)?.clone();
+                let atom = couple.get(1).ok_or_else(arg_error)?.clone();
+                Ok(vec![Atom::expr([Atom::gnd(LetOp{}), pattern, atom,
+                    Atom::expr([Atom::gnd(LetVarOp{}), Atom::expr(tail), template])])])
+            },
+        }
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -552,77 +639,53 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_space() {
-        let program = "
-            (= (And T T) T)
-            (= (frog $x)
-                (And (croaks $x)
-                     (eat_flies $x)))
-            (= (croaks Fritz) T)
-            (= (eat_flies Fritz) T)
-            (= (green $x) (frog $x))
-            !(green Fritz)
-        ";
-
-        let metta = Metta::new(Shared::new(GroundingSpace::new()));
-        let result = metta.run(&mut SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![Atom::sym("T")]]));
-    }
-
-    #[test]
-    fn test_match() {
-        let program = "
+    fn match_op() {
+        let space = Shared::new(metta_space("
             (A B)
             !(match &self (A B) (B A))
-        ";
+        "));
 
-        let metta = Metta::new(Shared::new(GroundingSpace::new()));
-        let result = metta.run(&mut SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!("B" "A")]]));
+        let match_op = MatchOp{};
+
+        assert_eq!(match_op.execute(&mut vec![expr!({space}), expr!("A" "B"), expr!("B" "A")]),
+            Ok(vec![expr!("B" "A")]));
     }
 
     #[test]
-    fn new_space() {
-        let program = "
-            (A B)
-            !(match (new-space) (A B) (B A))
-        ";
-
-        let metta = Metta::new(Shared::new(GroundingSpace::new()));
-        let result = metta.run(&mut SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![]]));
+    fn new_space_op() {
+        let res = NewSpaceOp{}.execute(&mut vec![]).expect("No result returned");
+        let space = res.get(0).expect("Result is empty");
+        let space = space.as_gnd::<Shared<GroundingSpace>>().expect("Result is not space");
+        assert_eq!(*space.borrow().content(), vec![]);
     }
 
     #[test]
-    fn bind_new_space() {
-        let program = "
-            (A B)
-            !(bind! &my (new-space))
-            !(match &my (A B) (B A))
-        ";
+    fn bind_new_space_op() {
+        let tokenizer = Shared::new(Tokenizer::new());
 
-        let metta = Metta::new(Shared::new(GroundingSpace::new()));
-        let result = metta.run(&mut SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![], vec![]]));
+        let bind_op = BindOp::new(tokenizer.clone());
+
+        assert_eq!(bind_op.execute(&mut vec![sym!("&my"), sym!("definition")]), Ok(vec![]));
+        let borrowed = tokenizer.borrow();
+        let constr = borrowed.find_token("&my");
+        assert!(constr.is_some());
+        assert_eq!(constr.unwrap()("&my"), sym!("definition"));
     }
 
     #[test]
-    fn case() {
-        let program = "
+    fn case_op() {
+        let space = Shared::new(metta_space("
             (= (foo) (A B))
-            !(case (foo) (
-                (($n B) $n)
-                (%void% D)
-            ))
-            !(case (match &self (B C) (B C)) (
-                (($n C) $n)
-                (%void% D)
-            ))
-        ";
+        "));
 
-        let metta = Metta::new(Shared::new(GroundingSpace::new()));
-        let result = metta.run(&mut SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![Atom::sym("A")], vec![Atom::sym("D")]]));
+        let case_op = CaseOp::new(space.clone());
+
+        assert_eq!(case_op.execute(&mut vec![expr!(("foo")),
+                expr!(((n "B") n) ("%void%" "D"))]),
+            Ok(vec![Atom::sym("A")]));
+        assert_eq!(case_op.execute(&mut vec![expr!({MatchOp{}} {space} ("B" "C") ("C" "B")),
+                expr!(((n "C") n) ("%void%" "D"))]),
+            Ok(vec![Atom::sym("D")]));
     }
 
     fn assert_error(atom: Atom, message: &str) -> Atom {
@@ -630,51 +693,93 @@ mod tests {
     }
 
     #[test]
-    fn assert_equal() {
-        let program = "
+    fn assert_equal_op() {
+        let space = Shared::new(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
             (= (bar) (B C))
             (= (bar) (A B))
             (= (err) (A B))
-            !(assertEqual (foo) (bar))
-            !(assertEqual (foo) (err))
-            !(assertEqual (err) (foo))
-        ";
+        "));
 
-        let metta = Metta::new(Shared::new(GroundingSpace::new()));
-        let result = metta.run(&mut SExprParser::new(program));
-        assert_eq!(result, Ok(vec![
-            vec![],
-            vec![assert_error(expr!("A" "B"), "\nExpected: [(A B)]\nGot: [(A B), (B C)]\nExcessive result: (B C)"),
-                 assert_error(expr!("B" "C"), "\nExpected: [(A B)]\nGot: [(A B), (B C)]\nExcessive result: (B C)")],
-            vec![assert_error(expr!("A" "B"), "\nExpected: [(A B), (B C)]\nGot: [(A B)]\nMissed result: (B C)")]
-        ]));
+        let assert_equal_op = AssertEqualOp::new(space);
+
+        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]), Ok(vec![]));
+        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("err"))]),
+            Ok(vec![assert_error(expr!(("foo")), "\nExpected: [(A B)]\nGot: [(A B), (B C)]\nExcessive result: (B C)")]));
+        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("err")), expr!(("foo"))]),
+            Ok(vec![assert_error(expr!(("err")), "\nExpected: [(A B), (B C)]\nGot: [(A B)]\nMissed result: (B C)")]));
     }
 
     #[test]
-    fn assert_equal_to_result() {
-        let program = "
+    fn assert_equal_to_result_op() {
+        let space = Shared::new(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
-            !(assertEqualToResult (foo) ((B C) (A B)))
-        ";
+        "));
+        let assert_equal_to_result_op = AssertEqualToResultOp::new(space);
 
-        let metta = Metta::new(Shared::new(GroundingSpace::new()));
-        let result = metta.run(&mut SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![]]));
+        assert_eq!(assert_equal_to_result_op.execute(&mut vec![
+                expr!(("foo")), expr!(("B" "C") ("A" "B"))]),
+                Ok(vec![]));
     }
 
     #[test]
-    fn collapse() {
-        let program = "
+    fn collapse_op() {
+        let space = Shared::new(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
-            !(collapse (foo))
-        ";
+        "));
+        let collapse_op = CollapseOp::new(space);
 
-        let metta = Metta::new(Shared::new(GroundingSpace::new()));
-        let result = metta.run(&mut SExprParser::new(program));
-        assert_eq!(result, Ok(vec![vec![expr!(("A" "B") ("B" "C"))]]));
+        assert_eq!(collapse_op.execute(&mut vec![expr!(("foo"))]),
+            Ok(vec![expr!(("A" "B") ("B" "C"))]));
+    }
+
+    #[test]
+    fn superpose_op() {
+        let superpose_op = SuperposeOp{};
+        assert_eq!(superpose_op.execute(&mut vec![expr!("A" ("B" "C"))]),
+            Ok(vec![sym!("A"), expr!("B" "C")]));
+    }
+
+    #[test]
+    fn get_type_op() {
+        let space = Shared::new(metta_space("
+            (: B Type)
+            (: C Type)
+            (: A B)
+            (: A C)
+        "));
+
+        let get_type_op = GetTypeOp::new(space);
+        assert_eq!(get_type_op.execute(&mut vec![sym!("A")]),
+            Ok(vec![sym!("B"), sym!("C")]));
+    }
+
+    #[test]
+    fn println_op() {
+        assert_eq!(PrintlnOp{}.execute(&mut vec![sym!("A")]), Ok(vec![]));
+    }
+
+    #[test]
+    fn nop_op() {
+        assert_eq!(NopOp{}.execute(&mut vec![]), Ok(vec![]));
+    }
+
+    #[test]
+    fn let_op() {
+        assert_eq!(LetOp{}.execute(&mut vec![expr!(a b), expr!("A" "B"), expr!(b a)]),
+            Ok(vec![expr!("B" "A")]));
+    }
+
+    #[test]
+    fn let_var_op() {
+        assert_eq!(LetVarOp{}.execute(&mut vec![expr!(), sym!("B")]),
+            Ok(vec![sym!("B")]));
+        assert_eq!(LetVarOp{}.execute(&mut vec![expr!(((a "A"))), expr!(a)]),
+            Ok(vec![expr!({LetOp{}} a "A" a)]));
+        assert_eq!(LetVarOp{}.execute(&mut vec![expr!((a "A") (b "B")), expr!(b a)]),
+            Ok(vec![expr!({LetOp{}} a "A" ({LetVarOp{}} ((b "B")) (b a)))]));
     }
 }
