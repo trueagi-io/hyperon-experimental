@@ -58,6 +58,8 @@ class MeTTa:
 
     def import_file(self, fname):
         path = fname.split(os.sep)
+        if len(path) == 1:
+            path = ['.'] + path
         f = open(os.sep.join(path), "r")
         program = f.read()
         f.close()
