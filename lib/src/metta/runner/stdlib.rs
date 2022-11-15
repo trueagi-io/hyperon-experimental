@@ -116,7 +116,7 @@ impl Grounded for MatchOp {
         let pattern = args.get(1).ok_or_else(arg_error)?;
         let template = args.get(2).ok_or_else(arg_error)?;
         log::trace!("match_op: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
-        let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("match expects a space as a second argument")?;
+        let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("match expects a space as the first argument")?;
         Ok(space.borrow().subst(&pattern, &template))
     }
 
@@ -190,6 +190,92 @@ impl Grounded for NewSpaceOp {
         } else {
             Err("new-space doesn't expect arguments".into())
         }
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct AddAtomOp {}
+
+impl Display for AddAtomOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "add-atom")
+    }
+}
+
+impl Grounded for AddAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<GroundingSpace>>(),
+            ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("add-atom expects two arguments: space and atom");
+        let space = args.get(0).ok_or_else(arg_error)?;
+        let atom = args.get(1).ok_or_else(arg_error)?;
+        let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("add-atom expects a space as the first argument")?;
+        space.borrow_mut().add(atom.clone());
+        Ok(vec![])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct RemoveAtomOp {}
+
+impl Display for RemoveAtomOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "remove-atom")
+    }
+}
+
+impl Grounded for RemoveAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<GroundingSpace>>(),
+            ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("remove-atom expects two arguments: space and atom");
+        let space = args.get(0).ok_or_else(arg_error)?;
+        let atom = args.get(1).ok_or_else(arg_error)?;
+        let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("remove-atom expects a space as the first argument")?;
+        space.borrow_mut().remove(atom);
+        // TODO? return Bool
+        Ok(vec![])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct GetAtomsOp {}
+
+impl Display for GetAtomsOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "get-atoms")
+    }
+}
+
+impl Grounded for GetAtomsOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<GroundingSpace>>(),
+            ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("get-atoms expects one argument: space");
+        let space = args.get(0).ok_or_else(arg_error)?;
+        let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("get-atoms expects a space as its argument")?;
+        Ok(space.borrow().content().clone())
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
