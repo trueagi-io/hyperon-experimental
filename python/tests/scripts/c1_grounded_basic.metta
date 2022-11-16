@@ -65,18 +65,17 @@
   (False))
 
 ; Grounded symbols have predefined types.
-; If automatic type-checking is not turned on,
-; evaluation of ill-typed expressions produces
-; empty result
+; Evaluation of ill-typed expressions produces
+; a error expression
 !(assertEqualToResult
   (+ 2 "String")
-  ())
+  ((Error "String" BadType)))
 ; Custom symbols as arguments of grounded operations
 ; work similarly
 (: ln LN)
 !(assertEqualToResult
   (== 4 (+ ln 2))
-  ())
+  ((Error ln BadType)))
 
 ; Custom functions over grounded functions behave ordinarily
 (= (sqr $x) (* $x $x))
