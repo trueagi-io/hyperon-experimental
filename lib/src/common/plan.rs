@@ -8,7 +8,7 @@ pub enum StepResult<'a, R: 'a, E: 'a> {
     Execute(Box<dyn Plan<'a, (), R, E> + 'a>),
     /// Result returned
     Return(R),
-    /// Plan execution error message
+    /// Plan execution error
     Error(E),
 }
 
@@ -204,7 +204,7 @@ impl<'a, T1, T2: 'a + Debug, R: 'a, E: 'a + Debug> Plan<'a, T1, R, E> for Sequen
                 arg: result,
                 plan: self.second,
             }),
-            StepResult::Error(message) => StepResult::err(message),
+            StepResult::Error(error) => StepResult::err(error),
         }
     }
 }
@@ -384,7 +384,7 @@ mod tests {
             match step.step(()) {
                 StepResult::Execute(next) => step = next,
                 StepResult::Return(result) => return Ok(result),
-                StepResult::Error(message) => return Err(message),
+                StepResult::Error(error) => return Err(error),
             }
         }
     }
