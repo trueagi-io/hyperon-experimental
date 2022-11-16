@@ -3,8 +3,8 @@
 ; other type in a gradual typing fashion.
 ; Automatic type checking is off by default ATM, so
 ; incorrectly typed expressions can be added to Atomspace.
-; However, the interpreter checks types in runtime,
-; and refuses to reduce expressions of wrong types.
+; However, the interpreter checks types in runtime, and
+; evaluation of badly typed expressions leads to a error expression.
 (= (Add $x Z) $x)
 (= (Add $x (S $y)) (Add (S $x) $y))
 
@@ -18,7 +18,7 @@
 (: Z Nat)
 (: S (-> Nat Nat))
 (: Add (-> Nat Nat Nat))
-; Now the result of its evaluation will be empty, because `S` is not `Nat`
+; Now the result of its evaluation will be a error expression, because `S` is not `Nat`
 !(assertEqualToResult
   (Add S Z)
   ((Error S BadType)))
