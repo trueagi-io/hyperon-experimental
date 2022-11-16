@@ -61,6 +61,12 @@ impl Metta {
             tref.register_token(regex(r"remove-atom"), move |_| { remove_atom_op.clone() });
             let get_atoms_op = Atom::gnd(GetAtomsOp{});
             tref.register_token(regex(r"get-atoms"), move |_| { get_atoms_op.clone() });
+            let car_atom_op = Atom::gnd(CarAtomOp{});
+            tref.register_token(regex(r"car-atom"), move |_| { car_atom_op.clone() });
+            let cdr_atom_op = Atom::gnd(CdrAtomOp{});
+            tref.register_token(regex(r"cdr-atom"), move |_| { cdr_atom_op.clone() });
+            let cons_atom_op = Atom::gnd(ConsAtomOp{});
+            tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
             let case_op = Atom::gnd(CaseOp::new(space.clone()));
             tref.register_token(regex(r"case"), move |_| { case_op.clone() });
             let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
