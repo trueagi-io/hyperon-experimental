@@ -353,7 +353,7 @@ impl Grounded for ConsAtomOp {
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("cons-atom expects two argument: atom and expression");
+        let arg_error = || ExecError::from("cons-atom expects two arguments: atom and expression");
         let atom = args.get(0).ok_or_else(arg_error)?;
         let expr = args.get(1).ok_or_else(arg_error)?;
         let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
