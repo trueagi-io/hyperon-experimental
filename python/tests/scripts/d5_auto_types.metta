@@ -3,11 +3,11 @@
 ; checking grounded types
 !(assertEqualToResult
    (+ 5 "S")
-  ((Error (+ 5 "S") BadType)))
+  ((Error "S" BadType)))
 
 !(assertEqualToResult
    (== 5 "S")
-  ((Error (== 5 "S") BadType)))
+  ((Error "S" BadType)))
 
 ; checking custom types
 (: Entity Type)
@@ -23,26 +23,17 @@
 ; badly typed
 !(assertEqualToResult
    (== SocratesIsHuman SamIsMortal)
-  ((Error (== SocratesIsHuman SamIsMortal) BadType)))
+  ((Error SamIsMortal BadType)))
 !(assertEqualToResult
    (HumansAreMortal (Human Socrates))
-  ((Error (HumansAreMortal (Human Socrates)) BadType)))
+  ((Error (Human Socrates) BadType)))
 
 
-; FIXME? Evaluation of `(+ 5 "S")` inside `collapse` leads to
-; `(Error ...)`, but it is evaluated further, and the interpreter
-; returns an empty result since the expression is badly typed,
-; eventually, the interpreter keeps `collapse` unreduced
-!(assertEqualToResult
-   (collapse (+ 5 "S"))
-  ((collapse (+ 5 "S"))))
-; the fix is to have the argument of `Error` of `Atom` type
-(: Error (-> Atom Atom Atom))
 ; we'll got the error, although `collapse` will additionally
 ; wrap it into expression
 !(assertEqualToResult
    (collapse (+ 5 "S"))
-  (((Error (+ 5 "S") BadType))))
+   (((Error "S" BadType))))
 
 ; `match` can accept badly typed expressions without type error,
 ; which is correct

@@ -10,9 +10,10 @@
 (= (green $x)
    (frog $x))
 
+(: ift (-> Bool Atom Atom))
 (= (ift True $then) $then)
 !(ift (green $x)
-      (call:add_atom &kb (Green $x)))
+      (add-atom &kb (Green $x)))
 
 !(assertEqualToResult
   (match &kb (Green $x) $x)
