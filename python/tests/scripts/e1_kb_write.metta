@@ -10,7 +10,7 @@
 (= (green $x)
    (frog $x))
 
-(: ift (-> %Undefined% Atom Atom))
+(: ift (-> Bool Atom Atom))
 (= (ift True $then) $then)
 !(ift (green $x)
       (add-atom &kb (Green $x)))
