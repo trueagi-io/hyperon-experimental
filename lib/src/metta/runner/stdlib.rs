@@ -748,6 +748,40 @@ mod tests {
     }
 
     #[test]
+    fn add_atom_op() {
+        let space = Shared::new(GroundingSpace::new());
+        let satom = Atom::value(space.clone());
+        let res = AddAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
+        assert!(res.is_empty());
+        assert_eq!(*space.borrow().content(), vec![expr!(("foo" "bar"))]);
+    }
+
+    #[test]
+    fn remove_atom_op() {
+        let space = Shared::new(metta_space("
+            (foo bar)
+            (bar foo)
+        "));
+        let satom = Atom::value(space.clone());
+        let res = RemoveAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
+        // REM: can return Bool in future
+        assert!(res.is_empty());
+        assert_eq!(*space.borrow().content(), vec![expr!(("bar" "foo"))]);
+    }
+
+    #[test]
+    fn get_atoms_op() {
+        let space = Shared::new(metta_space("
+            (foo bar)
+            (bar foo)
+        "));
+        let satom = Atom::value(space.clone());
+        let res = GetAtomsOp{}.execute(&mut vec![satom]).expect("No result returned");
+        assert_eq!(res, *space.borrow().content());
+        assert_eq!(res, vec![expr!(("foo" "bar")), expr!(("bar" "foo"))]);
+    }
+
+    #[test]
     fn bind_new_space_op() {
         let tokenizer = Shared::new(Tokenizer::new());
 
