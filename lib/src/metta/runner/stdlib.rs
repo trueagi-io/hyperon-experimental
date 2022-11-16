@@ -11,6 +11,7 @@ use crate::common::shared::Shared;
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::collections::HashMap;
+use std::iter::FromIterator;
 use regex::Regex;
 
 pub const VOID_SYMBOL : Atom = sym!("%void%");
@@ -276,6 +277,89 @@ impl Grounded for GetAtomsOp {
         let space = args.get(0).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("get-atoms expects a space as its argument")?;
         Ok(space.borrow().content().clone())
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct CarAtomOp {}
+
+impl Display for CarAtomOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "car-atom")
+    }
+}
+
+impl Grounded for CarAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("car-atom expects one argument: expression");
+        let expr = args.get(0).ok_or_else(arg_error)?;
+        let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
+        let car = chld.get(0).ok_or("car-atom expects non-empty expression")?;
+        Ok(vec![car.clone()])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct CdrAtomOp {}
+
+impl Display for CdrAtomOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "cdr-atom")
+    }
+}
+
+impl Grounded for CdrAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("cdr-atom expects one argument: expression");
+        let expr = args.get(0).ok_or_else(arg_error)?;
+        let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
+        let cdr = Vec::from_iter(chld[1..].iter().cloned());
+        Ok(vec![Atom::expr(cdr)])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct ConsAtomOp {}
+
+impl Display for ConsAtomOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "cons-atom")
+    }
+}
+
+impl Grounded for ConsAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("cons-atom expects two arguments: atom and expression");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        let expr = args.get(1).ok_or_else(arg_error)?;
+        let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
+        let mut res = vec![atom.clone()];
+        res.extend(chld.iter().cloned());
+        Ok(vec![Atom::expr(res)])
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -779,6 +863,28 @@ mod tests {
         let res = GetAtomsOp{}.execute(&mut vec![satom]).expect("No result returned");
         assert_eq!(res, *space.borrow().content());
         assert_eq!(res, vec![expr!(("foo" "bar")), expr!(("bar" "foo"))]);
+    }
+
+    #[test]
+    fn car_atom_op() {
+        let res = CarAtomOp{}.execute(&mut vec![expr!(("A" "C") "B")]).expect("No result returned");
+        assert_eq!(res, vec![expr!("A" "C")]);
+    }
+
+    #[test]
+    fn cdr_atom_op() {
+        let res = CdrAtomOp{}.execute(&mut vec![expr!(("A"))]).expect("No result returned");
+        assert_eq!(res, vec![expr!()]);
+        let res = CdrAtomOp{}.execute(&mut vec![expr!(("A" "C") ("D" "E") "B")]).expect("No result returned");
+        assert_eq!(res, vec![expr!(("D" "E") "B")]);
+    }
+
+    #[test]
+    fn cons_atom_op() {
+        let res = ConsAtomOp{}.execute(&mut vec![expr!("A"), expr!()]).expect("No result returned");
+        assert_eq!(res, vec![expr!(("A"))]);
+        let res = ConsAtomOp{}.execute(&mut vec![expr!("A" "F"), expr!(("B" "C") "D")]).expect("No result returned");
+        assert_eq!(res, vec![expr!(("A" "F") ("B" "C") "D")]);
     }
 
     #[test]
