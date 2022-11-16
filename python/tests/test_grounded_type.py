@@ -60,7 +60,7 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertNotEqual(v1[0].get_grounded_type(), v3[0].get_grounded_type())
         # Untyped symbols don't cause type error, but the expression is not reduced
         self.assertEqual(metta.run("!(id_num untyp)"), [metta.parse_all("(id_num untyp)")])
-        # Typed symbols cause empty results due to type mismatch
+        # Typed symbols cause type error when evaluated
         metta.run("(: myAtom myType)")
         self.assertEqual(metta.run('''
             !(id_num myAtom)
