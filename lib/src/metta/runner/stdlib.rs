@@ -209,7 +209,7 @@ impl Display for AddAtomOp {
 impl Grounded for AddAtomOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<GroundingSpace>>(),
-            ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+            ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {

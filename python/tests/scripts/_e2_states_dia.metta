@@ -25,7 +25,7 @@
 ; even if the result of the previous clause is empty
 (= (change-state $var $value)
    (nop (do (remove-state $var))
-        (do (call:add_atom &memory (state $var $value)))))
+        (do (add-atom &memory (state $var $value)))))
 
 (= (get-state $var)
    (match &memory (state $var $value) $value))
