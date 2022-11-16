@@ -21,7 +21,7 @@
 ; Now the result of its evaluation will be empty, because `S` is not `Nat`
 !(assertEqualToResult
   (Add S Z)
-  ())
+  ((Error S BadType)))
 ; This will still work, because `Something` is of undefined type,
 ; and it might be `Nat`
 !(assertEqual
@@ -51,7 +51,7 @@
 ; This list is badly typed
 !(assertEqualToResult
   (Cons S (Cons Z Nil))
-  ())
+  ((Error Z BadType)))
 
 ; Another example
 (: T Type)
@@ -68,7 +68,7 @@
 ; Not accepted
 !(assertEqualToResult
   (eq Z S)
-  ())
+  ((Error S BadType)))
 
 ; Type (symbols) are not prohibited from being elements
 ; of other custom types
@@ -88,10 +88,10 @@
   T)
 !(assertEqualToResult
   (of-same-type Green Color)
-  ())
+  ((Error Color BadType)))
 !(assertEqualToResult
   (of-same-type Green Circle)
-  ())
+  ((Error Circle BadType)))
 
 ; There are some meta-types, which may influence
 ; the process of interpretation. One of them is `Atom`.

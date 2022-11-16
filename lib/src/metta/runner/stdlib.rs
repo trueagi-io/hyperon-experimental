@@ -59,7 +59,7 @@ impl Grounded for ImportOp {
         // TODO: replace Symbol by grounded String?
         if let Atom::Symbol(file) = file {
             path.push(file.name());
-            log::trace!("import! load file, full path: {}", path.display());
+            log::debug!("import! load file, full path: {}", path.display());
         } else {
             return Err("import! expects a file path as a second argument".into())
         }
@@ -115,7 +115,7 @@ impl Grounded for MatchOp {
         let space = args.get(0).ok_or_else(arg_error)?;
         let pattern = args.get(1).ok_or_else(arg_error)?;
         let template = args.get(2).ok_or_else(arg_error)?;
-        log::trace!("match_op: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
+        log::debug!("match_op: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
         let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("match expects a space as the first argument")?;
         Ok(space.borrow().subst(&pattern, &template))
     }
@@ -297,7 +297,7 @@ impl CaseOp {
         let mut space = GroundingSpace::new();
         space.add(atom.clone());
         for c in cases.children() {
-            log::trace!("CaseOp::first_case_matched: next case: {}", c);
+            log::debug!("CaseOp::first_case_matched: next case: {}", c);
             let next_case = atom_as_expr(c).ok_or("case expects expression of pairs as a second argument")?.children();
             let result = space.subst(&next_case[0], &next_case[1]);
             if !result.is_empty() {
@@ -331,10 +331,10 @@ impl Grounded for CaseOp {
         let arg_error = || ExecError::from("case expects two arguments: atom and expression of cases");
         let atom = args.get(0).ok_or_else(arg_error)?;
         let cases = atom_as_expr(args.get(1).ok_or_else(arg_error)?).ok_or("case expects expression of cases as a second argument")?;
-        log::trace!("CaseOp::execute: atom: {}, cases: {}", atom, cases);
+        log::debug!("CaseOp::execute: atom: {}, cases: {}", atom, cases);
 
         let result = interpret_no_error(self.space.clone(), atom);
-        log::trace!("case: interpretation result {:?}", result);
+        log::debug!("case: interpretation result {:?}", result);
         match result {
             Ok(result) if result.is_empty() => {
                 for c in cases.children() {
@@ -361,23 +361,23 @@ impl Grounded for CaseOp {
     }
 }
 
-fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Vec<Atom> {
-    log::trace!("assert_results_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
+fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
+    log::debug!("assert_results_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
     let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
     for r in actual {
         if !expected.contains(r) {
-            return vec![Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::sym(format!("{}\nExcessive result: {}", report, r))])]
+            return Err(ExecError::Runtime(format!("{}\nExcessive result: {}", report, r)));
         }
     }
     for r in expected {
         if !actual.contains(r) {
-            return vec![Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::sym(format!("{}\nMissed result: {}", report, r))])]
+            return Err(ExecError::Runtime(format!("{}\nMissed result: {}", report, r)));
         }
     }
     if expected.len() != actual.len() {
-        return vec![Atom::expr([ERROR_SYMBOL, Atom::sym(format!("{}\nDifferent number of elements", report))])]
+        return Err(ExecError::Runtime(format!("{}\nDifferent number of elements", report)));
     }
-    return vec![]
+    return Ok(vec![])
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -410,7 +410,7 @@ impl Grounded for AssertEqualOp {
         let actual = interpret_no_error(self.space.clone(), actual_atom)?;
         let expected = interpret_no_error(self.space.clone(), expected_atom)?;
 
-        Ok(assert_results_equal(&actual, &expected, actual_atom))
+        assert_results_equal(&actual, &expected, actual_atom)
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -449,7 +449,7 @@ impl Grounded for AssertEqualToResultOp {
 
         let actual = interpret_no_error(self.space.clone(), actual_atom)?;
 
-        Ok(assert_results_equal(&actual, expected, actual_atom))
+        assert_results_equal(&actual, expected, actual_atom)
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -665,7 +665,7 @@ impl Grounded for LetOp {
         let atom = args.get(1).ok_or_else(arg_error)?;
         let template = args.get(2).ok_or_else(arg_error)?;
 
-        log::trace!("LetOp::execute: pattern: {}, atom: {}, template: {}", pattern, atom, template);
+        log::debug!("LetOp::execute: pattern: {}, atom: {}, template: {}", pattern, atom, template);
 
         let mut space = GroundingSpace::new();
         space.add(atom.clone());
@@ -696,7 +696,7 @@ impl Grounded for LetVarOp {
         let arg_error = || ExecError::from("let* list of couples and template as arguments");
         let expr = atom_as_expr(args.get(0).ok_or_else(arg_error)?).ok_or(arg_error())?;
         let template = args.get(1).ok_or_else(arg_error)?.clone();
-        log::trace!("LetVarOp::execute: expr: {}, template: {}", expr, template);
+        log::debug!("LetVarOp::execute: expr: {}, template: {}", expr, template);
 
         let children = expr.children().as_slice();
         match children {
@@ -810,10 +810,6 @@ mod tests {
             Ok(vec![Atom::sym("D")]));
     }
 
-    fn assert_error(atom: Atom, message: &str) -> Atom {
-        Atom::expr([ERROR_SYMBOL, atom, Atom::sym(message)])
-    }
-
     #[test]
     fn assert_equal_op() {
         let space = Shared::new(metta_space("
@@ -828,9 +824,9 @@ mod tests {
 
         assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]), Ok(vec![]));
         assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("err"))]),
-            Ok(vec![assert_error(expr!(("foo")), "\nExpected: [(A B)]\nGot: [(A B), (B C)]\nExcessive result: (B C)")]));
+            Err(ExecError::from("\nExpected: [(A B)]\nGot: [(A B), (B C)]\nExcessive result: (B C)")));
         assert_eq!(assert_equal_op.execute(&mut vec![expr!(("err")), expr!(("foo"))]),
-            Ok(vec![assert_error(expr!(("err")), "\nExpected: [(A B), (B C)]\nGot: [(A B)]\nMissed result: (B C)")]));
+            Err(ExecError::from("\nExpected: [(A B), (B C)]\nGot: [(A B)]\nMissed result: (B C)")));
     }
 
     #[test]

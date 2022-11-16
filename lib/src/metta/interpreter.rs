@@ -80,8 +80,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
 
-type InterpreterError = (Atom, Atom);
-
 /// Result of atom interpretation plus variable bindings found
 #[derive(Clone, PartialEq)]
 pub struct InterpretedAtom(Atom, Bindings);
@@ -125,6 +123,7 @@ impl Debug for InterpretedAtom {
 }
 
 type Results = Vec<InterpretedAtom>;
+type InterpreterError = (Atom, Atom);
 type NoInputPlan<'a> = Box<dyn Plan<'a, (), Results, InterpreterError> + 'a>;
 trait GroundingSpacePtr : Clone + LockBorrow<GroundingSpace> {}
 impl<T: Clone + LockBorrow<GroundingSpace>> GroundingSpacePtr for T {}
@@ -173,8 +172,7 @@ pub fn interpret<T: Clone + LockBorrow<GroundingSpace>>(space: T, expr: &Atom) -
         StepResult::Return(mut result) => Ok(result.drain(0..)
             .map(|InterpretedAtom(atom, _)| atom).collect()),
         // TODO: return (Error atom err) expression
-        StepResult::Error((atom, err)) => Err(format!("Error {} on atom {}", err, atom)),
-                                          //Ok(vec![Atom::expr([ERROR_SYMBOL, atom, err])]),
+        StepResult::Error((atom, err)) => Ok(vec![Atom::expr([ERROR_SYMBOL, atom, err])]),
         _ => panic!("Not expected step result: {:?}", step),
     }
 }
@@ -336,7 +334,7 @@ fn interpret_expression_as_type_plan<'a, T: GroundingSpacePtr + 'a>(context: Int
         input: InterpretedAtom, typ: Atom) -> OperatorPlan<'a, Vec<Atom>, Results, InterpreterError> {
     let descr = format!("form alternative plans for expression {} using types", input);
     OperatorPlan::new(move |op_types: Vec<Atom>| {
-        make_alternives_plan(input.clone(), op_types, move |op_typ| {
+        make_alternives_plan(input.0.clone(), op_types, move |op_typ| {
             interpret_expression_as_type_op(context.clone(),
                 input.clone(), op_typ, typ.clone())
         })
@@ -382,16 +380,15 @@ fn interpret_expression_as_type_op<'a, T: GroundingSpacePtr + 'a>(context: Inter
                 let context = context.clone();
                 plan = Box::new(SequencePlan::new(
                     plan,
-                    OperatorPlan::new(move |mut results: Results| {
-                        let alternatives = results.drain(0..).map(|result| -> NoInputPlan {
+                    OperatorPlan::new(move |results: Results| {
+                        make_alternives_plan(arg.clone(), results, move |result| -> NoInputPlan {
                             let arg_typ = apply_bindings_to_atom(&arg_typ, result.bindings());
                             Box::new(SequencePlan::new(
                                 interpret_as_type_plan(context.clone(),
                                     InterpretedAtom(arg.clone(), result.bindings().clone()),
                                     arg_typ),
                                 insert_reducted_arg_plan(result, expr_idx)))
-                        }).collect();
-                        StepResult::execute(AlternativeInterpretationsPlan::new(arg, alternatives))
+                        })
                     }, format!("Interpret {} argument", expr_idx))
                 ))
             }
@@ -405,15 +402,14 @@ fn interpret_expression_as_type_op<'a, T: GroundingSpacePtr + 'a>(context: Inter
             let context = context.clone();
             plan = Box::new(SequencePlan::new(
                 plan,
-                OperatorPlan::new(move |mut results: Results| {
-                    let alternatives = results.drain(0..).map(|result| -> NoInputPlan {
+                OperatorPlan::new(move |results: Results| {
+                    make_alternives_plan(arg.clone(), results, move |result| -> NoInputPlan {
                         Box::new(SequencePlan::new(
                             interpret_as_type_plan(context.clone(),
                                 InterpretedAtom(arg.clone(), result.bindings().clone()),
                                 ATOM_TYPE_UNDEFINED),
                             insert_reducted_arg_plan(result, expr_idx)))
-                    }).collect();
-                    StepResult::execute(AlternativeInterpretationsPlan::new(arg, alternatives))
+                    })
                 }, format!("Interpret {} argument", expr_idx))
             ))
         }
@@ -424,7 +420,7 @@ fn interpret_expression_as_type_op<'a, T: GroundingSpacePtr + 'a>(context: Inter
 fn call_alternatives_plan<'a, T: GroundingSpacePtr + 'a>(plan: NoInputPlan<'a>, context: InterpreterContextRef<'a, T>,
     input: InterpretedAtom) -> NoInputPlan<'a> {
     Box::new(SequencePlan::new(plan, OperatorPlan::new(move |results: Results| {
-        make_alternives_plan(input, results, move |result| {
+        make_alternives_plan(input.0, results, move |result| {
             call_plan(context.clone(), result)
         })
     }, "interpret each alternative")))
@@ -526,7 +522,7 @@ fn execute_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, 
                         if results.is_empty() {
                             StepResult::ret(results)
                         } else {
-                            make_alternives_plan(input, results, move |result| {
+                            make_alternives_plan(input.0, results, move |result| {
                                 interpret_as_type_plan(context.clone(),
                                     result, ATOM_TYPE_UNDEFINED)
                             })
@@ -575,23 +571,24 @@ fn match_op<'a, T: GroundingSpacePtr + 'a>(context: InterpreterContextRef<'a, T>
         .filter(|(_, bindings)| bindings.is_ok())
         .map(|(result, bindings)| InterpretedAtom(result, bindings.unwrap()))
         .collect();
-    make_alternives_plan(input, results, move |result| {
+    make_alternives_plan(input.0, results, move |result| {
         interpret_as_type_plan(context.clone(), result, ATOM_TYPE_UNDEFINED)
     })
 }
 
-fn make_alternives_plan<'a, T, F, P>(input: InterpretedAtom, mut results: Vec<T>,
+fn make_alternives_plan<'a, T: Debug, F, P>(input: Atom, mut results: Vec<T>,
     plan: F) -> StepResult<'a, Results, InterpreterError>
 where
     F: 'a + Fn(T) -> P,
     P: 'a + Plan<'a, (), Results, InterpreterError>
 {
+    log::debug!("make_alternives_plan: input: {:?}, alternatives: {:?}", input, results);
     match results.len() {
-        0 => StepResult::err((input.0, NO_VALID_ALTERNATIVES)),
+        0 => StepResult::err((input, NO_VALID_ALTERNATIVES)),
         1 => StepResult::execute(plan(results.pop().unwrap())),
         _ => {
             StepResult::execute(AlternativeInterpretationsPlan::new(
-                input.0,
+                input,
                 results.drain(0..)
                     .map(|result| -> NoInputPlan { Box::new(plan(result)) })
                     .collect()))
@@ -624,6 +621,7 @@ impl<'a, T> AlternativeInterpretationsPlan<'a, T> {
 
 impl<'a, T: Debug> Plan<'a, (), Vec<T>, InterpreterError> for AlternativeInterpretationsPlan<'a, T> {
     fn step(mut self: Box<Self>, _: ()) -> StepResult<'a, Vec<T>, InterpreterError> {
+        log::debug!("AlternativeInterpretationsPlan::step: {} alternatives left", self.plans.len());
         if self.plans.len() == 0 {
             if self.success {
                 StepResult::ret(self.results)
@@ -742,7 +740,7 @@ mod tests {
 
     #[test]
     fn test_make_alternatives_plan_no_alternative() {
-        let plan = make_alternives_plan(InterpretedAtom(sym!("Test"), Bindings::new()),
+        let plan = make_alternives_plan(sym!("Test"),
             vec![], |_res: InterpretedAtom| StepResult::ret(vec![]));
 
         let result = test_interpret(plan, ());
@@ -930,6 +928,29 @@ mod tests {
         let expr = expr!({MulXUndefinedType(3)} {2});
 
         assert_eq!(interpret(&space, &expr), Ok(vec![Atom::value(6)]));
+    }
+
+    static ID_NUM: &Operation = &Operation{
+        name: "id_num",
+        execute: |_, args| {
+            let arg_error = || ExecError::from("id_num expects one argument: number");
+            let num = args.get(0).ok_or_else(arg_error)?;
+            Ok(vec![num.clone()])
+        },
+        typ: "(-> Number Number)",
+    };
+
+    #[test]
+    fn return_bad_type_error() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!(":" "myAtom" "myType"));
+        space.add(expr!(":" "id_a" ("->" "A" "A")));
+        space.add(expr!("=" ("id_a" a) a));
+
+        assert_eq!(interpret(&space, &expr!({ID_NUM} "myAtom")),
+            Ok(vec![Atom::expr([ERROR_SYMBOL, sym!("myAtom"), BAD_TYPE_SYMBOL])]));
+        assert_eq!(interpret(&space, &expr!("id_a" "myAtom")),
+            Ok(vec![Atom::expr([ERROR_SYMBOL, sym!("myAtom"), BAD_TYPE_SYMBOL])]));
     }
 }
 

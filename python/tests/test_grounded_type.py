@@ -1,7 +1,7 @@
 import unittest
 
 from hyperon import *
-from common import MeTTa, MeTTaPy
+from common import MeTTa
 
 class GroundedTypeTest(unittest.TestCase):
 
@@ -48,7 +48,7 @@ class GroundedTypeTest(unittest.TestCase):
                          metta.run("! 3"))
 
     def test_meta_types(self):
-        metta = MeTTaPy()
+        metta = MeTTa()
         ### Basic functional types
         metta.add_atom(r"id_num", OperationAtom("id_num", lambda x: x, ['Number', 'Number']))
         metta.add_atom(r"as_int", OperationAtom("as_int", lambda x: x, ['Number', 'Int']))
@@ -66,7 +66,8 @@ class GroundedTypeTest(unittest.TestCase):
             !(id_num myAtom)
             !(id_num False)
             '''),
-            [[], []])
+            [[E(S('Error'), S('myAtom'), S('BadType'))],
+             [E(S('Error'), ValueAtom(False, 'Bool'), S('BadType'))]])
         ### Grounded functions over Atom
         ### (should use unwrap=False to deal with non-grounded atoms)
         # All grounded and ungrounded, typed and untyped symbols should be processed
