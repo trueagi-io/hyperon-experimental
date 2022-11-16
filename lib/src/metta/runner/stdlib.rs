@@ -867,24 +867,24 @@ mod tests {
 
     #[test]
     fn car_atom_op() {
-        let res = CarAtomOp{}.execute(&mut vec![expr!((("A" "C") "B"))]).expect("No result returned");
-        assert_eq!(res, vec!(expr!(("A" "C"))));
+        let res = CarAtomOp{}.execute(&mut vec![expr!(("A" "C") "B")]).expect("No result returned");
+        assert_eq!(res, vec![expr!("A" "C")]);
     }
 
     #[test]
     fn cdr_atom_op() {
         let res = CdrAtomOp{}.execute(&mut vec![expr!(("A"))]).expect("No result returned");
-        assert_eq!(res, vec!(expr!(())));
-        let res = CdrAtomOp{}.execute(&mut vec![expr!((("A" "C") ("D" "E") "B"))]).expect("No result returned");
-        assert_eq!(res, vec!(expr!((("D" "E") "B"))));
+        assert_eq!(res, vec![expr!()]);
+        let res = CdrAtomOp{}.execute(&mut vec![expr!(("A" "C") ("D" "E") "B")]).expect("No result returned");
+        assert_eq!(res, vec![expr!(("D" "E") "B")]);
     }
 
     #[test]
     fn cons_atom_op() {
-        let res = ConsAtomOp{}.execute(&mut vec![expr!("A"), expr!(())]).expect("No result returned");
-        assert_eq!(res, vec!(expr!(("A"))));
-        let res = ConsAtomOp{}.execute(&mut vec![expr!(("A" "F")), expr!((("B" "C") "D"))]).expect("No result returned");
-        assert_eq!(res, vec!(expr!((("A" "F") ("B" "C") "D"))));
+        let res = ConsAtomOp{}.execute(&mut vec![expr!("A"), expr!()]).expect("No result returned");
+        assert_eq!(res, vec![expr!(("A"))]);
+        let res = ConsAtomOp{}.execute(&mut vec![expr!("A" "F"), expr!(("B" "C") "D")]).expect("No result returned");
+        assert_eq!(res, vec![expr!(("A" "F") ("B" "C") "D")]);
     }
 
     #[test]
