@@ -65,7 +65,13 @@ cargo build
 cargo test
 ```
 
-To enable logging during tests execute:
+Run examples:
+```
+cargo run --example sorted_list
+```
+
+To enable logging during running tests or examples export `RUST_LOG`
+environment variable:
 ```
 RUST_LOG=hyperon=debug cargo test
 ```
