@@ -52,3 +52,6 @@ add_subdirectory(tests)
 
 install(FILES ${HYPERONC_LIB_PATH} DESTINATION lib)
 install(DIRECTORY ${HYPERONC_INCLUDE_DIR} DESTINATION include)
+
+add_test(NAME rust_c_api COMMAND cargo test --target-dir ${RUST_TARGET_DIR}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
