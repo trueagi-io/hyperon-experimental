@@ -1,7 +1,6 @@
 import unittest
 
 from hyperon import *
-from common import MeTTa
 
 class NondetermTest(unittest.TestCase):
 

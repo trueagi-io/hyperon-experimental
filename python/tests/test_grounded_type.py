@@ -1,7 +1,6 @@
 import unittest
 
 from hyperon import *
-from common import MeTTa
 
 class GroundedTypeTest(unittest.TestCase):
 

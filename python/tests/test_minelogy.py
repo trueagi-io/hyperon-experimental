@@ -2,7 +2,6 @@ import unittest
 
 from test_common import assert_atoms_are_equivalent
 from hyperon import *
-from common import MeTTa
 
 
 class MinelogyTest(unittest.TestCase):
