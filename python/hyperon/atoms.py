@@ -163,18 +163,18 @@ class OperationObject(GroundedObject):
     def __eq__(self, other):
         return isinstance(other, OperationObject) and self.name == other.name
 
-def type_sugar(type_names):
+def _type_sugar(type_names):
     if type_names is None:
         return AtomType.UNDEFINED
     if isinstance(type_names, list):
-        return E(S("->"), *[type_sugar(n) for n in type_names])
+        return E(S("->"), *[_type_sugar(n) for n in type_names])
     if isinstance(type_names, str):
         return V(type_names) if type_names[0] == '$' else S(type_names)
     return type_names
 
 def OperationAtom(name, op, type_names=None, unwrap=True):
-    return G(OperationObject(name, op, unwrap), type_sugar(type_names))
+    return G(OperationObject(name, op, unwrap), _type_sugar(type_names))
 
 def ValueAtom(value, type_name=None, atom_id=None):
-    return G(ValueObject(value, atom_id), type_sugar(type_name))
+    return G(ValueObject(value, atom_id), _type_sugar(type_name))
 
