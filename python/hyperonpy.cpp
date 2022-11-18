@@ -84,10 +84,9 @@ py::object inc_ref(py::object obj) {
 }
 
 exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, struct vec_atom_t* ret) {
-    // Increment module reference counter otherwise SIGSEGV happens on exit
-    static py::object hyperon = inc_ref(py::module_::import("hyperon"));
-    static py::object call_execute_on_grounded_atom = hyperon.attr("call_execute_on_grounded_atom");
-    static py::handle NoReduceError = hyperon.attr("NoReduceError");
+    py::object hyperon = py::module_::import("hyperon");
+    py::function call_execute_on_grounded_atom = hyperon.attr("call_execute_on_grounded_atom");
+    py::handle NoReduceError = hyperon.attr("NoReduceError");
     py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
     CAtom pytyp = static_cast<GroundedObject const*>(_cgnd)->typ;
     try {
@@ -139,9 +138,9 @@ void py_free(struct gnd_t* _cgnd) {
 
 struct CConstr {
 
-    py::object pyconstr;
+    py::function pyconstr;
 
-    CConstr(py::object pyconstr) : pyconstr(pyconstr) { }
+    CConstr(py::function pyconstr) : pyconstr(pyconstr) { }
 
     static void free(void* ptr) {
         CConstr* self = static_cast<CConstr*>(ptr);
@@ -279,7 +278,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("tokenizer_new", []() { return CTokenizer(tokenizer_new()); }, "New tokenizer");
     m.def("tokenizer_free", [](CTokenizer tokenizer) { tokenizer_free(tokenizer.ptr); }, "Free tokenizer");
     m.def("tokenizer_clone", [](CTokenizer tokenizer) { tokenizer_clone(tokenizer.ptr); }, "Clone tokenizer");
-    m.def("tokenizer_register_token", [](CTokenizer tokenizer, char const* regex, py::object constr) {
+    m.def("tokenizer_register_token", [](CTokenizer tokenizer, char const* regex, py::function constr) {
             droppable_t context = { new CConstr(constr), CConstr::free };
             tokenizer_register_token(tokenizer.ptr, regex, &CConstr::apply, context);
         }, "Register token");
