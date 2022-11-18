@@ -1,7 +1,7 @@
 import os
 import sys
 
-from common import MeTTa
+from hyperon import MeTTa
 
 if __name__ == "__main__":
     os.system('clear')

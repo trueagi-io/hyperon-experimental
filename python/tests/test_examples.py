@@ -1,7 +1,6 @@
 import unittest
 
 from hyperon import *
-from common import MeTTa
 from test_common import *
 
 class ExamplesTest(unittest.TestCase):
@@ -56,7 +55,6 @@ class ExamplesTest(unittest.TestCase):
         metta.add_token("ploc", lambda _: ValueAtom(ploc))
         metta.add_token("Setter", lambda token: newNewAtom(token, Setter))
         metta.add_token("SetAtom", lambda token: newNewAtom(token, Setter, False))
-        kb = GroundingSpace()
         # Just checking that interpretation of "pglob" gives us
         # a grounded atom that stores 10
         self.assertEqual(metta.run('! pglob')[0][0].get_object().value.get(), 10)

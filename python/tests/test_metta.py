@@ -1,7 +1,6 @@
 import unittest
 
 from hyperon import *
-from common import MeTTa
 
 class MettaTest(unittest.TestCase):
 
@@ -30,7 +29,7 @@ class MettaTest(unittest.TestCase):
             (= (green $x) (frog $x))
             !(green Fritz)
         '''
-        runner = Metta()
+        runner = MeTTa()
         result = runner.run(program)
 
         self.assertEqual([[S('T')]], result)

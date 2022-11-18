@@ -1,6 +1,6 @@
 import unittest
 
-from common import MeTTa
+from hyperon import MeTTa
 
 class MeTTaTest(unittest.TestCase):
 
