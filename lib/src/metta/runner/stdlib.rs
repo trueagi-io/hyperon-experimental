@@ -358,7 +358,7 @@ impl Grounded for ConsAtomOp {
         let expr = args.get(1).ok_or_else(arg_error)?;
         let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
         let mut res = vec![atom.clone()];
-        res.extend(chld.iter().cloned());
+        res.extend(chld.clone());
         Ok(vec![Atom::expr(res)])
     }
 
