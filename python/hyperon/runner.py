@@ -1,8 +1,8 @@
 import os
+from importlib import import_module
 import hyperonpy as hp
-from .atoms import Atom
+from .atoms import Atom, AtomType, OperationAtom
 from .base import GroundingSpace, Tokenizer, SExprParser
-from . import stdlib
 
 class MeTTa:
 
@@ -10,7 +10,11 @@ class MeTTa:
         if space is None:
             space = GroundingSpace()
         self.cmetta = hp.metta_new(space.cspace, cwd)
-        stdlib.import_to(self)
+        self.load_py_module("hyperon.stdlib")
+        self.add_atom('extend-py!',
+            OperationAtom('extend-py!',
+                          lambda name: self.load_py_module(name) or [],
+                          [AtomType.UNDEFINED, AtomType.ATOM], unwrap=False))
 
     def __del__(self):
         hp.metta_free(self.cmetta)
@@ -40,6 +44,15 @@ class MeTTa:
 
     def parse_single(self, program):
         return next(self._parse_all(program))
+
+    def load_py_module(self, name):
+        if not isinstance(name, str):
+            name = repr(name)
+        stdlib = import_module(name)
+        for n in dir(stdlib):
+            obj = getattr(stdlib, n)
+            if '__name__' in dir(obj) and obj.__name__ in ['metta_add_atoms', 'metta_add_tokens']:
+                obj(self)
 
     def import_file(self, fname):
         path = fname.split(os.sep)
