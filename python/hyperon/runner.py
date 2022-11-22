@@ -48,9 +48,9 @@ class MeTTa:
     def load_py_module(self, name):
         if not isinstance(name, str):
             name = repr(name)
-        stdlib = import_module(name)
-        for n in dir(stdlib):
-            obj = getattr(stdlib, n)
+        mod = import_module(name)
+        for n in dir(mod):
+            obj = getattr(mod, n)
             if '__name__' in dir(obj) and obj.__name__ in ['metta_add_atoms', 'metta_add_tokens']:
                 obj(self)
 
