@@ -2,9 +2,9 @@ import unittest
 
 from hyperon import *
 
-class CaseTest(unittest.TestCase):
+class ExtendTest(unittest.TestCase):
 
-    def test_case(self):
+    def test_extend(self):
         metta = MeTTa()
         self.assertEqual(
             metta.run('''
