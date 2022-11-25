@@ -1,7 +1,7 @@
 from hyperon.atoms import OperationAtom, ValueAtom
-from hyperon.ext import add_atoms
+from hyperon.ext import register_atoms
 
-@add_atoms
+@register_atoms
 def my_dict_atoms():
     return {
         '&my-dict': ValueAtom({'A': 5, 6: 'B'}),

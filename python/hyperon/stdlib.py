@@ -1,7 +1,7 @@
 from .atoms import GroundedAtom, OperationAtom, ValueAtom, NoReduceError
-from .ext import add_atoms, add_tokens
+from .ext import register_atoms, register_tokens
 
-@add_atoms
+@register_atoms
 def arithm_ops():
     subAtom = OperationAtom('-', lambda a, b: a - b, ['Number', 'Number', 'Number'])
     mulAtom = OperationAtom('*', lambda a, b: a * b, ['Number', 'Number', 'Number'])
@@ -16,7 +16,7 @@ def arithm_ops():
         r"%": modAtom
     }
 
-@add_atoms
+@register_atoms
 def bool_ops():
     equalAtom = OperationAtom('==', lambda a, b: [ValueAtom(a == b, 'Bool')],
                             ['$t', '$t', 'Bool'], unwrap=False)
@@ -34,7 +34,7 @@ def bool_ops():
         r"not": notAtom
     }
 
-@add_tokens
+@register_tokens
 def type_tokens():
     return {
         r"\d+(\.\d+)": lambda token: ValueAtom(float(token), 'Number'),
@@ -44,7 +44,7 @@ def type_tokens():
     }
 
 
-@add_tokens
+@register_tokens
 def call_atom():
     def newCallAtom(token):
         # NOTE: we could use "call" as a plain symbol (insted of "call:...")

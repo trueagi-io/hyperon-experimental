@@ -18,8 +18,8 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertEqual(
             metta.run("!(> (* 2 2) 1)")[0][0].get_grounded_type(),
             metta.run("!(or True True)")[0][0].get_grounded_type())
-        metta.add_atom("untyped", ValueAtom(None))
-        metta.add_atom("untop", OperationAtom("untop", lambda: None))
+        metta.register_atom("untyped", ValueAtom(None))
+        metta.register_atom("untop", OperationAtom("untop", lambda: None))
         self.assertEqual(
             metta.run("!(untop)")[0][0].get_grounded_type(),
             metta.parse_single("untyped").get_grounded_type())
@@ -32,7 +32,7 @@ class GroundedTypeTest(unittest.TestCase):
 
     def test_higher_func(self):
         metta = MeTTa()
-        metta.add_atom(
+        metta.register_atom(
             r"curry_num",
             OperationAtom(
                 "curry_num",
@@ -49,8 +49,8 @@ class GroundedTypeTest(unittest.TestCase):
     def test_meta_types(self):
         metta = MeTTa()
         ### Basic functional types
-        metta.add_atom(r"id_num", OperationAtom("id_num", lambda x: x, ['Number', 'Number']))
-        metta.add_atom(r"as_int", OperationAtom("as_int", lambda x: x, ['Number', 'Int']))
+        metta.register_atom(r"id_num", OperationAtom("id_num", lambda x: x, ['Number', 'Number']))
+        metta.register_atom(r"as_int", OperationAtom("as_int", lambda x: x, ['Number', 'Int']))
         v1 = metta.run("!(id_num (+ 2 2))")[0]
         v2 = metta.run("! 4")[0]
         v3 = metta.run("!(as_int (+ 2 2))")[0]
@@ -70,7 +70,7 @@ class GroundedTypeTest(unittest.TestCase):
         ### Grounded functions over Atom
         ### (should use unwrap=False to deal with non-grounded atoms)
         # All grounded and ungrounded, typed and untyped symbols should be processed
-        metta.add_atom(r"id_atom", OperationAtom("id_atom",
+        metta.register_atom(r"id_atom", OperationAtom("id_atom",
             lambda x: [x], [AtomType.ATOM, AtomType.ATOM], unwrap=False))
         self.assertEqual(metta.run('''
             !(id_atom 1)
@@ -88,7 +88,7 @@ class GroundedTypeTest(unittest.TestCase):
         # Nothing is done with `$t` on the Grounded side, but we check that:
         # - the argument has really a variable type
         # - the interpreter doesn't reject to process this grounded function
-        metta.add_atom(r"id_poly_w", OperationAtom("id_poly_w", lambda x: [x], ['$t', '$t'], unwrap=False))
+        metta.register_atom(r"id_poly_w", OperationAtom("id_poly_w", lambda x: [x], ['$t', '$t'], unwrap=False))
         self.assertEqual(metta.run('''
             !(id_poly_w 1)
             !(id_poly_w myAtom)
@@ -107,10 +107,10 @@ class GroundedTypeTest(unittest.TestCase):
         ### Polymorphic with unwrapping
         # TODO: automatic unwrapping of arguments of grounded polymorphic function
         #       is not supported on the Python side
-        metta.add_atom(r"id_poly_u", OperationAtom("id_poly_u", lambda x: x, ['$t', '$t']))
+        metta.register_atom(r"id_poly_u", OperationAtom("id_poly_u", lambda x: x, ['$t', '$t']))
         ### Undefined arguments
         # It is a bad idea to have an undefined result with automatic wrapping, but it's ok here
-        metta.add_atom(r"id_undef", OperationAtom("id_undef", lambda x: x, [AtomType.UNDEFINED, AtomType.UNDEFINED]))
+        metta.register_atom(r"id_undef", OperationAtom("id_undef", lambda x: x, [AtomType.UNDEFINED, AtomType.UNDEFINED]))
         self.assertEqual(metta.run('''
             !(id_undef 1)
             !(id_undef False)
@@ -136,8 +136,8 @@ class GroundedTypeTest(unittest.TestCase):
     @unittest.skip("Behavior to be defined")
     def test_undefined_operation_type(self):
         metta = MeTTa()
-        metta.add_atom("untyped", ValueAtom(None))
-        metta.add_atom("untop", OperationAtom("untop", lambda: None))
+        metta.register_atom("untyped", ValueAtom(None))
+        metta.register_atom("untop", OperationAtom("untop", lambda: None))
         self.assertNotEqual(metta.parse_single("untop").get_grounded_type(),
                 metta.parse_single("untyped").get_grounded_type())
 

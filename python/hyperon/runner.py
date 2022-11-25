@@ -11,7 +11,7 @@ class MeTTa:
             space = GroundingSpace()
         self.cmetta = hp.metta_new(space.cspace, cwd)
         self.load_py_module("hyperon.stdlib")
-        self.add_atom('extend-py!',
+        self.register_atom('extend-py!',
             OperationAtom('extend-py!',
                           lambda name: self.load_py_module(name) or [],
                           [AtomType.UNDEFINED, AtomType.ATOM], unwrap=False))
@@ -25,11 +25,11 @@ class MeTTa:
     def tokenizer(self):
         return Tokenizer._from_ctokenizer(hp.metta_tokenizer(self.cmetta))
 
-    def add_token(self, regexp, constr):
+    def register_token(self, regexp, constr):
         self.tokenizer().register_token(regexp, constr)
 
-    def add_atom(self, name, symbol):
-        self.add_token(name, lambda _: symbol)
+    def register_atom(self, name, symbol):
+        self.register_token(name, lambda _: symbol)
 
     def _parse_all(self, program):
         parser = SExprParser(program)
@@ -51,7 +51,7 @@ class MeTTa:
         mod = import_module(name)
         for n in dir(mod):
             obj = getattr(mod, n)
-            if '__name__' in dir(obj) and obj.__name__ in ['metta_add_atoms', 'metta_add_tokens']:
+            if '__name__' in dir(obj) and obj.__name__ in ['metta_register_atoms', 'metta_register_tokens']:
                 obj(self)
 
     def import_file(self, fname):

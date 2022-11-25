@@ -44,8 +44,8 @@ class MinelogyTest(unittest.TestCase):
              ((: wooden_pickaxe type) (: $_ variant) (: 1 quantity)))
             ''')
         utils = MeTTa()
-        utils.add_atom("&mines", mines.run("! &self")[0][0])
-        utils.add_atom("&crafts", crafts.run("! &self")[0][0])
+        utils.register_atom("&mines", mines.run("! &self")[0][0])
+        utils.register_atom("&crafts", crafts.run("! &self")[0][0])
         utils.run('''
             (= (get-mine-block $ent-type $ent-var)
                (match &mines
@@ -170,7 +170,7 @@ class MinelogyTest(unittest.TestCase):
                ((CEntityT wooden_pickaxe) 1))
             ''')
         utils = MeTTa()
-        utils.add_atom("&kb", kb.run("! &self")[0][0])
+        utils.register_atom("&kb", kb.run("! &self")[0][0])
         utils.run('''
             (= (get-mine-block $t)
                (match &kb
