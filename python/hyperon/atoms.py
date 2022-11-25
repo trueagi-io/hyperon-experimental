@@ -99,6 +99,19 @@ def call_execute_on_grounded_atom(gnd, typ, args):
     args = [Atom._from_catom(catom) for catom in args]
     return gnd.execute(*args, res_typ=res_typ)
 
+def call_match_on_grounded_atom(gnd, typ):
+    # const char *var;
+    # const struct atom_t *atom;
+    # placeholders, implement your custom functionaluty code here 
+    #result = hp.grounding_space_query(self.cspace, pattern.catom)
+    #return [{k: Atom._from_catom(v) for k, v in bindings.items()} for bindings in result]
+    atom_ = Atom._from_catom(typ)
+    result_dict = {"var", atom_}
+    result_array = []
+    result_array.append(result_dict)
+    #return gnd.match_(gnd, typ)
+    return result_array.copy
+
 def atoms_are_equivalent(first, second):
     return hp.atoms_are_equivalent(first.catom, second.catom)
 

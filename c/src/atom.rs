@@ -1,6 +1,7 @@
 use hyperon::*;
 
 use crate::util::*;
+use crate::space::*;
 
 use std::os::raw::*;
 use std::fmt::Display;
@@ -24,11 +25,13 @@ pub struct exec_error_t {
     pub error: ExecError,
 }
 
+
 #[repr(C)]
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
     execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
+    match_: extern "C" fn(*const gnd_t, *const atom_t) -> *mut binding_array_t,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
     display: extern "C" fn(*const gnd_t, *mut c_char, usize) -> usize,
@@ -272,8 +275,14 @@ impl Grounded for CGrounded {
     }
 
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        match_by_equality(self, other)
+        //match_by_equality(self, other)
+        let res_c = (self.api().match_)(self.get_ptr(), (other as *const Atom).cast::<atom_t>());
+        let res_rust = res_c.cast::<matcher::MatchResultIter>();
+        let result = *unsafe{ Box::from_raw(res_rust) };
+        result
     }
+
+
 }
 
 impl PartialEq for CGrounded {
