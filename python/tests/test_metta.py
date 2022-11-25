@@ -34,12 +34,11 @@ class MettaTest(unittest.TestCase):
 
         self.assertEqual([[S('T')]], result)
 
-    @unittest.skip("TODO: panics because error cannot be returned from interpreter")
-    def test_no_successful_alternatives(self):
+    def test_gnd_type_error(self):
         program = '''
           !(+ 2 "String")
         '''
         runner = MeTTa()
         result = runner.run(program)
 
-        self.assertEqual([[]], result)
+        self.assertEqual([[E(S('Error'), ValueAtom('String'), S('BadType'))]], result)
