@@ -10,11 +10,11 @@ class MettaTest(unittest.TestCase):
         atom = metta.parse_single('(A B)')
         self.assertEqual(atom, E(S('A'), S('B')))
 
-        metta.add_atom('A', S('C'))
+        metta.register_atom('A', S('C'))
         atom = metta.parse_single('(A B)')
         self.assertEqual(atom, E(S('C'), S('B')))
 
-        metta.add_atom('A', S('F'))
+        metta.register_atom('A', S('F'))
         atom = metta.parse_single('(A B)')
         self.assertEqual(atom, E(S('F'), S('B')))
 

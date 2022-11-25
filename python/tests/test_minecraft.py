@@ -35,9 +35,9 @@ class MinecraftTest(unittest.TestCase):
     def test_minecraft_planning(self):
         metta = MeTTa()
         inventory = [S('inventory'), S('hands')]
-        metta.add_token("in-inventory", lambda _: newInInventory(inventory))
-        metta.add_token("craft", lambda _: newCraftOp(inventory))
-        metta.add_token("mine", lambda _: newMineOp(inventory))
+        metta.register_token("in-inventory", lambda _: newInInventory(inventory))
+        metta.register_token("craft", lambda _: newCraftOp(inventory))
+        metta.register_token("mine", lambda _: newMineOp(inventory))
 
         metta.run('''
             (: if (-> Bool Atom Atom Atom))
@@ -76,7 +76,7 @@ class MinecraftTest(unittest.TestCase):
 
         inventory = [S('inventory'), S('hands'), S('crafting-table'), S('stick'),
                      S('iron-ingot'), S('iron-pickaxe')]
-        metta.add_token("in-inventory", lambda _: newInInventory(inventory))
+        metta.register_token("in-inventory", lambda _: newInInventory(inventory))
 
         metta.run('''
             (= (can-be-mined diamond) True)
