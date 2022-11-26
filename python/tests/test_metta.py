@@ -10,11 +10,11 @@ class MettaTest(unittest.TestCase):
         atom = metta.parse_single('(A B)')
         self.assertEqual(atom, E(S('A'), S('B')))
 
-        metta.add_atom('A', S('C'))
+        metta.register_atom('A', S('C'))
         atom = metta.parse_single('(A B)')
         self.assertEqual(atom, E(S('C'), S('B')))
 
-        metta.add_atom('A', S('F'))
+        metta.register_atom('A', S('F'))
         atom = metta.parse_single('(A B)')
         self.assertEqual(atom, E(S('F'), S('B')))
 
@@ -34,12 +34,11 @@ class MettaTest(unittest.TestCase):
 
         self.assertEqual([[S('T')]], result)
 
-    @unittest.skip("TODO: panics because error cannot be returned from interpreter")
-    def test_no_successful_alternatives(self):
+    def test_gnd_type_error(self):
         program = '''
           !(+ 2 "String")
         '''
         runner = MeTTa()
         result = runner.run(program)
 
-        self.assertEqual([[]], result)
+        self.assertEqual([[E(S('Error'), ValueAtom('String'), S('BadType'))]], result)

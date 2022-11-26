@@ -96,6 +96,17 @@ impl Metta {
                 |token| { Atom::gnd(Number::from_float_str(token)) });
             tref.register_token(regex(r"True|False"),
                 |token| { Atom::gnd(Bool::from_str(token)) });
+            let sum_op = Atom::gnd(SumOp{});
+            tref.register_token(regex(r"\+"), move |_| { sum_op.clone() });
+            let sub_op = Atom::gnd(SubOp{});
+            tref.register_token(regex(r"\-"), move |_| { sub_op.clone() });
+            let mul_op = Atom::gnd(MulOp{});
+            tref.register_token(regex(r"\*"), move |_| { mul_op.clone() });
+            let div_op = Atom::gnd(DivOp{});
+            tref.register_token(regex(r"/"), move |_| { div_op.clone() });
+            let mod_op = Atom::gnd(ModOp{});
+            tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
+    
         }
         Self{ space, tokenizer, settings }
     }
