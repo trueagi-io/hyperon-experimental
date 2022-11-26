@@ -270,7 +270,7 @@ impl Grounded for CGrounded {
                 log::trace!("CGrounded::execute: atom: {:?}, args: {:?}, ret: {:?}", self, args, ret);
                 ret
             },
-            None => panic!("Trying to execute non executable atom"),
+            None => execute_not_executable(self)
         }
     }
 

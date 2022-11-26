@@ -9,7 +9,7 @@ class ExamplesTest(unittest.TestCase):
         metta = MeTTa()
         obj = SomeObject()
         # using & as a prefix is not obligatory, but is naming convention
-        metta.add_atom("&obj", ValueAtom(obj))
+        metta.register_atom("&obj", ValueAtom(obj))
 
         target = metta.parse_single('(call:foo &obj)')
         # interpreting this target in another space still works,
@@ -51,10 +51,10 @@ class ExamplesTest(unittest.TestCase):
         metta = MeTTa()
         pglob = Global(10)
         ploc = 10
-        metta.add_token("pglob", lambda _: ValueAtom(pglob))
-        metta.add_token("ploc", lambda _: ValueAtom(ploc))
-        metta.add_token("Setter", lambda token: newNewAtom(token, Setter))
-        metta.add_token("SetAtom", lambda token: newNewAtom(token, Setter, False))
+        metta.register_token("pglob", lambda _: ValueAtom(pglob))
+        metta.register_token("ploc", lambda _: ValueAtom(ploc))
+        metta.register_token("Setter", lambda token: newNewAtom(token, Setter))
+        metta.register_token("SetAtom", lambda token: newNewAtom(token, Setter, False))
         # Just checking that interpretation of "pglob" gives us
         # a grounded atom that stores 10
         self.assertEqual(metta.run('! pglob')[0][0].get_object().value.get(), 10)
@@ -81,7 +81,7 @@ class ExamplesTest(unittest.TestCase):
         self.assertEqual(metta.run('! ploc')[0][0].get_object().value, 10)
         # Another way is to return the same atom each time
         ploca = ValueAtom(ploc)
-        metta.add_token("ploca", lambda _: ploca)
+        metta.register_token("ploca", lambda _: ploca)
         # It will be not affected by assigning unwrapped values:
         # we are still copying values while unwrapping
         metta.run('!(call:let (Setter ploca 5))')
@@ -165,7 +165,7 @@ class ExamplesTest(unittest.TestCase):
             (= (inverse $x) (match &self (= $y $x) $y))
         ''')
         metta2 = MeTTa()
-        metta2.add_atom("&space1", metta1.run("! &self")[0][0])
+        metta2.register_atom("&space1", metta1.run("! &self")[0][0])
         metta2.run('''
             (= C B)
             (= (f-in-s2) success)
