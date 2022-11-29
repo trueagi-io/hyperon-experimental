@@ -8,8 +8,7 @@ def my_dict_atoms():
         'get-by-key': OperationAtom('get-by-key', lambda d, k: d[k])
         }
 
-@pass_metta
-@register_tokens
+@register_tokens(pass_metta=True)
 def my_get_runner(metta):
     return {
         '&runner': lambda _: ValueAtom(metta)
