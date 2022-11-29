@@ -51,7 +51,7 @@ class MeTTa:
         mod = import_module(name)
         for n in dir(mod):
             obj = getattr(mod, n)
-            if '__name__' in dir(obj) and obj.__name__ in ['metta_register_atoms', 'metta_register_tokens']:
+            if '__name__' in dir(obj) and obj.__name__ == 'metta_register':
                 obj(self)
 
     def import_file(self, fname):
