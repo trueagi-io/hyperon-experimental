@@ -32,7 +32,7 @@ pub struct gnd_api_t {
     // One can assign NULL to this field, it means the atom is not executable
     execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
     //match_: extern "C" fn(*const gnd_t, *const atom_t) -> *mut binding_array_t,
-    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, lambda_t<binding_array_t>, *mut c_void) -> *mut exec_error_t>,
+    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, lambda_t<binding_array_t>, *mut c_void)>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
     display: extern "C" fn(*const gnd_t, *mut c_char, usize) -> usize,
@@ -103,6 +103,7 @@ pub extern "C" fn atom_to_str(atom: *const atom_t, callback: c_str_callback_t, c
     let atom = unsafe{ &(*atom).atom };
     callback(str_as_cstr(atom.to_string().as_str()).as_ptr(), context);
 }
+
 
 #[no_mangle]
 pub extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
@@ -249,7 +250,32 @@ impl CGrounded {
     fn free(&mut self) {
         (self.api().free)(self.get_mut_ptr());
     }
+
+    pub extern "C" fn match_callback(data: binding_array_t, mut context: *mut c_void) {
+        let mut vec_: Vec<(VariableAtom, Atom)> = Vec::new();
+
+        let mut ptr_array = data.items.cast_mut();
+        //let box_: Box<binding_t> = unsafe{Box::new((*data.items))};
+        //let box_ptr = Box::into_raw(box_);
+        let vec_array = unsafe{Vec::from_raw_parts(ptr_array, (data.size), (data.size))};
+
+        for each in vec_array{
+            let x:*const c_char = unsafe{each.var};
+            let str_ = cstr_as_str(x);
+            let var1 = VariableAtom::new(str_);
+            let var = var1.make_unique();
+            let atom_ = unsafe{ &(*each.atom).atom };
+            vec_.push((var,(*atom_).clone()));
+
+        }
+
+        use hyperon::matcher::Bindings;
+        let mut binding = Bindings::from(vec_);
+        context = (binding as *mut Bindings).cast::<c_void>();
+    }
+
 }
+
 
 impl Grounded for CGrounded {
     fn type_(&self) -> Atom {
@@ -276,11 +302,23 @@ impl Grounded for CGrounded {
     }
 
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        //match_by_equality(self, other)
-        let res_c = (self.api().match_)(self.get_ptr(), (other as *const Atom).cast::<atom_t>());
-        let res_rust = res_c.cast::<matcher::MatchResultIter>();
-        let result = *unsafe{ Box::from_raw(res_rust) };
-        result
+        match self.api().match_ {
+            Some(func) => {
+                let mut vec_: Vec<binding_t> = Vec::new();
+                //let mut binding_: binding_array_t = (&vec_).into();
+                let mut context: *mut c_void = (&mut vec_ as *mut Vec<binding_t>).cast::<c_void>();
+
+                //CGrounded::match_callback(binding_, context);
+                func(self.get_ptr(), (other as *const Atom).cast::<atom_t>(), CGrounded::match_callback, context);
+
+                let res_rust = context.cast::<matcher::MatchResultIter>();
+                let result = *unsafe{ Box::from_raw(res_rust) };
+                result
+            },
+            None => match_by_equality(self, other)
+        }
+        
+        
     }
 
 
@@ -313,3 +351,22 @@ impl Drop for CGrounded {
     }
 }
 
+#[cfg(test)]
+mod tests {
+use super::*;
+    #[test]
+    pub fn test_api(){
+
+        let mut vec_: Vec<binding_t> = Vec::new();
+        let mut binding_: binding_array_t = (&vec_).into();
+        let mut context: *mut c_void = (&mut vec_ as *mut Vec<binding_t>).cast::<c_void>();
+
+        CGrounded::match_callback(binding_, context);
+        
+        //let mut gnd: *mut gnd_t;
+        //let mut new_gnd = CGrounded(AtomicPtr::new(gnd));
+        //let atom_= Atom::gnd(CGrounded(AtomicPtr::new(gnd)));
+        //new_gnd.match_(&atom_);
+        ;
+    }
+}

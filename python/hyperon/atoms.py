@@ -103,8 +103,6 @@ def call_match_on_grounded_atom(gnd, typ):
     # const char *var;
     # const struct atom_t *atom;
     # placeholders, implement your custom functionaluty code here 
-    #result = hp.grounding_space_query(self.cspace, pattern.catom)
-    #return [{k: Atom._from_catom(v) for k, v in bindings.items()} for bindings in result]
     atom_ = Atom._from_catom(typ)
     result_dict = {"var", atom_}
     result_array = []
