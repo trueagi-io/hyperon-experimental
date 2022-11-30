@@ -55,8 +55,8 @@ pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, id
 
 #[repr(C)]
 pub struct binding_t {
-    var: *const c_char,
-    atom: *const atom_t,
+    pub var: *const c_char,
+    pub atom: *const atom_t,
 }
 
 pub type binding_array_t = array_t<binding_t>;
