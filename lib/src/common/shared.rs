@@ -2,7 +2,9 @@ use std::sync::{Arc, Mutex};
 use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::cell::RefCell;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
+use crate::atom::*;
+use crate::matcher::MatchResultIter;
 
 pub trait LockBorrow<T> {
     fn borrow(&self) -> Box<dyn Deref<Target=T> + '_>;
@@ -133,5 +135,25 @@ impl<T> Clone for Shared<T> {
 impl<T: Debug> Debug for Shared<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?} addr {:?}", self.0, Rc::as_ptr(&self.0))
+    }
+}
+
+impl<T: Display> Display for Shared<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "Shared GroundingSpace addr {:?}", Rc::as_ptr(&self.0))
+    }
+}
+
+impl<T: Grounded> Grounded for Shared<T> {
+    fn type_(&self) -> Atom {
+        (*self.0.borrow()).type_()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        (*self.0.borrow()).match_(other)
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        (*self.0.borrow()).execute(args)
     }
 }

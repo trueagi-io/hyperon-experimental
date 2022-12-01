@@ -3,8 +3,10 @@
 
 use crate::*;
 use crate::atom::*;
+use crate::common::shared::Shared;
 use crate::atom::matcher::{Bindings, Unifications, match_atoms};
 use crate::atom::subexpr::split_expr;
+use crate::matcher::MatchResultIter;
 
 use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
@@ -334,6 +336,20 @@ impl Display for GroundingSpace {
     }
 }
 
+impl Grounded for GroundingSpace {
+    fn type_(&self) -> Atom {
+        rust_type_atom::<Shared<GroundingSpace>>()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        Box::new(self.query(other).into_iter())
+    }
+
+    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        execute_not_executable(self)
+    }
+}
+
 fn collect_variables(atom: &Atom) -> HashSet<VariableAtom> {
     fn recursion(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
         match atom {
@@ -594,6 +610,18 @@ mod test {
         space.add(expr!("A" "Sam"));
 
         let result = space.query(&expr!("," ("implies" ("B" x) z) ("implies" ("A" x) y) ("A" x)));
+        assert_eq!(result, vec![bind!{x: sym!("Sam"), y: expr!("B" "Sam"), z: expr!("C" "Sam")}]);
+    }
+
+    #[test]
+    fn test_custom_match_with_space() {
+        let mut main_space = GroundingSpace::new();
+        let mut inserted_space = GroundingSpace::new();
+        inserted_space.add(expr!("implies" ("B" x) ("C" x)));
+        inserted_space.add(expr!("implies" ("A" x) ("B" x)));
+        inserted_space.add(expr!("A" "Sam"));
+        main_space.add(Atom::gnd(inserted_space));
+        let result = main_space.query(&expr!("," ("implies" ("B" x) z) ("implies" ("A" x) y) ("A" x)));
         assert_eq!(result, vec![bind!{x: sym!("Sam"), y: expr!("B" "Sam"), z: expr!("C" "Sam")}]);
     }
 }
