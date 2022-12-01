@@ -6,6 +6,7 @@ use crate::atom::*;
 use crate::atom::matcher::{Bindings, Unifications, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::matcher::MatchResultIter;
+use crate::common::collections::ListMap;
 
 use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
@@ -13,6 +14,177 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 
 // Grounding space
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+enum IndexKey {
+    Symbol(SymbolAtom),
+    Wildcard,
+    ExpressionBegin(ExpressionAtom, usize),
+    ExpressionEnd,
+}
+
+impl IndexKey {
+    fn keys_from_atom(atom: &Atom) -> Vec<IndexKey> {
+        match atom {
+            Atom::Symbol(sym) => vec![IndexKey::Symbol(sym.clone())],
+            Atom::Expression(expr) => {
+                let mut keys = Vec::new();
+                let mut expr_len = 0usize;
+
+                expr_len += 1;
+                keys.push(IndexKey::ExpressionEnd);
+
+                for child in expr.children().iter().rev() {
+                    let mut children = IndexKey::keys_from_atom(child);
+                    expr_len += children.len();
+                    keys.append(&mut children);
+                }
+
+                keys.push(IndexKey::ExpressionBegin(expr.clone(), expr_len));
+                keys
+            },
+            _ => vec![IndexKey::Wildcard],
+        }
+    }
+}
+
+#[derive(Clone)]
+struct IndexTree<T> {
+    // FIXME: improve performance using HashMap for symbols and Vec for expressions
+    next: ListMap<IndexKey, Box<IndexTree<T>>>,
+    leaf: Vec<T>,
+}
+
+macro_rules! walk_index_tree {
+    ( $IndexTreeIter:ident, {$( $mut_:tt )?}, $raw_mut:tt ) => {
+        struct $IndexTreeIter<'a, T, F>
+            where F: Fn(&'a $( $mut_ )? IndexTree<T>, IndexKey, Vec<IndexKey>, &mut dyn FnMut(*$raw_mut IndexTree<T>, Vec<IndexKey>))
+        {
+            queue: Vec<(* $raw_mut IndexTree<T>, Vec<IndexKey>)>,
+            next_op: F,
+            _marker: std::marker::PhantomData<&'a $( $mut_ )? IndexTree<T>>,
+        }
+
+        impl<'a, T, F> $IndexTreeIter<'a, T, F>
+            where F: Fn(&'a $( $mut_ )? IndexTree<T>, IndexKey, Vec<IndexKey>, &mut dyn FnMut(*$raw_mut IndexTree<T>, Vec<IndexKey>))
+        {
+            fn new(idx: &'a $( $mut_ )? IndexTree<T>, atom: &Atom, next_op: F) -> Self {
+                let idx: * $raw_mut IndexTree<T> = idx;
+                let mut queue = Vec::new();
+
+                queue.push((idx, IndexKey::keys_from_atom(&atom)));
+
+                Self{ queue: queue, next_op, _marker: std::marker::PhantomData }
+            }
+
+            fn call_next(&mut self, idx: * $raw_mut IndexTree<T>, key: IndexKey, keys: Vec<IndexKey>) {
+                let queue = &mut self.queue;
+                (self.next_op)(unsafe{ & $( $mut_ )? *idx}, key, keys, &mut |index, keys| queue.push((index, keys)));
+            }
+        }
+
+        impl<'a, T, F> Iterator for $IndexTreeIter<'a, T, F>
+            where F: Fn(&'a $( $mut_ )? IndexTree<T>, IndexKey, Vec<IndexKey>, &mut dyn FnMut(*$raw_mut IndexTree<T>, Vec<IndexKey>))
+        {
+            type Item = &'a $( $mut_ )? IndexTree<T>;
+
+            fn next(&mut self) -> Option<Self::Item> {
+                while let Some((idx, mut keys)) = self.queue.pop() {
+                    match keys.pop() {
+                        None => return Some(unsafe{ & $( $mut_ )? *idx }),
+                        Some(key) => self.call_next(idx, key, keys),
+                    }
+                }
+                None
+            }
+        }
+    }
+}
+
+walk_index_tree!(IndexTreeIterMut, { mut }, mut);
+walk_index_tree!(IndexTreeIter, { /* no mut */ }, const);
+
+impl<T: PartialEq + Clone> IndexTree<T> {
+
+    fn new() -> Self {
+        Self{ next: ListMap::new(), leaf: Vec::new() }
+    }
+
+    fn next_or_insert<'a>(&'a mut self, key: IndexKey, keys: Vec<IndexKey>,
+            callback: &mut dyn FnMut(*mut IndexTree<T>, Vec<IndexKey>)) {
+        // FIXME: make faster and remove clone
+        self.next.entry(key.clone()).or_insert(Box::new(IndexTree::new()));
+        let idx = self.next.get_mut(&key).unwrap();
+        if let IndexKey::ExpressionBegin(_, expr_len) = key {
+            let len = keys.len() - expr_len;
+            let tail = &keys.as_slice()[..len];
+            callback(idx.as_mut(), tail.to_vec());
+        }
+        callback(idx.as_mut(), keys)
+    }
+
+    fn remove_value(&mut self, value: &T) -> bool {
+        match self.leaf.iter().position(|other| *other == *value) {
+            Some(position) => {
+                self.leaf.remove(position);
+                true
+            },
+            None => false,
+        }
+    }
+
+    fn next<'a>(&'a self, key: IndexKey, keys: Vec<IndexKey>,
+            callback: &mut dyn FnMut(*const IndexTree<T>, Vec<IndexKey>)) {
+        match key {
+            IndexKey::Symbol(_) => {
+                self.next.get(&key).map_or((), |idx| callback(idx.as_ref(), keys.clone()));
+                self.next.get(&IndexKey::Wildcard).map_or((), |idx| callback(idx.as_ref(), keys));
+            },
+            IndexKey::ExpressionEnd => self.next.get(&key).map_or((), |idx| callback(idx.as_ref(), keys)),
+            IndexKey::ExpressionBegin(_, expr_len) => {
+                let len = keys.len() - expr_len;
+                let tail = &keys.as_slice()[..len];
+                self.next.get(&IndexKey::Wildcard).map_or((), |idx| callback(idx.as_ref(), tail.to_vec()));
+                match self.next.get(&key) {
+                    Some(idx) => callback(idx.as_ref(), keys),
+                    None => {
+                        self.next.iter().for_each(|(key, idx)| {
+                            if let IndexKey::ExpressionBegin(_, _) = *key {
+                                callback(idx.as_ref(), keys.clone());
+                            }
+                        });
+                    }
+                }
+            },
+            IndexKey::Wildcard =>
+                self.next.iter().for_each(|(key, idx)| {
+                    if *key != IndexKey::ExpressionEnd {
+                        callback(idx.as_ref(), keys.clone())
+                    }
+                }),
+        }
+    }
+    
+    fn add(&mut self, key: &Atom, value: T) {
+        IndexTreeIterMut::new(self, key, |idx, key, keys, callback| {
+            idx.next_or_insert(key, keys, callback)
+        }).for_each(|idx| idx.leaf.push(value.clone()));
+    }
+
+    fn remove(&mut self, key: &Atom, value: &T) -> bool {
+        IndexTreeIterMut::new(self, &key, |idx, key, keys, callback| {
+            // FIXME: remove second expression path
+            idx.next.get_mut(&key).map_or({}, |idx| callback(idx.as_mut(), keys))
+        }).map(|idx| idx.remove_value(value)).fold(false, |a, b| a | b)
+    }
+
+    // FIXME: actually we can call match on Atom instead of returning it
+    fn get(&self, pattern: &Atom) -> impl Iterator<Item=&T> {
+        IndexTreeIter::new(self, &pattern, |idx, key, keys, callback| {
+            idx.next(key, keys, callback)
+        }).flat_map(|idx| idx.leaf.as_slice().iter())
+    }
+}
 
 /// Symbol to concatenate queries to space.
 pub const COMMA_SYMBOL : Atom = sym!(",");
@@ -621,5 +793,47 @@ mod test {
         ]);
         let result: Vec<Bindings> = match_atoms(&Atom::gnd(space), &expr!("A" {1} x x)).collect();
         assert_eq!(result, vec![bind!{x: sym!("a")}]);
+    }
+
+    trait IntoVec<T: Ord> {
+        fn to_vec(self) -> Vec<T>;
+    }
+
+    impl<'a, T: 'a + Ord + Clone, I: Iterator<Item=&'a T>> IntoVec<T> for I {
+        fn to_vec(self) -> Vec<T> {
+            let mut vec: Vec<T> = self.cloned().collect();
+            vec.sort();
+            vec
+        }
+    }
+
+    #[test]
+    fn index_tree_add_atom_basic() {
+        let mut index = IndexTree::new();
+        index.add(&Atom::sym("A"), 1);
+        index.add(&Atom::value(1), 2);
+        index.add(&Atom::var("a"), 3);
+        index.add(&expr!("A" "B"), 4);
+
+        // TODO: index doesn't match grounded atoms yet, it considers them as wildcards
+        // as matching can be redefined for them
+        assert_eq!(index.get(&Atom::sym("A")).to_vec(), vec![1, 2, 3]);
+        assert_eq!(index.get(&Atom::sym("B")).to_vec(), vec![2, 3]);
+
+        assert_eq!(index.get(&Atom::value(1)).to_vec(), vec![1, 2, 3, 4]);
+        assert_eq!(index.get(&Atom::value(2)).to_vec(), vec![1, 2, 3, 4]);
+
+        assert_eq!(index.get(&expr!("A" "B")).to_vec(), vec![2, 3, 4]);
+        assert_eq!(index.get(&expr!("A" "C")).to_vec(), vec![2, 3]);
+    }
+
+    #[test]
+    fn index_tree_add_atom_expr() {
+        let mut index = IndexTree::new();
+        index.add(&expr!(("A") "B"), 1);
+        index.add(&expr!(a "C"), 2);
+
+        assert_eq!(index.get(&expr!(a "B")).to_vec(), vec![1]);
+        assert_eq!(index.get(&expr!(("A") "C")).to_vec(), vec![2]);
     }
 }
