@@ -102,13 +102,13 @@ def call_execute_on_grounded_atom(gnd, typ, args):
 def call_match_on_grounded_atom(gnd, typ):
     # const char *var;
     # const struct atom_t *atom;
-    # placeholders, implement your custom functionaluty code here 
-    atom_ = Atom._from_catom(typ)
-    result_dict = {"var", atom_}
+    # placeholders, implement your custom functionaluty here 
+    atom_test = Atom._from_catom(typ)
+    var_test = "var_test"
+    bnd_res = {var_test, atom_test}
     result_array = []
-    result_array.append(result_dict)
-    #return gnd.match_(gnd, typ)
-    return result_array.copy
+    result_array.append(bnd_res)
+    return result_array
 
 def atoms_are_equivalent(first, second):
     return hp.atoms_are_equivalent(first.catom, second.catom)

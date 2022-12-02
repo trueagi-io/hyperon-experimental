@@ -214,6 +214,10 @@ impl VariableAtom {
         Self{ name: name.into(), id: 0 }
     }
 
+    pub fn new_id<T: Into<String>>(name: T, id: usize) -> Self {
+        Self{ name: name.into(), id: id }
+    }
+
     // TODO: for now name() is used to expose keys of Bindings via C API as
     // strings (which are variable names). Looks like better approach is using
     // Atom as a key in Bindings structure but it requires implementing

@@ -146,8 +146,6 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bi
     py::list py_list = call_match_on_grounded_atom(pyobj, pytyp);
     
     binding_array_t data;
-    //binding_array_t & data1 = & py_list;
-
     size_t size = py::len(py_list);
     binding_t c_binding_t[size];
     for (size_t i = 0; i < size; ++i)
@@ -155,7 +153,7 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bi
         py::dict dict_ = py_list[i];
         for (auto item : dict_){
             c_binding_t[i].var = (std::string(py::str(item.first))).c_str();
-            c_binding_t[i].atom = atom_clone(item.second.cast<CAtom &>().ptr);
+            c_binding_t[i].atom = item.second.cast<CAtom &>().ptr;
         }
     }
     data = {c_binding_t, size};
