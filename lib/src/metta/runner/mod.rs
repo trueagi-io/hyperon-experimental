@@ -47,7 +47,7 @@ impl Metta {
 
             let match_op = Atom::gnd(MatchOp{});
             tref.register_token(regex(r"match"), move |_| { match_op.clone() });
-            let space_val = Atom::value(space.clone());
+            let space_val = Atom::gnd(space.clone());
             tref.register_token(regex(r"&self"), move |_| { space_val.clone() });
             let import_op = Atom::gnd(ImportOp::new(cwd.clone(), space.clone(), tokenizer.clone()));
             tref.register_token(regex(r"import!"), move |_| { import_op.clone() });

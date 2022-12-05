@@ -5,6 +5,7 @@ use crate::*;
 use crate::atom::*;
 use crate::atom::matcher::{Bindings, Unifications, match_atoms};
 use crate::atom::subexpr::split_expr;
+use crate::matcher::MatchResultIter;
 
 use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
@@ -334,6 +335,20 @@ impl Display for GroundingSpace {
     }
 }
 
+impl Grounded for GroundingSpace {
+    fn type_(&self) -> Atom {
+        rust_type_atom::<GroundingSpace>()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        Box::new(self.query(other).into_iter())
+    }
+
+    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        execute_not_executable(self)
+    }
+}
+
 fn collect_variables(atom: &Atom) -> HashSet<VariableAtom> {
     fn recursion(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
         match atom {
@@ -595,5 +610,16 @@ mod test {
 
         let result = space.query(&expr!("," ("implies" ("B" x) z) ("implies" ("A" x) y) ("A" x)));
         assert_eq!(result, vec![bind!{x: sym!("Sam"), y: expr!("B" "Sam"), z: expr!("C" "Sam")}]);
+    }
+
+    #[test]
+    fn test_custom_match_with_space() {
+        let space = GroundingSpace::from_vec(vec![
+            expr!("A" {1} x "a"),
+            expr!("B" {1} x "b"),
+            expr!("A" {2} x "c"),
+        ]);
+        let result: Vec<Bindings> = match_atoms(&Atom::gnd(space), &expr!("A" {1} x x)).collect();
+        assert_eq!(result, vec![bind!{x: sym!("a")}]);
     }
 }

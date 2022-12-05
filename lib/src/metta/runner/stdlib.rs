@@ -69,7 +69,7 @@ impl Grounded for ImportOp {
             Atom::Symbol(space) => {
                 let name = space.name();
                 let space = Shared::new(GroundingSpace::new());
-                let space_atom = Atom::value(space.clone());
+                let space_atom = Atom::gnd(space.clone());
                 let regex = Regex::new(name)
                     .map_err(|err| format!("Could convert space name {} into regex: {}", name, err))?;
                 self.tokenizer.borrow_mut()
@@ -186,7 +186,7 @@ impl Grounded for NewSpaceOp {
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         if args.len() == 0 {
-            let space = Atom::value(Shared::new(GroundingSpace::new()));
+            let space = Atom::gnd(Shared::new(GroundingSpace::new()));
             Ok(vec![space])
         } else {
             Err("new-space doesn't expect arguments".into())
@@ -834,7 +834,7 @@ mod tests {
     #[test]
     fn add_atom_op() {
         let space = Shared::new(GroundingSpace::new());
-        let satom = Atom::value(space.clone());
+        let satom = Atom::gnd(space.clone());
         let res = AddAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         assert!(res.is_empty());
         assert_eq!(*space.borrow().content(), vec![expr!(("foo" "bar"))]);
@@ -846,7 +846,7 @@ mod tests {
             (foo bar)
             (bar foo)
         "));
-        let satom = Atom::value(space.clone());
+        let satom = Atom::gnd(space.clone());
         let res = RemoveAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         // REM: can return Bool in future
         assert!(res.is_empty());
@@ -859,7 +859,7 @@ mod tests {
             (foo bar)
             (bar foo)
         "));
-        let satom = Atom::value(space.clone());
+        let satom = Atom::gnd(space.clone());
         let res = GetAtomsOp{}.execute(&mut vec![satom]).expect("No result returned");
         assert_eq!(res, *space.borrow().content());
         assert_eq!(res, vec![expr!(("foo" "bar")), expr!(("bar" "foo"))]);
