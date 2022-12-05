@@ -122,7 +122,7 @@ impl<T> LockBorrowMut<T> for Shared<T> {
 
 impl<T> PartialEq for Shared<T> {
     fn eq(&self, other: &Self) -> bool {
-        Rc::as_ptr(&self.0) == Rc::as_ptr(&other.0)
+        RefCell::as_ptr(&self.0) == RefCell::as_ptr(&other.0)
     }
 }
 
@@ -134,26 +134,82 @@ impl<T> Clone for Shared<T> {
 
 impl<T: Debug> Debug for Shared<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?} addr {:?}", self.0, Rc::as_ptr(&self.0))
+        write!(f, "Shared{{ val={:?}, addr={:?} }}", RefCell::borrow(&self.0), RefCell::as_ptr(&self.0))
     }
 }
 
 impl<T: Display> Display for Shared<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "Shared GroundingSpace addr {:?}", Rc::as_ptr(&self.0))
+        write!(f, "{}(addr={:?})", RefCell::borrow(&self.0), RefCell::as_ptr(&self.0))
     }
 }
 
 impl<T: Grounded> Grounded for Shared<T> {
     fn type_(&self) -> Atom {
-        (*self.0.borrow()).type_()
+        rust_type_atom::<Self>()
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
-        (*self.0.borrow()).match_(other)
+        self.0.borrow().match_(other)
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-        (*self.0.borrow()).execute(args)
+        self.0.borrow().execute(args)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::bind;
+    use crate::atom::matcher::Bindings;
+
+    #[test]
+    fn debug_for_shared() {
+        let shared = Shared::new("some-string");
+        assert_eq!(format!("{:?}", shared), format!("Shared{{ val=\"some-string\", addr={:?} }}", RefCell::as_ptr(&shared.0)));
+    }
+
+    #[test]
+    fn display_for_shared() {
+        let shared = Shared::new("some-string");
+        assert_eq!(format!("{}", shared), format!("some-string(addr={:?})", RefCell::as_ptr(&shared.0)));
+    }
+
+    struct SharedGrounded {}
+
+    impl Display for SharedGrounded {
+        fn fmt<'a>(&self, f: &mut std::fmt::Formatter<'a>) -> std::fmt::Result {
+            write!(f, "SharedGrounded")
+        }
+    }
+
+    impl Grounded for SharedGrounded {
+        fn type_(&self) -> Atom {
+            Atom::sym("IgnoredType")
+        }
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            let vec = if *other == Atom::sym("matchable") {
+                vec![bind!{ x: Atom::sym("match") }]
+            } else {
+                Vec::new()
+            };
+            Box::new(vec.into_iter())
+        }
+        fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+            let mut result = vec![Atom::sym("executed")];
+            result.append(args);
+            Ok(result)
+        }
+    }
+
+    #[test]
+    fn grounded_for_shared() {
+        let shared = Shared::new(SharedGrounded{});
+
+        assert_eq!(shared.type_(), Atom::sym("hyperon::common::shared::Shared<hyperon::common::shared::tests::SharedGrounded>"));
+        assert_eq!(shared.match_(&Atom::sym("matchable")).collect::<Vec<Bindings>>(), 
+            vec![bind!{ x: Atom::sym("match") }]);
+        assert_eq!(shared.execute(&mut vec![Atom::sym("arg")]), Ok(vec![Atom::sym("executed"), Atom::sym("arg")]));
     }
 }
