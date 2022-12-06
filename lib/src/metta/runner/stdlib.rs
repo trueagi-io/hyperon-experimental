@@ -14,6 +14,8 @@ use std::collections::HashMap;
 use std::iter::FromIterator;
 use regex::Regex;
 
+use super::arithmetics::*;
+
 pub const VOID_SYMBOL : Atom = sym!("%void%");
 
 // TODO: remove hiding errors completely after making it possible passing
@@ -65,6 +67,12 @@ impl Grounded for ImportOp {
             return Err("import! expects a file path as a second argument".into())
         }
 
+        // REM: we need to create new tokenizer not to override &self
+        // TODO: &self, no symbol for space itself, are we importing into different space, etc.
+        // (no need for new tokenizer if the space is the same???)
+        //let new_tokenizer = Tokenizer::new();
+        // Tokenizer is created before adding the token for the space itself
+        let new_tokenizer = self.tokenizer.borrow().clone();
         let space: Result<Shared<GroundingSpace>, String> = match space {
             Atom::Symbol(space) => {
                 let name = space.name();
@@ -85,7 +93,7 @@ impl Grounded for ImportOp {
         let space = space?;
         let mut next_cwd = path.clone();
         next_cwd.pop();
-        let metta = Metta::from_space_cwd(space.clone(), next_cwd);
+        let metta = Metta::from_space_cwd(space.clone(), Shared::new(new_tokenizer), next_cwd);
         let program = std::fs::read_to_string(&path)
             .map_err(|err| format!("Could not read file {}: {}", path.display(), err))?;
         let _result = metta.run(&mut SExprParser::new(program.as_str()))?;
@@ -804,6 +812,83 @@ impl Grounded for LetVarOp {
     fn match_(&self, other: &Atom) -> MatchResultIter {
         match_by_equality(self, other)
     }
+}
+
+pub fn register_tokens(metta: &Metta, cwd: PathBuf) {
+    fn regex(regex: &str) -> Regex {
+        Regex::new(regex).unwrap()
+    }
+    let space = metta.space.clone();
+    let tokenizer = metta.tokenizer.clone();
+    let stdlib_tokenizer = Shared::new(Tokenizer::new());
+    let mut tref = stdlib_tokenizer.borrow_mut();
+
+    let match_op = Atom::gnd(MatchOp{});
+    tref.register_token(regex(r"match"), move |_| { match_op.clone() });
+    let import_op = Atom::gnd(ImportOp::new(cwd.clone(), space.clone(), tokenizer.clone()));
+    tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+    let bind_op = Atom::gnd(BindOp::new(tokenizer.clone()));
+    tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
+    let new_space_op = Atom::gnd(NewSpaceOp{});
+    tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
+    let add_atom_op = Atom::gnd(AddAtomOp{});
+    tref.register_token(regex(r"add-atom"), move |_| { add_atom_op.clone() });
+    let remove_atom_op = Atom::gnd(RemoveAtomOp{});
+    tref.register_token(regex(r"remove-atom"), move |_| { remove_atom_op.clone() });
+    let get_atoms_op = Atom::gnd(GetAtomsOp{});
+    tref.register_token(regex(r"get-atoms"), move |_| { get_atoms_op.clone() });
+    let car_atom_op = Atom::gnd(CarAtomOp{});
+    tref.register_token(regex(r"car-atom"), move |_| { car_atom_op.clone() });
+    let cdr_atom_op = Atom::gnd(CdrAtomOp{});
+    tref.register_token(regex(r"cdr-atom"), move |_| { cdr_atom_op.clone() });
+    let cons_atom_op = Atom::gnd(ConsAtomOp{});
+    tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
+    let case_op = Atom::gnd(CaseOp::new(space.clone()));
+    tref.register_token(regex(r"case"), move |_| { case_op.clone() });
+    let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
+    tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
+    let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
+    tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
+    let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
+    tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
+    let superpose_op = Atom::gnd(SuperposeOp{});
+    tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
+    let pragma_op = Atom::gnd(PragmaOp::new(metta.settings.clone()));
+    tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
+    let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
+    tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
+    let println_op = Atom::gnd(PrintlnOp{});
+    tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
+    let nop_op = Atom::gnd(NopOp{});
+    tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
+    let let_op = Atom::gnd(LetOp{});
+    tref.register_token(regex(r"let"), move |_| { let_op.clone() });
+    let let_var_op = Atom::gnd(LetVarOp{});
+    tref.register_token(regex(r"let\*"), move |_| { let_var_op.clone() });
+
+    tref.register_token(regex(r"\d+"),
+        |token| { Atom::gnd(Number::from_int_str(token)) });
+    tref.register_token(regex(r"\d+(.\d+)([eE][\-\+]?\d+)?"),
+        |token| { Atom::gnd(Number::from_float_str(token)) });
+    tref.register_token(regex(r"True|False"),
+        |token| { Atom::gnd(Bool::from_str(token)) });
+    let sum_op = Atom::gnd(SumOp{});
+    tref.register_token(regex(r"\+"), move |_| { sum_op.clone() });
+    let sub_op = Atom::gnd(SubOp{});
+    tref.register_token(regex(r"\-"), move |_| { sub_op.clone() });
+    let mul_op = Atom::gnd(MulOp{});
+    tref.register_token(regex(r"\*"), move |_| { mul_op.clone() });
+    let div_op = Atom::gnd(DivOp{});
+    tref.register_token(regex(r"/"), move |_| { div_op.clone() });
+    let mod_op = Atom::gnd(ModOp{});
+    tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
+    // Prepend stdlib tokens, so they will not spoil tokens of the runner if any of them exist
+    tref.append_tokens(&mut tokenizer.borrow_mut());
+    tokenizer.borrow_mut().append_tokens(&mut tref);
+    // &self should be updated
+    // REM: adding &self might be done not by stdlib, but by MeTTa itself
+    let space_val = Atom::gnd(space.clone());
+    tokenizer.borrow_mut().register_token(regex(r"&self"), move |_| { space_val.clone() });
 }
 
 #[cfg(test)]

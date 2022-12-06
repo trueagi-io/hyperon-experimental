@@ -331,7 +331,7 @@ PYBIND11_MODULE(hyperonpy, m) {
         }, "Get types of the given atom");
 
     py::class_<CMetta>(m, "CMetta");
-    m.def("metta_new", [](CGroundingSpace space, char const* cwd) { return CMetta(metta_new(space.ptr, cwd)); }, "New MeTTa interpreter instance");
+    m.def("metta_new", [](CGroundingSpace space, CTokenizer tokenizer, char const* cwd) { return CMetta(metta_new(space.ptr, tokenizer.ptr, cwd)); }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.ptr); }, "Free MeTTa interpreter");
     m.def("metta_space", [](CMetta metta) { return CGroundingSpace(metta_space(metta.ptr)); }, "Get space of MeTTa interpreter");
     m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr)); }, "Get tokenizer of MeTTa interpreter");
