@@ -67,10 +67,7 @@ impl Grounded for ImportOp {
             return Err("import! expects a file path as a second argument".into())
         }
 
-        // REM: we need to create new tokenizer not to override &self
-        // TODO: &self, no symbol for space itself, are we importing into different space, etc.
-        // (no need for new tokenizer if the space is the same???)
-        //let new_tokenizer = Tokenizer::new();
+        // REM: we need to create a new tokenizer not to override &self
         // Tokenizer is created before adding the token for the space itself
         let new_tokenizer = self.tokenizer.borrow().clone();
         let space: Result<Shared<GroundingSpace>, String> = match space {
