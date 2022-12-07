@@ -669,7 +669,7 @@ impl<T: Debug> Debug for AlternativeInterpretationsPlan<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_match_all() {
         let mut space = GroundingSpace::new();
@@ -678,8 +678,8 @@ mod tests {
         space.add(expr!("=" ("color") "green"));
         let expr = expr!(("color"));
 
-        assert_eq!(interpret(&space, &expr),
-            Ok(vec![expr!("blue"), expr!("red"), expr!("green")]));
+        assert_eq_no_order!(interpret(&space, &expr).unwrap(),
+            vec![expr!("blue"), expr!("red"), expr!("green")]);
     }
 
     #[test]

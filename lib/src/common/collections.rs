@@ -84,6 +84,22 @@ impl<K: PartialEq, V> ListMap<K, V> {
     }
 }
 
+impl<K: PartialEq, V: PartialEq> PartialEq for ListMap<K, V> {
+    fn eq(&self, other: &Self) -> bool {
+        for e in other.iter() {
+            if self.get(e.0) != Some(e.1) {
+                return false;
+            }
+        }
+        for e in self.iter() {
+            if other.get(e.0) != Some(e.1) {
+                return false;
+            }
+        }
+        true
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ImmutableString {
     Allocated(String),
@@ -116,5 +132,29 @@ impl std::hash::Hash for ImmutableString {
 impl Display for ImmutableString {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.as_str())
+    }
+}
+
+pub fn vec_eq_some_order<T: PartialEq + std::fmt::Debug>(left: &Vec<T>, right: &Vec<T>) -> bool {
+    let mut amap: ListMap<&T, usize> = ListMap::new();
+    let mut bmap: ListMap<&T, usize> = ListMap::new();
+    for i in left.iter() {
+        *amap.entry(&i).or_insert(0) += 1;
+    }
+    for i in right.iter() {
+        *bmap.entry(&i).or_insert(0) += 1;
+    }
+    amap == bmap
+}
+
+#[macro_export]
+macro_rules! assert_eq_no_order {
+    ($left:expr, $right:expr) => {
+        {
+            let left = &$left;
+            let right = &$right;
+            assert!($crate::common::collections::vec_eq_some_order(left, right),
+                "(left == right some order)\n  left: {:?}\n right: {:?}", left, right);
+        }
     }
 }

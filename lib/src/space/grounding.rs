@@ -171,6 +171,9 @@ impl<T: PartialEq + Clone> IndexTree<T> {
         }).for_each(|idx| idx.leaf.push(value.clone()));
     }
 
+    // FIXME: at the moment the method doesn't remove the key from the index.
+    // It can be fixed by using links to parent in the IndexTree nodes and
+    // cleaning up the map entries which point to the empty nodes only.
     fn remove(&mut self, key: &Atom, value: &T) -> bool {
         IndexTreeIterMut::new(self, &key, |idx, key, keys, callback| {
             // FIXME: remove second expression path
@@ -241,6 +244,7 @@ pub trait SpaceObserver {
 // TODO: Clone is required by C API
 #[derive(Clone)]
 pub struct GroundingSpace {
+    index: IndexTree<usize>,
     content: Vec<Atom>,
     observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>,
 }
@@ -250,6 +254,7 @@ impl GroundingSpace {
     /// Constructs new empty space.
     pub fn new() -> Self {
         Self {
+            index: IndexTree::new(),
             content: Vec::new(),
             observers: RefCell::new(Vec::new()),
         }
@@ -257,7 +262,12 @@ impl GroundingSpace {
 
     /// Constructs space from vector of atoms.
     pub fn from_vec(atoms: Vec<Atom>) -> Self {
+        let mut index = IndexTree::new();
+        for (i, atom) in atoms.iter().enumerate() {
+            index.add(atom, i);
+        }
         Self{
+            index,
             content: atoms,
             observers: RefCell::new(Vec::new()),
         }
@@ -302,8 +312,13 @@ impl GroundingSpace {
     /// assert_eq!(space.into_vec(), vec![sym!("A"), sym!("B")]);
     /// ```
     pub fn add(&mut self, atom: Atom) {
-        self.content.push(atom.clone());
+        self.add_internal(atom.clone());
         self.notify(&SpaceEvent::Add(atom));
+    }
+
+    fn add_internal(&mut self, atom: Atom) {
+        self.index.add(&atom, self.content.len());
+        self.content.push(atom);
     }
 
     /// Removes `atom` from space. Returns true if atom was found and removed,
@@ -322,15 +337,24 @@ impl GroundingSpace {
     /// assert!(space.into_vec().is_empty());
     /// ```
     pub fn remove(&mut self, atom: &Atom) -> bool {
-        let position = self.content.iter().position(|other| other == atom);
-        match position {
-            Some(position) => {
-                self.content.remove(position);
-                self.notify(&SpaceEvent::Remove(atom.clone()));
-                true
-            },
-            None => false, 
+        let is_removed = self.remove_internal(atom);
+        if is_removed {
+            self.notify(&SpaceEvent::Remove(atom.clone()));
         }
+        is_removed
+    }
+
+    fn remove_internal(&mut self, atom: &Atom) -> bool {
+        let indexes: Vec<usize> = self.index.get(atom).map(|i| *i).collect();
+        let mut indexes: Vec<usize> = indexes.into_iter()
+            .filter(|i| self.content[*i] == *atom).collect();
+        indexes.sort_by(|a, b| b.partial_cmp(a).unwrap());
+        let is_removed = indexes.len() > 0;
+        for i in indexes {
+            self.index.remove(atom, &i);
+            self.content.remove(i);
+        }
+        is_removed
     }
 
     /// Replaces `from` atom to `to` atom inside space. Doesn't add `to` when
@@ -350,15 +374,19 @@ impl GroundingSpace {
     /// assert_eq!(space.into_vec(), vec![sym!("B")]);
     /// ```
     pub fn replace(&mut self, from: &Atom, to: Atom) -> bool {
-        let position = self.content.iter().position(|other| other == from);
-        match position {
-            Some(position) => {
-                self.content.as_mut_slice()[position] = to.clone();
-                self.notify(&SpaceEvent::Replace(from.clone(), to));
-                true
-            },
-            None => false, 
+        let is_replaced = self.replace_internal(from, to.clone());
+        if is_replaced {
+            self.notify(&SpaceEvent::Replace(from.clone(), to));
         }
+        is_replaced
+    }
+
+    fn replace_internal(&mut self, from: &Atom, to: Atom) -> bool {
+        let is_replaced = self.remove_internal(from);
+        if is_replaced {
+            self.add_internal(to);
+        }
+        is_replaced
     }
 
     /// Executes `query` on the space and returns variable bindings found.
@@ -415,7 +443,8 @@ impl GroundingSpace {
     fn single_query(&self, query: &Atom) -> Vec<Bindings> {
         log::debug!("single_query: query: {}", query);
         let mut result = Vec::new();
-        for next in &self.content {
+        for i in self.index.get(query) {
+            let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", query, i).as_str());
             let next = make_variables_unique(next);
             log::trace!("single_query: match next: {}", next);
             for bindings in match_atoms(&next, query) {
@@ -434,14 +463,14 @@ impl GroundingSpace {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::expr;
+    /// use hyperon::{expr, assert_eq_no_order};
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let space = GroundingSpace::from_vec(vec![expr!("A" "B"), expr!("A" "C")]);
     ///
     /// let result = space.subst(&expr!("A" x), &expr!("D" x));
     ///
-    /// assert_eq!(result, vec![expr!("D" "B"), expr!("D" "C")]);
+    /// assert_eq_no_order!(result, vec![expr!("D" "B"), expr!("D" "C")]);
     /// ```
     pub fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         self.query(pattern).drain(0..)
@@ -462,7 +491,8 @@ impl GroundingSpace {
     pub fn unify(&self, pattern: &Atom) -> Vec<(Bindings, Unifications)> {
         log::debug!("unify: pattern: {}", pattern);
         let mut result = Vec::new();
-        for next in &self.content {
+        for i in self.index.get(pattern) {
+            let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", pattern, i).as_str());
             match matcher::unify_atoms(next, pattern) {
                 Some(res) => {
                     let bindings = matcher::apply_bindings_to_bindings(&res.data_bindings, &res.pattern_bindings);
@@ -613,7 +643,7 @@ mod test {
         space.add(expr!("c"));
         assert_eq!(space.replace(&expr!("b"), expr!("d")), true);
 
-        assert_eq!(*space.content, vec![expr!("a"), expr!("d"), expr!("c")]);
+        assert_eq_no_order!(space.content, vec![expr!("a"), expr!("d"), expr!("c")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
             SpaceEvent::Add(sym!("b")), SpaceEvent::Add(sym!("c")),
             SpaceEvent::Replace(sym!("b"), sym!("d"))]);
@@ -630,6 +660,22 @@ mod test {
 
         assert_eq!(*space.content, vec![expr!("a")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a"))]);
+    }
+
+    #[test]
+    fn remove_replaced_atom() {
+        let mut space = GroundingSpace::new();
+        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
+        space.register_observer(Rc::clone(&observer));
+
+        space.add(expr!("a"));
+        space.replace(&expr!("a"), expr!("b"));
+        assert_eq!(space.remove(&expr!("b")), true);
+
+        assert_eq!(*space.content, vec![]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
+            SpaceEvent::Replace(expr!("a"), expr!("b")),
+            SpaceEvent::Remove(expr!("b"))]);
     }
 
     #[test]

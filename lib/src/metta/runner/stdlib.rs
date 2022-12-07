@@ -930,9 +930,9 @@ mod tests {
 
         assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]), Ok(vec![]));
         assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("err"))]),
-            Err(ExecError::from("\nExpected: [(A B)]\nGot: [(A B), (B C)]\nExcessive result: (B C)")));
+            Err(ExecError::from("\nExpected: [(A B)]\nGot: [(B C), (A B)]\nExcessive result: (B C)")));
         assert_eq!(assert_equal_op.execute(&mut vec![expr!(("err")), expr!(("foo"))]),
-            Err(ExecError::from("\nExpected: [(A B), (B C)]\nGot: [(A B)]\nMissed result: (B C)")));
+            Err(ExecError::from("\nExpected: [(B C), (A B)]\nGot: [(A B)]\nMissed result: (B C)")));
     }
 
     #[test]
@@ -956,8 +956,8 @@ mod tests {
         "));
         let collapse_op = CollapseOp::new(space);
 
-        assert_eq!(collapse_op.execute(&mut vec![expr!(("foo"))]),
-            Ok(vec![expr!(("A" "B") ("B" "C"))]));
+        assert_eq!(collapse_op.execute(&mut vec![expr!(("foo"))]).unwrap(),
+            vec![expr!(("B" "C") ("A" "B"))]);
     }
 
     #[test]
@@ -977,8 +977,8 @@ mod tests {
         "));
 
         let get_type_op = GetTypeOp::new(space);
-        assert_eq!(get_type_op.execute(&mut vec![sym!("A")]),
-            Ok(vec![sym!("B"), sym!("C")]));
+        assert_eq_no_order!(get_type_op.execute(&mut vec![sym!("A")]).unwrap(),
+            vec![sym!("B"), sym!("C")]);
     }
 
     #[test]

@@ -66,7 +66,7 @@ fn test_case_operation() {
         !(maybe-inc (Just 2))
     "));
     let expected = metta.run(&mut SExprParser::new("
-        ! (superpose ((P B) (Q C)))
+        ! (superpose ((Q C) (P B)))
         ! no-match
         ! Nothing
         ! (Just 3)
