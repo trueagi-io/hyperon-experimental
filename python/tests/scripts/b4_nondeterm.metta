@@ -10,7 +10,7 @@
 !(assertEqual
   (collapse
     (match &self (= (color) $x) $x))
-  (green yellow red))
+  (red yellow green))
 !(assertEqual
   (collapse
     (match &self (= (shape) $x) $x))
@@ -20,7 +20,7 @@
 ; are also returned by the interpreter
 !(assertEqual
   (collapse (color))
-  (green yellow red))
+  (red yellow green))
 ; Instead of collapsing the result of nondeterministic expression,
 ; one can create a nondeterministic result with `superpose`
 !(assertEqual
@@ -85,7 +85,7 @@
 (= (makes ventilation (air dry)) T)
 !(assertEqual
   (collapse (is (air dry)))
-  ((start humidifier) (start kettle) (stop ventilation)))
+  ((stop ventilation) (start kettle) (start humidifier)))
 !(assertEqual
   (collapse (is (air wet)))
-  ((start ventilation) (stop humidifier) (stop kettle)))
+  ((stop kettle) (stop humidifier) (start ventilation)))

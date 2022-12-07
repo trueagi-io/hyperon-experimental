@@ -1,8 +1,9 @@
 import unittest
 
 from hyperon import *
+from test_common import HyperonTestCase
 
-class PLNTVTest(unittest.TestCase):
+class PLNTVTest(HyperonTestCase):
 
     def test_fuzzy_conjunction_fn(self):
         metta = MeTTa()
@@ -26,7 +27,7 @@ class PLNTVTest(unittest.TestCase):
                 (: B Concept)
                 (: P Predicate)
         ''')
-        self.assertEqual(
+        self.assertEqualMettaRunnerResults(
             metta.run('!(stv (And (P A) (P B)))'),
             [metta.parse_all('(stv 0.3 0.8)')])
         metta.run('''
@@ -36,7 +37,7 @@ class PLNTVTest(unittest.TestCase):
         # in c3_pln_stv.metta (e.g. `(pln (green $x))` will not substitute $x in the result`),
         # but "functional" stv cannot process implications without `match` (see also b2_backchain.metta)`
         # (would actually count (stv (P A)) twice for probabilistic version)
-        self.assertEqual(
+        self.assertEqualMettaRunnerResults(
             metta.run('!(pln (And (P A) (P $x)))'),
             [metta.parse_all('''
                 ((And (P A) (P A)) (stv 0.5 0.8))
