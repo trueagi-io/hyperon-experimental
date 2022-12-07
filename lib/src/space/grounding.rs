@@ -110,17 +110,31 @@ impl<T: PartialEq + Clone> IndexTree<T> {
         Self{ next: ListMap::new(), leaf: Vec::new() }
     }
 
-    fn next_or_insert<'a>(&'a mut self, key: IndexKey, keys: Vec<IndexKey>,
+    fn next_get_or_insert(&mut self, key: IndexKey) -> &mut IndexTree<T> {
+        self.next.entry(key).or_insert(Box::new(IndexTree::new()))
+    }
+
+    fn next_get(&self, key: &IndexKey) -> Option<&IndexTree<T>> {
+        self.next.get(key).map(|b| b.as_ref())
+    }
+
+    fn next_get_mut(&mut self, key: &IndexKey) -> Option<&mut IndexTree<T>> {
+        self.next.get_mut(key).map(|b| b.as_mut())
+    }
+
+    fn next_iter(&self) -> impl Iterator<Item=(&IndexKey, &IndexTree<T>)> {
+        self.next.iter().map(|(key, idx)| (key, idx.as_ref()))
+    }
+
+    fn next_for_add<'a>(&'a mut self, key: IndexKey, keys: Vec<IndexKey>,
             callback: &mut dyn FnMut(*mut IndexTree<T>, Vec<IndexKey>)) {
-        // FIXME: make faster and remove clone
-        self.next.entry(key.clone()).or_insert(Box::new(IndexTree::new()));
-        let idx = self.next.get_mut(&key).unwrap();
+        let idx = self.next_get_or_insert(key.clone());
         if let IndexKey::ExpressionBegin(_, expr_len) = key {
             let len = keys.len() - expr_len;
             let tail = &keys.as_slice()[..len];
-            callback(idx.as_mut(), tail.to_vec());
+            callback(idx, tail.to_vec());
         }
-        callback(idx.as_mut(), keys)
+        callback(idx, keys)
     }
 
     fn remove_value(&mut self, value: &T) -> bool {
@@ -133,41 +147,34 @@ impl<T: PartialEq + Clone> IndexTree<T> {
         }
     }
 
-    fn next<'a>(&'a self, key: IndexKey, keys: Vec<IndexKey>,
+    fn next_for_get<'a>(&'a self, key: IndexKey, keys: Vec<IndexKey>,
             callback: &mut dyn FnMut(*const IndexTree<T>, Vec<IndexKey>)) {
         match key {
             IndexKey::Symbol(_) => {
-                self.next.get(&key).map_or((), |idx| callback(idx.as_ref(), keys.clone()));
-                self.next.get(&IndexKey::Wildcard).map_or((), |idx| callback(idx.as_ref(), keys));
+                self.next_get(&key).map_or((), |idx| callback(idx, keys.clone()));
+                self.next_get(&IndexKey::Wildcard).map_or((), |idx| callback(idx, keys));
             },
-            IndexKey::ExpressionEnd => self.next.get(&key).map_or((), |idx| callback(idx.as_ref(), keys)),
+            IndexKey::ExpressionEnd => self.next_get(&key).map_or((), |idx| callback(idx, keys)),
             IndexKey::ExpressionBegin(_, expr_len) => {
                 let len = keys.len() - expr_len;
                 let tail = &keys.as_slice()[..len];
-                self.next.get(&IndexKey::Wildcard).map_or((), |idx| callback(idx.as_ref(), tail.to_vec()));
-                match self.next.get(&key) {
-                    Some(idx) => callback(idx.as_ref(), keys),
-                    None => {
-                        self.next.iter().for_each(|(key, idx)| {
-                            if let IndexKey::ExpressionBegin(_, _) = *key {
-                                callback(idx.as_ref(), keys.clone());
-                            }
-                        });
-                    }
+                self.next_get(&IndexKey::Wildcard).map_or((), |idx| callback(idx, tail.to_vec()));
+                match self.next_get(&key) {
+                    Some(idx) => callback(idx, keys),
+                    None => self.next_iter()
+                        .filter(|(key, _)| matches!(*key, IndexKey::ExpressionBegin(_, _)))
+                        .for_each(|(_, idx)| callback(idx, keys.clone())),
                 }
             },
-            IndexKey::Wildcard =>
-                self.next.iter().for_each(|(key, idx)| {
-                    if *key != IndexKey::ExpressionEnd {
-                        callback(idx.as_ref(), keys.clone())
-                    }
-                }),
+            IndexKey::Wildcard => self.next_iter()
+                    .filter(|(key, _)| **key != IndexKey::ExpressionEnd)
+                    .for_each(|(_, idx)| callback(idx, keys.clone())),
         }
     }
     
     fn add(&mut self, key: &Atom, value: T) {
         IndexTreeIterMut::new(self, key, |idx, key, keys, callback| {
-            idx.next_or_insert(key, keys, callback)
+            idx.next_for_add(key, keys, callback)
         }).for_each(|idx| idx.leaf.push(value.clone()));
     }
 
@@ -177,14 +184,14 @@ impl<T: PartialEq + Clone> IndexTree<T> {
     fn remove(&mut self, key: &Atom, value: &T) -> bool {
         IndexTreeIterMut::new(self, &key, |idx, key, keys, callback| {
             // FIXME: remove second expression path
-            idx.next.get_mut(&key).map_or({}, |idx| callback(idx.as_mut(), keys))
+            idx.next_get_mut(&key).map_or({}, |idx| callback(idx, keys))
         }).map(|idx| idx.remove_value(value)).fold(false, |a, b| a | b)
     }
 
     // FIXME: actually we can call match on Atom instead of returning it
     fn get(&self, pattern: &Atom) -> impl Iterator<Item=&T> {
         IndexTreeIter::new(self, &pattern, |idx, key, keys, callback| {
-            idx.next(key, keys, callback)
+            idx.next_for_get(key, keys, callback)
         }).flat_map(|idx| idx.leaf.as_slice().iter())
     }
 }
