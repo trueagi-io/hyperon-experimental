@@ -20,7 +20,8 @@ use std::collections::HashMap;
 enum IndexKey {
     Symbol(SymbolAtom),
     Wildcard,
-    ExpressionBegin(ExpressionAtom, usize),
+    Expression(ExpressionAtom, usize),
+    ExpressionBegin,
     ExpressionEnd,
 }
 
@@ -41,7 +42,7 @@ impl IndexKey {
                     keys.append(&mut children);
                 }
 
-                keys.push(IndexKey::ExpressionBegin(expr.clone(), expr_len));
+                keys.push(IndexKey::Expression(expr.clone(), expr_len));
                 keys
             },
             _ => vec![IndexKey::Wildcard],
@@ -55,6 +56,7 @@ struct IndexTree<T> {
     symbols: HashMap<SymbolAtom, Box<IndexTree<T>>>,
     wildcard: Option<Box<IndexTree<T>>>,
     expressions: ListMap<IndexKey, Box<IndexTree<T>>>,
+    expressionbegin: Option<Box<IndexTree<T>>>,
     expressionend: Option<Box<IndexTree<T>>>,
     leaf: Vec<T>,
 }
@@ -115,6 +117,7 @@ impl<T: PartialEq + Clone> IndexTree<T> {
             symbols: HashMap::new(),
             wildcard: None,
             expressions: ListMap::new(),
+            expressionbegin: None,
             expressionend: None,
             leaf: Vec::new() }
     }
@@ -124,7 +127,8 @@ impl<T: PartialEq + Clone> IndexTree<T> {
         match key {
             IndexKey::Symbol(sym) => self.symbols.entry(sym).or_insert(default),
             IndexKey::Wildcard => self.wildcard.get_or_insert(default),
-            IndexKey::ExpressionBegin(_, _) => self.expressions.entry(key).or_insert(default),
+            IndexKey::Expression(_, _) => self.expressions.entry(key).or_insert(default),
+            IndexKey::ExpressionBegin => self.expressionbegin.get_or_insert(default),
             IndexKey::ExpressionEnd => self.expressionend.get_or_insert(default),
         }
     }
@@ -133,7 +137,8 @@ impl<T: PartialEq + Clone> IndexTree<T> {
         match key {
             IndexKey::Symbol(sym) => self.symbols.get(sym),
             IndexKey::Wildcard => self.wildcard.as_ref(),
-            IndexKey::ExpressionBegin(_, _) => self.expressions.get(key),
+            IndexKey::Expression(_, _) => self.expressions.get(key),
+            IndexKey::ExpressionBegin => self.expressionbegin.as_ref(),
             IndexKey::ExpressionEnd => self.expressionend.as_ref(),
         }.map(Box::as_ref)
     }
@@ -142,7 +147,9 @@ impl<T: PartialEq + Clone> IndexTree<T> {
         match key {
             IndexKey::Symbol(sym) => self.symbols.get_mut(sym),
             IndexKey::Wildcard => self.wildcard.as_mut(),
-            IndexKey::ExpressionBegin(_, _) => self.expressions.get_mut(key),
+            IndexKey::Expression(_, _) => self.expressions.get_mut(key),
+            // FIXME: replace all except Expression by HashableIndexKey
+            IndexKey::ExpressionBegin => self.expressionbegin.as_mut(),
             IndexKey::ExpressionEnd => self.expressionend.as_mut(),
         }.map(Box::as_mut)
     }
@@ -154,6 +161,7 @@ impl<T: PartialEq + Clone> IndexTree<T> {
             .chain(
                 self.wildcard.iter().map(|idx| (&IndexKey::Wildcard, idx))
                 .chain(self.expressions.iter())
+                .chain(self.expressionbegin.iter().map(|idx| (&IndexKey::ExpressionBegin, idx)))
                 .chain(self.expressionend.iter().map(|idx| (&IndexKey::ExpressionEnd, idx)))
                 .filter(move |(key, _)| filter(key))
                 .map(|(_, idx)| idx.as_ref())
@@ -162,13 +170,17 @@ impl<T: PartialEq + Clone> IndexTree<T> {
 
     fn next_for_add<'a>(&'a mut self, key: IndexKey, keys: Vec<IndexKey>,
             callback: &mut dyn FnMut(*mut IndexTree<T>, Vec<IndexKey>)) {
-        let idx = self.next_get_or_insert(key.clone());
-        if let IndexKey::ExpressionBegin(_, expr_len) = key {
-            let len = keys.len() - expr_len;
-            let tail = &keys.as_slice()[..len];
-            callback(idx, tail.to_vec());
+        if let IndexKey::Expression(_, expr_len) = key {
+            let wildmatch_idx = self.next_get_or_insert(key);
+            let tail = &keys.as_slice()[..(keys.len() - expr_len)];
+            callback(wildmatch_idx, tail.to_vec());
+
+            let full_idx = self.next_get_or_insert(IndexKey::ExpressionBegin);
+            callback(full_idx, keys);
+        } else {
+            let idx = self.next_get_or_insert(key);
+            callback(idx, keys)
         }
-        callback(idx, keys)
     }
 
     fn remove_value(&mut self, value: &T) -> bool {
@@ -189,18 +201,16 @@ impl<T: PartialEq + Clone> IndexTree<T> {
                 self.next_get(&IndexKey::Wildcard).map_or((), |idx| callback(idx, keys));
             },
             IndexKey::ExpressionEnd => self.next_get(&key).map_or((), |idx| callback(idx, keys)),
-            IndexKey::ExpressionBegin(_, expr_len) => {
+            IndexKey::Expression(_, expr_len) => {
                 let len = keys.len() - expr_len;
                 let tail = &keys.as_slice()[..len];
                 self.next_get(&IndexKey::Wildcard).map_or((), |idx| callback(idx, tail.to_vec()));
-                match self.next_get(&key) {
-                    Some(idx) => callback(idx, keys),
-                    None => self.next_iter(&|key| matches!(*key, IndexKey::ExpressionBegin(_, _)))
-                        .for_each(|idx| callback(idx, keys.clone())),
-                }
+                self.next_get(&IndexKey::ExpressionBegin).map_or((), |idx| callback(idx, keys));
             },
-            IndexKey::Wildcard => self.next_iter(&|key| *key != IndexKey::ExpressionEnd)
-                    .for_each(|idx| callback(idx, keys.clone())),
+            IndexKey::Wildcard => self.next_iter(&|key|
+                *key != IndexKey::ExpressionEnd && *key != IndexKey::ExpressionBegin)
+                .for_each(|idx| callback(idx, keys.clone())),
+            IndexKey::ExpressionBegin => panic!("Should not be included into a key from atom"),
         }
     }
     
