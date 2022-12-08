@@ -144,6 +144,7 @@ impl Display for BindOp {
     }
 }
 
+// TODO: move it into hyperon::atom module?
 fn atom_as_sym(atom: &Atom) -> Option<&SymbolAtom> {
     match atom {
         Atom::Symbol(sym) => Some(sym),
@@ -399,7 +400,7 @@ impl Display for CaseOp {
     }
 }
 
-// FIXME: move it into hyperon::atom module?
+// TODO: move it into hyperon::atom module?
 fn atom_as_expr(atom: &Atom) -> Option<&ExpressionAtom> {
     match atom {
         Atom::Expression(expr) => Some(expr),

@@ -216,7 +216,7 @@ impl<T: PartialEq + Clone> IndexTree<T> {
         }).for_each(|idx| idx.leaf.push(value.clone()));
     }
 
-    // FIXME: at the moment the method doesn't remove the key from the index. 
+    // TODO: at the moment the method doesn't remove the key from the index. 
     // It removes only value.  It can be fixed by using links to parent in the
     // IndexTree nodes and cleaning up the map entries which point to the empty
     // nodes only.
@@ -226,7 +226,6 @@ impl<T: PartialEq + Clone> IndexTree<T> {
         }).map(|idx| idx.remove_value(value)).fold(false, |a, b| a | b)
     }
 
-    // FIXME: actually we can call match on Atom instead of returning it
     fn get(&self, pattern: &Atom) -> impl Iterator<Item=&T> {
         IndexTreeIter::new(self, &pattern, |idx, key, keys, callback| {
             idx.next_for_get(key, keys, callback)
