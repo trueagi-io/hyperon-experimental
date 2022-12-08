@@ -6,7 +6,6 @@ use crate::atom::*;
 use crate::atom::matcher::{Bindings, Unifications, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::matcher::MatchResultIter;
-use crate::common::collections::ListMap;
 
 use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
@@ -16,11 +15,11 @@ use std::collections::HashMap;
 
 // Grounding space
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 enum IndexKey {
     Symbol(SymbolAtom),
     Wildcard,
-    Expression(ExpressionAtom, usize),
+    Expression(usize),
     ExpressionBegin,
     ExpressionEnd,
 }
@@ -42,7 +41,7 @@ impl IndexKey {
                     keys.append(&mut children);
                 }
 
-                keys.push(IndexKey::Expression(expr.clone(), expr_len));
+                keys.push(IndexKey::Expression(expr_len));
                 keys
             },
             _ => vec![IndexKey::Wildcard],
@@ -52,12 +51,7 @@ impl IndexKey {
 
 #[derive(Clone)]
 struct IndexTree<T> {
-    // FIXME: improve performance using HashMap for symbols and Vec for expressions
-    symbols: HashMap<SymbolAtom, Box<IndexTree<T>>>,
-    wildcard: Option<Box<IndexTree<T>>>,
-    expressions: ListMap<IndexKey, Box<IndexTree<T>>>,
-    expressionbegin: Option<Box<IndexTree<T>>>,
-    expressionend: Option<Box<IndexTree<T>>>,
+    next: HashMap<IndexKey, Box<IndexTree<T>>>,
     leaf: Vec<T>,
 }
 
@@ -113,64 +107,42 @@ walk_index_tree!(IndexTreeIter, { /* no mut */ }, const);
 impl<T: PartialEq + Clone> IndexTree<T> {
 
     fn new() -> Self {
-        Self{
-            symbols: HashMap::new(),
-            wildcard: None,
-            expressions: ListMap::new(),
-            expressionbegin: None,
-            expressionend: None,
-            leaf: Vec::new() }
+        Self{ next: HashMap::new(), leaf: Vec::new() }
     }
 
     fn next_get_or_insert(&mut self, key: IndexKey) -> &mut IndexTree<T> {
-        let default = Box::new(IndexTree::new());
-        match key {
-            IndexKey::Symbol(sym) => self.symbols.entry(sym).or_insert(default),
-            IndexKey::Wildcard => self.wildcard.get_or_insert(default),
-            IndexKey::Expression(_, _) => self.expressions.entry(key).or_insert(default),
-            IndexKey::ExpressionBegin => self.expressionbegin.get_or_insert(default),
-            IndexKey::ExpressionEnd => self.expressionend.get_or_insert(default),
-        }
+        self.next.entry(key).or_insert(Box::new(IndexTree::new()))
     }
 
     fn next_get(&self, key: &IndexKey) -> Option<&IndexTree<T>> {
-        match key {
-            IndexKey::Symbol(sym) => self.symbols.get(sym),
-            IndexKey::Wildcard => self.wildcard.as_ref(),
-            IndexKey::Expression(_, _) => self.expressions.get(key),
-            IndexKey::ExpressionBegin => self.expressionbegin.as_ref(),
-            IndexKey::ExpressionEnd => self.expressionend.as_ref(),
-        }.map(Box::as_ref)
+        self.next.get(key).map(Box::as_ref)
     }
 
     fn next_get_mut(&mut self, key: &IndexKey) -> Option<&mut IndexTree<T>> {
-        match key {
-            IndexKey::Symbol(sym) => self.symbols.get_mut(sym),
-            IndexKey::Wildcard => self.wildcard.as_mut(),
-            IndexKey::Expression(_, _) => self.expressions.get_mut(key),
-            // FIXME: replace all except Expression by HashableIndexKey
-            IndexKey::ExpressionBegin => self.expressionbegin.as_mut(),
-            IndexKey::ExpressionEnd => self.expressionend.as_mut(),
-        }.map(Box::as_mut)
+        self.next.get_mut(key).map(Box::as_mut)
     }
 
     fn next_iter<'a>(&'a self, filter: &'a dyn Fn(&IndexKey)->bool) -> impl Iterator<Item=&'a IndexTree<T>> + 'a {
-        self.symbols.iter()
-            .filter(move |(key, _)| filter(&IndexKey::Symbol((*key).clone())))
-            .map(|(_, idx)| idx.as_ref())
-            .chain(
-                self.wildcard.iter().map(|idx| (&IndexKey::Wildcard, idx))
-                .chain(self.expressions.iter())
-                .chain(self.expressionbegin.iter().map(|idx| (&IndexKey::ExpressionBegin, idx)))
-                .chain(self.expressionend.iter().map(|idx| (&IndexKey::ExpressionEnd, idx)))
-                .filter(move |(key, _)| filter(key))
-                .map(|(_, idx)| idx.as_ref())
-            )
+        self.next.iter().filter_map(move |(key, idx)| {
+            match filter(key) {
+                true => Some(idx.as_ref()),
+                false => None,
+            }
+        })
+    }
+
+    fn next_iter_mut<'a>(&'a mut self, filter: &'a dyn Fn(&IndexKey)->bool) -> impl Iterator<Item=&'a mut IndexTree<T>> + 'a {
+        self.next.iter_mut().filter_map(move |(key, idx)| {
+            match filter(key) {
+                true => Some(idx.as_mut()),
+                false => None,
+            }
+        })
     }
 
     fn next_for_add<'a>(&'a mut self, key: IndexKey, keys: Vec<IndexKey>,
             callback: &mut dyn FnMut(*mut IndexTree<T>, Vec<IndexKey>)) {
-        if let IndexKey::Expression(_, expr_len) = key {
+        if let IndexKey::Expression(expr_len) = key {
             let wildmatch_idx = self.next_get_or_insert(key);
             let tail = &keys.as_slice()[..(keys.len() - expr_len)];
             callback(wildmatch_idx, tail.to_vec());
@@ -183,6 +155,29 @@ impl<T: PartialEq + Clone> IndexTree<T> {
         }
     }
 
+    fn next_for_remove<'a>(&'a mut self, key: IndexKey, keys: Vec<IndexKey>,
+            callback: &mut dyn FnMut(*mut IndexTree<T>, Vec<IndexKey>)) {
+        match key {
+            IndexKey::Symbol(_) => {
+                self.next_get_mut(&key).map_or((), |idx| callback(idx, keys.clone()));
+                self.next_get_mut(&IndexKey::Wildcard).map_or((), |idx| callback(idx, keys));
+            },
+            IndexKey::ExpressionEnd =>
+                self.next_get_mut(&key).map_or((), |idx| callback(idx, keys)),
+            IndexKey::Expression(expr_len) => {
+                let len = keys.len() - expr_len;
+                let tail = &keys.as_slice()[..len];
+                self.next_get_mut(&IndexKey::Wildcard).map_or((), |idx| callback(idx, tail.to_vec()));
+                self.next_get_mut(&key).map_or((), |idx| callback(idx, tail.to_vec()));
+                self.next_get_mut(&IndexKey::ExpressionBegin).map_or((), |idx| callback(idx, keys));
+            },
+            IndexKey::Wildcard => self.next_iter_mut(&|key|
+                *key != IndexKey::ExpressionEnd && *key != IndexKey::ExpressionBegin)
+                .for_each(|idx| callback(idx, keys.clone())),
+            IndexKey::ExpressionBegin => panic!("Should not be included into a key from atom"),
+        }
+    }
+    
     fn remove_value(&mut self, value: &T) -> bool {
         match self.leaf.iter().position(|other| *other == *value) {
             Some(position) => {
@@ -200,8 +195,9 @@ impl<T: PartialEq + Clone> IndexTree<T> {
                 self.next_get(&key).map_or((), |idx| callback(idx, keys.clone()));
                 self.next_get(&IndexKey::Wildcard).map_or((), |idx| callback(idx, keys));
             },
-            IndexKey::ExpressionEnd => self.next_get(&key).map_or((), |idx| callback(idx, keys)),
-            IndexKey::Expression(_, expr_len) => {
+            IndexKey::ExpressionEnd =>
+                self.next_get(&key).map_or((), |idx| callback(idx, keys)),
+            IndexKey::Expression(expr_len) => {
                 let len = keys.len() - expr_len;
                 let tail = &keys.as_slice()[..len];
                 self.next_get(&IndexKey::Wildcard).map_or((), |idx| callback(idx, tail.to_vec()));
@@ -220,13 +216,13 @@ impl<T: PartialEq + Clone> IndexTree<T> {
         }).for_each(|idx| idx.leaf.push(value.clone()));
     }
 
-    // FIXME: at the moment the method doesn't remove the key from the index.
-    // It can be fixed by using links to parent in the IndexTree nodes and
-    // cleaning up the map entries which point to the empty nodes only.
+    // FIXME: at the moment the method doesn't remove the key from the index. 
+    // It removes only value.  It can be fixed by using links to parent in the
+    // IndexTree nodes and cleaning up the map entries which point to the empty
+    // nodes only.
     fn remove(&mut self, key: &Atom, value: &T) -> bool {
         IndexTreeIterMut::new(self, &key, |idx, key, keys, callback| {
-            // FIXME: remove second expression path
-            idx.next_get_mut(&key).map_or({}, |idx| callback(idx, keys))
+            idx.next_for_remove(key, keys, callback)
         }).map(|idx| idx.remove_value(value)).fold(false, |a, b| a | b)
     }
 
@@ -918,6 +914,9 @@ mod test {
         assert_eq!(index.get(&Atom::value(1)).to_vec(), vec![1, 2, 3, 4]);
         assert_eq!(index.get(&Atom::value(2)).to_vec(), vec![1, 2, 3, 4]);
 
+        assert_eq!(index.get(&Atom::var("a")).to_vec(), vec![1, 2, 3, 4]);
+        assert_eq!(index.get(&Atom::var("b")).to_vec(), vec![1, 2, 3, 4]);
+
         assert_eq!(index.get(&expr!("A" "B")).to_vec(), vec![2, 3, 4]);
         assert_eq!(index.get(&expr!("A" "C")).to_vec(), vec![2, 3]);
     }
@@ -930,5 +929,25 @@ mod test {
 
         assert_eq!(index.get(&expr!(a "B")).to_vec(), vec![1]);
         assert_eq!(index.get(&expr!(("A") "C")).to_vec(), vec![2]);
+    }
+
+    #[test]
+    fn index_tree_remove_atom_basic() {
+        let mut index = IndexTree::new();
+
+        index.add(&Atom::sym("A"), 1);
+        index.add(&Atom::value(1), 2);
+        index.add(&Atom::var("a"), 3);
+        index.add(&expr!("A" "B"), 4);
+
+        index.remove(&Atom::sym("A"), &1);
+        index.remove(&Atom::value(1), &2);
+        index.remove(&Atom::var("a"), &3);
+        index.remove(&expr!("A" "B"), &4);
+
+        assert_eq!(index.get(&Atom::sym("A")).to_vec(), vec![]);
+        assert_eq!(index.get(&Atom::value(1)).to_vec(), vec![]);
+        assert_eq!(index.get(&Atom::var("a")).to_vec(), vec![]);
+        assert_eq!(index.get(&expr!("A" "B")).to_vec(), vec![]);
     }
 }

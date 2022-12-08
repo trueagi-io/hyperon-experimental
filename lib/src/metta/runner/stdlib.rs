@@ -907,6 +907,14 @@ mod tests {
             Ok(vec![Atom::sym("D")]));
     }
 
+    fn assert_runtime_error(actual: Result<Vec<Atom>, ExecError>, expected: Regex) {
+        match actual {
+            Err(ExecError::Runtime(msg)) => assert!(expected.is_match(msg.as_str()),
+                "Incorrect error message:\nexpected: {:?}\n  actual: {:?}", expected.to_string(), msg),
+            _ => assert!(false, "Error is expected as result, {:?} returned", actual),
+        }
+    }
+
     #[test]
     fn assert_equal_op() {
         let space = Shared::new(metta_space("
@@ -920,10 +928,14 @@ mod tests {
         let assert_equal_op = AssertEqualOp::new(space);
 
         assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]), Ok(vec![]));
-        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("err"))]),
-            Err(ExecError::from("\nExpected: [(A B)]\nGot: [(B C), (A B)]\nExcessive result: (B C)")));
-        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("err")), expr!(("foo"))]),
-            Err(ExecError::from("\nExpected: [(B C), (A B)]\nGot: [(A B)]\nMissed result: (B C)")));
+
+        let actual = assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("err"))]);
+        let expected = Regex::new("\nExpected: \\[(A B)\\]\nGot: \\[\\((B C)|, |(A B)\\){3}\\]\nExcessive result: (B C)").unwrap();
+        assert_runtime_error(actual, expected);
+
+        let actual = assert_equal_op.execute(&mut vec![expr!(("err")), expr!(("foo"))]);
+        let expected = Regex::new("\nExpected: \\[\\((B C)|, |(A B)\\){3}\\]\nGot: \\[(A B)\\]\nMissed result: (B C)").unwrap();
+        assert_runtime_error(actual, expected);
     }
 
     #[test]
@@ -947,8 +959,11 @@ mod tests {
         "));
         let collapse_op = CollapseOp::new(space);
 
-        assert_eq!(collapse_op.execute(&mut vec![expr!(("foo"))]).unwrap(),
-            vec![expr!(("B" "C") ("A" "B"))]);
+        let actual = collapse_op.execute(&mut vec![expr!(("foo"))]).unwrap();
+        assert_eq!(actual.len(), 1);
+        assert_eq_no_order!(
+            atom_as_expr(&actual[0]).unwrap().children(),
+            vec![expr!("B" "C"), expr!("A" "B")]);
     }
 
     #[test]

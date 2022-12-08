@@ -33,6 +33,20 @@ impl<'a, K, V> Iterator for ListMapIter<'a, K, V> {
     }
 }
 
+pub struct ListMapIterMut<'a, K, V> {
+    delegate: std::slice::IterMut<'a, (K, V)>,
+}
+
+impl<'a, K, V> Iterator for ListMapIterMut<'a, K, V> {
+    type Item = (&'a K, &'a mut V);
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.delegate.next() {
+            Some((key, value)) => Some((key, value)),
+            None => None,
+        }
+    }
+}
+
 impl<K: PartialEq, V> ListMap<K, V> {
     pub fn new() -> Self {
         Self{ list: vec![] }
@@ -81,6 +95,10 @@ impl<K: PartialEq, V> ListMap<K, V> {
 
     pub fn iter(&self) -> ListMapIter<'_, K, V> {
         ListMapIter{ delegate: self.list.iter() }
+    }
+
+    pub fn iter_mut(&mut self) -> ListMapIterMut<'_, K, V> {
+        ListMapIterMut{ delegate: self.list.iter_mut() }
     }
 }
 
