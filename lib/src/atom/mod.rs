@@ -119,7 +119,7 @@ use crate::common::collections::ImmutableString;
 // Symbol atom
 
 /// A symbol atom structure.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SymbolAtom {
     name: ImmutableString,
 }
@@ -173,6 +173,11 @@ impl ExpressionAtom {
     /// Returns a mutable reference to a vector of sub-atoms.
     pub fn children_mut(&mut self) -> &mut Vec<Atom> {
         &mut self.children
+    }
+
+    /// Converts into a vector of sub-atoms.
+    pub fn into_children(self) -> Vec<Atom> {
+        self.children
     }
 }
 
