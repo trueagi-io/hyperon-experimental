@@ -14,7 +14,6 @@ fn space(size: isize) -> GroundingSpace {
         let func_def = Atom::expr([Atom::sym("="),
             Atom::expr([func_sym, Atom::var("x")]),
             Atom::var("x")]);
-        println!("func_def: {}", func_def);
         space.add(func_def);
     }
     space
@@ -25,7 +24,7 @@ fn query_x10(bencher: &mut Bencher) {
     let space = space(10);
     bencher.iter(|| {
         let res = space.query(&expr!("=" ("func-9" "arg") X));
-        assert_eq!(res.len(), 1);
+        assert_eq!(res, vec![bind!{ X: Atom::sym("arg") }]);
     })
 }
 
@@ -34,6 +33,6 @@ fn query_x100(bencher: &mut Bencher) {
     let space = space(100);
     bencher.iter(|| {
         let res = space.query(&expr!("=" ("func-2A" "arg") X));
-        assert_eq!(res.len(), 1);
+        assert_eq!(res, vec![bind!{ X: Atom::sym("arg") }]);
     })
 }
