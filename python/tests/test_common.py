@@ -2,7 +2,7 @@ import unittest
 
 from hyperon import atoms_are_equivalent
 
-def isEqualNoOrder(a, b):
+def areEqualNoOrder(a, b):
     class FakeHash:
         def __init__(self, o):
             self.o = o
@@ -29,11 +29,11 @@ def isEqualNoOrder(a, b):
             return False
     return True
 
-def isEqualMettaRunResults(a, b):
+def areEqualMettaRunResults(a, b):
     if len(a) != len(b):
         return False
     for (a, b) in zip(a, b):
-        if not isEqualNoOrder(a, b):
+        if not areEqualNoOrder(a, b):
             return False
     return True
 
@@ -43,11 +43,11 @@ class HyperonTestCase(unittest.TestCase):
         super().__init__(methodName)
 
     def assertEqualNoOrder(self, left, right):
-        self.assertTrue(isEqualNoOrder(left, right),
+        self.assertTrue(areEqualNoOrder(left, right),
             f"Lists differ: {left} != {right}")
 
     def assertEqualMettaRunnerResults(self, left, right):
-        self.assertTrue(isEqualMettaRunResults(left, right),
+        self.assertTrue(areEqualMettaRunResults(left, right),
             f"MeTTa results differ: {left} != {right}")
 
     def assertAtomsAreEquivalent(self, actual, expected):

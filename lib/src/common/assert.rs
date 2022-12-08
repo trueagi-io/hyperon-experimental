@@ -1,15 +1,43 @@
 use super::collections::ListMap;
 
-pub fn vec_eq_some_order<T: PartialEq + std::fmt::Debug>(left: &Vec<T>, right: &Vec<T>) -> bool {
-    let mut amap: ListMap<&T, usize> = ListMap::new();
-    let mut bmap: ListMap<&T, usize> = ListMap::new();
+use std::cmp::Ordering;
+
+pub fn vec_eq_no_order<T: PartialEq + std::fmt::Debug>(left: &Vec<T>, right: &Vec<T>) -> Result<(), String> {
+    let mut left_count: ListMap<&T, usize> = ListMap::new();
+    let mut right_count: ListMap<&T, usize> = ListMap::new();
     for i in left.iter() {
-        *amap.entry(&i).or_insert(0) += 1;
+        *left_count.entry(&i).or_insert(0) += 1;
     }
     for i in right.iter() {
-        *bmap.entry(&i).or_insert(0) += 1;
+        *right_count.entry(&i).or_insert(0) += 1;
     }
-    amap == bmap
+    counter_eq_explanation(&left_count, &right_count)
+}
+
+fn counter_eq_explanation<T: PartialEq + std::fmt::Debug>(left: &ListMap<&T, usize>, right: &ListMap<&T, usize>) -> Result<(), String> {
+    for e in right.iter() {
+        if let Some(count) = left.get(e.0) {
+            match count.cmp(e.1) {
+                Ordering::Less => return Err(format!("Missed result: {:?}", e.0)),
+                Ordering::Greater => return Err(format!("Excessive result: {:?}", e.0)),
+                Ordering::Equal => {},
+            }
+        } else {
+            return Err(format!("Missed result: {:?}", e.0));
+        }
+    }
+    for e in left.iter() {
+        if let Some(count) = right.get(e.0) {
+            match e.1.cmp(count) {
+                Ordering::Less => return Err(format!("Missed result: {:?}", e.0)),
+                Ordering::Greater => return Err(format!("Excessive result: {:?}", e.0)),
+                Ordering::Equal => {},
+            }
+        } else {
+            return Err(format!("Excessive result: {:?}", e.0));
+        }
+    }
+    Ok(())
 }
 
 #[macro_export]
@@ -18,7 +46,7 @@ macro_rules! assert_eq_no_order {
         {
             let left = &$left;
             let right = &$right;
-            assert!($crate::common::assert::vec_eq_some_order(left, right),
+            assert!($crate::common::assert::vec_eq_no_order(left, right) == Ok(()),
                 "(left == right some order)\n  left: {:?}\n right: {:?}", left, right);
         }
     }
@@ -30,7 +58,7 @@ pub fn metta_results_eq<T: PartialEq + std::fmt::Debug>(
     match (left, right) {
         (Ok(left), Ok(right)) if left.len() == right.len() => {
             for (left, right) in left.iter().zip(right.iter()) {
-                if !vec_eq_some_order(left, right) {
+                if let Err(_) = vec_eq_no_order(left, right) {
                     return false;
                 }
             }

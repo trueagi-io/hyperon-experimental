@@ -7,6 +7,7 @@ use crate::metta::interpreter::interpret;
 use crate::metta::runner::Metta;
 use crate::metta::types::get_atom_types;
 use crate::common::shared::Shared;
+use crate::common::assert::vec_eq_no_order;
 
 use std::fmt::Display;
 use std::path::PathBuf;
@@ -448,20 +449,10 @@ impl Grounded for CaseOp {
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
     log::debug!("assert_results_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
     let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
-    for r in actual {
-        if !expected.contains(r) {
-            return Err(ExecError::Runtime(format!("{}\nExcessive result: {}", report, r)));
-        }
+    match vec_eq_no_order(actual, expected) {
+        Ok(()) => Ok(vec![]),
+        Err(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
-    for r in expected {
-        if !actual.contains(r) {
-            return Err(ExecError::Runtime(format!("{}\nMissed result: {}", report, r)));
-        }
-    }
-    if expected.len() != actual.len() {
-        return Err(ExecError::Runtime(format!("{}\nDifferent number of elements", report)));
-    }
-    return Ok(vec![])
 }
 
 #[derive(Clone, PartialEq, Debug)]
