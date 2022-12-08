@@ -1,8 +1,9 @@
 import unittest
 
 from hyperon import MeTTa
+from test_common import HyperonTestCase
 
-class MeTTaTest(unittest.TestCase):
+class MeTTaTest(HyperonTestCase):
 
     def test_run_metta(self):
         program = '''
@@ -16,8 +17,9 @@ class MeTTaTest(unittest.TestCase):
             !(f)
         '''
 
-        result = MeTTa().run(program)
-        self.assertEqual('[[red, green, blue], [5]]', repr(result))
+        metta = MeTTa()
+        self.assertEqualMettaRunnerResults(metta.run(program),
+            [metta.parse_all('red  green  blue'), metta.parse_all('5')])
 
     def test_run_complex_query(self):
         program = '''

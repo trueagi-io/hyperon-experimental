@@ -3,7 +3,7 @@ import unittest
 from hyperon import *
 from test_common import *
 
-class ExamplesTest(unittest.TestCase):
+class ExamplesTest(HyperonTestCase):
 
     def test_grounded_functions(self):
         metta = MeTTa()
@@ -41,10 +41,10 @@ class ExamplesTest(unittest.TestCase):
                (match &self (state $var $value) $value))
         ''')
         metta.run('!(change-state (name id-001) Fritz)')
-        self.assertEqual(metta.run('!(get-state (name id-001))'),
+        self.assertEqualMettaRunnerResults(metta.run('!(get-state (name id-001))'),
                          [[S('Fritz')]])
         metta.run('!(change-state (name id-001) Sam)')
-        self.assertEqual(metta.run('!(get-state (name id-001))'),
+        self.assertEqualMettaRunnerResults(metta.run('!(get-state (name id-001))'),
                          [[S('Sam')]])
 
     def test_new_object(self):
@@ -110,7 +110,7 @@ class ExamplesTest(unittest.TestCase):
         self.assertEqual(metta.parse_all('(= (Fritz frog) True)'), fritz_frog)
         metta.space().add_atom(fritz_frog[0])
 
-        self.assertEqual([metta.parse_all('(= (Fritz green) True)')],
+        self.assertEqualMettaRunnerResults([metta.parse_all('(= (Fritz green) True)')],
                 metta.run('!(if ($x frog) (= ($x green) True) nop)'))
 
     def test_infer_function_application_type(self):
@@ -126,7 +126,7 @@ class ExamplesTest(unittest.TestCase):
         ''')
 
         output = metta.run('!(if (: (apply reverse "Hello") $t) $t)')
-        self.assertEqual(output, [[S('String')]])
+        self.assertEqualMettaRunnerResults(output, [[S('String')]])
 
     def test_plus_reduces_Z(self):
         metta = MeTTa()
@@ -137,7 +137,7 @@ class ExamplesTest(unittest.TestCase):
            (= (plus (S $k) $y) (S (plus $k $y)))
         ''')
 
-        self.assertEqual(metta.run('''
+        self.assertEqualMettaRunnerResults(metta.run('''
             !(eq (+ 2 2) 4)
             !(eq (+ 2 3) 4)
             !(eq (plus Z $n) $n)
@@ -148,7 +148,7 @@ class ExamplesTest(unittest.TestCase):
             ]
         )
         output = metta.run('!(eq (plus (S Z) $n) $n)')
-        assert_atoms_are_equivalent(self, output[0], metta.parse_all('(eq (S $y) $y)'))
+        self.assertAtomsAreEquivalent(output[0], metta.parse_all('(eq (S $y) $y)'))
 
     def test_multi_space(self):
         # NOTE: it is not recommended to split code into multiple spaces, because
@@ -172,17 +172,17 @@ class ExamplesTest(unittest.TestCase):
             (= (find-in $s $x) (match $s (= $y $x) $y))
             (= (borrow $s $e) (match $s (= $e $r) $r))
         ''')
-        self.assertEqual(metta1.run('!(inverse B)'), [[S('A')]])
-        self.assertEqual(metta2.run('!(find-in &space1 B)'), [[S('A')]])
-        self.assertEqual(metta2.run('!(find-in &self B)'), [[S('C')]])
+        self.assertEqualMettaRunnerResults(metta1.run('!(inverse B)'), [[S('A')]])
+        self.assertEqualMettaRunnerResults(metta2.run('!(find-in &space1 B)'), [[S('A')]])
+        self.assertEqualMettaRunnerResults(metta2.run('!(find-in &self B)'), [[S('C')]])
         # `inverse` is successfully found in `&space1`
         # it resolves `&self` to metta1.space and matches against `(= A B)`
-        self.assertEqual(metta2.run('!(borrow &space1 (inverse B))'), [[S('A')]])
+        self.assertEqualMettaRunnerResults(metta2.run('!(borrow &space1 (inverse B))'), [[S('A')]])
         # `borrow` executes `how-it-works?` in context of `&space1` via `match`
         # but then the interpreter evaluates `(how-it-works?)` via equality query
         # in the original metta2.space
-        self.assertEqual(metta2.run('!(borrow &space1 (how-it-works?))'), [[S('success')]])
-        self.assertEqual(metta1.run('!(how-it-works?)'), [[S('failure')]])
+        self.assertEqualMettaRunnerResults(metta2.run('!(borrow &space1 (how-it-works?))'), [[S('success')]])
+        self.assertEqualMettaRunnerResults(metta1.run('!(how-it-works?)'), [[S('failure')]])
 
     def test_custom_deptypes(self):
         metta = MeTTa()
@@ -227,7 +227,7 @@ class ExamplesTest(unittest.TestCase):
             (:= SamIsGreen (Green Sam))
             (:= SamCroaks (Croaks Sam))
         ''')
-        self.assertEqual(metta.run('''
+        self.assertEqualMettaRunnerResults(metta.run('''
             !(:? (HumansAreMortal SocratesIsHuman))
             !(:check (HumansAreMortal SocratesIsHuman) (Mortal Socrates))
             !(:? (= SocratesIsMortal (HumansAreMortal SocratesIsHuman)))
@@ -244,7 +244,7 @@ class ExamplesTest(unittest.TestCase):
             ]
         )
         # some negative examples
-        self.assertEqual(metta.run('''
+        self.assertEqualMettaRunnerResults(metta.run('''
             !(:check (= SocratesIsHuman SocratesIsMortal) Prop)
             !(:? (SocratesIsHuman (Human Socrates)))
             !(:? (Human Time))
@@ -255,7 +255,7 @@ class ExamplesTest(unittest.TestCase):
         # Then, `(:= $c $t)` is matched against `(:= (HumansAreMortal (Human $t)) (Mortal $t))`
         # immediately resulting in `(Mortal Time)`. Thus, it doesn't matter that matching against
         # `(= (:? ($c $a))` doesn't work (since `(:? $a)` is incorrect).
-        # self.assertEqual(metta.run("!(:? (HumansAreMortal (Human Time)))"),
+        # self.assertEqualMettaRunnerResults(metta.run("!(:? (HumansAreMortal (Human Time)))"),
         #                                  [[]])
         # It should be noted that `(HumansAreMortal (Human Socrates))` is also an incorrectly typed
         # expression, since HumansAreMortal expects an element of (Human Socrates) - not the type itself
@@ -287,7 +287,7 @@ class ExamplesTest(unittest.TestCase):
         # :? just infers the type of the expression - not its inhabitance
         # Note: `(Human Socrates)` and `(Human Plato)` are different types, but they are
         # elements of the same Type, so they can be equated
-        self.assertEqual(metta.run('''
+        self.assertEqualMettaRunnerResults(metta.run('''
             !(:? (Human Plato))
             !(:? (Human Time))
             !(:? (HumansAreMortal SocratesIsHuman))
@@ -313,7 +313,7 @@ class ExamplesTest(unittest.TestCase):
         )
         # Interestingly, the following example works correctly in this syntax, because
         # application `(Human Socrates)` is not mixed up with dependent type definition
-        self.assertEqual(metta.run("!(:? (HumansAreMortal (Human Socrates)))"), [[]])
+        self.assertEqualMettaRunnerResults(metta.run("!(:? (HumansAreMortal (Human Socrates)))"), [[]])
 
     def test_visit_kim(self):
         # legacy test
@@ -334,7 +334,7 @@ class ExamplesTest(unittest.TestCase):
             (= (achieve (health-check Kim)) True)
             (= (achieve (lunch-order Kim)) False)
         ''')
-        self.assertEqual(metta.run('''
+        self.assertEqualMettaRunnerResults(metta.run('''
             !(perform (visit Kim))
             !(achieve (visit Kim))
             '''),
@@ -345,7 +345,7 @@ class ExamplesTest(unittest.TestCase):
             (= (do $goal1 $goal2) (achieve $goal1))
             (= (do $goal1 $goal2) (achieve $goal2))
         ''')
-        self.assertEqual(metta.run('!(achieve (visit Kim))'),
+        self.assertEqualMettaRunnerResults(metta.run('!(achieve (visit Kim))'),
             [metta.parse_all('False True')])
 
 class SomeObject():

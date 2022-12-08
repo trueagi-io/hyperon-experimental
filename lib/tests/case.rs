@@ -1,3 +1,4 @@
+use hyperon::assert_eq_metta_results;
 use hyperon::metta::text::SExprParser;
 use hyperon::metta::runner::Metta;
 use hyperon::common::shared::Shared;
@@ -67,10 +68,10 @@ fn test_case_operation() {
         !(maybe-inc (Just 2))
     "));
     let expected = metta.run(&mut SExprParser::new("
-        ! (superpose ((P B) (Q C)))
+        ! (superpose ((Q C) (P B)))
         ! no-match
         ! Nothing
         ! (Just 3)
     "));
-    assert_eq!(result, expected);
+    assert_eq_metta_results!(result, expected);
 }

@@ -77,8 +77,7 @@ impl Metta {
     }
 
     fn interp_atom(&self, mode: Mode, atom: Atom) -> Result<Option<Vec<Atom>>, String> {
-        // FIXME: how to make it look better?
-        if self.get_setting("type-check").as_ref().map(String::as_str) == Some("auto") {
+        if self.get_setting("type-check").map_or(false, |val| val == "auto") {
             if !validate_atom(&self.space.borrow(), &atom) {
                 return Ok(Some(vec![Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL])]))
             }

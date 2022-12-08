@@ -140,14 +140,14 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 /// # Examples
 ///
 /// ```
-/// use hyperon::expr;
+/// use hyperon::{expr, assert_eq_no_order};
 /// use hyperon::metta::metta_space;
 /// use hyperon::metta::types::get_atom_types;
 ///
 /// let space = metta_space("(: a A) (: a B)");
 /// let types = get_atom_types(&space, &expr!("a"));
 ///
-/// assert_eq!(types, vec!(expr!("A"), expr!("B")));
+/// assert_eq_no_order!(types, vec!(expr!("A"), expr!("B")));
 /// ```
 pub fn get_atom_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
     let types = get_reducted_types(space, atom);

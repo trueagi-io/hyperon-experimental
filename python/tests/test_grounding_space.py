@@ -1,8 +1,9 @@
 import unittest
 
 from hyperon import *
+from test_common import HyperonTestCase
 
-class GroundingSpaceTest(unittest.TestCase):
+class GroundingSpaceTest(HyperonTestCase):
 
     def test_add(self):
         kb = GroundingSpace()
@@ -10,7 +11,7 @@ class GroundingSpaceTest(unittest.TestCase):
 
         kb.add_atom(S("b"))
 
-        self.assertEqual(kb.get_atoms(), [S("a"), S("b")])
+        self.assertEqualNoOrder(kb.get_atoms(), [S("a"), S("b")])
 
     def test_remove(self):
         kb = GroundingSpace()
@@ -20,7 +21,7 @@ class GroundingSpaceTest(unittest.TestCase):
 
         self.assertTrue(kb.remove_atom(S("b")))
 
-        self.assertEqual(kb.get_atoms(), [S("a"), S("c")])
+        self.assertEqualNoOrder(kb.get_atoms(), [S("a"), S("c")])
 
     def test_replace(self):
         kb = GroundingSpace()
@@ -30,7 +31,7 @@ class GroundingSpaceTest(unittest.TestCase):
 
         self.assertTrue(kb.replace_atom(S("b"), S("d")))
 
-        self.assertEqual(kb.get_atoms(), [S("a"), S("d"), S("c")])
+        self.assertEqualNoOrder(kb.get_atoms(), [S("a"), S("d"), S("c")])
 
     def test_complex_query(self):
         kb = GroundingSpace()
@@ -38,4 +39,4 @@ class GroundingSpaceTest(unittest.TestCase):
         kb.add_atom(E(S("C"), S("B")))
 
         result = kb.query(E(S(","), E(S("A"), V("x")), E(S("C"), V("x"))))
-        self.assertEqual(result, [{"x": S("B")}])
+        self.assertEqualNoOrder(result, [{"x": S("B")}])

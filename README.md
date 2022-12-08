@@ -76,6 +76,11 @@ environment variable:
 RUST_LOG=hyperon=debug cargo test
 ```
 
+Running benchmarks requires nightly toolchain so they can be run using:
+```
+cargo +nightly bench
+```
+
 Generate docs:
 ```
 cd ./lib
