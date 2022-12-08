@@ -3,6 +3,7 @@
 pub mod plan;
 pub mod collections;
 pub mod shared;
+pub mod assert;
 mod arithmetics;
 
 pub use arithmetics::*;

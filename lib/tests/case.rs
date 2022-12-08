@@ -1,3 +1,4 @@
+use hyperon::assert_eq_metta_results;
 use hyperon::metta::text::SExprParser;
 use hyperon::metta::runner::Metta;
 use hyperon::common::shared::Shared;
@@ -71,5 +72,5 @@ fn test_case_operation() {
         ! Nothing
         ! (Just 3)
     "));
-    assert_eq!(result, expected);
+    assert_eq_metta_results!(result, expected);
 }
