@@ -12,6 +12,7 @@ use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::collections::HashMap;
 
 // Grounding space
 
@@ -51,7 +52,10 @@ impl IndexKey {
 #[derive(Clone)]
 struct IndexTree<T> {
     // FIXME: improve performance using HashMap for symbols and Vec for expressions
-    next: ListMap<IndexKey, Box<IndexTree<T>>>,
+    symbols: HashMap<SymbolAtom, Box<IndexTree<T>>>,
+    wildcard: Option<Box<IndexTree<T>>>,
+    expressions: ListMap<IndexKey, Box<IndexTree<T>>>,
+    expressionend: Option<Box<IndexTree<T>>>,
     leaf: Vec<T>,
 }
 
@@ -107,23 +111,53 @@ walk_index_tree!(IndexTreeIter, { /* no mut */ }, const);
 impl<T: PartialEq + Clone> IndexTree<T> {
 
     fn new() -> Self {
-        Self{ next: ListMap::new(), leaf: Vec::new() }
+        Self{
+            symbols: HashMap::new(),
+            wildcard: None,
+            expressions: ListMap::new(),
+            expressionend: None,
+            leaf: Vec::new() }
     }
 
     fn next_get_or_insert(&mut self, key: IndexKey) -> &mut IndexTree<T> {
-        self.next.entry(key).or_insert(Box::new(IndexTree::new()))
+        let default = Box::new(IndexTree::new());
+        match key {
+            IndexKey::Symbol(sym) => self.symbols.entry(sym).or_insert(default),
+            IndexKey::Wildcard => self.wildcard.get_or_insert(default),
+            IndexKey::ExpressionBegin(_, _) => self.expressions.entry(key).or_insert(default),
+            IndexKey::ExpressionEnd => self.expressionend.get_or_insert(default),
+        }
     }
 
     fn next_get(&self, key: &IndexKey) -> Option<&IndexTree<T>> {
-        self.next.get(key).map(|b| b.as_ref())
+        match key {
+            IndexKey::Symbol(sym) => self.symbols.get(sym),
+            IndexKey::Wildcard => self.wildcard.as_ref(),
+            IndexKey::ExpressionBegin(_, _) => self.expressions.get(key),
+            IndexKey::ExpressionEnd => self.expressionend.as_ref(),
+        }.map(Box::as_ref)
     }
 
     fn next_get_mut(&mut self, key: &IndexKey) -> Option<&mut IndexTree<T>> {
-        self.next.get_mut(key).map(|b| b.as_mut())
+        match key {
+            IndexKey::Symbol(sym) => self.symbols.get_mut(sym),
+            IndexKey::Wildcard => self.wildcard.as_mut(),
+            IndexKey::ExpressionBegin(_, _) => self.expressions.get_mut(key),
+            IndexKey::ExpressionEnd => self.expressionend.as_mut(),
+        }.map(Box::as_mut)
     }
 
-    fn next_iter(&self) -> impl Iterator<Item=(&IndexKey, &IndexTree<T>)> {
-        self.next.iter().map(|(key, idx)| (key, idx.as_ref()))
+    fn next_iter<'a>(&'a self, filter: &'a dyn Fn(&IndexKey)->bool) -> impl Iterator<Item=&'a IndexTree<T>> + 'a {
+        self.symbols.iter()
+            .filter(move |(key, _)| filter(&IndexKey::Symbol((*key).clone())))
+            .map(|(_, idx)| idx.as_ref())
+            .chain(
+                self.wildcard.iter().map(|idx| (&IndexKey::Wildcard, idx))
+                .chain(self.expressions.iter())
+                .chain(self.expressionend.iter().map(|idx| (&IndexKey::ExpressionEnd, idx)))
+                .filter(move |(key, _)| filter(key))
+                .map(|(_, idx)| idx.as_ref())
+            )
     }
 
     fn next_for_add<'a>(&'a mut self, key: IndexKey, keys: Vec<IndexKey>,
@@ -161,14 +195,12 @@ impl<T: PartialEq + Clone> IndexTree<T> {
                 self.next_get(&IndexKey::Wildcard).map_or((), |idx| callback(idx, tail.to_vec()));
                 match self.next_get(&key) {
                     Some(idx) => callback(idx, keys),
-                    None => self.next_iter()
-                        .filter(|(key, _)| matches!(*key, IndexKey::ExpressionBegin(_, _)))
-                        .for_each(|(_, idx)| callback(idx, keys.clone())),
+                    None => self.next_iter(&|key| matches!(*key, IndexKey::ExpressionBegin(_, _)))
+                        .for_each(|idx| callback(idx, keys.clone())),
                 }
             },
-            IndexKey::Wildcard => self.next_iter()
-                    .filter(|(key, _)| **key != IndexKey::ExpressionEnd)
-                    .for_each(|(_, idx)| callback(idx, keys.clone())),
+            IndexKey::Wildcard => self.next_iter(&|key| *key != IndexKey::ExpressionEnd)
+                    .for_each(|idx| callback(idx, keys.clone())),
         }
     }
     
