@@ -1,6 +1,6 @@
 use std::fmt::Display;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ListMap<K, V> {
     list: Vec<(K, V)>,
 }
@@ -19,30 +19,36 @@ impl<'a, K: PartialEq, V> ListMapEntry<'a, K, V> {
     }
 }
 
-pub struct ListMapIter<'a, K, V> {
-    delegate: std::slice::Iter<'a, (K, V)>,
-}
+macro_rules! list_map_iterator {
+    ( $ListMapIter:ident, $Iter:ident, {$( $mut_:tt )?} ) => {
+        pub struct $ListMapIter<'a, K, V> {
+            delegate: std::slice::$Iter<'a, (K, V)>,
+        }
 
-impl<'a, K, V> Iterator for ListMapIter<'a, K, V> {
-    type Item = (&'a K, &'a V);
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.delegate.next() {
-            Some((key, value)) => Some((key, value)),
-            None => None,
+        impl<'a, K, V> Iterator for $ListMapIter<'a, K, V> {
+            type Item = (&'a K, &'a $( $mut_ )? V);
+            fn next(&mut self) -> Option<Self::Item> {
+                match self.delegate.next() {
+                    Some((key, value)) => Some((key, value)),
+                    None => None,
+                }
+            }
         }
     }
 }
 
-pub struct ListMapIterMut<'a, K, V> {
-    delegate: std::slice::IterMut<'a, (K, V)>,
-}
+list_map_iterator!(ListMapIter, Iter, {});
+list_map_iterator!(ListMapIterMut, IterMut, { mut });
 
-impl<'a, K, V> Iterator for ListMapIterMut<'a, K, V> {
-    type Item = (&'a K, &'a mut V);
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.delegate.next() {
-            Some((key, value)) => Some((key, value)),
-            None => None,
+macro_rules! list_map_get {
+    ($get:ident, {$( $mut_:tt )?}) => {
+        pub fn $get(& $( $mut_ )? self, key: &K) -> Option<& $( $mut_ )? V> {
+            for (k, v) in & $( $mut_ )? self.list {
+                if *k == *key {
+                    return Some(v)
+                }
+            }
+            None
         }
     }
 }
@@ -53,32 +59,14 @@ impl<K: PartialEq, V> ListMap<K, V> {
     }
 
     pub fn entry<'a>(&'a mut self, key: K) -> ListMapEntry<'a, K, V> {
-        for (k, _) in &mut self.list {
-            if *k == key {
-                return ListMapEntry::Occupied(key, self);
-            }
+        match self.get_mut(&key) {
+            Some(_) => ListMapEntry::Occupied(key, self),
+            None => ListMapEntry::Vacant(key, self)
         }
-        ListMapEntry::Vacant(key, self)
     }
 
-    pub fn get(&self, key: &K) -> Option<&V> {
-        // FIXME: merge loops here and in entry and possible in get_mut?
-        for (k, v) in &self.list {
-            if *k == *key {
-                return Some(&v)
-            }
-        }
-        None
-    }
-
-    pub fn get_mut(&mut self, key: &K) -> Option<&mut V> {
-        for (k, v) in &mut self.list {
-            if *k == *key {
-                return Some(v)
-            }
-        }
-        None
-    }
+    list_map_get!(get, {});
+    list_map_get!(get_mut, {mut});
 
     pub fn insert(&mut self, key: K, value: V) {
         self.insert_entry(key, value);
@@ -104,17 +92,25 @@ impl<K: PartialEq, V> ListMap<K, V> {
 
 impl<K: PartialEq, V: PartialEq> PartialEq for ListMap<K, V> {
     fn eq(&self, other: &Self) -> bool {
-        for e in other.iter() {
-            if self.get(e.0) != Some(e.1) {
-                return false;
+        fn left_includes_right<K: PartialEq, V: PartialEq>(left: &ListMap<K, V>, right: &ListMap<K, V>) -> bool {
+            for e in right.iter() {
+                if left.get(e.0) != Some(e.1) {
+                    return false;
+                }
             }
+            true
         }
-        for e in self.iter() {
-            if other.get(e.0) != Some(e.1) {
-                return false;
-            }
+        left_includes_right(self, other) && left_includes_right(other, self)
+    }
+}
+
+impl<K: PartialEq, V: PartialEq> From<Vec<(K, V)>> for ListMap<K, V> {
+    fn from(list: Vec<(K, V)>) -> Self {
+        let mut map = ListMap::new();
+        for (k, v) in list.into_iter() {
+            map.insert(k, v)
         }
-        true
+        map
     }
 }
 
@@ -153,3 +149,18 @@ impl Display for ImmutableString {
     }
 }
 
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn list_map_eq() {
+        let a = ListMap::from(vec![("A", 1), ("B", 2)]);
+        let b = ListMap::from(vec![("B", 2), ("A", 1)]);
+        let c = ListMap::from(vec![("B", 1), ("A", 2)]);
+
+        assert_eq!(a, b);
+        assert_ne!(a, c);
+        assert_ne!(b, c);
+    }
+}
