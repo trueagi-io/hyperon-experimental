@@ -68,9 +68,7 @@ impl Grounded for ImportOp {
             return Err("import! expects a file path as a second argument".into())
         }
 
-        // REM: we need to create a new tokenizer not to override &self
-        // Tokenizer is created before adding the token for the space itself
-        let new_tokenizer = self.tokenizer.borrow().clone();
+        let tokenizer_before_adding_imported_space = self.tokenizer.cloned();
         let space: Result<Shared<GroundingSpace>, String> = match space {
             Atom::Symbol(space) => {
                 let name = space.name();
@@ -83,7 +81,8 @@ impl Grounded for ImportOp {
                 Ok(space)
             },
             Atom::Grounded(_) => {
-                let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("import! expects a space as a first argument")?;
+                let space = Atom::as_gnd::<Shared<GroundingSpace>>(space)
+                    .ok_or("import! expects a space as a first argument")?;
                 Ok(space.clone())
             },
             _ => Err("import! expects space as a first argument".into()),
@@ -91,7 +90,7 @@ impl Grounded for ImportOp {
         let space = space?;
         let mut next_cwd = path.clone();
         next_cwd.pop();
-        let metta = Metta::from_space_cwd(space.clone(), Shared::new(new_tokenizer), next_cwd);
+        let metta = Metta::from_space_cwd(space, tokenizer_before_adding_imported_space, next_cwd);
         let program = std::fs::read_to_string(&path)
             .map_err(|err| format!("Could not read file {}: {}", path.display(), err))?;
         let _result = metta.run(&mut SExprParser::new(program.as_str()))?;
@@ -807,10 +806,12 @@ pub fn register_tokens(metta: &Metta, cwd: PathBuf) {
     fn regex(regex: &str) -> Regex {
         Regex::new(regex).unwrap()
     }
-    let space = metta.space.clone();
-    let tokenizer = metta.tokenizer.clone();
-    let stdlib_tokenizer = Shared::new(Tokenizer::new());
-    let mut tref = stdlib_tokenizer.borrow_mut();
+
+    let space = &metta.space;
+    let tokenizer = &metta.tokenizer;
+
+    let mut stdlib_tokens = Tokenizer::new();
+    let tref = &mut stdlib_tokens;
 
     let match_op = Atom::gnd(MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
@@ -871,13 +872,13 @@ pub fn register_tokens(metta: &Metta, cwd: PathBuf) {
     tref.register_token(regex(r"/"), move |_| { div_op.clone() });
     let mod_op = Atom::gnd(ModOp{});
     tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
-    // Prepend stdlib tokens, so they will not spoil tokens of the runner if any of them exist
-    tref.append_tokens(&mut tokenizer.borrow_mut());
-    tokenizer.borrow_mut().append_tokens(&mut tref);
+
+    metta.tokenizer.borrow_mut().move_front(&mut stdlib_tokens);
+
     // &self should be updated
-    // REM: adding &self might be done not by stdlib, but by MeTTa itself
-    let space_val = Atom::gnd(space.clone());
-    tokenizer.borrow_mut().register_token(regex(r"&self"), move |_| { space_val.clone() });
+    // TODO: adding &self might be done not by stdlib, but by MeTTa itself
+    let space_val = Atom::gnd(metta.space.clone());
+    metta.tokenizer.borrow_mut().register_token(regex(r"&self"), move |_| { space_val.clone() });
 }
 
 #[cfg(test)]
