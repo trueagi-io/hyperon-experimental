@@ -44,6 +44,16 @@ impl IndexKey {
                 keys.push(IndexKey::Expression(expr_len));
                 keys
             },
+            // TODO: At the moment all grounding symbols are matched as wildcards
+            // because they potentially may have custom Grounded::match_()
+            // implementation and we cannot understand it from data. We could improve
+            // speed of extracting grounded values from the index if GroundedAtom
+            // has a flag which says whether match_() is match_by_equality() or
+            // not. GroundedAtom with match_by_equality() implementation can be
+            // added as separate IndexKey::GroundedValue to navigate through
+            // the index quickly. GroundedAtom with custom match_() will be added
+            // as a wildcard to be matched after search in index. It also requires
+            // implementing Hash on Grounded.
             _ => vec![IndexKey::Wildcard],
         }
     }
