@@ -157,9 +157,10 @@ pub extern "C" fn step_to_str(step: *const step_result_t, callback: c_str_callba
 pub type metta_t = SharedApi<Metta>;
 
 #[no_mangle]
-pub extern "C" fn metta_new(space: *mut grounding_space_t, cwd: *const c_char) -> *mut metta_t {
+pub extern "C" fn metta_new(space: *mut grounding_space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> *mut metta_t {
     let space = unsafe{ &mut *space }.shared();
-    metta_t::new(Metta::from_space_cwd(space, PathBuf::from(cstr_as_str(cwd))))
+    let tokenizer = unsafe{ &mut *tokenizer }.shared();
+    metta_t::new(Metta::from_space_cwd(space, tokenizer, PathBuf::from(cstr_as_str(cwd))))
 }
 
 #[no_mangle]

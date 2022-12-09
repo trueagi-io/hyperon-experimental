@@ -9,7 +9,8 @@ class MeTTa:
     def __init__(self, space = None, cwd = "."):
         if space is None:
             space = GroundingSpace()
-        self.cmetta = hp.metta_new(space.cspace, cwd)
+        tokenizer = Tokenizer()
+        self.cmetta = hp.metta_new(space.cspace, tokenizer.ctokenizer, cwd)
         self.load_py_module("hyperon.stdlib")
         self.register_atom('extend-py!',
             OperationAtom('extend-py!',
