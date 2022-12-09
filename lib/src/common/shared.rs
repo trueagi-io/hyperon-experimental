@@ -106,6 +106,10 @@ impl<T> Shared<T> {
     pub fn borrow_mut(&self) -> Box<dyn DerefMut<Target=T> + '_> {
         Box::new(RefCell::borrow_mut(&self.0))
     }
+
+    pub fn cloned(&self) -> Self where T: Clone {
+        Self::new(RefCell::borrow(&self.0).clone())
+    }
 }
 
 impl<T> LockBorrow<T> for Shared<T> {

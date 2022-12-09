@@ -68,9 +68,7 @@ impl Grounded for ImportOp {
             return Err("import! expects a file path as a second argument".into())
         }
 
-        // REM: we need to create a new tokenizer not to override &self
-        // Tokenizer is created before adding the token for the space itself
-        let new_tokenizer = self.tokenizer.borrow().clone();
+        let tokenizer_before_adding_imported_space = self.tokenizer.cloned();
         let space: Result<Shared<GroundingSpace>, String> = match space {
             Atom::Symbol(space) => {
                 let name = space.name();
@@ -83,7 +81,8 @@ impl Grounded for ImportOp {
                 Ok(space)
             },
             Atom::Grounded(_) => {
-                let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("import! expects a space as a first argument")?;
+                let space = Atom::as_gnd::<Shared<GroundingSpace>>(space)
+                    .ok_or("import! expects a space as a first argument")?;
                 Ok(space.clone())
             },
             _ => Err("import! expects space as a first argument".into()),
@@ -91,7 +90,7 @@ impl Grounded for ImportOp {
         let space = space?;
         let mut next_cwd = path.clone();
         next_cwd.pop();
-        let metta = Metta::from_space_cwd(space.clone(), Shared::new(new_tokenizer), next_cwd);
+        let metta = Metta::from_space_cwd(space, tokenizer_before_adding_imported_space, next_cwd);
         let program = std::fs::read_to_string(&path)
             .map_err(|err| format!("Could not read file {}: {}", path.display(), err))?;
         let _result = metta.run(&mut SExprParser::new(program.as_str()))?;
