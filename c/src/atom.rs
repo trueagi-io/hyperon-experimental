@@ -36,7 +36,6 @@ pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
     execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
-    //match_: extern "C" fn(*const gnd_t, *const atom_t) -> *mut binding_array_t,
     match_: Option<extern "C" fn(*const gnd_t, *const atom_t, lambda_t<binding_array_t>, *mut c_void)>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
