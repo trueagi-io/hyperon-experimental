@@ -279,9 +279,8 @@ impl CGrounded {
         }
         mem::forget(slice_);
 
-        let vec_bnd = context.cast::<Vec<Bindings>>();
-        unsafe{(*vec_bnd).push(bnd)};
-        context = (vec_bnd as *mut Vec<Bindings>).cast::<c_void>();
+        let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
+        vec_bnd.push(bnd);
 
     }
 
@@ -313,31 +312,26 @@ impl Grounded for CGrounded {
     }
 
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        println!("match_: Start");
         match self.api().match_ {
             Some(func) => {
                 let mut vec_temp: Vec<Bindings> = Vec::new();
                 let mut bnd_temp = Bindings::new();
                 let var_temp = VariableAtom::new("var_temp");
-                let atom_temp = Atom::sym("Temp");
+                let atom_temp = Atom::sym("atom_temp");
                 bnd_temp.insert(var_temp.clone(), atom_temp.clone());
                 vec_temp.push(bnd_temp);
                 let mut context: *mut c_void = (&mut vec_temp as *mut Vec<Bindings>).cast::<c_void>();
 
                 func(self.get_ptr(), (other as *const Atom).cast::<atom_t>(), CGrounded::match_callback, context);
 
-                let res_vec = context.cast::<Vec<Bindings>>();
-                let len_ = unsafe{(*res_vec).len()};
-                let res_bnd = unsafe{(*res_vec).get(len_-1).unwrap()};
-                Box::new(std::iter::once((*res_bnd).clone()))
+                let res_vec = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
+                let len_ = res_vec.len();
+                let res_bnd = res_vec.get(len_-1).unwrap();
+                Box::new(std::iter::once(res_bnd.clone()))
             },
             None => match_by_equality(self, other)
         }
-        
-        
     }
-
-
 }
 
 impl PartialEq for CGrounded {
@@ -374,12 +368,10 @@ use std::sync::Arc;
 use super::*;
     #[test]
     pub fn test_match_callback(){
-
         let mut vec_t: Vec<binding_t> = Vec::new();
         let string_ = String::from("var#1");
-        let cstring_=string_as_cstr(string_);
+        let cstring_ = string_as_cstr(string_);
         let c_char_:*const c_char = cstring_.as_ptr();
-        //let name = cstr_into_string(c_char_);
         let atom_ = Atom::sym("A");
         let bnd_t = binding_t{
             var: c_char_,
@@ -391,52 +383,24 @@ use super::*;
         let mut vec_temp: Vec<Bindings> = Vec::new();
         let mut res_temp = Bindings::new();
         let var_temp = VariableAtom::new("var_temp");
-        let atom_temp = Atom::sym("Temp");
+        let atom_temp = Atom::sym("atom_temp");
         res_temp.insert(var_temp.clone(), atom_temp.clone());
         vec_temp.push(res_temp);
         let mut context: *mut c_void = (&mut vec_temp as *mut Vec<Bindings>).cast::<c_void>();
 
         CGrounded::match_callback(binding_, context);
 
-        //let res_rust = context.cast::<matcher::MatchResultIter>();
-        //let res_ = unsafe{(*res_rust).};
-        //let result = *unsafe{ Box::from_raw(res_rust) };
-
-        //Box<dyn Iterator<Item=matcher::Bindings>>
         let res_rust = context.cast::<Vec<Bindings>>();
-        //let res_ = unsafe{(*res_rust).clone()};
         let len_ = unsafe{(*res_rust).len()};
         let bind_ = unsafe{(*res_rust).get(len_-1).unwrap()};
-        let res_box = Box::new(std::iter::once((*bind_).clone()));
-
-        let iter_res = bind_.into_iter();
-        let iter_box = Box::new(iter_res);
-
         let iter_ = (*bind_).iter().last();
         if let Some((k,v))=iter_ {
             println!("k_name: {}", k);
         }
-
         bind_.iter().for_each(|(k, v)| { 
             let k_name = k.name();
             println!("k_name: {}", k_name);
-            //let v_name = (*v).name(); 
         });
-    }
-
-    pub fn test_match_(){
-        /*
-        let api_: *const gnd_api_t;
-        let typ_: *mut atom_t;
-        let gnd =  gnd_t {
-            api: api_,
-            typ: typ_,
-        };
-        let mut gnd_p: *mut gnd_t;
-        let mut new_gnd = CGrounded(AtomicPtr::new(gnd_p));
-        let atom_= Atom::gnd(CGrounded(AtomicPtr::new(gnd_p)));
-        new_gnd.match_(&atom_);
-         */
     }
 
 }

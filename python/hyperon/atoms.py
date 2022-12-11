@@ -100,9 +100,7 @@ def call_execute_on_grounded_atom(gnd, typ, args):
     return gnd.execute(*args, res_typ=res_typ)
 
 def call_match_on_grounded_atom(gnd, typ):
-    # const char *var;
-    # const struct atom_t *atom;
-    # placeholders, implement your custom functionaluty here 
+    # placeholder, please implement your custom functionaluty here 
     atom_test = Atom._from_catom(typ)
     var_test = "var_test"
     bnd_res = {var_test, atom_test}
