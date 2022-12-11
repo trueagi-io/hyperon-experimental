@@ -280,7 +280,6 @@ impl CGrounded {
 
         let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
         vec_bnd.push(bnd);
-
     }
 
 }
