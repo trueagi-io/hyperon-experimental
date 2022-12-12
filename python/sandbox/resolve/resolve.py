@@ -25,6 +25,12 @@ def my_resolver_atoms(metta):
         # TODO: assert
         runner = metta.run('! ' + runner_name)[0][0].get_object()
         atom = runner.run('! ' + atom_name)[0][0]
+        # A hack to make runner::&self work
+        # TODO? the problem is that we need to return an operation to make this
+        # work in parent expressions, thus, it is unclear how to return pure
+        # symbols
+        if atom.get_type() == hp.AtomKind.GROUNDED:
+            return atom
         # TODO: borrow atom type to op
         return OperationAtom(
             token,

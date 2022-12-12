@@ -18,6 +18,12 @@ def my_imported_runner_atom():
              ($_ (* $x (fact (- $x 1)))))
            )
         )
+
+        (some content)
+        (= (self-from-self)
+           (match &self (some $x) $x))
+
+        something
     '''
     runner = MeTTa()
     runner.run(content)
