@@ -24,6 +24,8 @@ def my_imported_runner_atom():
            (match &self (some $x) $x))
 
         something
+
+        (= (call_func $f $arg) ($f $arg))
     '''
     runner = MeTTa()
     runner.run(content)

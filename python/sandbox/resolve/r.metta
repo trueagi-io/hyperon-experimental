@@ -18,3 +18,7 @@
 ! (r::content) ; its execution results in unreduced `(content)`
 ; the following doesn't work (it might be ok, but semantics of :: is weird overall)
 !(match r::&self ($x r::content) $x)
+
+; both work, so :: doesn't separate "namespaces" precisely
+!(r::call_func fact 6)
+!(r::call_func r::fact 6)
