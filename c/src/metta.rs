@@ -191,3 +191,12 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
         return_atoms(&result, output, out_context);
     }
 }
+
+#[no_mangle]
+pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: *const atom_t,
+        output: c_atoms_callback_t, out_context: *mut c_void) {
+    let metta = unsafe{ &*metta }.borrow();
+    let atom = unsafe{ &(*atom).atom };
+    let result = metta.evaluate_atom(atom.clone()).expect("Returning errors from C API is not implemented yet");
+    return_atoms(&result, output, out_context);
+}

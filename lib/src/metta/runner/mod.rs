@@ -76,6 +76,16 @@ impl Metta {
         Ok(results)
     }
 
+    pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
+        // FIXME: some code repitiion with `run`;
+        //        can a better decomposition be done?
+        match self.interp_atom(Mode::INTERPRET, atom) {
+            Err(msg) => Err(msg),
+            Ok(Some(result)) => Ok(result),
+            _ => Ok(Vec::new()),
+        }
+    }
+
     fn interp_atom(&self, mode: Mode, atom: Atom) -> Result<Option<Vec<Atom>>, String> {
         if self.get_setting("type-check").map_or(false, |val| val == "auto") {
             if !validate_atom(&self.space.borrow(), &atom) {
