@@ -14,6 +14,7 @@ def my_resolver_atoms(metta):
         return result
 
     def resolve_atom(metta, token):
+        # TODO: nested modules...
         runner_name, atom_name = token.split('::')
         # FIXME: using `run` for this is an overkill,
         #        but there is no good Python API for this;
