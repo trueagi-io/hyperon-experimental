@@ -20,15 +20,6 @@ class MeTTa:
     def __del__(self):
         hp.metta_free(self.cmetta)
 
-    def copy(self):
-        # FIXME: metta_clone cannot be dirctly implemented in c/src/metta.rs
-        #        because traits are not satisfied, but we need a copy method
-        #        for MeTTa, otherwise we cannot call metta.run in resolve_atom
-        # REM: this might also not be needed (now) if we resolve atoms via
-        #      tokenizer in resolve_atom (or move this functionality to Rust)
-        #      instead of 'running' them
-        return self
-
     def space(self):
         return GroundingSpace._from_cspace(hp.metta_space(self.cmetta))
 
