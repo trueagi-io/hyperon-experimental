@@ -47,6 +47,11 @@ impl Metta {
         self.tokenizer.clone()
     }
 
+    #[cfg(test)]
+    fn set_setting(&self, key: String, value: String) {
+        self.settings.borrow_mut().insert(key, value);
+    }
+
     fn get_setting(&self, key: &str) -> Option<String> {
         self.settings.borrow().get(key.into()).cloned()
     }
@@ -64,7 +69,10 @@ impl Metta {
                         continue;
                     }
                     match mode {
-                        Mode::ADD => self.add_atom(atom),
+                        Mode::ADD => match self.add_atom(atom) {
+                            Err(atom) => results.push(vec![atom]),
+                            Ok(()) => {},
+                        }
                         Mode::INTERPRET => match self.evaluate_atom(atom) {
                             Err(msg) => return Err(msg),
                             Ok(result) => results.push(result),
@@ -85,8 +93,10 @@ impl Metta {
         }
     }
 
-    fn add_atom(&self, atom: Atom) {
+    fn add_atom(&self, atom: Atom) -> Result<(), Atom>{
+        let atom = self.type_check(atom)?;
         self.space.borrow_mut().add(atom);
+        Ok(())
     }
 
     fn type_check(&self, atom: Atom) -> Result<Atom, Atom> {
@@ -120,5 +130,33 @@ mod tests {
         let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![Atom::sym("T")]]));
+    }
+
+    #[test]
+    fn metta_add_type_check() {
+        let program = "
+            (: foo (-> A B))
+            (: b B)
+            (foo b)
+        ";
+
+        let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        metta.set_setting("type-check".into(), "auto".into());
+        let result = metta.run(&mut SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
+    }
+
+    #[test]
+    fn metta_interpret_type_check() {
+        let program = "
+            (: foo (-> A B))
+            (: b B)
+            !(foo b)
+        ";
+
+        let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        metta.set_setting("type-check".into(), "auto".into());
+        let result = metta.run(&mut SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
 }
