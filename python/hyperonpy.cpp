@@ -340,5 +340,10 @@ PYBIND11_MODULE(hyperonpy, m) {
             metta_run(metta.ptr, parser.ptr, copy_lists_of_atom, &lists_of_atom);
             return lists_of_atom;
         }, "Run MeTTa interpreter on an input");
+    m.def("metta_evaluate_atom", [](CMetta metta, CAtom atom) {
+            py::list atoms;
+            metta_evaluate_atom(metta.ptr, atom_clone(atom.ptr), copy_atoms, &atoms);
+            return atoms;
+        }, "Run MeTTa interpreter on an atom");
 }
 

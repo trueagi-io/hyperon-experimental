@@ -63,10 +63,12 @@ impl Metta {
                         mode = Mode::INTERPRET;
                         continue;
                     }
-                    match self.interp_atom(mode, atom) {
-                        Err(msg) => return Err(msg),
-                        Ok(Some(result)) => results.push(result),
-                        _ => {},
+                    match mode {
+                        Mode::ADD => self.add_atom(atom),
+                        Mode::INTERPRET => match self.evaluate_atom(atom) {
+                            Err(msg) => return Err(msg),
+                            Ok(result) => results.push(result),
+                        },
                     }
                     mode = Mode::ADD;
                 },
@@ -76,27 +78,23 @@ impl Metta {
         Ok(results)
     }
 
-    fn interp_atom(&self, mode: Mode, atom: Atom) -> Result<Option<Vec<Atom>>, String> {
-        if self.get_setting("type-check").map_or(false, |val| val == "auto") {
-            if !validate_atom(&self.space.borrow(), &atom) {
-                return Ok(Some(vec![Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL])]))
-            }
+    pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
+        match self.type_check(atom) {
+            Err(atom) => Ok(vec![atom]),
+            Ok(atom) => interpret(self.space.clone(), &atom),
         }
-        match mode {
-            Mode::ADD => {
-                log::trace!("Metta::run: adding atom: {} into space: {:?}", atom, self.space);
-                self.space.borrow_mut().add(atom);
-                Ok(None) 
-            },
-            Mode::INTERPRET => {
-                log::trace!("Metta::run: interpreting atom: {}", atom);
-                let result = interpret(self.space.clone(), &atom);
-                log::trace!("Metta::run: interpretation result {:?}", result);
-                match result {
-                    Ok(result) => Ok(Some(result)),
-                    Err(message) => Err(format!("Error: {}", message)),
-                }
-            },
+    }
+
+    fn add_atom(&self, atom: Atom) {
+        self.space.borrow_mut().add(atom);
+    }
+
+    fn type_check(&self, atom: Atom) -> Result<Atom, Atom> {
+        let is_type_check_enabled = self.get_setting("type-check").map_or(false, |val| val == "auto");
+        if  is_type_check_enabled && !validate_atom(&self.space.borrow(), &atom) {
+            Err(Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]))
+        } else {
+            Ok(atom)
         }
     }
 
