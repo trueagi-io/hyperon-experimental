@@ -5,7 +5,6 @@ use crate::space::*;
 
 use std::os::raw::*;
 use std::fmt::Display;
-//use std::slice::range;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon::matcher::Bindings;
