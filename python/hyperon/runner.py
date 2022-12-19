@@ -24,6 +24,9 @@ class MeTTa:
     def __del__(self):
         hp.metta_free(self.cmetta)
 
+    def copy(self):
+        return MeTTa(cmetta = hp.metta_clone(self.cmetta))
+
     def space(self):
         return GroundingSpace._from_cspace(hp.metta_space(self.cmetta))
 

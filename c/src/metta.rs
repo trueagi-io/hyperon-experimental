@@ -164,6 +164,12 @@ pub extern "C" fn metta_new(space: *mut grounding_space_t, tokenizer: *mut token
 }
 
 #[no_mangle]
+pub extern "C" fn metta_clone(metta: *mut metta_t) -> *mut metta_t {
+    let metta = unsafe{ &(*metta) };
+    metta_t::from_shared(metta.shared())
+}
+
+#[no_mangle]
 pub extern "C" fn metta_free(metta: *mut metta_t) {
     metta_t::drop(metta);
 }
