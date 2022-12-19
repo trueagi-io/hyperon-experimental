@@ -6,17 +6,20 @@ from .base import GroundingSpace, Tokenizer, SExprParser
 
 class MeTTa:
 
-    def __init__(self, space = None, cwd = "."):
-        if space is None:
-            space = GroundingSpace()
-        tokenizer = Tokenizer()
-        self.cmetta = hp.metta_new(space.cspace, tokenizer.ctokenizer, cwd)
-        self.load_py_module("hyperon.stdlib")
-        hp.metta_load_module(self.cmetta, "stdlib")
-        self.register_atom('extend-py!',
-            OperationAtom('extend-py!',
-                          lambda name: self.load_py_module(name) or [],
-                          [AtomType.UNDEFINED, AtomType.ATOM], unwrap=False))
+    def __init__(self, space = None, cwd = ".", cmetta = None):
+        if cmetta is not None:
+            self.cmetta = cmetta
+        else:
+            if space is None:
+                space = GroundingSpace()
+            tokenizer = Tokenizer()
+            self.cmetta = hp.metta_new(space.cspace, tokenizer.ctokenizer, cwd)
+            self.load_py_module("hyperon.stdlib")
+            hp.metta_load_module(self.cmetta, "stdlib")
+            self.register_atom('extend-py!',
+                OperationAtom('extend-py!',
+                              lambda name: self.load_py_module(name) or [],
+                              [AtomType.UNDEFINED, AtomType.ATOM], unwrap=False))
 
     def __del__(self):
         hp.metta_free(self.cmetta)
