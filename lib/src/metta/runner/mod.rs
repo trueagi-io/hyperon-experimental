@@ -40,9 +40,18 @@ impl Metta {
     }
 
     pub fn load_module(&self, name: &str) {
+        let space = Shared::new(GroundingSpace::new());
+        let tokenizer = self.tokenizer.clone();
+        let settings = self.settings.clone();
+        // We don't use Metta::[new|from_space_cwd] in order to use the right tokenizer
+        // (and to avoid overriding it with Rust tokens)
+        let runner = Self { space, tokenizer, settings };
         if name == "stdlib" {
-            self.run(&mut SExprParser::new(stdlib::metta_code())).expect("Cannot import stdlib code");
+            runner.run(&mut SExprParser::new(stdlib::metta_code())).expect("Cannot import stdlib code");
         }
+        let space_atom = Atom::gnd(runner.space.clone());
+        // self.tokenizer.borrow_mut().register_token(stdlib::regex(name), move |_| { space_atom.clone() });
+        self.space.borrow_mut().add(space_atom);
     }
 
     pub fn space(&self) -> Shared<GroundingSpace> {
