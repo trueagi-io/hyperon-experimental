@@ -1,13 +1,13 @@
 use hyperon::assert_eq_metta_results;
 use hyperon::metta::text::SExprParser;
-use hyperon::metta::runner::Metta;
+use hyperon::metta::runner::new_metta_rust;
 use hyperon::common::shared::Shared;
 use hyperon::space::grounding::GroundingSpace;
 use hyperon::metta::text::Tokenizer;
 
 #[test]
 fn test_case_operation() {
-    let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+    let metta = new_metta_rust();
     let result = metta.run(&mut SExprParser::new("
         ; cases are processed sequentially
         !(case (+ 1 5)
@@ -42,7 +42,7 @@ fn test_case_operation() {
     "));
     assert_eq!(result, expected);
 
-    let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+    let metta = new_metta_rust();
     let result = metta.run(&mut SExprParser::new("
         (Rel-P A B)
         (Rel-Q A C)

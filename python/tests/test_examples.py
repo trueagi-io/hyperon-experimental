@@ -96,9 +96,6 @@ class ExamplesTest(HyperonTestCase):
         metta = MeTTa()
 
         metta.run('''
-            (: if (-> Bool Atom Atom $t))
-            (= (if True $then $else) $then)
-            (= (if False $then $else) $else)
             (= (Fritz croaks) True)
             (= (Tweety chirps) True)
             (= (Tweety yellow) True)
@@ -117,15 +114,13 @@ class ExamplesTest(HyperonTestCase):
         metta = MeTTa()
 
         metta.run('''
-           (= (if True $then) $then)
-
            (= (: (apply $f $x) $r) (and (: $f (=> $a $r)) (: $x $a)))
 
            (= (: reverse (=> String String)) True)
            (= (: "Hello" String) True)
         ''')
 
-        output = metta.run('!(if (: (apply reverse "Hello") $t) $t)')
+        output = metta.run('!(if (: (apply reverse "Hello") $t) $t Wrong)')
         self.assertEqualMettaRunnerResults(output, [[S('String')]])
 
     def test_plus_reduces_Z(self):
@@ -159,17 +154,17 @@ class ExamplesTest(HyperonTestCase):
         # detect, if something is changes in the interpreter
         metta1 = MeTTa()
         metta1.run('''
-            (= A B)
+            (eq A B)
             (= (f-in-s2) failure)
             (= (how-it-works?) (f-in-s2))
-            (= (inverse $x) (match &self (= $y $x) $y))
+            (= (inverse $x) (match &self (eq $y $x) $y))
         ''')
         metta2 = MeTTa()
         metta2.register_atom("&space1", metta1.run("! &self")[0][0])
         metta2.run('''
-            (= C B)
+            (eq C B)
             (= (f-in-s2) success)
-            (= (find-in $s $x) (match $s (= $y $x) $y))
+            (= (find-in $s $x) (match $s (eq $y $x) $y))
             (= (borrow $s $e) (match $s (= $e $r) $r))
         ''')
         self.assertEqualMettaRunnerResults(metta1.run('!(inverse B)'), [[S('A')]])

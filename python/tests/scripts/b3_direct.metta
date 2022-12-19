@@ -22,11 +22,8 @@
   Fritz)
 
 ; We can also use expressions with `=` in `match`
-; TODO: for it to work now, we need to specify type of `=`
-; in the program; should this type somehow be built-in?
 ; NOTE: `=` is not an ordinary symbol, and declarative reasoning over expressions
 ; with it may work differently from that over purely symbolic expressions
-(: = (-> Atom Atom Atom))
 !(assertEqualToResult
   (match &self (= ($p Fritz) T) $p)
   (croaks eat_flies))

@@ -345,5 +345,10 @@ PYBIND11_MODULE(hyperonpy, m) {
             metta_evaluate_atom(metta.ptr, atom_clone(atom.ptr), copy_atoms, &atoms);
             return atoms;
         }, "Run MeTTa interpreter on an atom");
+
+    m.def("metta_load_module", [](CMetta metta, std::string text) {
+        metta_load_module(metta.ptr, text.c_str());
+    }, "Load MeTTa module");
+
 }
 

@@ -802,16 +802,16 @@ impl Grounded for LetVarOp {
     }
 }
 
-pub fn register_tokens(metta: &Metta, cwd: PathBuf) {
-    fn regex(regex: &str) -> Regex {
-        Regex::new(regex).unwrap()
-    }
+fn regex(regex: &str) -> Regex {
+    Regex::new(regex).unwrap()
+}
 
+pub fn register_common_tokens(metta: &Metta, cwd: PathBuf) {
     let space = &metta.space;
     let tokenizer = &metta.tokenizer;
 
-    let mut stdlib_tokens = Tokenizer::new();
-    let tref = &mut stdlib_tokens;
+    let mut common_tokens = Tokenizer::new();
+    let tref = &mut common_tokens;
 
     let match_op = Atom::gnd(MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
@@ -856,6 +856,18 @@ pub fn register_tokens(metta: &Metta, cwd: PathBuf) {
     let let_var_op = Atom::gnd(LetVarOp{});
     tref.register_token(regex(r"let\*"), move |_| { let_var_op.clone() });
 
+    metta.tokenizer.borrow_mut().move_front(&mut common_tokens);
+
+    // &self should be updated
+    // TODO: adding &self might be done not by stdlib, but by MeTTa itself
+    let space_val = Atom::gnd(metta.space.clone());
+    metta.tokenizer.borrow_mut().register_token(regex(r"&self"), move |_| { space_val.clone() });
+}
+
+pub fn register_rust_tokens(metta: &Metta) {
+    let mut rust_tokens = Tokenizer::new();
+    let tref = &mut rust_tokens;
+
     tref.register_token(regex(r"\d+"),
         |token| { Atom::gnd(Number::from_int_str(token)) });
     tref.register_token(regex(r"\d+(.\d+)([eE][\-\+]?\d+)?"),
@@ -873,12 +885,17 @@ pub fn register_tokens(metta: &Metta, cwd: PathBuf) {
     let mod_op = Atom::gnd(ModOp{});
     tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
 
-    metta.tokenizer.borrow_mut().move_front(&mut stdlib_tokens);
+    metta.tokenizer.borrow_mut().move_front(&mut rust_tokens);
+}
 
-    // &self should be updated
-    // TODO: adding &self might be done not by stdlib, but by MeTTa itself
-    let space_val = Atom::gnd(metta.space.clone());
-    metta.tokenizer.borrow_mut().register_token(regex(r"&self"), move |_| { space_val.clone() });
+pub fn metta_code() -> &'static str {
+    // `$then`, `$else` should be of `Atom` type to avoid evaluation
+    // and infinite cycle in inference
+    "
+    (: if (-> Bool Atom Atom $t))
+    (= (if True $then $else) $then)
+    (= (if False $then $else) $else)
+    "
 }
 
 #[cfg(test)]

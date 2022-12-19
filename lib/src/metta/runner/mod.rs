@@ -35,8 +35,14 @@ impl Metta {
     pub fn from_space_cwd(space: Shared<GroundingSpace>, tokenizer: Shared<Tokenizer>, cwd: PathBuf) -> Self {
         let settings = Shared::new(HashMap::new());
         let metta = Self{ space, tokenizer, settings };
-        stdlib::register_tokens(&metta, cwd);
+        stdlib::register_common_tokens(&metta, cwd);
         metta
+    }
+
+    pub fn load_module(&self, name: &str) {
+        if name == "stdlib" {
+            self.run(&mut SExprParser::new(stdlib::metta_code())).expect("Cannot import stdlib code");
+        }
     }
 
     pub fn space(&self) -> Shared<GroundingSpace> {
@@ -100,6 +106,14 @@ impl Metta {
 
 }
 
+pub fn new_metta_rust() -> Metta {
+    let metta = Metta::new(Shared::new(GroundingSpace::new()),
+        Shared::new(Tokenizer::new()));
+    stdlib::register_rust_tokens(&metta);
+    metta.load_module("stdlib");
+    metta
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -117,7 +131,7 @@ mod tests {
             !(green Fritz)
         ";
 
-        let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = new_metta_rust();
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![Atom::sym("T")]]));
     }

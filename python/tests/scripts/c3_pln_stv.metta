@@ -1,5 +1,3 @@
-(= (if True $then $else) $then)
-(= (if False $then $else) $else)
 (= (min $a $b) (if (< $a $b) $a $b))
 (= (s-tv (stv $s $c)) $s)
 (= (c-tv (stv $s $c)) $c)

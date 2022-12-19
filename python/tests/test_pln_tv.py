@@ -10,8 +10,6 @@ class PLNTVTest(HyperonTestCase):
         # `stv` as a mix of function and constructor
         # working through ordinary equalities
         metta.run('''
-                (= (if True $then $else) $then)
-                (= (if False $then $else) $else)
                 (= (min $a $b) (if (< $a $b) $a $b))
                 (= (s-tv (stv $s $c)) $s)
                 (= (c-tv (stv $s $c)) $c)

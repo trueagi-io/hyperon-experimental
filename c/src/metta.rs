@@ -200,3 +200,9 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: *mut atom_t,
     let result = metta.evaluate_atom(atom.atom).expect("Returning errors from C API is not implemented yet");
     return_atoms(&result, output, out_context);
 }
+
+#[no_mangle]
+pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
+    let metta = unsafe{ &*metta }.borrow();
+    metta.load_module(cstr_as_str(name));
+}
