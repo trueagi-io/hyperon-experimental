@@ -20,6 +20,7 @@ pub struct Metta {
     space: Shared<GroundingSpace>,
     tokenizer: Shared<Tokenizer>,
     settings: Shared<HashMap<String, String>>,
+    modules: Shared<HashMap<String, Shared<GroundingSpace>>>,
 }
 
 enum Mode {
@@ -34,23 +35,40 @@ impl Metta {
 
     pub fn from_space_cwd(space: Shared<GroundingSpace>, tokenizer: Shared<Tokenizer>, cwd: PathBuf) -> Self {
         let settings = Shared::new(HashMap::new());
-        let metta = Self{ space, tokenizer, settings };
+        let modules = Shared::new(HashMap::new());
+        let metta = Self{ space, tokenizer, settings, modules };
         stdlib::register_common_tokens(&metta, cwd);
         metta
     }
 
     pub fn load_module(&self, name: &str) {
-        let space = Shared::new(GroundingSpace::new());
-        let tokenizer = self.tokenizer.clone();
-        let settings = self.settings.clone();
-        // We don't use Metta::[new|from_space_cwd] in order to use the right tokenizer
-        // (and to avoid overriding it with Rust tokens)
-        let runner = Self { space, tokenizer, settings };
-        if name == "stdlib" {
-            runner.run(&mut SExprParser::new(stdlib::metta_code())).expect("Cannot import stdlib code");
-        }
-        let space_atom = Atom::gnd(runner.space.clone());
+        let module_name = name.to_string();
+        let mut my_modules = self.modules.borrow_mut();
+        // Loading the module only once
+        // TODO? force_reload?
+        let space =
+            match my_modules.get(&module_name) {
+                Some(module_space) => module_space.cloned(),
+                None => {
+                    let space = Shared::new(GroundingSpace::new());
+                    let tokenizer = self.tokenizer.clone();
+                    let settings = self.settings.clone();
+                    let modules = self.modules.clone();
+                    // We don't use Metta::[new|from_space_cwd] in order to use the right tokenizer
+                    // (and to avoid overriding it with Rust tokens)
+                    let runner = Self { space, tokenizer, settings, modules };
+                    if name == "stdlib" {
+                        runner.run(&mut SExprParser::new(stdlib::metta_code())).expect("Cannot import stdlib code");
+                    }
+                    my_modules.insert(module_name, runner.space.clone());
+                    runner.space.clone()
+                }
+            };
+        // REM: loading the module to &self now
+        let space_atom = Atom::gnd(space);
+        // TODO: Should we register the module name?
         // self.tokenizer.borrow_mut().register_token(stdlib::regex(name), move |_| { space_atom.clone() });
+        // TODO: check if it is already there (if the module is newly loaded)
         self.space.borrow_mut().add(space_atom);
     }
 
