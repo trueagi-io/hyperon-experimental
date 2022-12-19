@@ -70,12 +70,29 @@ impl Metta {
                     }
                     match mode {
                         Mode::ADD => match self.add_atom(atom) {
-                            Err(atom) => results.push(vec![atom]),
+                            Err(atom) => {
+                                results.push(vec![atom]);
+                                break
+                            }
                             Ok(()) => {},
                         }
                         Mode::INTERPRET => match self.evaluate_atom(atom) {
                             Err(msg) => return Err(msg),
-                            Ok(result) => results.push(result),
+                            Ok(result) => {
+                                fn is_error(atom: &Atom) -> bool {
+                                    match atom {
+                                        Atom::Expression(expr) => expr.children()[0] == ERROR_SYMBOL,
+                                        _ => false,
+                                    }
+                                }
+                                let error = result.iter()
+                                    .map(|atom| is_error(atom))
+                                    .fold(false, |a, b| a | b);
+                                results.push(result);
+                                if error {
+                                    break
+                                }
+                            }
                         },
                     }
                     mode = Mode::ADD;
@@ -152,6 +169,61 @@ mod tests {
             (: foo (-> A B))
             (: b B)
             !(foo b)
+        ";
+
+        let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        metta.set_setting("type-check".into(), "auto".into());
+        let result = metta.run(&mut SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
+    }
+
+    #[derive(Clone, PartialEq, Debug)]
+    struct ErrorOp{}
+
+    impl std::fmt::Display for ErrorOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "error")
+        }
+    }
+
+    impl Grounded for ErrorOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED])
+        }
+        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+            //FIXME: why next two lines led to not equal results?
+            Ok(vec![expr!("Error" ("error") "TestError")])
+            //Err("TestError".into())
+        }
+        fn match_(&self, other: &Atom) -> crate::matcher::MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    #[test]
+    fn metta_stop_run_after_error() {
+        let program = "
+            (= (foo) ok)
+            !(error)
+            !(foo)
+        ";
+
+        let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        metta.tokenizer().borrow_mut().register_token(Regex::new("error").unwrap(),
+            |_| Atom::gnd(ErrorOp{}));
+        let result = metta.run(&mut SExprParser::new(program));
+
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("error") "TestError")]]));
+    }
+
+    #[test]
+    fn metta_stop_after_type_check_fails_on_add() {
+        let program = "
+            (: foo (-> A B))
+            (: a A)
+            (: b B)
+            (foo b)
+            !(foo a)
         ";
 
         let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
