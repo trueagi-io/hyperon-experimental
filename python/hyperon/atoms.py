@@ -90,6 +90,7 @@ class GroundedAtom(Atom):
         return Atom._from_catom(hp.atom_get_grounded_type(self.catom))
 
 def G(object, type=AtomType.UNDEFINED):
+    assert hasattr(object, "copy"), "Method copy should be implemented by grounded object"
     return GroundedAtom(hp.atom_gnd(object, type.catom))
 
 def call_execute_on_grounded_atom(gnd, typ, args):
