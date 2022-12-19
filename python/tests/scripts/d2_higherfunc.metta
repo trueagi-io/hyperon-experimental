@@ -53,6 +53,30 @@
   ((is-socrates) Human)
   True)
 
+; The same trick works for defining lambda
+; (basically, `lambda` is curried `let`)
+(: lambda (-> $a $t (-> $a $t)))
+(= ((lambda $var $body) $arg)
+   (let $var $arg $body))
+!(assertEqual
+  ((lambda $x (+ $x 1)) 2)
+  3)
+!(assertEqual
+  ((lambda ($x $y) (+ $x $y)) (2 7))
+  9)
+(= (part-appl $f $x)
+   (lambda $y ($f $x $y)))
+(= (inc) (part-appl + 1))
+!(assertEqual
+  ((inc) 5)
+  6)
+; REM:
+;   (get-type (lambda ($x $y) (+ $x $y)))
+; returns (-> %Undefined% Number), bacause the type of `($x $y)` is not defined.
+; It is also not clear how to check that the type of `$var` is suitable for `$body`
+; (it should somehow be done on`let` side)
+
+
 ; Let's introduce some functors
 (: Maybe (-> $t Type))
 (: Nothing (-> (Maybe $t)))
