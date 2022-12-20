@@ -42,21 +42,25 @@ impl Metta {
         metta
     }
 
-    pub fn load_module(&self, path: PathBuf) {
+    pub fn load_module_space(&self, path: PathBuf) -> Shared<GroundingSpace> {
         let mut my_modules = self.modules.borrow_mut();
         // Loading the module only once
         // TODO? force_reload?
         let space =
             match my_modules.get(&path) {
-                Some(module_space) => module_space.cloned(),
+                Some(module_space) => module_space.cloned(), //FIXME? clone() ?
                 None => {
+                    // Load the module to the new space
                     let space = Shared::new(GroundingSpace::new());
-                    let tokenizer = self.tokenizer.clone();
-                    let settings = self.settings.clone();
-                    let modules = self.modules.clone();
-                    // We don't use Metta::[new|from_space_cwd] in order to use the right tokenizer
-                    // (and to avoid overriding it with Rust tokens)
-                    let runner = Self { space, tokenizer, settings, modules };
+                    let tokenizer = self.tokenizer.cloned();
+                    let mut next_cwd = path.clone();
+                    next_cwd.pop();
+                    // We have to use from_space_cwd to register new grounded symbols
+                    // related to importing, the runner itself and its space
+                    //TODO: pass modules and settings
+                    //let settings = self.settings.clone();
+                    //let modules = self.modules.clone();
+                    let runner = Metta::from_space_cwd(space, tokenizer, next_cwd);
                     let program = match path.to_str() {
                         Some("stdlib") => stdlib::metta_code().to_string(),
                         _ => {
@@ -73,11 +77,17 @@ impl Metta {
                     runner.space.clone()
                 }
             };
-        // REM: loading the module to &self now
-        let space_atom = Atom::gnd(space);
+        space
+    }
+
+    pub fn load_module(&self, path: PathBuf) {
+        // Load module to &self
         // TODO: Should we register the module name?
         // self.tokenizer.borrow_mut().register_token(stdlib::regex(name), move |_| { space_atom.clone() });
         // TODO: check if it is already there (if the module is newly loaded)
+        //self.space.borrow_mut().add(space_atom);
+        let module_space = self.load_module_space(path);
+        let space_atom = Atom::gnd(module_space);
         self.space.borrow_mut().add(space_atom);
     }
 

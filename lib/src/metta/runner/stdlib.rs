@@ -57,7 +57,6 @@ impl Grounded for ImportOp {
         let arg_error = || ExecError::from("import! expects two arguments: space and file path");
         let space = args.get(0).ok_or_else(arg_error)?;
         let file = args.get(1).ok_or_else(arg_error)?;
-        let tokenizer = &self.metta.borrow().tokenizer;
 
         let mut path = self.cwd.clone();
         // TODO: replace Symbol by grounded String?
@@ -67,31 +66,28 @@ impl Grounded for ImportOp {
         } else {
             return Err("import! expects a file path as a second argument".into())
         }
+        let module_space = self.metta.borrow().load_module_space(path);
 
-        let tokenizer_before_adding_imported_space = tokenizer.cloned();
-        let space: Result<Shared<GroundingSpace>, String> = match space {
+        match space {
+            // If the module is to be associated with a new space,
+            // we register it in the tokenizer - works as "import as"
             Atom::Symbol(space) => {
                 let name = space.name();
-                let space = Shared::new(GroundingSpace::new());
-                let space_atom = Atom::gnd(space.clone());
+                let space_atom = Atom::gnd(module_space.clone());
                 let regex = Regex::new(name)
                     .map_err(|err| format!("Could convert space name {} into regex: {}", name, err))?;
-                tokenizer.borrow_mut()
+                self.metta.borrow().tokenizer.borrow_mut()
                     .register_token(regex, move |_| { space_atom.clone() });
-                Ok(space)
             },
+            // If the reference space exists, the module space atom is inserted into it
+            // (but the token is not added) - works as "import to"
             Atom::Grounded(_) => {
                 let space = Atom::as_gnd::<Shared<GroundingSpace>>(space)
                     .ok_or("import! expects a space as a first argument")?;
-                Ok(space.clone())
+                space.borrow_mut().add(Atom::gnd(module_space));
             },
-            _ => Err("import! expects space as a first argument".into()),
+            _ => return Err("import! expects space as a first argument".into()),
         };
-        let space = space?;
-        let mut next_cwd = path.clone();
-        next_cwd.pop();
-        let metta = Metta::from_space_cwd(space, tokenizer_before_adding_imported_space, next_cwd);
-        metta.load_module(path);
         Ok(vec![])
     }
 
