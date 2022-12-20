@@ -20,7 +20,7 @@ pub struct Metta {
     space: Shared<GroundingSpace>,
     tokenizer: Shared<Tokenizer>,
     settings: Shared<HashMap<String, String>>,
-    modules: Shared<HashMap<String, Shared<GroundingSpace>>>,
+    modules: Shared<HashMap<PathBuf, Shared<GroundingSpace>>>,
 }
 
 enum Mode {
@@ -41,13 +41,12 @@ impl Metta {
         metta
     }
 
-    pub fn load_module(&self, name: &str) {
-        let module_name = name.to_string();
+    pub fn load_module(&self, path: PathBuf) {
         let mut my_modules = self.modules.borrow_mut();
         // Loading the module only once
         // TODO? force_reload?
         let space =
-            match my_modules.get(&module_name) {
+            match my_modules.get(&path) {
                 Some(module_space) => module_space.cloned(),
                 None => {
                     let space = Shared::new(GroundingSpace::new());
@@ -57,10 +56,19 @@ impl Metta {
                     // We don't use Metta::[new|from_space_cwd] in order to use the right tokenizer
                     // (and to avoid overriding it with Rust tokens)
                     let runner = Self { space, tokenizer, settings, modules };
-                    if name == "stdlib" {
-                        runner.run(&mut SExprParser::new(stdlib::metta_code())).expect("Cannot import stdlib code");
-                    }
-                    my_modules.insert(module_name, runner.space.clone());
+                    let program = match path.to_str() {
+                        Some("stdlib") => stdlib::metta_code().to_string(),
+                        _ => {
+                            let prog = std::fs::read_to_string(&path);
+                            let prog = match prog {
+                                Err(err) => format!("Could not read file {}: {}", path.display(), err),
+                                Ok(str) => str,
+                            };
+                            prog
+                        },
+                    };
+                    runner.run(&mut SExprParser::new(program.as_str())).expect("Cannot import stdlib code");
+                    my_modules.insert(path, runner.space.clone());
                     runner.space.clone()
                 }
             };
@@ -164,7 +172,7 @@ pub fn new_metta_rust() -> Metta {
     let metta = Metta::new(Shared::new(GroundingSpace::new()),
         Shared::new(Tokenizer::new()));
     stdlib::register_rust_tokens(&metta);
-    metta.load_module("stdlib");
+    metta.load_module(PathBuf::from("stdlib"));
     metta
 }
 

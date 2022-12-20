@@ -2,7 +2,7 @@ use crate::*;
 use crate::matcher::MatchResultIter;
 use crate::metta::*;
 use crate::metta::space::grounding::GroundingSpace;
-use crate::metta::text::{Tokenizer, SExprParser};
+use crate::metta::text::Tokenizer;
 use crate::metta::interpreter::interpret;
 use crate::metta::runner::Metta;
 use crate::metta::types::get_atom_types;
@@ -91,9 +91,7 @@ impl Grounded for ImportOp {
         let mut next_cwd = path.clone();
         next_cwd.pop();
         let metta = Metta::from_space_cwd(space, tokenizer_before_adding_imported_space, next_cwd);
-        let program = std::fs::read_to_string(&path)
-            .map_err(|err| format!("Could not read file {}: {}", path.display(), err))?;
-        let _result = metta.run(&mut SExprParser::new(program.as_str()))?;
+        metta.load_module(path);
         Ok(vec![])
     }
 

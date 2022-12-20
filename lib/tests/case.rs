@@ -1,9 +1,6 @@
 use hyperon::assert_eq_metta_results;
 use hyperon::metta::text::SExprParser;
 use hyperon::metta::runner::new_metta_rust;
-use hyperon::common::shared::Shared;
-use hyperon::space::grounding::GroundingSpace;
-use hyperon::metta::text::Tokenizer;
 
 #[test]
 fn test_case_operation() {

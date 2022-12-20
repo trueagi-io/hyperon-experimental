@@ -210,5 +210,5 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: *mut atom_t,
 #[no_mangle]
 pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
     let metta = unsafe{ &*metta }.borrow();
-    metta.load_module(cstr_as_str(name));
+    metta.load_module(PathBuf::from(cstr_as_str(name)));
 }
