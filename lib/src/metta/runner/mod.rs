@@ -43,12 +43,12 @@ impl Metta {
     }
 
     pub fn load_module_space(&self, path: PathBuf) -> Shared<GroundingSpace> {
-        let mut my_modules = self.modules.borrow_mut();
+        let mut my_modules = self.modules.borrow_mut().clone();
         // Loading the module only once
         // TODO? force_reload?
         let space =
             match my_modules.get(&path) {
-                Some(module_space) => module_space.cloned(), //FIXME? clone() ?
+                Some(module_space) => module_space.clone(),
                 None => {
                     // Load the module to the new space
                     let space = Shared::new(GroundingSpace::new());
@@ -72,7 +72,7 @@ impl Metta {
                             prog
                         },
                     };
-                    runner.run(&mut SExprParser::new(program.as_str())).expect("Cannot import stdlib code");
+                    runner.run(&mut SExprParser::new(program.as_str())).expect("Cannot import {path} code");
                     my_modules.insert(path, runner.space.clone());
                     runner.space.clone()
                 }
