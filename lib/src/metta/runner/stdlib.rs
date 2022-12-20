@@ -33,13 +33,12 @@ fn interpret_no_error(space: Shared<GroundingSpace>, expr: &Atom) -> Result<Vec<
 #[derive(Clone, PartialEq, Debug)]
 pub struct ImportOp {
     cwd: PathBuf,
-    space: Shared<GroundingSpace>,
-    tokenizer: Shared<Tokenizer>,
+    metta: Shared<Metta>,
 }
 
 impl ImportOp {
-    pub fn new(cwd: PathBuf, space: Shared<GroundingSpace>, tokenizer: Shared<Tokenizer>) -> Self {
-        Self{ cwd, space, tokenizer }
+    pub fn new(metta: Shared<Metta>, cwd: PathBuf) -> Self {
+        Self{ metta, cwd }
     }
 }
 
@@ -58,6 +57,7 @@ impl Grounded for ImportOp {
         let arg_error = || ExecError::from("import! expects two arguments: space and file path");
         let space = args.get(0).ok_or_else(arg_error)?;
         let file = args.get(1).ok_or_else(arg_error)?;
+        let tokenizer = &self.metta.borrow().tokenizer;
 
         let mut path = self.cwd.clone();
         // TODO: replace Symbol by grounded String?
@@ -68,7 +68,7 @@ impl Grounded for ImportOp {
             return Err("import! expects a file path as a second argument".into())
         }
 
-        let tokenizer_before_adding_imported_space = self.tokenizer.cloned();
+        let tokenizer_before_adding_imported_space = tokenizer.cloned();
         let space: Result<Shared<GroundingSpace>, String> = match space {
             Atom::Symbol(space) => {
                 let name = space.name();
@@ -76,7 +76,7 @@ impl Grounded for ImportOp {
                 let space_atom = Atom::gnd(space.clone());
                 let regex = Regex::new(name)
                     .map_err(|err| format!("Could convert space name {} into regex: {}", name, err))?;
-                self.tokenizer.borrow_mut()
+                tokenizer.borrow_mut()
                     .register_token(regex, move |_| { space_atom.clone() });
                 Ok(space)
             },
@@ -807,13 +807,14 @@ fn regex(regex: &str) -> Regex {
 pub fn register_common_tokens(metta: &Metta, cwd: PathBuf) {
     let space = &metta.space;
     let tokenizer = &metta.tokenizer;
+    let smetta = metta.clone();
 
     let mut common_tokens = Tokenizer::new();
     let tref = &mut common_tokens;
 
     let match_op = Atom::gnd(MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
-    let import_op = Atom::gnd(ImportOp::new(cwd.clone(), space.clone(), tokenizer.clone()));
+    let import_op = Atom::gnd(ImportOp::new(smetta.clone(), cwd.clone()));
     tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
     let bind_op = Atom::gnd(BindOp::new(tokenizer.clone()));
     tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });

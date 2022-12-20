@@ -16,6 +16,7 @@ mod arithmetics;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
+#[derive(Debug)]
 pub struct Metta {
     space: Shared<GroundingSpace>,
     tokenizer: Shared<Tokenizer>,
@@ -86,6 +87,11 @@ impl Metta {
 
     pub fn tokenizer(&self) -> Shared<Tokenizer> {
         self.tokenizer.clone()
+    }
+
+    pub fn clone(&self) -> Shared<Self> {
+        Shared::new(Self{ space: self.space(), tokenizer: self.tokenizer(),
+            settings: self.settings.clone(), modules: self.modules.clone() })
     }
 
     #[cfg(test)]
