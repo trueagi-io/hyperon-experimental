@@ -2,6 +2,12 @@ project(hyperon)
 # minimum version required by $<IF..> generator expression
 cmake_minimum_required(VERSION 3.10.2)
 
+# Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
+if (POLICY CMP0025)
+    cmake_policy(SET CMP0025 NEW)
+endif ()
+set(CMAKE_CXX_STANDARD 11)
+
 enable_testing()
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 
