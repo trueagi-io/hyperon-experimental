@@ -43,24 +43,29 @@ impl Metta {
     }
 
     pub fn load_module_space(&self, path: PathBuf) -> Shared<GroundingSpace> {
-        let mut my_modules = self.modules.borrow_mut().clone();
+        //println!("Load module space {}", path.display());
+        let my_modules = self.modules.borrow().clone();
+        //println!("my_modules: {:?}", my_modules);
         // Loading the module only once
         // TODO? force_reload?
         let space =
             match my_modules.get(&path) {
-                Some(module_space) => module_space.clone(),
+                Some(module_space) => {
+                    //println!("Found module {}", path.display());
+                    module_space.clone()
+                },
                 None => {
                     // Load the module to the new space
                     let space = Shared::new(GroundingSpace::new());
                     let tokenizer = self.tokenizer.cloned();
                     let mut next_cwd = path.clone();
                     next_cwd.pop();
-                    // We have to use from_space_cwd to register new grounded symbols
-                    // related to importing, the runner itself and its space
-                    //TODO: pass modules and settings
-                    //let settings = self.settings.clone();
-                    //let modules = self.modules.clone();
-                    let runner = Metta::from_space_cwd(space, tokenizer, next_cwd);
+                    let settings = self.settings.clone();
+                    let modules = self.modules.clone();
+                    let runner = Self{ space, tokenizer, settings, modules };
+                    // override common tokens related to the runner (including import)
+                    // FIXME? won't all tokens including import! except &self be shaded by the parent?
+                    stdlib::register_common_tokens(&runner, next_cwd);
                     let program = match path.to_str() {
                         Some("stdlib") => stdlib::metta_code().to_string(),
                         _ => {
@@ -72,8 +77,10 @@ impl Metta {
                             prog
                         },
                     };
+                    // Make the imported module be immediately available to itself
+                    // to mitigate circular imports
+                    self.modules.borrow_mut().insert(path, runner.space.clone());
                     runner.run(&mut SExprParser::new(program.as_str())).expect("Cannot import {path} code");
-                    my_modules.insert(path, runner.space.clone());
                     runner.space.clone()
                 }
             };
@@ -85,10 +92,9 @@ impl Metta {
         // TODO: Should we register the module name?
         // self.tokenizer.borrow_mut().register_token(stdlib::regex(name), move |_| { space_atom.clone() });
         // TODO: check if it is already there (if the module is newly loaded)
-        //self.space.borrow_mut().add(space_atom);
         let module_space = self.load_module_space(path);
         let space_atom = Atom::gnd(module_space);
-        self.space.borrow_mut().add(space_atom);
+        self.space.borrow_mut().add(space_atom); // self.add_atom(space_atom)
     }
 
     pub fn space(&self) -> Shared<GroundingSpace> {
