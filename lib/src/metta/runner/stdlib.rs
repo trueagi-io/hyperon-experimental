@@ -84,6 +84,15 @@ impl Grounded for ImportOp {
             Atom::Grounded(_) => {
                 let space = Atom::as_gnd::<Shared<GroundingSpace>>(space)
                     .ok_or("import! expects a space as a first argument")?;
+                /* // TODO: Moving space atoms from children to parent
+                let modules = self.metta.borrow().modules.borrow().clone();
+                for (_path, mspace) in modules {
+                    let aspace = Atom::gnd(mspace);
+                    if module_space.borrow_mut().remove(&aspace) {
+                        self.metta.borrow().space().borrow_mut().remove(&aspace);
+                        self.metta.borrow().space().borrow_mut().add(aspace);
+                    }
+                }*/
                 space.borrow_mut().add(Atom::gnd(module_space));
             },
             _ => return Err("import! expects space as a first argument".into()),
