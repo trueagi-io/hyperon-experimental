@@ -11,6 +11,7 @@ use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 
 // Grounding space
@@ -114,7 +115,7 @@ macro_rules! walk_index_tree {
 walk_index_tree!(IndexTreeIterMut, { mut }, mut);
 walk_index_tree!(IndexTreeIter, { /* no mut */ }, const);
 
-impl<T: PartialEq + Clone> IndexTree<T> {
+impl<T: Debug + PartialEq + Clone> IndexTree<T> {
 
     fn new() -> Self {
         Self{ next: HashMap::new(), leaf: Vec::new() }
@@ -221,6 +222,7 @@ impl<T: PartialEq + Clone> IndexTree<T> {
     }
     
     fn add(&mut self, key: &Atom, value: T) {
+        log::debug!("IndexTree::add(): key: {:?}, value: {:?}", key, value);
         IndexTreeIterMut::new(self, key, |idx, key, keys, callback| {
             idx.next_for_add(key, keys, callback)
         }).for_each(|idx| idx.leaf.push(value.clone()));
@@ -231,6 +233,7 @@ impl<T: PartialEq + Clone> IndexTree<T> {
     // IndexTree nodes and cleaning up the map entries which point to the empty
     // nodes only.
     fn remove(&mut self, key: &Atom, value: &T) -> bool {
+        log::debug!("IndexTree::remove(): key: {:?}, value: {:?}", key, value);
         IndexTreeIterMut::new(self, &key, |idx, key, keys, callback| {
             idx.next_for_remove(key, keys, callback)
         }).map(|idx| idx.remove_value(value)).fold(false, |a, b| a | b)
@@ -294,12 +297,43 @@ pub trait SpaceObserver {
     fn notify(&mut self, event: &SpaceEvent);
 }
 
+struct GroundingSpaceIter<'a> {
+    space: &'a GroundingSpace,
+    i: usize,
+}
+
+impl<'a> GroundingSpaceIter<'a> {
+    fn new(space: &'a GroundingSpace) -> Self {
+        GroundingSpaceIter { space, i: 0 }
+    }
+}
+
+impl<'a> Iterator for GroundingSpaceIter<'a> {
+    type Item = &'a Atom;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let len = self.space.content.len();
+        let mut i = self.i;
+        while i < len && self.space.free.contains(&i) {
+            i += 1;
+        }
+        if i >= len {
+            self.i = i;
+            None
+        } else {
+            self.i = i + 1;
+            self.space.content.get(i)
+        }
+    }
+}
+
 /// In-memory space which can contain grounded atoms.
 // TODO: Clone is required by C API
 #[derive(Clone)]
 pub struct GroundingSpace {
     index: IndexTree<usize>,
     content: Vec<Atom>,
+    free: BTreeSet<usize>,
     observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>,
 }
 
@@ -310,6 +344,7 @@ impl GroundingSpace {
         Self {
             index: IndexTree::new(),
             content: Vec::new(),
+            free: BTreeSet::new(),
             observers: RefCell::new(Vec::new()),
         }
     }
@@ -323,6 +358,7 @@ impl GroundingSpace {
         Self{
             index,
             content: atoms,
+            free: BTreeSet::new(),
             observers: RefCell::new(Vec::new()),
         }
     }
@@ -358,21 +394,33 @@ impl GroundingSpace {
     /// ```
     /// use hyperon::sym;
     /// use hyperon::space::grounding::GroundingSpace;
+    /// use hyperon::atom::matcher::Bindings;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     /// 
     /// space.add(sym!("B"));
     ///
-    /// assert_eq!(space.into_vec(), vec![sym!("A"), sym!("B")]);
+    /// assert_eq!(space.query(&sym!("A")), vec![Bindings::new()]);
+    /// assert_eq!(space.query(&sym!("B")), vec![Bindings::new()]);
+    /// assert_eq!(space.query(&sym!("C")), vec![]);
     /// ```
     pub fn add(&mut self, atom: Atom) {
+        log::debug!("GroundingSpace::add(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
         self.add_internal(atom.clone());
         self.notify(&SpaceEvent::Add(atom));
     }
 
     fn add_internal(&mut self, atom: Atom) {
-        self.index.add(&atom, self.content.len());
-        self.content.push(atom);
+        if self.free.is_empty() {
+            let pos = self.content.len();
+            self.index.add(&atom, pos);
+            self.content.push(atom);
+        } else {
+            let pos = *self.free.iter().next().unwrap();
+            self.free.remove(&pos);
+            self.index.add(&atom, pos);
+            self.content[pos] = atom;
+        }
     }
 
     /// Removes `atom` from space. Returns true if atom was found and removed,
@@ -388,9 +436,10 @@ impl GroundingSpace {
     /// 
     /// space.remove(&sym!("A"));
     ///
-    /// assert!(space.into_vec().is_empty());
+    /// assert_eq!(space.query(&sym!("A")), vec![]);
     /// ```
     pub fn remove(&mut self, atom: &Atom) -> bool {
+        log::debug!("GroundingSpace::remove(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
         let is_removed = self.remove_internal(atom);
         if is_removed {
             self.notify(&SpaceEvent::Remove(atom.clone()));
@@ -406,7 +455,7 @@ impl GroundingSpace {
         let is_removed = indexes.len() > 0;
         for i in indexes {
             self.index.remove(atom, &i);
-            self.content.remove(i);
+            self.free.insert(i);
         }
         is_removed
     }
@@ -420,12 +469,14 @@ impl GroundingSpace {
     /// ```
     /// use hyperon::sym;
     /// use hyperon::space::grounding::GroundingSpace;
+    /// use hyperon::atom::matcher::Bindings;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     /// 
     /// space.replace(&sym!("A"), sym!("B"));
     ///
-    /// assert_eq!(space.into_vec(), vec![sym!("B")]);
+    /// assert_eq!(space.query(&sym!("A")), vec![]);
+    /// assert_eq!(space.query(&sym!("B")), vec![Bindings::new()]);
     /// ```
     pub fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         let is_replaced = self.replace_internal(from, to.clone());
@@ -562,14 +613,9 @@ impl GroundingSpace {
         result
     }
 
-    /// Returns the reference to the vector of the atoms in the space.
-    pub fn content(&self) -> &Vec<Atom> {
-        &self.content
-    }
-
-    /// Converts space into a vector of atoms.
-    pub fn into_vec(self) -> Vec<Atom> {
-        self.content.clone()
+    /// Returns the iterator over content of the space.
+    pub fn iter(&self) -> impl Iterator<Item=&Atom> {
+        GroundingSpaceIter::new(self)
     }
 }
 
@@ -651,7 +697,7 @@ mod test {
         space.add(expr!("b"));
         space.add(expr!("c"));
 
-        assert_eq!(*space.content, vec![expr!("a"), expr!("b"), expr!("c")]);
+        assert_eq_no_order!(space, vec![expr!("a"), expr!("b"), expr!("c")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
             SpaceEvent::Add(sym!("b")), SpaceEvent::Add(sym!("c"))]);
     }
@@ -667,7 +713,7 @@ mod test {
         space.add(expr!("c"));
         assert_eq!(space.remove(&expr!("b")), true);
 
-        assert_eq!(*space.content, vec![expr!("a"), expr!("c")]);
+        assert_eq_no_order!(space, vec![expr!("a"), expr!("c")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
             SpaceEvent::Add(sym!("b")), SpaceEvent::Add(sym!("c")),
             SpaceEvent::Remove(sym!("b"))]);
@@ -682,7 +728,7 @@ mod test {
         space.add(expr!("a"));
         assert_eq!(space.remove(&expr!("b")), false);
 
-        assert_eq!(*space.content, vec![expr!("a")]);
+        assert_eq_no_order!(space, vec![expr!("a")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a"))]);
     }
 
@@ -697,7 +743,7 @@ mod test {
         space.add(expr!("c"));
         assert_eq!(space.replace(&expr!("b"), expr!("d")), true);
 
-        assert_eq_no_order!(space.content, vec![expr!("a"), expr!("d"), expr!("c")]);
+        assert_eq_no_order!(space, vec![expr!("a"), expr!("d"), expr!("c")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
             SpaceEvent::Add(sym!("b")), SpaceEvent::Add(sym!("c")),
             SpaceEvent::Replace(sym!("b"), sym!("d"))]);
@@ -712,7 +758,7 @@ mod test {
         space.add(expr!("a"));
         assert_eq!(space.replace(&expr!("b"), expr!("d")), false);
 
-        assert_eq!(*space.content, vec![expr!("a")]);
+        assert_eq_no_order!(space, vec![expr!("a")]);
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a"))]);
     }
 
@@ -726,10 +772,40 @@ mod test {
         space.replace(&expr!("a"), expr!("b"));
         assert_eq!(space.remove(&expr!("b")), true);
 
-        assert_eq!(*space.content, vec![]);
+        assert_eq_no_order!(space, Vec::<Atom>::new());
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
             SpaceEvent::Replace(expr!("a"), expr!("b")),
             SpaceEvent::Remove(expr!("b"))]);
+    }
+
+    #[test]
+    fn get_atom_after_removed() {
+        let mut space = GroundingSpace::new();
+
+        space.add(Atom::sym("A"));
+        space.add(Atom::sym("B"));
+        space.remove(&Atom::sym("A"));
+
+        assert_eq!(space.query(&Atom::sym("B")), vec![Bindings::new()]);
+    }
+
+    #[test]
+    fn iter_empty() {
+        let space = GroundingSpace::from_vec(vec![]);
+
+        let iter = space.iter();
+        assert_eq!(iter.count(), 0);
+    }
+
+    #[test]
+    fn iter_after_remove() {
+        let mut space = GroundingSpace::from_vec(vec![expr!("a"), expr!("b"), expr!("c")]);
+        space.remove(&expr!("b"));
+
+        let mut iter = space.iter();
+        assert_eq!(iter.next(), Some(&expr!("a")));
+        assert_eq!(iter.next(), Some(&expr!("c")));
+        assert_eq!(iter.next(), None);
     }
 
     #[test]
@@ -740,8 +816,8 @@ mod test {
         first.add(expr!("b"));
         second.add(expr!("d"));
 
-        assert_eq!(*first.content, vec![expr!("b")]);
-        assert_eq!(*second.content, vec![expr!("d")]);
+        assert_eq_no_order!(first, vec![expr!("b")]);
+        assert_eq_no_order!(second, vec![expr!("d")]);
     }
 
     #[test]
@@ -858,7 +934,7 @@ mod test {
 
         space.add(expr!("a"));
 
-        assert_eq!(*space.content, vec![expr!("a")]);
+        assert_eq_no_order!(space, vec![expr!("a")]);
         assert_eq!(space.observers.borrow().len(), 0);
     }
 
@@ -959,4 +1035,5 @@ mod test {
         assert_eq!(index.get(&Atom::var("a")).to_vec(), vec![]);
         assert_eq!(index.get(&expr!("A" "B")).to_vec(), vec![]);
     }
+
 }
