@@ -213,7 +213,8 @@ impl VariableAtom {
     pub fn new<T: Into<String>>(name: T) -> Self {
         Self{ name: name.into(), id: 0 }
     }
-
+    
+    // Constructs new variable using `name` and 'id' provided.
     pub fn new_id<T: Into<String>>(name: T, id: usize) -> Self {
         Self{ name: name.into(), id: id }
     }

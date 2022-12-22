@@ -255,28 +255,29 @@ impl CGrounded {
         (self.api().free)(self.get_mut_ptr());
     }
 
-    pub extern "C" fn match_callback(data: binding_array_t, mut context: *mut c_void) {
-        let slice_ = unsafe { slice::from_raw_parts(&data, data.size) };
-        let mut bnd = Bindings::new();
-        let len_ = slice_.len();
-        for i in 0..len_{
-            let c_char_:*const c_char = unsafe{ (*(*slice_)[i].items).var };
-            let name = cstr_into_string(c_char_);
-            let ind = name.find('#');
-            let mut var:VariableAtom;
+    extern "C" fn match_callback(cbindings: binding_array_t, context: *mut c_void) {
+        fn var_from_name(name: &str) -> VariableAtom {
+            let ind = name.rfind('#');
             if let Some(i) = ind {
                 let name_id = &name[0..i];
                 let id_str = &name[i+1..name.len()];
                 let id = id_str.parse::<usize>().unwrap();
-                var = VariableAtom::new_id(name_id, id);
+                VariableAtom::new_id(name_id, id)
             } else {
-                var = VariableAtom::new(name);
+                VariableAtom::new(name)
             }
-            let atom_t = unsafe{ (*(*slice_)[i].items).atom };
-            let atom_ = unsafe{ &(*atom_t).atom };
-            bnd.insert(var.clone(), atom_.clone());
         }
-        mem::forget(slice_);
+
+        let cbindings = unsafe { slice::from_raw_parts(cbindings.items, cbindings.size) };
+        let mut bnd = Bindings::new();
+        for i in 0..cbindings.len() {
+            let name = cstr_as_str(cbindings[i].var as *const c_char);
+            let var = var_from_name(name);
+            let atom = cbindings[i].atom;
+            let atom = unsafe{ &(*atom).atom };
+            bnd.insert(var, atom.clone());
+        }
+        mem::forget(cbindings);
 
         let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
         vec_bnd.push(bnd);
@@ -312,20 +313,10 @@ impl Grounded for CGrounded {
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
         match self.api().match_ {
             Some(func) => {
-                let mut vec_temp: Vec<Bindings> = Vec::new();
-                let mut bnd_temp = Bindings::new();
-                let var_temp = VariableAtom::new("var_temp");
-                let atom_temp = Atom::sym("atom_temp");
-                bnd_temp.insert(var_temp.clone(), atom_temp.clone());
-                vec_temp.push(bnd_temp);
-                let mut context: *mut c_void = (&mut vec_temp as *mut Vec<Bindings>).cast::<c_void>();
-
+                let mut results: Vec<Bindings> = Vec::new();
+                let context: *mut c_void = (&mut results as *mut Vec<Bindings>).cast::<c_void>();
                 func(self.get_ptr(), (other as *const Atom).cast::<atom_t>(), CGrounded::match_callback, context);
-
-                let res_vec = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
-                let len_ = res_vec.len();
-                let res_bnd = res_vec.get(len_-1).unwrap();
-                Box::new(std::iter::once(res_bnd.clone()))
+                Box::new(results.into_iter())
             },
             None => match_by_equality(self, other)
         }
@@ -361,44 +352,34 @@ impl Drop for CGrounded {
 
 #[cfg(test)]
 mod tests {
-use std::sync::Arc;
-
 use super::*;
     #[test]
     pub fn test_match_callback(){
-        let mut vec_t: Vec<binding_t> = Vec::new();
-        let string_ = String::from("var#1");
-        let cstring_ = string_as_cstr(string_);
-        let c_char_:*const c_char = cstring_.as_ptr();
-        let atom_ = Atom::sym("A");
-        let bnd_t = binding_t{
-            var: c_char_,
-            atom: (&atom_ as *const Atom).cast::<atom_t>()
+        let mut vec_test: Vec<binding_t> = Vec::new();
+        let string_test = String::from("var#1");
+        let cstring_test = string_as_cstr(string_test.clone());
+        let c_char_test:*const c_char = cstring_test.as_ptr();
+        let atom_test = Atom::sym("atom_test");
+        let bnd_test = binding_t{
+            var: c_char_test,
+            atom: (&atom_test as *const Atom).cast::<atom_t>()
         };
-        vec_t.push(bnd_t);
-        let mut binding_: binding_array_t = (&vec_t).into();
-
-        let mut vec_temp: Vec<Bindings> = Vec::new();
-        let mut res_temp = Bindings::new();
-        let var_temp = VariableAtom::new("var_temp");
-        let atom_temp = Atom::sym("atom_temp");
-        res_temp.insert(var_temp.clone(), atom_temp.clone());
-        vec_temp.push(res_temp);
-        let mut context: *mut c_void = (&mut vec_temp as *mut Vec<Bindings>).cast::<c_void>();
+        vec_test.push(bnd_test);
+        let binding_: binding_array_t = (&vec_test).into();
+        
+        let mut results: Vec<Bindings> = Vec::new();
+        let context: *mut c_void = (&mut results as *mut Vec<Bindings>).cast::<c_void>();
 
         CGrounded::match_callback(binding_, context);
 
-        let res_rust = context.cast::<Vec<Bindings>>();
-        let len_ = unsafe{(*res_rust).len()};
-        let bind_ = unsafe{(*res_rust).get(len_-1).unwrap()};
-        let iter_ = (*bind_).iter().last();
-        if let Some((k,v))=iter_ {
-            println!("k_name: {}", k);
+        let mut res_iter = results.into_iter();
+        let first_element = res_iter.next();
+        if let Some(bind_) = first_element{
+            bind_.iter().for_each(|(k, v)| { 
+                let var_name = k.name();
+                assert_eq!(var_name, string_test);
+            });
         }
-        bind_.iter().for_each(|(k, v)| { 
-            let k_name = k.name();
-            println!("k_name: {}", k_name);
-        });
     }
 
 }

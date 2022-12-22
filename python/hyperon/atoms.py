@@ -99,14 +99,9 @@ def call_execute_on_grounded_atom(gnd, typ, args):
     args = [Atom._from_catom(catom) for catom in args]
     return gnd.execute(*args, res_typ=res_typ)
 
-def call_match_on_grounded_atom(gnd, typ):
-    # placeholder, please implement your custom functionaluty here 
-    atom_test = Atom._from_catom(typ)
-    var_test = "var_test"
-    bnd_res = {var_test, atom_test}
-    result_array = []
-    result_array.append(bnd_res)
-    return result_array
+def call_match_on_grounded_atom(gnd, catom):
+    args=[]
+    return gnd.match_(gnd, catom, *args)
 
 def atoms_are_equivalent(first, second):
     return hp.atoms_are_equivalent(first.catom, second.catom)
@@ -122,6 +117,16 @@ class GroundedObject:
 
     def copy(self):
         return self
+    
+    def match_(self, catom, *args):
+        py_bind_arr = []
+        if self == catom:
+            var_ = str(self)
+            atom_ = S(var_ )
+            py_bind = {var_: atom_}
+            py_bind_arr.append(py_bind)
+        return py_bind_arr
+
 
 class ValueObject(GroundedObject):
 

@@ -142,9 +142,8 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bi
     py::object hyperon = py::module_::import("hyperon");
     py::function call_match_on_grounded_atom = hyperon.attr("call_match_on_grounded_atom");
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
-    CAtom pytyp = (atom_t *)_atom;
-    py::list py_list = call_match_on_grounded_atom(pyobj, pytyp);
-    
+    CAtom catom = (atom_t *)_atom;
+    py::list py_list = call_match_on_grounded_atom(pyobj, catom);
     binding_array_t data;
     size_t size = py::len(py_list);
     binding_t c_binding_t[size];
@@ -153,7 +152,7 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bi
         py::dict dict_ = py_list[i];
         for (auto item : dict_){
             c_binding_t[i].var = (std::string(py::str(item.first))).c_str();
-            c_binding_t[i].atom = item.second.cast<CAtom &>().ptr;
+            c_binding_t[i].atom = item.second.attr("catom").cast<CAtom>().ptr;
         }
     }
     data = {c_binding_t, size};
