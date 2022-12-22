@@ -285,7 +285,7 @@ impl Grounded for GetAtomsOp {
         let arg_error = || ExecError::from("get-atoms expects one argument: space");
         let space = args.get(0).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("get-atoms expects a space as its argument")?;
-        Ok(space.borrow().content().clone())
+        Ok(space.borrow().iter().cloned().collect())
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -457,7 +457,7 @@ impl Grounded for CaseOp {
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
     log::debug!("assert_results_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
     let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
-    match vec_eq_no_order(actual, expected) {
+    match vec_eq_no_order(actual.iter(), expected.iter()) {
         Ok(()) => Ok(vec![]),
         Err(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
@@ -924,7 +924,7 @@ mod tests {
         let res = NewSpaceOp{}.execute(&mut vec![]).expect("No result returned");
         let space = res.get(0).expect("Result is empty");
         let space = space.as_gnd::<Shared<GroundingSpace>>().expect("Result is not space");
-        assert_eq!(*space.borrow().content(), vec![]);
+        assert_eq_no_order!(space.borrow().deref(), Vec::<Atom>::new());
     }
 
     #[test]
@@ -933,7 +933,7 @@ mod tests {
         let satom = Atom::gnd(space.clone());
         let res = AddAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         assert!(res.is_empty());
-        assert_eq!(*space.borrow().content(), vec![expr!(("foo" "bar"))]);
+        assert_eq_no_order!(space.borrow().deref(), vec![expr!(("foo" "bar"))]);
     }
 
     #[test]
@@ -946,7 +946,7 @@ mod tests {
         let res = RemoveAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         // REM: can return Bool in future
         assert!(res.is_empty());
-        assert_eq!(*space.borrow().content(), vec![expr!(("bar" "foo"))]);
+        assert_eq_no_order!(space.borrow().deref(), vec![expr!(("bar" "foo"))]);
     }
 
     #[test]
@@ -957,8 +957,8 @@ mod tests {
         "));
         let satom = Atom::gnd(space.clone());
         let res = GetAtomsOp{}.execute(&mut vec![satom]).expect("No result returned");
-        assert_eq!(res, *space.borrow().content());
-        assert_eq!(res, vec![expr!(("foo" "bar")), expr!(("bar" "foo"))]);
+        assert_eq_no_order!(res, space.borrow().deref());
+        assert_eq_no_order!(res, vec![expr!(("foo" "bar")), expr!(("bar" "foo"))]);
     }
 
     #[test]
@@ -1067,7 +1067,7 @@ mod tests {
         let actual = collapse_op.execute(&mut vec![expr!(("foo"))]).unwrap();
         assert_eq!(actual.len(), 1);
         assert_eq_no_order!(
-            atom_as_expr(&actual[0]).unwrap().children(),
+            *atom_as_expr(&actual[0]).unwrap().children(),
             vec![expr!("B" "C"), expr!("A" "B")]);
     }
 

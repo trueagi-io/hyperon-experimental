@@ -2,13 +2,13 @@ use super::collections::ListMap;
 
 use std::cmp::Ordering;
 
-pub fn vec_eq_no_order<T: PartialEq + std::fmt::Debug>(left: &Vec<T>, right: &Vec<T>) -> Result<(), String> {
+pub fn vec_eq_no_order<'a, T: PartialEq + std::fmt::Debug + 'a, A: Iterator<Item=&'a T>, B: Iterator<Item=&'a T>>(left: A, right: B) -> Result<(), String> {
     let mut left_count: ListMap<&T, usize> = ListMap::new();
     let mut right_count: ListMap<&T, usize> = ListMap::new();
-    for i in left.iter() {
+    for i in left {
         *left_count.entry(&i).or_insert(0) += 1;
     }
-    for i in right.iter() {
+    for i in right {
         *right_count.entry(&i).or_insert(0) += 1;
     }
     counter_eq_explanation(&left_count, &right_count)
@@ -44,10 +44,8 @@ fn counter_eq_explanation<T: PartialEq + std::fmt::Debug>(left: &ListMap<&T, usi
 macro_rules! assert_eq_no_order {
     ($left:expr, $right:expr) => {
         {
-            let left = &$left;
-            let right = &$right;
-            assert!($crate::common::assert::vec_eq_no_order(left, right) == Ok(()),
-                "(left == right some order)\n  left: {:?}\n right: {:?}", left, right);
+            assert!($crate::common::assert::vec_eq_no_order($left.iter(), $right.iter()) == Ok(()),
+                "(left == right some order)\n  left: {:?}\n right: {:?}", $left, $right);
         }
     }
 }
@@ -58,7 +56,7 @@ pub fn metta_results_eq<T: PartialEq + std::fmt::Debug>(
     match (left, right) {
         (Ok(left), Ok(right)) if left.len() == right.len() => {
             for (left, right) in left.iter().zip(right.iter()) {
-                if let Err(_) = vec_eq_no_order(left, right) {
+                if let Err(_) = vec_eq_no_order(left.iter(), right.iter()) {
                     return false;
                 }
             }
