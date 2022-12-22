@@ -61,8 +61,8 @@ extern "C" {
     void py_free(struct gnd_t* _gnd);
 }
 
-const gnd_api_t PY_EXECUTABLE_API = { &py_execute, &py_eq, &py_clone, &py_display, &py_free };
-const gnd_api_t PY_VALUE_API = { nullptr, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_EXECUTABLE_API = { &py_execute, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_VALUE_API = { nullptr, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
 
 struct GroundedObject : gnd_t {
     GroundedObject(py::object pyobj, atom_t* typ) : pyobj(pyobj) {
