@@ -405,7 +405,7 @@ impl GroundingSpace {
     /// assert_eq!(space.query(&sym!("C")), vec![]);
     /// ```
     pub fn add(&mut self, atom: Atom) {
-        log::debug!("GroundingSpace::add(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
+        //log::debug!("GroundingSpace::add(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
         self.add_internal(atom.clone());
         self.notify(&SpaceEvent::Add(atom));
     }
@@ -439,7 +439,7 @@ impl GroundingSpace {
     /// assert_eq!(space.query(&sym!("A")), vec![]);
     /// ```
     pub fn remove(&mut self, atom: &Atom) -> bool {
-        log::debug!("GroundingSpace::remove(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
+        //log::debug!("GroundingSpace::remove(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
         let is_removed = self.remove_internal(atom);
         if is_removed {
             self.notify(&SpaceEvent::Remove(atom.clone()));

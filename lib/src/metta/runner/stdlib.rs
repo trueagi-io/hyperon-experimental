@@ -73,7 +73,7 @@ impl Grounded for ImportOp {
             // we register it in the tokenizer - works as "import as"
             Atom::Symbol(space) => {
                 let name = space.name();
-                let space_atom = Atom::gnd(module_space.clone());
+                let space_atom = Atom::gnd(module_space);
                 let regex = Regex::new(name)
                     .map_err(|err| format!("Could convert space name {} into regex: {}", name, err))?;
                 self.metta.borrow().tokenizer.borrow_mut()
@@ -84,15 +84,16 @@ impl Grounded for ImportOp {
             Atom::Grounded(_) => {
                 let space = Atom::as_gnd::<Shared<GroundingSpace>>(space)
                     .ok_or("import! expects a space as a first argument")?;
-                /* // TODO: Moving space atoms from children to parent
-                let modules = self.metta.borrow().modules.borrow().clone();
-                for (_path, mspace) in modules {
-                    let aspace = Atom::gnd(mspace);
+                // Moving space atoms from children to parent
+                let metta = self.metta.borrow();
+                let modules = metta.modules.borrow();
+                for (_path, mspace) in modules.iter() {
+                    let aspace = Atom::gnd(mspace.clone());
                     if module_space.borrow_mut().remove(&aspace) {
                         self.metta.borrow().space().borrow_mut().remove(&aspace);
                         self.metta.borrow().space().borrow_mut().add(aspace);
                     }
-                }*/
+                }
                 space.borrow_mut().add(Atom::gnd(module_space));
             },
             _ => return Err("import! expects space as a first argument".into()),
@@ -812,14 +813,18 @@ fn regex(regex: &str) -> Regex {
 pub fn register_common_tokens(metta: &Metta, cwd: PathBuf) {
     let space = &metta.space;
     let tokenizer = &metta.tokenizer;
-    let smetta = metta.clone();
 
     let mut common_tokens = Tokenizer::new();
     let tref = &mut common_tokens;
 
     let match_op = Atom::gnd(MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
-    let import_op = Atom::gnd(ImportOp::new(smetta.clone(), cwd.clone()));
+    // TODO: here clone of the metta is moved into separate location in memory.
+    // It means that shared reference inside ImportOp points into a different
+    // instance of the Metta struct, not one which is referenced by metta.
+    // This can lead to inconsistence when Metta struct is changed and some
+    // non-shared field is added to it.
+    let import_op = Atom::gnd(ImportOp::new(Shared::new(metta.clone()), cwd.clone()));
     tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
     let bind_op = Atom::gnd(BindOp::new(tokenizer.clone()));
     tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
@@ -863,7 +868,12 @@ pub fn register_common_tokens(metta: &Metta, cwd: PathBuf) {
     metta.tokenizer.borrow_mut().move_front(&mut common_tokens);
 
     // &self should be updated
-    // TODO: adding &self might be done not by stdlib, but by MeTTa itself
+    // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
+    // TODO: adding &self introduces self referencing and thus prevents space
+    // from being freed. There are two options to eliminate this. (1) use weak
+    // pointer and somehow use the same type to represent weak and strong
+    // pointers to the atomspace. (2) resolve &self in GroundingSpace::query
+    // method without adding it into container.
     let space_val = Atom::gnd(metta.space.clone());
     metta.tokenizer.borrow_mut().register_token(regex(r"&self"), move |_| { space_val.clone() });
 }

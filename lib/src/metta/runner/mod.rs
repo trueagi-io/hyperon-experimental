@@ -16,7 +16,7 @@ mod arithmetics;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Metta {
     space: Shared<GroundingSpace>,
     tokenizer: Shared<Tokenizer>,
@@ -43,48 +43,49 @@ impl Metta {
     }
 
     pub fn load_module_space(&self, path: PathBuf) -> Shared<GroundingSpace> {
-        //println!("Load module space {}", path.display());
-        let my_modules = self.modules.borrow().clone();
-        //println!("my_modules: {:?}", my_modules);
+        log::debug!("Metta::load_module_space: load module space {}", path.display());
+        let loaded_module = self.modules.borrow().get(&path).cloned();
+
         // Loading the module only once
-        // TODO? force_reload?
-        let space =
-            match my_modules.get(&path) {
-                Some(module_space) => {
-                    //println!("Found module {}", path.display());
-                    module_space.clone()
-                },
-                None => {
-                    // Load the module to the new space
-                    let space = Shared::new(GroundingSpace::new());
-                    let tokenizer = self.tokenizer.cloned();
-                    let mut next_cwd = path.clone();
-                    next_cwd.pop();
-                    let settings = self.settings.clone();
-                    let modules = self.modules.clone();
-                    let runner = Self{ space, tokenizer, settings, modules };
-                    // override common tokens related to the runner (including import)
-                    // FIXME? won't all tokens including import! except &self be shaded by the parent?
-                    stdlib::register_common_tokens(&runner, next_cwd);
-                    let program = match path.to_str() {
-                        Some("stdlib") => stdlib::metta_code().to_string(),
-                        _ => {
-                            let prog = std::fs::read_to_string(&path);
-                            let prog = match prog {
-                                Err(err) => format!("Could not read file {}: {}", path.display(), err),
-                                Ok(str) => str,
-                            };
-                            prog
-                        },
-                    };
-                    // Make the imported module be immediately available to itself
-                    // to mitigate circular imports
-                    self.modules.borrow_mut().insert(path, runner.space.clone());
-                    runner.run(&mut SExprParser::new(program.as_str())).expect("Cannot import {path} code");
-                    runner.space.clone()
-                }
-            };
-        space
+        // TODO: force_reload?
+        match loaded_module {
+            Some(module_space) => {
+                log::debug!("Metta::load_module_space: module is already loaded {}", path.display());
+                module_space
+            },
+            None => {
+                // Load the module to the new space
+                let space = Shared::new(GroundingSpace::new());
+                let tokenizer = self.tokenizer.cloned();
+                let mut next_cwd = path.clone();
+                next_cwd.pop();
+                let settings = self.settings.clone();
+                let modules = self.modules.clone();
+                let runner = Self{ space, tokenizer, settings, modules };
+                // override common tokens related to the runner (including import)
+                // FIXME: won't all tokens including import! except &self be shaded by the parent?
+                stdlib::register_common_tokens(&runner, next_cwd);
+                let program = match path.to_str() {
+                    Some("stdlib") => stdlib::metta_code().to_string(),
+                    _ => {
+                        let prog = std::fs::read_to_string(&path);
+                        let prog = match prog {
+                            // FIXME: incorrect program
+                            Err(err) => format!("Could not read file {}: {}", path.display(), err),
+                            Ok(str) => str,
+                        };
+                        prog
+                    },
+                };
+                let cannot_import_path = format!("Cannot import {} code", path.display());
+                // Make the imported module be immediately available to itself
+                // to mitigate circular imports
+                self.modules.borrow_mut().insert(path, runner.space());
+                runner.run(&mut SExprParser::new(program.as_str()))
+                    .expect(cannot_import_path.as_str());
+                runner.space()
+            }
+        }
     }
 
     pub fn load_module(&self, path: PathBuf) {
@@ -103,11 +104,6 @@ impl Metta {
 
     pub fn tokenizer(&self) -> Shared<Tokenizer> {
         self.tokenizer.clone()
-    }
-
-    pub fn clone(&self) -> Shared<Self> {
-        Shared::new(Self{ space: self.space(), tokenizer: self.tokenizer(),
-            settings: self.settings.clone(), modules: self.modules.clone() })
     }
 
     #[cfg(test)]
