@@ -119,16 +119,6 @@ class GroundedObject:
     def copy(self):
         return self
     
-    def match_(self, catom, *args):
-        py_bind_arr = []
-        if self == catom:
-            var_ = str(self)
-            atom_ = S(var_ )
-            py_bind = {var_: atom_}
-            py_bind_arr.append(py_bind)
-        return py_bind_arr
-
-
 class ValueObject(GroundedObject):
 
     @property
@@ -178,6 +168,16 @@ class OperationObject(GroundedObject):
     def __eq__(self, other):
         return isinstance(other, OperationObject) and self.name == other.name
 
+class MatchableObject(ValueObject):
+    def match_(self, catom, *args):
+        py_bind_arr = []
+        if self == catom:
+            var_ = str(self)
+            atom_ = S(var_ )
+            py_bind = {var_: atom_}
+            py_bind_arr.append(py_bind)
+        return py_bind_arr
+
 def _type_sugar(type_names):
     if type_names is None:
         return AtomType.UNDEFINED
@@ -193,3 +193,5 @@ def OperationAtom(name, op, type_names=None, unwrap=True):
 def ValueAtom(value, type_name=None, atom_id=None):
     return G(ValueObject(value, atom_id), _type_sugar(type_name))
 
+def MatchableAtom(value, type_name=None, atom_id=None):
+    return G(MatchableObject(value, atom_id), _type_sugar(type_name))

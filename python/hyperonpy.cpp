@@ -61,13 +61,19 @@ extern "C" {
     void py_free(struct gnd_t* _gnd);
 }
 
-const gnd_api_t PY_EXECUTABLE_API = { &py_execute, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
-const gnd_api_t PY_VALUE_API = { nullptr, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_EXECUTABLE_MATCHABLE_API = { &py_execute, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_EXECUTABLE_API = { &py_execute, nullptr, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_MATCHABLE_API = { nullptr, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_VALUE_API = { nullptr, nullptr, &py_eq, &py_clone, &py_display, &py_free };
 
 struct GroundedObject : gnd_t {
     GroundedObject(py::object pyobj, atom_t* typ) : pyobj(pyobj) {
-        if (py::hasattr(pyobj, "execute")) {
+        if (py::hasattr(pyobj, "execute") && py::hasattr(pyobj, "match_")) {
+            this->api = &PY_EXECUTABLE_MATCHABLE_API;
+        } else if (py::hasattr(pyobj, "execute")) {
             this->api = &PY_EXECUTABLE_API;
+        } else if (py::hasattr(pyobj, "match_")) {
+            this->api = &PY_MATCHABLE_API;
         } else {
             this->api = &PY_VALUE_API;
         }
@@ -121,11 +127,13 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bi
     binding_array_t data;
     size_t size = py::len(py_list);
     binding_t c_binding_t[size];
+    std::string string_array[size];
     for (size_t i = 0; i < size; ++i)
     {
         py::dict dict_ = py_list[i];
         for (auto item : dict_){
-            c_binding_t[i].var = (std::string(py::str(item.first))).c_str();
+            string_array[i] = std::string(py::str(item.first));
+            c_binding_t[i].var = string_array[i].c_str();
             c_binding_t[i].atom = item.second.attr("catom").cast<CAtom>().ptr;
         }
     }
