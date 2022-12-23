@@ -496,9 +496,6 @@ fn match_atoms_recursively(data: &Atom, pattern: &Atom) -> VarMatchIter {
 
     match (data, pattern) {
         (Atom::Symbol(a), Atom::Symbol(b)) if a == b => once(VariableMatch::new()),
-        (Atom::Grounded(a), Atom::Grounded(_)) => {
-            Box::new(a.match_(pattern).map(Bindings::into_variable_match))
-        },
         (Atom::Variable(dv), Atom::Variable(pv)) => {
             VariableMatch::new().with_var_equality(dv, pv).map_or(empty(), once)
         }
@@ -514,6 +511,9 @@ fn match_atoms_recursively(data: &Atom, pattern: &Atom) -> VarMatchIter {
                 |acc, (a, b)| {
                     variable_matcher_product(acc, match_atoms_recursively(a, b))
                 })
+        },
+        (Atom::Grounded(a), _) => {
+            Box::new(a.match_(pattern).map(Bindings::into_variable_match))
         },
         _ => empty(),
     }

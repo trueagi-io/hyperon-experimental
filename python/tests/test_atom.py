@@ -47,6 +47,12 @@ class AtomTest(unittest.TestCase):
         atom = G(GroundedObject(None), S("Float"))
         self.assertEqual(atom.get_grounded_type(), S("Float"))
 
+    def test_grounded_no_copy(self):
+        with self.assertRaises(AssertionError) as context:
+            atom = G(GroundedNoCopy(), S("GroundedNoCopy"))
+        self.assertEqual("Method copy should be implemented by grounded object",
+                        str(context.exception))
+
     # def test_grounded_execute_default(self):
         # self.assertEqual(ValueAtom(1.0).get_object().execute(VecAtom(),
             # VecAtom()), "1.0 is not executable")
@@ -107,3 +113,6 @@ x2Atom = OperationAtom('*2', x2_op, type_names=["int", "int"], unwrap=False)
 def no_reduce_op(atom):
     raise NoReduceError()
 noReduceAtom = OperationAtom('no-reduce', no_reduce_op, unwrap=False)
+
+class GroundedNoCopy:
+    pass

@@ -44,7 +44,7 @@ cargo install --force cbindgen
 
 Install Conan and make default Conan profile:
 ```
-python3 -m pip install conan==1.50
+python3 -m pip install conan==1.53
 conan profile new --detect default
 ```
 
@@ -74,6 +74,11 @@ To enable logging during running tests or examples export `RUST_LOG`
 environment variable:
 ```
 RUST_LOG=hyperon=debug cargo test
+```
+
+Running benchmarks requires nightly toolchain so they can be run using:
+```
+cargo +nightly bench
 ```
 
 Generate docs:

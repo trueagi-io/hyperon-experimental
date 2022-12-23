@@ -15,7 +15,13 @@
 !(assertEqualToResult
   (match &self ($p is-a Color) $p)
   ())
-
+; Checking that grounded symbols from different spaces are compatible
+!(assertEqual
+  (match &kb
+    (, (Venus orbit $x au)
+       (Mars orbit $y au))
+    (- $y $x))
+  0.8)
 
 (Ball is Red)
 (Chair is High)

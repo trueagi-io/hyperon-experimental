@@ -1,10 +1,10 @@
 import unittest
 
-from test_common import assert_atoms_are_equivalent
+from test_common import *
 from hyperon import *
 
 
-class MinelogyTest(unittest.TestCase):
+class MinelogyTest(HyperonTestCase):
 
     def test_minelogy(self):
         # A nearly direct reimplementation of minelogy as it
@@ -113,7 +113,7 @@ class MinelogyTest(unittest.TestCase):
         self.assertEqual(repr(output),
             '[(do-mine ((: stone type) (: stone variant)))]')
         output = utils.run('!(how-get stick)')[0]
-        assert_atoms_are_equivalent(self, output,
+        self.assertAtomsAreEquivalent(output,
                 MeTTa().parse_all('(do-craft ((: planks type) (: $x variant) (: 2 quantity)))'))
 
     def test_minelogy_wtypes(self):
@@ -191,7 +191,7 @@ class MinelogyTest(unittest.TestCase):
         ''')
         # NOTE: utils.run will not work here, because
         # utils.space doesn't contain equalities for `mine` and `craft`
-        self.assertEqual(kb.run('''
+        self.assertEqualNoOrder(kb.run('''
             !(mine (CBlockV log oak) $_)
             !(craft (list ((CEntityV log oak) $_)))
             ''', flat=True),
@@ -203,7 +203,7 @@ class MinelogyTest(unittest.TestCase):
         # NOTE: interpretation is done until end, because
         # `match &kb` switches the context, so equalities for `mine` and `craft`
         # are found even we start with `utils` - not `kb`
-        self.assertEqual(utils.run('''
+        self.assertEqualNoOrder(utils.run('''
             !(get-mine-block log oak)
             !(get-mine-block cobblestone)
             !(get-ingredients planks oak)
@@ -215,7 +215,7 @@ class MinelogyTest(unittest.TestCase):
             ''')
         )
         output = utils.run('!(get-ingredients wooden_pickaxe)')[0]
-        assert_atoms_are_equivalent(self, output,
+        self.assertAtomsAreEquivalent(output,
                 MeTTa().parse_all('(list ((CEntityT stick) 2) ((CEntityV planks $_) 3))'))
 
 

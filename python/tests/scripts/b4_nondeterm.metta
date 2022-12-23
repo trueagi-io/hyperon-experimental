@@ -4,30 +4,32 @@
 (= (color) yellow)
 (= (color) red)
 
-; `match` can return multiple or no results
-; `collapse` converts a nondeterministic result into a tuple
-(: = (-> Atom Atom Atom)) ; FIXME
+; In `a1_symbols` we saw that `match` can return multiple or no results
+; The same is true for equality queries
+; `superpose` turns a tuple into a non-deterministic result (for comparison here)
 !(assertEqual
-  (collapse
-    (match &self (= (color) $x) $x))
-  (green yellow red))
+  (match &self (= (color) $x) $x)
+  (superpose (red yellow green)))
+; `collapse` converts a nondeterministic result into a tuple
+; We don't use it above, because the order of non-deterministic results
+; is not guaranteed
 !(assertEqual
   (collapse
     (match &self (= (shape) $x) $x))
   ())
 
+
 ; Multiple results from equality queries
 ; are also returned by the interpreter
 !(assertEqual
-  (collapse (color))
-  (green yellow red))
-; Instead of collapsing the result of nondeterministic expression,
-; one can create a nondeterministic result with `superpose`
+  (color)
+  (superpose (red yellow green)))
+; `superpose` reverts `collapse`
 !(assertEqual
   (color)
-  (superpose (green yellow red)))
+  (superpose (collapse (color))))
 
-; However, if the equality query returns an empty result
+; In contrast to `match`, if the equality query returns an empty result
 ; the interpreter doesn't reduce a symbolic expression
 !(assertEqual
   (collapse (shape))
@@ -83,9 +85,10 @@
 (= (makes humidifier (air wet)) T)
 (= (makes kettle (air wet)) T)
 (= (makes ventilation (air dry)) T)
+; the results are not sequential in sense that their order is arbitrary
 !(assertEqual
-  (collapse (is (air dry)))
-  ((start humidifier) (start kettle) (stop ventilation)))
+  (is (air dry))
+  (superpose ((stop ventilation) (start kettle) (start humidifier))))
 !(assertEqual
-  (collapse (is (air wet)))
-  ((start ventilation) (stop humidifier) (stop kettle)))
+  (is (air wet))
+  (superpose ((stop kettle) (stop humidifier) (start ventilation))))

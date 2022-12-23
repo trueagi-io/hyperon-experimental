@@ -7,12 +7,15 @@ use crate::metta::interpreter::interpret;
 use crate::metta::runner::Metta;
 use crate::metta::types::get_atom_types;
 use crate::common::shared::Shared;
+use crate::common::assert::vec_eq_no_order;
 
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use regex::Regex;
+
+use super::arithmetics::*;
 
 pub const VOID_SYMBOL : Atom = sym!("%void%");
 
@@ -65,11 +68,12 @@ impl Grounded for ImportOp {
             return Err("import! expects a file path as a second argument".into())
         }
 
+        let tokenizer_before_adding_imported_space = self.tokenizer.cloned();
         let space: Result<Shared<GroundingSpace>, String> = match space {
             Atom::Symbol(space) => {
                 let name = space.name();
                 let space = Shared::new(GroundingSpace::new());
-                let space_atom = Atom::value(space.clone());
+                let space_atom = Atom::gnd(space.clone());
                 let regex = Regex::new(name)
                     .map_err(|err| format!("Could convert space name {} into regex: {}", name, err))?;
                 self.tokenizer.borrow_mut()
@@ -77,7 +81,8 @@ impl Grounded for ImportOp {
                 Ok(space)
             },
             Atom::Grounded(_) => {
-                let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("import! expects a space as a first argument")?;
+                let space = Atom::as_gnd::<Shared<GroundingSpace>>(space)
+                    .ok_or("import! expects a space as a first argument")?;
                 Ok(space.clone())
             },
             _ => Err("import! expects space as a first argument".into()),
@@ -85,7 +90,7 @@ impl Grounded for ImportOp {
         let space = space?;
         let mut next_cwd = path.clone();
         next_cwd.pop();
-        let metta = Metta::from_space_cwd(space.clone(), next_cwd);
+        let metta = Metta::from_space_cwd(space, tokenizer_before_adding_imported_space, next_cwd);
         let program = std::fs::read_to_string(&path)
             .map_err(|err| format!("Could not read file {}: {}", path.display(), err))?;
         let _result = metta.run(&mut SExprParser::new(program.as_str()))?;
@@ -143,6 +148,7 @@ impl Display for BindOp {
     }
 }
 
+// TODO: move it into hyperon::atom module?
 fn atom_as_sym(atom: &Atom) -> Option<&SymbolAtom> {
     match atom {
         Atom::Symbol(sym) => Some(sym),
@@ -186,7 +192,7 @@ impl Grounded for NewSpaceOp {
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         if args.len() == 0 {
-            let space = Atom::value(Shared::new(GroundingSpace::new()));
+            let space = Atom::gnd(Shared::new(GroundingSpace::new()));
             Ok(vec![space])
         } else {
             Err("new-space doesn't expect arguments".into())
@@ -276,7 +282,7 @@ impl Grounded for GetAtomsOp {
         let arg_error = || ExecError::from("get-atoms expects one argument: space");
         let space = args.get(0).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("get-atoms expects a space as its argument")?;
-        Ok(space.borrow().content().clone())
+        Ok(space.borrow().iter().cloned().collect())
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -358,7 +364,7 @@ impl Grounded for ConsAtomOp {
         let expr = args.get(1).ok_or_else(arg_error)?;
         let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
         let mut res = vec![atom.clone()];
-        res.extend(chld.iter().cloned());
+        res.extend(chld.clone());
         Ok(vec![Atom::expr(res)])
     }
 
@@ -398,7 +404,7 @@ impl Display for CaseOp {
     }
 }
 
-// FIXME: move it into hyperon::atom module?
+// TODO: move it into hyperon::atom module?
 fn atom_as_expr(atom: &Atom) -> Option<&ExpressionAtom> {
     match atom {
         Atom::Expression(expr) => Some(expr),
@@ -448,20 +454,10 @@ impl Grounded for CaseOp {
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
     log::debug!("assert_results_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
     let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
-    for r in actual {
-        if !expected.contains(r) {
-            return Err(ExecError::Runtime(format!("{}\nExcessive result: {}", report, r)));
-        }
+    match vec_eq_no_order(actual.iter(), expected.iter()) {
+        Ok(()) => Ok(vec![]),
+        Err(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
-    for r in expected {
-        if !actual.contains(r) {
-            return Err(ExecError::Runtime(format!("{}\nMissed result: {}", report, r)));
-        }
-    }
-    if expected.len() != actual.len() {
-        return Err(ExecError::Runtime(format!("{}\nDifferent number of elements", report)));
-    }
-    return Ok(vec![])
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -806,6 +802,85 @@ impl Grounded for LetVarOp {
     }
 }
 
+pub fn register_tokens(metta: &Metta, cwd: PathBuf) {
+    fn regex(regex: &str) -> Regex {
+        Regex::new(regex).unwrap()
+    }
+
+    let space = &metta.space;
+    let tokenizer = &metta.tokenizer;
+
+    let mut stdlib_tokens = Tokenizer::new();
+    let tref = &mut stdlib_tokens;
+
+    let match_op = Atom::gnd(MatchOp{});
+    tref.register_token(regex(r"match"), move |_| { match_op.clone() });
+    let import_op = Atom::gnd(ImportOp::new(cwd.clone(), space.clone(), tokenizer.clone()));
+    tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+    let bind_op = Atom::gnd(BindOp::new(tokenizer.clone()));
+    tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
+    let new_space_op = Atom::gnd(NewSpaceOp{});
+    tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
+    let add_atom_op = Atom::gnd(AddAtomOp{});
+    tref.register_token(regex(r"add-atom"), move |_| { add_atom_op.clone() });
+    let remove_atom_op = Atom::gnd(RemoveAtomOp{});
+    tref.register_token(regex(r"remove-atom"), move |_| { remove_atom_op.clone() });
+    let get_atoms_op = Atom::gnd(GetAtomsOp{});
+    tref.register_token(regex(r"get-atoms"), move |_| { get_atoms_op.clone() });
+    let car_atom_op = Atom::gnd(CarAtomOp{});
+    tref.register_token(regex(r"car-atom"), move |_| { car_atom_op.clone() });
+    let cdr_atom_op = Atom::gnd(CdrAtomOp{});
+    tref.register_token(regex(r"cdr-atom"), move |_| { cdr_atom_op.clone() });
+    let cons_atom_op = Atom::gnd(ConsAtomOp{});
+    tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
+    let case_op = Atom::gnd(CaseOp::new(space.clone()));
+    tref.register_token(regex(r"case"), move |_| { case_op.clone() });
+    let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
+    tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
+    let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
+    tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
+    let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
+    tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
+    let superpose_op = Atom::gnd(SuperposeOp{});
+    tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
+    let pragma_op = Atom::gnd(PragmaOp::new(metta.settings.clone()));
+    tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
+    let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
+    tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
+    let println_op = Atom::gnd(PrintlnOp{});
+    tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
+    let nop_op = Atom::gnd(NopOp{});
+    tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
+    let let_op = Atom::gnd(LetOp{});
+    tref.register_token(regex(r"let"), move |_| { let_op.clone() });
+    let let_var_op = Atom::gnd(LetVarOp{});
+    tref.register_token(regex(r"let\*"), move |_| { let_var_op.clone() });
+
+    tref.register_token(regex(r"\d+"),
+        |token| { Atom::gnd(Number::from_int_str(token)) });
+    tref.register_token(regex(r"\d+(.\d+)([eE][\-\+]?\d+)?"),
+        |token| { Atom::gnd(Number::from_float_str(token)) });
+    tref.register_token(regex(r"True|False"),
+        |token| { Atom::gnd(Bool::from_str(token)) });
+    let sum_op = Atom::gnd(SumOp{});
+    tref.register_token(regex(r"\+"), move |_| { sum_op.clone() });
+    let sub_op = Atom::gnd(SubOp{});
+    tref.register_token(regex(r"\-"), move |_| { sub_op.clone() });
+    let mul_op = Atom::gnd(MulOp{});
+    tref.register_token(regex(r"\*"), move |_| { mul_op.clone() });
+    let div_op = Atom::gnd(DivOp{});
+    tref.register_token(regex(r"/"), move |_| { div_op.clone() });
+    let mod_op = Atom::gnd(ModOp{});
+    tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
+
+    metta.tokenizer.borrow_mut().move_front(&mut stdlib_tokens);
+
+    // &self should be updated
+    // TODO: adding &self might be done not by stdlib, but by MeTTa itself
+    let space_val = Atom::gnd(metta.space.clone());
+    metta.tokenizer.borrow_mut().register_token(regex(r"&self"), move |_| { space_val.clone() });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -828,16 +903,16 @@ mod tests {
         let res = NewSpaceOp{}.execute(&mut vec![]).expect("No result returned");
         let space = res.get(0).expect("Result is empty");
         let space = space.as_gnd::<Shared<GroundingSpace>>().expect("Result is not space");
-        assert_eq!(*space.borrow().content(), vec![]);
+        assert_eq_no_order!(space.borrow().deref(), Vec::<Atom>::new());
     }
 
     #[test]
     fn add_atom_op() {
         let space = Shared::new(GroundingSpace::new());
-        let satom = Atom::value(space.clone());
+        let satom = Atom::gnd(space.clone());
         let res = AddAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         assert!(res.is_empty());
-        assert_eq!(*space.borrow().content(), vec![expr!(("foo" "bar"))]);
+        assert_eq_no_order!(space.borrow().deref(), vec![expr!(("foo" "bar"))]);
     }
 
     #[test]
@@ -846,11 +921,11 @@ mod tests {
             (foo bar)
             (bar foo)
         "));
-        let satom = Atom::value(space.clone());
+        let satom = Atom::gnd(space.clone());
         let res = RemoveAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         // REM: can return Bool in future
         assert!(res.is_empty());
-        assert_eq!(*space.borrow().content(), vec![expr!(("bar" "foo"))]);
+        assert_eq_no_order!(space.borrow().deref(), vec![expr!(("bar" "foo"))]);
     }
 
     #[test]
@@ -859,10 +934,10 @@ mod tests {
             (foo bar)
             (bar foo)
         "));
-        let satom = Atom::value(space.clone());
+        let satom = Atom::gnd(space.clone());
         let res = GetAtomsOp{}.execute(&mut vec![satom]).expect("No result returned");
-        assert_eq!(res, *space.borrow().content());
-        assert_eq!(res, vec![expr!(("foo" "bar")), expr!(("bar" "foo"))]);
+        assert_eq_no_order!(res, space.borrow().deref());
+        assert_eq_no_order!(res, vec![expr!(("foo" "bar")), expr!(("bar" "foo"))]);
     }
 
     #[test]
@@ -916,6 +991,14 @@ mod tests {
             Ok(vec![Atom::sym("D")]));
     }
 
+    fn assert_runtime_error(actual: Result<Vec<Atom>, ExecError>, expected: Regex) {
+        match actual {
+            Err(ExecError::Runtime(msg)) => assert!(expected.is_match(msg.as_str()),
+                "Incorrect error message:\nexpected: {:?}\n  actual: {:?}", expected.to_string(), msg),
+            _ => assert!(false, "Error is expected as result, {:?} returned", actual),
+        }
+    }
+
     #[test]
     fn assert_equal_op() {
         let space = Shared::new(metta_space("
@@ -929,10 +1012,14 @@ mod tests {
         let assert_equal_op = AssertEqualOp::new(space);
 
         assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]), Ok(vec![]));
-        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("err"))]),
-            Err(ExecError::from("\nExpected: [(A B)]\nGot: [(A B), (B C)]\nExcessive result: (B C)")));
-        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("err")), expr!(("foo"))]),
-            Err(ExecError::from("\nExpected: [(A B), (B C)]\nGot: [(A B)]\nMissed result: (B C)")));
+
+        let actual = assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("err"))]);
+        let expected = Regex::new("\nExpected: \\[(A B)\\]\nGot: \\[\\((B C)|, |(A B)\\){3}\\]\nExcessive result: (B C)").unwrap();
+        assert_runtime_error(actual, expected);
+
+        let actual = assert_equal_op.execute(&mut vec![expr!(("err")), expr!(("foo"))]);
+        let expected = Regex::new("\nExpected: \\[\\((B C)|, |(A B)\\){3}\\]\nGot: \\[(A B)\\]\nMissed result: (B C)").unwrap();
+        assert_runtime_error(actual, expected);
     }
 
     #[test]
@@ -956,8 +1043,11 @@ mod tests {
         "));
         let collapse_op = CollapseOp::new(space);
 
-        assert_eq!(collapse_op.execute(&mut vec![expr!(("foo"))]),
-            Ok(vec![expr!(("A" "B") ("B" "C"))]));
+        let actual = collapse_op.execute(&mut vec![expr!(("foo"))]).unwrap();
+        assert_eq!(actual.len(), 1);
+        assert_eq_no_order!(
+            *atom_as_expr(&actual[0]).unwrap().children(),
+            vec![expr!("B" "C"), expr!("A" "B")]);
     }
 
     #[test]
@@ -977,8 +1067,8 @@ mod tests {
         "));
 
         let get_type_op = GetTypeOp::new(space);
-        assert_eq!(get_type_op.execute(&mut vec![sym!("A")]),
-            Ok(vec![sym!("B"), sym!("C")]));
+        assert_eq_no_order!(get_type_op.execute(&mut vec![sym!("A")]).unwrap(),
+            vec![sym!("B"), sym!("C")]);
     }
 
     #[test]

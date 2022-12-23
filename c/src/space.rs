@@ -45,12 +45,15 @@ pub unsafe extern "C" fn grounding_space_replace(space: *mut grounding_space_t, 
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_len(space: *const grounding_space_t) -> usize {
-    (*space).borrow().content().len()
+    (*space).borrow().iter().count()
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *mut atom_t {
-    atom_to_ptr((*space).borrow().content()[idx].clone())
+    // TODO: highly ineffective implementation, should be reworked after replacing
+    // the GroundingSpace struct by Space trait in code.
+    atom_to_ptr((*space).borrow().iter().skip(idx).next()
+        .expect(format!("Index is out of bounds: {}", idx).as_str()).clone())
 }
 
 #[repr(C)]

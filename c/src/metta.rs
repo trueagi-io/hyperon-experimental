@@ -157,9 +157,16 @@ pub extern "C" fn step_to_str(step: *const step_result_t, callback: c_str_callba
 pub type metta_t = SharedApi<Metta>;
 
 #[no_mangle]
-pub extern "C" fn metta_new(space: *mut grounding_space_t, cwd: *const c_char) -> *mut metta_t {
+pub extern "C" fn metta_new(space: *mut grounding_space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> *mut metta_t {
     let space = unsafe{ &mut *space }.shared();
-    metta_t::new(Metta::from_space_cwd(space, PathBuf::from(cstr_as_str(cwd))))
+    let tokenizer = unsafe{ &mut *tokenizer }.shared();
+    metta_t::new(Metta::from_space_cwd(space, tokenizer, PathBuf::from(cstr_as_str(cwd))))
+}
+
+#[no_mangle]
+pub extern "C" fn metta_clone(metta: *mut metta_t) -> *mut metta_t {
+    let metta = unsafe{ &(*metta) };
+    metta_t::from_shared(metta.shared())
 }
 
 #[no_mangle]
@@ -189,4 +196,13 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
     for result in results.expect("Returning errors from C API is not implemented yet") {
         return_atoms(&result, output, out_context);
     }
+}
+
+#[no_mangle]
+pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: *mut atom_t,
+        output: c_atoms_callback_t, out_context: *mut c_void) {
+    let metta = unsafe{ &*metta }.borrow();
+    let atom = unsafe{ Box::from_raw(atom) };
+    let result = metta.evaluate_atom(atom.atom).expect("Returning errors from C API is not implemented yet");
+    return_atoms(&result, output, out_context);
 }

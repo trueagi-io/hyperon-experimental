@@ -36,6 +36,15 @@ impl Tokenizer {
         self.tokens.push(TokenDescr{ regex, constr: Rc::new(constr) })
     }
 
+    pub fn move_front(&mut self, from: &mut Tokenizer) {
+        from.move_back(self);
+        self.move_back(from);
+    }
+
+    pub fn move_back(&mut self, from: &mut Tokenizer) {
+        self.tokens.append(&mut from.tokens);
+    }
+
     pub fn find_token(&self, token: &str) -> Option<&AtomConstr> {
         self.tokens.iter().rfind(|descr| {
             match descr.regex.find_at(token, 0) {
