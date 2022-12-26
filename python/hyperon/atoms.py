@@ -101,8 +101,7 @@ def call_execute_on_grounded_atom(gnd, typ, args):
     return gnd.execute(*args, res_typ=res_typ)
 
 def call_match_on_grounded_atom(gnd, catom):
-    args=[]
-    return gnd.match_(gnd, catom, *args)
+    return gnd.match_(Atom._from_catom(catom))
 
 def atoms_are_equivalent(first, second):
     return hp.atoms_are_equivalent(first.catom, second.catom)
@@ -169,14 +168,21 @@ class OperationObject(GroundedObject):
         return isinstance(other, OperationObject) and self.name == other.name
 
 class MatchableObject(ValueObject):
-    def match_(self, catom, *args):
-        py_bind_arr = []
-        if self == catom:
-            var_ = str(self)
-            atom_ = S(var_ )
-            py_bind = {var_: atom_}
-            py_bind_arr.append(py_bind)
-        return py_bind_arr
+    def match_(self, atom):
+        raise RuntimeError("MatchableObject::match_() is not implemented")
+        # Below example of returning results
+        #py_bind_arr = []
+        #var1 = 'var1'
+        #atom1 = S(var1)
+        #var2 = 'var2'
+        #atom2 = S(var2)
+        #py_bind1 = {var1: atom1, var2: atom2}
+        #py_bind_arr.append(py_bind1)
+        #var3 = 'var3'
+        #atom3 = S(var3)
+        #py_bind2 = {var3: atom3}
+        #py_bind_arr.append(py_bind2)
+        #return py_bind_arr
 
 def _type_sugar(type_names):
     if type_names is None:

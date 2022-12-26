@@ -117,28 +117,29 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
     }
 }
 
-void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_binding_array_t callback, void *context)
-{
+void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_binding_array_t callback, void *context) {
     py::object hyperon = py::module_::import("hyperon");
     py::function call_match_on_grounded_atom = hyperon.attr("call_match_on_grounded_atom");
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
     CAtom catom = (atom_t *)_atom;
     py::list py_list = call_match_on_grounded_atom(pyobj, catom);
-    binding_array_t data;
-    size_t size = py::len(py_list);
-    binding_t c_binding_t[size];
-    std::string string_array[size];
-    for (size_t i = 0; i < size; ++i)
-    {
-        py::dict dict_ = py_list[i];
-        for (auto item : dict_){
-            string_array[i] = std::string(py::str(item.first));
-            c_binding_t[i].var = string_array[i].c_str();
-            c_binding_t[i].atom = item.second.attr("catom").cast<CAtom>().ptr;
+    size_t size_py_list = py::len(py_list);
+    for (size_t c = 0; c < size_py_list; ++c) {
+        py::dict py_dict = py_list[c];
+        size_t size_py_dict = py::len(py_dict);
+        binding_array_t data;
+        binding_t c_binding_t[size_py_dict];
+        std::string string_array[size_py_dict];
+        for (size_t i = 0; i < size_py_dict; ++i) {
+            for (auto item : py_dict){
+                string_array[i] = std::string(py::str(item.first));
+                c_binding_t[i].var = string_array[i].c_str();
+                c_binding_t[i].atom = item.second.attr("catom").cast<CAtom>().ptr;
+            }
         }
+        data = {c_binding_t, size_py_dict};
+        callback(data, context);
     }
-    data = {c_binding_t, size};
-    callback(data, context);
 }
 
 bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b) {

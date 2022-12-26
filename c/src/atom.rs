@@ -352,33 +352,22 @@ impl Drop for CGrounded {
 #[cfg(test)]
 mod tests {
 use super::*;
+use std::ptr;
     #[test]
-    pub fn test_match_callback(){
-        let mut vec_test: Vec<binding_t> = Vec::new();
-        let string_test = String::from("var#1");
-        let cstring_test = string_as_cstr(string_test.clone());
-        let c_char_test:*const c_char = cstring_test.as_ptr();
-        let atom_test = Atom::sym("atom_test");
-        let bnd_test = binding_t{
-            var: c_char_test,
-            atom: (&atom_test as *const Atom).cast::<atom_t>()
-        };
-        vec_test.push(bnd_test);
-        let binding_: binding_array_t = (&vec_test).into();
+    pub fn test_match_callback() {
+        let var = str_as_cstr("var#1");
+        let atom = atom_to_ptr(Atom::sym("atom_test"));
+        let vec = vec![ binding_t{ var: var.as_ptr(), atom } ];
+        let bindings = (&vec).into();
         
         let mut results: Vec<Bindings> = Vec::new();
-        let context: *mut c_void = (&mut results as *mut Vec<Bindings>).cast::<c_void>();
+        let context = ptr::addr_of_mut!(results).cast::<c_void>();
 
-        CGrounded::match_callback(binding_, context);
+        CGrounded::match_callback(bindings, context);
 
-        let mut res_iter = results.into_iter();
-        let first_element = res_iter.next();
-        if let Some(bind_) = first_element{
-            bind_.iter().for_each(|(k, v)| { 
-                let var_name = k.name();
-                assert_eq!(var_name, string_test);
-            });
-        }
+        assert_eq!(results, vec![Bindings::from(vec![
+                (VariableAtom::new_id("var", 1), Atom::sym("atom_test"))])]);
+        unsafe{ atom_free(atom) };
     }
 
 }
