@@ -55,7 +55,7 @@ impl Metta {
         metta
     }
 
-    pub fn load_module_space(&self, path: PathBuf) -> Shared<GroundingSpace> {
+    pub fn load_module_space(&self, path: PathBuf) -> Result<Shared<GroundingSpace>, String> {
         log::debug!("Metta::load_module_space: load module space {}", path.display());
         let loaded_module = self.modules.borrow().get(&path).cloned();
 
@@ -64,42 +64,35 @@ impl Metta {
         match loaded_module {
             Some(module_space) => {
                 log::debug!("Metta::load_module_space: module is already loaded {}", path.display());
-                module_space
+                Ok(module_space)
             },
             None => {
                 // Load the module to the new space
                 let runner = Metta::new_loading_runner(self, path.clone());
                 let program = match path.to_str() {
                     Some("stdlib") => stdlib::metta_code().to_string(),
-                    _ => {
-                        let prog = std::fs::read_to_string(&path);
-                        let prog = match prog {
-                            // FIXME: incorrect program
-                            Err(err) => format!("Could not read file {}: {}", path.display(), err),
-                            Ok(str) => str,
-                        };
-                        prog
-                    },
+                    _ => std::fs::read_to_string(&path).map_err(
+                        |err| format!("Could not read file, path: {}, error: {}", path.display(), err))?,
                 };
-                let cannot_import_path = format!("Cannot import {} code", path.display());
                 // Make the imported module be immediately available to itself
                 // to mitigate circular imports
-                self.modules.borrow_mut().insert(path, runner.space());
+                self.modules.borrow_mut().insert(path.clone(), runner.space());
                 runner.run(&mut SExprParser::new(program.as_str()))
-                    .expect(cannot_import_path.as_str());
-                runner.space()
+                    .map_err(|err| format!("Cannot import module, path: {}, error: {}", path.display(), err))?;
+                Ok(runner.space())
             }
         }
     }
 
-    pub fn load_module(&self, path: PathBuf) {
+    pub fn load_module(&self, path: PathBuf) -> Result<(), String> {
         // Load module to &self
         // TODO: Should we register the module name?
         // self.tokenizer.borrow_mut().register_token(stdlib::regex(name), move |_| { space_atom.clone() });
         // TODO: check if it is already there (if the module is newly loaded)
-        let module_space = self.load_module_space(path);
+        let module_space = self.load_module_space(path)?;
         let space_atom = Atom::gnd(module_space);
         self.space.borrow_mut().add(space_atom); // self.add_atom(space_atom)
+        Ok(())
     }
 
     pub fn space(&self) -> Shared<GroundingSpace> {
@@ -194,7 +187,7 @@ pub fn new_metta_rust() -> Metta {
     let metta = Metta::new(Shared::new(GroundingSpace::new()),
         Shared::new(Tokenizer::new()));
     stdlib::register_rust_tokens(&metta);
-    metta.load_module(PathBuf::from("stdlib"));
+    metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
     metta
 }
 

@@ -66,7 +66,7 @@ impl Grounded for ImportOp {
         } else {
             return Err("import! expects a file path as a second argument".into())
         }
-        let module_space = self.metta.borrow().load_module_space(path);
+        let module_space = self.metta.borrow().load_module_space(path)?;
 
         match space {
             // If the module is to be associated with a new space,
