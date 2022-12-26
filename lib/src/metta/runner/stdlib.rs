@@ -810,22 +810,12 @@ fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
 }
 
-pub fn register_common_tokens(metta: &Metta, cwd: PathBuf) {
-    let space = &metta.space;
+pub fn register_common_tokens(metta: &Metta) {
     let tokenizer = &metta.tokenizer;
-
-    let mut common_tokens = Tokenizer::new();
-    let tref = &mut common_tokens;
+    let mut tref = tokenizer.borrow_mut();
 
     let match_op = Atom::gnd(MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
-    // TODO: here clone of the metta is moved into separate location in memory.
-    // It means that shared reference inside ImportOp points into a different
-    // instance of the Metta struct, not one which is referenced by metta.
-    // This can lead to inconsistence when Metta struct is changed and some
-    // non-shared field is added to it.
-    let import_op = Atom::gnd(ImportOp::new(Shared::new(metta.clone()), cwd.clone()));
-    tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
     let bind_op = Atom::gnd(BindOp::new(tokenizer.clone()));
     tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
     let new_space_op = Atom::gnd(NewSpaceOp{});
@@ -842,20 +832,8 @@ pub fn register_common_tokens(metta: &Metta, cwd: PathBuf) {
     tref.register_token(regex(r"cdr-atom"), move |_| { cdr_atom_op.clone() });
     let cons_atom_op = Atom::gnd(ConsAtomOp{});
     tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
-    let case_op = Atom::gnd(CaseOp::new(space.clone()));
-    tref.register_token(regex(r"case"), move |_| { case_op.clone() });
-    let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
-    tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
-    let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
-    tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
-    let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
-    tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
     let superpose_op = Atom::gnd(SuperposeOp{});
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
-    let pragma_op = Atom::gnd(PragmaOp::new(metta.settings.clone()));
-    tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
-    let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
-    tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
     let println_op = Atom::gnd(PrintlnOp{});
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
     let nop_op = Atom::gnd(NopOp{});
@@ -864,8 +842,33 @@ pub fn register_common_tokens(metta: &Metta, cwd: PathBuf) {
     tref.register_token(regex(r"let"), move |_| { let_op.clone() });
     let let_var_op = Atom::gnd(LetVarOp{});
     tref.register_token(regex(r"let\*"), move |_| { let_var_op.clone() });
+}
 
-    metta.tokenizer.borrow_mut().move_front(&mut common_tokens);
+pub fn register_runner_tokens(metta: &Metta, cwd: PathBuf) {
+    let space = &metta.space;
+    let tokenizer = &metta.tokenizer;
+
+    let mut tref = tokenizer.borrow_mut();
+
+    let case_op = Atom::gnd(CaseOp::new(space.clone()));
+    tref.register_token(regex(r"case"), move |_| { case_op.clone() });
+    let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
+    tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
+    let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
+    tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
+    let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
+    tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
+    let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
+    tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
+    // TODO: here clone of the metta is moved into separate location in memory.
+    // It means that shared reference inside ImportOp points into a different
+    // instance of the Metta struct, not one which is referenced by metta.
+    // This can lead to inconsistence when Metta struct is changed and some
+    // non-shared field is added to it.
+    let import_op = Atom::gnd(ImportOp::new(Shared::new(metta.clone()), cwd.clone()));
+    tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+    let pragma_op = Atom::gnd(PragmaOp::new(metta.settings.clone()));
+    tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
 
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
@@ -874,8 +877,8 @@ pub fn register_common_tokens(metta: &Metta, cwd: PathBuf) {
     // pointer and somehow use the same type to represent weak and strong
     // pointers to the atomspace. (2) resolve &self in GroundingSpace::query
     // method without adding it into container.
-    let space_val = Atom::gnd(metta.space.clone());
-    metta.tokenizer.borrow_mut().register_token(regex(r"&self"), move |_| { space_val.clone() });
+    let self_atom = Atom::gnd(metta.space.clone());
+    tref.register_token(regex(r"&self"), move |_| { self_atom.clone() });
 }
 
 pub fn register_rust_tokens(metta: &Metta) {

@@ -38,7 +38,20 @@ impl Metta {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
         let metta = Self{ space, tokenizer, settings, modules };
-        stdlib::register_common_tokens(&metta, cwd);
+        stdlib::register_runner_tokens(&metta, cwd);
+        stdlib::register_common_tokens(&metta);
+        metta
+    }
+
+    fn new_loading_runner(metta: &Metta, path: PathBuf) -> Self {
+        let space = Shared::new(GroundingSpace::new());
+        let tokenizer = metta.tokenizer.cloned();
+        let mut next_cwd = path;
+        next_cwd.pop();
+        let settings = metta.settings.clone();
+        let modules = metta.modules.clone();
+        let metta = Metta{ space, tokenizer, settings, modules };
+        stdlib::register_runner_tokens(&metta, next_cwd);
         metta
     }
 
@@ -55,16 +68,7 @@ impl Metta {
             },
             None => {
                 // Load the module to the new space
-                let space = Shared::new(GroundingSpace::new());
-                let tokenizer = self.tokenizer.cloned();
-                let mut next_cwd = path.clone();
-                next_cwd.pop();
-                let settings = self.settings.clone();
-                let modules = self.modules.clone();
-                let runner = Self{ space, tokenizer, settings, modules };
-                // override common tokens related to the runner (including import)
-                // FIXME: won't all tokens including import! except &self be shaded by the parent?
-                stdlib::register_common_tokens(&runner, next_cwd);
+                let runner = Metta::new_loading_runner(self, path.clone());
                 let program = match path.to_str() {
                     Some("stdlib") => stdlib::metta_code().to_string(),
                     _ => {
