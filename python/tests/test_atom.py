@@ -1,8 +1,19 @@
 import unittest
 
+import sys
+sys.path.append('/home/aleksei/Downloads/Code/Hyperon/test_task/hyperon-experimental/python')
+
 from hyperon import *
 
 class AtomTest(unittest.TestCase):
+
+    def test_match_(self):
+        print('test_match_ start')
+        space = GroundingSpace()
+        match_atom = MatchableAtom('match_value', type_name=None, atom_id=None)
+        space.add_atom(match_atom)
+        result = space.query(S('test'))
+        print('test_match_ result:', result)
 
     def test_symbol_equals(self):
         self.assertEqual(S("a"), S("a"))
@@ -104,7 +115,8 @@ class AtomTest(unittest.TestCase):
         space = GroundingSpace()
         self.assertEqual(interpret(space, E(noReduceAtom, ValueAtom(1))),
                 [E(noReduceAtom, ValueAtom(1))])
-
+    
+    
 # No unwrap
 def x2_op(atom):
     return [ValueAtom(2 * atom.get_object().value)]
@@ -116,3 +128,6 @@ noReduceAtom = OperationAtom('no-reduce', no_reduce_op, unwrap=False)
 
 class GroundedNoCopy:
     pass
+
+if __name__ == "__main__":
+    unittest.main()

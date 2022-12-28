@@ -1,3 +1,6 @@
+import sys
+sys.path.append('/home/aleksei/Downloads/Code/Hyperon/test_task/hyperon-experimental/build/python')
+
 import hyperonpy as hp
 from hyperonpy import AtomKind
 
@@ -169,20 +172,16 @@ class OperationObject(GroundedObject):
 
 class MatchableObject(ValueObject):
     def match_(self, atom):
-        raise RuntimeError("MatchableObject::match_() is not implemented")
-        # Below example of returning results
-        #py_bind_arr = []
-        #var1 = 'var1'
-        #atom1 = S(var1)
-        #var2 = 'var2'
-        #atom2 = S(var2)
-        #py_bind1 = {var1: atom1, var2: atom2}
-        #py_bind_arr.append(py_bind1)
-        #var3 = 'var3'
-        #atom3 = S(var3)
-        #py_bind2 = {var3: atom3}
-        #py_bind_arr.append(py_bind2)
-        #return py_bind_arr
+        #raise RuntimeError("MatchableObject::match_() is not implemented")
+        print('MatchableObject match_ atom: ', atom)
+        type = atom.get_type()
+        py_bind_arr = []
+        var3 = 'atom_type'
+        atom3 = S(type.name)
+        py_bind2 = {var3: atom3}
+        py_bind_arr.append(py_bind2)
+        print(' MatchableObject match_ py_bind_arr: ', py_bind_arr)
+        return py_bind_arr
 
 def _type_sugar(type_names):
     if type_names is None:

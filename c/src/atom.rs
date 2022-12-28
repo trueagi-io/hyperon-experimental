@@ -312,9 +312,11 @@ impl Grounded for CGrounded {
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
         match self.api().match_ {
             Some(func) => {
+                println!("fn match_ self.api().match_: self: {:?}, other: {:?}", self, other);
                 let mut results: Vec<Bindings> = Vec::new();
                 let context: *mut c_void = (&mut results as *mut Vec<Bindings>).cast::<c_void>();
                 func(self.get_ptr(), (other as *const Atom).cast::<atom_t>(), CGrounded::match_callback, context);
+                println!("fn match_ func results: {:?}, ptr: {:?}", results, results.as_ptr());
                 Box::new(results.into_iter())
             },
             None => match_by_equality(self, other)

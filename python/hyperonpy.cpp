@@ -118,20 +118,34 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
 }
 
 void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_binding_array_t callback, void *context) {
+    std::cout << "py_match_ _gnd: "<< _gnd << ", _atom: " << _atom << std::endl;
     py::object hyperon = py::module_::import("hyperon");
     py::function call_match_on_grounded_atom = hyperon.attr("call_match_on_grounded_atom");
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
     CAtom catom = (atom_t *)_atom;
     py::list py_list = call_match_on_grounded_atom(pyobj, catom);
     size_t size_py_list = py::len(py_list);
+
+    py::dict py_dict = py_list[0];
+    binding_array_t data;
+    binding_t c_binding_t[1];
+    std::string string_array[1];
+    for (auto item : py_dict) {
+        string_array[0] = std::string(py::str(item.first));
+        c_binding_t[0].var = string_array[0].c_str();
+        std::cout << "py_match_ c_binding_t[i].var: " <<  c_binding_t[0].var << std::endl;
+        c_binding_t[0].atom = item.second.attr("catom").cast<CAtom>().ptr;
+    }
+    data = {c_binding_t, 1};
+    callback(data, context);
+/*
     for (size_t c = 0; c < size_py_list; ++c) {
         py::dict py_dict = py_list[c];
         size_t size_py_dict = py::len(py_dict);
-        binding_array_t data;
-        binding_t c_binding_t[size_py_dict];
-        std::string string_array[size_py_dict];
+        //binding_t c_binding_t[size_py_dict];
+        //std::string string_array[size_py_dict];
         for (size_t i = 0; i < size_py_dict; ++i) {
-            for (auto item : py_dict){
+            for (auto item : py_dict) {
                 string_array[i] = std::string(py::str(item.first));
                 c_binding_t[i].var = string_array[i].c_str();
                 c_binding_t[i].atom = item.second.attr("catom").cast<CAtom>().ptr;
@@ -140,6 +154,7 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bi
         data = {c_binding_t, size_py_dict};
         callback(data, context);
     }
+*/
 }
 
 bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b) {
