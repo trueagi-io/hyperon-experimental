@@ -10,10 +10,31 @@ class AtomTest(unittest.TestCase):
     def test_match_(self):
         print('test_match_ start')
         space = GroundingSpace()
-        match_atom = MatchableAtom('match_value', type_name=None, atom_id=None)
+        match_atom = MatchableAtom(S("MatchableAtom"), type_name=None, atom_id=None)
         space.add_atom(match_atom)
-        result = space.query(S('test'))
+
+        result = space.query(S('symbol_atom'))
         print('test_match_ result:', result)
+        self.assertEqual(AtomKind.SYMBOL.name, str(result[0]['atom_type']))
+
+        result = space.query(E(S("+"), S("1"), S("2")))
+        print('test_match_ result:', result)
+        self.assertEqual(AtomKind.EXPR.name, str(result[0]['atom_type']))
+        
+        atom = G(GroundedObject(None), S("Float"))
+        result = space.query(atom)
+        print('test_match_ result:', result)
+        self.assertEqual(AtomKind.GROUNDED.name, str(result[0]['atom_type']))
+        
+        result = space.query(V("z"))
+        self.assertEqual(AtomKind.VARIABLE.name, str(result[0]['atom_type']))
+        print('test_match_ result:', result)
+
+        #self.assertEqual(S('test').get_type(), AtomKind.SYMBOL)
+        #elif type == AtomKind.VARIABLE:
+        #    return ExpressionAtom(catom)
+        #elif type == AtomKind.GROUNDED:
+
 
     def test_symbol_equals(self):
         self.assertEqual(S("a"), S("a"))
