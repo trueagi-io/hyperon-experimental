@@ -118,7 +118,6 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
 }
 
 void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_binding_array_t callback, void *context) {
-    std::cout << "py_match_ _gnd: "<< _gnd << ", _atom: " << _atom << std::endl;
     py::object hyperon = py::module_::import("hyperon");
     py::function call_match_on_grounded_atom = hyperon.attr("call_match_on_grounded_atom");
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
@@ -135,7 +134,6 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bi
             for (auto item : py_dict) {
                 string_array[i] = std::string(py::str(item.first));
                 c_binding_t[i].var = string_array[i].c_str();
-                std::cout << "py_match_ c_binding_t[i].var: " <<  c_binding_t[0].var << std::endl;
                 c_binding_t[0].atom = atom_clone(item.second.attr("catom").cast<CAtom>().ptr);
             }
         }

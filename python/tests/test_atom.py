@@ -1,40 +1,8 @@
 import unittest
 
-import sys
-sys.path.append('/home/aleksei/Downloads/Code/Hyperon/test_task/hyperon-experimental/python')
-
 from hyperon import *
 
 class AtomTest(unittest.TestCase):
-
-    def test_match_(self):
-        print('test_match_ start')
-        space = GroundingSpace()
-        match_atom = MatchableAtom(S("MatchableAtom"), type_name=None, atom_id=None)
-        space.add_atom(match_atom)
-
-        result = space.query(S('symbol_atom'))
-        print('test_match_ result:', result)
-        self.assertEqual(AtomKind.SYMBOL.name, str(result[0]['atom_type']))
-
-        result = space.query(E(S("+"), S("1"), S("2")))
-        print('test_match_ result:', result)
-        self.assertEqual(AtomKind.EXPR.name, str(result[0]['atom_type']))
-        
-        atom = G(GroundedObject(None), S("Float"))
-        result = space.query(atom)
-        print('test_match_ result:', result)
-        self.assertEqual(AtomKind.GROUNDED.name, str(result[0]['atom_type']))
-        
-        result = space.query(V("z"))
-        self.assertEqual(AtomKind.VARIABLE.name, str(result[0]['atom_type']))
-        print('test_match_ result:', result)
-
-        #self.assertEqual(S('test').get_type(), AtomKind.SYMBOL)
-        #elif type == AtomKind.VARIABLE:
-        #    return ExpressionAtom(catom)
-        #elif type == AtomKind.GROUNDED:
-
 
     def test_symbol_equals(self):
         self.assertEqual(S("a"), S("a"))
@@ -137,6 +105,19 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(interpret(space, E(noReduceAtom, ValueAtom(1))),
                 [E(noReduceAtom, ValueAtom(1))])
     
+    def test_match_(self):
+        space = GroundingSpace()
+        match_atom = MatchableAtomTest(S("MatchableAtom"), type_name=None, atom_id=None)
+        space.add_atom(match_atom)
+        result = space.query(S('symbol_atom'))
+        self.assertEqual(AtomKind.SYMBOL.name, str(result[0]['atom_type']))
+        result = space.query(E(S("+"), S("1"), S("2")))
+        self.assertEqual(AtomKind.EXPR.name, str(result[0]['atom_type']))
+        atom = G(GroundedObject(None), S("Float"))
+        result = space.query(atom)
+        self.assertEqual(AtomKind.GROUNDED.name, str(result[0]['atom_type']))
+        result = space.query(V("Z"))
+        self.assertEqual(S("MatchableAtom").get_name(), str(result[0]['Z']))
     
 # No unwrap
 def x2_op(atom):
@@ -150,5 +131,16 @@ noReduceAtom = OperationAtom('no-reduce', no_reduce_op, unwrap=False)
 class GroundedNoCopy:
     pass
 
-if __name__ == "__main__":
-    unittest.main()
+class MatchableObjectTest(MatchableObject):
+    def match_(self, atom):
+        type = atom.get_type()
+        py_bind_arr = []
+        var = 'atom_type'
+        atom = S(type.name)
+        py_bind = {var: atom}
+        py_bind_arr.append(py_bind)
+        return py_bind_arr
+
+def MatchableAtomTest(value, type_name=None, atom_id=None):
+    return G(MatchableObjectTest(value, atom_id), AtomType.UNDEFINED)
+
