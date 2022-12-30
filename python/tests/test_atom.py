@@ -144,3 +144,5 @@ class MatchableObjectTest(MatchableObject):
 def MatchableAtomTest(value, type_name=None, atom_id=None):
     return G(MatchableObjectTest(value, atom_id), AtomType.UNDEFINED)
 
+if __name__ == "__main__":
+    unittest.main()

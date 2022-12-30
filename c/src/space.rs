@@ -1,4 +1,3 @@
-use hyperon::*;
 use hyperon::space::grounding::*;
 
 use crate::atom::*;
@@ -59,7 +58,7 @@ pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, id
 #[repr(C)]
 pub struct binding_t {
     pub var: *const c_char,
-    pub atom: *const atom_t,
+    pub atom: *mut atom_t,
 }
 
 pub type binding_array_t = array_t<binding_t>;
@@ -68,17 +67,17 @@ pub type binding_array_t = array_t<binding_t>;
 pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
         pattern: *const atom_t, callback: lambda_t<binding_array_t>, context: *mut c_void) {
     let results = unsafe { (*space).borrow().query(&((*pattern).atom)) };
-    for result in results {
+    for result in results.into_iter() {
         let mut vars : Vec<CString> = Vec::new();
-        let vec = result.iter().map(|(k, v)| {
+        let vec: Vec<binding_t> = result.into_iter().map(|(k, v)| {
                 // put C string into collection which is external to closure
                 // to prevent its deallocation before callback is called
                 vars.push(string_as_cstr(k.name()));
                 binding_t{
                     var: vars.last().unwrap().as_ptr(),
-                    atom: (v as *const Atom).cast::<atom_t>()
+                    atom: atom_to_ptr(v),
                 }
-            }).collect::<Vec<binding_t>>();
+            }).collect();
         callback((&vec).into(), context);
     }
 }

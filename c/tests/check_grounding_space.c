@@ -26,6 +26,7 @@ void query_callback(binding_array_t results, void* data) {
         binding_t const* result = results.items + i;
         output->len += snprintf(output->str + output->len, 1024 - output->len, "%s: ", results.items->var);
         atom_to_str(result->atom, copy_to_output, output);
+        atom_free(result->atom);
     }
 }
 

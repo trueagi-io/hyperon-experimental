@@ -158,6 +158,16 @@ impl<'a> IntoIterator for &'a Bindings {
     }
 }
 
+impl IntoIterator for Bindings {
+    type Item = (VariableAtom, Atom);
+    type IntoIter = std::collections::hash_map::IntoIter<VariableAtom, Atom>;
+
+    #[inline]
+    fn into_iter(self) -> std::collections::hash_map::IntoIter<VariableAtom, Atom> {
+        self.0.into_iter()
+    }
+}
+
 impl Display for Bindings {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{{")

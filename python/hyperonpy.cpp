@@ -291,7 +291,7 @@ PYBIND11_MODULE(hyperonpy, m) {
                         py::list& results = *(py::list*)context;
                         py::dict pybindings;
                         for (size_t i = 0; i < cbindings.size; ++i) {
-                            pybindings[cbindings.items[i].var] = CAtom(atom_clone(cbindings.items[i].atom));
+                            pybindings[cbindings.items[i].var] = CAtom(cbindings.items[i].atom);
                         }
                         results.append(pybindings);
                     }, &results);
