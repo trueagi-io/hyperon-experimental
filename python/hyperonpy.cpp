@@ -121,7 +121,7 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bi
     py::object hyperon = py::module_::import("hyperon");
     py::function call_match_on_grounded_atom = hyperon.attr("call_match_on_grounded_atom");
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
-    CAtom catom = (atom_t *)_atom;
+    CAtom catom = atom_clone(_atom);
     py::list py_list = call_match_on_grounded_atom(pyobj, catom);
     size_t size_py_list = py::len(py_list);
     binding_array_t data;
