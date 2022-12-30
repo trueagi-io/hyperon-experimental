@@ -133,14 +133,10 @@ class GroundedNoCopy:
 
 class MatchableObjectTest(MatchableObject):
     def match_(self, atom):
-        type = atom.get_type()
-        py_bind_arr = []
-        var = 'atom_type'
-        atom = S(type.name)
-        py_bind = {var: atom}
-        py_bind_arr.append(py_bind)
-        return py_bind_arr
+        return [{'atom_type': S(atom.get_type().name)}]
 
 def MatchableAtomTest(value, type_name=None, atom_id=None):
     return G(MatchableObjectTest(value, atom_id), AtomType.UNDEFINED)
 
+if __name__ == "__main__":
+    unittest.main()

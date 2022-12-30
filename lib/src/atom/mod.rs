@@ -219,7 +219,8 @@ impl VariableAtom {
         Self{ name: name.into(), id: 0 }
     }
     
-    /// Constructs new variable using `name` and 'id' provided.
+    /// Constructs new variable using `name` and 'id' provided. This method is
+    /// used to convert C API [Bindings] to Rust.
     pub fn new_id<T: Into<String>>(name: T, id: usize) -> Self {
         Self{ name: name.into(), id: id }
     }

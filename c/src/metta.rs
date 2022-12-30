@@ -78,16 +78,16 @@ pub extern "C" fn sexpr_parser_free(parser: *mut sexpr_parser_t) {
 pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
         tokenizer: *const tokenizer_t) -> *mut atom_t {
     (*parser).borrow_mut().parse(&(*tokenizer).borrow())
-        .map_or(std::ptr::null_mut(), |atom| { atom_to_ptr(atom) })
+        .map_or(std::ptr::null_mut(), |atom| { atom_into_ptr(atom) })
 }
 
-#[no_mangle] pub extern "C" fn ATOM_TYPE_UNDEFINED() -> *mut atom_t { atom_to_ptr(hyperon::metta::ATOM_TYPE_UNDEFINED) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_TYPE() -> *mut atom_t { atom_to_ptr(hyperon::metta::ATOM_TYPE_TYPE) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_ATOM() -> *mut atom_t { atom_to_ptr(hyperon::metta::ATOM_TYPE_ATOM) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_SYMBOL() -> *mut atom_t { atom_to_ptr(hyperon::metta::ATOM_TYPE_SYMBOL) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_VARIABLE() -> *mut atom_t { atom_to_ptr(hyperon::metta::ATOM_TYPE_VARIABLE) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_EXPRESSION() -> *mut atom_t { atom_to_ptr(hyperon::metta::ATOM_TYPE_EXPRESSION) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED() -> *mut atom_t { atom_to_ptr(hyperon::metta::ATOM_TYPE_GROUNDED) }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_UNDEFINED() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_UNDEFINED) }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_TYPE() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_TYPE) }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_ATOM() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_ATOM) }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_SYMBOL() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_SYMBOL) }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_VARIABLE() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_VARIABLE) }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_EXPRESSION() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_EXPRESSION) }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_GROUNDED) }
 
 #[no_mangle]
 pub unsafe extern "C" fn check_type(space: *const grounding_space_t, atom: *const atom_t, typ: *const atom_t) -> bool {
@@ -202,7 +202,7 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
 pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: *mut atom_t,
         output: c_atoms_callback_t, out_context: *mut c_void) {
     let metta = unsafe{ &*metta }.borrow();
-    let atom = unsafe{ Box::from_raw(atom) };
-    let result = metta.evaluate_atom(atom.atom).expect("Returning errors from C API is not implemented yet");
+    let atom = ptr_into_atom(atom);
+    let result = metta.evaluate_atom(atom).expect("Returning errors from C API is not implemented yet");
     return_atoms(&result, output, out_context);
 }
