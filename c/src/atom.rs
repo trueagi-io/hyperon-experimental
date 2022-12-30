@@ -1,7 +1,6 @@
 use hyperon::*;
 
 use crate::util::*;
-use crate::space::*;
 
 use std::os::raw::*;
 use std::fmt::Display;
@@ -29,6 +28,13 @@ pub struct exec_error_t {
     pub error: ExecError,
 }
 
+#[repr(C)]
+pub struct binding_t {
+    pub var: *const c_char,
+    pub atom: *mut atom_t,
+}
+
+pub type binding_array_t = array_t<binding_t>;
 
 #[repr(C)]
 pub struct gnd_api_t {

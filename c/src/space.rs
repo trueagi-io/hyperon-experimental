@@ -55,14 +55,6 @@ pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, id
         .expect(format!("Index is out of bounds: {}", idx).as_str()).clone())
 }
 
-#[repr(C)]
-pub struct binding_t {
-    pub var: *const c_char,
-    pub atom: *mut atom_t,
-}
-
-pub type binding_array_t = array_t<binding_t>;
-
 #[no_mangle]
 pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
         pattern: *const atom_t, callback: lambda_t<binding_array_t>, context: *mut c_void) {
