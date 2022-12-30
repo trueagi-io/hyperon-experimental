@@ -54,19 +54,26 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 
 extern "C" {
     exec_error_t *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* args, struct vec_atom_t* ret);
+    void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_binding_array_t callback, void *context);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
     size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
     void py_free(struct gnd_t* _gnd);
 }
 
-const gnd_api_t PY_EXECUTABLE_API = { &py_execute, &py_eq, &py_clone, &py_display, &py_free };
-const gnd_api_t PY_VALUE_API = { nullptr, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_EXECUTABLE_MATCHABLE_API = { &py_execute, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_EXECUTABLE_API = { &py_execute, nullptr, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_MATCHABLE_API = { nullptr, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_VALUE_API = { nullptr, nullptr, &py_eq, &py_clone, &py_display, &py_free };
 
 struct GroundedObject : gnd_t {
     GroundedObject(py::object pyobj, atom_t* typ) : pyobj(pyobj) {
-        if (py::hasattr(pyobj, "execute")) {
+        if (py::hasattr(pyobj, "execute") && py::hasattr(pyobj, "match_")) {
+            this->api = &PY_EXECUTABLE_MATCHABLE_API;
+        } else if (py::hasattr(pyobj, "execute")) {
             this->api = &PY_EXECUTABLE_API;
+        } else if (py::hasattr(pyobj, "match_")) {
+            this->api = &PY_MATCHABLE_API;
         } else {
             this->api = &PY_VALUE_API;
         }
@@ -107,6 +114,31 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
             snprintf(message, lenghtof(message), "Exception caught:\n%s", e.what());
             return exec_error_runtime(message);
         }
+    }
+}
+
+void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_binding_array_t callback, void *context) {
+    py::object hyperon = py::module_::import("hyperon");
+    py::function call_match_on_grounded_atom = hyperon.attr("call_match_on_grounded_atom");
+    py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
+    CAtom catom = atom_clone(_atom);
+    py::list py_list = call_match_on_grounded_atom(pyobj, catom);
+    size_t size_py_list = py::len(py_list);
+    binding_array_t data;
+    for (size_t c = 0; c < size_py_list; ++c) {
+        py::dict py_dict = py_list[c];
+        size_t size_py_dict = py::len(py_dict);
+        binding_t c_binding_t[size_py_dict];
+        std::string string_array[size_py_dict];
+        for (size_t i = 0; i < size_py_dict; ++i) {
+            for (auto item : py_dict) {
+                string_array[i] = std::string(py::str(item.first));
+                c_binding_t[i].var = string_array[i].c_str();
+                c_binding_t[i].atom = atom_clone(item.second.attr("catom").cast<CAtom>().ptr);
+            }
+        }
+        data = {c_binding_t, size_py_dict};
+        callback(data, context);
     }
 }
 

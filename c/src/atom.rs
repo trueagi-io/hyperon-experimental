@@ -1,10 +1,15 @@
 use hyperon::*;
 
 use crate::util::*;
+use crate::space::*;
 
 use std::os::raw::*;
 use std::fmt::Display;
 use std::sync::atomic::{AtomicPtr, Ordering};
+
+use hyperon::matcher::Bindings;
+use std::mem;
+use std::slice;
 
 // Atom
 
@@ -24,11 +29,13 @@ pub struct exec_error_t {
     pub error: ExecError,
 }
 
+
 #[repr(C)]
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
     execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
+    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, lambda_t<binding_array_t>, *mut c_void)>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
     display: extern "C" fn(*const gnd_t, *mut c_char, usize) -> usize,
@@ -99,6 +106,7 @@ pub extern "C" fn atom_to_str(atom: *const atom_t, callback: c_str_callback_t, c
     let atom = unsafe{ &(*atom).atom };
     callback(str_as_cstr(atom.to_string().as_str()).as_ptr(), context);
 }
+
 
 #[no_mangle]
 pub extern "C" fn atom_get_name(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
@@ -245,7 +253,37 @@ impl CGrounded {
     fn free(&mut self) {
         (self.api().free)(self.get_mut_ptr());
     }
+
+    extern "C" fn match_callback(cbindings: binding_array_t, context: *mut c_void) {
+        fn var_from_name(name: &str) -> VariableAtom {
+            let ind = name.rfind('#');
+            if let Some(i) = ind {
+                let name_id = &name[0..i];
+                let id_str = &name[i+1..name.len()];
+                let id = id_str.parse::<usize>().unwrap();
+                VariableAtom::new_id(name_id, id)
+            } else {
+                VariableAtom::new(name)
+            }
+        }
+
+        let cbindings = unsafe { slice::from_raw_parts(cbindings.items, cbindings.size) };
+        let mut bnd = Bindings::new();
+        for i in 0..cbindings.len() {
+            let name = cstr_as_str(cbindings[i].var as *const c_char);
+            let var = var_from_name(name);
+            let atom = cbindings[i].atom;
+            let atom = unsafe{ &(*atom).atom };
+            bnd.insert(var, atom.clone());
+        }
+        mem::forget(cbindings);
+
+        let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
+        vec_bnd.push(bnd);
+    }
+
 }
+
 
 impl Grounded for CGrounded {
     fn type_(&self) -> Atom {
@@ -272,7 +310,15 @@ impl Grounded for CGrounded {
     }
 
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        match_by_equality(self, other)
+        match self.api().match_ {
+            Some(func) => {
+                let mut results: Vec<Bindings> = Vec::new();
+                let context: *mut c_void = (&mut results as *mut Vec<Bindings>).cast::<c_void>();
+                func(self.get_ptr(), (other as *const Atom).cast::<atom_t>(), CGrounded::match_callback, context);
+                Box::new(results.into_iter())
+            },
+            None => match_by_equality(self, other)
+        }
     }
 }
 
@@ -303,3 +349,25 @@ impl Drop for CGrounded {
     }
 }
 
+#[cfg(test)]
+mod tests {
+use super::*;
+use std::ptr;
+    #[test]
+    pub fn test_match_callback() {
+        let var = str_as_cstr("var#1");
+        let atom = atom_to_ptr(Atom::sym("atom_test"));
+        let vec = vec![ binding_t{ var: var.as_ptr(), atom } ];
+        let bindings = (&vec).into();
+        
+        let mut results: Vec<Bindings> = Vec::new();
+        let context = ptr::addr_of_mut!(results).cast::<c_void>();
+
+        CGrounded::match_callback(bindings, context);
+
+        assert_eq!(results, vec![Bindings::from(vec![
+                (VariableAtom::new_id("var", 1), Atom::sym("atom_test"))])]);
+        unsafe{ atom_free(atom) };
+    }
+
+}

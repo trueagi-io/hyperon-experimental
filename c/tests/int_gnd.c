@@ -7,7 +7,7 @@ gnd_t* int_clone(const gnd_t* _self);
 uintptr_t int_display(const struct gnd_t*, char*, uintptr_t);
 void int_free(struct gnd_t*);
 
-gnd_api_t const INT_GND_API = { 0, &int_eq, &int_clone, &int_display, &int_free };
+gnd_api_t const INT_GND_API = { 0, 0, &int_eq, &int_clone, &int_display, &int_free };
 
 gnd_t* int_new(int n) {
     int_gnd_t* self = malloc(sizeof(int_gnd_t));

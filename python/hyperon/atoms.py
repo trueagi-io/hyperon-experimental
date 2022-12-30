@@ -100,6 +100,9 @@ def call_execute_on_grounded_atom(gnd, typ, args):
     args = [Atom._from_catom(catom) for catom in args]
     return gnd.execute(*args, res_typ=res_typ)
 
+def call_match_on_grounded_atom(gnd, catom):
+    return gnd.match_(Atom._from_catom(catom))
+
 def atoms_are_equivalent(first, second):
     return hp.atoms_are_equivalent(first.catom, second.catom)
 
@@ -114,7 +117,6 @@ class GroundedObject:
 
     def copy(self):
         return self
-
 class ValueObject(GroundedObject):
 
     @property
@@ -164,6 +166,10 @@ class OperationObject(GroundedObject):
     def __eq__(self, other):
         return isinstance(other, OperationObject) and self.name == other.name
 
+class MatchableObject(ValueObject):
+    def match_(self, atom):
+        raise RuntimeError("MatchableObject::match_() is not implemented")
+
 def _type_sugar(type_names):
     if type_names is None:
         return AtomType.UNDEFINED
@@ -179,3 +185,5 @@ def OperationAtom(name, op, type_names=None, unwrap=True):
 def ValueAtom(value, type_name=None, atom_id=None):
     return G(ValueObject(value, atom_id), _type_sugar(type_name))
 
+def MatchableAtom(value, type_name=None, atom_id=None):
+    return G(MatchableObject(value, atom_id), _type_sugar(type_name))
