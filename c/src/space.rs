@@ -27,7 +27,7 @@ pub unsafe extern "C" fn grounding_space_eq(a: *const grounding_space_t, b: *con
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_add(space: *mut grounding_space_t, atom: *mut atom_t) {
-    (*space).borrow_mut().add(ptr_to_atom(atom));
+    (*space).borrow_mut().add(ptr_into_atom(atom));
 }
 
 #[no_mangle]
@@ -37,7 +37,7 @@ pub unsafe extern "C" fn grounding_space_remove(space: *mut grounding_space_t, a
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_replace(space: *mut grounding_space_t, from: *const atom_t, to: *mut atom_t) -> bool {
-    (*space).borrow_mut().replace(&(*from).atom, ptr_to_atom(to))
+    (*space).borrow_mut().replace(&(*from).atom, ptr_into_atom(to))
 }
 
 #[no_mangle]
@@ -49,7 +49,7 @@ pub unsafe extern "C" fn grounding_space_len(space: *const grounding_space_t) ->
 pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *mut atom_t {
     // TODO: highly ineffective implementation, should be reworked after replacing
     // the GroundingSpace struct by Space trait in code.
-    atom_to_ptr((*space).borrow().iter().skip(idx).next()
+    atom_into_ptr((*space).borrow().iter().skip(idx).next()
         .expect(format!("Index is out of bounds: {}", idx).as_str()).clone())
 }
 
@@ -65,7 +65,7 @@ pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
                 vars.push(string_as_cstr(k.name()));
                 binding_t{
                     var: vars.last().unwrap().as_ptr(),
-                    atom: atom_to_ptr(v),
+                    atom: atom_into_ptr(v),
                 }
             }).collect();
         callback((&vec).into(), context);

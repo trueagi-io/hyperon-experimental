@@ -72,28 +72,28 @@ pub extern "C" fn exec_error_free(error: *mut exec_error_t) {
 #[no_mangle]
 pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
     // cstr_as_str() keeps pointer ownership, but Atom::sym() copies resulting
-    // String into Atom::Symbol::symbol field. atom_to_ptr() moves value to the
+    // String into Atom::Symbol::symbol field. atom_into_ptr() moves value to the
     // heap and gives ownership to the caller.
-    atom_to_ptr(Atom::sym(cstr_as_str(name)))
+    atom_into_ptr(Atom::sym(cstr_as_str(name)))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) -> *mut atom_t {
     let c_arr = std::slice::from_raw_parts(children, size);
     let children: Vec<Atom> = c_arr.into_iter().map(|atom| {
-        ptr_to_atom(*atom)
+        ptr_into_atom(*atom)
     }).collect();
-    atom_to_ptr(Atom::expr(children))
+    atom_into_ptr(Atom::expr(children))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_var(name: *const c_char) -> *mut atom_t {
-    atom_to_ptr(Atom::var(cstr_as_str(name)))
+    atom_into_ptr(Atom::var(cstr_as_str(name)))
 }
 
 #[no_mangle]
 pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> *mut atom_t {
-    atom_to_ptr(Atom::gnd(CGrounded(AtomicPtr::new(gnd))))
+    atom_into_ptr(Atom::gnd(CGrounded(AtomicPtr::new(gnd))))
 }
 
 #[no_mangle]
@@ -138,7 +138,7 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
 #[no_mangle]
 pub extern "C" fn atom_get_grounded_type(atom: *const atom_t) -> *mut atom_t {
     if let Atom::Grounded(ref g) = unsafe{ &(*atom) }.atom {
-        atom_to_ptr(g.type_())
+        atom_into_ptr(g.type_())
     } else {
         panic!("Only Grounded atoms has grounded type attribute!");
     }
@@ -162,7 +162,7 @@ pub unsafe extern "C" fn atom_free(atom: *mut atom_t) {
 
 #[no_mangle]
 pub extern "C" fn atom_clone(atom: *const atom_t) -> *mut atom_t {
-    atom_to_ptr(unsafe{ &(*atom) }.atom.clone())
+    atom_into_ptr(unsafe{ &(*atom) }.atom.clone())
 }
 
 #[no_mangle]
@@ -175,7 +175,7 @@ pub struct vec_atom_t(Vec<Atom>);
 
 #[no_mangle]
 pub extern "C" fn vec_atom_new() -> *mut vec_atom_t {
-    vec_atom_to_ptr(Vec::new()) 
+    vec_atom_into_ptr(Vec::new()) 
 }
 
 #[no_mangle]
@@ -190,12 +190,12 @@ pub unsafe extern "C" fn vec_atom_size(vec: *mut vec_atom_t) -> usize {
 
 #[no_mangle]
 pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> *mut atom_t {
-    atom_to_ptr((*vec).0.pop().expect("Vector is empty"))
+    atom_into_ptr((*vec).0.pop().expect("Vector is empty"))
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn vec_atom_push(vec: *mut vec_atom_t, atom: *mut atom_t) {
-    (*vec).0.push(ptr_to_atom(atom));
+    (*vec).0.push(ptr_into_atom(atom));
 }
 
 #[no_mangle]
@@ -205,7 +205,7 @@ pub unsafe extern "C" fn vec_atom_len(vec: *const vec_atom_t) -> usize {
 
 #[no_mangle]
 pub unsafe extern "C" fn vec_atom_get(vec: *mut vec_atom_t, idx: usize) -> *mut atom_t {
-    atom_to_ptr((*vec).0[idx].clone())
+    atom_into_ptr((*vec).0[idx].clone())
 }
 
 pub type atom_array_t = array_t<*const atom_t>;
@@ -220,15 +220,15 @@ pub extern "C" fn atoms_are_equivalent(first: *const atom_t, second: *const atom
 // Code below is a boilerplate code to implement C API correctly.
 // It is not a part of C API.
 
-pub fn atom_to_ptr(atom: Atom) -> *mut atom_t {
+pub fn atom_into_ptr(atom: Atom) -> *mut atom_t {
     Box::into_raw(Box::new(atom_t{ atom }))
 }
 
-pub fn ptr_to_atom(atom: *mut atom_t) -> Atom {
+pub fn ptr_into_atom(atom: *mut atom_t) -> Atom {
     unsafe{ Box::from_raw(atom) }.atom
 }
 
-fn vec_atom_to_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {
+fn vec_atom_into_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {
     Box::into_raw(Box::new(vec_atom_t(vec)))
 }
 
@@ -280,7 +280,7 @@ impl CGrounded {
         for i in 0..cbindings.len() {
             let name = cstr_as_str(cbindings[i].var as *const c_char);
             let var = var_from_name(name);
-            let atom = ptr_to_atom(cbindings[i].atom);
+            let atom = ptr_into_atom(cbindings[i].atom);
             bindings.insert(var, atom);
         }
         mem::forget(cbindings);
@@ -364,7 +364,7 @@ use std::ptr;
     #[test]
     pub fn test_match_callback() {
         let var = str_as_cstr("var#1");
-        let atom = atom_to_ptr(Atom::sym("atom_test"));
+        let atom = atom_into_ptr(Atom::sym("atom_test"));
         let vec = vec![ binding_t{ var: var.as_ptr(), atom } ];
         let bindings = (&vec).into();
         
