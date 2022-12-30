@@ -134,7 +134,7 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bi
             for (auto item : py_dict) {
                 string_array[i] = std::string(py::str(item.first));
                 c_binding_t[i].var = string_array[i].c_str();
-                c_binding_t[0].atom = atom_clone(item.second.attr("catom").cast<CAtom>().ptr);
+                c_binding_t[i].atom = atom_clone(item.second.attr("catom").cast<CAtom>().ptr);
             }
         }
         data = {c_binding_t, size_py_dict};
