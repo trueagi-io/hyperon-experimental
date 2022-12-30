@@ -117,7 +117,6 @@ class GroundedObject:
 
     def copy(self):
         return self
-    
 class ValueObject(GroundedObject):
 
     @property
