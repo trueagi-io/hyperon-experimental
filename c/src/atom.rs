@@ -29,19 +29,19 @@ pub struct exec_error_t {
 }
 
 #[repr(C)]
-pub struct binding_t {
+pub struct var_atom_t {
     pub var: *const c_char,
     pub atom: *mut atom_t,
 }
 
-pub type binding_array_t = array_t<binding_t>;
+pub type bindings_t = array_t<var_atom_t>;
 
 #[repr(C)]
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
     execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
-    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, lambda_t<binding_array_t>, *mut c_void)>,
+    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, lambda_t<bindings_t>, *mut c_void)>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
     display: extern "C" fn(*const gnd_t, *mut c_char, usize) -> usize,
@@ -262,7 +262,7 @@ impl CGrounded {
         (self.api().free)(self.get_mut_ptr());
     }
 
-    extern "C" fn match_callback(cbindings: binding_array_t, context: *mut c_void) {
+    extern "C" fn match_callback(cbindings: bindings_t, context: *mut c_void) {
         fn var_from_name(name: &str) -> VariableAtom {
             let ind = name.rfind('#');
             if let Some(i) = ind {
@@ -365,7 +365,7 @@ use std::ptr;
     pub fn test_match_callback() {
         let var = str_as_cstr("var#1");
         let atom = atom_into_ptr(Atom::sym("atom_test"));
-        let vec = vec![ binding_t{ var: var.as_ptr(), atom } ];
+        let vec = vec![ var_atom_t{ var: var.as_ptr(), atom } ];
         let bindings = (&vec).into();
         
         let mut results: Vec<Bindings> = Vec::new();

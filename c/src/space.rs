@@ -55,15 +55,15 @@ pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, id
 
 #[no_mangle]
 pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
-        pattern: *const atom_t, callback: lambda_t<binding_array_t>, context: *mut c_void) {
+        pattern: *const atom_t, callback: lambda_t<bindings_t>, context: *mut c_void) {
     let results = unsafe { (*space).borrow().query(&((*pattern).atom)) };
     for result in results.into_iter() {
         let mut vars : Vec<CString> = Vec::new();
-        let vec: Vec<binding_t> = result.into_iter().map(|(k, v)| {
+        let vec: Vec<var_atom_t> = result.into_iter().map(|(k, v)| {
                 // put C string into collection which is external to closure
                 // to prevent its deallocation before callback is called
                 vars.push(string_as_cstr(k.name()));
-                binding_t{
+                var_atom_t{
                     var: vars.last().unwrap().as_ptr(),
                     atom: atom_into_ptr(v),
                 }
