@@ -202,7 +202,7 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
 pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: *mut atom_t,
         output: c_atoms_callback_t, out_context: *mut c_void) {
     let metta = unsafe{ &*metta }.borrow();
-    let atom = unsafe{ Box::from_raw(atom) };
-    let result = metta.evaluate_atom(atom.atom).expect("Returning errors from C API is not implemented yet");
+    let atom = ptr_to_atom(atom);
+    let result = metta.evaluate_atom(atom).expect("Returning errors from C API is not implemented yet");
     return_atoms(&result, output, out_context);
 }

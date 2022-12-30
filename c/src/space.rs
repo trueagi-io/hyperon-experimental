@@ -27,8 +27,7 @@ pub unsafe extern "C" fn grounding_space_eq(a: *const grounding_space_t, b: *con
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_add(space: *mut grounding_space_t, atom: *mut atom_t) {
-    let c_atom = Box::from_raw(atom);
-    (*space).borrow_mut().add(c_atom.atom);
+    (*space).borrow_mut().add(ptr_to_atom(atom));
 }
 
 #[no_mangle]
@@ -38,8 +37,7 @@ pub unsafe extern "C" fn grounding_space_remove(space: *mut grounding_space_t, a
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_replace(space: *mut grounding_space_t, from: *const atom_t, to: *mut atom_t) -> bool {
-    let c_to = Box::from_raw(to);
-    (*space).borrow_mut().replace(&(*from).atom, c_to.atom)
+    (*space).borrow_mut().replace(&(*from).atom, ptr_to_atom(to))
 }
 
 #[no_mangle]

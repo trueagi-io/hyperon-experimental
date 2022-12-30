@@ -81,8 +81,7 @@ pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
 pub unsafe extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) -> *mut atom_t {
     let c_arr = std::slice::from_raw_parts(children, size);
     let children: Vec<Atom> = c_arr.into_iter().map(|atom| {
-        let c_atom = Box::from_raw(*atom);
-        c_atom.atom
+        ptr_to_atom(*atom)
     }).collect();
     atom_to_ptr(Atom::expr(children))
 }
@@ -196,8 +195,7 @@ pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> *mut atom_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn vec_atom_push(vec: *mut vec_atom_t, atom: *mut atom_t) {
-    let c_atom = Box::from_raw(atom);
-    (*vec).0.push(c_atom.atom);
+    (*vec).0.push(ptr_to_atom(atom));
 }
 
 #[no_mangle]
@@ -224,6 +222,10 @@ pub extern "C" fn atoms_are_equivalent(first: *const atom_t, second: *const atom
 
 pub fn atom_to_ptr(atom: Atom) -> *mut atom_t {
     Box::into_raw(Box::new(atom_t{ atom }))
+}
+
+pub fn ptr_to_atom(atom: *mut atom_t) -> Atom {
+    unsafe{ Box::from_raw(atom) }.atom
 }
 
 fn vec_atom_to_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {
@@ -274,18 +276,17 @@ impl CGrounded {
         }
 
         let cbindings = unsafe { slice::from_raw_parts(cbindings.items, cbindings.size) };
-        let mut bnd = Bindings::new();
+        let mut bindings = Bindings::new();
         for i in 0..cbindings.len() {
             let name = cstr_as_str(cbindings[i].var as *const c_char);
             let var = var_from_name(name);
-            let atom = cbindings[i].atom;
-            let atom = unsafe{ &(*atom).atom };
-            bnd.insert(var, atom.clone());
+            let atom = ptr_to_atom(cbindings[i].atom);
+            bindings.insert(var, atom);
         }
         mem::forget(cbindings);
 
         let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
-        vec_bnd.push(bnd);
+        vec_bnd.push(bindings);
     }
 
 }
@@ -319,8 +320,9 @@ impl Grounded for CGrounded {
         match self.api().match_ {
             Some(func) => {
                 let mut results: Vec<Bindings> = Vec::new();
-                let context: *mut c_void = (&mut results as *mut Vec<Bindings>).cast::<c_void>();
-                func(self.get_ptr(), (other as *const Atom).cast::<atom_t>(), CGrounded::match_callback, context);
+                let context = (&mut results as *mut Vec<Bindings>).cast::<c_void>();
+                func(self.get_ptr(), (other as *const Atom).cast::<atom_t>(),
+                    CGrounded::match_callback, context);
                 Box::new(results.into_iter())
             },
             None => match_by_equality(self, other)
@@ -373,7 +375,6 @@ use std::ptr;
 
         assert_eq!(results, vec![Bindings::from(vec![
                 (VariableAtom::new_id("var", 1), Atom::sym("atom_test"))])]);
-        unsafe{ atom_free(atom) };
     }
 
 }
