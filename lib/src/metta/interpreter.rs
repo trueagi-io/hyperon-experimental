@@ -374,9 +374,13 @@ fn interpret_expression_as_type_op<'a, T: GroundingSpacePtr + 'a>(context: Inter
             let expr = get_expr(input.atom());
             assert!(!expr.children().is_empty(), "Empty expression is not expected");
             let mut plan: NoInputPlan = Box::new(StepResult::ret(vec![input.clone()]));
-            for expr_idx in 1..(expr.children().len()) {
+            for expr_idx in 0..(expr.children().len()) {
                 let arg = expr.children()[expr_idx].clone();
-                let arg_typ = op_arg_types[expr_idx - 1].clone();
+                let arg_typ = if expr_idx > 0 {
+                    op_arg_types[expr_idx - 1].clone()
+                } else {
+                    op_typ.clone()
+                };
                 let context = context.clone();
                 plan = Box::new(SequencePlan::new(
                     plan,
@@ -951,6 +955,17 @@ mod tests {
             Ok(vec![Atom::expr([ERROR_SYMBOL, sym!("myAtom"), BAD_TYPE_SYMBOL])]));
         assert_eq!(interpret(&space, &expr!("id_a" "myAtom")),
             Ok(vec![Atom::expr([ERROR_SYMBOL, sym!("myAtom"), BAD_TYPE_SYMBOL])]));
+    }
+
+    #[test]
+    fn operation_is_expression() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!(":" "foo" ("->" ("->" "A" "A"))));
+        space.add(expr!(":" "a" "A"));
+        space.add(expr!("=" ("foo") "bar"));
+        space.add(expr!("=" ("bar" x) x));
+
+        assert_eq!(interpret(&space, &expr!(("foo") "a")), Ok(vec![expr!("a")]));
     }
 }
 

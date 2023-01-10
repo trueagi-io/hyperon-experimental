@@ -75,7 +75,7 @@ impl Grounded for ImportOp {
                 let space = Shared::new(GroundingSpace::new());
                 let space_atom = Atom::gnd(space.clone());
                 let regex = Regex::new(name)
-                    .map_err(|err| format!("Could convert space name {} into regex: {}", name, err))?;
+                    .map_err(|err| format!("Could not convert space name {} into regex: {}", name, err))?;
                 self.tokenizer.borrow_mut()
                     .register_token(regex, move |_| { space_atom.clone() });
                 Ok(space)

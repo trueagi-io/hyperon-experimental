@@ -55,7 +55,8 @@
 
 ; The same trick works for defining lambda
 ; (basically, `lambda` is curried `let`)
-(: lambda (-> $a $t (-> $a $t)))
+; FIXME: how to make parameterized type here?
+(: lambda (-> Atom $t (-> $a $t)))
 (= ((lambda $var $body) $arg)
    (let $var $arg $body))
 !(assertEqual

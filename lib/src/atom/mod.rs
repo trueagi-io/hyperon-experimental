@@ -442,6 +442,7 @@ pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matc
     }
 }
 
+// TODO: pass args to execute_not_executable(), rename to execute_non_executable()
 /// Returns [ExecError::NoReduce] which means this atom should not be reduced
 /// further. This is a default implementation of `execute()` for the
 /// grounded types wrapped automatically.
