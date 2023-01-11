@@ -75,7 +75,7 @@ impl Grounded for ImportOp {
                 let name = space.name();
                 let space_atom = Atom::gnd(module_space);
                 let regex = Regex::new(name)
-                    .map_err(|err| format!("Could convert space name {} into regex: {}", name, err))?;
+                    .map_err(|err| format!("Could not convert space name {} into regex: {}", name, err))?;
                 self.metta.borrow().tokenizer.borrow_mut()
                     .register_token(regex, move |_| { space_atom.clone() });
             },

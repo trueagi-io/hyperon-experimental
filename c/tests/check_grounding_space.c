@@ -20,12 +20,13 @@ void copy_to_output(char const* str, void* context) {
     output->len += snprintf(output->str + output->len, 1024 - output->len, "%s, ", str);
 }
 
-void query_callback(binding_array_t results, void* data) {
+void query_callback(bindings_t results, void* data) {
     struct output_t *output = data;
     for (int i = 0; i < results.size; ++i) {
-        binding_t const* result = results.items + i;
+        var_atom_t const* result = results.items + i;
         output->len += snprintf(output->str + output->len, 1024 - output->len, "%s: ", results.items->var);
         atom_to_str(result->atom, copy_to_output, output);
+        atom_free(result->atom);
     }
 }
 

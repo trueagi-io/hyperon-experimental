@@ -218,6 +218,12 @@ impl VariableAtom {
     pub fn new<T: Into<String>>(name: T) -> Self {
         Self{ name: name.into(), id: 0 }
     }
+    
+    /// Constructs new variable using `name` and 'id' provided. This method is
+    /// used to convert C API [Bindings] to Rust.
+    pub fn new_id<T: Into<String>>(name: T, id: usize) -> Self {
+        Self{ name: name.into(), id: id }
+    }
 
     // TODO: for now name() is used to expose keys of Bindings via C API as
     // strings (which are variable names). Looks like better approach is using
@@ -436,6 +442,7 @@ pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matc
     }
 }
 
+// TODO: pass args to execute_not_executable(), rename to execute_non_executable()
 /// Returns [ExecError::NoReduce] which means this atom should not be reduced
 /// further. This is a default implementation of `execute()` for the
 /// grounded types wrapped automatically.

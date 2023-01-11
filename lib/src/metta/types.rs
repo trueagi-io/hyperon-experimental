@@ -297,6 +297,8 @@ fn get_matched_types(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(At
     let mut types = get_reducted_types(space, atom);
     types.drain(0..).filter_map(|t| {
         let mut bindings = Bindings::new();
+        // FIXME: write a unit test
+        let t = make_variables_unique(&t);
         if match_reducted_types(&t, typ, &mut bindings) {
             Some((t, bindings))
         } else {

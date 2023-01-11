@@ -1,4 +1,3 @@
-use hyperon::*;
 use hyperon::space::grounding::*;
 
 use crate::atom::*;
@@ -28,8 +27,7 @@ pub unsafe extern "C" fn grounding_space_eq(a: *const grounding_space_t, b: *con
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_add(space: *mut grounding_space_t, atom: *mut atom_t) {
-    let c_atom = Box::from_raw(atom);
-    (*space).borrow_mut().add(c_atom.atom);
+    (*space).borrow_mut().add(ptr_into_atom(atom));
 }
 
 #[no_mangle]
@@ -39,8 +37,7 @@ pub unsafe extern "C" fn grounding_space_remove(space: *mut grounding_space_t, a
 
 #[no_mangle]
 pub unsafe extern "C" fn grounding_space_replace(space: *mut grounding_space_t, from: *const atom_t, to: *mut atom_t) -> bool {
-    let c_to = Box::from_raw(to);
-    (*space).borrow_mut().replace(&(*from).atom, c_to.atom)
+    (*space).borrow_mut().replace(&(*from).atom, ptr_into_atom(to))
 }
 
 #[no_mangle]
@@ -52,33 +49,25 @@ pub unsafe extern "C" fn grounding_space_len(space: *const grounding_space_t) ->
 pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *mut atom_t {
     // TODO: highly ineffective implementation, should be reworked after replacing
     // the GroundingSpace struct by Space trait in code.
-    atom_to_ptr((*space).borrow().iter().skip(idx).next()
+    atom_into_ptr((*space).borrow().iter().skip(idx).next()
         .expect(format!("Index is out of bounds: {}", idx).as_str()).clone())
 }
 
-#[repr(C)]
-pub struct binding_t {
-    var: *const c_char,
-    atom: *const atom_t,
-}
-
-pub type binding_array_t = array_t<binding_t>;
-
 #[no_mangle]
 pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
-        pattern: *const atom_t, callback: lambda_t<binding_array_t>, context: *mut c_void) {
+        pattern: *const atom_t, callback: lambda_t<bindings_t>, context: *mut c_void) {
     let results = unsafe { (*space).borrow().query(&((*pattern).atom)) };
-    for result in results {
+    for result in results.into_iter() {
         let mut vars : Vec<CString> = Vec::new();
-        let vec = result.iter().map(|(k, v)| {
+        let vec: Vec<var_atom_t> = result.into_iter().map(|(k, v)| {
                 // put C string into collection which is external to closure
                 // to prevent its deallocation before callback is called
                 vars.push(string_as_cstr(k.name()));
-                binding_t{
+                var_atom_t{
                     var: vars.last().unwrap().as_ptr(),
-                    atom: (v as *const Atom).cast::<atom_t>()
+                    atom: atom_into_ptr(v),
                 }
-            }).collect::<Vec<binding_t>>();
+            }).collect();
         callback((&vec).into(), context);
     }
 }
