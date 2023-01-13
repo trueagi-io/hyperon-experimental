@@ -15,6 +15,7 @@ class MeTTa:
             tokenizer = Tokenizer()
             self.cmetta = hp.metta_new(space.cspace, tokenizer.ctokenizer, cwd)
             self.load_py_module("hyperon.stdlib")
+            hp.metta_load_module(self.cmetta, "stdlib")
             self.register_atom('extend-py!',
                 OperationAtom('extend-py!',
                               lambda name: self.load_py_module(name) or [],

@@ -216,4 +216,16 @@ mod tests {
             vec![bind!{ x: Atom::sym("match") }]);
         assert_eq!(shared.execute(&mut vec![Atom::sym("arg")]), Ok(vec![Atom::sym("executed"), Atom::sym("arg")]));
     }
+
+    #[test]
+    fn shared_cloned() {
+        let value = 0;
+        let shared = Shared::new(value);
+        let cloned = shared.cloned();
+
+        **cloned.borrow_mut() = 1;
+
+        assert_eq!(**shared.borrow(), 0);
+        assert_eq!(**cloned.borrow(), 1);
+    }
 }
