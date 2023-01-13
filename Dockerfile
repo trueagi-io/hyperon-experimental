@@ -3,10 +3,12 @@ FROM ubuntu:22.04
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
-    apt-get install -y git python3 python3-pip curl gcc cmake && \
+    apt-get install -y sudo git python3 python3-pip curl gcc cmake && \
     rm -rf /var/lib/apt/lists/*
 
+RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
 RUN useradd -m -g users user
+RUN usermod -aG sudo user
 USER user
 ENV HOME=/home/user
 WORKDIR ${HOME}
