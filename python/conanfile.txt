@@ -1,5 +1,5 @@
 [requires]
-pybind11/2.7.1
+pybind11/2.10.1
 
 [generators]
 cmake_paths
