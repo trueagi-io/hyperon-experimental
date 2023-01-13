@@ -40,10 +40,6 @@ class MinecraftTest(unittest.TestCase):
         metta.register_token("mine", lambda _: newMineOp(inventory))
 
         metta.run('''
-            (: if (-> Bool Atom Atom Atom))
-            (= (if True $then $else) $then)
-            (= (if False $then $else) $else)
-
             (= (wood) (spruce-wood))
             (= (spruce-wood) (mine spruce-tree hand))
 

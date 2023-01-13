@@ -2,7 +2,7 @@ use crate::*;
 use crate::matcher::MatchResultIter;
 use crate::metta::*;
 use crate::metta::space::grounding::GroundingSpace;
-use crate::metta::text::{Tokenizer, SExprParser};
+use crate::metta::text::Tokenizer;
 use crate::metta::interpreter::interpret;
 use crate::metta::runner::Metta;
 use crate::metta::types::get_atom_types;
@@ -33,13 +33,12 @@ fn interpret_no_error(space: Shared<GroundingSpace>, expr: &Atom) -> Result<Vec<
 #[derive(Clone, PartialEq, Debug)]
 pub struct ImportOp {
     cwd: PathBuf,
-    space: Shared<GroundingSpace>,
-    tokenizer: Shared<Tokenizer>,
+    metta: Shared<Metta>,
 }
 
 impl ImportOp {
-    pub fn new(cwd: PathBuf, space: Shared<GroundingSpace>, tokenizer: Shared<Tokenizer>) -> Self {
-        Self{ cwd, space, tokenizer }
+    pub fn new(metta: Shared<Metta>, cwd: PathBuf) -> Self {
+        Self{ metta, cwd }
     }
 }
 
@@ -67,33 +66,38 @@ impl Grounded for ImportOp {
         } else {
             return Err("import! expects a file path as a second argument".into())
         }
+        let module_space = self.metta.borrow().load_module_space(path)?;
 
-        let tokenizer_before_adding_imported_space = self.tokenizer.cloned();
-        let space: Result<Shared<GroundingSpace>, String> = match space {
+        match space {
+            // If the module is to be associated with a new space,
+            // we register it in the tokenizer - works as "import as"
             Atom::Symbol(space) => {
                 let name = space.name();
-                let space = Shared::new(GroundingSpace::new());
-                let space_atom = Atom::gnd(space.clone());
+                let space_atom = Atom::gnd(module_space);
                 let regex = Regex::new(name)
                     .map_err(|err| format!("Could not convert space name {} into regex: {}", name, err))?;
-                self.tokenizer.borrow_mut()
+                self.metta.borrow().tokenizer.borrow_mut()
                     .register_token(regex, move |_| { space_atom.clone() });
-                Ok(space)
             },
+            // If the reference space exists, the module space atom is inserted into it
+            // (but the token is not added) - works as "import to"
             Atom::Grounded(_) => {
                 let space = Atom::as_gnd::<Shared<GroundingSpace>>(space)
                     .ok_or("import! expects a space as a first argument")?;
-                Ok(space.clone())
+                // Moving space atoms from children to parent
+                let metta = self.metta.borrow();
+                let modules = metta.modules.borrow();
+                for (_path, mspace) in modules.iter() {
+                    let aspace = Atom::gnd(mspace.clone());
+                    if module_space.borrow_mut().remove(&aspace) {
+                        self.metta.borrow().space().borrow_mut().remove(&aspace);
+                        self.metta.borrow().space().borrow_mut().add(aspace);
+                    }
+                }
+                space.borrow_mut().add(Atom::gnd(module_space));
             },
-            _ => Err("import! expects space as a first argument".into()),
+            _ => return Err("import! expects space as a first argument".into()),
         };
-        let space = space?;
-        let mut next_cwd = path.clone();
-        next_cwd.pop();
-        let metta = Metta::from_space_cwd(space, tokenizer_before_adding_imported_space, next_cwd);
-        let program = std::fs::read_to_string(&path)
-            .map_err(|err| format!("Could not read file {}: {}", path.display(), err))?;
-        let _result = metta.run(&mut SExprParser::new(program.as_str()))?;
         Ok(vec![])
     }
 
@@ -802,21 +806,16 @@ impl Grounded for LetVarOp {
     }
 }
 
-pub fn register_tokens(metta: &Metta, cwd: PathBuf) {
-    fn regex(regex: &str) -> Regex {
-        Regex::new(regex).unwrap()
-    }
+fn regex(regex: &str) -> Regex {
+    Regex::new(regex).unwrap()
+}
 
-    let space = &metta.space;
+pub fn register_common_tokens(metta: &Metta) {
     let tokenizer = &metta.tokenizer;
-
-    let mut stdlib_tokens = Tokenizer::new();
-    let tref = &mut stdlib_tokens;
+    let mut tref = tokenizer.borrow_mut();
 
     let match_op = Atom::gnd(MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
-    let import_op = Atom::gnd(ImportOp::new(cwd.clone(), space.clone(), tokenizer.clone()));
-    tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
     let bind_op = Atom::gnd(BindOp::new(tokenizer.clone()));
     tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
     let new_space_op = Atom::gnd(NewSpaceOp{});
@@ -833,20 +832,8 @@ pub fn register_tokens(metta: &Metta, cwd: PathBuf) {
     tref.register_token(regex(r"cdr-atom"), move |_| { cdr_atom_op.clone() });
     let cons_atom_op = Atom::gnd(ConsAtomOp{});
     tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
-    let case_op = Atom::gnd(CaseOp::new(space.clone()));
-    tref.register_token(regex(r"case"), move |_| { case_op.clone() });
-    let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
-    tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
-    let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
-    tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
-    let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
-    tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
     let superpose_op = Atom::gnd(SuperposeOp{});
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
-    let pragma_op = Atom::gnd(PragmaOp::new(metta.settings.clone()));
-    tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
-    let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
-    tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
     let println_op = Atom::gnd(PrintlnOp{});
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
     let nop_op = Atom::gnd(NopOp{});
@@ -855,6 +842,48 @@ pub fn register_tokens(metta: &Metta, cwd: PathBuf) {
     tref.register_token(regex(r"let"), move |_| { let_op.clone() });
     let let_var_op = Atom::gnd(LetVarOp{});
     tref.register_token(regex(r"let\*"), move |_| { let_var_op.clone() });
+}
+
+pub fn register_runner_tokens(metta: &Metta, cwd: PathBuf) {
+    let space = &metta.space;
+    let tokenizer = &metta.tokenizer;
+
+    let mut tref = tokenizer.borrow_mut();
+
+    let case_op = Atom::gnd(CaseOp::new(space.clone()));
+    tref.register_token(regex(r"case"), move |_| { case_op.clone() });
+    let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
+    tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
+    let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
+    tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
+    let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
+    tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
+    let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
+    tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
+    // TODO: here clone of the metta is moved into separate location in memory.
+    // It means that shared reference inside ImportOp points into a different
+    // instance of the Metta struct, not one which is referenced by metta.
+    // This can lead to inconsistence when Metta struct is changed and some
+    // non-shared field is added to it.
+    let import_op = Atom::gnd(ImportOp::new(Shared::new(metta.clone()), cwd.clone()));
+    tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+    let pragma_op = Atom::gnd(PragmaOp::new(metta.settings.clone()));
+    tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
+
+    // &self should be updated
+    // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
+    // TODO: adding &self introduces self referencing and thus prevents space
+    // from being freed. There are two options to eliminate this. (1) use weak
+    // pointer and somehow use the same type to represent weak and strong
+    // pointers to the atomspace. (2) resolve &self in GroundingSpace::query
+    // method without adding it into container.
+    let self_atom = Atom::gnd(metta.space.clone());
+    tref.register_token(regex(r"&self"), move |_| { self_atom.clone() });
+}
+
+pub fn register_rust_tokens(metta: &Metta) {
+    let mut rust_tokens = Tokenizer::new();
+    let tref = &mut rust_tokens;
 
     tref.register_token(regex(r"\d+"),
         |token| { Atom::gnd(Number::from_int_str(token)) });
@@ -873,12 +902,17 @@ pub fn register_tokens(metta: &Metta, cwd: PathBuf) {
     let mod_op = Atom::gnd(ModOp{});
     tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
 
-    metta.tokenizer.borrow_mut().move_front(&mut stdlib_tokens);
+    metta.tokenizer.borrow_mut().move_front(&mut rust_tokens);
+}
 
-    // &self should be updated
-    // TODO: adding &self might be done not by stdlib, but by MeTTa itself
-    let space_val = Atom::gnd(metta.space.clone());
-    metta.tokenizer.borrow_mut().register_token(regex(r"&self"), move |_| { space_val.clone() });
+pub fn metta_code() -> &'static str {
+    // `$then`, `$else` should be of `Atom` type to avoid evaluation
+    // and infinite cycle in inference
+    "
+    (: if (-> Bool Atom Atom $t))
+    (= (if True $then $else) $then)
+    (= (if False $then $else) $else)
+    "
 }
 
 #[cfg(test)]

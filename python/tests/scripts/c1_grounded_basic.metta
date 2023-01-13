@@ -102,12 +102,6 @@
 
 ; Grounded symbols work with non-determinism based "reasoning"
 
-; `$then`, `$else` should be of `Atom` type to avoid evaluation
-; and infinite cycle in inference
-(: if (-> Bool Atom Atom $t))
-(= (if True $then $else) $then)
-(= (if False $then $else) $else)
-
 ; basic recursion
 (= (fact $n) (if (== $n 0) 1 (* (fact (- $n 1)) $n)))
 !(assertEqual (fact 5) 120)
