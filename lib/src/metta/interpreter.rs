@@ -238,7 +238,7 @@ struct InterpreterContextRef<'a, T: GroundingSpacePtr + 'a>(Rc<InterpreterContex
 impl<'a, T: GroundingSpacePtr + 'a> InterpreterContextRef<'a, T> {
     fn new(space: T) -> Self {
         let cache = Rc::new(RefCell::new(InterpreterCache::new()));
-        space.borrow().register_observer(Rc::clone(&cache));
+        space.borrow().register_observer(cache.clone());
         Self(Rc::new(InterpreterContext{ space, cache, phantom: PhantomData }))
     }
 }
