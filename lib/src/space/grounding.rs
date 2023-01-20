@@ -2,6 +2,7 @@
 //! an underlying storage.
 
 use crate::*;
+use super::*;
 use crate::atom::*;
 use crate::atom::matcher::{Bindings, Unifications, match_atoms};
 use crate::atom::subexpr::split_expr;
@@ -248,54 +249,6 @@ impl<T: Debug + PartialEq + Clone> IndexTree<T> {
 
 /// Symbol to concatenate queries to space.
 pub const COMMA_SYMBOL : Atom = sym!(",");
-
-/// Contains information about space modification event.
-#[derive(Clone, Debug, PartialEq)]
-pub enum SpaceEvent {
-    /// Atom is added into a space.
-    Add(Atom),
-    /// Atom is removed from space.
-    Remove(Atom),
-    /// First atom is replaced by the second one.
-    Replace(Atom, Atom),
-}
-
-/// Space modification event observer trait.
-///
-/// # Examples
-///
-/// ```
-/// use hyperon::sym;
-/// use hyperon::space::grounding::*;
-/// use std::rc::Rc;
-/// use std::cell::RefCell;
-///
-/// struct MyObserver {
-///     events: Vec<SpaceEvent>
-/// }
-///
-/// impl SpaceObserver for MyObserver {
-///     fn notify(&mut self, event: &SpaceEvent) {
-///         self.events.push(event.clone());
-///     }
-/// }
-///
-/// let mut space = GroundingSpace::new();
-/// let observer = Rc::new(RefCell::new(MyObserver{ events: Vec::new() }));
-///
-/// space.register_observer(observer.clone());
-/// space.add(sym!("A"));
-/// space.replace(&sym!("A"), sym!("B"));
-/// space.remove(&sym!("B"));
-///
-/// assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("A")),
-///     SpaceEvent::Replace(sym!("A"), sym!("B")),
-///     SpaceEvent::Remove(sym!("B"))]);
-/// ```
-pub trait SpaceObserver {
-    /// Notifies about space modification.
-    fn notify(&mut self, event: &SpaceEvent);
-}
 
 struct GroundingSpaceIter<'a> {
     space: &'a GroundingSpace,
@@ -613,8 +566,38 @@ impl GroundingSpace {
     }
 
     /// Returns the iterator over content of the space.
-    pub fn iter(&self) -> impl Iterator<Item=&Atom> {
-        GroundingSpaceIter::new(self)
+    pub fn iter(&self) -> SpaceIter {
+        SpaceIter::new(GroundingSpaceIter::new(self))
+    }
+}
+
+impl Space for GroundingSpace {
+    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
+        GroundingSpace::register_observer(self, observer)
+    }
+
+    fn add(&mut self, atom: Atom) {
+        GroundingSpace::add(self, atom)
+    }
+
+    fn remove(&mut self, atom: &Atom) -> bool {
+        GroundingSpace::remove(self, atom)
+    }
+
+    fn replace(&mut self, from: &Atom, to: Atom) -> bool {
+        GroundingSpace::replace(self, from, to)
+    }
+
+    fn query(&self, query: &Atom) -> Vec<Bindings> {
+        GroundingSpace::query(self, query)
+    }
+
+    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
+        GroundingSpace::subst(self, pattern, template)
+    }
+
+    fn iter(&self) -> SpaceIter {
+        GroundingSpace::iter(self)
     }
 }
 
