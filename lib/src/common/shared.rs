@@ -6,11 +6,11 @@ use std::fmt::{Debug, Display};
 use crate::atom::*;
 use crate::matcher::MatchResultIter;
 
-pub trait LockBorrow<T> {
+pub trait LockBorrow<T: ?Sized> {
     fn borrow(&self) -> Box<dyn Deref<Target=T> + '_>;
 }
 
-pub trait LockBorrowMut<T> : LockBorrow<T> {
+pub trait LockBorrowMut<T: ?Sized> {
     fn borrow_mut(&mut self) -> Box<dyn DerefMut<Target=T> + '_>;
 }
 

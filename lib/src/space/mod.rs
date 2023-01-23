@@ -80,10 +80,71 @@ impl<'a> Iterator for SpaceIter<'a> {
 /// Space trait.
 pub trait Space {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>);
-    fn add(&mut self, atom: Atom);
-    fn remove(&mut self, atom: &Atom) -> bool;
-    fn replace(&mut self, from: &Atom, to: Atom) -> bool;
     fn query(&self, query: &Atom) -> Vec<Bindings>;
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom>;
     fn iter(&self) -> SpaceIter;
+}
+
+/// Space trait.
+pub trait SpaceMut {
+    fn add(&mut self, atom: Atom);
+    fn remove(&mut self, atom: &Atom) -> bool;
+    fn replace(&mut self, from: &Atom, to: Atom) -> bool;
+}
+
+use crate::common::shared::Shared;
+
+impl<T: Space> Space for Shared<T> {
+    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
+        self.borrow().register_observer(observer)
+    }
+    fn query(&self, query: &Atom) -> Vec<Bindings> {
+        self.borrow().query(query)
+    }
+    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
+        self.borrow().subst(pattern, template)
+    }
+    fn iter(&self) -> SpaceIter {
+        todo!("Not implemented")
+    }
+}
+
+impl<T: SpaceMut> SpaceMut for Shared<T> {
+    fn add(&mut self, atom: Atom) {
+        self.borrow_mut().add(atom)
+    }
+    fn remove(&mut self, atom: &Atom) -> bool {
+        self.borrow_mut().remove(atom)
+    }
+    fn replace(&mut self, from: &Atom, to: Atom) -> bool {
+        self.borrow_mut().replace(from, to)
+    }
+}
+
+
+impl<T: Space> Space for &T {
+    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
+        T::register_observer(*self, observer)
+    }
+    fn query(&self, query: &Atom) -> Vec<Bindings> {
+        T::query(*self, query)
+    }
+    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
+        T::subst(*self, pattern, template)
+    }
+    fn iter(&self) -> SpaceIter {
+        todo!("Not implemented")
+    }
+}
+
+impl<T: SpaceMut> SpaceMut for &mut T {
+    fn add(&mut self, atom: Atom) {
+        (*self).add(atom)
+    }
+    fn remove(&mut self, atom: &Atom) -> bool {
+        (*self).remove(atom)
+    }
+    fn replace(&mut self, from: &Atom, to: Atom) -> bool {
+        (*self).replace(from, to)
+    }
 }

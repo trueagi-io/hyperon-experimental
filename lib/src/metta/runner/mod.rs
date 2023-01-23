@@ -174,7 +174,7 @@ impl Metta {
 
     fn type_check(&self, atom: Atom) -> Result<Atom, Atom> {
         let is_type_check_enabled = self.get_setting("type-check").map_or(false, |val| val == "auto");
-        if  is_type_check_enabled && !validate_atom(&self.space.borrow(), &atom) {
+        if  is_type_check_enabled && !validate_atom(self.space.borrow().deref(), &atom) {
             Err(Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]))
         } else {
             Ok(atom)

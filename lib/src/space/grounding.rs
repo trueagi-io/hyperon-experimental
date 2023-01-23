@@ -575,29 +575,26 @@ impl Space for GroundingSpace {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
         GroundingSpace::register_observer(self, observer)
     }
-
-    fn add(&mut self, atom: Atom) {
-        GroundingSpace::add(self, atom)
-    }
-
-    fn remove(&mut self, atom: &Atom) -> bool {
-        GroundingSpace::remove(self, atom)
-    }
-
-    fn replace(&mut self, from: &Atom, to: Atom) -> bool {
-        GroundingSpace::replace(self, from, to)
-    }
-
     fn query(&self, query: &Atom) -> Vec<Bindings> {
         GroundingSpace::query(self, query)
     }
-
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         GroundingSpace::subst(self, pattern, template)
     }
-
     fn iter(&self) -> SpaceIter {
         GroundingSpace::iter(self)
+    }
+}
+
+impl SpaceMut for GroundingSpace {
+    fn add(&mut self, atom: Atom) {
+        GroundingSpace::add(self, atom)
+    }
+    fn remove(&mut self, atom: &Atom) -> bool {
+        GroundingSpace::remove(self, atom)
+    }
+    fn replace(&mut self, from: &Atom, to: Atom) -> bool {
+        GroundingSpace::replace(self, from, to)
     }
 }
 

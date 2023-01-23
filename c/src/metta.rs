@@ -91,12 +91,12 @@ pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
 
 #[no_mangle]
 pub unsafe extern "C" fn check_type(space: *const grounding_space_t, atom: *const atom_t, typ: *const atom_t) -> bool {
-    hyperon::metta::types::check_type(&(*space).borrow(), &(*atom).atom, &(*typ).atom)
+    hyperon::metta::types::check_type((*space).borrow().deref(), &(*atom).atom, &(*typ).atom)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn validate_atom(space: *const grounding_space_t, atom: *const atom_t) -> bool {
-    hyperon::metta::types::validate_atom(&(*space).borrow(), &(*atom).atom)
+    hyperon::metta::types::validate_atom((*space).borrow().deref(), &(*atom).atom)
 }
 
 #[no_mangle]
@@ -104,7 +104,7 @@ pub extern "C" fn get_atom_types(space: *const grounding_space_t, atom: *const a
         callback: c_atoms_callback_t, context: *mut c_void) {
     let space = unsafe{ &(*space).borrow() };
     let atom = unsafe{ &(*atom).atom };
-    let types = hyperon::metta::types::get_atom_types(space, atom);
+    let types = hyperon::metta::types::get_atom_types(space.deref(), atom);
     return_atoms(&types, callback, context);
 }
 
