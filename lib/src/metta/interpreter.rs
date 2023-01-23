@@ -134,7 +134,7 @@ type NoInputPlan<'a> = Box<dyn Plan<'a, (), Results, InterpreterError> + 'a>;
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
-pub fn interpret_init<'a, T: Clone + Space + 'a>(space: T, expr: &Atom) -> StepResult<'a, Results, InterpreterError> {
+pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> StepResult<'a, Results, InterpreterError> {
     let context = InterpreterContextRef::new(space);
     interpret_as_type_plan(context,
         InterpretedAtom(expr.clone(), Bindings::new()),
@@ -162,7 +162,7 @@ pub fn interpret_step<'a>(step: StepResult<'a, Results, InterpreterError>) -> St
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
-pub fn interpret<T: Clone + Space>(space: T, expr: &Atom) -> Result<Vec<Atom>, String> {
+pub fn interpret<T: Space>(space: T, expr: &Atom) -> Result<Vec<Atom>, String> {
     let mut step = interpret_init(space, expr);
     while step.has_next() {
         step = interpret_step(step);
@@ -225,8 +225,8 @@ impl SpaceObserver for InterpreterCache {
 
 use std::marker::PhantomData;
 
-trait SpacePtr<'a> : Clone + Space + 'a {}
-impl<'a, T: Clone + Space + 'a> SpacePtr<'a> for T {}
+trait SpacePtr<'a> : Space + 'a {}
+impl<'a, T: Space + 'a> SpacePtr<'a> for T {}
 
 struct InterpreterContext<'a, T: SpacePtr<'a>> {
     space: T,
@@ -234,7 +234,6 @@ struct InterpreterContext<'a, T: SpacePtr<'a>> {
     phantom: PhantomData<&'a GroundingSpace>,
 }
 
-#[derive(Clone)]
 struct InterpreterContextRef<'a, T: SpacePtr<'a>>(Rc<InterpreterContext<'a, T>>);
 
 impl<'a, T: SpacePtr<'a>> InterpreterContextRef<'a, T> {
@@ -250,6 +249,12 @@ impl<'a, T: SpacePtr<'a>> Deref for InterpreterContextRef<'a, T> {
 
     fn deref(&self) -> &Self::Target {
         &self.0
+    }
+}
+
+impl<'a, T: SpacePtr<'a>> Clone for InterpreterContextRef<'a, T> {
+    fn clone(&self) -> Self {
+        Self(Rc::clone(&self.0))
     }
 }
 
