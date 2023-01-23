@@ -77,18 +77,111 @@ impl<'a> Iterator for SpaceIter<'a> {
     }
 }
 
-/// Space trait.
+/// Read-only space trait.
 pub trait Space {
+    /// Registers space modifications `observer`. Observer is automatically
+    /// deregistered when `Rc` counter reaches zero. See [SpaceObserver] for
+    /// examples.
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>);
+
+    /// Executes `query` on the space and returns variable bindings found.
+    /// Query may include sub-queries glued by [COMMA_SYMBOL] symbol. Number
+    /// of results is equal to the length of the `Vec<Bindings>` returned.
+    /// Each [Bindings] instance represents single result.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::{expr, bind, sym};
+    /// use hyperon::space::grounding::GroundingSpace;
+    ///
+    /// let space = GroundingSpace::from_vec(vec![expr!("A" "B"), expr!("B" "C")]);
+    /// let query = expr!("," ("A" x) (x "C"));
+    ///
+    /// let result = space.query(&query);
+    ///
+    /// assert_eq!(result, vec![bind!{x: sym!("B")}]);
+    /// ```
     fn query(&self, query: &Atom) -> Vec<Bindings>;
+
+    /// Executes `pattern` query on the space and for each result substitutes
+    /// variables in `template` by the values from `pattern`. Returns results
+    /// of the substitution.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::{expr, assert_eq_no_order};
+    /// use hyperon::space::grounding::GroundingSpace;
+    ///
+    /// let space = GroundingSpace::from_vec(vec![expr!("A" "B"), expr!("A" "C")]);
+    ///
+    /// let result = space.subst(&expr!("A" x), &expr!("D" x));
+    ///
+    /// assert_eq_no_order!(result, vec![expr!("D" "B"), expr!("D" "C")]);
+    /// ```
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom>;
+
+    /// Returns the iterator over content of the space.
     fn iter(&self) -> SpaceIter;
 }
 
-/// Space trait.
+/// Mutable space trait.
 pub trait SpaceMut {
+    /// Adds `atom` into space.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::sym;
+    /// use hyperon::space::grounding::GroundingSpace;
+    /// use hyperon::atom::matcher::Bindings;
+    ///
+    /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
+    /// 
+    /// space.add(sym!("B"));
+    ///
+    /// assert_eq!(space.query(&sym!("A")), vec![Bindings::new()]);
+    /// assert_eq!(space.query(&sym!("B")), vec![Bindings::new()]);
+    /// assert_eq!(space.query(&sym!("C")), vec![]);
+    /// ```
     fn add(&mut self, atom: Atom);
+
+    /// Removes `atom` from space. Returns true if atom was found and removed,
+    /// and false otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::sym;
+    /// use hyperon::space::grounding::GroundingSpace;
+    ///
+    /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
+    /// 
+    /// space.remove(&sym!("A"));
+    ///
+    /// assert_eq!(space.query(&sym!("A")), vec![]);
+    /// ```
     fn remove(&mut self, atom: &Atom) -> bool;
+
+    /// Replaces `from` atom to `to` atom inside space. Doesn't add `to` when
+    /// `from` is not found. Returns true if atom was found and replaced, and
+    /// false otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::sym;
+    /// use hyperon::space::grounding::GroundingSpace;
+    /// use hyperon::atom::matcher::Bindings;
+    ///
+    /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
+    /// 
+    /// space.replace(&sym!("A"), sym!("B"));
+    ///
+    /// assert_eq!(space.query(&sym!("A")), vec![]);
+    /// assert_eq!(space.query(&sym!("B")), vec![Bindings::new()]);
+    /// ```
     fn replace(&mut self, from: &Atom, to: Atom) -> bool;
 }
 
