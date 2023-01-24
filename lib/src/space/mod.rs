@@ -121,9 +121,6 @@ pub trait Space {
     /// assert_eq_no_order!(result, vec![expr!("D" "B"), expr!("D" "C")]);
     /// ```
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom>;
-
-    /// Returns the iterator over content of the space.
-    fn iter(&self) -> SpaceIter;
 }
 
 /// Mutable space trait.
@@ -197,9 +194,6 @@ impl<T: Space> Space for Shared<T> {
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         self.borrow().subst(pattern, template)
     }
-    fn iter(&self) -> SpaceIter {
-        todo!("Not implemented")
-    }
 }
 
 impl<T: SpaceMut> SpaceMut for Shared<T> {
@@ -224,9 +218,6 @@ impl<T: Space> Space for &T {
     }
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         T::subst(*self, pattern, template)
-    }
-    fn iter(&self) -> SpaceIter {
-        todo!("Not implemented")
     }
 }
 

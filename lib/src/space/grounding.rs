@@ -581,9 +581,6 @@ impl Space for GroundingSpace {
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         GroundingSpace::subst(self, pattern, template)
     }
-    fn iter(&self) -> SpaceIter {
-        GroundingSpace::iter(self)
-    }
 }
 
 impl SpaceMut for GroundingSpace {
