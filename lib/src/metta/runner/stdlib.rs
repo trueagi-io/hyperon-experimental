@@ -671,7 +671,7 @@ impl Grounded for GetTypeOp {
         let arg_error = || ExecError::from("get-type expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
 
-        Ok(get_atom_types(&self.space.borrow(), atom))
+        Ok(get_atom_types(self.space.borrow().deref(), atom))
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {

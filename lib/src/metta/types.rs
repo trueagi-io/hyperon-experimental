@@ -20,7 +20,7 @@
 
 use super::*;
 use crate::atom::matcher::{Bindings, apply_bindings_to_atom};
-use crate::space::grounding::GroundingSpace;
+use crate::space::Space;
 
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
     Atom::expr(vec![HAS_TYPE_SYMBOL, atom.clone(), typ.clone()])
@@ -30,18 +30,18 @@ fn isa_query(sub_type: &Atom, super_type: &Atom) -> Atom {
     Atom::expr(vec![SUB_TYPE_SYMBOL, sub_type.clone(), super_type.clone()])
 }
 
-fn query_has_type(space: &GroundingSpace, sub_type: &Atom, super_type: &Atom) -> Vec<Bindings> {
+fn query_has_type(space: &dyn Space, sub_type: &Atom, super_type: &Atom) -> Vec<Bindings> {
     space.query(&typeof_query(sub_type, super_type))
 }
 
-fn query_super_types(space: &GroundingSpace, sub_type: &Atom) -> Vec<Atom> {
+fn query_super_types(space: &dyn Space, sub_type: &Atom) -> Vec<Atom> {
     // TODO: query should check that sub type is a type and not another typed symbol
     let var_x = VariableAtom::new("%X%");
     let mut super_types = space.query(&isa_query(&sub_type, &Atom::Variable(var_x.clone())));
     super_types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect()
 }
 
-fn add_super_types(space: &GroundingSpace, sub_types: &mut Vec<Atom>, from: usize) {
+fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
     let mut types = Vec::new();
     sub_types.iter().skip(from).for_each(|typ| {
         for typ in query_super_types(space, typ) {
@@ -91,7 +91,7 @@ pub fn is_func(typ: &Atom) -> bool {
     }
 }
 
-fn query_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
+fn query_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     let var_x = VariableAtom::new("%X%");
     let mut types = query_has_type(space, atom, &Atom::Variable(var_x.clone()));
     let mut types = types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect();
@@ -149,13 +149,13 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 ///
 /// assert_eq_no_order!(types, vec!(expr!("A"), expr!("B")));
 /// ```
-pub fn get_atom_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
+pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     let types = get_reducted_types(space, atom);
     log::debug!("get_atom_types: atom: {}, types: {:?}", atom, types);
     types
 }
 
-fn get_reducted_types(space: &GroundingSpace, atom: &Atom) -> Vec<Atom> {
+fn get_reducted_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     log::trace!("get_reducted_types: atom: {}", atom);
     let types = match atom {
         Atom::Variable(_) => vec![ATOM_TYPE_UNDEFINED],
@@ -293,7 +293,7 @@ pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings)
     result
 }
 
-fn get_matched_types(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
+fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
     let mut types = get_reducted_types(space, atom);
     types.drain(0..).filter_map(|t| {
         let mut bindings = Bindings::new();
@@ -322,7 +322,7 @@ fn get_matched_types(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(At
 ///
 /// assert!(check_type(&space, &expr!("a"), &expr!("B")));
 /// ```
-pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> bool {
+pub fn check_type(space: &dyn Space, atom: &Atom, typ: &Atom) -> bool {
     check_meta_type(atom, typ) || !get_matched_types(space, atom, typ).is_empty()
 }
 
@@ -342,7 +342,7 @@ pub fn check_type(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> bool {
 ///
 /// assert_eq!(types, vec![(expr!("List" "A"), bind!{ t: expr!("A") })]);
 /// ```
-pub fn get_type_bindings(space: &GroundingSpace, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
+pub fn get_type_bindings(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
     let mut result = Vec::new();
     if check_meta_type(atom, typ) {
         result.push((typ.clone(), Bindings::new()));
@@ -382,7 +382,7 @@ fn check_meta_type(atom: &Atom, typ: &Atom) -> bool {
 /// assert!(validate_atom(&space, &expr!("foo" "a")));
 /// assert!(!validate_atom(&space, &expr!("foo" "b")));
 /// ```
-pub fn validate_atom(space: &GroundingSpace, atom: &Atom) -> bool {
+pub fn validate_atom(space: &dyn Space, atom: &Atom) -> bool {
     !get_reducted_types(space, atom).is_empty()
 }
 
