@@ -4,7 +4,7 @@
 use crate::*;
 use super::*;
 use crate::atom::*;
-use crate::atom::matcher::{Bindings, Unifications, match_atoms};
+use crate::atom::matcher::{Bindings, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::matcher::MatchResultIter;
 
@@ -533,36 +533,6 @@ impl GroundingSpace {
         self.query(pattern).drain(0..)
             .map(| bindings | matcher::apply_bindings_to_atom(template, &bindings))
             .collect()
-    }
-
-    // TODO: for now we have separate methods query() and unify() but
-    // they probably can be merged. One way of doing it is designating
-    // in the query which part of query should be unified and which matched.
-    // For example for the typical query in a form (= (+ a b) $X) the
-    // (= (...) $X) level should not be unified otherwise we will recursively
-    // infer that we need calculating (+ a b) again which is equal to original
-    // query. Another option is designating this in the data itself.
-    // After combining match and unification we could leave only single
-    // universal method.
-    #[doc(hidden)]
-    pub fn unify(&self, pattern: &Atom) -> Vec<(Bindings, Unifications)> {
-        log::debug!("unify: pattern: {}", pattern);
-        let mut result = Vec::new();
-        for i in self.index.get(pattern) {
-            let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", pattern, i).as_str());
-            match matcher::unify_atoms(next, pattern) {
-                Some(res) => {
-                    let bindings = matcher::apply_bindings_to_bindings(&res.data_bindings, &res.pattern_bindings);
-                    if let Ok(bindings) = bindings {
-                        // TODO: implement Display for bindings
-                        log::debug!("unify: push result: {}, bindings: {:?}", next, bindings);
-                        result.push((bindings, res.unifications));
-                    }
-                },
-                None => continue,
-            }
-        }
-        result
     }
 
     /// Returns the iterator over content of the space.
