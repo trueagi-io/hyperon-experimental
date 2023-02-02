@@ -15,7 +15,7 @@
 ; (no need to turn 1 into np.array)
 (= (np-add-1 $x) (np.add $x 1))
 
-!(np-add-1 (np-add-1 &x)) ; [3 4 5]
+!(np-add-1 (np-add-1 &x)) ; [3 4 5] ; not a pattern
 
 ; could work with untyped np objects,
 ; although with some problems (the resulting type would be Number),
@@ -28,3 +28,5 @@
 
 ! (np.add &m (np.vector 1 2)) ; ((7 3) (8 4) (9 5))
 ! (np.matmul &mt &m) ; ((6 1) (7 2))
+
+! (np.add &m $x) ; will be turned into pattern

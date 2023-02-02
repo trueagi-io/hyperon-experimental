@@ -10,6 +10,33 @@ class NumpyValue(ValueObject):
                (self.content.shape == other.content.shape) and\
                (self.content == other.content).all()
 
+
+class PatternValue(ValueObject):
+
+    pass
+
+
+class PatternOperation(OperationObject):
+
+    def __init__(self, name, op, unwrap=False, rec=False):
+        super().__init__(name, op, unwrap)
+        self.rec = rec
+
+    def execute(self, *args, res_typ=AtomType.UNDEFINED):
+        if self.rec:
+            args = args[0].get_children()
+            args = [self.execute(arg)[0]\
+                if isinstance(arg, ExpressionAtom) else arg for arg in args]
+        # If there is a variable or PatternValue in arguments, create PatternValue
+        # instead of executing the operation
+        for arg in args:
+            if isinstance(arg, GroundedAtom) and\
+               isinstance(arg.get_object(), PatternValue) or\
+               isinstance(arg, VariableAtom):
+                return [G(PatternValue([self, args]))]
+        return super().execute(*args, res_typ=res_typ)
+
+
 def _np_atom_type(npobj):
     return E(S('NPArray'), E(*[ValueAtom(s, 'Number') for s in npobj.shape]))
 
@@ -24,39 +51,15 @@ def wrapnpop(func):
 @register_atoms
 def numme_atoms():
 
-    def nmvector_op(*args):
-        npobj = np.array([a.get_object().value for a in args])
-        typ = _np_atom_type(npobj)
-        return [G(NumpyValue(npobj), typ)]
-
-    def nmarray_op(data):
-        def _to_array(expr):
-            arr = []
-            for a in expr.get_children():
-                v = None
-                match a.get_type():
-                    case AtomKind.EXPR:
-                        v = _to_array(a)
-                    case AtomKind.GROUNDED:
-                        v = a.get_object().value
-                    case _:
-                        raise Exception("Unexpected element for np.array: " + str(a))
-                arr += [v]
-            return arr
-        arr = _to_array(data)
-        npobj = np.array(arr)
-        typ = _np_atom_type(npobj)
-        return [G(NumpyValue(npobj), typ)]
-
     # FIXME: we don't add types for operations, because numpy operations types
     # are too loose
-    nmVectorAtom = OperationAtom('np.vector', nmvector_op, unwrap=False)
-    nmArrayAtom = OperationAtom('np.array', nmarray_op, unwrap=False)
-    nmAddAtom = OperationAtom('np.add', wrapnpop(np.add), unwrap=False)
-    nmSubAtom = OperationAtom('np.sub', wrapnpop(np.subtract), unwrap=False)
-    nmMulAtom = OperationAtom('np.mul', wrapnpop(np.multiply), unwrap=False)
-    nmDivAtom = OperationAtom('np.div', wrapnpop(np.divide), unwrap=False)
-    nmMMulAtom = OperationAtom('np.matmul', wrapnpop(np.matmul), unwrap=False)
+    nmVectorAtom = G(PatternOperation('np.vector', wrapnpop(lambda *args: np.array(args)), unwrap=False))
+    nmArrayAtom = G(PatternOperation('np.array', wrapnpop(lambda *args: np.array(args)), unwrap=False, rec=True))
+    nmAddAtom = G(PatternOperation('np.add', wrapnpop(np.add), unwrap=False))
+    nmSubAtom = G(PatternOperation('np.sub', wrapnpop(np.subtract), unwrap=False))
+    nmMulAtom = G(PatternOperation('np.mul', wrapnpop(np.multiply), unwrap=False))
+    nmDivAtom = G(PatternOperation('np.div', wrapnpop(np.divide), unwrap=False))
+    nmMMulAtom = G(PatternOperation('np.matmul', wrapnpop(np.matmul), unwrap=False))
 
     return {
         r"np\.vector": nmVectorAtom,
