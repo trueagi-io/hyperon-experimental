@@ -153,6 +153,28 @@ Please ensure you are using the latest stable version:
 rustup update stable
 ```
 
+### Importing hyperon Python module fails
+
+If importing the hyperon module in Python
+
+```python
+import hyperon
+```
+
+returns the error
+
+```
+ModuleNotFoundError: No module named 'hyperonpy'
+```
+
+it likely means that `PYTHONPATH` is set incorrectly.  Make sure it
+points to `build/python` not just `python`.  The path should typically
+look like
+
+```
+/home/<USERNAME>/<HYPERON-EXPERIMENTAL>/build/python
+```
+
 # Development
 
 ## Structure of the codebase
