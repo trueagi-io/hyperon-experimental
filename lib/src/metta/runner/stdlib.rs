@@ -584,7 +584,7 @@ pub struct SuperposeOp { }
 
 impl Display for SuperposeOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "collapse")
+        write!(f, "superpose")
     }
 }
 
