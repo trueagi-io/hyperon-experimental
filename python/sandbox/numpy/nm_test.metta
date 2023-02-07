@@ -30,3 +30,16 @@
 ! (np.matmul &mt &m) ; ((6 1) (7 2))
 
 ! (np.add &m $x) ; will be turned into pattern
+
+! (case (np.array (((1 1) (2 2) (3 3)) ((2 3) (3 4) (4 5))))
+    (
+        (($a $b $c) $b)
+        (($x ($y1 $y2 $y3)) (np.add $x $y2))
+    )
+  )
+
+! (case (np.vector 1 2 3)
+    (
+        (&x "X")
+    )
+  )

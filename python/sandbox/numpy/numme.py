@@ -3,17 +3,51 @@ from hyperon.ext import register_atoms
 
 import numpy as np
 
-class NumpyValue(ValueObject):
+class NumpyValue(MatchableObject):
 
     def __eq__(self, other):
         return isinstance(other, NumpyValue) and\
                (self.content.shape == other.content.shape) and\
                (self.content == other.content).all()
 
+    def match_(self, other):
+        sh = self.content.shape
+        bindings = {}
+        if isinstance(other, GroundedAtom):
+            other = other.get_object()
+        # Match by equality with another NumpyValue
+        if isinstance(other, NumpyValue):
+            return [{}] if other == self else []
+        # if isinstance(other, PatternValue):
+        #     other = other.to_expr()
+        if isinstance(other, ExpressionAtom):
+            ch = other.get_children()
+            # TODO: constructors and operations
+            if len(ch) != sh[0]:
+                return []
+            for i in range(len(ch)):
+                res = self.content[i]
+                typ = _np_atom_type(res)
+                res = NumpyValue(res)
+                if isinstance(ch[i], VariableAtom):
+                    bindings[ch[i].get_name()] = G(res, typ)
+                elif isinstance(ch[i], ExpressionAtom):
+                    bind_add = res.match_(ch[i])
+                    if bind_add == []:
+                        return []
+                    bindings.update(bind_add[0])
+        return [] if len(bindings) == 0 else [bindings]
 
-class PatternValue(ValueObject):
 
-    pass
+class PatternValue(MatchableObject):
+
+    def match_(self, other):
+        if isinstance(other, GroundedAtom):
+            other = other.get_object().content
+        if not isinstance(other, PatternValue):
+            return other.match_(self)
+        # TODO: match to patterns
+        return []
 
 
 class PatternOperation(OperationObject):
