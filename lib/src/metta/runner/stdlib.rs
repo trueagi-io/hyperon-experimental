@@ -9,6 +9,8 @@ use crate::metta::types::get_atom_types;
 use crate::common::shared::Shared;
 use crate::common::assert::vec_eq_no_order;
 
+use std::rc::Rc;
+use std::cell::RefCell;
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::collections::HashMap;
@@ -806,6 +808,131 @@ impl Grounded for LetVarOp {
     }
 }
 
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct State {
+    content: RefCell<Atom>,
+}
+
+impl State {
+    pub fn new(atom: Atom) -> Self {
+        Self{ content: RefCell::new(atom) }
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct StateAtom(Rc<State>);
+
+impl StateAtom {
+    pub fn new(atom: Atom) -> Self {
+        Self{ 0: Rc::new(State::new(atom)) }
+    }
+}
+
+impl Display for StateAtom {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(State {})", self.0.content.borrow())
+    }
+}
+
+impl Grounded for StateAtom {
+    fn type_(&self) -> Atom {
+        // TODO: Doesn't work for non-grounded atoms
+        // self.content.type_()
+        //Atom::expr([rust_type_atom::<State>(), ATOM_TYPE_ATOM])
+        Atom::expr([expr!("StateMonad"), ATOM_TYPE_UNDEFINED])
+    }
+
+    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        execute_not_executable(self)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        // TODO: match content?
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct NewStateOp { }
+
+impl Display for NewStateOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "new-state")
+    }
+}
+
+impl Grounded for NewStateOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, expr!(tnso), expr!("StateMonad" tnso)])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("new-state expects single atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        Ok(vec![Atom::gnd(StateAtom::new(atom.clone()))])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct GetStateOp { }
+
+impl Grounded for GetStateOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, expr!("StateMonad" tgso), expr!(tgso)])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("get-state expects single state atom as an argument");
+        let state = args.get(0).ok_or_else(arg_error)?;
+        let atom = Atom::as_gnd::<StateAtom>(state).ok_or_else(arg_error)?;
+        Ok(vec![atom.0.content.borrow().clone()])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+impl Display for GetStateOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "get-state")
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct ChangeStateOp { }
+
+impl Display for ChangeStateOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "change-state!")
+    }
+}
+
+impl Grounded for ChangeStateOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, expr!("StateMonad" tcso), expr!(tcso), expr!("StateMonad" tcso)])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("change-state! expects a state atom and its new value as arguments");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        let state = Atom::as_gnd::<StateAtom>(atom).ok_or("change-state! expects a state as the first argument")?;
+        let new_value = args.get(1).ok_or_else(arg_error)?;
+        *state.0.content.borrow_mut() = new_value.clone();
+        Ok(vec![atom.clone()])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+
 fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
 }
@@ -842,6 +969,12 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"let"), move |_| { let_op.clone() });
     let let_var_op = Atom::gnd(LetVarOp{});
     tref.register_token(regex(r"let\*"), move |_| { let_var_op.clone() });
+    let new_state_op = Atom::gnd(NewStateOp{});
+    tref.register_token(regex(r"new-state"), move |_| { new_state_op.clone() });
+    let change_state_op = Atom::gnd(ChangeStateOp{});
+    tref.register_token(regex(r"change-state!"), move |_| { change_state_op.clone() });
+    let get_state_op = Atom::gnd(GetStateOp{});
+    tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
 }
 
 pub fn register_runner_tokens(metta: &Metta, cwd: PathBuf) {
@@ -1129,5 +1262,18 @@ mod tests {
             Ok(vec![expr!({LetOp{}} a "A" a)]));
         assert_eq!(LetVarOp{}.execute(&mut vec![expr!((a "A") (b "B")), expr!(b a)]),
             Ok(vec![expr!({LetOp{}} a "A" ({LetVarOp{}} ((b "B")) (b a)))]));
+    }
+
+    #[test]
+    fn state_ops() {
+        let result = NewStateOp{}.execute(&mut vec![expr!("A" "B")]).unwrap();
+        let old_state = result.get(0).ok_or("error").unwrap();
+        assert_eq!(old_state, &Atom::gnd(StateAtom::new(expr!("A" "B"))));
+        let result = ChangeStateOp{}.execute(&mut vec!(old_state.clone(), expr!("C" "D"))).unwrap();
+        let new_state = result.get(0).ok_or("error").unwrap();
+        assert_eq!(old_state, new_state);
+        assert_eq!(new_state, &Atom::gnd(StateAtom::new(expr!("C" "D"))));
+        let result = GetStateOp{}.execute(&mut vec![new_state.clone()]);
+        assert_eq!(result, Ok(vec![expr!("C" "D")]))
     }
 }
