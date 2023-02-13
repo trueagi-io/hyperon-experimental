@@ -19,6 +19,7 @@
    (new-state (A B)))
 
 ; State atoms are of StateMonad type
+; These are inferred types based on new-state and change-state! signatures
 !(assertEqual
   (get-type (new-state 2))
   (StateMonad Number))
@@ -26,9 +27,21 @@
   (get-type (change-state! (new-state "S") "V"))
   (StateMonad String))
 
-; TODO? Should be BadType error?
-; ! (change-state! (new-state 1) "S")
-; ! (change-state! &state-token "S")
+; These are the types of State grounded atom
+!(assertEqual
+  (let $v (new-state 1) (get-type $v))
+  (StateMonad Number))
+; atm, meta-types for states of non-grounded types are used
+!(assertEqual
+  (get-type &state-token)
+  (StateMonad Expression))
+
+!(assertEqual
+  (change-state! &state-token 1)
+  (Error 1 BadType))
+!(assertEqual
+  (change-state! (new-state 1) "S")
+  (Error "S" BadType))
 
 ; Changing the content of the state atom
 !(nop (change-state! &state-token (C D)))

@@ -821,16 +821,22 @@ impl StateAtom {
 
 impl Display for StateAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(State {})", self.state.borrow())
+        write!(f, "(State {})", RefCell::borrow(&self.state))
     }
 }
 
 impl Grounded for StateAtom {
     fn type_(&self) -> Atom {
-        // TODO: Doesn't work for non-grounded atoms
-        // self.content.type_()
-        //Atom::expr([rust_type_atom::<State>(), ATOM_TYPE_ATOM])
-        Atom::expr([expr!("StateMonad"), ATOM_TYPE_UNDEFINED])
+        // TODO? Wrap metatypes for non-grounded atoms 
+        // rust_type_atom::<StateAtom>() instead of StateMonad symbol might be used
+        let atom = &*RefCell::borrow(&self.state);
+        let typ = match atom {
+            Atom::Symbol(_) => ATOM_TYPE_SYMBOL,
+            Atom::Expression(_) => ATOM_TYPE_EXPRESSION,
+            Atom::Variable(_) => ATOM_TYPE_VARIABLE,
+            Atom::Grounded(a) => a.type_(),
+        };
+        Atom::expr([expr!("StateMonad"), typ])
     }
 
     fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
@@ -838,7 +844,7 @@ impl Grounded for StateAtom {
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
-        // TODO: match content?
+        // Different state atoms with equal states are equal
         match_by_equality(self, other)
     }
 }
@@ -880,7 +886,7 @@ impl Grounded for GetStateOp {
         let arg_error = || ExecError::from("get-state expects single state atom as an argument");
         let state = args.get(0).ok_or_else(arg_error)?;
         let atom = Atom::as_gnd::<StateAtom>(state).ok_or_else(arg_error)?;
-        Ok(vec![atom.state.borrow().clone()])
+        Ok(vec![RefCell::borrow(&atom.state).clone()])
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
