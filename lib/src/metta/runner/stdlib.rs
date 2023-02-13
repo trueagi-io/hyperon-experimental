@@ -808,30 +808,20 @@ impl Grounded for LetVarOp {
     }
 }
 
-
 #[derive(Clone, PartialEq, Debug)]
-pub struct State {
-    content: RefCell<Atom>,
+pub struct StateAtom {
+    state: Rc<RefCell<Atom>>
 }
-
-impl State {
-    pub fn new(atom: Atom) -> Self {
-        Self{ content: RefCell::new(atom) }
-    }
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct StateAtom(Rc<State>);
 
 impl StateAtom {
     pub fn new(atom: Atom) -> Self {
-        Self{ 0: Rc::new(State::new(atom)) }
+        Self{ state: Rc::new(RefCell::new(atom)) }
     }
 }
 
 impl Display for StateAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(State {})", self.0.content.borrow())
+        write!(f, "(State {})", self.state.borrow())
     }
 }
 
@@ -890,7 +880,7 @@ impl Grounded for GetStateOp {
         let arg_error = || ExecError::from("get-state expects single state atom as an argument");
         let state = args.get(0).ok_or_else(arg_error)?;
         let atom = Atom::as_gnd::<StateAtom>(state).ok_or_else(arg_error)?;
-        Ok(vec![atom.0.content.borrow().clone()])
+        Ok(vec![atom.state.borrow().clone()])
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -923,7 +913,7 @@ impl Grounded for ChangeStateOp {
         let atom = args.get(0).ok_or_else(arg_error)?;
         let state = Atom::as_gnd::<StateAtom>(atom).ok_or("change-state! expects a state as the first argument")?;
         let new_value = args.get(1).ok_or_else(arg_error)?;
-        *state.0.content.borrow_mut() = new_value.clone();
+        *state.state.borrow_mut() = new_value.clone();
         Ok(vec![atom.clone()])
     }
 
