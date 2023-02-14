@@ -821,7 +821,7 @@ impl StateAtom {
 
 impl Display for StateAtom {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(State {})", RefCell::borrow(&self.state))
+        write!(f, "(State {})", self.state.borrow())
     }
 }
 
@@ -829,7 +829,7 @@ impl Grounded for StateAtom {
     fn type_(&self) -> Atom {
         // TODO? Wrap metatypes for non-grounded atoms 
         // rust_type_atom::<StateAtom>() instead of StateMonad symbol might be used
-        let atom = &*RefCell::borrow(&self.state);
+        let atom = &*self.state.borrow();
         let typ = match atom {
             Atom::Symbol(_) => ATOM_TYPE_SYMBOL,
             Atom::Expression(_) => ATOM_TYPE_EXPRESSION,
@@ -864,8 +864,8 @@ impl Grounded for NewStateOp {
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("new-state expects single atom as an argument");
-        let atom = args.get(0).ok_or_else(arg_error)?;
+        let arg_error = "new-state expects single atom as an argument";
+        let atom = args.get(0).ok_or(arg_error)?;
         Ok(vec![Atom::gnd(StateAtom::new(atom.clone()))])
     }
 
@@ -883,10 +883,10 @@ impl Grounded for GetStateOp {
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("get-state expects single state atom as an argument");
-        let state = args.get(0).ok_or_else(arg_error)?;
-        let atom = Atom::as_gnd::<StateAtom>(state).ok_or_else(arg_error)?;
-        Ok(vec![RefCell::borrow(&atom.state).clone()])
+        let arg_error = "get-state expects single state atom as an argument";
+        let state = args.get(0).ok_or(arg_error)?;
+        let atom = Atom::as_gnd::<StateAtom>(state).ok_or(arg_error)?;
+        Ok(vec![atom.state.borrow().clone()])
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -915,10 +915,10 @@ impl Grounded for ChangeStateOp {
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("change-state! expects a state atom and its new value as arguments");
-        let atom = args.get(0).ok_or_else(arg_error)?;
+        let arg_error = "change-state! expects a state atom and its new value as arguments";
+        let atom = args.get(0).ok_or(arg_error)?;
         let state = Atom::as_gnd::<StateAtom>(atom).ok_or("change-state! expects a state as the first argument")?;
-        let new_value = args.get(1).ok_or_else(arg_error)?;
+        let new_value = args.get(1).ok_or(arg_error)?;
         *state.state.borrow_mut() = new_value.clone();
         Ok(vec![atom.clone()])
     }
