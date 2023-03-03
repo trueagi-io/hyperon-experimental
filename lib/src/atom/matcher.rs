@@ -698,6 +698,9 @@ fn match_atoms_recursively(left: &Atom, rigth: &Atom) -> MatchResultIter {
         (Atom::Grounded(a), _) => {
             Box::new(a.match_(rigth))
         },
+        (_, Atom::Grounded(b)) => {
+            Box::new(b.match_(left))
+        },
         _ => empty(),
     }
 }
