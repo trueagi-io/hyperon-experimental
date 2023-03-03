@@ -31,7 +31,7 @@ jobs:
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.1
         with:
-          version: 1.53.0
+          version: 1.57.0
 
       - name: Install cbindgen
         uses: actions-rs/cargo@v1.0.1

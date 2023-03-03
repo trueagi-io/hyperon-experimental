@@ -109,11 +109,11 @@ class AtomTest(unittest.TestCase):
         space = GroundingSpace()
         match_atom = MatchableAtomTest(S("MatchableAtom"), type_name=None, atom_id=None)
         space.add_atom(match_atom)
-        result = space.query(S('symbol_atom'))
+        result = space.query(E(S('symbol_atom'), V('atom_type')))
         self.assertEqual(AtomKind.SYMBOL.name, str(result[0]['atom_type']))
-        result = space.query(E(S("+"), S("1"), S("2")))
+        result = space.query(E(E(S("+"), S("1"), S("2")), V('atom_type')))
         self.assertEqual(AtomKind.EXPR.name, str(result[0]['atom_type']))
-        atom = G(GroundedObject(None), S("Float"))
+        atom = E(G(GroundedObject(None), S("Float")), V('atom_type'))
         result = space.query(atom)
         self.assertEqual(AtomKind.GROUNDED.name, str(result[0]['atom_type']))
         result = space.query(V("Z"))
@@ -133,7 +133,7 @@ class GroundedNoCopy:
 
 class MatchableObjectTest(MatchableObject):
     def match_(self, atom):
-        return [{'atom_type': S(atom.get_type().name)}]
+        return [{'atom_type': S(atom.get_children()[0].get_type().name)}]
 
 def MatchableAtomTest(value, type_name=None, atom_id=None):
     return G(MatchableObjectTest(value, atom_id), AtomType.UNDEFINED)

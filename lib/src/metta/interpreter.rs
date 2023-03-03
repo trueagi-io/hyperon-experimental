@@ -558,25 +558,22 @@ fn match_plan<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input:
 
 fn match_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results, InterpreterError> {
     log::debug!("match_op: {}", input);
-    let var_x = VariableAtom::new("%X%");
-    // TODO: unique variable?
-    let atom_x = Atom::Variable(var_x.clone());
-    let query = Atom::expr(vec![EQUAL_SYMBOL, input.atom().clone(), atom_x]);
-    let mut local_bindings = context.space.query(&query);
-    let results: Vec<InterpretedAtom> = local_bindings
+    let var_x = VariableAtom::new("X").make_unique();
+    let query = Atom::expr(vec![EQUAL_SYMBOL, input.atom().clone(), Atom::Variable(var_x.clone())]);
+    let mut query_bindings = context.space.query(&query);
+    let results: Vec<InterpretedAtom> = query_bindings
         .drain(0..)
-        .map(|mut binding| {
-            let result = binding.remove(&var_x).unwrap(); 
-            let result = apply_bindings_to_atom(&result, &binding);
+        .map(|mut query_binding| {
+            let result = query_binding.resolve_and_remove(&var_x).unwrap(); 
+            let result = apply_bindings_to_atom(&result, &query_binding);
             // TODO: sometimes we apply bindings twice: first time here,
             // second time when inserting matched argument into nesting
             // expression.  It should be enough doing it only once.
-            let bindings = apply_bindings_to_bindings(&binding, input.bindings());
-            let bindings = bindings.map(|mut bindings| {
-                binding.drain().for_each(|(k, v)| { bindings.insert(k, v); });
-                bindings
+            let bindings = apply_bindings_to_bindings(&query_binding, input.bindings());
+            let bindings = bindings.and_then(|bindings| {
+                Bindings::merge(&query_binding, &bindings).ok_or(())
             });
-            log::debug!("match_op: query: {}, binding: {:?}, result: {}", input, bindings, result);
+            log::debug!("match_op: query: {}, bindings: {:?}, result: {}", input, bindings, result);
             (result, bindings)
         })
         .filter(|(_, bindings)| bindings.is_ok())

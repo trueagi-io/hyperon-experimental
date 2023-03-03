@@ -281,7 +281,7 @@ impl CGrounded {
             let name = cstr_as_str(cbindings[i].var as *const c_char);
             let var = var_from_name(name);
             let atom = ptr_into_atom(cbindings[i].atom);
-            bindings.insert(var, atom);
+            bindings.add_var_binding(var, atom);
         }
         mem::forget(cbindings);
 

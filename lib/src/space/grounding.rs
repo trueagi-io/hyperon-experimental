@@ -4,16 +4,16 @@
 use crate::*;
 use super::*;
 use crate::atom::*;
-use crate::atom::matcher::{Bindings, Unifications, match_atoms};
+use crate::atom::matcher::{Bindings, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::matcher::MatchResultIter;
 
 use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
-use std::collections::HashSet;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::HashSet;
 
 // Grounding space
 
@@ -223,7 +223,8 @@ impl<T: Debug + PartialEq + Clone> IndexTree<T> {
     }
     
     fn add(&mut self, key: &Atom, value: T) {
-        log::debug!("IndexTree::add(): key: {:?}, value: {:?}", key, value);
+        // TODO: cannot log here because of borrowing rules violation
+        //log::debug!("IndexTree::add(): key: {:?}, value: {:?}", key, value);
         IndexTreeIterMut::new(self, key, |idx, key, keys, callback| {
             idx.next_for_add(key, keys, callback)
         }).for_each(|idx| idx.leaf.push(value.clone()));
@@ -469,8 +470,7 @@ impl GroundingSpace {
             // Cannot match with COMMA_SYMBOL here, because Rust allows
             // it only when Atom has PartialEq and Eq derived.
             Some((sym @ Atom::Symbol(_), args)) if *sym == COMMA_SYMBOL => {
-                let vars = collect_variables(&query);
-                let mut result = args.fold(vec![bind!{}],
+                let result = args.fold(vec![bind!{}],
                     |mut acc, query| {
                         let result = if acc.is_empty() {
                             acc
@@ -489,7 +489,6 @@ impl GroundingSpace {
                         log::debug!("query: current result: {:?}", result);
                         result
                     });
-                result.iter_mut().for_each(|bindings| bindings.filter(|k, _v| vars.contains(k)));
                 result
             },
             _ => self.single_query(query),
@@ -500,11 +499,14 @@ impl GroundingSpace {
     fn single_query(&self, query: &Atom) -> Vec<Bindings> {
         log::debug!("single_query: query: {}", query);
         let mut result = Vec::new();
+        let mut query_vars = HashSet::new();
+        query.iter().filter_map(AtomIter::extract_var).for_each(|var| { query_vars.insert(var.clone()); });
         for i in self.index.get(query) {
             let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", query, i).as_str());
             let next = make_variables_unique(next);
             log::trace!("single_query: match next: {}", next);
             for bindings in match_atoms(&next, query) {
+                let bindings = bindings.narrow_vars(&query_vars);
                 log::trace!("single_query: push result: {}", bindings);
                 result.push(bindings);
             }
@@ -533,36 +535,6 @@ impl GroundingSpace {
         self.query(pattern).drain(0..)
             .map(| bindings | matcher::apply_bindings_to_atom(template, &bindings))
             .collect()
-    }
-
-    // TODO: for now we have separate methods query() and unify() but
-    // they probably can be merged. One way of doing it is designating
-    // in the query which part of query should be unified and which matched.
-    // For example for the typical query in a form (= (+ a b) $X) the
-    // (= (...) $X) level should not be unified otherwise we will recursively
-    // infer that we need calculating (+ a b) again which is equal to original
-    // query. Another option is designating this in the data itself.
-    // After combining match and unification we could leave only single
-    // universal method.
-    #[doc(hidden)]
-    pub fn unify(&self, pattern: &Atom) -> Vec<(Bindings, Unifications)> {
-        log::debug!("unify: pattern: {}", pattern);
-        let mut result = Vec::new();
-        for i in self.index.get(pattern) {
-            let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", pattern, i).as_str());
-            match matcher::unify_atoms(next, pattern) {
-                Some(res) => {
-                    let bindings = matcher::apply_bindings_to_bindings(&res.data_bindings, &res.pattern_bindings);
-                    if let Ok(bindings) = bindings {
-                        // TODO: implement Display for bindings
-                        log::debug!("unify: push result: {}, bindings: {:?}", next, bindings);
-                        result.push((bindings, res.unifications));
-                    }
-                },
-                None => continue,
-            }
-        }
-        result
     }
 
     /// Returns the iterator over content of the space.
@@ -626,22 +598,6 @@ impl Grounded for GroundingSpace {
         execute_not_executable(self)
     }
 }
-
-fn collect_variables(atom: &Atom) -> HashSet<VariableAtom> {
-    fn recursion(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
-        match atom {
-            Atom::Variable(var) => { vars.insert(var.clone()); },
-            Atom::Expression(expr) => {
-                expr.children().iter().for_each(|child| recursion(child, vars));
-            }
-            _ => {},
-        }
-    }
-    let mut vars = HashSet::new();
-    recursion(atom, &mut vars);
-    vars
-}
-
 
 #[cfg(test)]
 mod test {
@@ -832,19 +788,13 @@ mod test {
         assert_eq!(space.query(&expr!("+" a ("*" a c))), vec![]);
     }
 
-    fn get_var<'a>(bindings: &'a Bindings, name: &str) -> &'a Atom {
-        bindings.get(&VariableAtom::new(name)).unwrap()
-    }
-
     #[test]
     fn test_match_query_variable_has_priority() {
         let mut space = GroundingSpace::new();
         space.add(expr!("equals" x x));
         
         let result = space.query(&expr!("equals" y z));
-        assert_eq!(result.len(), 1);
-        assert!(matches!(get_var(&result[0], "y"), Atom::Variable(_)));
-        assert!(matches!(get_var(&result[0], "z"), Atom::Variable(_)));
+        assert_eq!(result, vec![bind!{ y: expr!(z) }]);
     }
 
     #[test]
@@ -922,7 +872,10 @@ mod test {
 
         let result = space.query(&expr!("," (":=" "a" b) (":=" ("sum" {3} b) W)));
 
-        assert_eq!(result, vec![bind!{b: expr!({4}), W: expr!("+" {3} {4})}]);
+        assert_eq!(result.len(), 1);
+        let result = &result[0];
+        assert_eq!(result.resolve(&VariableAtom::new("W")), Some(expr!("+" {3} {4})));
+        assert_eq!(result.resolve(&VariableAtom::new("b")), Some(expr!({4})));
     }
 
     #[test]
@@ -933,7 +886,7 @@ mod test {
         space.add(expr!("A" "Sam"));
 
         let result = space.query(&expr!("," ("implies" ("B" x) z) ("implies" ("A" x) y) ("A" x)));
-        assert_eq!(result, vec![bind!{x: sym!("Sam"), y: expr!("B" "Sam"), z: expr!("C" "Sam")}]);
+        assert_eq!(result, vec![bind!{x: sym!("Sam"), y: expr!("B" x), z: expr!("C" x)}]);
     }
 
     #[test]

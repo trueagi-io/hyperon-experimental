@@ -36,9 +36,9 @@ fn query_has_type(space: &dyn Space, sub_type: &Atom, super_type: &Atom) -> Vec<
 
 fn query_super_types(space: &dyn Space, sub_type: &Atom) -> Vec<Atom> {
     // TODO: query should check that sub type is a type and not another typed symbol
-    let var_x = VariableAtom::new("%X%");
+    let var_x = VariableAtom::new("X").make_unique();
     let mut super_types = space.query(&isa_query(&sub_type, &Atom::Variable(var_x.clone())));
-    super_types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect()
+    super_types.drain(0..).map(|mut bindings| { bindings.resolve_and_remove(&var_x).unwrap() }).collect()
 }
 
 fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
@@ -92,9 +92,9 @@ pub fn is_func(typ: &Atom) -> bool {
 }
 
 fn query_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
-    let var_x = VariableAtom::new("%X%");
+    let var_x = VariableAtom::new("X").make_unique();
     let mut types = query_has_type(space, atom, &Atom::Variable(var_x.clone()));
-    let mut types = types.drain(0..).map(|mut bindings| bindings.remove(&var_x).unwrap()).collect();
+    let mut types = types.drain(0..).map(|mut bindings| { bindings.resolve_and_remove(&var_x).unwrap() }).collect();
     add_super_types(space, &mut types, 0);
     types
 }
@@ -264,15 +264,15 @@ pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings)
             bindings: &mut Bindings, reverse_bindings: &mut Bindings) -> bool {
         let result = match (type1, type2) {
             (Atom::Variable(f), Atom::Variable(s)) => {
-                bindings.check_and_insert_binding(f, type2) &&
-                    reverse_bindings.check_and_insert_binding(s, type1)
+                bindings.add_var_binding(f, type2) &&
+                    reverse_bindings.add_var_binding(s, type1)
             },
             (Atom::Grounded(_), Atom::Grounded(_)) => type1 == type2,
             (Atom::Symbol(sym1), Atom::Symbol(sym2)) => {
                 type1 == type2 || sym1.name() == "%Undefined%" || sym2.name() == "%Undefined%"
             },
             (Atom::Variable(var), typ) | (typ, Atom::Variable(var)) => {
-                bindings.check_and_insert_binding(var, typ)
+                bindings.add_var_binding(var, typ)
             },
             (Atom::Grounded(_), _) | (_, Atom::Grounded(_)) => false,
             (Atom::Expression(expr1), Atom::Expression(expr2)) => {
@@ -297,7 +297,7 @@ fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, B
     let mut types = get_reducted_types(space, atom);
     types.drain(0..).filter_map(|t| {
         let mut bindings = Bindings::new();
-        // FIXME: write a unit test
+        // TODO: write a unit test
         let t = make_variables_unique(&t);
         if match_reducted_types(&t, typ, &mut bindings) {
             Some((t, bindings))
@@ -725,7 +725,7 @@ mod tests {
         ");
 
         assert!(check_type(&space, &atom("A"), &atom("(Pair $e $f)")));
-        assert!(!check_type(&space, &atom("A"), &atom("(Pair $f $f)")));
+        assert!(check_type(&space, &atom("A"), &atom("(Pair $f $f)")));
     }
 
     #[test]
