@@ -13,7 +13,7 @@ impl Atom {
 }
 
 /// Iterator of the sub-atoms of the [Atom].
-// TODO: Single/Expression can be used inside to make code more clear.
+// TODO: Single/Expression enum can be used inside to make code more clear.
 pub struct AtomIter<'a> {
     levels: Vec<std::slice::Iter<'a, Atom>>,
     single: Option<&'a Atom>,
