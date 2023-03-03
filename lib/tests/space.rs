@@ -10,5 +10,7 @@ fn test_custom_match_with_space() {
     inserted_space.add(expr!("A" "Sam"));
     main_space.add(Atom::gnd(inserted_space));
     let result = main_space.query(&expr!("," ("implies" ("B" x) z) ("implies" ("A" x) y) ("A" x)));
-    assert_eq!(result, vec![bind!{x: sym!("Sam"), y: expr!("B" "Sam"), z: expr!("C" "Sam")}]);
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].resolve(&VariableAtom::new("y")), Some(expr!("B" "Sam")));
+    assert_eq!(result[0].resolve(&VariableAtom::new("z")), Some(expr!("C" "Sam")));
 }

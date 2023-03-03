@@ -117,8 +117,10 @@ mod tests {
         // (= (fac n) (* n (fac (- n 1))))
         space.add(expr!("=" ("fac" n) ({MUL} n ("fac" ({SUB} n {1})))));
 
-        let expected = bind!{X: expr!({MUL} {3} ("fac" ({SUB} {3} {1})))};
-        assert_eq!(space.query(&expr!("=" ("fac" {3}) X)), vec![expected]);
+        let actual = space.query(&expr!("=" ("fac" {3}) X));
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0].resolve(&VariableAtom::new("X")),
+            Some(expr!({MUL} {3} ("fac" ({SUB} {3} {1})))));
     }
 
     #[test]
