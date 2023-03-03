@@ -109,6 +109,9 @@ macro_rules! sym {
 
 pub mod matcher;
 pub mod subexpr;
+mod iter;
+
+pub use iter::*;
 
 use std::any::Any;
 use std::fmt::{Display, Debug};
