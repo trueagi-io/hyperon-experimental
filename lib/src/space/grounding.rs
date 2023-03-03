@@ -223,7 +223,7 @@ impl<T: Debug + PartialEq + Clone> IndexTree<T> {
     }
     
     fn add(&mut self, key: &Atom, value: T) {
-        // FIXME: cannot log here because of borrowing rules violation
+        // TODO: cannot log here because of borrowing rules violation
         //log::debug!("IndexTree::add(): key: {:?}, value: {:?}", key, value);
         IndexTreeIterMut::new(self, key, |idx, key, keys, callback| {
             idx.next_for_add(key, keys, callback)

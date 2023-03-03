@@ -36,8 +36,7 @@ fn query_has_type(space: &dyn Space, sub_type: &Atom, super_type: &Atom) -> Vec<
 
 fn query_super_types(space: &dyn Space, sub_type: &Atom) -> Vec<Atom> {
     // TODO: query should check that sub type is a type and not another typed symbol
-    // FIXME: make variable unique
-    let var_x = VariableAtom::new("%X%");
+    let var_x = VariableAtom::new("X").make_unique();
     let mut super_types = space.query(&isa_query(&sub_type, &Atom::Variable(var_x.clone())));
     super_types.drain(0..).map(|mut bindings| { bindings.resolve_and_remove(&var_x).unwrap() }).collect()
 }
@@ -93,8 +92,7 @@ pub fn is_func(typ: &Atom) -> bool {
 }
 
 fn query_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
-    // FIXME: make variable unique
-    let var_x = VariableAtom::new("%X%");
+    let var_x = VariableAtom::new("X").make_unique();
     let mut types = query_has_type(space, atom, &Atom::Variable(var_x.clone()));
     let mut types = types.drain(0..).map(|mut bindings| { bindings.resolve_and_remove(&var_x).unwrap() }).collect();
     add_super_types(space, &mut types, 0);
@@ -299,7 +297,7 @@ fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, B
     let mut types = get_reducted_types(space, atom);
     types.drain(0..).filter_map(|t| {
         let mut bindings = Bindings::new();
-        // FIXME: write a unit test
+        // TODO: write a unit test
         let t = make_variables_unique(&t);
         if match_reducted_types(&t, typ, &mut bindings) {
             Some((t, bindings))

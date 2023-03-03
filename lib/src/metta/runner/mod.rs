@@ -255,7 +255,7 @@ mod tests {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED])
         }
         fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-            //FIXME: why next two lines led to not equal results?
+            // TODO: why next two lines led to not equal results?
             Ok(vec![expr!("Error" ("error") "TestError")])
             //Err("TestError".into())
         }

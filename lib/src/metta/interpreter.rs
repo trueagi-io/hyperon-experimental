@@ -558,10 +558,8 @@ fn match_plan<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input:
 
 fn match_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results, InterpreterError> {
     log::debug!("match_op: {}", input);
-    let var_x = VariableAtom::new("%X%");
-    // FIXME: unique variable?
-    let atom_x = Atom::Variable(var_x.clone());
-    let query = Atom::expr(vec![EQUAL_SYMBOL, input.atom().clone(), atom_x]);
+    let var_x = VariableAtom::new("X").make_unique();
+    let query = Atom::expr(vec![EQUAL_SYMBOL, input.atom().clone(), Atom::Variable(var_x.clone())]);
     let mut query_bindings = context.space.query(&query);
     let results: Vec<InterpretedAtom> = query_bindings
         .drain(0..)
