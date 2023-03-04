@@ -237,7 +237,7 @@ impl Bindings {
 
     // TODO: function should return Vec<Bindings>, because
     // Bindings::match_values() can return it.
-    fn with_var_binding(mut self, var: &VariableAtom, value: &Atom) -> Option<Self> {
+    fn with_var_binding<T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>>(mut self, var: T1, value: T2) -> Option<Self> {
         self.add_var_binding(var, value).then(|| self)
     }
 
@@ -672,12 +672,12 @@ pub fn match_atoms<'a>(left: &'a Atom, right: &'a Atom) -> MatchResultIter {
         .filter(|binding| !binding.has_loops()))
 }
 
-fn match_atoms_recursively(left: &Atom, rigth: &Atom) -> MatchResultIter {
-    log::trace!("match_atoms_recursively: {} ~ {}", left, rigth);
+fn match_atoms_recursively(left: &Atom, right: &Atom) -> MatchResultIter {
+    log::trace!("match_atoms_recursively: {} ~ {}", left, right);
     fn empty() -> MatchResultIter { Box::new(std::iter::empty()) }
     fn once(b: Bindings) -> MatchResultIter { Box::new(std::iter::once(b)) }
 
-    match (left, rigth) {
+    match (left, right) {
         (Atom::Symbol(a), Atom::Symbol(b)) if a == b => once(Bindings::new()),
         (Atom::Variable(dv), Atom::Variable(pv)) => {
             Bindings::new().with_var_equality(dv, pv).map_or(empty(), once)
@@ -695,8 +695,16 @@ fn match_atoms_recursively(left: &Atom, rigth: &Atom) -> MatchResultIter {
                     match_result_product(acc, match_atoms_recursively(a, b))
                 })
         },
+        // TODO: one more case for the special flag to see if GroundedAtom is
+        // matchable. If GroundedAtom is matched with VariableAtom there are
+        // two way to calculate match: (1) pass variable to the
+        // GroundedAtom::match(); (2) assign GroundedAtom to the Variable.
+        // Returning both results breaks tests right now.
         (Atom::Grounded(a), _) => {
-            Box::new(a.match_(rigth))
+            Box::new(a.match_(right))
+        },
+        (_, Atom::Grounded(b)) => {
+            Box::new(b.match_(left))
         },
         _ => empty(),
     }
@@ -822,8 +830,8 @@ mod test {
     use crate::assert_eq_no_order;
     use super::*;
 
-    fn assert_match(left: Atom, rigth: Atom, expected: Vec<Bindings>) {
-        let actual: Vec<Bindings> = match_atoms(&left, &rigth).collect();
+    fn assert_match(left: Atom, right: Atom, expected: Vec<Bindings>) {
+        let actual: Vec<Bindings> = match_atoms(&left, &right).collect();
         assert_eq_no_order!(actual, expected);
     }
 
@@ -958,73 +966,44 @@ mod test {
     }
 
     #[derive(PartialEq, Clone, Debug)]
-    struct TestDict(Vec<(Atom, Atom)>);
+    struct Rand{}
 
-    impl TestDict {
-        fn new() -> Self {
-            TestDict(Vec::new())
-        }
-        fn get(&self, key: &Atom) -> Option<&Atom> {
-            self.0.iter().filter(|(k, _)| { k == key }).nth(0).map(|(_, v)| { v })
-        }
-        fn remove(&mut self, key: &Atom) -> Option<Atom> {
-            let v = self.get(key).map(Atom::clone);
-            self.0 = self.0.drain(..).filter(|(k, _)| { k != key }).collect();
-            v
-        }
-        fn put(&mut self, key: Atom, value: Atom) -> Option<Atom> {
-            let v = self.remove(&key);
-            self.0.push((key, value));
-            v
-        }
-    }
-
-    impl Grounded for TestDict {
+    impl Grounded for Rand {
         fn type_(&self) -> Atom {
-            Atom::sym("Dict")
+            Atom::sym("Rand")
         }
         fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-            if let Some(other) = other.as_gnd::<TestDict>() {
-                other.0.iter().map(|(ko, vo)| {
-                    self.0.iter().map(|(k, v)| {
-                        match_atoms(&Atom::expr(vec![k.clone(), v.clone()]), &Atom::expr(vec![ko.clone(), vo.clone()]))
-                    }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
-                        Box::new(acc.chain(i))
-                    })
-                }).fold(Box::new(std::iter::once(Bindings::new())),
-                    |acc, i| { matcher::match_result_product(acc, i) })
-            } else {
-                Box::new(std::iter::empty())
+            match other {
+                Atom::Expression(expr) if expr.children().len() == 1 =>
+                    match expr.children()[0] {
+                        Atom::Variable(ref var) => Box::new(std::iter::once(
+                            Bindings::new().with_var_binding(var, expr!({42})).unwrap())),
+                        _ => Box::new(std::iter::empty()),
+                }
+                _ => Box::new(std::iter::empty()),
             }
         }
     }
     
-    impl Display for TestDict {
+    impl Display for Rand {
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(f, "{{ ").and_then(|_| self.0.iter().fold(Ok(()),
-                |ret, (key, val)| ret.and_then(
-                    |_| write!(f, "{}: {}, ", key, val))))
-                .and_then(|_| write!(f, "}}"))
+            write!(f, "Rand")
         }
     }
 
     #[test]
     fn match_atoms_with_custom_matcher_implementation() {
-        let mut dict = TestDict::new();
-        dict.put(expr!("x"), expr!({2} {5}));
-        dict.put(expr!("y"), expr!({5}));
-        let dict = expr!({dict}); 
-
-        let mut query = TestDict::new();
-        query.put(expr!(b), expr!(y));
-        query.put(expr!(a), expr!({2} y));
-        let query = expr!({query});
-
-        let result: Vec<Bindings> = match_atoms(&dict, &query).collect();
-        assert_eq!(result, vec![bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}]);
+        assert_match(
+            expr!({Rand{}}),
+            expr!((x)),
+            vec![bind!{x: expr!({42})}]);
+        assert_match(
+            expr!((x)),
+            expr!({Rand{}}),
+            vec![bind!{x: expr!({42})}]);
     }
 
     #[ignore = "Requires sorting inside Bindings to be stable"]

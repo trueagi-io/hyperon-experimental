@@ -241,6 +241,29 @@ fn get_reducted_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     types
 }
 
+#[derive(Clone, PartialEq, Debug)]
+struct UndefinedTypeMatch { }
+
+impl std::fmt::Display for UndefinedTypeMatch {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", ATOM_TYPE_UNDEFINED)
+    }
+}
+
+impl Grounded for UndefinedTypeMatch {
+    fn type_(&self) -> Atom {
+        ATOM_TYPE_TYPE
+    }
+
+    fn match_(&self, _other: &Atom) -> crate::matcher::MatchResultIter {
+        Box::new(std::iter::once(crate::matcher::Bindings::new()))
+    }
+
+    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        execute_not_executable(self)
+    }
+}
+
 /// Matches two types and puts new variable bindings into `bindings`. Returns
 /// true when match is found. Function matches types using previous bindings
 /// passed. If match is not found some new bindings can still be added. If
@@ -259,38 +282,35 @@ fn get_reducted_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
 /// assert!(is_matched);
 /// assert_eq!(bindings, bind!{ t: expr!("A") });
 /// ```
-pub fn match_reducted_types(type1: &Atom, type2: &Atom, bindings: &mut Bindings) -> bool {
-    fn match_reducted_types_recursive(type1: &Atom, type2: &Atom,
-            bindings: &mut Bindings, reverse_bindings: &mut Bindings) -> bool {
-        let result = match (type1, type2) {
-            (Atom::Variable(f), Atom::Variable(s)) => {
-                bindings.add_var_binding(f, type2) &&
-                    reverse_bindings.add_var_binding(s, type1)
-            },
-            (Atom::Grounded(_), Atom::Grounded(_)) => type1 == type2,
-            (Atom::Symbol(sym1), Atom::Symbol(sym2)) => {
-                type1 == type2 || sym1.name() == "%Undefined%" || sym2.name() == "%Undefined%"
-            },
-            (Atom::Variable(var), typ) | (typ, Atom::Variable(var)) => {
-                bindings.add_var_binding(var, typ)
-            },
-            (Atom::Grounded(_), _) | (_, Atom::Grounded(_)) => false,
-            (Atom::Expression(expr1), Atom::Expression(expr2)) => {
-                std::iter::zip(expr1.children().iter(), expr2.children().iter())
-                    .map(|(child1, child2)| match_reducted_types_recursive(child1, child2, bindings, reverse_bindings))
-                    .reduce(|a, b| a && b)
-                    .unwrap_or(true)
-            },
-            (Atom::Expression(_), Atom::Symbol(sym))
-                | (Atom::Symbol(sym), Atom::Expression(_))
-                if sym.name() == "%Undefined%" => true,
-                    _ => false,
-        };
-        result
-    }
-    let result = match_reducted_types_recursive(type1, type2, bindings, &mut Bindings::new());
-    log::trace!("match_reducted_types: type1: {}, type2: {}, bindings: {} return {}", type1, type2, bindings, result);
-    result
+pub fn match_reducted_types(left: &Atom, right: &Atom, bindings: &mut Bindings) -> bool {
+    let left = replace_undefined_types(left);
+    let right = replace_undefined_types(right);
+    let mut match_result = matcher::match_atoms(&left, &right);
+    let match_bindings = match_result.next();
+    let matched = match match_bindings {
+        None => false,
+        Some(match_bindings) => {
+            log::debug!("match_reducted_types: bindings: {}", match_bindings);
+            // TODO: match_result can contain more than one result
+            assert_eq!(match_result.next(), None, "Single result is expected because custom matching for types is not supported yet!");
+            match Bindings::merge(bindings, &match_bindings) {
+                None => false,
+                Some(output_bindings) => {
+                    *bindings = output_bindings;
+                    true
+                },
+            }
+        },
+    };
+    log::debug!("match_reducted_types: {} ~ {} => {}, bindings: {}", left, right, matched, bindings);
+    matched
+}
+
+fn replace_undefined_types(atom: &Atom) -> Atom {
+    let mut atom = atom.clone();
+    atom.iter_mut().filter(|atom| **atom == ATOM_TYPE_UNDEFINED)
+        .for_each(|atom| *atom = Atom::gnd(UndefinedTypeMatch{}));
+    atom
 }
 
 fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
@@ -552,8 +572,7 @@ mod tests {
         assert!(!check_type(&space, &atom("(Human Time)"), &atom("((-> Entity Prop) NotEntity)")));
         assert!(check_type(&space, &atom("(= Socrates Socrates)"), t));
         assert!(check_type(&space, &atom("(= Socrates Plato)"), t));
-        // TODO: should we type check this as (= Any Any) or (= Atom Atom)?
-        assert!(!check_type(&space, &atom("(= Socrates Untyped)"), t));
+        assert!(check_type(&space, &atom("(= Socrates Untyped)"), t));
         assert!(!check_type(&space, &atom("(= Socrates Time)"), t));
 
         assert!(validate_atom(&space, &atom("(HumansAreMortal SocratesIsHuman)")));
