@@ -10,7 +10,7 @@ use super::interpreter::interpret;
 use std::path::PathBuf;
 use std::collections::HashMap;
 
-mod stdlib;
+pub mod stdlib;
 
 mod arithmetics;
 
