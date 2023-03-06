@@ -789,18 +789,18 @@ pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bind
 /// assert!(atoms_are_equivalent(&atom, &eq));
 /// assert!(!atoms_are_equivalent(&atom, &neq));
 /// ```
-pub fn atoms_are_equivalent(first: &Atom, second: &Atom) -> bool {
-    atoms_are_equivalent_with_bindings(first, second, &mut HashMap::new(), &mut HashMap::new())
+pub fn atoms_are_equivalent(left: &Atom, right: &Atom) -> bool {
+    atoms_are_equivalent_with_bindings(left, right, &mut HashMap::new(), &mut HashMap::new())
 }
 
 use std::collections::hash_map::Entry;
 
-fn atoms_are_equivalent_with_bindings<'a, 'b: 'a>(first: &'b Atom, second: &'b Atom,
-        direct_bindings: &'a mut HashMap<&'b VariableAtom, &'b Atom>,
-        reverse_bindings: &'a mut HashMap<&'b VariableAtom, &'b Atom>) -> bool {
+fn atoms_are_equivalent_with_bindings<'a, 'b: 'a>(left: &'b Atom, right: &'b Atom,
+        left_vars: &'a mut HashMap<&'b VariableAtom, &'b VariableAtom>,
+        right_vars: &'a mut HashMap<&'b VariableAtom, &'b VariableAtom>) -> bool {
 
-    fn check_and_insert<'a, 'b: 'a>(map: &'a mut HashMap<&'b VariableAtom, &'b Atom>,
-        var: &'b VariableAtom, atom: &'b Atom) -> bool {
+    fn can_be_renamed<'a, 'b: 'a>(map: &'a mut HashMap<&'b VariableAtom, &'b VariableAtom>,
+        var: &'b VariableAtom, atom: &'b VariableAtom) -> bool {
         match map.entry(var) {
             Entry::Occupied(entry) => *entry.get() == atom,
             Entry::Vacant(entry) => {
@@ -810,17 +810,17 @@ fn atoms_are_equivalent_with_bindings<'a, 'b: 'a>(first: &'b Atom, second: &'b A
         }
     }
 
-    match (first, second) {
-        (Atom::Variable(f), Atom::Variable(s)) =>
-            check_and_insert(direct_bindings, f, second) &&
-                check_and_insert(reverse_bindings, s, first),
-        (Atom::Symbol(first), Atom::Symbol(second)) => first == second,
-        (Atom::Grounded(first), Atom::Grounded(second)) => first == second,
-        (Atom::Expression(first), Atom::Expression(second)) =>
-            first.children().len() == second.children().len() &&
-            first.children().iter().zip(second.children().iter())
-                .all(|(first, second)| atoms_are_equivalent_with_bindings(
-                        first, second, direct_bindings, reverse_bindings)),
+    match (left, right) {
+        (Atom::Variable(left), Atom::Variable(right)) =>
+            can_be_renamed(left_vars, left, right) &&
+                can_be_renamed(right_vars, right, left),
+        (Atom::Symbol(left), Atom::Symbol(right)) => left == right,
+        (Atom::Grounded(left), Atom::Grounded(right)) => left == right,
+        (Atom::Expression(left), Atom::Expression(right)) =>
+            left.children().len() == right.children().len() &&
+            left.children().iter().zip(right.children().iter())
+                .all(|(left, right)| atoms_are_equivalent_with_bindings(
+                        left, right, left_vars, right_vars)),
         _ => false,
     }
 }
