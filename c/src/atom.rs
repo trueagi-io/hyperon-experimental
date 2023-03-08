@@ -1,17 +1,14 @@
-use std::env::var;
 use hyperon::*;
 
 use crate::util::*;
 
 use std::os::raw::*;
 use std::fmt::Display;
-use std::ptr::null;
 use std::sync::atomic::{AtomicPtr, Ordering};
-use log::debug;
 
 use hyperon::matcher::Bindings;
 use std::mem;
-//use std::slice;
+
 
 // Atom
 
@@ -40,14 +37,6 @@ pub struct var_atom_t {
 pub struct bindings_t {
     pub bindings: Bindings,
 }
-
-
-fn fff(bin: bindings_t) -> bool {
-    //bin.bindings.into_iter().for_each();
-
-    return false;
-}
-
 
 #[repr(C)]
 pub struct gnd_api_t {
@@ -93,23 +82,20 @@ pub unsafe extern "C" fn bindings_new() -> *mut bindings_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn bindings_traverse(bindings: * const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
-    (*bindings).bindings.iter().for_each(|(varAtom, atomItem)|  {
-            let name = string_as_cstr(varAtom.name());
-            let var = var_atom_t {
+    (*bindings).bindings.iter().for_each(|(var, atom)|  {
+            let name = string_as_cstr(var.name());
+            let var_atom = var_atom_t {
                 var: name.as_ptr(),
-                atom: atom_into_ptr(atomItem)
+                atom: atom_into_ptr(atom)
             };
-            println!("cbl");
-            debug!("name {}\n", varAtom.name());
-            println!("cbl2 {}", varAtom.name());
-            callback(&var, context);
+            callback(&var_atom, context);
         }
     )
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, atom: *const var_atom_t) -> bool {
-    let mut bindings = &mut(*bindings).bindings;
+    let bindings = &mut(*bindings).bindings;
     let var = VariableAtom::new(cstr_into_string ((*atom).var));
     let atom = (*(*atom).atom).atom.clone();
     bindings.add_var_binding(var, atom)
