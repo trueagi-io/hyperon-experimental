@@ -50,40 +50,14 @@ impl<'a> Iterator for GroundingSpaceIter<'a> {
     }
 }
 
-#[derive(Clone)]
-struct Index(MultiTrie<SymbolAtom, usize>);
-
-impl Index {
-
-    fn new() -> Self {
-        Index(MultiTrie::new())
-    }
-
-    fn add(&mut self, atom: &Atom, i: usize) {
-        self.0.add(Self::key(atom), i)
-    }
-
-    fn remove(&mut self, atom: &Atom, i: &usize) -> bool {
-        self.0.remove(Self::key(atom), i)
-    }
-
-    fn get(&self, pattern: &Atom) -> impl Iterator<Item=&usize> {
-        self.0.get(Self::key(pattern))
-    }
-
-    fn key(atom: &Atom) -> TrieKey<SymbolAtom> {
-        let mut keys = Vec::new();
-        Self::generate_key(atom, &mut keys);
-        TrieKey::from_list(keys)
-    }
-
-    fn generate_key(atom: &Atom, keys: &mut Vec<NodeKey<SymbolAtom>>) {
+fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
+    fn fill_key(atom: &Atom, keys: &mut Vec<NodeKey<SymbolAtom>>) {
         match atom {
             Atom::Symbol(sym) => keys.push(NodeKey::Exact(sym.clone())),
             Atom::Expression(expr) => {
                 let start = keys.len();
                 keys.push(NodeKey::ExpressionBegin);
-                expr.children().iter().for_each(|child| Self::generate_key(child, keys));
+                expr.children().iter().for_each(|child| fill_key(child, keys));
                 keys.push(NodeKey::ExpressionEnd);
                 let expr_len = keys.len() - start - 1;
                 keys[start] = NodeKey::Expression(expr_len);
@@ -102,13 +76,16 @@ impl Index {
         }
     }
 
+    let mut keys = Vec::new();
+    fill_key(atom, &mut keys);
+    TrieKey::from_list(keys)
 }
 
 /// In-memory space which can contain grounded atoms.
 // TODO: Clone is required by C API
 #[derive(Clone)]
 pub struct GroundingSpace {
-    index: Index,
+    index: MultiTrie<SymbolAtom, usize>,
     content: Vec<Atom>,
     free: BTreeSet<usize>,
     observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>,
@@ -119,7 +96,7 @@ impl GroundingSpace {
     /// Constructs new empty space.
     pub fn new() -> Self {
         Self {
-            index: Index::new(),
+            index: MultiTrie::new(),
             content: Vec::new(),
             free: BTreeSet::new(),
             observers: RefCell::new(Vec::new()),
@@ -128,9 +105,9 @@ impl GroundingSpace {
 
     /// Constructs space from vector of atoms.
     pub fn from_vec(atoms: Vec<Atom>) -> Self {
-        let mut index = Index::new();
+        let mut index = MultiTrie::new();
         for (i, atom) in atoms.iter().enumerate() {
-            index.add(atom, i);
+            index.add(atom_to_trie_key(atom), i);
         }
         Self{
             index,
@@ -189,12 +166,12 @@ impl GroundingSpace {
     fn add_internal(&mut self, atom: Atom) {
         if self.free.is_empty() {
             let pos = self.content.len();
-            self.index.add(&atom, pos);
+            self.index.add(atom_to_trie_key(&atom), pos);
             self.content.push(atom);
         } else {
             let pos = *self.free.iter().next().unwrap();
             self.free.remove(&pos);
-            self.index.add(&atom, pos);
+            self.index.add(atom_to_trie_key(&atom), pos);
             self.content[pos] = atom;
         }
     }
@@ -224,13 +201,13 @@ impl GroundingSpace {
     }
 
     fn remove_internal(&mut self, atom: &Atom) -> bool {
-        let indexes: Vec<usize> = self.index.get(atom).map(|i| *i).collect();
+        let indexes: Vec<usize> = self.index.get(atom_to_trie_key(atom)).map(|i| *i).collect();
         let mut indexes: Vec<usize> = indexes.into_iter()
             .filter(|i| self.content[*i] == *atom).collect();
         indexes.sort_by(|a, b| b.partial_cmp(a).unwrap());
         let is_removed = indexes.len() > 0;
         for i in indexes {
-            self.index.remove(atom, &i);
+            self.index.remove(atom_to_trie_key(atom), &i);
             self.free.insert(i);
         }
         is_removed
@@ -324,7 +301,7 @@ impl GroundingSpace {
         let mut result = Vec::new();
         let mut query_vars = HashSet::new();
         query.iter().filter_map(AtomIter::extract_var).for_each(|var| { query_vars.insert(var.clone()); });
-        for i in self.index.get(query) {
+        for i in self.index.get(atom_to_trie_key(query)) {
             let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", query, i).as_str());
             let next = make_variables_unique(next);
             log::trace!("single_query: match next: {}", next);
@@ -725,10 +702,10 @@ mod test {
 
     #[test]
     fn index_atom_to_key() {
-        assert_eq!(Index::key(&Atom::sym("A")), TrieKey::from_list([NodeKey::Exact(SymbolAtom::new("A".into()))]));
-        assert_eq!(Index::key(&Atom::value(1)), TrieKey::from_list([NodeKey::Wildcard]));
-        assert_eq!(Index::key(&Atom::var("a")), TrieKey::from_list([NodeKey::Wildcard]));
-        assert_eq!(Index::key(&expr!("A" "B")), TrieKey::from_list([
+        assert_eq!(atom_to_trie_key(&Atom::sym("A")), TrieKey::from_list([NodeKey::Exact(SymbolAtom::new("A".into()))]));
+        assert_eq!(atom_to_trie_key(&Atom::value(1)), TrieKey::from_list([NodeKey::Wildcard]));
+        assert_eq!(atom_to_trie_key(&Atom::var("a")), TrieKey::from_list([NodeKey::Wildcard]));
+        assert_eq!(atom_to_trie_key(&expr!("A" "B")), TrieKey::from_list([
                 NodeKey::Expression(3),
                 NodeKey::Exact(SymbolAtom::new("A".into())),
                 NodeKey::Exact(SymbolAtom::new("B".into())),
