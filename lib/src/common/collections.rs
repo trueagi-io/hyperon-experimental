@@ -149,6 +149,18 @@ impl Display for ImmutableString {
     }
 }
 
+impl From<&'static str> for ImmutableString {
+    fn from(s: &'static str) -> Self {
+        ImmutableString::Literal(s)
+    }
+}
+
+impl From<String> for ImmutableString {
+    fn from(s: String) -> Self {
+        ImmutableString::Allocated(s)
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
