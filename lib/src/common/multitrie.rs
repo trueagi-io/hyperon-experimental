@@ -240,6 +240,11 @@ where
         ValueExplorer::new(self, key, MultiTrieNode::get_exploring_strategy)
             .flat_map(|node| node.values.iter())
     }
+
+    #[cfg(test)]
+    fn size(&self) -> usize {
+        self.children.values().fold(1, |size, node| { size + node.size() })
+    }
 }
 
 #[cfg(test)]
@@ -341,5 +346,27 @@ mod test {
         assert_eq!(format!("{:?}", exact_a), "TrieKey([Exact(\"A\")])");
         assert_eq!(format!("{:?}", wild), "TrieKey([Wildcard])");
         assert_eq!(format!("{:?}", expr_a_b), "TrieKey([Expression(3), Exact(\"A\"), Exact(\"B\"), ExpressionEnd])");
+    }
+
+    #[ignore]
+    #[test]
+    fn trie_add_key_with_many_subexpr() {
+        fn with_subexpr(nvars: usize) -> TrieKey<NodeKey<usize>> {
+            let mut keys = Vec::new();
+            keys.push(NodeKey::Expression(nvars * 2 + 1));
+            for _i in 0..nvars {
+                keys.push(NodeKey::Expression(1));
+                keys.push(NodeKey::ExpressionEnd);
+            }
+            keys.push(NodeKey::ExpressionEnd);
+            TrieKey::from_list(keys)
+        }
+        let mut index = MultiTrie::new();
+
+        index.add(with_subexpr(4), 0);
+        assert_eq!(index.size(), 4*2 + 4);
+
+        index.add(with_subexpr(8), 0);
+        assert_eq!(index.size(), 8*2 + 8);
     }
 }
