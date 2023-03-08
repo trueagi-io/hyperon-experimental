@@ -348,6 +348,18 @@ mod test {
         assert_eq!(format!("{:?}", expr_a_b), "TrieKey([Expression(3), Exact(\"A\"), Exact(\"B\"), ExpressionEnd])");
     }
 
+    #[test]
+    fn trie_clone() {
+        let mut trie = MultiTrie::new();
+        let key = TrieKey::from_list([NodeKey::Exact(0), NodeKey::Wildcard,
+            NodeKey::Expression(2), NodeKey::Wildcard, NodeKey::ExpressionEnd]);
+        trie.add(key.clone(), "test");
+
+        let copy = trie.clone();
+
+        assert_eq!(copy.get(key).to_sorted(), vec!["test"]);
+    }
+
     #[ignore]
     #[test]
     fn trie_add_key_with_many_subexpr() {
