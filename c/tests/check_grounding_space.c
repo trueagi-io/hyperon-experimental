@@ -13,21 +13,51 @@ void teardown(void) {
 struct output_t {
     char str[1024];
     char len;
+    unsigned count;
 };
 
 void copy_to_output(char const* str, void* context) {
+    printf("%s", "copy_to_output\n");
     struct output_t *output = context;
     output->len += snprintf(output->str + output->len, 1024 - output->len, "%s, ", str);
 }
 
-void query_callback(bindings_t results, void* data) {
-    struct output_t *output = data;
-    for (int i = 0; i < results.size; ++i) {
+void query_callback_single_atom(const struct var_atom_t* atom, void* data)
+{
+    printf("%s", "single\n");
+    struct output_t* out = data;
+    printf("%s", atom->var);
+    printf("%s", "next\n", atom->var);
+    int l = out->len;
+    printf("%d", l);
+    printf("%s\n", "go");
+    out->len += snprintf(out->str + out->len, 1024 - out->len, "%s: ", atom->var);
+    printf("%s\n", "sprintf ok");
+    atom_to_str(atom->atom, copy_to_output, out);
+    printf("%s\n", "atom to str ok");
+
+    ++out->count;
+    printf("%d\n", out->count);
+}
+
+void query_callback(struct bindings_t const* results, void* data) {
+
+    struct output_t* out = data;
+    out->count = 0;
+
+
+    printf("%s", "callback\n");
+
+
+    bindings_traverse(results, query_callback_single_atom, out);
+
+   /* for (int i = 0; i < results.size; ++i) {
         var_atom_t const* result = results.items + i;
+
         output->len += snprintf(output->str + output->len, 1024 - output->len, "%s: ", results.items->var);
         atom_to_str(result->atom, copy_to_output, output);
         atom_free(result->atom);
-    }
+    }*/
 }
 
 START_TEST (test_query)
@@ -36,7 +66,7 @@ START_TEST (test_query)
     grounding_space_add(space, expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0));
     atom_t* query = expr(atom_sym("+"), atom_sym("A"), atom_var("b"), 0);
 
-    struct output_t result = { "", 0 };
+    struct output_t result = { "", 0 ,0};
     grounding_space_query(space, query, query_callback, &result);
     ck_assert_str_eq(result.str, "b: B, ");
 

@@ -1,14 +1,17 @@
+use std::env::var;
 use hyperon::*;
 
 use crate::util::*;
 
 use std::os::raw::*;
 use std::fmt::Display;
+use std::ptr::null;
 use std::sync::atomic::{AtomicPtr, Ordering};
+use log::debug;
 
 use hyperon::matcher::Bindings;
 use std::mem;
-use std::slice;
+//use std::slice;
 
 // Atom
 
@@ -34,14 +37,24 @@ pub struct var_atom_t {
     pub atom: *mut atom_t,
 }
 
-pub type bindings_t = array_t<var_atom_t>;
+pub struct bindings_t {
+    pub bindings: Bindings,
+}
+
+
+fn fff(bin: bindings_t) -> bool {
+    //bin.bindings.into_iter().for_each();
+
+    return false;
+}
+
 
 #[repr(C)]
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
     execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
-    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, lambda_t<bindings_t>, *mut c_void)>,
+    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, lambda_t<* const bindings_t>, *mut c_void)>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
     display: extern "C" fn(*const gnd_t, *mut c_char, usize) -> usize,
@@ -68,6 +81,41 @@ pub extern "C" fn exec_error_no_reduce() -> *mut exec_error_t {
 pub extern "C" fn exec_error_free(error: *mut exec_error_t) {
     unsafe{ drop(Box::from_raw(error)); }
 }
+
+// bindings
+#[no_mangle]
+pub unsafe extern "C" fn bindings_new() -> *mut bindings_t {
+    // cstr_as_str() keeps pointer ownership, but Atom::sym() copies resulting
+    // String into Atom::Symbol::symbol field. atom_into_ptr() moves value to the
+    // heap and gives ownership to the caller.
+    bindings_into_ptr(Bindings::new())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn bindings_traverse(bindings: * const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
+    (*bindings).bindings.iter().for_each(|(varAtom, atomItem)|  {
+            let name = string_as_cstr(varAtom.name());
+            let var = var_atom_t {
+                var: name.as_ptr(),
+                atom: atom_into_ptr(atomItem)
+            };
+            println!("cbl");
+            debug!("name {}\n", varAtom.name());
+            println!("cbl2 {}", varAtom.name());
+            callback(&var, context);
+        }
+    )
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, atom: *const var_atom_t) -> bool {
+    let mut bindings = &mut(*bindings).bindings;
+    let var = VariableAtom::new(cstr_into_string ((*atom).var));
+    let atom = (*(*atom).atom).atom.clone();
+    bindings.add_var_binding(var, atom)
+}
+
+// end of bindings
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
@@ -108,8 +156,13 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
 
 #[no_mangle]
 pub extern "C" fn atom_to_str(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
+    println!("atom_to_str rs\n");
     let atom = unsafe{ &(*atom).atom };
-    callback(str_as_cstr(atom.to_string().as_str()).as_ptr(), context);
+    println!("atom_to_str atom rs\n");
+    let s = str_as_cstr(atom.to_string().as_str());
+    println!("atom_to_str s rs\n");
+    callback(s.as_ptr(), context);
+    println!("atom_to_str rs end \n");
 }
 
 
@@ -224,8 +277,16 @@ pub fn atom_into_ptr(atom: Atom) -> *mut atom_t {
     Box::into_raw(Box::new(atom_t{ atom }))
 }
 
+pub fn bindings_into_ptr(bindings: Bindings) -> *mut bindings_t {
+    Box::into_raw(Box::new(bindings_t{bindings}))
+}
+
 pub fn ptr_into_atom(atom: *mut atom_t) -> Atom {
     unsafe{ Box::from_raw(atom) }.atom
+}
+
+pub fn ptr_into_bindings(bindings: *mut bindings_t) -> Bindings {
+    unsafe {Box::from_raw(bindings)}.bindings
 }
 
 fn vec_atom_into_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {
@@ -262,7 +323,7 @@ impl CGrounded {
         (self.api().free)(self.get_mut_ptr());
     }
 
-    extern "C" fn match_callback(cbindings: bindings_t, context: *mut c_void) {
+    extern "C" fn match_callback(cbindings: *const bindings_t, context: *mut c_void) {
         fn var_from_name(name: &str) -> VariableAtom {
             let ind = name.rfind('#');
             if let Some(i) = ind {
@@ -275,14 +336,17 @@ impl CGrounded {
             }
         }
 
-        let cbindings = unsafe { slice::from_raw_parts(cbindings.items, cbindings.size) };
+        // todo: check for optimality
+        let bindings = unsafe{ (*cbindings).bindings.clone() };
+
+        /*let cbindings = unsafe { slice::from_raw_parts(cbindings.items, cbindings.size) };
         let mut bindings = Bindings::new();
         for i in 0..cbindings.len() {
             let name = cstr_as_str(cbindings[i].var as *const c_char);
             let var = var_from_name(name);
             let atom = ptr_into_atom(cbindings[i].atom);
             bindings.add_var_binding(var, atom);
-        }
+        }*/
         mem::forget(cbindings);
 
         let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
@@ -361,17 +425,20 @@ impl Drop for CGrounded {
 mod tests {
 use super::*;
 use std::ptr;
+    use hyperon::Atom::Variable;
+
     #[test]
     pub fn test_match_callback() {
-        let var = str_as_cstr("var#1");
-        let atom = atom_into_ptr(Atom::sym("atom_test"));
-        let vec = vec![ var_atom_t{ var: var.as_ptr(), atom } ];
-        let bindings = (&vec).into();
-        
+        let var = VariableAtom::new_id ("var", 1);
+        let atom = Atom::sym("atom_test");
+        let mut bindings= Bindings::new();
+        bindings.add_var_binding(var, atom);
+        let cbindings = bindings_t{bindings };
+
         let mut results: Vec<Bindings> = Vec::new();
         let context = ptr::addr_of_mut!(results).cast::<c_void>();
 
-        CGrounded::match_callback(bindings, context);
+        CGrounded::match_callback(&cbindings, context);
 
         assert_eq!(results, vec![Bindings::from(vec![
                 (VariableAtom::new_id("var", 1), Atom::sym("atom_test"))])]);

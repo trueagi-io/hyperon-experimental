@@ -34,6 +34,12 @@ static void copy_atoms(atom_array_t atoms, void* context) {
     }
 }
 
+static void copy_atom_to_dict(const var_atom_t* atom, void* context) {
+    py::dict& pybindings = *static_cast<py::dict*>(context);
+    pybindings[atom->var] = CAtom(atom->atom);
+}
+
+
 static void copy_lists_of_atom(atom_array_t atoms, void* context) {
     py::list* list_of_lists = static_cast<py::list*>(context);
     py::list list;
@@ -54,7 +60,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 
 extern "C" {
     exec_error_t *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* args, struct vec_atom_t* ret);
-    void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bindings_t callback, void *context);
+    void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t______bindings_t callback, void *context);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
     size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
@@ -117,7 +123,7 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
     }
 }
 
-void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bindings_t callback, void *context) {
+void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t______bindings_t callback, void *context) {
     py::object hyperon = py::module_::import("hyperon");
     py::function call_match_on_grounded_atom = hyperon.attr("call_match_on_grounded_atom");
 
@@ -131,13 +137,16 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bi
         std::string vars[size];
         var_atom_t array[size];
         size_t i = 0;
+        struct bindings_t* cbindings = bindings_new();
         for (auto var_atom : pybindings) {
             vars[i] = var_atom.first.cast<py::str>();
             array[i].var = vars[i].c_str();
             array[i].atom = atom_clone(var_atom.second.attr("catom").cast<CAtom>().ptr);
+            // todo: remove unneeded vars & copies.
+            bindings_add_var_binding(cbindings, &array[i]);
             ++i;
         }
-        bindings_t cbindings = { array, size };
+
         callback(cbindings, context);
     }
 }
@@ -287,12 +296,10 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("grounding_space_query", [](CGroundingSpace space, CAtom pattern) {
             py::list results;
             grounding_space_query(space.ptr, pattern.ptr,
-                    [](bindings_t cbindings, void* context) {
+                    [](bindings_t const* cbindings, void* context) {
                         py::list& results = *(py::list*)context;
                         py::dict pybindings;
-                        for (size_t i = 0; i < cbindings.size; ++i) {
-                            pybindings[cbindings.items[i].var] = CAtom(cbindings.items[i].atom);
-                        }
+                        bindings_traverse(cbindings, copy_atom_to_dict, &pybindings );
                         results.append(pybindings);
                     }, &results);
             return results;

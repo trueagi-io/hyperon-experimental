@@ -4,7 +4,8 @@ use crate::atom::*;
 use crate::util::*;
 
 use std::os::raw::*;
-use std::ffi::CString;
+use hyperon::common::reformove::RefOrMove;
+//use std::ffi::CString;
 
 // GroundingSpace
 
@@ -55,10 +56,10 @@ pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, id
 
 #[no_mangle]
 pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
-        pattern: *const atom_t, callback: lambda_t<bindings_t>, context: *mut c_void) {
+        pattern: *const atom_t, callback: lambda_t<* const bindings_t>, context: *mut c_void) {
     let results = unsafe { (*space).borrow().query(&((*pattern).atom)) };
     for result in results.into_iter() {
-        let mut vars : Vec<CString> = Vec::new();
+        /*let mut vars : Vec<CString> = Vec::new();
         let vec: Vec<var_atom_t> = result.into_iter().map(|(k, v)| {
                 // put C string into collection which is external to closure
                 // to prevent its deallocation before callback is called
@@ -68,7 +69,11 @@ pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
                     atom: atom_into_ptr(v),
                 }
             }).collect();
-        callback((&vec).into(), context);
+        callback((&vec).into(), context);*/
+        // todo: check if rust allow this(no dead ref)
+        let b = bindings_into_ptr(result.clone());
+        println!("{}\n", unsafe{(*b).bindings.is_empty()});
+        callback(b, context);
     }
 }
 
