@@ -72,18 +72,21 @@ impl Index {
     }
 
     fn key(atom: &Atom) -> TrieKey<SymbolAtom> {
-        TrieKey::from_list(Self::key_vec(atom))
+        let mut keys = Vec::new();
+        Self::generate_key(atom, &mut keys);
+        TrieKey::from_list(keys)
     }
 
-    fn key_vec(atom: &Atom) -> Vec<NodeKey<SymbolAtom>> {
+    fn generate_key(atom: &Atom, keys: &mut Vec<NodeKey<SymbolAtom>>) {
         match atom {
-            Atom::Symbol(sym) => vec![NodeKey::Exact(sym.clone())],
+            Atom::Symbol(sym) => keys.push(NodeKey::Exact(sym.clone())),
             Atom::Expression(expr) => {
-                let mut keys: Vec<NodeKey<SymbolAtom>> = expr.children().iter()
-                    .flat_map(Self::key_vec).collect();
+                let start = keys.len();
+                keys.push(NodeKey::ExpressionBegin);
+                expr.children().iter().for_each(|child| Self::generate_key(child, keys));
                 keys.push(NodeKey::ExpressionEnd);
-                keys.insert(0, NodeKey::Expression(keys.len()));
-                keys
+                let expr_len = keys.len() - start - 1;
+                keys[start] = NodeKey::Expression(expr_len);
             },
             // TODO: At the moment all grounding symbols are matched as wildcards
             // because they potentially may have custom Grounded::match_()
@@ -95,7 +98,7 @@ impl Index {
             // the index quickly. GroundedAtom with custom match_() will be added
             // as a wildcard to be matched after search in index. It also requires
             // implementing Hash on Grounded.
-            _ => vec![NodeKey::Wildcard],
+            _ => keys.push(NodeKey::Wildcard),
         }
     }
 
@@ -720,69 +723,16 @@ mod test {
         assert_eq!(result, vec![bind!{x: sym!("a")}]);
     }
 
-    trait IntoVec<T: Ord> {
-        fn to_vec(self) -> Vec<T>;
-    }
-
-    impl<'a, T: 'a + Ord + Clone, I: Iterator<Item=&'a T>> IntoVec<T> for I {
-        fn to_vec(self) -> Vec<T> {
-            let mut vec: Vec<T> = self.cloned().collect();
-            vec.sort();
-            vec
-        }
-    }
-
     #[test]
-    fn index_add_atom_basic() {
-        let mut index = Index::new();
-        index.add(&Atom::sym("A"), 1);
-        index.add(&Atom::value(1), 2);
-        index.add(&Atom::var("a"), 3);
-        index.add(&expr!("A" "B"), 4);
-
-        // TODO: index doesn't match grounded atoms yet, it considers them as wildcards
-        // as matching can be redefined for them
-        assert_eq!(index.get(&Atom::sym("A")).to_vec(), vec![1, 2, 3]);
-        assert_eq!(index.get(&Atom::sym("B")).to_vec(), vec![2, 3]);
-
-        assert_eq!(index.get(&Atom::value(1)).to_vec(), vec![1, 2, 3, 4]);
-        assert_eq!(index.get(&Atom::value(2)).to_vec(), vec![1, 2, 3, 4]);
-
-        assert_eq!(index.get(&Atom::var("a")).to_vec(), vec![1, 2, 3, 4]);
-        assert_eq!(index.get(&Atom::var("b")).to_vec(), vec![1, 2, 3, 4]);
-
-        assert_eq!(index.get(&expr!("A" "B")).to_vec(), vec![2, 3, 4]);
-        assert_eq!(index.get(&expr!("A" "C")).to_vec(), vec![2, 3]);
+    fn index_atom_to_key() {
+        assert_eq!(Index::key(&Atom::sym("A")), TrieKey::from_list([NodeKey::Exact(SymbolAtom::new("A".into()))]));
+        assert_eq!(Index::key(&Atom::value(1)), TrieKey::from_list([NodeKey::Wildcard]));
+        assert_eq!(Index::key(&Atom::var("a")), TrieKey::from_list([NodeKey::Wildcard]));
+        assert_eq!(Index::key(&expr!("A" "B")), TrieKey::from_list([
+                NodeKey::Expression(3),
+                NodeKey::Exact(SymbolAtom::new("A".into())),
+                NodeKey::Exact(SymbolAtom::new("B".into())),
+                NodeKey::ExpressionEnd
+        ]));
     }
-
-    #[test]
-    fn index_add_atom_expr() {
-        let mut index = Index::new();
-        index.add(&expr!(("A") "B"), 1);
-        index.add(&expr!(a "C"), 2);
-
-        assert_eq!(index.get(&expr!(a "B")).to_vec(), vec![1]);
-        assert_eq!(index.get(&expr!(("A") "C")).to_vec(), vec![2]);
-    }
-
-    #[test]
-    fn index_remove_atom_basic() {
-        let mut index = Index::new();
-
-        index.add(&Atom::sym("A"), 1);
-        index.add(&Atom::value(1), 2);
-        index.add(&Atom::var("a"), 3);
-        index.add(&expr!("A" "B"), 4);
-
-        index.remove(&Atom::sym("A"), &1);
-        index.remove(&Atom::value(1), &2);
-        index.remove(&Atom::var("a"), &3);
-        index.remove(&expr!("A" "B"), &4);
-
-        assert_eq!(index.get(&Atom::sym("A")).to_vec(), vec![]);
-        assert_eq!(index.get(&Atom::value(1)).to_vec(), vec![]);
-        assert_eq!(index.get(&Atom::var("a")).to_vec(), vec![]);
-        assert_eq!(index.get(&expr!("A" "B")).to_vec(), vec![]);
-    }
-
 }

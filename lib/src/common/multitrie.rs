@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::hash::Hash;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -18,22 +19,16 @@ impl<T: PartialEq> NodeKey<T> {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct TrieKey<T>(Vec<NodeKey<T>>);
+#[derive(PartialEq, Clone, Debug)]
+pub struct TrieKey<T>(VecDeque<NodeKey<T>>);
 
 impl<T> TrieKey<T> {
-    pub fn from_list<V: Into<Vec<NodeKey<T>>>>(keys: V) -> Self {
-        let mut keys: Vec<NodeKey<T>> = keys.into();
-        keys.reverse();
-        Self(keys)
-    }
-
-    pub fn from_single(key: NodeKey<T>) -> Self {
-        Self(vec![key])
+    pub fn from_list<V: Into<VecDeque<NodeKey<T>>>>(keys: V) -> Self {
+        Self(keys.into())
     }
 
     fn pop_head(&mut self) -> Option<NodeKey<T>> {
-        self.0.pop()
+        self.0.pop_front()
     }
 
     fn pop_head_unchecked(&mut self) -> NodeKey<T> {
@@ -47,8 +42,8 @@ impl<T> TrieKey<T> {
 
 impl<T: Clone> TrieKey<T> {
     fn skip_expr(&self, expr_len: usize) -> Self {
-        let no_expr_tail = &self.0.as_slice()[..(self.0.len() - expr_len)];
-        Self(no_expr_tail.to_vec())
+        let no_expr_tail = self.0.iter().cloned().skip(expr_len).collect();
+        Self(no_expr_tail)
     }
 }
 
@@ -333,5 +328,18 @@ mod test {
         assert!(trie.get(exact_a).to_sorted().is_empty());
         assert!(trie.get(wild).to_sorted().is_empty());
         assert!(trie.get(expr_a_b).to_sorted().is_empty());
+    }
+
+    #[test]
+    fn trie_key_debug() {
+        let exact_a: TrieKey<&str> = TrieKey::from_list([NodeKey::Exact("A")]);
+        let wild: TrieKey<&str> = TrieKey::from_list([NodeKey::Wildcard]);
+        let expr_a_b: TrieKey<&str> = TrieKey::from_list([NodeKey::Expression(3)
+            , NodeKey::Exact("A"), NodeKey::Exact("B")
+            , NodeKey::ExpressionEnd]);
+
+        assert_eq!(format!("{:?}", exact_a), "TrieKey([Exact(\"A\")])");
+        assert_eq!(format!("{:?}", wild), "TrieKey([Wildcard])");
+        assert_eq!(format!("{:?}", expr_a_b), "TrieKey([Expression(3), Exact(\"A\"), Exact(\"B\"), ExpressionEnd])");
     }
 }
