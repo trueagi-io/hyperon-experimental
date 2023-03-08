@@ -14,11 +14,12 @@ use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::hash::Hash;
 
 // Grounding space
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
-enum IndexKey {
+enum NodeKey {
     Symbol(SymbolAtom),
     Wildcard,
     Expression(usize),
@@ -26,25 +27,35 @@ enum IndexKey {
     ExpressionEnd,
 }
 
-impl IndexKey {
-    fn keys_from_atom(atom: &Atom) -> Vec<IndexKey> {
+impl NodeKey {
+    fn is_expr_begin_or_end(&self) -> bool {
+        *self == NodeKey::ExpressionEnd || *self == NodeKey::ExpressionBegin
+    }
+}
+
+#[derive(Clone, Debug)]
+struct TrieKey(Vec<NodeKey>);
+
+impl TrieKey {
+
+    fn from_atom(atom: &Atom) -> Self {
         match atom {
-            Atom::Symbol(sym) => vec![IndexKey::Symbol(sym.clone())],
+            Atom::Symbol(sym) => Self(vec![NodeKey::Symbol(sym.clone())]),
             Atom::Expression(expr) => {
-                let mut keys = Vec::new();
+                let mut node_keys = Vec::new();
                 let mut expr_len = 0usize;
 
                 expr_len += 1;
-                keys.push(IndexKey::ExpressionEnd);
+                node_keys.push(NodeKey::ExpressionEnd);
 
                 for child in expr.children().iter().rev() {
-                    let mut children = IndexKey::keys_from_atom(child);
-                    expr_len += children.len();
-                    keys.append(&mut children);
+                    let mut children = Self::from_atom(child);
+                    expr_len += children.0.len();
+                    node_keys.append(&mut children.0);
                 }
 
-                keys.push(IndexKey::Expression(expr_len));
-                keys
+                node_keys.push(NodeKey::Expression(expr_len));
+                Self(node_keys)
             },
             // TODO: At the moment all grounding symbols are matched as wildcards
             // because they potentially may have custom Grounded::match_()
@@ -52,59 +63,94 @@ impl IndexKey {
             // speed of extracting grounded values from the index if GroundedAtom
             // has a flag which says whether match_() is match_by_equality() or
             // not. GroundedAtom with match_by_equality() implementation can be
-            // added as separate IndexKey::GroundedValue to navigate through
+            // added as separate NodeKey::GroundedValue to navigate through
             // the index quickly. GroundedAtom with custom match_() will be added
             // as a wildcard to be matched after search in index. It also requires
             // implementing Hash on Grounded.
-            _ => vec![IndexKey::Wildcard],
+            _ => Self(vec![NodeKey::Wildcard]),
         }
+    }
+
+    fn pop_head(&mut self) -> Option<NodeKey> {
+        self.0.pop()
+    }
+
+    fn pop_head_unchecked(&mut self) -> NodeKey {
+        self.pop_head().expect("Unexpected end of key")
+    }
+
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    fn skip_expr(&self, expr_len: usize) -> Self {
+        let no_expr_tail = &self.0.as_slice()[..(self.0.len() - expr_len)];
+        Self(no_expr_tail.to_vec())
     }
 }
 
+type MultiTrie<T> = MultiTrieNode<T>;
+
 #[derive(Clone)]
-struct IndexTree<T> {
-    next: HashMap<IndexKey, Box<IndexTree<T>>>,
-    leaf: Vec<T>,
+struct MultiTrieNode<T> {
+    children: HashMap<NodeKey, Box<MultiTrieNode<T>>>,
+    values: HashSet<T>,
 }
 
-macro_rules! walk_index_tree {
-    ( $IndexTreeIter:ident, {$( $mut_:tt )?}, $raw_mut:tt ) => {
-        struct $IndexTreeIter<'a, T, F>
-            where F: Fn(&'a $( $mut_ )? IndexTree<T>, IndexKey, Vec<IndexKey>, &mut dyn FnMut(*$raw_mut IndexTree<T>, Vec<IndexKey>))
-        {
-            queue: Vec<(* $raw_mut IndexTree<T>, Vec<IndexKey>)>,
-            next_op: F,
-            _marker: std::marker::PhantomData<&'a $( $mut_ )? IndexTree<T>>,
+macro_rules! multi_trie_explorer {
+    ( $ValueExplorer:ident, $UnexploredPath:ident, {$( $mut_:tt )?}, $raw_mut:tt ) => {
+
+        struct $UnexploredPath<T> {
+            node: * $raw_mut MultiTrieNode<T>,
+            key: TrieKey,
         }
 
-        impl<'a, T, F> $IndexTreeIter<'a, T, F>
-            where F: Fn(&'a $( $mut_ )? IndexTree<T>, IndexKey, Vec<IndexKey>, &mut dyn FnMut(*$raw_mut IndexTree<T>, Vec<IndexKey>))
-        {
-            fn new(idx: &'a $( $mut_ )? IndexTree<T>, atom: &Atom, next_op: F) -> Self {
-                let idx: * $raw_mut IndexTree<T> = idx;
-                let mut queue = Vec::new();
-
-                queue.push((idx, IndexKey::keys_from_atom(&atom)));
-
-                Self{ queue: queue, next_op, _marker: std::marker::PhantomData }
-            }
-
-            fn call_next(&mut self, idx: * $raw_mut IndexTree<T>, key: IndexKey, keys: Vec<IndexKey>) {
-                let queue = &mut self.queue;
-                (self.next_op)(unsafe{ & $( $mut_ )? *idx}, key, keys, &mut |index, keys| queue.push((index, keys)));
+        impl<T> $UnexploredPath<T> {
+            fn new(node: & $( $mut_ )? MultiTrieNode<T>, key: TrieKey) -> Self {
+                let node_ptr = & $( $mut_ )? *node;
+                Self{ node: node_ptr, key }
             }
         }
 
-        impl<'a, T, F> Iterator for $IndexTreeIter<'a, T, F>
-            where F: Fn(&'a $( $mut_ )? IndexTree<T>, IndexKey, Vec<IndexKey>, &mut dyn FnMut(*$raw_mut IndexTree<T>, Vec<IndexKey>))
+        struct $ValueExplorer<'a, T, ExploringStrategy>
+            where ExploringStrategy: Fn(&'a $( $mut_ )? MultiTrieNode<T>,
+                  TrieKey, &mut dyn FnMut($UnexploredPath<T>))
         {
-            type Item = &'a $( $mut_ )? IndexTree<T>;
+            unexplored_queue: Vec<$UnexploredPath<T>>,
+            strategy: ExploringStrategy,
+            _marker: std::marker::PhantomData<&'a $( $mut_ )? MultiTrieNode<T>>,
+        }
+
+        impl<'a, T, ExploringStrategy> $ValueExplorer<'a, T, ExploringStrategy>
+            where ExploringStrategy: Fn(&'a $( $mut_ )? MultiTrieNode<T>,
+                  TrieKey, &mut dyn FnMut($UnexploredPath<T>))
+        {
+            fn new(node: &'a $( $mut_ )? MultiTrieNode<T>, key: TrieKey, strategy: ExploringStrategy) -> Self {
+                let unexplored_queue = vec![$UnexploredPath::new(node, key)];
+                Self{ unexplored_queue, strategy, _marker: std::marker::PhantomData }
+            }
+
+            fn explore(&mut self, node: * $raw_mut MultiTrieNode<T>, key: TrieKey) {
+                let node = unsafe{ & $( $mut_ )? *node};
+                let unexplored_queue = &mut self.unexplored_queue;
+                (self.strategy)(node, key, &mut |key| unexplored_queue.push(key));
+            }
+        }
+
+        impl<'a, T, ExploringStrategy> Iterator for $ValueExplorer<'a, T, ExploringStrategy>
+            where ExploringStrategy: Fn(&'a $( $mut_ )? MultiTrieNode<T>,
+                  TrieKey, &mut dyn FnMut($UnexploredPath<T>))
+        {
+            type Item = &'a $( $mut_ )? MultiTrieNode<T>;
 
             fn next(&mut self) -> Option<Self::Item> {
-                while let Some((idx, mut keys)) = self.queue.pop() {
-                    match keys.pop() {
-                        None => return Some(unsafe{ & $( $mut_ )? *idx }),
-                        Some(key) => self.call_next(idx, key, keys),
+                while let Some($UnexploredPath{node, key}) = self.unexplored_queue.pop() {
+                    match key.is_empty() {
+                        true => {
+                            let node = unsafe{ & $( $mut_ )? *node };
+                            return Some(node);
+                        },
+                        false => self.explore(node, key),
                     }
                 }
                 None
@@ -113,138 +159,127 @@ macro_rules! walk_index_tree {
     }
 }
 
-walk_index_tree!(IndexTreeIterMut, { mut }, mut);
-walk_index_tree!(IndexTreeIter, { /* no mut */ }, const);
+multi_trie_explorer!(ValueMutExplorer, UnexploredPathMut, { mut }, mut);
+multi_trie_explorer!(ValueExplorer, UnexploredPath, { /* no mut */ }, const);
 
-impl<T: Debug + PartialEq + Clone> IndexTree<T> {
+impl<T: Debug + PartialEq + Clone + Eq + Hash> MultiTrieNode<T> {
 
     fn new() -> Self {
-        Self{ next: HashMap::new(), leaf: Vec::new() }
+        Self{ children: HashMap::new(), values: HashSet::new() }
     }
 
-    fn next_get_or_insert(&mut self, key: IndexKey) -> &mut IndexTree<T> {
-        self.next.entry(key).or_insert(Box::new(IndexTree::new()))
+    fn get_or_insert_child(&mut self, key: NodeKey) -> &mut MultiTrieNode<T> {
+        self.children.entry(key).or_insert(Box::new(MultiTrieNode::new()))
     }
 
-    fn next_get(&self, key: &IndexKey) -> Option<&IndexTree<T>> {
-        self.next.get(key).map(Box::as_ref)
+    fn get_child(&self, key: &NodeKey) -> Option<&MultiTrieNode<T>> {
+        self.children.get(key).map(Box::as_ref)
     }
 
-    fn next_get_mut(&mut self, key: &IndexKey) -> Option<&mut IndexTree<T>> {
-        self.next.get_mut(key).map(Box::as_mut)
+    fn get_child_mut(&mut self, key: &NodeKey) -> Option<&mut MultiTrieNode<T>> {
+        self.children.get_mut(key).map(Box::as_mut)
     }
 
-    fn next_iter<'a>(&'a self, filter: &'a dyn Fn(&IndexKey)->bool) -> impl Iterator<Item=&'a IndexTree<T>> + 'a {
-        self.next.iter().filter_map(move |(key, idx)| {
-            match filter(key) {
-                true => Some(idx.as_ref()),
-                false => None,
-            }
-        })
-    }
+    fn add_exploring_strategy(&mut self, mut key: TrieKey, callback: &mut dyn FnMut(UnexploredPathMut<T>)) {
+        let head = key.pop_head_unchecked();
+        match head {
+            NodeKey::Expression(expr_len) => {
+                let wildcard_path_start = self.get_or_insert_child(head);
+                callback(UnexploredPathMut::new(wildcard_path_start, key.skip_expr(expr_len)));
 
-    fn next_iter_mut<'a>(&'a mut self, filter: &'a dyn Fn(&IndexKey)->bool) -> impl Iterator<Item=&'a mut IndexTree<T>> + 'a {
-        self.next.iter_mut().filter_map(move |(key, idx)| {
-            match filter(key) {
-                true => Some(idx.as_mut()),
-                false => None,
-            }
-        })
-    }
-
-    fn next_for_add<'a>(&'a mut self, key: IndexKey, keys: Vec<IndexKey>,
-            callback: &mut dyn FnMut(*mut IndexTree<T>, Vec<IndexKey>)) {
-        if let IndexKey::Expression(expr_len) = key {
-            let wildmatch_idx = self.next_get_or_insert(key);
-            let tail = &keys.as_slice()[..(keys.len() - expr_len)];
-            callback(wildmatch_idx, tail.to_vec());
-
-            let full_idx = self.next_get_or_insert(IndexKey::ExpressionBegin);
-            callback(full_idx, keys);
-        } else {
-            let idx = self.next_get_or_insert(key);
-            callback(idx, keys)
+                let expanded_path_start = self.get_or_insert_child(NodeKey::ExpressionBegin);
+                callback(UnexploredPathMut::new(expanded_path_start, key));
+            },
+            NodeKey::ExpressionBegin => panic!(concat!(
+                    "NodeKey::ExpressionBegin used only for indexing never for searching.",
+                    "Should not be included into a key created from atom.")),
+            _ => {
+                let node = self.get_or_insert_child(head);
+                callback(UnexploredPathMut::new(node, key));
+            },
         }
     }
 
-    fn next_for_remove<'a>(&'a mut self, key: IndexKey, keys: Vec<IndexKey>,
-            callback: &mut dyn FnMut(*mut IndexTree<T>, Vec<IndexKey>)) {
-        match key {
-            IndexKey::Symbol(_) => {
-                self.next_get_mut(&key).map_or((), |idx| callback(idx, keys.clone()));
-                self.next_get_mut(&IndexKey::Wildcard).map_or((), |idx| callback(idx, keys));
+    fn remove_exploring_strategy(&mut self, mut key: TrieKey, callback: &mut dyn FnMut(UnexploredPathMut<T>)) {
+        let head = key.pop_head_unchecked();
+        match head {
+            NodeKey::Symbol(_) => {
+                self.get_child_mut(&head).map(|child| callback(UnexploredPathMut::new(child, key.clone())));
+                self.get_child_mut(&NodeKey::Wildcard).map(|child| callback(UnexploredPathMut::new(child, key)));
             },
-            IndexKey::ExpressionEnd =>
-                self.next_get_mut(&key).map_or((), |idx| callback(idx, keys)),
-            IndexKey::Expression(expr_len) => {
-                let len = keys.len() - expr_len;
-                let tail = &keys.as_slice()[..len];
-                self.next_get_mut(&IndexKey::Wildcard).map_or((), |idx| callback(idx, tail.to_vec()));
-                self.next_get_mut(&key).map_or((), |idx| callback(idx, tail.to_vec()));
-                self.next_get_mut(&IndexKey::ExpressionBegin).map_or((), |idx| callback(idx, keys));
+            NodeKey::ExpressionEnd => {
+                self.get_child_mut(&head).map(|child| callback(UnexploredPathMut::new(child, key)));
             },
-            IndexKey::Wildcard => self.next_iter_mut(&|key|
-                *key != IndexKey::ExpressionEnd && *key != IndexKey::ExpressionBegin)
-                .for_each(|idx| callback(idx, keys.clone())),
-            IndexKey::ExpressionBegin => panic!("Should not be included into a key from atom"),
+            NodeKey::Expression(expr_len) => {
+                self.get_child_mut(&NodeKey::Wildcard).map(|child| callback(UnexploredPathMut::new(child, key.skip_expr(expr_len))));
+                self.get_child_mut(&head).map(|child| callback(UnexploredPathMut::new(child, key.skip_expr(expr_len))));
+                self.get_child_mut(&NodeKey::ExpressionBegin).map(|child| callback(UnexploredPathMut::new(child, key)));
+            },
+            NodeKey::Wildcard => {
+                self.children.iter_mut()
+                    .filter(|(key, _child)| !key.is_expr_begin_or_end())
+                    .map(|(_key, child)| child)
+                    .for_each(|child| callback(UnexploredPathMut::new(child.as_mut(), key.clone())));
+            },
+            NodeKey::ExpressionBegin => panic!(concat!(
+                    "NodeKey::ExpressionBegin used only for indexing never for searching.",
+                    "Should not be included into a key created from atom.")),
         }
     }
     
-    fn remove_value(&mut self, value: &T) -> bool {
-        match self.leaf.iter().position(|other| *other == *value) {
-            Some(position) => {
-                self.leaf.remove(position);
-                true
+    fn get_exploring_strategy(&self, mut key: TrieKey, callback: &mut dyn FnMut(UnexploredPath<T>)) {
+        let head = key.pop_head_unchecked();
+        match head {
+            NodeKey::Symbol(_) => {
+                self.get_child(&head).map(|child| callback(UnexploredPath::new(child, key.clone())));
+                self.get_child(&NodeKey::Wildcard).map(|child| callback(UnexploredPath::new(child, key)));
             },
-            None => false,
-        }
-    }
-
-    fn next_for_get<'a>(&'a self, key: IndexKey, keys: Vec<IndexKey>,
-            callback: &mut dyn FnMut(*const IndexTree<T>, Vec<IndexKey>)) {
-        match key {
-            IndexKey::Symbol(_) => {
-                self.next_get(&key).map_or((), |idx| callback(idx, keys.clone()));
-                self.next_get(&IndexKey::Wildcard).map_or((), |idx| callback(idx, keys));
+            NodeKey::ExpressionEnd => {
+                self.get_child(&head).map(|child| callback(UnexploredPath::new(child, key)));
+            }
+            NodeKey::Expression(expr_len) => {
+                self.get_child(&NodeKey::Wildcard).map(|child| callback(UnexploredPath::new(child, key.skip_expr(expr_len))));
+                self.get_child(&NodeKey::ExpressionBegin).map(|child| callback(UnexploredPath::new(child, key)));
             },
-            IndexKey::ExpressionEnd =>
-                self.next_get(&key).map_or((), |idx| callback(idx, keys)),
-            IndexKey::Expression(expr_len) => {
-                let len = keys.len() - expr_len;
-                let tail = &keys.as_slice()[..len];
-                self.next_get(&IndexKey::Wildcard).map_or((), |idx| callback(idx, tail.to_vec()));
-                self.next_get(&IndexKey::ExpressionBegin).map_or((), |idx| callback(idx, keys));
+            NodeKey::Wildcard => {
+                self.children.iter()
+                    .filter(|(key, _child)| !key.is_expr_begin_or_end())
+                    .map(|(_key, child)| child)
+                    .for_each(|child| callback(UnexploredPath::new(child.as_ref(), key.clone())));
             },
-            IndexKey::Wildcard => self.next_iter(&|key|
-                *key != IndexKey::ExpressionEnd && *key != IndexKey::ExpressionBegin)
-                .for_each(|idx| callback(idx, keys.clone())),
-            IndexKey::ExpressionBegin => panic!("Should not be included into a key from atom"),
+            NodeKey::ExpressionBegin => panic!(concat!(
+                    "NodeKey::ExpressionBegin used only for indexing never for searching.",
+                    "Should not be included into a key created from atom.")),
         }
     }
     
-    fn add(&mut self, key: &Atom, value: T) {
-        // TODO: cannot log here because of borrowing rules violation
-        //log::debug!("IndexTree::add(): key: {:?}, value: {:?}", key, value);
-        IndexTreeIterMut::new(self, key, |idx, key, keys, callback| {
-            idx.next_for_add(key, keys, callback)
-        }).for_each(|idx| idx.leaf.push(value.clone()));
+    fn add(&mut self, atom: &Atom, value: T) {
+        let key = TrieKey::from_atom(atom);
+        log::debug!("MultiTrieNode::add(): key: {:?}, value: {:?}", key, value);
+        ValueMutExplorer::new(self, key, MultiTrieNode::add_exploring_strategy)
+            .for_each(|node| { node.values.insert(value.clone()); });
     }
 
     // TODO: at the moment the method doesn't remove the key from the index. 
     // It removes only value.  It can be fixed by using links to parent in the
-    // IndexTree nodes and cleaning up the map entries which point to the empty
+    // MultiTrieNode nodes and cleaning up the map entries which point to the empty
     // nodes only.
-    fn remove(&mut self, key: &Atom, value: &T) -> bool {
-        log::debug!("IndexTree::remove(): key: {:?}, value: {:?}", key, value);
-        IndexTreeIterMut::new(self, &key, |idx, key, keys, callback| {
-            idx.next_for_remove(key, keys, callback)
-        }).map(|idx| idx.remove_value(value)).fold(false, |a, b| a | b)
+    fn remove(&mut self, atom: &Atom, value: &T) -> bool {
+        let key = TrieKey::from_atom(atom);
+        log::debug!("MultiTrieNode::remove(): key: {:?}, value: {:?}", key, value);
+        ValueMutExplorer::new(self, key, MultiTrieNode::remove_exploring_strategy)
+            .map(|node| node.remove_value(value)).fold(false, |a, b| a | b)
+    }
+
+    #[inline]
+    fn remove_value(&mut self, value: &T) -> bool {
+        self.values.remove(value)
     }
 
     fn get(&self, pattern: &Atom) -> impl Iterator<Item=&T> {
-        IndexTreeIter::new(self, &pattern, |idx, key, keys, callback| {
-            idx.next_for_get(key, keys, callback)
-        }).flat_map(|idx| idx.leaf.as_slice().iter())
+        let key = TrieKey::from_atom(pattern);
+        ValueExplorer::new(self, key, MultiTrieNode::get_exploring_strategy)
+            .flat_map(|node| node.values.iter())
     }
 }
 
@@ -285,7 +320,7 @@ impl<'a> Iterator for GroundingSpaceIter<'a> {
 // TODO: Clone is required by C API
 #[derive(Clone)]
 pub struct GroundingSpace {
-    index: IndexTree<usize>,
+    index: MultiTrie<usize>,
     content: Vec<Atom>,
     free: BTreeSet<usize>,
     observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>,
@@ -296,7 +331,7 @@ impl GroundingSpace {
     /// Constructs new empty space.
     pub fn new() -> Self {
         Self {
-            index: IndexTree::new(),
+            index: MultiTrie::new(),
             content: Vec::new(),
             free: BTreeSet::new(),
             observers: RefCell::new(Vec::new()),
@@ -305,7 +340,7 @@ impl GroundingSpace {
 
     /// Constructs space from vector of atoms.
     pub fn from_vec(atoms: Vec<Atom>) -> Self {
-        let mut index = IndexTree::new();
+        let mut index = MultiTrie::new();
         for (i, atom) in atoms.iter().enumerate() {
             index.add(atom, i);
         }
@@ -913,8 +948,8 @@ mod test {
     }
 
     #[test]
-    fn index_tree_add_atom_basic() {
-        let mut index = IndexTree::new();
+    fn multi_trie_add_atom_basic() {
+        let mut index = MultiTrie::new();
         index.add(&Atom::sym("A"), 1);
         index.add(&Atom::value(1), 2);
         index.add(&Atom::var("a"), 3);
@@ -936,8 +971,8 @@ mod test {
     }
 
     #[test]
-    fn index_tree_add_atom_expr() {
-        let mut index = IndexTree::new();
+    fn multi_trie_add_atom_expr() {
+        let mut index = MultiTrie::new();
         index.add(&expr!(("A") "B"), 1);
         index.add(&expr!(a "C"), 2);
 
@@ -946,8 +981,8 @@ mod test {
     }
 
     #[test]
-    fn index_tree_remove_atom_basic() {
-        let mut index = IndexTree::new();
+    fn multi_trie_remove_atom_basic() {
+        let mut index = MultiTrie::new();
 
         index.add(&Atom::sym("A"), 1);
         index.add(&Atom::value(1), 2);
