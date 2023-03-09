@@ -8,6 +8,7 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon::matcher::Bindings;
 use std::mem;
+use std::ptr;
 
 
 // Atom
@@ -81,6 +82,22 @@ pub unsafe extern "C" fn bindings_new() -> *mut bindings_t {
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn bindings_free(bindings: *mut bindings_t) {
+    // drop() does nothing actually, but it is used here for clarity
+    drop(Box::from_raw(bindings));
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_clone(bindings: *const bindings_t) -> *mut bindings_t {
+    bindings_into_ptr(unsafe{ &(*bindings) }.bindings.clone())
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn bindings_eq(bindingsa: *const bindings_t, bindingsb: *const bindings_t) -> bool {
+    (*bindingsa).bindings == (*bindingsb).bindings
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn bindings_traverse(bindings: * const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
     (*bindings).bindings.iter().for_each(|(var, atom)|  {
             let name = string_as_cstr(var.name());
@@ -100,6 +117,54 @@ pub unsafe extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, at
     let atom = (*(*atom).atom).atom.clone();
     bindings.add_var_binding(var, atom)
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn bindings_is_empty(bindings: *const bindings_t) -> bool{
+    let bindings = &(*bindings).bindings;
+    bindings.is_empty()
+}
+
+// todo: discuss if var_atom_t is more convinient, option convention
+#[no_mangle]
+pub unsafe extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const c_char) -> *const atom_t
+{
+    let bindings = &(*bindings).bindings;
+    let var = VariableAtom::new(cstr_into_string(var_name));
+
+    match bindings.resolve(&var) {
+        None => { ptr::null() }
+        Some(atom) => { atom_into_ptr(atom) }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindings_right: *const bindings_t) -> *mut bindings_t
+{
+    let bindings_l = &(*bindings_left).bindings;
+    let bindings_r = &(*bindings_right).bindings;
+
+    match Bindings::merge(bindings_l, bindings_r){
+        None => {ptr::null_mut()}
+        Some(merged) => { bindings_into_ptr(merged)}
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_name: *const c_char) -> *mut atom_t {
+    let bindings = &mut(*bindings).bindings;
+    let var = VariableAtom::new(cstr_into_string(var_name));
+
+    match bindings.resolve_and_remove(&var) {
+        None => { ptr::null_mut()}
+        Some(removed) =>{atom_into_ptr(removed)}
+    }
+}
+
+
+// todo: discuss correepondance HashSet to c struct
+//pub unsafe extern "C" fn bindings_narrow_vars(bindings: *const bindings_t)
+//pub fn narrow_vars(&self, vars: &HashSet<VariableAtom>) -> Bindings {
+
 
 // end of bindings
 
