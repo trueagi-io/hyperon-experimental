@@ -7,246 +7,15 @@ use crate::atom::*;
 use crate::atom::matcher::{Bindings, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::matcher::MatchResultIter;
+use crate::common::multitrie::{MultiTrie, TrieKey, NodeKey};
 
 use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 use std::collections::BTreeSet;
-use std::collections::HashMap;
 use std::collections::HashSet;
 
 // Grounding space
-
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
-enum IndexKey {
-    Symbol(SymbolAtom),
-    Wildcard,
-    Expression(usize),
-    ExpressionBegin,
-    ExpressionEnd,
-}
-
-impl IndexKey {
-    fn keys_from_atom(atom: &Atom) -> Vec<IndexKey> {
-        match atom {
-            Atom::Symbol(sym) => vec![IndexKey::Symbol(sym.clone())],
-            Atom::Expression(expr) => {
-                let mut keys = Vec::new();
-                let mut expr_len = 0usize;
-
-                expr_len += 1;
-                keys.push(IndexKey::ExpressionEnd);
-
-                for child in expr.children().iter().rev() {
-                    let mut children = IndexKey::keys_from_atom(child);
-                    expr_len += children.len();
-                    keys.append(&mut children);
-                }
-
-                keys.push(IndexKey::Expression(expr_len));
-                keys
-            },
-            // TODO: At the moment all grounding symbols are matched as wildcards
-            // because they potentially may have custom Grounded::match_()
-            // implementation and we cannot understand it from data. We could improve
-            // speed of extracting grounded values from the index if GroundedAtom
-            // has a flag which says whether match_() is match_by_equality() or
-            // not. GroundedAtom with match_by_equality() implementation can be
-            // added as separate IndexKey::GroundedValue to navigate through
-            // the index quickly. GroundedAtom with custom match_() will be added
-            // as a wildcard to be matched after search in index. It also requires
-            // implementing Hash on Grounded.
-            _ => vec![IndexKey::Wildcard],
-        }
-    }
-}
-
-#[derive(Clone)]
-struct IndexTree<T> {
-    next: HashMap<IndexKey, Box<IndexTree<T>>>,
-    leaf: Vec<T>,
-}
-
-macro_rules! walk_index_tree {
-    ( $IndexTreeIter:ident, {$( $mut_:tt )?}, $raw_mut:tt ) => {
-        struct $IndexTreeIter<'a, T, F>
-            where F: Fn(&'a $( $mut_ )? IndexTree<T>, IndexKey, Vec<IndexKey>, &mut dyn FnMut(*$raw_mut IndexTree<T>, Vec<IndexKey>))
-        {
-            queue: Vec<(* $raw_mut IndexTree<T>, Vec<IndexKey>)>,
-            next_op: F,
-            _marker: std::marker::PhantomData<&'a $( $mut_ )? IndexTree<T>>,
-        }
-
-        impl<'a, T, F> $IndexTreeIter<'a, T, F>
-            where F: Fn(&'a $( $mut_ )? IndexTree<T>, IndexKey, Vec<IndexKey>, &mut dyn FnMut(*$raw_mut IndexTree<T>, Vec<IndexKey>))
-        {
-            fn new(idx: &'a $( $mut_ )? IndexTree<T>, atom: &Atom, next_op: F) -> Self {
-                let idx: * $raw_mut IndexTree<T> = idx;
-                let mut queue = Vec::new();
-
-                queue.push((idx, IndexKey::keys_from_atom(&atom)));
-
-                Self{ queue: queue, next_op, _marker: std::marker::PhantomData }
-            }
-
-            fn call_next(&mut self, idx: * $raw_mut IndexTree<T>, key: IndexKey, keys: Vec<IndexKey>) {
-                let queue = &mut self.queue;
-                (self.next_op)(unsafe{ & $( $mut_ )? *idx}, key, keys, &mut |index, keys| queue.push((index, keys)));
-            }
-        }
-
-        impl<'a, T, F> Iterator for $IndexTreeIter<'a, T, F>
-            where F: Fn(&'a $( $mut_ )? IndexTree<T>, IndexKey, Vec<IndexKey>, &mut dyn FnMut(*$raw_mut IndexTree<T>, Vec<IndexKey>))
-        {
-            type Item = &'a $( $mut_ )? IndexTree<T>;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                while let Some((idx, mut keys)) = self.queue.pop() {
-                    match keys.pop() {
-                        None => return Some(unsafe{ & $( $mut_ )? *idx }),
-                        Some(key) => self.call_next(idx, key, keys),
-                    }
-                }
-                None
-            }
-        }
-    }
-}
-
-walk_index_tree!(IndexTreeIterMut, { mut }, mut);
-walk_index_tree!(IndexTreeIter, { /* no mut */ }, const);
-
-impl<T: Debug + PartialEq + Clone> IndexTree<T> {
-
-    fn new() -> Self {
-        Self{ next: HashMap::new(), leaf: Vec::new() }
-    }
-
-    fn next_get_or_insert(&mut self, key: IndexKey) -> &mut IndexTree<T> {
-        self.next.entry(key).or_insert(Box::new(IndexTree::new()))
-    }
-
-    fn next_get(&self, key: &IndexKey) -> Option<&IndexTree<T>> {
-        self.next.get(key).map(Box::as_ref)
-    }
-
-    fn next_get_mut(&mut self, key: &IndexKey) -> Option<&mut IndexTree<T>> {
-        self.next.get_mut(key).map(Box::as_mut)
-    }
-
-    fn next_iter<'a>(&'a self, filter: &'a dyn Fn(&IndexKey)->bool) -> impl Iterator<Item=&'a IndexTree<T>> + 'a {
-        self.next.iter().filter_map(move |(key, idx)| {
-            match filter(key) {
-                true => Some(idx.as_ref()),
-                false => None,
-            }
-        })
-    }
-
-    fn next_iter_mut<'a>(&'a mut self, filter: &'a dyn Fn(&IndexKey)->bool) -> impl Iterator<Item=&'a mut IndexTree<T>> + 'a {
-        self.next.iter_mut().filter_map(move |(key, idx)| {
-            match filter(key) {
-                true => Some(idx.as_mut()),
-                false => None,
-            }
-        })
-    }
-
-    fn next_for_add<'a>(&'a mut self, key: IndexKey, keys: Vec<IndexKey>,
-            callback: &mut dyn FnMut(*mut IndexTree<T>, Vec<IndexKey>)) {
-        if let IndexKey::Expression(expr_len) = key {
-            let wildmatch_idx = self.next_get_or_insert(key);
-            let tail = &keys.as_slice()[..(keys.len() - expr_len)];
-            callback(wildmatch_idx, tail.to_vec());
-
-            let full_idx = self.next_get_or_insert(IndexKey::ExpressionBegin);
-            callback(full_idx, keys);
-        } else {
-            let idx = self.next_get_or_insert(key);
-            callback(idx, keys)
-        }
-    }
-
-    fn next_for_remove<'a>(&'a mut self, key: IndexKey, keys: Vec<IndexKey>,
-            callback: &mut dyn FnMut(*mut IndexTree<T>, Vec<IndexKey>)) {
-        match key {
-            IndexKey::Symbol(_) => {
-                self.next_get_mut(&key).map_or((), |idx| callback(idx, keys.clone()));
-                self.next_get_mut(&IndexKey::Wildcard).map_or((), |idx| callback(idx, keys));
-            },
-            IndexKey::ExpressionEnd =>
-                self.next_get_mut(&key).map_or((), |idx| callback(idx, keys)),
-            IndexKey::Expression(expr_len) => {
-                let len = keys.len() - expr_len;
-                let tail = &keys.as_slice()[..len];
-                self.next_get_mut(&IndexKey::Wildcard).map_or((), |idx| callback(idx, tail.to_vec()));
-                self.next_get_mut(&key).map_or((), |idx| callback(idx, tail.to_vec()));
-                self.next_get_mut(&IndexKey::ExpressionBegin).map_or((), |idx| callback(idx, keys));
-            },
-            IndexKey::Wildcard => self.next_iter_mut(&|key|
-                *key != IndexKey::ExpressionEnd && *key != IndexKey::ExpressionBegin)
-                .for_each(|idx| callback(idx, keys.clone())),
-            IndexKey::ExpressionBegin => panic!("Should not be included into a key from atom"),
-        }
-    }
-    
-    fn remove_value(&mut self, value: &T) -> bool {
-        match self.leaf.iter().position(|other| *other == *value) {
-            Some(position) => {
-                self.leaf.remove(position);
-                true
-            },
-            None => false,
-        }
-    }
-
-    fn next_for_get<'a>(&'a self, key: IndexKey, keys: Vec<IndexKey>,
-            callback: &mut dyn FnMut(*const IndexTree<T>, Vec<IndexKey>)) {
-        match key {
-            IndexKey::Symbol(_) => {
-                self.next_get(&key).map_or((), |idx| callback(idx, keys.clone()));
-                self.next_get(&IndexKey::Wildcard).map_or((), |idx| callback(idx, keys));
-            },
-            IndexKey::ExpressionEnd =>
-                self.next_get(&key).map_or((), |idx| callback(idx, keys)),
-            IndexKey::Expression(expr_len) => {
-                let len = keys.len() - expr_len;
-                let tail = &keys.as_slice()[..len];
-                self.next_get(&IndexKey::Wildcard).map_or((), |idx| callback(idx, tail.to_vec()));
-                self.next_get(&IndexKey::ExpressionBegin).map_or((), |idx| callback(idx, keys));
-            },
-            IndexKey::Wildcard => self.next_iter(&|key|
-                *key != IndexKey::ExpressionEnd && *key != IndexKey::ExpressionBegin)
-                .for_each(|idx| callback(idx, keys.clone())),
-            IndexKey::ExpressionBegin => panic!("Should not be included into a key from atom"),
-        }
-    }
-    
-    fn add(&mut self, key: &Atom, value: T) {
-        // TODO: cannot log here because of borrowing rules violation
-        //log::debug!("IndexTree::add(): key: {:?}, value: {:?}", key, value);
-        IndexTreeIterMut::new(self, key, |idx, key, keys, callback| {
-            idx.next_for_add(key, keys, callback)
-        }).for_each(|idx| idx.leaf.push(value.clone()));
-    }
-
-    // TODO: at the moment the method doesn't remove the key from the index. 
-    // It removes only value.  It can be fixed by using links to parent in the
-    // IndexTree nodes and cleaning up the map entries which point to the empty
-    // nodes only.
-    fn remove(&mut self, key: &Atom, value: &T) -> bool {
-        log::debug!("IndexTree::remove(): key: {:?}, value: {:?}", key, value);
-        IndexTreeIterMut::new(self, &key, |idx, key, keys, callback| {
-            idx.next_for_remove(key, keys, callback)
-        }).map(|idx| idx.remove_value(value)).fold(false, |a, b| a | b)
-    }
-
-    fn get(&self, pattern: &Atom) -> impl Iterator<Item=&T> {
-        IndexTreeIter::new(self, &pattern, |idx, key, keys, callback| {
-            idx.next_for_get(key, keys, callback)
-        }).flat_map(|idx| idx.leaf.as_slice().iter())
-    }
-}
 
 /// Symbol to concatenate queries to space.
 pub const COMMA_SYMBOL : Atom = sym!(",");
@@ -281,11 +50,42 @@ impl<'a> Iterator for GroundingSpaceIter<'a> {
     }
 }
 
+fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
+    fn fill_key(atom: &Atom, keys: &mut Vec<NodeKey<SymbolAtom>>) {
+        match atom {
+            Atom::Symbol(sym) => keys.push(NodeKey::Exact(sym.clone())),
+            Atom::Expression(expr) => {
+                let start = keys.len();
+                keys.push(NodeKey::ExpressionBegin);
+                expr.children().iter().for_each(|child| fill_key(child, keys));
+                keys.push(NodeKey::ExpressionEnd);
+                let expr_len = keys.len() - start - 1;
+                keys[start] = NodeKey::Expression(expr_len);
+            },
+            // TODO: At the moment all grounding symbols are matched as wildcards
+            // because they potentially may have custom Grounded::match_()
+            // implementation and we cannot understand it from data. We could improve
+            // speed of extracting grounded values from the index if GroundedAtom
+            // has a flag which says whether match_() is match_by_equality() or
+            // not. GroundedAtom with match_by_equality() implementation can be
+            // added as separate NodeKey::GroundedValue to navigate through
+            // the index quickly. GroundedAtom with custom match_() will be added
+            // as a wildcard to be matched after search in index. It also requires
+            // implementing Hash on Grounded.
+            _ => keys.push(NodeKey::Wildcard),
+        }
+    }
+
+    let mut keys = Vec::new();
+    fill_key(atom, &mut keys);
+    TrieKey::from_list(keys)
+}
+
 /// In-memory space which can contain grounded atoms.
 // TODO: Clone is required by C API
 #[derive(Clone)]
 pub struct GroundingSpace {
-    index: IndexTree<usize>,
+    index: MultiTrie<SymbolAtom, usize>,
     content: Vec<Atom>,
     free: BTreeSet<usize>,
     observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>,
@@ -296,7 +96,7 @@ impl GroundingSpace {
     /// Constructs new empty space.
     pub fn new() -> Self {
         Self {
-            index: IndexTree::new(),
+            index: MultiTrie::new(),
             content: Vec::new(),
             free: BTreeSet::new(),
             observers: RefCell::new(Vec::new()),
@@ -305,9 +105,9 @@ impl GroundingSpace {
 
     /// Constructs space from vector of atoms.
     pub fn from_vec(atoms: Vec<Atom>) -> Self {
-        let mut index = IndexTree::new();
+        let mut index = MultiTrie::new();
         for (i, atom) in atoms.iter().enumerate() {
-            index.add(atom, i);
+            index.add(atom_to_trie_key(atom), i);
         }
         Self{
             index,
@@ -366,12 +166,12 @@ impl GroundingSpace {
     fn add_internal(&mut self, atom: Atom) {
         if self.free.is_empty() {
             let pos = self.content.len();
-            self.index.add(&atom, pos);
+            self.index.add(atom_to_trie_key(&atom), pos);
             self.content.push(atom);
         } else {
             let pos = *self.free.iter().next().unwrap();
             self.free.remove(&pos);
-            self.index.add(&atom, pos);
+            self.index.add(atom_to_trie_key(&atom), pos);
             self.content[pos] = atom;
         }
     }
@@ -401,13 +201,13 @@ impl GroundingSpace {
     }
 
     fn remove_internal(&mut self, atom: &Atom) -> bool {
-        let indexes: Vec<usize> = self.index.get(atom).map(|i| *i).collect();
+        let indexes: Vec<usize> = self.index.get(atom_to_trie_key(atom)).map(|i| *i).collect();
         let mut indexes: Vec<usize> = indexes.into_iter()
             .filter(|i| self.content[*i] == *atom).collect();
         indexes.sort_by(|a, b| b.partial_cmp(a).unwrap());
         let is_removed = indexes.len() > 0;
         for i in indexes {
-            self.index.remove(atom, &i);
+            self.index.remove(atom_to_trie_key(atom), &i);
             self.free.insert(i);
         }
         is_removed
@@ -501,7 +301,7 @@ impl GroundingSpace {
         let mut result = Vec::new();
         let mut query_vars = HashSet::new();
         query.iter().filter_map(AtomIter::extract_var).for_each(|var| { query_vars.insert(var.clone()); });
-        for i in self.index.get(query) {
+        for i in self.index.get(atom_to_trie_key(query)) {
             let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", query, i).as_str());
             let next = make_variables_unique(next);
             log::trace!("single_query: match next: {}", next);
@@ -900,69 +700,16 @@ mod test {
         assert_eq!(result, vec![bind!{x: sym!("a")}]);
     }
 
-    trait IntoVec<T: Ord> {
-        fn to_vec(self) -> Vec<T>;
-    }
-
-    impl<'a, T: 'a + Ord + Clone, I: Iterator<Item=&'a T>> IntoVec<T> for I {
-        fn to_vec(self) -> Vec<T> {
-            let mut vec: Vec<T> = self.cloned().collect();
-            vec.sort();
-            vec
-        }
-    }
-
     #[test]
-    fn index_tree_add_atom_basic() {
-        let mut index = IndexTree::new();
-        index.add(&Atom::sym("A"), 1);
-        index.add(&Atom::value(1), 2);
-        index.add(&Atom::var("a"), 3);
-        index.add(&expr!("A" "B"), 4);
-
-        // TODO: index doesn't match grounded atoms yet, it considers them as wildcards
-        // as matching can be redefined for them
-        assert_eq!(index.get(&Atom::sym("A")).to_vec(), vec![1, 2, 3]);
-        assert_eq!(index.get(&Atom::sym("B")).to_vec(), vec![2, 3]);
-
-        assert_eq!(index.get(&Atom::value(1)).to_vec(), vec![1, 2, 3, 4]);
-        assert_eq!(index.get(&Atom::value(2)).to_vec(), vec![1, 2, 3, 4]);
-
-        assert_eq!(index.get(&Atom::var("a")).to_vec(), vec![1, 2, 3, 4]);
-        assert_eq!(index.get(&Atom::var("b")).to_vec(), vec![1, 2, 3, 4]);
-
-        assert_eq!(index.get(&expr!("A" "B")).to_vec(), vec![2, 3, 4]);
-        assert_eq!(index.get(&expr!("A" "C")).to_vec(), vec![2, 3]);
+    fn index_atom_to_key() {
+        assert_eq!(atom_to_trie_key(&Atom::sym("A")), TrieKey::from_list([NodeKey::Exact(SymbolAtom::new("A".into()))]));
+        assert_eq!(atom_to_trie_key(&Atom::value(1)), TrieKey::from_list([NodeKey::Wildcard]));
+        assert_eq!(atom_to_trie_key(&Atom::var("a")), TrieKey::from_list([NodeKey::Wildcard]));
+        assert_eq!(atom_to_trie_key(&expr!("A" "B")), TrieKey::from_list([
+                NodeKey::Expression(3),
+                NodeKey::Exact(SymbolAtom::new("A".into())),
+                NodeKey::Exact(SymbolAtom::new("B".into())),
+                NodeKey::ExpressionEnd
+        ]));
     }
-
-    #[test]
-    fn index_tree_add_atom_expr() {
-        let mut index = IndexTree::new();
-        index.add(&expr!(("A") "B"), 1);
-        index.add(&expr!(a "C"), 2);
-
-        assert_eq!(index.get(&expr!(a "B")).to_vec(), vec![1]);
-        assert_eq!(index.get(&expr!(("A") "C")).to_vec(), vec![2]);
-    }
-
-    #[test]
-    fn index_tree_remove_atom_basic() {
-        let mut index = IndexTree::new();
-
-        index.add(&Atom::sym("A"), 1);
-        index.add(&Atom::value(1), 2);
-        index.add(&Atom::var("a"), 3);
-        index.add(&expr!("A" "B"), 4);
-
-        index.remove(&Atom::sym("A"), &1);
-        index.remove(&Atom::value(1), &2);
-        index.remove(&Atom::var("a"), &3);
-        index.remove(&expr!("A" "B"), &4);
-
-        assert_eq!(index.get(&Atom::sym("A")).to_vec(), vec![]);
-        assert_eq!(index.get(&Atom::value(1)).to_vec(), vec![]);
-        assert_eq!(index.get(&Atom::var("a")).to_vec(), vec![]);
-        assert_eq!(index.get(&expr!("A" "B")).to_vec(), vec![]);
-    }
-
 }
