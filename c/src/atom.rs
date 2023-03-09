@@ -310,29 +310,8 @@ impl CGrounded {
     }
 
     extern "C" fn match_callback(cbindings: *const bindings_t, context: *mut c_void) {
-        fn var_from_name(name: &str) -> VariableAtom {
-            let ind = name.rfind('#');
-            if let Some(i) = ind {
-                let name_id = &name[0..i];
-                let id_str = &name[i+1..name.len()];
-                let id = id_str.parse::<usize>().unwrap();
-                VariableAtom::new_id(name_id, id)
-            } else {
-                VariableAtom::new(name)
-            }
-        }
-
         // todo: check for optimality
         let bindings = unsafe{ (*cbindings).bindings.clone() };
-
-        /*let cbindings = unsafe { slice::from_raw_parts(cbindings.items, cbindings.size) };
-        let mut bindings = Bindings::new();
-        for i in 0..cbindings.len() {
-            let name = cstr_as_str(cbindings[i].var as *const c_char);
-            let var = var_from_name(name);
-            let atom = ptr_into_atom(cbindings[i].atom);
-            bindings.add_var_binding(var, atom);
-        }*/
         mem::forget(cbindings);
 
         let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
@@ -411,7 +390,6 @@ impl Drop for CGrounded {
 mod tests {
 use super::*;
 use std::ptr;
-    use hyperon::Atom::Variable;
 
     #[test]
     pub fn test_match_callback() {
