@@ -30,7 +30,7 @@ PR should satisfy the following requirement before being merged:
 - pass tests;
 - be reviewed.
 
-Feel free to raise draft PR if you advice or help with your change.
+Feel free to raise draft PR if you need an advice or help with your changes.
 
 ## Code style
 
