@@ -110,6 +110,10 @@ impl<T> Shared<T> {
     pub fn cloned(&self) -> Self where T: Clone {
         Self::new(RefCell::borrow(&self.0).clone())
     }
+
+    pub fn as_ptr(&self) -> *mut T {
+        self.0.as_ptr()
+    }
 }
 
 impl<T> LockBorrow<T> for Shared<T> {
