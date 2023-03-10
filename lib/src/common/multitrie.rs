@@ -50,9 +50,10 @@ impl<T: Clone> TrieKey<T> {
 
 pub type MultiTrie<K, V> = MultiTrieNode<K, V>;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct MultiTrieNode<K, V> {
-    children: HashMap<NodeKey<K>, Shared<MultiTrieNode<K, V>>>,
+    children: HashMap<NodeKey<K>, Shared<Self>>,
+    expression_wildcards: HashMap<*mut Self, Shared<Self>>,
     values: HashSet<V>,
 }
 
@@ -127,15 +128,15 @@ where
 {
 
     pub fn new() -> Self {
-        Self{ children: HashMap::new(), values: HashSet::new() }
+        Self{
+            children: HashMap::new(),
+            expression_wildcards: HashMap::new(),
+            values: HashSet::new(),
+        }
     }
 
     fn get_or_insert_child(&mut self, key: NodeKey<K>) -> Shared<Self> {
         self.children.entry(key).or_insert(Shared::new(Self::new())).clone()
-    }
-
-    fn insert_child(&mut self, key: NodeKey<K>, node: Shared<Self>) {
-        self.children.insert(key, node);
     }
 
     fn get_child(&self, key: &NodeKey<K>) -> Option<*const Self> {
@@ -144,26 +145,6 @@ where
 
     fn get_child_mut(&mut self, key: &NodeKey<K>) -> Option<*mut Self> {
         self.children.get_mut(key).map(|child| Shared::as_ptr(child))
-    }
-
-    fn add_exploring_strategy(&mut self, mut key: TrieKey<K>, callback: &mut dyn FnMut(UnexploredPathMut<K, V>)) {
-        let head = key.pop_head_unchecked();
-        match head {
-            NodeKey::Expression(expr_len) => {
-                let wildcard_path_start = self.get_or_insert_child(head);
-                callback(UnexploredPathMut::new(wildcard_path_start.as_ptr(), key.skip_expr(expr_len)));
-
-                let expanded_path_start = self.get_or_insert_child(NodeKey::ExpressionBegin);
-                callback(UnexploredPathMut::new(expanded_path_start.as_ptr(), key));
-            },
-            NodeKey::ExpressionBegin => panic!(concat!(
-                    "NodeKey::ExpressionBegin used only for indexing never for searching.",
-                    "Should not be included into a key created from atom.")),
-            _ => {
-                let node = self.get_or_insert_child(head);
-                callback(UnexploredPathMut::new(node.as_ptr(), key));
-            },
-        }
     }
 
     fn remove_exploring_strategy(&mut self, mut key: TrieKey<K>, callback: &mut dyn FnMut(UnexploredPathMut<K, V>)) {
@@ -178,13 +159,14 @@ where
             },
             NodeKey::Expression(expr_len) => {
                 self.get_child_mut(&NodeKey::Wildcard).map(|child| callback(UnexploredPathMut::new(child, key.skip_expr(expr_len))));
-                self.get_child_mut(&head).map(|child| callback(UnexploredPathMut::new(child, key.skip_expr(expr_len))));
                 self.get_child_mut(&NodeKey::ExpressionBegin).map(|child| callback(UnexploredPathMut::new(child, key)));
             },
             NodeKey::Wildcard => {
                 self.children.iter_mut()
                     .filter(|(key, _child)| !key.is_expr_begin_or_end())
                     .map(|(_key, child)| child)
+                    .for_each(|child| callback(UnexploredPathMut::new(child.as_ptr(), key.clone())));
+                self.expression_wildcards.values_mut()
                     .for_each(|child| callback(UnexploredPathMut::new(child.as_ptr(), key.clone())));
             },
             NodeKey::ExpressionBegin => panic!(concat!(
@@ -212,6 +194,8 @@ where
                     .filter(|(key, _child)| !key.is_expr_begin_or_end())
                     .map(|(_key, child)| child)
                     .for_each(|child| callback(UnexploredPath::new(child.as_ptr(), key.clone())));
+                self.expression_wildcards.values()
+                    .for_each(|child| callback(UnexploredPath::new(child.as_ptr(), key.clone())));
             },
             NodeKey::ExpressionBegin => panic!(concat!(
                     "NodeKey::ExpressionBegin used only for indexing never for searching.",
@@ -219,10 +203,51 @@ where
         }
     }
 
-    pub fn add(&mut self, key: TrieKey<K>, value: V) {
-        log::debug!("MultiTrieNode::add(): key: {:?}, value: {:?}", key, value);
-        ValueMutExplorer::new(self, key, MultiTrieNode::add_exploring_strategy)
-            .for_each(|node| { node.values.insert(value.clone()); });
+    pub fn add(&mut self, mut key: TrieKey<K>, value: V) {
+        log::debug!("MultiTrie::add(): key: {:?}, value: {:?}", key, value);
+        if key.is_empty() {
+            self.values.insert(value);
+        } else {
+            let mut nodes: Vec<Shared<Self>> = vec![];
+            let mut exprs: Vec<(usize, usize)> = Vec::new();
+            let mut pos = 0;
+            
+            let mut head = key.pop_head_unchecked();
+            if let NodeKey::Expression(size) = head {
+                exprs.push((pos, pos + size + 1));
+                head = NodeKey::ExpressionBegin;
+            }
+            let mut cur = self.get_or_insert_child(head);
+            nodes.push(cur.clone());
+            pos = pos + 1;
+
+            loop {
+                match key.pop_head() {
+                    None => {
+                        cur.borrow_mut().values.insert(value);
+                        break;
+                    },
+                    Some(mut head) => {
+                        if let NodeKey::Expression(size) = head {
+                            exprs.push((pos, pos + size + 1));
+                            head = NodeKey::ExpressionBegin;
+                        }
+                        let node = cur.borrow_mut().get_or_insert_child(head);
+                        cur = node;
+                        nodes.push(cur.clone());
+                    },
+                }
+                pos = pos + 1
+            }
+            for (start, end) in exprs {
+                let end_node = nodes[end - 1].clone();
+                if start > 0 {
+                    nodes[start - 1].borrow_mut().expression_wildcards.insert(end_node.as_ptr(), end_node);
+                } else {
+                    self.expression_wildcards.insert(end_node.as_ptr(), end_node);
+                }
+            }
+        }
     }
 
     // TODO: at the moment the method doesn't remove the key from the index. 
@@ -247,7 +272,19 @@ where
 
     #[cfg(test)]
     fn size(&self) -> usize {
-        self.children.values().fold(1, |size, node| { size + node.borrow().size() })
+        let mut counted = HashSet::new();
+        fn size_recursive<K, V>(node: &MultiTrieNode<K, V>, counted: &mut HashSet<*const MultiTrieNode<K, V>>) -> usize {
+            let ptr = node as *const MultiTrieNode<K, V>;
+            if !counted.contains(&ptr) {
+                counted.insert(ptr);
+                node.children.values().fold(1, |size, node| {
+                    size + size_recursive(node.borrow().as_ref(), counted)
+                })
+            } else {
+                0
+            }
+        }
+        size_recursive(self, &mut counted)
     }
 }
 
@@ -296,24 +333,52 @@ mod test {
 
     #[test]
     fn multi_trie_add_expr() {
-        let mut index = MultiTrie::new();
+        let mut trie = MultiTrie::new();
 
-        let expr_a_b = TrieKey::from_list([NodeKey::Expression(3)
+        let expr_a_b = TrieKey::from_list([NodeKey::Expression(5)
             , NodeKey::Expression(2) , NodeKey::Exact("A"), NodeKey::ExpressionEnd
             , NodeKey::Exact("B") , NodeKey::ExpressionEnd]);
         let expr_x_b = TrieKey::from_list([NodeKey::Expression(3)
             , NodeKey::Wildcard, NodeKey::Exact("B") , NodeKey::ExpressionEnd]);
         let expr_x_c = TrieKey::from_list([NodeKey::Expression(3)
             , NodeKey::Wildcard, NodeKey::Exact("C") , NodeKey::ExpressionEnd]);
-        let expr_a_c = TrieKey::from_list([NodeKey::Expression(3)
+        let expr_a_c = TrieKey::from_list([NodeKey::Expression(5)
             , NodeKey::Expression(2) , NodeKey::Exact("A"), NodeKey::ExpressionEnd
             , NodeKey::Exact("C") , NodeKey::ExpressionEnd]);
 
-        index.add(expr_a_b, "expr_a_b");
-        index.add(expr_x_c, "expr_x_c");
+        trie.add(expr_a_b, "expr_a_b");
+        trie.add(expr_x_c, "expr_x_c");
 
-        assert_eq!(index.get(expr_x_b).to_sorted(), vec!["expr_a_b"]);
-        assert_eq!(index.get(expr_a_c).to_sorted(), vec!["expr_x_c"]);
+        assert_eq!(trie.get(expr_x_b).to_sorted(), vec!["expr_a_b"]);
+        assert_eq!(trie.get(expr_a_c).to_sorted(), vec!["expr_x_c"]);
+    }
+
+    #[test]
+    fn multi_trie_add_subexpr_twice() {
+        let mut trie: MultiTrie<&'static str, &'static str> = MultiTrie::new();
+        let empty_expr = TrieKey::from_list([NodeKey::Expression(1), NodeKey::ExpressionEnd]);
+        let wildcard: TrieKey<&'static str> = TrieKey::from_list([NodeKey::Wildcard]);
+
+        trie.add(empty_expr.clone(), "empty_expr");
+        trie.add(empty_expr.clone(), "empty_expr");
+
+        assert_eq!(trie.get(empty_expr).to_sorted(), vec!["empty_expr"]);
+        assert_eq!(trie.get(wildcard).to_sorted(), vec!["empty_expr"]);
+    }
+
+    #[test]
+    fn multi_trie_twice_result_because_of_subexpr() {
+        let mut trie = MultiTrie::new();
+        let expr_a = TrieKey::from_list([NodeKey::Expression(2), NodeKey::Exact("A"), NodeKey::ExpressionEnd]);
+        let expr_b = TrieKey::from_list([NodeKey::Expression(2), NodeKey::Exact("B"), NodeKey::ExpressionEnd]);
+        let expr_x = TrieKey::from_list([NodeKey::Expression(2), NodeKey::Wildcard, NodeKey::ExpressionEnd]);
+
+        trie.add(expr_a.clone(), "expr_a");
+        trie.add(expr_b.clone(), "expr_b");
+
+        println!("trie: {:?}", trie);
+
+        assert_eq!(trie.get(expr_x).to_sorted(), vec!["expr_a", "expr_b"]);
     }
 
     #[test]
@@ -353,7 +418,7 @@ mod test {
     }
 
     #[test]
-    fn trie_clone() {
+    fn multi_trie_clone() {
         let mut trie = MultiTrie::new();
         let key = TrieKey::from_list([NodeKey::Exact(0), NodeKey::Wildcard,
             NodeKey::Expression(2), NodeKey::Wildcard, NodeKey::ExpressionEnd]);
@@ -364,9 +429,8 @@ mod test {
         assert_eq!(copy.get(key).to_sorted(), vec!["test"]);
     }
 
-    #[ignore]
     #[test]
-    fn trie_add_key_with_many_subexpr() {
+    fn multi_trie_add_key_with_many_subexpr() {
         fn with_subexpr(nvars: usize) -> TrieKey<NodeKey<usize>> {
             let mut keys = Vec::new();
             keys.push(NodeKey::Expression(nvars * 2 + 1));
@@ -377,12 +441,12 @@ mod test {
             keys.push(NodeKey::ExpressionEnd);
             TrieKey::from_list(keys)
         }
-        let mut index = MultiTrie::new();
+        let mut trie = MultiTrie::new();
 
-        index.add(with_subexpr(4), 0);
-        assert_eq!(index.size(), 4*2 + 4);
+        trie.add(with_subexpr(4), 0);
+        assert_eq!(trie.size(), 5*2 + 1);
 
-        index.add(with_subexpr(8), 0);
-        assert_eq!(index.size(), 8*2 + 8);
+        trie.add(with_subexpr(8), 0);
+        assert_eq!(trie.size(), 20);
     }
 }

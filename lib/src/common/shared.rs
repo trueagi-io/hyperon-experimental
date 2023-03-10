@@ -114,6 +114,13 @@ impl<T> Shared<T> {
     pub fn as_ptr(&self) -> *mut T {
         self.0.as_ptr()
     }
+
+    pub fn unwrap_or_clone(self) -> T where T: Clone {
+        match Rc::try_unwrap(self.0) {
+            Err(rc) => RefCell::borrow(&rc).clone(),
+            Ok(ref_cell) => ref_cell.into_inner(),
+        }
+    }
 }
 
 impl<T> LockBorrow<T> for Shared<T> {
