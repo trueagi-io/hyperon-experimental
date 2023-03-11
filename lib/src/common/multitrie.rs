@@ -331,124 +331,115 @@ mod test {
         }
     }
 
+    macro_rules! triekey {
+        ($($x:tt)*) => { TrieKey::from_list(triekeyslice!($($x)*)) }
+    }
+
+    macro_rules! triekeyslice {
+        () => { vec![] };
+        (*) => { vec![ NodeKey::Wildcard ] };
+        ($x:literal) => { vec![ NodeKey::Exact($x) ] };
+        ([]) => { vec![ vec![ NodeKey::ExpressionBegin ], vec![ NodeKey::ExpressionEnd ] ].concat() };
+        ([$($x:tt),*]) => { {
+            vec![ vec![ NodeKey::ExpressionBegin ], $( triekeyslice!($x) ),*, vec![ NodeKey::ExpressionEnd ] ].concat()
+        } };
+        ($($x:tt),*) => { vec![ $( triekeyslice!($x) ),* ].concat() };
+    }
+
+    #[test]
+    fn triekey_macro() {
+        assert_eq!(triekey!() as TrieKey<u32>, TrieKey::from_list([ ]));
+        assert_eq!(triekey!(*) as TrieKey<u32>, TrieKey::from_list([NodeKey::Wildcard]));
+        assert_eq!(triekey!(0), TrieKey::from_list([NodeKey::Exact(0)]));
+        assert_eq!(triekey!([]) as TrieKey<u32>, TrieKey::from_list([
+                NodeKey::ExpressionBegin,NodeKey::ExpressionEnd]));
+        assert_eq!(triekey!([0, *]), TrieKey::from_list([
+                NodeKey::ExpressionBegin, NodeKey::Exact(0),
+                NodeKey::Wildcard, NodeKey::ExpressionEnd]));
+        assert_eq!(triekey!([[0, *]]), TrieKey::from_list([
+                NodeKey::ExpressionBegin, NodeKey::ExpressionBegin,
+                NodeKey::Exact(0), NodeKey::Wildcard,
+                NodeKey::ExpressionEnd, NodeKey::ExpressionEnd]));
+        assert_eq!(triekey!(0, *, [*]), TrieKey::from_list([
+                NodeKey::Exact(0), NodeKey::Wildcard,
+                NodeKey::ExpressionBegin, NodeKey::Wildcard,
+                NodeKey::ExpressionEnd]));
+    }
+
     #[test]
     fn multi_trie_add_basic() {
         let mut trie = MultiTrie::new();
 
-        let exact_a = TrieKey::from_list([NodeKey::Exact("A")]);
-        let exact_b = TrieKey::from_list([NodeKey::Exact("B")]);
-        let wild = TrieKey::from_list([NodeKey::Wildcard]);
-        let expr_a_b = TrieKey::from_list([NodeKey::ExpressionBegin
-            , NodeKey::Exact("A"), NodeKey::Exact("B")
-            , NodeKey::ExpressionEnd]);
-        let expr_a_c = TrieKey::from_list([NodeKey::ExpressionBegin
-            , NodeKey::Exact("A"), NodeKey::Exact("C")
-            , NodeKey::ExpressionEnd]);
+        trie.add(triekey!("A"), "exact_a");
+        trie.add(triekey!(*), "wild");
+        trie.add(triekey!(["A", "B"]), "expr_a_b");
 
-        trie.add(exact_a.clone(), "exact_a");
-        trie.add(wild.clone(), "wild");
-        trie.add(expr_a_b.clone(), "expr_a_b");
-
-        assert_eq!(trie.get(exact_a).to_sorted(), vec!["exact_a", "wild"]);
-        assert_eq!(trie.get(exact_b).to_sorted(), vec!["wild"]);
-
-        assert_eq!(trie.get(wild).to_sorted(), vec!["exact_a", "expr_a_b", "wild"]);
-
-        assert_eq!(trie.get(expr_a_b).to_sorted(), vec!["expr_a_b", "wild"]);
-        assert_eq!(trie.get(expr_a_c).to_sorted(), vec!["wild"]);
+        assert_eq!(trie.get(triekey!("A")).to_sorted(), vec!["exact_a", "wild"]);
+        assert_eq!(trie.get(triekey!("B")).to_sorted(), vec!["wild"]);
+        assert_eq!(trie.get(triekey!(*)).to_sorted(), vec!["exact_a", "expr_a_b", "wild"]);
+        assert_eq!(trie.get(triekey!(["A", "B"])).to_sorted(), vec!["expr_a_b", "wild"]);
+        assert_eq!(trie.get(triekey!(["A", "C"])).to_sorted(), vec!["wild"]);
     }
 
     #[test]
     fn multi_trie_add_expr() {
         let mut trie = MultiTrie::new();
 
-        let expr_a_b = TrieKey::from_list([NodeKey::ExpressionBegin
-            , NodeKey::ExpressionBegin , NodeKey::Exact("A"), NodeKey::ExpressionEnd
-            , NodeKey::Exact("B") , NodeKey::ExpressionEnd]);
-        let expr_x_b = TrieKey::from_list([NodeKey::ExpressionBegin
-            , NodeKey::Wildcard, NodeKey::Exact("B") , NodeKey::ExpressionEnd]);
-        let expr_x_c = TrieKey::from_list([NodeKey::ExpressionBegin
-            , NodeKey::Wildcard, NodeKey::Exact("C") , NodeKey::ExpressionEnd]);
-        let expr_a_c = TrieKey::from_list([NodeKey::ExpressionBegin
-            , NodeKey::ExpressionBegin , NodeKey::Exact("A"), NodeKey::ExpressionEnd
-            , NodeKey::Exact("C") , NodeKey::ExpressionEnd]);
+        trie.add(triekey!(["A", "B"]), "expr_a_b");
+        trie.add(triekey!([*, "C"]), "expr_x_c");
 
-        trie.add(expr_a_b, "expr_a_b");
-        trie.add(expr_x_c, "expr_x_c");
-
-        assert_eq!(trie.get(expr_x_b).to_sorted(), vec!["expr_a_b"]);
-        assert_eq!(trie.get(expr_a_c).to_sorted(), vec!["expr_x_c"]);
+        assert_eq!(trie.get(triekey!([*, "B"])).to_sorted(), vec!["expr_a_b"]);
+        assert_eq!(trie.get(triekey!(["A", "C"])).to_sorted(), vec!["expr_x_c"]);
     }
 
     #[test]
     fn multi_trie_add_subexpr_twice() {
         let mut trie: MultiTrie<&'static str, &'static str> = MultiTrie::new();
-        let empty_expr = TrieKey::from_list([NodeKey::ExpressionBegin, NodeKey::ExpressionEnd]);
-        let wildcard: TrieKey<&'static str> = TrieKey::from_list([NodeKey::Wildcard]);
 
-        trie.add(empty_expr.clone(), "empty_expr");
-        trie.add(empty_expr.clone(), "empty_expr");
+        trie.add(triekey!([]), "empty_expr");
+        trie.add(triekey!([]).clone(), "empty_expr");
 
-        assert_eq!(trie.get(empty_expr).to_sorted(), vec!["empty_expr"]);
-        assert_eq!(trie.get(wildcard).to_sorted(), vec!["empty_expr"]);
+        assert_eq!(trie.get(triekey!([])).to_sorted(), vec!["empty_expr"]);
+        assert_eq!(trie.get(triekey!(*)).to_sorted(), vec!["empty_expr"]);
     }
 
     #[test]
     fn multi_trie_twice_result_because_of_subexpr() {
         let mut trie = MultiTrie::new();
-        let expr_a = TrieKey::from_list([NodeKey::ExpressionBegin, NodeKey::Exact("A"), NodeKey::ExpressionEnd]);
-        let expr_b = TrieKey::from_list([NodeKey::ExpressionBegin, NodeKey::Exact("B"), NodeKey::ExpressionEnd]);
-        let expr_x = TrieKey::from_list([NodeKey::ExpressionBegin, NodeKey::Wildcard, NodeKey::ExpressionEnd]);
 
-        trie.add(expr_a.clone(), "expr_a");
-        trie.add(expr_b.clone(), "expr_b");
+        trie.add(triekey!(["A"]), "expr_a");
+        trie.add(triekey!(["B"]), "expr_b");
 
-        println!("trie: {:?}", trie);
-
-        assert_eq!(trie.get(expr_x).to_sorted(), vec!["expr_a", "expr_b"]);
+        assert_eq!(trie.get(triekey!([*])).to_sorted(), vec!["expr_a", "expr_b"]);
     }
 
     #[test]
     fn multi_trie_remove_basic() {
         let mut trie = MultiTrie::new();
+        trie.add(triekey!("A"), "exact_a");
+        trie.add(triekey!(*), "wild");
+        trie.add(triekey!(["A", "B"]), "expr_a_b");
 
-        let exact_a = TrieKey::from_list([NodeKey::Exact("A")]);
-        let wild = TrieKey::from_list([NodeKey::Wildcard]);
-        let expr_a_b = TrieKey::from_list([NodeKey::ExpressionBegin
-            , NodeKey::Exact("A"), NodeKey::Exact("B")
-            , NodeKey::ExpressionEnd]);
+        trie.remove(triekey!("A"), &"exact_a");
+        trie.remove(triekey!(*), &"wild");
+        trie.remove(triekey!(["A", "B"]), &"expr_a_b");
 
-        trie.add(exact_a.clone(), "exact_a");
-        trie.add(wild.clone(), "wild");
-        trie.add(expr_a_b.clone(), "expr_a_b");
-
-        trie.remove(exact_a.clone(), &"exact_a");
-        trie.remove(wild.clone(), &"wild");
-        trie.remove(expr_a_b.clone(), &"expr_a_b");
-
-        assert!(trie.get(exact_a).to_sorted().is_empty());
-        assert!(trie.get(wild).to_sorted().is_empty());
-        assert!(trie.get(expr_a_b).to_sorted().is_empty());
+        assert!(trie.get(triekey!("A")).to_sorted().is_empty());
+        assert!(trie.get(triekey!(*)).to_sorted().is_empty());
+        assert!(trie.get(triekey!(["A", "B"])).to_sorted().is_empty());
     }
 
     #[test]
     fn trie_key_debug() {
-        let exact_a: TrieKey<&str> = TrieKey::from_list([NodeKey::Exact("A")]);
-        let wild: TrieKey<&str> = TrieKey::from_list([NodeKey::Wildcard]);
-        let expr_a_b: TrieKey<&str> = TrieKey::from_list([NodeKey::ExpressionBegin
-            , NodeKey::Exact("A"), NodeKey::Exact("B")
-            , NodeKey::ExpressionEnd]);
-
-        assert_eq!(format!("{:?}", exact_a), "TrieKey([Exact(\"A\")])");
-        assert_eq!(format!("{:?}", wild), "TrieKey([Wildcard])");
-        assert_eq!(format!("{:?}", expr_a_b), "TrieKey([Expression(3), Exact(\"A\"), Exact(\"B\"), ExpressionEnd])");
+        assert_eq!(format!("{:?}", triekey!("A")), "TrieKey([Exact(\"A\")])");
+        assert_eq!(format!("{:?}", triekey!(*) as TrieKey<u32>), "TrieKey([Wildcard])");
+        assert_eq!(format!("{:?}", triekey!(["A", "B"])), "TrieKey([Expression(3), Exact(\"A\"), Exact(\"B\"), ExpressionEnd])");
     }
 
     #[test]
     fn multi_trie_clone() {
         let mut trie = MultiTrie::new();
-        let key = TrieKey::from_list([NodeKey::Exact(0), NodeKey::Wildcard,
-            NodeKey::ExpressionBegin, NodeKey::Wildcard, NodeKey::ExpressionEnd]);
+        let key = triekey!(0, *, [*]);
         trie.add(key.clone(), "test");
 
         let copy = trie.clone();
