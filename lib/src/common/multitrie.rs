@@ -373,12 +373,17 @@ mod test {
         trie.add(triekey!("A"), "exact_a");
         trie.add(triekey!(*), "wild");
         trie.add(triekey!(["A", "B"]), "expr_a_b");
+        trie.add(triekey!("A", "B"), "a_b");
 
         assert_eq!(trie.get(triekey!("A")).to_sorted(), vec!["exact_a", "wild"]);
         assert_eq!(trie.get(triekey!("B")).to_sorted(), vec!["wild"]);
         assert_eq!(trie.get(triekey!(*)).to_sorted(), vec!["exact_a", "expr_a_b", "wild"]);
         assert_eq!(trie.get(triekey!(["A", "B"])).to_sorted(), vec!["expr_a_b", "wild"]);
         assert_eq!(trie.get(triekey!(["A", "C"])).to_sorted(), vec!["wild"]);
+        assert_eq!(trie.get(triekey!(["A", *])).to_sorted(), vec!["expr_a_b", "wild"]);
+        assert_eq!(trie.get(triekey!("A", "B")).to_sorted(), vec!["a_b"]);
+        assert_eq!(trie.get(triekey!("A", "C")).to_sorted(), vec![] as Vec<&str>);
+        assert_eq!(trie.get(triekey!("A", *)).to_sorted(), vec!["a_b"]);
     }
 
     #[test]
@@ -419,14 +424,17 @@ mod test {
         trie.add(triekey!("A"), "exact_a");
         trie.add(triekey!(*), "wild");
         trie.add(triekey!(["A", "B"]), "expr_a_b");
+        trie.add(triekey!("A", "B"), "a_b");
 
         trie.remove(triekey!("A"), &"exact_a");
         trie.remove(triekey!(*), &"wild");
         trie.remove(triekey!(["A", "B"]), &"expr_a_b");
+        trie.remove(triekey!("A", "B"), &"a_b");
 
         assert!(trie.get(triekey!("A")).to_sorted().is_empty());
         assert!(trie.get(triekey!(*)).to_sorted().is_empty());
         assert!(trie.get(triekey!(["A", "B"])).to_sorted().is_empty());
+        assert!(trie.get(triekey!("A", "B")).to_sorted().is_empty());
     }
 
     #[test]
