@@ -25,7 +25,34 @@ pub struct TrieKey<T>(VecDeque<NodeKey<T>>);
 
 impl<T> TrieKey<T> {
     pub fn from_list<V: Into<VecDeque<NodeKey<T>>>>(keys: V) -> Self {
-        Self(keys.into())
+        let panic = |err| { panic!("{}", err) };
+        let keys = Self::mark_expressions(keys.into()).unwrap_or_else(panic);
+        Self(keys)
+    }
+
+    fn mark_expressions(mut keys: VecDeque<NodeKey<T>>) -> Result<VecDeque<NodeKey<T>>, String> {
+        let mut starts = Vec::new();
+        for (pos, key) in keys.iter_mut().enumerate() {
+            match key {
+                NodeKey::ExpressionBegin => starts.push((key, pos)),
+                NodeKey::ExpressionEnd => {
+                    let error = || { format!(concat!(
+                            "Key has less NodeKey::ExpressionBegin ",
+                            "tokens than NodeKey::ExpressionEnd tokens ",
+                            "at position {}"), pos)
+                    };
+                    let (key, start) = starts.pop().ok_or_else(error)?;
+                    *key = NodeKey::Expression(pos - start);
+                },
+                _ => {},
+            }
+        }
+        if starts.is_empty() {
+            Ok(keys)
+        } else {
+            Err(concat!("Key has more NodeKey::ExpressionBegin ",
+                    "tokens than NodeKey::ExpressionEnd tokens").to_owned())
+        }
     }
 
     fn pop_head(&mut self) -> Option<NodeKey<T>> {
@@ -311,10 +338,10 @@ mod test {
         let exact_a = TrieKey::from_list([NodeKey::Exact("A")]);
         let exact_b = TrieKey::from_list([NodeKey::Exact("B")]);
         let wild = TrieKey::from_list([NodeKey::Wildcard]);
-        let expr_a_b = TrieKey::from_list([NodeKey::Expression(3)
+        let expr_a_b = TrieKey::from_list([NodeKey::ExpressionBegin
             , NodeKey::Exact("A"), NodeKey::Exact("B")
             , NodeKey::ExpressionEnd]);
-        let expr_a_c = TrieKey::from_list([NodeKey::Expression(3)
+        let expr_a_c = TrieKey::from_list([NodeKey::ExpressionBegin
             , NodeKey::Exact("A"), NodeKey::Exact("C")
             , NodeKey::ExpressionEnd]);
 
@@ -335,15 +362,15 @@ mod test {
     fn multi_trie_add_expr() {
         let mut trie = MultiTrie::new();
 
-        let expr_a_b = TrieKey::from_list([NodeKey::Expression(5)
-            , NodeKey::Expression(2) , NodeKey::Exact("A"), NodeKey::ExpressionEnd
+        let expr_a_b = TrieKey::from_list([NodeKey::ExpressionBegin
+            , NodeKey::ExpressionBegin , NodeKey::Exact("A"), NodeKey::ExpressionEnd
             , NodeKey::Exact("B") , NodeKey::ExpressionEnd]);
-        let expr_x_b = TrieKey::from_list([NodeKey::Expression(3)
+        let expr_x_b = TrieKey::from_list([NodeKey::ExpressionBegin
             , NodeKey::Wildcard, NodeKey::Exact("B") , NodeKey::ExpressionEnd]);
-        let expr_x_c = TrieKey::from_list([NodeKey::Expression(3)
+        let expr_x_c = TrieKey::from_list([NodeKey::ExpressionBegin
             , NodeKey::Wildcard, NodeKey::Exact("C") , NodeKey::ExpressionEnd]);
-        let expr_a_c = TrieKey::from_list([NodeKey::Expression(5)
-            , NodeKey::Expression(2) , NodeKey::Exact("A"), NodeKey::ExpressionEnd
+        let expr_a_c = TrieKey::from_list([NodeKey::ExpressionBegin
+            , NodeKey::ExpressionBegin , NodeKey::Exact("A"), NodeKey::ExpressionEnd
             , NodeKey::Exact("C") , NodeKey::ExpressionEnd]);
 
         trie.add(expr_a_b, "expr_a_b");
@@ -356,7 +383,7 @@ mod test {
     #[test]
     fn multi_trie_add_subexpr_twice() {
         let mut trie: MultiTrie<&'static str, &'static str> = MultiTrie::new();
-        let empty_expr = TrieKey::from_list([NodeKey::Expression(1), NodeKey::ExpressionEnd]);
+        let empty_expr = TrieKey::from_list([NodeKey::ExpressionBegin, NodeKey::ExpressionEnd]);
         let wildcard: TrieKey<&'static str> = TrieKey::from_list([NodeKey::Wildcard]);
 
         trie.add(empty_expr.clone(), "empty_expr");
@@ -369,9 +396,9 @@ mod test {
     #[test]
     fn multi_trie_twice_result_because_of_subexpr() {
         let mut trie = MultiTrie::new();
-        let expr_a = TrieKey::from_list([NodeKey::Expression(2), NodeKey::Exact("A"), NodeKey::ExpressionEnd]);
-        let expr_b = TrieKey::from_list([NodeKey::Expression(2), NodeKey::Exact("B"), NodeKey::ExpressionEnd]);
-        let expr_x = TrieKey::from_list([NodeKey::Expression(2), NodeKey::Wildcard, NodeKey::ExpressionEnd]);
+        let expr_a = TrieKey::from_list([NodeKey::ExpressionBegin, NodeKey::Exact("A"), NodeKey::ExpressionEnd]);
+        let expr_b = TrieKey::from_list([NodeKey::ExpressionBegin, NodeKey::Exact("B"), NodeKey::ExpressionEnd]);
+        let expr_x = TrieKey::from_list([NodeKey::ExpressionBegin, NodeKey::Wildcard, NodeKey::ExpressionEnd]);
 
         trie.add(expr_a.clone(), "expr_a");
         trie.add(expr_b.clone(), "expr_b");
@@ -387,7 +414,7 @@ mod test {
 
         let exact_a = TrieKey::from_list([NodeKey::Exact("A")]);
         let wild = TrieKey::from_list([NodeKey::Wildcard]);
-        let expr_a_b = TrieKey::from_list([NodeKey::Expression(3)
+        let expr_a_b = TrieKey::from_list([NodeKey::ExpressionBegin
             , NodeKey::Exact("A"), NodeKey::Exact("B")
             , NodeKey::ExpressionEnd]);
 
@@ -408,7 +435,7 @@ mod test {
     fn trie_key_debug() {
         let exact_a: TrieKey<&str> = TrieKey::from_list([NodeKey::Exact("A")]);
         let wild: TrieKey<&str> = TrieKey::from_list([NodeKey::Wildcard]);
-        let expr_a_b: TrieKey<&str> = TrieKey::from_list([NodeKey::Expression(3)
+        let expr_a_b: TrieKey<&str> = TrieKey::from_list([NodeKey::ExpressionBegin
             , NodeKey::Exact("A"), NodeKey::Exact("B")
             , NodeKey::ExpressionEnd]);
 
@@ -421,7 +448,7 @@ mod test {
     fn multi_trie_clone() {
         let mut trie = MultiTrie::new();
         let key = TrieKey::from_list([NodeKey::Exact(0), NodeKey::Wildcard,
-            NodeKey::Expression(2), NodeKey::Wildcard, NodeKey::ExpressionEnd]);
+            NodeKey::ExpressionBegin, NodeKey::Wildcard, NodeKey::ExpressionEnd]);
         trie.add(key.clone(), "test");
 
         let copy = trie.clone();
@@ -433,9 +460,9 @@ mod test {
     fn multi_trie_add_key_with_many_subexpr() {
         fn with_subexpr(nvars: usize) -> TrieKey<NodeKey<usize>> {
             let mut keys = Vec::new();
-            keys.push(NodeKey::Expression(nvars * 2 + 1));
+            keys.push(NodeKey::ExpressionBegin);
             for _i in 0..nvars {
-                keys.push(NodeKey::Expression(1));
+                keys.push(NodeKey::ExpressionBegin);
                 keys.push(NodeKey::ExpressionEnd);
             }
             keys.push(NodeKey::ExpressionEnd);

@@ -55,12 +55,9 @@ fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
         match atom {
             Atom::Symbol(sym) => keys.push(NodeKey::Exact(sym.clone())),
             Atom::Expression(expr) => {
-                let start = keys.len();
                 keys.push(NodeKey::ExpressionBegin);
                 expr.children().iter().for_each(|child| fill_key(child, keys));
                 keys.push(NodeKey::ExpressionEnd);
-                let expr_len = keys.len() - start - 1;
-                keys[start] = NodeKey::Expression(expr_len);
             },
             // TODO: At the moment all grounding symbols are matched as wildcards
             // because they potentially may have custom Grounded::match_()
@@ -706,7 +703,7 @@ mod test {
         assert_eq!(atom_to_trie_key(&Atom::value(1)), TrieKey::from_list([NodeKey::Wildcard]));
         assert_eq!(atom_to_trie_key(&Atom::var("a")), TrieKey::from_list([NodeKey::Wildcard]));
         assert_eq!(atom_to_trie_key(&expr!("A" "B")), TrieKey::from_list([
-                NodeKey::Expression(3),
+                NodeKey::ExpressionBegin,
                 NodeKey::Exact(SymbolAtom::new("A".into())),
                 NodeKey::Exact(SymbolAtom::new("B".into())),
                 NodeKey::ExpressionEnd
