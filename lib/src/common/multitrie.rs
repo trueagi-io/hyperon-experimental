@@ -1,7 +1,5 @@
-use std::fmt::Debug;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::collections::VecDeque;
+use std::fmt::{Debug, Display};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use crate::common::shared::Shared;
 
@@ -9,57 +7,73 @@ use crate::common::shared::Shared;
 pub enum NodeKey<T> {
     Exact(T),
     Wildcard,
-    Expression(usize),
-    ExpressionBegin,
-    ExpressionEnd,
+    LeftPar,
+    RightPar,
 }
 
 impl<T: PartialEq> NodeKey<T> {
-    fn is_expr_begin_or_end(&self) -> bool {
-        *self == NodeKey::ExpressionEnd || *self == NodeKey::ExpressionBegin
+    fn is_parenthesis(&self) -> bool {
+        *self == NodeKey::RightPar || *self == NodeKey::LeftPar
+    }
+}
+
+impl<T: Display> Display for NodeKey<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            NodeKey::Exact(val) => write!(f, "Exact({})", val),
+            NodeKey::Wildcard => write!(f, "*"),
+            NodeKey::LeftPar => write!(f, "LeftPar"),
+            NodeKey::RightPar => write!(f, "RightPar"),
+        }
     }
 }
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct TrieKey<T>(VecDeque<NodeKey<T>>);
+struct _NodeKey<T> {
+    key: NodeKey<T>,
+    par_size: Option<usize>,
+}
+
+#[derive(PartialEq, Clone, Debug)]
+pub struct TrieKey<T>(VecDeque<_NodeKey<T>>);
 
 impl<T> TrieKey<T> {
     pub fn from_list<V: Into<VecDeque<NodeKey<T>>>>(keys: V) -> Self {
         let panic = |err| { panic!("{}", err) };
-        let keys = Self::mark_expressions(keys.into()).unwrap_or_else(panic);
+        let keys = Self::precalculate_par_sizes(keys.into()).unwrap_or_else(panic);
         Self(keys)
     }
 
-    fn mark_expressions(mut keys: VecDeque<NodeKey<T>>) -> Result<VecDeque<NodeKey<T>>, String> {
-        let mut starts = Vec::new();
-        for (pos, key) in keys.iter_mut().enumerate() {
-            match key {
-                NodeKey::ExpressionBegin => starts.push((key, pos)),
-                NodeKey::ExpressionEnd => {
+    fn precalculate_par_sizes(bare_keys: VecDeque<NodeKey<T>>) -> Result<VecDeque<_NodeKey<T>>, String> {
+        let mut left_par_stack = Vec::new();
+        let mut keys_with_sizes = VecDeque::new();
+        for (pos, bare_key) in bare_keys.into_iter().enumerate() {
+            keys_with_sizes.push_back(_NodeKey{ key: bare_key, par_size: None });
+            match keys_with_sizes.back().unwrap().key {
+                NodeKey::LeftPar => left_par_stack.push(pos),
+                NodeKey::RightPar => {
                     let error = || { format!(concat!(
-                            "Key has less NodeKey::ExpressionBegin ",
-                            "tokens than NodeKey::ExpressionEnd tokens ",
-                            "at position {}"), pos)
-                    };
-                    let (key, start) = starts.pop().ok_or_else(error)?;
-                    *key = NodeKey::Expression(pos - start);
+                            "Unbalanced key: NodeKey::RightPar without ",
+                            "NodeKey::LeftPar at position {}"), pos) };
+                    let start = left_par_stack.pop().ok_or_else(error)?;
+                    keys_with_sizes[start].par_size = Some(pos - start);
                 },
                 _ => {},
             }
         }
-        if starts.is_empty() {
-            Ok(keys)
+        if left_par_stack.is_empty() {
+            Ok(keys_with_sizes)
         } else {
-            Err(concat!("Key has more NodeKey::ExpressionBegin ",
-                    "tokens than NodeKey::ExpressionEnd tokens").to_owned())
+            Err(format!(concat!("Unbalanced key: NodeKey::LeftPar without ",
+                        "NodeKey::Right at positions {:?}"), left_par_stack))
         }
     }
 
-    fn pop_head(&mut self) -> Option<NodeKey<T>> {
+    fn pop_head(&mut self) -> Option<_NodeKey<T>> {
         self.0.pop_front()
     }
 
-    fn pop_head_unchecked(&mut self) -> NodeKey<T> {
+    fn pop_head_unchecked(&mut self) -> _NodeKey<T> {
         self.pop_head().expect("Unexpected end of key")
     }
 
@@ -69,9 +83,19 @@ impl<T> TrieKey<T> {
 }
 
 impl<T: Clone> TrieKey<T> {
-    fn skip_expr(&self, expr_len: usize) -> Self {
-        let no_expr_tail = self.0.iter().cloned().skip(expr_len).collect();
-        Self(no_expr_tail)
+    fn skip_tokens(&self, size: usize) -> Self {
+        Self(self.0.iter().cloned().skip(size).collect())
+    }
+}
+
+impl<T: Display> Display for TrieKey<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "TrieKey(")
+            .and_then(|_| self.0.iter().take(1).fold(Ok(()),
+                |res, key| res.and_then(|_| write!(f, "{}", key.key))))
+            .and_then(|_| self.0.iter().skip(1).fold(Ok(()),
+                |res, key| res.and_then(|_| write!(f, ", {}", key.key))))
+            .and_then(|_| write!(f, ")"))
     }
 }
 
@@ -80,7 +104,7 @@ pub type MultiTrie<K, V> = MultiTrieNode<K, V>;
 #[derive(Clone, Debug)]
 pub struct MultiTrieNode<K, V> {
     children: HashMap<NodeKey<K>, Shared<Self>>,
-    expression_wildcards: HashMap<*mut Self, Shared<Self>>,
+    skip_pars: HashMap<*mut Self, Shared<Self>>,
     values: HashSet<V>,
 }
 
@@ -157,7 +181,7 @@ where
     pub fn new() -> Self {
         Self{
             children: HashMap::new(),
-            expression_wildcards: HashMap::new(),
+            skip_pars: HashMap::new(),
             values: HashSet::new(),
         }
     }
@@ -176,57 +200,51 @@ where
 
     fn remove_exploring_strategy(&mut self, mut key: TrieKey<K>, callback: &mut dyn FnMut(UnexploredPathMut<K, V>)) {
         let head = key.pop_head_unchecked();
-        match head {
+        match head.key {
             NodeKey::Exact(_) => {
-                self.get_child_mut(&head).map(|child| callback(UnexploredPathMut::new(child, key.clone())));
+                self.get_child_mut(&head.key).map(|child| callback(UnexploredPathMut::new(child, key.clone())));
                 self.get_child_mut(&NodeKey::Wildcard).map(|child| callback(UnexploredPathMut::new(child, key)));
             },
-            NodeKey::ExpressionEnd => {
-                self.get_child_mut(&head).map(|child| callback(UnexploredPathMut::new(child, key)));
+            NodeKey::RightPar => {
+                self.get_child_mut(&head.key).map(|child| callback(UnexploredPathMut::new(child, key)));
             },
-            NodeKey::Expression(expr_len) => {
-                self.get_child_mut(&NodeKey::Wildcard).map(|child| callback(UnexploredPathMut::new(child, key.skip_expr(expr_len))));
-                self.get_child_mut(&NodeKey::ExpressionBegin).map(|child| callback(UnexploredPathMut::new(child, key)));
+            NodeKey::LeftPar => {
+                self.get_child_mut(&NodeKey::Wildcard).map(|child| callback(UnexploredPathMut::new(child, key.skip_tokens(head.par_size.unwrap()))));
+                self.get_child_mut(&NodeKey::LeftPar).map(|child| callback(UnexploredPathMut::new(child, key)));
             },
             NodeKey::Wildcard => {
                 self.children.iter_mut()
-                    .filter(|(key, _child)| !key.is_expr_begin_or_end())
+                    .filter(|(key, _child)| !key.is_parenthesis())
                     .map(|(_key, child)| child)
                     .for_each(|child| callback(UnexploredPathMut::new(child.as_ptr(), key.clone())));
-                self.expression_wildcards.values_mut()
+                self.skip_pars.values_mut()
                     .for_each(|child| callback(UnexploredPathMut::new(child.as_ptr(), key.clone())));
             },
-            NodeKey::ExpressionBegin => panic!(concat!(
-                    "NodeKey::ExpressionBegin used only for indexing never for searching.",
-                    "Should not be included into a key created from atom.")),
         }
     }
     
     fn get_exploring_strategy(&self, mut key: TrieKey<K>, callback: &mut dyn FnMut(UnexploredPath<K, V>)) {
         let head = key.pop_head_unchecked();
-        match head {
+        match head.key {
             NodeKey::Exact(_) => {
-                self.get_child(&head).map(|child| callback(UnexploredPath::new(child, key.clone())));
+                self.get_child(&head.key).map(|child| callback(UnexploredPath::new(child, key.clone())));
                 self.get_child(&NodeKey::Wildcard).map(|child| callback(UnexploredPath::new(child, key)));
             },
-            NodeKey::ExpressionEnd => {
-                self.get_child(&head).map(|child| callback(UnexploredPath::new(child, key)));
+            NodeKey::RightPar => {
+                self.get_child(&head.key).map(|child| callback(UnexploredPath::new(child, key)));
             }
-            NodeKey::Expression(expr_len) => {
-                self.get_child(&NodeKey::Wildcard).map(|child| callback(UnexploredPath::new(child, key.skip_expr(expr_len))));
-                self.get_child(&NodeKey::ExpressionBegin).map(|child| callback(UnexploredPath::new(child, key)));
+            NodeKey::LeftPar => {
+                self.get_child(&NodeKey::Wildcard).map(|child| callback(UnexploredPath::new(child, key.skip_tokens(head.par_size.unwrap()))));
+                self.get_child(&NodeKey::LeftPar).map(|child| callback(UnexploredPath::new(child, key)));
             },
             NodeKey::Wildcard => {
                 self.children.iter()
-                    .filter(|(key, _child)| !key.is_expr_begin_or_end())
+                    .filter(|(key, _child)| !key.is_parenthesis())
                     .map(|(_key, child)| child)
                     .for_each(|child| callback(UnexploredPath::new(child.as_ptr(), key.clone())));
-                self.expression_wildcards.values()
+                self.skip_pars.values()
                     .for_each(|child| callback(UnexploredPath::new(child.as_ptr(), key.clone())));
             },
-            NodeKey::ExpressionBegin => panic!(concat!(
-                    "NodeKey::ExpressionBegin used only for indexing never for searching.",
-                    "Should not be included into a key created from atom.")),
         }
     }
 
@@ -236,15 +254,14 @@ where
             self.values.insert(value);
         } else {
             let mut nodes: Vec<Shared<Self>> = vec![];
-            let mut exprs: Vec<(usize, usize)> = Vec::new();
+            let mut pars: Vec<(usize, usize)> = Vec::new();
             let mut pos = 0;
             
-            let mut head = key.pop_head_unchecked();
-            if let NodeKey::Expression(size) = head {
-                exprs.push((pos, pos + size + 1));
-                head = NodeKey::ExpressionBegin;
+            let head = key.pop_head_unchecked();
+            if let _NodeKey{ key: NodeKey::LeftPar, par_size: Some(size) } = head {
+                pars.push((pos, pos + size + 1));
             }
-            let mut cur = self.get_or_insert_child(head);
+            let mut cur = self.get_or_insert_child(head.key);
             nodes.push(cur.clone());
             pos = pos + 1;
 
@@ -254,24 +271,23 @@ where
                         cur.borrow_mut().values.insert(value);
                         break;
                     },
-                    Some(mut head) => {
-                        if let NodeKey::Expression(size) = head {
-                            exprs.push((pos, pos + size + 1));
-                            head = NodeKey::ExpressionBegin;
+                    Some(head) => {
+                        if let _NodeKey{ key: NodeKey::LeftPar, par_size: Some(size) } = head {
+                            pars.push((pos, pos + size + 1));
                         }
-                        let node = cur.borrow_mut().get_or_insert_child(head);
+                        let node = cur.borrow_mut().get_or_insert_child(head.key);
                         cur = node;
                         nodes.push(cur.clone());
                     },
                 }
                 pos = pos + 1
             }
-            for (start, end) in exprs {
+            for (start, end) in pars {
                 let end_node = nodes[end - 1].clone();
                 if start > 0 {
-                    nodes[start - 1].borrow_mut().expression_wildcards.insert(end_node.as_ptr(), end_node);
+                    nodes[start - 1].borrow_mut().skip_pars.insert(end_node.as_ptr(), end_node);
                 } else {
-                    self.expression_wildcards.insert(end_node.as_ptr(), end_node);
+                    self.skip_pars.insert(end_node.as_ptr(), end_node);
                 }
             }
         }
@@ -339,9 +355,9 @@ mod test {
         () => { vec![] };
         (*) => { vec![ NodeKey::Wildcard ] };
         ($x:literal) => { vec![ NodeKey::Exact($x) ] };
-        ([]) => { vec![ vec![ NodeKey::ExpressionBegin ], vec![ NodeKey::ExpressionEnd ] ].concat() };
+        ([]) => { vec![ vec![ NodeKey::LeftPar ], vec![ NodeKey::RightPar ] ].concat() };
         ([$($x:tt),*]) => { {
-            vec![ vec![ NodeKey::ExpressionBegin ], $( triekeyslice!($x) ),*, vec![ NodeKey::ExpressionEnd ] ].concat()
+            vec![ vec![ NodeKey::LeftPar ], $( triekeyslice!($x) ),*, vec![ NodeKey::RightPar ] ].concat()
         } };
         ($($x:tt),*) => { vec![ $( triekeyslice!($x) ),* ].concat() };
     }
@@ -352,18 +368,18 @@ mod test {
         assert_eq!(triekey!(*) as TrieKey<u32>, TrieKey::from_list([NodeKey::Wildcard]));
         assert_eq!(triekey!(0), TrieKey::from_list([NodeKey::Exact(0)]));
         assert_eq!(triekey!([]) as TrieKey<u32>, TrieKey::from_list([
-                NodeKey::ExpressionBegin,NodeKey::ExpressionEnd]));
+                NodeKey::LeftPar,NodeKey::RightPar]));
         assert_eq!(triekey!([0, *]), TrieKey::from_list([
-                NodeKey::ExpressionBegin, NodeKey::Exact(0),
-                NodeKey::Wildcard, NodeKey::ExpressionEnd]));
+                NodeKey::LeftPar, NodeKey::Exact(0),
+                NodeKey::Wildcard, NodeKey::RightPar]));
         assert_eq!(triekey!([[0, *]]), TrieKey::from_list([
-                NodeKey::ExpressionBegin, NodeKey::ExpressionBegin,
+                NodeKey::LeftPar, NodeKey::LeftPar,
                 NodeKey::Exact(0), NodeKey::Wildcard,
-                NodeKey::ExpressionEnd, NodeKey::ExpressionEnd]));
+                NodeKey::RightPar, NodeKey::RightPar]));
         assert_eq!(triekey!(0, *, [*]), TrieKey::from_list([
                 NodeKey::Exact(0), NodeKey::Wildcard,
-                NodeKey::ExpressionBegin, NodeKey::Wildcard,
-                NodeKey::ExpressionEnd]));
+                NodeKey::LeftPar, NodeKey::Wildcard,
+                NodeKey::RightPar]));
     }
 
     #[test]
@@ -372,50 +388,50 @@ mod test {
 
         trie.add(triekey!("A"), "exact_a");
         trie.add(triekey!(*), "wild");
-        trie.add(triekey!(["A", "B"]), "expr_a_b");
+        trie.add(triekey!(["A", "B"]), "pars_a_b");
         trie.add(triekey!("A", "B"), "a_b");
 
         assert_eq!(trie.get(triekey!("A")).to_sorted(), vec!["exact_a", "wild"]);
         assert_eq!(trie.get(triekey!("B")).to_sorted(), vec!["wild"]);
-        assert_eq!(trie.get(triekey!(*)).to_sorted(), vec!["exact_a", "expr_a_b", "wild"]);
-        assert_eq!(trie.get(triekey!(["A", "B"])).to_sorted(), vec!["expr_a_b", "wild"]);
+        assert_eq!(trie.get(triekey!(*)).to_sorted(), vec!["exact_a", "pars_a_b", "wild"]);
+        assert_eq!(trie.get(triekey!(["A", "B"])).to_sorted(), vec!["pars_a_b", "wild"]);
         assert_eq!(trie.get(triekey!(["A", "C"])).to_sorted(), vec!["wild"]);
-        assert_eq!(trie.get(triekey!(["A", *])).to_sorted(), vec!["expr_a_b", "wild"]);
+        assert_eq!(trie.get(triekey!(["A", *])).to_sorted(), vec!["pars_a_b", "wild"]);
         assert_eq!(trie.get(triekey!("A", "B")).to_sorted(), vec!["a_b"]);
         assert_eq!(trie.get(triekey!("A", "C")).to_sorted(), vec![] as Vec<&str>);
         assert_eq!(trie.get(triekey!("A", *)).to_sorted(), vec!["a_b"]);
     }
 
     #[test]
-    fn multi_trie_add_expr() {
+    fn multi_trie_add_pars() {
         let mut trie = MultiTrie::new();
 
-        trie.add(triekey!(["A", "B"]), "expr_a_b");
-        trie.add(triekey!([*, "C"]), "expr_x_c");
+        trie.add(triekey!(["A", "B"]), "pars_a_b");
+        trie.add(triekey!([*, "C"]), "pars_x_c");
 
-        assert_eq!(trie.get(triekey!([*, "B"])).to_sorted(), vec!["expr_a_b"]);
-        assert_eq!(trie.get(triekey!(["A", "C"])).to_sorted(), vec!["expr_x_c"]);
+        assert_eq!(trie.get(triekey!([*, "B"])).to_sorted(), vec!["pars_a_b"]);
+        assert_eq!(trie.get(triekey!(["A", "C"])).to_sorted(), vec!["pars_x_c"]);
     }
 
     #[test]
-    fn multi_trie_add_subexpr_twice() {
+    fn multi_trie_add_subpars_twice() {
         let mut trie: MultiTrie<&'static str, &'static str> = MultiTrie::new();
 
-        trie.add(triekey!([]), "empty_expr");
-        trie.add(triekey!([]).clone(), "empty_expr");
+        trie.add(triekey!([]), "empty_pars");
+        trie.add(triekey!([]).clone(), "empty_pars");
 
-        assert_eq!(trie.get(triekey!([])).to_sorted(), vec!["empty_expr"]);
-        assert_eq!(trie.get(triekey!(*)).to_sorted(), vec!["empty_expr"]);
+        assert_eq!(trie.get(triekey!([])).to_sorted(), vec!["empty_pars"]);
+        assert_eq!(trie.get(triekey!(*)).to_sorted(), vec!["empty_pars"]);
     }
 
     #[test]
-    fn multi_trie_twice_result_because_of_subexpr() {
+    fn multi_trie_twice_result_because_of_subpars() {
         let mut trie = MultiTrie::new();
 
-        trie.add(triekey!(["A"]), "expr_a");
-        trie.add(triekey!(["B"]), "expr_b");
+        trie.add(triekey!(["A"]), "pars_a");
+        trie.add(triekey!(["B"]), "pars_b");
 
-        assert_eq!(trie.get(triekey!([*])).to_sorted(), vec!["expr_a", "expr_b"]);
+        assert_eq!(trie.get(triekey!([*])).to_sorted(), vec!["pars_a", "pars_b"]);
     }
 
     #[test]
@@ -423,12 +439,12 @@ mod test {
         let mut trie = MultiTrie::new();
         trie.add(triekey!("A"), "exact_a");
         trie.add(triekey!(*), "wild");
-        trie.add(triekey!(["A", "B"]), "expr_a_b");
+        trie.add(triekey!(["A", "B"]), "pars_a_b");
         trie.add(triekey!("A", "B"), "a_b");
 
         trie.remove(triekey!("A"), &"exact_a");
         trie.remove(triekey!(*), &"wild");
-        trie.remove(triekey!(["A", "B"]), &"expr_a_b");
+        trie.remove(triekey!(["A", "B"]), &"pars_a_b");
         trie.remove(triekey!("A", "B"), &"a_b");
 
         assert!(trie.get(triekey!("A")).to_sorted().is_empty());
@@ -438,10 +454,10 @@ mod test {
     }
 
     #[test]
-    fn trie_key_debug() {
-        assert_eq!(format!("{:?}", triekey!("A")), "TrieKey([Exact(\"A\")])");
-        assert_eq!(format!("{:?}", triekey!(*) as TrieKey<u32>), "TrieKey([Wildcard])");
-        assert_eq!(format!("{:?}", triekey!(["A", "B"])), "TrieKey([Expression(3), Exact(\"A\"), Exact(\"B\"), ExpressionEnd])");
+    fn trie_key_display() {
+        assert_eq!(format!("{}", triekey!("A")), "TrieKey(Exact(A))");
+        assert_eq!(format!("{}", triekey!(*) as TrieKey<u32>), "TrieKey(*)");
+        assert_eq!(format!("{}", triekey!(["A", "B", *])), "TrieKey(LeftPar, Exact(A), Exact(B), *, RightPar)");
     }
 
     #[test]
@@ -456,23 +472,23 @@ mod test {
     }
 
     #[test]
-    fn multi_trie_add_key_with_many_subexpr() {
-        fn with_subexpr(nvars: usize) -> TrieKey<NodeKey<usize>> {
+    fn multi_trie_add_key_with_many_subpars() {
+        fn with_subpars(nvars: usize) -> TrieKey<NodeKey<usize>> {
             let mut keys = Vec::new();
-            keys.push(NodeKey::ExpressionBegin);
+            keys.push(NodeKey::LeftPar);
             for _i in 0..nvars {
-                keys.push(NodeKey::ExpressionBegin);
-                keys.push(NodeKey::ExpressionEnd);
+                keys.push(NodeKey::LeftPar);
+                keys.push(NodeKey::RightPar);
             }
-            keys.push(NodeKey::ExpressionEnd);
+            keys.push(NodeKey::RightPar);
             TrieKey::from_list(keys)
         }
         let mut trie = MultiTrie::new();
 
-        trie.add(with_subexpr(4), 0);
+        trie.add(with_subpars(4), 0);
         assert_eq!(trie.size(), 5*2 + 1);
 
-        trie.add(with_subexpr(8), 0);
+        trie.add(with_subpars(8), 0);
         assert_eq!(trie.size(), 20);
     }
 }
