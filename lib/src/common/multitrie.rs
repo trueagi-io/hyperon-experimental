@@ -1,6 +1,7 @@
 use std::fmt::{Debug, Display};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
+use std::marker::PhantomData;
 use crate::common::shared::Shared;
 
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -128,7 +129,7 @@ macro_rules! multi_trie_explorer {
         {
             to_be_explored: Vec<$UnexploredPath<K, V>>,
             strategy: ExploringStrategy,
-            _marker: std::marker::PhantomData<&'a $( $mut_ )? MultiTrieNode<K, V>>,
+            _node_ref_marker: PhantomData<&'a $( $mut_ )? MultiTrieNode<K, V>>,
         }
 
         impl<'a, K, V, ExploringStrategy> $ValueExplorer<'a, K, V, ExploringStrategy>
@@ -137,10 +138,10 @@ macro_rules! multi_trie_explorer {
         {
             fn new(node: &'a $( $mut_ )? MultiTrieNode<K, V>, key: TrieKey<K>, strategy: ExploringStrategy) -> Self {
                 let to_be_explored = vec![$UnexploredPath::new(node, key)];
-                Self{ to_be_explored, strategy, _marker: std::marker::PhantomData }
+                Self{ to_be_explored, strategy, _node_ref_marker: PhantomData }
             }
 
-            fn explore(&mut self, node: * $raw_mut MultiTrieNode<K, V>, key: TrieKey<K>) {
+            fn add_paths_from_key(&mut self, node: * $raw_mut MultiTrieNode<K, V>, key: TrieKey<K>) {
                 let node = unsafe{ & $( $mut_ )? *node};
                 let to_be_explored = &mut self.to_be_explored;
                 (self.strategy)(node, key, &mut |key| to_be_explored.push(key));
@@ -160,7 +161,7 @@ macro_rules! multi_trie_explorer {
                             let node = unsafe{ & $( $mut_ )? *node };
                             return Some(node);
                         },
-                        false => self.explore(node, key),
+                        false => self.add_paths_from_key(node, key),
                     }
                 }
                 None
@@ -308,7 +309,7 @@ where
         self.values.remove(value)
     }
 
-    pub fn get(&self, key: TrieKey<K>) -> impl Iterator<Item=&V> {
+    pub fn get(&self, key: TrieKey<K>) -> impl Iterator<Item=&V> + '_ {
         ValueExplorer::new(self, key, MultiTrieNode::get_exploring_strategy)
             .flat_map(|node| node.values.iter())
     }
