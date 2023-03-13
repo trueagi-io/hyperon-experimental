@@ -170,7 +170,6 @@ macro_rules! multi_trie_explorer {
     }
 }
 
-multi_trie_explorer!(ValueMutExplorer, UnexploredPathMut, { mut }, mut);
 multi_trie_explorer!(ValueExplorer, UnexploredPath, { /* no mut */ }, const);
 
 impl<K, V> MultiTrieNode<K, V>
@@ -195,32 +194,60 @@ where
         self.children.get(key).map(|child| Shared::as_ptr(&child) as *const Self)
     }
 
-    fn get_child_mut(&mut self, key: &NodeKey<K>) -> Option<*mut Self> {
-        self.children.get_mut(key).map(|child| Shared::as_ptr(child))
+    fn get_children_mut<'a>(&'a self, key: &NodeKey<K>) -> Option<Shared<Self>> {
+        self.children.get(key).cloned()
     }
 
-    fn remove_exploring_strategy(&mut self, mut key: TrieKey<K>, callback: &mut dyn FnMut(UnexploredPathMut<K, V>)) {
+    fn children(&self, mut key: TrieKey<K>) -> Vec<(Option<NodeKey<K>>, Shared<Self>, TrieKey<K>)> {
         let head = key.pop_head_unchecked();
+        let mut result = Vec::new();
         match head.key {
             NodeKey::Exact(_) => {
-                self.get_child_mut(&head.key).map(|child| callback(UnexploredPathMut::new(child, key.clone())));
-                self.get_child_mut(&NodeKey::Wildcard).map(|child| callback(UnexploredPathMut::new(child, key)));
+                self.get_children_mut(&head.key).map(|child| result.push((Some(head.key), child, key.clone())));
+                self.get_children_mut(&NodeKey::Wildcard).map(|child| result.push((Some(NodeKey::Wildcard), child, key)));
             },
             NodeKey::RightPar => {
-                self.get_child_mut(&head.key).map(|child| callback(UnexploredPathMut::new(child, key)));
+                self.get_children_mut(&head.key).map(|child| result.push((Some(head.key), child, key)));
             },
             NodeKey::LeftPar => {
-                self.get_child_mut(&NodeKey::Wildcard).map(|child| callback(UnexploredPathMut::new(child, key.skip_tokens(head.par_size.unwrap()))));
-                self.get_child_mut(&NodeKey::LeftPar).map(|child| callback(UnexploredPathMut::new(child, key)));
+                self.get_children_mut(&NodeKey::Wildcard)
+                    .map(|child| result.push((Some(NodeKey::Wildcard), child, key.skip_tokens(head.par_size.unwrap()))));
+                self.get_children_mut(&NodeKey::LeftPar)
+                    .map(|child| result.push((Some(NodeKey::LeftPar), child, key)));
             },
             NodeKey::Wildcard => {
-                self.children.iter_mut()
+                self.children.iter()
                     .filter(|(key, _child)| !key.is_parenthesis())
-                    .map(|(_key, child)| child)
-                    .for_each(|child| callback(UnexploredPathMut::new(child.as_ptr(), key.clone())));
-                self.skip_pars.values_mut()
-                    .for_each(|child| callback(UnexploredPathMut::new(child.as_ptr(), key.clone())));
+                    .for_each(|(head, child)| result.push((Some(head.clone()), child.clone(), key.clone())));
+                self.skip_pars.values()
+                    .for_each(|child| result.push((None, child.clone(), key.clone())));
             },
+        };
+        result
+    }
+
+    fn is_empty(&self) -> bool {
+        self.children.is_empty() && self.values.is_empty()
+    }
+
+    pub fn remove(&mut self, key: TrieKey<K>, value: &V) -> bool {
+        log::debug!("MultiTrieNode::remove(): key: {:?}, value: {:?}", key, value);
+        if key.is_empty() {
+            self.values.remove(value)
+        } else {
+            self.children(key)
+                .into_iter()
+                .map(|(child_key, child_node, key)| {
+                    let removed = child_node.borrow_mut().remove(key, value);
+                    if removed && child_node.borrow().is_empty() {
+                        match child_key {
+                            Some(key) => { self.children.remove(&key); },
+                            None => { self.skip_pars.remove(&child_node.as_ptr()); },
+                        }
+                    }
+                    removed
+                })
+            .fold(false, |a, b| a || b)
         }
     }
     
@@ -292,21 +319,6 @@ where
                 }
             }
         }
-    }
-
-    // TODO: at the moment the method doesn't remove the key from the index. 
-    // It removes only value.  It can be fixed by using links to parent in the
-    // MultiTrieNode nodes and cleaning up the map entries which point to the empty
-    // nodes only.
-    pub fn remove(&mut self, key: TrieKey<K>, value: &V) -> bool {
-        log::debug!("MultiTrieNode::remove(): key: {:?}, value: {:?}", key, value);
-        ValueMutExplorer::new(self, key, MultiTrieNode::remove_exploring_strategy)
-            .map(|node| node.remove_value(value)).fold(false, |a, b| a | b)
-    }
-
-    #[inline]
-    fn remove_value(&mut self, value: &V) -> bool {
-        self.values.remove(value)
     }
 
     pub fn get(&self, key: TrieKey<K>) -> impl Iterator<Item=&V> + '_ {
@@ -438,6 +450,7 @@ mod test {
     #[test]
     fn multi_trie_remove_basic() {
         let mut trie = MultiTrie::new();
+        let empty_trie_size = trie.size();
         trie.add(triekey!("A"), "exact_a");
         trie.add(triekey!(*), "wild");
         trie.add(triekey!(["A", "B"]), "pars_a_b");
@@ -452,6 +465,7 @@ mod test {
         assert!(trie.get(triekey!(*)).to_sorted().is_empty());
         assert!(trie.get(triekey!(["A", "B"])).to_sorted().is_empty());
         assert!(trie.get(triekey!("A", "B")).to_sorted().is_empty());
+        assert_eq!(trie.size(), empty_trie_size);
     }
 
     #[test]
