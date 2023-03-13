@@ -5,6 +5,7 @@ pub mod collections;
 pub mod shared;
 pub mod assert;
 pub mod reformove;
+pub mod multitrie;
 mod arithmetics;
 
 pub use arithmetics::*;
