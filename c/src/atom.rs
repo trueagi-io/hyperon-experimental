@@ -75,9 +75,6 @@ pub extern "C" fn exec_error_free(error: *mut exec_error_t) {
 // bindings
 #[no_mangle]
 pub unsafe extern "C" fn bindings_new() -> *mut bindings_t {
-    // cstr_as_str() keeps pointer ownership, but Atom::sym() copies resulting
-    // String into Atom::Symbol::symbol field. atom_into_ptr() moves value to the
-    // heap and gives ownership to the caller.
     bindings_into_ptr(Bindings::new())
 }
 
@@ -90,6 +87,13 @@ pub unsafe extern "C" fn bindings_free(bindings: *mut bindings_t) {
 #[no_mangle]
 pub extern "C" fn bindings_clone(bindings: *const bindings_t) -> *mut bindings_t {
     bindings_into_ptr(unsafe{ &(*bindings) }.bindings.clone())
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_to_str(bindings: *const bindings_t, callback: c_str_callback_t, context: *mut c_void) {
+    let bindings = unsafe{ &(*bindings).bindings };
+    let s = str_as_cstr(bindings.to_string().as_str());
+    callback(s.as_ptr(), context);
 }
 
 #[no_mangle]
@@ -124,15 +128,16 @@ pub unsafe extern "C" fn bindings_is_empty(bindings: *const bindings_t) -> bool{
     bindings.is_empty()
 }
 
-// todo: discuss if var_atom_t is more convinient, option convention
+// todo: discuss if var_atom_t is more convinient
+//       using Option cause `extern` fn uses type `Option<atom::atom_t>`, which is not FFI-safe warning
 #[no_mangle]
-pub unsafe extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const c_char) -> *const atom_t
+pub unsafe extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const c_char) -> * mut atom_t
 {
     let bindings = &(*bindings).bindings;
     let var = VariableAtom::new(cstr_into_string(var_name));
 
     match bindings.resolve(&var) {
-        None => { ptr::null() }
+        None => { ptr::null_mut() }
         Some(atom) => { atom_into_ptr(atom) }
     }
 }
@@ -144,7 +149,7 @@ pub unsafe extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindin
     let bindings_r = &(*bindings_right).bindings;
 
     match Bindings::merge(bindings_l, bindings_r){
-        None => {ptr::null_mut()}
+        None => { ptr::null_mut() }
         Some(merged) => { bindings_into_ptr(merged)}
     }
 }
@@ -155,16 +160,10 @@ pub unsafe extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, 
     let var = VariableAtom::new(cstr_into_string(var_name));
 
     match bindings.resolve_and_remove(&var) {
-        None => { ptr::null_mut()}
-        Some(removed) =>{atom_into_ptr(removed)}
+        None => { ptr::null_mut() }
+        Some(removed) =>{ atom_into_ptr(removed) }
     }
 }
-
-
-// todo: discuss correepondance HashSet to c struct
-//pub unsafe extern "C" fn bindings_narrow_vars(bindings: *const bindings_t)
-//pub fn narrow_vars(&self, vars: &HashSet<VariableAtom>) -> Bindings {
-
 
 // end of bindings
 
@@ -207,13 +206,9 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
 
 #[no_mangle]
 pub extern "C" fn atom_to_str(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
-    println!("atom_to_str rs\n");
     let atom = unsafe{ &(*atom).atom };
-    println!("atom_to_str atom rs\n");
     let s = str_as_cstr(atom.to_string().as_str());
-    println!("atom_to_str s rs\n");
     callback(s.as_ptr(), context);
-    println!("atom_to_str rs end \n");
 }
 
 

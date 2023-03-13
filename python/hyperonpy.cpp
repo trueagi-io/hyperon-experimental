@@ -17,6 +17,7 @@ struct CPtr {
 
 using CAtom = CPtr<atom_t>;
 using CVecAtom = CPtr<vec_atom_t>;
+using CBindings = CPtr<bindings_t>;
 using CGroundingSpace = CPtr<grounding_space_t>;
 using CTokenizer = CPtr<tokenizer_t>;
 using CStepResult = CPtr<step_result_t>;
@@ -283,6 +284,31 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("vec_atom_size", [](CVecAtom vec) { return vec_atom_size(vec.ptr); }, "Return size of the vector");
     m.def("vec_atom_push", [](CVecAtom vec, CAtom atom) { vec_atom_push(vec.ptr, atom_clone(atom.ptr)); }, "Push atom into vector");
     m.def("vec_atom_pop", [](CVecAtom vec) { return CAtom(vec_atom_pop(vec.ptr)); }, "Push atom into vector");
+
+    py::class_<CBindings>(m, "CBindings");
+    m.def("bindings_new", []() { return CBindings(bindings_new()); }, "New bindings");
+    m.def("bindings_free", [](CBindings bindings) { bindings_free(bindings.ptr);}, "Free bindings" );
+    m.def("bindings_clone", [](CBindings bindings) { return CBindings(bindings_clone(bindings.ptr)); }, "Deep copy if bindings");
+    m.def("bindings_merge", [](CBindings left, CBindings right) { return CBindings(bindings_merge(left.ptr, right.ptr));}, "Merges bindings");
+    m.def("bindings_eq", [](CBindings left, CBindings right){ return bindings_eq(left.ptr, right.ptr);}, "Compares bindings"  );
+    m.def("bindings_add_var_bindings",
+          [](CBindings bindings, char const* varName, CAtom atom) {
+              var_atom_t var_atom{.var = varName, .atom = atom.ptr};
+              return bindings_add_var_binding(bindings.ptr, &var_atom);
+          },
+          "Links variable to atom" );
+    m.def("bindings_is_empty", [](CBindings bindings){ return bindings_is_empty(bindings.ptr);}, "Returns true if bindings is empty");
+    m.def("bindings_resolve", [](CBindings bindings, char const* varName){ return CAtom(bindings_resolve(bindings.ptr, varName));}, "Resolve" );
+    m.def("bindings_resolve_and_remove", [](CBindings bindings, char const* varName){ return CAtom(bindings_resolve_and_remove(bindings.ptr, varName));}, "Resolve" );
+    m.def("bindings_to_str", [](CBindings bindings) {
+        std::string str;
+        bindings_to_str(bindings.ptr, copy_to_string, &str);
+        return str;
+    }, "Convert bindings to human readable string");
+    // todo: how to pass callback?
+    //pub unsafe extern "C" fn bindings_traverse(bindings: * const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
+
+
 
     py::class_<CGroundingSpace>(m, "CGroundingSpace");
     m.def("grounding_space_new", []() { return CGroundingSpace(grounding_space_new()); }, "New grounding space instance");
