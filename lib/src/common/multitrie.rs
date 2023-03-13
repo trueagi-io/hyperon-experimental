@@ -109,69 +109,6 @@ pub struct MultiTrieNode<K, V> {
     values: HashSet<V>,
 }
 
-macro_rules! multi_trie_explorer {
-    ( $ValueExplorer:ident, $UnexploredPath:ident, {$( $mut_:tt )?}, $raw_mut:tt ) => {
-
-        struct $UnexploredPath<K, V> {
-            node: * $raw_mut MultiTrieNode<K, V>,
-            key: TrieKey<K>,
-        }
-
-        impl<K, V> $UnexploredPath<K, V> {
-            fn new(node: * $raw_mut MultiTrieNode<K, V>, key: TrieKey<K>) -> Self {
-                Self{ node, key }
-            }
-        }
-
-        struct $ValueExplorer<'a, K, V, ExploringStrategy>
-            where ExploringStrategy: Fn(&'a $( $mut_ )? MultiTrieNode<K, V>,
-                  TrieKey<K>, &mut dyn FnMut($UnexploredPath<K, V>))
-        {
-            to_be_explored: Vec<$UnexploredPath<K, V>>,
-            strategy: ExploringStrategy,
-            _node_ref_marker: PhantomData<&'a $( $mut_ )? MultiTrieNode<K, V>>,
-        }
-
-        impl<'a, K, V, ExploringStrategy> $ValueExplorer<'a, K, V, ExploringStrategy>
-            where ExploringStrategy: Fn(&'a $( $mut_ )? MultiTrieNode<K, V>,
-                  TrieKey<K>, &mut dyn FnMut($UnexploredPath<K, V>))
-        {
-            fn new(node: &'a $( $mut_ )? MultiTrieNode<K, V>, key: TrieKey<K>, strategy: ExploringStrategy) -> Self {
-                let to_be_explored = vec![$UnexploredPath::new(node, key)];
-                Self{ to_be_explored, strategy, _node_ref_marker: PhantomData }
-            }
-
-            fn add_paths_from_key(&mut self, node: * $raw_mut MultiTrieNode<K, V>, key: TrieKey<K>) {
-                let node = unsafe{ & $( $mut_ )? *node};
-                let to_be_explored = &mut self.to_be_explored;
-                (self.strategy)(node, key, &mut |key| to_be_explored.push(key));
-            }
-        }
-
-        impl<'a, K, V, ExploringStrategy> Iterator for $ValueExplorer<'a, K, V, ExploringStrategy>
-            where ExploringStrategy: Fn(&'a $( $mut_ )? MultiTrieNode<K, V>,
-                  TrieKey<K>, &mut dyn FnMut($UnexploredPath<K, V>))
-        {
-            type Item = &'a $( $mut_ )? MultiTrieNode<K, V>;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                while let Some($UnexploredPath{node, key}) = self.to_be_explored.pop() {
-                    match key.is_empty() {
-                        true => {
-                            let node = unsafe{ & $( $mut_ )? *node };
-                            return Some(node);
-                        },
-                        false => self.add_paths_from_key(node, key),
-                    }
-                }
-                None
-            }
-        }
-    }
-}
-
-multi_trie_explorer!(ValueExplorer, UnexploredPath, { /* no mut */ }, const);
-
 impl<K, V> MultiTrieNode<K, V>
 where
     K: Clone + Debug + Eq + Hash + ?Sized,
@@ -186,48 +123,40 @@ where
         }
     }
 
+    fn is_empty(&self) -> bool {
+        self.children.is_empty() && self.values.is_empty()
+    }
+
     fn get_or_insert_child(&mut self, key: NodeKey<K>) -> Shared<Self> {
         self.children.entry(key).or_insert(Shared::new(Self::new())).clone()
     }
 
-    fn get_child(&self, key: &NodeKey<K>) -> Option<*const Self> {
-        self.children.get(key).map(|child| Shared::as_ptr(&child) as *const Self)
-    }
-
-    fn get_children_mut<'a>(&'a self, key: &NodeKey<K>) -> Option<Shared<Self>> {
-        self.children.get(key).cloned()
-    }
-
-    fn children(&self, mut key: TrieKey<K>) -> Vec<(Option<NodeKey<K>>, Shared<Self>, TrieKey<K>)> {
+    fn next<F, R>(&self, mut key: TrieKey<K>, map: F, result: &mut Vec<R>)
+        where F: Fn(Option<NodeKey<K>>, &Shared<Self>, TrieKey<K>) -> R,
+    {
         let head = key.pop_head_unchecked();
-        let mut result = Vec::new();
         match head.key {
             NodeKey::Exact(_) => {
-                self.get_children_mut(&head.key).map(|child| result.push((Some(head.key), child, key.clone())));
-                self.get_children_mut(&NodeKey::Wildcard).map(|child| result.push((Some(NodeKey::Wildcard), child, key)));
+                self.children.get(&head.key).map(|child| result.push(map(Some(head.key), child, key.clone())));
+                self.children.get(&NodeKey::Wildcard).map(|child| result.push(map(Some(NodeKey::Wildcard), child, key)));
             },
             NodeKey::RightPar => {
-                self.get_children_mut(&head.key).map(|child| result.push((Some(head.key), child, key)));
+                self.children.get(&head.key).map(|child| result.push(map(Some(head.key), child, key)));
             },
             NodeKey::LeftPar => {
-                self.get_children_mut(&NodeKey::Wildcard)
-                    .map(|child| result.push((Some(NodeKey::Wildcard), child, key.skip_tokens(head.par_size.unwrap()))));
-                self.get_children_mut(&NodeKey::LeftPar)
-                    .map(|child| result.push((Some(NodeKey::LeftPar), child, key)));
+                self.children.get(&NodeKey::Wildcard)
+                    .map(|child| result.push(map(Some(NodeKey::Wildcard), child, key.skip_tokens(head.par_size.unwrap()))));
+                self.children.get(&NodeKey::LeftPar)
+                    .map(|child| result.push(map(Some(NodeKey::LeftPar), child, key)));
             },
             NodeKey::Wildcard => {
                 self.children.iter()
                     .filter(|(key, _child)| !key.is_parenthesis())
-                    .for_each(|(head, child)| result.push((Some(head.clone()), child.clone(), key.clone())));
+                    .for_each(|(head, child)| result.push(map(Some(head.clone()), child, key.clone())));
                 self.skip_pars.values()
-                    .for_each(|child| result.push((None, child.clone(), key.clone())));
+                    .for_each(|child| result.push(map(None, child, key.clone())));
             },
         };
-        result
-    }
-
-    fn is_empty(&self) -> bool {
-        self.children.is_empty() && self.values.is_empty()
     }
 
     pub fn remove(&mut self, key: TrieKey<K>, value: &V) -> bool {
@@ -235,8 +164,9 @@ where
         if key.is_empty() {
             self.values.remove(value)
         } else {
-            self.children(key)
-                .into_iter()
+            let mut children = Vec::new();
+            self.next(key, |child_key, child_node, key| (child_key, child_node.clone(), key), &mut children);
+            children.into_iter()
                 .map(|(child_key, child_node, key)| {
                     let removed = child_node.borrow_mut().remove(key, value);
                     if removed && child_node.borrow().is_empty() {
@@ -251,31 +181,6 @@ where
         }
     }
     
-    fn get_exploring_strategy(&self, mut key: TrieKey<K>, callback: &mut dyn FnMut(UnexploredPath<K, V>)) {
-        let head = key.pop_head_unchecked();
-        match head.key {
-            NodeKey::Exact(_) => {
-                self.get_child(&head.key).map(|child| callback(UnexploredPath::new(child, key.clone())));
-                self.get_child(&NodeKey::Wildcard).map(|child| callback(UnexploredPath::new(child, key)));
-            },
-            NodeKey::RightPar => {
-                self.get_child(&head.key).map(|child| callback(UnexploredPath::new(child, key)));
-            }
-            NodeKey::LeftPar => {
-                self.get_child(&NodeKey::Wildcard).map(|child| callback(UnexploredPath::new(child, key.skip_tokens(head.par_size.unwrap()))));
-                self.get_child(&NodeKey::LeftPar).map(|child| callback(UnexploredPath::new(child, key)));
-            },
-            NodeKey::Wildcard => {
-                self.children.iter()
-                    .filter(|(key, _child)| !key.is_parenthesis())
-                    .map(|(_key, child)| child)
-                    .for_each(|child| callback(UnexploredPath::new(child.as_ptr(), key.clone())));
-                self.skip_pars.values()
-                    .for_each(|child| callback(UnexploredPath::new(child.as_ptr(), key.clone())));
-            },
-        }
-    }
-
     pub fn add(&mut self, mut key: TrieKey<K>, value: V) {
         log::debug!("MultiTrie::add(): key: {:?}, value: {:?}", key, value);
         if key.is_empty() {
@@ -322,8 +227,7 @@ where
     }
 
     pub fn get(&self, key: TrieKey<K>) -> impl Iterator<Item=&V> + '_ {
-        ValueExplorer::new(self, key, MultiTrieNode::get_exploring_strategy)
-            .flat_map(|node| node.values.iter())
+        MultiValueIter::new(self, key).flat_map(|node| node.values.iter())
     }
 
     #[cfg(test)]
@@ -341,6 +245,47 @@ where
             }
         }
         size_recursive(self, &mut counted)
+    }
+}
+
+struct MultiValueIter<'a, K, V> {
+    to_be_explored: Vec<(*mut MultiTrieNode<K, V>, TrieKey<K>)>,
+    _root_node_ref: PhantomData<&'a MultiTrieNode<K, V>>,
+}
+
+impl<'a, K, V> MultiValueIter<'a, K, V>
+where
+    K: Clone + Debug + Eq + Hash + ?Sized,
+    V: Clone + Debug + Eq + Hash + ?Sized,
+{
+    fn new(node: &'a MultiTrieNode<K, V>, key: TrieKey<K>) -> Self {
+        let mut to_be_explored = Vec::new();
+        node.next(key, Self::map_children, &mut to_be_explored);
+        Self{ to_be_explored, _root_node_ref: PhantomData }
+    }
+
+    fn map_children(_child_key: Option<NodeKey<K>>,
+        child: &Shared<MultiTrieNode<K, V>>, key: TrieKey<K>) -> (*mut MultiTrieNode<K, V>, TrieKey<K>) {
+        (child.as_ptr(), key)
+    }
+}
+
+impl<'a, K, V> Iterator for MultiValueIter<'a, K, V>
+where
+    K: Clone + Debug + Eq + Hash + ?Sized,
+    V: Clone + Debug + Eq + Hash + ?Sized,
+{
+    type Item = &'a MultiTrieNode<K, V>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((node, key)) = self.to_be_explored.pop() {
+            let node = unsafe{ &*node };
+            match key.is_empty() {
+                true => return Some(node),
+                false => node.next(key, MultiValueIter::map_children, &mut self.to_be_explored),
+            }
+        }
+        None
     }
 }
 
