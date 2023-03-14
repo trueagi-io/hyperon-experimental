@@ -1,85 +1,135 @@
+//! Multi-value trie with double side matching.
+//!
+//! Key of the trie is a sequence of tokens. The most common token type is
+//! an [TrieToken::Exact] token. It contains a value and matches with another [TrieToken::Exact] token
+//! having the equal value. For example key `[ Exact(A), Exact(B) ]` matches with
+//! the equal key but doesn't match with `[ Exact(A), Exact(C) ]`.
+//! But [TrieKey] containing [TrieToken::Exact] token is not the only kind of keys supported.
+//! [MultiTrie] also supports wildcards and sub-expressions.
+//!
+//! Subexpression is a part of the key between a pair of left and right parentheses.
+//! [TrieToken::LeftPar] and [TrieToken::RightPar] are also kinds of tokens.
+//! Parentheses mark the edges of the key subsequence which can be matched as a whole.
+//! Exact token doesn't match with a part of a subexpression unless it is also
+//! a part of a subexpression and located on the same position as a matched token.
+//! Subexpressions can be nested and in such case parentheses should be correctly balanced.
+//! For example `[ Exact(A), LeftPar, Exact(B), RightPar ]` is a key which contains
+//! a subexpression. It can be matched with the same key but doesn't match with
+//! `[ Exact(A), Exact(B) ]`.
+//!
+//! The [TrieToken::Wildcard] is a last kind of token which matches the exact value, the whole
+//! sub-expression or another wildcard. It can recognize anything but when dealing
+//! with subexpression it matches with the whole subexpression only. It cannot
+//! be matched with a part of the subexpression or with the left or right parenthesis.
+//! For example `[ Exact(A), * ]` key matches both `[ Exact(A), Exact(B) ]` and
+//! `[ Exact(A), LeftPar, Exact(B), RightPar ]` keys.
+//!
+//! Wildcard can be used not only for getting value but also as a key for
+//! keeping value. Thus a singly key in the [MultiTrie] can match many different keys
+//! for retrieve value. In the example above we could put two
+//! values with `[ Exact(A), Exact(B) ]` and `[ Exact(A), LeftPar, Exact(B), RightPar ]`
+//! keys into the trie and then get both of them using `[ Exact(A), * ]` key.
+//! Or vice versa put a single value using `[ Exact(A), * ]` key and extract
+//! it using two keys above. This is what is called double-side matching.
+//!
+//! Because of double-side matching [MultiTrie] cannot guarantie that single key
+//! corresponds to the single value. Thus [MultiTrie::get] call returns the
+//! iterator through the values which keys are matched with given key.
+
 use std::fmt::{Debug, Display};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::marker::PhantomData;
 use crate::common::shared::Shared;
 
+/// Single token of [TrieKey]. Each kind of token has its own recognition rules.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub enum NodeKey<T> {
+pub enum TrieToken<T> {
+    /// Exact token recognizes another instance of [TrieToken::Exact] which
+    /// has the equal value inside.
     Exact(T),
+    /// Whildcard token recognizes [TrieToken::Exact] with any value inside,
+    /// another [TrieToken::Wildcard] or the whole sub-expression from
+    /// [TrieToken::LeftPar] to [TrieToken::RightPar].
     Wildcard,
+    /// LeftPar designates beginning of the sub-expression. It recognizes
+    /// another [TrieToken::LeftPar] or [TrieToken::Wildcard].
     LeftPar,
+    /// RightPar designates end of the sub-expression. It recognizes another
+    /// [TrieToken::RightPar] only.
     RightPar,
 }
 
-impl<T: PartialEq> NodeKey<T> {
+impl<T: PartialEq> TrieToken<T> {
     fn is_parenthesis(&self) -> bool {
-        *self == NodeKey::RightPar || *self == NodeKey::LeftPar
+        *self == TrieToken::RightPar || *self == TrieToken::LeftPar
     }
 }
 
-impl<T: Display> Display for NodeKey<T> {
+impl<T: Display> Display for TrieToken<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            NodeKey::Exact(val) => write!(f, "Exact({})", val),
-            NodeKey::Wildcard => write!(f, "*"),
-            NodeKey::LeftPar => write!(f, "LeftPar"),
-            NodeKey::RightPar => write!(f, "RightPar"),
+            TrieToken::Exact(val) => write!(f, "Exact({})", val),
+            TrieToken::Wildcard => write!(f, "*"),
+            TrieToken::LeftPar => write!(f, "LeftPar"),
+            TrieToken::RightPar => write!(f, "RightPar"),
         }
     }
 }
 
 #[derive(PartialEq, Clone, Debug)]
-struct _NodeKey<T> {
-    key: NodeKey<T>,
+struct _Token<T> {
+    token: TrieToken<T>,
     par_size: Option<usize>,
 }
 
 #[derive(PartialEq, Clone, Debug)]
-pub struct TrieKey<T>(VecDeque<_NodeKey<T>>);
+pub struct TrieKey<T>(VecDeque<_Token<T>>);
 
 impl<T> TrieKey<T> {
-    pub fn from_list<V: Into<VecDeque<NodeKey<T>>>>(keys: V) -> Self {
-        let panic = |err| { panic!("{}", err) };
-        let keys = Self::precalculate_par_sizes(keys.into()).unwrap_or_else(panic);
-        Self(keys)
-    }
-
-    fn precalculate_par_sizes(bare_keys: VecDeque<NodeKey<T>>) -> Result<VecDeque<_NodeKey<T>>, String> {
+    fn precalculate_par_sizes(raw_tokens: VecDeque<TrieToken<T>>) -> Result<VecDeque<_Token<T>>, String> {
         let mut left_par_stack = Vec::new();
-        let mut keys_with_sizes = VecDeque::new();
-        for (pos, bare_key) in bare_keys.into_iter().enumerate() {
-            keys_with_sizes.push_back(_NodeKey{ key: bare_key, par_size: None });
-            match keys_with_sizes.back().unwrap().key {
-                NodeKey::LeftPar => left_par_stack.push(pos),
-                NodeKey::RightPar => {
+        let mut tokens = VecDeque::new();
+        for (pos, token) in raw_tokens.into_iter().enumerate() {
+            tokens.push_back(_Token{ token, par_size: None });
+            match tokens.back().unwrap().token {
+                TrieToken::LeftPar => left_par_stack.push(pos),
+                TrieToken::RightPar => {
                     let error = || { format!(concat!(
-                            "Unbalanced key: NodeKey::RightPar without ",
-                            "NodeKey::LeftPar at position {}"), pos) };
+                            "Unbalanced key: TrieToken::RightPar without ",
+                            "TrieToken::LeftPar at position {}"), pos) };
                     let start = left_par_stack.pop().ok_or_else(error)?;
-                    keys_with_sizes[start].par_size = Some(pos - start);
+                    tokens[start].par_size = Some(pos - start);
                 },
                 _ => {},
             }
         }
         if left_par_stack.is_empty() {
-            Ok(keys_with_sizes)
+            Ok(tokens)
         } else {
-            Err(format!(concat!("Unbalanced key: NodeKey::LeftPar without ",
-                        "NodeKey::Right at positions {:?}"), left_par_stack))
+            Err(format!(concat!("Unbalanced key: TrieToken::LeftPar without ",
+                        "TrieToken::Right at positions {:?}"), left_par_stack))
         }
     }
 
-    fn pop_head(&mut self) -> Option<_NodeKey<T>> {
+    fn pop_head(&mut self) -> Option<_Token<T>> {
         self.0.pop_front()
     }
 
-    fn pop_head_unchecked(&mut self) -> _NodeKey<T> {
+    fn pop_head_unchecked(&mut self) -> _Token<T> {
         self.pop_head().expect("Unexpected end of key")
     }
 
     fn is_empty(&self) -> bool {
         self.0.is_empty()
+    }
+}
+
+impl<T, V: Into<VecDeque<TrieToken<T>>>> From<V> for TrieKey<T> {
+    fn from(tokens: V) -> Self {
+        let panic = |err| { panic!("{}", err) };
+        let tokens = Self::precalculate_par_sizes(tokens.into()).unwrap_or_else(panic);
+        Self(tokens)
     }
 }
 
@@ -91,12 +141,12 @@ impl<T: Clone> TrieKey<T> {
 
 impl<T: Display> Display for TrieKey<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "TrieKey(")
+        write!(f, "[ ")
             .and_then(|_| self.0.iter().take(1).fold(Ok(()),
-                |res, key| res.and_then(|_| write!(f, "{}", key.key))))
+                |res, token| res.and_then(|_| write!(f, "{}", token.token))))
             .and_then(|_| self.0.iter().skip(1).fold(Ok(()),
-                |res, key| res.and_then(|_| write!(f, ", {}", key.key))))
-            .and_then(|_| write!(f, ")"))
+                |res, token| res.and_then(|_| write!(f, ", {}", token.token))))
+            .and_then(|_| write!(f, " ]"))
     }
 }
 
@@ -104,7 +154,7 @@ pub type MultiTrie<K, V> = MultiTrieNode<K, V>;
 
 #[derive(Clone, Debug)]
 pub struct MultiTrieNode<K, V> {
-    children: HashMap<NodeKey<K>, Shared<Self>>,
+    children: HashMap<TrieToken<K>, Shared<Self>>,
     skip_pars: HashMap<*mut Self, Shared<Self>>,
     values: HashSet<V>,
 }
@@ -127,31 +177,31 @@ where
         self.children.is_empty() && self.values.is_empty()
     }
 
-    fn get_or_insert_child(&mut self, key: NodeKey<K>) -> Shared<Self> {
-        self.children.entry(key).or_insert(Shared::new(Self::new())).clone()
+    fn get_or_insert_child(&mut self, token: TrieToken<K>) -> Shared<Self> {
+        self.children.entry(token).or_insert(Shared::new(Self::new())).clone()
     }
 
     fn next<F, R>(&self, mut key: TrieKey<K>, map: F, result: &mut Vec<R>)
-        where F: Fn(Option<NodeKey<K>>, &Shared<Self>, TrieKey<K>) -> R,
+        where F: Fn(Option<TrieToken<K>>, &Shared<Self>, TrieKey<K>) -> R,
     {
         let head = key.pop_head_unchecked();
-        match head.key {
-            NodeKey::Exact(_) => {
-                self.children.get(&head.key).map(|child| result.push(map(Some(head.key), child, key.clone())));
-                self.children.get(&NodeKey::Wildcard).map(|child| result.push(map(Some(NodeKey::Wildcard), child, key)));
+        match head.token {
+            TrieToken::Exact(_) => {
+                self.children.get(&head.token).map(|child| result.push(map(Some(head.token), child, key.clone())));
+                self.children.get(&TrieToken::Wildcard).map(|child| result.push(map(Some(TrieToken::Wildcard), child, key)));
             },
-            NodeKey::RightPar => {
-                self.children.get(&head.key).map(|child| result.push(map(Some(head.key), child, key)));
+            TrieToken::RightPar => {
+                self.children.get(&head.token).map(|child| result.push(map(Some(head.token), child, key)));
             },
-            NodeKey::LeftPar => {
-                self.children.get(&NodeKey::Wildcard)
-                    .map(|child| result.push(map(Some(NodeKey::Wildcard), child, key.skip_tokens(head.par_size.unwrap()))));
-                self.children.get(&NodeKey::LeftPar)
-                    .map(|child| result.push(map(Some(NodeKey::LeftPar), child, key)));
+            TrieToken::LeftPar => {
+                self.children.get(&TrieToken::Wildcard)
+                    .map(|child| result.push(map(Some(TrieToken::Wildcard), child, key.skip_tokens(head.par_size.unwrap()))));
+                self.children.get(&TrieToken::LeftPar)
+                    .map(|child| result.push(map(Some(TrieToken::LeftPar), child, key)));
             },
-            NodeKey::Wildcard => {
+            TrieToken::Wildcard => {
                 self.children.iter()
-                    .filter(|(key, _child)| !key.is_parenthesis())
+                    .filter(|(token, _child)| !token.is_parenthesis())
                     .for_each(|(head, child)| result.push(map(Some(head.clone()), child, key.clone())));
                 self.skip_pars.values()
                     .for_each(|child| result.push(map(None, child, key.clone())));
@@ -165,13 +215,13 @@ where
             self.values.remove(value)
         } else {
             let mut children = Vec::new();
-            self.next(key, |child_key, child_node, key| (child_key, child_node.clone(), key), &mut children);
+            self.next(key, |token, child_node, key| (token, child_node.clone(), key), &mut children);
             children.into_iter()
-                .map(|(child_key, child_node, key)| {
+                .map(|(token, child_node, key)| {
                     let removed = child_node.borrow_mut().remove(key, value);
                     if removed && child_node.borrow().is_empty() {
-                        match child_key {
-                            Some(key) => { self.children.remove(&key); },
+                        match token {
+                            Some(token) => { self.children.remove(&token); },
                             None => { self.skip_pars.remove(&child_node.as_ptr()); },
                         }
                     }
@@ -191,10 +241,10 @@ where
             let mut pos = 0;
             
             let head = key.pop_head_unchecked();
-            if let _NodeKey{ key: NodeKey::LeftPar, par_size: Some(size) } = head {
+            if let _Token{ token: TrieToken::LeftPar, par_size: Some(size) } = head {
                 pars.push((pos, pos + size + 1));
             }
-            let mut cur = self.get_or_insert_child(head.key);
+            let mut cur = self.get_or_insert_child(head.token);
             nodes.push(cur.clone());
             pos = pos + 1;
 
@@ -205,10 +255,10 @@ where
                         break;
                     },
                     Some(head) => {
-                        if let _NodeKey{ key: NodeKey::LeftPar, par_size: Some(size) } = head {
+                        if let _Token{ token: TrieToken::LeftPar, par_size: Some(size) } = head {
                             pars.push((pos, pos + size + 1));
                         }
-                        let node = cur.borrow_mut().get_or_insert_child(head.key);
+                        let node = cur.borrow_mut().get_or_insert_child(head.token);
                         cur = node;
                         nodes.push(cur.clone());
                     },
@@ -264,7 +314,7 @@ where
         Self{ to_be_explored, _root_node_ref: PhantomData }
     }
 
-    fn map_children(_child_key: Option<NodeKey<K>>,
+    fn map_children(_token: Option<TrieToken<K>>,
         child: &Shared<MultiTrieNode<K, V>>, key: TrieKey<K>) -> (*mut MultiTrieNode<K, V>, TrieKey<K>) {
         (child.as_ptr(), key)
     }
@@ -306,38 +356,38 @@ mod test {
     }
 
     macro_rules! triekey {
-        ($($x:tt)*) => { TrieKey::from_list(triekeyslice!($($x)*)) }
+        ($($x:tt)*) => { TrieKey::from(trietokens!($($x)*)) }
     }
 
-    macro_rules! triekeyslice {
+    macro_rules! trietokens {
         () => { vec![] };
-        (*) => { vec![ NodeKey::Wildcard ] };
-        ($x:literal) => { vec![ NodeKey::Exact($x) ] };
-        ([]) => { vec![ vec![ NodeKey::LeftPar ], vec![ NodeKey::RightPar ] ].concat() };
+        (*) => { vec![ TrieToken::Wildcard ] };
+        ($x:literal) => { vec![ TrieToken::Exact($x) ] };
+        ([]) => { vec![ vec![ TrieToken::LeftPar ], vec![ TrieToken::RightPar ] ].concat() };
         ([$($x:tt),*]) => { {
-            vec![ vec![ NodeKey::LeftPar ], $( triekeyslice!($x) ),*, vec![ NodeKey::RightPar ] ].concat()
+            vec![ vec![ TrieToken::LeftPar ], $( trietokens!($x) ),*, vec![ TrieToken::RightPar ] ].concat()
         } };
-        ($($x:tt),*) => { vec![ $( triekeyslice!($x) ),* ].concat() };
+        ($($x:tt),*) => { vec![ $( trietokens!($x) ),* ].concat() };
     }
 
     #[test]
     fn triekey_macro() {
-        assert_eq!(triekey!() as TrieKey<u32>, TrieKey::from_list([ ]));
-        assert_eq!(triekey!(*) as TrieKey<u32>, TrieKey::from_list([NodeKey::Wildcard]));
-        assert_eq!(triekey!(0), TrieKey::from_list([NodeKey::Exact(0)]));
-        assert_eq!(triekey!([]) as TrieKey<u32>, TrieKey::from_list([
-                NodeKey::LeftPar,NodeKey::RightPar]));
-        assert_eq!(triekey!([0, *]), TrieKey::from_list([
-                NodeKey::LeftPar, NodeKey::Exact(0),
-                NodeKey::Wildcard, NodeKey::RightPar]));
-        assert_eq!(triekey!([[0, *]]), TrieKey::from_list([
-                NodeKey::LeftPar, NodeKey::LeftPar,
-                NodeKey::Exact(0), NodeKey::Wildcard,
-                NodeKey::RightPar, NodeKey::RightPar]));
-        assert_eq!(triekey!(0, *, [*]), TrieKey::from_list([
-                NodeKey::Exact(0), NodeKey::Wildcard,
-                NodeKey::LeftPar, NodeKey::Wildcard,
-                NodeKey::RightPar]));
+        assert_eq!(triekey!() as TrieKey<u32>, TrieKey::from([ ]));
+        assert_eq!(triekey!(*) as TrieKey<u32>, TrieKey::from([TrieToken::Wildcard]));
+        assert_eq!(triekey!(0), TrieKey::from([TrieToken::Exact(0)]));
+        assert_eq!(triekey!([]) as TrieKey<u32>, TrieKey::from([
+                TrieToken::LeftPar,TrieToken::RightPar]));
+        assert_eq!(triekey!([0, *]), TrieKey::from([
+                TrieToken::LeftPar, TrieToken::Exact(0),
+                TrieToken::Wildcard, TrieToken::RightPar]));
+        assert_eq!(triekey!([[0, *]]), TrieKey::from([
+                TrieToken::LeftPar, TrieToken::LeftPar,
+                TrieToken::Exact(0), TrieToken::Wildcard,
+                TrieToken::RightPar, TrieToken::RightPar]));
+        assert_eq!(triekey!(0, *, [*]), TrieKey::from([
+                TrieToken::Exact(0), TrieToken::Wildcard,
+                TrieToken::LeftPar, TrieToken::Wildcard,
+                TrieToken::RightPar]));
     }
 
     #[test]
@@ -415,9 +465,9 @@ mod test {
 
     #[test]
     fn trie_key_display() {
-        assert_eq!(format!("{}", triekey!("A")), "TrieKey(Exact(A))");
-        assert_eq!(format!("{}", triekey!(*) as TrieKey<u32>), "TrieKey(*)");
-        assert_eq!(format!("{}", triekey!(["A", "B", *])), "TrieKey(LeftPar, Exact(A), Exact(B), *, RightPar)");
+        assert_eq!(format!("{}", triekey!("A")), "[ Exact(A) ]");
+        assert_eq!(format!("{}", triekey!(*) as TrieKey<u32>), "[ * ]");
+        assert_eq!(format!("{}", triekey!(["A", "B", *])), "[ LeftPar, Exact(A), Exact(B), *, RightPar ]");
     }
 
     #[test]
@@ -433,15 +483,15 @@ mod test {
 
     #[test]
     fn multi_trie_add_key_with_many_subpars() {
-        fn with_subpars(nvars: usize) -> TrieKey<NodeKey<usize>> {
-            let mut keys = Vec::new();
-            keys.push(NodeKey::LeftPar);
+        fn with_subpars(nvars: usize) -> TrieKey<TrieToken<usize>> {
+            let mut tokens = Vec::new();
+            tokens.push(TrieToken::LeftPar);
             for _i in 0..nvars {
-                keys.push(NodeKey::LeftPar);
-                keys.push(NodeKey::RightPar);
+                tokens.push(TrieToken::LeftPar);
+                tokens.push(TrieToken::RightPar);
             }
-            keys.push(NodeKey::RightPar);
-            TrieKey::from_list(keys)
+            tokens.push(TrieToken::RightPar);
+            TrieKey::from(tokens)
         }
         let mut trie = MultiTrie::new();
 

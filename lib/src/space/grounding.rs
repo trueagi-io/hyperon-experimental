@@ -7,7 +7,7 @@ use crate::atom::*;
 use crate::atom::matcher::{Bindings, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::matcher::MatchResultIter;
-use crate::common::multitrie::{MultiTrie, TrieKey, NodeKey};
+use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
 
 use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
@@ -51,13 +51,13 @@ impl<'a> Iterator for GroundingSpaceIter<'a> {
 }
 
 fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
-    fn fill_key(atom: &Atom, keys: &mut Vec<NodeKey<SymbolAtom>>) {
+    fn fill_key(atom: &Atom, tokens: &mut Vec<TrieToken<SymbolAtom>>) {
         match atom {
-            Atom::Symbol(sym) => keys.push(NodeKey::Exact(sym.clone())),
+            Atom::Symbol(sym) => tokens.push(TrieToken::Exact(sym.clone())),
             Atom::Expression(expr) => {
-                keys.push(NodeKey::LeftPar);
-                expr.children().iter().for_each(|child| fill_key(child, keys));
-                keys.push(NodeKey::RightPar);
+                tokens.push(TrieToken::LeftPar);
+                expr.children().iter().for_each(|child| fill_key(child, tokens));
+                tokens.push(TrieToken::RightPar);
             },
             // TODO: At the moment all grounding symbols are matched as wildcards
             // because they potentially may have custom Grounded::match_()
@@ -65,17 +65,17 @@ fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
             // speed of extracting grounded values from the index if GroundedAtom
             // has a flag which says whether match_() is match_by_equality() or
             // not. GroundedAtom with match_by_equality() implementation can be
-            // added as separate NodeKey::GroundedValue to navigate through
+            // added as separate TrieToken::GroundedValue to navigate through
             // the index quickly. GroundedAtom with custom match_() will be added
             // as a wildcard to be matched after search in index. It also requires
             // implementing Hash on Grounded.
-            _ => keys.push(NodeKey::Wildcard),
+            _ => tokens.push(TrieToken::Wildcard),
         }
     }
 
-    let mut keys = Vec::new();
-    fill_key(atom, &mut keys);
-    TrieKey::from_list(keys)
+    let mut tokens = Vec::new();
+    fill_key(atom, &mut tokens);
+    TrieKey::from(tokens)
 }
 
 /// In-memory space which can contain grounded atoms.
@@ -699,14 +699,14 @@ mod test {
 
     #[test]
     fn index_atom_to_key() {
-        assert_eq!(atom_to_trie_key(&Atom::sym("A")), TrieKey::from_list([NodeKey::Exact(SymbolAtom::new("A".into()))]));
-        assert_eq!(atom_to_trie_key(&Atom::value(1)), TrieKey::from_list([NodeKey::Wildcard]));
-        assert_eq!(atom_to_trie_key(&Atom::var("a")), TrieKey::from_list([NodeKey::Wildcard]));
-        assert_eq!(atom_to_trie_key(&expr!("A" "B")), TrieKey::from_list([
-                NodeKey::LeftPar,
-                NodeKey::Exact(SymbolAtom::new("A".into())),
-                NodeKey::Exact(SymbolAtom::new("B".into())),
-                NodeKey::RightPar
+        assert_eq!(atom_to_trie_key(&Atom::sym("A")), TrieKey::from([TrieToken::Exact(SymbolAtom::new("A".into()))]));
+        assert_eq!(atom_to_trie_key(&Atom::value(1)), TrieKey::from([TrieToken::Wildcard]));
+        assert_eq!(atom_to_trie_key(&Atom::var("a")), TrieKey::from([TrieToken::Wildcard]));
+        assert_eq!(atom_to_trie_key(&expr!("A" "B")), TrieKey::from([
+                TrieToken::LeftPar,
+                TrieToken::Exact(SymbolAtom::new("A".into())),
+                TrieToken::Exact(SymbolAtom::new("B".into())),
+                TrieToken::RightPar
         ]));
     }
 }
