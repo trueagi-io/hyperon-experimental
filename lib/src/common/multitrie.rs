@@ -115,19 +115,11 @@ impl<T> TrieKey<T> {
         }
     }
 
-    fn pop_head(&mut self) -> Option<(TrieToken<T>, usize)> {
+    fn pop_head(&mut self) -> Option<TrieToken<T>> {
         match (self.tokens.pop_front(), self.expr_size.pop_front()) {
-            (Some(token), Some(size)) => Some((token, size)),
+            (Some(token), _) => Some(token),
             _ => None,
         }
-    }
-
-    fn pop_head_unchecked(&mut self) -> (TrieToken<T>, usize) {
-        self.pop_head().expect("Unexpected end of key")
-    }
-
-    fn is_empty(&self) -> bool {
-        self.tokens.is_empty()
     }
 
     fn iter(&self) -> TrieKeyIter<'_, T> {
@@ -155,7 +147,7 @@ impl<'a, T> TrieKeyIter<'a, T> {
         self.pos >= self.key.tokens.len()
     }
 
-    fn skip_tokens(mut self) -> Self {
+    fn skip_expression(mut self) -> Self {
         assert!(self.pos > 0 && self.key.expr_size[self.pos - 1] > 0);
         self.pos += self.key.expr_size[self.pos - 1];
         self
@@ -301,8 +293,8 @@ struct MultiTrieNode<K, V> {
 
 impl<K, V> MultiTrieNode<K, V>
 where
-    K: Clone + Eq + Hash,
-    V: Eq + Hash,
+    K: Debug + Clone + Eq + Hash,
+    V: Debug + Eq + Hash,
 {
 
     fn new() -> Self {
@@ -338,7 +330,7 @@ where
                     self.children.get(&TrieToken::LeftPar)
                         .map(|child| result.push((Some(&TrieToken::LeftPar), child, key.clone())));
                     self.children.get(&TrieToken::Wildcard)
-                        .map(|child| result.push((Some(&TrieToken::Wildcard), child, key.skip_tokens())));
+                        .map(|child| result.push((Some(&TrieToken::Wildcard), child, key.skip_expression())));
                 },
                 TrieToken::Wildcard => {
                     self.children.iter()
@@ -378,47 +370,33 @@ where
         }
     }
     
-    fn insert(&mut self, mut key: TrieKey<K>, value: V) {
-        if key.is_empty() {
-            self.values.insert(value);
-        } else {
-            let mut nodes: Vec<Shared<Self>> = vec![];
-            let mut pars: Vec<(usize, usize)> = Vec::new();
-            let mut pos = 0;
-            
-            let (token, size) = key.pop_head_unchecked();
-            if token == TrieToken::LeftPar {
-                pars.push((pos, pos + size + 1));
-            }
-            let mut cur = self.get_or_insert_child(token);
-            nodes.push(cur.clone());
-            pos = pos + 1;
+    fn insert(&mut self, key: TrieKey<K>, value: V) {
+        self.insert_internal(key, value, &mut Vec::new())
+    }
 
-            loop {
-                match key.pop_head() {
-                    None => {
-                        cur.borrow_mut().values.insert(value);
-                        break;
-                    },
-                    Some((token, size)) => {
-                        if token == TrieToken::LeftPar {
-                            pars.push((pos, pos + size + 1));
-                        }
-                        let node = cur.borrow_mut().get_or_insert_child(token);
-                        cur = node;
-                        nodes.push(cur.clone());
-                    },
-                }
-                pos = pos + 1
-            }
-            for (start, end) in pars {
-                let end_node = nodes[end - 1].clone();
-                if start > 0 {
-                    nodes[start - 1].borrow_mut().end_of_expr.insert(end_node.as_ptr(), end_node);
-                } else {
-                    self.end_of_expr.insert(end_node.as_ptr(), end_node);
-                }
-            }
+    fn insert_internal(&mut self, mut key: TrieKey<K>, value: V,
+        right_par_nodes: &mut Vec<Shared<Self>>)
+    {
+        log::trace!("MultiTrieNode::insert_internal(): key: {:?}, value: {:?}", key, value);
+        match key.pop_head() {
+            None => {
+                self.values.insert(value);
+            },
+            Some(token @ TrieToken::LeftPar) => {
+                let left_par = self.get_or_insert_child(token);
+                left_par.borrow_mut().insert_internal(key, value, right_par_nodes);
+                let right_par = right_par_nodes.pop().expect("Unbalanced key");
+                self.end_of_expr.insert(right_par.as_ptr(), right_par);
+            },
+            Some(token @ TrieToken::RightPar) => {
+                let right_par = self.get_or_insert_child(token);
+                right_par.borrow_mut().insert_internal(key, value, right_par_nodes);
+                right_par_nodes.push(right_par);
+            },
+            Some(token @ _) => {
+                let node = self.get_or_insert_child(token);
+                node.borrow_mut().insert_internal(key, value, right_par_nodes);
+            },
         }
     }
 
@@ -451,8 +429,8 @@ struct MultiValueIter<'a, K, V> {
 
 impl<'a, K, V> MultiValueIter<'a, K, V>
 where
-    K: Clone + Eq + Hash,
-    V: Eq + Hash,
+    K: Debug + Clone + Eq + Hash,
+    V: Debug + Eq + Hash,
 {
     fn new(node: &'a MultiTrieNode<K, V>, key: TrieKeyIter<'a, K>) -> Self {
         let to_be_explored = node.next(key).map(Self::to_unexplored_path).collect();
@@ -466,8 +444,8 @@ where
 
 impl<'a, K, V> Iterator for MultiValueIter<'a, K, V>
 where
-    K: Clone + Eq + Hash,
-    V: Eq + Hash,
+    K: Debug + Clone + Eq + Hash,
+    V: Debug + Eq + Hash,
 {
     type Item = &'a MultiTrieNode<K, V>;
 
