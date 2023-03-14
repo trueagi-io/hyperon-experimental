@@ -150,7 +150,7 @@ struct TrieKeyIter<'a, T> {
     pos: usize,
 }
 
-impl<'a, T: Clone> TrieKeyIter<'a, T> {
+impl<'a, T> TrieKeyIter<'a, T> {
     // FIXME: can we remove it?
     fn is_empty(&self) -> bool {
         self.pos >= self.key.tokens.len()
@@ -193,8 +193,8 @@ pub struct MultiTrie<K, V>(MultiTrieNode<K, V>);
 
 impl<K, V> MultiTrie<K, V>
 where
-    K: Clone + Debug + Eq + Hash + ?Sized,
-    V: Clone + Debug + Eq + Hash + ?Sized,
+    K: Debug + Clone + Eq + Hash,
+    V: Debug + Eq + Hash,
 {
     /// Constructs new empty [MultiTrie] instance.
     pub fn new() -> Self {
@@ -302,8 +302,8 @@ struct MultiTrieNode<K, V> {
 
 impl<K, V> MultiTrieNode<K, V>
 where
-    K: Clone + Debug + Eq + Hash + ?Sized,
-    V: Clone + Debug + Eq + Hash + ?Sized,
+    K: Clone + Eq + Hash,
+    V: Eq + Hash,
 {
 
     fn new() -> Self {
@@ -454,8 +454,8 @@ struct MultiValueIter<'a, K, V> {
 
 impl<'a, K, V> MultiValueIter<'a, K, V>
 where
-    K: Clone + Debug + Eq + Hash + ?Sized,
-    V: Clone + Debug + Eq + Hash + ?Sized,
+    K: Clone + Eq + Hash,
+    V: Eq + Hash,
 {
     fn new(node: &'a MultiTrieNode<K, V>, key: TrieKeyIter<'a, K>) -> Self {
         let mut to_be_explored = Vec::new();
@@ -470,8 +470,8 @@ where
 
 impl<'a, K, V> Iterator for MultiValueIter<'a, K, V>
 where
-    K: Clone + Debug + Eq + Hash + ?Sized,
-    V: Clone + Debug + Eq + Hash + ?Sized,
+    K: Clone + Eq + Hash,
+    V: Eq + Hash,
 {
     type Item = &'a MultiTrieNode<K, V>;
 
