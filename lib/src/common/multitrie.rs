@@ -129,6 +129,10 @@ impl<T> TrieKey<T> {
     fn is_empty(&self) -> bool {
         self.tokens.is_empty()
     }
+
+    fn iter(&self) -> TrieKeyIter<'_, T> {
+        TrieKeyIter{ key: self, pos: 0 }
+    }
 }
 
 impl<T, V: Into<VecDeque<TrieToken<T>>>> From<V> for TrieKey<T> {
@@ -140,12 +144,34 @@ impl<T, V: Into<VecDeque<TrieToken<T>>>> From<V> for TrieKey<T> {
     }
 }
 
-impl<T: Clone> TrieKey<T> {
-    fn skip_tokens(&self, size: usize) -> Self {
-        Self{
-            tokens: self.tokens.iter().skip(size).cloned().collect(),
-            expr_size: self.expr_size.iter().skip(size).cloned().collect(),
+#[derive(Clone)]
+struct TrieKeyIter<'a, T> {
+    key: &'a TrieKey<T>,
+    pos: usize,
+}
+
+impl<'a, T: Clone> TrieKeyIter<'a, T> {
+    // FIXME: can we remove it?
+    fn is_empty(&self) -> bool {
+        self.pos >= self.key.tokens.len()
+    }
+
+    fn skip_tokens(mut self) -> Self {
+        assert!(self.pos > 0 && self.key.expr_size[self.pos - 1] > 0);
+        self.pos += self.key.expr_size[self.pos - 1];
+        self
+    }
+}
+
+impl<'a, T> Iterator for TrieKeyIter<'a, T> {
+    type Item = &'a TrieToken<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let token = self.key.tokens.get(self.pos);
+        if token.is_some() {
+            self.pos = self.pos + 1;
         }
+        token
     }
 }
 
@@ -194,8 +220,8 @@ where
     /// trie.insert(ab.clone(), "AB");
     /// trie.insert(ac.clone(), "AC");
     ///
-    /// assert_eq!(collect(trie.get(ab)), vec!["AB"]);
-    /// assert_eq!(collect(trie.get(ac)), vec!["AC"]);
+    /// assert_eq!(collect(trie.get(&ab)), vec!["AB"]);
+    /// assert_eq!(collect(trie.get(&ac)), vec!["AC"]);
     /// ```
     pub fn insert(&mut self, key: TrieKey<K>, value: V) {
         log::debug!("MultiTrie::insert(): key: {:?}, value: {:?}", key, value);
@@ -222,11 +248,11 @@ where
     ///
     /// trie.insert(ax.clone(), "A*");
     ///
-    /// assert_eq!(collect(trie.get(ax)), vec!["A*"]);
-    /// assert_eq!(collect(trie.get(ab)), vec!["A*"]);
-    /// assert_eq!(collect(trie.get(ae)), vec!["A*"]);
+    /// assert_eq!(collect(trie.get(&ax)), vec!["A*"]);
+    /// assert_eq!(collect(trie.get(&ab)), vec!["A*"]);
+    /// assert_eq!(collect(trie.get(&ae)), vec!["A*"]);
     /// ```
-    pub fn get(&self, key: TrieKey<K>) -> impl Iterator<Item=&V> + '_ {
+    pub fn get<'a>(&'a self, key: &'a TrieKey<K>) -> impl Iterator<Item=&'a V> + 'a {
         self.0.get(key)
     }
 
@@ -250,13 +276,13 @@ where
     /// trie.insert(ab.clone(), "AB");
     /// trie.insert(ac.clone(), "AC");
     ///
-    /// assert_eq!(collect(trie.get(ab.clone())), vec!["AB"]);
-    /// assert!(trie.remove(ax.clone(), &"AB"));
-    /// assert!(!trie.remove(ax, &"AB"));
-    /// assert_eq!(trie.get(ab).count(), 0);
-    /// assert_eq!(collect(trie.get(ac)), vec!["AC"]);
+    /// assert_eq!(collect(trie.get(&ab)), vec!["AB"]);
+    /// assert!(trie.remove(&ax, &"AB"));
+    /// assert!(!trie.remove(&ax, &"AB"));
+    /// assert_eq!(trie.get(&ab).count(), 0);
+    /// assert_eq!(collect(trie.get(&ac)), vec!["AC"]);
     /// ```
-    pub fn remove(&mut self, key: TrieKey<K>, value: &V) -> bool {
+    pub fn remove(&mut self, key: &TrieKey<K>, value: &V) -> bool {
         log::debug!("MultiTrie::remove(): key: {:?}, value: {:?}", key, value);
         self.0.remove(key, value)
     }
@@ -296,45 +322,54 @@ where
         self.children.entry(token).or_insert(Shared::new(Self::new())).clone()
     }
 
-    fn next<F, R>(&self, mut key: TrieKey<K>, map: F, result: &mut Vec<R>)
-        where F: Fn(Option<TrieToken<K>>, &Shared<Self>, TrieKey<K>) -> R,
+    fn next<'a, 'b: 'a, F, R>(&'a self, mut key: TrieKeyIter<'b, K>, map: F, result: &mut Vec<R>)
+        where F: Fn(Option<&'a TrieToken<K>>, &'a Shared<Self>, TrieKeyIter<'b, K>) -> R,
     {
-        let (token, size) = key.pop_head_unchecked();
-        match token {
-            TrieToken::Exact(_) => {
-                self.children.get(&token).map(|child| result.push(map(Some(token), child, key.clone())));
-                self.children.get(&TrieToken::Wildcard).map(|child| result.push(map(Some(TrieToken::Wildcard), child, key)));
+        match key.next() {
+            Some(token) => match token {
+                TrieToken::Exact(_) => {
+                    self.children.get(token).map(|child| result.push(map(Some(token), child, key.clone())));
+                    self.children.get(&TrieToken::Wildcard).map(|child| result.push(map(Some(&TrieToken::Wildcard), child, key)));
+                },
+                TrieToken::RightPar => {
+                    self.children.get(token).map(|child| result.push(map(Some(token), child, key)));
+                },
+                TrieToken::LeftPar => {
+                    self.children.get(&TrieToken::LeftPar)
+                        .map(|child| result.push(map(Some(&TrieToken::LeftPar), child, key.clone())));
+                    self.children.get(&TrieToken::Wildcard)
+                        .map(|child| result.push(map(Some(&TrieToken::Wildcard), child, key.skip_tokens())));
+                },
+                TrieToken::Wildcard => {
+                    self.children.iter()
+                        .filter(|(token, _child)| !token.is_parenthesis())
+                        .for_each(|(token, child)| result.push(map(Some(token), child, key.clone())));
+                    self.skip_pars.values()
+                        .for_each(|child| result.push(map(None, child, key.clone())));
+                },
             },
-            TrieToken::RightPar => {
-                self.children.get(&token).map(|child| result.push(map(Some(token), child, key)));
-            },
-            TrieToken::LeftPar => {
-                self.children.get(&TrieToken::Wildcard)
-                    .map(|child| result.push(map(Some(TrieToken::Wildcard), child, key.skip_tokens(size))));
-                self.children.get(&TrieToken::LeftPar)
-                    .map(|child| result.push(map(Some(TrieToken::LeftPar), child, key)));
-            },
-            TrieToken::Wildcard => {
-                self.children.iter()
-                    .filter(|(token, _child)| !token.is_parenthesis())
-                    .for_each(|(token, child)| result.push(map(Some(token.clone()), child, key.clone())));
-                self.skip_pars.values()
-                    .for_each(|child| result.push(map(None, child, key.clone())));
-            },
-        };
+            None => {},
+        }
     }
 
-    fn remove(&mut self, key: TrieKey<K>, value: &V) -> bool {
-        log::debug!("MultiTrieNode::remove(): key: {:?}, value: {:?}", key, value);
+    fn remove(&mut self, key: &TrieKey<K>, value: &V) -> bool {
+        self.remove_internal(key.iter(), value)
+    }
+
+    fn remove_internal(&mut self, key: TrieKeyIter<K>, value: &V) -> bool {
+        fn clone_child_ref<'a, 'b: 'a, K: Clone, N>(token: Option<&'a TrieToken<K>>, child: &'a Shared<N>, key: TrieKeyIter<'b, K>)
+            -> (Option<TrieToken<K>>, Shared<N>, TrieKeyIter<'b, K>) {
+            (token.cloned(), child.clone(), key)
+        }
         if key.is_empty() {
             self.values.remove(value)
         } else {
             let mut children = Vec::new();
-            self.next(key, |token, child_node, key| (token, child_node.clone(), key), &mut children);
+            self.next(key, clone_child_ref, &mut children);
             children.into_iter()
                 .map(|(token, child_node, key)| {
-                    let removed = child_node.borrow_mut().remove(key, value);
-                    if removed && child_node.borrow().is_empty() {
+                    let removed = child_node.borrow_mut().remove_internal(key, value);
+                    if removed && child_node.borrow().is_empty(){
                         match token {
                             Some(token) => { self.children.remove(&token); },
                             None => { self.skip_pars.remove(&child_node.as_ptr()); },
@@ -347,7 +382,6 @@ where
     }
     
     fn insert(&mut self, mut key: TrieKey<K>, value: V) {
-        log::debug!("MultiTrie::insert(): key: {:?}, value: {:?}", key, value);
         if key.is_empty() {
             self.values.insert(value);
         } else {
@@ -391,8 +425,8 @@ where
         }
     }
 
-    fn get(&self, key: TrieKey<K>) -> impl Iterator<Item=&V> + '_ {
-        MultiValueIter::new(self, key).flat_map(|node| node.values.iter())
+    fn get<'a>(&'a self, key: &'a TrieKey<K>) -> impl Iterator<Item=&'a V> + 'a {
+        MultiValueIter::new(self, key.iter()).flat_map(|node| node.values.iter())
     }
 
     #[cfg(test)]
@@ -414,7 +448,7 @@ where
 }
 
 struct MultiValueIter<'a, K, V> {
-    to_be_explored: Vec<(*mut MultiTrieNode<K, V>, TrieKey<K>)>,
+    to_be_explored: Vec<(*mut MultiTrieNode<K, V>, TrieKeyIter<'a, K>)>,
     _root_node_ref: PhantomData<&'a MultiTrieNode<K, V>>,
 }
 
@@ -423,14 +457,13 @@ where
     K: Clone + Debug + Eq + Hash + ?Sized,
     V: Clone + Debug + Eq + Hash + ?Sized,
 {
-    fn new(node: &'a MultiTrieNode<K, V>, key: TrieKey<K>) -> Self {
+    fn new(node: &'a MultiTrieNode<K, V>, key: TrieKeyIter<'a, K>) -> Self {
         let mut to_be_explored = Vec::new();
         node.next(key, Self::map_children, &mut to_be_explored);
         Self{ to_be_explored, _root_node_ref: PhantomData }
     }
 
-    fn map_children(_token: Option<TrieToken<K>>,
-        child: &Shared<MultiTrieNode<K, V>>, key: TrieKey<K>) -> (*mut MultiTrieNode<K, V>, TrieKey<K>) {
+    fn map_children(_token: Option<&TrieToken<K>>, child: &Shared<MultiTrieNode<K, V>>, key: TrieKeyIter<'a, K>) -> (*mut MultiTrieNode<K, V>, TrieKeyIter<'a, K>) {
         (child.as_ptr(), key)
     }
 }
@@ -514,15 +547,15 @@ mod test {
         trie.insert(triekey!(["A", "B"]), "pars_a_b");
         trie.insert(triekey!("A", "B"), "a_b");
 
-        assert_eq!(trie.get(triekey!("A")).to_sorted(), vec!["exact_a", "wild"]);
-        assert_eq!(trie.get(triekey!("B")).to_sorted(), vec!["wild"]);
-        assert_eq!(trie.get(triekey!(*)).to_sorted(), vec!["exact_a", "pars_a_b", "wild"]);
-        assert_eq!(trie.get(triekey!(["A", "B"])).to_sorted(), vec!["pars_a_b", "wild"]);
-        assert_eq!(trie.get(triekey!(["A", "C"])).to_sorted(), vec!["wild"]);
-        assert_eq!(trie.get(triekey!(["A", *])).to_sorted(), vec!["pars_a_b", "wild"]);
-        assert_eq!(trie.get(triekey!("A", "B")).to_sorted(), vec!["a_b"]);
-        assert_eq!(trie.get(triekey!("A", "C")).to_sorted(), vec![] as Vec<&str>);
-        assert_eq!(trie.get(triekey!("A", *)).to_sorted(), vec!["a_b"]);
+        assert_eq!(trie.get(&triekey!("A")).to_sorted(), vec!["exact_a", "wild"]);
+        assert_eq!(trie.get(&triekey!("B")).to_sorted(), vec!["wild"]);
+        assert_eq!(trie.get(&triekey!(*)).to_sorted(), vec!["exact_a", "pars_a_b", "wild"]);
+        assert_eq!(trie.get(&triekey!(["A", "B"])).to_sorted(), vec!["pars_a_b", "wild"]);
+        assert_eq!(trie.get(&triekey!(["A", "C"])).to_sorted(), vec!["wild"]);
+        assert_eq!(trie.get(&triekey!(["A", *])).to_sorted(), vec!["pars_a_b", "wild"]);
+        assert_eq!(trie.get(&triekey!("A", "B")).to_sorted(), vec!["a_b"]);
+        assert_eq!(trie.get(&triekey!("A", "C")).to_sorted(), vec![] as Vec<&str>);
+        assert_eq!(trie.get(&triekey!("A", *)).to_sorted(), vec!["a_b"]);
     }
 
     #[test]
@@ -532,8 +565,8 @@ mod test {
         trie.insert(triekey!(["A", "B"]), "pars_a_b");
         trie.insert(triekey!([*, "C"]), "pars_x_c");
 
-        assert_eq!(trie.get(triekey!([*, "B"])).to_sorted(), vec!["pars_a_b"]);
-        assert_eq!(trie.get(triekey!(["A", "C"])).to_sorted(), vec!["pars_x_c"]);
+        assert_eq!(trie.get(&triekey!([*, "B"])).to_sorted(), vec!["pars_a_b"]);
+        assert_eq!(trie.get(&triekey!(["A", "C"])).to_sorted(), vec!["pars_x_c"]);
     }
 
     #[test]
@@ -543,8 +576,8 @@ mod test {
         trie.insert(triekey!([]), "empty_pars");
         trie.insert(triekey!([]).clone(), "empty_pars");
 
-        assert_eq!(trie.get(triekey!([])).to_sorted(), vec!["empty_pars"]);
-        assert_eq!(trie.get(triekey!(*)).to_sorted(), vec!["empty_pars"]);
+        assert_eq!(trie.get(&triekey!([])).to_sorted(), vec!["empty_pars"]);
+        assert_eq!(trie.get(&triekey!(*)).to_sorted(), vec!["empty_pars"]);
     }
 
     #[test]
@@ -554,7 +587,7 @@ mod test {
         trie.insert(triekey!(["A"]), "pars_a");
         trie.insert(triekey!(["B"]), "pars_b");
 
-        assert_eq!(trie.get(triekey!([*])).to_sorted(), vec!["pars_a", "pars_b"]);
+        assert_eq!(trie.get(&triekey!([*])).to_sorted(), vec!["pars_a", "pars_b"]);
     }
 
     #[test]
@@ -566,15 +599,15 @@ mod test {
         trie.insert(triekey!(["A", "B"]), "pars_a_b");
         trie.insert(triekey!("A", "B"), "a_b");
 
-        trie.remove(triekey!("A"), &"exact_a");
-        trie.remove(triekey!(*), &"wild");
-        trie.remove(triekey!(["A", "B"]), &"pars_a_b");
-        trie.remove(triekey!("A", "B"), &"a_b");
+        trie.remove(&triekey!("A"), &"exact_a");
+        trie.remove(&triekey!(*), &"wild");
+        trie.remove(&triekey!(["A", "B"]), &"pars_a_b");
+        trie.remove(&triekey!("A", "B"), &"a_b");
 
-        assert!(trie.get(triekey!("A")).to_sorted().is_empty());
-        assert!(trie.get(triekey!(*)).to_sorted().is_empty());
-        assert!(trie.get(triekey!(["A", "B"])).to_sorted().is_empty());
-        assert!(trie.get(triekey!("A", "B")).to_sorted().is_empty());
+        assert!(trie.get(&triekey!("A")).to_sorted().is_empty());
+        assert!(trie.get(&triekey!(*)).to_sorted().is_empty());
+        assert!(trie.get(&triekey!(["A", "B"])).to_sorted().is_empty());
+        assert!(trie.get(&triekey!("A", "B")).to_sorted().is_empty());
         assert_eq!(trie.size(), empty_trie_size);
     }
 
@@ -593,7 +626,7 @@ mod test {
 
         let copy = trie.clone();
 
-        assert_eq!(copy.get(key).to_sorted(), vec!["test"]);
+        assert_eq!(copy.get(&key).to_sorted(), vec!["test"]);
     }
 
     #[test]

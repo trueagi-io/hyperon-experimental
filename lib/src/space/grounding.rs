@@ -198,13 +198,14 @@ impl GroundingSpace {
     }
 
     fn remove_internal(&mut self, atom: &Atom) -> bool {
-        let indexes: Vec<usize> = self.index.get(atom_to_trie_key(atom)).map(|i| *i).collect();
+        let index_key = atom_to_trie_key(atom);
+        let indexes: Vec<usize> = self.index.get(&index_key).map(|i| *i).collect();
         let mut indexes: Vec<usize> = indexes.into_iter()
             .filter(|i| self.content[*i] == *atom).collect();
         indexes.sort_by(|a, b| b.partial_cmp(a).unwrap());
         let is_removed = indexes.len() > 0;
         for i in indexes {
-            self.index.remove(atom_to_trie_key(atom), &i);
+            self.index.remove(&index_key, &i);
             self.free.insert(i);
         }
         is_removed
@@ -298,7 +299,7 @@ impl GroundingSpace {
         let mut result = Vec::new();
         let mut query_vars = HashSet::new();
         query.iter().filter_map(AtomIter::extract_var).for_each(|var| { query_vars.insert(var.clone()); });
-        for i in self.index.get(atom_to_trie_key(query)) {
+        for i in self.index.get(&atom_to_trie_key(query)) {
             let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", query, i).as_str());
             let next = make_variables_unique(next);
             log::trace!("single_query: match next: {}", next);
