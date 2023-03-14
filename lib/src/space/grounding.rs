@@ -104,7 +104,7 @@ impl GroundingSpace {
     pub fn from_vec(atoms: Vec<Atom>) -> Self {
         let mut index = MultiTrie::new();
         for (i, atom) in atoms.iter().enumerate() {
-            index.add(atom_to_trie_key(atom), i);
+            index.insert(atom_to_trie_key(atom), i);
         }
         Self{
             index,
@@ -163,12 +163,12 @@ impl GroundingSpace {
     fn add_internal(&mut self, atom: Atom) {
         if self.free.is_empty() {
             let pos = self.content.len();
-            self.index.add(atom_to_trie_key(&atom), pos);
+            self.index.insert(atom_to_trie_key(&atom), pos);
             self.content.push(atom);
         } else {
             let pos = *self.free.iter().next().unwrap();
             self.free.remove(&pos);
-            self.index.add(atom_to_trie_key(&atom), pos);
+            self.index.insert(atom_to_trie_key(&atom), pos);
             self.content[pos] = atom;
         }
     }

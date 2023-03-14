@@ -160,10 +160,115 @@ impl<T: Display> Display for TrieKey<T> {
     }
 }
 
-pub type MultiTrie<K, V> = MultiTrieNode<K, V>;
+/// Multi-value trie with double side matching. See [crate::common::multitrie]
+/// for the algorithm description.
+#[derive(Clone, Debug)]
+pub struct MultiTrie<K, V>(MultiTrieNode<K, V>);
+
+impl<K, V> MultiTrie<K, V>
+where
+    K: Clone + Debug + Eq + Hash + ?Sized,
+    V: Clone + Debug + Eq + Hash + ?Sized,
+{
+    /// Constructs new empty [MultiTrie] instance.
+    pub fn new() -> Self {
+        Self(MultiTrieNode::new())
+    }
+
+    /// Insert the given `value` by the given `key`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::common::multitrie::*;
+    ///
+    /// fn collect<'a, T, I>(it: I) -> Vec<T> where T: Clone + 'a, I: Iterator<Item=&'a T>, {
+    ///     it.cloned().collect()
+    /// }
+    ///
+    /// let mut trie = MultiTrie::new();
+    ///
+    /// let ab = TrieKey::from([TrieToken::Exact("A"), TrieToken::Exact("B")]);
+    /// let ac = TrieKey::from([TrieToken::Exact("A"), TrieToken::Exact("C")]);
+    ///
+    /// trie.insert(ab.clone(), "AB");
+    /// trie.insert(ac.clone(), "AC");
+    ///
+    /// assert_eq!(collect(trie.get(ab)), vec!["AB"]);
+    /// assert_eq!(collect(trie.get(ac)), vec!["AC"]);
+    /// ```
+    pub fn insert(&mut self, key: TrieKey<K>, value: V) {
+        log::debug!("MultiTrie::insert(): key: {:?}, value: {:?}", key, value);
+        self.0.insert(key, value)
+    }
+
+    /// Get values from the trie by the given `key`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::common::multitrie::*;
+    ///
+    /// fn collect<'a, T, I>(it: I) -> Vec<T> where T: Clone + 'a, I: Iterator<Item=&'a T>, {
+    ///     it.cloned().collect()
+    /// }
+    ///
+    /// let mut trie = MultiTrie::new();
+    ///
+    /// let ax = TrieKey::from([TrieToken::Exact("A"), TrieToken::Wildcard]);
+    /// let ab = TrieKey::from([TrieToken::Exact("A"), TrieToken::Exact("B")]);
+    /// let ae = TrieKey::from([TrieToken::Exact("A"), TrieToken::LeftPar,
+    ///                         TrieToken::Exact("B"), TrieToken::RightPar]);
+    ///
+    /// trie.insert(ax.clone(), "A*");
+    ///
+    /// assert_eq!(collect(trie.get(ax)), vec!["A*"]);
+    /// assert_eq!(collect(trie.get(ab)), vec!["A*"]);
+    /// assert_eq!(collect(trie.get(ae)), vec!["A*"]);
+    /// ```
+    pub fn get(&self, key: TrieKey<K>) -> impl Iterator<Item=&V> + '_ {
+        self.0.get(key)
+    }
+
+    /// Remove the given `value` by the given `key`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::common::multitrie::*;
+    ///
+    /// fn collect<'a, T, I>(it: I) -> Vec<T> where T: Clone + 'a, I: Iterator<Item=&'a T>, {
+    ///     it.cloned().collect()
+    /// }
+    ///
+    /// let mut trie = MultiTrie::new();
+    ///
+    /// let ab = TrieKey::from([TrieToken::Exact("A"), TrieToken::Exact("B")]);
+    /// let ac = TrieKey::from([TrieToken::Exact("A"), TrieToken::Exact("C")]);
+    /// let ax = TrieKey::from([TrieToken::Exact("A"), TrieToken::Wildcard]);
+    ///
+    /// trie.insert(ab.clone(), "AB");
+    /// trie.insert(ac.clone(), "AC");
+    ///
+    /// assert_eq!(collect(trie.get(ab.clone())), vec!["AB"]);
+    /// assert!(trie.remove(ax.clone(), &"AB"));
+    /// assert!(!trie.remove(ax, &"AB"));
+    /// assert_eq!(trie.get(ab).count(), 0);
+    /// assert_eq!(collect(trie.get(ac)), vec!["AC"]);
+    /// ```
+    pub fn remove(&mut self, key: TrieKey<K>, value: &V) -> bool {
+        log::debug!("MultiTrie::remove(): key: {:?}, value: {:?}", key, value);
+        self.0.remove(key, value)
+    }
+
+    #[cfg(test)]
+    fn size(&self) -> usize {
+        self.0.size()
+    }
+}
 
 #[derive(Clone, Debug)]
-pub struct MultiTrieNode<K, V> {
+struct MultiTrieNode<K, V> {
     children: HashMap<TrieToken<K>, Shared<Self>>,
     skip_pars: HashMap<*mut Self, Shared<Self>>,
     values: HashSet<V>,
@@ -175,7 +280,7 @@ where
     V: Clone + Debug + Eq + Hash + ?Sized,
 {
 
-    pub fn new() -> Self {
+    fn new() -> Self {
         Self{
             children: HashMap::new(),
             skip_pars: HashMap::new(),
@@ -219,7 +324,7 @@ where
         };
     }
 
-    pub fn remove(&mut self, key: TrieKey<K>, value: &V) -> bool {
+    fn remove(&mut self, key: TrieKey<K>, value: &V) -> bool {
         log::debug!("MultiTrieNode::remove(): key: {:?}, value: {:?}", key, value);
         if key.is_empty() {
             self.values.remove(value)
@@ -241,8 +346,8 @@ where
         }
     }
     
-    pub fn add(&mut self, mut key: TrieKey<K>, value: V) {
-        log::debug!("MultiTrie::add(): key: {:?}, value: {:?}", key, value);
+    fn insert(&mut self, mut key: TrieKey<K>, value: V) {
+        log::debug!("MultiTrie::insert(): key: {:?}, value: {:?}", key, value);
         if key.is_empty() {
             self.values.insert(value);
         } else {
@@ -286,7 +391,7 @@ where
         }
     }
 
-    pub fn get(&self, key: TrieKey<K>) -> impl Iterator<Item=&V> + '_ {
+    fn get(&self, key: TrieKey<K>) -> impl Iterator<Item=&V> + '_ {
         MultiValueIter::new(self, key).flat_map(|node| node.values.iter())
     }
 
@@ -404,10 +509,10 @@ mod test {
     fn multi_trie_add_basic() {
         let mut trie = MultiTrie::new();
 
-        trie.add(triekey!("A"), "exact_a");
-        trie.add(triekey!(*), "wild");
-        trie.add(triekey!(["A", "B"]), "pars_a_b");
-        trie.add(triekey!("A", "B"), "a_b");
+        trie.insert(triekey!("A"), "exact_a");
+        trie.insert(triekey!(*), "wild");
+        trie.insert(triekey!(["A", "B"]), "pars_a_b");
+        trie.insert(triekey!("A", "B"), "a_b");
 
         assert_eq!(trie.get(triekey!("A")).to_sorted(), vec!["exact_a", "wild"]);
         assert_eq!(trie.get(triekey!("B")).to_sorted(), vec!["wild"]);
@@ -424,8 +529,8 @@ mod test {
     fn multi_trie_add_pars() {
         let mut trie = MultiTrie::new();
 
-        trie.add(triekey!(["A", "B"]), "pars_a_b");
-        trie.add(triekey!([*, "C"]), "pars_x_c");
+        trie.insert(triekey!(["A", "B"]), "pars_a_b");
+        trie.insert(triekey!([*, "C"]), "pars_x_c");
 
         assert_eq!(trie.get(triekey!([*, "B"])).to_sorted(), vec!["pars_a_b"]);
         assert_eq!(trie.get(triekey!(["A", "C"])).to_sorted(), vec!["pars_x_c"]);
@@ -435,8 +540,8 @@ mod test {
     fn multi_trie_add_subpars_twice() {
         let mut trie: MultiTrie<&'static str, &'static str> = MultiTrie::new();
 
-        trie.add(triekey!([]), "empty_pars");
-        trie.add(triekey!([]).clone(), "empty_pars");
+        trie.insert(triekey!([]), "empty_pars");
+        trie.insert(triekey!([]).clone(), "empty_pars");
 
         assert_eq!(trie.get(triekey!([])).to_sorted(), vec!["empty_pars"]);
         assert_eq!(trie.get(triekey!(*)).to_sorted(), vec!["empty_pars"]);
@@ -446,8 +551,8 @@ mod test {
     fn multi_trie_twice_result_because_of_subpars() {
         let mut trie = MultiTrie::new();
 
-        trie.add(triekey!(["A"]), "pars_a");
-        trie.add(triekey!(["B"]), "pars_b");
+        trie.insert(triekey!(["A"]), "pars_a");
+        trie.insert(triekey!(["B"]), "pars_b");
 
         assert_eq!(trie.get(triekey!([*])).to_sorted(), vec!["pars_a", "pars_b"]);
     }
@@ -456,10 +561,10 @@ mod test {
     fn multi_trie_remove_basic() {
         let mut trie = MultiTrie::new();
         let empty_trie_size = trie.size();
-        trie.add(triekey!("A"), "exact_a");
-        trie.add(triekey!(*), "wild");
-        trie.add(triekey!(["A", "B"]), "pars_a_b");
-        trie.add(triekey!("A", "B"), "a_b");
+        trie.insert(triekey!("A"), "exact_a");
+        trie.insert(triekey!(*), "wild");
+        trie.insert(triekey!(["A", "B"]), "pars_a_b");
+        trie.insert(triekey!("A", "B"), "a_b");
 
         trie.remove(triekey!("A"), &"exact_a");
         trie.remove(triekey!(*), &"wild");
@@ -484,7 +589,7 @@ mod test {
     fn multi_trie_clone() {
         let mut trie = MultiTrie::new();
         let key = triekey!(0, *, [*]);
-        trie.add(key.clone(), "test");
+        trie.insert(key.clone(), "test");
 
         let copy = trie.clone();
 
@@ -505,10 +610,10 @@ mod test {
         }
         let mut trie = MultiTrie::new();
 
-        trie.add(with_subpars(4), 0);
+        trie.insert(with_subpars(4), 0);
         assert_eq!(trie.size(), 5*2 + 1);
 
-        trie.add(with_subpars(8), 0);
+        trie.insert(with_subpars(8), 0);
         assert_eq!(trie.size(), 20);
     }
 }
