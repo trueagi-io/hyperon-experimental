@@ -151,8 +151,7 @@ struct TrieKeyIter<'a, T> {
 }
 
 impl<'a, T> TrieKeyIter<'a, T> {
-    // FIXME: can we remove it?
-    fn is_empty(&self) -> bool {
+    fn is_end(&self) -> bool {
         self.pos >= self.key.tokens.len()
     }
 
@@ -296,7 +295,7 @@ where
 #[derive(Clone, Debug)]
 struct MultiTrieNode<K, V> {
     children: HashMap<TrieToken<K>, Shared<Self>>,
-    skip_pars: HashMap<*mut Self, Shared<Self>>,
+    end_of_expr: HashMap<*mut Self, Shared<Self>>,
     values: HashSet<V>,
 }
 
@@ -309,7 +308,7 @@ where
     fn new() -> Self {
         Self{
             children: HashMap::new(),
-            skip_pars: HashMap::new(),
+            end_of_expr: HashMap::new(),
             values: HashSet::new(),
         }
     }
@@ -322,34 +321,36 @@ where
         self.children.entry(token).or_insert(Shared::new(Self::new())).clone()
     }
 
-    fn next<'a, 'b: 'a, F, R>(&'a self, mut key: TrieKeyIter<'b, K>, map: F, result: &mut Vec<R>)
-        where F: Fn(Option<&'a TrieToken<K>>, &'a Shared<Self>, TrieKeyIter<'b, K>) -> R,
+    fn next<'a, 'b: 'a>(&'a self, mut key: TrieKeyIter<'b, K>) ->
+        impl Iterator<Item=(Option<&'a TrieToken<K>>, &'a Shared<Self>, TrieKeyIter<'b, K>)>
     {
+        let mut result = Vec::new();
         match key.next() {
             Some(token) => match token {
                 TrieToken::Exact(_) => {
-                    self.children.get(token).map(|child| result.push(map(Some(token), child, key.clone())));
-                    self.children.get(&TrieToken::Wildcard).map(|child| result.push(map(Some(&TrieToken::Wildcard), child, key)));
+                    self.children.get(token).map(|child| result.push((Some(token), child, key.clone())));
+                    self.children.get(&TrieToken::Wildcard).map(|child| result.push((Some(&TrieToken::Wildcard), child, key)));
                 },
                 TrieToken::RightPar => {
-                    self.children.get(token).map(|child| result.push(map(Some(token), child, key)));
+                    self.children.get(token).map(|child| result.push((Some(token), child, key)));
                 },
                 TrieToken::LeftPar => {
                     self.children.get(&TrieToken::LeftPar)
-                        .map(|child| result.push(map(Some(&TrieToken::LeftPar), child, key.clone())));
+                        .map(|child| result.push((Some(&TrieToken::LeftPar), child, key.clone())));
                     self.children.get(&TrieToken::Wildcard)
-                        .map(|child| result.push(map(Some(&TrieToken::Wildcard), child, key.skip_tokens())));
+                        .map(|child| result.push((Some(&TrieToken::Wildcard), child, key.skip_tokens())));
                 },
                 TrieToken::Wildcard => {
                     self.children.iter()
                         .filter(|(token, _child)| !token.is_parenthesis())
-                        .for_each(|(token, child)| result.push(map(Some(token), child, key.clone())));
-                    self.skip_pars.values()
-                        .for_each(|child| result.push(map(None, child, key.clone())));
+                        .for_each(|(token, child)| result.push((Some(token), child, key.clone())));
+                    self.end_of_expr.values()
+                        .for_each(|child| result.push((None, child, key.clone())));
                 },
             },
             None => {},
         }
+        result.into_iter()
     }
 
     fn remove(&mut self, key: &TrieKey<K>, value: &V) -> bool {
@@ -357,26 +358,22 @@ where
     }
 
     fn remove_internal(&mut self, key: TrieKeyIter<K>, value: &V) -> bool {
-        fn clone_child_ref<'a, 'b: 'a, K: Clone, N>(token: Option<&'a TrieToken<K>>, child: &'a Shared<N>, key: TrieKeyIter<'b, K>)
-            -> (Option<TrieToken<K>>, Shared<N>, TrieKeyIter<'b, K>) {
-            (token.cloned(), child.clone(), key)
-        }
-        if key.is_empty() {
+        if key.is_end() {
             self.values.remove(value)
         } else {
-            let mut children = Vec::new();
-            self.next(key, clone_child_ref, &mut children);
-            children.into_iter()
-                .map(|(token, child_node, key)| {
-                    let removed = child_node.borrow_mut().remove_internal(key, value);
-                    if removed && child_node.borrow().is_empty(){
-                        match token {
-                            Some(token) => { self.children.remove(&token); },
-                            None => { self.skip_pars.remove(&child_node.as_ptr()); },
-                        }
+            let children: Vec<(Option<TrieToken<K>>, Shared<Self>, TrieKeyIter<K>)> = self.next(key)
+                .map(|(token, child_node, key)| (token.cloned(), child_node.clone(), key))
+                .collect();
+            children.into_iter().map(|(token, child_node, key)| {
+                let removed = child_node.borrow_mut().remove_internal(key, value);
+                if removed && child_node.borrow().is_empty(){
+                    match token {
+                        Some(token) => { self.children.remove(&token); },
+                        None => { self.end_of_expr.remove(&child_node.as_ptr()); },
                     }
-                    removed
-                })
+                }
+                removed
+            })
             .fold(false, |a, b| a || b)
         }
     }
@@ -417,9 +414,9 @@ where
             for (start, end) in pars {
                 let end_node = nodes[end - 1].clone();
                 if start > 0 {
-                    nodes[start - 1].borrow_mut().skip_pars.insert(end_node.as_ptr(), end_node);
+                    nodes[start - 1].borrow_mut().end_of_expr.insert(end_node.as_ptr(), end_node);
                 } else {
-                    self.skip_pars.insert(end_node.as_ptr(), end_node);
+                    self.end_of_expr.insert(end_node.as_ptr(), end_node);
                 }
             }
         }
@@ -431,19 +428,19 @@ where
 
     #[cfg(test)]
     fn size(&self) -> usize {
-        let mut counted = HashSet::new();
-        fn size_recursive<K, V>(node: &MultiTrieNode<K, V>, counted: &mut HashSet<*const MultiTrieNode<K, V>>) -> usize {
+        let mut visited = HashSet::new();
+        fn size_recursive<K, V>(node: &MultiTrieNode<K, V>, visited: &mut HashSet<*const MultiTrieNode<K, V>>) -> usize {
             let ptr = node as *const MultiTrieNode<K, V>;
-            if !counted.contains(&ptr) {
-                counted.insert(ptr);
+            if !visited.contains(&ptr) {
+                visited.insert(ptr);
                 node.children.values().fold(1, |size, node| {
-                    size + size_recursive(node.borrow().as_ref(), counted)
+                    size + size_recursive(node.borrow().as_ref(), visited)
                 })
             } else {
                 0
             }
         }
-        size_recursive(self, &mut counted)
+        size_recursive(self, &mut visited)
     }
 }
 
@@ -458,12 +455,11 @@ where
     V: Eq + Hash,
 {
     fn new(node: &'a MultiTrieNode<K, V>, key: TrieKeyIter<'a, K>) -> Self {
-        let mut to_be_explored = Vec::new();
-        node.next(key, Self::map_children, &mut to_be_explored);
+        let to_be_explored = node.next(key).map(Self::to_unexplored_path).collect();
         Self{ to_be_explored, _root_node_ref: PhantomData }
     }
 
-    fn map_children(_token: Option<&TrieToken<K>>, child: &Shared<MultiTrieNode<K, V>>, key: TrieKeyIter<'a, K>) -> (*mut MultiTrieNode<K, V>, TrieKeyIter<'a, K>) {
+    fn to_unexplored_path((_token, child, key): (Option<&TrieToken<K>>, &Shared<MultiTrieNode<K, V>>, TrieKeyIter<'a, K>)) -> (*mut MultiTrieNode<K, V>, TrieKeyIter<'a, K>) {
         (child.as_ptr(), key)
     }
 }
@@ -478,9 +474,11 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         while let Some((node, key)) = self.to_be_explored.pop() {
             let node = unsafe{ &*node };
-            match key.is_empty() {
+            match key.is_end() {
                 true => return Some(node),
-                false => node.next(key, MultiValueIter::map_children, &mut self.to_be_explored),
+                false => node.next(key)
+                    .map(MultiValueIter::to_unexplored_path)
+                    .for_each(|x| self.to_be_explored.push(x)),
             }
         }
         None
