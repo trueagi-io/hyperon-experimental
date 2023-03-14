@@ -77,75 +77,85 @@ impl<T: Display> Display for TrieToken<T> {
     }
 }
 
+/// Trie key is a sequence of [TrieToken].
 #[derive(PartialEq, Clone, Debug)]
-struct _Token<T> {
-    token: TrieToken<T>,
-    par_size: Option<usize>,
+pub struct TrieKey<T> {
+    tokens: VecDeque<TrieToken<T>>,
+    expr_size: VecDeque<usize>,
 }
 
-#[derive(PartialEq, Clone, Debug)]
-pub struct TrieKey<T>(VecDeque<_Token<T>>);
-
 impl<T> TrieKey<T> {
-    fn precalculate_par_sizes(raw_tokens: VecDeque<TrieToken<T>>) -> Result<VecDeque<_Token<T>>, String> {
+    fn precalculate_expr_size(tokens: &VecDeque<TrieToken<T>>) -> Result<VecDeque<usize>, String> {
+        fn unbalanced_right(pos: usize) -> String {
+            format!(concat!("Unbalanced key: TrieToken::RightPar without ",
+                    "TrieToken::LeftPar at position {}"), pos)
+        }
+        fn unbalanced_left(left_par_stack: Vec<usize>) -> String {
+            format!(concat!("Unbalanced key: TrieToken::LeftPar without ",
+                    "TrieToken::Right at positions {:?}"), left_par_stack)
+        }
+
         let mut left_par_stack = Vec::new();
-        let mut tokens = VecDeque::new();
-        for (pos, token) in raw_tokens.into_iter().enumerate() {
-            tokens.push_back(_Token{ token, par_size: None });
-            match tokens.back().unwrap().token {
+        let mut expr_size = VecDeque::with_capacity(tokens.len());
+        for (pos, token) in tokens.iter().enumerate() {
+            expr_size.push_back(0);
+            match token {
                 TrieToken::LeftPar => left_par_stack.push(pos),
                 TrieToken::RightPar => {
-                    let error = || { format!(concat!(
-                            "Unbalanced key: TrieToken::RightPar without ",
-                            "TrieToken::LeftPar at position {}"), pos) };
-                    let start = left_par_stack.pop().ok_or_else(error)?;
-                    tokens[start].par_size = Some(pos - start);
+                    let left_pos = left_par_stack.pop().ok_or_else(|| unbalanced_right(pos))?;
+                    expr_size[left_pos] = pos - left_pos;
                 },
                 _ => {},
             }
         }
         if left_par_stack.is_empty() {
-            Ok(tokens)
+            Ok(expr_size)
         } else {
-            Err(format!(concat!("Unbalanced key: TrieToken::LeftPar without ",
-                        "TrieToken::Right at positions {:?}"), left_par_stack))
+            Err(unbalanced_left(left_par_stack))
         }
     }
 
-    fn pop_head(&mut self) -> Option<_Token<T>> {
-        self.0.pop_front()
+    fn pop_head(&mut self) -> Option<(TrieToken<T>, usize)> {
+        match (self.tokens.pop_front(), self.expr_size.pop_front()) {
+            (Some(token), Some(size)) => Some((token, size)),
+            _ => None,
+        }
     }
 
-    fn pop_head_unchecked(&mut self) -> _Token<T> {
+    fn pop_head_unchecked(&mut self) -> (TrieToken<T>, usize) {
         self.pop_head().expect("Unexpected end of key")
     }
 
     fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.tokens.is_empty()
     }
 }
 
 impl<T, V: Into<VecDeque<TrieToken<T>>>> From<V> for TrieKey<T> {
     fn from(tokens: V) -> Self {
         let panic = |err| { panic!("{}", err) };
-        let tokens = Self::precalculate_par_sizes(tokens.into()).unwrap_or_else(panic);
-        Self(tokens)
+        let tokens = tokens.into();
+        let expr_size = Self::precalculate_expr_size(&tokens).unwrap_or_else(panic);
+        Self{ tokens, expr_size }
     }
 }
 
 impl<T: Clone> TrieKey<T> {
     fn skip_tokens(&self, size: usize) -> Self {
-        Self(self.0.iter().cloned().skip(size).collect())
+        Self{
+            tokens: self.tokens.iter().skip(size).cloned().collect(),
+            expr_size: self.expr_size.iter().skip(size).cloned().collect(),
+        }
     }
 }
 
 impl<T: Display> Display for TrieKey<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "[ ")
-            .and_then(|_| self.0.iter().take(1).fold(Ok(()),
-                |res, token| res.and_then(|_| write!(f, "{}", token.token))))
-            .and_then(|_| self.0.iter().skip(1).fold(Ok(()),
-                |res, token| res.and_then(|_| write!(f, ", {}", token.token))))
+            .and_then(|_| self.tokens.iter().take(1).fold(Ok(()),
+                |res, token| res.and_then(|_| write!(f, "{}", token))))
+            .and_then(|_| self.tokens.iter().skip(1).fold(Ok(()),
+                |res, token| res.and_then(|_| write!(f, ", {}", token))))
             .and_then(|_| write!(f, " ]"))
     }
 }
@@ -184,25 +194,25 @@ where
     fn next<F, R>(&self, mut key: TrieKey<K>, map: F, result: &mut Vec<R>)
         where F: Fn(Option<TrieToken<K>>, &Shared<Self>, TrieKey<K>) -> R,
     {
-        let head = key.pop_head_unchecked();
-        match head.token {
+        let (token, size) = key.pop_head_unchecked();
+        match token {
             TrieToken::Exact(_) => {
-                self.children.get(&head.token).map(|child| result.push(map(Some(head.token), child, key.clone())));
+                self.children.get(&token).map(|child| result.push(map(Some(token), child, key.clone())));
                 self.children.get(&TrieToken::Wildcard).map(|child| result.push(map(Some(TrieToken::Wildcard), child, key)));
             },
             TrieToken::RightPar => {
-                self.children.get(&head.token).map(|child| result.push(map(Some(head.token), child, key)));
+                self.children.get(&token).map(|child| result.push(map(Some(token), child, key)));
             },
             TrieToken::LeftPar => {
                 self.children.get(&TrieToken::Wildcard)
-                    .map(|child| result.push(map(Some(TrieToken::Wildcard), child, key.skip_tokens(head.par_size.unwrap()))));
+                    .map(|child| result.push(map(Some(TrieToken::Wildcard), child, key.skip_tokens(size))));
                 self.children.get(&TrieToken::LeftPar)
                     .map(|child| result.push(map(Some(TrieToken::LeftPar), child, key)));
             },
             TrieToken::Wildcard => {
                 self.children.iter()
                     .filter(|(token, _child)| !token.is_parenthesis())
-                    .for_each(|(head, child)| result.push(map(Some(head.clone()), child, key.clone())));
+                    .for_each(|(token, child)| result.push(map(Some(token.clone()), child, key.clone())));
                 self.skip_pars.values()
                     .for_each(|child| result.push(map(None, child, key.clone())));
             },
@@ -240,11 +250,11 @@ where
             let mut pars: Vec<(usize, usize)> = Vec::new();
             let mut pos = 0;
             
-            let head = key.pop_head_unchecked();
-            if let _Token{ token: TrieToken::LeftPar, par_size: Some(size) } = head {
+            let (token, size) = key.pop_head_unchecked();
+            if token == TrieToken::LeftPar {
                 pars.push((pos, pos + size + 1));
             }
-            let mut cur = self.get_or_insert_child(head.token);
+            let mut cur = self.get_or_insert_child(token);
             nodes.push(cur.clone());
             pos = pos + 1;
 
@@ -254,11 +264,11 @@ where
                         cur.borrow_mut().values.insert(value);
                         break;
                     },
-                    Some(head) => {
-                        if let _Token{ token: TrieToken::LeftPar, par_size: Some(size) } = head {
+                    Some((token, size)) => {
+                        if token == TrieToken::LeftPar {
                             pars.push((pos, pos + size + 1));
                         }
-                        let node = cur.borrow_mut().get_or_insert_child(head.token);
+                        let node = cur.borrow_mut().get_or_insert_child(token);
                         cur = node;
                         nodes.push(cur.clone());
                     },
