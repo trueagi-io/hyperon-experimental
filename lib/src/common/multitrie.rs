@@ -25,7 +25,7 @@
 //! `[ Exact(A), LeftPar, Exact(B), RightPar ]` keys.
 //!
 //! Wildcard can be used not only for getting value but also as a key for
-//! keeping value. Thus a singly key in the [MultiTrie] can match many different keys
+//! keeping value. Thus a single key in the [MultiTrie] can match many different keys
 //! for retrieve value. In the example above we could put two
 //! values with `[ Exact(A), Exact(B) ]` and `[ Exact(A), LeftPar, Exact(B), RightPar ]`
 //! keys into the trie and then get both of them using `[ Exact(A), * ]` key.
