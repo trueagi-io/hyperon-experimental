@@ -57,7 +57,7 @@ pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
         pattern: *const atom_t, callback: lambda_t<* const bindings_t>, context: *mut c_void) {
     let results = unsafe { (*space).borrow().query(&((*pattern).atom)) };
     for result in results.into_iter() {
-        let b = bindings_into_ptr(result.clone());
+        let b = bindings_into_ptr(result);
         callback(b, context);
     }
 }
