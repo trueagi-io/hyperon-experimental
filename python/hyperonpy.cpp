@@ -60,7 +60,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 
 extern "C" {
     exec_error_t *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* args, struct vec_atom_t* ret);
-    void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t______bindings_t callback, void *context);
+    void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, bindings_callback_t callback, void *context);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
     size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
@@ -123,7 +123,7 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
     }
 }
 
-void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t______bindings_t callback, void *context) {
+void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, bindings_callback_t callback, void *context) {
     py::object hyperon = py::module_::import("hyperon");
     py::function call_match_on_grounded_atom = hyperon.attr("call_match_on_grounded_atom");
 

@@ -39,12 +39,14 @@ pub struct bindings_t {
     pub bindings: Bindings,
 }
 
+pub type bindings_callback_t = lambda_t<*const bindings_t>;
+
 #[repr(C)]
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
     execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
-    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, lambda_t<* const bindings_t>, *mut c_void)>,
+    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, bindings_callback_t, *mut c_void)>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
     display: extern "C" fn(*const gnd_t, *mut c_char, usize) -> usize,
