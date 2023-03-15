@@ -57,20 +57,7 @@ pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
         pattern: *const atom_t, callback: lambda_t<* const bindings_t>, context: *mut c_void) {
     let results = unsafe { (*space).borrow().query(&((*pattern).atom)) };
     for result in results.into_iter() {
-        /*let mut vars : Vec<CString> = Vec::new();
-        let vec: Vec<var_atom_t> = result.into_iter().map(|(k, v)| {
-                // put C string into collection which is external to closure
-                // to prevent its deallocation before callback is called
-                vars.push(string_as_cstr(k.name()));
-                var_atom_t{
-                    var: vars.last().unwrap().as_ptr(),
-                    atom: atom_into_ptr(v),
-                }
-            }).collect();
-        callback((&vec).into(), context);*/
-        // todo: check if rust allow this(no dead ref)
         let b = bindings_into_ptr(result.clone());
-        println!("{}\n", unsafe{(*b).bindings.is_empty()});
         callback(b, context);
     }
 }

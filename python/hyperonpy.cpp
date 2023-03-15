@@ -40,7 +40,6 @@ static void copy_atom_to_dict(const var_atom_t* atom, void* context) {
     pybindings[atom->var] = CAtom(atom->atom);
 }
 
-
 static void copy_lists_of_atom(atom_array_t atoms, void* context) {
     py::list* list_of_lists = static_cast<py::list*>(context);
     py::list list;
@@ -134,18 +133,14 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t___
 
     for (py::handle result: results) {
         py::dict pybindings = result.cast<py::dict>();
-        size_t size = py::len(pybindings);
-        std::string vars[size];
-        var_atom_t array[size];
-        size_t i = 0;
+
         struct bindings_t* cbindings = bindings_new();
         for (auto var_atom : pybindings) {
-            vars[i] = var_atom.first.cast<py::str>();
-            array[i].var = vars[i].c_str();
-            array[i].atom = atom_clone(var_atom.second.attr("catom").cast<CAtom>().ptr);
-            // todo: remove unneeded vars & copies.
-            bindings_add_var_binding(cbindings, &array[i]);
-            ++i;
+            const std::string var  = var_atom.first.cast<py::str>();
+            CAtom atom = atom_clone(var_atom.second.attr("catom").cast<CAtom>().ptr);
+            var_atom_t varAtom{.var = var.c_str(), .atom = atom.ptr };
+
+            bindings_add_var_binding(cbindings, &varAtom);
         }
 
         callback(cbindings, context);
@@ -307,8 +302,6 @@ PYBIND11_MODULE(hyperonpy, m) {
     }, "Convert bindings to human readable string");
     // todo: how to pass callback?
     //pub unsafe extern "C" fn bindings_traverse(bindings: * const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
-
-
 
     py::class_<CGroundingSpace>(m, "CGroundingSpace");
     m.def("grounding_space_new", []() { return CGroundingSpace(grounding_space_new()); }, "New grounding space instance");

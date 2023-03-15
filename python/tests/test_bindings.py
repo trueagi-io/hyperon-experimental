@@ -20,7 +20,7 @@ class BindingsTest(unittest.TestCase):
     def test_bindings_match_display(self):
         pass
         '''
-        comented till sort inside bindings become stable
+        commented till sort inside bindings become stable
         bindings = hp.bindings_new()
 
         # uncomment this and assert on line 22 fails
@@ -88,29 +88,6 @@ class BindingsTest(unittest.TestCase):
         self.assertEqual(atom_expected_first, atom_resolved_first)
         self.assertEqual(atom_expected_second, atom_resolved_second)
         # see above about negative tests
-
-
-'''
-    m.def("bindings_add_var_bindings",
-          [](CBindings bindings, char const* varName, CAtom atom) {
-              var_atom_t var_atom{.var = varName, .atom = atom.ptr};
-              return bindings_add_var_binding(bindings.ptr, &var_atom);
-          },
-          "Links variable to atom" );
-    m.def("bindings_resolve", [](CBindings bindings, char const* varName){ return CAtom(bindings_resolve(bindings.ptr, varName));}, "Resolve" );
-    m.def("bindings_resolve_and_remove", [](CBindings bindings, char const* varName){ return CAtom(bindings_resolve_and_remove(bindings.ptr, varName));}, "Resolve" );
-    m.def("bindings_to_str", [](CBindings bindings) {
-        std::string str;
-        bindings_to_str(bindings.ptr, copy_to_string, &str);
-        return str;
-    }, "Convert bindings to human readable string");
-     '''
-
-
-
-
-
-        
 
 
 if __name__ == "__main__":

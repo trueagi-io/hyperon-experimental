@@ -16,7 +16,6 @@ struct output_t {
 };
 
 void copy_to_output(char const* str, void* context) {
-    printf("%s", "copy_to_output\n");
     struct output_t *output = context;
     output->len += snprintf(output->str + output->len, 1024 - output->len, "%s, ", str);
 }
@@ -29,20 +28,11 @@ void query_callback_single_atom(const struct var_atom_t* atom, void* data)
     atom_to_str(atom->atom, copy_to_output, out);
 }
 
-void query_callback(struct bindings_t const* results, void* data) {
-
+void query_callback(struct bindings_t const* results, void* data)
+{
     struct output_t* out = data;
 
     bindings_traverse(results, query_callback_single_atom, out);
-    // todo: discuss why free???
-
-   /* for (int i = 0; i < results.size; ++i) {
-        var_atom_t const* result = results.items + i;
-
-        output->len += snprintf(output->str + output->len, 1024 - output->len, "%s: ", results.items->var);
-        atom_to_str(result->atom, copy_to_output, output);
-        atom_free(result->atom);
-    }*/
 }
 
 START_TEST (test_query)

@@ -207,8 +207,7 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
 #[no_mangle]
 pub extern "C" fn atom_to_str(atom: *const atom_t, callback: c_str_callback_t, context: *mut c_void) {
     let atom = unsafe{ &(*atom).atom };
-    let s = str_as_cstr(atom.to_string().as_str());
-    callback(s.as_ptr(), context);
+    callback(str_as_cstr(atom.to_string().as_str()).as_ptr(), context);
 }
 
 
