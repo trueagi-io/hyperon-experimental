@@ -288,7 +288,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("bindings_eq", [](CBindings left, CBindings right){ return bindings_eq(left.ptr, right.ptr);}, "Compares bindings"  );
     m.def("bindings_add_var_bindings",
           [](CBindings bindings, char const* varName, CAtom atom) {
-              var_atom_t var_atom{.var = varName, .atom = atom.ptr};
+              var_atom_t var_atom{.var = varName, .atom = atom_clone(atom.ptr) };
               return bindings_add_var_binding(bindings.ptr, &var_atom);
           },
           "Links variable to atom" );

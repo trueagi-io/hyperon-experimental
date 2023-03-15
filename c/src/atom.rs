@@ -123,7 +123,7 @@ pub extern "C" fn bindings_traverse(cbindings: * const bindings_t, callback: lam
 pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, atom: *const var_atom_t) -> bool {
     let bindings = unsafe{ &mut(*bindings).bindings };
     let var = VariableAtom::new(cstr_into_string (unsafe{(*atom).var}));
-    let atom = unsafe{ (*(*atom).atom).atom.clone()};
+    let atom = ptr_into_atom(unsafe{(*atom).atom});
     bindings.add_var_binding(var, atom)
 }
 
