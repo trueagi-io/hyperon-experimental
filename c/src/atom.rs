@@ -74,14 +74,14 @@ pub extern "C" fn exec_error_free(error: *mut exec_error_t) {
 
 // bindings
 #[no_mangle]
-pub unsafe extern "C" fn bindings_new() -> *mut bindings_t {
+pub extern "C" fn bindings_new() -> *mut bindings_t {
     bindings_into_ptr(Bindings::new())
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn bindings_free(bindings: *mut bindings_t) {
+pub extern "C" fn bindings_free(bindings: *mut bindings_t) {
     // drop() does nothing actually, but it is used here for clarity
-    drop(Box::from_raw(bindings));
+    drop(unsafe{Box::from_raw(bindings)});
 }
 
 #[no_mangle]
@@ -97,13 +97,16 @@ pub extern "C" fn bindings_to_str(bindings: *const bindings_t, callback: c_str_c
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn bindings_eq(bindingsa: *const bindings_t, bindingsb: *const bindings_t) -> bool {
-    (*bindingsa).bindings == (*bindingsb).bindings
+pub extern "C" fn bindings_eq(bindingsa: *const bindings_t, bindingsb: *const bindings_t) -> bool {
+    let left = unsafe{&(*bindingsa).bindings};
+    let right = unsafe{&(*bindingsb).bindings};
+    left == right
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn bindings_traverse(bindings: * const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
-    (*bindings).bindings.iter().for_each(|(var, atom)|  {
+pub extern "C" fn bindings_traverse(cbindings: * const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
+    let bindings = unsafe{&(*cbindings).bindings};
+    bindings.iter().for_each(|(var, atom)|  {
             let name = string_as_cstr(var.name());
             let var_atom = var_atom_t {
                 var: name.as_ptr(),
@@ -115,25 +118,25 @@ pub unsafe extern "C" fn bindings_traverse(bindings: * const bindings_t, callbac
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, atom: *const var_atom_t) -> bool {
-    let bindings = &mut(*bindings).bindings;
-    let var = VariableAtom::new(cstr_into_string ((*atom).var));
-    let atom = (*(*atom).atom).atom.clone();
+pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, atom: *const var_atom_t) -> bool {
+    let bindings = unsafe{ &mut(*bindings).bindings };
+    let var = VariableAtom::new(cstr_into_string (unsafe{(*atom).var}));
+    let atom = unsafe{ (*(*atom).atom).atom.clone()};
     bindings.add_var_binding(var, atom)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn bindings_is_empty(bindings: *const bindings_t) -> bool{
-    let bindings = &(*bindings).bindings;
+pub extern "C" fn bindings_is_empty(bindings: *const bindings_t) -> bool{
+    let bindings = unsafe{ &(*bindings).bindings };
     bindings.is_empty()
 }
 
-// todo: discuss if var_atom_t is more convinient
+// TODO: discuss if var_atom_t is more convenient
 //       using Option cause `extern` fn uses type `Option<atom::atom_t>`, which is not FFI-safe warning
 #[no_mangle]
-pub unsafe extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const c_char) -> * mut atom_t
+pub extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const c_char) -> * mut atom_t
 {
-    let bindings = &(*bindings).bindings;
+    let bindings = unsafe{&(*bindings).bindings};
     let var = VariableAtom::new(cstr_into_string(var_name));
 
     match bindings.resolve(&var) {
@@ -143,10 +146,10 @@ pub unsafe extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name:
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindings_right: *const bindings_t) -> *mut bindings_t
+pub extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindings_right: *const bindings_t) -> *mut bindings_t
 {
-    let bindings_l = &(*bindings_left).bindings;
-    let bindings_r = &(*bindings_right).bindings;
+    let bindings_l = unsafe{ &(*bindings_left).bindings };
+    let bindings_r = unsafe{ &(*bindings_right).bindings };
 
     match Bindings::merge(bindings_l, bindings_r){
         None => { ptr::null_mut() }
@@ -155,8 +158,8 @@ pub unsafe extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindin
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_name: *const c_char) -> *mut atom_t {
-    let bindings = &mut(*bindings).bindings;
+pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_name: *const c_char) -> *mut atom_t {
+    let bindings = unsafe{&mut(*bindings).bindings};
     let var = VariableAtom::new(cstr_into_string(var_name));
 
     match bindings.resolve_and_remove(&var) {
