@@ -237,17 +237,16 @@ class Bindings:
 
     def resolve(self, var_name: str) -> Atom | None:
         raw_atom = hp.bindings_resolve(self.cbindings, var_name)
-        return None if raw_atom is None else Atom(raw_atom)
+        return None if raw_atom is None else Atom._from_catom(raw_atom)
 
     def resolve_and_remove(self, var_name: str) -> Atom | None:
         raw_atom = hp.bindings_resolve_and_remove(self.cbindings, var_name)
-        return None if raw_atom is None else Atom(raw_atom)
+        return None if raw_atom is None else Atom._from_catom(raw_atom)
 
     def iterator(self):
         res = hp.bindings_list(self.cbindings)
         result = []
         for r in res:
-            result.append((r[0], Atom(r[1])))
+            result.append((r[0], Atom._from_catom(r[1])))
 
         return iter(result)
-
