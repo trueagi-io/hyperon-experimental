@@ -39,7 +39,7 @@ at the existing code and stick to its style.
 
 ### General
 
-If you want to leave some reminder in code, for example to fix somthing later,
+If you want to leave some reminder in code, for example to fix something later,
 you can do it by two ways. Add a comment starting with `FIXME` to mark something
 which should be done before the PR is merged. Add a comment starting with `TODO`
 to mark the improvement which can be postponed and done later by a separate PR.
