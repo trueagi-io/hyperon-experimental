@@ -87,7 +87,20 @@ class BindingsTest(unittest.TestCase):
         self.assertTrue(self.bindings.is_empty())
         self.assertEqual(atom_expected_first, atom_resolved_first)
         self.assertEqual(atom_expected_second, atom_resolved_second)
-        # see above about negative tests
+
+    def test_bindings_iterator(self):
+        pass
+        # uncomment below as sort in bindings become stable.
+        '''
+
+        it = self.bindings.iterator()
+        expected_names = ["x", "a"]
+        expected_atoms = [S("y"), S("b")]
+
+        for x, expected_name, expected_atom in zip(it, expected_names, expected_atoms):
+            self.assertEqual(expected_name, x[0])
+            self.assertEqual(expected_atom, x[1])
+       '''
 
 
 if __name__ == "__main__":

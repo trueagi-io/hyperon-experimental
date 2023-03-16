@@ -175,6 +175,14 @@ void py_free(struct gnd_t* _cgnd) {
     delete static_cast<GroundedObject const*>(_cgnd);
 }
 
+void copy_to_list_callback(var_atom_t const* varAtom, void* context){
+
+    pybind11::list& var_atom_list = *( (pybind11::list*)(context) );
+
+    var_atom_list.append(
+            std::make_pair(std::string(varAtom->var), CAtom(atom_clone(varAtom->atom))));
+}
+
 struct CConstr {
 
     py::function pyconstr;
@@ -301,7 +309,7 @@ PYBIND11_MODULE(hyperonpy, m) {
             return nullptr == res ? std::nullopt : std::optional(CAtom(res));
         }, "Resolve" );
 
-    m.def("bindings_resolve_and_remove", [](CBindings bindings, char const* varName) ->std::optional<CAtom> {
+    m.def("bindings_resolve_and_remove", [](CBindings bindings, char const* varName) -> std::optional<CAtom> {
             auto const res = bindings_resolve_and_remove(bindings.ptr, varName);
             return nullptr == res ? std::nullopt : std::optional(CAtom(res));
         }, "Resolve and remove" );
@@ -311,8 +319,16 @@ PYBIND11_MODULE(hyperonpy, m) {
         bindings_to_str(bindings.ptr, copy_to_string, &str);
         return str;
     }, "Convert bindings to human readable string");
-    // todo: how to pass callback?
-    //pub unsafe extern "C" fn bindings_traverse(bindings: * const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
+
+    m.def("bindings_list", [](CBindings bindings) -> pybind11::list {
+        pybind11::list var_atom_list;
+        bindings_traverse(
+                bindings.ptr,
+                copy_to_list_callback,
+                &var_atom_list);
+
+        return var_atom_list;
+    }, "Returns iterator to traverse bindings");
 
     py::class_<CGroundingSpace>(m, "CGroundingSpace");
     m.def("grounding_space_new", []() { return CGroundingSpace(grounding_space_new()); }, "New grounding space instance");
