@@ -3,6 +3,8 @@
 
 #include <hyperon/hyperon.h>
 
+#include <optional>
+
 namespace py = pybind11;
 
 template<class T, size_t N>
@@ -60,7 +62,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 
 extern "C" {
     exec_error_t *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* args, struct vec_atom_t* ret);
-    void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, bindings_callback_t callback, void *context);
+    void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, bindings_mut_callback_t callback, void *context);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
     size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
@@ -123,7 +125,7 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
     }
 }
 
-void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, bindings_callback_t callback, void *context) {
+void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, bindings_mut_callback_t callback, void *context) {
     py::object hyperon = py::module_::import("hyperon");
     py::function call_match_on_grounded_atom = hyperon.attr("call_match_on_grounded_atom");
 
@@ -293,8 +295,17 @@ PYBIND11_MODULE(hyperonpy, m) {
           },
           "Links variable to atom" );
     m.def("bindings_is_empty", [](CBindings bindings){ return bindings_is_empty(bindings.ptr);}, "Returns true if bindings is empty");
-    m.def("bindings_resolve", [](CBindings bindings, char const* varName){ return CAtom(bindings_resolve(bindings.ptr, varName));}, "Resolve" );
-    m.def("bindings_resolve_and_remove", [](CBindings bindings, char const* varName){ return CAtom(bindings_resolve_and_remove(bindings.ptr, varName));}, "Resolve" );
+
+    m.def("bindings_resolve", [](CBindings bindings, char const* varName) -> std::optional<CAtom> {
+            auto const res = bindings_resolve(bindings.ptr, varName);
+            return nullptr == res ? std::nullopt : std::optional(CAtom(res));
+        }, "Resolve" );
+
+    m.def("bindings_resolve_and_remove", [](CBindings bindings, char const* varName) ->std::optional<CAtom> {
+            auto const res = bindings_resolve_and_remove(bindings.ptr, varName);
+            return nullptr == res ? std::nullopt : std::optional(CAtom(res));
+        }, "Resolve and remove" );
+
     m.def("bindings_to_str", [](CBindings bindings) {
         std::string str;
         bindings_to_str(bindings.ptr, copy_to_string, &str);

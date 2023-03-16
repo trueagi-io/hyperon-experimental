@@ -40,13 +40,14 @@ pub struct bindings_t {
 }
 
 pub type bindings_callback_t = lambda_t<*const bindings_t>;
+pub type bindings_mut_callback_t = lambda_t<*mut bindings_t>;
 
 #[repr(C)]
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
     execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
-    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, bindings_callback_t, *mut c_void)>,
+    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, bindings_mut_callback_t, *mut c_void)>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
     display: extern "C" fn(*const gnd_t, *mut c_char, usize) -> usize,
@@ -106,7 +107,7 @@ pub extern "C" fn bindings_eq(bindingsa: *const bindings_t, bindingsb: *const bi
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_traverse(cbindings: * const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
+pub extern "C" fn bindings_traverse(cbindings: *const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
     let bindings = unsafe{&(*cbindings).bindings};
     bindings.iter().for_each(|(var, atom)|  {
             let name = string_as_cstr(var.name());
@@ -373,13 +374,11 @@ impl CGrounded {
         (self.api().free)(self.get_mut_ptr());
     }
 
-    extern "C" fn match_callback(cbindings: *const bindings_t, context: *mut c_void) {
-        // todo: check for optimality
-        let bindings = unsafe{ (*cbindings).bindings.clone() };
-        mem::forget(cbindings);
-
+    extern "C" fn match_callback(cbindings: *mut bindings_t, context: *mut c_void) {
+        let bindings = ptr_into_bindings(cbindings);
         let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
         vec_bnd.push(bindings);
+        mem::forget(cbindings);
     }
 
 }
@@ -458,13 +457,12 @@ use std::ptr;
     #[test]
     pub fn test_match_callback() {
 
-        let bindings= bind! {var: expr!("atom_test")};
-        let cbindings = bindings_t{ bindings };
+        let cbindings = bindings_into_ptr(bind!{var: expr!("atom_test")} );
 
         let mut results: Vec<Bindings> = Vec::new();
         let context = ptr::addr_of_mut!(results).cast::<c_void>();
 
-        CGrounded::match_callback(&cbindings, context);
+        CGrounded::match_callback( cbindings, context);
 
         assert_eq!(results, vec![Bindings::from(vec![
                 (VariableAtom::new("var"), Atom::sym("atom_test"))])]);

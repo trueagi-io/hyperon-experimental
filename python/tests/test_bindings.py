@@ -67,17 +67,18 @@ class BindingsTest(unittest.TestCase):
         self.assertFalse(self.bindings.is_empty())
 
     def test_bindings_resolve(self):
-        # todo: how to perfom negative tests?
-        #at = hp.bindings_resolve(self.emptyBindings, "a")
-        #s = hp.atom_get_type(at) fail how to check for none?g
-        #self.assertIsNone(hp.bindings_resolve(self.emptyBindings, "a"))
-        #self.assertIsNone(hp.bindings_resolve(self.bindings, "XXX"))
+
+        self.assertIsNone(self.emptyBindings.resolve("a"))
+        self.assertIsNone(self.bindings.resolve("XYXY"))
 
         atom_expected = S("b")
         atom_resolved = self.bindings.resolve("a")
         self.assertEqual(atom_expected, atom_resolved)
 
     def test_bindings_resolve_and_remove(self):
+        self.assertIsNone(self.emptyBindings.resolve_and_remove("a"))
+        self.assertIsNone(self.bindings.resolve_and_remove("XYXY"))
+
         atom_expected_first = S("b")
         atom_expected_second = S("y")
         atom_resolved_first = self.bindings.resolve_and_remove("a")

@@ -235,8 +235,10 @@ class Bindings:
     def is_empty(self) -> bool:
         return hp.bindings_is_empty(self.cbindings)
 
-    def resolve(self, var_name: str) -> Atom:
-        return Atom(hp.bindings_resolve(self.cbindings, var_name))
+    def resolve(self, var_name: str) -> Atom | None:
+        raw_atom = hp.bindings_resolve(self.cbindings, var_name)
+        return None if raw_atom is None else Atom(raw_atom)
 
-    def resolve_and_remove(self, var_name: str) -> Atom:
-        return Atom(hp.bindings_resolve_and_remove(self.cbindings, var_name))
+    def resolve_and_remove(self, var_name: str) -> Atom | None:
+        raw_atom = hp.bindings_resolve_and_remove(self.cbindings, var_name)
+        return None if raw_atom is None else Atom(raw_atom)
