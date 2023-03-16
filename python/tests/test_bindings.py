@@ -1,5 +1,4 @@
 import unittest
-import hyperonpy as hp
 from hyperon import *
 from copy import deepcopy
 
@@ -10,8 +9,8 @@ class BindingsTest(unittest.TestCase):
         self.emptyBindings = Bindings()
 
         self.bindings = Bindings()
-        self.bindings.add_var_bindings("a", SymbolAtom(hp.atom_sym("b")))
-        self.bindings.add_var_bindings("x", SymbolAtom(hp.atom_sym("y")))
+        self.bindings.add_var_bindings("a", S("b"))
+        self.bindings.add_var_bindings("x", S("y"))
 
 
     def tearDown(self) -> None:
@@ -74,13 +73,13 @@ class BindingsTest(unittest.TestCase):
         #self.assertIsNone(hp.bindings_resolve(self.emptyBindings, "a"))
         #self.assertIsNone(hp.bindings_resolve(self.bindings, "XXX"))
 
-        atom_expected = Atom(hp.atom_sym("b"))
+        atom_expected = S("b")
         atom_resolved = self.bindings.resolve("a")
         self.assertEqual(atom_expected, atom_resolved)
 
     def test_bindings_resolve_and_remove(self):
-        atom_expected_first = SymbolAtom(hp.atom_sym("b"))
-        atom_expected_second = SymbolAtom(hp.atom_sym("y"))
+        atom_expected_first = S("b")
+        atom_expected_second = S("y")
         atom_resolved_first = self.bindings.resolve_and_remove("a")
         atom_resolved_second = self.bindings.resolve_and_remove("x")
 

@@ -120,10 +120,10 @@ pub extern "C" fn bindings_traverse(cbindings: * const bindings_t, callback: lam
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, atom: *const var_atom_t) -> bool {
+pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, var_atom: *const var_atom_t) -> bool {
     let bindings = unsafe{ &mut(*bindings).bindings };
-    let var = VariableAtom::new(cstr_into_string (unsafe{(*atom).var}));
-    let atom = ptr_into_atom(unsafe{(*atom).atom});
+    let var = VariableAtom::new(cstr_into_string (unsafe{(*var_atom).var}));
+    let atom = ptr_into_atom(unsafe{(*var_atom).atom});
     bindings.add_var_binding(var, atom)
 }
 
@@ -457,11 +457,9 @@ use std::ptr;
 
     #[test]
     pub fn test_match_callback() {
-        let var = VariableAtom::new_id ("var", 1);
-        let atom = Atom::sym("atom_test");
-        let mut bindings= Bindings::new();
-        bindings.add_var_binding(var, atom);
-        let cbindings = bindings_t{bindings };
+
+        let bindings= bind! {var: expr!("atom_test")};
+        let cbindings = bindings_t{ bindings };
 
         let mut results: Vec<Bindings> = Vec::new();
         let context = ptr::addr_of_mut!(results).cast::<c_void>();
@@ -469,7 +467,7 @@ use std::ptr;
         CGrounded::match_callback(&cbindings, context);
 
         assert_eq!(results, vec![Bindings::from(vec![
-                (VariableAtom::new_id("var", 1), Atom::sym("atom_test"))])]);
+                (VariableAtom::new("var"), Atom::sym("atom_test"))])]);
     }
 
 }
