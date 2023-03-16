@@ -7,9 +7,7 @@ use std::fmt::Display;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon::matcher::Bindings;
-use std::mem;
 use std::ptr;
-
 
 // Atom
 
@@ -378,7 +376,6 @@ impl CGrounded {
         let bindings = ptr_into_bindings(cbindings);
         let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
         vec_bnd.push(bindings);
-        mem::forget(cbindings);
     }
 
 }
