@@ -85,6 +85,13 @@ pub struct TrieKey<T> {
 }
 
 impl<T> TrieKey<T> {
+    /// Function precalculates a distance between left and right left parentheses.
+    /// It is an optimisation and precalculated distance is used while traversing
+    /// a trie to quickly skip expression inside key when expression is matched
+    /// with a wildcard. Function gets a vector of [TrieToken] as arguments and
+    /// returns a vector of sizes. Returned vector contains non-zero distances
+    /// in positions which correspond to left parenthesis. Error is returned
+    /// when parentheses in passed tokens are unbalanced.
     fn precalculate_expr_size(tokens: &VecDeque<TrieToken<T>>) -> Result<VecDeque<usize>, String> {
         fn unbalanced_right(pos: usize) -> String {
             format!(concat!("Unbalanced key: TrieToken::RightPar without ",
@@ -115,6 +122,7 @@ impl<T> TrieKey<T> {
         }
     }
 
+    /// Pop [TrieToken] from the head of the key.
     fn pop_head(&mut self) -> Option<TrieToken<T>> {
         match (self.tokens.pop_front(), self.expr_size.pop_front()) {
             (Some(token), _) => Some(token),
@@ -122,6 +130,7 @@ impl<T> TrieKey<T> {
         }
     }
 
+    /// Return iterator throught sequence of [TrieToken] inside key.
     fn iter(&self) -> TrieKeyIter<'_, T> {
         TrieKeyIter{ key: self, pos: 0 }
     }
@@ -143,10 +152,13 @@ struct TrieKeyIter<'a, T> {
 }
 
 impl<'a, T> TrieKeyIter<'a, T> {
+    /// Returns true when iterator returned the last token of the key.
     fn is_end(&self) -> bool {
         self.pos >= self.key.tokens.len()
     }
 
+    /// Return a copy of the key with the first expression skipped.
+    /// Function expects iterator is on the next [TrieToken] after [TrieToken::LeftPar].
     fn skip_expression(mut self) -> Self {
         assert!(self.pos > 0 && self.key.expr_size[self.pos - 1] > 0);
         self.pos += self.key.expr_size[self.pos - 1];
@@ -219,7 +231,8 @@ where
         self.0.insert(key, value)
     }
 
-    /// Get values from the trie by the given `key`.
+    /// Get values from the trie by the given `key`. Returns an iterator through
+    /// values found.
     ///
     /// # Examples
     ///
@@ -247,7 +260,8 @@ where
         self.0.get(key)
     }
 
-    /// Remove the given `value` by the given `key`.
+    /// Remove the given `value` by the given `key`. Returns `true` if value was
+    /// found and removed and `false` otherwise.
     ///
     /// # Examples
     ///
@@ -284,10 +298,15 @@ where
     }
 }
 
+/// Single node of the multi value trie.
 #[derive(Clone, Debug)]
 struct MultiTrieNode<K, V> {
+    /// Next node by the [TrieToken] key.
     children: HashMap<TrieToken<K>, Shared<Self>>,
+    /// The shortcuts to the ends of expressions which are used
+    /// when expressions are matched by [TrieToken::Wildcard].
     end_of_expr: HashMap<*mut Self, Shared<Self>>,
+    /// Values which keys are ended on this node.
     values: HashSet<V>,
 }
 
@@ -313,6 +332,11 @@ where
         self.children.entry(token).or_insert(Shared::new(Self::new())).clone()
     }
 
+    /// Function gets first token from the iterator over key, gets a list of
+    /// nodes which can be matched by this key and returns an iterator over
+    /// triads `(reference to the token, reference to the node, tail of the iterator)`.
+    /// This function is used to iterate through nodes inside [MultiTrieNode::remove]
+    /// and [MultiTrieNode::get] functions.
     fn next<'a, 'b: 'a>(&'a self, mut key: TrieKeyIter<'b, K>) ->
         impl Iterator<Item=(Option<&'a TrieToken<K>>, &'a Shared<Self>, TrieKeyIter<'b, K>)>
     {
@@ -422,8 +446,15 @@ where
     }
 }
 
+/// Read-only iterator through the [MultiTrieNode] instances which are matched
+/// by the givec [TrieKeyIter].
 struct MultiValueIter<'a, K, V> {
+    /// List of the nodes and iterators to be processed on the next iterator step.
     to_be_explored: Vec<(*mut MultiTrieNode<K, V>, TrieKeyIter<'a, K>)>,
+    /// The holder of the reference to the original node which is required
+    /// to borrow it. It is required because pointers to the node are kept inside
+    /// and borrow checker cannot connect the iterator and root node reference
+    /// lifetimes.
     _root_node_ref: PhantomData<&'a MultiTrieNode<K, V>>,
 }
 
