@@ -20,14 +20,19 @@ void copy_to_output(char const* str, void* context) {
     output->len += snprintf(output->str + output->len, 1024 - output->len, "%s, ", str);
 }
 
-void query_callback(bindings_t results, void* data) {
-    struct output_t *output = data;
-    for (int i = 0; i < results.size; ++i) {
-        var_atom_t const* result = results.items + i;
-        output->len += snprintf(output->str + output->len, 1024 - output->len, "%s: ", results.items->var);
-        atom_to_str(result->atom, copy_to_output, output);
-        atom_free(result->atom);
-    }
+void query_callback_single_atom(const struct var_atom_t* atom, void* data)
+{
+    struct output_t* out = data;
+
+    out->len += snprintf(out->str + out->len, 1024 - out->len, "%s: ", atom->var);
+    atom_to_str(atom->atom, copy_to_output, out);
+}
+
+void query_callback(struct bindings_t const* results, void* data)
+{
+    struct output_t* out = data;
+
+    bindings_traverse(results, query_callback_single_atom, out);
 }
 
 START_TEST (test_query)

@@ -7,8 +7,7 @@ use std::fmt::Display;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon::matcher::Bindings;
-use std::mem;
-use std::slice;
+use std::ptr;
 
 // Atom
 
@@ -34,14 +33,19 @@ pub struct var_atom_t {
     pub atom: *mut atom_t,
 }
 
-pub type bindings_t = array_t<var_atom_t>;
+pub struct bindings_t {
+    pub bindings: Bindings,
+}
+
+pub type bindings_callback_t = lambda_t<*const bindings_t>;
+pub type bindings_mut_callback_t = lambda_t<*mut bindings_t>;
 
 #[repr(C)]
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
     execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
-    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, lambda_t<bindings_t>, *mut c_void)>,
+    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, bindings_mut_callback_t, *mut c_void)>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
     display: extern "C" fn(*const gnd_t, *mut c_char, usize) -> usize,
@@ -68,6 +72,104 @@ pub extern "C" fn exec_error_no_reduce() -> *mut exec_error_t {
 pub extern "C" fn exec_error_free(error: *mut exec_error_t) {
     unsafe{ drop(Box::from_raw(error)); }
 }
+
+// bindings
+#[no_mangle]
+pub extern "C" fn bindings_new() -> *mut bindings_t {
+    bindings_into_ptr(Bindings::new())
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_free(bindings: *mut bindings_t) {
+    // drop() does nothing actually, but it is used here for clarity
+    drop(unsafe{Box::from_raw(bindings)});
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_clone(bindings: *const bindings_t) -> *mut bindings_t {
+    bindings_into_ptr(unsafe{ &(*bindings) }.bindings.clone())
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_to_str(bindings: *const bindings_t, callback: c_str_callback_t, context: *mut c_void) {
+    let bindings = unsafe{ &(*bindings).bindings };
+    let s = str_as_cstr(bindings.to_string().as_str());
+    callback(s.as_ptr(), context);
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_eq(bindingsa: *const bindings_t, bindingsb: *const bindings_t) -> bool {
+    let left = unsafe{&(*bindingsa).bindings};
+    let right = unsafe{&(*bindingsb).bindings};
+    left == right
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_traverse(cbindings: *const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
+    let bindings = unsafe{&(*cbindings).bindings};
+    bindings.iter().for_each(|(var, atom)|  {
+            let name = string_as_cstr(var.name());
+            let var_atom = var_atom_t {
+                var: name.as_ptr(),
+                atom: atom_into_ptr(atom)
+            };
+            callback(&var_atom, context);
+        }
+    )
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, var_atom: *const var_atom_t) -> bool {
+    let bindings = unsafe{ &mut(*bindings).bindings };
+    let var = VariableAtom::new(cstr_into_string (unsafe{(*var_atom).var}));
+    let atom = ptr_into_atom(unsafe{(*var_atom).atom});
+    bindings.add_var_binding(var, atom)
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_is_empty(bindings: *const bindings_t) -> bool{
+    let bindings = unsafe{ &(*bindings).bindings };
+    bindings.is_empty()
+}
+
+// TODO: discuss if var_atom_t is more convenient
+//       using Option cause `extern` fn uses type `Option<atom::atom_t>`, which is not FFI-safe warning
+#[no_mangle]
+pub extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const c_char) -> * mut atom_t
+{
+    let bindings = unsafe{&(*bindings).bindings};
+    let var = VariableAtom::new(cstr_into_string(var_name));
+
+    match bindings.resolve(&var) {
+        None => { ptr::null_mut() }
+        Some(atom) => { atom_into_ptr(atom) }
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindings_right: *const bindings_t) -> *mut bindings_t
+{
+    let bindings_l = unsafe{ &(*bindings_left).bindings };
+    let bindings_r = unsafe{ &(*bindings_right).bindings };
+
+    match Bindings::merge(bindings_l, bindings_r){
+        None => { ptr::null_mut() }
+        Some(merged) => { bindings_into_ptr(merged)}
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_name: *const c_char) -> *mut atom_t {
+    let bindings = unsafe{&mut(*bindings).bindings};
+    let var = VariableAtom::new(cstr_into_string(var_name));
+
+    match bindings.resolve_and_remove(&var) {
+        None => { ptr::null_mut() }
+        Some(removed) =>{ atom_into_ptr(removed) }
+    }
+}
+
+// end of bindings
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
@@ -224,8 +326,16 @@ pub fn atom_into_ptr(atom: Atom) -> *mut atom_t {
     Box::into_raw(Box::new(atom_t{ atom }))
 }
 
+pub fn bindings_into_ptr(bindings: Bindings) -> *mut bindings_t {
+    Box::into_raw(Box::new(bindings_t{bindings}))
+}
+
 pub fn ptr_into_atom(atom: *mut atom_t) -> Atom {
     unsafe{ Box::from_raw(atom) }.atom
+}
+
+pub fn ptr_into_bindings(bindings: *mut bindings_t) -> Bindings {
+    unsafe {Box::from_raw(bindings)}.bindings
 }
 
 fn vec_atom_into_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {
@@ -262,29 +372,8 @@ impl CGrounded {
         (self.api().free)(self.get_mut_ptr());
     }
 
-    extern "C" fn match_callback(cbindings: bindings_t, context: *mut c_void) {
-        fn var_from_name(name: &str) -> VariableAtom {
-            let ind = name.rfind('#');
-            if let Some(i) = ind {
-                let name_id = &name[0..i];
-                let id_str = &name[i+1..name.len()];
-                let id = id_str.parse::<usize>().unwrap();
-                VariableAtom::new_id(name_id, id)
-            } else {
-                VariableAtom::new(name)
-            }
-        }
-
-        let cbindings = unsafe { slice::from_raw_parts(cbindings.items, cbindings.size) };
-        let mut bindings = Bindings::new();
-        for i in 0..cbindings.len() {
-            let name = cstr_as_str(cbindings[i].var as *const c_char);
-            let var = var_from_name(name);
-            let atom = ptr_into_atom(cbindings[i].atom);
-            bindings.add_var_binding(var, atom);
-        }
-        mem::forget(cbindings);
-
+    extern "C" fn match_callback(cbindings: *mut bindings_t, context: *mut c_void) {
+        let bindings = ptr_into_bindings(cbindings);
         let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
         vec_bnd.push(bindings);
     }
@@ -361,20 +450,19 @@ impl Drop for CGrounded {
 mod tests {
 use super::*;
 use std::ptr;
+
     #[test]
     pub fn test_match_callback() {
-        let var = str_as_cstr("var#1");
-        let atom = atom_into_ptr(Atom::sym("atom_test"));
-        let vec = vec![ var_atom_t{ var: var.as_ptr(), atom } ];
-        let bindings = (&vec).into();
-        
+
+        let cbindings = bindings_into_ptr(bind!{var: expr!("atom_test")} );
+
         let mut results: Vec<Bindings> = Vec::new();
         let context = ptr::addr_of_mut!(results).cast::<c_void>();
 
-        CGrounded::match_callback(bindings, context);
+        CGrounded::match_callback( cbindings, context);
 
         assert_eq!(results, vec![Bindings::from(vec![
-                (VariableAtom::new_id("var", 1), Atom::sym("atom_test"))])]);
+                (VariableAtom::new("var"), Atom::sym("atom_test"))])]);
     }
 
 }

@@ -59,7 +59,7 @@ void check_atoms(atom_array_t act_atoms, void* context) {
         free(actual_str);
         ++i;
     }
-    ck_assert_msg(i == act_atoms.size && !exp_atoms[i], "actual size: %u, expected size: %u", act_atoms.size, i);
+    ck_assert_msg(i == act_atoms.size && !exp_atoms[i], "actual size: %lu, expected size: %u", act_atoms.size, i);
 }
 
 START_TEST (test_get_atom_types)
