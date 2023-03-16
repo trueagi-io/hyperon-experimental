@@ -51,7 +51,7 @@ instead.
 ### Rust
 
 When working on Rust C API prefer making `unsafe` blocks as small as possible.
-It allows easily detect blocks which can be a source of issues. Usually it is
+This makes it easier to find blocks that might be source of issues. Usually it is
 not required to mark C API functions `unsafe` because they are not intended to
 be used from the Rust safe code.
 
