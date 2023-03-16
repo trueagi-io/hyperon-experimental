@@ -3,6 +3,8 @@
 
 #include <hyperon/hyperon.h>
 
+#include <optional>
+
 namespace py = pybind11;
 
 template<class T, size_t N>
@@ -17,6 +19,7 @@ struct CPtr {
 
 using CAtom = CPtr<atom_t>;
 using CVecAtom = CPtr<vec_atom_t>;
+using CBindings = CPtr<bindings_t>;
 using CGroundingSpace = CPtr<grounding_space_t>;
 using CTokenizer = CPtr<tokenizer_t>;
 using CStepResult = CPtr<step_result_t>;
@@ -32,6 +35,11 @@ static void copy_atoms(atom_array_t atoms, void* context) {
     for (size_t i = 0; i < atoms.size; ++i) {
         list->append(CAtom(atom_clone(atoms.items[i])));
     }
+}
+
+static void copy_atom_to_dict(const var_atom_t* atom, void* context) {
+    py::dict& pybindings = *static_cast<py::dict*>(context);
+    pybindings[atom->var] = CAtom(atom->atom);
 }
 
 static void copy_lists_of_atom(atom_array_t atoms, void* context) {
@@ -54,7 +62,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 
 extern "C" {
     exec_error_t *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* args, struct vec_atom_t* ret);
-    void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bindings_t callback, void *context);
+    void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, bindings_mut_callback_t callback, void *context);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
     size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
@@ -117,7 +125,7 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
     }
 }
 
-void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bindings_t callback, void *context) {
+void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, bindings_mut_callback_t callback, void *context) {
     py::object hyperon = py::module_::import("hyperon");
     py::function call_match_on_grounded_atom = hyperon.attr("call_match_on_grounded_atom");
 
@@ -127,17 +135,16 @@ void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, lambda_t_bi
 
     for (py::handle result: results) {
         py::dict pybindings = result.cast<py::dict>();
-        size_t size = py::len(pybindings);
-        std::string vars[size];
-        var_atom_t array[size];
-        size_t i = 0;
+
+        struct bindings_t* cbindings = bindings_new();
         for (auto var_atom : pybindings) {
-            vars[i] = var_atom.first.cast<py::str>();
-            array[i].var = vars[i].c_str();
-            array[i].atom = atom_clone(var_atom.second.attr("catom").cast<CAtom>().ptr);
-            ++i;
+            const std::string var  = var_atom.first.cast<py::str>();
+            CAtom atom = atom_clone(var_atom.second.attr("catom").cast<CAtom>().ptr);
+            var_atom_t varAtom{.var = var.c_str(), .atom = atom.ptr };
+
+            bindings_add_var_binding(cbindings, &varAtom);
         }
-        bindings_t cbindings = { array, size };
+
         callback(cbindings, context);
     }
 }
@@ -166,6 +173,14 @@ size_t py_display(const struct gnd_t* _cgnd, char* buffer, size_t size) {
 
 void py_free(struct gnd_t* _cgnd) {
     delete static_cast<GroundedObject const*>(_cgnd);
+}
+
+void copy_to_list_callback(var_atom_t const* varAtom, void* context){
+
+    pybind11::list& var_atom_list = *( (pybind11::list*)(context) );
+
+    var_atom_list.append(
+            std::make_pair(std::string(varAtom->var), CAtom(atom_clone(varAtom->atom))));
 }
 
 struct CConstr {
@@ -275,6 +290,46 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("vec_atom_push", [](CVecAtom vec, CAtom atom) { vec_atom_push(vec.ptr, atom_clone(atom.ptr)); }, "Push atom into vector");
     m.def("vec_atom_pop", [](CVecAtom vec) { return CAtom(vec_atom_pop(vec.ptr)); }, "Push atom into vector");
 
+    py::class_<CBindings>(m, "CBindings");
+    m.def("bindings_new", []() { return CBindings(bindings_new()); }, "New bindings");
+    m.def("bindings_free", [](CBindings bindings) { bindings_free(bindings.ptr);}, "Free bindings" );
+    m.def("bindings_clone", [](CBindings bindings) { return CBindings(bindings_clone(bindings.ptr)); }, "Deep copy if bindings");
+    m.def("bindings_merge", [](CBindings left, CBindings right) { return CBindings(bindings_merge(left.ptr, right.ptr));}, "Merges bindings");
+    m.def("bindings_eq", [](CBindings left, CBindings right){ return bindings_eq(left.ptr, right.ptr);}, "Compares bindings"  );
+    m.def("bindings_add_var_bindings",
+          [](CBindings bindings, char const* varName, CAtom atom) {
+              var_atom_t var_atom{.var = varName, .atom = atom_clone(atom.ptr) };
+              return bindings_add_var_binding(bindings.ptr, &var_atom);
+          },
+          "Links variable to atom" );
+    m.def("bindings_is_empty", [](CBindings bindings){ return bindings_is_empty(bindings.ptr);}, "Returns true if bindings is empty");
+
+    m.def("bindings_resolve", [](CBindings bindings, char const* varName) -> std::optional<CAtom> {
+            auto const res = bindings_resolve(bindings.ptr, varName);
+            return nullptr == res ? std::nullopt : std::optional(CAtom(res));
+        }, "Resolve" );
+
+    m.def("bindings_resolve_and_remove", [](CBindings bindings, char const* varName) -> std::optional<CAtom> {
+            auto const res = bindings_resolve_and_remove(bindings.ptr, varName);
+            return nullptr == res ? std::nullopt : std::optional(CAtom(res));
+        }, "Resolve and remove" );
+
+    m.def("bindings_to_str", [](CBindings bindings) {
+        std::string str;
+        bindings_to_str(bindings.ptr, copy_to_string, &str);
+        return str;
+    }, "Convert bindings to human readable string");
+
+    m.def("bindings_list", [](CBindings bindings) -> pybind11::list {
+        pybind11::list var_atom_list;
+        bindings_traverse(
+                bindings.ptr,
+                copy_to_list_callback,
+                &var_atom_list);
+
+        return var_atom_list;
+    }, "Returns iterator to traverse bindings");
+
     py::class_<CGroundingSpace>(m, "CGroundingSpace");
     m.def("grounding_space_new", []() { return CGroundingSpace(grounding_space_new()); }, "New grounding space instance");
     m.def("grounding_space_free", [](CGroundingSpace space) { grounding_space_free(space.ptr); }, "Free grounding space");
@@ -287,12 +342,10 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("grounding_space_query", [](CGroundingSpace space, CAtom pattern) {
             py::list results;
             grounding_space_query(space.ptr, pattern.ptr,
-                    [](bindings_t cbindings, void* context) {
+                    [](bindings_t const* cbindings, void* context) {
                         py::list& results = *(py::list*)context;
                         py::dict pybindings;
-                        for (size_t i = 0; i < cbindings.size; ++i) {
-                            pybindings[cbindings.items[i].var] = CAtom(cbindings.items[i].atom);
-                        }
+                        bindings_traverse(cbindings, copy_atom_to_dict, &pybindings );
                         results.append(pybindings);
                     }, &results);
             return results;

@@ -1,6 +1,7 @@
 import hyperonpy as hp
 from hyperonpy import AtomKind
 
+
 class Atom:
 
     def __init__(self, catom):
@@ -9,6 +10,7 @@ class Atom:
     def __del__(self):
         #import sys; sys.stderr.write("Atom._del_(" + str(self) + ")\n"); sys.stderr.flush()
         hp.atom_free(self.catom)
+
 
     def __eq__(self, other):
         return (isinstance(other, Atom) and
@@ -188,3 +190,63 @@ def ValueAtom(value, type_name=None, atom_id=None):
 
 def MatchableAtom(value, type_name=None, atom_id=None):
     return G(MatchableObject(value, atom_id), _type_sugar(type_name))
+
+
+class Bindings:
+
+    def __init__(self, bindings: hp.CBindings | None = None):
+        if bindings is None:
+            self.cbindings = hp.bindings_new()
+        else:
+            self.cbindings = bindings
+
+    def __del__(self):
+        if self.cbindings is not None:
+            hp.bindings_free(self.cbindings)
+
+    def __eq__(self, other):
+        return (isinstance(other, Bindings) and
+                hp.bindings_eq(self.cbindings, other.cbindings))
+
+    def __repr__(self):
+        return hp.bindings_to_str(self.cbindings)
+
+    def __deepcopy__(self, memodict={}):
+        return self.clone()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.cbindings is not None:
+            hp.bindings_free(self.cbindings)
+            self.cbindings = None
+
+    def clone(self):
+        return Bindings(hp.bindings_clone(self.cbindings))
+
+    @staticmethod
+    def merge(left, right):
+        return Bindings(hp.bindings_merge(left.cbindings, right.cbindings))
+
+    def add_var_bindings(self, var_name:str, atom: Atom) -> bool:
+        return hp.bindings_add_var_bindings(self.cbindings, var_name, atom.catom)
+
+    def is_empty(self) -> bool:
+        return hp.bindings_is_empty(self.cbindings)
+
+    def resolve(self, var_name: str) -> Atom | None:
+        raw_atom = hp.bindings_resolve(self.cbindings, var_name)
+        return None if raw_atom is None else Atom._from_catom(raw_atom)
+
+    def resolve_and_remove(self, var_name: str) -> Atom | None:
+        raw_atom = hp.bindings_resolve_and_remove(self.cbindings, var_name)
+        return None if raw_atom is None else Atom._from_catom(raw_atom)
+
+    def iterator(self):
+        res = hp.bindings_list(self.cbindings)
+        result = []
+        for r in res:
+            result.append((r[0], Atom._from_catom(r[1])))
+
+        return iter(result)

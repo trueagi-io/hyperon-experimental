@@ -10,6 +10,7 @@ macro(ADD_TESTS)
 endmacro()
 
 ADD_TESTS("test_atom.py")
+ADD_TESTS("test_bindings.py")
 ADD_TESTS("test_grounding_space.py")
 ADD_TESTS("test_examples.py")
 ADD_TESTS("test_extend.py")
