@@ -22,8 +22,8 @@ is less than 73 character long.
 Such commits looks better in GitHub history.
 
 Please don't include number and description of the issue into a commit summary
-line. Use `Fixes #<issue-number>` in the pull request description to link the
-PR to the issue.
+line. Use `Fixes #<issue-number>` in the pull request description instead
+to link the PR and the issue.
 
 PR should satisfy the following requirement before being merged:
 - contain latest changes from the repo;
@@ -34,5 +34,24 @@ Feel free to raise draft PR if you need an advice or help with your changes.
 
 ## Code style
 
-We have no specific code style rules for now. Please take a look at the
-existing code and stick to its style.
+We have small set of code style rules for now. The rule of thumb is to take a look
+at the existing code and stick to its style.
+
+### General
+
+If you want to leave some reminder in code, for example to fix somthing later,
+you can do it by two ways. Add a comment starting with `FIXME` to mark something
+which should be done before the PR is merged. Add a comment starting with `TODO`
+to mark the improvement which can be postponed and done later by a separate PR.
+Main purpose of `TODO` comment is to trigger a developer who looks at the code
+after you and make him fix the issue if it is apropriate. If change or question
+is big enough or it affects the API of the module it is better to raise an issue
+instead.
+
+### Rust
+
+When working on Rust C API prefere making `unsafe` blocks as small as possible.
+It allows easily detect blocks which can be a source of issues. Usually it is
+not required to mark C API functions `unsafe` because they are not intended to
+be used from the Rust safe code.
+
