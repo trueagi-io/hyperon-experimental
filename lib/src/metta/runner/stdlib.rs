@@ -709,6 +709,33 @@ impl Grounded for PrintlnOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub struct TraceOp {}
+
+impl Display for TraceOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "trace!")
+    }
+}
+
+impl Grounded for TraceOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, Atom::var("a"), Atom::var("a")])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("trace! expects two atoms as arguments");
+        let msg = args.get(0).ok_or_else(arg_error)?;
+        let val = args.get(1).ok_or_else(arg_error)?.clone();
+        eprintln!("{}", msg);
+        Ok(vec![val])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct NopOp {}
 
 impl Display for NopOp {
@@ -960,6 +987,8 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let println_op = Atom::gnd(PrintlnOp{});
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
+    let trace_op = Atom::gnd(TraceOp{});
+    tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
     let nop_op = Atom::gnd(NopOp{});
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
     let let_op = Atom::gnd(LetOp{});
