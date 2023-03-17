@@ -1,6 +1,6 @@
 import hyperonpy as hp
 from hyperonpy import AtomKind
-
+from typing import Union
 
 class Atom:
 
@@ -194,7 +194,7 @@ def MatchableAtom(value, type_name=None, atom_id=None):
 
 class Bindings:
 
-    def __init__(self, bindings: hp.CBindings | None = None):
+    def __init__(self, bindings: Union[hp.CBindings, None] = None):
         if bindings is None:
             self.cbindings = hp.bindings_new()
         else:
@@ -235,11 +235,11 @@ class Bindings:
     def is_empty(self) -> bool:
         return hp.bindings_is_empty(self.cbindings)
 
-    def resolve(self, var_name: str) -> Atom | None:
+    def resolve(self, var_name: str) -> Union[Atom, None]:
         raw_atom = hp.bindings_resolve(self.cbindings, var_name)
         return None if raw_atom is None else Atom._from_catom(raw_atom)
 
-    def resolve_and_remove(self, var_name: str) -> Atom | None:
+    def resolve_and_remove(self, var_name: str) -> Union[Atom, None]:
         raw_atom = hp.bindings_resolve_and_remove(self.cbindings, var_name)
         return None if raw_atom is None else Atom._from_catom(raw_atom)
 
