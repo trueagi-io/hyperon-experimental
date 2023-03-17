@@ -43,10 +43,10 @@ If you want to leave some reminder in code, for example to fix something later,
 you can do it by two ways. Add a comment starting with `FIXME` to mark something
 which should be done before the PR is merged. Add a comment starting with `TODO`
 to mark the improvement which can be postponed and done later by a separate PR.
-Main purpose of `TODO` comment is to trigger a developer who looks at the code
-after you and make him fix the issue if it is apropriate. If change or question
-is big enough or it affects the API of the module it is better to raise an issue
-instead.
+The main purpose of a `TODO` comment is to trigger a developer who looks at the
+code after you and make him fix the issue if it is appropriate. If the change or
+question is big enough or it affects the API of the module it is better to raise
+an issue instead.
 
 ### Rust
 
