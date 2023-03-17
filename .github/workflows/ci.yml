@@ -12,9 +12,6 @@ jobs:
   tests:
 
     runs-on: ubuntu-20.04
-    strategy:
-      matrix:
-        python-version: ["3.7"]
 
     steps:
       - name: Check out repository code
@@ -33,10 +30,10 @@ jobs:
           cargo build
           RUST_LOG=hyperon=debug cargo test
 
-      - name: Set up Python ${{ matrix.python-version }}
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ matrix.python-version }}
+          python-version: 3.7
 
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.1
