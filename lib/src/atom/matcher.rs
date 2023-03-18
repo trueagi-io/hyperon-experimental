@@ -995,15 +995,55 @@ mod test {
     }
 
     #[test]
-    fn match_atoms_with_custom_matcher_implementation() {
+    fn match_atoms_with_custom_matcher() {
         assert_match(
-            expr!({Rand{}}),
-            expr!((x)),
+            expr!( {Rand{}} ),
+            expr!(   (x)    ),
             vec![bind!{x: expr!({42})}]);
         assert_match(
-            expr!((x)),
-            expr!({Rand{}}),
+            expr!(   (x)    ),
+            expr!( {Rand{}} ),
             vec![bind!{x: expr!({42})}]);
+    }
+
+    #[derive(PartialEq, Clone, Debug, Copy)]
+    struct ReturnPairInX{}
+
+    impl Grounded for ReturnPairInX {
+        fn type_(&self) -> Atom {
+            Atom::sym("ReturnPairInX")
+        }
+        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+            execute_not_executable(self)
+        }
+        fn match_(&self, _other: &Atom) -> matcher::MatchResultIter {
+            let result = vec![ bind!{ x: expr!("B") }, bind!{ x: expr!("C") } ];
+            Box::new(result.into_iter())
+        }
+    }
+
+    impl Display for ReturnPairInX {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "ReturnPairInX")
+        }
+    }
+
+    #[ignore = "An API change in Bindings is required in order to implement this"]
+    #[test]
+    fn match_atoms_with_custom_matcher_split_results_by_adding_value() {
+        let pair = ReturnPairInX{};
+
+        assert_match(
+            expr!( { pair } ("A" x) ),
+            expr!(     s        s   ),
+            vec![ bind!{ s: expr!({ pair }), x: expr!("B") },
+                  bind!{ s: expr!({ pair }), x: expr!("C") } ]);
+
+        assert_match(
+            expr!( { pair }    y    y ),
+            expr!(     s    ("A" x) s ),
+            vec![ bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("B") },
+                  bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("C") } ]);
     }
 
     #[ignore = "Requires sorting inside Bindings to be stable"]
@@ -1082,5 +1122,40 @@ mod test {
             VariableAtom::new("rightE"), VariableAtom::new("rightF")]));
 
         assert_eq!(narrow, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
+    }
+
+    #[ignore = "An API change is required in order to implement this"]
+    #[test]
+    fn bindings_add_var_value_splits_bindings() {
+        let mut bindings = Bindings::new();
+        let pair = ReturnPairInX{};
+
+        // ({ x -> B, x -> C } (A $x)) ~ ($s $s)
+        bindings.add_var_binding(VariableAtom::new("s"), expr!({ pair }));
+        bindings.add_var_binding(VariableAtom::new("s"), expr!("A" x));
+
+        // Bindings::add_var_binding() should return a list of resulting
+        // Bindings instances.
+        // assert_eq_no_order!(result,
+        //    vec![ bind!{ s: expr!({ pair }), x: expr!("B") },
+        //          bind!{ s: expr!({ pair }), x: expr!("C") } ]);
+    }
+
+    #[ignore = "An API change is required in order to implement this"]
+    #[test]
+    fn bindings_add_var_equality_splits_bindings() {
+        let mut bindings = Bindings::new();
+        let pair = ReturnPairInX{};
+
+        // ({ x -> B, x -> C } $y $y) ~ ($s (A $x) $s)
+        bindings.add_var_binding(VariableAtom::new("s"), expr!({ pair }));
+        bindings.add_var_binding(VariableAtom::new("y"), expr!("A" x));
+        bindings.add_var_equality(&VariableAtom::new("y"), &VariableAtom::new("s"));
+
+        // Bindings::add_var_binding() should return a list of resulting
+        // Bindings instances.
+        // assert_eq_no_order!(result,
+        //    vec![ bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("B") },
+        //          bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("C") } ]);
     }
 }
