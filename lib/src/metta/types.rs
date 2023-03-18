@@ -59,7 +59,7 @@ fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
 
 fn check_types(actual: &[Vec<Atom>], expected: &[Atom], bindings: &mut Bindings) -> bool {
     log::trace!("check_types: actual: {:?}, expected: {:?}, bindings: {}", actual, expected, bindings);
-    match (actual, expected) {
+    let matched = match (actual, expected) {
         ([actual, actual_tail @ ..], [expected, expected_tail @ ..]) => {
             actual.iter().map(|actual| {
                 match_reducted_types(actual, expected, bindings)
@@ -68,7 +68,9 @@ fn check_types(actual: &[Vec<Atom>], expected: &[Atom], bindings: &mut Bindings)
         },
         ([], []) => true,
         _ => false,
-    }
+    };
+    log::trace!("check_types: actual: {:?}, expected: {:?}, bindings: {}, matched: {}", actual, expected, bindings, matched);
+    matched
 }
 
 /// Returns true if passed type is a type of function.
