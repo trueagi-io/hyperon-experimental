@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::atom::Atom;
-use crate::atom::matcher::Bindings;
+use crate::atom::matcher::{Bindings, apply_bindings_to_atom};
 
 /// Contains information about space modification event.
 #[derive(Clone, Debug, PartialEq)]
@@ -112,6 +112,7 @@ pub trait Space {
     ///
     /// ```
     /// use hyperon::{expr, assert_eq_no_order};
+    /// use hyperon::space::Space;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let space = GroundingSpace::from_vec(vec![expr!("A" "B"), expr!("A" "C")]);
@@ -120,7 +121,11 @@ pub trait Space {
     ///
     /// assert_eq_no_order!(result, vec![expr!("D" "B"), expr!("D" "C")]);
     /// ```
-    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom>;
+    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
+        self.query(pattern).drain(0..)
+            .map(| bindings | apply_bindings_to_atom(template, &bindings))
+            .collect()
+    }
 }
 
 /// Mutable space trait.
