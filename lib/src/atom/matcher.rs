@@ -323,26 +323,28 @@ impl Bindings {
     /// TODO: Rename to `merge` when clients have adopted new API 
     pub fn merge_v2(a: &Bindings, b: &Bindings) -> Vec<Bindings> {
         log::trace!("Bindings::merge: a: {}, b: {}", a, b);
-        let mut var_ids: HashMap<u32, VariableAtom> = HashMap::new();
-        let results = b.id_by_var.iter().fold(vec![a.clone()],
-            |results, (var, var_id)| {
-                //TODO: Vitaly to review this logic
+        
+        let results = b.id_by_var.iter().fold(vec![(a.clone(), HashMap::new())],
+            |results, (var, var_id)| -> Vec<(Bindings, HashMap<u32, VariableAtom>)> {
                 let mut all_results = vec![];
-                for result in results {
-                    let new_results = if let Some(first_var) = var_ids.get(&var_id) {
+                
+                for (result, mut b_vars_merged) in results {
+                    let new_results = if let Some(first_var) = b_vars_merged.get(&var_id) {
                         result.with_var_equality(first_var, var)
                     } else {
-                        var_ids.insert(*var_id, var.clone());
+                        b_vars_merged.insert(*var_id, var.clone());
                         if let Some(value) = b.value_by_id.get(var_id) {
                             result.add_var_binding_v2(var, value)
                         } else {
                             vec![result.with_var_no_value(var)]
                         }
                     };
-                    all_results.extend(new_results);
+                    all_results.extend(new_results.into_iter().map(|new_binding| (new_binding, b_vars_merged.clone())));
                 }
                 all_results
             });
+
+        let results = results.into_iter().map(|(result, _)| result).collect();
         log::trace!("Bindings::merge: {} ^ {} -> {:?}", a, b, results);
         results
     }
@@ -580,8 +582,13 @@ impl PartialEq for Bindings {
 }
 
 impl From<Vec<(VariableAtom, Atom)>> for Bindings {
-
     fn from(pairs: Vec<(VariableAtom, Atom)>) -> Self {
+        Bindings::from(&pairs[..])
+    }
+}
+
+impl From<&[(VariableAtom, Atom)]> for Bindings {
+    fn from(pairs: &[(VariableAtom, Atom)]) -> Self {
         let mut bindings = Bindings::new();
         for (var, val) in pairs {
             let mut result_vec = match val {
@@ -591,12 +598,11 @@ impl From<Vec<(VariableAtom, Atom)>> for Bindings {
             match result_vec.len() {
                 0 => { bindings = Bindings::new(); },
                 1 => { bindings = result_vec.pop().unwrap(); },
-                _ => { panic!("Error: Multiple Bindings created from Atoms Vec"); }
+                _ => { panic!("Error: Multiple Bindings created from Atoms slice"); }
             }
         }
         bindings
     }
-
 }
 
 /// Iterator over `(&VariableAtom, Atom)` pairs in [Bindings].
@@ -1048,7 +1054,6 @@ mod test {
         }
     }
 
-    #[ignore = "An API change in Bindings is required in order to implement this"]
     #[test]
     fn match_atoms_with_custom_matcher_split_results_by_adding_value() {
         let pair = ReturnPairInX{};
@@ -1176,4 +1181,57 @@ mod test {
            vec![ bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("B") },
                  bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("C") } ]);
     }
+
+    #[test]
+    fn bindings_merge_custom_matching() {
+
+        /// Assigner matches the expression atoms in the following form (<variable> <value>...)
+        /// and returns the list of the bindings (one per each value) which assign
+        /// values to the variable. For example being matched with `($x A B)` atom it
+        /// returns `[ { $x = A }, { $x = B } ]`. This grounded atom is implemented for
+        /// testing purposes.
+        #[derive(PartialEq, Clone, Debug, Copy)]
+        struct Assigner{}
+
+        impl Grounded for Assigner {
+            fn type_(&self) -> Atom {
+                Atom::sym("Assigner")
+            }
+            fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+                execute_not_executable(self)
+            }
+            fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+                match other.iter().collect::<Vec<&Atom>>().as_slice() {
+                    [ Atom::Variable(var), values @ .. ] => {
+                        let result: Vec<Bindings> = values.into_iter()
+                            .map(|&val| { Bindings::from(&[(var.clone(), val.clone())][..]) })
+                            .collect();
+                        Box::new(result.into_iter())
+                    },
+                    _ => panic!("Assigner expects (<variable> <values>...) atom as a query"),
+                }
+            }
+        }
+
+        impl Display for Assigner {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(f, "Assigner")
+            }
+        }
+
+        let assigner = Assigner{};
+
+        let a = bind!{ a: expr!({ assigner }), b: expr!({ assigner }) };
+        let b = bind!{ a: expr!(x "C" "D"), b: expr!(y "E" "F") };
+
+        let merge = Bindings::merge_v2(&a, &b);
+
+        assert_eq_no_order!(merge, vec![
+            bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("C"), y: expr!("E") },
+            bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("C"), y: expr!("F") },
+            bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("D"), y: expr!("E") },
+            bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("D"), y: expr!("F") },
+        ]);
+    }
+
 }
