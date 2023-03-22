@@ -150,13 +150,6 @@ impl Bindings {
         }
     }
 
-    // TODO: There is no longer a functional difference between `with_var_equality` and `add_var_equality`
-    //   so one of them is probably unnecessary.
-    // Also, Should this function be made public?  The previous comment said that was the idea.
-    fn with_var_equality(self, a: &VariableAtom, b: &VariableAtom) -> Vec<Bindings> {
-        self.add_var_equality(a, b)
-    }
-
     fn add_var_equality(mut self, a: &VariableAtom, b: &VariableAtom) -> Vec<Bindings> {
         match (self.id_by_var.get(a).copied(), self.id_by_var.get(b).copied()) {
             (Some(a_var_id), Some(b_var_id))  =>
@@ -216,12 +209,6 @@ impl Bindings {
         self.next_var_id = self.next_var_id + 1;
         next_var_id
     }
-
-    // TODO: There is no longer a functional difference between `with_var_binding` and `add_var_binding_v2`
-    //   so one of them is probably unnecessary.  (Commenting out pending deletion)
-    // fn with_var_binding<T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>>(mut self, var: T1, value: T2) -> Vec<Bindings> {
-    //     self.add_var_binding(var, value)
-    // }
 
     /// Tries to insert `value` as a binding for the `var`. If `self` already
     /// has binding for the `var` and it is not matchable with the `value` then
@@ -330,7 +317,7 @@ impl Bindings {
                 
                 for (result, mut b_vars_merged) in results {
                     let new_results = if let Some(first_var) = b_vars_merged.get(&var_id) {
-                        result.with_var_equality(first_var, var)
+                        result.add_var_equality(first_var, var)
                     } else {
                         b_vars_merged.insert(*var_id, var.clone());
                         if let Some(value) = b.value_by_id.get(var_id) {
@@ -698,7 +685,7 @@ fn match_atoms_recursively(left: &Atom, right: &Atom) -> MatchResultIter {
     match (left, right) {
         (Atom::Symbol(a), Atom::Symbol(b)) if a == b => once(Bindings::new()),
         (Atom::Variable(dv), Atom::Variable(pv)) => {
-            let bindings = Bindings::new().with_var_equality(dv, pv);
+            let bindings = Bindings::new().add_var_equality(dv, pv);
             Box::new(bindings.into_iter())
         }
         (Atom::Variable(v), b) => {
@@ -736,7 +723,6 @@ fn match_atoms_recursively(left: &Atom, right: &Atom) -> MatchResultIter {
 pub fn match_result_product(prev: MatchResultIter, next: MatchResultIter) -> MatchResultIter {
     let next : Vec<Bindings> = next.collect();
     log::trace!("match_result_product_iter, next: {:?}", next);
-    //TODO: Vitaly to review this logic
     let result_iter = prev.flat_map(move |p| -> Vec<Bindings> {
         next.iter().flat_map(|n| {
             Bindings::merge_v2(&p, n)
@@ -1005,8 +991,8 @@ mod test {
             match other {
                 Atom::Expression(expr) if expr.children().len() == 1 =>
                     match expr.children()[0] {
-                        Atom::Variable(ref var) => Box::new(std::iter::once(
-                            Bindings::new().add_var_binding_v2(var, expr!({42})).pop().unwrap())),
+                        Atom::Variable(ref var) => Box::new(
+                            Bindings::new().add_var_binding_v2(var, expr!({42})).into_iter()),
                         _ => Box::new(std::iter::empty()),
                 }
                 _ => Box::new(std::iter::empty()),
