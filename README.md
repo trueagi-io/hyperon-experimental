@@ -18,12 +18,12 @@ A docker image can be used as a ready to run environment.
 
 Build docker image running:
 ```
-docker build -t hyperon https://raw.githubusercontent.com/trueagi-io/hyperon-experimental/main/Dockerfile
+docker build -t trueagi/hyperon https://raw.githubusercontent.com/trueagi-io/hyperon-experimental/main/Dockerfile
 ```
 
 Run the image:
 ```
-docker run --rm -ti hyperon
+docker run --rm -ti trueagi/hyperon
 ```
 
 Resulting container contains the latest code from the repo compiled and ready
