@@ -18,12 +18,12 @@ A docker image can be used as a ready to run environment.
 
 Build docker image running:
 ```
-docker build -t hyperon https://raw.githubusercontent.com/trueagi-io/hyperon-experimental/main/Dockerfile
+docker build -t trueagi/hyperon https://raw.githubusercontent.com/trueagi-io/hyperon-experimental/main/Dockerfile
 ```
 
 Run the image:
 ```
-docker run --rm -ti hyperon
+docker run --rm -ti trueagi/hyperon
 ```
 
 Resulting container contains the latest code from the repo compiled and ready
@@ -35,7 +35,7 @@ to run.  If the docker image doesn't work, please raise an
 Install latest stable Rust (1.63 or later), see [Rust installation
 page](https://www.rust-lang.org/tools/install). Make sure your
 `PATH` variable includes `$HOME/.cargo/bin` directory after installing
-Rust (see the Notes at the installation page). Python 3 (3.6 or later),
+Rust (see the Notes at the installation page). Python 3 (3.7 or later),
 GCC (7.5 or later) and CMake (3.10 or later) are required to build C and
 Python API.
 

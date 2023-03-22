@@ -10,7 +10,9 @@ on:
 
 jobs:
   tests:
-    runs-on: ubuntu-latest
+
+    runs-on: ubuntu-20.04
+
     steps:
       - name: Check out repository code
         uses: actions/checkout@v2
@@ -27,6 +29,11 @@ jobs:
           cargo check
           cargo build
           RUST_LOG=hyperon=debug cargo test
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.7
 
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.1
