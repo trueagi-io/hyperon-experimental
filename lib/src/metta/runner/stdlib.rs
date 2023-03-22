@@ -1,7 +1,8 @@
 use crate::*;
 use crate::matcher::MatchResultIter;
+use crate::space::Space;
+use crate::space::grounding::GroundingSpace;
 use crate::metta::*;
-use crate::metta::space::grounding::GroundingSpace;
 use crate::metta::text::Tokenizer;
 use crate::metta::interpreter::interpret;
 use crate::metta::runner::Metta;

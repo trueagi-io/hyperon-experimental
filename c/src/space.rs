@@ -1,4 +1,5 @@
 use hyperon::space::grounding::*;
+use hyperon::space::Space;
 
 use crate::atom::*;
 use crate::util::*;
