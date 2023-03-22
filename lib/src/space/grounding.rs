@@ -315,28 +315,6 @@ impl GroundingSpace {
         result
     }
 
-    /// Executes `pattern` query on the space and for each result substitutes
-    /// variables in `template` by the values from `pattern`. Returns results
-    /// of the substitution.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use hyperon::{expr, assert_eq_no_order};
-    /// use hyperon::space::grounding::GroundingSpace;
-    ///
-    /// let space = GroundingSpace::from_vec(vec![expr!("A" "B"), expr!("A" "C")]);
-    ///
-    /// let result = space.subst(&expr!("A" x), &expr!("D" x));
-    ///
-    /// assert_eq_no_order!(result, vec![expr!("D" "B"), expr!("D" "C")]);
-    /// ```
-    pub fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        self.query(pattern).drain(0..)
-            .map(| bindings | matcher::apply_bindings_to_atom(template, &bindings))
-            .collect()
-    }
-
     /// Returns the iterator over content of the space.
     pub fn iter(&self) -> SpaceIter {
         SpaceIter::new(GroundingSpaceIter::new(self))
@@ -349,9 +327,6 @@ impl Space for GroundingSpace {
     }
     fn query(&self, query: &Atom) -> Vec<Bindings> {
         GroundingSpace::query(self, query)
-    }
-    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        GroundingSpace::subst(self, pattern, template)
     }
 }
 
