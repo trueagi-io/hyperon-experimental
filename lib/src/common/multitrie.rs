@@ -1,244 +1,496 @@
-use std::fmt::Debug;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::collections::VecDeque;
-use std::hash::Hash;
+//! Multi-value trie with double side matching.
+//!
+//! Key of the trie is a sequence of tokens. The most common token type is
+//! an [TrieToken::Exact] token. It contains a value and matches with another [TrieToken::Exact] token
+//! having the equal value. For example key `[ Exact(A), Exact(B) ]` matches with
+//! the equal key but doesn't match with `[ Exact(A), Exact(C) ]`.
+//! But [TrieKey] containing [TrieToken::Exact] token is not the only kind of keys supported.
+//! [MultiTrie] also supports wildcards and sub-expressions.
+//!
+//! Subexpression is a part of the key between a pair of left and right parentheses.
+//! [TrieToken::LeftPar] and [TrieToken::RightPar] are also kinds of tokens.
+//! Parentheses mark the edges of the key subsequence which can be matched as a whole.
+//! Exact token doesn't match with a part of a subexpression unless it is also
+//! a part of a subexpression and located on the same position as a matched token.
+//! Subexpressions can be nested and in such case parentheses should be correctly balanced.
+//! For example `[ Exact(A), LeftPar, Exact(B), RightPar ]` is a key which contains
+//! a subexpression. It can be matched with the same key but doesn't match with
+//! `[ Exact(A), Exact(B) ]`.
+//!
+//! The [TrieToken::Wildcard] is a last kind of token which matches the exact value, the whole
+//! sub-expression or another wildcard. It can recognize anything but when dealing
+//! with subexpression it matches with the whole subexpression only. It cannot
+//! be matched with a part of the subexpression or with the left or right parenthesis.
+//! For example `[ Exact(A), * ]` key matches both `[ Exact(A), Exact(B) ]` and
+//! `[ Exact(A), LeftPar, Exact(B), RightPar ]` keys.
+//!
+//! Wildcard can be used not only for getting value but also as a key for
+//! keeping value. Thus a single key in the [MultiTrie] can match many different keys
+//! for retrieve value. In the example above we could put two
+//! values with `[ Exact(A), Exact(B) ]` and `[ Exact(A), LeftPar, Exact(B), RightPar ]`
+//! keys into the trie and then get both of them using `[ Exact(A), * ]` key.
+//! Or vice versa put a single value using `[ Exact(A), * ]` key and extract
+//! it using two keys above. This is what is called double-side matching.
+//!
+//! Because of double-side matching [MultiTrie] cannot guarantie that single key
+//! corresponds to the single value. Thus [MultiTrie::get] call returns the
+//! iterator through the values which keys are matched with given key.
 
+use std::fmt::{Debug, Display};
+use std::collections::{HashMap, HashSet, VecDeque};
+use std::hash::Hash;
+use std::marker::PhantomData;
+use crate::common::shared::Shared;
+
+/// Single token of [TrieKey]. Each kind of token has its own recognition rules.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
-pub enum NodeKey<T> {
+pub enum TrieToken<T> {
+    /// Exact token recognizes another instance of [TrieToken::Exact] which
+    /// has the equal value inside.
     Exact(T),
+    /// Whildcard token recognizes [TrieToken::Exact] with any value inside,
+    /// another [TrieToken::Wildcard] or the whole sub-expression from
+    /// [TrieToken::LeftPar] to [TrieToken::RightPar].
     Wildcard,
-    Expression(usize),
-    ExpressionBegin,
-    ExpressionEnd,
+    /// LeftPar designates beginning of the sub-expression. It recognizes
+    /// another [TrieToken::LeftPar] or [TrieToken::Wildcard].
+    LeftPar,
+    /// RightPar designates end of the sub-expression. It recognizes another
+    /// [TrieToken::RightPar] only.
+    RightPar,
 }
 
-impl<T: PartialEq> NodeKey<T> {
-    fn is_expr_begin_or_end(&self) -> bool {
-        *self == NodeKey::ExpressionEnd || *self == NodeKey::ExpressionBegin
+impl<T: PartialEq> TrieToken<T> {
+    fn is_parenthesis(&self) -> bool {
+        *self == TrieToken::RightPar || *self == TrieToken::LeftPar
     }
 }
 
+impl<T: Display> Display for TrieToken<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            TrieToken::Exact(val) => write!(f, "Exact({})", val),
+            TrieToken::Wildcard => write!(f, "*"),
+            TrieToken::LeftPar => write!(f, "LeftPar"),
+            TrieToken::RightPar => write!(f, "RightPar"),
+        }
+    }
+}
+
+/// Trie key is a sequence of [TrieToken].
 #[derive(PartialEq, Clone, Debug)]
-pub struct TrieKey<T>(VecDeque<NodeKey<T>>);
+pub struct TrieKey<T> {
+    tokens: VecDeque<TrieToken<T>>,
+    expr_size: VecDeque<usize>,
+}
 
 impl<T> TrieKey<T> {
-    pub fn from_list<V: Into<VecDeque<NodeKey<T>>>>(keys: V) -> Self {
-        Self(keys.into())
+    /// Function precalculates a distance between left and right left parentheses.
+    /// It is an optimisation and precalculated distance is used while traversing
+    /// a trie to quickly skip expression inside key when expression is matched
+    /// with a wildcard. Function gets a vector of [TrieToken] as arguments and
+    /// returns a vector of sizes. Returned vector contains non-zero distances
+    /// in positions which correspond to left parenthesis. Error is returned
+    /// when parentheses in passed tokens are unbalanced.
+    fn precalculate_expr_size(tokens: &VecDeque<TrieToken<T>>) -> Result<VecDeque<usize>, String> {
+        fn unbalanced_right(pos: usize) -> String {
+            format!(concat!("Unbalanced key: TrieToken::RightPar without ",
+                    "TrieToken::LeftPar at position {}"), pos)
+        }
+        fn unbalanced_left(left_par_stack: Vec<usize>) -> String {
+            format!(concat!("Unbalanced key: TrieToken::LeftPar without ",
+                    "TrieToken::Right at positions {:?}"), left_par_stack)
+        }
+
+        let mut left_par_stack = Vec::new();
+        let mut expr_size = VecDeque::with_capacity(tokens.len());
+        for (pos, token) in tokens.iter().enumerate() {
+            expr_size.push_back(0);
+            match token {
+                TrieToken::LeftPar => left_par_stack.push(pos),
+                TrieToken::RightPar => {
+                    let left_pos = left_par_stack.pop().ok_or_else(|| unbalanced_right(pos))?;
+                    expr_size[left_pos] = pos - left_pos;
+                },
+                _ => {},
+            }
+        }
+        if left_par_stack.is_empty() {
+            Ok(expr_size)
+        } else {
+            Err(unbalanced_left(left_par_stack))
+        }
     }
 
-    fn pop_head(&mut self) -> Option<NodeKey<T>> {
-        self.0.pop_front()
+    /// Pop [TrieToken] from the head of the key.
+    fn pop_head(&mut self) -> Option<TrieToken<T>> {
+        match (self.tokens.pop_front(), self.expr_size.pop_front()) {
+            (Some(token), _) => Some(token),
+            _ => None,
+        }
     }
 
-    fn pop_head_unchecked(&mut self) -> NodeKey<T> {
-        self.pop_head().expect("Unexpected end of key")
-    }
-
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
+    /// Return iterator throught sequence of [TrieToken] inside key.
+    fn iter(&self) -> TrieKeyIter<'_, T> {
+        TrieKeyIter{ key: self, pos: 0 }
     }
 }
 
-impl<T: Clone> TrieKey<T> {
-    fn skip_expr(&self, expr_len: usize) -> Self {
-        let no_expr_tail = self.0.iter().cloned().skip(expr_len).collect();
-        Self(no_expr_tail)
+impl<T, V: Into<VecDeque<TrieToken<T>>>> From<V> for TrieKey<T> {
+    fn from(tokens: V) -> Self {
+        let panic = |err| { panic!("{}", err) };
+        let tokens = tokens.into();
+        let expr_size = Self::precalculate_expr_size(&tokens).unwrap_or_else(panic);
+        Self{ tokens, expr_size }
     }
 }
-
-pub type MultiTrie<K, V> = MultiTrieNode<K, V>;
 
 #[derive(Clone)]
-pub struct MultiTrieNode<K, V> {
-    children: HashMap<NodeKey<K>, Box<MultiTrieNode<K, V>>>,
+struct TrieKeyIter<'a, T> {
+    key: &'a TrieKey<T>,
+    pos: usize,
+}
+
+impl<'a, T> TrieKeyIter<'a, T> {
+    /// Returns true when iterator returned the last token of the key.
+    fn is_end(&self) -> bool {
+        self.pos >= self.key.tokens.len()
+    }
+
+    /// Return a copy of the key with the first expression skipped.
+    /// Function expects iterator is on the next [TrieToken] after [TrieToken::LeftPar].
+    fn skip_expression(mut self) -> Self {
+        assert!(self.pos > 0 && self.key.expr_size[self.pos - 1] > 0);
+        self.pos += self.key.expr_size[self.pos - 1];
+        self
+    }
+}
+
+impl<'a, T> Iterator for TrieKeyIter<'a, T> {
+    type Item = &'a TrieToken<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let token = self.key.tokens.get(self.pos);
+        if token.is_some() {
+            self.pos = self.pos + 1;
+        }
+        token
+    }
+}
+
+impl<T: Display> Display for TrieKey<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[ ")
+            .and_then(|_| self.tokens.iter().take(1).fold(Ok(()),
+                |res, token| res.and_then(|_| write!(f, "{}", token))))
+            .and_then(|_| self.tokens.iter().skip(1).fold(Ok(()),
+                |res, token| res.and_then(|_| write!(f, ", {}", token))))
+            .and_then(|_| write!(f, " ]"))
+    }
+}
+
+/// Multi-value trie with double side matching. See [crate::common::multitrie]
+/// for the algorithm description.
+#[derive(Clone, Debug)]
+pub struct MultiTrie<K, V>(MultiTrieNode<K, V>);
+
+impl<K, V> MultiTrie<K, V>
+where
+    K: Debug + Clone + Eq + Hash,
+    V: Debug + Eq + Hash,
+{
+    /// Constructs new empty [MultiTrie] instance.
+    pub fn new() -> Self {
+        Self(MultiTrieNode::new())
+    }
+
+    /// Insert the given `value` by the given `key`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::common::multitrie::*;
+    ///
+    /// fn collect<'a, T, I>(it: I) -> Vec<T> where T: Clone + 'a, I: Iterator<Item=&'a T>, {
+    ///     it.cloned().collect()
+    /// }
+    ///
+    /// let mut trie = MultiTrie::new();
+    ///
+    /// let ab = TrieKey::from([TrieToken::Exact("A"), TrieToken::Exact("B")]);
+    /// let ac = TrieKey::from([TrieToken::Exact("A"), TrieToken::Exact("C")]);
+    ///
+    /// trie.insert(ab.clone(), "AB");
+    /// trie.insert(ac.clone(), "AC");
+    ///
+    /// assert_eq!(collect(trie.get(&ab)), vec!["AB"]);
+    /// assert_eq!(collect(trie.get(&ac)), vec!["AC"]);
+    /// ```
+    pub fn insert(&mut self, key: TrieKey<K>, value: V) {
+        log::debug!("MultiTrie::insert(): key: {:?}, value: {:?}", key, value);
+        self.0.insert(key, value)
+    }
+
+    /// Get values from the trie by the given `key`. Returns an iterator through
+    /// values found.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::common::multitrie::*;
+    ///
+    /// fn collect<'a, T, I>(it: I) -> Vec<T> where T: Clone + 'a, I: Iterator<Item=&'a T>, {
+    ///     it.cloned().collect()
+    /// }
+    ///
+    /// let mut trie = MultiTrie::new();
+    ///
+    /// let ax = TrieKey::from([TrieToken::Exact("A"), TrieToken::Wildcard]);
+    /// let ab = TrieKey::from([TrieToken::Exact("A"), TrieToken::Exact("B")]);
+    /// let ae = TrieKey::from([TrieToken::Exact("A"), TrieToken::LeftPar,
+    ///                         TrieToken::Exact("B"), TrieToken::RightPar]);
+    ///
+    /// trie.insert(ax.clone(), "A*");
+    ///
+    /// assert_eq!(collect(trie.get(&ax)), vec!["A*"]);
+    /// assert_eq!(collect(trie.get(&ab)), vec!["A*"]);
+    /// assert_eq!(collect(trie.get(&ae)), vec!["A*"]);
+    /// ```
+    pub fn get<'a>(&'a self, key: &'a TrieKey<K>) -> impl Iterator<Item=&'a V> + 'a {
+        self.0.get(key)
+    }
+
+    /// Remove the given `value` by the given `key`. Returns `true` if value was
+    /// found and removed and `false` otherwise.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::common::multitrie::*;
+    ///
+    /// fn collect<'a, T, I>(it: I) -> Vec<T> where T: Clone + 'a, I: Iterator<Item=&'a T>, {
+    ///     it.cloned().collect()
+    /// }
+    ///
+    /// let mut trie = MultiTrie::new();
+    ///
+    /// let ab = TrieKey::from([TrieToken::Exact("A"), TrieToken::Exact("B")]);
+    /// let ac = TrieKey::from([TrieToken::Exact("A"), TrieToken::Exact("C")]);
+    /// let ax = TrieKey::from([TrieToken::Exact("A"), TrieToken::Wildcard]);
+    ///
+    /// trie.insert(ab.clone(), "AB");
+    /// trie.insert(ac.clone(), "AC");
+    ///
+    /// assert_eq!(collect(trie.get(&ab)), vec!["AB"]);
+    /// assert!(trie.remove(&ax, &"AB"));
+    /// assert!(!trie.remove(&ax, &"AB"));
+    /// assert_eq!(trie.get(&ab).count(), 0);
+    /// assert_eq!(collect(trie.get(&ac)), vec!["AC"]);
+    /// ```
+    pub fn remove(&mut self, key: &TrieKey<K>, value: &V) -> bool {
+        log::debug!("MultiTrie::remove(): key: {:?}, value: {:?}", key, value);
+        self.0.remove(key, value)
+    }
+
+    #[cfg(test)]
+    fn size(&self) -> usize {
+        self.0.size()
+    }
+}
+
+/// Single node of the multi value trie.
+#[derive(Clone, Debug)]
+struct MultiTrieNode<K, V> {
+    /// Next node by the [TrieToken] key.
+    children: HashMap<TrieToken<K>, Shared<Self>>,
+    /// The shortcuts to the ends of expressions which are used
+    /// when expressions are matched by [TrieToken::Wildcard].
+    end_of_expr: HashMap<*mut Self, Shared<Self>>,
+    /// Values which keys are ended on this node.
     values: HashSet<V>,
 }
 
-macro_rules! multi_trie_explorer {
-    ( $ValueExplorer:ident, $UnexploredPath:ident, {$( $mut_:tt )?}, $raw_mut:tt ) => {
+impl<K, V> MultiTrieNode<K, V>
+where
+    K: Debug + Clone + Eq + Hash,
+    V: Debug + Eq + Hash,
+{
 
-        struct $UnexploredPath<K, V> {
-            node: * $raw_mut MultiTrieNode<K, V>,
-            key: TrieKey<K>,
+    fn new() -> Self {
+        Self{
+            children: HashMap::new(),
+            end_of_expr: HashMap::new(),
+            values: HashSet::new(),
         }
+    }
 
-        impl<K, V> $UnexploredPath<K, V> {
-            fn new(node: & $( $mut_ )? MultiTrieNode<K, V>, key: TrieKey<K>) -> Self {
-                let node_ptr = & $( $mut_ )? *node;
-                Self{ node: node_ptr, key }
-            }
+    fn is_empty(&self) -> bool {
+        self.children.is_empty() && self.values.is_empty()
+    }
+
+    fn get_or_insert_child(&mut self, token: TrieToken<K>) -> Shared<Self> {
+        self.children.entry(token).or_insert(Shared::new(Self::new())).clone()
+    }
+
+    /// Function gets first token from the iterator over key, gets a list of
+    /// nodes which can be matched by this key and returns an iterator over
+    /// triads `(reference to the token, reference to the node, tail of the iterator)`.
+    /// This function is used to iterate through nodes inside [MultiTrieNode::remove]
+    /// and [MultiTrieNode::get] functions.
+    fn next<'a, 'b: 'a>(&'a self, mut key: TrieKeyIter<'b, K>) ->
+        impl Iterator<Item=(Option<&'a TrieToken<K>>, &'a Shared<Self>, TrieKeyIter<'b, K>)>
+    {
+        let mut result = Vec::new();
+        match key.next() {
+            Some(token) => match token {
+                TrieToken::Exact(_) => {
+                    self.children.get(token).map(|child| result.push((Some(token), child, key.clone())));
+                    self.children.get(&TrieToken::Wildcard).map(|child| result.push((Some(&TrieToken::Wildcard), child, key)));
+                },
+                TrieToken::RightPar => {
+                    self.children.get(token).map(|child| result.push((Some(token), child, key)));
+                },
+                TrieToken::LeftPar => {
+                    self.children.get(&TrieToken::LeftPar)
+                        .map(|child| result.push((Some(&TrieToken::LeftPar), child, key.clone())));
+                    self.children.get(&TrieToken::Wildcard)
+                        .map(|child| result.push((Some(&TrieToken::Wildcard), child, key.skip_expression())));
+                },
+                TrieToken::Wildcard => {
+                    self.children.iter()
+                        .filter(|(token, _child)| !token.is_parenthesis())
+                        .for_each(|(token, child)| result.push((Some(token), child, key.clone())));
+                    self.end_of_expr.values()
+                        .for_each(|child| result.push((None, child, key.clone())));
+                },
+            },
+            None => {},
         }
+        result.into_iter()
+    }
 
-        struct $ValueExplorer<'a, K, V, ExploringStrategy>
-            where ExploringStrategy: Fn(&'a $( $mut_ )? MultiTrieNode<K, V>,
-                  TrieKey<K>, &mut dyn FnMut($UnexploredPath<K, V>))
-        {
-            unexplored_queue: Vec<$UnexploredPath<K, V>>,
-            strategy: ExploringStrategy,
-            _marker: std::marker::PhantomData<&'a $( $mut_ )? MultiTrieNode<K, V>>,
-        }
+    fn remove(&mut self, key: &TrieKey<K>, value: &V) -> bool {
+        self.remove_internal(key.iter(), value)
+    }
 
-        impl<'a, K, V, ExploringStrategy> $ValueExplorer<'a, K, V, ExploringStrategy>
-            where ExploringStrategy: Fn(&'a $( $mut_ )? MultiTrieNode<K, V>,
-                  TrieKey<K>, &mut dyn FnMut($UnexploredPath<K, V>))
-        {
-            fn new(node: &'a $( $mut_ )? MultiTrieNode<K, V>, key: TrieKey<K>, strategy: ExploringStrategy) -> Self {
-                let unexplored_queue = vec![$UnexploredPath::new(node, key)];
-                Self{ unexplored_queue, strategy, _marker: std::marker::PhantomData }
-            }
-
-            fn explore(&mut self, node: * $raw_mut MultiTrieNode<K, V>, key: TrieKey<K>) {
-                let node = unsafe{ & $( $mut_ )? *node};
-                let unexplored_queue = &mut self.unexplored_queue;
-                (self.strategy)(node, key, &mut |key| unexplored_queue.push(key));
-            }
-        }
-
-        impl<'a, K, V, ExploringStrategy> Iterator for $ValueExplorer<'a, K, V, ExploringStrategy>
-            where ExploringStrategy: Fn(&'a $( $mut_ )? MultiTrieNode<K, V>,
-                  TrieKey<K>, &mut dyn FnMut($UnexploredPath<K, V>))
-        {
-            type Item = &'a $( $mut_ )? MultiTrieNode<K, V>;
-
-            fn next(&mut self) -> Option<Self::Item> {
-                while let Some($UnexploredPath{node, key}) = self.unexplored_queue.pop() {
-                    match key.is_empty() {
-                        true => {
-                            let node = unsafe{ & $( $mut_ )? *node };
-                            return Some(node);
-                        },
-                        false => self.explore(node, key),
+    fn remove_internal(&mut self, key: TrieKeyIter<K>, value: &V) -> bool {
+        if key.is_end() {
+            self.values.remove(value)
+        } else {
+            let children: Vec<(Option<TrieToken<K>>, Shared<Self>, TrieKeyIter<K>)> = self.next(key)
+                .map(|(token, child_node, key)| (token.cloned(), child_node.clone(), key))
+                .collect();
+            children.into_iter().map(|(token, child_node, key)| {
+                let removed = child_node.borrow_mut().remove_internal(key, value);
+                if removed && child_node.borrow().is_empty(){
+                    match token {
+                        Some(token) => { self.children.remove(&token); },
+                        None => { self.end_of_expr.remove(&child_node.as_ptr()); },
                     }
                 }
-                None
+                removed
+            })
+            .fold(false, |a, b| a || b)
+        }
+    }
+    
+    fn insert(&mut self, key: TrieKey<K>, value: V) {
+        self.insert_internal(key, value, &mut Vec::new())
+    }
+
+    fn insert_internal(&mut self, mut key: TrieKey<K>, value: V,
+        right_par_nodes: &mut Vec<Shared<Self>>)
+    {
+        log::trace!("MultiTrieNode::insert_internal(): key: {:?}, value: {:?}", key, value);
+        match key.pop_head() {
+            None => {
+                self.values.insert(value);
+            },
+            Some(token @ TrieToken::LeftPar) => {
+                let left_par = self.get_or_insert_child(token);
+                left_par.borrow_mut().insert_internal(key, value, right_par_nodes);
+                let right_par = right_par_nodes.pop().expect("Unbalanced key");
+                self.end_of_expr.insert(right_par.as_ptr(), right_par);
+            },
+            Some(token @ TrieToken::RightPar) => {
+                let right_par = self.get_or_insert_child(token);
+                right_par.borrow_mut().insert_internal(key, value, right_par_nodes);
+                right_par_nodes.push(right_par);
+            },
+            Some(token @ _) => {
+                let node = self.get_or_insert_child(token);
+                node.borrow_mut().insert_internal(key, value, right_par_nodes);
+            },
+        }
+    }
+
+    fn get<'a>(&'a self, key: &'a TrieKey<K>) -> impl Iterator<Item=&'a V> + 'a {
+        MultiValueIter::new(self, key.iter()).flat_map(|node| node.values.iter())
+    }
+
+    #[cfg(test)]
+    fn size(&self) -> usize {
+        let mut visited = HashSet::new();
+        fn size_recursive<K, V>(node: &MultiTrieNode<K, V>, visited: &mut HashSet<*const MultiTrieNode<K, V>>) -> usize {
+            let ptr = node as *const MultiTrieNode<K, V>;
+            if !visited.contains(&ptr) {
+                visited.insert(ptr);
+                node.children.values().fold(1, |size, node| {
+                    size + size_recursive(node.borrow().as_ref(), visited)
+                })
+            } else {
+                0
             }
         }
+        size_recursive(self, &mut visited)
     }
 }
 
-multi_trie_explorer!(ValueMutExplorer, UnexploredPathMut, { mut }, mut);
-multi_trie_explorer!(ValueExplorer, UnexploredPath, { /* no mut */ }, const);
+/// Read-only iterator through the [MultiTrieNode] instances which are matched
+/// by the givec [TrieKeyIter].
+struct MultiValueIter<'a, K, V> {
+    /// List of the nodes and iterators to be processed on the next iterator step.
+    to_be_explored: Vec<(*mut MultiTrieNode<K, V>, TrieKeyIter<'a, K>)>,
+    /// The holder of the reference to the original node which is required
+    /// to borrow it. It is required because pointers to the node are kept inside
+    /// and borrow checker cannot connect the iterator and root node reference
+    /// lifetimes.
+    _root_node_ref: PhantomData<&'a MultiTrieNode<K, V>>,
+}
 
-impl<K, V> MultiTrieNode<K, V>
+impl<'a, K, V> MultiValueIter<'a, K, V>
 where
-    K: Clone + Debug + Eq + Hash + ?Sized,
-    V: Clone + Debug + Eq + Hash + ?Sized,
+    K: Debug + Clone + Eq + Hash,
+    V: Debug + Eq + Hash,
 {
-
-    pub fn new() -> Self {
-        Self{ children: HashMap::new(), values: HashSet::new() }
+    fn new(node: &'a MultiTrieNode<K, V>, key: TrieKeyIter<'a, K>) -> Self {
+        let to_be_explored = node.next(key).map(Self::to_unexplored_path).collect();
+        Self{ to_be_explored, _root_node_ref: PhantomData }
     }
 
-    fn get_or_insert_child(&mut self, key: NodeKey<K>) -> &mut Self {
-        self.children.entry(key).or_insert(Box::new(MultiTrieNode::new()))
+    fn to_unexplored_path((_token, child, key): (Option<&TrieToken<K>>, &Shared<MultiTrieNode<K, V>>, TrieKeyIter<'a, K>)) -> (*mut MultiTrieNode<K, V>, TrieKeyIter<'a, K>) {
+        (child.as_ptr(), key)
     }
+}
 
-    fn get_child(&self, key: &NodeKey<K>) -> Option<&Self> {
-        self.children.get(key).map(Box::as_ref)
-    }
+impl<'a, K, V> Iterator for MultiValueIter<'a, K, V>
+where
+    K: Debug + Clone + Eq + Hash,
+    V: Debug + Eq + Hash,
+{
+    type Item = &'a MultiTrieNode<K, V>;
 
-    fn get_child_mut(&mut self, key: &NodeKey<K>) -> Option<&mut Self> {
-        self.children.get_mut(key).map(Box::as_mut)
-    }
-
-    fn add_exploring_strategy(&mut self, mut key: TrieKey<K>, callback: &mut dyn FnMut(UnexploredPathMut<K, V>)) {
-        let head = key.pop_head_unchecked();
-        match head {
-            NodeKey::Expression(expr_len) => {
-                let wildcard_path_start = self.get_or_insert_child(head);
-                callback(UnexploredPathMut::new(wildcard_path_start, key.skip_expr(expr_len)));
-
-                let expanded_path_start = self.get_or_insert_child(NodeKey::ExpressionBegin);
-                callback(UnexploredPathMut::new(expanded_path_start, key));
-            },
-            NodeKey::ExpressionBegin => panic!(concat!(
-                    "NodeKey::ExpressionBegin used only for indexing never for searching.",
-                    "Should not be included into a key created from atom.")),
-            _ => {
-                let node = self.get_or_insert_child(head);
-                callback(UnexploredPathMut::new(node, key));
-            },
-        }
-    }
-
-    fn remove_exploring_strategy(&mut self, mut key: TrieKey<K>, callback: &mut dyn FnMut(UnexploredPathMut<K, V>)) {
-        let head = key.pop_head_unchecked();
-        match head {
-            NodeKey::Exact(_) => {
-                self.get_child_mut(&head).map(|child| callback(UnexploredPathMut::new(child, key.clone())));
-                self.get_child_mut(&NodeKey::Wildcard).map(|child| callback(UnexploredPathMut::new(child, key)));
-            },
-            NodeKey::ExpressionEnd => {
-                self.get_child_mut(&head).map(|child| callback(UnexploredPathMut::new(child, key)));
-            },
-            NodeKey::Expression(expr_len) => {
-                self.get_child_mut(&NodeKey::Wildcard).map(|child| callback(UnexploredPathMut::new(child, key.skip_expr(expr_len))));
-                self.get_child_mut(&head).map(|child| callback(UnexploredPathMut::new(child, key.skip_expr(expr_len))));
-                self.get_child_mut(&NodeKey::ExpressionBegin).map(|child| callback(UnexploredPathMut::new(child, key)));
-            },
-            NodeKey::Wildcard => {
-                self.children.iter_mut()
-                    .filter(|(key, _child)| !key.is_expr_begin_or_end())
-                    .map(|(_key, child)| child)
-                    .for_each(|child| callback(UnexploredPathMut::new(child.as_mut(), key.clone())));
-            },
-            NodeKey::ExpressionBegin => panic!(concat!(
-                    "NodeKey::ExpressionBegin used only for indexing never for searching.",
-                    "Should not be included into a key created from atom.")),
-        }
-    }
-    
-    fn get_exploring_strategy(&self, mut key: TrieKey<K>, callback: &mut dyn FnMut(UnexploredPath<K, V>)) {
-        let head = key.pop_head_unchecked();
-        match head {
-            NodeKey::Exact(_) => {
-                self.get_child(&head).map(|child| callback(UnexploredPath::new(child, key.clone())));
-                self.get_child(&NodeKey::Wildcard).map(|child| callback(UnexploredPath::new(child, key)));
-            },
-            NodeKey::ExpressionEnd => {
-                self.get_child(&head).map(|child| callback(UnexploredPath::new(child, key)));
+    fn next(&mut self) -> Option<Self::Item> {
+        while let Some((node, key)) = self.to_be_explored.pop() {
+            let node = unsafe{ &*node };
+            match key.is_end() {
+                true => return Some(node),
+                false => node.next(key)
+                    .map(MultiValueIter::to_unexplored_path)
+                    .for_each(|x| self.to_be_explored.push(x)),
             }
-            NodeKey::Expression(expr_len) => {
-                self.get_child(&NodeKey::Wildcard).map(|child| callback(UnexploredPath::new(child, key.skip_expr(expr_len))));
-                self.get_child(&NodeKey::ExpressionBegin).map(|child| callback(UnexploredPath::new(child, key)));
-            },
-            NodeKey::Wildcard => {
-                self.children.iter()
-                    .filter(|(key, _child)| !key.is_expr_begin_or_end())
-                    .map(|(_key, child)| child)
-                    .for_each(|child| callback(UnexploredPath::new(child.as_ref(), key.clone())));
-            },
-            NodeKey::ExpressionBegin => panic!(concat!(
-                    "NodeKey::ExpressionBegin used only for indexing never for searching.",
-                    "Should not be included into a key created from atom.")),
         }
-    }
-    
-    pub fn add(&mut self, key: TrieKey<K>, value: V) {
-        log::debug!("MultiTrieNode::add(): key: {:?}, value: {:?}", key, value);
-        ValueMutExplorer::new(self, key, MultiTrieNode::add_exploring_strategy)
-            .for_each(|node| { node.values.insert(value.clone()); });
-    }
-
-    // TODO: at the moment the method doesn't remove the key from the index. 
-    // It removes only value.  It can be fixed by using links to parent in the
-    // MultiTrieNode nodes and cleaning up the map entries which point to the empty
-    // nodes only.
-    pub fn remove(&mut self, key: TrieKey<K>, value: &V) -> bool {
-        log::debug!("MultiTrieNode::remove(): key: {:?}, value: {:?}", key, value);
-        ValueMutExplorer::new(self, key, MultiTrieNode::remove_exploring_strategy)
-            .map(|node| node.remove_value(value)).fold(false, |a, b| a | b)
-    }
-
-    #[inline]
-    fn remove_value(&mut self, value: &V) -> bool {
-        self.values.remove(value)
-    }
-
-    pub fn get(&self, key: TrieKey<K>) -> impl Iterator<Item=&V> {
-        ValueExplorer::new(self, key, MultiTrieNode::get_exploring_strategy)
-            .flat_map(|node| node.values.iter())
+        None
     }
 }
 
@@ -258,88 +510,150 @@ mod test {
         }
     }
 
+    macro_rules! triekey {
+        ($($x:tt)*) => { TrieKey::from(trietokens!($($x)*)) }
+    }
+
+    macro_rules! trietokens {
+        () => { vec![] };
+        (*) => { vec![ TrieToken::Wildcard ] };
+        ($x:literal) => { vec![ TrieToken::Exact($x) ] };
+        ([]) => { vec![ vec![ TrieToken::LeftPar ], vec![ TrieToken::RightPar ] ].concat() };
+        ([$($x:tt),*]) => { {
+            vec![ vec![ TrieToken::LeftPar ], $( trietokens!($x) ),*, vec![ TrieToken::RightPar ] ].concat()
+        } };
+        ($($x:tt),*) => { vec![ $( trietokens!($x) ),* ].concat() };
+    }
+
+    #[test]
+    fn triekey_macro() {
+        assert_eq!(triekey!() as TrieKey<u32>, TrieKey::from([ ]));
+        assert_eq!(triekey!(*) as TrieKey<u32>, TrieKey::from([TrieToken::Wildcard]));
+        assert_eq!(triekey!(0), TrieKey::from([TrieToken::Exact(0)]));
+        assert_eq!(triekey!([]) as TrieKey<u32>, TrieKey::from([
+                TrieToken::LeftPar,TrieToken::RightPar]));
+        assert_eq!(triekey!([0, *]), TrieKey::from([
+                TrieToken::LeftPar, TrieToken::Exact(0),
+                TrieToken::Wildcard, TrieToken::RightPar]));
+        assert_eq!(triekey!([[0, *]]), TrieKey::from([
+                TrieToken::LeftPar, TrieToken::LeftPar,
+                TrieToken::Exact(0), TrieToken::Wildcard,
+                TrieToken::RightPar, TrieToken::RightPar]));
+        assert_eq!(triekey!(0, *, [*]), TrieKey::from([
+                TrieToken::Exact(0), TrieToken::Wildcard,
+                TrieToken::LeftPar, TrieToken::Wildcard,
+                TrieToken::RightPar]));
+    }
+
     #[test]
     fn multi_trie_add_basic() {
         let mut trie = MultiTrie::new();
 
-        let exact_a = TrieKey::from_list([NodeKey::Exact("A")]);
-        let exact_b = TrieKey::from_list([NodeKey::Exact("B")]);
-        let wild = TrieKey::from_list([NodeKey::Wildcard]);
-        let expr_a_b = TrieKey::from_list([NodeKey::Expression(3)
-            , NodeKey::Exact("A"), NodeKey::Exact("B")
-            , NodeKey::ExpressionEnd]);
-        let expr_a_c = TrieKey::from_list([NodeKey::Expression(3)
-            , NodeKey::Exact("A"), NodeKey::Exact("C")
-            , NodeKey::ExpressionEnd]);
+        trie.insert(triekey!("A"), "exact_a");
+        trie.insert(triekey!(*), "wild");
+        trie.insert(triekey!(["A", "B"]), "pars_a_b");
+        trie.insert(triekey!("A", "B"), "a_b");
 
-        trie.add(exact_a.clone(), "exact_a");
-        trie.add(wild.clone(), "wild");
-        trie.add(expr_a_b.clone(), "expr_a_b");
-
-        assert_eq!(trie.get(exact_a).to_sorted(), vec!["exact_a", "wild"]);
-        assert_eq!(trie.get(exact_b).to_sorted(), vec!["wild"]);
-
-        assert_eq!(trie.get(wild).to_sorted(), vec!["exact_a", "expr_a_b", "wild"]);
-
-        assert_eq!(trie.get(expr_a_b).to_sorted(), vec!["expr_a_b", "wild"]);
-        assert_eq!(trie.get(expr_a_c).to_sorted(), vec!["wild"]);
+        assert_eq!(trie.get(&triekey!("A")).to_sorted(), vec!["exact_a", "wild"]);
+        assert_eq!(trie.get(&triekey!("B")).to_sorted(), vec!["wild"]);
+        assert_eq!(trie.get(&triekey!(*)).to_sorted(), vec!["exact_a", "pars_a_b", "wild"]);
+        assert_eq!(trie.get(&triekey!(["A", "B"])).to_sorted(), vec!["pars_a_b", "wild"]);
+        assert_eq!(trie.get(&triekey!(["A", "C"])).to_sorted(), vec!["wild"]);
+        assert_eq!(trie.get(&triekey!(["A", *])).to_sorted(), vec!["pars_a_b", "wild"]);
+        assert_eq!(trie.get(&triekey!("A", "B")).to_sorted(), vec!["a_b"]);
+        assert_eq!(trie.get(&triekey!("A", "C")).to_sorted(), vec![] as Vec<&str>);
+        assert_eq!(trie.get(&triekey!("A", *)).to_sorted(), vec!["a_b"]);
     }
 
     #[test]
-    fn multi_trie_add_expr() {
-        let mut index = MultiTrie::new();
+    fn multi_trie_add_pars() {
+        let mut trie = MultiTrie::new();
 
-        let expr_a_b = TrieKey::from_list([NodeKey::Expression(3)
-            , NodeKey::Expression(2) , NodeKey::Exact("A"), NodeKey::ExpressionEnd
-            , NodeKey::Exact("B") , NodeKey::ExpressionEnd]);
-        let expr_x_b = TrieKey::from_list([NodeKey::Expression(3)
-            , NodeKey::Wildcard, NodeKey::Exact("B") , NodeKey::ExpressionEnd]);
-        let expr_x_c = TrieKey::from_list([NodeKey::Expression(3)
-            , NodeKey::Wildcard, NodeKey::Exact("C") , NodeKey::ExpressionEnd]);
-        let expr_a_c = TrieKey::from_list([NodeKey::Expression(3)
-            , NodeKey::Expression(2) , NodeKey::Exact("A"), NodeKey::ExpressionEnd
-            , NodeKey::Exact("C") , NodeKey::ExpressionEnd]);
+        trie.insert(triekey!(["A", "B"]), "pars_a_b");
+        trie.insert(triekey!([*, "C"]), "pars_x_c");
 
-        index.add(expr_a_b, "expr_a_b");
-        index.add(expr_x_c, "expr_x_c");
+        assert_eq!(trie.get(&triekey!([*, "B"])).to_sorted(), vec!["pars_a_b"]);
+        assert_eq!(trie.get(&triekey!(["A", "C"])).to_sorted(), vec!["pars_x_c"]);
+    }
 
-        assert_eq!(index.get(expr_x_b).to_sorted(), vec!["expr_a_b"]);
-        assert_eq!(index.get(expr_a_c).to_sorted(), vec!["expr_x_c"]);
+    #[test]
+    fn multi_trie_add_subpars_twice() {
+        let mut trie: MultiTrie<&'static str, &'static str> = MultiTrie::new();
+
+        trie.insert(triekey!([]), "empty_pars");
+        trie.insert(triekey!([]).clone(), "empty_pars");
+
+        assert_eq!(trie.get(&triekey!([])).to_sorted(), vec!["empty_pars"]);
+        assert_eq!(trie.get(&triekey!(*)).to_sorted(), vec!["empty_pars"]);
+    }
+
+    #[test]
+    fn multi_trie_twice_result_because_of_subpars() {
+        let mut trie = MultiTrie::new();
+
+        trie.insert(triekey!(["A"]), "pars_a");
+        trie.insert(triekey!(["B"]), "pars_b");
+
+        assert_eq!(trie.get(&triekey!([*])).to_sorted(), vec!["pars_a", "pars_b"]);
     }
 
     #[test]
     fn multi_trie_remove_basic() {
         let mut trie = MultiTrie::new();
+        let empty_trie_size = trie.size();
+        trie.insert(triekey!("A"), "exact_a");
+        trie.insert(triekey!(*), "wild");
+        trie.insert(triekey!(["A", "B"]), "pars_a_b");
+        trie.insert(triekey!("A", "B"), "a_b");
 
-        let exact_a = TrieKey::from_list([NodeKey::Exact("A")]);
-        let wild = TrieKey::from_list([NodeKey::Wildcard]);
-        let expr_a_b = TrieKey::from_list([NodeKey::Expression(3)
-            , NodeKey::Exact("A"), NodeKey::Exact("B")
-            , NodeKey::ExpressionEnd]);
+        trie.remove(&triekey!("A"), &"exact_a");
+        trie.remove(&triekey!(*), &"wild");
+        trie.remove(&triekey!(["A", "B"]), &"pars_a_b");
+        trie.remove(&triekey!("A", "B"), &"a_b");
 
-        trie.add(exact_a.clone(), "exact_a");
-        trie.add(wild.clone(), "wild");
-        trie.add(expr_a_b.clone(), "expr_a_b");
-
-        trie.remove(exact_a.clone(), &"exact_a");
-        trie.remove(wild.clone(), &"wild");
-        trie.remove(expr_a_b.clone(), &"expr_a_b");
-
-        assert!(trie.get(exact_a).to_sorted().is_empty());
-        assert!(trie.get(wild).to_sorted().is_empty());
-        assert!(trie.get(expr_a_b).to_sorted().is_empty());
+        assert!(trie.get(&triekey!("A")).to_sorted().is_empty());
+        assert!(trie.get(&triekey!(*)).to_sorted().is_empty());
+        assert!(trie.get(&triekey!(["A", "B"])).to_sorted().is_empty());
+        assert!(trie.get(&triekey!("A", "B")).to_sorted().is_empty());
+        assert_eq!(trie.size(), empty_trie_size);
     }
 
     #[test]
-    fn trie_key_debug() {
-        let exact_a: TrieKey<&str> = TrieKey::from_list([NodeKey::Exact("A")]);
-        let wild: TrieKey<&str> = TrieKey::from_list([NodeKey::Wildcard]);
-        let expr_a_b: TrieKey<&str> = TrieKey::from_list([NodeKey::Expression(3)
-            , NodeKey::Exact("A"), NodeKey::Exact("B")
-            , NodeKey::ExpressionEnd]);
+    fn trie_key_display() {
+        assert_eq!(format!("{}", triekey!("A")), "[ Exact(A) ]");
+        assert_eq!(format!("{}", triekey!(*) as TrieKey<u32>), "[ * ]");
+        assert_eq!(format!("{}", triekey!(["A", "B", *])), "[ LeftPar, Exact(A), Exact(B), *, RightPar ]");
+    }
 
-        assert_eq!(format!("{:?}", exact_a), "TrieKey([Exact(\"A\")])");
-        assert_eq!(format!("{:?}", wild), "TrieKey([Wildcard])");
-        assert_eq!(format!("{:?}", expr_a_b), "TrieKey([Expression(3), Exact(\"A\"), Exact(\"B\"), ExpressionEnd])");
+    #[test]
+    fn multi_trie_clone() {
+        let mut trie = MultiTrie::new();
+        let key = triekey!(0, *, [*]);
+        trie.insert(key.clone(), "test");
+
+        let copy = trie.clone();
+
+        assert_eq!(copy.get(&key).to_sorted(), vec!["test"]);
+    }
+
+    #[test]
+    fn multi_trie_add_key_with_many_subpars() {
+        fn with_subpars(nvars: usize) -> TrieKey<TrieToken<usize>> {
+            let mut tokens = Vec::new();
+            tokens.push(TrieToken::LeftPar);
+            for _i in 0..nvars {
+                tokens.push(TrieToken::LeftPar);
+                tokens.push(TrieToken::RightPar);
+            }
+            tokens.push(TrieToken::RightPar);
+            TrieKey::from(tokens)
+        }
+        let mut trie = MultiTrie::new();
+
+        trie.insert(with_subpars(4), 0);
+        assert_eq!(trie.size(), 5*2 + 1);
+
+        trie.insert(with_subpars(8), 0);
+        assert_eq!(trie.size(), 20);
     }
 }

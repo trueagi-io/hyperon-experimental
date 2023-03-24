@@ -7,7 +7,7 @@ use crate::atom::*;
 use crate::atom::matcher::{Bindings, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::matcher::MatchResultIter;
-use crate::common::multitrie::{MultiTrie, TrieKey, NodeKey};
+use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
 
 use std::fmt::{Display, Debug};
 use std::rc::{Rc, Weak};
@@ -51,16 +51,13 @@ impl<'a> Iterator for GroundingSpaceIter<'a> {
 }
 
 fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
-    fn fill_key(atom: &Atom, keys: &mut Vec<NodeKey<SymbolAtom>>) {
+    fn fill_key(atom: &Atom, tokens: &mut Vec<TrieToken<SymbolAtom>>) {
         match atom {
-            Atom::Symbol(sym) => keys.push(NodeKey::Exact(sym.clone())),
+            Atom::Symbol(sym) => tokens.push(TrieToken::Exact(sym.clone())),
             Atom::Expression(expr) => {
-                let start = keys.len();
-                keys.push(NodeKey::ExpressionBegin);
-                expr.children().iter().for_each(|child| fill_key(child, keys));
-                keys.push(NodeKey::ExpressionEnd);
-                let expr_len = keys.len() - start - 1;
-                keys[start] = NodeKey::Expression(expr_len);
+                tokens.push(TrieToken::LeftPar);
+                expr.children().iter().for_each(|child| fill_key(child, tokens));
+                tokens.push(TrieToken::RightPar);
             },
             // TODO: At the moment all grounding symbols are matched as wildcards
             // because they potentially may have custom Grounded::match_()
@@ -68,17 +65,17 @@ fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
             // speed of extracting grounded values from the index if GroundedAtom
             // has a flag which says whether match_() is match_by_equality() or
             // not. GroundedAtom with match_by_equality() implementation can be
-            // added as separate NodeKey::GroundedValue to navigate through
+            // added as separate TrieToken::GroundedValue to navigate through
             // the index quickly. GroundedAtom with custom match_() will be added
             // as a wildcard to be matched after search in index. It also requires
             // implementing Hash on Grounded.
-            _ => keys.push(NodeKey::Wildcard),
+            _ => tokens.push(TrieToken::Wildcard),
         }
     }
 
-    let mut keys = Vec::new();
-    fill_key(atom, &mut keys);
-    TrieKey::from_list(keys)
+    let mut tokens = Vec::new();
+    fill_key(atom, &mut tokens);
+    TrieKey::from(tokens)
 }
 
 /// In-memory space which can contain grounded atoms.
@@ -107,7 +104,7 @@ impl GroundingSpace {
     pub fn from_vec(atoms: Vec<Atom>) -> Self {
         let mut index = MultiTrie::new();
         for (i, atom) in atoms.iter().enumerate() {
-            index.add(atom_to_trie_key(atom), i);
+            index.insert(atom_to_trie_key(atom), i);
         }
         Self{
             index,
@@ -166,12 +163,12 @@ impl GroundingSpace {
     fn add_internal(&mut self, atom: Atom) {
         if self.free.is_empty() {
             let pos = self.content.len();
-            self.index.add(atom_to_trie_key(&atom), pos);
+            self.index.insert(atom_to_trie_key(&atom), pos);
             self.content.push(atom);
         } else {
             let pos = *self.free.iter().next().unwrap();
             self.free.remove(&pos);
-            self.index.add(atom_to_trie_key(&atom), pos);
+            self.index.insert(atom_to_trie_key(&atom), pos);
             self.content[pos] = atom;
         }
     }
@@ -201,13 +198,14 @@ impl GroundingSpace {
     }
 
     fn remove_internal(&mut self, atom: &Atom) -> bool {
-        let indexes: Vec<usize> = self.index.get(atom_to_trie_key(atom)).map(|i| *i).collect();
+        let index_key = atom_to_trie_key(atom);
+        let indexes: Vec<usize> = self.index.get(&index_key).map(|i| *i).collect();
         let mut indexes: Vec<usize> = indexes.into_iter()
             .filter(|i| self.content[*i] == *atom).collect();
         indexes.sort_by(|a, b| b.partial_cmp(a).unwrap());
         let is_removed = indexes.len() > 0;
         for i in indexes {
-            self.index.remove(atom_to_trie_key(atom), &i);
+            self.index.remove(&index_key, &i);
             self.free.insert(i);
         }
         is_removed
@@ -301,7 +299,7 @@ impl GroundingSpace {
         let mut result = Vec::new();
         let mut query_vars = HashSet::new();
         query.iter().filter_map(AtomIter::extract_var).for_each(|var| { query_vars.insert(var.clone()); });
-        for i in self.index.get(atom_to_trie_key(query)) {
+        for i in self.index.get(&atom_to_trie_key(query)) {
             let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", query, i).as_str());
             let next = make_variables_unique(next);
             log::trace!("single_query: match next: {}", next);
@@ -677,14 +675,14 @@ mod test {
 
     #[test]
     fn index_atom_to_key() {
-        assert_eq!(atom_to_trie_key(&Atom::sym("A")), TrieKey::from_list([NodeKey::Exact(SymbolAtom::new("A".into()))]));
-        assert_eq!(atom_to_trie_key(&Atom::value(1)), TrieKey::from_list([NodeKey::Wildcard]));
-        assert_eq!(atom_to_trie_key(&Atom::var("a")), TrieKey::from_list([NodeKey::Wildcard]));
-        assert_eq!(atom_to_trie_key(&expr!("A" "B")), TrieKey::from_list([
-                NodeKey::Expression(3),
-                NodeKey::Exact(SymbolAtom::new("A".into())),
-                NodeKey::Exact(SymbolAtom::new("B".into())),
-                NodeKey::ExpressionEnd
+        assert_eq!(atom_to_trie_key(&Atom::sym("A")), TrieKey::from([TrieToken::Exact(SymbolAtom::new("A".into()))]));
+        assert_eq!(atom_to_trie_key(&Atom::value(1)), TrieKey::from([TrieToken::Wildcard]));
+        assert_eq!(atom_to_trie_key(&Atom::var("a")), TrieKey::from([TrieToken::Wildcard]));
+        assert_eq!(atom_to_trie_key(&expr!("A" "B")), TrieKey::from([
+                TrieToken::LeftPar,
+                TrieToken::Exact(SymbolAtom::new("A".into())),
+                TrieToken::Exact(SymbolAtom::new("B".into())),
+                TrieToken::RightPar
         ]));
     }
 }
