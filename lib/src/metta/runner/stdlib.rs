@@ -708,6 +708,24 @@ impl Grounded for PrintlnOp {
     }
 }
 
+// Implement trace! built-in.
+//
+// It is equivalent to Idris or Haskell Trace, that is, it prints a
+// message to stderr and pass a value along.
+//
+// For instance
+// ```
+// !(trace! "Here?" 42)
+// ```
+// prints to stderr
+// ```
+// Here?
+// ```
+// and returns
+// ```
+// [42]
+// ```
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct TraceOp {}
 
