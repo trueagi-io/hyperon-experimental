@@ -1288,6 +1288,12 @@ mod tests {
     }
 
     #[test]
+    fn trace_op() {
+        assert_eq!(TraceOp{}.execute(&mut vec![sym!("\"Here?\""), sym!("42")]),
+                   Ok(vec![sym!("42")]));
+    }
+
+    #[test]
     fn nop_op() {
         assert_eq!(NopOp{}.execute(&mut vec![]), Ok(vec![]));
     }
