@@ -756,8 +756,8 @@ impl Grounded for TraceOp {
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("trace! expects two atoms as arguments");
-        let msg = args.get(0).ok_or_else(arg_error)?;
-        let val = args.get(1).ok_or_else(arg_error)?.clone();
+        let val = args.pop().ok_or_else(arg_error)?;
+        let msg = args.pop().ok_or_else(arg_error)?;
         eprintln!("{}", msg);
         Ok(vec![val])
     }
