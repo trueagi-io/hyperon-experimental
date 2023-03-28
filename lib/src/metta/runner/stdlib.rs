@@ -725,6 +725,20 @@ impl Grounded for PrintlnOp {
 // ```
 // [42]
 // ```
+//
+// Note that the first argument does not need to be a string, which
+// makes `trace!` actually quite capable on its own.  For instance
+// ```
+// !(trace! ("Hello world!" (if True A B) 1 2 3) 42)
+// ```
+// prints to stderr
+// ```
+// (Hello world! A 1 2 3)
+// ```
+// and returns
+// ```
+// [42]
+// ```
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct TraceOp {}
