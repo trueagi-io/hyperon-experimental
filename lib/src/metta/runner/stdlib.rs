@@ -708,6 +708,65 @@ impl Grounded for PrintlnOp {
     }
 }
 
+/// Implement trace! built-in.
+///
+/// It is equivalent to Idris or Haskell Trace, that is, it prints a
+/// message to stderr and pass a value along.
+///
+/// For instance
+/// ```metta
+/// !(trace! "Here?" 42)
+/// ```
+/// prints to stderr
+/// ```stderr
+/// Here?
+/// ```
+/// and returns
+/// ```metta
+/// [42]
+/// ```
+///
+/// Note that the first argument does not need to be a string, which
+/// makes `trace!` actually quite capable on its own.  For instance
+/// ```metta
+/// !(trace! ("Hello world!" (if True A B) 1 2 3) 42)
+/// ```
+/// prints to stderr
+/// ```stderr
+/// (Hello world! A 1 2 3)
+/// ```
+/// and returns
+/// ```metta
+/// [42]
+/// ```
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct TraceOp {}
+
+impl Display for TraceOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "trace!")
+    }
+}
+
+impl Grounded for TraceOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, Atom::var("a"), Atom::var("a")])
+    }
+
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("trace! expects two atoms as arguments");
+        let val = args.pop().ok_or_else(arg_error)?;
+        let msg = args.pop().ok_or_else(arg_error)?;
+        eprintln!("{}", msg);
+        Ok(vec![val])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct NopOp {}
 
@@ -960,6 +1019,8 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let println_op = Atom::gnd(PrintlnOp{});
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
+    let trace_op = Atom::gnd(TraceOp{});
+    tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
     let nop_op = Atom::gnd(NopOp{});
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
     let let_op = Atom::gnd(LetOp{});
@@ -1238,6 +1299,12 @@ mod tests {
     #[test]
     fn println_op() {
         assert_eq!(PrintlnOp{}.execute(&mut vec![sym!("A")]), Ok(vec![]));
+    }
+
+    #[test]
+    fn trace_op() {
+        assert_eq!(TraceOp{}.execute(&mut vec![sym!("\"Here?\""), sym!("42")]),
+                   Ok(vec![sym!("42")]));
     }
 
     #[test]
