@@ -708,37 +708,37 @@ impl Grounded for PrintlnOp {
     }
 }
 
-// Implement trace! built-in.
-//
-// It is equivalent to Idris or Haskell Trace, that is, it prints a
-// message to stderr and pass a value along.
-//
-// For instance
-// ```
-// !(trace! "Here?" 42)
-// ```
-// prints to stderr
-// ```
-// Here?
-// ```
-// and returns
-// ```
-// [42]
-// ```
-//
-// Note that the first argument does not need to be a string, which
-// makes `trace!` actually quite capable on its own.  For instance
-// ```
-// !(trace! ("Hello world!" (if True A B) 1 2 3) 42)
-// ```
-// prints to stderr
-// ```
-// (Hello world! A 1 2 3)
-// ```
-// and returns
-// ```
-// [42]
-// ```
+/// Implement trace! built-in.
+///
+/// It is equivalent to Idris or Haskell Trace, that is, it prints a
+/// message to stderr and pass a value along.
+///
+/// For instance
+/// ```metta
+/// !(trace! "Here?" 42)
+/// ```
+/// prints to stderr
+/// ```stderr
+/// Here?
+/// ```
+/// and returns
+/// ```metta
+/// [42]
+/// ```
+///
+/// Note that the first argument does not need to be a string, which
+/// makes `trace!` actually quite capable on its own.  For instance
+/// ```metta
+/// !(trace! ("Hello world!" (if True A B) 1 2 3) 42)
+/// ```
+/// prints to stderr
+/// ```stderr
+/// (Hello world! A 1 2 3)
+/// ```
+/// and returns
+/// ```metta
+/// [42]
+/// ```
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct TraceOp {}
