@@ -164,11 +164,15 @@ pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
 fn get_reducted_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     log::trace!("get_reducted_types: atom: {}", atom);
     let types = match atom {
+        // TODO: type of the variable could be actually a type variable,
+        // in this case inside each variant of type for the atom we should
+        // also keep bindings for the type variables. For example,
+        // we have an expression `(let $n (foo) (+ $n $n))`, where
+        // `(: let (-> $t $t $r $r))`, `(: foo (-> $tt))`,
+        // and `(: + (-> Num Num Num))`then type checker can find that
+        // `{ $r = $t = $tt = Num }`.
         Atom::Variable(_) => vec![ATOM_TYPE_UNDEFINED],
-        Atom::Grounded(gnd) => {
-            let types = vec![gnd.type_()];
-            types
-        },
+        Atom::Grounded(gnd) => vec![gnd.type_()],
         Atom::Symbol(_) => {
             let mut types = query_types(space, atom);
             if types.is_empty() {
@@ -177,73 +181,98 @@ fn get_reducted_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
             types
         },
         Atom::Expression(expr) => {
-            // tuple type
-            let mut tuples = vec![vec![]];
-            for (i, child) in expr.children().iter().enumerate() {
-                // TODO: it is not straightforward, if (: a (-> B C)) then
-                // what should we return for (d (a b)): (D ((-> B C) B)) or
-                // (D C) or both? Same question for a function call.
-                let child_types = get_reducted_types(space, child);
-                let not_a_function_call = |typ: &&Atom| { i != 0 || !is_func(typ) };
-                let child_types = child_types.iter().filter(not_a_function_call);
-                tuples = child_types.flat_map(|typ| -> Vec<Vec<Atom>> {
-                    tuples.iter().map(|prev| {
-                        let mut next = prev.clone();
-                        next.push(typ.clone());
-                        next
-                    }).collect()
-                }).collect();
-            }
-            // if all members of tuple is Undefined then whole tuple is Undefined
-            let mut types: Vec<Atom> = tuples.drain(0..)
-                .filter(|children| children.iter().any(|child| *child != ATOM_TYPE_UNDEFINED))
-                .map(Atom::expr).collect();
-            types.append(&mut query_types(space, atom));
-            add_super_types(space, &mut types, 0);
-            log::trace!("get_reducted_types: tuple {} types {:?}", atom, types);
+            let tuples = get_tuple_types(space, atom, expr);
+            let applications = get_application_types(space, atom, expr);
 
-            // functional types
-            let mut only_tuple = true;
-            if !expr.children().is_empty() {
-                let op = get_op(expr);
-                let args = get_args(expr);
-                let actual_arg_types: Vec<Vec<Atom>> = args.iter()
-                    .map(|arg| {
-                        let mut types = get_reducted_types(space, arg);
-                        types.push(ATOM_TYPE_ATOM);
-                        types.push(get_meta_type(arg));
-                        types
-                    }).collect();
-                let mut fn_types = get_reducted_types(space, op);
-                let fn_types = fn_types.drain(0..).filter(is_func);
-                for fn_type in fn_types {
-                    only_tuple = false;
-                    let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
-                    for bindings in check_types(actual_arg_types.as_slice(), expected_arg_types, Bindings::new()) {
-                        types.push(apply_bindings_to_atom(&ret_typ, &bindings));
-                    }
-                }
-                log::trace!("get_reducted_types: tuple + function {} types {:?}", atom, types);
-            }
-
-            // TODO: Three cases here:
-            // - tuple type
-            // - function call type with correct arg types
-            // - fnction call type with incorrect arg types
-            // if (1) we should return [ Undefined ]; if (2) we should
-            // return full type of the function if (3) we should return
-            // empty (otherwise validate doesn't make sense).
-            // This is tricky logic. To simplify it we could physically 
-            // separate tuples and calls in separate Atom types. Or use
-            // embedded atom to designate function call.
-            if only_tuple && types.is_empty() {
-                types.push(ATOM_TYPE_UNDEFINED)
+            let mut types = Vec::new();
+            if tuples.is_empty() && applications == None {
+                types.push(ATOM_TYPE_UNDEFINED);
+            } else {
+                types.extend(tuples);
+                applications.into_iter().for_each(|t| types.extend(t));
             }
             types
         },
     };
     log::trace!("get_reducted_types: return atom {} types {:?}", atom, types);
     types
+}
+
+fn get_tuple_types(space: &dyn Space, atom: &Atom, expr: &ExpressionAtom) -> Vec<Atom> {
+    let mut tuples = vec![vec![]];
+    for (i, child) in expr.children().iter().enumerate() {
+        // TODO: it is not straightforward, if (: a (-> B C)) then
+        // what should we return for (d (a b)): (D ((-> B C) B)) or
+        // (D C) or both? Same question for a function call.
+        let child_types = get_reducted_types(space, child);
+        let not_a_function_call = |typ: &Atom| { i != 0 || !is_func(typ) };
+        let child_types = child_types.into_iter().filter(not_a_function_call);
+        tuples = child_types.flat_map(|typ| -> Vec<Vec<Atom>> {
+            tuples.iter().map(|prev| {
+                let mut next = prev.clone();
+                next.push(typ.clone());
+                next
+            }).collect()
+        }).collect();
+    }
+    // if all members of tuple is Undefined then whole tuple is Undefined
+    let mut types: Vec<Atom> = tuples.drain(0..)
+        // FIXME: could we remove this?
+        .filter(|children| children.iter().any(|child| *child != ATOM_TYPE_UNDEFINED))
+        .map(Atom::expr).collect();
+    types.append(&mut query_types(space, atom));
+    add_super_types(space, &mut types, 0);
+    log::trace!("get_tuple_types: tuple {} types {:?}", atom, types);
+    types
+}
+
+// TODO: Three cases here:
+// 1. function call types are not found
+// 2. function call type with correct arg types are found
+// 3. only function call type with incorrect arg types are found
+//
+// In (1) we should return `vec![ Undefined ]` from `get_reducted_types()` when no types found;
+// In (2) we should return the type which function returns but types are never empty;
+// In (3) we should return empty `Vec` when types are empty, because `validate_atom()` expects
+// empty `Vec` when atom is incorrectly typed.
+//
+// Thus we divide these three cases in a return value of the function:
+// - `None` corresponds to the first case
+// - `Some(vec![...])` corresponds to the second case
+// - `Some(vec![])` corresponds to the third case
+//
+// This is a tricky logic. To simplify it we could  separate tuple and
+// function application using separate Atom types. Or use an embedded atom
+// to designate function application.
+fn get_application_types(space: &dyn Space, atom: &Atom, expr: &ExpressionAtom) -> Option<Vec<Atom>> {
+    let mut has_function_types = false;
+    let mut types = Vec::new();
+    if !expr.children().is_empty() {
+        let op = get_op(expr);
+        let args = get_args(expr);
+        let actual_arg_types: Vec<Vec<Atom>> = args.iter()
+            .map(|arg| {
+                let mut types = get_reducted_types(space, arg);
+                types.push(ATOM_TYPE_ATOM);
+                types.push(get_meta_type(arg));
+                types
+            }).collect();
+        let mut fn_types = get_reducted_types(space, op);
+        let fn_types = fn_types.drain(0..).filter(is_func);
+        for fn_type in fn_types {
+            has_function_types = true;
+            let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
+            for bindings in check_types(actual_arg_types.as_slice(), expected_arg_types, Bindings::new()) {
+                types.push(apply_bindings_to_atom(&ret_typ, &bindings));
+            }
+        }
+        log::trace!("get_application_types: function application {} types {:?}", atom, types);
+    }
+    if has_function_types {
+        Some(types)
+    } else {
+        None
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
