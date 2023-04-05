@@ -390,28 +390,65 @@ impl CaseOp {
         Self{ space }
     }
 
-    fn introduce_local_vars(cases: &mut ExpressionAtom) -> Result<(), ExecError> {
-        for next_case in cases.children_mut() {
-            let next_case = match next_case {
-                Atom::Expression(next_case) if next_case.children().len() == 2 => Ok(next_case.children_mut()),
-                _ => Err("case expects expression of pairs as a second argument"),
-            }?;
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("case expects two arguments: atom and expression of cases");
+        let cases = args.pop().ok_or_else(arg_error)?;
+        let atom = args.pop().ok_or_else(arg_error)?;
+        let cases = CaseOp::cases_into_tuples(cases)?;
+        log::debug!("CaseOp::execute: atom: {}, cases: {:?}", atom, cases);
 
-            let mut local_vars = HashMap::new();
-            let pattern = next_case.get_mut(0).unwrap();
-            introduce_local_vars(pattern, &mut local_vars);
+        let result = interpret_no_error(self.space.clone(), &atom);
+        log::debug!("case: interpretation result {:?}", result);
 
-            let template = next_case.get_mut(1).unwrap();
-            replace_vars(template, &local_vars);
+        match result {
+            Ok(result) if result.is_empty() => {
+                cases.into_iter()
+                    .find_map(|(pattern, template)| {
+                        if pattern == VOID_SYMBOL {
+                            Some(template)
+                        } else {
+                            None
+                        }
+                    })
+                    .map_or(Ok(vec![]), |result| Ok(vec![result]))
+            },
+            Ok(result) => {
+                let triggered = result.into_iter()
+                    .flat_map(|atom| CaseOp::return_first_matched(&atom, &cases))
+                    .collect();
+                Ok(triggered)
+            },
+            Err(message) => Err(format!("Error: {}", message).into()),
         }
-        Ok(())
     }
 
-    fn return_first_matched(atom: &Atom, cases: &ExpressionAtom) -> Vec<Atom> {
-        for c in cases.children() {
-            let next_case = atom_as_expr(c).unwrap().children();
-            let pattern = next_case.get(0).unwrap();
-            let template = next_case.get(1).unwrap();
+    fn cases_into_tuples(cases: Atom) -> Result<Vec<(Atom, Atom)>, ExecError> {
+        let cases = match cases {
+            Atom::Expression(expr) => Ok(expr),
+            _ => Err("case expects expression of cases as a second argument"),
+        }?;
+
+        let mut pairs = Vec::new();
+        for next_case in cases.into_children() {
+            let mut next_case = match next_case {
+                Atom::Expression(next_case) if next_case.children().len() == 2 => Ok(next_case.into_children()),
+                _ => Err("case expects expression of pairs as a second argument"),
+            }?;
+            let mut template = next_case.pop().unwrap();
+            let mut pattern = next_case.pop().unwrap();
+
+            let mut local_vars = HashMap::new();
+            introduce_local_vars(&mut pattern, &mut local_vars);
+            replace_vars(&mut template, &local_vars);
+
+            pairs.push((pattern, template));
+        }
+
+        Ok(pairs)
+    }
+
+    fn return_first_matched(atom: &Atom, cases: &Vec<(Atom, Atom)>) -> Vec<Atom> {
+        for (pattern, template) in cases {
             let bindings = matcher::match_atoms(atom, &pattern);
             let result: Vec<Atom> = bindings.map(|b| matcher::apply_bindings_to_atom(&template, &b)).collect();
             if !result.is_empty() {
@@ -442,41 +479,7 @@ impl Grounded for CaseOp {
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("case expects two arguments: atom and expression of cases");
-        let cases = args.pop().ok_or_else(arg_error)?;
-        let atom = args.pop().ok_or_else(arg_error)?;
-        log::debug!("CaseOp::execute: atom: {}, cases: {}", atom, cases);
-
-        let mut cases = match cases {
-            Atom::Expression(expr) => Ok(expr),
-            _ => Err("case expects expression of cases as a second argument"),
-        }?;
-        CaseOp::introduce_local_vars(&mut cases)?;
-
-        let result = interpret_no_error(self.space.clone(), &atom);
-        log::debug!("case: interpretation result {:?}", result);
-
-        match result {
-            Ok(result) if result.is_empty() => {
-                cases.children().into_iter()
-                    .map(|pair| atom_as_expr(pair).unwrap().children())
-                    .find_map(|pair| {
-                        if *pair.get(0).unwrap() == VOID_SYMBOL {
-                            Some(pair.get(1).unwrap().clone())
-                        } else {
-                            None
-                        }
-                    })
-                    .map_or(Ok(vec![]), |result| Ok(vec![result]))
-            },
-            Ok(result) => {
-                let triggered = result.into_iter()
-                    .flat_map(|atom| CaseOp::return_first_matched(&atom, &cases))
-                    .collect();
-                Ok(triggered)
-            },
-            Err(message) => Err(format!("Error: {}", message).into()),
-        }
+        CaseOp::execute(self, args)
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
