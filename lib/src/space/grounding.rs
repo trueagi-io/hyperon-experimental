@@ -301,7 +301,7 @@ impl GroundingSpace {
         query.iter().filter_map(AtomIter::extract_var).for_each(|var| { query_vars.insert(var.clone()); });
         for i in self.index.get(&atom_to_trie_key(query)) {
             let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", query, i).as_str());
-            let next = make_variables_unique(next);
+            let next = make_variables_unique(next.clone());
             log::trace!("single_query: match next: {}", next);
             for bindings in match_atoms(&next, query) {
                 let bindings = bindings.narrow_vars(&query_vars);

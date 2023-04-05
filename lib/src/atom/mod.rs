@@ -267,26 +267,20 @@ impl Display for VariableAtom {
 }
 
 /// Returns a copy of `atom` with all variables replaced by unique instances.
-pub fn make_variables_unique(atom: &Atom) -> Atom {
-    fn recursion(atom: &Atom, vars: &mut HashMap<VariableAtom, Atom>) -> Atom {
-        match atom {
+pub fn make_variables_unique(mut atom: Atom) -> Atom {
+    let mut vars = HashMap::new();
+    atom.iter_mut().for_each(|sub| {
+        match sub {
             Atom::Variable(var) => {
                 if !vars.contains_key(var) {
                     vars.insert(var.clone(), Atom::Variable(var.make_unique()));
                 }
-                vars[var].clone()
-            },
-            Atom::Expression(expr) => {
-                let children: Vec<Atom> = expr.children().iter()
-                    .map(|atom| recursion(&atom, vars))
-                    .collect();
-                Atom::expr(children)
+                *sub = vars[var].clone();
             }
-            _ => atom.clone(),
+            _ => {},
         }
-    }
-
-    recursion(atom, &mut HashMap::new())
+    });
+    atom
 }
 
 // Grounded atom

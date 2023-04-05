@@ -955,8 +955,8 @@ mod test {
     fn match_variable_with_unique_itself() {
         let x_uniq = Atom::Variable(VariableAtom::new_id("x", 1));
         assert_match(
-            make_variables_unique(&expr!(("A" x) ("B" x))),
-                                   expr!(("A" x)    z   ),
+            make_variables_unique(expr!(("A" x) ("B" x))),
+                                  expr!(("A" x)    z   ),
             vec![bind!{x: x_uniq.clone(), z: Atom::expr([sym!("B"), x_uniq])}]);
     }
 
