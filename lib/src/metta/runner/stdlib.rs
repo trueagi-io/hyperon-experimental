@@ -1318,6 +1318,22 @@ mod tests {
             Ok(vec![expr!("B" "A")]));
     }
 
+    #[ignore = "Not fixed yet"]
+    #[test]
+    fn let_op_external_vars_at_right_are_kept_untouched() {
+        assert_eq!(LetOp{}.execute(&mut vec![expr!(t), expr!(ext), expr!(t)]),
+            Ok(vec![expr!(ext)]));
+        assert_eq!(LetOp{}.execute(&mut vec![expr!(t), expr!(ext "A"), expr!(t)]),
+            Ok(vec![expr!(ext "A")]));
+    }
+
+    #[ignore = "Not fixed yet"]
+    #[test]
+    fn let_op_internal_variables_has_priority_in_template() {
+        assert_eq!(LetOp{}.execute(&mut vec![expr!(x), expr!(x "A"), expr!(x)]),
+            Ok(vec![expr!(x "A")]));
+    }
+
     #[test]
     fn let_var_op() {
         assert_eq!(LetVarOp{}.execute(&mut vec![expr!(), sym!("B")]),
