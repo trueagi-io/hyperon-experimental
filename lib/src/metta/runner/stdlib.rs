@@ -806,21 +806,53 @@ impl Grounded for LetOp {
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("let expects three arguments: pattern, atom and template");
-        let pattern = args.get(0).ok_or_else(arg_error)?;
-        let atom = args.get(1).ok_or_else(arg_error)?;
-        let template = args.get(2).ok_or_else(arg_error)?;
-
-        log::debug!("LetOp::execute: pattern: {}, atom: {}, template: {}", pattern, atom, template);
-
-        let mut space = GroundingSpace::new();
-        space.add(atom.clone());
-        Ok(space.subst(pattern, template))
+        LetOp::execute(self, args)
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
         match_by_equality(self, other)
     }
+}
+
+impl LetOp {
+    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("let expects three arguments: pattern, atom and template");
+        let mut template = args.pop().ok_or_else(arg_error)?;
+        let atom = args.pop().ok_or_else(arg_error)?;
+        let mut pattern = args.pop().ok_or_else(arg_error)?;
+
+        let mut vars = HashMap::new();
+        LetOp::generate_let_vars(&mut pattern, &mut vars);
+        LetOp::replace_vars(&mut template, &vars);
+
+        let bindings = matcher::match_atoms(&pattern, &atom);
+        let result = bindings.map(|b| matcher::apply_bindings_to_atom(&template, &b)).collect();
+        log::debug!("LetOp::execute: pattern: {}, atom: {}, template: {}, result: {:?}", pattern, atom, template, result);
+        Ok(result)
+    }
+
+    fn generate_let_vars(atom: &mut Atom, vars: &mut HashMap<VariableAtom, VariableAtom>) {
+        atom.iter_mut().for_each(|sub| {
+            match sub {
+                Atom::Variable(var) => {
+                    *var = vars.entry(var.clone()).or_insert(var.make_unique()).clone();
+                },
+                _ => {},
+            }
+        });
+    }
+
+    fn replace_vars(atom: &mut Atom, vars: &HashMap<VariableAtom, VariableAtom>) {
+        atom.iter_mut().for_each(|sub| {
+            match sub {
+                Atom::Variable(var) => {
+                    vars.get(var).map(|v| *var = v.clone());
+                },
+                _ => {},
+            }
+        });
+    }
+
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -1318,7 +1350,6 @@ mod tests {
             Ok(vec![expr!("B" "A")]));
     }
 
-    #[ignore = "Not fixed yet"]
     #[test]
     fn let_op_external_vars_at_right_are_kept_untouched() {
         assert_eq!(LetOp{}.execute(&mut vec![expr!(t), expr!(ext), expr!(t)]),
@@ -1327,7 +1358,6 @@ mod tests {
             Ok(vec![expr!(ext "A")]));
     }
 
-    #[ignore = "Not fixed yet"]
     #[test]
     fn let_op_internal_variables_has_priority_in_template() {
         assert_eq!(LetOp{}.execute(&mut vec![expr!(x), expr!(x "A"), expr!(x)]),
