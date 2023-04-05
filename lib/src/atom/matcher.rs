@@ -674,7 +674,14 @@ pub type MatchResultIter = Box<dyn Iterator<Item=matcher::Bindings>>;
 /// ```
 pub fn match_atoms<'a>(left: &'a Atom, right: &'a Atom) -> MatchResultIter {
     Box::new(match_atoms_recursively(left, right)
-        .filter(|binding| !binding.has_loops()))
+        .filter(|binding| {
+            if binding.has_loops() {
+                log::trace!("match_atoms: remove bindings which contains a variable loop: {}", binding);
+                false
+            } else {
+                true
+            }
+        }))
 }
 
 fn match_atoms_recursively(left: &Atom, right: &Atom) -> MatchResultIter {
