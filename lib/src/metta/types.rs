@@ -320,7 +320,7 @@ fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, B
     types.drain(0..).filter_map(|t| {
         let mut bindings = Bindings::new();
         // TODO: write a unit test
-        let t = make_variables_unique(&t);
+        let t = make_variables_unique(t);
         if match_reducted_types(&t, typ, &mut bindings) {
             Some((t, bindings))
         } else {
