@@ -179,7 +179,7 @@ def _type_sugar(type_names):
     if isinstance(type_names, list):
         return E(S("->"), *[_type_sugar(n) for n in type_names])
     if isinstance(type_names, str):
-        return V(type_names) if type_names[0] == '$' else S(type_names)
+        return V(type_names[1:]) if type_names[0] == '$' else S(type_names)
     return type_names
 
 def OperationAtom(name, op, type_names=None, unwrap=True):
