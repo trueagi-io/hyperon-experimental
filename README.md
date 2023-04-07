@@ -2,12 +2,19 @@
 
 # Overview
 
-This is a reimplementation from scratch of the C++ Hyperon prototype in the Rust
-programming language. This project replaces the [previous
-prototype](https://github.com/trueagi-io/hyperon-cpp/tree/master).
-See [MeTTa scripts](./python/tests/scripts) and [Python examples](./python/tests) to become familiar with Hyperon features.
-More complex examples of using metta are located at [Metta examples repo](https://github.com/trueagi-io/metta-examples).
+OpenCog Hyperon is a substantially revised, novel version of OpenCog - which is currently at an active
+pre-alpha stage of development and experimentation. One of the focuses in the Hyperon design is a successor
+to the OpenCog Classic Atomese language with clear semantics supporting meta-language features,
+different types of inference, etc. What we have landed on is an "Atomese 2" language called MeTTa (Meta Type Talk) 
 
+In order to get familiar with MeTTa one can read [MeTTa specification](https://wiki.opencog.org/w/File:MeTTa_Specification.pdf)
+and watch video with different [MeTTa example explained](https://singularitynet.zoom.us/rec/share/VqHmU37XtbS7VnKY474tkTvvTglsgOIfsI-21MXWxVm_in7U3tGPcfjjiE0P_15R.yUwPdCzEONSUx1EL?startTime=1650636238000).
+The examples of MeTTa programs can be found in [./python/tests/scripts](./python/tests/scripts) directory.
+Please look look at the [Python unit tests](./python/tests) to understand how one can use MeTTa from Python.
+More complex usage scenarios are located at [MeTTa examples repo](https://github.com/trueagi-io/metta-examples).
+A lot of different materials can be found on [OpenCog wiki server](https://wiki.opencog.org/w/Hyperon).
+
+If you want to contribute the project please see the [contribution guide](./CONTRIBUTING.md) first.
 If you find troubles with the installation, see the [Troubleshooting](#troubleshooting) section below.
 
 # Prepare environment
