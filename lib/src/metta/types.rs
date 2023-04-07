@@ -57,8 +57,8 @@ fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
     }
 }
 
-fn check_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> Vec<Bindings> {
-    log::trace!("check_types: actual: {:?}, expected: {:?}", actual, expected);
+fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> Vec<Bindings> {
+    log::trace!("check_arg_types: actual: {:?}, expected: {:?}", actual, expected);
     let matched = match (actual, meta, expected) {
         ([actual, actual_tail @ ..], [meta, meta_tail @ ..], [expected, expected_tail @ ..]) => {
             let mut result = Vec::new();
@@ -68,7 +68,7 @@ fn check_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bind
                 for typ in actual {
                     match_reducted_types_v2(typ, expected)
                         .flat_map(|b| Bindings::merge_v2(&bindings, &b))
-                        .flat_map(|b| check_types(actual_tail, meta_tail, expected_tail, b))
+                        .flat_map(|b| check_arg_types(actual_tail, meta_tail, expected_tail, b))
                         .for_each(|b| result.push(b));
                 }
             }
@@ -77,7 +77,7 @@ fn check_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bind
         ([], [], []) => vec![bindings],
         _ => vec![],
     };
-    log::trace!("check_types: actual: {:?}, expected: {:?}, matched: {:?}", actual, expected, matched);
+    log::trace!("check_arg_types: actual: {:?}, expected: {:?}, matched: {:?}", actual, expected, matched);
     matched
 }
 
@@ -265,7 +265,7 @@ fn get_application_types(space: &dyn Space, atom: &Atom, expr: &ExpressionAtom) 
         for fn_type in fn_types {
             has_function_types = true;
             let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
-            for bindings in check_types(actual_arg_types.as_slice(), meta_arg_types.as_slice(), expected_arg_types, Bindings::new()) {
+            for bindings in check_arg_types(actual_arg_types.as_slice(), meta_arg_types.as_slice(), expected_arg_types, Bindings::new()) {
                 types.push(apply_bindings_to_atom(&ret_typ, &bindings));
             }
         }
@@ -337,6 +337,19 @@ pub fn match_reducted_types(left: &Atom, right: &Atom, bindings: &mut Bindings) 
     matched
 }
 
+/// Matches two types and returns an iterator over resulting bindings.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::{expr, bind};
+/// use hyperon::matcher::Bindings;
+/// use hyperon::metta::types::match_reducted_types_v2;
+///
+/// let bindings: Vec<Bindings> = match_reducted_types_v2(&expr!("List" t), &expr!("List" "A")).collect();
+///
+/// assert_eq!(bindings, vec![ bind!{ t: expr!("A") } ]);
+/// ```
 pub fn match_reducted_types_v2(left: &Atom, right: &Atom) -> matcher::MatchResultIter {
     let left = replace_undefined_types(left);
     let right = replace_undefined_types(right);
