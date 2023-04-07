@@ -1380,6 +1380,21 @@ mod tests {
     }
 
     #[test]
+    fn get_type_op_non_valid_atom() {
+        let space = Shared::new(metta_space("
+            (: f (-> Number String))
+            (: 42 Number)
+            (: \"test\" String)
+        "));
+
+        let get_type_op = GetTypeOp::new(space);
+        assert_eq_no_order!(get_type_op.execute(&mut vec![expr!("f" "42")]).unwrap(),
+            vec![sym!("String")]);
+        assert_eq_no_order!(get_type_op.execute(&mut vec![expr!("f" "\"test\"")]).unwrap(),
+            Vec::<Atom>::new());
+    }
+
+    #[test]
     fn println_op() {
         assert_eq!(PrintlnOp{}.execute(&mut vec![sym!("A")]), Ok(vec![]));
     }
