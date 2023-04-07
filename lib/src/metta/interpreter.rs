@@ -6,7 +6,7 @@
 //! * [Atom::Variable] is returned as is.
 //! * [Atom::Symbol] and [Atom::Grounded] are type checked; each applicable
 //!   type of the atom is checked vs expected type:
-//!   * If type is corrent then atom is returned as is.
+//!   * If type is correct then atom is returned as is.
 //!   * If type is incorrect then error result is returned.
 //!   * Note: cast may return as many results as many types were casted
 //!     successfully, each result may have its own variable bindings if
@@ -51,7 +51,7 @@
 //!   * If result is not empty plan to interpret each alternative further is
 //!     returned. Note: if each alternative returns error then the result
 //!     of execution is also error.
-//! * If one of previous steps returned error then original expresion is
+//! * If one of previous steps returned error then original expression is
 //!   returned. Otherwise the result of the interpretation is returned.
 //!   It may be empty if one of expression is grounded expression which
 //!   returns empty result.
@@ -61,8 +61,8 @@
 //!   returns empty result, or one of the arguments returned empty result
 //! * error is returned when atom cannot be casted to the type expected
 //!   or all alternative interpretations are errors; the overall result includes
-//!   successfuly interpreted alternatives only
-//! * call of the expression returns either succesful result or original expression
+//!   successfully interpreted alternatives only
+//! * call of the expression returns either successful result or original expression
 
 use crate::*;
 use crate::common::plan::*;
