@@ -57,20 +57,24 @@ fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
     }
 }
 
-fn check_types(actual: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> Vec<Bindings> {
+fn check_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> Vec<Bindings> {
     log::trace!("check_types: actual: {:?}, expected: {:?}", actual, expected);
-    let matched = match (actual, expected) {
-        ([actual, actual_tail @ ..], [expected, expected_tail @ ..]) => {
+    let matched = match (actual, meta, expected) {
+        ([actual, actual_tail @ ..], [meta, meta_tail @ ..], [expected, expected_tail @ ..]) => {
             let mut result = Vec::new();
-            for typ in actual {
-                match_reducted_types_v2(typ, expected)
-                    .flat_map(|b| Bindings::merge_v2(&bindings, &b))
-                    .flat_map(|b| check_types(actual_tail, expected_tail, b))
-                    .for_each(|b| result.push(b))
+            if meta.contains(expected) {
+                result.push(Bindings::new());
+            } else {
+                for typ in actual {
+                    match_reducted_types_v2(typ, expected)
+                        .flat_map(|b| Bindings::merge_v2(&bindings, &b))
+                        .flat_map(|b| check_types(actual_tail, meta_tail, expected_tail, b))
+                        .for_each(|b| result.push(b));
+                }
             }
             result
         },
-        ([], []) => vec![bindings],
+        ([], [], []) => vec![bindings],
         _ => vec![],
     };
     log::trace!("check_types: actual: {:?}, expected: {:?}, matched: {:?}", actual, expected, matched);
@@ -250,19 +254,18 @@ fn get_application_types(space: &dyn Space, atom: &Atom, expr: &ExpressionAtom) 
     if !expr.children().is_empty() {
         let op = get_op(expr);
         let args = get_args(expr);
-        let actual_arg_types: Vec<Vec<Atom>> = args.iter()
-            .map(|arg| {
-                let mut types = get_reducted_types(space, arg);
-                types.push(ATOM_TYPE_ATOM);
-                types.push(get_meta_type(arg));
-                types
-            }).collect();
+        let mut actual_arg_types = Vec::new();
+        let mut meta_arg_types = Vec::new();
+        for arg in args {
+            actual_arg_types.push(get_reducted_types(space, arg));
+            meta_arg_types.push(vec![get_meta_type(arg), ATOM_TYPE_ATOM]);
+        }
         let mut fn_types = get_reducted_types(space, op);
         let fn_types = fn_types.drain(0..).filter(is_func);
         for fn_type in fn_types {
             has_function_types = true;
             let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
-            for bindings in check_types(actual_arg_types.as_slice(), expected_arg_types, Bindings::new()) {
+            for bindings in check_types(actual_arg_types.as_slice(), meta_arg_types.as_slice(), expected_arg_types, Bindings::new()) {
                 types.push(apply_bindings_to_atom(&ret_typ, &bindings));
             }
         }
@@ -578,7 +581,6 @@ mod tests {
         assert!(validate_atom(&space, &expr!("=" ("f" x) x)));
     }
 
-    #[ignore = "FIXME: fix type checking logic"]
     #[test]
     fn simple_dep_types() {
         let space = metta_space("
