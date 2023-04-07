@@ -622,7 +622,7 @@ impl Display for SuperposeOp {
 
 impl Grounded for SuperposeOp {
     fn type_(&self) -> Atom {
-        ATOM_TYPE_UNDEFINED
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_UNDEFINED])
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
@@ -1163,6 +1163,7 @@ pub fn metta_code() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metta::types::validate_atom;
 
     #[test]
     fn match_op() {
@@ -1354,6 +1355,14 @@ mod tests {
         let superpose_op = SuperposeOp{};
         assert_eq!(superpose_op.execute(&mut vec![expr!("A" ("B" "C"))]),
             Ok(vec![sym!("A"), expr!("B" "C")]));
+    }
+
+    #[test]
+    fn superpose_op_type() {
+        let space = GroundingSpace::new();
+        assert!(validate_atom(&space, &expr!({SumOp{}}
+            ({SuperposeOp{}} ({Number::Integer(1)} {Number::Integer(2)} {Number::Integer(3)}))
+            {Number::Integer(1)})));
     }
 
     #[test]
