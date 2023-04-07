@@ -115,7 +115,7 @@ class GroundedObject:
         self.id = id
 
     def __repr__(self):
-        return str(self.content) if self.id is None else self.id
+        return repr(self.content) if self.id is None else self.id
 
     def copy(self):
         return self

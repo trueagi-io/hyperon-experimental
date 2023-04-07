@@ -39,6 +39,7 @@ class AtomTest(unittest.TestCase):
 
     def test_grounded_str(self):
         self.assertEqual(str(ValueAtom(1.0)), "1.0")
+        self.assertEqual(str(ValueAtom("1.0")), "'1.0'")
 
     def test_grounded_type(self):
         self.assertEqual(ValueAtom(1.0).get_type(), AtomKind.GROUNDED)
