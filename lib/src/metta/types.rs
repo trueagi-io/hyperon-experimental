@@ -722,38 +722,40 @@ mod tests {
     }
 
     #[test]
-    fn get_atom_types_undefined_expression_type() {
+    fn get_atom_types_symbol() {
         let space = metta_space("
             (: a A)
+            (: a AA)
         ");
-        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![atom("(A %Undefined%)")]);
-
-        let space = metta_space("");
-        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![ATOM_TYPE_UNDEFINED]);
-
-        let space = metta_space("
-            (: a (-> C D))
-            (: b B)
-        ");
-        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![]);
+        assert_eq_no_order!(get_atom_types(&space, &atom("a")), vec![expr!("A"), expr!("AA")]);
+        assert_eq_no_order!(get_atom_types(&space, &atom("b")), vec![ATOM_TYPE_UNDEFINED]);
     }
 
     #[test]
-    fn get_atom_types_function_call() {
-        let space = metta_space("
-            (: a (-> B C))
-            (: b B)
-        ");
-        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![atom("C")]);
+    fn get_atom_types_variable() {
+        let space = GroundingSpace::new();
+        assert_eq!(get_atom_types(&space, &atom("$x")), vec![ATOM_TYPE_UNDEFINED]);
+    }
+
+    #[test]
+    fn get_atom_types_grounded_atom() {
+        let space = GroundingSpace::new();
+        assert_eq!(get_atom_types(&space, &Atom::value(3)), vec![atom("i32")]);
     }
 
     #[test]
     fn get_atom_types_tuple() {
         let space = metta_space("
             (: a A)
+            (: a AA)
             (: b B)
+            (: b BB)
         ");
-        assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![atom("(A B)")]);
+        assert_eq_no_order!(get_atom_types(&space, &atom("(a b)")),
+            vec![atom("(A B)"), atom("(AA B)"), atom("(A BB)"), atom("(AA BB)")]);
+        assert_eq_no_order!(get_atom_types(&space, &atom("(a c)")),
+            vec![atom("(A %Undefined%)"), atom("(AA %Undefined%)")]);
+        assert_eq_no_order!(get_atom_types(&space, &atom("(c d)")), vec![ATOM_TYPE_UNDEFINED]);
     }
 
     #[test]
@@ -767,24 +769,77 @@ mod tests {
     }
 
     #[test]
-    fn get_atom_types_grounded_atom() {
-        let space = GroundingSpace::new();
-        assert_eq!(get_atom_types(&space, &Atom::value(3)), vec![atom("i32")]);
-    }
-
-    #[test]
     fn get_atom_types_empty_expression() {
         let space = GroundingSpace::new();
         assert_eq!(get_atom_types(&space, &Atom::expr([])), vec![ATOM_TYPE_UNDEFINED]);
     }
 
     #[test]
-    fn get_atom_types_empty_expression_type() {
+    fn get_atom_types_function_call() {
+        let space = metta_space("
+            (: f (-> B C))
+            (: b B)
+        ");
+        assert_eq!(get_atom_types(&space, &atom("(f b)")), vec![atom("C")]);
+        assert_eq!(get_atom_types(&space, &atom("(f a)")), vec![atom("C")]);
+    }
+
+    #[test]
+    fn get_atom_types_function_call_meta_types() {
+        let space = metta_space("
+            (: f_atom (-> Atom D))
+            (: f_expr (-> Expression D))
+            (: f_var (-> Variable D))
+            (: f_sym (-> Symbol D))
+            (: f_gnd (-> Grounded D))
+            (: b B)
+        ");
+        assert_eq!(get_atom_types(&space, &expr!("f_atom" "b")), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_sym" "b")), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_expr" "b")), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_var" "b")), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_gnd" "b")), vec![]);
+
+        assert_eq!(get_atom_types(&space, &expr!("f_atom" b)), vec![atom("D")]);
+        //assert_eq!(get_atom_types(&space, &expr!("f_sym" b)), vec![]);
+        //assert_eq!(get_atom_types(&space, &expr!("f_expr" b)), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_var" b)), vec![atom("D")]);
+        //assert_eq!(get_atom_types(&space, &expr!("f_gnd" b)), vec![]);
+
+        assert_eq!(get_atom_types(&space, &expr!("f_atom" ("b"))), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_sym" ("b"))), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_expr" ("b"))), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_var" ("b"))), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_gnd" ("b"))), vec![]);
+
+        assert_eq!(get_atom_types(&space, &expr!("f_atom" {1})), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_sym" {1})), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_expr" {1})), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_var" {1})), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_gnd" {1})), vec![atom("D")]);
+    }
+
+    #[test]
+    fn get_atom_types_function_call_incorrect_arguments() {
         let space = metta_space("
             (: a (-> C D))
             (: b B)
         ");
         assert_eq!(get_atom_types(&space, &atom("(a b)")), vec![]);
+    }
+
+    #[test]
+    fn get_atom_types_function_call_parameterized_types() {
+        let space = metta_space("
+            (: = (-> $t $t Type))
+            (: Some (-> $p Type))
+            (: foo (-> (Some P)))
+            (: bar (-> $p (Some $p)))
+            (: p X)
+            (: p P)
+        ");
+        assert_eq!(get_atom_types(&space, &metta_atom("(= (foo) (bar p))")),
+            vec![expr!("Type")]);
     }
 
     #[test]
