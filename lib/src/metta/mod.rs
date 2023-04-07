@@ -30,6 +30,7 @@ pub const INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL : Atom = sym!("IncorrectNumberOfA
 pub const NOT_REDUCIBLE_SYMBOL : Atom = sym!("NotReducible");
 pub const NO_VALID_ALTERNATIVES : Atom = sym!("NoValidAlternatives");
 
+// TODO: use stdlib to parse input text
 pub fn metta_space(text: &str) -> GroundingSpace {
     let tokenizer = common_tokenizer();
     let mut parser = SExprParser::new(text);
@@ -55,6 +56,7 @@ fn common_tokenizer() -> Tokenizer {
     tokenizer
 }
 
+// TODO: use stdlib to parse input text
 pub fn metta_atom(atom: &str) -> Atom {
     let tokenizer = common_tokenizer();
     let mut parser = SExprParser::new(atom);
