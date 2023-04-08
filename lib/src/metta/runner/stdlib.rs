@@ -629,9 +629,12 @@ impl Grounded for SuperposeOp {
         let arg_error = || ExecError::from("superpose expects single expression as an argument");
         // `superpose` receives one atom (expression) in order to make composition
         // `(superpose (collapse ...))` possible
-        let expr = atom_as_expr(args.get(0).ok_or_else(arg_error)?).ok_or(arg_error())?;
+        let expr = match args.pop().ok_or_else(arg_error)? {
+            Atom::Expression(expr) => Ok(expr),
+            _ => Err(arg_error()),
+        }?;
 
-        Ok(expr.children().clone())
+        Ok(expr.into_children())
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
