@@ -1163,6 +1163,7 @@ pub fn metta_code() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metta::runner::*;
     use crate::metta::types::validate_atom;
 
     #[test]
@@ -1363,6 +1364,23 @@ mod tests {
         assert!(validate_atom(&space, &expr!({SumOp{}}
             ({SuperposeOp{}} ({Number::Integer(1)} {Number::Integer(2)} {Number::Integer(3)}))
             {Number::Integer(1)})));
+    }
+
+    #[test]
+    fn superpose_op_multiple_interpretations() {
+        let metta = new_metta_rust();
+        let mut parser = SExprParser::new("
+            (= (f) A)
+            (= (f) B)
+            (= (g) C)
+            (= (g) D)
+
+            !(superpose ((f) (g)))
+        ");
+
+        assert_eq_metta_results!(metta.run(&mut parser),
+            Ok(vec![vec![expr!("A"), expr!("B"), expr!("C"), expr!("D"),
+                         expr!("A"), expr!("B"), expr!("C"), expr!("D")]]));
     }
 
     #[test]
