@@ -612,7 +612,15 @@ impl Grounded for CollapseOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct SuperposeOp { }
+pub struct SuperposeOp {
+    space: Shared<GroundingSpace>,
+}
+
+impl SuperposeOp {
+    fn new(space: Shared<GroundingSpace>) -> Self {
+        Self{ space }
+    }
+}
 
 impl Display for SuperposeOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -622,19 +630,22 @@ impl Display for SuperposeOp {
 
 impl Grounded for SuperposeOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_UNDEFINED])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("superpose expects single expression as an argument");
-        // `superpose` receives one atom (expression) in order to make composition
-        // `(superpose (collapse ...))` possible
-        let expr = match args.pop().ok_or_else(arg_error)? {
-            Atom::Expression(expr) => Ok(expr),
-            _ => Err(arg_error()),
-        }?;
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        let expr = atom_as_expr(&atom).ok_or(arg_error())?;
 
-        Ok(expr.into_children())
+        let mut superposed = Vec::new();
+        for atom in expr.children() {
+            match interpret_no_error(self.space.clone(), atom) {
+                Ok(results) => { superposed.extend(results); },
+                Err(message) => { return Err(format!("Error: {}", message).into()) },
+            }
+        }
+        Ok(superposed)
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -1072,8 +1083,6 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"cdr-atom"), move |_| { cdr_atom_op.clone() });
     let cons_atom_op = Atom::gnd(ConsAtomOp{});
     tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
-    let superpose_op = Atom::gnd(SuperposeOp{});
-    tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let println_op = Atom::gnd(PrintlnOp{});
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
     let trace_op = Atom::gnd(TraceOp{});
@@ -1106,6 +1115,8 @@ pub fn register_runner_tokens(metta: &Metta, cwd: PathBuf) {
     tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
     let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
     tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
+    let superpose_op = Atom::gnd(SuperposeOp::new(space.clone()));
+    tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
     // TODO: here clone of the metta is moved into separate location in memory.
@@ -1357,16 +1368,17 @@ mod tests {
 
     #[test]
     fn superpose_op() {
-        let superpose_op = SuperposeOp{};
+        let space = Shared::new(GroundingSpace::new());
+        let superpose_op = SuperposeOp::new(space);
         assert_eq!(superpose_op.execute(&mut vec![expr!("A" ("B" "C"))]),
             Ok(vec![sym!("A"), expr!("B" "C")]));
     }
 
     #[test]
     fn superpose_op_type() {
-        let space = GroundingSpace::new();
-        assert!(validate_atom(&space, &expr!({SumOp{}}
-            ({SuperposeOp{}} ({Number::Integer(1)} {Number::Integer(2)} {Number::Integer(3)}))
+        let space = Shared::new(GroundingSpace::new());
+        assert!(validate_atom(space.borrow().deref(), &expr!({SumOp{}}
+            ({SuperposeOp::new(space.clone())} ({Number::Integer(1)} {Number::Integer(2)} {Number::Integer(3)}))
             {Number::Integer(1)})));
     }
 
@@ -1383,8 +1395,39 @@ mod tests {
         ");
 
         assert_eq_metta_results!(metta.run(&mut parser),
-            Ok(vec![vec![expr!("A"), expr!("B"), expr!("C"), expr!("D"),
-                         expr!("A"), expr!("B"), expr!("C"), expr!("D")]]));
+            Ok(vec![vec![expr!("A"), expr!("B"), expr!("C"), expr!("D")]]));
+    }
+
+    #[test]
+    fn superpose_op_superposed_with_collapse() {
+        let metta = new_metta_rust();
+        let mut parser = SExprParser::new("
+            (= (f) A)
+            (= (f) B)
+
+            !(let $x (collapse (f)) (superpose $x))
+        ");
+
+        assert_eq_metta_results!(metta.run(&mut parser),
+            Ok(vec![vec![expr!("A"), expr!("B")]]));
+    }
+
+    #[test]
+    fn superpose_op_consumes_interpreter_errors() {
+        let metta = new_metta_rust();
+        let mut parser = SExprParser::new("
+            (: f (-> A B))
+            (= (f $x) $x)
+
+            (: a A)
+            (: b B)
+
+            !(superpose ((f (nop)) (f a) (f b)))
+        ");
+
+        assert_eq!(metta.run(&mut parser), Ok(vec![vec![
+                expr!("Error" ("f" ({NopOp{}})) "NoValidAlternatives"),
+                expr!("a"), expr!("Error" "b" "BadType")]]));
     }
 
     #[test]
