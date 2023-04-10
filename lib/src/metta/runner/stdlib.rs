@@ -1160,6 +1160,7 @@ pub fn metta_code() -> &'static str {
     (: if (-> Bool Atom Atom $t))
     (= (if True $then $else) $then)
     (= (if False $then $else) $else)
+    (: Error (-> Atom Atom ErrorType))
     "
 }
 
