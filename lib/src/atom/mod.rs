@@ -349,6 +349,7 @@ pub trait GroundedAtom : mopa::Any + Debug + Display {
     fn as_any_ref(&self) -> &dyn Any;
     fn as_any_mut(&mut self) -> &mut dyn Any;
 
+    // TODO: type_() should return Vec<Atom> because of type non-determinism
     fn type_(&self) -> Atom;
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError>;
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;

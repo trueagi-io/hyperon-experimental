@@ -39,9 +39,11 @@
 ; which is correct
 (match &self (== SocratesIsHuman SamIsMortal) Really?)
 
-; FIXME? These type-check
+; internal call doesn't pass type check despite
+; it is wrapped by function with type parameter
 (let $x (+ 5 "S") $x)
 (: f (-> $t Number))
-(f (+ 5 "S"))
-
+!(assertEqualToResult
+   (f (+ 5 "S"))
+   ((Error "S" BadType)))
 
