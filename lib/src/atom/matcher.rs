@@ -195,7 +195,7 @@ impl Bindings {
 
     fn match_values(&self, current: &Atom, value: &Atom) -> BindingsSet {
         match_atoms_recursively(current, value).into_iter()
-            .flat_map(|binding| self.clone().merge_internal(&binding).into_iter())
+            .flat_map(|binding| binding.merge_internal(self).into_iter())
             .collect()
     }
 
