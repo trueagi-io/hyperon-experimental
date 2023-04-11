@@ -27,7 +27,7 @@
 ; `superpose` reverts `collapse`
 !(assertEqual
   (color)
-  (superpose (collapse (color))))
+  (let $x (collapse (color)) (superpose $x)))
 
 ; In contrast to `match`, if the equality query returns an empty result
 ; the interpreter doesn't reduce a symbolic expression
