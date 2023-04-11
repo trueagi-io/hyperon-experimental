@@ -62,13 +62,13 @@ fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], 
     let matched = match (actual, meta, expected) {
         ([actual, actual_tail @ ..], [meta, meta_tail @ ..], [expected, expected_tail @ ..]) => {
             if meta.contains(expected) {
-                BindingsSet::new()
+                BindingsSet::single()
             } else {
                 let mut result_bindings = BindingsSet::empty();
                 for typ in actual {
                     result_bindings.extend(
                         match_reducted_types_v2(typ, expected)
-                            .flat_map(|b| BindingsSet::from(b).merge_bindings(&bindings))
+                            .flat_map(|b| b.merge_v2(&bindings))
                             .flat_map(|b| check_arg_types(actual_tail, meta_tail, expected_tail, b))
                     );
                 }
