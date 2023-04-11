@@ -19,7 +19,7 @@ class CoverageCommand(Command):
 
 
 setup(name='hyperon',
-      version='0.1.1',
+      version='0.1.2',
       description='Hyperon API in Python',
       packages=['hyperon'],
       install_requires=[],
