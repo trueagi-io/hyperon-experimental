@@ -23,8 +23,6 @@ macro_rules! bind {
     };
 }
 
-
-use std::borrow::{Borrow, ToOwned};
 use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::cmp::max;
@@ -253,7 +251,7 @@ impl Bindings {
     /// 
     /// TODO: Rename to `add_var_binding` when clients have adopted the new API 
     pub fn add_var_binding_v2<T1, T2>(self, var: T1, value: T2) -> Result<Bindings, &'static str>
-        where T1: Borrow<VariableAtom>, T2: Borrow<Atom>
+        where T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>
     {
         let temp_set = self.add_var_binding_internal(var, value);
         match temp_set.len() {
@@ -264,27 +262,27 @@ impl Bindings {
     }
 
     fn add_var_binding_internal<T1, T2>(mut self, var: T1, value: T2) -> BindingsSet
-        where T1: Borrow<VariableAtom>, T2: Borrow<Atom>
+        where T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>
     {
-        match self.id_by_var.get(var.borrow()) {
+        match self.id_by_var.get(var.as_ref()) {
             Some(var_id) =>
                 match self.value_by_id.get(var_id) {
                     Some(current) => {
-                        if current == value.borrow() {
+                        if current == value.as_ref() {
                             BindingsSet::from(self)
                         } else {
-                            self.match_values(current, value.borrow())
+                            self.match_values(current, value.as_ref())
                         }
                     },
                     None => {
-                        self.value_by_id.insert(*var_id, value.borrow().to_owned());
+                        self.value_by_id.insert(*var_id, value.as_value());
                         BindingsSet::from(self)
                     },
                 },
             None => {
                 let var_id = self.get_next_var_id();
-                self.id_by_var.insert(var.borrow().to_owned(), var_id);
-                self.value_by_id.insert(var_id, value.borrow().to_owned());
+                self.id_by_var.insert(var.as_value(), var_id);
+                self.value_by_id.insert(var_id, value.as_value());
                 BindingsSet::from(self)
             },
         }
@@ -693,9 +691,9 @@ impl BindingsSet {
     }
 
     pub fn add_var_binding<T1, T2>(self, var: T1, value: T2) -> Self
-        where T1: Borrow<VariableAtom>, T2: Borrow<Atom>
+        where T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>
     {
-        self.perform_one_to_many_op(|bindings| bindings.add_var_binding_internal(var.borrow(), value.borrow()))
+        self.perform_one_to_many_op(|bindings| bindings.add_var_binding_internal(var.as_ref(), value.as_ref()))
     }
 
     fn merge_bindings(self, b: &Bindings) -> Self {
