@@ -154,15 +154,16 @@ impl Bindings {
         }
     }
 
-    /// Asserts equality between two [VariableAtom]s.  If the existing bindings for `a` and `b` are incompatible
-    /// then this method will return None.  This method will panic if the operation causes split bindings.
-    /// In situations where split bindings are a possibility, call [BindingsSet::add_var_equality] instead.
-    pub fn add_var_equality(self, a: &VariableAtom, b: &VariableAtom) -> Option<Bindings> {
+    /// Asserts equality between two [VariableAtom]s.  If the existing bindings for `a` and `b` are
+    /// incompatible then this method will return an Err.  This method will also return an Err if the
+    /// operation causes split bindings. In situations where split bindings are a possibility, call
+    /// [BindingsSet::add_var_equality] instead.
+    pub fn add_var_equality(self, a: &VariableAtom, b: &VariableAtom) -> Result<Bindings, &'static str> {
         let temp_set = self.add_var_equality_internal(a, b);
         match temp_set.len() {
-            0 => None,
-            1 => Some(Bindings::try_from(temp_set).unwrap()),
-            _ => panic!("Bindings::add_var_equality caused split.  Try BindingsSet::add_var_equality")
+            0 => Err("Bindings are incompatible"),
+            1 => Ok(Bindings::try_from(temp_set).unwrap()),
+            _ => Err("Bindings split occurred.  Try BindingsSet::add_var_equality")
         }
     }
 
@@ -197,7 +198,7 @@ impl Bindings {
             .collect()
     }
 
-    /// Internal function used by the [BindingsSet::add_var_equality] implementation
+    /// Internal function used by the [Bindings::add_var_equality] implementation
     fn merge_var_ids(mut self, a_var_id: u32, b_var_id: u32) -> BindingsSet {
         fn replace_id(id_by_var: &mut HashMap<VariableAtom, u32>, to_replace: u32, replace_by: u32) {
             id_by_var.iter_mut().for_each(|(_var, id)| {
@@ -229,7 +230,7 @@ impl Bindings {
 
     /// Tries to insert `value` as a binding for the `var`. If `self` already
     /// has binding for the `var` and it is not matchable with the `value` then
-    /// function returns None. Otherwise it returns updated Bindings.
+    /// function returns Err. Otherwise it returns updated Bindings.
     ///
     /// # Examples
     ///
@@ -251,14 +252,14 @@ impl Bindings {
     /// ```
     /// 
     /// TODO: Rename to `add_var_binding` when clients have adopted the new API 
-    pub fn add_var_binding_v2<T1, T2>(self, var: T1, value: T2) -> Option<Bindings>
+    pub fn add_var_binding_v2<T1, T2>(self, var: T1, value: T2) -> Result<Bindings, &'static str>
         where T1: Borrow<VariableAtom>, T2: Borrow<Atom>
     {
         let temp_set = self.add_var_binding_internal(var, value);
         match temp_set.len() {
-            0 => None,
-            1 => Some(Bindings::try_from(temp_set).unwrap()),
-            _ => panic!("Bindings::add_var_binding_v2 caused split.  Try BindingsSet::add_var_binding")
+            0 => Err("Bindings are incompatible"),
+            1 => Ok(Bindings::try_from(temp_set).unwrap()),
+            _ => Err("Bindings split occurred.  Try BindingsSet::add_var_binding")
         }
     }
 
@@ -296,11 +297,11 @@ impl Bindings {
     /// TODO: This implementation should be deprecated in favor of the implementation in `add_var_binding_v2`
     pub fn add_var_binding<'a, T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>>(&mut self, var: T1, value: T2) -> bool {
         match self.clone().add_var_binding_v2(var.as_value(), value.as_value()) {
-            Some(new_bindings) => {
+            Ok(new_bindings) => {
                 *self = new_bindings;
                 true
             },
-            None => false
+            Err(_) => false
         }
     }
 
@@ -609,7 +610,7 @@ impl From<&[(VariableAtom, Atom)]> for Bindings {
             bindings = match val {
                 Atom::Variable(val) => bindings.add_var_equality(&var, &val),
                 _ => bindings.add_var_binding_v2(var, val),
-            }.unwrap_or_else(|| panic!("Error creating Bindings from Atoms"));
+            }.unwrap_or_else(|e| panic!("Error creating Bindings from Atoms: {}", e));
         }
         bindings
     }
@@ -1177,13 +1178,14 @@ mod test {
 
     #[ignore = "Requires sorting inside Bindings to be stable"]
     #[test]
-    fn bindings_match_display() {
+    fn bindings_match_display() -> Result<(), &'static str> {
         let bindings = Bindings::new()
-            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b")).unwrap()
-            .add_var_binding_v2(VariableAtom::new("b"), Atom::sym("v")).unwrap()
-            .add_var_equality(&VariableAtom::new("c"), &VariableAtom::new("d")).unwrap();
+            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
+            .add_var_binding_v2(VariableAtom::new("b"), Atom::sym("v"))?
+            .add_var_equality(&VariableAtom::new("c"), &VariableAtom::new("d"))?;
         
         assert_eq!(bindings.to_string(), "{ $a = $b = v, $c = $d }");
+        Ok(())
     }
 
     #[test]
@@ -1195,39 +1197,43 @@ mod test {
     }
 
     #[test]
-    fn bindings_get_variable_bound_to_value() {
+    fn bindings_get_variable_bound_to_value() -> Result<(), &'static str> {
         let bindings = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("x"), expr!("A" y)).unwrap()
-            .add_var_binding_v2(VariableAtom::new("y"), expr!("B" z)).unwrap();
+            .add_var_binding_v2(VariableAtom::new("x"), expr!("A" y))?
+            .add_var_binding_v2(VariableAtom::new("y"), expr!("B" z))?;
 
         assert_eq!(bindings.resolve(&VariableAtom::new("x")), Some(expr!("A" ("B" z))));
         assert_eq!(bindings.resolve(&VariableAtom::new("y")), Some(expr!("B" z)));
+        Ok(())
     }
 
     #[test]
-    fn bindings_get_variable_bound_to_value_with_loop() {
+    fn bindings_get_variable_bound_to_value_with_loop() -> Result<(), &'static str> {
         let bindings = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("x"), expr!("A" y)).unwrap()
-            .add_var_binding_v2(VariableAtom::new("y"), expr!("B" x)).unwrap();
+            .add_var_binding_v2(VariableAtom::new("x"), expr!("A" y))?
+            .add_var_binding_v2(VariableAtom::new("y"), expr!("B" x))?;
 
         assert_eq!(bindings.resolve(&VariableAtom::new("x")), None);
         assert_eq!(bindings.resolve(&VariableAtom::new("y")), None);
+        Ok(())
     }
 
     #[test]
-    fn bindings_get_variable_bound_to_variable() {
+    fn bindings_get_variable_bound_to_variable() -> Result<(), &'static str> {
         let bindings = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("x"), expr!(x)).unwrap();
+            .add_var_binding_v2(VariableAtom::new("x"), expr!(x))?;
         
         assert_eq!(bindings.resolve(&VariableAtom::new("x")), None);
+        Ok(())
     }
 
     #[test]
-    fn bindings_get_variable_equal_to_variable() {
+    fn bindings_get_variable_equal_to_variable() -> Result<(), &'static str> {
         let bindings = Bindings::new()
-            .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("y")).unwrap();
+            .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("y"))?;
 
         assert_eq!(bindings.resolve(&VariableAtom::new("x")), Some(expr!(y)));
+        Ok(())
     }
 
     #[test]
@@ -1239,18 +1245,19 @@ mod test {
     }
 
     #[test]
-    fn bindings_narrow_vars() {
+    fn bindings_narrow_vars() -> Result<(), &'static str> {
         let bindings = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("leftA"), expr!("A")).unwrap()
-            .add_var_equality(&VariableAtom::new("leftA"), &VariableAtom::new("rightB")).unwrap()
-            .add_var_binding_v2(VariableAtom::new("leftC"), expr!("C")).unwrap()
-            .add_var_equality(&VariableAtom::new("leftD"), &VariableAtom::new("rightE")).unwrap()
-            .add_var_binding_v2(VariableAtom::new("rightF"), expr!("F")).unwrap();
+            .add_var_binding_v2(VariableAtom::new("leftA"), expr!("A"))?
+            .add_var_equality(&VariableAtom::new("leftA"), &VariableAtom::new("rightB"))?
+            .add_var_binding_v2(VariableAtom::new("leftC"), expr!("C"))?
+            .add_var_equality(&VariableAtom::new("leftD"), &VariableAtom::new("rightE"))?
+            .add_var_binding_v2(VariableAtom::new("rightF"), expr!("F"))?;
 
         let narrow = bindings.narrow_vars(&HashSet::from([VariableAtom::new("rightB"),
             VariableAtom::new("rightE"), VariableAtom::new("rightF")]));
 
         assert_eq!(narrow, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
+        Ok(())
     }
 
     #[test]
