@@ -19,7 +19,7 @@
 //! of `%Undefined%` type can be matched with any type required.
 
 use super::*;
-use crate::atom::matcher::{Bindings, apply_bindings_to_atom};
+use crate::atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom};
 use crate::space::Space;
 
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
@@ -57,25 +57,26 @@ fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
     }
 }
 
-fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> Vec<Bindings> {
+fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> BindingsSet {
     log::trace!("check_arg_types: actual: {:?}, expected: {:?}", actual, expected);
     let matched = match (actual, meta, expected) {
         ([actual, actual_tail @ ..], [meta, meta_tail @ ..], [expected, expected_tail @ ..]) => {
-            let mut result = Vec::new();
             if meta.contains(expected) {
-                result.push(Bindings::new());
+                BindingsSet::single()
             } else {
+                let mut result_bindings = BindingsSet::empty();
                 for typ in actual {
-                    match_reducted_types_v2(typ, expected)
-                        .flat_map(|b| Bindings::merge_v2(&bindings, &b))
-                        .flat_map(|b| check_arg_types(actual_tail, meta_tail, expected_tail, b))
-                        .for_each(|b| result.push(b));
+                    result_bindings.extend(
+                        match_reducted_types_v2(typ, expected)
+                            .flat_map(|b| b.merge_v2(&bindings))
+                            .flat_map(|b| check_arg_types(actual_tail, meta_tail, expected_tail, b))
+                    );
                 }
+                result_bindings
             }
-            result
         },
-        ([], [], []) => vec![bindings],
-        _ => vec![],
+        ([], [], []) => BindingsSet::from(bindings),
+        _ => BindingsSet::empty(),
     };
     log::trace!("check_arg_types: actual: {:?}, expected: {:?}, matched: {:?}", actual, expected, matched);
     matched

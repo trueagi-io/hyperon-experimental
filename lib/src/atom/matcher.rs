@@ -23,9 +23,11 @@ macro_rules! bind {
     };
 }
 
-use super::*;
-
 use std::collections::{HashMap, HashSet};
+use std::convert::TryFrom;
+use std::cmp::max;
+
+use super::*;
 use crate::common::reformove::RefOrMove;
 
 enum VarResolutionResult<T> {
@@ -150,38 +152,52 @@ impl Bindings {
         }
     }
 
-    fn add_var_equality(mut self, a: &VariableAtom, b: &VariableAtom) -> Vec<Bindings> {
-        match (self.id_by_var.get(a).copied(), self.id_by_var.get(b).copied()) {
-            (Some(a_var_id), Some(b_var_id))  =>
+    /// Asserts equality between two [VariableAtom]s.  If the existing bindings for `a` and `b` are
+    /// incompatible then this method will return an Err.  This method will also return an Err if the
+    /// operation causes split bindings. In situations where split bindings are a possibility, call
+    /// [BindingsSet::add_var_equality] instead.
+    pub fn add_var_equality(self, a: &VariableAtom, b: &VariableAtom) -> Result<Bindings, &'static str> {
+        let temp_set = self.add_var_equality_internal(a, b);
+        match temp_set.len() {
+            0 => Err("Bindings are incompatible"),
+            1 => Ok(Bindings::try_from(temp_set).unwrap()),
+            _ => Err("Bindings split occurred.  Try BindingsSet::add_var_equality")
+        }
+    }
+
+    fn add_var_equality_internal(mut self, a: &VariableAtom, b: &VariableAtom) -> BindingsSet {
+        match (self.id_by_var.get(a), self.id_by_var.get(b)) {
+            (Some(&a_var_id), Some(&b_var_id))  =>
                 if a_var_id != b_var_id {
                     self.merge_var_ids(a_var_id, b_var_id)
                 } else {
-                    vec![self]
+                    BindingsSet::from(self)
                 }
-            (Some(var_id), None) => {
+            (Some(&var_id), None) => {
                 self.id_by_var.insert(b.clone(), var_id);
-                vec![self]
+                BindingsSet::from(self)
             },
-            (None, Some(var_id)) => {
+            (None, Some(&var_id)) => {
                 self.id_by_var.insert(a.clone(), var_id);
-                vec![self]
+                BindingsSet::from(self)
             },
             (None, None) => {
                 let var_id = self.get_next_var_id();
                 self.id_by_var.insert(a.clone(), var_id);
                 self.id_by_var.insert(b.clone(), var_id);
-                vec![self]
+                BindingsSet::from(self)
             },
         }
     }
 
-    fn match_values(&self, current: &Atom, value: &Atom) -> Vec<Bindings> {
-        match_atoms_recursively(current, value)
-            .flat_map(|binding| Bindings::merge_v2(self, &binding))
+    fn match_values(&self, current: &Atom, value: &Atom) -> BindingsSet {
+        match_atoms_recursively(current, value).into_iter()
+            .flat_map(|binding| binding.merge_v2(self))
             .collect()
     }
 
-    fn merge_var_ids(mut self, a_var_id: u32, b_var_id: u32) -> Vec<Bindings> {
+    /// Internal function used by the [Bindings::add_var_equality] implementation
+    fn merge_var_ids(mut self, a_var_id: u32, b_var_id: u32) -> BindingsSet {
         fn replace_id(id_by_var: &mut HashMap<VariableAtom, u32>, to_replace: u32, replace_by: u32) {
             id_by_var.iter_mut().for_each(|(_var, id)| {
                 if *id == to_replace {
@@ -195,11 +211,11 @@ impl Bindings {
             },
             (Some(_), None) => {
                 replace_id(&mut self.id_by_var, b_var_id, a_var_id);
-                vec![self]
+                BindingsSet::from(self)
             }
             _ => {
                 replace_id(&mut self.id_by_var, a_var_id, b_var_id);
-                vec![self]
+                BindingsSet::from(self)
             },
         }
     }
@@ -212,7 +228,7 @@ impl Bindings {
 
     /// Tries to insert `value` as a binding for the `var`. If `self` already
     /// has binding for the `var` and it is not matchable with the `value` then
-    /// function returns vec![]. Otherwise it returns updated bindings.
+    /// function returns Err. Otherwise it returns updated Bindings.
     ///
     /// # Examples
     ///
@@ -234,27 +250,40 @@ impl Bindings {
     /// ```
     /// 
     /// TODO: Rename to `add_var_binding` when clients have adopted the new API 
-    pub fn add_var_binding_v2<'a, T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>>(mut self, var: T1, value: T2) -> Vec<Bindings> {
+    pub fn add_var_binding_v2<T1, T2>(self, var: T1, value: T2) -> Result<Bindings, &'static str>
+        where T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>
+    {
+        let temp_set = self.add_var_binding_internal(var, value);
+        match temp_set.len() {
+            0 => Err("Bindings are incompatible"),
+            1 => Ok(Bindings::try_from(temp_set).unwrap()),
+            _ => Err("Bindings split occurred.  Try BindingsSet::add_var_binding")
+        }
+    }
+
+    fn add_var_binding_internal<T1, T2>(mut self, var: T1, value: T2) -> BindingsSet
+        where T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>
+    {
         match self.id_by_var.get(var.as_ref()) {
             Some(var_id) =>
                 match self.value_by_id.get(var_id) {
                     Some(current) => {
                         if current == value.as_ref() {
-                            vec![self]
+                            BindingsSet::from(self)
                         } else {
                             self.match_values(current, value.as_ref())
                         }
                     },
                     None => {
                         self.value_by_id.insert(*var_id, value.as_value());
-                        vec![self]
+                        BindingsSet::from(self)
                     },
                 },
             None => {
                 let var_id = self.get_next_var_id();
                 self.id_by_var.insert(var.as_value(), var_id);
                 self.value_by_id.insert(var_id, value.as_value());
-                vec![self]
+                BindingsSet::from(self)
             },
         }
     }
@@ -265,16 +294,12 @@ impl Bindings {
     ///
     /// TODO: This implementation should be deprecated in favor of the implementation in `add_var_binding_v2`
     pub fn add_var_binding<'a, T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>>(&mut self, var: T1, value: T2) -> bool {
-        let mut bindings = self.clone().add_var_binding_v2(var, value);
-        match bindings.len() {
-            0 => false,
-            1 => {
-                *self = bindings.pop().unwrap();
+        match self.clone().add_var_binding_v2(var.as_value(), value.as_value()) {
+            Ok(new_bindings) => {
+                *self = new_bindings;
                 true
-            }
-            _ => {
-                panic!("Error: add_var_binding doesn't support returning multiple bindings.  Use new API instead");
-            }
+            },
+            Err(_) => false
         }
     }
 
@@ -290,8 +315,9 @@ impl Bindings {
         }
     }
 
-    /// Merges `a` and `b` bindings if they are compatible. Returns vec![]
-    /// if incompatibility is found.
+    /// Merges `b` bindings into self if they are compatible.  May return a [BindingsSet] containings
+    /// multiple [Bindings] if appropriate.  If no compatible bindings can be merged, [BindingsSet::empty()]
+    /// will be returned.
     ///
     /// # Examples
     ///
@@ -308,22 +334,26 @@ impl Bindings {
     /// ```
     /// 
     /// TODO: Rename to `merge` when clients have adopted new API 
-    pub fn merge_v2(a: &Bindings, b: &Bindings) -> Vec<Bindings> {
-        log::trace!("Bindings::merge: a: {}, b: {}", a, b);
+    pub fn merge_v2(self, b: &Bindings) -> BindingsSet {
+        log::trace!("Bindings::merge: a: {}, b: {}", self, b);
+        let trace_self = match log::log_enabled!(log::Level::Trace) {
+            true => Some(self.clone()),
+            false => None
+        };
         
-        let results = b.id_by_var.iter().fold(vec![(a.clone(), HashMap::new())],
-            |results, (var, var_id)| -> Vec<(Bindings, HashMap<u32, VariableAtom>)> {
-                let mut all_results = vec![];
+        let results = b.id_by_var.iter().fold(smallvec::smallvec![(self, HashMap::new())],
+            |results, (var, var_id)| -> smallvec::SmallVec<[(Bindings, HashMap<u32, VariableAtom>); 1]> {
+                let mut all_results = smallvec::smallvec![];
                 
                 for (result, mut b_vars_merged) in results {
                     let new_results = if let Some(first_var) = b_vars_merged.get(&var_id) {
-                        result.add_var_equality(first_var, var)
+                        result.add_var_equality_internal(first_var, var)
                     } else {
                         b_vars_merged.insert(*var_id, var.clone());
                         if let Some(value) = b.value_by_id.get(var_id) {
-                            result.add_var_binding_v2(var, value)
+                            result.add_var_binding_internal(var, value)
                         } else {
-                            vec![result.with_var_no_value(var)]
+                            BindingsSet::from(result.with_var_no_value(var))
                         }
                     };
                     all_results.extend(new_results.into_iter().map(|new_binding| (new_binding, b_vars_merged.clone())));
@@ -332,13 +362,13 @@ impl Bindings {
             });
 
         let results = results.into_iter().map(|(result, _)| result).collect();
-        log::trace!("Bindings::merge: {} ^ {} -> {:?}", a, b, results);
+        log::trace!("Bindings::merge: {} ^ {} -> {:?}", trace_self.unwrap(), b, results);
         results
     }
 
     /// Compatibility shim for merge_v2.  TODO: Delete then the new API has been adopted downstream
     pub fn merge(a: &Bindings, b: &Bindings) -> Option<Bindings> {
-        Self::merge_v2(a, b).pop()
+        a.clone().merge_v2(b).into_iter().next()
     }
 
     fn vars_by_id(&self) -> HashMap<&u32, Vec<&VariableAtom>> {
@@ -533,9 +563,6 @@ impl Debug for Bindings {
 
 }
 
-use std::convert::TryFrom;
-use std::cmp::max;
-
 impl PartialEq for Bindings {
 
     fn eq(&self, other: &Self) -> bool {
@@ -578,18 +605,111 @@ impl From<&[(VariableAtom, Atom)]> for Bindings {
     fn from(pairs: &[(VariableAtom, Atom)]) -> Self {
         let mut bindings = Bindings::new();
         for (var, val) in pairs {
-            let mut result_vec = match val {
+            bindings = match val {
                 Atom::Variable(val) => bindings.add_var_equality(&var, &val),
                 _ => bindings.add_var_binding_v2(var, val),
-            };
-            match result_vec.len() {
-                0 => { bindings = Bindings::new(); },
-                1 => { bindings = result_vec.pop().unwrap(); },
-                _ => { panic!("Error: Multiple Bindings created from Atoms slice"); }
-            }
+            }.unwrap_or_else(|e| panic!("Error creating Bindings from Atoms: {}", e));
         }
         bindings
     }
+}
+
+/// Represents a set of [Bindings] instances resulting from an operation where multiple matches are possible.
+#[derive(Clone, Debug)]
+pub struct BindingsSet(smallvec::SmallVec<[Bindings; 1]>);
+
+impl core::iter::FromIterator<Bindings> for BindingsSet {
+    fn from_iter<I: IntoIterator<Item=Bindings>>(iter: I) -> Self {
+        let new_vec = iter.into_iter().collect();
+        BindingsSet(new_vec)
+    }
+}
+
+impl IntoIterator for BindingsSet {
+    type Item = Bindings;
+    type IntoIter = smallvec::IntoIter<[Bindings; 1]>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
+}
+
+impl From<Bindings> for BindingsSet {
+    fn from(bindings: Bindings) -> Self {
+        BindingsSet(smallvec::smallvec![bindings])
+    }
+}
+
+impl TryFrom<BindingsSet> for Bindings {
+    type Error = &'static str;
+    fn try_from(mut set: BindingsSet) -> Result<Self, &'static str> {
+        match set.len() {
+            0 => Ok(Bindings::new()),
+            1 => Ok(set.0.pop().unwrap()),
+            _ => Err("Set Contains Multiple Bindings")
+        }
+    }
+}
+
+impl Extend<Bindings> for BindingsSet {
+    fn extend<I: IntoIterator<Item=Bindings>>(&mut self, iter: I) {
+        self.0.extend(iter);
+    }
+}
+
+impl core::ops::Deref for BindingsSet {
+    type Target = [Bindings];
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl BindingsSet {
+
+    pub fn empty() -> Self {
+        BindingsSet(smallvec::smallvec![])
+    }
+
+    pub fn single() -> Self {
+        BindingsSet(smallvec::smallvec![Bindings::new()])
+    }
+
+    /// An internal function to execute an operation that may take a single Bindings instance and replace
+    /// it with a new BindingsSet containing zero or more Bindings instances
+    fn perform_one_to_many_op<F>(mut self, mut func: F) -> Self
+        where F: FnMut(Bindings) -> BindingsSet
+    {
+        let mut new_set = BindingsSet::empty();
+        for bindings in self.0.drain(..) {
+            new_set.extend(func(bindings));
+        }
+        new_set
+    }
+
+    pub fn add_var_equality(self, a: &VariableAtom, b: &VariableAtom) -> Self {
+        self.perform_one_to_many_op(|bindings| bindings.add_var_equality_internal(a, b))
+    }
+
+    pub fn add_var_binding<T1, T2>(self, var: T1, value: T2) -> Self
+        where T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>
+    {
+        self.perform_one_to_many_op(|bindings| bindings.add_var_binding_internal(var.as_ref(), value.as_ref()))
+    }
+
+    fn merge_bindings(self, b: &Bindings) -> Self {
+        self.perform_one_to_many_op(|bindings| bindings.merge_v2(b))
+    }
+
+    /// Merges each bindings from `other` to each bindings from `self`
+    /// 
+    /// NOTE: this subsumes the functionality formerly in `match_result_product`
+    pub fn merge(self, other: &BindingsSet) -> Self {
+        let mut new_set = BindingsSet::empty();
+        for other_binding in other.iter() {
+            new_set.extend(self.clone().merge_bindings(other_binding).into_iter());
+        }
+        new_set
+    }   
 }
 
 /// Iterator over `(&VariableAtom, Atom)` pairs in [Bindings].
@@ -632,6 +752,8 @@ impl<'a> IntoIterator for &'a Bindings {
 
 
 /// Iterator over atom matching results. Each result is an instance of [Bindings].
+//TODO: A situation where a MatchResultIter returns an unbounded (infinite) number of results
+// will hang this implementation, on account of `.collect()`
 pub type MatchResultIter = Box<dyn Iterator<Item=matcher::Bindings>>;
 
 /// Matches two atoms and returns an iterator over results. Atoms are
@@ -673,7 +795,7 @@ pub type MatchResultIter = Box<dyn Iterator<Item=matcher::Bindings>>;
 /// assert_eq!(empty, vec![]);
 /// ```
 pub fn match_atoms<'a>(left: &'a Atom, right: &'a Atom) -> MatchResultIter {
-    Box::new(match_atoms_recursively(left, right)
+    Box::new(match_atoms_recursively(left, right).into_iter()
         .filter(|binding| {
             if binding.has_loops() {
                 log::trace!("match_atoms: remove bindings which contains a variable loop: {}", binding);
@@ -684,31 +806,20 @@ pub fn match_atoms<'a>(left: &'a Atom, right: &'a Atom) -> MatchResultIter {
         }))
 }
 
-fn match_atoms_recursively(left: &Atom, right: &Atom) -> MatchResultIter {
+fn match_atoms_recursively(left: &Atom, right: &Atom) -> BindingsSet {
     log::trace!("match_atoms_recursively: {} ~ {}", left, right);
-    fn empty() -> MatchResultIter { Box::new(std::iter::empty()) }
-    fn once(b: Bindings) -> MatchResultIter { Box::new(std::iter::once(b)) }
 
     match (left, right) {
-        (Atom::Symbol(a), Atom::Symbol(b)) if a == b => once(Bindings::new()),
-        (Atom::Variable(dv), Atom::Variable(pv)) => {
-            let bindings = Bindings::new().add_var_equality(dv, pv);
-            Box::new(bindings.into_iter())
-        }
-        (Atom::Variable(v), b) => {
-            let bindings = Bindings::new().add_var_binding_v2(v, b);
-            Box::new(bindings.into_iter())
-        }
-        (a, Atom::Variable(v)) => {
-            let bindings = Bindings::new().add_var_binding_v2(v, a);
-            Box::new(bindings.into_iter())
-        },
+        (Atom::Symbol(a), Atom::Symbol(b)) if a == b => BindingsSet::single(),
+        (Atom::Variable(dv), Atom::Variable(pv)) => BindingsSet::single().add_var_equality(dv, pv),
+        (Atom::Variable(v), b) => BindingsSet::single().add_var_binding(v, b),
+        (a, Atom::Variable(v)) => BindingsSet::single().add_var_binding(v, a),
         (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b }))
-                if a.len() == b.len() => {
-            a.iter().zip(b.iter()).fold(once(Bindings::new()),
-                |acc, (a, b)| {
-                    match_result_product(acc, match_atoms_recursively(a, b))
-                })
+        if a.len() == b.len() => {
+            a.iter().zip(b.iter()).fold(BindingsSet::single(),
+            |acc, (a, b)| {
+                acc.merge(&match_atoms_recursively(a, b))
+            })
         },
         // TODO: one more case for the special flag to see if GroundedAtom is
         // matchable. If GroundedAtom is matched with VariableAtom there are
@@ -716,27 +827,23 @@ fn match_atoms_recursively(left: &Atom, right: &Atom) -> MatchResultIter {
         // GroundedAtom::match(); (2) assign GroundedAtom to the Variable.
         // Returning both results breaks tests right now.
         (Atom::Grounded(a), _) => {
-            Box::new(a.match_(right))
+            a.match_(right).collect()
         },
         (_, Atom::Grounded(b)) => {
-            Box::new(b.match_(left))
+            b.match_(left).collect()
         },
-        _ => empty(),
+        _ => BindingsSet::empty(),
     }
 }
 
+//TODO: This function is redundant, as the functionality is subsumed by BindingsSet::merge
 /// Merges each bindings from `prev` iter to each bindings from `next`
 /// iter. The result is an iter over successfully merged bindings.
 pub fn match_result_product(prev: MatchResultIter, next: MatchResultIter) -> MatchResultIter {
-    let next : Vec<Bindings> = next.collect();
+    let next: BindingsSet = next.collect();
+    let prev: BindingsSet = prev.collect();
     log::trace!("match_result_product_iter, next: {:?}", next);
-    let result_iter = prev.flat_map(move |p| -> Vec<Bindings> {
-        next.iter().flat_map(|n| {
-            Bindings::merge_v2(&p, n)
-        }).collect()
-    });
-
-    Box::new(result_iter)
+    Box::new(prev.merge(&next).into_iter())
 }
 
 /// Applies bindings to atom. Function replaces all variables in atom by
@@ -998,8 +1105,11 @@ mod test {
             match other {
                 Atom::Expression(expr) if expr.children().len() == 1 =>
                     match expr.children()[0] {
-                        Atom::Variable(ref var) => Box::new(
-                            Bindings::new().add_var_binding_v2(var, expr!({42})).into_iter()),
+                        Atom::Variable(ref var) => {
+                            let bindings = Bindings::new()
+                                .add_var_binding_v2(var, expr!({42})).unwrap();
+                            Box::new(std::iter::once(bindings))
+                        },
                         _ => Box::new(std::iter::empty()),
                 }
                 _ => Box::new(std::iter::empty()),
@@ -1066,13 +1176,14 @@ mod test {
 
     #[ignore = "Requires sorting inside Bindings to be stable"]
     #[test]
-    fn bindings_match_display() {
+    fn bindings_match_display() -> Result<(), &'static str> {
         let bindings = Bindings::new()
-            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b")).pop().unwrap()
-            .add_var_binding_v2(VariableAtom::new("b"), Atom::sym("v")).pop().unwrap()
-            .add_var_equality(&VariableAtom::new("c"), &VariableAtom::new("d")).pop().unwrap();
+            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
+            .add_var_binding_v2(VariableAtom::new("b"), Atom::sym("v"))?
+            .add_var_equality(&VariableAtom::new("c"), &VariableAtom::new("d"))?;
         
         assert_eq!(bindings.to_string(), "{ $a = $b = v, $c = $d }");
+        Ok(())
     }
 
     #[test]
@@ -1084,39 +1195,43 @@ mod test {
     }
 
     #[test]
-    fn bindings_get_variable_bound_to_value() {
+    fn bindings_get_variable_bound_to_value() -> Result<(), &'static str> {
         let bindings = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("x"), expr!("A" y)).pop().unwrap()
-            .add_var_binding_v2(VariableAtom::new("y"), expr!("B" z)).pop().unwrap();
+            .add_var_binding_v2(VariableAtom::new("x"), expr!("A" y))?
+            .add_var_binding_v2(VariableAtom::new("y"), expr!("B" z))?;
 
         assert_eq!(bindings.resolve(&VariableAtom::new("x")), Some(expr!("A" ("B" z))));
         assert_eq!(bindings.resolve(&VariableAtom::new("y")), Some(expr!("B" z)));
+        Ok(())
     }
 
     #[test]
-    fn bindings_get_variable_bound_to_value_with_loop() {
+    fn bindings_get_variable_bound_to_value_with_loop() -> Result<(), &'static str> {
         let bindings = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("x"), expr!("A" y)).pop().unwrap()
-            .add_var_binding_v2(VariableAtom::new("y"), expr!("B" x)).pop().unwrap();
+            .add_var_binding_v2(VariableAtom::new("x"), expr!("A" y))?
+            .add_var_binding_v2(VariableAtom::new("y"), expr!("B" x))?;
 
         assert_eq!(bindings.resolve(&VariableAtom::new("x")), None);
         assert_eq!(bindings.resolve(&VariableAtom::new("y")), None);
+        Ok(())
     }
 
     #[test]
-    fn bindings_get_variable_bound_to_variable() {
+    fn bindings_get_variable_bound_to_variable() -> Result<(), &'static str> {
         let bindings = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("x"), expr!(x)).pop().unwrap();
+            .add_var_binding_v2(VariableAtom::new("x"), expr!(x))?;
         
         assert_eq!(bindings.resolve(&VariableAtom::new("x")), None);
+        Ok(())
     }
 
     #[test]
-    fn bindings_get_variable_equal_to_variable() {
-        let bindings = Bindings::new();
-        let bindings = bindings.add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("y")).pop().unwrap();
+    fn bindings_get_variable_equal_to_variable() -> Result<(), &'static str> {
+        let bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("y"))?;
 
         assert_eq!(bindings.resolve(&VariableAtom::new("x")), Some(expr!(y)));
+        Ok(())
     }
 
     #[test]
@@ -1128,18 +1243,19 @@ mod test {
     }
 
     #[test]
-    fn bindings_narrow_vars() {
+    fn bindings_narrow_vars() -> Result<(), &'static str> {
         let bindings = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("leftA"), expr!("A")).pop().unwrap()
-            .add_var_equality(&VariableAtom::new("leftA"), &VariableAtom::new("rightB")).pop().unwrap()
-            .add_var_binding_v2(VariableAtom::new("leftC"), expr!("C")).pop().unwrap()
-            .add_var_equality(&VariableAtom::new("leftD"), &VariableAtom::new("rightE")).pop().unwrap()
-            .add_var_binding_v2(VariableAtom::new("rightF"), expr!("F")).pop().unwrap();
+            .add_var_binding_v2(VariableAtom::new("leftA"), expr!("A"))?
+            .add_var_equality(&VariableAtom::new("leftA"), &VariableAtom::new("rightB"))?
+            .add_var_binding_v2(VariableAtom::new("leftC"), expr!("C"))?
+            .add_var_equality(&VariableAtom::new("leftD"), &VariableAtom::new("rightE"))?
+            .add_var_binding_v2(VariableAtom::new("rightF"), expr!("F"))?;
 
         let narrow = bindings.narrow_vars(&HashSet::from([VariableAtom::new("rightB"),
             VariableAtom::new("rightE"), VariableAtom::new("rightF")]));
 
         assert_eq!(narrow, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
+        Ok(())
     }
 
     #[test]
@@ -1147,9 +1263,9 @@ mod test {
         let pair = ReturnPairInX{};
 
         // ({ x -> B, x -> C } (A $x)) ~ ($s $s)
-        let bindings = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("s"), expr!({ pair })).pop().unwrap()
-            .add_var_binding_v2(VariableAtom::new("s"), expr!("A" x));
+        let bindings = BindingsSet::single()
+            .add_var_binding(VariableAtom::new("s"), expr!({ pair }))
+            .add_var_binding(VariableAtom::new("s"), expr!("A" x));
 
         // Bindings::add_var_binding() should return a list of resulting
         // Bindings instances.
@@ -1163,9 +1279,9 @@ mod test {
         let pair = ReturnPairInX{};
 
         // ({ x -> B, x -> C } $y $y) ~ ($s (A $x) $s)
-        let bindings = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("s"), expr!({ pair })).pop().unwrap()
-            .add_var_binding_v2(VariableAtom::new("y"), expr!("A" x)).pop().unwrap()
+        let bindings = BindingsSet::single()
+            .add_var_binding(VariableAtom::new("s"), expr!({ pair }))
+            .add_var_binding(VariableAtom::new("y"), expr!("A" x))
             .add_var_equality(&VariableAtom::new("y"), &VariableAtom::new("s"));
 
         // Bindings::add_var_binding() should return a list of resulting
@@ -1217,9 +1333,9 @@ mod test {
         let a = bind!{ a: expr!({ assigner }), b: expr!({ assigner }) };
         let b = bind!{ a: expr!(x "C" "D"), b: expr!(y "E" "F") };
 
-        let merge = Bindings::merge_v2(&a, &b);
+        let bindings = BindingsSet::from(a).merge(&BindingsSet::from(b));
 
-        assert_eq_no_order!(merge, vec![
+        assert_eq_no_order!(bindings, vec![
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("C"), y: expr!("E") },
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("C"), y: expr!("F") },
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("D"), y: expr!("E") },
