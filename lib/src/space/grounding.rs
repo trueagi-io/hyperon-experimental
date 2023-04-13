@@ -4,7 +4,7 @@
 use crate::*;
 use super::*;
 use crate::atom::*;
-use crate::atom::matcher::{Bindings, match_atoms};
+use crate::atom::matcher::{BindingsSet, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::matcher::MatchResultIter;
 use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
@@ -144,15 +144,15 @@ impl GroundingSpace {
     /// ```
     /// use hyperon::sym;
     /// use hyperon::space::grounding::GroundingSpace;
-    /// use hyperon::atom::matcher::Bindings;
+    /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     /// 
     /// space.add(sym!("B"));
     ///
-    /// assert_eq!(space.query(&sym!("A")), vec![Bindings::new()]);
-    /// assert_eq!(space.query(&sym!("B")), vec![Bindings::new()]);
-    /// assert_eq!(space.query(&sym!("C")), vec![]);
+    /// assert_eq!(space.query(&sym!("A")), BindingsSet::single());
+    /// assert_eq!(space.query(&sym!("B")), BindingsSet::single());
+    /// assert_eq!(space.query(&sym!("C")), BindingsSet::empty());
     /// ```
     pub fn add(&mut self, atom: Atom) {
         //log::debug!("GroundingSpace::add(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
@@ -180,13 +180,14 @@ impl GroundingSpace {
     ///
     /// ```
     /// use hyperon::sym;
+    /// use hyperon::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     /// 
     /// space.remove(&sym!("A"));
     ///
-    /// assert_eq!(space.query(&sym!("A")), vec![]);
+    /// assert_eq!(space.query(&sym!("A")), BindingsSet::empty());
     /// ```
     pub fn remove(&mut self, atom: &Atom) -> bool {
         //log::debug!("GroundingSpace::remove(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
@@ -220,14 +221,14 @@ impl GroundingSpace {
     /// ```
     /// use hyperon::sym;
     /// use hyperon::space::grounding::GroundingSpace;
-    /// use hyperon::atom::matcher::Bindings;
+    /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     /// 
     /// space.replace(&sym!("A"), sym!("B"));
     ///
-    /// assert_eq!(space.query(&sym!("A")), vec![]);
-    /// assert_eq!(space.query(&sym!("B")), vec![Bindings::new()]);
+    /// assert_eq!(space.query(&sym!("A")), BindingsSet::empty());
+    /// assert_eq!(space.query(&sym!("B")), BindingsSet::single());
     /// ```
     pub fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         let is_replaced = self.replace_internal(from, to.clone());
@@ -254,6 +255,7 @@ impl GroundingSpace {
     ///
     /// ```
     /// use hyperon::{expr, bind, sym};
+    /// use hyperon::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let space = GroundingSpace::from_vec(vec![expr!("A" "B"), expr!("B" "C")]);
@@ -261,24 +263,23 @@ impl GroundingSpace {
     ///
     /// let result = space.query(&query);
     ///
-    /// assert_eq!(result, vec![bind!{x: sym!("B")}]);
+    /// assert_eq!(result, BindingsSet::from(bind!{x: sym!("B")}));
     /// ```
-    pub fn query(&self, query: &Atom) -> Vec<Bindings> {
+    pub fn query(&self, query: &Atom) -> BindingsSet {
         match split_expr(query) {
             // Cannot match with COMMA_SYMBOL here, because Rust allows
             // it only when Atom has PartialEq and Eq derived.
             Some((sym @ Atom::Symbol(_), args)) if *sym == COMMA_SYMBOL => {
-                let result = args.fold(vec![bind!{}],
+                args.fold(BindingsSet::single(),
                     |mut acc, query| {
                         let result = if acc.is_empty() {
                             acc
                         } else {
-                            acc.drain(0..).flat_map(|prev| -> Vec<Bindings> {
+                            acc.drain(0..).flat_map(|prev| -> BindingsSet {
                                 let query = matcher::apply_bindings_to_atom(&query, &prev);
                                 let mut res = self.query(&query);
                                 res.drain(0..)
-                                    .map(|next| Bindings::merge(&prev, &next))
-                                    .filter(Option::is_some).map(Option::unwrap)
+                                    .flat_map(|next| next.merge_v2(&prev))
                                     .map(|next| matcher::apply_bindings_to_bindings(&next, &next)
                                         .expect("Self consistent bindings are expected"))
                                     .collect()
@@ -286,17 +287,16 @@ impl GroundingSpace {
                         };
                         log::debug!("query: current result: {:?}", result);
                         result
-                    });
-                result
+                    })
             },
             _ => self.single_query(query),
         }
     }
 
     /// Executes simple `query` without sub-queries on the space.
-    fn single_query(&self, query: &Atom) -> Vec<Bindings> {
+    fn single_query(&self, query: &Atom) -> BindingsSet {
         log::debug!("single_query: query: {}", query);
-        let mut result = Vec::new();
+        let mut result = BindingsSet::empty();
         let mut query_vars = HashSet::new();
         query.iter().filter_map(AtomIter::extract_var).for_each(|var| { query_vars.insert(var.clone()); });
         for i in self.index.get(&atom_to_trie_key(query)) {
@@ -323,7 +323,7 @@ impl Space for GroundingSpace {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
         GroundingSpace::register_observer(self, observer)
     }
-    fn query(&self, query: &Atom) -> Vec<Bindings> {
+    fn query(&self, query: &Atom) -> BindingsSet {
         GroundingSpace::query(self, query)
     }
 }
@@ -491,7 +491,7 @@ mod test {
         space.add(Atom::sym("B"));
         space.remove(&Atom::sym("A"));
 
-        assert_eq!(space.query(&Atom::sym("B")), vec![Bindings::new()]);
+        assert_eq!(space.query(&Atom::sym("B")), BindingsSet::single());
     }
 
     #[test]
@@ -529,21 +529,21 @@ mod test {
     fn test_match_symbol() {
         let mut space = GroundingSpace::new();
         space.add(expr!("foo"));
-        assert_eq!(space.query(&expr!("foo")), vec![bind!{}]);
+        assert_eq!(space.query(&expr!("foo")), BindingsSet::single());
     }
 
     #[test]
     fn test_match_variable() {
         let mut space = GroundingSpace::new();
         space.add(expr!("foo"));
-        assert_eq!(space.query(&expr!(x)), vec![bind!{x: expr!("foo")}]);
+        assert_eq!(space.query(&expr!(x)), BindingsSet::from(bind!{x: expr!("foo")}));
     }
 
     #[test]
     fn test_match_expression() {
         let mut space = GroundingSpace::new();
         space.add(expr!("+" "a" ("*" "b" "c")));
-        assert_eq!(space.query(&expr!("+" "a" ("*" "b" "c"))), vec![bind!{}]);
+        assert_eq!(space.query(&expr!("+" "a" ("*" "b" "c"))), BindingsSet::single());
     }
 
     #[test]
@@ -551,14 +551,14 @@ mod test {
         let mut space = GroundingSpace::new();
         space.add(expr!("+" "A" ("*" "B" "C")));
         assert_eq!(space.query(&expr!("+" a ("*" b c))),
-        vec![bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }]);
+        BindingsSet::from(bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }));
     }
 
     #[test]
     fn test_match_different_value_for_variable() {
         let mut space = GroundingSpace::new();
         space.add(expr!("+" "A" ("*" "B" "C")));
-        assert_eq!(space.query(&expr!("+" a ("*" a c))), vec![]);
+        assert_eq!(space.query(&expr!("+" a ("*" a c))), BindingsSet::empty());
     }
 
     #[test]
@@ -567,14 +567,14 @@ mod test {
         space.add(expr!("equals" x x));
         
         let result = space.query(&expr!("equals" y z));
-        assert_eq!(result, vec![bind!{ y: expr!(z) }]);
+        assert_eq!(result, BindingsSet::from(bind!{ y: expr!(z) }));
     }
 
     #[test]
     fn test_match_query_variable_via_data_variable() {
         let mut space = GroundingSpace::new();
         space.add(expr!(x x));
-        assert_eq!(space.query(&expr!(y (z))), vec![bind!{y: expr!((z))}]);
+        assert_eq!(space.query(&expr!(y (z))), BindingsSet::from(bind!{y: expr!((z))}));
     }
 
     #[test]
@@ -582,7 +582,7 @@ mod test {
         let mut space = GroundingSpace::new();
         space.add(expr!("=" ("if" "True" then) then));
         assert_eq!(space.query(&expr!("=" ("if" "True" "42") X)),
-        vec![bind!{X: expr!("42")}]);
+        BindingsSet::from(bind!{X: expr!("42")}));
     }
 
     #[test]
@@ -595,7 +595,7 @@ mod test {
         let result = space.query(&expr!("," ("posesses" "Sam" object)
         ("likes" "Sam" (color "stuff"))
         ("has-color" object color)));
-        assert_eq!(result, vec![bind!{object: expr!("baloon"), color: expr!("blue")}]);
+        assert_eq!(result, BindingsSet::from(bind!{object: expr!("baloon"), color: expr!("blue")}));
     }
 
     #[test]
@@ -619,7 +619,7 @@ mod test {
         space.add(expr!("Cons" "Socrates" "Nil"));
 
         let result = space.query(&expr!("," (":" h "Human") ("Cons" h t)));
-        assert_eq!(result, vec![bind!{h: expr!("Socrates"), t: expr!("Nil")}]);
+        assert_eq!(result, BindingsSet::from(bind!{h: expr!("Socrates"), t: expr!("Nil")}));
     }
 
     #[test]
@@ -659,7 +659,7 @@ mod test {
         space.add(expr!("A" "Sam"));
 
         let result = space.query(&expr!("," ("implies" ("B" x) z) ("implies" ("A" x) y) ("A" x)));
-        assert_eq!(result, vec![bind!{x: sym!("Sam"), y: expr!("B" x), z: expr!("C" x)}]);
+        assert_eq!(result, BindingsSet::from(bind!{x: sym!("Sam"), y: expr!("B" x), z: expr!("C" x)}));
     }
 
     #[test]
@@ -669,8 +669,8 @@ mod test {
             expr!("B" {1} x "b"),
             expr!("A" {2} x "c"),
         ]);
-        let result: Vec<Bindings> = match_atoms(&Atom::gnd(space), &expr!("A" {1} x x)).collect();
-        assert_eq!(result, vec![bind!{x: sym!("a")}]);
+        let result: BindingsSet = match_atoms(&Atom::gnd(space), &expr!("A" {1} x x)).collect();
+        assert_eq!(result, BindingsSet::from(bind!{x: sym!("a")}));
     }
 
     #[test]

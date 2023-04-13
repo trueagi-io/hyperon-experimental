@@ -236,17 +236,26 @@ impl Bindings {
     /// use hyperon::*;
     /// use hyperon::matcher::Bindings;
     ///
+    /// # fn main() -> Result<(), &'static str> {
     /// let a = VariableAtom::new("a");
     /// let b = VariableAtom::new("b");
     /// let c = VariableAtom::new("c");
     /// let mut binds = bind!{ a: expr!("A"), b: expr!("B") };
+    ///     
+    /// // Re-asserting an existing binding is ok
+    /// binds = binds.add_var_binding_v2(&a, &expr!("A"))?;
     ///
-    /// assert!(binds.add_var_binding(&a, &expr!("A")));
-    /// assert!(!binds.add_var_binding(&b, &expr!("C")));
-    /// assert!(binds.add_var_binding(&c, &expr!("C")));
+    /// // Asserting a conflicting binding is an error
+    /// assert!(binds.clone().add_var_binding_v2(&b, &expr!("C")).is_err());
+    /// 
+    /// // Creating a new binding is ok
+    /// binds = binds.add_var_binding_v2(&c, &expr!("C"))?;
+    /// 
     /// assert_eq!(binds.resolve(&a), Some(expr!("A")));
     /// assert_eq!(binds.resolve(&b), Some(expr!("B")));
     /// assert_eq!(binds.resolve(&c), Some(expr!("C")));
+    /// # Ok(())
+    /// # }
     /// ```
     /// 
     /// TODO: Rename to `add_var_binding` when clients have adopted the new API 
@@ -615,7 +624,7 @@ impl From<&[(VariableAtom, Atom)]> for Bindings {
 }
 
 /// Represents a set of [Bindings] instances resulting from an operation where multiple matches are possible.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct BindingsSet(smallvec::SmallVec<[Bindings; 1]>);
 
 impl core::iter::FromIterator<Bindings> for BindingsSet {
@@ -672,6 +681,14 @@ impl BindingsSet {
 
     pub fn single() -> Self {
         BindingsSet(smallvec::smallvec![Bindings::new()])
+    }
+
+    pub fn drain<'a, R: std::ops::RangeBounds<usize>>(&'a mut self, range: R) -> impl Iterator<Item=Bindings> +'a {
+        self.0.drain(range)
+    }
+
+    pub fn push(&mut self, bindings: Bindings) {
+        self.0.push(bindings);
     }
 
     /// An internal function to execute an operation that may take a single Bindings instance and replace
@@ -897,7 +914,8 @@ pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
 pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bindings, ()> {
     // TODO: apply_bindings_to_bindings can be replaced by Bindings::merge,
     // when Bindings::merge are modified to return Vec<Bindings>
-    Bindings::merge(to, from).filter(|bindings| !bindings.has_loops()).ok_or(())
+    //LP QUESTION: unclear whether behavior to filter out Bindings with loops continues to make this function relevant
+    from.clone().merge_v2(to).into_iter().filter(|bindings| !bindings.has_loops()).next().ok_or(())
 }
 
 /// Checks if atoms are equal up to variables replacement.
@@ -979,20 +997,20 @@ mod test {
 
     #[test]
     fn bindings_merge_value_conflict() {
-        assert_eq!(Bindings::merge(&bind!{ a: expr!("A") },
-            &bind!{ a: expr!("C"), b: expr!("B") }), None);
-        assert_eq!(Bindings::merge(&bind!{ a: expr!("C"), b: expr!("B") },
-            &bind!{ a: expr!("A") }), None);
+        assert_eq!(bind!{ a: expr!("A") }.merge_v2(
+            &bind!{ a: expr!("C"), b: expr!("B") }), BindingsSet::empty());
+        assert_eq!(bind!{ a: expr!("C"), b: expr!("B") }.merge_v2(
+            &bind!{ a: expr!("A") }), BindingsSet::empty());
     }
 
     #[test]
     fn test_bindings_merge() {
-        assert_eq!(Bindings::merge(&bind!{ a: expr!("A") },
+        assert_eq!(bind!{ a: expr!("A") }.merge_v2(
             &bind!{ a: expr!("A"), b: expr!("B") }),
-            Some(bind!{ a: expr!("A"), b: expr!("B") }));
-        assert_eq!(Bindings::merge(&bind!{ a: expr!("A"), b: expr!("B") },
+            BindingsSet::from(bind!{ a: expr!("A"), b: expr!("B") }));
+        assert_eq!(bind!{ a: expr!("A"), b: expr!("B") }.merge_v2(
             &bind!{ a: expr!("A") }),
-            Some(bind!{ a: expr!("A"), b: expr!("B") }));
+            BindingsSet::from(bind!{ a: expr!("A"), b: expr!("B") }));
     }
 
     #[test]

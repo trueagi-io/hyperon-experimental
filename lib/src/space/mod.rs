@@ -7,7 +7,7 @@ use std::rc::Rc;
 use std::cell::RefCell;
 
 use crate::atom::Atom;
-use crate::atom::matcher::{Bindings, apply_bindings_to_atom};
+use crate::atom::matcher::{BindingsSet, apply_bindings_to_atom};
 
 /// Contains information about space modification event.
 #[derive(Clone, Debug, PartialEq)]
@@ -93,6 +93,7 @@ pub trait Space {
     ///
     /// ```
     /// use hyperon::{expr, bind, sym};
+    /// use hyperon::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let space = GroundingSpace::from_vec(vec![expr!("A" "B"), expr!("B" "C")]);
@@ -100,9 +101,9 @@ pub trait Space {
     ///
     /// let result = space.query(&query);
     ///
-    /// assert_eq!(result, vec![bind!{x: sym!("B")}]);
+    /// assert_eq!(result, BindingsSet::from(bind!{x: sym!("B")}));
     /// ```
-    fn query(&self, query: &Atom) -> Vec<Bindings>;
+    fn query(&self, query: &Atom) -> BindingsSet;
 
     /// Executes `pattern` query on the space and for each result substitutes
     /// variables in `template` by the values from `pattern`. Returns results
@@ -137,15 +138,15 @@ pub trait SpaceMut {
     /// ```
     /// use hyperon::sym;
     /// use hyperon::space::grounding::GroundingSpace;
-    /// use hyperon::atom::matcher::Bindings;
+    /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     /// 
     /// space.add(sym!("B"));
     ///
-    /// assert_eq!(space.query(&sym!("A")), vec![Bindings::new()]);
-    /// assert_eq!(space.query(&sym!("B")), vec![Bindings::new()]);
-    /// assert_eq!(space.query(&sym!("C")), vec![]);
+    /// assert_eq!(space.query(&sym!("A")), BindingsSet::single());
+    /// assert_eq!(space.query(&sym!("B")), BindingsSet::single());
+    /// assert_eq!(space.query(&sym!("C")), BindingsSet::empty());
     /// ```
     fn add(&mut self, atom: Atom);
 
@@ -156,13 +157,14 @@ pub trait SpaceMut {
     ///
     /// ```
     /// use hyperon::sym;
+    /// use hyperon::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     /// 
     /// space.remove(&sym!("A"));
     ///
-    /// assert_eq!(space.query(&sym!("A")), vec![]);
+    /// assert_eq!(space.query(&sym!("A")), BindingsSet::empty());
     /// ```
     fn remove(&mut self, atom: &Atom) -> bool;
 
@@ -175,14 +177,14 @@ pub trait SpaceMut {
     /// ```
     /// use hyperon::sym;
     /// use hyperon::space::grounding::GroundingSpace;
-    /// use hyperon::atom::matcher::Bindings;
+    /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     /// 
     /// space.replace(&sym!("A"), sym!("B"));
     ///
-    /// assert_eq!(space.query(&sym!("A")), vec![]);
-    /// assert_eq!(space.query(&sym!("B")), vec![Bindings::new()]);
+    /// assert_eq!(space.query(&sym!("A")), BindingsSet::empty());
+    /// assert_eq!(space.query(&sym!("B")), BindingsSet::single());
     /// ```
     fn replace(&mut self, from: &Atom, to: Atom) -> bool;
 }
@@ -193,7 +195,7 @@ impl<T: Space> Space for Shared<T> {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
         self.borrow().register_observer(observer)
     }
-    fn query(&self, query: &Atom) -> Vec<Bindings> {
+    fn query(&self, query: &Atom) -> BindingsSet {
         self.borrow().query(query)
     }
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
@@ -218,7 +220,7 @@ impl<T: Space> Space for &T {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
         T::register_observer(*self, observer)
     }
-    fn query(&self, query: &Atom) -> Vec<Bindings> {
+    fn query(&self, query: &Atom) -> BindingsSet {
         T::query(*self, query)
     }
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {

@@ -5,6 +5,7 @@ extern crate test;
 use test::Bencher;
 
 use hyperon::*;
+use hyperon::matcher::BindingsSet;
 use hyperon::space::grounding::*;
 
 fn space(size: isize) -> GroundingSpace {
@@ -24,7 +25,7 @@ fn query_x10(bencher: &mut Bencher) {
     let space = space(10);
     bencher.iter(|| {
         let res = space.query(&expr!("=" ("func-9" "arg") X));
-        assert_eq!(res, vec![bind!{ X: Atom::sym("arg") }]);
+        assert_eq!(res, BindingsSet::from(bind!{ X: Atom::sym("arg") }));
     })
 }
 
@@ -33,6 +34,6 @@ fn query_x100(bencher: &mut Bencher) {
     let space = space(100);
     bencher.iter(|| {
         let res = space.query(&expr!("=" ("func-2A" "arg") X));
-        assert_eq!(res, vec![bind!{ X: Atom::sym("arg") }]);
+        assert_eq!(res, BindingsSet::from(bind!{ X: Atom::sym("arg") }));
     })
 }

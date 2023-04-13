@@ -18,6 +18,8 @@
 //! When atom has no type assigned by user it has type `%Undefined%`. The value
 //! of `%Undefined%` type can be matched with any type required.
 
+use std::convert::TryInto;
+
 use super::*;
 use crate::atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom};
 use crate::space::Space;
@@ -30,7 +32,7 @@ fn isa_query(sub_type: &Atom, super_type: &Atom) -> Atom {
     Atom::expr(vec![SUB_TYPE_SYMBOL, sub_type.clone(), super_type.clone()])
 }
 
-fn query_has_type(space: &dyn Space, sub_type: &Atom, super_type: &Atom) -> Vec<Bindings> {
+fn query_has_type(space: &dyn Space, sub_type: &Atom, super_type: &Atom) -> BindingsSet {
     space.query(&typeof_query(sub_type, super_type))
 }
 
@@ -327,18 +329,15 @@ impl Grounded for UndefinedTypeMatch {
 /// assert_eq!(bindings, bind!{ t: expr!("A") });
 /// ```
 pub fn match_reducted_types(left: &Atom, right: &Atom, bindings: &mut Bindings) -> bool {
-    let result: Vec<Bindings> = match_reducted_types_v2(left, right).collect();
-    assert!(result.len() <= 1, "Single result is expected because custom matching for types is not supported yet!");
-    let matched = if !result.is_empty() {
-        match Bindings::merge(bindings, result.get(0).unwrap()) {
-            Some(b) => {
-                *bindings = b;
-                true
-            },
-            None => false,
+    let mut result: Vec<Bindings> = match_reducted_types_v2(left, right).collect();
+    let matched = match result.len() {
+        0 => false,
+        1 => {
+            let result_set = result.pop().unwrap().merge_v2(bindings);
+            *bindings = result_set.try_into().expect("Single result is expected because custom matching for types is not supported yet!");
+            true
         }
-    } else {
-        false
+        _ => panic!("Single result is expected because custom matching for types is not supported yet!")
     };
     log::debug!("match_reducted_types: {} ~ {} => {}, bindings: {}", left, right, matched, bindings);
     matched
