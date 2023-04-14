@@ -4,9 +4,8 @@
 use crate::*;
 use super::*;
 use crate::atom::*;
-use crate::atom::matcher::{BindingsSet, match_atoms};
+use crate::atom::matcher::{BindingsSet, MatchResultIter, match_atoms};
 use crate::atom::subexpr::split_expr;
-use crate::matcher::MatchResultIter;
 use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
 
 use std::fmt::{Display, Debug};
@@ -247,9 +246,9 @@ impl GroundingSpace {
     }
 
     /// Executes `query` on the space and returns variable bindings found.
-    /// Query may include sub-queries glued by [COMMA_SYMBOL] symbol. Number
-    /// of results is equal to the length of the `Vec<Bindings>` returned.
-    /// Each [Bindings] instance represents single result.
+    /// Query may include sub-queries glued by [COMMA_SYMBOL] symbol.
+    /// Each [Bindings](matcher::Bindings) instance in the returned [BindingsSet]
+    /// represents single result.
     ///
     /// # Examples
     ///

@@ -85,9 +85,9 @@ pub trait Space {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>);
 
     /// Executes `query` on the space and returns variable bindings found.
-    /// Query may include sub-queries glued by [grounding::COMMA_SYMBOL]
-    /// symbol. Number of results is equal to the length of the `Vec<Bindings>`
-    /// returned. Each [Bindings] instance represents single result.
+    /// Query may include sub-queries glued by [grounding::COMMA_SYMBOL] symbol. 
+    /// Each [Bindings](crate::atom::matcher::Bindings) instance in the returned [BindingsSet]
+    /// represents single result.
     ///
     /// # Examples
     ///
