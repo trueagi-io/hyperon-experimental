@@ -310,6 +310,13 @@ fn is_grounded_op(expr: &ExpressionAtom) -> bool {
     }
 }
 
+fn is_variable_op(expr: &ExpressionAtom) -> bool {
+    match expr.children().get(0) {
+        Some(Atom::Variable(_)) => true,
+        _ => false,
+    }
+}
+
 fn has_grounded_sub_expr(expr: &Atom) -> bool {
     return SubexprStream::from_expr(expr.clone(), TOP_DOWN_DEPTH_WALK)
         .any(|sub| if let Atom::Expression(sub) = sub {
@@ -551,6 +558,8 @@ fn interpret_reducted_plan<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'
     if let Atom::Expression(ref expr) = input.atom() {
         if is_grounded_op(expr) {
             Box::new(execute_plan(context, input))
+        } else if is_variable_op(expr) {
+            Box::new(StepResult::ret(vec![input]))
         } else {
             Box::new(match_plan(context, input))
         }
@@ -743,16 +752,16 @@ mod tests {
         space.add(expr!("=" ("and" "True" "True") "True"));
         space.add(expr!("=" ("if" "True" then else) then));
         space.add(expr!("=" ("if" "False" then else) else));
-        space.add(expr!("=" ("Fritz" "croaks") "True"));
-        space.add(expr!("=" ("Fritz" "eats-flies") "True"));
-        space.add(expr!("=" ("Tweety" "chirps") "True"));
-        space.add(expr!("=" ("Tweety" "yellow") "True"));
-        space.add(expr!("=" ("Tweety" "eats-flies") "True"));
-        let expr = expr!("if" ("and" (x "croaks") (x "eats-flies"))
-            ("=" (x "frog") "True") "nop");
+        space.add(expr!("=" ("croaks" "Fritz") "True"));
+        space.add(expr!("=" ("eats-flies" "Fritz") "True"));
+        space.add(expr!("=" ("chirps" "Tweety") "True"));
+        space.add(expr!("=" ("yellow" "Tweety") "True"));
+        space.add(expr!("=" ("eats-flies" "Tweety") "True"));
+        let expr = expr!("if" ("and" ("croaks" x) ("eats-flies" x))
+            ("=" ("frog" x) "True") "nop");
 
         assert_eq!(interpret(&space, &expr),
-            Ok(vec![expr!("=" ("Fritz" "frog") "True")]));
+            Ok(vec![expr!("=" ("frog" "Fritz") "True")]));
     }
 
     fn results_are_equivalent(actual: &Result<Vec<Atom>, String>,
@@ -1078,6 +1087,15 @@ mod tests {
         } else {
             panic!("Non-empty result is expected");
         }
+    }
+
+    #[test]
+    fn interpret_variable_does_not_match_operation_issue_242() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("=" ("foo" x) ("foo result" x)));
+        space.add(expr!("=" ("bar" x) ("bar result" x)));
+
+        assert_eq!(interpret(&space, &expr!(op "arg")), Ok(vec![expr!(op "arg")]));
     }
 }
 
