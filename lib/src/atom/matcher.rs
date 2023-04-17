@@ -23,7 +23,64 @@ macro_rules! bind {
     };
 }
 
+/// Constructs a new [BindingsSet] with predefined content.
+/// Macros takes variable/value pairs as arguments. If value is a single
+/// variable then the pair means variable equality. Otherwise pair means
+/// assigning value. May be ineffective, should be used mainly in unit tests.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::*;
+///
+/// // Compose a BindingsSet with implicit Bindings
+/// let set = bind_set![{a: expr!("A")}, {a: expr!("APrime")}, {a: expr!("ADoublePrime")}];
+///
+/// assert_eq!(set.len(), 3);
+/// assert_eq!(set[0].resolve(&VariableAtom::new("a")), Some(expr!("A")));
+/// assert_eq!(set[2].resolve(&VariableAtom::new("a")), Some(expr!("ADoublePrime")));
+/// 
+/// // Compose a BindingsSet with explicitly defined Bindings
+/// let set = bind_set![bind!{a: expr!("A")}, bind!{a: expr!("APrime")}];
+/// 
+/// assert_eq!(set.len(), 2);
+/// assert_eq!(set[0].resolve(&VariableAtom::new("a")), Some(expr!("A")));
+/// assert_eq!(set[1].resolve(&VariableAtom::new("a")), Some(expr!("APrime")));
+/// 
+/// // Mix and match, including existing Bindings and BindingsSets
+/// let other_set = bind_set![];
+/// let set = bind_set![{a: expr!("A")}, other_set];
+/// ```
+#[macro_export]
+macro_rules! bind_set {
+    // An empty BindingsSet
+    [] => {
+        $crate::atom::matcher::BindingsSet::empty()
+    };
+    // An implicitly defined Bindings
+    [{$($b:tt)*}] => {
+        $crate::atom::matcher::BindingsSet::from($crate::bind!{$($b)*})
+    };
+    // An explicitly defined Bindings
+    [$b:expr] => {
+        $crate::atom::matcher::BindingsSet::from($b)
+    };
+    // Recursive pattern to handle multiple Bindings, where the next item is implicit
+    [{$($b:tt)*}, $($b_rest:tt)*] => {{
+        let mut b = bind_set![{$($b)*}];
+        b.extend(bind_set![$($b_rest)*]);
+        b
+    }};
+    // Recursive pattern to handle multiple Bindings, where the next item is explicit
+    [$b:expr, $($b_rest:tt)*] => {{
+        let mut b = bind_set![$b];
+        b.extend(bind_set![$($b_rest)*]);
+        b
+    }};
+}
+
 use std::collections::{HashMap, HashSet};
+use core::iter::FromIterator;
 use std::convert::TryFrom;
 use std::cmp::max;
 
@@ -236,17 +293,26 @@ impl Bindings {
     /// use hyperon::*;
     /// use hyperon::matcher::Bindings;
     ///
+    /// # fn main() -> Result<(), &'static str> {
     /// let a = VariableAtom::new("a");
     /// let b = VariableAtom::new("b");
     /// let c = VariableAtom::new("c");
     /// let mut binds = bind!{ a: expr!("A"), b: expr!("B") };
+    ///     
+    /// // Re-asserting an existing binding is ok
+    /// binds = binds.add_var_binding_v2(&a, &expr!("A"))?;
     ///
-    /// assert!(binds.add_var_binding(&a, &expr!("A")));
-    /// assert!(!binds.add_var_binding(&b, &expr!("C")));
-    /// assert!(binds.add_var_binding(&c, &expr!("C")));
+    /// // Asserting a conflicting binding is an error
+    /// assert!(binds.clone().add_var_binding_v2(&b, &expr!("C")).is_err());
+    /// 
+    /// // Creating a new binding is ok
+    /// binds = binds.add_var_binding_v2(&c, &expr!("C"))?;
+    /// 
     /// assert_eq!(binds.resolve(&a), Some(expr!("A")));
     /// assert_eq!(binds.resolve(&b), Some(expr!("B")));
     /// assert_eq!(binds.resolve(&c), Some(expr!("C")));
+    /// # Ok(())
+    /// # }
     /// ```
     /// 
     /// TODO: Rename to `add_var_binding` when clients have adopted the new API 
@@ -618,7 +684,17 @@ impl From<&[(VariableAtom, Atom)]> for Bindings {
 #[derive(Clone, Debug)]
 pub struct BindingsSet(smallvec::SmallVec<[Bindings; 1]>);
 
-impl core::iter::FromIterator<Bindings> for BindingsSet {
+// BindingsSets are conceptually unordered
+impl PartialEq for BindingsSet {
+    fn eq(&self, other: &Self) -> bool {
+        match crate::common::assert::vec_eq_no_order(self.iter(), other.iter()) {
+            Ok(()) => true,
+            Err(_) => false
+        }
+    }
+}
+
+impl FromIterator<Bindings> for BindingsSet {
     fn from_iter<I: IntoIterator<Item=Bindings>>(iter: I) -> Self {
         let new_vec = iter.into_iter().collect();
         BindingsSet(new_vec)
@@ -672,6 +748,14 @@ impl BindingsSet {
 
     pub fn single() -> Self {
         BindingsSet(smallvec::smallvec![Bindings::new()])
+    }
+
+    pub fn drain<'a, R: std::ops::RangeBounds<usize>>(&'a mut self, range: R) -> impl Iterator<Item=Bindings> +'a {
+        self.0.drain(range)
+    }
+
+    pub fn push(&mut self, bindings: Bindings) {
+        self.0.push(bindings);
     }
 
     /// An internal function to execute an operation that may take a single Bindings instance and replace
@@ -897,7 +981,8 @@ pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
 pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bindings, ()> {
     // TODO: apply_bindings_to_bindings can be replaced by Bindings::merge,
     // when Bindings::merge are modified to return Vec<Bindings>
-    Bindings::merge(to, from).filter(|bindings| !bindings.has_loops()).ok_or(())
+    //TODO: Delete of this function pending refactor of Interpreter
+    from.clone().merge_v2(to).into_iter().filter(|bindings| !bindings.has_loops()).next().ok_or(())
 }
 
 /// Checks if atoms are equal up to variables replacement.
@@ -979,20 +1064,20 @@ mod test {
 
     #[test]
     fn bindings_merge_value_conflict() {
-        assert_eq!(Bindings::merge(&bind!{ a: expr!("A") },
-            &bind!{ a: expr!("C"), b: expr!("B") }), None);
-        assert_eq!(Bindings::merge(&bind!{ a: expr!("C"), b: expr!("B") },
-            &bind!{ a: expr!("A") }), None);
+        assert_eq!(bind!{ a: expr!("A") }.merge_v2(
+            &bind!{ a: expr!("C"), b: expr!("B") }), BindingsSet::empty());
+        assert_eq!(bind!{ a: expr!("C"), b: expr!("B") }.merge_v2(
+            &bind!{ a: expr!("A") }), BindingsSet::empty());
     }
 
     #[test]
     fn test_bindings_merge() {
-        assert_eq!(Bindings::merge(&bind!{ a: expr!("A") },
+        assert_eq!(bind!{ a: expr!("A") }.merge_v2(
             &bind!{ a: expr!("A"), b: expr!("B") }),
-            Some(bind!{ a: expr!("A"), b: expr!("B") }));
-        assert_eq!(Bindings::merge(&bind!{ a: expr!("A"), b: expr!("B") },
+            bind_set![{ a: expr!("A"), b: expr!("B") }]);
+        assert_eq!(bind!{ a: expr!("A"), b: expr!("B") }.merge_v2(
             &bind!{ a: expr!("A") }),
-            Some(bind!{ a: expr!("A"), b: expr!("B") }));
+            bind_set![{ a: expr!("A"), b: expr!("B") }]);
     }
 
     #[test]
@@ -1269,9 +1354,9 @@ mod test {
 
         // Bindings::add_var_binding() should return a list of resulting
         // Bindings instances.
-        assert_eq_no_order!(bindings,
-           vec![ bind!{ s: expr!({ pair }), x: expr!("B") },
-                 bind!{ s: expr!({ pair }), x: expr!("C") } ]);
+        assert_eq!(bindings, bind_set![
+            bind!{ s: expr!({ pair }), x: expr!("B") },
+            bind!{ s: expr!({ pair }), x: expr!("C") } ]);
     }
 
     #[test]
@@ -1286,9 +1371,9 @@ mod test {
 
         // Bindings::add_var_binding() should return a list of resulting
         // Bindings instances.
-        assert_eq_no_order!(bindings,
-           vec![ bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("B") },
-                 bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("C") } ]);
+        assert_eq!(bindings, bind_set![
+            bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("B") },
+            bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("C") } ]);
     }
 
     #[test]
@@ -1333,9 +1418,9 @@ mod test {
         let a = bind!{ a: expr!({ assigner }), b: expr!({ assigner }) };
         let b = bind!{ a: expr!(x "C" "D"), b: expr!(y "E" "F") };
 
-        let bindings = BindingsSet::from(a).merge(&BindingsSet::from(b));
+        let bindings = a.merge_v2(&b);
 
-        assert_eq_no_order!(bindings, vec![
+        assert_eq!(bindings, bind_set![
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("C"), y: expr!("E") },
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("C"), y: expr!("F") },
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("D"), y: expr!("E") },
