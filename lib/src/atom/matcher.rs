@@ -981,7 +981,7 @@ pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
 pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bindings, ()> {
     // TODO: apply_bindings_to_bindings can be replaced by Bindings::merge,
     // when Bindings::merge are modified to return Vec<Bindings>
-    //LP QUESTION: unclear whether behavior to filter out Bindings with loops continues to make this function relevant
+    //TODO: Delete of this function pending refactor of Interpreter
     from.clone().merge_v2(to).into_iter().filter(|bindings| !bindings.has_loops()).next().ok_or(())
 }
 

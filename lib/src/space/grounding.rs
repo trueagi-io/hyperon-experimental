@@ -279,8 +279,6 @@ impl GroundingSpace {
                                 let mut res = self.query(&query);
                                 res.drain(0..)
                                     .flat_map(|next| next.merge_v2(&prev))
-                                    .map(|next| matcher::apply_bindings_to_bindings(&next, &next)
-                                        .expect("Self consistent bindings are expected"))
                                     .collect()
                             }).collect()
                         };
