@@ -681,8 +681,18 @@ impl From<&[(VariableAtom, Atom)]> for Bindings {
 }
 
 /// Represents a set of [Bindings] instances resulting from an operation where multiple matches are possible.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct BindingsSet(smallvec::SmallVec<[Bindings; 1]>);
+
+// BindingsSets are conceptually unordered
+impl PartialEq for BindingsSet {
+    fn eq(&self, other: &Self) -> bool {
+        match crate::common::assert::vec_eq_no_order(self.iter(), other.iter()) {
+            Ok(()) => true,
+            Err(_) => false
+        }
+    }
+}
 
 impl FromIterator<Bindings> for BindingsSet {
     fn from_iter<I: IntoIterator<Item=Bindings>>(iter: I) -> Self {
@@ -1344,9 +1354,9 @@ mod test {
 
         // Bindings::add_var_binding() should return a list of resulting
         // Bindings instances.
-        assert_eq_no_order!(bindings,
-           vec![ bind!{ s: expr!({ pair }), x: expr!("B") },
-                 bind!{ s: expr!({ pair }), x: expr!("C") } ]);
+        assert_eq!(bindings, bind_set![
+            bind!{ s: expr!({ pair }), x: expr!("B") },
+            bind!{ s: expr!({ pair }), x: expr!("C") } ]);
     }
 
     #[test]
@@ -1361,9 +1371,9 @@ mod test {
 
         // Bindings::add_var_binding() should return a list of resulting
         // Bindings instances.
-        assert_eq_no_order!(bindings,
-           vec![ bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("B") },
-                 bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("C") } ]);
+        assert_eq!(bindings, bind_set![
+            bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("B") },
+            bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("C") } ]);
     }
 
     #[test]
@@ -1408,9 +1418,9 @@ mod test {
         let a = bind!{ a: expr!({ assigner }), b: expr!({ assigner }) };
         let b = bind!{ a: expr!(x "C" "D"), b: expr!(y "E" "F") };
 
-        let bindings = BindingsSet::from(a).merge(&BindingsSet::from(b));
+        let bindings = a.merge_v2(&b);
 
-        assert_eq_no_order!(bindings, vec![
+        assert_eq!(bindings, bind_set![
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("C"), y: expr!("E") },
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("C"), y: expr!("F") },
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("D"), y: expr!("E") },
