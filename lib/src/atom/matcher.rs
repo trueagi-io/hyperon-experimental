@@ -23,7 +23,64 @@ macro_rules! bind {
     };
 }
 
+/// Constructs a new [BindingsSet] with predefined content.
+/// Macros takes variable/value pairs as arguments. If value is a single
+/// variable then the pair means variable equality. Otherwise pair means
+/// assigning value. May be ineffective, should be used mainly in unit tests.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::*;
+///
+/// // Compose a BindingsSet with implicit Bindings
+/// let set = bind_set![{a: expr!("A")}, {a: expr!("APrime")}, {a: expr!("ADoublePrime")}];
+///
+/// assert_eq!(set.len(), 3);
+/// assert_eq!(set[0].resolve(&VariableAtom::new("a")), Some(expr!("A")));
+/// assert_eq!(set[2].resolve(&VariableAtom::new("a")), Some(expr!("ADoublePrime")));
+/// 
+/// // Compose a BindingsSet with explicitly defined Bindings
+/// let set = bind_set![bind!{a: expr!("A")}, bind!{a: expr!("APrime")}];
+/// 
+/// assert_eq!(set.len(), 2);
+/// assert_eq!(set[0].resolve(&VariableAtom::new("a")), Some(expr!("A")));
+/// assert_eq!(set[1].resolve(&VariableAtom::new("a")), Some(expr!("APrime")));
+/// 
+/// // Mix and match, including existing Bindings and BindingsSets
+/// let other_set = bind_set![];
+/// let set = bind_set![{a: expr!("A")}, other_set];
+/// ```
+#[macro_export]
+macro_rules! bind_set {
+    // An empty BindingsSet
+    [] => {
+        $crate::atom::matcher::BindingsSet::empty()
+    };
+    // An implicitly defined Bindings
+    [{$($b:tt)*}] => {
+        $crate::atom::matcher::BindingsSet::from($crate::bind!{$($b)*})
+    };
+    // An explicitly defined Bindings
+    [$b:expr] => {
+        $crate::atom::matcher::BindingsSet::from($b)
+    };
+    // Recursive pattern to handle multiple Bindings, where the next item is implicit
+    [{$($b:tt)*}, $($b_rest:tt)*] => {{
+        let mut b = bind_set![{$($b)*}];
+        b.extend(bind_set![$($b_rest)*]);
+        b
+    }};
+    // Recursive pattern to handle multiple Bindings, where the next item is explicit
+    [$b:expr, $($b_rest:tt)*] => {{
+        let mut b = bind_set![$b];
+        b.extend(bind_set![$($b_rest)*]);
+        b
+    }};
+}
+
 use std::collections::{HashMap, HashSet};
+use core::iter::FromIterator;
 use std::convert::TryFrom;
 use std::cmp::max;
 
@@ -627,7 +684,7 @@ impl From<&[(VariableAtom, Atom)]> for Bindings {
 #[derive(Clone, Debug, PartialEq)]
 pub struct BindingsSet(smallvec::SmallVec<[Bindings; 1]>);
 
-impl core::iter::FromIterator<Bindings> for BindingsSet {
+impl FromIterator<Bindings> for BindingsSet {
     fn from_iter<I: IntoIterator<Item=Bindings>>(iter: I) -> Self {
         let new_vec = iter.into_iter().collect();
         BindingsSet(new_vec)
@@ -1007,10 +1064,10 @@ mod test {
     fn test_bindings_merge() {
         assert_eq!(bind!{ a: expr!("A") }.merge_v2(
             &bind!{ a: expr!("A"), b: expr!("B") }),
-            BindingsSet::from(bind!{ a: expr!("A"), b: expr!("B") }));
+            bind_set![{ a: expr!("A"), b: expr!("B") }]);
         assert_eq!(bind!{ a: expr!("A"), b: expr!("B") }.merge_v2(
             &bind!{ a: expr!("A") }),
-            BindingsSet::from(bind!{ a: expr!("A"), b: expr!("B") }));
+            bind_set![{ a: expr!("A"), b: expr!("B") }]);
     }
 
     #[test]

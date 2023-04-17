@@ -253,7 +253,7 @@ impl GroundingSpace {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::{expr, bind, sym};
+    /// use hyperon::{expr, bind_set, sym};
     /// use hyperon::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
@@ -262,7 +262,7 @@ impl GroundingSpace {
     ///
     /// let result = space.query(&query);
     ///
-    /// assert_eq!(result, BindingsSet::from(bind!{x: sym!("B")}));
+    /// assert_eq!(result, bind_set![{x: sym!("B")}]);
     /// ```
     pub fn query(&self, query: &Atom) -> BindingsSet {
         match split_expr(query) {
@@ -535,7 +535,7 @@ mod test {
     fn test_match_variable() {
         let mut space = GroundingSpace::new();
         space.add(expr!("foo"));
-        assert_eq!(space.query(&expr!(x)), BindingsSet::from(bind!{x: expr!("foo")}));
+        assert_eq!(space.query(&expr!(x)), bind_set![{x: expr!("foo")}]);
     }
 
     #[test]
@@ -550,7 +550,7 @@ mod test {
         let mut space = GroundingSpace::new();
         space.add(expr!("+" "A" ("*" "B" "C")));
         assert_eq!(space.query(&expr!("+" a ("*" b c))),
-        BindingsSet::from(bind!{a: expr!("A"), b: expr!("B"), c: expr!("C") }));
+        bind_set![{a: expr!("A"), b: expr!("B"), c: expr!("C") }]);
     }
 
     #[test]
@@ -566,14 +566,14 @@ mod test {
         space.add(expr!("equals" x x));
         
         let result = space.query(&expr!("equals" y z));
-        assert_eq!(result, BindingsSet::from(bind!{ y: expr!(z) }));
+        assert_eq!(result, bind_set![{ y: expr!(z) }]);
     }
 
     #[test]
     fn test_match_query_variable_via_data_variable() {
         let mut space = GroundingSpace::new();
         space.add(expr!(x x));
-        assert_eq!(space.query(&expr!(y (z))), BindingsSet::from(bind!{y: expr!((z))}));
+        assert_eq!(space.query(&expr!(y (z))), bind_set![{y: expr!((z))}]);
     }
 
     #[test]
@@ -581,7 +581,7 @@ mod test {
         let mut space = GroundingSpace::new();
         space.add(expr!("=" ("if" "True" then) then));
         assert_eq!(space.query(&expr!("=" ("if" "True" "42") X)),
-        BindingsSet::from(bind!{X: expr!("42")}));
+        bind_set![{X: expr!("42")}]);
     }
 
     #[test]
@@ -594,7 +594,7 @@ mod test {
         let result = space.query(&expr!("," ("posesses" "Sam" object)
         ("likes" "Sam" (color "stuff"))
         ("has-color" object color)));
-        assert_eq!(result, BindingsSet::from(bind!{object: expr!("baloon"), color: expr!("blue")}));
+        assert_eq!(result, bind_set![{object: expr!("baloon"), color: expr!("blue")}]);
     }
 
     #[test]
@@ -618,7 +618,7 @@ mod test {
         space.add(expr!("Cons" "Socrates" "Nil"));
 
         let result = space.query(&expr!("," (":" h "Human") ("Cons" h t)));
-        assert_eq!(result, BindingsSet::from(bind!{h: expr!("Socrates"), t: expr!("Nil")}));
+        assert_eq!(result, bind_set![{h: expr!("Socrates"), t: expr!("Nil")}]);
     }
 
     #[test]
@@ -658,7 +658,7 @@ mod test {
         space.add(expr!("A" "Sam"));
 
         let result = space.query(&expr!("," ("implies" ("B" x) z) ("implies" ("A" x) y) ("A" x)));
-        assert_eq!(result, BindingsSet::from(bind!{x: sym!("Sam"), y: expr!("B" x), z: expr!("C" x)}));
+        assert_eq!(result, bind_set![{x: sym!("Sam"), y: expr!("B" x), z: expr!("C" x)}]);
     }
 
     #[test]
@@ -669,7 +669,7 @@ mod test {
             expr!("A" {2} x "c"),
         ]);
         let result: BindingsSet = match_atoms(&Atom::gnd(space), &expr!("A" {1} x x)).collect();
-        assert_eq!(result, BindingsSet::from(bind!{x: sym!("a")}));
+        assert_eq!(result, bind_set![{x: sym!("a")}]);
     }
 
     #[test]

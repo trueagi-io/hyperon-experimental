@@ -92,7 +92,7 @@ pub trait Space {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::{expr, bind, sym};
+    /// use hyperon::{expr, bind_set, sym};
     /// use hyperon::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
@@ -101,7 +101,7 @@ pub trait Space {
     ///
     /// let result = space.query(&query);
     ///
-    /// assert_eq!(result, BindingsSet::from(bind!{x: sym!("B")}));
+    /// assert_eq!(result, bind_set![{x: sym!("B")}]);
     /// ```
     fn query(&self, query: &Atom) -> BindingsSet;
 
