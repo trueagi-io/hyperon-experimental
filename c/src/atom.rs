@@ -6,7 +6,7 @@ use std::os::raw::*;
 use std::fmt::Display;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
-use hyperon::matcher::Bindings;
+use hyperon::matcher::{Bindings, BindingsSet};
 use std::ptr;
 
 // Atom
@@ -35,6 +35,10 @@ pub struct var_atom_t {
 
 pub struct bindings_t {
     pub bindings: Bindings,
+}
+
+pub struct bindings_set_t {
+    set: BindingsSet,
 }
 
 pub type bindings_callback_t = lambda_t<*const bindings_t>;
@@ -123,7 +127,13 @@ pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, var_atom:
     let bindings = unsafe{ &mut(*bindings).bindings };
     let var = VariableAtom::new(cstr_into_string (unsafe{(*var_atom).var}));
     let atom = ptr_into_atom(unsafe{(*var_atom).atom});
-    bindings.add_var_binding(var, atom)
+    match bindings.clone().add_var_binding_v2(var, atom) {
+        Ok(new_bindings) => {
+            *bindings = new_bindings;
+            true
+        },
+        Err(_) => false
+    }
 }
 
 #[no_mangle]
@@ -159,6 +169,16 @@ pub extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindings_righ
 }
 
 #[no_mangle]
+pub extern "C" fn bindings_merge_v2(bindings_left: *const bindings_t, bindings_right: *const bindings_t) -> *mut bindings_set_t
+{
+    let bindings_l = unsafe{ &(*bindings_left).bindings };
+    let bindings_r = unsafe{ &(*bindings_right).bindings };
+
+    let new_set = bindings_l.clone().merge_v2(bindings_r);
+    bindings_set_into_ptr(new_set)
+}
+
+#[no_mangle]
 pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_name: *const c_char) -> *mut atom_t {
     let bindings = unsafe{&mut(*bindings).bindings};
     let var = VariableAtom::new(cstr_into_string(var_name));
@@ -170,6 +190,56 @@ pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_nam
 }
 
 // end of bindings
+
+// bindings_set
+
+#[no_mangle]
+pub extern "C" fn bindings_set_empty() -> *mut bindings_set_t {
+    bindings_set_into_ptr(BindingsSet::empty())
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_set_single() -> *mut bindings_set_t {
+    bindings_set_into_ptr(BindingsSet::single())
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_set_from_bindings(bindings: *const bindings_t) -> *mut bindings_set_t {
+    let bindings = unsafe{ &(*bindings).bindings };
+    bindings_set_into_ptr(BindingsSet::from(bindings.clone()))
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_set_free(set: *mut bindings_set_t) {
+    // drop() does nothing actually, but it is used here for clarity
+    drop(unsafe{Box::from_raw(set)});
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_set_len(set: *const bindings_set_t) -> usize {
+    let set = unsafe{ &(*set).set };
+    set.len()
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_set_iterate(set: *const bindings_set_t, callback: bindings_callback_t, context: *mut c_void) {
+    let set = unsafe{ &(*set).set };
+    for bindings in set.iter() {
+        let bindings_ptr = (bindings as *const Bindings).cast::<bindings_t>();
+        callback(bindings_ptr, context);
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_set_merge(a: *const bindings_set_t, b: *const bindings_set_t) -> *mut bindings_set_t {
+    let a = unsafe{ &(*a).set };
+    let b = unsafe{ &(*b).set };
+
+    let result_set = a.clone().merge(b);
+    bindings_set_into_ptr(result_set)
+}
+
+// end of bindings_set functions
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
@@ -336,6 +406,10 @@ pub fn ptr_into_atom(atom: *mut atom_t) -> Atom {
 
 pub fn ptr_into_bindings(bindings: *mut bindings_t) -> Bindings {
     unsafe {Box::from_raw(bindings)}.bindings
+}
+
+pub fn bindings_set_into_ptr(set: BindingsSet) -> *mut bindings_set_t {
+    Box::into_raw(Box::new(bindings_set_t{set}))
 }
 
 fn vec_atom_into_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {

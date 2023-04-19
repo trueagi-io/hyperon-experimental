@@ -10,6 +10,46 @@ void setup(void) {
 void teardown(void) {
 }
 
+#include "stdio.h"
+
+void print_str(const char *str, void *context) {
+    printf("%s", str);
+};
+
+void print_bindings(const bindings_t* bindings, void *context) {
+    bindings_to_str(bindings, &print_str, NULL);
+};
+
+START_TEST (test_bindings_set)
+{    
+    bindings_t* bindings_a = bindings_new();
+    var_atom_t var_atom_a = {.var = "a", .atom = atom_sym("A")};
+    bindings_add_var_binding(bindings_a, &var_atom_a);
+
+    bindings_t* bindings_b = bindings_new();
+    var_atom_t var_atom_b = {.var = "b", .atom = atom_sym("B")};
+    bindings_add_var_binding(bindings_b, &var_atom_b);
+
+    bindings_set_t* set_1 = bindings_merge_v2(bindings_a, bindings_b);
+
+    bindings_t* bindings_c = bindings_new();
+    var_atom_t var_atom_c = {.var = "c", .atom = atom_sym("C")};
+    bindings_add_var_binding(bindings_c, &var_atom_c);
+
+    bindings_set_t* set_2 = bindings_set_from_bindings(bindings_c);
+    bindings_set_t* result_set = bindings_set_merge(set_1, set_2);
+
+    bindings_set_iterate(result_set, &print_bindings, NULL);
+
+    bindings_free(bindings_a);
+    bindings_free(bindings_b);
+    bindings_free(bindings_c);
+    bindings_set_free(set_1);
+    bindings_set_free(set_2);
+    bindings_set_free(result_set);
+}
+END_TEST
+
 START_TEST (test_sym)
 {
     char name[] = "test";
@@ -38,6 +78,7 @@ END_TEST
 
 void init_test(TCase* test_case) {
     tcase_add_checked_fixture(test_case, setup, teardown);
+    tcase_add_test(test_case, test_bindings_set);
     tcase_add_test(test_case, test_sym);
     tcase_add_test(test_case, test_expr);
 }
