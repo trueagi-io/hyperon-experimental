@@ -4,6 +4,7 @@ use crate::util::*;
 
 use std::os::raw::*;
 use std::fmt::Display;
+use std::convert::TryInto;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon::matcher::{Bindings, BindingsSet};
@@ -228,6 +229,30 @@ pub extern "C" fn bindings_set_iterate(set: *const bindings_set_t, callback: bin
         let bindings_ptr = (bindings as *const Bindings).cast::<bindings_t>();
         callback(bindings_ptr, context);
     }
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_set_add_var_equality(set: *mut bindings_set_t, a: *const atom_t, b: *const atom_t) {
+    let set = unsafe{ &mut(*set).set };
+    let a = unsafe{ &(*a).atom };
+    let b = unsafe{ &(*b).atom };
+
+    let mut owned_set = BindingsSet::empty();
+    core::mem::swap(&mut owned_set, set);
+    let mut result_set = owned_set.add_var_equality(a.try_into().unwrap(), b.try_into().unwrap());
+    core::mem::swap(&mut result_set, set);
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_set_add_var_binding(set: *mut bindings_set_t, var: *const atom_t, value: *const atom_t) {
+    let set = unsafe{ &mut(*set).set };
+    let var = unsafe{ &(*var).atom };
+    let value = unsafe{ &(*value).atom };
+
+    let mut owned_set = BindingsSet::empty();
+    core::mem::swap(&mut owned_set, set);
+    let mut result_set = owned_set.add_var_binding(TryInto::<&VariableAtom>::try_into(var).unwrap(), value);
+    core::mem::swap(&mut result_set, set);
 }
 
 #[no_mangle]

@@ -39,6 +39,10 @@ START_TEST (test_bindings_set)
     bindings_set_t* set_2 = bindings_set_from_bindings(bindings_c);
     bindings_set_t* result_set = bindings_set_merge(set_1, set_2);
 
+    bindings_set_add_var_equality(result_set, atom_var("a"), atom_var("a_prime"));
+
+    bindings_set_add_var_binding(result_set, atom_var("d"), atom_sym("D"));
+
     bindings_set_iterate(result_set, &print_bindings, NULL);
 
     bindings_free(bindings_a);
