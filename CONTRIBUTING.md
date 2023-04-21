@@ -48,6 +48,13 @@ code after you and make him fix the issue if it is appropriate. If the change or
 question is big enough or it affects the API of the module it is better to raise
 an issue instead.
 
+### Libraries
+
+When adding new library into the project please ensure you specify the exact
+version instead of using ranges. The minor update of the library can break the
+build unexpectedly. The broken build is a real burden because most of the users
+build the project from the source.
+
 ### Rust
 
 When working on Rust C API prefer making `unsafe` blocks as small as possible.
