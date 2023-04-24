@@ -21,6 +21,8 @@ class CoverageCommand(Command):
 setup(name='hyperon',
       version='0.1.2',
       description='Hyperon API in Python',
+      long_description_content_type="text/markdown",
+      long_description=README.md,
       packages=['hyperon'],
       install_requires=[],
       extras_require={
