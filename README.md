@@ -1,5 +1,5 @@
 ![CI](https://github.com/trueagi-io/hyperon-experimental/actions/workflows/ci.yml/badge.svg)
-[![Upload Python Package](https://github.com/wenwei-dev/hyperon-experimental/actions/workflows/python-publish.yml/badge.svg)](https://github.com/wenwei-dev/hyperon-experimental/actions/workflows/python-publish.yml)
+
 
 # Overview
 
