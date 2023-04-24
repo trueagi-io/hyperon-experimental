@@ -17,12 +17,16 @@ class CoverageCommand(Command):
         subprocess.run(shlex.split("coverage html"), check=True, cwd='./tests')
         raise SystemExit(result.returncode)
 
+from pathlib import Path
+this_directory = Path(__file__).parent
+long_description = (this_directory / "../README.md").read_text()
+
 
 setup(name='hyperon',
       version='0.1.2',
       description='Hyperon API in Python',
       long_description_content_type="text/markdown",
-      long_description=README.md,
+      long_description=long_description,
       packages=['hyperon'],
       install_requires=[],
       extras_require={
