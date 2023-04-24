@@ -73,6 +73,7 @@ jobs:
         path: ./build/artifacts.tar.gz
 
   publish-python-package:
+    runs-on: ubuntu-20.04
     permissions:
       id-token: write
     steps:
