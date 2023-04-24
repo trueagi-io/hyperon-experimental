@@ -28,6 +28,7 @@ setup(name='hyperon',
       long_description_content_type="text/markdown",
       long_description='Hyperon API in Python',
       packages=['hyperon'],
+      package_data={'hyperon': ['*.so']},
       install_requires=[],
       extras_require={
           'dev': [

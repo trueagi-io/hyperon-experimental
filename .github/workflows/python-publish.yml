@@ -16,10 +16,8 @@ permissions:
   contents: read
 
 jobs:
-  ubuntu-deploy:
+  build-ubuntu-20.04:
     runs-on: ubuntu-20.04
-    permissions:
-      id-token: write
     steps:
     - uses: actions/checkout@v3
 
@@ -46,6 +44,40 @@ jobs:
         command: install
         args: cbindgen
 
+    - name: Install Python dependencies
+      run: |
+        python3 -m pip install -e ./python[dev]
+
+    - name: Setup C API build
+      run: |
+        mkdir -p build
+        cd build
+        # specify C compiler as conan could not find it automatically
+        # see https://github.com/conan-io/conan/issues/4322
+        cmake -DCMAKE_C_COMPILER=gcc ..
+
+    - name: Build C API
+      working-directory: ./build
+      run: |
+        set -e
+        make
+        mkdir -p artifacts
+        chrpath -d ./python/*.so  ./c/cargo/*.so
+        cp ./python/*.so  ./c/cargo/*.so artifacts
+        tar zcf artifacts.tar.gz artifacts
+
+    - name: Upload shared library artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: artifacts.tar.gz
+        path: ./build/artifacts.tar.gz
+
+  publish-python-package:
+    permissions:
+      id-token: write
+    steps:
+    - uses: actions/checkout@v3
+
     - name: Set up Python
       uses: actions/setup-python@v4
       with:
@@ -56,9 +88,17 @@ jobs:
         python -m pip install --upgrade pip
         pip install build
 
+    - name: Download shared library artifacts
+      uses: actions/download-artifact@v3
+      with:
+        name: artifacts.tar.gz
+        path: python
+
     - name: Build package
       working-directory: ./python
-      run: python -m build
+      run: |
+        tar zxf artifacts.tar.gz -C hyperon  # decompress *.so files to hyperon
+        python -m build
 
     - name: Publish package
       if: startsWith(github.ref, 'refs/tags')
