@@ -66,4 +66,4 @@ jobs:
         verbose: true
         password: ${{ secrets.TEST_PYPI_API_TOKEN }}
         repository-url: https://test.pypi.org/legacy/
-        packages-dir: python/
+        packages-dir: python/dist/
