@@ -1,4 +1,8 @@
 import sys
+import os
+package_path = os.path.dirname(__file__)
+sys.path.insert(0, package_path)
+
 from .atoms import *
 from .base import *
 from .runner import MeTTa

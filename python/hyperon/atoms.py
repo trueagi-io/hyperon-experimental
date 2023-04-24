@@ -1,7 +1,3 @@
-import sys
-import os
-package_path = os.path.dirname(__file__)
-sys.path.insert(0, package_path)
 import hyperonpy as hp
 from hyperonpy import AtomKind
 from typing import Union
