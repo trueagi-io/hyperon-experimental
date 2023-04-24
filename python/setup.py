@@ -23,7 +23,12 @@ long_description = (this_directory / "../README.md").read_text()
 
 
 setup(name='hyperon',
-      version='0.1.2',
+      setup_requires=['setuptools_scm'],
+      use_scm_version = {
+          "root": "..",
+          "relative_to": __file__,
+          "local_scheme": "node-and-timestamp"
+      },
       description='Hyperon API in Python',
       long_description_content_type="text/markdown",
       long_description=long_description,
