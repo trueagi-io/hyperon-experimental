@@ -772,11 +772,6 @@ impl PartialEq for Atom {
     }
 }
 
-//QUESTION for Vitaly: What is the philosophy on external crates?  I noticed this project
-// is very sparing in the use of dependencies.
-// Specifically, in this case, derive_more could auto-generate most of the impls below, but
-// it would also bring along some other unnecessary stuff that would slow the build a tiny
-// bit when it was stripped from the binary.
 impl TryFrom<Atom> for VariableAtom {
     type Error = &'static str;
     fn try_from(atom: Atom) -> Result<Self, &'static str> {
