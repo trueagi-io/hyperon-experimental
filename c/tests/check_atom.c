@@ -29,7 +29,6 @@ void clone_one_bindings(const bindings_t* bindings, void *context) {
 
 START_TEST (test_bindings_set)
 {
-    for (int i=0; i<100000000; i++) {
     bindings_t* bindings_a = bindings_new();
     var_atom_t var_atom_a = {.var = "a", .atom = atom_sym("A")};
     bindings_add_var_binding(bindings_a, &var_atom_a);
@@ -87,7 +86,6 @@ START_TEST (test_bindings_set)
 
     bindings_set_free(set_1);
     bindings_set_free(set_2);
-    }
 }
 END_TEST
 
