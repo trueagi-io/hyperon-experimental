@@ -225,6 +225,26 @@ pub extern "C" fn bindings_set_free(set: *mut bindings_set_t) {
 }
 
 #[no_mangle]
+pub extern "C" fn bindings_set_clone(set: *const bindings_set_t) -> *mut bindings_set_t {
+    let set = unsafe{&(*set).set};
+    bindings_set_into_ptr(set.clone())
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_set_eq(set: *const bindings_set_t, other: *const bindings_set_t) -> bool {    
+    let set = unsafe{&(*set).set};
+    let other = unsafe{&(*other).set};
+    set == other
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_set_to_str(set: *const bindings_set_t, callback: c_str_callback_t, context: *mut c_void) {
+    let set = unsafe{ &(*set).set };
+    let s = str_as_cstr(set.to_string().as_str());
+    callback(s.as_ptr(), context);
+}
+
+#[no_mangle]
 pub extern "C" fn bindings_set_len(set: *const bindings_set_t) -> usize {
     let set = unsafe{ &(*set).set };
     set.len()

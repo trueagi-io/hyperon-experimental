@@ -740,6 +740,20 @@ impl core::ops::Deref for BindingsSet {
     }
 }
 
+impl Display for BindingsSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        let mut iter = self.iter();
+        if let Some(first_bindings) = iter.next() {
+            write!(f, " {first_bindings}")?;
+        }
+        for bindings in iter {
+            write!(f, ",\n {bindings}")?;
+        }
+        write!(f, " ]")
+    }
+}
+
 impl BindingsSet {
 
     pub fn empty() -> Self {
