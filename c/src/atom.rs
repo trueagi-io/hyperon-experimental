@@ -169,13 +169,17 @@ pub extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindings_righ
     }
 }
 
+/// WARNING: This function takes ownership of the _self argument.
+/// After calling this function, the bindings_t passed as _self must not be accessed or freed
+/// 
+/// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
-pub extern "C" fn bindings_merge_v2(bindings_left: *const bindings_t, bindings_right: *const bindings_t) -> *mut bindings_set_t
+pub extern "C" fn bindings_merge_v2(_self: *mut bindings_t, other: *const bindings_t) -> *mut bindings_set_t
 {
-    let bindings_l = unsafe{ &(*bindings_left).bindings };
-    let bindings_r = unsafe{ &(*bindings_right).bindings };
+    let other = unsafe{ &(*other).bindings };
+    let owned_self = ptr_into_bindings(_self);
 
-    let new_set = bindings_l.clone().merge_v2(bindings_r);
+    let new_set = owned_self.merge_v2(other);
     bindings_set_into_ptr(new_set)
 }
 
@@ -204,10 +208,14 @@ pub extern "C" fn bindings_set_single() -> *mut bindings_set_t {
     bindings_set_into_ptr(BindingsSet::single())
 }
 
+/// WARNING: This function takes ownership of the bindings argument.
+/// After calling this function, the bindings_t passed must not be accessed or freed
+/// 
+/// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
-pub extern "C" fn bindings_set_from_bindings(bindings: *const bindings_t) -> *mut bindings_set_t {
-    let bindings = unsafe{ &(*bindings).bindings };
-    bindings_set_into_ptr(BindingsSet::from(bindings.clone()))
+pub extern "C" fn bindings_set_from_bindings(bindings: *mut bindings_t) -> *mut bindings_set_t {
+    let owned_bindings = ptr_into_bindings(bindings);
+    bindings_set_into_ptr(BindingsSet::from(owned_bindings))
 }
 
 #[no_mangle]
@@ -256,12 +264,14 @@ pub extern "C" fn bindings_set_add_var_binding(set: *mut bindings_set_t, var: *c
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_merge(a: *const bindings_set_t, b: *const bindings_set_t) -> *mut bindings_set_t {
-    let a = unsafe{ &(*a).set };
-    let b = unsafe{ &(*b).set };
+pub extern "C" fn bindings_set_merge_into(_self: *mut bindings_set_t, other: *const bindings_set_t) {
+    let _self = unsafe{ &mut (*_self).set };
+    let other = unsafe{ &(*other).set };
+    let mut owned_self = BindingsSet::empty();
+    core::mem::swap(_self, &mut owned_self);
 
-    let result_set = a.clone().merge(b);
-    bindings_set_into_ptr(result_set)
+    let mut result_set = owned_self.merge(other);
+    core::mem::swap(_self, &mut result_set);
 }
 
 // end of bindings_set functions
