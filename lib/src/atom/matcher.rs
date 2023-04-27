@@ -756,10 +756,15 @@ impl Display for BindingsSet {
 
 impl BindingsSet {
 
+    /// Creates a new fully-constrained BindingsSet
+    /// 
+    /// NOTE: It is rare that you want to create an empty BindingsSet.  This function is useful
+    /// for making an inexpensive placeholder, but you probably want to use [BinsingsSet::single].
     pub fn empty() -> Self {
         BindingsSet(smallvec::smallvec![])
     }
 
+    /// Creates a new unconstrained BindingsSet
     pub fn single() -> Self {
         BindingsSet(smallvec::smallvec![Bindings::new()])
     }
