@@ -769,6 +769,22 @@ impl BindingsSet {
         BindingsSet(smallvec::smallvec![Bindings::new()])
     }
 
+    /// Returns `true` if a BindingsSet contains no Bindings Objects (fully constrained)
+    /// 
+    /// TODO: Need a better name that doesn't conflict with the intuitions about Bindings::is_empty()
+    /// https://github.com/trueagi-io/hyperon-experimental/issues/281
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Returns `true` if a BindingsSet contains no limiting Bindings inside (unconstrained)
+    /// 
+    /// TODO: Need a better word to describe this concept than "single"
+    /// https://github.com/trueagi-io/hyperon-experimental/issues/281
+    pub fn is_single(&self) -> bool {
+        self.len() == 1 && self.0[0].is_empty()
+    }
+
     pub fn drain<'a, R: std::ops::RangeBounds<usize>>(&'a mut self, range: R) -> impl Iterator<Item=Bindings> +'a {
         self.0.drain(range)
     }

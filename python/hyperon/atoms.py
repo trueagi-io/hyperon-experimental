@@ -295,6 +295,9 @@ class BindingsSet:
 
     def is_empty(self) -> bool:
         return hp.bindings_set_is_empty(self.c_set)
+    
+    def is_single(self) -> bool:
+        return hp.bindings_set_is_single(self.c_set)
 
     def add_var_binding(self, var: Atom, value: Atom) -> bool:
         return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)

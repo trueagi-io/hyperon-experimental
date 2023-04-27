@@ -343,17 +343,14 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("bindings_set_single", []() { return CBindingsSet(bindings_set_single()); }, "New BindingsSet with one new Bindings");
     m.def("bindings_set_free", [](CBindingsSet set) { bindings_set_free(set.ptr); }, "Free BindingsSet");
     m.def("bindings_set_eq", [](CBindingsSet set, CBindingsSet other) { return bindings_set_eq(set.ptr, other.ptr); }, "Free BindingsSet");
-    //TODO: Discussion topic.  I would like to replace BindingsSet::len() with BindingsSet::is_empty across the whole
-    // code base, all the way back to Rust. Then I'd like to unify the behavior between a BindingsSet with a single empty
-    // Bindings and a BindingsSet with no Bindings whatsoever.  I believe this is one step towards a future where
-    // BindingsSets can represent lazily-evaluated bindings, and ultimately infinite and explosive sets
+    //TODO: I think we need better words for these concepts.  "empty" & "single" are placeholders for now.
+    //https://github.com/trueagi-io/hyperon-experimental/issues/281
     m.def("bindings_set_is_empty", [](CBindingsSet set) {
-        if (bindings_set_len(set.ptr) == 0) return true;
-        bindings_set_t* test_set = bindings_set_single();
-        bool val = bindings_set_eq(set.ptr, test_set);
-        bindings_set_free(test_set);
-        return val;
-    }, "Returns true if BindingsSet contains no Bindings");
+        return bindings_set_is_empty(set.ptr);
+    }, "Returns true if BindingsSet contains no Bindings object (fully constrained)");
+    m.def("bindings_set_is_single", [](CBindingsSet set) {
+        return bindings_set_is_single(set.ptr);
+    }, "Returns true if BindingsSet contains no variable bindings (unconstrained)");
     m.def("bindings_set_to_str", [](CBindingsSet set) {
         std::string str;
         bindings_set_to_str(set.ptr, copy_to_string, &str);

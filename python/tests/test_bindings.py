@@ -104,9 +104,11 @@ class BindingsTest(unittest.TestCase):
 
     def test_bindings_set(self):
         set = BindingsSet()
-        self.assertTrue(set.is_empty())
+        self.assertTrue(set.is_single())
+        self.assertFalse(set.is_empty())
 
         set.add_var_binding(V("a"), S("A"));
+        self.assertFalse(set.is_single())
         self.assertFalse(set.is_empty())
 
         new_bindings = Bindings();
@@ -116,6 +118,9 @@ class BindingsTest(unittest.TestCase):
 
         cloned_set = deepcopy(set)
         self.assertEqual(set, cloned_set)
+
+        cloned_set.add_var_binding(V("a"), S("B"));
+        self.assertTrue(cloned_set.is_empty())
 
         set.add_var_equality(V("a"), V("a_prime"));
 

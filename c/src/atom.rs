@@ -240,9 +240,15 @@ pub extern "C" fn bindings_set_to_str(set: *const bindings_set_t, callback: c_st
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_len(set: *const bindings_set_t) -> usize {
+pub extern "C" fn bindings_set_is_empty(set: *const bindings_set_t) -> bool {
     let set = unsafe{ &(*set).set };
-    set.len()
+    set.is_empty()
+}
+
+#[no_mangle]
+pub extern "C" fn bindings_set_is_single(set: *const bindings_set_t) -> bool {
+    let set = unsafe{ &(*set).set };
+    set.is_single()
 }
 
 #[no_mangle]
