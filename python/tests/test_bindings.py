@@ -108,6 +108,11 @@ class BindingsTest(unittest.TestCase):
         self.assertFalse(empty_set.is_single())
         self.assertTrue(empty_set.is_empty())
 
+        new_bindings = Bindings();
+        new_bindings.add_var_bindings(V("a"), S("A"))
+        empty_set.push(new_bindings);
+        no_longer_empty_set = empty_set;
+
         set = BindingsSet()
         self.assertTrue(set.is_single())
         self.assertFalse(set.is_empty())
@@ -115,6 +120,7 @@ class BindingsTest(unittest.TestCase):
         set.add_var_binding(V("a"), S("A"));
         self.assertFalse(set.is_single())
         self.assertFalse(set.is_empty())
+        self.assertEqual(set, no_longer_empty_set);        
 
         new_bindings = Bindings();
         new_bindings.add_var_bindings(V("a"), S("A"))

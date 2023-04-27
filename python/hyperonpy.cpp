@@ -359,6 +359,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     }, "Convert BindingsSet to human readable string");
     m.def("bindings_set_clone", [](CBindingsSet set) { return CBindingsSet(bindings_set_clone(set.ptr)); }, "Deep copy of BindingsSet");
     m.def("bindings_set_from_bindings", [](CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); return CBindingsSet(bindings_set_from_bindings(cloned_bindings)); }, "New BindingsSet from existing Bindings");
+    m.def("bindings_set_push", [](CBindingsSet set, CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); bindings_set_push(set.ptr, cloned_bindings); }, "Adds the Bindings to the BindingsSet");
     m.def("bindings_set_add_var_binding", [](CBindingsSet set, CAtom var, CAtom value) {
         bindings_set_add_var_binding(set.ptr, var.ptr, value.ptr);
     }, "Asserts a binding between a variable and an atom for every Bindings in the BindingsSet" );

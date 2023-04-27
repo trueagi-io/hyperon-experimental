@@ -301,6 +301,9 @@ class BindingsSet:
     
     def is_single(self) -> bool:
         return hp.bindings_set_is_single(self.c_set)
+    
+    def push(self, bindings: Bindings):
+        hp.bindings_set_push(self.c_set, bindings.cbindings)
 
     def add_var_binding(self, var: Atom, value: Atom) -> bool:
         return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)

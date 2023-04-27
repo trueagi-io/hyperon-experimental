@@ -218,6 +218,15 @@ pub extern "C" fn bindings_set_from_bindings(bindings: *mut bindings_t) -> *mut 
     bindings_set_into_ptr(BindingsSet::from(owned_bindings))
 }
 
+/// WARNING: This function takes ownership of the bindings argument.
+/// After calling this function, the bindings_t passed must not be accessed or freed
+#[no_mangle]
+pub extern "C" fn bindings_set_push(set: *mut bindings_set_t, bindings: *mut bindings_t) {    
+    let set = unsafe{&mut (*set).set};
+    let owned_bindings = ptr_into_bindings(bindings);
+    set.push(owned_bindings);
+}
+
 #[no_mangle]
 pub extern "C" fn bindings_set_free(set: *mut bindings_set_t) {
     // drop() does nothing actually, but it is used here for clarity
