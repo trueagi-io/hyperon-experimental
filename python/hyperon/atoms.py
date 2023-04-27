@@ -232,8 +232,11 @@ class Bindings:
     def merge_v2(left, right) -> 'BindingsSet':
         return BindingsSet(hp.bindings_merge_v2(left.cbindings, right.cbindings))
 
-    def add_var_bindings(self, var_name:str, atom: Atom) -> bool:
-        return hp.bindings_add_var_bindings(self.cbindings, var_name, atom.catom)
+    def add_var_bindings(self, var: Union[str, Atom], atom: Atom) -> bool:
+        if isinstance(var, Atom):
+            return hp.bindings_add_var_bindings(self.cbindings, var.get_name(), atom.catom)
+        else:
+            return hp.bindings_add_var_bindings(self.cbindings, var, atom.catom)
 
     def is_empty(self) -> bool:
         return hp.bindings_is_empty(self.cbindings)
@@ -293,11 +296,11 @@ class BindingsSet:
     def is_empty(self) -> bool:
         return hp.bindings_set_is_empty(self.c_set)
 
-    def add_var_binding(self, var_name:str, atom: Atom) -> bool:
-        return hp.bindings_set_add_var_binding(self.c_set, var_name, atom.catom)
+    def add_var_binding(self, var: Atom, value: Atom) -> bool:
+        return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)
 
-    def add_var_equality(self, var_a_name:str, var_b_name:str) -> bool:
-        return hp.bindings_set_add_var_equality(self.c_set, var_a_name, var_b_name)
+    def add_var_equality(self, a: Atom, b: Atom) -> bool:
+        return hp.bindings_set_add_var_equality(self.c_set, a.catom, b.catom)
 
     def merge_into(self, input: Union['BindingsSet', Bindings]):
         if isinstance(input, BindingsSet):

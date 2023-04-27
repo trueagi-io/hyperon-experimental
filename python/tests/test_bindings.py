@@ -106,18 +106,18 @@ class BindingsTest(unittest.TestCase):
         set = BindingsSet()
         self.assertTrue(set.is_empty())
 
-        set.add_var_binding("a", S("A"));
+        set.add_var_binding(V("a"), S("A"));
         self.assertFalse(set.is_empty())
 
         new_bindings = Bindings();
-        new_bindings.add_var_bindings("a", S("A"))
+        new_bindings.add_var_bindings(V("a"), S("A"))
         set_2 = BindingsSet(new_bindings);
         self.assertEqual(set, set_2)
 
         cloned_set = deepcopy(set)
         self.assertEqual(set, cloned_set)
 
-        set.add_var_equality("a", "a_prime");
+        set.add_var_equality(V("a"), V("a_prime"));
 
         bindings_counter = 0
         for _ in set.iterator():
@@ -125,27 +125,27 @@ class BindingsTest(unittest.TestCase):
         self.assertEqual(1, bindings_counter)
 
         new_bindings = Bindings();
-        new_bindings.add_var_bindings("b", S("B"))
+        new_bindings.add_var_bindings(V("b"), S("B"))
         set.merge_into(new_bindings);
 
         new_bindings = Bindings();
-        new_bindings.add_var_bindings("c", S("C"))
+        new_bindings.add_var_bindings(V("c"), S("C"))
         new_set = BindingsSet(new_bindings);
         set.merge_into(new_set);
 
         new_bindings = Bindings();
-        new_bindings.add_var_bindings("d", S("D"))
+        new_bindings.add_var_bindings(V("d"), S("D"))
         for existing_bindings in set.iterator():
             new_set = new_bindings.merge_v2(existing_bindings);
         
         print(new_set)
 
         expected_bindings_set = BindingsSet()
-        expected_bindings_set.add_var_binding("a", S("A"));
-        expected_bindings_set.add_var_binding("b", S("B"));
-        expected_bindings_set.add_var_binding("c", S("C"));
-        expected_bindings_set.add_var_binding("d", S("D"));
-        expected_bindings_set.add_var_equality("a", "a_prime");
+        expected_bindings_set.add_var_binding(V("a"), S("A"));
+        expected_bindings_set.add_var_binding(V("b"), S("B"));
+        expected_bindings_set.add_var_binding(V("c"), S("C"));
+        expected_bindings_set.add_var_binding(V("d"), S("D"));
+        expected_bindings_set.add_var_equality(V("a"), V("a_prime"));
 
         self.assertEqual(new_set, expected_bindings_set)
 

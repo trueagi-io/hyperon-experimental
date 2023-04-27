@@ -361,19 +361,12 @@ PYBIND11_MODULE(hyperonpy, m) {
         return str;
     }, "Convert BindingsSet to human readable string");
     m.def("bindings_set_clone", [](CBindingsSet set) { return CBindingsSet(bindings_set_clone(set.ptr)); }, "Deep copy of BindingsSet");
-    //TODO: How do we tell the Python API that we are taking ownership of (and destroying) the input, so we don't have a double-free?
     m.def("bindings_set_from_bindings", [](CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); return CBindingsSet(bindings_set_from_bindings(cloned_bindings)); }, "New BindingsSet from existing Bindings");
-    m.def("bindings_set_add_var_binding", [](CBindingsSet set, char const* var_name, CAtom atom) {
-        atom_t* var = atom_var(var_name);
-        bindings_set_add_var_binding(set.ptr, var, atom.ptr);
-        atom_free(var);
+    m.def("bindings_set_add_var_binding", [](CBindingsSet set, CAtom var, CAtom value) {
+        bindings_set_add_var_binding(set.ptr, var.ptr, value.ptr);
     }, "Asserts a binding between a variable and an atom for every Bindings in the BindingsSet" );
-    m.def("bindings_set_add_var_equality", [](CBindingsSet set, char const* var_a_name, char const* var_b_name) {
-        atom_t* var_a = atom_var(var_a_name);
-        atom_t* var_b = atom_var(var_b_name);
-        bindings_set_add_var_equality(set.ptr, var_a, var_b);
-        atom_free(var_a);
-        atom_free(var_b);
+    m.def("bindings_set_add_var_equality", [](CBindingsSet set, CAtom var_a, CAtom var_b) {
+        bindings_set_add_var_equality(set.ptr, var_a.ptr, var_b.ptr);
     }, "Asserts a binding between two variables for every Bindings in the BindingsSet" );
     m.def("bindings_set_merge_into", [](CBindingsSet set, CBindingsSet other) {
         bindings_set_merge_into(set.ptr, other.ptr);
