@@ -20,6 +20,7 @@ struct CPtr {
 using CAtom = CPtr<atom_t>;
 using CVecAtom = CPtr<vec_atom_t>;
 using CBindings = CPtr<bindings_t>;
+using CBindingsSet = CPtr<bindings_set_t>;
 using CGroundingSpace = CPtr<grounding_space_t>;
 using CTokenizer = CPtr<tokenizer_t>;
 using CStepResult = CPtr<step_result_t>;
@@ -183,6 +184,11 @@ void copy_to_list_callback(var_atom_t const* varAtom, void* context){
             std::make_pair(std::string(varAtom->var), CAtom(atom_clone(varAtom->atom))));
 }
 
+void bindings_copy_to_list_callback(bindings_t const* bindings, void* context){
+    pybind11::list& bindings_list = *( (pybind11::list*)(context) );
+    bindings_list.append(CBindings(bindings_clone(bindings)));
+}
+
 struct CConstr {
 
     py::function pyconstr;
@@ -293,8 +299,11 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<CBindings>(m, "CBindings");
     m.def("bindings_new", []() { return CBindings(bindings_new()); }, "New bindings");
     m.def("bindings_free", [](CBindings bindings) { bindings_free(bindings.ptr);}, "Free bindings" );
-    m.def("bindings_clone", [](CBindings bindings) { return CBindings(bindings_clone(bindings.ptr)); }, "Deep copy if bindings");
+    m.def("bindings_clone", [](CBindings bindings) { return CBindings(bindings_clone(bindings.ptr)); }, "Deep copy of bindings");
     m.def("bindings_merge", [](CBindings left, CBindings right) { return CBindings(bindings_merge(left.ptr, right.ptr));}, "Merges bindings");
+    m.def("bindings_merge_v2", [](CBindings self, CBindings other) {
+        return CBindingsSet(bindings_merge_v2(bindings_clone(self.ptr), other.ptr));
+    }, "Merges bindings into a BindingsSet, allowing for conflicting bindings to split");
     m.def("bindings_eq", [](CBindings left, CBindings right){ return bindings_eq(left.ptr, right.ptr);}, "Compares bindings"  );
     m.def("bindings_add_var_bindings",
           [](CBindings bindings, char const* varName, CAtom atom) {
@@ -329,6 +338,47 @@ PYBIND11_MODULE(hyperonpy, m) {
 
         return var_atom_list;
     }, "Returns iterator to traverse bindings");
+
+    py::class_<CBindingsSet>(m, "CBindingsSet");
+    m.def("bindings_set_empty", []() { return CBindingsSet(bindings_set_empty()); }, "New BindingsSet with no Bindings");
+    m.def("bindings_set_single", []() { return CBindingsSet(bindings_set_single()); }, "New BindingsSet with one new Bindings");
+    m.def("bindings_set_free", [](CBindingsSet set) { bindings_set_free(set.ptr); }, "Free BindingsSet");
+    m.def("bindings_set_eq", [](CBindingsSet set, CBindingsSet other) { return bindings_set_eq(set.ptr, other.ptr); }, "Free BindingsSet");
+    //TODO: I think we need better words for these concepts.  "empty" & "single" are placeholders for now.
+    //https://github.com/trueagi-io/hyperon-experimental/issues/281
+    m.def("bindings_set_is_empty", [](CBindingsSet set) {
+        return bindings_set_is_empty(set.ptr);
+    }, "Returns true if BindingsSet contains no Bindings object (fully constrained)");
+    m.def("bindings_set_is_single", [](CBindingsSet set) {
+        return bindings_set_is_single(set.ptr);
+    }, "Returns true if BindingsSet contains no variable bindings (unconstrained)");
+    m.def("bindings_set_to_str", [](CBindingsSet set) {
+        std::string str;
+        bindings_set_to_str(set.ptr, copy_to_string, &str);
+        return str;
+    }, "Convert BindingsSet to human readable string");
+    m.def("bindings_set_clone", [](CBindingsSet set) { return CBindingsSet(bindings_set_clone(set.ptr)); }, "Deep copy of BindingsSet");
+    m.def("bindings_set_from_bindings", [](CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); return CBindingsSet(bindings_set_from_bindings(cloned_bindings)); }, "New BindingsSet from existing Bindings");
+    m.def("bindings_set_push", [](CBindingsSet set, CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); bindings_set_push(set.ptr, cloned_bindings); }, "Adds the Bindings to the BindingsSet");
+    m.def("bindings_set_add_var_binding", [](CBindingsSet set, CAtom var, CAtom value) {
+        bindings_set_add_var_binding(set.ptr, var.ptr, value.ptr);
+    }, "Asserts a binding between a variable and an atom for every Bindings in the BindingsSet" );
+    m.def("bindings_set_add_var_equality", [](CBindingsSet set, CAtom var_a, CAtom var_b) {
+        bindings_set_add_var_equality(set.ptr, var_a.ptr, var_b.ptr);
+    }, "Asserts a binding between two variables for every Bindings in the BindingsSet" );
+    m.def("bindings_set_merge_into", [](CBindingsSet set, CBindingsSet other) {
+        bindings_set_merge_into(set.ptr, other.ptr);
+    }, "Merges the contents of the `other` BindingsSet into the `set` BindingsSet" );
+    m.def("bindings_set_list", [](CBindingsSet set) -> pybind11::list {
+        pybind11::list bindings_list;
+        bindings_set_iterate(
+                set.ptr,
+                bindings_copy_to_list_callback,
+                &bindings_list);
+
+        return bindings_list;
+    }, "Returns iterator to traverse Bindings within BindingsSet");
+
 
     py::class_<CGroundingSpace>(m, "CGroundingSpace");
     m.def("grounding_space_new", []() { return CGroundingSpace(grounding_space_new()); }, "New grounding space instance");

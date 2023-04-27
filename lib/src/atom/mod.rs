@@ -116,6 +116,7 @@ pub use iter::*;
 use std::any::Any;
 use std::fmt::{Display, Debug};
 use std::collections::HashMap;
+use std::convert::TryFrom;
 
 use crate::common::collections::ImmutableString;
 
@@ -767,6 +768,66 @@ impl PartialEq for Atom {
             // for matching (see COMMA_SYMBOL in grounding.rs for instance).
             (Atom::Grounded(gnd), Atom::Grounded(other)) => PartialEq::eq(gnd, other),
             _ => false,
+        }
+    }
+}
+
+impl TryFrom<Atom> for VariableAtom {
+    type Error = &'static str;
+    fn try_from(atom: Atom) -> Result<Self, &'static str> {
+        match atom {
+            Atom::Variable(var) => Ok(var),
+            _ => Err("Atom is not a VariableAtom")
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a Atom> for &'a VariableAtom {
+    type Error = &'static str;
+    fn try_from(atom: &Atom) -> Result<&VariableAtom, &'static str> {
+        match atom {
+            Atom::Variable(var) => Ok(&var),
+            _ => Err("Atom is not a VariableAtom")
+        }
+    }
+}
+
+impl TryFrom<Atom> for ExpressionAtom {
+    type Error = &'static str;
+    fn try_from(atom: Atom) -> Result<Self, &'static str> {
+        match atom {
+            Atom::Expression(expr) => Ok(expr),
+            _ => Err("Atom is not an ExpressionAtom")
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a Atom> for &'a ExpressionAtom {
+    type Error = &'static str;
+    fn try_from(atom: &Atom) -> Result<&ExpressionAtom, &'static str> {
+        match atom {
+            Atom::Expression(expr) => Ok(&expr),
+            _ => Err("Atom is not a ExpressionAtom")
+        }
+    }
+}
+
+impl TryFrom<Atom> for SymbolAtom {
+    type Error = &'static str;
+    fn try_from(atom: Atom) -> Result<Self, &'static str> {
+        match atom {
+            Atom::Symbol(sym) => Ok(sym),
+            _ => Err("Atom is not a SymbolAtom")
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a Atom> for &'a SymbolAtom {
+    type Error = &'static str;
+    fn try_from(atom: &Atom) -> Result<&SymbolAtom, &'static str> {
+        match atom {
+            Atom::Symbol(sym) => Ok(&sym),
+            _ => Err("Atom is not a SymbolAtom")
         }
     }
 }

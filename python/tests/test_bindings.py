@@ -102,6 +102,68 @@ class BindingsTest(unittest.TestCase):
             self.assertEqual(expected_atom, x[1])
        '''
 
+    def test_bindings_set(self):
+
+        empty_set = BindingsSet.empty();
+        self.assertFalse(empty_set.is_single())
+        self.assertTrue(empty_set.is_empty())
+
+        new_bindings = Bindings();
+        new_bindings.add_var_bindings(V("a"), S("A"))
+        empty_set.push(new_bindings);
+        no_longer_empty_set = empty_set;
+
+        set = BindingsSet()
+        self.assertTrue(set.is_single())
+        self.assertFalse(set.is_empty())
+
+        set.add_var_binding(V("a"), S("A"));
+        self.assertFalse(set.is_single())
+        self.assertFalse(set.is_empty())
+        self.assertEqual(set, no_longer_empty_set);        
+
+        new_bindings = Bindings();
+        new_bindings.add_var_bindings(V("a"), S("A"))
+        set_2 = BindingsSet(new_bindings);
+        self.assertEqual(set, set_2)
+
+        cloned_set = deepcopy(set)
+        self.assertEqual(set, cloned_set)
+
+        cloned_set.add_var_binding(V("a"), S("B"));
+        self.assertTrue(cloned_set.is_empty())
+
+        set.add_var_equality(V("a"), V("a_prime"));
+
+        bindings_counter = 0
+        for _ in set.iterator():
+            bindings_counter += 1
+        self.assertEqual(1, bindings_counter)
+
+        new_bindings = Bindings();
+        new_bindings.add_var_bindings(V("b"), S("B"))
+        set.merge_into(new_bindings);
+
+        new_bindings = Bindings();
+        new_bindings.add_var_bindings(V("c"), S("C"))
+        new_set = BindingsSet(new_bindings);
+        set.merge_into(new_set);
+
+        new_bindings = Bindings();
+        new_bindings.add_var_bindings(V("d"), S("D"))
+        for existing_bindings in set.iterator():
+            new_set = new_bindings.merge_v2(existing_bindings);
+        
+        print(new_set)
+
+        expected_bindings_set = BindingsSet()
+        expected_bindings_set.add_var_binding(V("a"), S("A"));
+        expected_bindings_set.add_var_binding(V("b"), S("B"));
+        expected_bindings_set.add_var_binding(V("c"), S("C"));
+        expected_bindings_set.add_var_binding(V("d"), S("D"));
+        expected_bindings_set.add_var_equality(V("a"), V("a_prime"));
+
+        self.assertEqual(new_set, expected_bindings_set)
 
 if __name__ == "__main__":
     unittest.main()
