@@ -290,6 +290,9 @@ class BindingsSet:
             hp.bindings_set_free(self.c_set)
             self.c_set = None
 
+    def empty():
+        return BindingsSet(hp.bindings_set_empty())
+
     def clone(self):
         return BindingsSet(hp.bindings_set_clone(self.c_set))
 

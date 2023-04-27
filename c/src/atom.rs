@@ -199,6 +199,11 @@ pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_nam
 // bindings_set
 
 #[no_mangle]
+pub extern "C" fn bindings_set_empty() -> *mut bindings_set_t {
+    bindings_set_into_ptr(BindingsSet::empty())
+}
+
+#[no_mangle]
 pub extern "C" fn bindings_set_single() -> *mut bindings_set_t {
     bindings_set_into_ptr(BindingsSet::single())
 }

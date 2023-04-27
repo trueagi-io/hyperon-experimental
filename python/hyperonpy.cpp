@@ -340,6 +340,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     }, "Returns iterator to traverse bindings");
 
     py::class_<CBindingsSet>(m, "CBindingsSet");
+    m.def("bindings_set_empty", []() { return CBindingsSet(bindings_set_empty()); }, "New BindingsSet with no Bindings");
     m.def("bindings_set_single", []() { return CBindingsSet(bindings_set_single()); }, "New BindingsSet with one new Bindings");
     m.def("bindings_set_free", [](CBindingsSet set) { bindings_set_free(set.ptr); }, "Free BindingsSet");
     m.def("bindings_set_eq", [](CBindingsSet set, CBindingsSet other) { return bindings_set_eq(set.ptr, other.ptr); }, "Free BindingsSet");

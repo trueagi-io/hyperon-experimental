@@ -758,8 +758,9 @@ impl BindingsSet {
 
     /// Creates a new fully-constrained BindingsSet
     /// 
-    /// NOTE: It is rare that you want to create an empty BindingsSet.  This function is useful
-    /// for making an inexpensive placeholder, but you probably want to use [BinsingsSet::single].
+    /// NOTE: This function is useful for making a Bindings Iterator that returns no results,
+    /// as you might want for a return from a GroundedAtom match function that matched no atoms.
+    /// In other cases, you probably want to use [BinsingsSet::single].
     pub fn empty() -> Self {
         BindingsSet(smallvec::smallvec![])
     }

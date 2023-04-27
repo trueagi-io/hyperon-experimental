@@ -103,6 +103,11 @@ class BindingsTest(unittest.TestCase):
        '''
 
     def test_bindings_set(self):
+
+        empty_set = BindingsSet.empty();
+        self.assertFalse(empty_set.is_single())
+        self.assertTrue(empty_set.is_empty())
+
         set = BindingsSet()
         self.assertTrue(set.is_single())
         self.assertFalse(set.is_empty())
