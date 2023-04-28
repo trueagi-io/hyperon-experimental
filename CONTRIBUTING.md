@@ -21,6 +21,12 @@ is less than 73 character long.
 ```
 Such commits looks better in GitHub history.
 
+Please avoid generic commit messages like `Update README.md`.
+Good commit message should describe the change, not a fact of the change.
+For example `Add troubleshooting section about No module named 'hyperonpy'`.
+By looking to the commit message history the reviewer should understand
+the order and brief description of changes.
+  
 Please don't include number and description of the issue into a commit summary
 line. Use `Fixes #<issue-number>` in the pull request description instead
 to link the PR and the issue.

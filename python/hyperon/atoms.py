@@ -229,8 +229,14 @@ class Bindings:
     def merge(left, right):
         return Bindings(hp.bindings_merge(left.cbindings, right.cbindings))
 
-    def add_var_bindings(self, var_name:str, atom: Atom) -> bool:
-        return hp.bindings_add_var_bindings(self.cbindings, var_name, atom.catom)
+    def merge_v2(left, right) -> 'BindingsSet':
+        return BindingsSet(hp.bindings_merge_v2(left.cbindings, right.cbindings))
+
+    def add_var_bindings(self, var: Union[str, Atom], atom: Atom) -> bool:
+        if isinstance(var, Atom):
+            return hp.bindings_add_var_bindings(self.cbindings, var.get_name(), atom.catom)
+        else:
+            return hp.bindings_add_var_bindings(self.cbindings, var, atom.catom)
 
     def is_empty(self) -> bool:
         return hp.bindings_is_empty(self.cbindings)
@@ -249,4 +255,72 @@ class Bindings:
         for r in res:
             result.append((r[0], Atom._from_catom(r[1])))
 
+        return iter(result)
+
+class BindingsSet:
+
+    def __init__(self, input: Union[hp.CBindingsSet, Bindings, None] = None):
+        if input is None:
+            self.c_set = hp.bindings_set_single()
+        elif isinstance(input, Bindings):
+            self.c_set = hp.bindings_set_from_bindings(input.cbindings)
+        else:
+            self.c_set = input
+
+    def __del__(self):
+        if self.c_set is not None:
+            hp.bindings_set_free(self.c_set)
+            self.c_set = None
+
+    def __eq__(self, other):
+        return (isinstance(other, BindingsSet) and
+                hp.bindings_set_eq(self.c_set, other.c_set))
+
+    def __repr__(self):
+        return hp.bindings_set_to_str(self.c_set)
+
+    def __deepcopy__(self, memodict={}):
+        return self.clone()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.c_set is not None:
+            hp.bindings_set_free(self.c_set)
+            self.c_set = None
+
+    def empty():
+        return BindingsSet(hp.bindings_set_empty())
+
+    def clone(self):
+        return BindingsSet(hp.bindings_set_clone(self.c_set))
+
+    def is_empty(self) -> bool:
+        return hp.bindings_set_is_empty(self.c_set)
+    
+    def is_single(self) -> bool:
+        return hp.bindings_set_is_single(self.c_set)
+    
+    def push(self, bindings: Bindings):
+        hp.bindings_set_push(self.c_set, bindings.cbindings)
+
+    def add_var_binding(self, var: Atom, value: Atom) -> bool:
+        return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)
+
+    def add_var_equality(self, a: Atom, b: Atom) -> bool:
+        return hp.bindings_set_add_var_equality(self.c_set, a.catom, b.catom)
+
+    def merge_into(self, input: Union['BindingsSet', Bindings]):
+        if isinstance(input, BindingsSet):
+            hp.bindings_set_merge_into(self.c_set, input.c_set);
+        else:
+            new_set = BindingsSet(input);
+            hp.bindings_set_merge_into(self.c_set, new_set.c_set);
+
+    def iterator(self):
+        res = hp.bindings_set_list(self.c_set)
+        result = []
+        for r in res:
+            result.append(Bindings(r))
         return iter(result)
