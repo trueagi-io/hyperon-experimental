@@ -16,12 +16,14 @@ on:
     inputs:
       publish_to_pypi:
         description: 'Publish the python package to pypi'
-        required: true
         type: boolean
+        required: true
+        default: false
       test_site:
         description: 'Publish to pypi test site'
-        required: true
         type: boolean
+        required: true
+        default: true
 
 permissions:
   contents: read
@@ -103,7 +105,7 @@ jobs:
         python -m build
 
     - name: Publish package to pypi
-      if: startsWith(github.ref, 'refs/tags') && ${{ inputs.publish_to_pypi }}
+      if: startsWith(github.ref, 'refs/tags') && ${{ inputs.publish_to_pypi }} && ${{ ! inputs.test_site }}
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         verbose: true
