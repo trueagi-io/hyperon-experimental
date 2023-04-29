@@ -24,7 +24,7 @@ on:
         type: boolean
 
 
-default:
+defaults:
   run:
     timeout-minutes: 30
 
