@@ -27,8 +27,15 @@ permissions:
   contents: read
 
 jobs:
-  build-ubuntu-2004:
-    runs-on: ubuntu-20.04
+  build-ubuntu:
+    permissions:
+      id-token: write
+
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+
     steps:
     - uses: actions/checkout@v3
 
@@ -37,6 +44,11 @@ jobs:
       with:
           toolchain: stable
           override: true
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
 
     - name: Build and test
       working-directory: ./lib
@@ -66,64 +78,36 @@ jobs:
         cd build
         # specify C compiler as conan could not find it automatically
         # see https://github.com/conan-io/conan/issues/4322
-        cmake -DCMAKE_C_COMPILER=gcc ..
+        cmake -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Release ..
 
     - name: Build C API
       working-directory: ./build
       run: |
         set -e
         make
-        mkdir -p artifacts
         chrpath -d ./python/*.so  ./c/cargo/*.so
-        cp ./python/*.so  ./c/cargo/*.so artifacts
-        tar zcf artifacts.tar.gz artifacts
-
-    - name: Upload shared library artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: artifacts.tar.gz
-        path: ./build/artifacts.tar.gz
-
-  publish-python-package:
-    needs: build-ubuntu-2004
-    runs-on: ubuntu-20.04
-    permissions:
-      id-token: write
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.x'
+        cp ./python/*.so  ./c/cargo/*.so ../python/hyperon
 
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install build
 
-    - name: Download shared library artifacts
-      uses: actions/download-artifact@v3
-      with:
-        name: artifacts.tar.gz
-        path: python
-
     - name: Build package
       working-directory: ./python
       run: |
-        tar zxf artifacts.tar.gz -C hyperon  # decompress *.so files to hyperon
         python -m build
 
-    - name: Publish package
-      if: startsWith(github.ref, 'refs/tags')
+    - name: Publish package to pypi
+      if: startsWith(github.ref, 'refs/tags') && ${{ inputs.publish_to_pypi }}
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         verbose: true
         password: ${{ secrets.PYPI_API_TOKEN }}
         packages-dir: python/dist/
 
-    - name: Publish package
-      if: startsWith(github.ref, 'refs/tags') && ${{ inputs.test_site }}
+    - name: Publish package to test pypi
+      if: startsWith(github.ref, 'refs/tags') && ${{ inputs.publish_to_pypi }} && ${{ inputs.test_site }} 
       uses: pypa/gh-action-pypi-publish@release/v1
       with:
         verbose: true
