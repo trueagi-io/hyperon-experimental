@@ -89,6 +89,7 @@ jobs:
       working-directory: ./build
       run: |
         set -e
+        apt install -y chrpath
         make
         chrpath -d ./python/*.so  ./c/cargo/*.so
         cp ./python/*.so  ./c/cargo/*.so ../python/hyperon
