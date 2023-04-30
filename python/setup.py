@@ -17,6 +17,15 @@ class CoverageCommand(Command):
         subprocess.run(shlex.split("coverage html"), check=True, cwd='./tests')
         raise SystemExit(result.returncode)
 
+try:
+    from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
+    class bdist_wheel(_bdist_wheel):
+        def finalize_options(self):
+            _bdist_wheel.finalize_options(self)
+            self.root_is_pure = False
+except ImportError:
+    bdist_wheel = None
+
 setup(name='hyperon',
       setup_requires=['setuptools_scm'],
       use_scm_version = {
@@ -36,6 +45,7 @@ setup(name='hyperon',
           ]
       },
       cmdclass={
-          'coverage': CoverageCommand,
+            'coverage': CoverageCommand,
+            'bdist_wheel': bdist_wheel,
           }
      )
