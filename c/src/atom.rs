@@ -39,7 +39,7 @@ pub struct bindings_t {
 }
 
 pub struct bindings_set_t {
-    set: BindingsSet,
+    pub(crate) set: BindingsSet,
 }
 
 pub type bindings_callback_t = lambda_t<*const bindings_t>;
@@ -413,7 +413,7 @@ pub unsafe extern "C" fn atom_eq(atoma: *const atom_t, atomb: *const atom_t) -> 
 }
 
 // TODO: make a macros to generate Vec<T> definitions for C API
-pub struct vec_atom_t(Vec<Atom>);
+pub struct vec_atom_t(pub(crate) Vec<Atom>);
 
 #[no_mangle]
 pub extern "C" fn vec_atom_new() -> *mut vec_atom_t {
