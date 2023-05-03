@@ -158,26 +158,24 @@ bool remove_atom_internal(custom_space_buf* space, const atom_t* atom) {
 bool remove_atom(void* space_ptr, const atom_t* atom) {
     custom_space_buf* space = space_ptr;
 
-    //QUESTION FOR VITALY: Not sure if it's right to notify on all removes, or just on
-    // sucessful removes.  Assuming all for now
-    space_event_t* event = space_event_new_remove(atom_clone(atom));
-    notify_all_observers(space->observers, event);
-    space_event_free(event);
+    if (remove_atom_internal(space, atom)) {
+        space_event_t* event = space_event_new_remove(atom_clone(atom));
+        notify_all_observers(space->observers, event);
+        space_event_free(event);
+        return true;
+    }
 
-    return remove_atom_internal(space, atom);
+    return false;
 }
 
 bool replace_atom(void* space_ptr, const atom_t* from, atom_t* to) {
     custom_space_buf* space = space_ptr;
 
-    //QUESTION FOR VITALY: Not sure if it's right to notify on all replaces, or just on
-    // sucessful ones.  Assuming all for now
-    space_event_t* event = space_event_new_replace(atom_clone(from), atom_clone(to));
-    notify_all_observers(space->observers, event);
-    space_event_free(event);
-
     if (remove_atom_internal(space, from)) {
         add_atom_internal(space, to);
+        space_event_t* event = space_event_new_replace(atom_clone(from), atom_clone(to));
+        notify_all_observers(space->observers, event);
+        space_event_free(event);
         return true;
     } else {
         atom_free(to);
