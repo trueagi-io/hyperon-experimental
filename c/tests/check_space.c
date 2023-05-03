@@ -114,12 +114,41 @@ START_TEST (test_abstract_space_grounding)
 }
 END_TEST
 
-// QUESTION FOR VITALY: What's the simplest way to test the observer mechanism?  Obviously I could
-// add my own observer, but I assume there is a better in-situ test that is possible?
+typedef struct _my_observer {
+    size_t      atom_count;
+} my_observer_t;
+
+void observer_notify(void* payload, const space_event_t* event) {
+    my_observer_t* observer = payload;
+    switch (space_event_get_type(event)) {
+        case SPACE_EVENT_TYPE_ADD:
+            observer->atom_count++;
+            break;
+        case SPACE_EVENT_TYPE_REMOVE:
+            observer->atom_count--;
+            break;
+        case SPACE_EVENT_TYPE_REPLACE:
+            break;
+    }
+}
+
+void observer_free_payload(void* payload) {
+    free(payload);
+}
+
+static space_observer_api_t const C_OBSERVER_API= {
+    .notify = &observer_notify,
+    .free_payload = &observer_free_payload
+};
 
 START_TEST (test_custom_c_space)
 {
     space_t* space = custom_space_new();
+
+    my_observer_t* observer_payload = malloc(sizeof(my_observer_t));
+    observer_payload->atom_count = 0;
+    space_observer_t* observer = space_observer_new(&C_OBSERVER_API, observer_payload);
+    space_register_observer(space, observer);
 
     atom_t* a = atom_sym("A");
     atom_t* b = atom_sym("B");
@@ -147,6 +176,22 @@ START_TEST (test_custom_c_space)
 
     custom_space_buf* c_space_buf = space_get_payload(space);
     ck_assert(c_space_buf->atom_count == 1);
+
+    //NEW QUESTION FOR VITALY: If we are following strict Rust-style ownership tracking rules, then the
+    // payload should not be accessed after it has been given to space_observer_new().  However this
+    // seems dumb because we would then need to add a space_observer_get_payload function that would
+    // return exactly the same pointer.  But the space_observer_t itself has been given to the space_t
+    // so we would also need iterator functions to access the observer.
+    //
+    //The whole point is to keep the C programmer from accessing the pointer after the space_t has
+    // been freed, but adding a "borrow-style" accessor basically trades one contract with the
+    // programmer in exchange for exactly the same contract.
+    //
+    //QUESTION 2:  Applying the same logic, perhaps I can simplify the code by deleting
+    // space_get_payload().  Although it might be convenient to keep it, if there are going to be a
+    // lot of spaces.  For example we would definitely want to keep atom_get_object() because the
+    // atom_t might come from a number of different places.
+    ck_assert(observer_payload->atom_count == 1);
 
     atom_free(query);
     space_free(space);

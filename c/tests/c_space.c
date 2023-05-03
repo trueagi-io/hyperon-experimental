@@ -14,7 +14,7 @@ void notify_all_observers(observer_list_item* list, space_event_t* event) {
     observer_list_item* cur_observer_item = list;
     while (cur_observer_item != NULL) {
         space_observer_notify(cur_observer_item->observer, event);
-        observer_list_item* next_item = cur_observer_item->next;
+        cur_observer_item = cur_observer_item->next;
     }
 }
 

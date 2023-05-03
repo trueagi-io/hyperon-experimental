@@ -14,17 +14,6 @@ use std::rc::Rc;
 // Space & SpaceMut trait interface wrapper
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
 
-//QUESTION FOR VITALY: This C interface could be simplified a lot by making the CSpace object
-// automatically handles calls to the observer instead of exporting the mechanism to register
-// observers.  However, my reasoning was that there must be a good reason the observer
-// interaction is part of the Space trait, and not part of a wrapper around a Space, and that
-// was the reason  I carried the observer mechanism forward into this C API.
-//
-//However, if there isn't a situation where a given space needs to manipulate the events seen
-// by the observer (hiding some events?, creating new events?) then we can simplify the API as
-// well as eliminate a potential source of mistakes by storing observers and handling observer
-// interactions automatically for CSpaces.
-
 #[repr(C)]
 pub enum space_event_type_t {
     SPACE_EVENT_TYPE_ADD,
@@ -125,6 +114,44 @@ pub extern "C" fn space_event_free(event: *mut space_event_t) {
     drop(event);
 }
 
+/// A table of functions to define the behavior of a SpaceObserver implemented in C
+///
+/// notify
+///   \arg payload \c is the pointer to the observer's payload
+///   \arg event \c is the event the observer is notified about.  This function should NOT take ownership
+///   of the event.
+///
+/// free_payload
+///   \arg payload \c is the pointer to the observer's payload
+///   NOTE: This function is responsible for freeing the payload buffer, as well as any other objects
+///   and resources stored by the observer.
+#[repr(C)]
+pub struct space_observer_api_t {
+    notify: extern "C" fn(payload: *mut c_void, event: *const space_event_t),
+
+    free_payload: extern "C" fn(payload: *mut c_void),
+}
+
+struct CObserver {
+    api: *const space_observer_api_t,
+    payload: *mut c_void,
+}
+
+impl SpaceObserver for CObserver {
+    fn notify(&mut self, event: &SpaceEvent) {
+        let api = unsafe{ &*self.api };
+        let event = (event as *const SpaceEvent).cast();
+        (api.notify)(self.payload, event);
+    }
+}
+
+impl Drop for CObserver {
+    fn drop(&mut self) {
+        let api = unsafe{ &*self.api };
+        (api.free_payload)(self.payload);
+    }
+}
+
 /// A handle to a space observer.
 ///
 //QUESTION FOR VITALY: Is the idea that the same observer will observe many spaces, including
@@ -133,6 +160,20 @@ pub extern "C" fn space_event_free(event: *mut space_event_t) {
 // object itself, rather than on the register interface.  But perhaps I am missing something?
 pub struct space_observer_t{
     observer: Rc<RefCell<dyn SpaceObserver>>,
+}
+
+/// Creates an observer handle for a SpaceObserver implemented in C
+///
+/// WARNING: This function takes ownership of the payload, and it should not be freed after it
+/// has been provided to this function
+///
+/// The returned space_observer_t must be freed with space_observer_free, or given to a space
+/// with space_register_observer
+#[no_mangle]
+pub extern "C" fn space_observer_new(api: *const space_observer_api_t, payload: *mut c_void) -> *mut space_observer_t {
+    let observer = CObserver {api, payload};
+    let observer = space_observer_t{observer: Rc::new(RefCell::new(observer))};
+    Box::into_raw(Box::new(observer))
 }
 
 /// Notifies an observer of an event
@@ -311,6 +352,15 @@ pub extern "C" fn space_get_payload(space: *mut space_t) -> *mut c_void {
         }
     }
     panic!("Only CSpace has a payload")
+}
+
+/// WARNING: This function takes ownership of the supplied observer, and it should not be freed or
+/// accessed after it has been provided to this function
+#[no_mangle]
+pub extern "C" fn space_register_observer(space: *mut space_t, observer: *mut space_observer_t) {
+    let space = unsafe{ (*space).borrow_mut() };
+    let observer = unsafe{ Box::from_raw(observer).observer };
+    space.register_observer(observer);
 }
 
 /// WARNING: This function takes ownership of the supplied atom, and it should not be freed or
