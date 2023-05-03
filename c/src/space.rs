@@ -54,21 +54,22 @@ pub extern "C" fn space_event_get_type(event: *const space_event_t) -> space_eve
     }
 }
 
-/// Returned atom must be freed with atom_free
+/// Returned atom_t* is borrowed from the space_event_t. The return value must not be freed or
+/// accessed after the space_event_t has been freed
 #[no_mangle]
-pub extern "C" fn space_event_get_field_atom(event: *const space_event_t, field: space_event_field_t) -> *mut atom_t {
+pub extern "C" fn space_event_get_field_atom(event: *const space_event_t, field: space_event_field_t) -> *const atom_t {
     let event = unsafe{ &(*event).event };
     match field {
         space_event_field_t::SPACE_EVENT_FIELD_ADD => {
             if let SpaceEvent::Add(atom) = event {
-                atom_into_ptr(atom.clone())
+                (atom as *const Atom).cast()
             } else {
                 panic!("SpaceEvent wasn't an Add event")
             }
         },
         space_event_field_t::SPACE_EVENT_FIELD_REMOVE => {
             if let SpaceEvent::Remove(atom) = event {
-                atom_into_ptr(atom.clone())
+                (atom as *const Atom).cast()
             } else {
                 panic!("SpaceEvent wasn't a Remove event")
             }
@@ -77,8 +78,8 @@ pub extern "C" fn space_event_get_field_atom(event: *const space_event_t, field:
         space_event_field_t::SPACE_EVENT_FIELD_REPLACE_TEMPLATE => {
             if let SpaceEvent::Replace(pattern_atom, template_atom) = event {
                 match field {
-                    space_event_field_t::SPACE_EVENT_FIELD_REPLACE_PATTERN => atom_into_ptr(pattern_atom.clone()),
-                    space_event_field_t::SPACE_EVENT_FIELD_REPLACE_TEMPLATE => atom_into_ptr(template_atom.clone()),
+                    space_event_field_t::SPACE_EVENT_FIELD_REPLACE_PATTERN => (pattern_atom as *const Atom).cast(),
+                    space_event_field_t::SPACE_EVENT_FIELD_REPLACE_TEMPLATE => (template_atom as *const Atom).cast(),
                     _ => unreachable!()
                 }
             } else {
@@ -89,33 +90,33 @@ pub extern "C" fn space_event_get_field_atom(event: *const space_event_t, field:
 }
 
 /// Returned space_event_t must be freed with space_event_free
-/// 
+///
 /// WARNING: This function takes ownership of the supplied atom, so it should not be freed or
 /// accessed subsequently
 #[no_mangle]
-pub extern "C" fn space_event_new_add(atom: *mut atom_t) -> *mut space_event_t {   
+pub extern "C" fn space_event_new_add(atom: *mut atom_t) -> *mut space_event_t {
     let event = SpaceEvent::Add(ptr_into_atom(atom));
-    Box::into_raw(Box::new(space_event_t{ event }))    
+    Box::into_raw(Box::new(space_event_t{ event }))
 }
 
 /// Returned space_event_t must be freed with space_event_free
-/// 
+///
 /// WARNING: This function takes ownership of the supplied atom, so it should not be freed or
 /// accessed subsequently
 #[no_mangle]
-pub extern "C" fn space_event_new_remove(atom: *mut atom_t) -> *mut space_event_t {   
+pub extern "C" fn space_event_new_remove(atom: *mut atom_t) -> *mut space_event_t {
     let event = SpaceEvent::Remove(ptr_into_atom(atom));
-    Box::into_raw(Box::new(space_event_t{ event }))    
+    Box::into_raw(Box::new(space_event_t{ event }))
 }
 
 /// Returned space_event_t must be freed with space_event_free
-/// 
+///
 /// WARNING: This function takes ownership of both supplied atoms, so they should not be freed or
 /// accessed subsequently
 #[no_mangle]
-pub extern "C" fn space_event_new_replace(pattern: *mut atom_t, tmpl: *mut atom_t) -> *mut space_event_t {   
+pub extern "C" fn space_event_new_replace(pattern: *mut atom_t, tmpl: *mut atom_t) -> *mut space_event_t {
     let event = SpaceEvent::Replace(ptr_into_atom(pattern), ptr_into_atom(tmpl));
-    Box::into_raw(Box::new(space_event_t{ event }))    
+    Box::into_raw(Box::new(space_event_t{ event }))
 }
 
 #[no_mangle]
@@ -125,7 +126,7 @@ pub extern "C" fn space_event_free(event: *mut space_event_t) {
 }
 
 /// A handle to a space observer.
-/// 
+///
 //QUESTION FOR VITALY: Is the idea that the same observer will observe many spaces, including
 // both C spaces & native Rust spaces?  Personally, it seems like it might be a better
 // structure to put the internal mutability, ie. Rc<RefCell<T>> pattern, inside the observer,
@@ -150,41 +151,41 @@ pub extern "C" fn space_observer_free(observer: *mut space_observer_t) {
 }
 
 /// A table of functions to define the behavior of a space implemented in C
-/// 
+///
 /// register_observer
 ///   \arg payload \c is the pointer to the space's payload
 ///   \arg observer \c is the observer object to register with the space.
 ///     NOTE: It is the responsibility of the space implementation to store all space_observer_t
 ///     pointers receieved from calls to `register_observer` inside the payload, and to free them
 ///     with space_observer_free before returning from free_payload.
-/// 
+///
 /// query
 ///   Returns a bindings_set_t representing the query results
 ///   \arg payload \c is the pointer to the space's payload
 ///   \arg atom \c is the query atom.  This function should NOT take ownership of the query atom.
-/// 
+///
 /// subst
 ///   \arg payload \c is the pointer to the space's payload
 ///   \arg pattern \c is the pattern atom to match.  This function should NOT take ownership of the pattern atom.
 ///   \arg tmpl \c is the template atom.  This function should NOT take ownership of the template atom.
 ///   NOTE: If a subst function is provided, it will be called.  If NULL is provided, the default
 ///     implementation will be called.
-/// 
+///
 /// add
 ///   \arg payload \c is the pointer to the space's payload
 ///   \arg atom \c is the atom to add to the space.  This function SHOULD take ownership of the atom.
-/// 
+///
 /// remove
 ///   \arg payload \c is the pointer to the space's payload
 ///   \arg atom \c is the atom to remove from the space.  This function should NOT take ownership of the atom.
 ///   Returns `true` if the atom was removed, otherwise returns `false`
-/// 
+///
 /// replace
 ///   \arg payload \c is the pointer to the space's payload
 ///   \arg from \c is the atom to replace in the space.  This function should NOT take ownership of the `from` atom.
 ///   \arg to \c is the atom to replace it with.  This function SHOULD take ownership of the `to` atom.
 ///   Returns `true` if the atom was replaced, otherwise returns `false`
-/// 
+///
 /// free_payload
 ///   \arg payload \c is the pointer to the space's payload
 ///   NOTE: This function is responsible for freeing the payload buffer, as well as any other objects
@@ -207,10 +208,6 @@ pub struct space_api_t {
     free_payload: extern "C" fn(payload: *mut c_void),
 }
 
-//QUESTION FOR VITALY: Looking to the CGrounded type for guidance about your preferred
-// patterns, I see that the type CGrounded wraps an AtomicPtr<>, but I don't understand
-// the situation where multiple threads would have shared access to this pointer and need
-// to atomically update it
 struct CSpace {
     api: *const space_api_t,
     payload: *mut c_void,
@@ -286,10 +283,10 @@ impl Drop for CSpace {
 pub type space_t = SharedApi<Box<dyn SpaceMut>>;
 
 /// Creates a new space_t, backed by an implementation in C
-/// 
+///
 /// WARNING: This function takes ownership of the payload, and it should not be freed or
 /// accessed after it has been provided to this function
-/// 
+///
 /// The returned space_t must be freed with space_free
 #[no_mangle]
 pub extern "C" fn space_new(api: *const space_api_t, payload: *mut c_void) -> *mut space_t {
@@ -303,7 +300,7 @@ pub extern "C" fn space_free(space: *mut space_t) {
 }
 
 /// Returns the pointer to the payload for a space created from C
-/// 
+///
 /// WARNING: The returned payload ptr must not be freed, nor must it be accessed after the space
 /// has been freed
 #[no_mangle]
@@ -358,7 +355,7 @@ pub extern "C" fn space_subst(space: *const space_t,
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
 
 /// Creates a new space_t, backed by a GroundSpace
-/// 
+///
 /// The returned space_t must be freed with space_free
 #[no_mangle]
 pub extern "C" fn space_new_grounding_space() -> *mut space_t {
@@ -413,7 +410,7 @@ pub unsafe extern "C" fn grounding_space_len(space: *const grounding_space_t) ->
 pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *mut atom_t {
     // TODO: highly ineffective implementation, should be reworked after replacing
     // the GroundingSpace struct by Space trait in code.
-    
+
     //QUESTION FOR VITALY: Do all spaces have integer-indexable atoms?  If so, it might make sense
     // to make get(idx) into a trait method of Space.  Or alternatively should all spaces support
     // atom iteration, we could add an iter() method to the trait.  However, as you point out,

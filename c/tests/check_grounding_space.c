@@ -333,7 +333,7 @@ void free_payload(void* space_ptr) {
 
 START_TEST (test_custom_c_space)
 {
-    space_api_t const C_SPACE_API= { 
+    space_api_t const C_SPACE_API= {
         .register_observer = &register_observer,
         .query = &query,
         .subst = NULL,
