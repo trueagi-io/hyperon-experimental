@@ -12,12 +12,6 @@ void teardown(void) {
 
 #include "stdio.h"
 
-#define BUF_SIZE 4096
-
-void str_to_buf(const char *str, void *context) {
-    strncpy(context, str, BUF_SIZE);
-};
-
 void bindings_to_buf(const bindings_t* bindings, void *context) {
     bindings_to_str(bindings, &str_to_buf, context);
 };
@@ -94,7 +88,7 @@ START_TEST (test_sym)
     char name[] = "test";
     atom_t* atom = atom_sym(name);
     name[0] = 'r';
-    
+
     char* actual = stratom(atom);
     ck_assert_str_eq(actual, "test");
 
