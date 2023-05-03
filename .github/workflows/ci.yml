@@ -48,7 +48,7 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          python3 -m pip install -e ./python[dev]
+          python -m pip install -e ./python[dev]
 
       - name: Setup C API build
         run: |
@@ -56,7 +56,7 @@ jobs:
           cd build
           # specify C compiler as conan could not find it automatically
           # see https://github.com/conan-io/conan/issues/4322
-          cmake -DCMAKE_C_COMPILER=gcc ..
+          cmake -DPython3_EXECUTABLE=`which python` -DCMAKE_C_COMPILER=gcc ..
 
       - name: Build C API
         working-directory: ./build
