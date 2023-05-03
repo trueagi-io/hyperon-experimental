@@ -39,7 +39,7 @@ jobs:
     strategy:
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
-      max-parallel: 1
+      max-parallel: 2
 
     steps:
     - uses: actions/checkout@v3
@@ -103,20 +103,20 @@ jobs:
       run: |
         python -m build
 
-        #    - name: Publish package to pypi
-        #      if: startsWith(github.ref, 'refs/tags') && ${{ inputs.publish_to_pypi }} && ${{ ! inputs.test_site }}
-        #      uses: pypa/gh-action-pypi-publish@release/v1
-        #      with:
-        #        verbose: true
-        #        password: ${{ secrets.PYPI_API_TOKEN }}
-        #        packages-dir: python/dist/
-        #
-        #    - name: Publish package to test pypi
-        #      if: startsWith(github.ref, 'refs/tags') && ${{ inputs.publish_to_pypi }} && ${{ inputs.test_site }} 
-        #      uses: pypa/gh-action-pypi-publish@release/v1
-        #      with:
-        #        verbose: true
-        #        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
-        #        repository-url: https://test.pypi.org/legacy/
-        #        packages-dir: python/dist/
-        #
+    - name: Publish package to pypi
+      if: startsWith(github.ref, 'refs/tags') && ${{ inputs.publish_to_pypi }} && ${{ ! inputs.test_site }}
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        verbose: true
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        packages-dir: python/dist/
+
+    - name: Publish package to test pypi
+      if: startsWith(github.ref, 'refs/tags') && ${{ inputs.publish_to_pypi }} && ${{ inputs.test_site }} 
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        verbose: true
+        password: ${{ secrets.TEST_PYPI_API_TOKEN }}
+        repository-url: https://test.pypi.org/legacy/
+        packages-dir: python/dist/
+
