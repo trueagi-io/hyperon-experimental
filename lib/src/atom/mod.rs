@@ -810,7 +810,30 @@ impl<'a> TryFrom<&'a Atom> for &'a ExpressionAtom {
     fn try_from(atom: &Atom) -> Result<&ExpressionAtom, &'static str> {
         match atom {
             Atom::Expression(expr) => Ok(&expr),
-            _ => Err("Atom is not a ExpressionAtom")
+            _ => Err("Atom is not an ExpressionAtom")
+        }
+    }
+}
+
+impl<const N: usize> TryFrom<Atom> for [Atom; N] {
+    type Error = &'static str;
+    fn try_from(atom: Atom) -> Result<[Atom; N], &'static str> {
+        match atom {
+            Atom::Expression(expr) => {
+                <[Atom; N]>::try_from(expr.into_children())
+                    .map_err(|_| concat!("ExpressionAtom length is not equal to expected"))
+            },
+            _ => Err("Atom is not an ExpressionAtom")
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a Atom> for &'a [Atom] {
+    type Error = &'static str;
+    fn try_from(atom: &Atom) -> Result<&[Atom], &'static str> {
+        match atom {
+            Atom::Expression(expr) => Ok(expr.children().as_slice()),
+            _ => Err("Atom is not an ExpressionAtom")
         }
     }
 }
@@ -1048,6 +1071,24 @@ mod test {
         } else {
             assert!(false, "GroundedAtom is expected");
         }
+    }
+
+    #[test]
+    fn test_array_try_from_expression_atom() {
+        assert_eq!(<[Atom; 2]>::try_from(expr!("A" "B")),
+            Ok([sym!("A"), sym!("B")]));
+        assert_eq!(<[Atom; 1]>::try_from(sym!("A")),
+            Err("Atom is not an ExpressionAtom"));
+        assert_eq!(<[Atom; 2]>::try_from(expr!("A" "B" "C")),
+            Err("ExpressionAtom length is not equal to expected"));
+    }
+
+    #[test]
+    fn test_slice_try_from_expression_atom() {
+        assert_eq!(<&[Atom]>::try_from(&expr!("A" "B" "C")),
+            Ok([sym!("A"), sym!("B"), sym!("C")].as_slice()));
+        assert_eq!(<&[Atom]>::try_from(&sym!("A")),
+            Err("Atom is not an ExpressionAtom"));
     }
 
 }
