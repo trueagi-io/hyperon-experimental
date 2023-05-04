@@ -39,14 +39,14 @@ macro_rules! bind {
 /// assert_eq!(set.len(), 3);
 /// assert_eq!(set[0].resolve(&VariableAtom::new("a")), Some(expr!("A")));
 /// assert_eq!(set[2].resolve(&VariableAtom::new("a")), Some(expr!("ADoublePrime")));
-/// 
+///
 /// // Compose a BindingsSet with explicitly defined Bindings
 /// let set = bind_set![bind!{a: expr!("A")}, bind!{a: expr!("APrime")}];
-/// 
+///
 /// assert_eq!(set.len(), 2);
 /// assert_eq!(set[0].resolve(&VariableAtom::new("a")), Some(expr!("A")));
 /// assert_eq!(set[1].resolve(&VariableAtom::new("a")), Some(expr!("APrime")));
-/// 
+///
 /// // Mix and match, including existing Bindings and BindingsSets
 /// let other_set = bind_set![];
 /// let set = bind_set![{a: expr!("A")}, other_set];
@@ -298,24 +298,24 @@ impl Bindings {
     /// let b = VariableAtom::new("b");
     /// let c = VariableAtom::new("c");
     /// let mut binds = bind!{ a: expr!("A"), b: expr!("B") };
-    ///     
+    ///
     /// // Re-asserting an existing binding is ok
     /// binds = binds.add_var_binding_v2(&a, &expr!("A"))?;
     ///
     /// // Asserting a conflicting binding is an error
     /// assert!(binds.clone().add_var_binding_v2(&b, &expr!("C")).is_err());
-    /// 
+    ///
     /// // Creating a new binding is ok
     /// binds = binds.add_var_binding_v2(&c, &expr!("C"))?;
-    /// 
+    ///
     /// assert_eq!(binds.resolve(&a), Some(expr!("A")));
     /// assert_eq!(binds.resolve(&b), Some(expr!("B")));
     /// assert_eq!(binds.resolve(&c), Some(expr!("C")));
     /// # Ok(())
     /// # }
     /// ```
-    /// 
-    /// TODO: Rename to `add_var_binding` when clients have adopted the new API 
+    ///
+    /// TODO: Rename to `add_var_binding` when clients have adopted the new API
     pub fn add_var_binding_v2<T1, T2>(self, var: T1, value: T2) -> Result<Bindings, &'static str>
         where T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>
     {
@@ -398,19 +398,19 @@ impl Bindings {
     /// assert_eq!(Bindings::merge(&binds, &comp), Some(bind!{ a: expr!("A"), b: expr!("B") }));
     /// assert_eq!(Bindings::merge(&binds, &incomp), None);
     /// ```
-    /// 
-    /// TODO: Rename to `merge` when clients have adopted new API 
+    ///
+    /// TODO: Rename to `merge` when clients have adopted new API
     pub fn merge_v2(self, b: &Bindings) -> BindingsSet {
         log::trace!("Bindings::merge: a: {}, b: {}", self, b);
         let trace_self = match log::log_enabled!(log::Level::Trace) {
             true => Some(self.clone()),
             false => None
         };
-        
+
         let results = b.id_by_var.iter().fold(smallvec::smallvec![(self, HashMap::new())],
             |results, (var, var_id)| -> smallvec::SmallVec<[(Bindings, HashMap<u32, VariableAtom>); 1]> {
                 let mut all_results = smallvec::smallvec![];
-                
+
                 for (result, mut b_vars_merged) in results {
                     let new_results = if let Some(first_var) = b_vars_merged.get(&var_id) {
                         result.add_var_equality_internal(first_var, var)
@@ -451,7 +451,7 @@ impl Bindings {
     ///
     /// ```
     /// use hyperon::*;
-    /// 
+    ///
     /// let mut bindings = bind!{ x: expr!(y), y: expr!("A" z), z: expr!("B") };
     ///
     /// assert_eq!(bindings.resolve_and_remove(&VariableAtom::new("x")), Some(expr!("A" "B")));
@@ -539,7 +539,7 @@ impl Bindings {
             .collect();
 
         let mapping = self.build_var_mapping(&vars, &dep_ids);
-        
+
         let mut bindings = Bindings::new();
         bindings.next_var_id = self.next_var_id;
         for (var, &id) in &self.id_by_var {
@@ -740,6 +740,12 @@ impl core::ops::Deref for BindingsSet {
     }
 }
 
+impl core::ops::DerefMut for BindingsSet {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
 impl Display for BindingsSet {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "[")?;
@@ -757,7 +763,7 @@ impl Display for BindingsSet {
 impl BindingsSet {
 
     /// Creates a new fully-constrained BindingsSet
-    /// 
+    ///
     /// NOTE: This function is useful for making a Bindings Iterator that returns no results,
     /// as you might want for a return from a GroundedAtom match function that matched no atoms.
     /// In other cases, you probably want to use [BinsingsSet::single].
@@ -771,7 +777,7 @@ impl BindingsSet {
     }
 
     /// Returns `true` if a BindingsSet contains no Bindings Objects (fully constrained)
-    /// 
+    ///
     /// TODO: Need a better name that doesn't conflict with the intuitions about Bindings::is_empty()
     /// https://github.com/trueagi-io/hyperon-experimental/issues/281
     pub fn is_empty(&self) -> bool {
@@ -779,7 +785,7 @@ impl BindingsSet {
     }
 
     /// Returns `true` if a BindingsSet contains no limiting Bindings inside (unconstrained)
-    /// 
+    ///
     /// TODO: Need a better word to describe this concept than "single"
     /// https://github.com/trueagi-io/hyperon-experimental/issues/281
     pub fn is_single(&self) -> bool {
@@ -821,7 +827,7 @@ impl BindingsSet {
     }
 
     /// Merges each bindings from `other` to each bindings from `self`
-    /// 
+    ///
     /// NOTE: this subsumes the functionality formerly in `match_result_product`
     pub fn merge(self, other: &BindingsSet) -> Self {
         let mut new_set = BindingsSet::empty();
@@ -829,7 +835,7 @@ impl BindingsSet {
             new_set.extend(self.clone().merge_bindings(other_binding).into_iter());
         }
         new_set
-    }   
+    }
 }
 
 /// Iterator over `(&VariableAtom, Atom)` pairs in [Bindings].
@@ -1237,7 +1243,7 @@ mod test {
             }
         }
     }
-    
+
     impl Display for Rand {
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             write!(f, "Rand")
@@ -1302,7 +1308,7 @@ mod test {
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
             .add_var_binding_v2(VariableAtom::new("b"), Atom::sym("v"))?
             .add_var_equality(&VariableAtom::new("c"), &VariableAtom::new("d"))?;
-        
+
         assert_eq!(bindings.to_string(), "{ $a = $b = v, $c = $d }");
         Ok(())
     }
@@ -1341,7 +1347,7 @@ mod test {
     fn bindings_get_variable_bound_to_variable() -> Result<(), &'static str> {
         let bindings = Bindings::new()
             .add_var_binding_v2(VariableAtom::new("x"), expr!(x))?;
-        
+
         assert_eq!(bindings.resolve(&VariableAtom::new("x")), None);
         Ok(())
     }

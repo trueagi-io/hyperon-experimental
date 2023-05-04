@@ -37,55 +37,16 @@ void register_observer(void* space_ptr, space_observer_t* observer) {
     }
 }
 
-void collect_child_atoms(atom_array_t atoms, void* vec_ptr) {
+void collect_variable_atoms(const atom_t* atom, void* vec_ptr) {
     vec_atom_t* vec = vec_ptr;
-    for (int i=0; i<atoms.size; i++) {
-        vec_atom_push(vec, atom_clone(atoms.items[i]));
+    if (atom_get_type(atom) == VARIABLE) {
+        vec_atom_push(vec, atom_clone(atom));
     }
 }
 
-void atom_match(const atom_t* q, const atom_t* s, bindings_t* bindings) {
-
-    //Assume both atoms are expression atoms
-    vec_atom_t* q_vec = vec_atom_new();
-    vec_atom_t* s_vec = vec_atom_new();
-    atom_get_children(q, &collect_child_atoms, q_vec);
-    atom_get_children(s, &collect_child_atoms, s_vec);
-
-    if (vec_atom_size(q_vec) == vec_atom_size(s_vec)) {
-
-        bool is_match = true;
-        for (int i=0; i<vec_atom_size(q_vec); i++) {
-            atom_t* q_atom = vec_atom_get(q_vec, i);
-            atom_t* s_atom = vec_atom_get(s_vec, i);
-            if (atom_get_type(q_atom) != VARIABLE &&
-                atom_get_type(s_atom) != VARIABLE &&
-                !atom_eq(q_atom, s_atom)) {
-                is_match = false;
-                break;
-            }
-            atom_free(q_atom);
-            atom_free(s_atom);
-        }
-
-        if (is_match) {
-            for (int i=0; i<vec_atom_size(q_vec); i++) {
-                atom_t* q_atom = vec_atom_get(q_vec, i);
-                atom_t* s_atom = vec_atom_get(s_vec, i);
-                if (atom_get_type(q_atom) == VARIABLE && atom_get_type(s_atom) != VARIABLE) {
-                    char str_buf[BUF_SIZE];
-                    atom_get_name(q_atom, &str_to_buf, &str_buf);
-                    var_atom_t binding = {.var = (char*)&str_buf, .atom = atom_clone(s_atom)};
-                    bindings_add_var_binding(bindings, &binding);
-                }
-                atom_free(q_atom);
-                atom_free(s_atom);
-            }
-        }
-    }
-
-    vec_atom_free(q_vec);
-    vec_atom_free(s_vec);
+void narrow_vars_callback(bindings_t* bindings, void* vars_vec_ptr) {
+    vec_atom_t* vars = vars_vec_ptr;
+    bindings_narrow_vars(bindings, vars);
 }
 
 // NOTE: this is a naive implementation barely good enough to pass the tests
@@ -93,15 +54,21 @@ void atom_match(const atom_t* q, const atom_t* s, bindings_t* bindings) {
 bindings_set_t* query(void* space_ptr, const atom_t* query_atom) {
     custom_space_buf* space = space_ptr;
 
-    bindings_t* new_bindings = bindings_new();
+    vec_atom_t* query_vars = vec_atom_new();
+    atom_iterate(query_atom, collect_variable_atoms, query_vars);
+
+    bindings_set_t* new_bindings_set = bindings_set_single();
 
     atom_list_item* cur_atom_item = space->atoms;
     while (cur_atom_item != NULL) {
-        atom_match(query_atom, cur_atom_item->atom, new_bindings);
+        bindings_set_t* match_results = atom_match_atom(cur_atom_item->atom, query_atom);
+        bindings_set_iterate(match_results, narrow_vars_callback, query_vars);
+        bindings_set_merge_into(new_bindings_set, match_results);
         cur_atom_item = cur_atom_item->next;
     }
 
-    return bindings_set_from_bindings(new_bindings);
+    vec_atom_free(query_vars);
+    return new_bindings_set;
 }
 
 /// adds an atom to a cspace without calling the observers

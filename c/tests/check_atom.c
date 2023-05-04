@@ -12,11 +12,11 @@ void teardown(void) {
 
 #include "stdio.h"
 
-void bindings_to_buf(const bindings_t* bindings, void *context) {
+void bindings_to_buf(bindings_t* bindings, void *context) {
     bindings_to_str(bindings, &str_to_buf, context);
 };
 
-void clone_one_bindings(const bindings_t* bindings, void *context) {
+void clone_one_bindings(bindings_t* bindings, void *context) {
     if (*((bindings_t**)context) != NULL) abort();
     *((bindings_t**)context) = bindings_clone(bindings);
 }
