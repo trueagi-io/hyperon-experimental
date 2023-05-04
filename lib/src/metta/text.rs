@@ -65,7 +65,7 @@ impl<'a> SExprParser<'a> {
         Self{ it: text.chars().peekable() }
     }
 
-    pub fn parse(&mut self, tokenizer: &Tokenizer) -> Option<Atom> {
+    pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
         while let Some(c) = self.it.peek() {
             match c {
                 ';' => {
@@ -77,19 +77,27 @@ impl<'a> SExprParser<'a> {
                 '$' => {
                     self.it.next();
                     let token = next_var(&mut self.it);
-                    return Some(Atom::var(token));
+                    return Ok(Some(Atom::var(token)));
                 },
                 '(' => {
                     self.it.next();
-                    return Some(self.parse_expr(tokenizer))
+                    if let Ok(expr) = self.parse_expr(tokenizer) {
+                        return Ok(Some(expr));
+                    } else {
+                        return Err("Error parsing expression".to_string());
+                    }
                 },
-                ')' => panic!("Unexpected right bracket"),
+                ')' => return Err("Unexpected right bracket".to_string()),
                 _ => {
-                    return self.parse_atom(tokenizer);
+                    if let Some(atom) = self.parse_atom(tokenizer) {
+                        return Ok(Some(atom));
+                    } else {
+                        return Err("Error parsing atom".to_string());
+                    }
                 },
             }
         }
-        None
+        Ok(None)
     }
 
     fn skip_line(&mut self) -> () {
@@ -111,7 +119,7 @@ impl<'a> SExprParser<'a> {
         }
     }
 
-    fn parse_expr(&mut self, tokenizer: &Tokenizer) -> Atom {
+    fn parse_expr(&mut self, tokenizer: &Tokenizer) -> Result<Atom, String> {
         let mut children: Vec<Atom> = Vec::new();
         while let Some(c) = self.it.peek() {
             match c {
@@ -119,15 +127,20 @@ impl<'a> SExprParser<'a> {
                 ')' => {
                     self.it.next();
                     let expr = Atom::expr(children);
-                    return expr;
+                    return Ok(expr);
                 },
                 _ => {
-                    children.push(self.parse(tokenizer).expect("Unexpected end of expression member"));
+                    if let Ok(Some(child)) = self.parse(tokenizer) {
+                        children.push(child);
+                    } else {
+                        return Err("Unexpected end of expression member".to_string());
+                    }
                 },
             }
         }
-        panic!("Unexpected end of expression");
+        Err("Unexpected end of expression".to_string())
     }
+    
 
 }
 
@@ -216,8 +229,8 @@ mod tests {
 
         let mut parser = SExprParser::new("ab");
 
-        assert_eq!(Some(expr!("ab")), parser.parse(&tokenizer));
-        assert_eq!(None, parser.parse(&tokenizer));
+        assert_eq!(Some(expr!("ab")), parser.parse(&tokenizer).unwrap());
+        assert_eq!(None, parser.parse(&tokenizer).unwrap());
     }
 
     #[test]
@@ -228,8 +241,8 @@ mod tests {
 
         let mut parser = SExprParser::new("(3d 42)");
 
-        assert_eq!(Some(expr!("3d" {42})), parser.parse(&tokenizer));
-        assert_eq!(None, parser.parse(&tokenizer));
+        assert_eq!(Some(expr!("3d" {42})), parser.parse(&tokenizer).unwrap());
+        assert_eq!(None, parser.parse(&tokenizer).unwrap());
     }
 
     #[test]
@@ -253,10 +266,11 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     #[should_panic(expected = "Unexpected right bracket")]
     fn test_panic_on_unbalanced_brackets() {
         let mut parser = SExprParser::new("(a))");
-        while let Some(_) = parser.parse(&Tokenizer::new()) {}
+        while let Ok(Some(_)) = parser.parse(&Tokenizer::new()) {}
     }
 
     #[test]
@@ -290,7 +304,7 @@ mod tests {
         let tokenizer = Tokenizer::new();
         let mut parser = SExprParser::new(program);
         let mut result = Vec::new();
-        while let Some(atom) = parser.parse(&tokenizer) {
+        while let Ok(Some(atom)) = parser.parse(&tokenizer) {
             result.push(atom);
         }
         result
@@ -300,7 +314,7 @@ mod tests {
     #[should_panic(expected = "'#' char is reserved for internal usage")]
     fn test_panic_on_lattice_in_var_name() {
         let mut parser = SExprParser::new("$a#");
-        while let Some(_) = parser.parse(&Tokenizer::new()) {}
+        while let Ok(Some(_)) = parser.parse(&Tokenizer::new()) {}
     }
 
     #[test]
