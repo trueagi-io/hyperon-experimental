@@ -8,7 +8,7 @@ use crate::util::*;
 
 use std::os::raw::*;
 use core::cell::RefCell;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
 // Space & SpaceMut trait interface wrapper
@@ -167,21 +167,12 @@ pub struct space_observer_t{
 /// WARNING: This function takes ownership of the payload, and it should not be freed after it
 /// has been provided to this function
 ///
-/// The returned space_observer_t must be freed with space_observer_free, or given to a space
-/// with space_register_observer
+/// The returned space_observer_t must be freed with space_observer_free
 #[no_mangle]
 pub extern "C" fn space_observer_new(api: *const space_observer_api_t, payload: *mut c_void) -> *mut space_observer_t {
     let observer = CObserver {api, payload};
     let observer = space_observer_t{observer: Rc::new(RefCell::new(observer))};
     Box::into_raw(Box::new(observer))
-}
-
-/// Notifies an observer of an event
-#[no_mangle]
-pub extern "C" fn space_observer_notify(observer: *const space_observer_t, event: *const space_event_t) {
-    let observer = unsafe{ &(*observer).observer };
-    let event = unsafe{ &(*event).event };
-    observer.borrow_mut().notify(event);
 }
 
 /// Frees an observer handle when the space implementation is finished with it.
@@ -193,36 +184,29 @@ pub extern "C" fn space_observer_free(observer: *mut space_observer_t) {
 
 /// A table of functions to define the behavior of a space implemented in C
 ///
-/// register_observer
-///   \arg payload \c is the pointer to the space's payload
-///   \arg observer \c is the observer object to register with the space.
-///     NOTE: It is the responsibility of the space implementation to store all space_observer_t
-///     pointers receieved from calls to `register_observer` inside the payload, and to free them
-///     with space_observer_free before returning from free_payload.
-///
 /// query
 ///   Returns a bindings_set_t representing the query results
-///   \arg payload \c is the pointer to the space's payload
+///   \arg params \c is the pointer to the space's params
 ///   \arg atom \c is the query atom.  This function should NOT take ownership of the query atom.
 ///
 /// subst
-///   \arg payload \c is the pointer to the space's payload
+///   \arg params \c is the pointer to the space's params
 ///   \arg pattern \c is the pattern atom to match.  This function should NOT take ownership of the pattern atom.
 ///   \arg tmpl \c is the template atom.  This function should NOT take ownership of the template atom.
 ///   NOTE: If a subst function is provided, it will be called.  If NULL is provided, the default
 ///     implementation will be called.
 ///
 /// add
-///   \arg payload \c is the pointer to the space's payload
+///   \arg params \c is the pointer to the space's params
 ///   \arg atom \c is the atom to add to the space.  This function SHOULD take ownership of the atom.
 ///
 /// remove
-///   \arg payload \c is the pointer to the space's payload
+///   \arg params \c is the pointer to the space's params
 ///   \arg atom \c is the atom to remove from the space.  This function should NOT take ownership of the atom.
 ///   Returns `true` if the atom was removed, otherwise returns `false`
 ///
 /// replace
-///   \arg payload \c is the pointer to the space's payload
+///   \arg params \c is the pointer to the space's params
 ///   \arg from \c is the atom to replace in the space.  This function should NOT take ownership of the `from` atom.
 ///   \arg to \c is the atom to replace it with.  This function SHOULD take ownership of the `to` atom.
 ///   Returns `true` if the atom was replaced, otherwise returns `false`
@@ -230,40 +214,79 @@ pub extern "C" fn space_observer_free(observer: *mut space_observer_t) {
 /// free_payload
 ///   \arg payload \c is the pointer to the space's payload
 ///   NOTE: This function is responsible for freeing the payload buffer, as well as any other objects
-///   and resources stored by the space.  This includes `atom_t` objects, `space_observer_t` objects,
-///   as well as any other buffers stored in the space
+///   and resources stored by the space.  This includes `atom_t` objects, as well as any other buffers
+///   stored in the space
 #[repr(C)]
 pub struct space_api_t {
-    register_observer: extern "C" fn(payload: *mut c_void, observer: *mut space_observer_t),
+    query: extern "C" fn(params: *const space_params_t, atom: *const atom_t) -> *mut bindings_set_t,
 
-    query: extern "C" fn(payload: *mut c_void, atom: *const atom_t) -> *mut bindings_set_t,
+    subst: Option<extern "C" fn(params: *const space_params_t, pattern: *const atom_t, tmpl: *const atom_t) -> *mut vec_atom_t>,
 
-    subst: Option<extern "C" fn(payload: *mut c_void, pattern: *const atom_t, tmpl: *const atom_t) -> *mut vec_atom_t>,
+    add: extern "C" fn(params: *const space_params_t, atom: *mut atom_t),
 
-    add: extern "C" fn(payload: *mut c_void, atom: *mut atom_t),
+    remove: extern "C" fn(params: *const space_params_t, atom: *const atom_t) -> bool,
 
-    remove: extern "C" fn(payload: *mut c_void, atom: *const atom_t) -> bool,
-
-    replace: extern "C" fn(payload: *mut c_void, from: *const atom_t, to: *mut atom_t) -> bool,
+    replace: extern "C" fn(params: *const space_params_t, from: *const atom_t, to: *mut atom_t) -> bool,
 
     free_payload: extern "C" fn(payload: *mut c_void),
 }
 
+pub struct space_observer_list_t {
+    observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>
+}
+
+/// Notifies all observers of an event
+#[no_mangle]
+pub extern "C" fn space_observer_list_notify_all(list: *const space_observer_list_t, event: *const space_event_t) {
+    let list = unsafe{ &(*list).observers };
+    let event = unsafe{ &(*event).event };
+
+    let mut cleanup = false;
+    for observer in list.borrow().iter() {
+        if let Some(observer) = observer.upgrade() {
+            observer.borrow_mut().notify(event);
+        } else {
+            cleanup = true;
+        }
+    }
+    if cleanup {
+        list.borrow_mut().retain(|w| w.strong_count() > 0);
+    }
+}
+
+/// Data associated with this particular space, including the space's payload and observers
+#[repr(C)]
+pub struct space_params_t {
+    payload: *mut c_void,
+    observers: Box<space_observer_list_t>,
+}
+
 struct CSpace {
     api: *const space_api_t,
-    payload: *mut c_void,
+    params: space_params_t,
+}
+
+impl CSpace {
+    fn new(api: *const space_api_t, payload: *mut c_void) -> Self {
+        CSpace{api, params: space_params_t{payload, observers: Box::new(space_observer_list_t::new())}}
+    }
+}
+
+impl space_observer_list_t {
+    fn new() -> Self {
+        space_observer_list_t{observers: RefCell::new(vec![])}
+    }
 }
 
 impl Space for CSpace {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
-        let api = unsafe{ &*self.api };
-        let observer_ptr = Box::into_raw(Box::new(space_observer_t{observer}));
-        (api.register_observer)(self.payload, observer_ptr);
+        let observers_vec = &(*self.params.observers).observers;
+        observers_vec.borrow_mut().push(Rc::downgrade(&observer) as Weak<RefCell<dyn SpaceObserver>>)
     }
     fn query(&self, query: &Atom) -> BindingsSet {
         let api = unsafe{ &*self.api };
         let query = (query as *const Atom).cast::<atom_t>();
-        let result_set = (api.query)(self.payload, query);
+        let result_set = (api.query)(&self.params, query);
         let bindings_box: Box<bindings_set_t> = unsafe{ Box::from_raw(result_set) };
         bindings_box.set
     }
@@ -272,7 +295,7 @@ impl Space for CSpace {
         if let Some(subst_fn) = api.subst {
             let pattern = (pattern as *const Atom).cast::<atom_t>();
             let tmpl = (tmpl as *const Atom).cast::<atom_t>();
-            let atom_vec = subst_fn(self.payload, pattern, tmpl);
+            let atom_vec = subst_fn(&self.params, pattern, tmpl);
             let vec_box = unsafe{ Box::from_raw(atom_vec) };
             (*vec_box).0
         } else {
@@ -296,18 +319,18 @@ impl SpaceMut for CSpace {
     fn add(&mut self, atom: Atom) {
         let api = unsafe{ &*self.api };
         let atom = atom_into_ptr(atom);
-        (api.add)(self.payload, atom);
+        (api.add)(&self.params, atom);
     }
     fn remove(&mut self, atom: &Atom) -> bool {
         let api = unsafe{ &*self.api };
         let atom = (atom as *const Atom).cast::<atom_t>();
-        (api.remove)(self.payload, atom)
+        (api.remove)(&self.params, atom)
     }
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         let api = unsafe{ &*self.api };
         let from = (from as *const Atom).cast::<atom_t>();
         let to = atom_into_ptr(to);
-        (api.replace)(self.payload, from, to)
+        (api.replace)(&self.params, from, to)
     }
     fn as_space(&self) -> &dyn Space {
         self
@@ -317,7 +340,7 @@ impl SpaceMut for CSpace {
 impl Drop for CSpace {
     fn drop(&mut self) {
         let api = unsafe{ &*self.api };
-        (api.free_payload)(self.payload);
+        (api.free_payload)(self.params.payload);
     }
 }
 
@@ -331,7 +354,7 @@ pub type space_t = SharedApi<Box<dyn SpaceMut>>;
 /// The returned space_t must be freed with space_free
 #[no_mangle]
 pub extern "C" fn space_new(api: *const space_api_t, payload: *mut c_void) -> *mut space_t {
-    let c_space = CSpace {api, payload};
+    let c_space = CSpace::new(api, payload);
     space_t::new(Box::new(c_space))
 }
 
@@ -348,19 +371,17 @@ pub extern "C" fn space_free(space: *mut space_t) {
 pub extern "C" fn space_get_payload(space: *mut space_t) -> *mut c_void {
     if let Some(any_ref) = unsafe{ (*space).borrow_mut().as_any() } {
         if let Some(c_space) = any_ref.downcast_ref::<CSpace>() {
-            return c_space.payload;
+            return c_space.params.payload;
         }
     }
     panic!("Only CSpace has a payload")
 }
 
-/// WARNING: This function takes ownership of the supplied observer, and it should not be freed or
-/// accessed after it has been provided to this function
 #[no_mangle]
-pub extern "C" fn space_register_observer(space: *mut space_t, observer: *mut space_observer_t) {
+pub extern "C" fn space_register_observer(space: *mut space_t, observer: *const space_observer_t) {
     let space = unsafe{ (*space).borrow_mut() };
-    let observer = unsafe{ Box::from_raw(observer).observer };
-    space.register_observer(observer);
+    let observer = unsafe{ &(*observer).observer };
+    space.register_observer(observer.clone());
 }
 
 /// WARNING: This function takes ownership of the supplied atom, and it should not be freed or

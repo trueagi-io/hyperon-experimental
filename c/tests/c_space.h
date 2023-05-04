@@ -13,7 +13,6 @@ typedef struct _custom_space_buf custom_space_t;
 space_t* custom_space_new();
 
 typedef struct _custom_space_buf {
-    struct _observer_list_item* observers;
     struct _atom_list_item* atoms;
     size_t atom_count;
 } custom_space_buf;

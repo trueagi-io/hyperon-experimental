@@ -150,6 +150,9 @@ START_TEST (test_custom_c_space)
     space_observer_t* observer = space_observer_new(&C_OBSERVER_API, observer_payload);
     space_register_observer(space, observer);
 
+    space_observer_t* observer_2 = space_observer_new(&C_OBSERVER_API, malloc(sizeof(my_observer_t)));
+    space_register_observer(space, observer_2);
+
     atom_t* a = atom_sym("A");
     atom_t* b = atom_sym("B");
     atom_t* c = atom_sym("C");
@@ -168,6 +171,9 @@ START_TEST (test_custom_c_space)
     atom_free(b);
     atom_free(c);
 
+    //Test that dropping an observer here doesn't cause problems with the other observer
+    space_observer_free(observer_2);
+
     space_add(space, expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0));
     atom_t* query = expr(atom_sym("+"), atom_sym("A"), atom_var("b"), 0);
     struct output_t result = { "", 0 };
@@ -180,11 +186,10 @@ START_TEST (test_custom_c_space)
     //NEW QUESTION FOR VITALY: If we are following strict Rust-style ownership tracking rules, then the
     // payload should not be accessed after it has been given to space_observer_new().  However this
     // seems dumb because we would then need to add a space_observer_get_payload function that would
-    // return exactly the same pointer.  But the space_observer_t itself has been given to the space_t
-    // so we would also need iterator functions to access the observer.
+    // return exactly the same pointer.
     //
-    //The whole point is to keep the C programmer from accessing the pointer after the space_t has
-    // been freed, but adding a "borrow-style" accessor basically trades one contract with the
+    //The whole point is to keep the C programmer from accessing the pointer after the space_observer_t
+    // has been freed, but adding a "borrow-style" accessor basically trades one contract with the
     // programmer in exchange for exactly the same contract.
     //
     //QUESTION 2:  Applying the same logic, perhaps I can simplify the code by deleting
@@ -193,6 +198,7 @@ START_TEST (test_custom_c_space)
     // atom_t might come from a number of different places.
     ck_assert(observer_payload->atom_count == 1);
 
+    space_observer_free(observer);
     atom_free(query);
     space_free(space);
 }

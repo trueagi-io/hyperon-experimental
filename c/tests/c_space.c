@@ -5,37 +5,10 @@
 #include "util.h"
 #include "c_space.h"
 
-typedef struct _observer_list_item {
-    space_observer_t* observer;
-    struct _observer_list_item* next;
-} observer_list_item;
-
-void notify_all_observers(observer_list_item* list, space_event_t* event) {
-    observer_list_item* cur_observer_item = list;
-    while (cur_observer_item != NULL) {
-        space_observer_notify(cur_observer_item->observer, event);
-        cur_observer_item = cur_observer_item->next;
-    }
-}
-
 typedef struct _atom_list_item {
     atom_t* atom;
     struct _atom_list_item* next;
 } atom_list_item;
-
-void register_observer(void* space_ptr, space_observer_t* observer) {
-    custom_space_buf* space = space_ptr;
-    observer_list_item* new_item = malloc(sizeof(observer_list_item));
-    new_item->observer = observer;
-    new_item->next = NULL;
-    if (space->observers == NULL) {
-        space->observers = new_item;
-    } else {
-        observer_list_item* cur_item = space->observers;
-        while (cur_item->next != NULL) {cur_item = cur_item->next;}
-        cur_item->next = new_item;
-    }
-}
 
 void collect_variable_atoms(const atom_t* atom, void* vec_ptr) {
     vec_atom_t* vec = vec_ptr;
@@ -51,8 +24,8 @@ void narrow_vars_callback(bindings_t* bindings, void* vars_vec_ptr) {
 
 // NOTE: this is a naive implementation barely good enough to pass the tests
 // Don't take this as a guide to implementing a space query function
-bindings_set_t* query(void* space_ptr, const atom_t* query_atom) {
-    custom_space_buf* space = space_ptr;
+bindings_set_t* query(const space_params_t* params, const atom_t* query_atom) {
+    custom_space_buf* space = params->payload;
 
     vec_atom_t* query_vars = vec_atom_new();
     atom_iterate(query_atom, collect_variable_atoms, query_vars);
@@ -88,11 +61,11 @@ void add_atom_internal(custom_space_buf* space, atom_t* atom) {
     space->atom_count += 1;
 }
 
-void add_atom(void* space_ptr, atom_t* atom) {
-    custom_space_buf* space = space_ptr;
+void add_atom(const space_params_t* params, atom_t* atom) {
+    custom_space_buf* space = params->payload;
 
     space_event_t* event = space_event_new_add(atom_clone(atom));
-    notify_all_observers(space->observers, event);
+    space_observer_list_notify_all(params->observers, event);
     space_event_free(event);
 
     add_atom_internal(space, atom);
@@ -123,12 +96,12 @@ bool remove_atom_internal(custom_space_buf* space, const atom_t* atom) {
     return false;
 }
 
-bool remove_atom(void* space_ptr, const atom_t* atom) {
-    custom_space_buf* space = space_ptr;
+bool remove_atom(const space_params_t* params, const atom_t* atom) {
+    custom_space_buf* space = params->payload;
 
     if (remove_atom_internal(space, atom)) {
         space_event_t* event = space_event_new_remove(atom_clone(atom));
-        notify_all_observers(space->observers, event);
+        space_observer_list_notify_all(params->observers, event);
         space_event_free(event);
         return true;
     }
@@ -136,13 +109,13 @@ bool remove_atom(void* space_ptr, const atom_t* atom) {
     return false;
 }
 
-bool replace_atom(void* space_ptr, const atom_t* from, atom_t* to) {
-    custom_space_buf* space = space_ptr;
+bool replace_atom(const space_params_t* params, const atom_t* from, atom_t* to) {
+    custom_space_buf* space = params->payload;
 
     if (remove_atom_internal(space, from)) {
         add_atom_internal(space, to);
         space_event_t* event = space_event_new_replace(atom_clone(from), atom_clone(to));
-        notify_all_observers(space->observers, event);
+        space_observer_list_notify_all(params->observers, event);
         space_event_free(event);
         return true;
     } else {
@@ -162,20 +135,11 @@ void free_payload(void* space_ptr) {
         cur_atom_item = next_item;
     }
 
-    observer_list_item* cur_observer_item = space->observers;
-    while (cur_observer_item != NULL) {
-        space_observer_free(cur_observer_item->observer);
-        observer_list_item* next_item = cur_observer_item->next;
-        free(cur_observer_item);
-        cur_observer_item = next_item;
-    }
-
     free(space);
 }
 
 // Space API Declaration to pass to space_new()
 static space_api_t const C_SPACE_API= {
-    .register_observer = &register_observer,
     .query = &query,
     .subst = NULL,
     .add = &add_atom,
@@ -187,7 +151,6 @@ static space_api_t const C_SPACE_API= {
 space_t* custom_space_new() {
 
     custom_space_buf* c_space = malloc(sizeof(custom_space_buf));
-    c_space->observers = NULL;
     c_space->atoms = NULL;
     c_space->atom_count = 0;
     space_t* space = space_new(&C_SPACE_API, c_space);
