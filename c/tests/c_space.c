@@ -64,6 +64,7 @@ bindings_set_t* query(void* space_ptr, const atom_t* query_atom) {
         bindings_set_t* match_results = atom_match_atom(cur_atom_item->atom, query_atom);
         bindings_set_iterate(match_results, narrow_vars_callback, query_vars);
         bindings_set_merge_into(new_bindings_set, match_results);
+        bindings_set_free(match_results);
         cur_atom_item = cur_atom_item->next;
     }
 
