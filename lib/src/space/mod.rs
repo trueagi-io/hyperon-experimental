@@ -127,10 +127,13 @@ pub trait Space {
             .map(| bindings | apply_bindings_to_atom(template, &bindings))
             .collect()
     }
+
+    /// Returns an &dyn [Any] for spaces where this is possible
+    fn as_any(&self) -> Option<&dyn std::any::Any>;
 }
 
 /// Mutable space trait.
-pub trait SpaceMut {
+pub trait SpaceMut: Space {
     /// Adds `atom` into space.
     ///
     /// # Examples
@@ -187,9 +190,28 @@ pub trait SpaceMut {
     /// assert_eq!(space.query(&sym!("B")), BindingsSet::single());
     /// ```
     fn replace(&mut self, from: &Atom, to: Atom) -> bool;
+
+    /// Turn a &dyn SpaceMut into an &dyn Space.  Obsolete when Trait Upcasting is stabilized.
+    /// https://github.com/rust-lang/rust/issues/65991  Any month now.
+    fn as_space(&self) -> &dyn Space;
 }
 
 use crate::common::shared::Shared;
+
+impl Space for Box<dyn SpaceMut> {
+    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
+        (**self).register_observer(observer)
+    }
+    fn query(&self, query: &Atom) -> BindingsSet {
+        (**self).query(query)
+    }
+    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
+        (**self).subst(pattern, template)
+    }
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        (*self).as_space().as_any()
+    }
+}
 
 impl<T: Space> Space for Shared<T> {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
@@ -200,6 +222,9 @@ impl<T: Space> Space for Shared<T> {
     }
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         self.borrow().subst(pattern, template)
+    }
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        None
     }
 }
 
@@ -212,6 +237,9 @@ impl<T: SpaceMut> SpaceMut for Shared<T> {
     }
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         self.borrow_mut().replace(from, to)
+    }
+    fn as_space(&self) -> &dyn Space {
+        self
     }
 }
 
@@ -226,6 +254,24 @@ impl<T: Space> Space for &T {
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         T::subst(*self, pattern, template)
     }
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        None
+    }
+}
+
+impl<T: Space> Space for &mut T {
+    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
+        T::register_observer(*self, observer)
+    }
+    fn query(&self, query: &Atom) -> BindingsSet {
+        T::query(*self, query)
+    }
+    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
+        T::subst(*self, pattern, template)
+    }
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        None
+    }
 }
 
 impl<T: SpaceMut> SpaceMut for &mut T {
@@ -237,5 +283,8 @@ impl<T: SpaceMut> SpaceMut for &mut T {
     }
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         (*self).replace(from, to)
+    }
+    fn as_space(&self) -> &dyn Space {
+        self
     }
 }
