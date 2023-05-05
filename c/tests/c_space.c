@@ -10,7 +10,7 @@ typedef struct _atom_list_item {
     struct _atom_list_item* next;
 } atom_list_item;
 
-void collect_variable_atoms(atom_t* atom, void* vec_ptr) {
+void collect_variable_atoms(const atom_t* atom, void* vec_ptr) {
     vec_atom_t* vec = vec_ptr;
     if (atom_get_type(atom) == VARIABLE) {
         vec_atom_push(vec, atom_clone(atom));
@@ -28,7 +28,7 @@ bindings_set_t* query(const space_params_t* params, const atom_t* query_atom) {
     custom_space_buf* space = params->payload;
 
     vec_atom_t* query_vars = vec_atom_new();
-    atom_iterate((atom_t*)query_atom, collect_variable_atoms, query_vars);
+    atom_iterate(query_atom, collect_variable_atoms, query_vars);
 
     bindings_set_t* new_bindings_set = bindings_set_single();
 
