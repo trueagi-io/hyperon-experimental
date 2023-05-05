@@ -184,7 +184,7 @@ void copy_to_list_callback(var_atom_t const* varAtom, void* context){
             std::make_pair(std::string(varAtom->var), CAtom(atom_clone(varAtom->atom))));
 }
 
-void bindings_copy_to_list_callback(bindings_t const* bindings, void* context){
+void bindings_copy_to_list_callback(bindings_t* bindings, void* context){
     pybind11::list& bindings_list = *( (pybind11::list*)(context) );
     bindings_list.append(CBindings(bindings_clone(bindings)));
 }
@@ -453,7 +453,7 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_TYPE(VARIABLE, "Variable")
         ADD_TYPE(EXPRESSION, "Expression")
         ADD_TYPE(GROUNDED, "Grounded");
-    m.def("check_type", [](CGroundingSpace space, CAtom atom, CAtom type) { 
+    m.def("check_type", [](CGroundingSpace space, CAtom atom, CAtom type) {
             return check_type(space.ptr, atom.ptr, type.ptr);
         }, "Check if atom is an instance of the passed type");
     m.def("validate_atom", [](CGroundingSpace space, CAtom atom) {

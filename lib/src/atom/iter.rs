@@ -21,7 +21,7 @@ pub struct AtomIter<'a> {
 
 impl<'a> AtomIter<'a> {
 
-    fn new(atom: &'a Atom) -> Self {
+    pub fn new(atom: &'a Atom) -> Self {
         match atom {
             Atom::Symbol(_) | Atom::Variable(_) | Atom::Grounded(_) => {
                 Self{ levels: vec![], single: Some(atom) }
@@ -74,7 +74,7 @@ pub struct AtomIterMut<'a> {
 
 impl<'a> AtomIterMut<'a> {
 
-    fn new(atom: &'a mut Atom) -> Self {
+    pub fn new(atom: &'a mut Atom) -> Self {
         match atom {
             Atom::Symbol(_) | Atom::Variable(_) | Atom::Grounded(_) => {
                 Self{ levels: vec![], single: Some(atom) }

@@ -5,6 +5,8 @@ use crate::util::*;
 use std::os::raw::*;
 use std::fmt::Display;
 use std::convert::TryInto;
+use std::collections::HashSet;
+use std::iter::FromIterator;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon::matcher::{Bindings, BindingsSet};
@@ -39,7 +41,7 @@ pub struct bindings_t {
 }
 
 pub struct bindings_set_t {
-    set: BindingsSet,
+    pub(crate) set: BindingsSet,
 }
 
 pub type bindings_callback_t = lambda_t<*const bindings_t>;
@@ -171,7 +173,7 @@ pub extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindings_righ
 
 /// WARNING: This function takes ownership of the _self argument.
 /// After calling this function, the bindings_t passed as _self must not be accessed or freed
-/// 
+///
 /// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
 pub extern "C" fn bindings_merge_v2(_self: *mut bindings_t, other: *const bindings_t) -> *mut bindings_set_t
@@ -194,6 +196,20 @@ pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_nam
     }
 }
 
+#[no_mangle]
+pub extern "C" fn bindings_narrow_vars(bindings: *mut bindings_t, vars: *const vec_atom_t) {
+    let bindings = unsafe{&mut (*bindings).bindings};
+    let vars = unsafe{&(*vars).0};
+    let vars_iter = vars.into_iter().map(|atom| {
+        TryInto::<VariableAtom>::try_into(atom.clone())
+            .expect("Only variable atoms allowed for bindings_narrow_vars")
+    });
+    let vars_set = HashSet::from_iter(vars_iter);
+
+    let mut new_bindings = bindings.narrow_vars(&vars_set);
+    core::mem::swap(&mut new_bindings, bindings);
+}
+
 // end of bindings
 
 // bindings_set
@@ -210,7 +226,7 @@ pub extern "C" fn bindings_set_single() -> *mut bindings_set_t {
 
 /// WARNING: This function takes ownership of the bindings argument.
 /// After calling this function, the bindings_t passed must not be accessed or freed
-/// 
+///
 /// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
 pub extern "C" fn bindings_set_from_bindings(bindings: *mut bindings_t) -> *mut bindings_set_t {
@@ -221,7 +237,7 @@ pub extern "C" fn bindings_set_from_bindings(bindings: *mut bindings_t) -> *mut 
 /// WARNING: This function takes ownership of the bindings argument.
 /// After calling this function, the bindings_t passed must not be accessed or freed
 #[no_mangle]
-pub extern "C" fn bindings_set_push(set: *mut bindings_set_t, bindings: *mut bindings_t) {    
+pub extern "C" fn bindings_set_push(set: *mut bindings_set_t, bindings: *mut bindings_t) {
     let set = unsafe{&mut (*set).set};
     let owned_bindings = ptr_into_bindings(bindings);
     set.push(owned_bindings);
@@ -240,7 +256,7 @@ pub extern "C" fn bindings_set_clone(set: *const bindings_set_t) -> *mut binding
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_eq(set: *const bindings_set_t, other: *const bindings_set_t) -> bool {    
+pub extern "C" fn bindings_set_eq(set: *const bindings_set_t, other: *const bindings_set_t) -> bool {
     let set = unsafe{&(*set).set};
     let other = unsafe{&(*other).set};
     set == other
@@ -266,10 +282,10 @@ pub extern "C" fn bindings_set_is_single(set: *const bindings_set_t) -> bool {
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_iterate(set: *const bindings_set_t, callback: bindings_callback_t, context: *mut c_void) {
-    let set = unsafe{ &(*set).set };
-    for bindings in set.iter() {
-        let bindings_ptr = (bindings as *const Bindings).cast::<bindings_t>();
+pub extern "C" fn bindings_set_iterate(set: *mut bindings_set_t, callback: bindings_mut_callback_t, context: *mut c_void) {
+    let set = unsafe{ &mut (*set).set };
+    for bindings in set.iter_mut() {
+        let bindings_ptr = (bindings as *mut Bindings).cast::<bindings_t>();
         callback(bindings_ptr, context);
     }
 }
@@ -396,6 +412,26 @@ pub unsafe extern "C" fn atom_get_children(atom: *const atom_t,
     }
 }
 
+/// Performs a depth-first exhaustive iteration of an atom and all its children recursively.
+/// The first result returned will be the atom itself
+#[no_mangle]
+pub unsafe extern "C" fn atom_iterate(atom: *const atom_t,
+        callback: c_atom_callback_t, context: *mut c_void) {
+    let atom = &(*atom).atom;
+    for inner_atom in AtomIter::new(atom) {
+        callback((inner_atom as *const Atom).cast(), context);
+    }
+}
+
+/// The object returned from this function must be freed with bindings_set_free()
+#[no_mangle]
+pub extern "C" fn atom_match_atom(a: *const atom_t, b: *const atom_t) -> *mut bindings_set_t {
+    let a = unsafe{ &(*a).atom };
+    let b = unsafe{ &(*b).atom };
+    let result_set: BindingsSet = crate::atom::matcher::match_atoms(a, b).collect();
+    bindings_set_into_ptr(result_set)
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn atom_free(atom: *mut atom_t) {
     // drop() does nothing actually, but it is used here for clarity
@@ -413,11 +449,11 @@ pub unsafe extern "C" fn atom_eq(atoma: *const atom_t, atomb: *const atom_t) -> 
 }
 
 // TODO: make a macros to generate Vec<T> definitions for C API
-pub struct vec_atom_t(Vec<Atom>);
+pub struct vec_atom_t(pub(crate) Vec<Atom>);
 
 #[no_mangle]
 pub extern "C" fn vec_atom_new() -> *mut vec_atom_t {
-    vec_atom_into_ptr(Vec::new()) 
+    vec_atom_into_ptr(Vec::new())
 }
 
 #[no_mangle]
@@ -452,6 +488,8 @@ pub unsafe extern "C" fn vec_atom_get(vec: *mut vec_atom_t, idx: usize) -> *mut 
 
 pub type atom_array_t = array_t<*const atom_t>;
 pub type c_atoms_callback_t = lambda_t<atom_array_t>;
+
+pub type c_atom_callback_t = lambda_t<*const atom_t>;
 
 #[no_mangle]
 pub extern "C" fn atoms_are_equivalent(first: *const atom_t, second: *const atom_t) -> bool {
