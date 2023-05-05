@@ -415,11 +415,11 @@ pub unsafe extern "C" fn atom_get_children(atom: *const atom_t,
 /// Performs a depth-first exhaustive iteration of an atom and all its children recursively.
 /// The first result returned will be the atom itself
 #[no_mangle]
-pub unsafe extern "C" fn atom_iterate(atom: *const atom_t,
-        callback: c_atom_callback_t, context: *mut c_void) {
-    let atom = &(*atom).atom;
-    for inner_atom in AtomIter::new(atom) {
-        callback((inner_atom as *const Atom).cast(), context);
+pub unsafe extern "C" fn atom_iterate(atom: *mut atom_t,
+        callback: c_atom_mut_callback_t, context: *mut c_void) {
+    let atom = &mut (*atom).atom;
+    for inner_atom in AtomIterMut::new(atom) {
+        callback((inner_atom as *mut Atom).cast(), context);
     }
 }
 
@@ -490,6 +490,7 @@ pub type atom_array_t = array_t<*const atom_t>;
 pub type c_atoms_callback_t = lambda_t<atom_array_t>;
 
 pub type c_atom_callback_t = lambda_t<*const atom_t>;
+pub type c_atom_mut_callback_t = lambda_t<*mut atom_t>;
 
 #[no_mangle]
 pub extern "C" fn atoms_are_equivalent(first: *const atom_t, second: *const atom_t) -> bool {
