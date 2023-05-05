@@ -323,6 +323,9 @@ impl Space for GroundingSpace {
     fn query(&self, query: &Atom) -> BindingsSet {
         GroundingSpace::query(self, query)
     }
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
 }
 
 impl SpaceMut for GroundingSpace {
@@ -334,6 +337,9 @@ impl SpaceMut for GroundingSpace {
     }
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         GroundingSpace::replace(self, from, to)
+    }
+    fn as_space(&self) -> &dyn Space {
+        self
     }
 }
 
