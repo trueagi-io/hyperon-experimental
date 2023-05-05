@@ -11,6 +11,7 @@ name: Build Python Package Wheels
 on:
   release:
     types: [push]
+  workflow_dispatch:
 
 permissions:
   contents: read
