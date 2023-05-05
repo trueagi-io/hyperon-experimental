@@ -81,19 +81,11 @@ impl<'a> SExprParser<'a> {
                 },
                 '(' => {
                     self.it.next();
-                    if let Ok(expr) = self.parse_expr(tokenizer) {
-                        return Ok(Some(expr));
-                    } else {
-                        return Err("Error parsing expression".to_string());
-                    }
+                    return self.parse_expr(tokenizer).map(Some);
                 },
                 ')' => return Err("Unexpected right bracket".to_string()),
                 _ => {
-                    if let Some(atom) = self.parse_atom(tokenizer) {
-                        return Ok(Some(atom));
-                    } else {
-                        return Err("Error parsing atom".to_string());
-                    }
+                    return Ok(self.parse_atom(tokenizer));
                 },
             }
         }
@@ -229,8 +221,8 @@ mod tests {
 
         let mut parser = SExprParser::new("ab");
 
-        assert_eq!(Some(expr!("ab")), parser.parse(&tokenizer).unwrap());
-        assert_eq!(None, parser.parse(&tokenizer).unwrap());
+        assert_eq!(Ok(Some(expr!("ab"))), parser.parse(&tokenizer));
+        assert_eq!(Ok(None), parser.parse(&tokenizer));
     }
 
     #[test]
@@ -241,8 +233,8 @@ mod tests {
 
         let mut parser = SExprParser::new("(3d 42)");
 
-        assert_eq!(Some(expr!("3d" {42})), parser.parse(&tokenizer).unwrap());
-        assert_eq!(None, parser.parse(&tokenizer).unwrap());
+        assert_eq!(Ok(Some(expr!("3d" {42}))), parser.parse(&tokenizer));
+        assert_eq!(Ok(None), parser.parse(&tokenizer));
     }
 
     #[test]

@@ -117,47 +117,47 @@ impl Metta {
         let mut results: Vec<Vec<Atom>> = Vec::new();
     
         loop {
-            let atom_result = parser.parse(&self.tokenizer.borrow());
-            match atom_result {
-                Ok(Some(atom)) => {
-                    if atom == EXEC_SYMBOL {
-                        mode = Mode::INTERPRET;
-                        continue;
-                    }
-                    match mode {
-                        Mode::ADD => {
-                            if let Err(atom) = self.add_atom(atom) {
-                                results.push(vec![atom]);
-                                break;
-                            }
-                        },
-                        Mode::INTERPRET => {
-                            match self.evaluate_atom(atom) {
-                                Err(msg) => return Err(msg),
-                                Ok(result) => {
-                                    fn is_error(atom: &Atom) -> bool {
-                                        match atom {
-                                            Atom::Expression(expr) => expr.children()[0] == ERROR_SYMBOL,
-                                            _ => false,
-                                        }
-                                    }
-                                    let error = result.iter().any(|atom| is_error(atom));
-                                    results.push(result);
-                                    if error {
-                                        break;
+            let atom = parser.parse(&self.tokenizer.borrow())?;
+    
+            if let Some(atom) = atom {
+                if atom == EXEC_SYMBOL {
+                    mode = Mode::INTERPRET;
+                    continue;
+                }
+                match mode {
+                    Mode::ADD => {
+                        if let Err(atom) = self.add_atom(atom) {
+                            results.push(vec![atom]);
+                            break;
+                        }
+                    },
+                    Mode::INTERPRET => {
+                        match self.evaluate_atom(atom) {
+                            Err(msg) => return Err(msg),
+                            Ok(result) => {
+                                fn is_error(atom: &Atom) -> bool {
+                                    match atom {
+                                        Atom::Expression(expr) => expr.children()[0] == ERROR_SYMBOL,
+                                        _ => false,
                                     }
                                 }
+                                let error = result.iter().any(|atom| is_error(atom));
+                                results.push(result);
+                                if error {
+                                    break;
+                                }
                             }
-                        },
-                    }
-                    mode = Mode::ADD;
-                },
-                Ok(None) => break,
-                Err(msg) => return Err(msg),
+                        }
+                    },
+                }
+                mode = Mode::ADD;
+            } else {
+                break;
             }
         }
         Ok(results)
     }
+    
     
 
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
