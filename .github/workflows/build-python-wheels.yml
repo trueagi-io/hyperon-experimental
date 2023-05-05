@@ -90,11 +90,11 @@ jobs:
       working-directory: ./python
       run: |
         python -m build
-        tar zcf dist.tar.gz dist
+        tar zcf ${{ matrix.python-version }}.tar.gz dist
 
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
         name: dist.tar.gz
-        path: ./python/dist.tar.gz
+        path: ./python/${{ matrix.python-version }}.tar.gz
 

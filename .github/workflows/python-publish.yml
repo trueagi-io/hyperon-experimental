@@ -36,19 +36,24 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    strategy:
+      matrix:
+        python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
+      max-parallel: 2
+
     steps:
     - uses: actions/checkout@v3
 
     - name: Download shared library artifacts
       uses: actions/download-artifact@v3
       with:
-        name: dist.tar.gz
+        name: dist-${{ matrix.python-version }}.tar.gz
         path: python
 
     - name: Untar
       working-directory: ./python
       run: |
-        tar zxf dist.tar.gz
+        tar zxf ${{ matrix.python-version }}.tar.gz
 
     - name: Publish package to pypi
       if: startsWith(github.ref, 'refs/tags') && ${{ inputs.publish_to_pypi }} && ${{ ! inputs.test_site }}
