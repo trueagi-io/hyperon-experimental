@@ -101,7 +101,7 @@ jobs:
       uses: svenstaro/upload-release-action@v2
       with:
         repo_token: ${{ secrets.WORKFLOW_GITHUB_TOKEN }}
-        file: ./python/dist/*.wheel
+        file: ./python/dist/*.whl
         tag: ${{ github.ref }}
         overwrite: true
         file_glob: true
