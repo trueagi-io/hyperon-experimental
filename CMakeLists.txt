@@ -1,6 +1,7 @@
-project(hyperon)
 # minimum version required by $<IF..> generator expression
 cmake_minimum_required(VERSION 3.10.2)
+
+project(hyperon)
 
 # Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
 if (POLICY CMP0025)
