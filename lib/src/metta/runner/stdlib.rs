@@ -1181,21 +1181,19 @@ pub fn register_rust_tokens(metta: &Metta) {
     metta.tokenizer.borrow_mut().move_front(&mut rust_tokens);
 }
 
-pub fn metta_code() -> &'static str {
-    // `$then`, `$else` should be of `Atom` type to avoid evaluation
-    // and infinite cycle in inference
-    "
+pub static METTA_CODE: &'static str = "
+    ; `$then`, `$else` should be of `Atom` type to avoid evaluation
+    ; and infinite cycle in inference
     (: if (-> Bool Atom Atom $t))
     (= (if True $then $else) $then)
     (= (if False $then $else) $else)
     (: Error (-> Atom Atom ErrorType))
-    "
-}
+";
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::runner::*;
+    use crate::metta::runner::new_metta_rust;
     use crate::metta::types::validate_atom;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {

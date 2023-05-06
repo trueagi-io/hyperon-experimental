@@ -5,12 +5,19 @@ use super::*;
 use super::space::*;
 use super::text::{Tokenizer, SExprParser};
 use super::types::validate_atom;
-use super::interpreter::interpret;
 
 use std::path::PathBuf;
 use std::collections::HashMap;
 
 pub mod stdlib;
+use super::interpreter::interpret;
+use stdlib::*;
+
+// Uncomment three lines below and comment three lines above to
+// switch to the minimal MeTTa version
+//pub mod stdlib2;
+//use super::interpreter2::interpret;
+//use stdlib2::*;
 
 mod arithmetics;
 
@@ -38,8 +45,8 @@ impl Metta {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
         let metta = Self{ space, tokenizer, settings, modules };
-        stdlib::register_runner_tokens(&metta, cwd);
-        stdlib::register_common_tokens(&metta);
+        register_runner_tokens(&metta, cwd);
+        register_common_tokens(&metta);
         metta
     }
 
@@ -51,7 +58,7 @@ impl Metta {
         let settings = metta.settings.clone();
         let modules = metta.modules.clone();
         let metta = Metta{ space, tokenizer, settings, modules };
-        stdlib::register_runner_tokens(&metta, next_cwd);
+        register_runner_tokens(&metta, next_cwd);
         metta
     }
 
@@ -70,7 +77,7 @@ impl Metta {
                 // Load the module to the new space
                 let runner = Metta::new_loading_runner(self, path.clone());
                 let program = match path.to_str() {
-                    Some("stdlib") => stdlib::metta_code().to_string(),
+                    Some("stdlib") => METTA_CODE.to_string(),
                     _ => std::fs::read_to_string(&path).map_err(
                         |err| format!("Could not read file, path: {}, error: {}", path.display(), err))?,
                 };
@@ -189,7 +196,7 @@ impl Metta {
 pub fn new_metta_rust() -> Metta {
     let metta = Metta::new(DynSpace::new(GroundingSpace::new()),
         Shared::new(Tokenizer::new()));
-    stdlib::register_rust_tokens(&metta);
+    register_rust_tokens(&metta);
     metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
     metta
 }
@@ -197,6 +204,9 @@ pub fn new_metta_rust() -> Metta {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use crate::atom::matcher::*;
+    use arithmetics::*;
 
     #[test]
     fn test_space() {
@@ -332,6 +342,111 @@ mod tests {
         let result = metta.run(&mut SExprParser::new(program));
 
         assert_eq!(result, Ok(vec![vec![expr!()]]));
+    }
+
+    #[test]
+    fn test_frog_reasoning() {
+        let program = "
+            (= (and True True) True)
+
+            (= (Fritz croaks) True)
+            (= (Fritz eats-flies) True)
+
+            (= (Tweety chirps) True)
+            (= (Tweety yello) True)
+            (= (Tweety eats-flies) True)
+
+            !(if (and ($x croaks) ($x eats-flies)) (= ($x frog) True) Empty)
+        ";
+
+        //let result = run_program(program);
+        //assert_eq!(result, Ok(vec![vec![expr!("=" ("Fritz" "frog") "True")]]));
+    }
+
+    #[test]
+    fn operation_is_expression() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!(":" "foo" ("->" ("->" "A" "A"))));
+        space.add(expr!(":" "a" "A"));
+        space.add(expr!("=" ("foo") "bar"));
+        space.add(expr!("=" ("bar" x) x));
+
+        assert_eq!(interpret(&space, &expr!(("foo") "a")), Ok(vec![expr!("a")]));
+    }
+
+    static ID_NUM: &Operation = &Operation{
+        name: "id_num",
+        execute: |_, args| {
+            let arg_error = || ExecError::from("id_num expects one argument: number");
+            let num = args.get(0).ok_or_else(arg_error)?;
+            Ok(vec![num.clone()])
+        },
+        typ: "(-> Number Number)",
+    };
+
+    #[test]
+    fn return_bad_type_error() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!(":" "myAtom" "myType"));
+        space.add(expr!(":" "id_a" ("->" "A" "A")));
+        space.add(expr!("=" ("id_a" a) a));
+
+        assert_eq!(interpret(&space, &expr!({ID_NUM} "myAtom")),
+            Ok(vec![Atom::expr([ERROR_SYMBOL, sym!("myAtom"), BAD_TYPE_SYMBOL])]));
+        assert_eq!(interpret(&space, &expr!("id_a" "myAtom")),
+            Ok(vec![Atom::expr([ERROR_SYMBOL, sym!("myAtom"), BAD_TYPE_SYMBOL])]));
+    }
+
+    #[test]
+    fn test_variable_defined_via_variable() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("=" ("if" "True" y) y));
+        space.add(expr!("=" ("not" "False") "True"));
+        space.add(expr!("=" ("a" z) ("not" ("b" z))));
+        space.add(expr!("=" ("b" "d") "False"));
+        let expr = expr!("if" ("a" x) x);
+
+        assert_eq!(interpret(&space, &expr), Ok(vec![expr!("d")]));
+    }
+
+    #[test]
+    fn test_variable_keeps_value_in_different_sub_expressions() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("=" ("eq" x x) "True"));
+        space.add(expr!("=" ("plus" "Z" y) y));
+        space.add(expr!("=" ("plus" ("S" k) y) ("S" ("plus" k y))));
+
+        assert_eq!(interpret(&space, &expr!("eq" ("plus" "Z" n) n)),
+            Ok(vec![expr!("True")]));
+        let actual = interpret(&space, &expr!("eq" ("plus" ("S" "Z") n) n));
+        let expected = Ok(vec![expr!("eq" ("S" y) y)]);
+        assert!(results_are_equivalent(&actual, &expected),
+            "actual: {:?} and expected: {:?} are not equivalent", actual, expected);
+    }
+
+    #[test]
+    fn test_variable_name_conflict_renaming() {
+        let space = metta_space("
+            (= (b ($x $y)) (c $x $y))
+        ");
+        let expr = metta_atom("(a (b $a) $x $y)");
+
+        let result = interpret(&space, &expr);
+
+        assert!(results_are_equivalent(&result,
+            &Ok(vec![metta_atom("(a (c $a $b) $c $d)")])));
+    }
+
+    fn results_are_equivalent(actual: &Result<Vec<Atom>, String>,
+            expected: &Result<Vec<Atom>, String>) -> bool {
+        match (actual, expected) {
+            (Ok(actual), Ok(expected)) =>
+                actual.len() == expected.len() &&
+                actual.iter().zip(expected.iter()).all(|(actual, expected)| {
+                    atoms_are_equivalent(actual, expected) }),
+            (Err(actual), Err(expected)) => actual == expected,
+            _ => false,
+        }
     }
 
 }
