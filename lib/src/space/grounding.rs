@@ -13,6 +13,7 @@ use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
+use std::convert::TryFrom;
 
 // Grounding space
 
@@ -295,7 +296,8 @@ impl GroundingSpace {
         log::debug!("single_query: query: {}", query);
         let mut result = BindingsSet::empty();
         let mut query_vars = HashSet::new();
-        query.iter().filter_map(AtomIter::extract_var).for_each(|var| { query_vars.insert(var.clone()); });
+        query.iter().filter_map(|atom| <&VariableAtom>::try_from(atom).ok())
+            .for_each(|var| { query_vars.insert(var.clone()); });
         for i in self.index.get(&atom_to_trie_key(query)) {
             let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", query, i).as_str());
             let next = make_variables_unique(next.clone());

@@ -786,7 +786,17 @@ impl<'a> TryFrom<&'a Atom> for &'a VariableAtom {
     type Error = &'static str;
     fn try_from(atom: &Atom) -> Result<&VariableAtom, &'static str> {
         match atom {
-            Atom::Variable(var) => Ok(&var),
+            Atom::Variable(var) => Ok(var),
+            _ => Err("Atom is not a VariableAtom")
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a mut Atom> for &'a mut VariableAtom {
+    type Error = &'static str;
+    fn try_from(atom: &mut Atom) -> Result<&mut VariableAtom, &'static str> {
+        match atom {
+            Atom::Variable(ref mut var) => Ok(var),
             _ => Err("Atom is not a VariableAtom")
         }
     }
