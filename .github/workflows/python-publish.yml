@@ -9,21 +9,7 @@
 name: Upload Python Package
 
 on:
-  release:
-    types: [published]
-
   workflow_dispatch:
-    inputs:
-      publish_to_pypi:
-        description: 'Publish the python package to pypi'
-        type: boolean
-        required: true
-        default: false
-      test_site:
-        description: 'Publish to pypi test site'
-        type: boolean
-        required: true
-        default: false
 
 permissions:
   contents: read
