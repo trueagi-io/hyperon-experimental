@@ -146,7 +146,7 @@ impl GroundingSpace {
     /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
-    /// 
+    ///
     /// space.add(sym!("B"));
     ///
     /// assert_eq!(space.query(&sym!("A")), BindingsSet::single());
@@ -183,7 +183,7 @@ impl GroundingSpace {
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
-    /// 
+    ///
     /// space.remove(&sym!("A"));
     ///
     /// assert_eq!(space.query(&sym!("A")), BindingsSet::empty());
@@ -223,7 +223,7 @@ impl GroundingSpace {
     /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
-    /// 
+    ///
     /// space.replace(&sym!("A"), sym!("B"));
     ///
     /// assert_eq!(space.query(&sym!("A")), BindingsSet::empty());
@@ -519,7 +519,7 @@ mod test {
     #[test]
     fn mut_cloned_atomspace() {
         let mut first = GroundingSpace::new();
-        let mut second = first.clone(); 
+        let mut second = first.clone();
 
         first.add(expr!("b"));
         second.add(expr!("d"));
@@ -568,7 +568,7 @@ mod test {
     fn test_match_query_variable_has_priority() {
         let mut space = GroundingSpace::new();
         space.add(expr!("equals" x x));
-        
+
         let result = space.query(&expr!("equals" y z));
         assert_eq!(result, bind_set![{ y: expr!(z) }]);
     }
