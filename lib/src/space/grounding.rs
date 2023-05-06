@@ -13,6 +13,7 @@ use std::rc::{Rc, Weak};
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
+use std::convert::TryFrom;
 
 // Grounding space
 
@@ -146,7 +147,7 @@ impl GroundingSpace {
     /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
-    /// 
+    ///
     /// space.add(sym!("B"));
     ///
     /// assert_eq!(space.query(&sym!("A")), BindingsSet::single());
@@ -183,7 +184,7 @@ impl GroundingSpace {
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
-    /// 
+    ///
     /// space.remove(&sym!("A"));
     ///
     /// assert_eq!(space.query(&sym!("A")), BindingsSet::empty());
@@ -223,7 +224,7 @@ impl GroundingSpace {
     /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
-    /// 
+    ///
     /// space.replace(&sym!("A"), sym!("B"));
     ///
     /// assert_eq!(space.query(&sym!("A")), BindingsSet::empty());
@@ -295,7 +296,8 @@ impl GroundingSpace {
         log::debug!("single_query: query: {}", query);
         let mut result = BindingsSet::empty();
         let mut query_vars = HashSet::new();
-        query.iter().filter_map(AtomIter::extract_var).for_each(|var| { query_vars.insert(var.clone()); });
+        query.iter().filter_map(|atom| <&VariableAtom>::try_from(atom).ok())
+            .for_each(|var| { query_vars.insert(var.clone()); });
         for i in self.index.get(&atom_to_trie_key(query)) {
             let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", query, i).as_str());
             let next = make_variables_unique(next.clone());
@@ -519,7 +521,7 @@ mod test {
     #[test]
     fn mut_cloned_atomspace() {
         let mut first = GroundingSpace::new();
-        let mut second = first.clone(); 
+        let mut second = first.clone();
 
         first.add(expr!("b"));
         second.add(expr!("d"));
@@ -568,7 +570,7 @@ mod test {
     fn test_match_query_variable_has_priority() {
         let mut space = GroundingSpace::new();
         space.add(expr!("equals" x x));
-        
+
         let result = space.query(&expr!("equals" y z));
         assert_eq!(result, bind_set![{ y: expr!(z) }]);
     }

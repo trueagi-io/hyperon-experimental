@@ -505,7 +505,7 @@ impl Bindings {
         deps.insert(var.clone());
         self.get_value(var).iter()
             .for_each(|value| {
-                value.iter().filter_map(AtomIter::extract_var)
+                value.iter().filter_map(|atom| <&VariableAtom>::try_from(atom).ok())
                     .for_each(|var| { self.find_deps(var, deps); });
             });
     }
@@ -550,7 +550,7 @@ impl Bindings {
         for (&id, value) in &self.value_by_id {
             if dep_ids.contains(&id) {
                 let mut mapped_value = value.clone();
-                mapped_value.iter_mut().filter_map(AtomIterMut::extract_var)
+                mapped_value.iter_mut().filter_map(|atom| <&mut VariableAtom>::try_from(atom).ok())
                     .for_each(|var| { mapping.get(var).map(|mapped| *var = (*mapped).clone()); });
                 bindings.value_by_id.insert(id, mapped_value);
             }
