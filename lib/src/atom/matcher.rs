@@ -1386,6 +1386,19 @@ mod test {
     }
 
     #[test]
+    fn bindings_narrow_vars_keeps_vars_equality() -> Result<(), &'static str> {
+        let bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("y"))?
+            .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("z"))?;
+
+        let narrow = bindings.narrow_vars(&HashSet::from([VariableAtom::new("y"),
+            VariableAtom::new("z")]));
+
+        assert_eq!(narrow, bind!{ y: expr!(z) });
+        Ok(())
+    }
+
+    #[test]
     fn bindings_add_var_value_splits_bindings() {
         let pair = ReturnPairInX{};
 
