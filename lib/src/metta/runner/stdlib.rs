@@ -1,5 +1,5 @@
 use crate::*;
-use crate::matcher::MatchResultIter;
+use crate::matcher::{MatchResultIter, Bindings};
 use crate::space::Space;
 use crate::space::grounding::GroundingSpace;
 use crate::metta::*;
@@ -15,6 +15,7 @@ use std::cell::RefCell;
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::iter::FromIterator;
 use regex::Regex;
 
@@ -857,9 +858,10 @@ impl Grounded for LetOp {
         let mut local_vars = HashMap::new();
         introduce_local_vars(&mut pattern, &mut local_vars);
         replace_vars(&mut template, &local_vars);
+        let local_vars: HashSet<VariableAtom> = local_vars.into_values().collect();
 
         let bindings = matcher::match_atoms(&pattern, &atom);
-        let result = bindings.map(|b| matcher::apply_bindings_to_atom(&template, &b)).collect();
+        let result = bindings.map(|b| apply_bindings_keeping_non_local_variables(&template, &b, &local_vars)).collect();
         log::debug!("LetOp::execute: pattern: {}, atom: {}, template: {}, result: {:?}", pattern, atom, template, result);
         Ok(result)
     }
@@ -870,26 +872,38 @@ impl Grounded for LetOp {
 }
 
 fn introduce_local_vars(atom: &mut Atom, vars: &mut HashMap<VariableAtom, VariableAtom>) {
-    atom.iter_mut().for_each(|sub| {
-        match sub {
-            Atom::Variable(var) => {
-                *var = vars.entry(var.clone()).or_insert(var.make_unique()).clone();
-            },
+    atom.iter_mut().for_each(|sub| match sub {
+            Atom::Variable(var) => { *var = vars.entry(var.clone()).or_insert(var.make_unique()).clone(); },
             _ => {},
-        }
     });
 }
 
 fn replace_vars(atom: &mut Atom, vars: &HashMap<VariableAtom, VariableAtom>) {
-    atom.iter_mut().for_each(|sub| {
-        match sub {
+    atom.iter_mut().for_each(|sub| match sub {
+            Atom::Variable(var) => { vars.get(var).map(|v| *var = v.clone()); },
+            _ => {},
+    });
+}
+
+fn apply_bindings_keeping_non_local_variables(templ: &Atom, bindings: &Bindings, local: &HashSet<VariableAtom>) -> Atom {
+    let mut result = templ.clone();
+    for it in result.iter_mut() {
+        match it {
             Atom::Variable(var) => {
-                vars.get(var).map(|v| *var = v.clone());
+                match bindings.resolve(var) {
+                    Some(Atom::Variable(_)) if !local.contains(var) => {
+                        /* ignore renaming non-local variable */
+                    },
+                    Some(atom) => { *it = atom; },
+                    None => {},
+                }
             },
             _ => {},
         }
-    });
+    }
+    result
 }
+
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct LetVarOp { }
@@ -955,7 +969,7 @@ impl Display for StateAtom {
 
 impl Grounded for StateAtom {
     fn type_(&self) -> Atom {
-        // TODO? Wrap metatypes for non-grounded atoms 
+        // TODO? Wrap metatypes for non-grounded atoms
         // rust_type_atom::<StateAtom>() instead of StateMonad symbol might be used
         let atom = &*self.state.borrow();
         let typ = match atom {
@@ -1493,6 +1507,14 @@ mod tests {
     fn let_op_internal_variables_has_priority_in_template() {
         assert_eq!(LetOp{}.execute(&mut vec![expr!(x), expr!(x "A"), expr!(x)]),
             Ok(vec![expr!(x "A")]));
+    }
+
+    #[test]
+    fn let_op_variables_equality() {
+        assert_eq!(LetOp{}.execute(&mut vec![expr!(f), expr!(x), expr!({LetOp{}} f "f" x)]),
+            Ok(vec![expr!({LetOp{}} x "f" x)]));
+        assert_eq!(LetOp{}.execute(&mut vec![expr!(x), expr!(f), expr!({LetOp{}} f "f" x)]),
+            Ok(vec![expr!({LetOp{}} f "f" f)]));
     }
 
     #[test]
