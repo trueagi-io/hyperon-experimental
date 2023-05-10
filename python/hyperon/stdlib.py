@@ -1,4 +1,4 @@
-from .atoms import GroundedAtom, OperationAtom, ValueAtom, NoReduceError
+from .atoms import Char, GroundedAtom, OperationAtom, ValueAtom, NoReduceError
 from .ext import register_atoms, register_tokens
 
 @register_atoms
@@ -40,6 +40,7 @@ def type_tokens():
         r"\d+(\.\d+)": lambda token: ValueAtom(float(token), 'Number'),
         r"\d+" : lambda token: ValueAtom(int(token), 'Number'),
         "\"[^\"]*\"": lambda token: ValueAtom(str(token[1:-1]), 'String'),
+        "\'[^\']\'": lambda token: ValueAtom(Char(token[1]), 'Char'),
         r"True|False": lambda token: ValueAtom(token == 'True', 'Bool')
     }
 
