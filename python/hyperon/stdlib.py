@@ -1,5 +1,28 @@
-from .atoms import Char, GroundedAtom, OperationAtom, ValueAtom, NoReduceError
+from .atoms import GroundedAtom, OperationAtom, ValueAtom, NoReduceError
 from .ext import register_atoms, register_tokens
+
+class Char:
+    """Emulate Char type as in a traditional FPL"""
+    def __init__(self, char):
+        if len(char) != 1:
+            raise ValueError("A Char object must be initialized with a single character.")
+        self.char = char
+
+    def __str__(self):
+        return self.char
+
+    def __repr__(self):
+        return f"'{self.char}'"
+
+    def __eq__(self, other):
+        if isinstance(other, Char):
+            return self.char == other.char
+        elif isinstance(other, str):
+            return self.char == other
+        return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
 
 @register_atoms
 def arithm_ops():

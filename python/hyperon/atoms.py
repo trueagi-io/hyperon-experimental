@@ -2,31 +2,6 @@ import hyperonpy as hp
 from hyperonpy import AtomKind
 from typing import Union
 
-
-class Char:
-    """Emulate Char type as in a traditional FPL"""
-    def __init__(self, char):
-        if len(char) != 1:
-            raise ValueError("A Char object must be initialized with a single character.")
-        self.char = char
-
-    def __str__(self):
-        return self.char
-
-    def __repr__(self):
-        return f"'{self.char}'"
-
-    def __eq__(self, other):
-        if isinstance(other, Char):
-            return self.char == other.char
-        elif isinstance(other, str):
-            return self.char == other
-        return False
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
-
 class Atom:
 
     def __init__(self, catom):
