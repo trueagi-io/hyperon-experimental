@@ -17,12 +17,7 @@ class Char:
     def __eq__(self, other):
         if isinstance(other, Char):
             return self.char == other.char
-        elif isinstance(other, str):
-            return self.char == other
         return False
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
 
 @register_atoms
 def arithm_ops():
@@ -66,7 +61,6 @@ def type_tokens():
         "\'[^\']\'": lambda token: ValueAtom(Char(token[1]), 'Char'),
         r"True|False": lambda token: ValueAtom(token == 'True', 'Bool')
     }
-
 
 @register_tokens
 def call_atom():
