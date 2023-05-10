@@ -345,6 +345,8 @@ class ExamplesTest(HyperonTestCase):
 
     def test_char_vs_string(self):
         metta = MeTTa()
+        self.assertEqual(repr(metta.run("!('A')")), "[[('A')]]")
+        self.assertEqual(repr(metta.run('!("A")')), '[[("A")]]')
         self.assertEqualMettaRunnerResults(metta.run("!(get-type 'A')"), [[S('Char')]])
         self.assertEqualMettaRunnerResults(metta.run('!(get-type "A")'), [[S('String')]])
 
