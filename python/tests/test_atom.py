@@ -105,7 +105,7 @@ class AtomTest(unittest.TestCase):
         space = GroundingSpace()
         self.assertEqual(interpret(space, E(noReduceAtom, ValueAtom(1))),
                 [E(noReduceAtom, ValueAtom(1))])
-    
+
     def test_match_(self):
         space = GroundingSpace()
         match_atom = MatchableAtomTest(S("MatchableAtom"), type_name=None, atom_id=None)
@@ -119,7 +119,7 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(AtomKind.GROUNDED.name, str(result[0]['atom_type']))
         result = space.query(V("Z"))
         self.assertEqual(S("MatchableAtom").get_name(), str(result[0]['Z']))
-    
+
 # No unwrap
 def x2_op(atom):
     return [ValueAtom(2 * atom.get_object().value)]

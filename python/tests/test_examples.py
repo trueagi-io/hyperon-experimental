@@ -370,7 +370,7 @@ class Global:
 
     def __init__(self, x):
         self.set(x)
-    
+
     def set(self, x):
         self.x = x
 

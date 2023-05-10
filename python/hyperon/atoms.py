@@ -298,10 +298,10 @@ class BindingsSet:
 
     def is_empty(self) -> bool:
         return hp.bindings_set_is_empty(self.c_set)
-    
+
     def is_single(self) -> bool:
         return hp.bindings_set_is_single(self.c_set)
-    
+
     def push(self, bindings: Bindings):
         hp.bindings_set_push(self.c_set, bindings.cbindings)
 
