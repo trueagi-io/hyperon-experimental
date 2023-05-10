@@ -343,6 +343,12 @@ class ExamplesTest(HyperonTestCase):
         self.assertEqualMettaRunnerResults(metta.run('!(achieve (visit Kim))'),
             [metta.parse_all('False True')])
 
+    def test_char_vs_string(self):
+        metta = MeTTa()
+        self.assertEqualMettaRunnerResults(metta.run("!(get-type 'A')"), [[S('Char')]])
+        self.assertEqualMettaRunnerResults(metta.run('!(get-type "A")'), [[S('String')]])
+
+
 class SomeObject():
 
     def __init__(self):
