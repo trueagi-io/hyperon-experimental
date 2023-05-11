@@ -1,6 +1,24 @@
 from .atoms import GroundedAtom, OperationAtom, ValueAtom, NoReduceError
 from .ext import register_atoms, register_tokens
 
+class Char:
+    """Emulate Char type as in a traditional FPL"""
+    def __init__(self, char):
+        if len(char) != 1:
+            raise ValueError("A Char object must be initialized with a single character.")
+        self.char = char
+
+    def __str__(self):
+        return self.char
+
+    def __repr__(self):
+        return f"'{self.char}'"
+
+    def __eq__(self, other):
+        if isinstance(other, Char):
+            return self.char == other.char
+        return False
+
 @register_atoms
 def arithm_ops():
     subAtom = OperationAtom('-', lambda a, b: a - b, ['Number', 'Number', 'Number'])
@@ -40,9 +58,9 @@ def type_tokens():
         r"\d+(\.\d+)": lambda token: ValueAtom(float(token), 'Number'),
         r"\d+" : lambda token: ValueAtom(int(token), 'Number'),
         "\"[^\"]*\"": lambda token: ValueAtom(str(token[1:-1]), 'String'),
+        "\'[^\']\'": lambda token: ValueAtom(Char(token[1]), 'Char'),
         r"True|False": lambda token: ValueAtom(token == 'True', 'Bool')
     }
-
 
 @register_tokens
 def call_atom():
