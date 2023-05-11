@@ -18,17 +18,23 @@ set(RUST_BUILD_SUFFIX $<IF:${IS_RELEASE_BUILD},release,debug>)
 add_custom_target(show-build-type-vars COMMAND ${CMAKE_COMMAND} -E echo
     "CMAKE_BUILD_TYPE:${BUILD_TYPE} IS_RELEASE_BUILD=${IS_RELEASE_BUILD} RUST_BUILD_SUFFIX=${RUST_BUILD_SUFFIX}")
 
-set(HYPERONC_LIB_FILE ${CMAKE_SHARED_LIBRARY_PREFIX}hyperonc${CMAKE_SHARED_LIBRARY_SUFFIX})
-set(HYPERONC_LIB_PATH ${RUST_TARGET_DIR}/${HYPERONC_LIB_FILE})
+set(HYPERONC_SHARED_LIB_FILE ${CMAKE_SHARED_LIBRARY_PREFIX}hyperonc${CMAKE_SHARED_LIBRARY_SUFFIX})
+set(HYPERONC_SHARED_LIB_PATH ${RUST_TARGET_DIR}/${HYPERONC_SHARED_LIB_FILE})
+set(HYPERONC_STATIC_LIB_FILE ${CMAKE_STATIC_LIBRARY_PREFIX}hyperonc${CMAKE_STATIC_LIBRARY_SUFFIX})
+set(HYPERONC_STATIC_LIB_PATH ${RUST_TARGET_DIR}/${HYPERONC_STATIC_LIB_FILE})
 set(HYPERONC_INCLUDE_DIR ${RUST_TARGET_DIR}/hyperon)
 
 add_custom_target(build-hyperonc ALL
     COMMAND cargo build
         $<${IS_RELEASE_BUILD}:--release>
         --target-dir ${RUST_TARGET_DIR}
+
     COMMAND ${CMAKE_COMMAND} -E copy
-        ${RUST_TARGET_DIR}/${RUST_BUILD_SUFFIX}/${HYPERONC_LIB_FILE}
-        ${HYPERONC_LIB_PATH}
+    ${RUST_TARGET_DIR}/${RUST_BUILD_SUFFIX}/${HYPERONC_SHARED_LIB_FILE}
+        ${HYPERONC_SHARED_LIB_PATH}
+    COMMAND ${CMAKE_COMMAND} -E copy
+    ${RUST_TARGET_DIR}/${RUST_BUILD_SUFFIX}/${HYPERONC_STATIC_LIB_FILE}
+        ${HYPERONC_STATIC_LIB_PATH}
 
     COMMAND ${CMAKE_COMMAND} -E make_directory ${HYPERONC_INCLUDE_DIR}
     COMMAND cbindgen
@@ -37,20 +43,28 @@ add_custom_target(build-hyperonc ALL
 
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-add_library(hyperonc SHARED IMPORTED GLOBAL)
 # cmake checks INTERFACE_INCLUDE_DIRECTORIES contains existing path
 execute_process(COMMAND mkdir -p ${RUST_TARGET_DIR})
-set_target_properties(hyperonc PROPERTIES
-    IMPORTED_LOCATION "${HYPERONC_LIB_PATH}"
+
+add_library(hyperonc-shared SHARED IMPORTED GLOBAL)
+set_target_properties(hyperonc-shared PROPERTIES
+    IMPORTED_LOCATION "${HYPERONC_SHARED_LIB_PATH}"
     INTERFACE_INCLUDE_DIRECTORIES "${RUST_TARGET_DIR}"
-    # required to import hyperonc by name not by relative path
+    # required to import hyperonc-shared by name not by relative path
     IMPORTED_NO_SONAME TRUE
     )
-add_dependencies(hyperonc build-hyperonc)
+add_dependencies(hyperonc-shared build-hyperonc)
+
+add_library(hyperonc-static STATIC IMPORTED GLOBAL)
+set_target_properties(hyperonc-static PROPERTIES
+    IMPORTED_LOCATION "${HYPERONC_STATIC_LIB_PATH}"
+    INTERFACE_INCLUDE_DIRECTORIES "${RUST_TARGET_DIR}"
+    )
+add_dependencies(hyperonc-static build-hyperonc)
 
 add_subdirectory(tests)
 
-install(FILES ${HYPERONC_LIB_PATH} DESTINATION lib)
+install(FILES ${HYPERONC_SHARED_LIB_PATH} ${HYPERONC_STATIC_LIB_PATH} DESTINATION lib)
 install(DIRECTORY ${HYPERONC_INCLUDE_DIR} DESTINATION include)
 
 add_test(NAME rust_c_api COMMAND cargo test --target-dir ${RUST_TARGET_DIR}
