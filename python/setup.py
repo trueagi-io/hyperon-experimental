@@ -46,7 +46,7 @@ setup(
     long_description_content_type="text/markdown",
     long_description="Hyperon API in Python",
     packages=["hyperon"],
-    package_data={"hyperon": ["*.so"]},
+    package_data={"hyperon": ["*.so", "*.dylib"]},
     install_requires=[
         'importlib-metadata; python_version < "3.8"',
     ],

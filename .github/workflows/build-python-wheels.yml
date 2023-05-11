@@ -72,10 +72,12 @@ jobs:
         # see https://github.com/conan-io/conan/issues/4322
         cmake -DPython3_EXECUTABLE=`which python` -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Release ..
         make
-        ls -l ./c
-        ls -1 ./c/cargo
-        #cp ./python/*.so  ./c/cargo/*.so ../python/hyperon
         cp ./python/*.so  ../python/hyperon
+        if [[ "${{ matrix.os }}" == *"macos"* ]]; then
+          cp ./c/cargo/*.dylib ../python/hyperon
+        else
+          cp ./c/cargo/*.so ../python/hyperon
+        fi
 
     - name: Install dependencies
       run: |
