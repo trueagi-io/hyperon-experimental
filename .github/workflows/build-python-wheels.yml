@@ -64,6 +64,7 @@ jobs:
 
     - name: Setup C API build
       run: |
+        conan profile new --detect default
         mkdir -p build
         cd build
         # specify C compiler as conan could not find it automatically
