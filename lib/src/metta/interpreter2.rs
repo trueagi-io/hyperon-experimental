@@ -511,6 +511,49 @@ mod tests {
         assert_eq!(result, vec![atom("(a b c)", bind!{})]);
     }
 
+    #[test]
+    fn metta_turing_machine() {
+        let space = space("
+            (= (tm $rule $state $tape)
+              (match $state HALT
+                $tape
+                (chain (eval (read $tape)) $char
+                  (chain (eval ($rule $state $char)) $res
+                    (match $res ($next-state $next-char $dir)
+                      (chain (eval (move $tape $next-char $dir)) $next-tape
+                        (eval (tm $rule $next-state $next-tape)) )
+                      (Error (tm $rule $state $tape) \"Incorrect state\") )))))
+
+            (= (read ($head $hole $tail)) $hole)
+
+            (= (move ($head $hole $tail) $char N) ($head $char $tail))
+            (= (move ($head $hole $tail) $char L)
+              (chain (cons $char $head) $next-head
+                (chain (decons $tail) $list
+                  (match $list ($next-hole $next-tail)
+                    ($next-head $next-hole $next-tail)
+                    ($next-head 0 ()) ))))
+            (= (move ($head $hole $tail) $char R)
+              (chain (cons $char $tail) $next-tail
+                (chain (decons $head) $list
+                  (match $list ($next-hole $next-head)
+                    ($next-head $next-hole $next-tail)
+                    (() 0 $next-tail) ))))
+
+            (= (busy-beaver A 0) (B 1 R))
+            (= (busy-beaver A 1) (C 1 L))
+
+            (= (busy-beaver B 0) (A 1 L))
+            (= (busy-beaver B 1) (B 1 R))
+
+            (= (busy-beaver C 0) (B 1 L))
+            (= (busy-beaver C 1) (HALT 1 N))
+
+        ");
+        let result = interpret(space, &metta_atom("(eval (tm busy-beaver A (() 0 ())))"));
+        assert_eq!(result, Ok(vec![metta_atom("((1 1) 1 (1 1 1))")]));
+    }
+
 
     fn atom(text: &str, bindings: Bindings) -> InterpretedAtom {
         InterpretedAtom(metta_atom(text), bindings)
