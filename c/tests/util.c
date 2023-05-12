@@ -3,6 +3,10 @@
 
 #include "util.h"
 
+void str_to_buf(const char *str, void *context) {
+    strncpy(context, str, BUF_SIZE);
+};
+
 void return_string(char const* value, void* context) {
     char** buffer = context;
     size_t length = strlen(value);

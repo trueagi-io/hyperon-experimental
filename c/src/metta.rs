@@ -96,8 +96,18 @@ pub unsafe extern "C" fn check_type(space: *const grounding_space_t, atom: *cons
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn check_type_v2(space: *const space_t, atom: *const atom_t, typ: *const atom_t) -> bool {
+    hyperon::metta::types::check_type((*space).borrow().deref().as_space(), &(*atom).atom, &(*typ).atom)
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn validate_atom(space: *const grounding_space_t, atom: *const atom_t) -> bool {
     hyperon::metta::types::validate_atom((*space).borrow().deref(), &(*atom).atom)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn validate_atom_v2(space: *const space_t, atom: *const atom_t) -> bool {
+    hyperon::metta::types::validate_atom((*space).borrow().deref().as_space(), &(*atom).atom)
 }
 
 #[no_mangle]
@@ -109,6 +119,15 @@ pub extern "C" fn get_atom_types(space: *const grounding_space_t, atom: *const a
     return_atoms(&types, callback, context);
 }
 
+#[no_mangle]
+pub extern "C" fn get_atom_types_v2(space: *const space_t, atom: *const atom_t,
+        callback: c_atoms_callback_t, context: *mut c_void) {
+    let space = unsafe{ &(*space).borrow() };
+    let atom = unsafe{ &(*atom).atom };
+    let types = hyperon::metta::types::get_atom_types(space.deref().as_space(), atom);
+    return_atoms(&types, callback, context);
+}
+
 // MeTTa interpreter API
 
 pub struct step_result_t<'a> {
@@ -117,6 +136,14 @@ pub struct step_result_t<'a> {
 
 #[no_mangle]
 pub extern "C" fn interpret_init<'a>(space: *mut grounding_space_t, expr: *const atom_t) -> *mut step_result_t<'a> {
+    let space = unsafe{ &(*space) };
+    let expr = unsafe{ &(*expr) };
+    let step = interpreter::interpret_init(space.shared(), &expr.atom);
+    Box::into_raw(Box::new(step_result_t{ result: step }))
+}
+
+#[no_mangle]
+pub extern "C" fn interpret_init_v2<'a>(space: *mut space_t, expr: *const atom_t) -> *mut step_result_t<'a> {
     let space = unsafe{ &(*space) };
     let expr = unsafe{ &(*expr) };
     let step = interpreter::interpret_init(space.shared(), &expr.atom);
