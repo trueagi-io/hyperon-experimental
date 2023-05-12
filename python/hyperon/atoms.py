@@ -115,6 +115,12 @@ class GroundedObject:
         self.id = id
 
     def __repr__(self):
+        # Overwrite Python default representation of a string to use
+        # double quotes instead of single quotes.
+        if isinstance(self.content, str):
+            return f'"{self.content}"'
+
+        # Use default representation for everything else
         return repr(self.content) if self.id is None else self.id
 
     def copy(self):
@@ -298,10 +304,10 @@ class BindingsSet:
 
     def is_empty(self) -> bool:
         return hp.bindings_set_is_empty(self.c_set)
-    
+
     def is_single(self) -> bool:
         return hp.bindings_set_is_single(self.c_set)
-    
+
     def push(self, bindings: Bindings):
         hp.bindings_set_push(self.c_set, bindings.cbindings)
 
