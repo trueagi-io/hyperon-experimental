@@ -745,17 +745,17 @@ mod tests {
     }
 
     #[derive(Debug, Clone, PartialEq)]
-    struct GroundedAtomWithParameterizedType();
+    struct GroundedAtomWithParameterizedType(Atom);
 
     impl std::fmt::Display for GroundedAtomWithParameterizedType {
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(f, "GroundedAtomWithParameterizedType")
+            write!(f, "GroundedAtomWithParameterizedType({})", self.0)
         }
     }
 
     impl Grounded for GroundedAtomWithParameterizedType {
         fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, Atom::var("t"), Atom::var("t")])
+            self.0.clone()
         }
 
         fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
@@ -768,12 +768,31 @@ mod tests {
 
     #[test]
     fn get_atom_types_variables_are_substituted_for_grounded_atom_type() {
-        let gnd = GroundedAtomWithParameterizedType();
-        let expected_type = gnd.type_();
-        let actual_type = get_atom_types(&GroundingSpace::new(), &Atom::gnd(gnd));
-        assert_eq!(actual_type.len(), 1);
-        assert_ne!(actual_type[0], expected_type);
-        assert!(atoms_are_equivalent(&actual_type[0], &expected_type));
+        let actual_type = Atom::var("t");
+        let gnd = GroundedAtomWithParameterizedType(actual_type.clone());
+        let resolved_type = get_atom_types(&GroundingSpace::new(), &Atom::gnd(gnd));
+        assert_eq!(resolved_type.len(), 1);
+        assert_ne!(resolved_type[0], actual_type);
+        assert!(atoms_are_equivalent(&resolved_type[0], &actual_type));
+    }
+
+    #[test]
+    fn parameterized_atom_types_should_not_conflict() {
+        let actual_type = Atom::expr([ARROW_SYMBOL, Atom::var("t"), Atom::var("t")]);
+        let gnd_1 = GroundedAtomWithParameterizedType(actual_type.clone());
+        let gnd_2 = GroundedAtomWithParameterizedType(actual_type.clone());
+        let resolved_type_1 = get_atom_types(&GroundingSpace::new(), &Atom::gnd(gnd_1));
+        let resolved_type_2 = get_atom_types(&GroundingSpace::new(), &Atom::gnd(gnd_2));
+
+        //Types of gnd_1 and gnd_2 are different in the space
+        assert_ne!(resolved_type_1, resolved_type_2);
+
+        //But the types are still equivalent
+        assert_eq!(resolved_type_1.len(), 1);
+        assert_eq!(resolved_type_2.len(), 1);
+        assert!(atoms_are_equivalent(&resolved_type_1[0], &actual_type));
+        assert!(atoms_are_equivalent(&resolved_type_2[0], &actual_type));
+        assert!(atoms_are_equivalent(&resolved_type_1[0], &resolved_type_2[0]));
     }
 
     #[test]
