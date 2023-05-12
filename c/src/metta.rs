@@ -77,8 +77,9 @@ pub extern "C" fn sexpr_parser_free(parser: *mut sexpr_parser_t) {
 #[no_mangle]
 pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
         tokenizer: *const tokenizer_t) -> *mut atom_t {
-    (*parser).borrow_mut().parse(&(*tokenizer).borrow())
-        .unwrap().map_or(std::ptr::null_mut(), |atom| { atom_into_ptr(atom) })
+            (*parser).borrow_mut().parse(&(*tokenizer).borrow())
+            .unwrap()
+            .map_or(std::ptr::null_mut(), |atom| { atom_into_ptr(atom) })
 }
 
 #[no_mangle] pub extern "C" fn ATOM_TYPE_UNDEFINED() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_UNDEFINED) }
