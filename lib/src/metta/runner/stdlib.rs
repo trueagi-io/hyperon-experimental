@@ -955,7 +955,7 @@ impl Display for StateAtom {
 
 impl Grounded for StateAtom {
     fn type_(&self) -> Atom {
-        // TODO? Wrap metatypes for non-grounded atoms 
+        // TODO? Wrap metatypes for non-grounded atoms
         // rust_type_atom::<StateAtom>() instead of StateMonad symbol might be used
         let atom = &*self.state.borrow();
         let typ = match atom {
@@ -1180,6 +1180,11 @@ mod tests {
     use super::*;
     use crate::metta::runner::*;
     use crate::metta::types::validate_atom;
+
+    fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
+        let metta = new_metta_rust();
+        metta.run(&mut SExprParser::new(program))
+    }
 
     #[test]
     fn match_op() {
@@ -1493,6 +1498,42 @@ mod tests {
     fn let_op_internal_variables_has_priority_in_template() {
         assert_eq!(LetOp{}.execute(&mut vec![expr!(x), expr!(x "A"), expr!(x)]),
             Ok(vec![expr!(x "A")]));
+    }
+
+    #[ignore]
+    #[test]
+    fn let_op_keep_variables_equalities_issue290() {
+        assert_eq_metta_results!(run_program("!(let* (($f f) ($f $x)) $x)"), Ok(vec![vec![expr!("f")]]));
+        assert_eq_metta_results!(run_program("!(let* (($f $x) ($f f)) $x)"), Ok(vec![vec![expr!("f")]]));
+        assert_eq_metta_results!(run_program("!(let ($x $x) ($z $y) (let $y A ($z $y)))"), Ok(vec![vec![expr!("A" "A")]]));
+        assert_eq_metta_results!(run_program("!(let ($x $x) ($z $y) (let $z A ($z $y)))"), Ok(vec![vec![expr!("A" "A")]]));
+    }
+
+    #[test]
+    fn let_op_variables_visibility_pr262() {
+        let program = "
+            ;; Knowledge
+            (→ P Q)
+            (→ Q R)
+
+            ;; Rule
+            (= (rule (→ $p $q) (→ $q $r)) (→ $p $r))
+
+            ;; Query (does not work as expected)
+            (= (query $kb)
+               (let* (($pq (→ $p $q))
+                      ($qr (→ $q $r)))
+                 (match $kb
+                   ;; Premises
+                   (, $pq $qr)
+                   ;; Conclusion
+                   (rule $pq $qr))))
+
+            ;; Call
+            !(query &self)
+            ;; [(→ P R)]
+        ";
+        assert_eq_metta_results!(run_program(program), Ok(vec![vec![expr!("→" "P" "R")]]));
     }
 
     #[test]
