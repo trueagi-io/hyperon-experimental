@@ -612,7 +612,7 @@ impl Display for Bindings {
                 write!(f, "{}{}", prefix, var)?;
             }
             match self.value_by_id.get(id) {
-                Some(value) => write!(f, " = {}", value)?,
+                Some(value) => write!(f, " <- {}", value)?,
                 None => {},
             }
         }

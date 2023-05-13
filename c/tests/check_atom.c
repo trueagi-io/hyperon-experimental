@@ -69,8 +69,8 @@ START_TEST (test_bindings_set)
 
     char str_buf[BUF_SIZE];
     bindings_set_iterate(set_1, &bindings_to_buf, &str_buf);
-    ck_assert(strlen(str_buf) == 45); //It's a pain to test every combinitory string, but they are all the same length
     //printf("%s\n\n", str_buf);
+    ck_assert(strlen(str_buf) == 49); //It's a pain to test every combinitory string, but they are all the same length
 
     //Don't need to free bindings_a, because ownership was consumed into set_1 by bindings_merge_v2
     bindings_free(bindings_b);
