@@ -561,6 +561,51 @@ impl Bindings {
         bindings
     }
 
+    /// Remove variable equalities from the Bindings and represent them as a
+    /// variable values. Set of preferred variables is used to select the top
+    /// level variable name. For example, variable bindings `{ $a = $b <- A }`
+    /// is converted into `{ $a <- A, $b <- $a }` when preferred vars set is
+    /// `{ $a }`, and into `{ $b <- A, $a <- $b }` when preferred vars set is
+    /// `{ $b }`.
+    pub fn convert_var_equalities_to_bindings(mut self, preferred_vars: &HashSet<VariableAtom>) -> Self {
+        let trace_self = match log::log_enabled!(log::Level::Trace) {
+            true => Some(self.clone()),
+            false => None
+        };
+        let mut value_vars: HashMap<u32, &VariableAtom> = HashMap::new();
+        let mut renamed_vars: HashMap<VariableAtom, VariableAtom> = HashMap::new();
+        for (var, var_id) in &self.id_by_var {
+            if let Some(&top_level_var) = value_vars.get(var_id) {
+                if top_level_var != var {
+                    renamed_vars.insert(var.clone(), top_level_var.clone());
+                }
+            } else {
+                if preferred_vars.contains(var) {
+                    value_vars.insert(*var_id, var);
+                } else {
+                    let new_var = self.var_by_id(*var_id, |v| preferred_vars.contains(v));
+                    match new_var {
+                        Some(new_var) => {
+                            value_vars.insert(*var_id, new_var);
+                            renamed_vars.insert(var.clone(), new_var.clone());
+                        },
+                        None => {
+                            value_vars.insert(*var_id, var);
+                        },
+                    }
+                }
+            }
+        }
+        for (old_var, new_var) in renamed_vars {
+            self.remove(&old_var);
+            self.add_var_binding(old_var, Atom::Variable(new_var));
+        }
+        if let Some(self_copy) = trace_self {
+            log::trace!("Bindings::convert_var_equalities_to_bindings: preferred_vars: {:?}, {} -> {}", preferred_vars, self_copy, self);
+        }
+        self
+    }
+
     fn has_loops(&self) -> bool {
         let vars_by_id = self.vars_by_id();
         for (var_id, value) in &self.value_by_id {
@@ -1397,6 +1442,27 @@ mod test {
             VariableAtom::new("z")]));
 
         assert_eq!(narrow, bind!{ y: expr!(z) });
+        Ok(())
+    }
+
+    #[test]
+    fn bindings_convert_var_equalities_to_bindings() -> Result<(), &'static str> {
+        let bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
+            .add_var_binding_v2(VariableAtom::new("a"), expr!("A"))?;
+
+        let result = bindings.clone().convert_var_equalities_to_bindings(&[VariableAtom::new("a")].into());
+        let expected = Bindings::new()
+            .add_var_binding_v2(VariableAtom::new("a"), expr!("A"))?
+            .add_var_binding_v2(&VariableAtom::new("b"), expr!(a))?;
+        assert_eq!(result, expected);
+
+        let result = bindings.clone().convert_var_equalities_to_bindings(&[VariableAtom::new("b")].into());
+        let expected = Bindings::new()
+            .add_var_binding_v2(VariableAtom::new("b"), expr!("A"))?
+            .add_var_binding_v2(&VariableAtom::new("a"), expr!(b))?;
+        assert_eq!(result, expected);
+
         Ok(())
     }
 
