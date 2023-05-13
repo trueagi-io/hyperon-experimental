@@ -428,7 +428,9 @@ impl Bindings {
             });
 
         let results = results.into_iter().map(|(result, _)| result).collect();
-        log::trace!("Bindings::merge: {} ^ {} -> {:?}", trace_self.unwrap(), b, results);
+        if let Some(self_copy) = trace_self {
+            log::trace!("Bindings::merge: {} ^ {} -> {:?}", self_copy, b, results);
+        }
         results
     }
 
