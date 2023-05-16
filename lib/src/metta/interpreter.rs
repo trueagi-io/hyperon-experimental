@@ -186,29 +186,27 @@ impl InterpreterCache {
     }
 
     fn get(&self, key: &Atom, current_bindings: &Bindings) -> Option<Results> {
-        self.0.get(key).map(|results| -> Option<Results> {
-                let mut inconsistent = Vec::new();
-                let mut result = Vec::new();
-                for res in results {
-                    let merged = Bindings::merge(res.bindings(), &current_bindings);
-                    if let Some(merged) = merged {
-                        result.push(InterpretedAtom(res.atom().clone(), merged));
-                    } else {
-                        inconsistent.push(res);
-                    }
-                }
-                if inconsistent.is_empty() {
-                    Some(result)
+        self.0.get(key).map(|results| {
+            let mut result = Vec::new();
+            for res in results {
+                let atom = if res.atom() != key {
+                    make_variables_unique(res.atom().clone())
                 } else {
-                    log::debug!("get_cached: return None as some results has inconsistent bindings");
-                    log::debug!("get_cached: current bindings: {}, inconsistent results: {:?}", current_bindings, inconsistent);
-                    None
-                }
-            }).flatten()
+                    res.atom().clone()
+                };
+                result.push(InterpretedAtom(atom, current_bindings.clone()));
+            }
+            result
+        })
     }
 
     fn insert(&mut self, key: Atom, value: Results) {
-        self.0.insert(key, value)
+        let has_non_empty_bindings = value.iter()
+            .any(|InterpretedAtom(_atom, bindings)| !bindings.is_empty());
+        // non-empty bindings require variable renaming when extracting results from cache
+        if !has_non_empty_bindings {
+            self.0.insert(key, value)
+        }
     }
 
     fn reset(&mut self) {
