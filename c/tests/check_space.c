@@ -17,6 +17,11 @@ struct output_t {
     char len;
 };
 
+void reset_output(struct output_t* output) {
+    output->str[0] = 0;
+    output->len = 0;
+}
+
 void copy_to_output(char const* str, void* context) {
     struct output_t *output = context;
     output->len += snprintf(output->str + output->len, 1024 - output->len, "%s, ", str);
@@ -36,6 +41,12 @@ void query_callback(struct bindings_t const* results, void* data)
     struct output_t* out = data;
 
     bindings_traverse(results, query_callback_single_atom, out);
+}
+
+void atom_callback(const atom_t* atom, void* data)
+{
+    struct output_t* out = data;
+    atom_to_str(atom, copy_to_output, out);
 }
 
 START_TEST (test_query)
@@ -179,6 +190,13 @@ START_TEST (test_custom_c_space)
     struct output_t result = { "", 0 };
     space_query(space, query, query_callback, &result);
     ck_assert_str_eq(result.str, "b: B, ");
+
+    //Test that we can iterate the atoms in the space
+    reset_output(&result);
+    space_iterate(space, atom_callback, &result);
+    ck_assert_str_eq(result.str, "(+ $a B), ");
+
+    ck_assert_int_eq(space_atom_count(space), 1);
 
     custom_space_buf* c_space_buf = space_get_payload(space);
     ck_assert(c_space_buf->atom_count == 1);

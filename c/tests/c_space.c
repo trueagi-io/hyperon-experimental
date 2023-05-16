@@ -124,6 +124,33 @@ bool replace_atom(const space_params_t* params, const atom_t* from, atom_t* to) 
     }
 }
 
+size_t atom_count(const space_params_t* params) {
+    custom_space_buf* space = params->payload;
+    return space->atom_count;
+}
+
+void* new_atom_iterator_state(const space_params_t* params) {
+    custom_space_buf* space = params->payload;
+    atom_list_item** cur_item_ptr = malloc(sizeof(atom_list_item*));
+    *cur_item_ptr = space->atoms;
+    return cur_item_ptr;
+}
+
+const atom_t* next_atom(const space_params_t* params, void* iterator_state) {
+    atom_list_item** cur_item_ptr = iterator_state;
+    if (*cur_item_ptr != NULL) {
+        atom_t* atom_to_return = (*cur_item_ptr)->atom;
+        *cur_item_ptr = (*cur_item_ptr)->next;
+        return atom_to_return;
+    } else {
+        return NULL;
+    }
+}
+
+void free_atom_iterator_state(const space_params_t* params, void* iterator_state) {
+    free(iterator_state);
+}
+
 void free_payload(void* space_ptr) {
     custom_space_buf* space = space_ptr;
 
@@ -145,6 +172,10 @@ static space_api_t const C_SPACE_API= {
     .add = &add_atom,
     .remove = &remove_atom,
     .replace = &replace_atom,
+    .atom_count = &atom_count,
+    .new_atom_iterator_state = &new_atom_iterator_state,
+    .next_atom = &next_atom,
+    .free_atom_iterator_state = &free_atom_iterator_state,
     .free_payload = &free_payload
 };
 

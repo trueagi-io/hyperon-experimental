@@ -211,6 +211,32 @@ pub extern "C" fn space_observer_free(observer: *mut space_observer_t) {
 ///   \arg to \c is the atom to replace it with.  This function SHOULD take ownership of the `to` atom.
 ///   Returns `true` if the atom was replaced, otherwise returns `false`
 ///
+/// atom_count
+///   \arg params \c is the pointer to the space's params
+///   NOTE: If an atom_count function is provided, it will be called.  NULL should be provided for spaces
+///     that cannot readily determine the number of contained atoms
+/// 
+/// new_atom_iterator_state
+///   \arg params \c is the pointer to the space's params
+///   Returns an allocated pointer to state necessary to perform an iteration over all atoms
+///   NOTE: The new_atom_iterator_state function is optional.  NULL should be provided for spaces
+///     that cannot traverse all contained atoms in an orderly way
+/// 
+/// next_atom
+///   \arg params \c is the pointer to the space's params
+///   \arg state \c is the buffer allocated by new_atom_iterator_state
+///   Returns a pointer to the next atom in the iteration sequence.  The returned pointer should point
+///   to an atom owned by the space, and thus the implementation will not free it.  This function should
+///   return NULL to signal the iteration has finished.
+///   NOTE: The next_atom function is optional.  NULL should be provided for spaces that cannot
+///     traverse all contained atoms in an orderly way.
+/// 
+/// free_atom_iterator_state
+///   \arg params \c is the pointer to the space's params
+///   \arg state \c is the buffer allocated by new_atom_iterator_state, that must be freed
+///   NOTE: The free_atom_iterator_state function is optional.  NULL should be provided for spaces
+///     that cannot traverse all contained atoms in an orderly way
+/// 
 /// free_payload
 ///   \arg payload \c is the pointer to the space's payload
 ///   NOTE: This function is responsible for freeing the payload buffer, as well as any other objects
@@ -227,6 +253,14 @@ pub struct space_api_t {
     remove: extern "C" fn(params: *const space_params_t, atom: *const atom_t) -> bool,
 
     replace: extern "C" fn(params: *const space_params_t, from: *const atom_t, to: *mut atom_t) -> bool,
+
+    atom_count: Option<extern "C" fn(params: *const space_params_t) -> usize>,
+
+    new_atom_iterator_state: Option<extern "C" fn(params: *const space_params_t) -> *mut c_void>,
+
+    next_atom: Option<extern "C" fn(params: *const space_params_t, state: *mut c_void) -> *const atom_t>,
+
+    free_atom_iterator_state: Option<extern "C" fn(params: *const space_params_t, state: *mut c_void)>,
 
     free_payload: extern "C" fn(payload: *mut c_void),
 }
@@ -302,6 +336,54 @@ impl Space for CSpace {
             DefaultSpace(self).subst(pattern, tmpl)
         }
     }
+    fn atom_count(&self) -> Option<usize> {
+        let api = unsafe{ &*self.api };
+        if let Some(atom_count_fn) = api.atom_count {
+            let count = atom_count_fn(&self.params);
+            Some(count)
+        } else {
+            None
+        }
+    }
+    fn atom_iter(&self) -> Option<SpaceIter> {
+        struct CSpaceIterator<'a>(&'a CSpace, *mut c_void);
+        impl<'a> Iterator for CSpaceIterator<'a> {
+            type Item = &'a Atom;
+            fn next(&mut self) -> Option<&'a Atom> {
+                let api = unsafe{ &*self.0.api };
+                if let Some(next_atom) = api.next_atom {
+                    let atom_ptr = next_atom(&self.0.params, self.1);
+                    if atom_ptr.is_null() {
+                        None
+                    } else {
+                        let atom = unsafe { &(*atom_ptr).atom };
+                        Some(atom)
+                    }
+                } else {
+                    panic!("next_atom function must be implemented if new_atom_iterator_state is implemented");
+                }
+            }
+        }
+        impl Drop for CSpaceIterator<'_> {
+            fn drop(&mut self) {
+                let api = unsafe{ &*self.0.api };
+                if let Some(free_atom_iterator_state) = api.free_atom_iterator_state {
+                    free_atom_iterator_state(&self.0.params, self.1);
+                } else {
+                    panic!("free_atom_iterator_state function must be implemented if new_atom_iterator_state is implemented");
+                }
+            }
+        }
+
+        let api = unsafe{ &*self.api };
+        if let Some(new_atom_iterator_state) = api.new_atom_iterator_state {
+            let ctx = new_atom_iterator_state(&self.params);
+            let new_iter = CSpaceIterator(self, ctx);
+            Some(SpaceIter::new(new_iter))
+        } else {
+            None
+        }
+    }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -312,6 +394,8 @@ struct DefaultSpace<'a>(&'a CSpace);
 impl Space for DefaultSpace<'_> {
     fn register_observer(&self, _observer: Rc<RefCell<dyn SpaceObserver>>) {}
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
+    fn atom_count(&self) -> Option<usize> { self.0.atom_count() }
+    fn atom_iter(&self) -> Option<SpaceIter> { self.0.atom_iter() }
     fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self.0) }
 }
 
@@ -419,6 +503,28 @@ pub extern "C" fn space_subst(space: *const space_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
     let results = unsafe { (*space).borrow().subst(&((*pattern).atom), &((*templ).atom)) };
     return_atoms(&results, callback, context);
+}
+
+/// NOTE: This function will return -1 for spaces on which it is impossible or impractical
+/// to determine the number of atoms
+#[no_mangle]
+pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
+    match unsafe { (*space).borrow().atom_count() } {
+        Some(count) => count as isize,
+        None => -1
+    }
+}
+
+/// NOTE: This function will do nothing for spaces on which space_atom_count() returns a
+/// non-positive number
+#[no_mangle]
+pub extern "C" fn space_iterate(space: *const space_t,
+        callback: c_atom_callback_t, context: *mut c_void) {
+    if let Some(atom_iter) = unsafe { (*space).borrow().atom_iter() } {
+        for atom in atom_iter {
+            callback((atom as *const Atom).cast(), context);
+        }
+    }
 }
 
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-

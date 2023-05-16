@@ -64,7 +64,7 @@ pub struct SpaceIter<'a> {
 }
 
 impl<'a> SpaceIter<'a> {
-    fn new<I: Iterator<Item=&'a Atom> + 'a>(iter: I) -> Self {
+    pub fn new<I: Iterator<Item=&'a Atom> + 'a>(iter: I) -> Self {
         Self{ iter: Box::new(iter) }
     }
 }
@@ -127,6 +127,12 @@ pub trait Space {
             .map(| bindings | apply_bindings_to_atom(template, &bindings))
             .collect()
     }
+
+    /// Returns the number of Atoms in the space, or None if this can't be determined
+    fn atom_count(&self) -> Option<usize>;
+
+    /// Returns an iterator over every atom in the space, or None if that is not possible
+    fn atom_iter(&self) -> Option<SpaceIter>;
 
     /// Returns an &dyn [Any] for spaces where this is possible
     fn as_any(&self) -> Option<&dyn std::any::Any>;
@@ -208,6 +214,12 @@ impl Space for Box<dyn SpaceMut> {
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         (**self).subst(pattern, template)
     }
+    fn atom_count(&self) -> Option<usize> {
+        (**self).atom_count()
+    }
+    fn atom_iter(&self) -> Option<SpaceIter> {
+        (**self).atom_iter()
+    }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         (*self).as_space().as_any()
     }
@@ -222,6 +234,12 @@ impl<T: Space> Space for Shared<T> {
     }
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         self.borrow().subst(pattern, template)
+    }
+    fn atom_count(&self) -> Option<usize> {
+        self.borrow().atom_count()
+    }
+    fn atom_iter(&self) -> Option<SpaceIter> {
+        None
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
@@ -243,7 +261,6 @@ impl<T: SpaceMut> SpaceMut for Shared<T> {
     }
 }
 
-
 impl<T: Space> Space for &T {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
         T::register_observer(*self, observer)
@@ -253,6 +270,12 @@ impl<T: Space> Space for &T {
     }
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         T::subst(*self, pattern, template)
+    }
+    fn atom_count(&self) -> Option<usize> {
+        T::atom_count(*self)
+    }
+    fn atom_iter(&self) -> Option<SpaceIter> {
+        T::atom_iter(*self)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
@@ -268,6 +291,12 @@ impl<T: Space> Space for &mut T {
     }
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         T::subst(*self, pattern, template)
+    }
+    fn atom_count(&self) -> Option<usize> {
+        T::atom_count(*self)
+    }
+    fn atom_iter(&self) -> Option<SpaceIter> {
+        T::atom_iter(*self)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
