@@ -394,7 +394,7 @@ impl CaseOp {
         let arg_error = || ExecError::from("case expects two arguments: atom and expression of cases");
         let cases = args.pop().ok_or_else(arg_error)?;
         let atom = args.pop().ok_or_else(arg_error)?;
-        let cases = CaseOp::cases_into_tuples(cases)?;
+        let cases = CaseOp::parse_cases(&atom, cases)?;
         log::debug!("CaseOp::execute: atom: {}, cases: {:?}", atom, cases);
 
         let result = interpret_no_error(self.space.clone(), &atom);
@@ -403,7 +403,7 @@ impl CaseOp {
         match result {
             Ok(result) if result.is_empty() => {
                 cases.into_iter()
-                    .find_map(|(pattern, template)| {
+                    .find_map(|(pattern, template, _external_vars)| {
                         if pattern == VOID_SYMBOL {
                             Some(template)
                         } else {
@@ -422,13 +422,16 @@ impl CaseOp {
         }
     }
 
-    fn cases_into_tuples(cases: Atom) -> Result<Vec<(Atom, Atom)>, ExecError> {
+    fn parse_cases(atom: &Atom, cases: Atom) -> Result<Vec<(Atom, Atom, HashSet<VariableAtom>)>, ExecError> {
         let cases = match cases {
             Atom::Expression(expr) => Ok(expr),
             _ => Err("case expects expression of cases as a second argument"),
         }?;
 
-        let mut pairs = Vec::new();
+        let mut atom_vars = HashSet::new();
+        collect_vars(&atom, &mut atom_vars);
+
+        let mut result = Vec::new();
         for next_case in cases.into_children() {
             let mut next_case = match next_case {
                 Atom::Expression(next_case) if next_case.children().len() == 2 => Ok(next_case.into_children()),
@@ -437,19 +440,20 @@ impl CaseOp {
             let mut template = next_case.pop().unwrap();
             let mut pattern = next_case.pop().unwrap();
 
-            let mut local_vars = HashMap::new();
-            introduce_local_vars(&mut pattern, &mut local_vars);
-            replace_vars(&mut template, &local_vars);
+            let mut external_vars = atom_vars.clone();
+            collect_vars(&template, &mut external_vars);
+            make_conflicting_vars_unique(&mut pattern, &mut template, &external_vars);
 
-            pairs.push((pattern, template));
+            result.push((pattern, template, external_vars));
         }
 
-        Ok(pairs)
+        Ok(result)
     }
 
-    fn return_first_matched(atom: &Atom, cases: &Vec<(Atom, Atom)>) -> Vec<Atom> {
-        for (pattern, template) in cases {
-            let bindings = matcher::match_atoms(atom, &pattern);
+    fn return_first_matched(atom: &Atom, cases: &Vec<(Atom, Atom, HashSet<VariableAtom>)>) -> Vec<Atom> {
+        for (pattern, template, external_vars) in cases {
+            let bindings = matcher::match_atoms(atom, &pattern)
+                .map(|b| b.convert_var_equalities_to_bindings(&external_vars));
             let result: Vec<Atom> = bindings.map(|b| matcher::apply_bindings_to_atom(&template, &b)).collect();
             if !result.is_empty() {
                 return result
@@ -842,6 +846,9 @@ impl Display for LetOp {
     }
 }
 
+use std::convert::TryFrom;
+use std::collections::HashSet;
+
 impl Grounded for LetOp {
     fn type_(&self) -> Atom {
         // TODO: Undefined for the argument is necessary to make argument reductable.
@@ -854,12 +861,11 @@ impl Grounded for LetOp {
         let atom = args.pop().ok_or_else(arg_error)?;
         let mut pattern = args.pop().ok_or_else(arg_error)?;
 
-        let mut local_vars = HashMap::new();
-        introduce_local_vars(&mut pattern, &mut local_vars);
-        replace_vars(&mut template, &local_vars);
+        let external_vars = resolve_var_conflicts(&atom, &mut pattern, &mut template);
 
-        let bindings = matcher::match_atoms(&pattern, &atom);
-        let result = bindings.map(|b| matcher::apply_bindings_to_atom(&template, &b)).collect();
+        let bindings = matcher::match_atoms(&pattern, &atom)
+            .map(|b| b.convert_var_equalities_to_bindings(&external_vars));
+        let result = bindings.map(|b| { matcher::apply_bindings_to_atom(&template, &b) }).collect();
         log::debug!("LetOp::execute: pattern: {}, atom: {}, template: {}, result: {:?}", pattern, atom, template, result);
         Ok(result)
     }
@@ -869,26 +875,46 @@ impl Grounded for LetOp {
     }
 }
 
-fn introduce_local_vars(atom: &mut Atom, vars: &mut HashMap<VariableAtom, VariableAtom>) {
-    atom.iter_mut().for_each(|sub| {
-        match sub {
-            Atom::Variable(var) => {
-                *var = vars.entry(var.clone()).or_insert(var.make_unique()).clone();
-            },
-            _ => {},
-        }
-    });
+fn resolve_var_conflicts(atom: &Atom, pattern: &mut Atom, template: &mut Atom) -> HashSet<VariableAtom> {
+    let mut external_vars = HashSet::new();
+    collect_vars(&atom, &mut external_vars);
+    collect_vars(&template, &mut external_vars);
+    make_conflicting_vars_unique(pattern, template, &external_vars);
+    external_vars
 }
 
-fn replace_vars(atom: &mut Atom, vars: &HashMap<VariableAtom, VariableAtom>) {
-    atom.iter_mut().for_each(|sub| {
-        match sub {
-            Atom::Variable(var) => {
-                vars.get(var).map(|v| *var = v.clone());
-            },
-            _ => {},
+fn atom_into_var_iter(atom: &Atom) -> impl Iterator<Item=&VariableAtom> {
+    atom.iter()
+        .map(<&VariableAtom>::try_from)
+        .filter(Result::is_ok)
+        .map(Result::unwrap)
+}
+
+fn atom_into_var_iter_mut(atom: &mut Atom) -> impl Iterator<Item=&mut VariableAtom> {
+    atom.iter_mut()
+        .map(<&mut VariableAtom>::try_from)
+        .filter(Result::is_ok)
+        .map(Result::unwrap)
+}
+
+fn collect_vars(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
+    for var in atom_into_var_iter(atom) {
+        vars.insert(var.clone());
+    }
+}
+
+fn make_conflicting_vars_unique(pattern: &mut Atom, template: &mut Atom, external_vars: &HashSet<VariableAtom>) {
+    let mut local_vars = HashMap::new();
+
+    for var in atom_into_var_iter_mut(pattern) {
+        if external_vars.contains(var) {
+            *var = local_vars.entry(var.clone()).or_insert(var.make_unique()).clone();
         }
-    });
+    }
+
+    for var in atom_into_var_iter_mut(template) {
+        local_vars.get(var).map(|v| *var = v.clone());
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -955,7 +981,7 @@ impl Display for StateAtom {
 
 impl Grounded for StateAtom {
     fn type_(&self) -> Atom {
-        // TODO? Wrap metatypes for non-grounded atoms 
+        // TODO? Wrap metatypes for non-grounded atoms
         // rust_type_atom::<StateAtom>() instead of StateMonad symbol might be used
         let atom = &*self.state.borrow();
         let typ = match atom {
@@ -1180,6 +1206,11 @@ mod tests {
     use super::*;
     use crate::metta::runner::*;
     use crate::metta::types::validate_atom;
+
+    fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
+        let metta = new_metta_rust();
+        metta.run(&mut SExprParser::new(program))
+    }
 
     #[test]
     fn match_op() {
@@ -1493,6 +1524,41 @@ mod tests {
     fn let_op_internal_variables_has_priority_in_template() {
         assert_eq!(LetOp{}.execute(&mut vec![expr!(x), expr!(x "A"), expr!(x)]),
             Ok(vec![expr!(x "A")]));
+    }
+
+    #[test]
+    fn let_op_keep_variables_equalities_issue290() {
+        assert_eq_metta_results!(run_program("!(let* (($f f) ($f $x)) $x)"), Ok(vec![vec![expr!("f")]]));
+        assert_eq_metta_results!(run_program("!(let* (($f $x) ($f f)) $x)"), Ok(vec![vec![expr!("f")]]));
+        assert_eq_metta_results!(run_program("!(let ($x $x) ($z $y) (let $y A ($z $y)))"), Ok(vec![vec![expr!("A" "A")]]));
+        assert_eq_metta_results!(run_program("!(let ($x $x) ($z $y) (let $z A ($z $y)))"), Ok(vec![vec![expr!("A" "A")]]));
+    }
+
+    #[test]
+    fn let_op_variables_visibility_pr262() {
+        let program = "
+            ;; Knowledge
+            (→ P Q)
+            (→ Q R)
+
+            ;; Rule
+            (= (rule (→ $p $q) (→ $q $r)) (→ $p $r))
+
+            ;; Query (does not work as expected)
+            (= (query $kb)
+               (let* (($pq (→ $p $q))
+                      ($qr (→ $q $r)))
+                 (match $kb
+                   ;; Premises
+                   (, $pq $qr)
+                   ;; Conclusion
+                   (rule $pq $qr))))
+
+            ;; Call
+            !(query &self)
+            ;; [(→ P R)]
+        ";
+        assert_eq_metta_results!(run_program(program), Ok(vec![vec![expr!("→" "P" "R")]]));
     }
 
     #[test]
