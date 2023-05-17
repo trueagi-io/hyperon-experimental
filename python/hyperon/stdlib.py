@@ -55,8 +55,9 @@ def bool_ops():
 @register_tokens
 def type_tokens():
     return {
-        r"\d+(\.\d+)": lambda token: ValueAtom(float(token), 'Number'),
-        r"\d+" : lambda token: ValueAtom(int(token), 'Number'),
+        r"[-+]?\d+(\.\d+)": lambda token: ValueAtom(float(token), 'Number'),
+        r"[-+]?\d+(\.\d+)?e[-+]?\d+": lambda token: ValueAtom(float(token), 'Number'),
+        r"[-+]?\d+" : lambda token: ValueAtom(int(token), 'Number'),
         "\"[^\"]*\"": lambda token: ValueAtom(str(token[1:-1]), 'String'),
         "\'[^\']\'": lambda token: ValueAtom(Char(token[1]), 'Char'),
         r"True|False": lambda token: ValueAtom(token == 'True', 'Bool')
