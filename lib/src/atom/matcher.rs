@@ -606,6 +606,14 @@ impl Bindings {
         self
     }
 
+    /// Keep only variables passed in vars
+    pub fn cleanup(&mut self, vars: &HashSet<&VariableAtom>) {
+        let to_remove: HashSet<VariableAtom> = self.id_by_var.iter()
+            .filter_map(|(var, _id)| if !vars.contains(var) { Some(var.clone()) } else { None })
+            .collect();
+        to_remove.into_iter().for_each(|var| { self.id_by_var.remove(&var); });
+    }
+
     fn has_loops(&self) -> bool {
         let vars_by_id = self.vars_by_id();
         for (var_id, value) in &self.value_by_id {
@@ -1549,6 +1557,17 @@ mod test {
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("D"), y: expr!("E") },
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("D"), y: expr!("F") },
         ]);
+    }
+
+    #[test]
+    fn bindings_cleanup() -> Result<(), &'static str> {
+        let mut bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
+            .add_var_binding_v2(VariableAtom::new("b"), expr!("B"))?
+            .add_var_binding_v2(VariableAtom::new("c"), expr!("C"))?;
+        bindings.cleanup(&[&VariableAtom::new("b")].into());
+        assert_eq!(bindings, bind!{ b: expr!("B") });
+        Ok(())
     }
 
 }
