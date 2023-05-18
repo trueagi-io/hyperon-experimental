@@ -85,7 +85,7 @@ impl<'a> SExprParser<'a> {
                 },
                 ')' => return Err("Unexpected right bracket".to_string()),
                 _ => {
-                    return Ok(self.parse_atom(tokenizer)?);
+                    return Ok(Some(self.parse_atom(tokenizer)?));
                 },
             }
         }
@@ -101,13 +101,13 @@ impl<'a> SExprParser<'a> {
         }
     }
 
-    fn parse_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
-        let token = next_token(&mut self.it)?.unwrap();
+    fn parse_atom(&mut self, tokenizer: &Tokenizer) -> Result<Atom, String> {
+        let token = next_token(&mut self.it)?;
         let constr = tokenizer.find_token(token.as_str());
         if let Some(constr) = constr {
-            return Ok(Some(constr(token.as_str())));
+            return Ok(constr(token.as_str()));
         } else {
-            return Ok(Some(Atom::sym(token)));
+            return Ok(Atom::sym(token));
         }
     }
 
@@ -136,15 +136,15 @@ impl<'a> SExprParser<'a> {
 
 }
 
-fn next_token(it: &mut Peekable<Chars<'_>>) -> Result<Option<String>, String> {
+fn next_token(it: &mut Peekable<Chars<'_>>) -> Result<String, String> {
     match it.peek() {
         Some('"') => next_string(it),
-        _ => Ok(Some(next_word(it)?)),
+        _ => Ok(next_word(it)?),
     }
 }
 
 
-fn next_string(it: &mut Peekable<Chars<'_>>) -> Result<Option<String>, String> {
+fn next_string(it: &mut Peekable<Chars<'_>>) -> Result<String, String> {
     let mut token = String::new();
 
     if it.next() != Some('"') {
@@ -152,24 +152,22 @@ fn next_string(it: &mut Peekable<Chars<'_>>) -> Result<Option<String>, String> {
     } else {
         token.push('"');
     }
-    while let Some(&c) = it.peek() {
+    while let Some(c) = it.next() {
         if c == '"' {
             token.push('"');
-            it.next();
             break;
         }
         let c = if c == '\\' {
-            match it.peek() {
-                Some(&c) => c,
-                None => return Err("Escaping sequence is not finished".to_string()), //no idea how to trigger this
+            match it.next() {
+                Some(c) => c,
+                None => return Err("Escaping sequence is not finished".to_string()),
             }
         } else {
             c
         };
         token.push(c);
-        it.next();
     }
-    Ok(Some(token))
+    Ok(token)
 }
 
 fn next_word(it: &mut Peekable<Chars<'_>>) -> Result<String, String> {
@@ -258,28 +256,22 @@ mod tests {
     fn test_next_token() {
         let mut it = "n)".chars().peekable();
 
-        assert_eq!("n".to_string(), next_token(&mut it).unwrap().unwrap());
+        assert_eq!("n".to_string(), next_token(&mut it).unwrap());
         assert_eq!(Some(')'), it.next());
     }
 
     #[test]
     fn test_next_string_errors() {
-
         let mut token = String::new();
         token.push('a');
         let mut it = token.chars().peekable();
         assert_eq!(Err(String::from("Double quote expected")), next_string(&mut it));
 
-
         let mut token = String::new();
         token.push('"');
         token.push('\\');
         let mut it = token.chars().peekable();
-        //assert_eq!(Err(String::from("Escaping sequence is not finished")), next_string(&mut it));
-        let x = next_string(&mut it);
-        println!("val = {:?}", x);
-        //assert_eq!(1,2);
-
+        assert_eq!(Err(String::from("Escaping sequence is not finished")), next_string(&mut it));
     }
 
     #[test]
