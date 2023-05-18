@@ -80,6 +80,8 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
+use std::collections::{HashSet, HashMap};
+use std::convert::TryFrom;
 
 /// Result of atom interpretation plus variable bindings found
 #[derive(Clone, PartialEq)]
@@ -93,7 +95,7 @@ impl InterpretedAtom {
     fn bindings(&self) -> &Bindings {
         &self.1
     }
-    
+
     /// Convert the instance into tuple of [Atom] and [Bindings]
     pub fn into_tuple(self) -> (Atom, Bindings) {
         (self.0, self.1)
@@ -178,6 +180,7 @@ pub fn interpret<T: Space>(space: T, expr: &Atom) -> Result<Vec<Atom>, String> {
 
 // TODO: ListMap is not effective but we cannot use HashMap here without
 // requiring hash functions for the grounded atoms.
+#[derive(Debug)]
 struct InterpreterCache(ListMap<Atom, Results>);
 
 impl InterpreterCache {
@@ -185,35 +188,52 @@ impl InterpreterCache {
         Self(ListMap::new())
     }
 
-    fn get(&self, key: &Atom, current_bindings: &Bindings) -> Option<Results> {
-        self.0.get(key).map(|results| -> Option<Results> {
-                let mut inconsistent = Vec::new();
-                let mut result = Vec::new();
-                for res in results {
-                    let merged = Bindings::merge(res.bindings(), &current_bindings);
-                    if let Some(merged) = merged {
-                        result.push(InterpretedAtom(res.atom().clone(), merged));
-                    } else {
-                        inconsistent.push(res);
+    fn get(&self, key: &Atom) -> Option<Results> {
+        let key_vars: HashSet<&VariableAtom> = atom_into_vars(&key).collect();
+
+        self.0.get(key).map(|results| {
+            let mut result = Vec::new();
+            let mut var_mapping = HashMap::new();
+            for res in results {
+                let mut atom = res.atom().clone();
+                atom_into_vars_mut(&mut atom).for_each(|var| {
+                    if !key_vars.contains(var) {
+                        if !var_mapping.contains_key(var) {
+                            var_mapping.insert(var.clone(), var.make_unique());
+                        }
+                        *var = var_mapping[var].clone();
                     }
-                }
-                if inconsistent.is_empty() {
-                    Some(result)
-                } else {
-                    log::debug!("get_cached: return None as some results has inconsistent bindings");
-                    log::debug!("get_cached: current bindings: {}, inconsistent results: {:?}", current_bindings, inconsistent);
-                    None
-                }
-            }).flatten()
+                });
+                result.push(InterpretedAtom(atom, res.bindings().clone()));
+            }
+            result
+        })
     }
 
-    fn insert(&mut self, key: Atom, value: Results) {
+    fn insert(&mut self, key: Atom, mut value: Results) {
+        value.iter_mut().for_each(|res| {
+            let vars = atom_into_vars(&key).collect();
+            res.0 = apply_bindings_to_atom(&res.0, &res.1);
+            res.1.cleanup(&vars);
+        });
         self.0.insert(key, value)
     }
 
     fn reset(&mut self) {
         self.0.clear();
     }
+}
+
+fn atom_into_vars_mut(atom: &mut Atom) -> impl Iterator<Item=&mut VariableAtom> {
+    atom.iter_mut().map(<&mut VariableAtom>::try_from)
+        .filter(Result::is_ok)
+        .map(Result::unwrap)
+}
+
+fn atom_into_vars(atom: &Atom) -> impl Iterator<Item=&VariableAtom> {
+    atom.iter().map(<&VariableAtom>::try_from)
+        .filter(Result::is_ok)
+        .map(Result::unwrap)
 }
 
 impl SpaceObserver for InterpreterCache {
@@ -259,7 +279,7 @@ impl<'a, T: SpaceRef<'a>> Clone for InterpreterContextRef<'a, T> {
 }
 
 fn is_grounded_op(expr: &ExpressionAtom) -> bool {
-    match expr.children().get(0) { 
+    match expr.children().get(0) {
         Some(Atom::Grounded(op)) if is_func(&op.type_())
             || op.type_() == ATOM_TYPE_UNDEFINED => true,
         _ => false,
@@ -461,8 +481,12 @@ fn call_plan<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input: 
 fn call_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input: InterpretedAtom) -> StepResult<'a, Results, InterpreterError> {
     log::debug!("call_op: {}", input);
 
-    let cached = context.cache.borrow().get(input.atom(), input.bindings());
+    let cached = context.cache.borrow().get(input.atom());
     if let Some(result) = cached {
+        let result = result.into_iter().flat_map(|InterpretedAtom(atom, bindings)| {
+            bindings.merge_v2(input.bindings()).into_iter()
+                .map(move |b| InterpretedAtom(atom.clone(), b))
+        }).collect();
         return_cached_result_plan(result)
     } else {
         if let Atom::Expression(_) = input.atom() {
@@ -564,7 +588,7 @@ fn match_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input: I
     let results: Vec<InterpretedAtom> = query_bindings
         .drain(0..)
         .map(|mut query_binding| {
-            let result = query_binding.resolve_and_remove(&var_x).unwrap(); 
+            let result = query_binding.resolve_and_remove(&var_x).unwrap();
             let result = apply_bindings_to_atom(&result, &query_binding);
             // TODO: sometimes we apply bindings twice: first time here,
             // second time when inserting matched argument into nesting
@@ -608,7 +632,7 @@ use std::collections::VecDeque;
 
 /// Plan which interprets in parallel alternatives of the expression.
 /// Each successful result is appended to the overall result of the plan.
-/// If no alternatives returned successful result the plan returns error. 
+/// If no alternatives returned successful result the plan returns error.
 pub struct AlternativeInterpretationsPlan<'a, T> {
     atom: Atom,
     plans: VecDeque<Box<dyn Plan<'a, (), Vec<T>, InterpreterError> + 'a>>,
@@ -617,7 +641,7 @@ pub struct AlternativeInterpretationsPlan<'a, T> {
 }
 
 impl<'a, T> AlternativeInterpretationsPlan<'a, T> {
-    /// Create new instance of [AlternativeInterpretationsPlan]. 
+    /// Create new instance of [AlternativeInterpretationsPlan].
     ///
     /// # Arguments
     /// `atom` - atom to be printed as root of the alternative interpretations
@@ -860,7 +884,7 @@ mod tests {
         let space = GroundingSpace::new();
         let expr = Atom::expr([Atom::gnd(ThrowError()), Atom::value("Runtime test error")]);
 
-        assert_eq!(interpret(&space, &expr), 
+        assert_eq!(interpret(&space, &expr),
             Ok(vec![Atom::expr([ERROR_SYMBOL, expr, Atom::sym("Runtime test error")])]));
     }
 
@@ -970,6 +994,54 @@ mod tests {
         space.add(expr!("=" ("bar" x) x));
 
         assert_eq!(interpret(&space, &expr!(("foo") "a")), Ok(vec![expr!("a")]));
+    }
+
+    #[test]
+    fn interpreter_cache_variables_are_not_changed_when_atom_was_not_transformed() {
+        let mut cache = InterpreterCache::new();
+        cache.insert(expr!("P" x), vec![InterpretedAtom(expr!("P" x), bind!{})]);
+        assert_eq!(cache.get(&expr!("P" x)), Some(vec![InterpretedAtom(expr!("P" x), bind!{})]));
+    }
+
+    #[test]
+    fn interpreter_cache_only_same_variables_are_matched() {
+        let mut cache = InterpreterCache::new();
+        cache.insert(expr!("P" x), vec![InterpretedAtom(expr!("P" x), bind!{})]);
+        assert_eq!(cache.get(&expr!("P" y)), None);
+    }
+
+    #[test]
+    fn interpreter_cache_variables_from_result_are_applied() {
+        let mut cache = InterpreterCache::new();
+        cache.insert(expr!("foo" "a"), vec![InterpretedAtom(expr!("P" x), bind!{ x: expr!("a") })]);
+        assert_eq!(cache.get(&expr!("foo" "a")), Some(vec![InterpretedAtom(expr!("P" "a"), bind!{})]));
+    }
+
+    #[test]
+    fn interpreter_cache_variables_from_key_are_kept_unique() {
+        let mut cache = InterpreterCache::new();
+        cache.insert(expr!("bar" x), vec![InterpretedAtom(expr!("P" x), bind!{})]);
+        assert_eq!(cache.get(&expr!("bar" x)), Some(vec![InterpretedAtom(expr!("P" x), bind!{})]));
+    }
+
+    #[test]
+    fn interpreter_cache_variables_absent_in_key_are_removed() {
+        let mut cache = InterpreterCache::new();
+        cache.insert(expr!("foo" x), vec![InterpretedAtom(expr!("bar"), bind!{ x: expr!("a"), y: expr!("Y") })]);
+        assert_eq!(cache.get(&expr!("foo" x)), Some(vec![InterpretedAtom(expr!("bar"), bind!{ x: expr!("a") })]));
+    }
+
+    #[test]
+    fn interpreter_cache_variables_from_result_becom_unique() {
+        let mut cache = InterpreterCache::new();
+        cache.insert(expr!(("bar")), vec![InterpretedAtom(expr!("P" x), bind!{})]);
+        if let Some(results) = cache.get(&expr!(("bar"))) {
+            assert_eq!(results.len(), 1);
+            assert!(atoms_are_equivalent(results[0].atom(), &expr!("P" x)));
+            assert_eq!(*results[0].bindings(), bind!{});
+        } else {
+            panic!("Non-empty result is expected");
+        }
     }
 }
 
