@@ -75,12 +75,13 @@ use crate::metta::*;
 use crate::metta::types::{is_func, get_arg_types, get_type_bindings,
     get_atom_types, match_reducted_types};
 use crate::common::shared::LockBorrow;
+use crate::common::ReplacingMapper;
 
 use std::ops::Deref;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
-use std::collections::{HashSet, HashMap};
+use std::collections::HashSet;
 
 /// Result of atom interpretation plus variable bindings found
 #[derive(Clone, PartialEq)]
@@ -192,21 +193,12 @@ impl InterpreterCache {
 
         self.0.get(key).map(|results| {
             let mut result = Vec::new();
-            let mut var_mapping: HashMap<VariableAtom, VariableAtom> = HashMap::new();
+            let mut var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
             for res in results {
                 let mut atom = res.atom().clone();
-                atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| {
-                    if !key_vars.contains(var) {
-                        match var_mapping.get(var) {
-                            Some(new_var) => *var = new_var.clone(),
-                            None => {
-                                let mut key = var.make_unique();
-                                std::mem::swap(&mut key, var);
-                                var_mapping.insert(key, var.clone());
-                            },
-                        }
-                    }
-                });
+                atom.iter_mut().filter_type::<&mut VariableAtom>()
+                    .filter(|var| !key_vars.contains(*var))
+                    .for_each(|var| var_mapper.replace(var));
                 result.push(InterpretedAtom(atom, res.bindings().clone()));
             }
             result

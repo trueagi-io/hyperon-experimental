@@ -115,10 +115,10 @@ pub use iter::*;
 
 use std::any::Any;
 use std::fmt::{Display, Debug};
-use std::collections::HashMap;
 use std::convert::TryFrom;
 
 use crate::common::collections::ImmutableString;
+use crate::common::ReplacingMapper;
 
 // Symbol atom
 
@@ -250,14 +250,15 @@ impl VariableAtom {
     /// use hyperon::VariableAtom;
     ///
     /// let x1 = VariableAtom::new("x");
-    /// let x2 = x1.make_unique();
+    /// let x2 = x1.clone().make_unique();
     ///
     /// assert_eq!(x1.name(), "x");
     /// assert_ne!(x1.name(), x2.name());
     /// assert_ne!(x1, x2);
     /// ```
-    pub fn make_unique(&self) -> Self {
-        VariableAtom{ name: self.name.clone(), id: next_variable_id() }
+    pub fn make_unique(mut self) -> Self {
+        self.id = next_variable_id();
+        self
     }
 }
 
@@ -269,17 +270,8 @@ impl Display for VariableAtom {
 
 /// Returns a copy of `atom` with all variables replaced by unique instances.
 pub fn make_variables_unique(mut atom: Atom) -> Atom {
-    let mut vars: HashMap<VariableAtom, VariableAtom> = HashMap::new();
-    atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| {
-        match vars.get(var) {
-            Some(new_var) => *var = new_var.clone(),
-            None => {
-                let mut key = var.make_unique();
-                std::mem::swap(&mut key, var);
-                vars.insert(key, var.clone());
-            }
-        }
-    });
+    let mut mapper = ReplacingMapper::new(VariableAtom::make_unique);
+    atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| mapper.replace(var));
     atom
 }
 
