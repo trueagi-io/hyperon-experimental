@@ -36,7 +36,7 @@ pub fn metta_space(text: &str) -> GroundingSpace {
     let mut parser = SExprParser::new(text);
     let mut space = GroundingSpace::new();
     loop {
-        let atom = parser.parse(&tokenizer);
+        let atom = parser.parse(&tokenizer).unwrap();
         if let Some(atom) = atom {
             space.add(atom);
         } else {
@@ -60,7 +60,7 @@ fn common_tokenizer() -> Tokenizer {
 pub fn metta_atom(atom: &str) -> Atom {
     let tokenizer = common_tokenizer();
     let mut parser = SExprParser::new(atom);
-    let atom = parser.parse(&tokenizer);
+    let atom = parser.parse(&tokenizer).unwrap();
     if let Some(atom) = atom {
         atom
     } else {
