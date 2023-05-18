@@ -32,13 +32,8 @@ impl<'a> AtomIter<'a> {
         }
     }
 
-    /// Return reference to the internal [VariableAtom] if atom is an instance
-    /// of [Atom::Variable]. Return `None` otherwise.
-    pub fn extract_var(atom: &Atom) -> Option<&VariableAtom> {
-        match atom {
-            Atom::Variable(var) => Some(var),
-            _ => None,
-        }
+    pub fn filter_type<T: TryFrom<&'a Atom>>(self) -> impl Iterator<Item=T> + 'a {
+        self.filter_map(|a| <T>::try_from(a).ok())
     }
 }
 
@@ -85,13 +80,8 @@ impl<'a> AtomIterMut<'a> {
         }
     }
 
-    /// Return mutable reference to the internal [VariableAtom] if atom is
-    /// an instance of [Atom::Variable]. Return `None` otherwise.
-    pub fn extract_var(atom: &mut Atom) -> Option<&mut VariableAtom> {
-        match atom {
-            Atom::Variable(var) => Some(var),
-            _ => None,
-        }
+    pub fn filter_type<T: TryFrom<&'a mut Atom>>(self) -> impl Iterator<Item=T> + 'a {
+        self.filter_map(|a| <T>::try_from(a).ok())
     }
 }
 

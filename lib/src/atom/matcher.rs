@@ -81,7 +81,6 @@ macro_rules! bind_set {
 
 use std::collections::{HashMap, HashSet};
 use core::iter::FromIterator;
-use std::convert::TryFrom;
 use std::cmp::max;
 
 use super::*;
@@ -428,7 +427,9 @@ impl Bindings {
             });
 
         let results = results.into_iter().map(|(result, _)| result).collect();
-        log::trace!("Bindings::merge: {} ^ {} -> {:?}", trace_self.unwrap(), b, results);
+        if let Some(self_copy) = trace_self {
+            log::trace!("Bindings::merge: {} ^ {} -> {:?}", self_copy, b, results);
+        }
         results
     }
 
@@ -478,7 +479,7 @@ impl Bindings {
         }
     }
 
-    fn build_var_mapping<'a>(&'a self, required_names: &HashSet<VariableAtom>, required_ids: &HashSet<u32>) -> HashMap<&'a VariableAtom, &'a VariableAtom> {
+    fn build_var_mapping<'a>(&'a self, required_names: &HashSet<&VariableAtom>, required_ids: &HashSet<u32>) -> HashMap<&'a VariableAtom, &'a VariableAtom> {
         let mut id_names: HashSet<VariableAtom> = HashSet::new();
         let mut mapping = HashMap::new();
         for (var, &id) in &self.id_by_var {
@@ -505,7 +506,7 @@ impl Bindings {
         deps.insert(var.clone());
         self.get_value(var).iter()
             .for_each(|value| {
-                value.iter().filter_map(AtomIter::extract_var)
+                value.iter().filter_map(|atom| <&VariableAtom>::try_from(atom).ok())
                     .for_each(|var| { self.find_deps(var, deps); });
             });
     }
@@ -521,12 +522,12 @@ impl Bindings {
     ///
     /// let bindings = bind!{ leftA: expr!("A"), leftA: expr!(rightB),
     ///     leftC: expr!("C"), leftD: expr!(rightE), rightF: expr!("F") };
-    /// let right = bindings.narrow_vars(&HashSet::from([VariableAtom::new("rightB"),
-    ///     VariableAtom::new("rightE"), VariableAtom::new("rightF")]));
+    /// let right = bindings.narrow_vars(&HashSet::from([&VariableAtom::new("rightB"),
+    ///     &VariableAtom::new("rightE"), &VariableAtom::new("rightF")]));
     ///
     /// assert_eq!(right, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
     /// ```
-    pub fn narrow_vars(&self, vars: &HashSet<VariableAtom>) -> Bindings {
+    pub fn narrow_vars(&self, vars: &HashSet<&VariableAtom>) -> Bindings {
         let mut deps: HashSet<VariableAtom> = HashSet::new();
         for var in vars {
             self.find_deps(var, &mut deps);
@@ -550,13 +551,66 @@ impl Bindings {
         for (&id, value) in &self.value_by_id {
             if dep_ids.contains(&id) {
                 let mut mapped_value = value.clone();
-                mapped_value.iter_mut().filter_map(AtomIterMut::extract_var)
+                mapped_value.iter_mut().filter_map(|atom| <&mut VariableAtom>::try_from(atom).ok())
                     .for_each(|var| { mapping.get(var).map(|mapped| *var = (*mapped).clone()); });
                 bindings.value_by_id.insert(id, mapped_value);
             }
         }
         log::trace!("Bindings::narrow_vars: {} -> {}", self, bindings);
         bindings
+    }
+
+    /// Remove variable equalities from the Bindings and represent them as a
+    /// variable values. Set of preferred variables is used to select the top
+    /// level variable name. For example, variable bindings `{ $a = $b <- A }`
+    /// is converted into `{ $a <- A, $b <- $a }` when preferred vars set is
+    /// `{ $a }`, and into `{ $b <- A, $a <- $b }` when preferred vars set is
+    /// `{ $b }`.
+    pub fn convert_var_equalities_to_bindings(mut self, preferred_vars: &HashSet<VariableAtom>) -> Self {
+        let trace_self = match log::log_enabled!(log::Level::Trace) {
+            true => Some(self.clone()),
+            false => None
+        };
+        let mut value_vars: HashMap<u32, &VariableAtom> = HashMap::new();
+        let mut renamed_vars: HashMap<VariableAtom, VariableAtom> = HashMap::new();
+        for (var, var_id) in &self.id_by_var {
+            if let Some(&top_level_var) = value_vars.get(var_id) {
+                if top_level_var != var {
+                    renamed_vars.insert(var.clone(), top_level_var.clone());
+                }
+            } else {
+                if preferred_vars.contains(var) {
+                    value_vars.insert(*var_id, var);
+                } else {
+                    let new_var = self.var_by_id(*var_id, |v| preferred_vars.contains(v));
+                    match new_var {
+                        Some(new_var) => {
+                            value_vars.insert(*var_id, new_var);
+                            renamed_vars.insert(var.clone(), new_var.clone());
+                        },
+                        None => {
+                            value_vars.insert(*var_id, var);
+                        },
+                    }
+                }
+            }
+        }
+        for (old_var, new_var) in renamed_vars {
+            self.remove(&old_var);
+            self.add_var_binding(old_var, Atom::Variable(new_var));
+        }
+        if let Some(self_copy) = trace_self {
+            log::trace!("Bindings::convert_var_equalities_to_bindings: preferred_vars: {:?}, {} -> {}", preferred_vars, self_copy, self);
+        }
+        self
+    }
+
+    /// Keep only variables passed in vars
+    pub fn cleanup(&mut self, vars: &HashSet<&VariableAtom>) {
+        let to_remove: HashSet<VariableAtom> = self.id_by_var.iter()
+            .filter_map(|(var, _id)| if !vars.contains(var) { Some(var.clone()) } else { None })
+            .collect();
+        to_remove.into_iter().for_each(|var| { self.id_by_var.remove(&var); });
     }
 
     fn has_loops(&self) -> bool {
@@ -612,7 +666,7 @@ impl Display for Bindings {
                 write!(f, "{}{}", prefix, var)?;
             }
             match self.value_by_id.get(id) {
-                Some(value) => write!(f, " = {}", value)?,
+                Some(value) => write!(f, " <- {}", value)?,
                 None => {},
             }
         }
@@ -1378,10 +1432,44 @@ mod test {
             .add_var_equality(&VariableAtom::new("leftD"), &VariableAtom::new("rightE"))?
             .add_var_binding_v2(VariableAtom::new("rightF"), expr!("F"))?;
 
-        let narrow = bindings.narrow_vars(&HashSet::from([VariableAtom::new("rightB"),
-            VariableAtom::new("rightE"), VariableAtom::new("rightF")]));
+        let narrow = bindings.narrow_vars(&HashSet::from([&VariableAtom::new("rightB"),
+            &VariableAtom::new("rightE"), &VariableAtom::new("rightF")]));
 
         assert_eq!(narrow, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
+        Ok(())
+    }
+
+    #[test]
+    fn bindings_narrow_vars_keeps_vars_equality() -> Result<(), &'static str> {
+        let bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("y"))?
+            .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("z"))?;
+
+        let narrow = bindings.narrow_vars(&HashSet::from([&VariableAtom::new("y"),
+            &VariableAtom::new("z")]));
+
+        assert_eq!(narrow, bind!{ y: expr!(z) });
+        Ok(())
+    }
+
+    #[test]
+    fn bindings_convert_var_equalities_to_bindings() -> Result<(), &'static str> {
+        let bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
+            .add_var_binding_v2(VariableAtom::new("a"), expr!("A"))?;
+
+        let result = bindings.clone().convert_var_equalities_to_bindings(&[VariableAtom::new("a")].into());
+        let expected = Bindings::new()
+            .add_var_binding_v2(VariableAtom::new("a"), expr!("A"))?
+            .add_var_binding_v2(&VariableAtom::new("b"), expr!(a))?;
+        assert_eq!(result, expected);
+
+        let result = bindings.clone().convert_var_equalities_to_bindings(&[VariableAtom::new("b")].into());
+        let expected = Bindings::new()
+            .add_var_binding_v2(VariableAtom::new("b"), expr!("A"))?
+            .add_var_binding_v2(&VariableAtom::new("a"), expr!(b))?;
+        assert_eq!(result, expected);
+
         Ok(())
     }
 
@@ -1468,6 +1556,17 @@ mod test {
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("D"), y: expr!("E") },
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("D"), y: expr!("F") },
         ]);
+    }
+
+    #[test]
+    fn bindings_cleanup() -> Result<(), &'static str> {
+        let mut bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
+            .add_var_binding_v2(VariableAtom::new("b"), expr!("B"))?
+            .add_var_binding_v2(VariableAtom::new("c"), expr!("C"))?;
+        bindings.cleanup(&[&VariableAtom::new("b")].into());
+        assert_eq!(bindings, bind!{ b: expr!("B") });
+        Ok(())
     }
 
 }

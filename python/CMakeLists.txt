@@ -28,7 +28,7 @@ include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
 find_package(pybind11 REQUIRED)
 
 pybind11_add_module(hyperonpy SHARED hyperonpy.cpp)
-target_link_libraries(hyperonpy PRIVATE hyperonc)
+target_link_libraries(hyperonpy PRIVATE hyperonc-static)
 
 set(PYTHONPATH "${CMAKE_CURRENT_BINARY_DIR}:${CMAKE_CURRENT_SOURCE_DIR}")
 add_subdirectory(tests)

@@ -12,7 +12,7 @@
 //! and `Expression`. These types should not be assigned explicitly, but they
 //! can be used in type expressions and will be checked. For example one can
 //! define a function which accepts `Atom` as an argument: `(: bar (-> Atom A))`.
-//! When such expression is interpreted the argument is accepted without 
+//! When such expression is interpreted the argument is accepted without
 //! reduction (see [metta::interpreter] algorithm).
 //!
 //! When atom has no type assigned by user it has type `%Undefined%`. The value
@@ -185,7 +185,7 @@ pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
         // and `(: + (-> Num Num Num))`then type checker can find that
         // `{ $r = $t = $tt = Num }`.
         Atom::Variable(_) => vec![ATOM_TYPE_UNDEFINED],
-        Atom::Grounded(gnd) => vec![gnd.type_()],
+        Atom::Grounded(gnd) => vec![make_variables_unique(gnd.type_())],
         Atom::Symbol(_) => {
             let mut types = query_types(space, atom);
             if types.is_empty() {
@@ -460,9 +460,10 @@ pub fn validate_atom(space: &dyn Space, atom: &Atom) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::atom::matcher::atoms_are_equivalent;
     use crate::metta::metta_space;
     use crate::metta::metta_atom as atom;
-    
+
     fn grammar_space() -> GroundingSpace {
         let mut space = GroundingSpace::new();
         space.add(expr!(":" "answer" ("->" "Sent" "Sent")));
@@ -743,6 +744,57 @@ mod tests {
         assert_eq!(get_atom_types(&space, &Atom::value(3)), vec![atom("i32")]);
     }
 
+    #[derive(Debug, Clone, PartialEq)]
+    struct GroundedAtomWithParameterizedType(Atom);
+
+    impl std::fmt::Display for GroundedAtomWithParameterizedType {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "GroundedAtomWithParameterizedType({})", self.0)
+        }
+    }
+
+    impl Grounded for GroundedAtomWithParameterizedType {
+        fn type_(&self) -> Atom {
+            self.0.clone()
+        }
+
+        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+            execute_not_executable(self)
+        }
+        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    #[test]
+    fn get_atom_types_variables_are_substituted_for_grounded_atom_type() {
+        let actual_type = Atom::var("t");
+        let gnd = GroundedAtomWithParameterizedType(actual_type.clone());
+        let resolved_type = get_atom_types(&GroundingSpace::new(), &Atom::gnd(gnd));
+        assert_eq!(resolved_type.len(), 1);
+        assert_ne!(resolved_type[0], actual_type);
+        assert!(atoms_are_equivalent(&resolved_type[0], &actual_type));
+    }
+
+    #[test]
+    fn parameterized_atom_types_should_not_conflict() {
+        let actual_type = Atom::expr([ARROW_SYMBOL, Atom::var("t"), Atom::var("t")]);
+        let gnd_1 = GroundedAtomWithParameterizedType(actual_type.clone());
+        let gnd_2 = GroundedAtomWithParameterizedType(actual_type.clone());
+        let resolved_type_1 = get_atom_types(&GroundingSpace::new(), &Atom::gnd(gnd_1));
+        let resolved_type_2 = get_atom_types(&GroundingSpace::new(), &Atom::gnd(gnd_2));
+
+        //Types of gnd_1 and gnd_2 are different in the space
+        assert_ne!(resolved_type_1, resolved_type_2);
+
+        //But the types are still equivalent
+        assert_eq!(resolved_type_1.len(), 1);
+        assert_eq!(resolved_type_2.len(), 1);
+        assert!(atoms_are_equivalent(&resolved_type_1[0], &actual_type));
+        assert!(atoms_are_equivalent(&resolved_type_2[0], &actual_type));
+        assert!(atoms_are_equivalent(&resolved_type_1[0], &resolved_type_2[0]));
+    }
+
     #[test]
     fn get_atom_types_tuple() {
         let space = metta_space("
@@ -962,7 +1014,7 @@ mod tests {
         // TODO: it is incorrectly typed, but (atomR a) is an Expression and
         // check_type returns True
         assert!(check_type(&space, &atom("(exprF (atomR a))"), type_r));
-        
+
         assert!(check_type(&space, &atom("(gndF (gndR a))"), type_r));
         assert!(!check_type(&space, &atom("(gndF (atomR a))"), type_r));
         assert!(check_type(&space, &atom("(symF (symR a))"), type_r));
@@ -1035,7 +1087,7 @@ mod tests {
         // TODO: (exprF (atomR a)) is incorrectly typed, but (atomR a)
         // is an Expression and validate_atom returns True
         assert!(validate_atom(&space, &atom("(exprF (atomR a))")));
-        
+
         assert!(validate_atom(&space, &atom("(gndF (gndR a))")));
         assert!(!validate_atom(&space, &atom("(gndF (atomR a))")));
         assert!(validate_atom(&space, &atom("(symF (symR a))")));
