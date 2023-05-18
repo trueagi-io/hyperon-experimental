@@ -81,7 +81,6 @@ macro_rules! bind_set {
 
 use std::collections::{HashMap, HashSet};
 use core::iter::FromIterator;
-use std::convert::TryFrom;
 use std::cmp::max;
 
 use super::*;
@@ -480,7 +479,7 @@ impl Bindings {
         }
     }
 
-    fn build_var_mapping<'a>(&'a self, required_names: &HashSet<VariableAtom>, required_ids: &HashSet<u32>) -> HashMap<&'a VariableAtom, &'a VariableAtom> {
+    fn build_var_mapping<'a>(&'a self, required_names: &HashSet<&VariableAtom>, required_ids: &HashSet<u32>) -> HashMap<&'a VariableAtom, &'a VariableAtom> {
         let mut id_names: HashSet<VariableAtom> = HashSet::new();
         let mut mapping = HashMap::new();
         for (var, &id) in &self.id_by_var {
@@ -523,12 +522,12 @@ impl Bindings {
     ///
     /// let bindings = bind!{ leftA: expr!("A"), leftA: expr!(rightB),
     ///     leftC: expr!("C"), leftD: expr!(rightE), rightF: expr!("F") };
-    /// let right = bindings.narrow_vars(&HashSet::from([VariableAtom::new("rightB"),
-    ///     VariableAtom::new("rightE"), VariableAtom::new("rightF")]));
+    /// let right = bindings.narrow_vars(&HashSet::from([&VariableAtom::new("rightB"),
+    ///     &VariableAtom::new("rightE"), &VariableAtom::new("rightF")]));
     ///
     /// assert_eq!(right, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
     /// ```
-    pub fn narrow_vars(&self, vars: &HashSet<VariableAtom>) -> Bindings {
+    pub fn narrow_vars(&self, vars: &HashSet<&VariableAtom>) -> Bindings {
         let mut deps: HashSet<VariableAtom> = HashSet::new();
         for var in vars {
             self.find_deps(var, &mut deps);
@@ -1433,8 +1432,8 @@ mod test {
             .add_var_equality(&VariableAtom::new("leftD"), &VariableAtom::new("rightE"))?
             .add_var_binding_v2(VariableAtom::new("rightF"), expr!("F"))?;
 
-        let narrow = bindings.narrow_vars(&HashSet::from([VariableAtom::new("rightB"),
-            VariableAtom::new("rightE"), VariableAtom::new("rightF")]));
+        let narrow = bindings.narrow_vars(&HashSet::from([&VariableAtom::new("rightB"),
+            &VariableAtom::new("rightE"), &VariableAtom::new("rightF")]));
 
         assert_eq!(narrow, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
         Ok(())
@@ -1446,8 +1445,8 @@ mod test {
             .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("y"))?
             .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("z"))?;
 
-        let narrow = bindings.narrow_vars(&HashSet::from([VariableAtom::new("y"),
-            VariableAtom::new("z")]));
+        let narrow = bindings.narrow_vars(&HashSet::from([&VariableAtom::new("y"),
+            &VariableAtom::new("z")]));
 
         assert_eq!(narrow, bind!{ y: expr!(z) });
         Ok(())

@@ -81,7 +81,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
 use std::collections::{HashSet, HashMap};
-use std::convert::TryFrom;
 
 /// Result of atom interpretation plus variable bindings found
 #[derive(Clone, PartialEq)]
@@ -189,19 +188,23 @@ impl InterpreterCache {
     }
 
     fn get(&self, key: &Atom) -> Option<Results> {
-        let key_vars: HashSet<&VariableAtom> = atom_into_vars(&key).collect();
+        let key_vars: HashSet<&VariableAtom> = key.iter().filter_type::<&VariableAtom>().collect();
 
         self.0.get(key).map(|results| {
             let mut result = Vec::new();
-            let mut var_mapping = HashMap::new();
+            let mut var_mapping: HashMap<VariableAtom, VariableAtom> = HashMap::new();
             for res in results {
                 let mut atom = res.atom().clone();
-                atom_into_vars_mut(&mut atom).for_each(|var| {
+                atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| {
                     if !key_vars.contains(var) {
-                        if !var_mapping.contains_key(var) {
-                            var_mapping.insert(var.clone(), var.make_unique());
+                        match var_mapping.get(var) {
+                            Some(new_var) => *var = new_var.clone(),
+                            None => {
+                                let mut key = var.make_unique();
+                                std::mem::swap(&mut key, var);
+                                var_mapping.insert(key, var.clone());
+                            },
                         }
-                        *var = var_mapping[var].clone();
                     }
                 });
                 result.push(InterpretedAtom(atom, res.bindings().clone()));
@@ -212,7 +215,7 @@ impl InterpreterCache {
 
     fn insert(&mut self, key: Atom, mut value: Results) {
         value.iter_mut().for_each(|res| {
-            let vars = atom_into_vars(&key).collect();
+            let vars = key.iter().filter_type::<&VariableAtom>().collect();
             res.0 = apply_bindings_to_atom(&res.0, &res.1);
             res.1.cleanup(&vars);
         });
@@ -222,18 +225,6 @@ impl InterpreterCache {
     fn reset(&mut self) {
         self.0.clear();
     }
-}
-
-fn atom_into_vars_mut(atom: &mut Atom) -> impl Iterator<Item=&mut VariableAtom> {
-    atom.iter_mut().map(<&mut VariableAtom>::try_from)
-        .filter(Result::is_ok)
-        .map(Result::unwrap)
-}
-
-fn atom_into_vars(atom: &Atom) -> impl Iterator<Item=&VariableAtom> {
-    atom.iter().map(<&VariableAtom>::try_from)
-        .filter(Result::is_ok)
-        .map(Result::unwrap)
 }
 
 impl SpaceObserver for InterpreterCache {

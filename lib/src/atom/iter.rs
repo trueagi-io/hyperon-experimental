@@ -31,6 +31,10 @@ impl<'a> AtomIter<'a> {
             },
         }
     }
+
+    pub fn filter_type<T: TryFrom<&'a Atom>>(self) -> impl Iterator<Item=T> + 'a {
+        self.filter_map(|a| <T>::try_from(a).ok())
+    }
 }
 
 impl<'a> Iterator for AtomIter<'a> {
@@ -76,6 +80,9 @@ impl<'a> AtomIterMut<'a> {
         }
     }
 
+    pub fn filter_type<T: TryFrom<&'a mut Atom>>(self) -> impl Iterator<Item=T> + 'a {
+        self.filter_map(|a| <T>::try_from(a).ok())
+    }
 }
 
 impl<'a> Iterator for AtomIterMut<'a> {

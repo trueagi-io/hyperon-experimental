@@ -846,7 +846,6 @@ impl Display for LetOp {
     }
 }
 
-use std::convert::TryFrom;
 use std::collections::HashSet;
 
 impl Grounded for LetOp {
@@ -883,36 +882,20 @@ fn resolve_var_conflicts(atom: &Atom, pattern: &mut Atom, template: &mut Atom) -
     external_vars
 }
 
-fn atom_into_var_iter(atom: &Atom) -> impl Iterator<Item=&VariableAtom> {
-    atom.iter()
-        .map(<&VariableAtom>::try_from)
-        .filter(Result::is_ok)
-        .map(Result::unwrap)
-}
-
-fn atom_into_var_iter_mut(atom: &mut Atom) -> impl Iterator<Item=&mut VariableAtom> {
-    atom.iter_mut()
-        .map(<&mut VariableAtom>::try_from)
-        .filter(Result::is_ok)
-        .map(Result::unwrap)
-}
-
 fn collect_vars(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
-    for var in atom_into_var_iter(atom) {
-        vars.insert(var.clone());
-    }
+    atom.iter().filter_type::<&VariableAtom>().cloned().for_each(|var| { vars.insert(var); });
 }
 
 fn make_conflicting_vars_unique(pattern: &mut Atom, template: &mut Atom, external_vars: &HashSet<VariableAtom>) {
     let mut local_vars = HashMap::new();
 
-    for var in atom_into_var_iter_mut(pattern) {
+    for var in pattern.iter_mut().filter_type::<&mut VariableAtom>() {
         if external_vars.contains(var) {
             *var = local_vars.entry(var.clone()).or_insert(var.make_unique()).clone();
         }
     }
 
-    for var in atom_into_var_iter_mut(template) {
+    for var in template.iter_mut().filter_type::<&mut VariableAtom>() {
         local_vars.get(var).map(|v| *var = v.clone());
     }
 }
