@@ -13,6 +13,7 @@ pub use arithmetics::*;
 use crate::*;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
+use std::collections::HashMap;
 
 use crate::metta::metta_atom;
 
@@ -94,6 +95,32 @@ impl<T> Display for GndRefCell<T> {
     }
 }
 
+pub struct ReplacingMapper<T: Clone + std::hash::Hash + Eq + ?Sized, F: Fn(T) -> T> {
+    mapper: F,
+    mapping: HashMap<T, T>,
+}
+
+impl<T: Clone + std::hash::Hash + Eq + ?Sized, F: Fn(T) -> T> ReplacingMapper<T, F> {
+    pub fn new(mapper: F) -> Self {
+        Self{ mapper, mapping: HashMap::new() }
+    }
+
+    pub fn replace(&mut self, val: &mut T) {
+        match self.mapping.get(&val) {
+            Some(mapped) => *val = mapped.clone(),
+            None => {
+                let mut key = (self.mapper)(val.clone());
+                std::mem::swap(&mut key, val);
+                self.mapping.insert(key, val.clone());
+            }
+        }
+    }
+
+    pub fn get_mapping(&self) -> &HashMap<T, T> {
+        &self.mapping
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -129,7 +156,7 @@ mod tests {
         let opa = Atom::gnd(&Operation{ name: "a", execute: test_op, typ: "(-> ())" });
         let opc = opa.clone();
         if let (Some(refa), Some(refc)) = (opa.as_gnd::<&Operation>(), opc.as_gnd::<&Operation>()) {
-            let ptra: *const Operation = *refa; 
+            let ptra: *const Operation = *refa;
             let ptrc: *const Operation = *refc;
             assert_eq!(ptra, ptrc);
         } else {

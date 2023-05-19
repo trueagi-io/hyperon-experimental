@@ -8,6 +8,7 @@ use crate::metta::runner::Metta;
 use crate::metta::types::get_atom_types;
 use crate::common::shared::Shared;
 use crate::common::assert::vec_eq_no_order;
+use crate::common::ReplacingMapper;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -886,17 +887,17 @@ fn collect_vars(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
 }
 
 fn make_conflicting_vars_unique(pattern: &mut Atom, template: &mut Atom, external_vars: &HashSet<VariableAtom>) {
-    let mut local_vars = HashMap::new();
+    let mut local_var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
 
-    for var in pattern.iter_mut().filter_type::<&mut VariableAtom>() {
-        if external_vars.contains(var) {
-            *var = local_vars.entry(var.clone()).or_insert(var.make_unique()).clone();
-        }
-    }
+    pattern.iter_mut().filter_type::<&mut VariableAtom>()
+        .filter(|var| external_vars.contains(var))
+        .for_each(|var| local_var_mapper.replace(var));
 
-    for var in template.iter_mut().filter_type::<&mut VariableAtom>() {
-        local_vars.get(var).map(|v| *var = v.clone());
-    }
+    template.iter_mut().filter_type::<&mut VariableAtom>()
+        .for_each(|var| match local_var_mapper.get_mapping().get(var) {
+            Some(v) => *var = v.clone(),
+            None => {},
+        });
 }
 
 #[derive(Clone, PartialEq, Debug)]
