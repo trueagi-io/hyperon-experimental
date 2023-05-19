@@ -269,16 +269,15 @@ impl Display for VariableAtom {
 
 /// Returns a copy of `atom` with all variables replaced by unique instances.
 pub fn make_variables_unique(mut atom: Atom) -> Atom {
-    let mut vars = HashMap::new();
-    atom.iter_mut().for_each(|sub| {
-        match sub {
-            Atom::Variable(var) => {
-                if !vars.contains_key(var) {
-                    vars.insert(var.clone(), Atom::Variable(var.make_unique()));
-                }
-                *sub = vars[var].clone();
+    let mut vars: HashMap<VariableAtom, VariableAtom> = HashMap::new();
+    atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| {
+        match vars.get(var) {
+            Some(new_var) => *var = new_var.clone(),
+            None => {
+                let mut key = var.make_unique();
+                std::mem::swap(&mut key, var);
+                vars.insert(key, var.clone());
             }
-            _ => {},
         }
     });
     atom

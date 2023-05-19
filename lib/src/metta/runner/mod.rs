@@ -115,24 +115,24 @@ impl Metta {
     pub fn run(&self, parser: &mut SExprParser) -> Result<Vec<Vec<Atom>>, String> {
         let mut mode = Mode::ADD;
         let mut results: Vec<Vec<Atom>> = Vec::new();
-
+    
         loop {
-            let atom = parser.parse(&self.tokenizer.borrow());
-            match atom {
-                Some(atom) => {
-                    if atom == EXEC_SYMBOL {
-                        mode = Mode::INTERPRET;
-                        continue;
-                    }
-                    match mode {
-                        Mode::ADD => match self.add_atom(atom) {
-                            Err(atom) => {
-                                results.push(vec![atom]);
-                                break
-                            }
-                            Ok(()) => {},
+            let atom = parser.parse(&self.tokenizer.borrow())?;
+    
+            if let Some(atom) = atom {
+                if atom == EXEC_SYMBOL {
+                    mode = Mode::INTERPRET;
+                    continue;
+                }
+                match mode {
+                    Mode::ADD => {
+                        if let Err(atom) = self.add_atom(atom) {
+                            results.push(vec![atom]);
+                            break;
                         }
-                        Mode::INTERPRET => match self.evaluate_atom(atom) {
+                    },
+                    Mode::INTERPRET => {
+                        match self.evaluate_atom(atom) {
                             Err(msg) => return Err(msg),
                             Ok(result) => {
                                 fn is_error(atom: &Atom) -> bool {
@@ -141,23 +141,24 @@ impl Metta {
                                         _ => false,
                                     }
                                 }
-                                let error = result.iter()
-                                    .map(|atom| is_error(atom))
-                                    .fold(false, |a, b| a | b);
+                                let error = result.iter().any(|atom| is_error(atom));
                                 results.push(result);
                                 if error {
-                                    break
+                                    break;
                                 }
                             }
-                        },
-                    }
-                    mode = Mode::ADD;
-                },
-                None => break,
+                        }
+                    },
+                }
+                mode = Mode::ADD;
+            } else {
+                break;
             }
         }
         Ok(results)
     }
+    
+    
 
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
         match self.type_check(atom) {
