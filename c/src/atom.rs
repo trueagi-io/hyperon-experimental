@@ -481,9 +481,10 @@ pub unsafe extern "C" fn vec_atom_len(vec: *const vec_atom_t) -> usize {
     (*vec).0.len()
 }
 
+/// WARNING: The atom returned from this function remains owned by the vec_atom_t.  It should NOT be freed.
 #[no_mangle]
-pub unsafe extern "C" fn vec_atom_get(vec: *mut vec_atom_t, idx: usize) -> *mut atom_t {
-    atom_into_ptr((*vec).0[idx].clone())
+pub unsafe extern "C" fn vec_atom_get(vec: *const vec_atom_t, idx: usize) -> *const atom_t {
+    (&(*vec).0[idx] as *const Atom).cast()
 }
 
 pub type atom_array_t = array_t<*const atom_t>;

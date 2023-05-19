@@ -91,7 +91,7 @@ pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
 #[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_GROUNDED) }
 
 #[no_mangle]
-pub unsafe extern "C" fn check_type(space: *const grounding_space_t, atom: *const atom_t, typ: *const atom_t) -> bool {
+pub unsafe extern "C" fn check_type(space: *const space_t, atom: *const atom_t, typ: *const atom_t) -> bool {
     hyperon::metta::types::check_type((*space).borrow().deref(), &(*atom).atom, &(*typ).atom)
 }
 
@@ -101,7 +101,7 @@ pub unsafe extern "C" fn check_type_v2(space: *const space_t, atom: *const atom_
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn validate_atom(space: *const grounding_space_t, atom: *const atom_t) -> bool {
+pub unsafe extern "C" fn validate_atom(space: *const space_t, atom: *const atom_t) -> bool {
     hyperon::metta::types::validate_atom((*space).borrow().deref(), &(*atom).atom)
 }
 
@@ -111,7 +111,7 @@ pub unsafe extern "C" fn validate_atom_v2(space: *const space_t, atom: *const at
 }
 
 #[no_mangle]
-pub extern "C" fn get_atom_types(space: *const grounding_space_t, atom: *const atom_t,
+pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
     let space = unsafe{ &(*space).borrow() };
     let atom = unsafe{ &(*atom).atom };
@@ -135,7 +135,7 @@ pub struct step_result_t<'a> {
 }
 
 #[no_mangle]
-pub extern "C" fn interpret_init<'a>(space: *mut grounding_space_t, expr: *const atom_t) -> *mut step_result_t<'a> {
+pub extern "C" fn interpret_init<'a>(space: *mut space_t, expr: *const atom_t) -> *mut step_result_t<'a> {
     let space = unsafe{ &(*space) };
     let expr = unsafe{ &(*expr) };
     let step = interpreter::interpret_init(space.shared(), &expr.atom);
@@ -185,7 +185,7 @@ pub extern "C" fn step_to_str(step: *const step_result_t, callback: c_str_callba
 pub type metta_t = SharedApi<Metta>;
 
 #[no_mangle]
-pub extern "C" fn metta_new(space: *mut grounding_space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> *mut metta_t {
+pub extern "C" fn metta_new(space: *mut space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> *mut metta_t {
     let space = unsafe{ &mut *space }.shared();
     let tokenizer = unsafe{ &mut *tokenizer }.shared();
     metta_t::new(Metta::from_space_cwd(space, tokenizer, PathBuf::from(cstr_as_str(cwd))))
@@ -203,9 +203,9 @@ pub extern "C" fn metta_free(metta: *mut metta_t) {
 }
 
 #[no_mangle]
-pub extern "C" fn metta_space(metta: *mut metta_t) -> *mut grounding_space_t {
+pub extern "C" fn metta_space(metta: *mut metta_t) -> *mut space_t {
     let space = unsafe{ &*metta }.borrow().space();
-    grounding_space_t::from_shared(space)
+    space_t::from_shared(space)
 }
 
 #[no_mangle]

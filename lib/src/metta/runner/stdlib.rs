@@ -1,7 +1,6 @@
 use crate::*;
 use crate::matcher::MatchResultIter;
-use crate::space::Space;
-use crate::space::grounding::GroundingSpace;
+use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::interpreter::interpret;
@@ -24,7 +23,7 @@ pub const VOID_SYMBOL : Atom = sym!("%void%");
 
 // TODO: remove hiding errors completely after making it possible passing
 // them to the user
-fn interpret_no_error(space: Shared<GroundingSpace>, expr: &Atom) -> Result<Vec<Atom>, String> {
+fn interpret_no_error(space: Shared<SpaceBox>, expr: &Atom) -> Result<Vec<Atom>, String> {
     let result = interpret(space, expr);
     log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
     match result {
@@ -85,7 +84,7 @@ impl Grounded for ImportOp {
             // If the reference space exists, the module space atom is inserted into it
             // (but the token is not added) - works as "import to"
             Atom::Grounded(_) => {
-                let space = Atom::as_gnd::<Shared<GroundingSpace>>(space)
+                let space = Atom::as_gnd::<Shared<SpaceBox>>(space)
                     .ok_or("import! expects a space as a first argument")?;
                 // Moving space atoms from children to parent
                 let metta = self.metta.borrow();
@@ -120,7 +119,7 @@ impl Display for MatchOp {
 
 impl Grounded for MatchOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<GroundingSpace>>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<SpaceBox>>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
@@ -129,7 +128,7 @@ impl Grounded for MatchOp {
         let pattern = args.get(1).ok_or_else(arg_error)?;
         let template = args.get(2).ok_or_else(arg_error)?;
         log::debug!("match_op: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
-        let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("match expects a space as the first argument")?;
+        let space = Atom::as_gnd::<Shared<SpaceBox>>(space).ok_or("match expects a space as the first argument")?;
         Ok(space.borrow().subst(&pattern, &template))
     }
 
@@ -194,12 +193,12 @@ impl Display for NewSpaceOp {
 
 impl Grounded for NewSpaceOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<GroundingSpace>>()])
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<SpaceBox>>()])
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         if args.len() == 0 {
-            let space = Atom::gnd(Shared::new(GroundingSpace::new()));
+            let space = Atom::gnd(Shared::new(space_box!(GroundingSpace::new())));
             Ok(vec![space])
         } else {
             Err("new-space doesn't expect arguments".into())
@@ -222,7 +221,7 @@ impl Display for AddAtomOp {
 
 impl Grounded for AddAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<GroundingSpace>>(),
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<SpaceBox>>(),
             ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
@@ -230,7 +229,7 @@ impl Grounded for AddAtomOp {
         let arg_error = || ExecError::from("add-atom expects two arguments: space and atom");
         let space = args.get(0).ok_or_else(arg_error)?;
         let atom = args.get(1).ok_or_else(arg_error)?;
-        let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("add-atom expects a space as the first argument")?;
+        let space = Atom::as_gnd::<Shared<SpaceBox>>(space).ok_or("add-atom expects a space as the first argument")?;
         space.borrow_mut().add(atom.clone());
         Ok(vec![])
     }
@@ -251,7 +250,7 @@ impl Display for RemoveAtomOp {
 
 impl Grounded for RemoveAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<GroundingSpace>>(),
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<SpaceBox>>(),
             ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
@@ -259,7 +258,7 @@ impl Grounded for RemoveAtomOp {
         let arg_error = || ExecError::from("remove-atom expects two arguments: space and atom");
         let space = args.get(0).ok_or_else(arg_error)?;
         let atom = args.get(1).ok_or_else(arg_error)?;
-        let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("remove-atom expects a space as the first argument")?;
+        let space = Atom::as_gnd::<Shared<SpaceBox>>(space).ok_or("remove-atom expects a space as the first argument")?;
         space.borrow_mut().remove(atom);
         // TODO? return Bool
         Ok(vec![])
@@ -281,15 +280,15 @@ impl Display for GetAtomsOp {
 
 impl Grounded for GetAtomsOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<GroundingSpace>>(),
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<Shared<SpaceBox>>(),
             ATOM_TYPE_ATOM])
     }
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-atoms expects one argument: space");
         let space = args.get(0).ok_or_else(arg_error)?;
-        let space = Atom::as_gnd::<Shared<GroundingSpace>>(space).ok_or("get-atoms expects a space as its argument")?;
-        Ok(space.borrow().iter().cloned().collect())
+        let space = Atom::as_gnd::<Shared<SpaceBox>>(space).ok_or("get-atoms expects a space as its argument")?;
+        space.borrow().as_space().atom_iter().map(|iter| iter.cloned().collect()).ok_or(ExecError::Runtime("Unsupported Operation. Can't traverse atoms in this space".to_string()))
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -382,11 +381,11 @@ impl Grounded for ConsAtomOp {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct CaseOp {
-    space: Shared<GroundingSpace>,
+    space: Shared<SpaceBox>,
 }
 
 impl CaseOp {
-    pub fn new(space: Shared<GroundingSpace>) -> Self {
+    pub fn new(space: Shared<SpaceBox>) -> Self {
         Self{ space }
     }
 
@@ -502,11 +501,11 @@ fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct AssertEqualOp {
-    space: Shared<GroundingSpace>,
+    space: Shared<SpaceBox>,
 }
 
 impl AssertEqualOp {
-    pub fn new(space: Shared<GroundingSpace>) -> Self {
+    pub fn new(space: Shared<SpaceBox>) -> Self {
         Self{ space }
     }
 }
@@ -540,11 +539,11 @@ impl Grounded for AssertEqualOp {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct AssertEqualToResultOp {
-    space: Shared<GroundingSpace>,
+    space: Shared<SpaceBox>,
 }
 
 impl AssertEqualToResultOp {
-    pub fn new(space: Shared<GroundingSpace>) -> Self {
+    pub fn new(space: Shared<SpaceBox>) -> Self {
         Self{ space }
     }
 }
@@ -579,11 +578,11 @@ impl Grounded for AssertEqualToResultOp {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct CollapseOp {
-    space: Shared<GroundingSpace>,
+    space: Shared<SpaceBox>,
 }
 
 impl CollapseOp {
-    pub fn new(space: Shared<GroundingSpace>) -> Self {
+    pub fn new(space: Shared<SpaceBox>) -> Self {
         Self{ space }
     }
 }
@@ -617,11 +616,11 @@ impl Grounded for CollapseOp {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct SuperposeOp {
-    space: Shared<GroundingSpace>,
+    space: Shared<SpaceBox>,
 }
 
 impl SuperposeOp {
-    fn new(space: Shared<GroundingSpace>) -> Self {
+    fn new(space: Shared<SpaceBox>) -> Self {
         Self{ space }
     }
 }
@@ -697,11 +696,11 @@ impl Grounded for PragmaOp {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct GetTypeOp {
-    space: Shared<GroundingSpace>,
+    space: Shared<SpaceBox>,
 }
 
 impl GetTypeOp {
-    pub fn new(space: Shared<GroundingSpace>) -> Self {
+    pub fn new(space: Shared<SpaceBox>) -> Self {
         Self{ space }
     }
 }
@@ -1197,10 +1196,10 @@ mod tests {
 
     #[test]
     fn match_op() {
-        let space = Shared::new(metta_space("
+        let space = Shared::new(space_box!(metta_space("
             (A B)
             !(match &self (A B) (B A))
-        "));
+        ")));
 
         let match_op = MatchOp{};
 
@@ -1212,41 +1211,45 @@ mod tests {
     fn new_space_op() {
         let res = NewSpaceOp{}.execute(&mut vec![]).expect("No result returned");
         let space = res.get(0).expect("Result is empty");
-        let space = space.as_gnd::<Shared<GroundingSpace>>().expect("Result is not space");
-        assert_eq_no_order!(space.borrow().deref(), Vec::<Atom>::new());
+        let space = space.as_gnd::<Shared<SpaceBox>>().expect("Result is not space");
+        let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
+        assert_eq_no_order!(space_atoms, Vec::<Atom>::new());
     }
 
     #[test]
     fn add_atom_op() {
-        let space = Shared::new(GroundingSpace::new());
+        let space = Shared::new(space_box!(GroundingSpace::new()));
         let satom = Atom::gnd(space.clone());
         let res = AddAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         assert!(res.is_empty());
-        assert_eq_no_order!(space.borrow().deref(), vec![expr!(("foo" "bar"))]);
+        let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
+        assert_eq_no_order!(space_atoms, vec![expr!(("foo" "bar"))]);
     }
 
     #[test]
     fn remove_atom_op() {
-        let space = Shared::new(metta_space("
+        let space = Shared::new(space_box!(metta_space("
             (foo bar)
             (bar foo)
-        "));
+        ")));
         let satom = Atom::gnd(space.clone());
         let res = RemoveAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         // REM: can return Bool in future
         assert!(res.is_empty());
-        assert_eq_no_order!(space.borrow().deref(), vec![expr!(("bar" "foo"))]);
+        let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
+        assert_eq_no_order!(space_atoms, vec![expr!(("bar" "foo"))]);
     }
 
     #[test]
     fn get_atoms_op() {
-        let space = Shared::new(metta_space("
+        let space = Shared::new(space_box!(metta_space("
             (foo bar)
             (bar foo)
-        "));
+        ")));
         let satom = Atom::gnd(space.clone());
         let res = GetAtomsOp{}.execute(&mut vec![satom]).expect("No result returned");
-        assert_eq_no_order!(res, space.borrow().deref());
+        let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
+        assert_eq_no_order!(res, space_atoms);
         assert_eq_no_order!(res, vec![expr!(("foo" "bar")), expr!(("bar" "foo"))]);
     }
 
@@ -1287,9 +1290,9 @@ mod tests {
 
     #[test]
     fn case_op() {
-        let space = Shared::new(metta_space("
+        let space = Shared::new(space_box!(metta_space("
             (= (foo) (A B))
-        "));
+        ")));
 
         let case_op = CaseOp::new(space.clone());
 
@@ -1303,7 +1306,7 @@ mod tests {
 
     #[test]
     fn case_op_external_vars_at_right_are_kept_untouched() {
-        let space = Shared::new(GroundingSpace::new());
+        let space = Shared::new(space_box!(GroundingSpace::new()));
         let case_op = CaseOp::new(space.clone());
 
         assert_eq!(case_op.execute(&mut vec![expr!(ext), expr!(((t t)))]),
@@ -1314,7 +1317,7 @@ mod tests {
 
     #[test]
     fn case_op_internal_variables_has_priority_in_template() {
-        let space = Shared::new(GroundingSpace::new());
+        let space = Shared::new(space_box!(GroundingSpace::new()));
         let case_op = CaseOp::new(space.clone());
 
         assert_eq!(case_op.execute(&mut vec![expr!(x "A"), expr!(((x x)))]),
@@ -1331,13 +1334,13 @@ mod tests {
 
     #[test]
     fn assert_equal_op() {
-        let space = Shared::new(metta_space("
+        let space = Shared::new(space_box!(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
             (= (bar) (B C))
             (= (bar) (A B))
             (= (err) (A B))
-        "));
+        ")));
 
         let assert_equal_op = AssertEqualOp::new(space);
 
@@ -1354,10 +1357,10 @@ mod tests {
 
     #[test]
     fn assert_equal_to_result_op() {
-        let space = Shared::new(metta_space("
+        let space = Shared::new(space_box!(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
-        "));
+        ")));
         let assert_equal_to_result_op = AssertEqualToResultOp::new(space);
 
         assert_eq!(assert_equal_to_result_op.execute(&mut vec![
@@ -1367,10 +1370,10 @@ mod tests {
 
     #[test]
     fn collapse_op() {
-        let space = Shared::new(metta_space("
+        let space = Shared::new(space_box!(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
-        "));
+        ")));
         let collapse_op = CollapseOp::new(space);
 
         let actual = collapse_op.execute(&mut vec![expr!(("foo"))]).unwrap();
@@ -1382,7 +1385,7 @@ mod tests {
 
     #[test]
     fn superpose_op() {
-        let space = Shared::new(GroundingSpace::new());
+        let space = Shared::new(space_box!(GroundingSpace::new()));
         let superpose_op = SuperposeOp::new(space);
         assert_eq!(superpose_op.execute(&mut vec![expr!("A" ("B" "C"))]),
             Ok(vec![sym!("A"), expr!("B" "C")]));
@@ -1390,7 +1393,7 @@ mod tests {
 
     #[test]
     fn superpose_op_type() {
-        let space = Shared::new(GroundingSpace::new());
+        let space = Shared::new(space_box!(GroundingSpace::new()));
         assert!(validate_atom(space.borrow().deref(), &expr!({SumOp{}}
             ({SuperposeOp::new(space.clone())} ({Number::Integer(1)} {Number::Integer(2)} {Number::Integer(3)}))
             {Number::Integer(1)})));
@@ -1446,12 +1449,12 @@ mod tests {
 
     #[test]
     fn get_type_op() {
-        let space = Shared::new(metta_space("
+        let space = Shared::new(space_box!(metta_space("
             (: B Type)
             (: C Type)
             (: A B)
             (: A C)
-        "));
+        ")));
 
         let get_type_op = GetTypeOp::new(space);
         assert_eq_no_order!(get_type_op.execute(&mut vec![sym!("A")]).unwrap(),
@@ -1460,11 +1463,11 @@ mod tests {
 
     #[test]
     fn get_type_op_non_valid_atom() {
-        let space = Shared::new(metta_space("
+        let space = Shared::new(space_box!(metta_space("
             (: f (-> Number String))
             (: 42 Number)
             (: \"test\" String)
-        "));
+        ")));
 
         let get_type_op = GetTypeOp::new(space);
         assert_eq_no_order!(get_type_op.execute(&mut vec![expr!("f" "42")]).unwrap(),

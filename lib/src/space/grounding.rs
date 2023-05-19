@@ -322,7 +322,7 @@ impl Space for GroundingSpace {
         GroundingSpace::query(self, query)
     }
     fn atom_count(&self) -> Option<usize> {
-        Some(self.content.len())
+        Some(self.iter().count())
     }
     fn atom_iter(&self) -> Option<SpaceIter> {
         Some(self.iter())

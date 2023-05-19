@@ -6,7 +6,7 @@ pub mod grounding;
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use crate::atom::Atom;
+use crate::atom::*;
 use crate::atom::matcher::{BindingsSet, apply_bindings_to_atom};
 
 /// Contains information about space modification event.
@@ -78,7 +78,7 @@ impl<'a> Iterator for SpaceIter<'a> {
 }
 
 /// Read-only space trait.
-pub trait Space {
+pub trait Space: std::fmt::Debug + std::fmt::Display {
     /// Registers space modifications `observer`. Observer is automatically
     /// deregistered when `Rc` counter reaches zero. See [SpaceObserver] for
     /// examples.
@@ -202,9 +202,16 @@ pub trait SpaceMut: Space {
     fn as_space(&self) -> &dyn Space;
 }
 
-use crate::common::shared::Shared;
+#[macro_export]
+macro_rules! space_box {
+    ($s:expr) => {
+        (Box::new($s) as Box<dyn $crate::space::SpaceMut>)
+    };
+}
 
-impl Space for Box<dyn SpaceMut> {
+pub type SpaceBox = Box<dyn SpaceMut>;
+
+impl Space for SpaceBox {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
         (**self).register_observer(observer)
     }
@@ -224,6 +231,36 @@ impl Space for Box<dyn SpaceMut> {
         (*self).as_space().as_any()
     }
 }
+
+impl PartialEq for SpaceBox {
+    fn eq(&self, other: &Self) -> bool {
+        match other.as_any() {
+            None => false,
+            Some(other) => {
+                match other.downcast_ref() {
+                    None => false,
+                    Some(other) => &*self == other,
+                }
+            }
+        }
+    }
+}
+
+impl crate::atom::Grounded for SpaceBox {
+    fn type_(&self) -> Atom {
+        rust_type_atom::<SpaceBox>()
+    }
+
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        Box::new(self.query(other).into_iter())
+    }
+
+    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        execute_not_executable(self)
+    }
+}
+
+use crate::common::shared::Shared;
 
 impl<T: Space> Space for Shared<T> {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {

@@ -31,8 +31,11 @@ class GroundingSpace:
         return hp.grounding_space_replace(self.cspace, atom.catom, replacement.catom)
 
     def get_atoms(self):
-        return [Atom._from_catom(hp.grounding_space_get(self.cspace, i))
-                for i in range(0, hp.grounding_space_len(self.cspace))]
+        res = hp.grounding_space_list(self.cspace)
+        result = []
+        for r in res:
+            result.append(Atom._from_catom(r))
+        return result
 
     def query(self, pattern):
         result = hp.grounding_space_query(self.cspace, pattern.catom)

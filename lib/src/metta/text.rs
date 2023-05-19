@@ -277,7 +277,7 @@ mod tests {
     #[test]
     fn test_unbalanced_brackets() {
         let mut parser = SExprParser::new("(a)))");
-        let x = parser.parse(&Tokenizer::new());
+        let _ = parser.parse(&Tokenizer::new());
         assert_eq!(Err(String::from("Unexpected right bracket")), parser.parse(&Tokenizer::new()));
     }
 

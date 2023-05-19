@@ -389,7 +389,19 @@ impl Space for CSpace {
     }
 }
 
+impl std::fmt::Display for CSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CSpace")
+    }
+}
+impl std::fmt::Debug for CSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CSpace")
+    }
+}
+
 /// A stub internal object, to get access to the default method of Space trait
+#[derive(Debug)]
 struct DefaultSpace<'a>(&'a CSpace);
 impl Space for DefaultSpace<'_> {
     fn register_observer(&self, _observer: Rc<RefCell<dyn SpaceObserver>>) {}
@@ -397,6 +409,11 @@ impl Space for DefaultSpace<'_> {
     fn atom_count(&self) -> Option<usize> { self.0.atom_count() }
     fn atom_iter(&self) -> Option<SpaceIter> { self.0.atom_iter() }
     fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self.0) }
+}
+impl std::fmt::Display for DefaultSpace<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DefaultSpace")
+    }
 }
 
 impl SpaceMut for CSpace {
@@ -445,6 +462,11 @@ pub extern "C" fn space_new(api: *const space_api_t, payload: *mut c_void) -> *m
 #[no_mangle]
 pub extern "C" fn space_free(space: *mut space_t) {
     space_t::drop(space)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn space_eq(a: *const space_t, b: *const space_t) -> bool {
+    *a == *b
 }
 
 /// Returns the pointer to the payload for a space created from C
@@ -538,81 +560,3 @@ pub extern "C" fn space_iterate(space: *const space_t,
 pub extern "C" fn space_new_grounding_space() -> *mut space_t {
     space_t::new(Box::new(GroundingSpace::new()))
 }
-
-//QUESTION FOR VITALY: Should we deprecate all the grounding_space_t functions, and replace them
-// with calls through the abstract API, or with calls that take a space_t, and downcast it to a
-// grounding_space when the function is specific to a grounding_space?
-//
-//Or alternatively, we can keep the grounding_space_t, and provide bidirectional conversion
-// functions.
-
-pub type grounding_space_t = SharedApi<GroundingSpace>;
-
-#[no_mangle]
-pub extern "C" fn grounding_space_new() -> *mut grounding_space_t {
-    grounding_space_t::new(GroundingSpace::new())
-}
-
-#[no_mangle]
-pub extern "C" fn grounding_space_free(space: *mut grounding_space_t) {
-    grounding_space_t::drop(space)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_eq(a: *const grounding_space_t, b: *const grounding_space_t) -> bool {
-    *a == *b
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_add(space: *mut grounding_space_t, atom: *mut atom_t) {
-    (*space).borrow_mut().add(ptr_into_atom(atom));
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_remove(space: *mut grounding_space_t, atom: *const atom_t) -> bool {
-    (*space).borrow_mut().remove(&(*atom).atom)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_replace(space: *mut grounding_space_t, from: *const atom_t, to: *mut atom_t) -> bool {
-    (*space).borrow_mut().replace(&(*from).atom, ptr_into_atom(to))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_len(space: *const grounding_space_t) -> usize {
-    (*space).borrow().iter().count()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *mut atom_t {
-    // TODO: highly ineffective implementation, should be reworked after replacing
-    // the GroundingSpace struct by Space trait in code.
-
-    //QUESTION FOR VITALY: Do all spaces have integer-indexable atoms?  If so, it might make sense
-    // to make get(idx) into a trait method of Space.  Or alternatively should all spaces support
-    // atom iteration, we could add an iter() method to the trait.  However, as you point out,
-    // Iterator::skip() or Iterator::nth() is a costly way to perform integer-based access in a
-    // large set.
-    atom_into_ptr((*space).borrow().iter().skip(idx).next()
-        .expect(format!("Index is out of bounds: {}", idx).as_str()).clone())
-}
-
-#[no_mangle]
-pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
-        pattern: *const atom_t, callback: lambda_t<* const bindings_t>, context: *mut c_void) {
-    let results = unsafe { (*space).borrow().query(&((*pattern).atom)) };
-    for result in results.into_iter() {
-        let b = bindings_into_ptr(result);
-        callback(b, context);
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn grounding_space_subst(space: *const grounding_space_t,
-        pattern: *const atom_t, templ: *const atom_t,
-        callback: c_atoms_callback_t, context: *mut c_void) {
-    let results = unsafe { (*space).borrow().subst(&((*pattern).atom), &((*templ).atom)) };
-    return_atoms(&results, callback, context);
-}
-
-

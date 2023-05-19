@@ -21,7 +21,7 @@ using CAtom = CPtr<atom_t>;
 using CVecAtom = CPtr<vec_atom_t>;
 using CBindings = CPtr<bindings_t>;
 using CBindingsSet = CPtr<bindings_set_t>;
-using CGroundingSpace = CPtr<grounding_space_t>;
+using CSpace = CPtr<space_t>;
 using CTokenizer = CPtr<tokenizer_t>;
 using CStepResult = CPtr<step_result_t>;
 using CMetta = CPtr<metta_t>;
@@ -182,6 +182,11 @@ void copy_to_list_callback(var_atom_t const* varAtom, void* context){
 
     var_atom_list.append(
             std::make_pair(std::string(varAtom->var), CAtom(atom_clone(varAtom->atom))));
+}
+
+void atom_copy_to_list_callback(const atom_t* atom, void* context){
+    pybind11::list& atoms_list = *( (pybind11::list*)(context) );
+    atoms_list.append(CAtom(atom_clone(atom)));
 }
 
 void bindings_copy_to_list_callback(bindings_t* bindings, void* context){
@@ -380,18 +385,23 @@ PYBIND11_MODULE(hyperonpy, m) {
     }, "Returns iterator to traverse Bindings within BindingsSet");
 
 
-    py::class_<CGroundingSpace>(m, "CGroundingSpace");
-    m.def("grounding_space_new", []() { return CGroundingSpace(grounding_space_new()); }, "New grounding space instance");
-    m.def("grounding_space_free", [](CGroundingSpace space) { grounding_space_free(space.ptr); }, "Free grounding space");
-    m.def("grounding_space_add", [](CGroundingSpace space, CAtom atom) { grounding_space_add(space.ptr, atom_clone(atom.ptr)); }, "Add atom into grounding space");
-    m.def("grounding_space_remove", [](CGroundingSpace space, CAtom atom) { return grounding_space_remove(space.ptr, atom.ptr); }, "Remove atom from grounding space");
-    m.def("grounding_space_replace", [](CGroundingSpace space, CAtom from, CAtom to) { return grounding_space_replace(space.ptr, from.ptr, atom_clone(to.ptr)); }, "Replace atom from grounding space");
-    m.def("grounding_space_eq", [](CGroundingSpace a, CGroundingSpace b) { return grounding_space_eq(a.ptr, b.ptr); }, "Check if two grounding spaces are equal");
-    m.def("grounding_space_len", [](CGroundingSpace space) { return grounding_space_len(space.ptr); }, "Return number of atoms in grounding space");
-    m.def("grounding_space_get", [](CGroundingSpace space, size_t idx) { return CAtom(grounding_space_get(space.ptr, idx)); }, "Get atom by index from grounding space");
-    m.def("grounding_space_query", [](CGroundingSpace space, CAtom pattern) {
+    // TODO: We should rename these python symbols from grounding_space... to space..., but I don't know who else is relying on them
+    py::class_<CSpace>(m, "CSpace");
+    m.def("grounding_space_new", []() { return CSpace(space_new_grounding_space()); }, "New grounding space instance");
+    m.def("grounding_space_free", [](CSpace space) { space_free(space.ptr); }, "Free space");
+    m.def("grounding_space_add", [](CSpace space, CAtom atom) { space_add(space.ptr, atom_clone(atom.ptr)); }, "Add atom into space");
+    m.def("grounding_space_remove", [](CSpace space, CAtom atom) { return space_remove(space.ptr, atom.ptr); }, "Remove atom from space");
+    m.def("grounding_space_replace", [](CSpace space, CAtom from, CAtom to) { return space_replace(space.ptr, from.ptr, atom_clone(to.ptr)); }, "Replace atom from space");
+    m.def("grounding_space_eq", [](CSpace a, CSpace b) { return space_eq(a.ptr, b.ptr); }, "Check if two spaces are equal");
+    m.def("grounding_space_len", [](CSpace space) { return space_atom_count(space.ptr); }, "Return number of atoms in space");
+    m.def("grounding_space_list", [](CSpace space) -> pybind11::list {
+        pybind11::list atoms_list;
+        space_iterate(space.ptr, atom_copy_to_list_callback, &atoms_list);
+        return atoms_list;
+    }, "Returns iterator to traverse atoms within a space");
+    m.def("grounding_space_query", [](CSpace space, CAtom pattern) {
             py::list results;
-            grounding_space_query(space.ptr, pattern.ptr,
+            space_query(space.ptr, pattern.ptr,
                     [](bindings_t const* cbindings, void* context) {
                         py::list& results = *(py::list*)context;
                         py::dict pybindings;
@@ -399,13 +409,10 @@ PYBIND11_MODULE(hyperonpy, m) {
                         results.append(pybindings);
                     }, &results);
             return results;
-        }, "Query atoms from grounding space by pattern");
-
-
-
-    m.def("grounding_space_subst", [](CGroundingSpace space, CAtom pattern, CAtom templ) {
+        }, "Query atoms from space by pattern");
+    m.def("grounding_space_subst", [](CSpace space, CAtom pattern, CAtom templ) {
             py::list atoms;
-            grounding_space_subst(space.ptr, pattern.ptr, templ.ptr, copy_atoms, &atoms);
+            space_subst(space.ptr, pattern.ptr, templ.ptr, copy_atoms, &atoms);
             return atoms;
         }, "Get bindings for pattern and apply to template");
 
@@ -428,7 +435,7 @@ PYBIND11_MODULE(hyperonpy, m) {
             step_to_str(step.ptr, copy_to_string, &str);
             return str;
         }, "Convert step to human readable string");
-    m.def("interpret_init", [](CGroundingSpace space, CAtom expr) {
+    m.def("interpret_init", [](CSpace space, CAtom expr) {
             return CStepResult(interpret_init(space.ptr, expr.ptr));
         }, "Initialize interpreter of the expression");
     m.def("interpret_step", [](CStepResult step) {
@@ -453,23 +460,25 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_TYPE(VARIABLE, "Variable")
         ADD_TYPE(EXPRESSION, "Expression")
         ADD_TYPE(GROUNDED, "Grounded");
-    m.def("check_type", [](CGroundingSpace space, CAtom atom, CAtom type) {
+    m.def("check_type", [](CSpace space, CAtom atom, CAtom type) {
             return check_type(space.ptr, atom.ptr, type.ptr);
         }, "Check if atom is an instance of the passed type");
-    m.def("validate_atom", [](CGroundingSpace space, CAtom atom) {
+    m.def("validate_atom", [](CSpace space, CAtom atom) {
             return validate_atom(space.ptr, atom.ptr);
         }, "Validate expression arguments correspond to the operation type");
-    m.def("get_atom_types", [](CGroundingSpace space, CAtom atom) {
+    m.def("get_atom_types", [](CSpace space, CAtom atom) {
             py::list atoms;
             get_atom_types(space.ptr, atom.ptr, copy_atoms, &atoms);
             return atoms;
         }, "Get types of the given atom");
 
     py::class_<CMetta>(m, "CMetta");
-    m.def("metta_new", [](CGroundingSpace space, CTokenizer tokenizer, char const* cwd) { return CMetta(metta_new(space.ptr, tokenizer.ptr, cwd)); }, "New MeTTa interpreter instance");
+    m.def("metta_new", [](CSpace space, CTokenizer tokenizer, char const* cwd) {
+        return CMetta(metta_new(space.ptr, tokenizer.ptr, cwd));
+    }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.ptr); }, "Free MeTTa interpreter");
     m.def("metta_clone", [](CMetta metta) { metta_clone(metta.ptr); }, "Clone MeTTa interpreter");
-    m.def("metta_space", [](CMetta metta) { return CGroundingSpace(metta_space(metta.ptr)); }, "Get space of MeTTa interpreter");
+    m.def("metta_space", [](CMetta metta) { return CSpace(metta_space(metta.ptr)); }, "Get space of MeTTa interpreter");
     m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr)); }, "Get tokenizer of MeTTa interpreter");
     m.def("metta_run", [](CMetta metta, CSExprParser& parser) {
             py::list lists_of_atom;

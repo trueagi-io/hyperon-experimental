@@ -2,7 +2,7 @@ use crate::*;
 use crate::common::shared::Shared;
 
 use super::*;
-use super::space::grounding::GroundingSpace;
+use super::space::*;
 use super::text::{Tokenizer, SExprParser};
 use super::types::validate_atom;
 use super::interpreter::interpret;
@@ -18,10 +18,10 @@ const EXEC_SYMBOL : Atom = sym!("!");
 
 #[derive(Debug, Clone)]
 pub struct Metta {
-    space: Shared<GroundingSpace>,
+    space: Shared<SpaceBox>,
     tokenizer: Shared<Tokenizer>,
     settings: Shared<HashMap<String, String>>,
-    modules: Shared<HashMap<PathBuf, Shared<GroundingSpace>>>,
+    modules: Shared<HashMap<PathBuf, Shared<SpaceBox>>>,
 }
 
 enum Mode {
@@ -30,11 +30,11 @@ enum Mode {
 }
 
 impl Metta {
-    pub fn new(space: Shared<GroundingSpace>, tokenizer: Shared<Tokenizer>) -> Self {
+    pub fn new(space: Shared<SpaceBox>, tokenizer: Shared<Tokenizer>) -> Self {
         Metta::from_space_cwd(space, tokenizer, PathBuf::from("."))
     }
 
-    pub fn from_space_cwd(space: Shared<GroundingSpace>, tokenizer: Shared<Tokenizer>, cwd: PathBuf) -> Self {
+    pub fn from_space_cwd(space: Shared<SpaceBox>, tokenizer: Shared<Tokenizer>, cwd: PathBuf) -> Self {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
         let metta = Self{ space, tokenizer, settings, modules };
@@ -44,7 +44,7 @@ impl Metta {
     }
 
     fn new_loading_runner(metta: &Metta, path: PathBuf) -> Self {
-        let space = Shared::new(GroundingSpace::new());
+        let space = Shared::new(space_box!(GroundingSpace::new()));
         let tokenizer = metta.tokenizer.cloned();
         let mut next_cwd = path;
         next_cwd.pop();
@@ -55,7 +55,7 @@ impl Metta {
         metta
     }
 
-    pub fn load_module_space(&self, path: PathBuf) -> Result<Shared<GroundingSpace>, String> {
+    pub fn load_module_space(&self, path: PathBuf) -> Result<Shared<SpaceBox>, String> {
         log::debug!("Metta::load_module_space: load module space {}", path.display());
         let loaded_module = self.modules.borrow().get(&path).cloned();
 
@@ -95,7 +95,7 @@ impl Metta {
         Ok(())
     }
 
-    pub fn space(&self) -> Shared<GroundingSpace> {
+    pub fn space(&self) -> Shared<SpaceBox> {
         self.space.clone()
     }
 
@@ -185,7 +185,7 @@ impl Metta {
 }
 
 pub fn new_metta_rust() -> Metta {
-    let metta = Metta::new(Shared::new(GroundingSpace::new()),
+    let metta = Metta::new(Shared::new(Box::new(GroundingSpace::new())),
         Shared::new(Tokenizer::new()));
     stdlib::register_rust_tokens(&metta);
     metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
@@ -222,7 +222,7 @@ mod tests {
             (foo b)
         ";
 
-        let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = Metta::new(Shared::new(Box::new(GroundingSpace::new())), Shared::new(Tokenizer::new()));
         metta.set_setting("type-check".into(), "auto".into());
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -236,7 +236,7 @@ mod tests {
             !(foo b)
         ";
 
-        let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = Metta::new(Shared::new(Box::new(GroundingSpace::new())), Shared::new(Tokenizer::new()));
         metta.set_setting("type-check".into(), "auto".into());
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -273,7 +273,7 @@ mod tests {
             !(foo)
         ";
 
-        let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = Metta::new(Shared::new(Box::new(GroundingSpace::new())), Shared::new(Tokenizer::new()));
         metta.tokenizer().borrow_mut().register_token(Regex::new("error").unwrap(),
             |_| Atom::gnd(ErrorOp{}));
         let result = metta.run(&mut SExprParser::new(program));
@@ -291,7 +291,7 @@ mod tests {
             !(foo a)
         ";
 
-        let metta = Metta::new(Shared::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = Metta::new(Shared::new(Box::new(GroundingSpace::new())), Shared::new(Tokenizer::new()));
         metta.set_setting("type-check".into(), "auto".into());
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
