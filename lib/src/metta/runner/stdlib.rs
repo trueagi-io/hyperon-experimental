@@ -9,6 +9,7 @@ use crate::metta::runner::Metta;
 use crate::metta::types::get_atom_types;
 use crate::common::shared::Shared;
 use crate::common::assert::vec_eq_no_order;
+use crate::common::ReplacingMapper;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -846,7 +847,6 @@ impl Display for LetOp {
     }
 }
 
-use std::convert::TryFrom;
 use std::collections::HashSet;
 
 impl Grounded for LetOp {
@@ -883,38 +883,22 @@ fn resolve_var_conflicts(atom: &Atom, pattern: &mut Atom, template: &mut Atom) -
     external_vars
 }
 
-fn atom_into_var_iter(atom: &Atom) -> impl Iterator<Item=&VariableAtom> {
-    atom.iter()
-        .map(<&VariableAtom>::try_from)
-        .filter(Result::is_ok)
-        .map(Result::unwrap)
-}
-
-fn atom_into_var_iter_mut(atom: &mut Atom) -> impl Iterator<Item=&mut VariableAtom> {
-    atom.iter_mut()
-        .map(<&mut VariableAtom>::try_from)
-        .filter(Result::is_ok)
-        .map(Result::unwrap)
-}
-
 fn collect_vars(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
-    for var in atom_into_var_iter(atom) {
-        vars.insert(var.clone());
-    }
+    atom.iter().filter_type::<&VariableAtom>().cloned().for_each(|var| { vars.insert(var); });
 }
 
 fn make_conflicting_vars_unique(pattern: &mut Atom, template: &mut Atom, external_vars: &HashSet<VariableAtom>) {
-    let mut local_vars = HashMap::new();
+    let mut local_var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
 
-    for var in atom_into_var_iter_mut(pattern) {
-        if external_vars.contains(var) {
-            *var = local_vars.entry(var.clone()).or_insert(var.make_unique()).clone();
-        }
-    }
+    pattern.iter_mut().filter_type::<&mut VariableAtom>()
+        .filter(|var| external_vars.contains(var))
+        .for_each(|var| local_var_mapper.replace(var));
 
-    for var in atom_into_var_iter_mut(template) {
-        local_vars.get(var).map(|v| *var = v.clone());
-    }
+    template.iter_mut().filter_type::<&mut VariableAtom>()
+        .for_each(|var| match local_var_mapper.get_mapping().get(var) {
+            Some(v) => *var = v.clone(),
+            None => {},
+        });
 }
 
 #[derive(Clone, PartialEq, Debug)]

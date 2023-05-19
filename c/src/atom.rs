@@ -201,7 +201,7 @@ pub extern "C" fn bindings_narrow_vars(bindings: *mut bindings_t, vars: *const v
     let bindings = unsafe{&mut (*bindings).bindings};
     let vars = unsafe{&(*vars).0};
     let vars_iter = vars.into_iter().map(|atom| {
-        TryInto::<VariableAtom>::try_into(atom.clone())
+        TryInto::<&VariableAtom>::try_into(atom)
             .expect("Only variable atoms allowed for bindings_narrow_vars")
     });
     let vars_set = HashSet::from_iter(vars_iter);
