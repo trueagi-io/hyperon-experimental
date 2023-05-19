@@ -96,11 +96,6 @@ pub unsafe extern "C" fn check_type(space: *const space_t, atom: *const atom_t, 
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn check_type_v2(space: *const space_t, atom: *const atom_t, typ: *const atom_t) -> bool {
-    hyperon::metta::types::check_type((*space).borrow().deref().as_space(), &(*atom).atom, &(*typ).atom)
-}
-
-#[no_mangle]
 pub unsafe extern "C" fn validate_atom(space: *const space_t, atom: *const atom_t) -> bool {
     hyperon::metta::types::validate_atom((*space).borrow().deref(), &(*atom).atom)
 }
