@@ -268,7 +268,7 @@ impl Display for VariableAtom {
     }
 }
 
-/// Returns a copy of `atom` with all variables replaced by unique instances.
+/// Returns `atom` with all variables replaced by unique instances.
 pub fn make_variables_unique(mut atom: Atom) -> Atom {
     let mut mapper = ReplacingMapper::new(VariableAtom::make_unique);
     atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| mapper.replace(var));
