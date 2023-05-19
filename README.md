@@ -1,6 +1,5 @@
 ![CI](https://github.com/trueagi-io/hyperon-experimental/actions/workflows/ci.yml/badge.svg)
 
-
 # Overview
 
 OpenCog Hyperon is a substantially revised, novel version of OpenCog - which is currently at an active
