@@ -39,26 +39,30 @@ to run.  If the docker image doesn't work, please raise an
 
 ## Manual installation
 
-Install latest stable Rust (1.63 or later), see [Rust installation
+### Prerequisites
+
+* Install latest stable Rust (1.63 or later), see [Rust installation
 page](https://www.rust-lang.org/tools/install). Make sure your
 `PATH` variable includes `$HOME/.cargo/bin` directory after installing
-Rust (see the Notes at the installation page). Python 3 (3.7 or later),
-GCC (7.5 or later) and CMake (3.10 or later) are required to build C and
-Python API.
+Rust (see the Notes at the installation page). 
 
-Install cbindgen:
+  Requirements for building C and Python API
+  * Python3 and Python3-dev (3.7 or later)
+  * GCC (7.5 or later)
+  * CMake (3.10 or later)
+
+* Install cbindgen:
 ```
 cargo install --force cbindgen
 ```
 
-Install Conan and make default Conan profile:
+* Install Conan and make default Conan profile:
 ```
 python3 -m pip install conan==1.57
 conan profile new --detect default
 ```
 
-Install Python library and dependencies in development mode (execute following
-command in the top directory of repository):
+* Install Python library and dependencies in development mode (execute following command in the top directory of repository):
 ```
 python3 -m pip install -e ./python[dev]
 ```
