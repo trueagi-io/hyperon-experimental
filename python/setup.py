@@ -55,4 +55,9 @@ setup(
         "coverage": CoverageCommand,
         "bdist_wheel": bdist_wheel,
     },
+    entry_points={
+        'console_scripts': [
+            'hyperon = hyperon:main',
+        ]
+    }
 )
