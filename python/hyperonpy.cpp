@@ -384,22 +384,20 @@ PYBIND11_MODULE(hyperonpy, m) {
         return bindings_list;
     }, "Returns iterator to traverse Bindings within BindingsSet");
 
-
-    // TODO: We should rename these python symbols from grounding_space... to space..., but I don't know who else is relying on them
     py::class_<CSpace>(m, "CSpace");
-    m.def("grounding_space_new", []() { return CSpace(space_new_grounding_space()); }, "New grounding space instance");
-    m.def("grounding_space_free", [](CSpace space) { space_free(space.ptr); }, "Free space");
-    m.def("grounding_space_add", [](CSpace space, CAtom atom) { space_add(space.ptr, atom_clone(atom.ptr)); }, "Add atom into space");
-    m.def("grounding_space_remove", [](CSpace space, CAtom atom) { return space_remove(space.ptr, atom.ptr); }, "Remove atom from space");
-    m.def("grounding_space_replace", [](CSpace space, CAtom from, CAtom to) { return space_replace(space.ptr, from.ptr, atom_clone(to.ptr)); }, "Replace atom from space");
-    m.def("grounding_space_eq", [](CSpace a, CSpace b) { return space_eq(a.ptr, b.ptr); }, "Check if two spaces are equal");
-    m.def("grounding_space_len", [](CSpace space) { return space_atom_count(space.ptr); }, "Return number of atoms in space");
-    m.def("grounding_space_list", [](CSpace space) -> pybind11::list {
+    m.def("space_new_grounding", []() { return CSpace(space_new_grounding_space()); }, "New grounding space instance");
+    m.def("space_free", [](CSpace space) { space_free(space.ptr); }, "Free space");
+    m.def("space_add", [](CSpace space, CAtom atom) { space_add(space.ptr, atom_clone(atom.ptr)); }, "Add atom into space");
+    m.def("space_remove", [](CSpace space, CAtom atom) { return space_remove(space.ptr, atom.ptr); }, "Remove atom from space");
+    m.def("space_replace", [](CSpace space, CAtom from, CAtom to) { return space_replace(space.ptr, from.ptr, atom_clone(to.ptr)); }, "Replace atom from space");
+    m.def("space_eq", [](CSpace a, CSpace b) { return space_eq(a.ptr, b.ptr); }, "Check if two spaces are equal");
+    m.def("space_len", [](CSpace space) { return space_atom_count(space.ptr); }, "Return number of atoms in space");
+    m.def("space_list", [](CSpace space) -> pybind11::list {
         pybind11::list atoms_list;
         space_iterate(space.ptr, atom_copy_to_list_callback, &atoms_list);
         return atoms_list;
     }, "Returns iterator to traverse atoms within a space");
-    m.def("grounding_space_query", [](CSpace space, CAtom pattern) {
+    m.def("space_query", [](CSpace space, CAtom pattern) {
             py::list results;
             space_query(space.ptr, pattern.ptr,
                     [](bindings_t const* cbindings, void* context) {
@@ -410,7 +408,7 @@ PYBIND11_MODULE(hyperonpy, m) {
                     }, &results);
             return results;
         }, "Query atoms from space by pattern");
-    m.def("grounding_space_subst", [](CSpace space, CAtom pattern, CAtom templ) {
+    m.def("space_subst", [](CSpace space, CAtom pattern, CAtom templ) {
             py::list atoms;
             space_subst(space.ptr, pattern.ptr, templ.ptr, copy_atoms, &atoms);
             return atoms;
