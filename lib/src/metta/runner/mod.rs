@@ -44,7 +44,7 @@ impl Metta {
     }
 
     fn new_loading_runner(metta: &Metta, path: PathBuf) -> Self {
-        let space = Shared::new(space_box!(GroundingSpace::new()));
+        let space = Shared::new(SpaceBox::new(GroundingSpace::new()));
         let tokenizer = metta.tokenizer.cloned();
         let mut next_cwd = path;
         next_cwd.pop();
@@ -185,7 +185,7 @@ impl Metta {
 }
 
 pub fn new_metta_rust() -> Metta {
-    let metta = Metta::new(Shared::new(space_box!(GroundingSpace::new())),
+    let metta = Metta::new(Shared::new(SpaceBox::new(GroundingSpace::new())),
         Shared::new(Tokenizer::new()));
     stdlib::register_rust_tokens(&metta);
     metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
@@ -222,7 +222,7 @@ mod tests {
             (foo b)
         ";
 
-        let metta = Metta::new(Shared::new(space_box!(GroundingSpace::new())), Shared::new(Tokenizer::new()));
+        let metta = Metta::new(Shared::new(SpaceBox::new(GroundingSpace::new())), Shared::new(Tokenizer::new()));
         metta.set_setting("type-check".into(), "auto".into());
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -236,7 +236,7 @@ mod tests {
             !(foo b)
         ";
 
-        let metta = Metta::new(Shared::new(space_box!(GroundingSpace::new())), Shared::new(Tokenizer::new()));
+        let metta = Metta::new(Shared::new(SpaceBox::new(GroundingSpace::new())), Shared::new(Tokenizer::new()));
         metta.set_setting("type-check".into(), "auto".into());
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -273,7 +273,7 @@ mod tests {
             !(foo)
         ";
 
-        let metta = Metta::new(Shared::new(space_box!(GroundingSpace::new())), Shared::new(Tokenizer::new()));
+        let metta = Metta::new(Shared::new(SpaceBox::new(GroundingSpace::new())), Shared::new(Tokenizer::new()));
         metta.tokenizer().borrow_mut().register_token(Regex::new("error").unwrap(),
             |_| Atom::gnd(ErrorOp{}));
         let result = metta.run(&mut SExprParser::new(program));
@@ -291,7 +291,7 @@ mod tests {
             !(foo a)
         ";
 
-        let metta = Metta::new(Shared::new(space_box!(GroundingSpace::new())), Shared::new(Tokenizer::new()));
+        let metta = Metta::new(Shared::new(SpaceBox::new(GroundingSpace::new())), Shared::new(Tokenizer::new()));
         metta.set_setting("type-check".into(), "auto".into());
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));

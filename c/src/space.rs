@@ -432,7 +432,7 @@ impl Drop for CSpace {
     }
 }
 
-pub type space_t = SharedApi<Box<dyn SpaceMut>>;
+pub type space_t = SharedApi<SpaceBox>;
 
 /// Creates a new space_t, backed by an implementation in C
 ///
@@ -443,7 +443,7 @@ pub type space_t = SharedApi<Box<dyn SpaceMut>>;
 #[no_mangle]
 pub extern "C" fn space_new(api: *const space_api_t, payload: *mut c_void) -> *mut space_t {
     let c_space = CSpace::new(api, payload);
-    space_t::new(Box::new(c_space))
+    space_t::new(SpaceBox::new(c_space))
 }
 
 #[no_mangle]
@@ -545,5 +545,5 @@ pub extern "C" fn space_iterate(space: *const space_t,
 /// The returned space_t must be freed with space_free
 #[no_mangle]
 pub extern "C" fn space_new_grounding_space() -> *mut space_t {
-    space_t::new(Box::new(GroundingSpace::new()))
+    space_t::new(SpaceBox::new(GroundingSpace::new()))
 }

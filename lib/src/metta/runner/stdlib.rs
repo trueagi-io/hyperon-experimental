@@ -199,7 +199,7 @@ impl Grounded for NewSpaceOp {
 
     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         if args.len() == 0 {
-            let space = Atom::gnd(Shared::new(space_box!(GroundingSpace::new())));
+            let space = Atom::gnd(Shared::new(SpaceBox::new(GroundingSpace::new())));
             Ok(vec![space])
         } else {
             Err("new-space doesn't expect arguments".into())
@@ -1197,7 +1197,7 @@ mod tests {
 
     #[test]
     fn match_op() {
-        let space = Shared::new(space_box!(metta_space("
+        let space = Shared::new(SpaceBox::new(metta_space("
             (A B)
             !(match &self (A B) (B A))
         ")));
@@ -1219,7 +1219,7 @@ mod tests {
 
     #[test]
     fn add_atom_op() {
-        let space = Shared::new(space_box!(GroundingSpace::new()));
+        let space = Shared::new(SpaceBox::new(GroundingSpace::new()));
         let satom = Atom::gnd(space.clone());
         let res = AddAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         assert!(res.is_empty());
@@ -1229,7 +1229,7 @@ mod tests {
 
     #[test]
     fn remove_atom_op() {
-        let space = Shared::new(space_box!(metta_space("
+        let space = Shared::new(SpaceBox::new(metta_space("
             (foo bar)
             (bar foo)
         ")));
@@ -1243,7 +1243,7 @@ mod tests {
 
     #[test]
     fn get_atoms_op() {
-        let space = Shared::new(space_box!(metta_space("
+        let space = Shared::new(SpaceBox::new(metta_space("
             (foo bar)
             (bar foo)
         ")));
@@ -1291,7 +1291,7 @@ mod tests {
 
     #[test]
     fn case_op() {
-        let space = Shared::new(space_box!(metta_space("
+        let space = Shared::new(SpaceBox::new(metta_space("
             (= (foo) (A B))
         ")));
 
@@ -1307,7 +1307,7 @@ mod tests {
 
     #[test]
     fn case_op_external_vars_at_right_are_kept_untouched() {
-        let space = Shared::new(space_box!(GroundingSpace::new()));
+        let space = Shared::new(SpaceBox::new(GroundingSpace::new()));
         let case_op = CaseOp::new(space.clone());
 
         assert_eq!(case_op.execute(&mut vec![expr!(ext), expr!(((t t)))]),
@@ -1318,7 +1318,7 @@ mod tests {
 
     #[test]
     fn case_op_internal_variables_has_priority_in_template() {
-        let space = Shared::new(space_box!(GroundingSpace::new()));
+        let space = Shared::new(SpaceBox::new(GroundingSpace::new()));
         let case_op = CaseOp::new(space.clone());
 
         assert_eq!(case_op.execute(&mut vec![expr!(x "A"), expr!(((x x)))]),
@@ -1335,7 +1335,7 @@ mod tests {
 
     #[test]
     fn assert_equal_op() {
-        let space = Shared::new(space_box!(metta_space("
+        let space = Shared::new(SpaceBox::new(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
             (= (bar) (B C))
@@ -1358,7 +1358,7 @@ mod tests {
 
     #[test]
     fn assert_equal_to_result_op() {
-        let space = Shared::new(space_box!(metta_space("
+        let space = Shared::new(SpaceBox::new(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
         ")));
@@ -1371,7 +1371,7 @@ mod tests {
 
     #[test]
     fn collapse_op() {
-        let space = Shared::new(space_box!(metta_space("
+        let space = Shared::new(SpaceBox::new(metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
         ")));
@@ -1386,7 +1386,7 @@ mod tests {
 
     #[test]
     fn superpose_op() {
-        let space = Shared::new(space_box!(GroundingSpace::new()));
+        let space = Shared::new(SpaceBox::new(GroundingSpace::new()));
         let superpose_op = SuperposeOp::new(space);
         assert_eq!(superpose_op.execute(&mut vec![expr!("A" ("B" "C"))]),
             Ok(vec![sym!("A"), expr!("B" "C")]));
@@ -1394,7 +1394,7 @@ mod tests {
 
     #[test]
     fn superpose_op_type() {
-        let space = Shared::new(space_box!(GroundingSpace::new()));
+        let space = Shared::new(SpaceBox::new(GroundingSpace::new()));
         assert!(validate_atom(space.borrow().deref(), &expr!({SumOp{}}
             ({SuperposeOp::new(space.clone())} ({Number::Integer(1)} {Number::Integer(2)} {Number::Integer(3)}))
             {Number::Integer(1)})));
@@ -1450,7 +1450,7 @@ mod tests {
 
     #[test]
     fn get_type_op() {
-        let space = Shared::new(space_box!(metta_space("
+        let space = Shared::new(SpaceBox::new(metta_space("
             (: B Type)
             (: C Type)
             (: A B)
@@ -1464,7 +1464,7 @@ mod tests {
 
     #[test]
     fn get_type_op_non_valid_atom() {
-        let space = Shared::new(space_box!(metta_space("
+        let space = Shared::new(SpaceBox::new(metta_space("
             (: f (-> Number String))
             (: 42 Number)
             (: \"test\" String)

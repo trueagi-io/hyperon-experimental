@@ -3,6 +3,7 @@
 
 pub mod grounding;
 
+use std::fmt::Display;
 use std::rc::Rc;
 use std::cell::RefCell;
 
@@ -202,33 +203,61 @@ pub trait SpaceMut: Space {
     fn as_space(&self) -> &dyn Space;
 }
 
-#[macro_export]
-macro_rules! space_box {
-    ($s:expr) => {
-        (Box::new($s) as Box<dyn $crate::space::SpaceMut>)
-    };
+#[derive(Debug)]
+pub struct SpaceBox(Box<dyn SpaceMut>);
+
+impl SpaceBox {
+    pub fn new<T: SpaceMut + 'static>(space: T) -> Self {
+        SpaceBox(Box::new(space))
+    }
 }
 
-pub type SpaceBox = Box<dyn SpaceMut>;
+impl Display for SpaceBox {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl core::ops::Deref for SpaceBox {
+    type Target = dyn SpaceMut + 'static;
+    fn deref(&self) -> &Self::Target {
+        &*self.0
+    }
+}
+
+impl SpaceMut for SpaceBox {
+    fn add(&mut self, atom: Atom) {
+        self.0.add(atom)
+    }
+    fn remove(&mut self, atom: &Atom) -> bool {
+        self.0.remove(atom)
+    }
+    fn replace(&mut self, from: &Atom, to: Atom) -> bool {
+        self.0.replace(from, to)
+    }
+    fn as_space(&self) -> &dyn Space {
+        self.0.as_space()
+    }
+}
 
 impl Space for SpaceBox {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
-        (**self).register_observer(observer)
+        (*self.0).register_observer(observer)
     }
     fn query(&self, query: &Atom) -> BindingsSet {
-        (**self).query(query)
+        (*self.0).query(query)
     }
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        (**self).subst(pattern, template)
+        (*self.0).subst(pattern, template)
     }
     fn atom_count(&self) -> Option<usize> {
-        (**self).atom_count()
+        (*self.0).atom_count()
     }
     fn atom_iter(&self) -> Option<SpaceIter> {
-        (**self).atom_iter()
+        (*self.0).atom_iter()
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
-        (*self).as_space().as_any()
+        self.0.as_space().as_any()
     }
 }
 
