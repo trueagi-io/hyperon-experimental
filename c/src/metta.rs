@@ -92,34 +92,35 @@ pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
 
 #[no_mangle]
 pub unsafe extern "C" fn check_type(space: *const space_t, atom: *const atom_t, typ: *const atom_t) -> bool {
-    hyperon::metta::types::check_type((*space).borrow().deref(), &(*atom).atom, &(*typ).atom)
+    hyperon::metta::types::check_type((*space).0.borrow().as_space(), &(*atom).atom, &(*typ).atom)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn validate_atom(space: *const space_t, atom: *const atom_t) -> bool {
-    hyperon::metta::types::validate_atom((*space).borrow().deref(), &(*atom).atom)
+    hyperon::metta::types::validate_atom((*space).0.borrow().as_space(), &(*atom).atom)
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn validate_atom_v2(space: *const space_t, atom: *const atom_t) -> bool {
-    hyperon::metta::types::validate_atom((*space).borrow().deref().as_space(), &(*atom).atom)
+    hyperon::metta::types::validate_atom((*space).0.borrow().as_space(), &(*atom).atom)
 }
 
 #[no_mangle]
 pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
-    let space = unsafe{ &(*space).borrow() };
+    let space = unsafe{ &(*space).0.borrow() };
     let atom = unsafe{ &(*atom).atom };
-    let types = hyperon::metta::types::get_atom_types(space.deref(), atom);
+    let types = hyperon::metta::types::get_atom_types(space.as_space(), atom);
     return_atoms(&types, callback, context);
 }
 
+//TODO: Get rid of this get_atom_types_v2 call as it's now identical to the above
 #[no_mangle]
 pub extern "C" fn get_atom_types_v2(space: *const space_t, atom: *const atom_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
-    let space = unsafe{ &(*space).borrow() };
+    let space = unsafe{ &(*space).0.borrow() };
     let atom = unsafe{ &(*atom).atom };
-    let types = hyperon::metta::types::get_atom_types(space.deref().as_space(), atom);
+    let types = hyperon::metta::types::get_atom_types(space.as_space(), atom);
     return_atoms(&types, callback, context);
 }
 

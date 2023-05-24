@@ -92,7 +92,7 @@ impl<T> LockBorrowMut<T> for &mut T {
     }
 }
 
-pub struct Shared<T>(Rc<RefCell<T>>);
+pub struct Shared<T: ?Sized>(pub(crate) Rc<RefCell<T>>);
 
 impl<T> Shared<T> {
     pub fn new(value: T) -> Self {
@@ -141,7 +141,7 @@ impl<T> PartialEq for Shared<T> {
     }
 }
 
-impl<T> Clone for Shared<T> {
+impl<T: ?Sized> Clone for Shared<T> {
     fn clone(&self) -> Self {
         Self(self.0.clone())
     }

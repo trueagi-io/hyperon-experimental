@@ -432,7 +432,35 @@ impl Drop for CSpace {
     }
 }
 
-pub type space_t = SharedApi<SpaceBox>;
+//INTERNAL NOTE: There are two reasons we need to box this space_t, rather than going directly from
+// the internal Rc to a raw pointer.
+// 1. The Rc inside DynSpace isn't pub, because we don't want to expose it to the Rust clients
+// 2. More importantly, the <dyn SpaceMut> type is unSized, so we can't recreate the Rc without
+//   knowing the size, and that knowledge is lost if we convert to a raw ptr.  So the indirection is
+//   neessary to preserve the allocation meta-data.
+pub struct space_t(pub(crate) DynSpace);
+
+impl space_t {
+    pub fn new<T: SpaceMut + 'static>(space: T) -> *mut space_t {
+        Box::into_raw(Box::new(space_t(DynSpace::new(space))))
+    }
+    pub fn from_shared(space: DynSpace) -> *mut space_t {
+        Box::into_raw(Box::new(space_t(space)))
+    }
+    pub fn from_ptr(space_ptr: *mut space_t) -> Self {
+        *unsafe{ Box::from_raw(space_ptr) }
+    }
+    pub fn shared(&self) -> DynSpace {
+        self.0.clone()
+    }
+}
+
+impl PartialEq for space_t {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
 
 /// Creates a new space_t, backed by an implementation in C
 ///
@@ -443,12 +471,13 @@ pub type space_t = SharedApi<SpaceBox>;
 #[no_mangle]
 pub extern "C" fn space_new(api: *const space_api_t, payload: *mut c_void) -> *mut space_t {
     let c_space = CSpace::new(api, payload);
-    space_t::new(SpaceBox::new(c_space))
+    space_t::new(c_space)
 }
 
 #[no_mangle]
 pub extern "C" fn space_free(space: *mut space_t) {
-    space_t::drop(space)
+    let space = space_t::from_ptr(space);
+    drop(space)
 }
 
 #[no_mangle]
@@ -462,7 +491,7 @@ pub unsafe extern "C" fn space_eq(a: *const space_t, b: *const space_t) -> bool 
 /// has been freed
 #[no_mangle]
 pub extern "C" fn space_get_payload(space: *mut space_t) -> *mut c_void {
-    if let Some(any_ref) = unsafe{ (*space).borrow_mut().as_any() } {
+    if let Some(any_ref) = unsafe{ (*space).0.borrow_mut().as_any() } {
         if let Some(c_space) = any_ref.downcast_ref::<CSpace>() {
             return c_space.params.payload;
         }
@@ -472,7 +501,7 @@ pub extern "C" fn space_get_payload(space: *mut space_t) -> *mut c_void {
 
 #[no_mangle]
 pub extern "C" fn space_register_observer(space: *mut space_t, observer: *const space_observer_t) {
-    let space = unsafe{ (*space).borrow_mut() };
+    let space = unsafe{ (*space).0.borrow_mut() };
     let observer = unsafe{ &(*observer).observer };
     space.register_observer(observer.clone());
 }
@@ -481,25 +510,25 @@ pub extern "C" fn space_register_observer(space: *mut space_t, observer: *const 
 /// accessed after it has been provided to this function
 #[no_mangle]
 pub unsafe extern "C" fn space_add(space: *mut space_t, atom: *mut atom_t) {
-    (*space).borrow_mut().add(ptr_into_atom(atom));
+    (*space).0.borrow_mut().add(ptr_into_atom(atom));
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn space_remove(space: *mut space_t, atom: *const atom_t) -> bool {
-    (*space).borrow_mut().remove(&(*atom).atom)
+    (*space).0.borrow_mut().remove(&(*atom).atom)
 }
 
 /// WARNING: This function takes ownership of the `to` atom, and it should not be freed or
 /// accessed after it has been provided to this function
 #[no_mangle]
 pub unsafe extern "C" fn space_replace(space: *mut space_t, from: *const atom_t, to: *mut atom_t) -> bool {
-    (*space).borrow_mut().replace(&(*from).atom, ptr_into_atom(to))
+    (*space).0.borrow_mut().replace(&(*from).atom, ptr_into_atom(to))
 }
 
 #[no_mangle]
 pub extern "C" fn space_query(space: *const space_t,
         pattern: *const atom_t, callback: lambda_t<* const bindings_t>, context: *mut c_void) {
-    let results = unsafe { (*space).borrow().query(&((*pattern).atom)) };
+    let results = unsafe { (*space).0.borrow().query(&((*pattern).atom)) };
     for result in results.into_iter() {
         let b = (&result as *const Bindings).cast();
         callback(b, context);
@@ -510,7 +539,7 @@ pub extern "C" fn space_query(space: *const space_t,
 pub extern "C" fn space_subst(space: *const space_t,
         pattern: *const atom_t, templ: *const atom_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
-    let results = unsafe { (*space).borrow().subst(&((*pattern).atom), &((*templ).atom)) };
+    let results = unsafe { (*space).0.borrow().subst(&((*pattern).atom), &((*templ).atom)) };
     return_atoms(&results, callback, context);
 }
 
@@ -518,7 +547,7 @@ pub extern "C" fn space_subst(space: *const space_t,
 /// to determine the number of atoms
 #[no_mangle]
 pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
-    match unsafe { (*space).borrow().atom_count() } {
+    match unsafe { (*space).0.borrow().atom_count() } {
         Some(count) => count as isize,
         None => -1
     }
@@ -529,7 +558,7 @@ pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
 #[no_mangle]
 pub extern "C" fn space_iterate(space: *const space_t,
         callback: c_atom_callback_t, context: *mut c_void) {
-    if let Some(atom_iter) = unsafe { (*space).borrow().atom_iter() } {
+    if let Some(atom_iter) = unsafe { (*space).0.borrow().atom_iter() } {
         for atom in atom_iter {
             callback((atom as *const Atom).cast(), context);
         }
@@ -545,5 +574,5 @@ pub extern "C" fn space_iterate(space: *const space_t,
 /// The returned space_t must be freed with space_free
 #[no_mangle]
 pub extern "C" fn space_new_grounding_space() -> *mut space_t {
-    space_t::new(SpaceBox::new(GroundingSpace::new()))
+    space_t::new(GroundingSpace::new())
 }

@@ -5,7 +5,7 @@ pub mod grounding;
 
 use std::fmt::Display;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{RefCell, Ref, RefMut};
 
 use crate::atom::*;
 use crate::atom::matcher::{BindingsSet, apply_bindings_to_atom};
@@ -203,81 +203,79 @@ pub trait SpaceMut: Space {
     fn as_space(&self) -> &dyn Space;
 }
 
-#[derive(Debug)]
-pub struct SpaceBox(Box<dyn SpaceMut>);
+#[derive(Clone)]
+pub struct DynSpace(Rc<RefCell<dyn SpaceMut>>);
 
-impl SpaceBox {
+impl DynSpace {
     pub fn new<T: SpaceMut + 'static>(space: T) -> Self {
-        SpaceBox(Box::new(space))
+        let shared = Rc::new(RefCell::new(space));
+        DynSpace(shared)
+    }
+    pub fn borrow(&self) -> Ref<dyn SpaceMut> {
+        self.0.borrow()
+    }
+    pub fn borrow_mut(&self) -> RefMut<dyn SpaceMut> {
+        self.0.borrow_mut()
     }
 }
 
-impl Display for SpaceBox {
+impl core::fmt::Debug for DynSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
+        write!(f, "{:?}", self.0)
     }
 }
 
-impl core::ops::Deref for SpaceBox {
-    type Target = dyn SpaceMut + 'static;
-    fn deref(&self) -> &Self::Target {
-        &*self.0
+impl Display for DynSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &*self.0.borrow())
     }
 }
 
-impl SpaceMut for SpaceBox {
+impl SpaceMut for DynSpace {
     fn add(&mut self, atom: Atom) {
-        self.0.add(atom)
+        self.0.borrow_mut().add(atom)
     }
     fn remove(&mut self, atom: &Atom) -> bool {
-        self.0.remove(atom)
+        self.0.borrow_mut().remove(atom)
     }
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
-        self.0.replace(from, to)
+        self.0.borrow_mut().replace(from, to)
     }
     fn as_space(&self) -> &dyn Space {
-        self.0.as_space()
+        self
     }
 }
 
-impl Space for SpaceBox {
+impl Space for DynSpace {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
-        (*self.0).register_observer(observer)
+        self.0.borrow().register_observer(observer)
     }
     fn query(&self, query: &Atom) -> BindingsSet {
-        (*self.0).query(query)
+        self.0.borrow().query(query)
     }
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        (*self.0).subst(pattern, template)
+        self.0.borrow().subst(pattern, template)
     }
     fn atom_count(&self) -> Option<usize> {
-        (*self.0).atom_count()
+        self.0.borrow().atom_count()
     }
     fn atom_iter(&self) -> Option<SpaceIter> {
-        (*self.0).atom_iter()
+        None
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
-        self.0.as_space().as_any()
+        None
     }
 }
 
-impl PartialEq for SpaceBox {
+impl PartialEq for DynSpace {
     fn eq(&self, other: &Self) -> bool {
-        match other.as_any() {
-            None => false,
-            Some(other) => {
-                match other.downcast_ref() {
-                    None => false,
-                    Some(other) => &*self == other,
-                }
-            }
-        }
+        RefCell::as_ptr(&self.0) == RefCell::as_ptr(&other.0)
     }
 }
 
-impl crate::atom::Grounded for SpaceBox {
+impl crate::atom::Grounded for DynSpace {
     fn type_(&self) -> Atom {
-        rust_type_atom::<SpaceBox>()
+        rust_type_atom::<DynSpace>()
     }
 
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
@@ -286,44 +284,6 @@ impl crate::atom::Grounded for SpaceBox {
 
     fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
-    }
-}
-
-use crate::common::shared::Shared;
-
-impl<T: Space> Space for Shared<T> {
-    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
-        self.borrow().register_observer(observer)
-    }
-    fn query(&self, query: &Atom) -> BindingsSet {
-        self.borrow().query(query)
-    }
-    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        self.borrow().subst(pattern, template)
-    }
-    fn atom_count(&self) -> Option<usize> {
-        self.borrow().atom_count()
-    }
-    fn atom_iter(&self) -> Option<SpaceIter> {
-        None
-    }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        None
-    }
-}
-
-impl<T: SpaceMut> SpaceMut for Shared<T> {
-    fn add(&mut self, atom: Atom) {
-        self.borrow_mut().add(atom)
-    }
-    fn remove(&mut self, atom: &Atom) -> bool {
-        self.borrow_mut().remove(atom)
-    }
-    fn replace(&mut self, from: &Atom, to: Atom) -> bool {
-        self.borrow_mut().replace(from, to)
-    }
-    fn as_space(&self) -> &dyn Space {
-        self
     }
 }
 
@@ -348,38 +308,3 @@ impl<T: Space> Space for &T {
     }
 }
 
-impl<T: Space> Space for &mut T {
-    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
-        T::register_observer(*self, observer)
-    }
-    fn query(&self, query: &Atom) -> BindingsSet {
-        T::query(*self, query)
-    }
-    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        T::subst(*self, pattern, template)
-    }
-    fn atom_count(&self) -> Option<usize> {
-        T::atom_count(*self)
-    }
-    fn atom_iter(&self) -> Option<SpaceIter> {
-        T::atom_iter(*self)
-    }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        None
-    }
-}
-
-impl<T: SpaceMut> SpaceMut for &mut T {
-    fn add(&mut self, atom: Atom) {
-        (*self).add(atom)
-    }
-    fn remove(&mut self, atom: &Atom) -> bool {
-        (*self).remove(atom)
-    }
-    fn replace(&mut self, from: &Atom, to: Atom) -> bool {
-        (*self).replace(from, to)
-    }
-    fn as_space(&self) -> &dyn Space {
-        self
-    }
-}
