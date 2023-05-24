@@ -66,6 +66,7 @@ impl Grounded for ImportOp {
         // TODO: replace Symbol by grounded String?
         if let Atom::Symbol(file) = file {
             path.push(file.name());
+            path = path.canonicalize().unwrap_or(path);
             log::debug!("import! load file, full path: {}", path.display());
         } else {
             return Err("import! expects a file path as a second argument".into())
