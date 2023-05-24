@@ -114,16 +114,6 @@ pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_t,
     return_atoms(&types, callback, context);
 }
 
-//TODO: Get rid of this get_atom_types_v2 call as it's now identical to the above
-#[no_mangle]
-pub extern "C" fn get_atom_types_v2(space: *const space_t, atom: *const atom_t,
-        callback: c_atoms_callback_t, context: *mut c_void) {
-    let space = unsafe{ &(*space).0.borrow() };
-    let atom = unsafe{ &(*atom).atom };
-    let types = hyperon::metta::types::get_atom_types(space.as_space(), atom);
-    return_atoms(&types, callback, context);
-}
-
 // MeTTa interpreter API
 
 pub struct step_result_t<'a> {
