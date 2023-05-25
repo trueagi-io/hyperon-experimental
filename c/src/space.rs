@@ -183,51 +183,72 @@ pub extern "C" fn space_observer_free(observer: *mut space_observer_t) {
 }
 
 /// A table of functions to define the behavior of a space implemented in C
-///
-/// query
-///   Returns a bindings_set_t representing the query results
-///   \arg params \c is the pointer to the space's params
-///   \arg atom \c is the query atom.  This function should NOT take ownership of the query atom.
-///
-/// subst
-///   \arg params \c is the pointer to the space's params
-///   \arg pattern \c is the pattern atom to match.  This function should NOT take ownership of the pattern atom.
-///   \arg tmpl \c is the template atom.  This function should NOT take ownership of the template atom.
-///   NOTE: If a subst function is provided, it will be called.  If NULL is provided, the default
-///     implementation will be called.
-///
-/// add
-///   \arg params \c is the pointer to the space's params
-///   \arg atom \c is the atom to add to the space.  This function SHOULD take ownership of the atom.
-///
-/// remove
-///   \arg params \c is the pointer to the space's params
-///   \arg atom \c is the atom to remove from the space.  This function should NOT take ownership of the atom.
-///   Returns `true` if the atom was removed, otherwise returns `false`
-///
-/// replace
-///   \arg params \c is the pointer to the space's params
-///   \arg from \c is the atom to replace in the space.  This function should NOT take ownership of the `from` atom.
-///   \arg to \c is the atom to replace it with.  This function SHOULD take ownership of the `to` atom.
-///   Returns `true` if the atom was replaced, otherwise returns `false`
-///
-/// free_payload
-///   \arg payload \c is the pointer to the space's payload
-///   NOTE: This function is responsible for freeing the payload buffer, as well as any other objects
-///   and resources stored by the space.  This includes `atom_t` objects, as well as any other buffers
-///   stored in the space
 #[repr(C)]
 pub struct space_api_t {
+
+    /// Performs a query against atoms in a space
+    ///   Returns a bindings_set_t representing the query results
+    ///   \arg params \c is the pointer to the space's params
+    ///   \arg atom \c is the query atom.  This function should NOT take ownership of the query atom.
     query: extern "C" fn(params: *const space_params_t, atom: *const atom_t) -> *mut bindings_set_t,
 
+    /// Substitutes atoms match by a query with atoms in a form derived from a template
+    ///   \arg params \c is the pointer to the space's params
+    ///   \arg pattern \c is the pattern atom to match.  This function should NOT take ownership of the pattern atom.
+    ///   \arg tmpl \c is the template atom.  This function should NOT take ownership of the template atom.
+    ///   NOTE: If a subst function is provided, it will be called.  If NULL is provided, the default
+    ///     implementation will be called.
     subst: Option<extern "C" fn(params: *const space_params_t, pattern: *const atom_t, tmpl: *const atom_t) -> *mut vec_atom_t>,
 
+    /// Adds an atom to the space
+    ///   \arg params \c is the pointer to the space's params
+    ///   \arg atom \c is the atom to add to the space.  This function SHOULD take ownership of the atom.
     add: extern "C" fn(params: *const space_params_t, atom: *mut atom_t),
 
+    /// Removes an atom from the space.  Returns `true` if the atom was removed, otherwise returns `false`
+    ///   \arg params \c is the pointer to the space's params
+    ///   \arg atom \c is the atom to remove from the space.  This function should NOT take ownership of the atom.
     remove: extern "C" fn(params: *const space_params_t, atom: *const atom_t) -> bool,
 
+    /// Replaces one atom in the space with another.  Returns `true` if the atom was replaced, otherwise returns `false`
+    ///   \arg params \c is the pointer to the space's params
+    ///   \arg from \c is the atom to replace in the space.  This function should NOT take ownership of the `from` atom.
+    ///   \arg to \c is the atom to replace it with.  This function SHOULD take ownership of the `to` atom.
     replace: extern "C" fn(params: *const space_params_t, from: *const atom_t, to: *mut atom_t) -> bool,
 
+    /// Returns the number of atoms contained within the space
+    ///   \arg params \c is the pointer to the space's params
+    ///   NOTE: If an atom_count function is provided, it will be called.  NULL should be provided for spaces
+    ///     that cannot readily determine the number of contained atoms
+    atom_count: Option<extern "C" fn(params: *const space_params_t) -> usize>,
+
+    /// Returns an allocated pointer to state necessary to perform an iteration over all atoms
+    ///   \arg params \c is the pointer to the space's params
+    ///   NOTE: The new_atom_iterator_state function is optional.  NULL should be provided for spaces
+    ///     that cannot traverse all contained atoms in an orderly way
+    new_atom_iterator_state: Option<extern "C" fn(params: *const space_params_t) -> *mut c_void>,
+
+    /// Returns a pointer to the next atom in the iteration sequence.
+    ///   \arg params \c is the pointer to the space's params
+    ///   \arg state \c is the buffer allocated by new_atom_iterator_state
+    ///   NOTE: The returned pointer should point to an atom owned by the space, and thus the implementation
+    ///   will not free it.  This function should return NULL to signal the iteration has finished.
+    ///   NOTE: The next_atom function is optional.  NULL should be provided for spaces that cannot
+    ///     traverse all contained atoms in an orderly way.
+    next_atom: Option<extern "C" fn(params: *const space_params_t, state: *mut c_void) -> *const atom_t>,
+
+    /// Frees the iterator state allocated by [new_atom_iterator_state]
+    ///   \arg params \c is the pointer to the space's params
+    ///   \arg state \c is the buffer allocated by new_atom_iterator_state, that must be freed
+    ///   NOTE: The free_atom_iterator_state function is optional.  NULL should be provided for spaces
+    ///     that cannot traverse all contained atoms in an orderly way
+    free_atom_iterator_state: Option<extern "C" fn(params: *const space_params_t, state: *mut c_void)>,
+
+    /// Frees the payload buffer passed when the space was created
+    ///   \arg payload \c is the pointer to the space's payload
+    ///   NOTE: This function is responsible for freeing the payload buffer, as well as any other objects
+    ///   and resources stored by the space.  This includes `atom_t` objects, as well as any other buffers
+    ///   stored in the space
     free_payload: extern "C" fn(payload: *mut c_void),
 }
 
@@ -302,17 +323,82 @@ impl Space for CSpace {
             DefaultSpace(self).subst(pattern, tmpl)
         }
     }
+    fn atom_count(&self) -> Option<usize> {
+        let api = unsafe{ &*self.api };
+        if let Some(atom_count_fn) = api.atom_count {
+            let count = atom_count_fn(&self.params);
+            Some(count)
+        } else {
+            None
+        }
+    }
+    fn atom_iter(&self) -> Option<SpaceIter> {
+        struct CSpaceIterator<'a>(&'a CSpace, *mut c_void);
+        impl<'a> Iterator for CSpaceIterator<'a> {
+            type Item = &'a Atom;
+            fn next(&mut self) -> Option<&'a Atom> {
+                let api = unsafe{ &*self.0.api };
+                if let Some(next_atom) = api.next_atom {
+                    let atom_ptr = next_atom(&self.0.params, self.1);
+                    if atom_ptr.is_null() {
+                        None
+                    } else {
+                        let atom = unsafe { &(*atom_ptr).atom };
+                        Some(atom)
+                    }
+                } else {
+                    panic!("next_atom function must be implemented if new_atom_iterator_state is implemented");
+                }
+            }
+        }
+        impl Drop for CSpaceIterator<'_> {
+            fn drop(&mut self) {
+                let api = unsafe{ &*self.0.api };
+                if let Some(free_atom_iterator_state) = api.free_atom_iterator_state {
+                    free_atom_iterator_state(&self.0.params, self.1);
+                } else {
+                    panic!("free_atom_iterator_state function must be implemented if new_atom_iterator_state is implemented");
+                }
+            }
+        }
+
+        let api = unsafe{ &*self.api };
+        if let Some(new_atom_iterator_state) = api.new_atom_iterator_state {
+            let ctx = new_atom_iterator_state(&self.params);
+            let new_iter = CSpaceIterator(self, ctx);
+            Some(SpaceIter::new(new_iter))
+        } else {
+            None
+        }
+    }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
 }
 
+impl std::fmt::Display for CSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CSpace")
+    }
+}
+impl std::fmt::Debug for CSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "CSpace")
+    }
+}
+
 /// A stub internal object, to get access to the default method of Space trait
+#[derive(Debug)]
 struct DefaultSpace<'a>(&'a CSpace);
 impl Space for DefaultSpace<'_> {
     fn register_observer(&self, _observer: Rc<RefCell<dyn SpaceObserver>>) {}
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
     fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self.0) }
+}
+impl std::fmt::Display for DefaultSpace<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DefaultSpace")
+    }
 }
 
 impl SpaceMut for CSpace {
@@ -344,7 +430,35 @@ impl Drop for CSpace {
     }
 }
 
-pub type space_t = SharedApi<Box<dyn SpaceMut>>;
+//INTERNAL NOTE: There are two reasons we need to box this space_t, rather than going directly from
+// the internal Rc to a raw pointer.
+// 1. The Rc inside DynSpace isn't pub, because we don't want to expose it to the Rust clients
+// 2. More importantly, the <dyn SpaceMut> type is unSized, so we can't recreate the Rc without
+//   knowing the size, and that knowledge is lost if we convert to a raw ptr.  So the indirection is
+//   neessary to preserve the allocation meta-data.
+pub struct space_t(pub(crate) DynSpace);
+
+impl space_t {
+    pub fn new<T: SpaceMut + 'static>(space: T) -> *mut space_t {
+        Box::into_raw(Box::new(space_t(DynSpace::new(space))))
+    }
+    pub fn from_shared(space: DynSpace) -> *mut space_t {
+        Box::into_raw(Box::new(space_t(space)))
+    }
+    pub fn from_ptr(space_ptr: *mut space_t) -> Self {
+        *unsafe{ Box::from_raw(space_ptr) }
+    }
+    pub fn shared(&self) -> DynSpace {
+        self.0.clone()
+    }
+}
+
+impl PartialEq for space_t {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
 
 /// Creates a new space_t, backed by an implementation in C
 ///
@@ -355,12 +469,18 @@ pub type space_t = SharedApi<Box<dyn SpaceMut>>;
 #[no_mangle]
 pub extern "C" fn space_new(api: *const space_api_t, payload: *mut c_void) -> *mut space_t {
     let c_space = CSpace::new(api, payload);
-    space_t::new(Box::new(c_space))
+    space_t::new(c_space)
 }
 
 #[no_mangle]
 pub extern "C" fn space_free(space: *mut space_t) {
-    space_t::drop(space)
+    let space = space_t::from_ptr(space);
+    drop(space)
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn space_eq(a: *const space_t, b: *const space_t) -> bool {
+    *a == *b
 }
 
 /// Returns the pointer to the payload for a space created from C
@@ -369,7 +489,7 @@ pub extern "C" fn space_free(space: *mut space_t) {
 /// has been freed
 #[no_mangle]
 pub extern "C" fn space_get_payload(space: *mut space_t) -> *mut c_void {
-    if let Some(any_ref) = unsafe{ (*space).borrow_mut().as_any() } {
+    if let Some(any_ref) = unsafe{ (*space).0.borrow_mut().as_any() } {
         if let Some(c_space) = any_ref.downcast_ref::<CSpace>() {
             return c_space.params.payload;
         }
@@ -379,7 +499,7 @@ pub extern "C" fn space_get_payload(space: *mut space_t) -> *mut c_void {
 
 #[no_mangle]
 pub extern "C" fn space_register_observer(space: *mut space_t, observer: *const space_observer_t) {
-    let space = unsafe{ (*space).borrow_mut() };
+    let space = unsafe{ (*space).0.borrow_mut() };
     let observer = unsafe{ &(*observer).observer };
     space.register_observer(observer.clone());
 }
@@ -388,25 +508,25 @@ pub extern "C" fn space_register_observer(space: *mut space_t, observer: *const 
 /// accessed after it has been provided to this function
 #[no_mangle]
 pub unsafe extern "C" fn space_add(space: *mut space_t, atom: *mut atom_t) {
-    (*space).borrow_mut().add(ptr_into_atom(atom));
+    (*space).0.borrow_mut().add(ptr_into_atom(atom));
 }
 
 #[no_mangle]
 pub unsafe extern "C" fn space_remove(space: *mut space_t, atom: *const atom_t) -> bool {
-    (*space).borrow_mut().remove(&(*atom).atom)
+    (*space).0.borrow_mut().remove(&(*atom).atom)
 }
 
 /// WARNING: This function takes ownership of the `to` atom, and it should not be freed or
 /// accessed after it has been provided to this function
 #[no_mangle]
 pub unsafe extern "C" fn space_replace(space: *mut space_t, from: *const atom_t, to: *mut atom_t) -> bool {
-    (*space).borrow_mut().replace(&(*from).atom, ptr_into_atom(to))
+    (*space).0.borrow_mut().replace(&(*from).atom, ptr_into_atom(to))
 }
 
 #[no_mangle]
 pub extern "C" fn space_query(space: *const space_t,
         pattern: *const atom_t, callback: lambda_t<* const bindings_t>, context: *mut c_void) {
-    let results = unsafe { (*space).borrow().query(&((*pattern).atom)) };
+    let results = unsafe { (*space).0.borrow().query(&((*pattern).atom)) };
     for result in results.into_iter() {
         let b = (&result as *const Bindings).cast();
         callback(b, context);
@@ -417,8 +537,36 @@ pub extern "C" fn space_query(space: *const space_t,
 pub extern "C" fn space_subst(space: *const space_t,
         pattern: *const atom_t, templ: *const atom_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
-    let results = unsafe { (*space).borrow().subst(&((*pattern).atom), &((*templ).atom)) };
+    let results = unsafe { (*space).0.borrow().subst(&((*pattern).atom), &((*templ).atom)) };
     return_atoms(&results, callback, context);
+}
+
+/// NOTE: This function will return -1 for spaces on which it is impossible or impractical
+/// to determine the number of atoms
+#[no_mangle]
+pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
+    match unsafe { (*space).0.borrow().atom_count() } {
+        Some(count) => count as isize,
+        None => -1
+    }
+}
+
+/// Calls the specified `callback` for each atom in the space, if possible
+/// 
+/// Returns `true` if the space was sucessfully iterated, or `false` if the space does not
+/// support iteration.
+#[no_mangle]
+pub extern "C" fn space_iterate(space: *const space_t,
+        callback: c_atom_callback_t, context: *mut c_void) -> bool {
+    match unsafe { (*space).0.borrow().atom_iter() } {
+        Some(atom_iter) => {
+            for atom in atom_iter {
+                callback((atom as *const Atom).cast(), context);
+            }
+            true
+        },
+        None => false
+    }
 }
 
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
@@ -430,83 +578,5 @@ pub extern "C" fn space_subst(space: *const space_t,
 /// The returned space_t must be freed with space_free
 #[no_mangle]
 pub extern "C" fn space_new_grounding_space() -> *mut space_t {
-    space_t::new(Box::new(GroundingSpace::new()))
+    space_t::new(GroundingSpace::new())
 }
-
-//QUESTION FOR VITALY: Should we deprecate all the grounding_space_t functions, and replace them
-// with calls through the abstract API, or with calls that take a space_t, and downcast it to a
-// grounding_space when the function is specific to a grounding_space?
-//
-//Or alternatively, we can keep the grounding_space_t, and provide bidirectional conversion
-// functions.
-
-pub type grounding_space_t = SharedApi<GroundingSpace>;
-
-#[no_mangle]
-pub extern "C" fn grounding_space_new() -> *mut grounding_space_t {
-    grounding_space_t::new(GroundingSpace::new())
-}
-
-#[no_mangle]
-pub extern "C" fn grounding_space_free(space: *mut grounding_space_t) {
-    grounding_space_t::drop(space)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_eq(a: *const grounding_space_t, b: *const grounding_space_t) -> bool {
-    *a == *b
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_add(space: *mut grounding_space_t, atom: *mut atom_t) {
-    (*space).borrow_mut().add(ptr_into_atom(atom));
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_remove(space: *mut grounding_space_t, atom: *const atom_t) -> bool {
-    (*space).borrow_mut().remove(&(*atom).atom)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_replace(space: *mut grounding_space_t, from: *const atom_t, to: *mut atom_t) -> bool {
-    (*space).borrow_mut().replace(&(*from).atom, ptr_into_atom(to))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_len(space: *const grounding_space_t) -> usize {
-    (*space).borrow().iter().count()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn grounding_space_get(space: *const grounding_space_t, idx: usize) -> *mut atom_t {
-    // TODO: highly ineffective implementation, should be reworked after replacing
-    // the GroundingSpace struct by Space trait in code.
-
-    //QUESTION FOR VITALY: Do all spaces have integer-indexable atoms?  If so, it might make sense
-    // to make get(idx) into a trait method of Space.  Or alternatively should all spaces support
-    // atom iteration, we could add an iter() method to the trait.  However, as you point out,
-    // Iterator::skip() or Iterator::nth() is a costly way to perform integer-based access in a
-    // large set.
-    atom_into_ptr((*space).borrow().iter().skip(idx).next()
-        .expect(format!("Index is out of bounds: {}", idx).as_str()).clone())
-}
-
-#[no_mangle]
-pub extern "C" fn grounding_space_query(space: *const grounding_space_t,
-        pattern: *const atom_t, callback: lambda_t<* const bindings_t>, context: *mut c_void) {
-    let results = unsafe { (*space).borrow().query(&((*pattern).atom)) };
-    for result in results.into_iter() {
-        let b = bindings_into_ptr(result);
-        callback(b, context);
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn grounding_space_subst(space: *const grounding_space_t,
-        pattern: *const atom_t, templ: *const atom_t,
-        callback: c_atoms_callback_t, context: *mut c_void) {
-    let results = unsafe { (*space).borrow().subst(&((*pattern).atom), &((*templ).atom)) };
-    return_atoms(&results, callback, context);
-}
-
-

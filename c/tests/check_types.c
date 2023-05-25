@@ -12,8 +12,8 @@ void teardown(void) {
 
 START_TEST (test_check_type)
 {
-    grounding_space_t* space = grounding_space_new();
-    grounding_space_add(space, expr(atom_sym(":"), atom_sym("do"), atom_sym("Verb"), 0));
+    space_t* space = space_new_grounding_space();
+    space_add(space, expr(atom_sym(":"), atom_sym("do"), atom_sym("Verb"), 0));
     atom_t* verb = atom_sym("Verb");
 
     atom_t* nonsense = atom_sym("nonsense");
@@ -27,10 +27,10 @@ END_TEST
 
 START_TEST (test_validate_atom)
 {
-    grounding_space_t* space = grounding_space_new();
-    grounding_space_add(space, expr(atom_sym(":"), atom_sym("a"), atom_sym("A"), 0));
-    grounding_space_add(space, expr(atom_sym(":"), atom_sym("b"), atom_sym("B"), 0));
-    grounding_space_add(space, expr(atom_sym(":"), atom_sym("foo"), expr(atom_sym("->"), atom_sym("A"), atom_sym("B"), 0), 0));
+    space_t* space = space_new_grounding_space();
+    space_add(space, expr(atom_sym(":"), atom_sym("a"), atom_sym("A"), 0));
+    space_add(space, expr(atom_sym(":"), atom_sym("b"), atom_sym("B"), 0));
+    space_add(space, expr(atom_sym(":"), atom_sym("foo"), expr(atom_sym("->"), atom_sym("A"), atom_sym("B"), 0), 0));
 
     atom_t* foo = expr(atom_sym("foo"), atom_sym("a"), 0);
     ck_assert(validate_atom(space, foo));
@@ -64,10 +64,10 @@ void check_atoms(atom_array_t act_atoms, void* context) {
 
 START_TEST (test_get_atom_types)
 {
-    grounding_space_t* space = grounding_space_new();
-    grounding_space_add(space, expr(atom_sym(":"), atom_sym("a"), expr(atom_sym("->"), atom_sym("C"), atom_sym("D"), 0), 0));
-    grounding_space_add(space, expr(atom_sym(":"), atom_sym("b"), atom_sym("B"), 0));
-    grounding_space_add(space, expr(atom_sym(":"), atom_sym("c"), atom_sym("C"), 0));
+    space_t* space = space_new_grounding_space();
+    space_add(space, expr(atom_sym(":"), atom_sym("a"), expr(atom_sym("->"), atom_sym("C"), atom_sym("D"), 0), 0));
+    space_add(space, expr(atom_sym(":"), atom_sym("b"), atom_sym("B"), 0));
+    space_add(space, expr(atom_sym(":"), atom_sym("c"), atom_sym("C"), 0));
 
     atom_t* D = atom_sym("D");
     atom_t* a = atom_sym("a");

@@ -6,7 +6,7 @@ class GroundingSpace:
 
     def __init__(self, cspace = None):
         if cspace is None:
-            self.cspace = hp.grounding_space_new()
+            self.cspace = hp.space_new_grounding()
         else:
             self.cspace = cspace
 
@@ -15,32 +15,37 @@ class GroundingSpace:
         return GroundingSpace(cspace)
 
     def __del__(self):
-        hp.grounding_space_free(self.cspace)
+        hp.space_free(self.cspace)
 
     def __eq__(self, other):
         return (isinstance(other, GroundingSpace) and
-                hp.grounding_space_eq(self.cspace, other.cspace))
+                hp.space_eq(self.cspace, other.cspace))
 
     def add_atom(self, atom):
-        hp.grounding_space_add(self.cspace, atom.catom)
+        hp.space_add(self.cspace, atom.catom)
 
     def remove_atom(self, atom):
-        return hp.grounding_space_remove(self.cspace, atom.catom)
+        return hp.space_remove(self.cspace, atom.catom)
 
     def replace_atom(self, atom, replacement):
-        return hp.grounding_space_replace(self.cspace, atom.catom, replacement.catom)
+        return hp.space_replace(self.cspace, atom.catom, replacement.catom)
 
     def get_atoms(self):
-        return [Atom._from_catom(hp.grounding_space_get(self.cspace, i))
-                for i in range(0, hp.grounding_space_len(self.cspace))]
+        res = hp.space_list(self.cspace)
+        if res == None:
+            return None
+        result = []
+        for r in res:
+            result.append(Atom._from_catom(r))
+        return result
 
     def query(self, pattern):
-        result = hp.grounding_space_query(self.cspace, pattern.catom)
+        result = hp.space_query(self.cspace, pattern.catom)
         return [{k: Atom._from_catom(v) for k, v in bindings.items()} for bindings in result]
 
     def subst(self, pattern, templ):
         return [Atom._from_catom(catom) for catom in
-                hp.grounding_space_subst(self.cspace, pattern.catom,
+                hp.space_subst(self.cspace, pattern.catom,
                                          templ.catom)]
 
 class Tokenizer:

@@ -40,7 +40,7 @@ pub fn string_as_cstr(s: String) -> CString {
 // We cannot use imported Shared in C API because it is not correctly
 // converted int C header and header cannot be compiled. This wrapper just
 // solves the issue by shadowing original type.
-pub struct SharedApi<T>(Shared<T>);
+pub struct SharedApi<T>(pub(crate) Shared<T>);
 
 impl<T> SharedApi<T> {
     pub fn new(value: T) -> *mut Self {
