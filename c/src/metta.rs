@@ -101,11 +101,6 @@ pub unsafe extern "C" fn validate_atom(space: *const space_t, atom: *const atom_
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn validate_atom_v2(space: *const space_t, atom: *const atom_t) -> bool {
-    hyperon::metta::types::validate_atom((*space).0.borrow().as_space(), &(*atom).atom)
-}
-
-#[no_mangle]
 pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
     let space = unsafe{ &(*space).0.borrow() };
@@ -122,14 +117,6 @@ pub struct step_result_t<'a> {
 
 #[no_mangle]
 pub extern "C" fn interpret_init<'a>(space: *mut space_t, expr: *const atom_t) -> *mut step_result_t<'a> {
-    let space = unsafe{ &(*space) };
-    let expr = unsafe{ &(*expr) };
-    let step = interpreter::interpret_init(space.shared(), &expr.atom);
-    Box::into_raw(Box::new(step_result_t{ result: step }))
-}
-
-#[no_mangle]
-pub extern "C" fn interpret_init_v2<'a>(space: *mut space_t, expr: *const atom_t) -> *mut step_result_t<'a> {
     let space = unsafe{ &(*space) };
     let expr = unsafe{ &(*expr) };
     let step = interpreter::interpret_init(space.shared(), &expr.atom);
