@@ -393,8 +393,6 @@ struct DefaultSpace<'a>(&'a CSpace);
 impl Space for DefaultSpace<'_> {
     fn register_observer(&self, _observer: Rc<RefCell<dyn SpaceObserver>>) {}
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
-    fn atom_count(&self) -> Option<usize> { self.0.atom_count() }
-    fn atom_iter(&self) -> Option<SpaceIter> { self.0.atom_iter() }
     fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self.0) }
 }
 impl std::fmt::Display for DefaultSpace<'_> {

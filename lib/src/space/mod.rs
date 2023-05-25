@@ -130,10 +130,14 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
     }
 
     /// Returns the number of Atoms in the space, or None if this can't be determined
-    fn atom_count(&self) -> Option<usize>;
+    fn atom_count(&self) -> Option<usize> {
+        None
+    }
 
     /// Returns an iterator over every atom in the space, or None if that is not possible
-    fn atom_iter(&self) -> Option<SpaceIter>;
+    fn atom_iter(&self) -> Option<SpaceIter> {
+        None
+    }
 
     /// Returns an &dyn [Any] for spaces where this is possible
     fn as_any(&self) -> Option<&dyn std::any::Any>;
