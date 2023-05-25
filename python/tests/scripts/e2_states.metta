@@ -57,9 +57,12 @@
      (change-state! $x (+ (get-state $x) 1)))
   (new-state 2))
 
-; FIXME: conflicting variable names in let-expression and type definition of new-state
-; !(let $tnso (new-state 1) $tnso)
+; Chcking that there is no conflict between variable names in let-expression
+; and type definition of new-state
+!(assertEqual
+   (let $tnso (new-state 1) $tnso)
+   (new-state 1))
 
-; FIXME: doesn't work as for 10 Feb 2023
+; FIXME: doesn't work as for 25 May 2023
 ; !(get-state (let $x (new-state 1) $x))
 
