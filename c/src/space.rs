@@ -553,15 +553,21 @@ pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
     }
 }
 
-/// NOTE: This function will do nothing for spaces on which space_atom_count() returns a
-/// non-positive number
+/// Calls the specified `callback` for each atom in the space, if possible
+/// 
+/// Returns `true` if the space was sucessfully iterated, or `false` if the space does not
+/// support iteration.
 #[no_mangle]
 pub extern "C" fn space_iterate(space: *const space_t,
-        callback: c_atom_callback_t, context: *mut c_void) {
-    if let Some(atom_iter) = unsafe { (*space).0.borrow().atom_iter() } {
-        for atom in atom_iter {
-            callback((atom as *const Atom).cast(), context);
-        }
+        callback: c_atom_callback_t, context: *mut c_void) -> bool {
+    match unsafe { (*space).0.borrow().atom_iter() } {
+        Some(atom_iter) => {
+            for atom in atom_iter {
+                callback((atom as *const Atom).cast(), context);
+            }
+            true
+        },
+        None => false
     }
 }
 

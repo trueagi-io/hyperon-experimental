@@ -392,10 +392,13 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("space_replace", [](CSpace space, CAtom from, CAtom to) { return space_replace(space.ptr, from.ptr, atom_clone(to.ptr)); }, "Replace atom from space");
     m.def("space_eq", [](CSpace a, CSpace b) { return space_eq(a.ptr, b.ptr); }, "Check if two spaces are equal");
     m.def("space_len", [](CSpace space) { return space_atom_count(space.ptr); }, "Return number of atoms in space, or -1 if the space is unable to determine the value");
-    m.def("space_list", [](CSpace space) -> pybind11::list {
+    m.def("space_list", [](CSpace space) -> std::optional<pybind11::list> {
         pybind11::list atoms_list;
-        space_iterate(space.ptr, atom_copy_to_list_callback, &atoms_list);
-        return atoms_list;
+        if (space_iterate(space.ptr, atom_copy_to_list_callback, &atoms_list)) {
+            return atoms_list;
+        } else {
+            return pybind11::none();
+        }
     }, "Returns iterator to traverse atoms within a space");
     m.def("space_query", [](CSpace space, CAtom pattern) {
             py::list results;
