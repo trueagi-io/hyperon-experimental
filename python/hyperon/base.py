@@ -31,6 +31,11 @@ class GroundingSpace:
         return hp.space_replace(self.cspace, atom.catom, replacement.catom)
 
     def get_atoms(self):
+        # TODO: This code will likely be copied / unified for custom spaces, so we ought to return
+        # `None` if we are calling into an unknown space implementation
+        # We know GroundingSpace supports iteration, so this check is pointless here.
+        # if hp.space_len(self.cspace) < 0:
+        #     return None
         res = hp.space_list(self.cspace)
         result = []
         for r in res:
