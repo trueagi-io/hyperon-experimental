@@ -55,12 +55,12 @@
             (get-type $y))
         (get-type &self))
    False)
-; let's check that `if` from stdlib is not duplicated and gives only one result
+; Let's check that `if` from stdlib is not duplicated and gives only one result
 !(assertEqual
   (if (> 1 2) 1 2)
   2)
 
-; let's import one more module into `&self` with a diamond dependence
+; Let's import one more module into `&self` with a diamond dependence
 !(import! &self f1_moduleB.metta)
 ; `g` from moduleC imported via two paths as well as `f`, which uses `g`,
 ; are not duplicated and produce deterministic results
