@@ -65,6 +65,7 @@ impl Grounded for ImportOp {
         // TODO: replace Symbol by grounded String?
         if let Atom::Symbol(file) = file {
             path.push(file.name());
+            path = path.canonicalize().unwrap_or(path);
             log::debug!("import! load file, full path: {}", path.display());
         } else {
             return Err("import! expects a file path as a second argument".into())
@@ -97,7 +98,10 @@ impl Grounded for ImportOp {
                         self.metta.borrow().space().borrow_mut().add(aspace);
                     }
                 }
-                space.borrow_mut().add(Atom::gnd(module_space));
+                let module_space_atom = Atom::gnd(module_space);
+                if space.borrow_mut().query(&module_space_atom).is_empty() {
+                    space.borrow_mut().add(module_space_atom);
+                }
             },
             _ => return Err("import! expects space as a first argument".into()),
         };
