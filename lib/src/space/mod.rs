@@ -3,10 +3,11 @@
 
 pub mod grounding;
 
+use std::fmt::Display;
 use std::rc::Rc;
-use std::cell::RefCell;
+use std::cell::{RefCell, Ref, RefMut};
 
-use crate::atom::Atom;
+use crate::atom::*;
 use crate::atom::matcher::{BindingsSet, apply_bindings_to_atom};
 
 /// Contains information about space modification event.
@@ -64,7 +65,7 @@ pub struct SpaceIter<'a> {
 }
 
 impl<'a> SpaceIter<'a> {
-    fn new<I: Iterator<Item=&'a Atom> + 'a>(iter: I) -> Self {
+    pub fn new<I: Iterator<Item=&'a Atom> + 'a>(iter: I) -> Self {
         Self{ iter: Box::new(iter) }
     }
 }
@@ -78,7 +79,7 @@ impl<'a> Iterator for SpaceIter<'a> {
 }
 
 /// Read-only space trait.
-pub trait Space {
+pub trait Space: std::fmt::Debug + std::fmt::Display {
     /// Registers space modifications `observer`. Observer is automatically
     /// deregistered when `Rc` counter reaches zero. See [SpaceObserver] for
     /// examples.
@@ -126,6 +127,16 @@ pub trait Space {
         self.query(pattern).drain(0..)
             .map(| bindings | apply_bindings_to_atom(template, &bindings))
             .collect()
+    }
+
+    /// Returns the number of Atoms in the space, or None if this can't be determined
+    fn atom_count(&self) -> Option<usize> {
+        None
+    }
+
+    /// Returns an iterator over every atom in the space, or None if that is not possible
+    fn atom_iter(&self) -> Option<SpaceIter> {
+        None
     }
 
     /// Returns an &dyn [Any] for spaces where this is possible
@@ -196,53 +207,89 @@ pub trait SpaceMut: Space {
     fn as_space(&self) -> &dyn Space;
 }
 
-use crate::common::shared::Shared;
+#[derive(Clone)]
+pub struct DynSpace(Rc<RefCell<dyn SpaceMut>>);
 
-impl Space for Box<dyn SpaceMut> {
-    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
-        (**self).register_observer(observer)
+impl DynSpace {
+    pub fn new<T: SpaceMut + 'static>(space: T) -> Self {
+        let shared = Rc::new(RefCell::new(space));
+        DynSpace(shared)
     }
-    fn query(&self, query: &Atom) -> BindingsSet {
-        (**self).query(query)
+    pub fn borrow(&self) -> Ref<dyn SpaceMut> {
+        self.0.borrow()
     }
-    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        (**self).subst(pattern, template)
-    }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        (*self).as_space().as_any()
+    pub fn borrow_mut(&self) -> RefMut<dyn SpaceMut> {
+        self.0.borrow_mut()
     }
 }
 
-impl<T: Space> Space for Shared<T> {
-    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
-        self.borrow().register_observer(observer)
-    }
-    fn query(&self, query: &Atom) -> BindingsSet {
-        self.borrow().query(query)
-    }
-    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        self.borrow().subst(pattern, template)
-    }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        None
+impl core::fmt::Debug for DynSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.0)
     }
 }
 
-impl<T: SpaceMut> SpaceMut for Shared<T> {
+impl Display for DynSpace {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", &*self.0.borrow())
+    }
+}
+
+impl SpaceMut for DynSpace {
     fn add(&mut self, atom: Atom) {
-        self.borrow_mut().add(atom)
+        self.0.borrow_mut().add(atom)
     }
     fn remove(&mut self, atom: &Atom) -> bool {
-        self.borrow_mut().remove(atom)
+        self.0.borrow_mut().remove(atom)
     }
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
-        self.borrow_mut().replace(from, to)
+        self.0.borrow_mut().replace(from, to)
     }
     fn as_space(&self) -> &dyn Space {
         self
     }
 }
 
+impl Space for DynSpace {
+    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
+        self.0.borrow().register_observer(observer)
+    }
+    fn query(&self, query: &Atom) -> BindingsSet {
+        self.0.borrow().query(query)
+    }
+    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
+        self.0.borrow().subst(pattern, template)
+    }
+    fn atom_count(&self) -> Option<usize> {
+        self.0.borrow().atom_count()
+    }
+    fn atom_iter(&self) -> Option<SpaceIter> {
+        None
+    }
+    fn as_any(&self) -> Option<&dyn std::any::Any> {
+        None
+    }
+}
+
+impl PartialEq for DynSpace {
+    fn eq(&self, other: &Self) -> bool {
+        RefCell::as_ptr(&self.0) == RefCell::as_ptr(&other.0)
+    }
+}
+
+impl crate::atom::Grounded for DynSpace {
+    fn type_(&self) -> Atom {
+        rust_type_atom::<DynSpace>()
+    }
+
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        Box::new(self.query(other).into_iter())
+    }
+
+    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        execute_not_executable(self)
+    }
+}
 
 impl<T: Space> Space for &T {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
@@ -254,37 +301,14 @@ impl<T: Space> Space for &T {
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         T::subst(*self, pattern, template)
     }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        None
+    fn atom_count(&self) -> Option<usize> {
+        T::atom_count(*self)
     }
-}
-
-impl<T: Space> Space for &mut T {
-    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
-        T::register_observer(*self, observer)
-    }
-    fn query(&self, query: &Atom) -> BindingsSet {
-        T::query(*self, query)
-    }
-    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        T::subst(*self, pattern, template)
+    fn atom_iter(&self) -> Option<SpaceIter> {
+        T::atom_iter(*self)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
     }
 }
 
-impl<T: SpaceMut> SpaceMut for &mut T {
-    fn add(&mut self, atom: Atom) {
-        (*self).add(atom)
-    }
-    fn remove(&mut self, atom: &Atom) -> bool {
-        (*self).remove(atom)
-    }
-    fn replace(&mut self, from: &Atom, to: Atom) -> bool {
-        (*self).replace(from, to)
-    }
-    fn as_space(&self) -> &dyn Space {
-        self
-    }
-}

@@ -321,6 +321,12 @@ impl Space for GroundingSpace {
     fn query(&self, query: &Atom) -> BindingsSet {
         GroundingSpace::query(self, query)
     }
+    fn atom_count(&self) -> Option<usize> {
+        Some(self.iter().count())
+    }
+    fn atom_iter(&self) -> Option<SpaceIter> {
+        Some(self.iter())
+    }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

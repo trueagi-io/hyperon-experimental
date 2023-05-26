@@ -69,7 +69,6 @@ use crate::common::plan::*;
 use crate::atom::subexpr::*;
 use crate::atom::matcher::*;
 use crate::space::*;
-use crate::space::grounding::*;
 use crate::common::collections::ListMap;
 use crate::metta::*;
 use crate::metta::types::{is_func, get_arg_types, get_type_bindings,
