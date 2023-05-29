@@ -8,7 +8,7 @@ use crate::util::*;
 
 use std::os::raw::*;
 use core::cell::RefCell;
-use std::rc::{Rc, Weak};
+use std::rc::{Rc};
 
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
 // Space & SpaceMut trait interface wrapper
@@ -252,34 +252,24 @@ pub struct space_api_t {
     free_payload: extern "C" fn(payload: *mut c_void),
 }
 
-pub struct space_observer_list_t {
-    observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>
-}
-
-/// Notifies all observers of an event
-#[no_mangle]
-pub extern "C" fn space_observer_list_notify_all(list: *const space_observer_list_t, event: *const space_event_t) {
-    let list = unsafe{ &(*list).observers };
-    let event = unsafe{ &(*event).event };
-
-    let mut cleanup = false;
-    for observer in list.borrow().iter() {
-        if let Some(observer) = observer.upgrade() {
-            observer.borrow_mut().notify(event);
-        } else {
-            cleanup = true;
-        }
-    }
-    if cleanup {
-        list.borrow_mut().retain(|w| w.strong_count() > 0);
-    }
+#[derive(Default)]
+pub struct space_common_t {
+    common: SpaceCommon
 }
 
 /// Data associated with this particular space, including the space's payload and observers
 #[repr(C)]
 pub struct space_params_t {
     payload: *mut c_void,
-    observers: Box<space_observer_list_t>,
+    common: Box<space_common_t>,
+}
+
+/// Notifies all observers of an event
+#[no_mangle]
+pub extern "C" fn space_params_notify_all_observers(params: *const space_params_t, event: *const space_event_t) {
+    let common = unsafe{ &(*params).common.common };
+    let event = unsafe{ &(*event).event };
+    common.notify_all_observers(event);
 }
 
 struct CSpace {
@@ -289,20 +279,13 @@ struct CSpace {
 
 impl CSpace {
     fn new(api: *const space_api_t, payload: *mut c_void) -> Self {
-        CSpace{api, params: space_params_t{payload, observers: Box::new(space_observer_list_t::new())}}
-    }
-}
-
-impl space_observer_list_t {
-    fn new() -> Self {
-        space_observer_list_t{observers: RefCell::new(vec![])}
+        CSpace{api, params: space_params_t{payload, common: Box::new(space_common_t::default())}}
     }
 }
 
 impl Space for CSpace {
-    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
-        let observers_vec = &(*self.params.observers).observers;
-        observers_vec.borrow_mut().push(Rc::downgrade(&observer) as Weak<RefCell<dyn SpaceObserver>>)
+    fn common(&self) -> Option<&SpaceCommon> {
+        Some(&(*self.params.common).common)
     }
     fn query(&self, query: &Atom) -> BindingsSet {
         let api = unsafe{ &*self.api };
@@ -391,7 +374,7 @@ impl std::fmt::Debug for CSpace {
 #[derive(Debug)]
 struct DefaultSpace<'a>(&'a CSpace);
 impl Space for DefaultSpace<'_> {
-    fn register_observer(&self, _observer: Rc<RefCell<dyn SpaceObserver>>) {}
+    fn common(&self) -> Option<&SpaceCommon> { None }
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
     fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self.0) }
 }

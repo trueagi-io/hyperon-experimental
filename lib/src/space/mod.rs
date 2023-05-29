@@ -4,7 +4,7 @@
 pub mod grounding;
 
 use std::fmt::Display;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
 
 use crate::atom::*;
@@ -78,12 +78,44 @@ impl<'a> Iterator for SpaceIter<'a> {
     }
 }
 
+/// A common object that needs to be maintained by all objects implementing the Space trait
+#[derive(Clone, Default)]
+pub struct SpaceCommon {
+    observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>,
+}
+impl SpaceCommon {
+    pub fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
+        self.observers.borrow_mut().push(Rc::downgrade(&observer) as Weak<RefCell<dyn SpaceObserver>>);
+    }
+
+    /// Notifies all registered observers about space modification `event`.
+    pub fn notify_all_observers(&self, event: &SpaceEvent) {
+        let mut cleanup = false;
+        for observer in self.observers.borrow_mut().iter() {
+            if let Some(observer) = observer.upgrade() {
+                observer.borrow_mut().notify(event);
+            } else {
+                cleanup = true;
+            }
+        }
+        if cleanup {
+            self.observers.borrow_mut().retain(|w| w.strong_count() > 0);
+        }
+    }
+
+}
+
 /// Read-only space trait.
 pub trait Space: std::fmt::Debug + std::fmt::Display {
     /// Registers space modifications `observer`. Observer is automatically
     /// deregistered when `Rc` counter reaches zero. See [SpaceObserver] for
     /// examples.
-    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>);
+    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
+        self.common().unwrap().register_observer(observer);
+    }
+
+    /// Access the SpaceCommon object owned by the Space
+    fn common(&self) -> Option<&SpaceCommon>;
 
     /// Executes `query` on the space and returns variable bindings found.
     /// Query may include sub-queries glued by [grounding::COMMA_SYMBOL] symbol. 
@@ -254,6 +286,9 @@ impl Space for DynSpace {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
         self.0.borrow().register_observer(observer)
     }
+    fn common(&self) -> Option<&SpaceCommon> {
+        None
+    }
     fn query(&self, query: &Atom) -> BindingsSet {
         self.0.borrow().query(query)
     }
@@ -294,6 +329,9 @@ impl crate::atom::Grounded for DynSpace {
 impl<T: Space> Space for &T {
     fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
         T::register_observer(*self, observer)
+    }
+    fn common(&self) -> Option<&SpaceCommon> {
+        T::common(*self)
     }
     fn query(&self, query: &Atom) -> BindingsSet {
         T::query(*self, query)

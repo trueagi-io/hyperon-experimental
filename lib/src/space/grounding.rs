@@ -9,8 +9,6 @@ use crate::atom::subexpr::split_expr;
 use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
 
 use std::fmt::{Display, Debug};
-use std::rc::{Rc, Weak};
-use std::cell::RefCell;
 use std::collections::BTreeSet;
 
 // Grounding space
@@ -83,7 +81,7 @@ pub struct GroundingSpace {
     index: MultiTrie<SymbolAtom, usize>,
     content: Vec<Atom>,
     free: BTreeSet<usize>,
-    observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>,
+    common: SpaceCommon,
 }
 
 impl GroundingSpace {
@@ -94,7 +92,7 @@ impl GroundingSpace {
             index: MultiTrie::new(),
             content: Vec::new(),
             free: BTreeSet::new(),
-            observers: RefCell::new(Vec::new()),
+            common: SpaceCommon::default(),
         }
     }
 
@@ -108,30 +106,7 @@ impl GroundingSpace {
             index,
             content: atoms,
             free: BTreeSet::new(),
-            observers: RefCell::new(Vec::new()),
-        }
-    }
-
-    /// Registers space modifications `observer`. Observer is automatically
-    /// deregistered when `Rc` counter reaches zero. See [SpaceObserver] for
-    /// examples.
-    pub fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>)
-    {
-        self.observers.borrow_mut().push(Rc::downgrade(&observer) as Weak<RefCell<dyn SpaceObserver>>);
-    }
-
-    /// Notifies registered observers about space modification `event`.
-    fn notify(&self, event: &SpaceEvent) {
-        let mut cleanup = false;
-        for observer in self.observers.borrow_mut().iter() {
-            if let Some(observer) = observer.upgrade() {
-                observer.borrow_mut().notify(event);
-            } else {
-                cleanup = true;
-            }
-        }
-        if cleanup {
-            self.observers.borrow_mut().retain(|w| w.strong_count() > 0);
+            common: SpaceCommon::default(),
         }
     }
 
@@ -155,7 +130,7 @@ impl GroundingSpace {
     pub fn add(&mut self, atom: Atom) {
         //log::debug!("GroundingSpace::add(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
         self.add_internal(atom.clone());
-        self.notify(&SpaceEvent::Add(atom));
+        self.common.notify_all_observers(&SpaceEvent::Add(atom));
     }
 
     fn add_internal(&mut self, atom: Atom) {
@@ -191,7 +166,7 @@ impl GroundingSpace {
         //log::debug!("GroundingSpace::remove(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
         let is_removed = self.remove_internal(atom);
         if is_removed {
-            self.notify(&SpaceEvent::Remove(atom.clone()));
+            self.common.notify_all_observers(&SpaceEvent::Remove(atom.clone()));
         }
         is_removed
     }
@@ -231,7 +206,7 @@ impl GroundingSpace {
     pub fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         let is_replaced = self.replace_internal(from, to.clone());
         if is_replaced {
-            self.notify(&SpaceEvent::Replace(from.clone(), to));
+            self.common.notify_all_observers(&SpaceEvent::Replace(from.clone(), to));
         }
         is_replaced
     }
@@ -315,8 +290,8 @@ impl GroundingSpace {
 }
 
 impl Space for GroundingSpace {
-    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
-        GroundingSpace::register_observer(self, observer)
+    fn common(&self) -> Option<&SpaceCommon> {
+        Some(&self.common)
     }
     fn query(&self, query: &Atom) -> BindingsSet {
         GroundingSpace::query(self, query)
@@ -635,13 +610,13 @@ mod test {
         {
             let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
             space.register_observer(observer.clone());
-            assert_eq!(space.observers.borrow().len(), 1);
+            assert_eq!(space.common.observers.borrow().len(), 1);
         }
 
         space.add(expr!("a"));
 
         assert_eq_no_order!(space, vec![expr!("a")]);
-        assert_eq!(space.observers.borrow().len(), 0);
+        assert_eq!(space.common.observers.borrow().len(), 0);
     }
 
     #[test]
