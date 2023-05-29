@@ -79,7 +79,7 @@ impl<'a> Iterator for SpaceIter<'a> {
 }
 
 /// A common object that needs to be maintained by all objects implementing the Space trait
-#[derive(Clone, Default)]
+#[derive(Default)]
 pub struct SpaceCommon {
     observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>,
 }
@@ -102,7 +102,16 @@ impl SpaceCommon {
             self.observers.borrow_mut().retain(|w| w.strong_count() > 0);
         }
     }
+}
 
+impl Clone for SpaceCommon {
+    fn clone(&self) -> Self {
+        Self {
+            //We don't want to clone observers when a space is cloned, as that leads to a situation
+            // where an observer can't know which space an event pertains to
+            observers: RefCell::new(vec![]),
+        }
+    }
 }
 
 /// Read-only space trait.
