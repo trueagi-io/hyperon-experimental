@@ -157,11 +157,9 @@ START_TEST (test_custom_c_space)
 
     my_observer_t* observer_payload = malloc(sizeof(my_observer_t));
     observer_payload->atom_count = 0;
-    space_observer_t* observer = space_observer_new(&C_OBSERVER_API, observer_payload);
-    space_register_observer(space, observer);
+    space_observer_t* observer = space_register_observer(space, &C_OBSERVER_API, observer_payload);
 
-    space_observer_t* observer_2 = space_observer_new(&C_OBSERVER_API, malloc(sizeof(my_observer_t)));
-    space_register_observer(space, observer_2);
+    space_observer_t* observer_2 = space_register_observer(space, &C_OBSERVER_API, malloc(sizeof(my_observer_t)));
 
     atom_t* a = atom_sym("A");
     atom_t* b = atom_sym("B");

@@ -290,8 +290,8 @@ impl GroundingSpace {
 }
 
 impl Space for GroundingSpace {
-    fn common(&self) -> Option<&SpaceCommon> {
-        Some(&self.common)
+    fn common(&self) -> FlexRef<SpaceCommon> {
+        FlexRef::from_simple(&self.common)
     }
     fn query(&self, query: &Atom) -> BindingsSet {
         GroundingSpace::query(self, query)
@@ -377,8 +377,7 @@ mod test {
     #[test]
     fn add_atom() {
         let mut space = GroundingSpace::new();
-        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
-        space.register_observer(observer.clone());
+        let observer = space.common.register_observer(SpaceEventCollector::new());
 
         space.add(expr!("a"));
         space.add(expr!("b"));
@@ -392,8 +391,7 @@ mod test {
     #[test]
     fn remove_atom() {
         let mut space = GroundingSpace::new();
-        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
-        space.register_observer(observer.clone());
+        let observer = space.common.register_observer(SpaceEventCollector::new());
 
         space.add(expr!("a"));
         space.add(expr!("b"));
@@ -409,8 +407,7 @@ mod test {
     #[test]
     fn remove_atom_not_found() {
         let mut space = GroundingSpace::new();
-        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
-        space.register_observer(observer.clone());
+        let observer = space.common.register_observer(SpaceEventCollector::new());
 
         space.add(expr!("a"));
         assert_eq!(space.remove(&expr!("b")), false);
@@ -422,8 +419,7 @@ mod test {
     #[test]
     fn replace_atom() {
         let mut space = GroundingSpace::new();
-        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
-        space.register_observer(observer.clone());
+        let observer = space.common.register_observer(SpaceEventCollector::new());
 
         space.add(expr!("a"));
         space.add(expr!("b"));
@@ -439,8 +435,7 @@ mod test {
     #[test]
     fn replace_atom_not_found() {
         let mut space = GroundingSpace::new();
-        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
-        space.register_observer(observer.clone());
+        let observer = space.common.register_observer(SpaceEventCollector::new());
 
         space.add(expr!("a"));
         assert_eq!(space.replace(&expr!("b"), expr!("d")), false);
@@ -452,8 +447,7 @@ mod test {
     #[test]
     fn remove_replaced_atom() {
         let mut space = GroundingSpace::new();
-        let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
-        space.register_observer(observer.clone());
+        let observer = space.common.register_observer(SpaceEventCollector::new());
 
         space.add(expr!("a"));
         space.replace(&expr!("a"), expr!("b"));
@@ -608,8 +602,7 @@ mod test {
     fn cleanup_observer() {
         let mut space = GroundingSpace::new();
         {
-            let observer = Rc::new(RefCell::new(SpaceEventCollector::new()));
-            space.register_observer(observer.clone());
+            let _observer = space.common.register_observer(SpaceEventCollector::new());
             assert_eq!(space.common.observers.borrow().len(), 1);
         }
 
