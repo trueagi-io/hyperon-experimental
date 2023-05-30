@@ -198,20 +198,8 @@ START_TEST (test_custom_c_space)
     custom_space_buf* c_space_buf = space_get_payload(space);
     ck_assert(c_space_buf->atom_count == 1);
 
-    //NEW QUESTION FOR VITALY: If we are following strict Rust-style ownership tracking rules, then the
-    // payload should not be accessed after it has been given to space_observer_new().  However this
-    // seems dumb because we would then need to add a space_observer_get_payload function that would
-    // return exactly the same pointer.
-    //
-    //The whole point is to keep the C programmer from accessing the pointer after the space_observer_t
-    // has been freed, but adding a "borrow-style" accessor basically trades one contract with the
-    // programmer in exchange for exactly the same contract.
-    //
-    //QUESTION 2:  Applying the same logic, perhaps I can simplify the code by deleting
-    // space_get_payload().  Although it might be convenient to keep it, if there are going to be a
-    // lot of spaces.  For example we would definitely want to keep atom_get_object() because the
-    // atom_t might come from a number of different places.
-    ck_assert(observer_payload->atom_count == 1);
+    my_observer_t* payload_ptr = space_observer_get_payload(observer);
+    ck_assert(payload_ptr->atom_count == 1);
 
     space_observer_free(observer);
     atom_free(query);

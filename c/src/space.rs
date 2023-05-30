@@ -152,7 +152,7 @@ impl Drop for CObserver {
 
 /// A handle to an observer, registered with a space
 pub struct space_observer_t{
-    _observer: SpaceObserverRef<CObserver>
+    observer: SpaceObserverRef<CObserver>
 }
 
 /// Frees an observer handle when the space implementation is finished with it.
@@ -160,6 +160,20 @@ pub struct space_observer_t{
 pub extern "C" fn space_observer_free(observer: *mut space_observer_t) {
     let observer = unsafe{ Box::from_raw(observer) };
     drop(observer);
+}
+
+/// Returns a pointer to the payload associated with the space_observer_t
+/// 
+/// WARNING: The returned pointer must not be accessed after the space_observer_t has been freed,
+/// or after any operations have occurred that may have caused events to occur in the space.
+/// 
+/// NOTE: The returned pointer should not be freed directly.  Call space_observer_free when
+/// you are finished with the observer.
+#[no_mangle]
+pub extern "C" fn space_observer_get_payload(observer: *const space_observer_t) -> *mut c_void {
+    let observer = unsafe{ &(*observer).observer };
+    let c_observer_ref = unsafe { observer.borrow_mut_unsafe() };
+    c_observer_ref.payload
 }
 
 /// A table of functions to define the behavior of a space implemented in C
@@ -471,7 +485,7 @@ pub extern "C" fn space_register_observer(space: *mut space_t, observer_api: *co
     let space = unsafe{ (*space).0.borrow_mut() };
     let observer = CObserver {api: observer_api, payload: observer_payload};
     let observer = space.common().register_observer(observer);
-    Box::into_raw(Box::new(space_observer_t{ _observer: observer } ))
+    Box::into_raw(Box::new(space_observer_t{ observer } ))
 }
 
 /// WARNING: This function takes ownership of the supplied atom, and it should not be freed or

@@ -70,6 +70,11 @@ impl<T: SpaceObserver> SpaceObserverRef<T> {
     pub fn borrow_mut(&self) -> RefMut<T> {
         self.0.borrow_mut()
     }
+    /// Returns unchecked mutable access to the contents.  Used to implement the C API
+    pub unsafe fn borrow_mut_unsafe(&self) -> &mut T {
+        let cell = &mut *(&*self.0 as *const RefCell<T>).cast_mut();
+        cell.get_mut()
+    }
 }
 
 /// Space iterator.
