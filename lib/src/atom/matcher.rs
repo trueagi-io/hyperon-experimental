@@ -166,7 +166,7 @@ impl Bindings {
                     let replacing_var = self.var_by_id(var_id, |alt| *alt != *var);
                     match  replacing_var {
                         Some(var) => VarResolutionResult::Some(Atom::Variable(var.clone())),
-                        None => VarResolutionResult::None,
+                        None => VarResolutionResult::Some(Atom::Variable(var.clone())),
                     }
                 },
             };
@@ -1368,11 +1368,18 @@ mod test {
     }
 
     #[test]
+    fn bindings_get_variable_no_variable() {
+        let bindings = Bindings::new();
+
+        assert_eq!(bindings.resolve(&VariableAtom::new("x")), None);
+    }
+
+    #[test]
     fn bindings_get_variable_no_value() {
         let mut bindings = Bindings::new();
         bindings.add_var_no_value(&VariableAtom::new("x"));
 
-        assert_eq!(bindings.resolve(&VariableAtom::new("x")), None);
+        assert_eq!(bindings.resolve(&VariableAtom::new("x")), Some(Atom::var("x")));
     }
 
     #[test]
