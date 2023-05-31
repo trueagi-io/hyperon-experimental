@@ -1,3 +1,4 @@
+use hyperon::common::FlexRef;
 use hyperon::space::grounding::*;
 use hyperon::space::*;
 use hyperon::atom::*;
@@ -7,8 +8,6 @@ use crate::atom::*;
 use crate::util::*;
 
 use std::os::raw::*;
-use core::cell::RefCell;
-use std::rc::{Rc, Weak};
 
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
 // Space & SpaceMut trait interface wrapper
@@ -115,20 +114,19 @@ pub extern "C" fn space_event_free(event: *mut space_event_t) {
 }
 
 /// A table of functions to define the behavior of a SpaceObserver implemented in C
-///
-/// notify
-///   \arg payload \c is the pointer to the observer's payload
-///   \arg event \c is the event the observer is notified about.  This function should NOT take ownership
-///   of the event.
-///
-/// free_payload
-///   \arg payload \c is the pointer to the observer's payload
-///   NOTE: This function is responsible for freeing the payload buffer, as well as any other objects
-///   and resources stored by the observer.
 #[repr(C)]
 pub struct space_observer_api_t {
+
+    /// Called to pass an event to the observer
+    ///   \arg payload \c is the pointer to the observer's payload
+    ///   \arg event \c is the event the observer is notified about.  This function should NOT take ownership
+    ///   of the event.
     notify: extern "C" fn(payload: *mut c_void, event: *const space_event_t),
 
+    /// Responsible for freeing the payload passed to space_register_observer
+    ///   \arg payload \c is the pointer to the observer's payload
+    ///   NOTE: This function is responsible for freeing the payload buffer, as well as any other objects
+    ///   and resources stored by the observer.
     free_payload: extern "C" fn(payload: *mut c_void),
 }
 
@@ -152,27 +150,9 @@ impl Drop for CObserver {
     }
 }
 
-/// A handle to a space observer.
-///
-//QUESTION FOR VITALY: Is the idea that the same observer will observe many spaces, including
-// both C spaces & native Rust spaces?  Personally, it seems like it might be a better
-// structure to put the internal mutability, ie. Rc<RefCell<T>> pattern, inside the observer,
-// object itself, rather than on the register interface.  But perhaps I am missing something?
+/// A handle to an observer, registered with a space
 pub struct space_observer_t{
-    observer: Rc<RefCell<dyn SpaceObserver>>,
-}
-
-/// Creates an observer handle for a SpaceObserver implemented in C
-///
-/// WARNING: This function takes ownership of the payload, and it should not be freed after it
-/// has been provided to this function
-///
-/// The returned space_observer_t must be freed with space_observer_free
-#[no_mangle]
-pub extern "C" fn space_observer_new(api: *const space_observer_api_t, payload: *mut c_void) -> *mut space_observer_t {
-    let observer = CObserver {api, payload};
-    let observer = space_observer_t{observer: Rc::new(RefCell::new(observer))};
-    Box::into_raw(Box::new(observer))
+    observer: SpaceObserverRef<CObserver>
 }
 
 /// Frees an observer handle when the space implementation is finished with it.
@@ -180,6 +160,20 @@ pub extern "C" fn space_observer_new(api: *const space_observer_api_t, payload: 
 pub extern "C" fn space_observer_free(observer: *mut space_observer_t) {
     let observer = unsafe{ Box::from_raw(observer) };
     drop(observer);
+}
+
+/// Returns a pointer to the payload associated with the space_observer_t
+/// 
+/// WARNING: The returned pointer must not be accessed after the space_observer_t has been freed,
+/// or after any operations have occurred that may have caused events to occur in the space.
+/// 
+/// NOTE: The returned pointer should not be freed directly.  Call space_observer_free when
+/// you are finished with the observer.
+#[no_mangle]
+pub extern "C" fn space_observer_get_payload(observer: *const space_observer_t) -> *mut c_void {
+    let observer = unsafe{ &(*observer).observer };
+    let c_observer_ref = unsafe { observer.borrow_mut_unsafe() };
+    c_observer_ref.payload
 }
 
 /// A table of functions to define the behavior of a space implemented in C
@@ -252,34 +246,24 @@ pub struct space_api_t {
     free_payload: extern "C" fn(payload: *mut c_void),
 }
 
-pub struct space_observer_list_t {
-    observers: RefCell<Vec<Weak<RefCell<dyn SpaceObserver>>>>
-}
-
-/// Notifies all observers of an event
-#[no_mangle]
-pub extern "C" fn space_observer_list_notify_all(list: *const space_observer_list_t, event: *const space_event_t) {
-    let list = unsafe{ &(*list).observers };
-    let event = unsafe{ &(*event).event };
-
-    let mut cleanup = false;
-    for observer in list.borrow().iter() {
-        if let Some(observer) = observer.upgrade() {
-            observer.borrow_mut().notify(event);
-        } else {
-            cleanup = true;
-        }
-    }
-    if cleanup {
-        list.borrow_mut().retain(|w| w.strong_count() > 0);
-    }
+#[derive(Default)]
+pub struct space_common_t {
+    common: SpaceCommon
 }
 
 /// Data associated with this particular space, including the space's payload and observers
 #[repr(C)]
 pub struct space_params_t {
     payload: *mut c_void,
-    observers: Box<space_observer_list_t>,
+    common: Box<space_common_t>,
+}
+
+/// Notifies all observers of an event
+#[no_mangle]
+pub extern "C" fn space_params_notify_all_observers(params: *const space_params_t, event: *const space_event_t) {
+    let common = unsafe{ &(*params).common.common };
+    let event = unsafe{ &(*event).event };
+    common.notify_all_observers(event);
 }
 
 struct CSpace {
@@ -289,20 +273,13 @@ struct CSpace {
 
 impl CSpace {
     fn new(api: *const space_api_t, payload: *mut c_void) -> Self {
-        CSpace{api, params: space_params_t{payload, observers: Box::new(space_observer_list_t::new())}}
-    }
-}
-
-impl space_observer_list_t {
-    fn new() -> Self {
-        space_observer_list_t{observers: RefCell::new(vec![])}
+        CSpace{api, params: space_params_t{payload, common: Box::new(space_common_t::default())}}
     }
 }
 
 impl Space for CSpace {
-    fn register_observer(&self, observer: Rc<RefCell<dyn SpaceObserver>>) {
-        let observers_vec = &(*self.params.observers).observers;
-        observers_vec.borrow_mut().push(Rc::downgrade(&observer) as Weak<RefCell<dyn SpaceObserver>>)
+    fn common(&self) -> FlexRef<SpaceCommon> {
+        FlexRef::from_simple(&(*self.params.common).common)
     }
     fn query(&self, query: &Atom) -> BindingsSet {
         let api = unsafe{ &*self.api };
@@ -391,7 +368,7 @@ impl std::fmt::Debug for CSpace {
 #[derive(Debug)]
 struct DefaultSpace<'a>(&'a CSpace);
 impl Space for DefaultSpace<'_> {
-    fn register_observer(&self, _observer: Rc<RefCell<dyn SpaceObserver>>) {}
+    fn common(&self) -> FlexRef<SpaceCommon> { self.0.common() }
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
     fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self.0) }
 }
@@ -497,11 +474,18 @@ pub extern "C" fn space_get_payload(space: *mut space_t) -> *mut c_void {
     panic!("Only CSpace has a payload")
 }
 
+/// Registers a new observer with the space
+/// 
+/// WARNING: This function takes ownership of the payload, and it should not be freed after it
+/// has been provided to this function
+///
+/// The returned space_observer_t must be freed with space_observer_free
 #[no_mangle]
-pub extern "C" fn space_register_observer(space: *mut space_t, observer: *const space_observer_t) {
+pub extern "C" fn space_register_observer(space: *mut space_t, observer_api: *const space_observer_api_t, observer_payload: *mut c_void) -> *mut space_observer_t {
     let space = unsafe{ (*space).0.borrow_mut() };
-    let observer = unsafe{ &(*observer).observer };
-    space.register_observer(observer.clone());
+    let observer = CObserver {api: observer_api, payload: observer_payload};
+    let observer = space.common().register_observer(observer);
+    Box::into_raw(Box::new(space_observer_t{ observer } ))
 }
 
 /// WARNING: This function takes ownership of the supplied atom, and it should not be freed or
