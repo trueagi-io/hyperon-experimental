@@ -73,12 +73,10 @@ use crate::common::collections::ListMap;
 use crate::metta::*;
 use crate::metta::types::{is_func, get_arg_types, get_type_bindings,
     get_atom_types, match_reducted_types};
-use crate::common::shared::LockBorrow;
 use crate::common::ReplacingMapper;
 
 use std::ops::Deref;
 use std::rc::Rc;
-use std::cell::RefCell;
 use std::fmt::{Debug, Display, Formatter};
 use std::collections::HashSet;
 
@@ -232,16 +230,16 @@ impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
 
 struct InterpreterContext<'a, T: SpaceRef<'a>> {
     space: T,
-    cache: Rc<RefCell<InterpreterCache>>,
-    phantom: PhantomData<&'a GroundingSpace>,
+    cache: SpaceObserverRef<InterpreterCache>,
+    phantom: PhantomData<&'a T>,
 }
 
 struct InterpreterContextRef<'a, T: SpaceRef<'a>>(Rc<InterpreterContext<'a, T>>);
 
 impl<'a, T: SpaceRef<'a>> InterpreterContextRef<'a, T> {
     fn new(space: T) -> Self {
-        let cache = Rc::new(RefCell::new(InterpreterCache::new()));
-        space.register_observer(cache.clone());
+        let cache = space.common().register_observer(InterpreterCache::new());
+
         Self(Rc::new(InterpreterContext{ space, cache, phantom: PhantomData }))
     }
 }
