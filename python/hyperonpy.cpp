@@ -236,9 +236,6 @@ struct CAtomType {};
 PYBIND11_MODULE(hyperonpy, m) {
     m.doc() = "Python API of the Hyperon library";
 
-    // TODO: integrate Rust logs with Python logger
-    m.def("init_logger", &init_logger, "Initialize Hyperon library logger");
-
     py::enum_<atom_type_t>(m, "AtomKind")
         .value("SYMBOL", atom_type_t::SYMBOL)
         .value("VARIABLE", atom_type_t::VARIABLE)
@@ -496,5 +493,11 @@ PYBIND11_MODULE(hyperonpy, m) {
         metta_load_module(metta.ptr, text.c_str());
     }, "Load MeTTa module");
 
+}
+
+__attribute__((constructor))
+static void init_library() {
+    // TODO: integrate Rust logs with Python logger
+    init_logger();
 }
 
