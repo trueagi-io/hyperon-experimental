@@ -3,21 +3,12 @@
 
 #include "util.h"
 
-void str_to_buf(const char *str, void *context) {
-    strncpy(context, str, BUF_SIZE);
-};
-
-void return_string(char const* value, void* context) {
-    char** buffer = context;
-    size_t length = strlen(value);
-    *buffer = malloc(length + 1);
-    strncpy(*buffer, value, length);
-    (*buffer)[length] = 0;
-}
-
 char* stratom(atom_t const* atom) {
-    char* buffer;
-    atom_to_str(atom, return_string, &buffer);
+    char temp_buffer[2048];
+    size_t len = atom_to_str(atom, temp_buffer, 2048);
+    char* buffer = malloc(len+1);
+    strncpy(buffer, temp_buffer, len+1);
+    buffer[len] = 0;
     return buffer;
 }
 

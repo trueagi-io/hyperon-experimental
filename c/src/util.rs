@@ -1,3 +1,5 @@
+use core::slice;
+use std::io::{Cursor, Write};
 use std::ffi::c_void;
 use std::ffi::CString;
 use std::os::raw::c_char;
@@ -19,8 +21,6 @@ impl<T> From<&Vec<T>> for array_t<T> {
 
 pub type lambda_t<T> = extern "C" fn(data: T, context: *mut c_void);
 
-pub type c_str_callback_t = lambda_t<*const c_char>;
-
 pub fn cstr_as_str<'a>(s: *const c_char) -> &'a str {
     unsafe{ CStr::from_ptr(s) }.to_str().expect("Incorrect UTF-8 sequence")
 }
@@ -35,6 +35,38 @@ pub fn str_as_cstr(s: &str) -> CString {
 
 pub fn string_as_cstr(s: String) -> CString {
     CString::new(s).expect("CString::new failed")
+}
+
+pub(crate) fn write_into_buf<T: std::fmt::Display>(obj: T, buf: *mut c_char, buf_len: usize) -> usize {
+    let slice = unsafe{ slice::from_raw_parts_mut(buf as *mut u8, buf_len) };
+    let mut cursor = Cursor::new(slice);
+    let len = if let Err(_err) = write!(cursor, "{obj}") {
+        0 //The buffer was probably too short
+    } else {
+        let len = cursor.position() as usize;
+
+        //If we wrote right up to the end of the buffer, then fail, because we need room for the terminator
+        if len < buf_len-1 {
+            len
+        } else {
+            0
+        }
+    };
+
+    //Write the terminator
+    let slice = cursor.into_inner();
+    slice[len] = 0;
+    len
+}
+
+pub(crate) fn write_debug_into_buf<T: std::fmt::Debug>(obj: T, buf: *mut c_char, buf_len: usize) -> usize {
+    struct DisplayDebug<DebugT>(DebugT);
+    impl<DebugT: std::fmt::Debug> std::fmt::Display for DisplayDebug<DebugT> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "{:?}", self.0)
+        }
+    }
+    write_into_buf(DisplayDebug(obj), buf, buf_len)
 }
 
 // We cannot use imported Shared in C API because it is not correctly

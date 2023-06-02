@@ -13,7 +13,8 @@ void teardown(void) {
 #include "stdio.h"
 
 void bindings_to_buf(bindings_t* bindings, void *context) {
-    bindings_to_str(bindings, &str_to_buf, context);
+    char* dst_buf = context;
+    bindings_to_str(bindings, dst_buf, BUF_SIZE);
 };
 
 void clone_one_bindings(bindings_t* bindings, void *context) {
