@@ -4,11 +4,9 @@
 #include "util.h"
 
 char* stratom(atom_t const* atom) {
-    char temp_buffer[2048];
-    size_t len = atom_to_str(atom, temp_buffer, 2048);
+    size_t len = atom_to_str(atom, NULL, 0);
     char* buffer = malloc(len+1);
-    strncpy(buffer, temp_buffer, len+1);
-    buffer[len] = 0;
+    atom_to_str(atom, buffer, len+1);
     return buffer;
 }
 

@@ -98,9 +98,8 @@ pub extern "C" fn bindings_clone(bindings: *const bindings_t) -> *mut bindings_t
 }
 
 /// Writes a text description of the bindings_t into the provided buffer and returns the number of bytes
-/// written, excluding the string terminator.
-///
-/// Returns 0 if the buffer is too small
+/// written, or that would have been written had the buf_len been large enough, excluding the
+/// string terminator.
 #[no_mangle]
 pub extern "C" fn bindings_to_str(bindings: *const bindings_t, buf: *mut c_char, buf_len: usize) -> usize {
     let bindings = unsafe{ &(*bindings).bindings };
@@ -266,9 +265,8 @@ pub extern "C" fn bindings_set_eq(set: *const bindings_set_t, other: *const bind
 }
 
 /// Writes a text description of the bindings_set_t into the provided buffer and returns the number of bytes
-/// written, excluding the string terminator.
-///
-/// Returns 0 if the buffer is too small
+/// written, or that would have been written had the buf_len been large enough, excluding the
+/// string terminator.
 #[no_mangle]
 pub extern "C" fn bindings_set_to_str(set: *const bindings_set_t, buf: *mut c_char, buf_len: usize) -> usize {
     let set = unsafe{ &(*set).set };
@@ -371,9 +369,8 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
 }
 
 /// Writes a text description of the atom into the provided buffer and returns the number of bytes
-/// written, excluding the string terminator.
-///
-/// Returns 0 if the buffer is too small
+/// written, or that would have been written had the buf_len been large enough, excluding the
+/// string terminator.
 #[no_mangle]
 pub extern "C" fn atom_to_str(atom: *const atom_t, buf: *mut c_char, buf_len: usize) -> usize {
     let atom = unsafe{ &(*atom).atom };
@@ -381,9 +378,8 @@ pub extern "C" fn atom_to_str(atom: *const atom_t, buf: *mut c_char, buf_len: us
 }
 
 /// Writes the name of the atom into the provided buffer and returns the number of bytes
-/// written, excluding the string terminator.
-///
-/// Returns 0 if the buffer is too small
+/// written, or that would have been written had the buf_len been large enough, excluding the
+/// string terminator.
 #[no_mangle]
 pub extern "C" fn atom_get_name(atom: *const atom_t, buf: *mut c_char, buf_len: usize) -> usize {
     let atom = unsafe{ &(*atom).atom };

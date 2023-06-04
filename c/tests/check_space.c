@@ -25,9 +25,8 @@ void reset_output(struct output_t* output) {
 void atom_string_callback(const atom_t* atom, void* data)
 {
     struct output_t* out = data;
-    char atom_str_buf[1024];
-    atom_to_str(atom, atom_str_buf, 1024);
-    out->len += snprintf(out->str + out->len, 1024 - out->len, "%s, ", atom_str_buf);
+    out->len += atom_to_str(atom, out->str + out->len, 1024 - out->len);
+    out->len += snprintf(out->str + out->len, 1024 - out->len, ", ");
 }
 
 void query_callback_single_atom(const struct var_atom_t* atom, void* data)

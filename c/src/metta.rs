@@ -150,9 +150,8 @@ pub extern "C" fn step_get_result(step: *mut step_result_t,
 }
 
 /// Writes a text description of the step_result_t into the provided buffer and returns the number of bytes
-/// written, excluding the string terminator.
-///
-/// Returns 0 if the buffer is too small
+/// written, or that would have been written had the buf_len been large enough, excluding the
+/// string terminator.
 #[no_mangle]
 pub extern "C" fn step_to_str(step: *const step_result_t, buf: *mut c_char, buf_len: usize) -> usize {
     let result = unsafe{ &(*step).result };
