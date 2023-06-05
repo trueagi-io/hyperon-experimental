@@ -22,17 +22,18 @@ void reset_output(struct output_t* output) {
     output->len = 0;
 }
 
-void copy_to_output(char const* str, void* context) {
-    struct output_t *output = context;
-    output->len += snprintf(output->str + output->len, 1024 - output->len, "%s, ", str);
+void atom_string_callback(const atom_t* atom, void* data)
+{
+    struct output_t* out = data;
+    out->len += atom_to_str(atom, out->str + out->len, 1024 - out->len);
+    out->len += snprintf(out->str + out->len, 1024 - out->len, ", ");
 }
 
 void query_callback_single_atom(const struct var_atom_t* atom, void* data)
 {
     struct output_t* out = data;
-
     out->len += snprintf(out->str + out->len, 1024 - out->len, "%s: ", atom->var);
-    atom_to_str(atom->atom, copy_to_output, out);
+    atom_string_callback(atom->atom, out);
     atom_free(atom->atom);
 }
 
@@ -41,12 +42,6 @@ void query_callback(struct bindings_t const* results, void* data)
     struct output_t* out = data;
 
     bindings_traverse(results, query_callback_single_atom, out);
-}
-
-void atom_string_callback(const atom_t* atom, void* data)
-{
-    struct output_t* out = data;
-    atom_to_str(atom, copy_to_output, out);
 }
 
 void collect_atoms(const atom_t* atom, void* vec_ptr) {

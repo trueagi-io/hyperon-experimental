@@ -26,9 +26,21 @@ using CTokenizer = CPtr<tokenizer_t>;
 using CStepResult = CPtr<step_result_t>;
 using CMetta = CPtr<metta_t>;
 
-static void copy_to_string(char const* cstr, void* context) {
-    std::string* cppstr = static_cast<std::string*>(context);
-    cppstr->assign(cstr);
+// Returns a string, created by executing a function that writes string data into a buffer
+typedef size_t (*write_to_buf_func_t)(void*, char*, size_t);
+std::string func_to_string(write_to_buf_func_t func, void* arg) {
+    //First try with a 1K stack buffer, because that will work in the vast majority of cases
+    char dst_buf[1024];
+    size_t len = func(arg, dst_buf, 1024);
+    if (len < 1024) {
+        return std::string(dst_buf);
+    } else {
+        std::string new_string = std::string();
+        new_string.resize(len+1); //Room for the terminator in the allocated buffer
+        func(arg, new_string.data(), len+1);
+        new_string.resize(len); //But the C++ string doesn't include the terminator in its len
+        return new_string;
+    }
 }
 
 static void copy_atoms(atom_array_t atoms, void* context) {
@@ -266,15 +278,11 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     m.def("atom_eq", [](CAtom a, CAtom b) -> bool { return atom_eq(a.ptr, b.ptr); }, "Test if two atoms are equal");
     m.def("atom_to_str", [](CAtom atom) {
-            std::string str;
-            atom_to_str(atom.ptr, copy_to_string, &str);
-            return str;
+            return func_to_string((write_to_buf_func_t)&atom_to_str, atom.ptr);
         }, "Convert atom to human readable string");
     m.def("atom_get_type", [](CAtom atom) { return atom_get_type(atom.ptr); }, "Get type of the atom");
     m.def("atom_get_name", [](CAtom atom) {
-            std::string str;
-            atom_get_name(atom.ptr, copy_to_string, &str);
-            return str;
+            return func_to_string((write_to_buf_func_t)&atom_get_name, atom.ptr);
         }, "Get name of the Symbol or Variable atom");
     m.def("atom_get_object", [](CAtom atom) {
             return static_cast<GroundedObject const*>(atom_get_object(atom.ptr))->pyobj;
@@ -326,9 +334,7 @@ PYBIND11_MODULE(hyperonpy, m) {
         }, "Resolve and remove" );
 
     m.def("bindings_to_str", [](CBindings bindings) {
-        std::string str;
-        bindings_to_str(bindings.ptr, copy_to_string, &str);
-        return str;
+        return func_to_string((write_to_buf_func_t)&bindings_to_str, bindings.ptr);
     }, "Convert bindings to human readable string");
 
     m.def("bindings_list", [](CBindings bindings) -> pybind11::list {
@@ -355,9 +361,7 @@ PYBIND11_MODULE(hyperonpy, m) {
         return bindings_set_is_single(set.ptr);
     }, "Returns true if BindingsSet contains no variable bindings (unconstrained)");
     m.def("bindings_set_to_str", [](CBindingsSet set) {
-        std::string str;
-        bindings_set_to_str(set.ptr, copy_to_string, &str);
-        return str;
+        return func_to_string((write_to_buf_func_t)&bindings_set_to_str, set.ptr);
     }, "Convert BindingsSet to human readable string");
     m.def("bindings_set_clone", [](CBindingsSet set) { return CBindingsSet(bindings_set_clone(set.ptr)); }, "Deep copy of BindingsSet");
     m.def("bindings_set_from_bindings", [](CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); return CBindingsSet(bindings_set_from_bindings(cloned_bindings)); }, "New BindingsSet from existing Bindings");
@@ -429,9 +433,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CStepResult>(m, "CStepResult")
         .def("__str__", [](CStepResult step) {
-            std::string str;
-            step_to_str(step.ptr, copy_to_string, &str);
-            return str;
+            return func_to_string((write_to_buf_func_t)&step_to_str, step.ptr);
         }, "Convert step to human readable string");
     m.def("interpret_init", [](CSpace space, CAtom expr) {
             return CStepResult(interpret_init(space.ptr, expr.ptr));
