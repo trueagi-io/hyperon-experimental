@@ -1,7 +1,6 @@
 import shlex
 from setuptools import setup, Command
 
-
 class CoverageCommand(Command):
     user_options = []
 
@@ -22,8 +21,8 @@ class CoverageCommand(Command):
         subprocess.run(shlex.split("coverage html"), check=True, cwd="./tests")
         raise SystemExit(result.returncode)
 
-
 try:
+
     from wheel.bdist_wheel import bdist_wheel as _bdist_wheel
 
     class bdist_wheel(_bdist_wheel):
@@ -35,29 +34,8 @@ except ImportError:
     bdist_wheel = None
 
 setup(
-    name="hyperon",
-    setup_requires=["setuptools_scm"],
-    use_scm_version={
-        "root": "..",
-        "relative_to": __file__,
-        "local_scheme": "node-and-timestamp",
-    },
-    description="Hyperon API in Python",
-    long_description_content_type="text/markdown",
-    long_description="Hyperon API in Python",
-    packages=["hyperon"],
-    package_data={"hyperon": ["*.so", "*.dylib"]},
-    install_requires=[
-        'importlib-metadata; python_version < "3.8"',
-    ],
-    extras_require={"dev": ["coverage"]},
     cmdclass={
         "coverage": CoverageCommand,
         "bdist_wheel": bdist_wheel,
     },
-    entry_points={
-        'console_scripts': [
-            'hyperon = hyperon:main',
-        ]
-    }
 )
