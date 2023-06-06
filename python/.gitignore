@@ -1,4 +1,5 @@
 __pycache__
 /hyperon.egg-info
+/dist
 /cover
 .coverage
