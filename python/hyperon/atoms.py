@@ -257,7 +257,7 @@ class Bindings:
     def is_empty(self) -> bool:
         return hp.bindings_is_empty(self.cbindings)
 
-    def narrow_vars(self, vars: list[Atom] ):
+    def narrow_vars(self, vars ):
         cvars = hp.CVecAtom = hp.vec_atom_new()
         for var in vars:
             hp.vec_atom_push(cvars, var.catom)
