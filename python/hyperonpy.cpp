@@ -188,6 +188,128 @@ void py_free(struct gnd_t* _cgnd) {
     delete static_cast<GroundedObject const*>(_cgnd);
 }
 
+extern "C" {
+    bindings_set_t *py_space_query(const struct space_params_t *params, const struct atom_t *atom);
+    vec_atom_t *py_space_subst(const struct space_params_t *params, const struct atom_t *pattern, const struct atom_t *tmpl);
+    void py_space_add(const struct space_params_t *params, struct atom_t *atom);
+    bool py_space_remove(const struct space_params_t *params, const struct atom_t *atom);
+    bool py_space_replace(const struct space_params_t *params, const struct atom_t *from, struct atom_t *to);
+    ssize_t py_space_atom_count(const struct space_params_t *params);
+    void *py_space_new_atom_iter_state(const struct space_params_t *params);
+    const atom_t *py_space_iter_next_atom(const struct space_params_t *params, void *state);
+    void py_space_free_atom_iter_state(const struct space_params_t *params, void *state);
+    void py_space_free_payload(void *payload);
+}
+
+const space_api_t PY_SPACE_NO_SUBST_API = {
+    &py_space_query,
+    NULL, //TODO: &py_space_subst
+    &py_space_add,
+    &py_space_remove,
+    &py_space_replace,
+    &py_space_atom_count,
+    &py_space_new_atom_iter_state,
+    &py_space_iter_next_atom,
+    &py_space_free_atom_iter_state,
+    &py_space_free_payload };
+
+struct PySpace {
+    PySpace(py::object pyobj) : pyobj(pyobj) {
+    }
+    virtual ~PySpace() {
+    }
+    py::object pyobj;
+};
+
+bindings_set_t *py_space_query(const struct space_params_t *params, const struct atom_t *query_atom) {
+    py::object hyperon = py::module_::import("hyperon");
+    py::function call_query_on_python_space = hyperon.attr("call_query_on_python_space");
+    py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
+    CAtom catom = atom_clone(query_atom);
+    py::object result = call_query_on_python_space(pyobj, catom);
+    const CBindingsSet &set = result.attr("c_set").cast<CBindingsSet>();
+    return bindings_set_clone(set.ptr);
+}
+
+//TODO, currently Python spaces use the default subst implementation
+// vec_atom_t *py_space_subst(const struct space_params_t *params, const struct atom_t *pattern, const struct atom_t *tmpl) {
+//     //TODO
+// }
+
+void py_space_add(const struct space_params_t *params, struct atom_t *atom) {
+    py::object hyperon = py::module_::import("hyperon");
+    py::function call_add_on_python_space = hyperon.attr("call_add_on_python_space");
+    py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
+    CAtom catom = atom;
+    call_add_on_python_space(pyobj, catom);
+}
+
+bool py_space_remove(const struct space_params_t *params, const struct atom_t *atom) {
+    py::object hyperon = py::module_::import("hyperon");
+    py::function call_remove_on_python_space = hyperon.attr("call_remove_on_python_space");
+    py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
+    CAtom catom = atom_clone(atom);
+    py::object result = call_remove_on_python_space(pyobj, catom);
+    return py::str(result).is(py::str(Py_True)); //Really?? The best way to test bools is using strings??
+}
+
+bool py_space_replace(const struct space_params_t *params, const struct atom_t *from, struct atom_t *to) {
+    py::object hyperon = py::module_::import("hyperon");
+    py::function call_replace_on_python_space = hyperon.attr("call_replace_on_python_space");
+    py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
+    CAtom catom_from = atom_clone(from);
+    CAtom catom_to = to;
+    py::object result = call_replace_on_python_space(pyobj, catom_from, catom_to);
+    return py::str(result).is(py::str(Py_True));
+}
+
+ssize_t py_space_atom_count(const struct space_params_t *params) {
+    py::object hyperon = py::module_::import("hyperon");
+    py::function call_atom_count_on_python_space = hyperon.attr("call_atom_count_on_python_space");
+    py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
+    py::int_ result = call_atom_count_on_python_space(pyobj);
+    return result.cast<ssize_t>();
+}
+
+void *py_space_new_atom_iter_state(const struct space_params_t *params) {
+    py::object hyperon = py::module_::import("hyperon");
+    py::function call_new_iter_state_on_python_space = hyperon.attr("call_new_iter_state_on_python_space");
+    py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
+    py::object result = call_new_iter_state_on_python_space(pyobj);
+    if (result.is_none()) {
+        return NULL;
+    } else {
+        py::object* iter_buf = (py::object*)malloc(sizeof(py::object));
+        *iter_buf = result;
+        py::function iter_init_fn = iter_buf->attr("__iter__");
+        iter_init_fn();
+        return (void*)iter_buf;
+    }
+}
+
+const atom_t *py_space_iter_next_atom(const struct space_params_t *params, void *state) {
+    py::object* iter_buf = (py::object*)state;
+    py::function next_fn = iter_buf->attr("__next__");
+    try {
+        py::object atom = next_fn();
+        return atom.attr("catom").cast<CAtom>().ptr;
+    } catch (pybind11::error_already_set &e) {
+        //We will assume it's the StopIteration exception
+        return NULL;
+    }
+}
+
+void py_space_free_atom_iter_state(const struct space_params_t *params, void *state) {
+    //TODO: Question - do we need to do anything so that the Python object gets its destructor called?
+    // py::object* iter_buf = (py::object*)state;
+    // delete *iter_buf;
+    free(state);
+}
+
+void py_space_free_payload(void *payload) {
+    delete static_cast<PySpace const*>(payload);
+}
+
 void copy_to_list_callback(var_atom_t const* varAtom, void* context){
 
     pybind11::list& var_atom_list = *( (pybind11::list*)(context) );
@@ -295,9 +417,17 @@ PYBIND11_MODULE(hyperonpy, m) {
             atom_get_children(atom.ptr, copy_atoms, &atoms);
             return atoms;
         }, "Get children atoms of the expression");
+    m.def("atom_iterate", [](CAtom atom) -> pybind11::list {
+            pybind11::list atoms_list;
+            atom_iterate(atom.ptr, atom_copy_to_list_callback, &atoms_list);
+            return atoms_list;
+        }, "Returns iterator to traverse child atoms recursively, depth first");
+    m.def("atom_match_atom", [](CAtom a, CAtom b) -> CBindingsSet {
+            return CBindingsSet(atom_match_atom(a.ptr, b.ptr));
+        }, "Matches one atom against another, establishing Bindings between variables");
     m.def("atoms_are_equivalent", [](CAtom first, CAtom second) {
-            return atoms_are_equivalent(first.ptr, second.ptr); },
-            "Check atom for equivalence");
+            return atoms_are_equivalent(first.ptr, second.ptr);
+        }, "Check atom for equivalence");
 
     py::class_<CVecAtom>(m, "CVecAtom");
     m.def("vec_atom_new", []() { return CVecAtom(vec_atom_new()); }, "New vector of atoms");
@@ -322,6 +452,10 @@ PYBIND11_MODULE(hyperonpy, m) {
           },
           "Links variable to atom" );
     m.def("bindings_is_empty", [](CBindings bindings){ return bindings_is_empty(bindings.ptr);}, "Returns true if bindings is empty");
+
+    m.def("bindings_narrow_vars", [](CBindings bindings, CVecAtom vars) {
+            bindings_narrow_vars(bindings.ptr, vars.ptr);
+        }, "Remove vars from Bindings, except those specified" );
 
     m.def("bindings_resolve", [](CBindings bindings, char const* varName) -> std::optional<CAtom> {
             auto const res = bindings_resolve(bindings.ptr, varName);
@@ -387,18 +521,25 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CSpace>(m, "CSpace");
     m.def("space_new_grounding", []() { return CSpace(space_new_grounding_space()); }, "New grounding space instance");
+    m.def("space_new_custom", [](py::object object) {
+        return CSpace( space_new(&PY_SPACE_NO_SUBST_API, new PySpace(object)));
+        }, "Create new custom space implemented in Python");
     m.def("space_free", [](CSpace space) { space_free(space.ptr); }, "Free space");
+    m.def("space_get_payload", [](CSpace space) {
+        PySpace* py_space = (PySpace*)space_get_payload(space.ptr);
+        return py_space->pyobj;
+        }, "Accessor for the payload of a space implemented in Python");
     m.def("space_add", [](CSpace space, CAtom atom) { space_add(space.ptr, atom_clone(atom.ptr)); }, "Add atom into space");
     m.def("space_remove", [](CSpace space, CAtom atom) { return space_remove(space.ptr, atom.ptr); }, "Remove atom from space");
     m.def("space_replace", [](CSpace space, CAtom from, CAtom to) { return space_replace(space.ptr, from.ptr, atom_clone(to.ptr)); }, "Replace atom from space");
     m.def("space_eq", [](CSpace a, CSpace b) { return space_eq(a.ptr, b.ptr); }, "Check if two spaces are equal");
-    m.def("space_len", [](CSpace space) { return space_atom_count(space.ptr); }, "Return number of atoms in space, or -1 if the space is unable to determine the value");
+    m.def("space_atom_count", [](CSpace space) { return space_atom_count(space.ptr); }, "Return number of atoms in space, or -1 if the space is unable to determine the value");
     m.def("space_list", [](CSpace space) -> std::optional<pybind11::list> {
         pybind11::list atoms_list;
         if (space_iterate(space.ptr, atom_copy_to_list_callback, &atoms_list)) {
             return atoms_list;
         } else {
-            return pybind11::none();
+            return std::nullopt;
         }
     }, "Returns iterator to traverse atoms within a space");
     m.def("space_query", [](CSpace space, CAtom pattern) {

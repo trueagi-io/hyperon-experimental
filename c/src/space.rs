@@ -214,7 +214,7 @@ pub struct space_api_t {
     ///   \arg params \c is the pointer to the space's params
     ///   NOTE: If an atom_count function is provided, it will be called.  NULL should be provided for spaces
     ///     that cannot readily determine the number of contained atoms
-    atom_count: Option<extern "C" fn(params: *const space_params_t) -> usize>,
+    atom_count: Option<extern "C" fn(params: *const space_params_t) -> isize>,
 
     /// Returns an allocated pointer to state necessary to perform an iteration over all atoms
     ///   \arg params \c is the pointer to the space's params
@@ -304,7 +304,11 @@ impl Space for CSpace {
         let api = unsafe{ &*self.api };
         if let Some(atom_count_fn) = api.atom_count {
             let count = atom_count_fn(&self.params);
-            Some(count)
+            if count >= 0 {
+                Some(count as usize)
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -342,8 +346,12 @@ impl Space for CSpace {
         let api = unsafe{ &*self.api };
         if let Some(new_atom_iterator_state) = api.new_atom_iterator_state {
             let ctx = new_atom_iterator_state(&self.params);
-            let new_iter = CSpaceIterator(self, ctx);
-            Some(SpaceIter::new(new_iter))
+            if ctx.is_null() {
+                None
+            } else {
+                let new_iter = CSpaceIterator(self, ctx);
+                Some(SpaceIter::new(new_iter))
+            }
         } else {
             None
         }
