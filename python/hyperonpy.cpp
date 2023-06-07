@@ -279,11 +279,9 @@ void *py_space_new_atom_iter_state(const struct space_params_t *params) {
     if (result.is_none()) {
         return NULL;
     } else {
-        py::object* iter_buf = (py::object*)malloc(sizeof(py::object));
-        *iter_buf = result;
-        iter_buf->inc_ref();
-        py::function iter_init_fn = iter_buf->attr("__iter__");
+        py::function iter_init_fn = result.attr("__iter__");
         iter_init_fn();
+        py::object* iter_buf = new py::object(result);
         return (void*)iter_buf;
     }
 }
@@ -301,10 +299,8 @@ const atom_t *py_space_iter_next_atom(const struct space_params_t *params, void 
 }
 
 void py_space_free_atom_iter_state(const struct space_params_t *params, void *state) {
-    //TODO: Question - do we need to do anything else so that the Python object gets its destructor called?
     py::object* iter_buf = (py::object*)state;
-    iter_buf->dec_ref();
-    free(state);
+    delete iter_buf;
 }
 
 void py_space_free_payload(void *payload) {
