@@ -240,27 +240,56 @@ void py_space_add(const struct space_params_t *params, struct atom_t *atom) {
     py::object hyperon = py::module_::import("hyperon");
     py::function call_add_on_python_space = hyperon.attr("call_add_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
+    atom_t* notify_atom = atom_clone(atom);
     CAtom catom = atom;
     call_add_on_python_space(pyobj, catom);
+
+    //TODO: Create a mechanism so the Python code can do the notification manually, and bypass this
+    // automatic notification code
+    space_event_t* event = space_event_new_add(notify_atom);
+    space_params_notify_all_observers(params, event);
+    space_event_free(event);
 }
 
 bool py_space_remove(const struct space_params_t *params, const struct atom_t *atom) {
     py::object hyperon = py::module_::import("hyperon");
     py::function call_remove_on_python_space = hyperon.attr("call_remove_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
+    atom_t* notify_atom = atom_clone(atom);
     CAtom catom = atom_clone(atom);
     py::object result = call_remove_on_python_space(pyobj, catom);
-    return result.cast<bool>();
+    if (result.cast<bool>()) {
+        //TODO: See comment about manual notification above
+        space_event_t* event = space_event_new_remove(notify_atom);
+        space_params_notify_all_observers(params, event);
+        space_event_free(event);
+        return true;
+    } else {
+        atom_free(notify_atom);
+        return false;
+    }
 }
 
 bool py_space_replace(const struct space_params_t *params, const struct atom_t *from, struct atom_t *to) {
     py::object hyperon = py::module_::import("hyperon");
     py::function call_replace_on_python_space = hyperon.attr("call_replace_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
+    atom_t* notify_from = atom_clone(from);
+    atom_t* notify_to = atom_clone(to);
     CAtom catom_from = atom_clone(from);
     CAtom catom_to = to;
     py::object result = call_replace_on_python_space(pyobj, catom_from, catom_to);
-    return result.cast<bool>();
+    if (result.cast<bool>()) {
+        //TODO: See comment about manual notification above
+        space_event_t* event = space_event_new_replace(notify_from, notify_to);
+        space_params_notify_all_observers(params, event);
+        space_event_free(event);
+        return true;
+    } else {
+        atom_free(notify_from);
+        atom_free(notify_to);
+        return false;
+    }
 }
 
 ssize_t py_space_atom_count(const struct space_params_t *params) {
