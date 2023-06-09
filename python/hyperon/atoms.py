@@ -1,3 +1,7 @@
+"""
+The Python wrapper for Hyperon Atom Rust types
+"""
+
 import hyperonpy as hp
 from hyperonpy import AtomKind
 from typing import Union
@@ -20,6 +24,7 @@ class Atom:
         return hp.atom_to_str(self.catom)
 
     def get_type(self):
+        """Gets the type of this Atom"""
         return hp.atom_get_type(self.catom)
 
     def iterate(self):
@@ -34,6 +39,7 @@ class Atom:
 
     @staticmethod
     def _from_catom(catom):
+        """Constructs an Atom from C Atom of the same type"""
         type = hp.atom_get_type(catom)
         if type == AtomKind.SYMBOL:
             return SymbolAtom(catom)
@@ -47,6 +53,8 @@ class Atom:
             raise Exception("Unexpected type of the atom: " + str(type))
 
 class SymbolAtom(Atom):
+    """Symbol Atom represents a single concepts which is identified by name. Two symbols
+    which have the same name reference the same concept."""
 
     def __init__(self, catom):
         super().__init__(catom)
@@ -58,6 +66,9 @@ def S(name):
     return SymbolAtom(hp.atom_sym(name))
 
 class VariableAtom(Atom):
+    """
+    Variable Atom represents a variable like a variable in the pattern.
+    """
 
     def __init__(self, catom):
         super().__init__(catom)
@@ -69,18 +80,21 @@ def V(name):
     return VariableAtom(hp.atom_var(name))
 
 class ExpressionAtom(Atom):
+    """Expression Atom combines other kinds of atoms including expressions themselves."""
 
     def __init__(self, catom):
         super().__init__(catom)
 
     def get_children(self):
-        return [Atom._from_catom(catom) for catom in
-                hp.atom_get_children(self.catom)]
+        """Gets all of the children Atoms"""
+        return [Atom._from_catom(catom) for catom in hp.atom_get_children(self.catom)]
+
 
 def E(*args):
     return ExpressionAtom(hp.atom_expr([atom.catom for atom in args]))
 
 class AtomType:
+    """Defines all the types of Atom"""
 
     UNDEFINED = Atom._from_catom(hp.CAtomType.UNDEFINED)
     TYPE = Atom._from_catom(hp.CAtomType.TYPE)
@@ -92,6 +106,15 @@ class AtomType:
     GROUNDED_SPACE = Atom._from_catom(hp.CAtomType.GROUNDED_SPACE)
 
 class GroundedAtom(Atom):
+    """Grounded Atom represents sub-symbolic knowledge. On the API level it allows
+    keeping data and behaviour inside an atom. There are three aspects of the grounded
+    atom which can be customized:
+
+        - the type of grounded atom is provided by the atom itself;
+        - matching algorithm of the atom can be modified by the user;
+        - atom can be made executable; such atom can be used to apply some sub-symbolic
+          operations to other atoms as arguments.
+    """
 
     def __init__(self, catom):
         super().__init__(catom)
