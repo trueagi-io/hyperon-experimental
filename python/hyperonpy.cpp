@@ -250,7 +250,7 @@ bool py_space_remove(const struct space_params_t *params, const struct atom_t *a
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     CAtom catom = atom_clone(atom);
     py::object result = call_remove_on_python_space(pyobj, catom);
-    return py::str(result).is(py::str(Py_True)); //Really?? The best way to test bools is using strings??
+    return result.cast<bool>();
 }
 
 bool py_space_replace(const struct space_params_t *params, const struct atom_t *from, struct atom_t *to) {
@@ -260,7 +260,7 @@ bool py_space_replace(const struct space_params_t *params, const struct atom_t *
     CAtom catom_from = atom_clone(from);
     CAtom catom_to = to;
     py::object result = call_replace_on_python_space(pyobj, catom_from, catom_to);
-    return py::str(result).is(py::str(Py_True));
+    return result.cast<bool>();
 }
 
 ssize_t py_space_atom_count(const struct space_params_t *params) {
@@ -293,8 +293,11 @@ const atom_t *py_space_iter_next_atom(const struct space_params_t *params, void 
         py::object atom = next_fn();
         return atom.attr("catom").cast<CAtom>().ptr;
     } catch (pybind11::error_already_set &e) {
-        //We will assume it's the StopIteration exception
-        return NULL;
+        if (e.matches(PyExc_StopIteration)) {
+            return NULL;
+        } else {
+            throw;
+        }
     }
 }
 
