@@ -96,3 +96,23 @@ class CustomSpaceTest(HyperonTestCase):
 
         result = kb.query(E(S("A"), V("x")))
         self.assertEqualNoOrder(result, [{"x": S("B")}])
+
+    def test_atom_containing_space(self):
+        m = MeTTa()
+
+        #Make a little space and add it to the MeTTa interpreter's space
+        little_space = Space(TestSpace())
+        little_space.add_atom(E(S("A"), S("B")))
+        space_atom = G(little_space, S("Space"))
+        m.space().add_atom(E(S("little-space"), space_atom))
+
+        #Make sure we can get the little space back, and then query it
+        kb_result = m.space().query(E(S("little-space"), V("s")))
+        result_atom = kb_result[0].get("s")
+        self.assertEqual(result_atom, space_atom)
+
+        result = result_atom.get_object().query(E(S("A"), V("v")))
+        self.assertEqualNoOrder(result, [{"v": S("B")}])
+
+        #Add the MeTTa space to the little space for some space recursion
+        space_atom.get_object().add_atom(E(S("big-space"), G(m.space(), S("Space"))))

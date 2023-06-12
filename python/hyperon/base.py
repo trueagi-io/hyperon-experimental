@@ -11,9 +11,6 @@ class PySpace:
     def __repr__(self):
         return self.id
 
-    def copy(self):
-        return self
-
 def call_query_on_python_space(space, query_catom):
     query_atom = Atom._from_catom(query_catom)
     return space.query(query_atom)
@@ -53,6 +50,9 @@ class Space:
 
     def __eq__(self, other):
         return hp.space_eq(self.cspace, other.cspace)
+
+    def copy(self):
+        return self
 
     def add_atom(self, atom):
         hp.space_add(self.cspace, atom.catom)
