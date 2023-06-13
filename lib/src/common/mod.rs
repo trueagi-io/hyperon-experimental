@@ -98,6 +98,7 @@ impl<T> Display for GndRefCell<T> {
     }
 }
 
+#[derive(Clone)]
 pub struct ReplacingMapper<T: Clone + std::hash::Hash + Eq + ?Sized, F: Fn(T) -> T> {
     mapper: F,
     mapping: HashMap<T, T>,
@@ -119,8 +120,12 @@ impl<T: Clone + std::hash::Hash + Eq + ?Sized, F: Fn(T) -> T> ReplacingMapper<T,
         }
     }
 
-    pub fn get_mapping(&self) -> &HashMap<T, T> {
-        &self.mapping
+    pub fn mapping_mut(&mut self) -> &mut HashMap<T, T> {
+        &mut self.mapping
+    }
+
+    pub fn as_fn_mut<'a>(&'a mut self) -> impl 'a + FnMut(T) -> T {
+        move |mut t| { self.replace(&mut t); t }
     }
 }
 
