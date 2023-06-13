@@ -1,16 +1,36 @@
-site_name: Hyperon
+site_name: OpenCog Hyperon
+repo_name: trueagi-io/hyperon-experimental
+repo_url: https://github.com/trueagi-io/hyperon-experimental
+
+copyright: |
+  &copy; 2023 <a href="https://github.com/trueagi-io/hyperon-experimental" target='_blank' rel="noopener">OpenCog Hyperon</a>
+
 theme:
   name: material
   features:
-    - navigation.tabs
-    - navigation.sections
-    - toc.integrate
-    - navigation.top
-    - search.suggest
-    - search.highlight
-    - content.tabs.link
-    - content.code.annotation
+    - announce.dismiss
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
     - content.code.copy
+    # - content.tabs.link
+    - content.tooltips
+    # - header.autohide
+    # - navigation.expand
+    - navigation.footer
+    - navigation.indexes
+    # - navigation.instant
+    # - navigation.prune
+    - navigation.sections
+    - navigation.tabs
+    # - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+    # - toc.integrate
   language: en
   palette:
     - scheme: default
@@ -25,6 +45,19 @@ theme:
         name: Switch to light mode
       primary: teal
       accent: lime
+  font:
+    text: Roboto
+    code: Roboto Mono
+  favicon: assets/P8T2_ASO_400x400.jpg
+  icon:
+    logo: logo
+
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  - minify:
+      minify_html: true
+  - mkdocstrings
 
 extra:
   social:
@@ -34,20 +67,47 @@ extra:
       link: https://twitter.com/OpenCog
 
 markdown_extensions:
-  - pymdownx.highlight:
-      anchor_linenums: true
-  - pymdownx.inlinehilite
   - pymdownx.snippets
+  - abbr
   - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
   - pymdownx.arithmatex:
       generic: true
-  - footnotes
-  - pymdownx.superfences
-  - pymdownx.mark
-  - attr_list
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
   - pymdownx.emoji:
-      emoji_index: !!python/name:materialx.emoji.twemoji
       emoji_generator: !!python/name:materialx.emoji.to_svg
+      emoji_index: !!python/name:materialx.emoji.twemoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: squidfunk
+      repo: mkdocs-material
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
 
-copyright: |
-  &copy; 2023 <a href="https://github.com/trueagi-io/hyperon-experimental" target='_blank' rel="noopener">OpenCog Hyperon</a>
+# Page tree
+nav:
+  - Home: index.md
