@@ -652,11 +652,6 @@ impl Bindings {
         BindingsIter { bindings: self, delegate: self.id_by_var.iter() }
     }
 
-    /// Converts [Bindings] into an iterator of pairs `(VariableAtom, Atom)`.
-    pub fn into_iter(self) -> impl Iterator<Item=(VariableAtom, Atom)> {
-        self.into_vec_of_pairs().into_iter()
-    }
-
     fn into_vec_of_pairs(mut self) -> Vec<(VariableAtom, Atom)> {
         let mut result = Vec::new();
         let mut core_vars: HashMap<u32, Atom> = HashMap::new();
@@ -771,6 +766,16 @@ impl From<&[(VariableAtom, Atom)]> for Bindings {
             }.unwrap_or_else(|e| panic!("Error creating Bindings from Atoms: {}", e));
         }
         bindings
+    }
+}
+
+impl IntoIterator for Bindings {
+    type Item = (VariableAtom, Atom);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    /// Converts [Bindings] into an iterator of pairs `(VariableAtom, Atom)`.
+    fn into_iter(self) -> Self::IntoIter {
+        self.into_vec_of_pairs().into_iter()
     }
 }
 
