@@ -651,6 +651,41 @@ impl Bindings {
     pub fn iter(&self) -> BindingsIter {
         BindingsIter { bindings: self, delegate: self.id_by_var.iter() }
     }
+
+    fn into_vec_of_pairs(mut self) -> Vec<(VariableAtom, Atom)> {
+        let mut result = Vec::new();
+        let mut core_vars: HashMap<u32, Atom> = HashMap::new();
+
+        for (var, id) in self.id_by_var {
+            match self.value_by_id.remove(&id) {
+                Some(value) => {
+                    core_vars.insert(id, Atom::Variable(var.clone()));
+                    result.push((var, value));
+                },
+                None => {
+                    match core_vars.get(&id) {
+                        Some(core_var) => { result.push((var, core_var.clone())); }
+                        None => { core_vars.insert(id, Atom::Variable(var)); }
+                    }
+                },
+            }
+        }
+
+        result
+    }
+
+    /// Rename variables inside bindings using `rename`.
+    pub fn rename_vars<F>(self, mut rename: F) -> Self where F: FnMut(VariableAtom) -> VariableAtom {
+        self.into_iter()
+            .map(|(mut v, mut a)| {
+                v = rename(v);
+                a.iter_mut().filter_type::<&mut VariableAtom>()
+                    .for_each(|var| *var = rename(var.clone()));
+                (v, a)
+            })
+            .collect::<Vec<(VariableAtom, Atom)>>()
+            .into()
+    }
 }
 
 impl Display for Bindings {
@@ -731,6 +766,16 @@ impl From<&[(VariableAtom, Atom)]> for Bindings {
             }.unwrap_or_else(|e| panic!("Error creating Bindings from Atoms: {}", e));
         }
         bindings
+    }
+}
+
+impl IntoIterator for Bindings {
+    type Item = (VariableAtom, Atom);
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    /// Converts [Bindings] into an iterator of pairs `(VariableAtom, Atom)`.
+    fn into_iter(self) -> Self::IntoIter {
+        self.into_vec_of_pairs().into_iter()
     }
 }
 
@@ -1576,4 +1621,50 @@ mod test {
         Ok(())
     }
 
+    #[ignore = "Unstable because HashMap doesn't guarantee the order of entries"]
+    #[test]
+    fn bindings_into_entries() -> Result<(), &'static str> {
+        let bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("y"))?
+            .add_var_binding_v2(VariableAtom::new("x"), Atom::sym("Z"))?
+            .add_var_binding_v2(VariableAtom::new("a"), Atom::expr([Atom::sym("A"), Atom::var("x")]))?
+            .add_var_binding_v2(VariableAtom::new("b"), Atom::expr([Atom::sym("B"), Atom::var("x")]))?;
+
+        let entries: Vec<(VariableAtom, Atom)> = bindings.into_iter().collect();
+
+        assert_eq_no_order!(entries, vec![
+            (VariableAtom::new("x"), Atom::var("y")),
+            (VariableAtom::new("y"), Atom::sym("Z")),
+            (VariableAtom::new("a"), Atom::expr([ Atom::sym("A"), Atom::var("x") ])),
+            (VariableAtom::new("b"), Atom::expr([ Atom::sym("B"), Atom::var("x") ])),
+        ]);
+        Ok(())
+    }
+
+    #[test]
+    fn bindings_rename_vars() -> Result<(), &'static str> {
+        let bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("y"))?
+            .add_var_binding_v2(VariableAtom::new("x"), Atom::sym("Z"))?
+            .add_var_binding_v2(VariableAtom::new("a"), Atom::expr([Atom::sym("A"), Atom::var("x")]))?
+            .add_var_binding_v2(VariableAtom::new("b"), Atom::expr([Atom::sym("B"), Atom::var("x")]))?;
+
+        let map: HashMap<VariableAtom, VariableAtom> = vec![
+            (VariableAtom::new("x"), VariableAtom::new("z"))
+        ].into_iter().collect();
+        let renamed = bindings.rename_vars(|v| {
+            match map.get(&v) {
+                Some(v) => v.clone(),
+                None => v,
+            }
+        });
+
+        let expected = Bindings::new()
+            .add_var_equality(&VariableAtom::new("z"), &VariableAtom::new("y"))?
+            .add_var_binding_v2(VariableAtom::new("z"), Atom::sym("Z"))?
+            .add_var_binding_v2(VariableAtom::new("a"), Atom::expr([Atom::sym("A"), Atom::var("z")]))?
+            .add_var_binding_v2(VariableAtom::new("b"), Atom::expr([Atom::sym("B"), Atom::var("z")]))?;
+        assert_eq!(renamed, expected);
+        Ok(())
+    }
 }

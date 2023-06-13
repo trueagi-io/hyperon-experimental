@@ -898,7 +898,7 @@ fn make_conflicting_vars_unique(pattern: &mut Atom, template: &mut Atom, externa
         .for_each(|var| local_var_mapper.replace(var));
 
     template.iter_mut().filter_type::<&mut VariableAtom>()
-        .for_each(|var| match local_var_mapper.get_mapping().get(var) {
+        .for_each(|var| match local_var_mapper.mapping_mut().get(var) {
             Some(v) => *var = v.clone(),
             None => {},
         });
