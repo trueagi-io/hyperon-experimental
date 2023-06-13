@@ -57,7 +57,13 @@ plugins:
       separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
   - minify:
       minify_html: true
-  - mkdocstrings
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - python
+  - autorefs
+
 
 extra:
   social:
@@ -111,3 +117,9 @@ markdown_extensions:
 # Page tree
 nav:
   - Home: index.md
+  - Reference:
+    - Atoms: reference/atoms.md
+    - Base: reference/base.md
+    - Ext: reference/ext.md
+    - Runner: reference/runner.md
+    - Stdlib: reference/stdlib.md

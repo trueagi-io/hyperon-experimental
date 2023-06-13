@@ -1,0 +1,2 @@
+# Base module
+::: hyperon.base

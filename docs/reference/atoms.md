@@ -1,0 +1,2 @@
+# Atoms module
+::: hyperon.atoms
