@@ -4,6 +4,7 @@ on:
     branches:
       - master
       - main
+      - docs-py
 permissions:
   contents: write
 jobs:
