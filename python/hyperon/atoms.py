@@ -22,6 +22,16 @@ class Atom:
     def get_type(self):
         return hp.atom_get_type(self.catom)
 
+    def iterate(self):
+        res = hp.atom_iterate(self.catom)
+        result = []
+        for r in res:
+            result.append(Atom._from_catom(r))
+        return result
+
+    def match_atom(self, b):
+        return BindingsSet(hp.atom_match_atom(self.catom, b.catom))
+
     @staticmethod
     def _from_catom(catom):
         type = hp.atom_get_type(catom)
@@ -246,6 +256,13 @@ class Bindings:
 
     def is_empty(self) -> bool:
         return hp.bindings_is_empty(self.cbindings)
+
+    def narrow_vars(self, vars ):
+        cvars = hp.CVecAtom = hp.vec_atom_new()
+        for var in vars:
+            hp.vec_atom_push(cvars, var.catom)
+        hp.bindings_narrow_vars(self.cbindings, cvars)
+        hp.vec_atom_free(cvars)
 
     def resolve(self, var_name: str) -> Union[Atom, None]:
         raw_atom = hp.bindings_resolve(self.cbindings, var_name)

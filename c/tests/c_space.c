@@ -124,7 +124,7 @@ bool replace_atom(const space_params_t* params, const atom_t* from, atom_t* to) 
     }
 }
 
-size_t atom_count(const space_params_t* params) {
+ssize_t atom_count(const space_params_t* params) {
     custom_space_buf* space = params->payload;
     return space->atom_count;
 }
