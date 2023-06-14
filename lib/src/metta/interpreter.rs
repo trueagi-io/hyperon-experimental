@@ -78,7 +78,6 @@ use crate::common::ReplacingMapper;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::fmt::{Debug, Display, Formatter};
-use std::collections::HashSet;
 
 /// Result of atom interpretation plus variable bindings found
 #[derive(Clone, PartialEq)]
@@ -186,17 +185,19 @@ impl InterpreterCache {
     }
 
     fn get(&self, key: &Atom) -> Option<Results> {
-        let key_vars: HashSet<&VariableAtom> = key.iter().filter_type::<&VariableAtom>().collect();
+        let mut var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
+        key.iter().filter_type::<&VariableAtom>()
+            .for_each(|v| { var_mapper.mapping_mut().insert(v.clone(), v.clone()); });
 
         self.0.get(key).map(|results| {
+            let mut var_mapper = var_mapper.clone();
             let mut result = Vec::new();
-            let mut var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
             for res in results {
                 let mut atom = res.atom().clone();
                 atom.iter_mut().filter_type::<&mut VariableAtom>()
-                    .filter(|var| !key_vars.contains(*var))
                     .for_each(|var| var_mapper.replace(var));
-                result.push(InterpretedAtom(atom, res.bindings().clone()));
+                let bindings = res.bindings().clone().rename_vars(var_mapper.as_fn_mut());
+                result.push(InterpretedAtom(atom, bindings));
             }
             result
         })
@@ -1019,6 +1020,19 @@ mod tests {
             assert_eq!(results.len(), 1);
             assert!(atoms_are_equivalent(results[0].atom(), &expr!("P" x)));
             assert_eq!(*results[0].bindings(), bind!{});
+        } else {
+            panic!("Non-empty result is expected");
+        }
+    }
+
+    #[test]
+    fn interpreter_cache_returns_variable_from_bindings() {
+        let mut cache = InterpreterCache::new();
+        cache.insert(expr!("bar" x), vec![InterpretedAtom(expr!(y), bind!{ x: expr!("A" y)})]);
+        if let Some(mut results) = cache.get(&expr!("bar" x)) {
+            let InterpretedAtom(atom, bindings) = results.pop().unwrap();
+            let value = bindings.resolve(&VariableAtom::new("x")).unwrap();
+            assert_eq!(Atom::expr([sym!("A"), atom]), value);
         } else {
             panic!("Non-empty result is expected");
         }
