@@ -1,6 +1,8 @@
 use hyperon::*;
+use hyperon::space::DynSpace;
 
 use crate::util::*;
+use crate::space::*;
 
 use std::os::raw::*;
 use std::fmt::Display;
@@ -46,6 +48,8 @@ pub struct bindings_set_t {
 
 pub type bindings_callback_t = lambda_t<*const bindings_t>;
 pub type bindings_mut_callback_t = lambda_t<*mut bindings_t>;
+
+#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> *mut atom_t { atom_into_ptr(rust_type_atom::<DynSpace>()) }
 
 #[repr(C)]
 pub struct gnd_api_t {
@@ -358,6 +362,15 @@ pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> *mut atom_t {
     atom_into_ptr(Atom::gnd(CGrounded(AtomicPtr::new(gnd))))
 }
 
+/// Returns a new grounded `atom_t` referencing the space
+/// 
+/// This function does not consume the space and the space still must be freed with `space_free`
+#[no_mangle]
+pub extern "C" fn atom_gnd_for_space(space: *mut space_t) -> *mut atom_t {
+    let space = unsafe { &(*space).0 };
+    atom_into_ptr(Atom::gnd(space.clone()))
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
     match (*atom).atom {
@@ -399,6 +412,20 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
         }
     } else {
         panic!("Only Grounded has object attribute!");
+    }
+}
+
+/// Returns a space_t from a grounded atom referencing the space
+/// 
+/// The returned space is borrowed from the atom, and should not be freed nor accessed after the atom
+/// has been freed.
+#[no_mangle]
+pub unsafe extern "C" fn atom_get_space(atom: *const atom_t) -> *const space_t {
+    let atom = &(*atom).atom;
+    if let Some(space) = Atom::as_gnd::<DynSpace>(atom) {
+        (space as *const DynSpace).cast()
+    } else {
+        panic!("Atom does not reference a space");
     }
 }
 
