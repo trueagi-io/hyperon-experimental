@@ -25,7 +25,6 @@ metta = "hyperon:main"
 
 [project.optional-dependencies]
 dev = [
-    "coverage",
 ]
 
 [tool.setuptools]
