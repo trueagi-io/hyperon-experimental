@@ -44,7 +44,7 @@ to run.  If the docker image doesn't work, please raise an
 * Install latest stable Rust (1.63 or later), see [Rust installation
 page](https://www.rust-lang.org/tools/install). Make sure your
 `PATH` variable includes `$HOME/.cargo/bin` directory after installing
-Rust (see the Notes at the installation page). 
+Rust (see the Notes at the installation page).
 
   Requirements for building C and Python API
   * Python3 and Python3-dev (3.7 or later)
@@ -60,11 +60,6 @@ cargo install --force cbindgen
 ```
 python3 -m pip install conan==1.57
 conan profile new --detect default
-```
-
-* Install Python library and dependencies in development mode (execute following command in the top directory of repository):
-```
-python3 -m pip install -e ./python[dev]
 ```
 
 # Build and run
@@ -117,19 +112,23 @@ make
 make check
 ```
 
-## Running Python and MeTTa examples from command line
+## Running Python and MeTTa examples
 
-In order to run examples you need to add Python libraries into the `PYTHONPATH`
-after compilation:
+In order to run examples you need to install the Python module. Please ensure
+you built [#c-and-python-api](C and Python API) first. Then execute the
+following command in the top directory of repository:
 ```
-cd build
-export PYTHONPATH=$PYTHONPATH:`pwd`/python
+python3 -m pip install -e ./python[dev]
 ```
 
-Run MeTTa script from command line:
+After this one can run unit tests within `python` directory using `pytest`:
 ```
-cd python/tests
-python3 metta.py ./scripts/<name>.metta
+pytest ./tests
+```
+
+One can run MeTTa script from command line:
+```
+metta ./tests/scripts/<name>.metta
 ```
 
 ## Troubleshooting
@@ -167,24 +166,17 @@ rustup update stable
 ### Importing hyperon Python module fails
 
 If importing the hyperon module in Python
-
 ```python
 import hyperon
 ```
 
-returns the error
-
+returns the error:
 ```
 ModuleNotFoundError: No module named 'hyperonpy'
 ```
 
-it likely means that `PYTHONPATH` is set incorrectly.  Make sure it
-points to `build/python` not just `python`.  The path should typically
-look like
-
-```
-/home/<USERNAME>/<HYPERON-EXPERIMENTAL>/build/python
-```
+Please ensure you have installed the Python module, see
+[#running-python-and-metta-examples](Running Python and MeTTa examples).
 
 # Development
 

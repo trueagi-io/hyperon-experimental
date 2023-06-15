@@ -24,7 +24,6 @@ RUN conan profile new --detect default
 
 RUN git clone https://github.com/trueagi-io/hyperon-experimental.git
 WORKDIR ${HOME}/hyperon-experimental
-RUN python3 -m pip install -e ./python[dev]
 RUN mkdir build
 
 WORKDIR ${HOME}/hyperon-experimental/lib
@@ -35,6 +34,6 @@ WORKDIR ${HOME}/hyperon-experimental/build
 RUN cmake ..
 RUN make
 RUN make check
-RUN echo "export PYTHONPATH=$PYTHONPATH:`pwd`/python" >>${HOME}/.bashrc
 
 WORKDIR ${HOME}/hyperon-experimental
+RUN python3 -m pip install -e ./python[dev]
