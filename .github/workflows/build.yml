@@ -1,0 +1,115 @@
+name: Build, test and make packages
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: 'A version of a python interpreter to use'
+        default: '3.7'
+        required: false
+        type: string
+      os:
+        description: 'A container which is used to make a build'
+        default: ubuntu-20.04
+        required: false
+        type: string
+      make-packages:
+        description: 'Is making packages required?'
+        default: false
+        required: false
+        type: boolean
+      publish:
+        description: 'Publish packages'
+        default: false
+        required: false
+        type: boolean
+      release-tag:
+        description: 'GitHub release tag'
+        required: false
+        type: string
+      prerelease:
+        description: 'Is it a prerelease'
+        default: true
+        required: false
+        type: boolean
+
+jobs:
+  run:
+
+    runs-on: ${{ inputs.os }}
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      - name: Install Rust stable
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+            toolchain: stable
+            override: true
+
+      - name: Build and test
+        working-directory: ./lib
+        run: |
+          cargo check
+          cargo build
+          RUST_LOG=hyperon=debug cargo test
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install Conan
+        uses: turtlebrowser/get-conan@v1.1
+        with:
+          version: 1.57.0
+
+      - name: Install cbindgen
+        uses: actions-rs/cargo@v1.0.1
+        with:
+          command: install
+          args: cbindgen
+
+      - name: Setup C API build
+        run: |
+          conan profile new --detect default
+          mkdir -p build
+          cd build
+          # specify C compiler as conan could not find it automatically
+          # see https://github.com/conan-io/conan/issues/4322
+          cmake -DPython3_EXECUTABLE=`which python` -DCMAKE_C_COMPILER=gcc ..
+
+      - name: Build C API
+        working-directory: ./build
+        run: make
+
+      - name: Test C API
+        working-directory: ./build
+        run: make check
+
+      - name: Build Python package
+        if: inputs.make-packages
+        working-directory: ./python
+        run: |
+          python -m pip install build==0.10.0
+          python -m build
+          tar zcf dist-${{ inputs.os }}-py${{ inputs.python-version }}.tar.gz dist
+
+      - name: Upload Python package to GitHub
+        if: inputs.make-packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist-${{ inputs.os }}-py${{ inputs.python-version }}.tar.gz
+          path: ./python/dist-${{ inputs.os }}-py${{ inputs.python-version }}.tar.gz
+
+      - name: Publish artifacts on GitHub
+        if: inputs.publish
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ./python/dist/*.whl
+          tag: ${{ inputs.release-tag }}
+          prerelease: ${{ inputs.prerelease }}
+          overwrite: true
+          file_glob: true
