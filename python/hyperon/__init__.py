@@ -1,11 +1,8 @@
-import sys
-import os
-package_path = os.path.dirname(__file__)
-sys.path.insert(0, package_path)
-
 from .atoms import *
 from .base import *
 from .runner import MeTTa
+
+import sys
 
 if sys.version_info[:2] >= (3, 8):
     # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`

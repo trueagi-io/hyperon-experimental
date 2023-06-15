@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools==65.6.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -17,7 +17,7 @@ classifiers = [
     "Operating System :: MacOS :: MacOS X",
 ]
 dependencies = [
-    'importlib-metadata; python_version<"3.8"',
+    'importlib-metadata==6.6.0; python_version<"3.8"',
 ]
 
 [project.scripts]
@@ -25,11 +25,9 @@ metta = "hyperon:main"
 
 [project.optional-dependencies]
 dev = [
+    "build==0.10.0",
 ]
 
 [tool.setuptools]
 packages = [ "hyperon" ]
 package-dir = { "hyperon" = "hyperon" }
-
-[tool.setuptools.package-data]
-hyperon = [ "*.so", "*.dylib" ]

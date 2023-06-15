@@ -1,5 +1,7 @@
 __pycache__
 /hyperon.egg-info
 /dist
-/cover
-.coverage
+/build
+/*.so
+/*.dylib
+/setup.py
