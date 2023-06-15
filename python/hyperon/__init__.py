@@ -2,20 +2,17 @@ from .atoms import *
 from .base import *
 from .runner import MeTTa
 
-import sys
+def _version(dist_name):
+    try:
+        import sys
+        if sys.version_info[:2] >= (3, 8):
+            # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`
+            from importlib.metadata import PackageNotFoundError, version  # pragma: no cover
+        else:
+            from importlib_metadata import PackageNotFoundError, version  # pragma: no cover
+        return version(dist_name)
+    except:
+        return "unknown"
 
-if sys.version_info[:2] >= (3, 8):
-    # TODO: Import directly (no need for conditional) when `python_requires = >= 3.8`
-    from importlib.metadata import PackageNotFoundError, version  # pragma: no cover
-else:
-    from importlib_metadata import PackageNotFoundError, version  # pragma: no cover
-
-try:
-    # Change here if project is renamed and does not equal the package name
-    dist_name = __name__
-    __version__ = version(dist_name)
-except PackageNotFoundError:  # pragma: no cover
-    __version__ = "unknown"
-finally:
-    del version, PackageNotFoundError
+__version__ = _version(__name__)
 
