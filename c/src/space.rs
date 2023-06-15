@@ -463,6 +463,15 @@ pub extern "C" fn space_free(space: *mut space_t) {
     drop(space)
 }
 
+/// Clones a space_t reference.  The underlying space is still the same space.
+/// 
+/// The returned space_t must be freed with space_free
+#[no_mangle]
+pub extern "C" fn space_clone_ref(space: *const space_t) -> *mut space_t {
+    let space = unsafe { &(*space).0 };
+    Box::into_raw(Box::new(space_t(space.clone())))
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn space_eq(a: *const space_t, b: *const space_t) -> bool {
     *a == *b

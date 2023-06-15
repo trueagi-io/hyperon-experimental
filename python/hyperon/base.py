@@ -43,13 +43,20 @@ def call_new_iter_state_on_python_space(space):
 class Space:
 
     def __init__(self, space_obj):
-        self.cspace = hp.space_new_custom(space_obj)
+        if type(space_obj) is hp.CSpace:
+            self.cspace = space_obj
+        else:
+            self.cspace = hp.space_new_custom(space_obj)
 
     def __del__(self):
         hp.space_free(self.cspace)
 
     def __eq__(self, other):
         return hp.space_eq(self.cspace, other.cspace)
+
+    @staticmethod
+    def _from_cspace(cspace):
+        return Space(cspace)
 
     def copy(self):
         return self

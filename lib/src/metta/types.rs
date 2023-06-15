@@ -107,7 +107,7 @@ pub fn is_func(typ: &Atom) -> bool {
 fn query_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     let var_x = VariableAtom::new("X").make_unique();
     let mut types = query_has_type(space, atom, &Atom::Variable(var_x.clone()));
-    let mut types = types.drain(0..).map(|mut bindings| { bindings.resolve_and_remove(&var_x).unwrap() }).collect();
+    let mut types = types.drain(0..).filter_map(|mut bindings| { bindings.resolve_and_remove(&var_x) }).collect();
     add_super_types(space, &mut types, 0);
     types
 }
