@@ -46,10 +46,6 @@ jobs:
           command: install
           args: cbindgen
 
-      - name: Install Python dependencies
-        run: |
-          python -m pip install -e ./python[dev]
-
       - name: Setup C API build
         run: |
           mkdir -p build
