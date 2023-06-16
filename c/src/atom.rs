@@ -49,8 +49,6 @@ pub struct bindings_set_t {
 pub type bindings_callback_t = lambda_t<*const bindings_t>;
 pub type bindings_mut_callback_t = lambda_t<*mut bindings_t>;
 
-#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> *mut atom_t { atom_into_ptr(rust_type_atom::<DynSpace>()) }
-
 #[repr(C)]
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
