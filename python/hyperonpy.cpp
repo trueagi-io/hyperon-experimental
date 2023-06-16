@@ -422,8 +422,20 @@ PYBIND11_MODULE(hyperonpy, m) {
             return CAtom(atom_expr(children, size));
         }, "Create expression atom");
     m.def("atom_gnd", [](py::object object, CAtom ctyp) {
-            atom_t* typ = atom_clone(ctyp.ptr);
-            return CAtom(atom_gnd(new GroundedObject(object, typ)));
+            if (py::hasattr(object, "cspace")) {
+                //TODO: We should make static constant type atoms, so we don't need to allocate and then
+                // free them, just to test a constant 
+                atom_t* undefined = ATOM_TYPE_UNDEFINED();
+                if (!atom_eq(ctyp.ptr, undefined)) {
+                    throw std::runtime_error("Grounded Space Atoms can't have a custom type");
+                }
+                atom_free(undefined);
+                space_t* space = object.attr("cspace").cast<CSpace>().ptr;
+                return CAtom(atom_gnd_for_space(space));
+            } else {
+                atom_t* typ = atom_clone(ctyp.ptr);
+                return CAtom(atom_gnd(new GroundedObject(object, typ)));
+            }
             }, "Create grounded atom");
     m.def("atom_free", [](CAtom atom) { atom_free(atom.ptr); }, "Free C atom");
 
@@ -435,6 +447,9 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("atom_get_name", [](CAtom atom) {
             return func_to_string((write_to_buf_func_t)&atom_get_name, atom.ptr);
         }, "Get name of the Symbol or Variable atom");
+    m.def("atom_get_space", [](CAtom atom) {
+            return CSpace(space_clone_ref(atom_get_space(atom.ptr)));
+        }, "Get the space inside of a Grounded atom wrapping a space");
     m.def("atom_get_object", [](CAtom atom) {
             return static_cast<GroundedObject const*>(atom_get_object(atom.ptr))->pyobj;
         }, "Get object of the grounded atom");
@@ -629,7 +644,8 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_TYPE(SYMBOL, "Symbol")
         ADD_TYPE(VARIABLE, "Variable")
         ADD_TYPE(EXPRESSION, "Expression")
-        ADD_TYPE(GROUNDED, "Grounded");
+        ADD_TYPE(GROUNDED, "Grounded")
+        ADD_TYPE(GROUNDED_SPACE, "Space");
     m.def("check_type", [](CSpace space, CAtom atom, CAtom type) {
             return check_type(space.ptr, atom.ptr, type.ptr);
         }, "Check if atom is an instance of the passed type");

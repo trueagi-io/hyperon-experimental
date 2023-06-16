@@ -1,9 +1,11 @@
+use hyperon::space::DynSpace;
 use hyperon::Atom;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpretedAtom;
 use hyperon::common::plan::StepResult;
 use hyperon::metta::runner::Metta;
+use hyperon::rust_type_atom;
 
 use crate::util::*;
 use crate::atom::*;
@@ -89,6 +91,7 @@ pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
 #[no_mangle] pub extern "C" fn ATOM_TYPE_VARIABLE() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_VARIABLE) }
 #[no_mangle] pub extern "C" fn ATOM_TYPE_EXPRESSION() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_EXPRESSION) }
 #[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_GROUNDED) }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> *mut atom_t { atom_into_ptr(rust_type_atom::<DynSpace>()) }
 
 #[no_mangle]
 pub unsafe extern "C" fn check_type(space: *const space_t, atom: *const atom_t, typ: *const atom_t) -> bool {

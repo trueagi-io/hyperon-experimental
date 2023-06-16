@@ -89,6 +89,7 @@ class AtomType:
     VARIABLE = Atom._from_catom(hp.CAtomType.VARIABLE)
     EXPRESSION = Atom._from_catom(hp.CAtomType.EXPRESSION)
     GROUNDED = Atom._from_catom(hp.CAtomType.GROUNDED)
+    GROUNDED_SPACE = Atom._from_catom(hp.CAtomType.GROUNDED_SPACE)
 
 class GroundedAtom(Atom):
 
@@ -96,7 +97,11 @@ class GroundedAtom(Atom):
         super().__init__(catom)
 
     def get_object(self):
-        return hp.atom_get_object(self.catom)
+        from .base import Space
+        if self.get_grounded_type() == AtomType.GROUNDED_SPACE:
+            return Space._from_cspace(hp.atom_get_space(self.catom))
+        else:
+            return hp.atom_get_object(self.catom)
 
     def get_grounded_type(self):
         return Atom._from_catom(hp.atom_get_grounded_type(self.catom))

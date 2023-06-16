@@ -103,7 +103,7 @@ class CustomSpaceTest(HyperonTestCase):
         #Make a little space and add it to the MeTTa interpreter's space
         little_space = Space(TestSpace())
         little_space.add_atom(E(S("A"), S("B")))
-        space_atom = G(little_space, S("Space"))
+        space_atom = G(little_space)
         m.space().add_atom(E(S("little-space"), space_atom))
 
         #Make sure we can get the little space back, and then query it
@@ -115,4 +115,16 @@ class CustomSpaceTest(HyperonTestCase):
         self.assertEqualNoOrder(result, [{"v": S("B")}])
 
         #Add the MeTTa space to the little space for some space recursion
-        space_atom.get_object().add_atom(E(S("big-space"), G(m.space(), S("Space"))))
+        little_space.add_atom(E(S("big-space"), G(m.space())))
+
+    def test_match_nested_custom_space(self):
+        nested = Space(TestSpace())
+        nested.add_atom(E(S("A"), S("B")))
+        space_atom = G(nested)
+
+        runner = MeTTa()
+        runner.space().add_atom(space_atom)
+        runner.tokenizer().register_token("nested", lambda token: space_atom)
+
+        result = runner.run("!(match nested (A $x) $x)")
+        self.assertEqual([[S("B")]], result)

@@ -40,3 +40,15 @@ class GroundingSpaceTest(HyperonTestCase):
 
         result = kb.query(E(S(","), E(S("A"), V("x")), E(S("C"), V("x"))))
         self.assertEqualNoOrder(result, [{"x": S("B")}])
+
+    def test_match_nested_grounding_space(self):
+        nested = GroundingSpace()
+        nested.add_atom(E(S("A"), S("B")))
+        space_atom = G(nested)
+
+        runner = MeTTa()
+        runner.space().add_atom(space_atom)
+        runner.tokenizer().register_token("nested", lambda token: space_atom)
+
+        result = runner.run("!(match nested (A $x) $x)")
+        self.assertEqual([[S("B")]], result)
