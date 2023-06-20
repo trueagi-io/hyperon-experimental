@@ -1,4 +1,11 @@
-name: Build, test and make packages
+# This reusable workflow builds the project, tests it, optionally makes
+# distribution packages and publishes them as part of GitHub release.
+
+# This workflow uses actions that are not certified by GitHub.  They are
+# provided by a third-party and are governed by separate terms of service,
+# privacy policy, and support documentation.
+
+name: Build, test, make packages, publish packages
 
 on:
   workflow_call:
@@ -14,28 +21,27 @@ on:
         required: false
         type: string
       make-packages:
-        description: 'Is making packages required?'
+        description: 'Flag to make packages'
         default: false
         required: false
         type: boolean
       publish:
-        description: 'Publish packages'
+        description: 'Flag to publish packages'
         default: false
         required: false
         type: boolean
       release-tag:
-        description: 'GitHub release tag'
+        description: 'GitHub release tag to publish packages'
         required: false
         type: string
       prerelease:
-        description: 'Is it a prerelease'
+        description: 'Flag to create a pre-release'
         default: true
         required: false
         type: boolean
 
 jobs:
-  run:
-
+  main:
     runs-on: ${{ inputs.os }}
 
     steps:
