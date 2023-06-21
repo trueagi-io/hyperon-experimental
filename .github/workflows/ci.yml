@@ -10,58 +10,8 @@ on:
 
 jobs:
   tests:
-
-    runs-on: ubuntu-20.04
-
-    steps:
-      - name: Check out repository code
-        uses: actions/checkout@v2
-
-      - name: Install Rust stable
-        uses: actions-rs/toolchain@v1.0.6
-        with:
-            toolchain: stable
-            override: true
-
-      - name: Build and test
-        working-directory: ./lib
-        run: |
-          cargo check
-          cargo build
-          RUST_LOG=hyperon=debug cargo test
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: 3.7
-
-      - name: Install Conan
-        uses: turtlebrowser/get-conan@v1.1
-        with:
-          version: 1.57.0
-
-      - name: Install cbindgen
-        uses: actions-rs/cargo@v1.0.1
-        with:
-          command: install
-          args: cbindgen
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install -e ./python[dev]
-
-      - name: Setup C API build
-        run: |
-          mkdir -p build
-          cd build
-          # specify C compiler as conan could not find it automatically
-          # see https://github.com/conan-io/conan/issues/4322
-          cmake -DPython3_EXECUTABLE=`which python` -DCMAKE_C_COMPILER=gcc ..
-
-      - name: Build C API
-        working-directory: ./build
-        run: make
-
-      - name: Test C API
-        working-directory: ./build
-        run: make check
+    uses: ./.github/workflows/build.yml
+    with:
+      python-version: '3.7'
+      os: ubuntu-20.04
+      make-packages: false

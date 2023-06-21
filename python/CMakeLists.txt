@@ -21,6 +21,9 @@ endif()
 message(STATUS "Python native modules installation path (Python3_SITEARCH): ${Python3_SITEARCH}")
 message(STATUS "Python modules installation path (Python3_SITELIB): ${Python3_SITELIB}")
 
+set(HYPERONPY_DIR ${CMAKE_CURRENT_BINARY_DIR})
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/setup.py.in ${CMAKE_CURRENT_SOURCE_DIR}/setup.py)
+
 execute_process(
     COMMAND conan install --build missing ${CMAKE_CURRENT_SOURCE_DIR}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
