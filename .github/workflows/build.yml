@@ -1,0 +1,121 @@
+# This reusable workflow builds the project, tests it, optionally makes
+# distribution packages and publishes them as part of GitHub release.
+
+# This workflow uses actions that are not certified by GitHub.  They are
+# provided by a third-party and are governed by separate terms of service,
+# privacy policy, and support documentation.
+
+name: Build, test, make packages, publish packages
+
+on:
+  workflow_call:
+    inputs:
+      python-version:
+        description: 'A version of a python interpreter to use'
+        default: '3.7'
+        required: false
+        type: string
+      os:
+        description: 'A container which is used to make a build'
+        default: ubuntu-20.04
+        required: false
+        type: string
+      make-packages:
+        description: 'Flag to make packages'
+        default: false
+        required: false
+        type: boolean
+      publish:
+        description: 'Flag to publish packages'
+        default: false
+        required: false
+        type: boolean
+      release-tag:
+        description: 'GitHub release tag to publish packages'
+        required: false
+        type: string
+      prerelease:
+        description: 'Flag to create a pre-release'
+        default: true
+        required: false
+        type: boolean
+
+jobs:
+  main:
+    runs-on: ${{ inputs.os }}
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+
+      - name: Install Rust stable
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+            toolchain: stable
+            override: true
+
+      - name: Build and test
+        working-directory: ./lib
+        run: |
+          cargo check
+          cargo build
+          RUST_LOG=hyperon=debug cargo test
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install Conan
+        uses: turtlebrowser/get-conan@v1.2
+        with:
+          version: 1.57.0
+
+      - name: Install cbindgen
+        uses: actions-rs/cargo@v1.0.1
+        with:
+          command: install
+          args: cbindgen
+
+      - name: Setup C API build
+        run: |
+          conan profile new --detect default
+          mkdir -p build
+          cd build
+          # specify C compiler as conan could not find it automatically
+          # see https://github.com/conan-io/conan/issues/4322
+          cmake -DPython3_EXECUTABLE=`which python` -DCMAKE_C_COMPILER=gcc ..
+
+      - name: Build C API
+        working-directory: ./build
+        run: make
+
+      - name: Test C API
+        working-directory: ./build
+        run: make check
+
+      - name: Build Python package
+        if: inputs.make-packages
+        working-directory: ./python
+        run: |
+          python -m pip install build==0.10.0
+          python -m build
+          tar zcf dist-${{ inputs.os }}-py${{ inputs.python-version }}.tar.gz dist
+
+      - name: Upload Python package to GitHub
+        if: inputs.make-packages
+        uses: actions/upload-artifact@v3
+        with:
+          name: dist-${{ inputs.os }}-py${{ inputs.python-version }}.tar.gz
+          path: ./python/dist-${{ inputs.os }}-py${{ inputs.python-version }}.tar.gz
+
+      - name: Publish artifacts on GitHub
+        if: inputs.publish
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ./python/dist/*.whl
+          tag: ${{ inputs.release-tag }}
+          prerelease: ${{ inputs.prerelease }}
+          overwrite: true
+          file_glob: true

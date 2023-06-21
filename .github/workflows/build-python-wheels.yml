@@ -1,106 +1,25 @@
-# This workflow will upload a Python Package using Twine when a release is created
-# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-python#publishing-to-package-registries
-
-# This workflow uses actions that are not certified by GitHub.
-# They are provided by a third-party and are governed by
-# separate terms of service, privacy policy, and support
-# documentation.
-
-name: Build Python Package Wheels
+name: Publish Packages
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
-  push:
-    tags:
-      - '*'
-
-permissions:
-  contents: read
+    inputs:
+      release-tag:
+        description: 'GitHub release tag (for example v0.1.2)'
+        required: true
+        type: string
 
 jobs:
-  build-python-wheel:
-    permissions:
-      id-token: write
-
+  publish:
     strategy:
       matrix:
         python-version: ["3.7", "3.8", "3.9", "3.10", "3.11"]
         os: [ubuntu-latest, macos-11]
       max-parallel: 3
 
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Install Rust stable
-      uses: actions-rs/toolchain@v1.0.6
-      with:
-          toolchain: stable
-          override: true
-
-    - name: Set up Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: ${{ matrix.python-version }}
-
-    - name: Install Conan
-      uses: turtlebrowser/get-conan@v1.1
-      with:
-        version: 1.57.0
-
-    - name: Install cbindgen
-      uses: actions-rs/cargo@v1.0.1
-      with:
-        command: install
-        args: cbindgen
-
-    - name: Install Python dependencies
-      run: |
-        python -m pip install -e ./python[dev]
-
-    - name: Setup C API build
-      run: |
-        conan profile new --detect default
-        mkdir -p build
-        cd build
-        # specify C compiler as conan could not find it automatically
-        # see https://github.com/conan-io/conan/issues/4322
-        cmake -DPython3_EXECUTABLE=`which python` -DCMAKE_C_COMPILER=gcc -DCMAKE_BUILD_TYPE=Release ..
-        make
-        cp ./python/*.so  ../python/hyperon
-        if [[ "${{ matrix.os }}" == *"macos"* ]]; then
-          cp ./c/cargo/*.dylib ../python/hyperon
-        else
-          cp ./c/cargo/*.so ../python/hyperon
-        fi
-
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install build
-
-    - name: Build package
-      working-directory: ./python
-      run: |
-        python -m build
-        tar zcf dist-${{ matrix.os }}-py${{ matrix.python-version }}.tar.gz dist
-
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: dist-${{ matrix.os }}-py${{ matrix.python-version }}.tar.gz
-        path: ./python/dist-${{ matrix.os }}-py${{ matrix.python-version }}.tar.gz
-
-    - name: Upload release assets
-      if: github.event.release
-      uses: svenstaro/upload-release-action@v2
-      with:
-        repo_token: ${{ secrets.WORKFLOW_GITHUB_TOKEN }}
-        file: ./python/dist/*.whl
-        tag: ${{ github.ref }}
-        overwrite: true
-        file_glob: true
+    uses: ./.github/workflows/build.yml
+    with:
+      python-version: ${{ matrix.python-version }}
+      os: ${{ matrix.os }}
+      make-packages: true
+      publish: true
+      release-tag: ${{ inputs.release-tag }}
