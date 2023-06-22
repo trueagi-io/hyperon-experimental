@@ -182,7 +182,7 @@ ModuleNotFoundError: No module named 'hyperonpy'
 ```
 
 Please ensure you have installed the Python module, see
-[#running-python-and-metta-examples](Running Python and MeTTa examples).
+[Running Python and MeTTa examples](#running-python-and-metta-examples).
 
 # Development
 
