@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hyperon"
-version = "0.1.2"
+version = "0.1.3"
 description = "Hyperon API in Python"
 requires-python = ">=3.7"
 keywords = ["metta", "hyperon", "opencog"]
