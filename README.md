@@ -48,6 +48,7 @@ Rust (see the Notes at the installation page).
 
   Requirements for building C and Python API
   * Python3 and Python3-dev (3.7 or later)
+  * Pip (23.1.2 or later)
   * GCC (7.5 or later)
   * CMake (3.10 or later)
 
@@ -60,6 +61,11 @@ cargo install --force cbindgen
 ```
 python3 -m pip install conan==1.57
 conan profile new --detect default
+```
+
+* Upgrade Pip to the required version:
+```
+python3 -m pip install pip==23.1.2
 ```
 
 # Build and run
