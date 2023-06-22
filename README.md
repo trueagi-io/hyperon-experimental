@@ -121,7 +121,7 @@ make check
 ## Running Python and MeTTa examples
 
 In order to run examples you need to install the Python module. Please ensure
-you built [#c-and-python-api](C and Python API) first. Then execute the
+you built [C and Python API](#c-and-python-api) first. Then execute the
 following command in the top directory of repository:
 ```
 python3 -m pip install -e ./python[dev]
