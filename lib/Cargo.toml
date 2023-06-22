@@ -1,6 +1,6 @@
 [package]
 name = "hyperon"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["Vitaly Bogdanov <vsbogd@gmail.com>"]
 edition = "2018"
 
