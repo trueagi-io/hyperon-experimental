@@ -424,7 +424,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("atom_gnd", [](py::object object, CAtom ctyp) {
             if (py::hasattr(object, "cspace")) {
                 //TODO: We should make static constant type atoms, so we don't need to allocate and then
-                // free them, just to test a constant 
+                // free them, just to test a constant
                 atom_t* undefined = ATOM_TYPE_UNDEFINED();
                 if (!atom_eq(ctyp.ptr, undefined)) {
                     throw std::runtime_error("Grounded Space Atoms can't have a custom type");
