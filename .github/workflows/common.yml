@@ -5,7 +5,7 @@
 # provided by a third-party and are governed by separate terms of service,
 # privacy policy, and support documentation.
 
-name: Build, test, make packages, publish packages
+name: common
 
 on:
   workflow_call:
@@ -41,7 +41,7 @@ on:
         type: boolean
 
 jobs:
-  main:
+  run:
     runs-on: ${{ inputs.os }}
 
     steps:

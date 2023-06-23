@@ -1,4 +1,4 @@
-name: CI
+name: ci
 
 on:
   push:
@@ -9,8 +9,8 @@ on:
       - main
 
 jobs:
-  tests:
-    uses: ./.github/workflows/build.yml
+  ci:
+    uses: ./.github/workflows/common.yml
     with:
       python-version: '3.7'
       os: ubuntu-20.04
