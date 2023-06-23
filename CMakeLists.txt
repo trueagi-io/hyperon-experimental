@@ -7,7 +7,7 @@ project(hyperon)
 if (POLICY CMP0025)
     cmake_policy(SET CMP0025 NEW)
 endif ()
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 11)
 
 enable_testing()
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)

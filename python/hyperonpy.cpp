@@ -1,11 +1,15 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
+#include <nonstd/optional.hpp>
 
 #include <hyperon/hyperon.h>
 
-#include <optional>
-
 namespace py = pybind11;
+
+namespace PYBIND11_NAMESPACE { namespace detail {
+    template <typename T>
+    struct type_caster<nonstd::optional<T>> : optional_caster<nonstd::optional<T>> {};
+}}
 
 template<class T, size_t N>
 constexpr size_t lenghtof(T (&)[N]) { return N; }
@@ -35,10 +39,9 @@ std::string func_to_string(write_to_buf_func_t func, void* arg) {
     if (len < 1024) {
         return std::string(dst_buf);
     } else {
-        std::string new_string = std::string();
-        new_string.resize(len+1); //Room for the terminator in the allocated buffer
-        func(arg, new_string.data(), len+1);
-        new_string.resize(len); //But the C++ string doesn't include the terminator in its len
+        char* data = new char[len+1];
+        func(arg, data, len+1);
+        std::string new_string = std::string(data);
         return new_string;
     }
 }
@@ -123,7 +126,7 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
             args.append(CAtom(atom_clone(vec_atom_get(_args, i))));
         }
         py::list result = call_execute_on_grounded_atom(pyobj, pytyp, args);
-        for (auto& atom:  result) {
+        for (py::handle atom:  result) {
             vec_atom_push(ret, atom_clone(atom.attr("catom").cast<CAtom>().ptr));
         }
         return nullptr;
@@ -414,7 +417,7 @@ PYBIND11_MODULE(hyperonpy, m) {
             size_t size = py::len(_children);
             atom_t* children[size];
             int idx = 0;
-            for (auto& atom : _children) {
+            for (py::handle atom : _children) {
                 // Copying atom is required because atom_expr() moves children
                 // catoms inside new expression atom.
                 children[idx++] = atom_clone(atom.cast<CAtom&>().ptr);
@@ -501,14 +504,14 @@ PYBIND11_MODULE(hyperonpy, m) {
             bindings_narrow_vars(bindings.ptr, vars.ptr);
         }, "Remove vars from Bindings, except those specified" );
 
-    m.def("bindings_resolve", [](CBindings bindings, char const* varName) -> std::optional<CAtom> {
+    m.def("bindings_resolve", [](CBindings bindings, char const* varName) -> nonstd::optional<CAtom> {
             auto const res = bindings_resolve(bindings.ptr, varName);
-            return nullptr == res ? std::nullopt : std::optional(CAtom(res));
+            return nullptr == res ? nonstd::nullopt : nonstd::optional<CAtom>(CAtom(res));
         }, "Resolve" );
 
-    m.def("bindings_resolve_and_remove", [](CBindings bindings, char const* varName) -> std::optional<CAtom> {
+    m.def("bindings_resolve_and_remove", [](CBindings bindings, char const* varName) -> nonstd::optional<CAtom> {
             auto const res = bindings_resolve_and_remove(bindings.ptr, varName);
-            return nullptr == res ? std::nullopt : std::optional(CAtom(res));
+            return nullptr == res ? nonstd::nullopt : nonstd::optional<CAtom>(CAtom(res));
         }, "Resolve and remove" );
 
     m.def("bindings_to_str", [](CBindings bindings) {
@@ -589,12 +592,12 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("space_replace", [](CSpace space, CAtom from, CAtom to) { return space_replace(space.ptr, from.ptr, atom_clone(to.ptr)); }, "Replace atom from space");
     m.def("space_eq", [](CSpace a, CSpace b) { return space_eq(a.ptr, b.ptr); }, "Check if two spaces are equal");
     m.def("space_atom_count", [](CSpace space) { return space_atom_count(space.ptr); }, "Return number of atoms in space, or -1 if the space is unable to determine the value");
-    m.def("space_list", [](CSpace space) -> std::optional<pybind11::list> {
+    m.def("space_list", [](CSpace space) -> nonstd::optional<pybind11::list> {
         pybind11::list atoms_list;
         if (space_iterate(space.ptr, atom_copy_to_list_callback, &atoms_list)) {
             return atoms_list;
         } else {
-            return std::nullopt;
+            return nonstd::nullopt;
         }
     }, "Returns iterator to traverse atoms within a space");
     m.def("space_query", [](CSpace space, CAtom pattern) {
