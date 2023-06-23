@@ -34,6 +34,3 @@ set_target_properties(hyperonpy PROPERTIES
 
 set(PYTHONPATH "${CMAKE_CURRENT_SOURCE_DIR}")
 add_subdirectory(tests)
-
-INSTALL(TARGETS hyperonpy DESTINATION "${Python3_SITEARCH}")
-INSTALL(DIRECTORY hyperon DESTINATION "${Python3_SITELIB}")
