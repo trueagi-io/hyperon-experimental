@@ -1,4 +1,4 @@
-name: Publish Packages
+name: publish
 
 on:
   workflow_dispatch:
@@ -16,7 +16,7 @@ jobs:
         os: [ubuntu-latest, macos-11]
       max-parallel: 3
 
-    uses: ./.github/workflows/build.yml
+    uses: ./.github/workflows/common.yml
     with:
       python-version: ${{ matrix.python-version }}
       os: ${{ matrix.os }}

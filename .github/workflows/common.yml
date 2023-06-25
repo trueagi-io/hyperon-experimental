@@ -5,7 +5,7 @@
 # provided by a third-party and are governed by separate terms of service,
 # privacy policy, and support documentation.
 
-name: Build, test, make packages, publish packages
+name: common
 
 on:
   workflow_call:
@@ -41,7 +41,7 @@ on:
         type: boolean
 
 jobs:
-  main:
+  run:
     runs-on: ${{ inputs.os }}
 
     steps:
@@ -99,15 +99,7 @@ jobs:
         working-directory: ./python
         run: |
           python -m pip install build==0.10.0
-          python -m build
-          tar zcf dist-${{ inputs.os }}-py${{ inputs.python-version }}.tar.gz dist
-
-      - name: Upload Python package to GitHub
-        if: inputs.make-packages
-        uses: actions/upload-artifact@v3
-        with:
-          name: dist-${{ inputs.os }}-py${{ inputs.python-version }}.tar.gz
-          path: ./python/dist-${{ inputs.os }}-py${{ inputs.python-version }}.tar.gz
+          python -m build --wheel
 
       - name: Publish artifacts on GitHub
         if: inputs.publish

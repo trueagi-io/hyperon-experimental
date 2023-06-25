@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+
+set_and_check(hyperonc_INCLUDE_DIRS "@PACKAGE_INCLUDE_INSTALL_PATH@")
+set_and_check(hyperonc_STATIC_LIBRARY "@PACKAGE_STATIC_LIBRARY_INSTALL_PATH@")
+set_and_check(hyperonc_SHARED_LIBRARY "@PACKAGE_SHARED_LIBRARY_INSTALL_PATH@")
+
+check_required_components(hyperonc)
+

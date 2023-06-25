@@ -65,8 +65,28 @@ add_dependencies(hyperonc-static build-hyperonc)
 
 add_subdirectory(tests)
 
-install(FILES ${HYPERONC_SHARED_LIB_PATH} DESTINATION lib)
-install(DIRECTORY ${HYPERONC_INCLUDE_DIR} DESTINATION include)
+set(BINARY_INSTALL_PATH "lib/hyperonc")
+set(INCLUDE_INSTALL_PATH "include/hyperonc")
+set(CONFIG_INSTALL_PATH "lib/cmake/hyperonc")
+set(SHARED_LIBRARY_INSTALL_PATH "${BINARY_INSTALL_PATH}/${HYPERONC_SHARED_LIB_FILE}")
+set(STATIC_LIBRARY_INSTALL_PATH "${BINARY_INSTALL_PATH}/${HYPERONC_STATIC_LIB_FILE}")
+
+include(CMakePackageConfigHelpers)
+configure_package_config_file("hyperonc-config.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/hyperonc-config.cmake"
+    INSTALL_DESTINATION "${CONFIG_INSTALL_PATH}"
+    PATH_VARS INCLUDE_INSTALL_PATH SHARED_LIBRARY_INSTALL_PATH
+    STATIC_LIBRARY_INSTALL_PATH
+)
+
+install(FILES
+    "${HYPERONC_STATIC_LIB_PATH}"
+    "${HYPERONC_SHARED_LIB_PATH}"
+    DESTINATION "${BINARY_INSTALL_PATH}")
+install(DIRECTORY "${HYPERONC_INCLUDE_DIR}"
+    DESTINATION "${INCLUDE_INSTALL_PATH}")
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/hyperonc-config.cmake"
+    DESTINATION "${CONFIG_INSTALL_PATH}")
 
 add_test(NAME rust_c_api COMMAND cargo test --target-dir ${HYPERONC_TARGET_DIR}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})

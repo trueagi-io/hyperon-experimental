@@ -20,6 +20,6 @@ class CopyBuild(build_ext):
             shutil.copyfile(source_path, target_path)
 
 setup(
-    ext_modules=[ CopyExtension('hyperonpy', source_dir='${HYPERONPY_DIR}') ],
+    ext_modules=[ CopyExtension('hyperonpy') ],
     cmdclass={ 'build_ext': CopyBuild },
 )

@@ -21,9 +21,6 @@ endif()
 message(STATUS "Python native modules installation path (Python3_SITEARCH): ${Python3_SITEARCH}")
 message(STATUS "Python modules installation path (Python3_SITELIB): ${Python3_SITELIB}")
 
-set(HYPERONPY_DIR ${CMAKE_CURRENT_BINARY_DIR})
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/setup.py.in ${CMAKE_CURRENT_SOURCE_DIR}/setup.py)
-
 execute_process(
     COMMAND conan install --build missing ${CMAKE_CURRENT_SOURCE_DIR}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -32,9 +29,8 @@ find_package(pybind11 REQUIRED)
 
 pybind11_add_module(hyperonpy SHARED hyperonpy.cpp)
 target_link_libraries(hyperonpy PRIVATE hyperonc-static)
+set_target_properties(hyperonpy PROPERTIES
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}")
 
-set(PYTHONPATH "${CMAKE_CURRENT_BINARY_DIR}:${CMAKE_CURRENT_SOURCE_DIR}")
+set(PYTHONPATH "${CMAKE_CURRENT_SOURCE_DIR}")
 add_subdirectory(tests)
-
-INSTALL(TARGETS hyperonpy DESTINATION "${Python3_SITEARCH}")
-INSTALL(DIRECTORY hyperon DESTINATION "${Python3_SITELIB}")
