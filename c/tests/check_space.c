@@ -37,7 +37,7 @@ void query_callback_single_atom(const struct var_atom_t* atom, void* data)
     atom_free(atom->atom);
 }
 
-void query_callback(struct bindings_t const* results, void* data)
+void query_callback(struct bindings_t* results, void* data)
 {
     struct output_t* out = data;
 
@@ -56,9 +56,11 @@ START_TEST (test_grounding_space_query)
     atom_t* query = expr(atom_sym("+"), atom_sym("A"), atom_var("b"), 0);
 
     struct output_t result = { "", 0 };
-    space_query(space, query, query_callback, &result);
+    bindings_set_t* bindings_set = space_query(space, query);
+    bindings_set_iterate(bindings_set, query_callback, &result);
     ck_assert_str_eq(result.str, "b: B, ");
 
+    bindings_set_free(bindings_set);
     space_free(space);
 }
 END_TEST
@@ -179,9 +181,12 @@ START_TEST (test_custom_c_space)
 
     space_add(space, expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0));
     atom_t* query = expr(atom_sym("+"), atom_sym("A"), atom_var("b"), 0);
+
     struct output_t result = { "", 0 };
-    space_query(space, query, query_callback, &result);
+    bindings_set_t* bindings_set = space_query(space, query);
+    bindings_set_iterate(bindings_set, query_callback, &result);
     ck_assert_str_eq(result.str, "b: B, ");
+    bindings_set_free(bindings_set);
 
     //Test that we can iterate the atoms in the space
     reset_output(&result);

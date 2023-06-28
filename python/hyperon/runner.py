@@ -2,7 +2,7 @@ import os
 from importlib import import_module
 import hyperonpy as hp
 from .atoms import Atom, AtomType, OperationAtom
-from .base import GroundingSpace, Tokenizer, SExprParser
+from .base import GroundingSpaceRef, Tokenizer, SExprParser
 
 class MeTTa:
 
@@ -11,7 +11,7 @@ class MeTTa:
             self.cmetta = cmetta
         else:
             if space is None:
-                space = GroundingSpace()
+                space = GroundingSpaceRef()
             tokenizer = Tokenizer()
             self.cmetta = hp.metta_new(space.cspace, tokenizer.ctokenizer, cwd)
             self.load_py_module("hyperon.stdlib")
@@ -28,7 +28,7 @@ class MeTTa:
         return MeTTa(cmetta = hp.metta_clone(self.cmetta))
 
     def space(self):
-        return GroundingSpace._from_cspace(hp.metta_space(self.cmetta))
+        return GroundingSpaceRef._from_cspace(hp.metta_space(self.cmetta))
 
     def tokenizer(self):
         return Tokenizer._from_ctokenizer(hp.metta_tokenizer(self.cmetta))

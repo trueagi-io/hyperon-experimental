@@ -5,7 +5,6 @@ use hyperon::atom::*;
 use hyperon::matcher::*;
 
 use crate::atom::*;
-use crate::util::*;
 
 use std::os::raw::*;
 
@@ -524,14 +523,12 @@ pub unsafe extern "C" fn space_replace(space: *mut space_t, from: *const atom_t,
     (*space).0.borrow_mut().replace(&(*from).atom, ptr_into_atom(to))
 }
 
+/// NOTE: The returned BindingsSet needs to be freed with bindings_set_free
 #[no_mangle]
-pub extern "C" fn space_query(space: *const space_t,
-        pattern: *const atom_t, callback: lambda_t<* const bindings_t>, context: *mut c_void) {
+pub extern "C" fn space_query(space: *const space_t, pattern: *const atom_t) -> *mut bindings_set_t
+{
     let results = unsafe { (*space).0.borrow().query(&((*pattern).atom)) };
-    for result in results.into_iter() {
-        let b = (&result as *const Bindings).cast();
-        callback(b, context);
-    }
+    bindings_set_into_ptr(results)
 }
 
 #[no_mangle]
