@@ -3,10 +3,10 @@ import unittest
 from hyperon import *
 from test_common import HyperonTestCase
 
-class TestSpace(PySpace):
+class TestSpace(AbstractSpace):
 
     def __init__(self, unwrap=True):
-        super().__init__((), "TestSpace")
+        super().__init__()
         self.atoms_list = []
         self.unwrap = unwrap
 
@@ -62,7 +62,7 @@ class CustomSpaceTest(HyperonTestCase):
         test_space = TestSpace()
         test_space.test_attrib = "Test Space Payload Attrib"
 
-        kb = Space(test_space)
+        kb = SpaceRef(test_space)
         kb.add_atom(S("a"))
         kb.add_atom(S("b"))
 
@@ -71,7 +71,7 @@ class CustomSpaceTest(HyperonTestCase):
         self.assertEqualNoOrder(kb.get_atoms(), [S("a"), S("b")])
 
     def test_remove(self):
-        kb = Space(TestSpace())
+        kb = SpaceRef(TestSpace())
         kb.add_atom(S("a"))
         kb.add_atom(S("b"))
         kb.add_atom(S("c"))
@@ -81,7 +81,7 @@ class CustomSpaceTest(HyperonTestCase):
         self.assertEqualNoOrder(kb.get_atoms(), [S("a"), S("c")])
 
     def test_replace(self):
-        kb = Space(TestSpace())
+        kb = SpaceRef(TestSpace())
         kb.add_atom(S("a"))
         kb.add_atom(S("b"))
         kb.add_atom(S("c"))
@@ -90,7 +90,7 @@ class CustomSpaceTest(HyperonTestCase):
         self.assertEqualNoOrder(kb.get_atoms(), [S("a"), S("d"), S("c")])
 
     def test_query(self):
-        kb = Space(TestSpace())
+        kb = SpaceRef(TestSpace())
         kb.add_atom(E(S("A"), S("B")))
         kb.add_atom(E(S("C"), S("D")))
 
@@ -101,7 +101,7 @@ class CustomSpaceTest(HyperonTestCase):
         m = MeTTa()
 
         #Make a little space and add it to the MeTTa interpreter's space
-        little_space = Space(TestSpace())
+        little_space = SpaceRef(TestSpace())
         little_space.add_atom(E(S("A"), S("B")))
         space_atom = G(little_space)
         m.space().add_atom(E(S("little-space"), space_atom))
@@ -118,7 +118,7 @@ class CustomSpaceTest(HyperonTestCase):
         little_space.add_atom(E(S("big-space"), G(m.space())))
 
     def test_match_nested_custom_space(self):
-        nested = Space(TestSpace())
+        nested = SpaceRef(TestSpace())
         nested.add_atom(E(S("A"), S("B")))
         space_atom = G(nested)
 

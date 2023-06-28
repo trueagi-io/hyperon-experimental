@@ -97,9 +97,9 @@ class GroundedAtom(Atom):
         super().__init__(catom)
 
     def get_object(self):
-        from .base import Space
+        from .base import SpaceRef
         if self.get_grounded_type() == AtomType.GROUNDED_SPACE:
-            return Space._from_cspace(hp.atom_get_space(self.catom))
+            return SpaceRef._from_cspace(hp.atom_get_space(self.catom))
         else:
             return hp.atom_get_object(self.catom)
 
@@ -110,14 +110,20 @@ def G(object, type=AtomType.UNDEFINED):
     assert hasattr(object, "copy"), "Method copy should be implemented by grounded object"
     return GroundedAtom(hp.atom_gnd(object, type.catom))
 
-def call_execute_on_grounded_atom(gnd, typ, args):
+"""
+Private glue for Hyperonpy implementation
+"""
+def _priv_call_execute_on_grounded_atom(gnd, typ, args):
     # ... if hp.atom_to_str(typ) == AtomType.UNDEFINED
     res_typ = AtomType.UNDEFINED if hp.atom_get_type(typ) != AtomKind.EXPR \
         else Atom._from_catom(hp.atom_get_children(typ)[-1])
     args = [Atom._from_catom(catom) for catom in args]
     return gnd.execute(*args, res_typ=res_typ)
 
-def call_match_on_grounded_atom(gnd, catom):
+"""
+Private glue for Hyperonpy implementation
+"""
+def _priv_call_match_on_grounded_atom(gnd, catom):
     return gnd.match_(Atom._from_catom(catom))
 
 def atoms_are_equivalent(first, second):
@@ -288,6 +294,7 @@ class Bindings:
 class BindingsSet:
 
     def __init__(self, input: Union[hp.CBindingsSet, Bindings, None] = None):
+        self.shadow_list = None # A lazily initialized list that shadows the BindingsSet values for indexed access
         if input is None:
             self.c_set = hp.bindings_set_single()
         elif isinstance(input, Bindings):
@@ -318,6 +325,12 @@ class BindingsSet:
             hp.bindings_set_free(self.c_set)
             self.c_set = None
 
+    def __getitem__(self, key):
+        if self.shadow_list is None:
+            result = hp.bindings_set_unpack(self.c_set)
+            self.shadow_list = [{k: Atom._from_catom(v) for k, v in bindings.items()} for bindings in result]
+        return self.shadow_list[key]
+
     def empty():
         return BindingsSet(hp.bindings_set_empty())
 
@@ -331,15 +344,19 @@ class BindingsSet:
         return hp.bindings_set_is_single(self.c_set)
 
     def push(self, bindings: Bindings):
+        self.shadow_list = None
         hp.bindings_set_push(self.c_set, bindings.cbindings)
 
     def add_var_binding(self, var: Atom, value: Atom) -> bool:
+        self.shadow_list = None
         return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)
 
     def add_var_equality(self, a: Atom, b: Atom) -> bool:
+        self.shadow_list = None
         return hp.bindings_set_add_var_equality(self.c_set, a.catom, b.catom)
 
     def merge_into(self, input: Union['BindingsSet', Bindings]):
+        self.shadow_list = None
         if isinstance(input, BindingsSet):
             hp.bindings_set_merge_into(self.c_set, input.c_set);
         else:

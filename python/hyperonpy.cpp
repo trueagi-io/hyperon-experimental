@@ -112,8 +112,8 @@ py::object inc_ref(py::object obj) {
 }
 
 exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, struct vec_atom_t* ret) {
-    py::object hyperon = py::module_::import("hyperon");
-    py::function call_execute_on_grounded_atom = hyperon.attr("call_execute_on_grounded_atom");
+    py::object hyperon = py::module_::import("hyperon.atoms");
+    py::function call_execute_on_grounded_atom = hyperon.attr("_priv_call_execute_on_grounded_atom");
     py::handle NoReduceError = hyperon.attr("NoReduceError");
     py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
     CAtom pytyp = static_cast<GroundedObject const*>(_cgnd)->typ;
@@ -139,8 +139,8 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
 }
 
 void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, bindings_mut_callback_t callback, void *context) {
-    py::object hyperon = py::module_::import("hyperon");
-    py::function call_match_on_grounded_atom = hyperon.attr("call_match_on_grounded_atom");
+    py::object hyperon = py::module_::import("hyperon.atoms");
+    py::function call_match_on_grounded_atom = hyperon.attr("_priv_call_match_on_grounded_atom");
 
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
     CAtom catom = atom_clone(_atom);
@@ -222,8 +222,8 @@ struct PySpace {
 };
 
 bindings_set_t *py_space_query(const struct space_params_t *params, const struct atom_t *query_atom) {
-    py::object hyperon = py::module_::import("hyperon");
-    py::function call_query_on_python_space = hyperon.attr("call_query_on_python_space");
+    py::object hyperon = py::module_::import("hyperon.base");
+    py::function call_query_on_python_space = hyperon.attr("_priv_call_query_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     CAtom catom = atom_clone(query_atom);
     py::object result = call_query_on_python_space(pyobj, catom);
@@ -237,8 +237,8 @@ bindings_set_t *py_space_query(const struct space_params_t *params, const struct
 // }
 
 void py_space_add(const struct space_params_t *params, struct atom_t *atom) {
-    py::object hyperon = py::module_::import("hyperon");
-    py::function call_add_on_python_space = hyperon.attr("call_add_on_python_space");
+    py::object hyperon = py::module_::import("hyperon.base");
+    py::function call_add_on_python_space = hyperon.attr("_priv_call_add_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     atom_t* notify_atom = atom_clone(atom);
     CAtom catom = atom;
@@ -252,8 +252,8 @@ void py_space_add(const struct space_params_t *params, struct atom_t *atom) {
 }
 
 bool py_space_remove(const struct space_params_t *params, const struct atom_t *atom) {
-    py::object hyperon = py::module_::import("hyperon");
-    py::function call_remove_on_python_space = hyperon.attr("call_remove_on_python_space");
+    py::object hyperon = py::module_::import("hyperon.base");
+    py::function call_remove_on_python_space = hyperon.attr("_priv_call_remove_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     atom_t* notify_atom = atom_clone(atom);
     CAtom catom = atom_clone(atom);
@@ -271,8 +271,8 @@ bool py_space_remove(const struct space_params_t *params, const struct atom_t *a
 }
 
 bool py_space_replace(const struct space_params_t *params, const struct atom_t *from, struct atom_t *to) {
-    py::object hyperon = py::module_::import("hyperon");
-    py::function call_replace_on_python_space = hyperon.attr("call_replace_on_python_space");
+    py::object hyperon = py::module_::import("hyperon.base");
+    py::function call_replace_on_python_space = hyperon.attr("_priv_call_replace_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     atom_t* notify_from = atom_clone(from);
     atom_t* notify_to = atom_clone(to);
@@ -293,16 +293,16 @@ bool py_space_replace(const struct space_params_t *params, const struct atom_t *
 }
 
 ssize_t py_space_atom_count(const struct space_params_t *params) {
-    py::object hyperon = py::module_::import("hyperon");
-    py::function call_atom_count_on_python_space = hyperon.attr("call_atom_count_on_python_space");
+    py::object hyperon = py::module_::import("hyperon.base");
+    py::function call_atom_count_on_python_space = hyperon.attr("_priv_call_atom_count_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     py::int_ result = call_atom_count_on_python_space(pyobj);
     return result.cast<ssize_t>();
 }
 
 void *py_space_new_atom_iter_state(const struct space_params_t *params) {
-    py::object hyperon = py::module_::import("hyperon");
-    py::function call_new_iter_state_on_python_space = hyperon.attr("call_new_iter_state_on_python_space");
+    py::object hyperon = py::module_::import("hyperon.base");
+    py::function call_new_iter_state_on_python_space = hyperon.attr("_priv_call_new_iter_state_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     py::object result = call_new_iter_state_on_python_space(pyobj);
     if (result.is_none()) {
@@ -559,9 +559,20 @@ PYBIND11_MODULE(hyperonpy, m) {
                 set.ptr,
                 bindings_copy_to_list_callback,
                 &bindings_list);
-
         return bindings_list;
     }, "Returns iterator to traverse Bindings within BindingsSet");
+    m.def("bindings_set_unpack", [](CBindingsSet set) -> pybind11::list {
+        py::list results;
+        bindings_set_iterate(
+            set.ptr,
+            [](bindings_t * cbindings, void* context) {
+                py::list& results = *(py::list*)context;
+                py::dict pybindings;
+                bindings_traverse(cbindings, copy_atom_to_dict, &pybindings );
+                results.append(pybindings);
+            }, &results);
+        return results;
+    }, "Unpacks a BindingsSet into a list of dicts");
 
     py::class_<CSpace>(m, "CSpace");
     m.def("space_new_grounding", []() { return CSpace(space_new_grounding_space()); }, "New grounding space instance");
@@ -587,15 +598,8 @@ PYBIND11_MODULE(hyperonpy, m) {
         }
     }, "Returns iterator to traverse atoms within a space");
     m.def("space_query", [](CSpace space, CAtom pattern) {
-            py::list results;
-            space_query(space.ptr, pattern.ptr,
-                    [](bindings_t const* cbindings, void* context) {
-                        py::list& results = *(py::list*)context;
-                        py::dict pybindings;
-                        bindings_traverse(cbindings, copy_atom_to_dict, &pybindings );
-                        results.append(pybindings);
-                    }, &results);
-            return results;
+            bindings_set_t* result_bindings_set = space_query(space.ptr, pattern.ptr);
+            return CBindingsSet(result_bindings_set);
         }, "Query atoms from space by pattern");
     m.def("space_subst", [](CSpace space, CAtom pattern, CAtom templ) {
             py::list atoms;

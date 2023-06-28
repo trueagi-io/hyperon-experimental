@@ -81,9 +81,9 @@ class AtomTest(unittest.TestCase):
                 [x2Atom, ValueAtom(1.0)])
 
     def test_groundingspace_equals(self):
-        kb_a = GroundingSpace()
+        kb_a = GroundingSpaceRef()
         kb_a.add_atom(E(S("+"), S("1"), S("2")))
-        kb_b = GroundingSpace()
+        kb_b = GroundingSpaceRef()
         kb_b.add_atom(E(S("+"), S("1"), S("2")))
         kb_c = kb_a
         self.assertEqual(kb_a.get_atoms(), kb_b.get_atoms())
@@ -91,23 +91,23 @@ class AtomTest(unittest.TestCase):
         self.assertNotEqual(kb_a, kb_b)
 
     def test_interpret(self):
-        space = GroundingSpace()
+        space = GroundingSpaceRef()
         self.assertEqual(interpret(space, E(x2Atom, ValueAtom(1))),
                 [ValueAtom(2)])
 
     def test_plan(self):
-        space = GroundingSpace()
+        space = GroundingSpaceRef()
         interpreter = Interpreter(space, E(x2Atom, ValueAtom(1)))
         self.assertEqual(str(interpreter.get_step_result()),
                 "return [(-> int int)] then form alternative plans for expression (*2 1) using types")
 
     def test_no_reduce(self):
-        space = GroundingSpace()
+        space = GroundingSpaceRef()
         self.assertEqual(interpret(space, E(noReduceAtom, ValueAtom(1))),
                 [E(noReduceAtom, ValueAtom(1))])
 
     def test_match_(self):
-        space = GroundingSpace()
+        space = GroundingSpaceRef()
         match_atom = MatchableAtomTest(S("MatchableAtom"), type_name=None, atom_id=None)
         space.add_atom(match_atom)
         result = space.query(E(S('symbol_atom'), V('atom_type')))
