@@ -14,3 +14,6 @@ def main():
             print(result)
     else:
         parser.print_usage()
+
+if __name__ == '__main__':
+    main()
