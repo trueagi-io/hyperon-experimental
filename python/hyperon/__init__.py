@@ -2,15 +2,6 @@ from .atoms import *
 from .base import *
 from .runner import MeTTa
 
-from .atoms import _priv_call_execute_on_grounded_atom
-from .atoms import _priv_call_match_on_grounded_atom
-from .base import _priv_call_query_on_python_space
-from .base import _priv_call_add_on_python_space
-from .base import _priv_call_remove_on_python_space
-from .base import _priv_call_replace_on_python_space
-from .base import _priv_call_atom_count_on_python_space
-from .base import _priv_call_new_iter_state_on_python_space
-
 def _version(dist_name):
     try:
         import sys

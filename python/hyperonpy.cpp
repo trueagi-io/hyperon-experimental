@@ -112,7 +112,7 @@ py::object inc_ref(py::object obj) {
 }
 
 exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, struct vec_atom_t* ret) {
-    py::object hyperon = py::module_::import("hyperon");
+    py::object hyperon = py::module_::import("hyperon.atoms");
     py::function call_execute_on_grounded_atom = hyperon.attr("_priv_call_execute_on_grounded_atom");
     py::handle NoReduceError = hyperon.attr("NoReduceError");
     py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
@@ -139,7 +139,7 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
 }
 
 void py_match_(const struct gnd_t *_gnd, const struct atom_t *_atom, bindings_mut_callback_t callback, void *context) {
-    py::object hyperon = py::module_::import("hyperon");
+    py::object hyperon = py::module_::import("hyperon.atoms");
     py::function call_match_on_grounded_atom = hyperon.attr("_priv_call_match_on_grounded_atom");
 
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
@@ -222,7 +222,7 @@ struct PySpace {
 };
 
 bindings_set_t *py_space_query(const struct space_params_t *params, const struct atom_t *query_atom) {
-    py::object hyperon = py::module_::import("hyperon");
+    py::object hyperon = py::module_::import("hyperon.base");
     py::function call_query_on_python_space = hyperon.attr("_priv_call_query_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     CAtom catom = atom_clone(query_atom);
@@ -237,7 +237,7 @@ bindings_set_t *py_space_query(const struct space_params_t *params, const struct
 // }
 
 void py_space_add(const struct space_params_t *params, struct atom_t *atom) {
-    py::object hyperon = py::module_::import("hyperon");
+    py::object hyperon = py::module_::import("hyperon.base");
     py::function call_add_on_python_space = hyperon.attr("_priv_call_add_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     atom_t* notify_atom = atom_clone(atom);
@@ -252,7 +252,7 @@ void py_space_add(const struct space_params_t *params, struct atom_t *atom) {
 }
 
 bool py_space_remove(const struct space_params_t *params, const struct atom_t *atom) {
-    py::object hyperon = py::module_::import("hyperon");
+    py::object hyperon = py::module_::import("hyperon.base");
     py::function call_remove_on_python_space = hyperon.attr("_priv_call_remove_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     atom_t* notify_atom = atom_clone(atom);
@@ -271,7 +271,7 @@ bool py_space_remove(const struct space_params_t *params, const struct atom_t *a
 }
 
 bool py_space_replace(const struct space_params_t *params, const struct atom_t *from, struct atom_t *to) {
-    py::object hyperon = py::module_::import("hyperon");
+    py::object hyperon = py::module_::import("hyperon.base");
     py::function call_replace_on_python_space = hyperon.attr("_priv_call_replace_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     atom_t* notify_from = atom_clone(from);
@@ -293,7 +293,7 @@ bool py_space_replace(const struct space_params_t *params, const struct atom_t *
 }
 
 ssize_t py_space_atom_count(const struct space_params_t *params) {
-    py::object hyperon = py::module_::import("hyperon");
+    py::object hyperon = py::module_::import("hyperon.base");
     py::function call_atom_count_on_python_space = hyperon.attr("_priv_call_atom_count_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     py::int_ result = call_atom_count_on_python_space(pyobj);
@@ -301,7 +301,7 @@ ssize_t py_space_atom_count(const struct space_params_t *params) {
 }
 
 void *py_space_new_atom_iter_state(const struct space_params_t *params) {
-    py::object hyperon = py::module_::import("hyperon");
+    py::object hyperon = py::module_::import("hyperon.base");
     py::function call_new_iter_state_on_python_space = hyperon.attr("_priv_call_new_iter_state_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     py::object result = call_new_iter_state_on_python_space(pyobj);
