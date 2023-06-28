@@ -68,3 +68,18 @@ class GroundingSpaceTest(HyperonTestCase):
 
         result = kb.query(E(S(","), E(S("A"), V("x")), E(S("C"), V("x"))))
         self.assertEqualNoOrder(result, [{"x": S("B")}])
+
+    class ExtendedGroundingSpace(GroundingSpace):
+        def query(self, query_atom):
+            modified_query = E(S("blue"), query_atom)
+            result = super().query(modified_query)
+            return result
+
+    def test_python_extended_grounding_space(self):
+        kb = SpaceRef(self.ExtendedGroundingSpace())
+
+        kb.add_atom(E(S("blue"), E(S("A"), S("B"))))
+        kb.add_atom(E(S("red"), E(S("A"), S("C"))))
+
+        result = kb.query(E(S("A"), V("x")))
+        self.assertEqualNoOrder(result, [{"x": S("B")}])
