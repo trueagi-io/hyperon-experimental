@@ -34,6 +34,7 @@ packages = [ "hyperon" ]
 package-dir = { "hyperon" = "hyperon" }
 
 [tool.cibuildwheel]
-before-all = "./install-hyperonc.sh"
+before-all = "sh -c ./python/install-hyperonc.sh"
 skip = "*-musllinux_i686"
-test-command = "pytest ./tests"
+test-requires = ["pytest==7.3.2"]
+test-command = "pytest {project}/python/tests"
