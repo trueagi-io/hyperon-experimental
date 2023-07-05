@@ -17,10 +17,18 @@ struct CPtr {
     T* ptr;
 };
 
+template <typename T>
+struct CStruct {
+    using type = T;
+    CStruct(T obj) : obj(obj) {}
+    T obj;
+    T* ptr () { return &(this->obj); }
+};
+
 using CAtom = CPtr<atom_t>;
 using CVecAtom = CPtr<vec_atom_t>;
 using CBindings = CPtr<bindings_t>;
-using CBindingsSet = CPtr<bindings_set_t>;
+using CBindingsSet = CStruct<bindings_set_t>;
 using CSpace = CPtr<space_t>;
 using CTokenizer = CPtr<tokenizer_t>;
 using CStepResult = CPtr<step_result_t>;
@@ -189,7 +197,7 @@ void py_free(struct gnd_t* _cgnd) {
 }
 
 extern "C" {
-    bindings_set_t *py_space_query(const struct space_params_t *params, const struct atom_t *atom);
+    bindings_set_t py_space_query(const struct space_params_t *params, const struct atom_t *atom);
     vec_atom_t *py_space_subst(const struct space_params_t *params, const struct atom_t *pattern, const struct atom_t *tmpl);
     void py_space_add(const struct space_params_t *params, struct atom_t *atom);
     bool py_space_remove(const struct space_params_t *params, const struct atom_t *atom);
@@ -221,14 +229,14 @@ struct PySpace {
     py::object pyobj;
 };
 
-bindings_set_t *py_space_query(const struct space_params_t *params, const struct atom_t *query_atom) {
+bindings_set_t py_space_query(const struct space_params_t *params, const struct atom_t *query_atom) {
     py::object hyperon = py::module_::import("hyperon.base");
     py::function call_query_on_python_space = hyperon.attr("_priv_call_query_on_python_space");
     py::object pyobj = static_cast<PySpace const *>(params->payload)->pyobj;
     CAtom catom = atom_clone(query_atom);
     py::object result = call_query_on_python_space(pyobj, catom);
-    const CBindingsSet &set = result.attr("c_set").cast<CBindingsSet>();
-    return bindings_set_clone(set.ptr);
+    CBindingsSet set = result.attr("c_set").cast<CBindingsSet>();
+    return bindings_set_clone(set.ptr());
 }
 
 //TODO, currently Python spaces use the default subst implementation
@@ -528,35 +536,35 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<CBindingsSet>(m, "CBindingsSet");
     m.def("bindings_set_empty", []() { return CBindingsSet(bindings_set_empty()); }, "New BindingsSet with no Bindings");
     m.def("bindings_set_single", []() { return CBindingsSet(bindings_set_single()); }, "New BindingsSet with one new Bindings");
-    m.def("bindings_set_free", [](CBindingsSet set) { bindings_set_free(set.ptr); }, "Free BindingsSet");
-    m.def("bindings_set_eq", [](CBindingsSet set, CBindingsSet other) { return bindings_set_eq(set.ptr, other.ptr); }, "Free BindingsSet");
+    m.def("bindings_set_free", [](CBindingsSet set) { bindings_set_free(set.obj); }, "Free BindingsSet");
+    m.def("bindings_set_eq", [](CBindingsSet set, CBindingsSet other) { return bindings_set_eq(set.ptr(), other.ptr()); }, "Free BindingsSet");
     //TODO: I think we need better words for these concepts.  "empty" & "single" are placeholders for now.
     //https://github.com/trueagi-io/hyperon-experimental/issues/281
     m.def("bindings_set_is_empty", [](CBindingsSet set) {
-        return bindings_set_is_empty(set.ptr);
+        return bindings_set_is_empty(set.ptr());
     }, "Returns true if BindingsSet contains no Bindings object (fully constrained)");
     m.def("bindings_set_is_single", [](CBindingsSet set) {
-        return bindings_set_is_single(set.ptr);
+        return bindings_set_is_single(set.ptr());
     }, "Returns true if BindingsSet contains no variable bindings (unconstrained)");
     m.def("bindings_set_to_str", [](CBindingsSet set) {
-        return func_to_string((write_to_buf_func_t)&bindings_set_to_str, set.ptr);
+        return func_to_string((write_to_buf_func_t)&bindings_set_to_str, (void*)set.ptr());
     }, "Convert BindingsSet to human readable string");
-    m.def("bindings_set_clone", [](CBindingsSet set) { return CBindingsSet(bindings_set_clone(set.ptr)); }, "Deep copy of BindingsSet");
+    m.def("bindings_set_clone", [](CBindingsSet set) { return CBindingsSet(bindings_set_clone(set.ptr())); }, "Deep copy of BindingsSet");
     m.def("bindings_set_from_bindings", [](CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); return CBindingsSet(bindings_set_from_bindings(cloned_bindings)); }, "New BindingsSet from existing Bindings");
-    m.def("bindings_set_push", [](CBindingsSet set, CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); bindings_set_push(set.ptr, cloned_bindings); }, "Adds the Bindings to the BindingsSet");
+    m.def("bindings_set_push", [](CBindingsSet set, CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); bindings_set_push(set.ptr(), cloned_bindings); }, "Adds the Bindings to the BindingsSet");
     m.def("bindings_set_add_var_binding", [](CBindingsSet set, CAtom var, CAtom value) {
-        bindings_set_add_var_binding(set.ptr, var.ptr, value.ptr);
+        bindings_set_add_var_binding(set.ptr(), var.ptr, value.ptr);
     }, "Asserts a binding between a variable and an atom for every Bindings in the BindingsSet" );
     m.def("bindings_set_add_var_equality", [](CBindingsSet set, CAtom var_a, CAtom var_b) {
-        bindings_set_add_var_equality(set.ptr, var_a.ptr, var_b.ptr);
+        bindings_set_add_var_equality(set.ptr(), var_a.ptr, var_b.ptr);
     }, "Asserts a binding between two variables for every Bindings in the BindingsSet" );
     m.def("bindings_set_merge_into", [](CBindingsSet set, CBindingsSet other) {
-        bindings_set_merge_into(set.ptr, other.ptr);
+        bindings_set_merge_into(set.ptr(), other.ptr());
     }, "Merges the contents of the `other` BindingsSet into the `set` BindingsSet" );
     m.def("bindings_set_list", [](CBindingsSet set) -> pybind11::list {
         pybind11::list bindings_list;
         bindings_set_iterate(
-                set.ptr,
+                set.ptr(),
                 bindings_copy_to_list_callback,
                 &bindings_list);
         return bindings_list;
@@ -564,7 +572,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("bindings_set_unpack", [](CBindingsSet set) -> pybind11::list {
         py::list results;
         bindings_set_iterate(
-            set.ptr,
+            set.ptr(),
             [](bindings_t * cbindings, void* context) {
                 py::list& results = *(py::list*)context;
                 py::dict pybindings;
@@ -598,7 +606,7 @@ PYBIND11_MODULE(hyperonpy, m) {
         }
     }, "Returns iterator to traverse atoms within a space");
     m.def("space_query", [](CSpace space, CAtom pattern) {
-            bindings_set_t* result_bindings_set = space_query(space.ptr, pattern.ptr);
+            bindings_set_t result_bindings_set = space_query(space.ptr, pattern.ptr);
             return CBindingsSet(result_bindings_set);
         }, "Query atoms from space by pattern");
     m.def("space_subst", [](CSpace space, CAtom pattern, CAtom templ) {

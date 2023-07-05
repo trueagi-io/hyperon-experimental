@@ -42,8 +42,32 @@ pub struct bindings_t {
     pub bindings: Bindings,
 }
 
+#[repr(C)]
 pub struct bindings_set_t {
-    pub(crate) set: BindingsSet,
+    set: *mut RustBindingsSet,
+}
+
+/// Internal wrapper type so CBindgen doesn't try and export it
+struct RustBindingsSet(BindingsSet);
+
+impl From<BindingsSet> for bindings_set_t {
+    fn from(set: BindingsSet) -> Self {
+        bindings_set_t {
+            set: Box::into_raw(Box::new(RustBindingsSet(set)))
+        }
+    }
+}
+
+impl bindings_set_t {
+    pub(crate) fn borrow(&self) -> &BindingsSet {
+        unsafe{ &(*self.set).0 }
+    }
+    pub(crate) fn borrow_mut(&mut self) -> &mut BindingsSet {
+        unsafe{ &mut (*self.set).0 }
+    }
+    pub(crate) fn into_inner(self) -> BindingsSet {
+        unsafe{*Box::from_raw(self.set)}.0
+    }
 }
 
 pub type bindings_callback_t = lambda_t<*const bindings_t>;
@@ -180,13 +204,13 @@ pub extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindings_righ
 ///
 /// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
-pub extern "C" fn bindings_merge_v2(_self: *mut bindings_t, other: *const bindings_t) -> *mut bindings_set_t
+pub extern "C" fn bindings_merge_v2(_self: *mut bindings_t, other: *const bindings_t) -> bindings_set_t
 {
     let other = unsafe{ &(*other).bindings };
     let owned_self = ptr_into_bindings(_self);
 
     let new_set = owned_self.merge_v2(other);
-    bindings_set_into_ptr(new_set)
+    new_set.into()
 }
 
 #[no_mangle]
@@ -219,13 +243,13 @@ pub extern "C" fn bindings_narrow_vars(bindings: *mut bindings_t, vars: *const v
 // bindings_set
 
 #[no_mangle]
-pub extern "C" fn bindings_set_empty() -> *mut bindings_set_t {
-    bindings_set_into_ptr(BindingsSet::empty())
+pub extern "C" fn bindings_set_empty() -> bindings_set_t {
+    BindingsSet::empty().into()
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_single() -> *mut bindings_set_t {
-    bindings_set_into_ptr(BindingsSet::single())
+pub extern "C" fn bindings_set_single() -> bindings_set_t {
+    BindingsSet::single().into()
 }
 
 /// WARNING: This function takes ownership of the bindings argument.
@@ -233,36 +257,36 @@ pub extern "C" fn bindings_set_single() -> *mut bindings_set_t {
 ///
 /// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
-pub extern "C" fn bindings_set_from_bindings(bindings: *mut bindings_t) -> *mut bindings_set_t {
+pub extern "C" fn bindings_set_from_bindings(bindings: *mut bindings_t) -> bindings_set_t {
     let owned_bindings = ptr_into_bindings(bindings);
-    bindings_set_into_ptr(BindingsSet::from(owned_bindings))
+    BindingsSet::from(owned_bindings).into()
 }
 
 /// WARNING: This function takes ownership of the bindings argument.
 /// After calling this function, the bindings_t passed must not be accessed or freed
 #[no_mangle]
 pub extern "C" fn bindings_set_push(set: *mut bindings_set_t, bindings: *mut bindings_t) {
-    let set = unsafe{&mut (*set).set};
+    let set = unsafe{ (&mut *set).borrow_mut() };
     let owned_bindings = ptr_into_bindings(bindings);
     set.push(owned_bindings);
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_free(set: *mut bindings_set_t) {
+pub extern "C" fn bindings_set_free(set: bindings_set_t) {
     // drop() does nothing actually, but it is used here for clarity
-    drop(unsafe{Box::from_raw(set)});
+    drop(set.into_inner());
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_clone(set: *const bindings_set_t) -> *mut bindings_set_t {
-    let set = unsafe{&(*set).set};
-    bindings_set_into_ptr(set.clone())
+pub extern "C" fn bindings_set_clone(set: *const bindings_set_t) -> bindings_set_t {
+    let set = unsafe{ (&*set).borrow() };
+    set.clone().into()
 }
 
 #[no_mangle]
 pub extern "C" fn bindings_set_eq(set: *const bindings_set_t, other: *const bindings_set_t) -> bool {
-    let set = unsafe{&(*set).set};
-    let other = unsafe{&(*other).set};
+    let set = unsafe{ (&*set).borrow() };
+    let other = unsafe{ (&*other).borrow() };
     set == other
 }
 
@@ -271,25 +295,25 @@ pub extern "C" fn bindings_set_eq(set: *const bindings_set_t, other: *const bind
 /// string terminator.
 #[no_mangle]
 pub extern "C" fn bindings_set_to_str(set: *const bindings_set_t, buf: *mut c_char, buf_len: usize) -> usize {
-    let set = unsafe{ &(*set).set };
+    let set = unsafe{ (&*set).borrow() };
     write_into_buf(set, buf, buf_len)
 }
 
 #[no_mangle]
 pub extern "C" fn bindings_set_is_empty(set: *const bindings_set_t) -> bool {
-    let set = unsafe{ &(*set).set };
+    let set = unsafe{ (&*set).borrow() };
     set.is_empty()
 }
 
 #[no_mangle]
 pub extern "C" fn bindings_set_is_single(set: *const bindings_set_t) -> bool {
-    let set = unsafe{ &(*set).set };
+    let set = unsafe{ (&*set).borrow() };
     set.is_single()
 }
 
 #[no_mangle]
 pub extern "C" fn bindings_set_iterate(set: *mut bindings_set_t, callback: bindings_mut_callback_t, context: *mut c_void) {
-    let set = unsafe{ &mut (*set).set };
+    let set = unsafe{ (&mut *set).borrow_mut() };
     for bindings in set.iter_mut() {
         let bindings_ptr = (bindings as *mut Bindings).cast::<bindings_t>();
         callback(bindings_ptr, context);
@@ -298,7 +322,7 @@ pub extern "C" fn bindings_set_iterate(set: *mut bindings_set_t, callback: bindi
 
 #[no_mangle]
 pub extern "C" fn bindings_set_add_var_equality(set: *mut bindings_set_t, a: *const atom_t, b: *const atom_t) {
-    let set = unsafe{ &mut(*set).set };
+    let set = unsafe{ (&mut *set).borrow_mut() };
     let a = unsafe{ &(*a).atom };
     let b = unsafe{ &(*b).atom };
 
@@ -310,7 +334,7 @@ pub extern "C" fn bindings_set_add_var_equality(set: *mut bindings_set_t, a: *co
 
 #[no_mangle]
 pub extern "C" fn bindings_set_add_var_binding(set: *mut bindings_set_t, var: *const atom_t, value: *const atom_t) {
-    let set = unsafe{ &mut(*set).set };
+    let set = unsafe{ (&mut *set).borrow_mut() };
     let var = unsafe{ &(*var).atom };
     let value = unsafe{ &(*value).atom };
 
@@ -322,8 +346,8 @@ pub extern "C" fn bindings_set_add_var_binding(set: *mut bindings_set_t, var: *c
 
 #[no_mangle]
 pub extern "C" fn bindings_set_merge_into(_self: *mut bindings_set_t, other: *const bindings_set_t) {
-    let _self = unsafe{ &mut (*_self).set };
-    let other = unsafe{ &(*other).set };
+    let _self = unsafe{ (&mut *_self).borrow_mut() };
+    let other = unsafe{ (&*other).borrow() };
     let mut owned_self = BindingsSet::empty();
     core::mem::swap(_self, &mut owned_self);
 
@@ -459,11 +483,11 @@ pub unsafe extern "C" fn atom_iterate(atom: *const atom_t,
 
 /// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
-pub extern "C" fn atom_match_atom(a: *const atom_t, b: *const atom_t) -> *mut bindings_set_t {
+pub extern "C" fn atom_match_atom(a: *const atom_t, b: *const atom_t) -> bindings_set_t {
     let a = unsafe{ &(*a).atom };
     let b = unsafe{ &(*b).atom };
     let result_set: BindingsSet = crate::atom::matcher::match_atoms(a, b).collect();
-    bindings_set_into_ptr(result_set)
+    result_set.into()
 }
 
 #[no_mangle]
@@ -549,10 +573,6 @@ pub fn ptr_into_atom(atom: *mut atom_t) -> Atom {
 
 pub fn ptr_into_bindings(bindings: *mut bindings_t) -> Bindings {
     unsafe {Box::from_raw(bindings)}.bindings
-}
-
-pub fn bindings_set_into_ptr(set: BindingsSet) -> *mut bindings_set_t {
-    Box::into_raw(Box::new(bindings_set_t{set}))
 }
 
 fn vec_atom_into_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {

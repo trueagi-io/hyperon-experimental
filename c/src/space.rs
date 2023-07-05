@@ -183,7 +183,7 @@ pub struct space_api_t {
     ///   Returns a bindings_set_t representing the query results
     ///   \arg params \c is the pointer to the space's params
     ///   \arg atom \c is the query atom.  This function should NOT take ownership of the query atom.
-    query: extern "C" fn(params: *const space_params_t, atom: *const atom_t) -> *mut bindings_set_t,
+    query: extern "C" fn(params: *const space_params_t, atom: *const atom_t) -> bindings_set_t,
 
     /// Substitutes atoms match by a query with atoms in a form derived from a template
     ///   \arg params \c is the pointer to the space's params
@@ -284,8 +284,7 @@ impl Space for CSpace {
         let api = unsafe{ &*self.api };
         let query = (query as *const Atom).cast::<atom_t>();
         let result_set = (api.query)(&self.params, query);
-        let bindings_box: Box<bindings_set_t> = unsafe{ Box::from_raw(result_set) };
-        bindings_box.set
+        result_set.into_inner()
     }
     fn subst(&self, pattern: &Atom, tmpl: &Atom) -> Vec<Atom> {
         let api = unsafe{ &*self.api };
@@ -525,10 +524,10 @@ pub unsafe extern "C" fn space_replace(space: *mut space_t, from: *const atom_t,
 
 /// NOTE: The returned BindingsSet needs to be freed with bindings_set_free
 #[no_mangle]
-pub extern "C" fn space_query(space: *const space_t, pattern: *const atom_t) -> *mut bindings_set_t
+pub extern "C" fn space_query(space: *const space_t, pattern: *const atom_t) -> bindings_set_t
 {
     let results = unsafe { (*space).0.borrow().query(&((*pattern).atom)) };
-    bindings_set_into_ptr(results)
+    results.into()
 }
 
 #[no_mangle]

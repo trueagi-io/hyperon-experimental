@@ -56,8 +56,8 @@ START_TEST (test_grounding_space_query)
     atom_t* query = expr(atom_sym("+"), atom_sym("A"), atom_var("b"), 0);
 
     struct output_t result = { "", 0 };
-    bindings_set_t* bindings_set = space_query(space, query);
-    bindings_set_iterate(bindings_set, query_callback, &result);
+    bindings_set_t bindings_set = space_query(space, query);
+    bindings_set_iterate(&bindings_set, query_callback, &result);
     ck_assert_str_eq(result.str, "b: B, ");
 
     bindings_set_free(bindings_set);
@@ -183,8 +183,8 @@ START_TEST (test_custom_c_space)
     atom_t* query = expr(atom_sym("+"), atom_sym("A"), atom_var("b"), 0);
 
     struct output_t result = { "", 0 };
-    bindings_set_t* bindings_set = space_query(space, query);
-    bindings_set_iterate(bindings_set, query_callback, &result);
+    bindings_set_t bindings_set = space_query(space, query);
+    bindings_set_iterate(&bindings_set, query_callback, &result);
     ck_assert_str_eq(result.str, "b: B, ");
     bindings_set_free(bindings_set);
 
