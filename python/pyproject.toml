@@ -35,6 +35,7 @@ package-dir = { "hyperon" = "hyperon" }
 
 [tool.cibuildwheel]
 before-all = "sh -c ./python/install-hyperonc.sh"
+# no Rust toolchain is available for musllinux-i686 environment
 skip = "*-musllinux_i686"
 test-requires = ["pytest==7.3.2"]
 test-command = "pytest {project}/python/tests"

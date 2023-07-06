@@ -7,6 +7,8 @@ option(BUILD_SHARED_LIBS "Build shared library" ON)
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 
 execute_process(
+    # --build is required to build dependencies from source under cibuildwheel
+    # environment
     COMMAND conan install --build -- ${CMAKE_CURRENT_SOURCE_DIR}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 include(${CMAKE_CURRENT_BINARY_DIR}/conanbuildinfo.cmake)

@@ -35,6 +35,8 @@ message(STATUS "Python native modules installation path (Python3_SITEARCH): ${Py
 message(STATUS "Python modules installation path (Python3_SITELIB): ${Python3_SITELIB}")
 
 execute_process(
+    # --build is required to build dependencies from source under cibuildwheel
+    # environment
     COMMAND conan install --build -- ${CMAKE_CURRENT_SOURCE_DIR}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)

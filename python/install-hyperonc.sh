@@ -43,6 +43,7 @@ git reset --hard FETCH_HEAD
 
 mkdir -p ${HOME}/hyperonc/c/build
 cd ${HOME}/hyperonc/c/build
+# Rust doesn't support building shared libraries under musllinux environment
 cmake -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release ..
 make
 make check
