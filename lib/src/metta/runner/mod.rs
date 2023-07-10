@@ -115,10 +115,10 @@ impl Metta {
     pub fn run(&self, parser: &mut SExprParser) -> Result<Vec<Vec<Atom>>, String> {
         let mut mode = Mode::ADD;
         let mut results: Vec<Vec<Atom>> = Vec::new();
-    
+
         loop {
             let atom = parser.parse(&self.tokenizer.borrow())?;
-    
+
             if let Some(atom) = atom {
                 if atom == EXEC_SYMBOL {
                     mode = Mode::INTERPRET;
@@ -137,7 +137,9 @@ impl Metta {
                             Ok(result) => {
                                 fn is_error(atom: &Atom) -> bool {
                                     match atom {
-                                        Atom::Expression(expr) => expr.children()[0] == ERROR_SYMBOL,
+                                        Atom::Expression(expr) => {
+                                            expr.children().len() > 0 && expr.children()[0] == ERROR_SYMBOL
+                                        },
                                         _ => false,
                                     }
                                 }
@@ -157,8 +159,8 @@ impl Metta {
         }
         Ok(results)
     }
-    
-    
+
+
 
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
         match self.type_check(atom) {
@@ -296,4 +298,40 @@ mod tests {
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
+
+    #[derive(Clone, PartialEq, Debug)]
+    struct ReturnAtomOp(Atom);
+
+    impl std::fmt::Display for ReturnAtomOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "return-atom {}", self.0)
+        }
+    }
+
+    impl Grounded for ReturnAtomOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED])
+        }
+        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+            Ok(vec![self.0.clone()])
+        }
+        fn match_(&self, other: &Atom) -> crate::matcher::MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    #[test]
+    fn metta_no_crash_on_empty_expression_returned() {
+        let program = "
+            !(empty)
+        ";
+
+        let metta = Metta::new(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        metta.tokenizer().borrow_mut().register_token(Regex::new("empty").unwrap(),
+            |_| Atom::gnd(ReturnAtomOp(expr!())));
+        let result = metta.run(&mut SExprParser::new(program));
+
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+    }
+
 }
