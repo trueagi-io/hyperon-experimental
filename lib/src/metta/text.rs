@@ -302,6 +302,15 @@ mod tests {
     }
 
     #[test]
+    fn test_comment_in_sexpr_before_closing_bracket() {
+        let program = " (a 5 ; 4)
+                  )";
+        let expected = vec![expr!("a" "5")];
+        let res = parse_atoms(program);
+        assert_eq!(res, expected);
+    }
+
+    #[test]
     fn test_comment_endl() {
         let program = " (a 4);
                   (b 5)";
