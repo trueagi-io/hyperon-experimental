@@ -115,6 +115,9 @@ impl<'a> SExprParser<'a> {
         let mut children: Vec<Atom> = Vec::new();
         while let Some(c) = self.it.peek() {
             match c {
+                ';' => {
+                    self.skip_line();
+                },
                 _ if c.is_whitespace() => { self.it.next(); },
                 ')' => {
                     self.it.next();
