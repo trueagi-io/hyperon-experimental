@@ -132,7 +132,6 @@ impl<'a> SExprParser<'a> {
         }
         Err("Unexpected end of expression".to_string())
     }
-    
 
 }
 
