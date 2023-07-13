@@ -115,6 +115,9 @@ impl<'a> SExprParser<'a> {
         let mut children: Vec<Atom> = Vec::new();
         while let Some(c) = self.it.peek() {
             match c {
+                ';' => {
+                    self.skip_line();
+                },
                 _ if c.is_whitespace() => { self.it.next(); },
                 ')' => {
                     self.it.next();
@@ -132,7 +135,6 @@ impl<'a> SExprParser<'a> {
         }
         Err("Unexpected end of expression".to_string())
     }
-    
 
 }
 
@@ -294,6 +296,15 @@ mod tests {
     fn test_comment_in_sexpr() {
         let program = " (a ; 4)
                   5)";
+        let expected = vec![expr!("a" "5")];
+        let res = parse_atoms(program);
+        assert_eq!(res, expected);
+    }
+
+    #[test]
+    fn test_comment_in_sexpr_before_closing_bracket() {
+        let program = " (a 5 ; 4)
+                  )";
         let expected = vec![expr!("a" "5")];
         let res = parse_atoms(program);
         assert_eq!(res, expected);
