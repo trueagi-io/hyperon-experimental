@@ -346,8 +346,12 @@ impl Grounded for CdrAtomOp {
         let arg_error = || ExecError::from("cdr-atom expects one argument: expression");
         let expr = args.get(0).ok_or_else(arg_error)?;
         let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
-        let cdr = Vec::from_iter(chld[1..].iter().cloned());
-        Ok(vec![Atom::expr(cdr)])
+        if chld.len() == 0 {
+            Err(ExecError::Runtime("cdr-atom expects non-empty expression".into()))
+        } else {
+            let cdr = Vec::from_iter(chld[1..].iter().cloned());
+            Ok(vec![Atom::expr(cdr)])
+        }
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -1270,6 +1274,8 @@ mod tests {
         assert_eq!(res, vec![expr!()]);
         let res = CdrAtomOp{}.execute(&mut vec![expr!(("A" "C") ("D" "E") "B")]).expect("No result returned");
         assert_eq!(res, vec![expr!(("D" "E") "B")]);
+        let res = CdrAtomOp{}.execute(&mut vec![expr!()]);
+        assert_eq!(res, Err(ExecError::Runtime("cdr-atom expects non-empty expression".into())));
     }
 
     #[test]
