@@ -1,9 +1,7 @@
-name: docs
+name: build docs
 on:
   push:
     branches:
-      - master
-      - main
       - docs-py
 permissions:
   contents: write
