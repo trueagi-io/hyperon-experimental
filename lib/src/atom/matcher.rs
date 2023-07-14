@@ -33,23 +33,12 @@ macro_rules! bind {
 /// ```
 /// use hyperon::*;
 ///
-/// // Compose a BindingsSet with implicit Bindings
-/// let set = bind_set![{a: expr!("A")}, {a: expr!("APrime")}, {a: expr!("ADoublePrime")}];
-///
-/// assert_eq!(set.len(), 3);
-/// assert_eq!(set[0].resolve(&VariableAtom::new("a")), Some(expr!("A")));
-/// assert_eq!(set[2].resolve(&VariableAtom::new("a")), Some(expr!("ADoublePrime")));
-///
 /// // Compose a BindingsSet with explicitly defined Bindings
 /// let set = bind_set![bind!{a: expr!("A")}, bind!{a: expr!("APrime")}];
 ///
 /// assert_eq!(set.len(), 2);
 /// assert_eq!(set[0].resolve(&VariableAtom::new("a")), Some(expr!("A")));
 /// assert_eq!(set[1].resolve(&VariableAtom::new("a")), Some(expr!("APrime")));
-///
-/// // Mix and match, including existing Bindings and BindingsSets
-/// let other_set = bind_set![];
-/// let set = bind_set![{a: expr!("A")}, other_set];
 /// ```
 #[macro_export]
 macro_rules! bind_set {
@@ -57,21 +46,15 @@ macro_rules! bind_set {
     [] => {
         $crate::atom::matcher::BindingsSet::empty()
     };
-    // An implicitly defined Bindings
+    // A single immediately defined Bindings
     [{$($b:tt)*}] => {
         $crate::atom::matcher::BindingsSet::from($crate::bind!{$($b)*})
     };
-    // An explicitly defined Bindings
+    // A single reduced Bindings
     [$b:expr] => {
         $crate::atom::matcher::BindingsSet::from($b)
     };
-    // Recursive pattern to handle multiple Bindings, where the next item is implicit
-    [{$($b:tt)*}, $($b_rest:tt)*] => {{
-        let mut b = bind_set![{$($b)*}];
-        b.extend(bind_set![$($b_rest)*]);
-        b
-    }};
-    // Recursive pattern to handle multiple Bindings, where the next item is explicit
+    // Recursive pattern to handle multiple Bindings, where each item is reduced
     [$b:expr, $($b_rest:tt)*] => {{
         let mut b = bind_set![$b];
         b.extend(bind_set![$($b_rest)*]);
