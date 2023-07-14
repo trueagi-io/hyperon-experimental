@@ -17,7 +17,7 @@ gnd_t* int_new(int n) {
     return (gnd_t*) self;
 }
 
-atom_t* int_atom_from_str(char const* str, void* context) {
+atom_t int_atom_from_str(char const* str, void* context) {
     int i;
     sscanf(str, "%u", &i);
     return atom_gnd(int_new(i));
@@ -41,5 +41,6 @@ uintptr_t int_display(const struct gnd_t* _self, char* buffer, uintptr_t max_siz
 }
 
 void int_free(struct gnd_t* self) {
+    atom_free(self->typ);
     free(self);
 }

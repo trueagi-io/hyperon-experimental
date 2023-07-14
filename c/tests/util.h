@@ -8,6 +8,6 @@
 void str_to_buf(const char *str, void *context);
 
 char* stratom(atom_t const* atom);
-atom_t* expr(atom_t* atom, ...);
+atom_t expr(atom_t atom, ...);
 
 #endif /* UTIL_H */

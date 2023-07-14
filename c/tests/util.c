@@ -1,3 +1,5 @@
+#include <hyperon/hyperon.h>
+
 #include <stdarg.h>
 #include <string.h>
 
@@ -10,17 +12,21 @@ char* stratom(atom_t const* atom) {
     return buffer;
 }
 
-#define MAXARGS 64
+//TODO for ALPHA: This expr API would be useful in general, and should not be limited to the tests.
 
-atom_t* expr(atom_t* atom, ...) {
+#define MAXARGS 64
+atom_t expr(atom_t atom, ...) {
     va_list ap;
-    atom_t* children[MAXARGS];
+    atom_t children[MAXARGS];
     int argno = 0;
 
     va_start(ap, atom);
-    while (atom != 0 && argno < MAXARGS) {
+    //NOTE: It's illagal to pass NULL as the list terminator, but the compiler can't check it
+    // because va_list is un-typed.  Therefore, we'll be on the safe side, and stop looping
+    // if the first ptr-sized chunk of the atom is NULL.
+    while ((*(void**)&atom != NULL) && !atom_is_null(&atom) && argno < MAXARGS) {
         children[argno++] = atom;
-        atom = va_arg(ap, atom_t*);
+        atom = va_arg(ap, atom_t);
     }
     va_end(ap);
     return atom_expr(children, argno);

@@ -6,14 +6,14 @@
 #include "c_space.h"
 
 typedef struct _atom_list_item {
-    atom_t* atom;
+    atom_t atom;
     struct _atom_list_item* next;
 } atom_list_item;
 
-void collect_variable_atoms(const atom_t* atom, void* vec_ptr) {
+void collect_variable_atoms(atom_ref_t atom, void* vec_ptr) {
     vec_atom_t* vec = vec_ptr;
-    if (atom_get_type(atom) == VARIABLE) {
-        vec_atom_push(vec, atom_clone(atom));
+    if (atom_get_type(&atom) == VARIABLE) {
+        vec_atom_push(vec, atom_clone(&atom));
     }
 }
 
@@ -34,7 +34,7 @@ bindings_set_t query(const space_params_t* params, const atom_t* query_atom) {
 
     atom_list_item* cur_atom_item = space->atoms;
     while (cur_atom_item != NULL) {
-        bindings_set_t match_results = atom_match_atom(cur_atom_item->atom, query_atom);
+        bindings_set_t match_results = atom_match_atom(&cur_atom_item->atom, query_atom);
         bindings_set_iterate(&match_results, narrow_vars_callback, query_vars);
         bindings_set_merge_into(&new_bindings_set, &match_results);
         bindings_set_free(match_results);
@@ -46,7 +46,7 @@ bindings_set_t query(const space_params_t* params, const atom_t* query_atom) {
 }
 
 /// adds an atom to a cspace without calling the observers
-void add_atom_internal(custom_space_buf* space, atom_t* atom) {
+void add_atom_internal(custom_space_buf* space, atom_t atom) {
     atom_list_item* new_item = malloc(sizeof(atom_list_item));
     new_item->atom = atom;
     new_item->next = NULL;
@@ -61,10 +61,10 @@ void add_atom_internal(custom_space_buf* space, atom_t* atom) {
     space->atom_count += 1;
 }
 
-void add_atom(const space_params_t* params, atom_t* atom) {
+void add_atom(const space_params_t* params, atom_t atom) {
     custom_space_buf* space = params->payload;
 
-    space_event_t* event = space_event_new_add(atom_clone(atom));
+    space_event_t* event = space_event_new_add(atom_clone(&atom));
     space_params_notify_all_observers(params, event);
     space_event_free(event);
 
@@ -78,7 +78,7 @@ bool remove_atom_internal(custom_space_buf* space, const atom_t* atom) {
     atom_list_item* cur_atom_item = space->atoms;
     atom_list_item** prev_item_ptr = &(space->atoms);
     while (cur_atom_item != NULL) {
-        if (atom_eq(cur_atom_item->atom, atom)) {
+        if (atom_eq(&cur_atom_item->atom, atom)) {
             *prev_item_ptr = cur_atom_item->next;
             atom_free(cur_atom_item->atom);
             free(cur_atom_item);
@@ -109,12 +109,12 @@ bool remove_atom(const space_params_t* params, const atom_t* atom) {
     return false;
 }
 
-bool replace_atom(const space_params_t* params, const atom_t* from, atom_t* to) {
+bool replace_atom(const space_params_t* params, const atom_t* from, atom_t to) {
     custom_space_buf* space = params->payload;
 
     if (remove_atom_internal(space, from)) {
         add_atom_internal(space, to);
-        space_event_t* event = space_event_new_replace(atom_clone(from), atom_clone(to));
+        space_event_t* event = space_event_new_replace(atom_clone(from), atom_clone(&to));
         space_params_notify_all_observers(params, event);
         space_event_free(event);
         return true;
@@ -136,14 +136,14 @@ void* new_atom_iterator_state(const space_params_t* params) {
     return cur_item_ptr;
 }
 
-const atom_t* next_atom(const space_params_t* params, void* iterator_state) {
+atom_ref_t next_atom(const space_params_t* params, void* iterator_state) {
     atom_list_item** cur_item_ptr = iterator_state;
     if (*cur_item_ptr != NULL) {
-        atom_t* atom_to_return = (*cur_item_ptr)->atom;
+        atom_ref_t atom_to_return = atom_ref(&(*cur_item_ptr)->atom);
         *cur_item_ptr = (*cur_item_ptr)->next;
         return atom_to_return;
     } else {
-        return NULL;
+        return atom_ref_null();
     }
 }
 

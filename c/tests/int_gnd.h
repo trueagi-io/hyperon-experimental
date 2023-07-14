@@ -5,11 +5,11 @@
 
 typedef struct _int_gnd_t {
     gnd_api_t const* api;
-    atom_t const* typ;
+    atom_t typ;
     int n;
 } int_gnd_t;
 
 gnd_t* int_new(int n);
-atom_t* int_atom_from_str(char const* str, void* context);
+atom_t int_atom_from_str(char const* str, void* context);
 
 #endif /* INT_GND_H */

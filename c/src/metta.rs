@@ -29,7 +29,7 @@ pub extern "C" fn tokenizer_free(tokenizer: *mut tokenizer_t) {
     tokenizer_t::drop(tokenizer)
 }
 
-type atom_constr_t = extern "C" fn(*const c_char, *mut c_void) -> *mut atom_t;
+type atom_constr_t = extern "C" fn(*const c_char, *mut c_void) -> atom_t;
 
 #[repr(C)]
 pub struct droppable_t {
@@ -51,8 +51,8 @@ pub unsafe extern "C" fn tokenizer_register_token(tokenizer: *mut tokenizer_t,
     regex: *const c_char, constr: atom_constr_t, context: droppable_t) {
     let regex = Regex::new(cstr_as_str(regex)).unwrap();
     (*tokenizer).borrow_mut().register_token(regex, move |token| {
-        let catom = Box::from_raw(constr(str_as_cstr(token).as_ptr(), context.ptr));
-        catom.atom
+        let atom = constr(str_as_cstr(token).as_ptr(), context.ptr);
+        atom.into_inner()
     });
 }
 
@@ -77,37 +77,39 @@ pub extern "C" fn sexpr_parser_free(parser: *mut sexpr_parser_t) {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn sexpr_parser_parse(parser: *mut sexpr_parser_t,
-        tokenizer: *const tokenizer_t) -> *mut atom_t {
-            (*parser).borrow_mut().parse(&(*tokenizer).borrow())
-            .unwrap()
-            .map_or(std::ptr::null_mut(), |atom| { atom_into_ptr(atom) })
+pub unsafe extern "C" fn sexpr_parser_parse(
+    parser: *mut sexpr_parser_t,
+    tokenizer: *const tokenizer_t) -> atom_t
+{
+    (*parser).borrow_mut().parse(&(*tokenizer).borrow()).unwrap().into()
 }
 
-#[no_mangle] pub extern "C" fn ATOM_TYPE_UNDEFINED() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_UNDEFINED) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_TYPE() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_TYPE) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_ATOM() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_ATOM) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_SYMBOL() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_SYMBOL) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_VARIABLE() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_VARIABLE) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_EXPRESSION() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_EXPRESSION) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED() -> *mut atom_t { atom_into_ptr(hyperon::metta::ATOM_TYPE_GROUNDED) }
-#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> *mut atom_t { atom_into_ptr(rust_type_atom::<DynSpace>()) }
+//TODO After Alpha.  These should be static rather than functions, once I get atom_t to be fully repr(C),
+// so the caller doesn't need to worry about freeing them
+#[no_mangle] pub extern "C" fn ATOM_TYPE_UNDEFINED() -> atom_t { hyperon::metta::ATOM_TYPE_UNDEFINED.into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_TYPE() -> atom_t { hyperon::metta::ATOM_TYPE_TYPE.into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_ATOM() -> atom_t { hyperon::metta::ATOM_TYPE_ATOM.into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_SYMBOL() -> atom_t { hyperon::metta::ATOM_TYPE_SYMBOL.into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_VARIABLE() -> atom_t { hyperon::metta::ATOM_TYPE_VARIABLE.into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_EXPRESSION() -> atom_t { hyperon::metta::ATOM_TYPE_EXPRESSION.into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED() -> atom_t { hyperon::metta::ATOM_TYPE_GROUNDED.into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> atom_t { rust_type_atom::<DynSpace>().into() }
 
 #[no_mangle]
-pub unsafe extern "C" fn check_type(space: *const space_t, atom: *const atom_t, typ: *const atom_t) -> bool {
-    hyperon::metta::types::check_type((*space).0.borrow().as_space(), &(*atom).atom, &(*typ).atom)
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn validate_atom(space: *const space_t, atom: *const atom_t) -> bool {
-    hyperon::metta::types::validate_atom((*space).0.borrow().as_space(), &(*atom).atom)
+pub unsafe extern "C" fn check_type(space: *const space_t, atom: *const atom_ref_t, typ: *const atom_ref_t) -> bool {
+    hyperon::metta::types::check_type((*space).0.borrow().as_space(), (&*atom).borrow(), (&*typ).borrow())
 }
 
 #[no_mangle]
-pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_t,
+pub unsafe extern "C" fn validate_atom(space: *const space_t, atom: *const atom_ref_t) -> bool {
+    hyperon::metta::types::validate_atom((*space).0.borrow().as_space(), (&*atom).borrow())
+}
+
+#[no_mangle]
+pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
     let space = unsafe{ &(*space).0.borrow() };
-    let atom = unsafe{ &(*atom).atom };
+    let atom = unsafe{ (&*atom).borrow() };
     let types = hyperon::metta::types::get_atom_types(space.as_space(), atom);
     return_atoms(&types, callback, context);
 }
@@ -119,10 +121,10 @@ pub struct step_result_t<'a> {
 }
 
 #[no_mangle]
-pub extern "C" fn interpret_init<'a>(space: *mut space_t, expr: *const atom_t) -> *mut step_result_t<'a> {
+pub extern "C" fn interpret_init<'a>(space: *mut space_t, expr: *const atom_ref_t) -> *mut step_result_t<'a> {
     let space = unsafe{ &(*space) };
-    let expr = unsafe{ &(*expr) };
-    let step = interpreter::interpret_init(space.shared(), &expr.atom);
+    let expr = unsafe{ (&*expr).borrow() };
+    let step = interpreter::interpret_init(space.shared(), expr);
     Box::into_raw(Box::new(step_result_t{ result: step }))
 }
 
@@ -206,10 +208,10 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
 }
 
 #[no_mangle]
-pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: *mut atom_t,
+pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
         output: c_atoms_callback_t, out_context: *mut c_void) {
     let metta = unsafe{ &*metta }.borrow();
-    let atom = ptr_into_atom(atom);
+    let atom = atom.into_inner();
     let result = metta.evaluate_atom(atom)
         .expect("Returning errors from C API is not implemented yet");
     return_atoms(&result, output, out_context);

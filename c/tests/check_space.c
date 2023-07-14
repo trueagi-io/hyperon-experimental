@@ -22,19 +22,19 @@ void reset_output(struct output_t* output) {
     output->len = 0;
 }
 
-void atom_string_callback(const atom_t* atom, void* data)
+void atom_string_callback(atom_ref_t atom, void* data)
 {
     struct output_t* out = data;
-    out->len += atom_to_str(atom, out->str + out->len, 1024 - out->len);
+    out->len += atom_to_str(&atom, out->str + out->len, 1024 - out->len);
     out->len += snprintf(out->str + out->len, 1024 - out->len, ", ");
 }
 
-void query_callback_single_atom(const struct var_atom_t* atom, void* data)
+void query_callback_single_atom(var_atom_t atom, void* data)
 {
     struct output_t* out = data;
-    out->len += snprintf(out->str + out->len, 1024 - out->len, "%s: ", atom->var);
-    atom_string_callback(atom->atom, out);
-    atom_free(atom->atom);
+    out->len += snprintf(out->str + out->len, 1024 - out->len, "%s: ", atom.var);
+    atom_string_callback(atom_ref(&atom.atom), out);
+    atom_free(atom.atom);
 }
 
 void query_callback(struct bindings_t* results, void* data)
@@ -44,23 +44,24 @@ void query_callback(struct bindings_t* results, void* data)
     bindings_traverse(results, query_callback_single_atom, out);
 }
 
-void collect_atoms(const atom_t* atom, void* vec_ptr) {
+void collect_atoms(atom_ref_t atom, void* vec_ptr) {
     vec_atom_t* vec = vec_ptr;
-    vec_atom_push(vec, atom_clone(atom));
+    vec_atom_push(vec, atom_clone(&atom));
 }
 
 START_TEST (test_grounding_space_query)
 {
     space_t* space = space_new_grounding_space();;
-    space_add(space, expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0));
-    atom_t* query = expr(atom_sym("+"), atom_sym("A"), atom_var("b"), 0);
+    space_add(space, expr(atom_sym("+"), atom_var("a"), atom_sym("B"), atom_ref_null()));
+    atom_t query = expr(atom_sym("+"), atom_sym("A"), atom_var("b"), atom_ref_null());
 
     struct output_t result = { "", 0 };
-    bindings_set_t bindings_set = space_query(space, query);
+    bindings_set_t bindings_set = space_query(space, &query);
     bindings_set_iterate(&bindings_set, query_callback, &result);
     ck_assert_str_eq(result.str, "b: B, ");
 
     bindings_set_free(bindings_set);
+    atom_free(query);
     space_free(space);
 }
 END_TEST
@@ -68,15 +69,16 @@ END_TEST
 START_TEST (test_grounding_space_add)
 {
     space_t* space = space_new_grounding_space();;
-    atom_t* atom = expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0);
+    atom_t atom = expr(atom_sym("+"), atom_var("a"), atom_sym("B"), atom_ref_null());
 
-    space_add(space, atom_clone(atom));
+    space_add(space, atom_clone(&atom));
 
     ck_assert_int_eq(space_atom_count(space), 1);
 
     vec_atom_t* atoms = vec_atom_new();
     space_iterate(space, collect_atoms, atoms);
-    ck_assert(atom_eq(vec_atom_get(atoms, 0), atom));
+    atom_ref_t atom_from_vec = vec_atom_get(atoms, 0);
+    ck_assert(atom_eq(&atom_from_vec, &atom));
 
     vec_atom_free(atoms);
     atom_free(atom);
@@ -87,10 +89,10 @@ END_TEST
 START_TEST (test_grounding_space_remove)
 {
     space_t* space = space_new_grounding_space();;
-    atom_t* atom = expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0);
-    space_add(space, atom_clone(atom));
+    atom_t atom = expr(atom_sym("+"), atom_var("a"), atom_sym("B"), atom_ref_null());
+    space_add(space, atom_clone(&atom));
 
-    space_remove(space, atom);
+    space_remove(space, &atom);
 
     ck_assert_int_eq(space_atom_count(space), 0);
 
@@ -102,17 +104,18 @@ END_TEST
 START_TEST (test_grounding_space_replace)
 {
     space_t* space = space_new_grounding_space();;
-    atom_t* atom1 = expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0);
-    atom_t* atom2 = expr(atom_sym("+"), atom_var("b"), atom_sym("A"), 0);
-    space_add(space, atom_clone(atom1));
+    atom_t atom1 = expr(atom_sym("+"), atom_var("a"), atom_sym("B"), atom_ref_null());
+    atom_t atom2 = expr(atom_sym("+"), atom_var("b"), atom_sym("A"), atom_ref_null());
+    space_add(space, atom_clone(&atom1));
 
-    space_replace(space, atom1, atom_clone(atom2));
+    space_replace(space, &atom1, atom_clone(&atom2));
 
     ck_assert_int_eq(space_atom_count(space), 1);
 
     vec_atom_t* atoms = vec_atom_new();
     space_iterate(space, collect_atoms, atoms);
-    ck_assert(atom_eq(vec_atom_get(atoms, 0), atom2));
+    atom_ref_t atom_from_vec = vec_atom_get(atoms, 0);
+    ck_assert(atom_eq(&atom_from_vec, &atom2));
 
     vec_atom_free(atoms);
     atom_free(atom1);
@@ -158,20 +161,20 @@ START_TEST (test_custom_c_space)
 
     space_observer_t* observer_2 = space_register_observer(space, &C_OBSERVER_API, malloc(sizeof(my_observer_t)));
 
-    atom_t* a = atom_sym("A");
-    atom_t* b = atom_sym("B");
-    atom_t* c = atom_sym("C");
+    atom_t a = atom_sym("A");
+    atom_t b = atom_sym("B");
+    atom_t c = atom_sym("C");
     space_add(space, atom_sym("A"));
     space_add(space, atom_sym("B"));
     space_add(space, atom_sym("C"));
-    ck_assert(space_remove(space, a));
-    ck_assert(!space_remove(space, a));
-    ck_assert(space_remove(space, c));
-    ck_assert(space_remove(space, b));
+    ck_assert(space_remove(space, &a));
+    ck_assert(!space_remove(space, &a));
+    ck_assert(space_remove(space, &c));
+    ck_assert(space_remove(space, &b));
     space_add(space, atom_sym("A"));
-    ck_assert(space_replace(space, a, atom_sym("B")));
-    ck_assert(!space_replace(space, a, atom_sym("Junk")));
-    ck_assert(space_remove(space, b));
+    ck_assert(space_replace(space, &a, atom_sym("B")));
+    ck_assert(!space_replace(space, &a, atom_sym("Junk")));
+    ck_assert(space_remove(space, &b));
     atom_free(a);
     atom_free(b);
     atom_free(c);
@@ -179,11 +182,11 @@ START_TEST (test_custom_c_space)
     //Test that dropping an observer here doesn't cause problems with the other observer
     space_observer_free(observer_2);
 
-    space_add(space, expr(atom_sym("+"), atom_var("a"), atom_sym("B"), 0));
-    atom_t* query = expr(atom_sym("+"), atom_sym("A"), atom_var("b"), 0);
+    space_add(space, expr(atom_sym("+"), atom_var("a"), atom_sym("B"), atom_ref_null()));
+    atom_t query = expr(atom_sym("+"), atom_sym("A"), atom_var("b"), atom_ref_null());
 
     struct output_t result = { "", 0 };
-    bindings_set_t bindings_set = space_query(space, query);
+    bindings_set_t bindings_set = space_query(space, &query);
     bindings_set_iterate(&bindings_set, query_callback, &result);
     ck_assert_str_eq(result.str, "b: B, ");
     bindings_set_free(bindings_set);
