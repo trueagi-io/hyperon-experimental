@@ -26,7 +26,7 @@ struct CStruct {
 };
 
 using CAtom = CStruct<atom_t>;
-using CVecAtom = CPtr<vec_atom_t>;
+using CVecAtom = CStruct<vec_atom_t>;
 using CBindings = CPtr<bindings_t>;
 using CBindingsSet = CStruct<bindings_set_t>;
 using CSpace = CPtr<space_t>;
@@ -127,7 +127,7 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, st
     CAtom pytyp = static_cast<GroundedObject const*>(_cgnd)->typ;
     try {
         py::list args;
-        for (size_t i = 0; i < vec_atom_size(_args); ++i) {
+        for (size_t i = 0; i < vec_atom_len(_args); ++i) {
             atom_ref_t arg_atom_ref = vec_atom_get(_args, i);
             args.append(CAtom(atom_clone(&arg_atom_ref)));
         }
@@ -484,10 +484,10 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CVecAtom>(m, "CVecAtom");
     m.def("vec_atom_new", []() { return CVecAtom(vec_atom_new()); }, "New vector of atoms");
-    m.def("vec_atom_free", [](CVecAtom vec) { vec_atom_free(vec.ptr); }, "Free vector of atoms");
-    m.def("vec_atom_size", [](CVecAtom vec) { return vec_atom_size(vec.ptr); }, "Return size of the vector");
-    m.def("vec_atom_push", [](CVecAtom vec, CAtom atom) { vec_atom_push(vec.ptr, atom_clone(atom.ptr())); }, "Push atom into vector");
-    m.def("vec_atom_pop", [](CVecAtom vec) { return CAtom(vec_atom_pop(vec.ptr)); }, "Push atom into vector");
+    m.def("vec_atom_free", [](CVecAtom vec) { vec_atom_free(vec.obj); }, "Free vector of atoms");
+    m.def("vec_atom_size", [](CVecAtom vec) { return vec_atom_len(vec.ptr()); }, "Return size of the vector");
+    m.def("vec_atom_push", [](CVecAtom vec, CAtom atom) { vec_atom_push(vec.ptr(), atom_clone(atom.ptr())); }, "Push atom into vector");
+    m.def("vec_atom_pop", [](CVecAtom vec) { return CAtom(vec_atom_pop(vec.ptr())); }, "Push atom into vector");
 
     py::class_<CBindings>(m, "CBindings");
     m.def("bindings_new", []() { return CBindings(bindings_new()); }, "New bindings");
@@ -507,7 +507,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("bindings_is_empty", [](CBindings bindings){ return bindings_is_empty(bindings.ptr);}, "Returns true if bindings is empty");
 
     m.def("bindings_narrow_vars", [](CBindings bindings, CVecAtom vars) {
-            bindings_narrow_vars(bindings.ptr, vars.ptr);
+            bindings_narrow_vars(bindings.ptr, vars.ptr());
         }, "Remove vars from Bindings, except those specified" );
 
     m.def("bindings_resolve", [](CBindings bindings, char const* varName) -> std::optional<CAtom> {

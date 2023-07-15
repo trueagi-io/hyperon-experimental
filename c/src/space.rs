@@ -191,7 +191,7 @@ pub struct space_api_t {
     ///   \arg tmpl \c is the template atom.  This function should NOT take ownership of the template atom.
     ///   NOTE: If a subst function is provided, it will be called.  If NULL is provided, the default
     ///     implementation will be called.
-    subst: Option<extern "C" fn(params: *const space_params_t, pattern: *const atom_ref_t, tmpl: *const atom_ref_t) -> *mut vec_atom_t>,
+    subst: Option<extern "C" fn(params: *const space_params_t, pattern: *const atom_ref_t, tmpl: *const atom_ref_t) -> vec_atom_t>,
 
     /// Adds an atom to the space
     ///   \arg params \c is the pointer to the space's params
@@ -292,8 +292,7 @@ impl Space for CSpace {
             let pattern: atom_ref_t = pattern.into();
             let tmpl: atom_ref_t = tmpl.into();
             let atom_vec = subst_fn(&self.params, &pattern, &tmpl);
-            let vec_box = unsafe{ Box::from_raw(atom_vec) };
-            (*vec_box).0
+            atom_vec.into()
         } else {
             DefaultSpace(self).subst(pattern, tmpl)
         }

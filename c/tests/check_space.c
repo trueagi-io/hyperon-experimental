@@ -75,9 +75,9 @@ START_TEST (test_grounding_space_add)
 
     ck_assert_int_eq(space_atom_count(space), 1);
 
-    vec_atom_t* atoms = vec_atom_new();
-    space_iterate(space, collect_atoms, atoms);
-    atom_ref_t atom_from_vec = vec_atom_get(atoms, 0);
+    vec_atom_t atoms = vec_atom_new();
+    space_iterate(space, collect_atoms, &atoms);
+    atom_ref_t atom_from_vec = vec_atom_get(&atoms, 0);
     ck_assert(atom_eq(&atom_from_vec, &atom));
 
     vec_atom_free(atoms);
@@ -112,9 +112,9 @@ START_TEST (test_grounding_space_replace)
 
     ck_assert_int_eq(space_atom_count(space), 1);
 
-    vec_atom_t* atoms = vec_atom_new();
-    space_iterate(space, collect_atoms, atoms);
-    atom_ref_t atom_from_vec = vec_atom_get(atoms, 0);
+    vec_atom_t atoms = vec_atom_new();
+    space_iterate(space, collect_atoms, &atoms);
+    atom_ref_t atom_from_vec = vec_atom_get(&atoms, 0);
     ck_assert(atom_eq(&atom_from_vec, &atom2));
 
     vec_atom_free(atoms);
