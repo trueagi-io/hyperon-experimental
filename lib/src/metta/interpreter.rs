@@ -529,8 +529,8 @@ fn execute_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input:
             let mut expr = expr.clone();
             let op = expr.children().get(0).cloned();
             if let Some(Atom::Grounded(op)) = op {
-                let mut args = expr.children_mut().drain(1..).collect();
-                match op.execute(&mut args) {
+                let args: Vec<Atom> = expr.children_mut().drain(1..).collect();
+                match op.execute(&args[..]) {
                     Ok(mut vec) => {
                         let results: Vec<InterpretedAtom> = vec.drain(0..)
                             .map(|atom| InterpretedAtom(atom, bindings.clone()))
@@ -846,7 +846,7 @@ mod tests {
         fn type_(&self) -> Atom {
             expr!("->" "&str" "Error")
         }
-        fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Err(args[0].as_gnd::<&str>().unwrap().deref().into())
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
@@ -876,7 +876,7 @@ mod tests {
         fn type_(&self) -> Atom {
             expr!("->" "&str" "u32")
         }
-        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Err(ExecError::NoReduce)
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
@@ -921,7 +921,7 @@ mod tests {
         fn type_(&self) -> Atom {
             ATOM_TYPE_UNDEFINED
         }
-        fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {

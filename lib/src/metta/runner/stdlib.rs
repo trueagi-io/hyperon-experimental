@@ -56,7 +56,7 @@ impl Grounded for ImportOp {
         ATOM_TYPE_UNDEFINED
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("import! expects two arguments: space and file path");
         let space = args.get(0).ok_or_else(arg_error)?;
         let file = args.get(1).ok_or_else(arg_error)?;
@@ -127,7 +127,7 @@ impl Grounded for MatchOp {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("match expects three arguments: space, pattern and template");
         let space = args.get(0).ok_or_else(arg_error)?;
         let pattern = args.get(1).ok_or_else(arg_error)?;
@@ -172,7 +172,7 @@ impl Grounded for BindOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_UNDEFINED])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("bind! expects two arguments: token and atom");
         let token = atom_as_sym(args.get(0).ok_or_else(arg_error)?).ok_or("bind! expects symbol atom as a token")?.name();
         let atom = args.get(1).ok_or_else(arg_error)?.clone();
@@ -201,7 +201,7 @@ impl Grounded for NewSpaceOp {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>()])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         if args.len() == 0 {
             let space = Atom::gnd(DynSpace::new(GroundingSpace::new()));
             Ok(vec![space])
@@ -230,7 +230,7 @@ impl Grounded for AddAtomOp {
             ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("add-atom expects two arguments: space and atom");
         let space = args.get(0).ok_or_else(arg_error)?;
         let atom = args.get(1).ok_or_else(arg_error)?;
@@ -259,7 +259,7 @@ impl Grounded for RemoveAtomOp {
             ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("remove-atom expects two arguments: space and atom");
         let space = args.get(0).ok_or_else(arg_error)?;
         let atom = args.get(1).ok_or_else(arg_error)?;
@@ -289,7 +289,7 @@ impl Grounded for GetAtomsOp {
             ATOM_TYPE_ATOM])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-atoms expects one argument: space");
         let space = args.get(0).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("get-atoms expects a space as its argument")?;
@@ -315,7 +315,7 @@ impl Grounded for CarAtomOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("car-atom expects one argument: expression");
         let expr = args.get(0).ok_or_else(arg_error)?;
         let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
@@ -342,7 +342,7 @@ impl Grounded for CdrAtomOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("cdr-atom expects one argument: expression");
         let expr = args.get(0).ok_or_else(arg_error)?;
         let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
@@ -373,7 +373,7 @@ impl Grounded for ConsAtomOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("cons-atom expects two arguments: atom and expression");
         let atom = args.get(0).ok_or_else(arg_error)?;
         let expr = args.get(1).ok_or_else(arg_error)?;
@@ -398,11 +398,11 @@ impl CaseOp {
         Self{ space }
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("case expects two arguments: atom and expression of cases");
-        let cases = args.pop().ok_or_else(arg_error)?;
-        let atom = args.pop().ok_or_else(arg_error)?;
-        let cases = CaseOp::parse_cases(&atom, cases)?;
+        let cases = args.get(1).ok_or_else(arg_error)?;
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        let cases = CaseOp::parse_cases(atom, cases.clone())?;
         log::debug!("CaseOp::execute: atom: {}, cases: {:?}", atom, cases);
 
         let result = interpret_no_error(self.space.clone(), &atom);
@@ -490,7 +490,7 @@ impl Grounded for CaseOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         CaseOp::execute(self, args)
     }
 
@@ -530,7 +530,7 @@ impl Grounded for AssertEqualOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("assertEqual expects two atoms as arguments: actual and expected");
         let actual_atom = args.get(0).ok_or_else(arg_error)?;
         let expected_atom = args.get(1).ok_or_else(arg_error)?;
@@ -568,7 +568,7 @@ impl Grounded for AssertEqualToResultOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("assertEqualToResult expects two atoms as arguments: actual and expected");
         let actual_atom = args.get(0).ok_or_else(arg_error)?;
         let expected = atom_as_expr(args.get(1).ok_or_else(arg_error)?)
@@ -607,7 +607,7 @@ impl Grounded for CollapseOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("collapse expects single executable atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
 
@@ -645,7 +645,7 @@ impl Grounded for SuperposeOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("superpose expects single expression as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
         let expr = atom_as_expr(&atom).ok_or(arg_error())?;
@@ -687,7 +687,7 @@ impl Grounded for PragmaOp {
         ATOM_TYPE_UNDEFINED
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("pragma! expects key and value as arguments");
         let key = atom_as_sym(args.get(0).ok_or_else(arg_error)?).ok_or("pragma! expects symbol atom as a key")?.name();
         let value = atom_as_sym(args.get(1).ok_or_else(arg_error)?).ok_or("pragma! expects symbol atom as a value")?.name();
@@ -725,7 +725,7 @@ impl Grounded for GetTypeOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-type expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
 
@@ -751,7 +751,7 @@ impl Grounded for PrintlnOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, sym!("IO")])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("println! expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
         println!("{}", atom);
@@ -809,12 +809,12 @@ impl Grounded for TraceOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, Atom::var("a"), Atom::var("a")])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("trace! expects two atoms as arguments");
-        let val = args.pop().ok_or_else(arg_error)?;
-        let msg = args.pop().ok_or_else(arg_error)?;
+        let val = args.get(1).ok_or_else(arg_error)?;
+        let msg = args.get(0).ok_or_else(arg_error)?;
         eprintln!("{}", msg);
-        Ok(vec![val])
+        Ok(vec![val.clone()])
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -836,7 +836,7 @@ impl Grounded for NopOp {
         ATOM_TYPE_UNDEFINED
     }
 
-    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         Ok(vec![])
     }
 
@@ -862,11 +862,11 @@ impl Grounded for LetOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("let expects three arguments: pattern, atom and template");
-        let mut template = args.pop().ok_or_else(arg_error)?;
-        let atom = args.pop().ok_or_else(arg_error)?;
-        let mut pattern = args.pop().ok_or_else(arg_error)?;
+        let mut template = args.get(2).ok_or_else(arg_error)?.clone();
+        let atom = args.get(1).ok_or_else(arg_error)?;
+        let mut pattern = args.get(0).ok_or_else(arg_error)?.clone();
 
         let external_vars = resolve_var_conflicts(&atom, &mut pattern, &mut template);
 
@@ -923,7 +923,7 @@ impl Grounded for LetVarOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("let* list of couples and template as arguments");
         let expr = atom_as_expr(args.get(0).ok_or_else(arg_error)?).ok_or(arg_error())?;
         let template = args.get(1).ok_or_else(arg_error)?.clone();
@@ -984,7 +984,7 @@ impl Grounded for StateAtom {
         Atom::expr([expr!("StateMonad"), typ])
     }
 
-    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
     }
 
@@ -1008,7 +1008,7 @@ impl Grounded for NewStateOp {
         Atom::expr([ARROW_SYMBOL, expr!(tnso), expr!("StateMonad" tnso)])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "new-state expects single atom as an argument";
         let atom = args.get(0).ok_or(arg_error)?;
         Ok(vec![Atom::gnd(StateAtom::new(atom.clone()))])
@@ -1027,7 +1027,7 @@ impl Grounded for GetStateOp {
         Atom::expr([ARROW_SYMBOL, expr!("StateMonad" tgso), expr!(tgso)])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "get-state expects single state atom as an argument";
         let state = args.get(0).ok_or(arg_error)?;
         let atom = Atom::as_gnd::<StateAtom>(state).ok_or(arg_error)?;
@@ -1059,7 +1059,7 @@ impl Grounded for ChangeStateOp {
         Atom::expr([ARROW_SYMBOL, expr!("StateMonad" tcso), expr!(tcso), expr!("StateMonad" tcso)])
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "change-state! expects a state atom and its new value as arguments";
         let atom = args.get(0).ok_or(arg_error)?;
         let state = Atom::as_gnd::<StateAtom>(atom).ok_or("change-state! expects a state as the first argument")?;

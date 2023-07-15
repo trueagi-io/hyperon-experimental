@@ -804,7 +804,7 @@ impl Grounded for CGrounded {
         unsafe{ &(*self.get_ptr()).typ }.borrow().clone()
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let mut ret = Vec::new();
         match self.api().execute {
             Some(func) => {

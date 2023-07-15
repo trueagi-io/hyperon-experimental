@@ -349,7 +349,7 @@ impl Grounded for GroundingSpace {
         Box::new(self.query(other).into_iter())
     }
 
-    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
     }
 }

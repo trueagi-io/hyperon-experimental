@@ -168,7 +168,7 @@ impl<T: Grounded> Grounded for Shared<T> {
         self.0.borrow().match_(other)
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         self.0.borrow().execute(args)
     }
 }
@@ -211,9 +211,9 @@ mod tests {
             };
             Box::new(vec.into_iter())
         }
-        fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let mut result = vec![Atom::sym("executed")];
-            result.append(args);
+            result.extend(args.into_iter().cloned());
             Ok(result)
         }
     }
