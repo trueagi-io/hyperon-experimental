@@ -305,7 +305,7 @@ impl Grounded for UndefinedTypeMatch {
         Box::new(std::iter::once(crate::matcher::Bindings::new()))
     }
 
-    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
     }
 }
@@ -758,7 +758,7 @@ mod tests {
             self.0.clone()
         }
 
-        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
