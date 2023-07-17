@@ -257,7 +257,7 @@ mod tests {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED])
         }
-        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             // TODO: why next two lines led to not equal results?
             Ok(vec![expr!("Error" ("error") "TestError")])
             //Err("TestError".into())
@@ -312,7 +312,7 @@ mod tests {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED])
         }
-        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![self.0.clone()])
         }
         fn match_(&self, other: &Atom) -> crate::matcher::MatchResultIter {

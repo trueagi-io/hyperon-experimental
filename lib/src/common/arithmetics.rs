@@ -45,7 +45,7 @@ pub static IS_INT: &Operation = &Operation{
     typ: "(-> Grounded bool)",
 };
 
-fn check_type(args: &mut Vec<Atom>, op: fn(&Atom) -> bool) -> Result<Vec<Atom>, ExecError> {
+fn check_type(args: &[Atom], op: fn(&Atom) -> bool) -> Result<Vec<Atom>, ExecError> {
     let arg = args.get(0).ok_or_else(|| format!("Unary operation called without arguments"))?; 
     Ok(vec![Atom::value(op(arg))])
 }
@@ -55,7 +55,7 @@ fn is_instance<T: 'static>(arg: &Atom) -> bool
     matches!(arg.as_gnd::<T>(), Some(_))
 }
 
-fn unary_op<T, R>(args: &mut Vec<Atom>, op: fn(T) -> R) -> Result<Vec<Atom>, ExecError>
+fn unary_op<T, R>(args: &[Atom], op: fn(T) -> R) -> Result<Vec<Atom>, ExecError>
 where
     T: 'static + Copy,
     R: AutoGroundedType,
@@ -68,7 +68,7 @@ where
     }
 }
 
-fn bin_op<T1, T2, R>(args: &mut Vec<Atom>, op: fn(T1, T2) -> R) -> Result<Vec<Atom>, ExecError>
+fn bin_op<T1, T2, R>(args: &[Atom], op: fn(T1, T2) -> R) -> Result<Vec<Atom>, ExecError>
 where
     T1: 'static + Copy,
     T2: 'static + Copy,
