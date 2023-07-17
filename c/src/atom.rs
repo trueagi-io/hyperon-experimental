@@ -24,8 +24,123 @@ pub enum atom_type_t {
     GROUNDED,
 }
 
+//Implementation Notes: both `atom_t` and `atom_ref_t` are transparent wrappers around a RustAtom,
+// which internally knows whether it owns or borrows the native `Atom` struct.  The reason for this
+// design choice is because at allows a pointer to `atom_ref` to be used interchangeably with a
+// pointer to `atom_t`
+//
+//TODO for Alpha: Explain this in user-facing API docs, along with ownership conventions
+#[repr(C)]
+enum RustAtom {
+    None,
+    Owned(Box<RustOpaqueAtom>),
+    Borrowed(*const RustOpaqueAtom)
+}
+
+struct RustOpaqueAtom(Atom);
+
+impl RustAtom {
+    pub(crate) fn is_null(&self) -> bool {
+        match self {
+            Self::None => true,
+            Self::Owned(_) => false,
+            Self::Borrowed(atom_ptr) => atom_ptr.is_null()
+        }
+    }
+    pub(crate) fn borrow(&self) -> &Atom {
+        match self {
+            Self::None => panic!("Attempt to access NULL atom"),
+            Self::Owned(atom) => &atom.0,
+            Self::Borrowed(atom_ptr) => unsafe{ &(**atom_ptr).0 }
+        }
+    }
+    pub(crate) fn into_ref(self) -> &'static Atom {
+        match self {
+            Self::None => panic!("Attempt to access NULL atom"),
+            Self::Owned(_) => panic!("atom_ref must reference an atom stored elsewhere"),
+            Self::Borrowed(atom_ptr) => unsafe{ &(*atom_ptr).0 }
+        }
+    }
+    pub(crate) fn into_inner(self) -> Atom {
+        match self {
+            Self::None => panic!("Attempt to access NULL atom"),
+            Self::Owned(atom) => atom.0,
+            Self::Borrowed(_) => panic!("Can't extract borrowed atom"),
+        }
+    }
+}
+
+/// Contains an Atom of any type
+///
+/// `atom_t` must be freed with `atom_free`, or passed by value to a function that takes ownership
+/// of the atom.
+//NOTE: In the future, we will want this struct to actually mirror a Rust atom's internals, or
+// possibly just reexport them.
+#[repr(transparent)]
 pub struct atom_t {
-    pub atom: Atom,
+    atom: RustAtom,
+}
+
+impl From<Atom> for atom_t {
+    fn from(atom: Atom) -> Self {
+        Self{ atom: RustAtom::Owned(Box::new(RustOpaqueAtom(atom))) }
+    }
+}
+
+impl From<Option<Atom>> for atom_t {
+    fn from(atom: Option<Atom>) -> Self {
+        match atom {
+            Some(atom) => atom.into(),
+            None => Self::null()
+        }
+    }
+}
+
+impl atom_t {
+    pub(crate) fn null() -> Self {
+        Self{ atom: RustAtom::None }
+    }
+    pub(crate) fn borrow(&self) -> &Atom {
+        self.atom.borrow()
+    }
+    pub(crate) fn into_inner(self) -> Atom {
+        self.atom.into_inner()
+    }
+}
+
+/// Refers to an Atom owned by another object.  It is not necessary to free `atom_ref_t`.
+///
+/// NOTE: A pointer to `atom_t` can be passed to any function requesting with a pointer to `atom_ref_t`.
+///
+/// WARNING: `atom_ref_t` must not be accessed beyond the lifetime of the object which owns the atom
+/// it references.
+///
+//NOTE: In the future, atom_ref_t will probably just be a `*const Atom` internally, and may even be
+// removed, once `Atom` and `atom_t` can share a memory layout
+#[repr(transparent)]
+pub struct atom_ref_t {
+    atom: RustAtom,
+}
+
+impl From<&Atom> for atom_ref_t {
+    fn from(atom: &Atom) -> Self {
+        Self{ atom: RustAtom::Borrowed((atom as *const Atom).cast()) }
+    }
+}
+
+impl atom_ref_t {
+    pub(crate) fn null() -> Self {
+        Self{ atom: RustAtom::None }
+    }
+    pub(crate) fn is_null(&self) -> bool {
+        self.atom.is_null()
+    }
+    pub(crate) fn borrow(&self) -> &Atom {
+        self.atom.borrow()
+    }
+    pub(crate) fn into_ref(self) -> &'static Atom {
+        self.atom.into_ref()
+    }
 }
 
 pub struct exec_error_t {
@@ -35,15 +150,39 @@ pub struct exec_error_t {
 #[repr(C)]
 pub struct var_atom_t {
     pub var: *const c_char,
-    pub atom: *mut atom_t,
+    pub atom: atom_t,
 }
 
 pub struct bindings_t {
     pub bindings: Bindings,
 }
 
+#[repr(C)]
 pub struct bindings_set_t {
-    pub(crate) set: BindingsSet,
+    set: *mut RustBindingsSet,
+}
+
+// Internal wrapper type so CBindgen doesn't try and export it
+struct RustBindingsSet(BindingsSet);
+
+impl From<BindingsSet> for bindings_set_t {
+    fn from(set: BindingsSet) -> Self {
+        bindings_set_t {
+            set: Box::into_raw(Box::new(RustBindingsSet(set)))
+        }
+    }
+}
+
+impl bindings_set_t {
+    pub(crate) fn borrow(&self) -> &BindingsSet {
+        unsafe{ &(*self.set).0 }
+    }
+    pub(crate) fn borrow_mut(&mut self) -> &mut BindingsSet {
+        unsafe{ &mut (*self.set).0 }
+    }
+    pub(crate) fn into_inner(self) -> BindingsSet {
+        unsafe{*Box::from_raw(self.set)}.0
+    }
 }
 
 pub type bindings_callback_t = lambda_t<*const bindings_t>;
@@ -54,17 +193,22 @@ pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
     execute: Option<extern "C" fn(*const gnd_t, *mut vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
-    match_: Option<extern "C" fn(*const gnd_t, *const atom_t, bindings_mut_callback_t, *mut c_void)>,
+    match_: Option<extern "C" fn(*const gnd_t, *const atom_ref_t, bindings_mut_callback_t, *mut c_void)>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
     display: extern "C" fn(*const gnd_t, *mut c_char, usize) -> usize,
     free: extern "C" fn(*mut gnd_t),
 }
 
+/// Use this struct as a header the the buffer used to implement a grounded atom
+//FUTURE TODO: Asking the user to maintain this header on their allocation is error-prone.  For example
+//the user may forget to free the typ field.  I'd like to revisit this API after alpha, and make it
+//more opaque - and potentially also offer some small amount of allocation-free storage (like 16 bytes)
+//for grounded atom types that are fundamentally small.
 #[repr(C)]
 pub struct gnd_t {
     api: *const gnd_api_t,
-    typ: *mut atom_t,
+    typ: atom_t,
 }
 
 #[no_mangle]
@@ -116,24 +260,24 @@ pub extern "C" fn bindings_eq(bindingsa: *const bindings_t, bindingsb: *const bi
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_traverse(cbindings: *const bindings_t, callback: lambda_t<* const var_atom_t>, context: *mut c_void) {
+pub extern "C" fn bindings_traverse(cbindings: *const bindings_t, callback: lambda_t<var_atom_t>, context: *mut c_void) {
     let bindings = unsafe{&(*cbindings).bindings};
     bindings.iter().for_each(|(var, atom)|  {
             let name = string_as_cstr(var.name());
             let var_atom = var_atom_t {
                 var: name.as_ptr(),
-                atom: atom_into_ptr(atom)
+                atom: atom.into()
             };
-            callback(&var_atom, context);
+            callback(var_atom, context);
         }
     )
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, var_atom: *const var_atom_t) -> bool {
+pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, var_atom: var_atom_t) -> bool {
     let bindings = unsafe{ &mut(*bindings).bindings };
-    let var = VariableAtom::new(cstr_into_string (unsafe{(*var_atom).var}));
-    let atom = ptr_into_atom(unsafe{(*var_atom).atom});
+    let var = VariableAtom::new(cstr_into_string ( var_atom.var ));
+    let atom = var_atom.atom.into_inner();
     match bindings.clone().add_var_binding_v2(var, atom) {
         Ok(new_bindings) => {
             *bindings = new_bindings;
@@ -149,18 +293,15 @@ pub extern "C" fn bindings_is_empty(bindings: *const bindings_t) -> bool{
     bindings.is_empty()
 }
 
-// TODO: discuss if var_atom_t is more convenient
-//       using Option cause `extern` fn uses type `Option<atom::atom_t>`, which is not FFI-safe warning
+/// Returns the atom bound to the supplied variable in the bindings.  Returns a NULL atom_ref if the
+/// variable is not present.
 #[no_mangle]
-pub extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const c_char) -> * mut atom_t
+pub extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const c_char) -> atom_t
 {
     let bindings = unsafe{&(*bindings).bindings};
     let var = VariableAtom::new(cstr_into_string(var_name));
 
-    match bindings.resolve(&var) {
-        None => { ptr::null_mut() }
-        Some(atom) => { atom_into_ptr(atom) }
-    }
+    bindings.resolve(&var).into()
 }
 
 #[no_mangle]
@@ -180,24 +321,23 @@ pub extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindings_righ
 ///
 /// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
-pub extern "C" fn bindings_merge_v2(_self: *mut bindings_t, other: *const bindings_t) -> *mut bindings_set_t
+pub extern "C" fn bindings_merge_v2(_self: *mut bindings_t, other: *const bindings_t) -> bindings_set_t
 {
     let other = unsafe{ &(*other).bindings };
     let owned_self = ptr_into_bindings(_self);
 
     let new_set = owned_self.merge_v2(other);
-    bindings_set_into_ptr(new_set)
+    new_set.into()
 }
 
+/// Returns the atom bound to the supplied variable, and then removes the variable-atom pair from the
+/// bindings.  Returns a NULL atom_ref if the variable is not present.
 #[no_mangle]
-pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_name: *const c_char) -> *mut atom_t {
+pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_name: *const c_char) -> atom_t {
     let bindings = unsafe{&mut(*bindings).bindings};
     let var = VariableAtom::new(cstr_into_string(var_name));
 
-    match bindings.resolve_and_remove(&var) {
-        None => { ptr::null_mut() }
-        Some(removed) =>{ atom_into_ptr(removed) }
-    }
+    bindings.resolve_and_remove(&var).into()
 }
 
 #[no_mangle]
@@ -219,13 +359,13 @@ pub extern "C" fn bindings_narrow_vars(bindings: *mut bindings_t, vars: *const v
 // bindings_set
 
 #[no_mangle]
-pub extern "C" fn bindings_set_empty() -> *mut bindings_set_t {
-    bindings_set_into_ptr(BindingsSet::empty())
+pub extern "C" fn bindings_set_empty() -> bindings_set_t {
+    BindingsSet::empty().into()
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_single() -> *mut bindings_set_t {
-    bindings_set_into_ptr(BindingsSet::single())
+pub extern "C" fn bindings_set_single() -> bindings_set_t {
+    BindingsSet::single().into()
 }
 
 /// WARNING: This function takes ownership of the bindings argument.
@@ -233,36 +373,36 @@ pub extern "C" fn bindings_set_single() -> *mut bindings_set_t {
 ///
 /// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
-pub extern "C" fn bindings_set_from_bindings(bindings: *mut bindings_t) -> *mut bindings_set_t {
+pub extern "C" fn bindings_set_from_bindings(bindings: *mut bindings_t) -> bindings_set_t {
     let owned_bindings = ptr_into_bindings(bindings);
-    bindings_set_into_ptr(BindingsSet::from(owned_bindings))
+    BindingsSet::from(owned_bindings).into()
 }
 
 /// WARNING: This function takes ownership of the bindings argument.
 /// After calling this function, the bindings_t passed must not be accessed or freed
 #[no_mangle]
 pub extern "C" fn bindings_set_push(set: *mut bindings_set_t, bindings: *mut bindings_t) {
-    let set = unsafe{&mut (*set).set};
+    let set = unsafe{ (&mut *set).borrow_mut() };
     let owned_bindings = ptr_into_bindings(bindings);
     set.push(owned_bindings);
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_free(set: *mut bindings_set_t) {
+pub extern "C" fn bindings_set_free(set: bindings_set_t) {
     // drop() does nothing actually, but it is used here for clarity
-    drop(unsafe{Box::from_raw(set)});
+    drop(set.into_inner());
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_clone(set: *const bindings_set_t) -> *mut bindings_set_t {
-    let set = unsafe{&(*set).set};
-    bindings_set_into_ptr(set.clone())
+pub extern "C" fn bindings_set_clone(set: *const bindings_set_t) -> bindings_set_t {
+    let set = unsafe{ (&*set).borrow() };
+    set.clone().into()
 }
 
 #[no_mangle]
 pub extern "C" fn bindings_set_eq(set: *const bindings_set_t, other: *const bindings_set_t) -> bool {
-    let set = unsafe{&(*set).set};
-    let other = unsafe{&(*other).set};
+    let set = unsafe{ (&*set).borrow() };
+    let other = unsafe{ (&*other).borrow() };
     set == other
 }
 
@@ -271,25 +411,25 @@ pub extern "C" fn bindings_set_eq(set: *const bindings_set_t, other: *const bind
 /// string terminator.
 #[no_mangle]
 pub extern "C" fn bindings_set_to_str(set: *const bindings_set_t, buf: *mut c_char, buf_len: usize) -> usize {
-    let set = unsafe{ &(*set).set };
+    let set = unsafe{ (&*set).borrow() };
     write_into_buf(set, buf, buf_len)
 }
 
 #[no_mangle]
 pub extern "C" fn bindings_set_is_empty(set: *const bindings_set_t) -> bool {
-    let set = unsafe{ &(*set).set };
+    let set = unsafe{ (&*set).borrow() };
     set.is_empty()
 }
 
 #[no_mangle]
 pub extern "C" fn bindings_set_is_single(set: *const bindings_set_t) -> bool {
-    let set = unsafe{ &(*set).set };
+    let set = unsafe{ (&*set).borrow() };
     set.is_single()
 }
 
 #[no_mangle]
 pub extern "C" fn bindings_set_iterate(set: *mut bindings_set_t, callback: bindings_mut_callback_t, context: *mut c_void) {
-    let set = unsafe{ &mut (*set).set };
+    let set = unsafe{ (&mut *set).borrow_mut() };
     for bindings in set.iter_mut() {
         let bindings_ptr = (bindings as *mut Bindings).cast::<bindings_t>();
         callback(bindings_ptr, context);
@@ -297,10 +437,10 @@ pub extern "C" fn bindings_set_iterate(set: *mut bindings_set_t, callback: bindi
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_add_var_equality(set: *mut bindings_set_t, a: *const atom_t, b: *const atom_t) {
-    let set = unsafe{ &mut(*set).set };
-    let a = unsafe{ &(*a).atom };
-    let b = unsafe{ &(*b).atom };
+pub extern "C" fn bindings_set_add_var_equality(set: *mut bindings_set_t, a: *const atom_ref_t, b: *const atom_ref_t) {
+    let set = unsafe{ (&mut *set).borrow_mut() };
+    let a = unsafe{ (&*a).borrow() };
+    let b = unsafe{ (&*b).borrow() };
 
     let mut owned_set = BindingsSet::empty();
     core::mem::swap(&mut owned_set, set);
@@ -309,10 +449,10 @@ pub extern "C" fn bindings_set_add_var_equality(set: *mut bindings_set_t, a: *co
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_set_add_var_binding(set: *mut bindings_set_t, var: *const atom_t, value: *const atom_t) {
-    let set = unsafe{ &mut(*set).set };
-    let var = unsafe{ &(*var).atom };
-    let value = unsafe{ &(*value).atom };
+pub extern "C" fn bindings_set_add_var_binding(set: *mut bindings_set_t, var: *const atom_ref_t, value: *const atom_ref_t) {
+    let set = unsafe{ (&mut *set).borrow_mut() };
+    let var = unsafe{ (&*var).borrow() };
+    let value = unsafe{ (&*value).borrow() };
 
     let mut owned_set = BindingsSet::empty();
     core::mem::swap(&mut owned_set, set);
@@ -322,8 +462,8 @@ pub extern "C" fn bindings_set_add_var_binding(set: *mut bindings_set_t, var: *c
 
 #[no_mangle]
 pub extern "C" fn bindings_set_merge_into(_self: *mut bindings_set_t, other: *const bindings_set_t) {
-    let _self = unsafe{ &mut (*_self).set };
-    let other = unsafe{ &(*other).set };
+    let _self = unsafe{ (&mut *_self).borrow_mut() };
+    let other = unsafe{ (&*other).borrow() };
     let mut owned_self = BindingsSet::empty();
     core::mem::swap(_self, &mut owned_self);
 
@@ -333,45 +473,61 @@ pub extern "C" fn bindings_set_merge_into(_self: *mut bindings_set_t, other: *co
 
 // end of bindings_set functions
 
+/// Returns an atom_ref_t that points to the supplied atom.
+///
+/// WARNING: The returned `atom_ref_t` must not be accessed after the atom it refers to has been freed,
+/// or after ownership of the original atom has been transferred to another function
 #[no_mangle]
-pub unsafe extern "C" fn atom_sym(name: *const c_char) -> *mut atom_t {
+pub unsafe extern "C" fn atom_ref(atom: *const atom_t) -> atom_ref_t {
+    let atom = unsafe { (*atom).borrow() };
+    atom.into()
+}
+
+/// Returns an atom_ref_t that does not point to any atom
+#[no_mangle]
+pub unsafe extern "C" fn atom_ref_null() -> atom_ref_t {
+    atom_ref_t::null()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn atom_sym(name: *const c_char) -> atom_t {
     // cstr_as_str() keeps pointer ownership, but Atom::sym() copies resulting
-    // String into Atom::Symbol::symbol field. atom_into_ptr() moves value to the
-    // heap and gives ownership to the caller.
-    atom_into_ptr(Atom::sym(cstr_as_str(name)))
+    // String into Atom::Symbol::symbol field.
+    Atom::sym(cstr_as_str(name)).into()
 }
 
+//TODO for Alpha: Make an interface that can construct an expression directly from an vec_atom_t
 #[no_mangle]
-pub unsafe extern "C" fn atom_expr(children: *const *mut atom_t, size: usize) -> *mut atom_t {
-    let c_arr = std::slice::from_raw_parts(children, size);
+pub unsafe extern "C" fn atom_expr(children: *mut atom_t, size: usize) -> atom_t {
+    let c_arr = std::slice::from_raw_parts_mut(children, size);
     let children: Vec<Atom> = c_arr.into_iter().map(|atom| {
-        ptr_into_atom(*atom)
+        core::mem::replace(atom, atom_t::null()).into_inner()
     }).collect();
-    atom_into_ptr(Atom::expr(children))
+    Atom::expr(children).into()
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_var(name: *const c_char) -> *mut atom_t {
-    atom_into_ptr(Atom::var(cstr_as_str(name)))
+pub unsafe extern "C" fn atom_var(name: *const c_char) -> atom_t {
+    Atom::var(cstr_as_str(name)).into()
 }
 
 #[no_mangle]
-pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> *mut atom_t {
-    atom_into_ptr(Atom::gnd(CGrounded(AtomicPtr::new(gnd))))
+pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> atom_t {
+    Atom::gnd(CGrounded(AtomicPtr::new(gnd))).into()
 }
 
 /// Returns a new grounded `atom_t` referencing the space
 ///
 /// This function does not consume the space and the space still must be freed with `space_free`
 #[no_mangle]
-pub extern "C" fn atom_gnd_for_space(space: *mut space_t) -> *mut atom_t {
+pub extern "C" fn atom_gnd_for_space(space: *const space_t) -> atom_t {
     let space = unsafe { &(*space).0 };
-    atom_into_ptr(Atom::gnd(space.clone()))
+    Atom::gnd(space.clone()).into()
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
-    match (*atom).atom {
+pub unsafe extern "C" fn atom_get_type(atom: *const atom_ref_t) -> atom_type_t {
+    match (*atom).borrow() {
         Atom::Symbol(_) => atom_type_t::SYMBOL,
         Atom::Variable(_) => atom_type_t::VARIABLE,
         Atom::Expression(_) => atom_type_t::EXPR,
@@ -379,12 +535,18 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_t) -> atom_type_t {
     }
 }
 
+/// Returns `true` if the referenced atom is invalid, otherwise returns `false`
+#[no_mangle]
+pub unsafe extern "C" fn atom_is_null(atom: *const atom_ref_t) -> bool {
+    (*atom).is_null()
+}
+
 /// Writes a text description of the atom into the provided buffer and returns the number of bytes
 /// written, or that would have been written had the buf_len been large enough, excluding the
 /// string terminator.
 #[no_mangle]
-pub extern "C" fn atom_to_str(atom: *const atom_t, buf: *mut c_char, buf_len: usize) -> usize {
-    let atom = unsafe{ &(*atom).atom };
+pub extern "C" fn atom_to_str(atom: *const atom_ref_t, buf: *mut c_char, buf_len: usize) -> usize {
+    let atom = unsafe{ (&*atom).borrow() };
     write_into_buf(atom, buf, buf_len)
 }
 
@@ -392,8 +554,8 @@ pub extern "C" fn atom_to_str(atom: *const atom_t, buf: *mut c_char, buf_len: us
 /// written, or that would have been written had the buf_len been large enough, excluding the
 /// string terminator.
 #[no_mangle]
-pub extern "C" fn atom_get_name(atom: *const atom_t, buf: *mut c_char, buf_len: usize) -> usize {
-    let atom = unsafe{ &(*atom).atom };
+pub extern "C" fn atom_get_name(atom: *const atom_ref_t, buf: *mut c_char, buf_len: usize) -> usize {
+    let atom = unsafe{ (&*atom).borrow() };
     match atom {
         Atom::Symbol(s) => write_into_buf(s.name(), buf, buf_len),
         Atom::Variable(v) => write_into_buf(v.name(), buf, buf_len),
@@ -402,8 +564,8 @@ pub extern "C" fn atom_get_name(atom: *const atom_t, buf: *mut c_char, buf_len: 
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
-    if let Atom::Grounded(ref g) = (*atom).atom {
+pub unsafe extern "C" fn atom_get_object(atom: *const atom_ref_t) -> *mut gnd_t {
+    if let Atom::Grounded(ref g) = (&*atom).borrow() {
         match (*g).as_any_ref().downcast_ref::<CGrounded>() {
             Some(g) => g.get_mut_ptr(),
             None => panic!("Returning non C grounded objects is not implemented yet!"),
@@ -418,8 +580,8 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_t) -> *mut gnd_t {
 /// The returned space is borrowed from the atom, and should not be freed nor accessed after the atom
 /// has been freed.
 #[no_mangle]
-pub unsafe extern "C" fn atom_get_space(atom: *const atom_t) -> *const space_t {
-    let atom = &(*atom).atom;
+pub unsafe extern "C" fn atom_get_space(atom: *const atom_ref_t) -> *const space_t {
+    let atom = (&*atom).borrow();
     if let Some(space) = Atom::as_gnd::<DynSpace>(atom) {
         (space as *const DynSpace).cast()
     } else {
@@ -428,61 +590,61 @@ pub unsafe extern "C" fn atom_get_space(atom: *const atom_t) -> *const space_t {
 }
 
 #[no_mangle]
-pub extern "C" fn atom_get_grounded_type(atom: *const atom_t) -> *mut atom_t {
-    if let Atom::Grounded(ref g) = unsafe{ &(*atom) }.atom {
-        atom_into_ptr(g.type_())
+pub extern "C" fn atom_get_grounded_type(atom: *const atom_ref_t) -> atom_t {
+    if let Atom::Grounded(ref g) = unsafe{ (&*atom).borrow() } {
+        g.type_().into()
     } else {
         panic!("Only Grounded atoms has grounded type attribute!");
     }
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_get_children(atom: *const atom_t,
+pub unsafe extern "C" fn atom_get_children(atom: *const atom_ref_t,
         callback: c_atoms_callback_t, context: *mut c_void) {
-    if let Atom::Expression(ref e) = (*atom).atom {
+    if let Atom::Expression(ref e) = (&*atom).borrow() {
         return_atoms(e.children(), callback, context);
     } else {
-        panic!("Only Expression has children!");
+        panic!("Only Expression atoms have children!");
     }
 }
 
 /// Performs a depth-first exhaustive iteration of an atom and all its children recursively.
 /// The first result returned will be the atom itself
 #[no_mangle]
-pub unsafe extern "C" fn atom_iterate(atom: *const atom_t,
+pub unsafe extern "C" fn atom_iterate(atom: *const atom_ref_t,
         callback: c_atom_callback_t, context: *mut c_void) {
-    let atom = &(*atom).atom;
+    let atom = (&*atom).borrow();
     for inner_atom in AtomIter::new(atom) {
-        callback((inner_atom as *const Atom).cast(), context);
+        callback(inner_atom.into(), context);
     }
 }
 
 /// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
-pub extern "C" fn atom_match_atom(a: *const atom_t, b: *const atom_t) -> *mut bindings_set_t {
-    let a = unsafe{ &(*a).atom };
-    let b = unsafe{ &(*b).atom };
+pub extern "C" fn atom_match_atom(a: *const atom_ref_t, b: *const atom_ref_t) -> bindings_set_t {
+    let a = unsafe{ (&*a).borrow() };
+    let b = unsafe{ (&*b).borrow() };
     let result_set: BindingsSet = crate::atom::matcher::match_atoms(a, b).collect();
-    bindings_set_into_ptr(result_set)
+    result_set.into()
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_free(atom: *mut atom_t) {
+pub unsafe extern "C" fn atom_free(atom: atom_t) {
     // drop() does nothing actually, but it is used here for clarity
-    drop(Box::from_raw(atom));
+    drop(atom.into_inner());
 }
 
 #[no_mangle]
-pub extern "C" fn atom_clone(atom: *const atom_t) -> *mut atom_t {
-    atom_into_ptr(unsafe{ &(*atom) }.atom.clone())
+pub extern "C" fn atom_clone(atom: *const atom_ref_t) -> atom_t {
+    unsafe{ &*atom }.borrow().clone().into()
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_eq(atoma: *const atom_t, atomb: *const atom_t) -> bool {
-    (*atoma).atom == (*atomb).atom
+pub unsafe extern "C" fn atom_eq(atoma: *const atom_ref_t, atomb: *const atom_ref_t) -> bool {
+    (&*atoma).borrow() == (&*atomb).borrow()
 }
 
-// TODO: make a macros to generate Vec<T> definitions for C API
+// TODO for Alpha: Unify vec_atom_t with atom_array_t
 pub struct vec_atom_t(pub(crate) Vec<Atom>);
 
 #[no_mangle]
@@ -501,13 +663,13 @@ pub unsafe extern "C" fn vec_atom_size(vec: *mut vec_atom_t) -> usize {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> *mut atom_t {
-    atom_into_ptr((*vec).0.pop().expect("Vector is empty"))
+pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> atom_t {
+    (&mut *vec).0.pop().expect("Vector is empty").into()
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vec_atom_push(vec: *mut vec_atom_t, atom: *mut atom_t) {
-    (*vec).0.push(ptr_into_atom(atom));
+pub unsafe extern "C" fn vec_atom_push(vec: *mut vec_atom_t, atom: atom_t) {
+    (*vec).0.push(atom.into_inner());
 }
 
 #[no_mangle]
@@ -515,44 +677,36 @@ pub unsafe extern "C" fn vec_atom_len(vec: *const vec_atom_t) -> usize {
     (*vec).0.len()
 }
 
-/// WARNING: The atom returned from this function remains owned by the vec_atom_t.  It should NOT be freed.
+/// WARNING: The atom returned from this function remains owned by the vec_atom_t.  It must NOT be
+/// accessed after the vec_atom_get has been modified or freed
 #[no_mangle]
-pub unsafe extern "C" fn vec_atom_get(vec: *const vec_atom_t, idx: usize) -> *const atom_t {
-    (&(*vec).0[idx] as *const Atom).cast()
+pub unsafe extern "C" fn vec_atom_get(vec: *const vec_atom_t, idx: usize) -> atom_ref_t {
+    let atom = &(*vec).0[idx];
+    atom.into()
 }
 
-pub type atom_array_t = array_t<*const atom_t>;
+pub type atom_array_t = array_t<atom_ref_t>;
 pub type c_atoms_callback_t = lambda_t<atom_array_t>;
 
-pub type c_atom_callback_t = lambda_t<*const atom_t>;
+pub type c_atom_callback_t = lambda_t<atom_ref_t>;
 
 #[no_mangle]
-pub extern "C" fn atoms_are_equivalent(first: *const atom_t, second: *const atom_t) -> bool {
-    crate::atom::matcher::atoms_are_equivalent(&unsafe{ &*first }.atom, &unsafe{ &*second }.atom)
+pub extern "C" fn atoms_are_equivalent(first: *const atom_ref_t, second: *const atom_ref_t) -> bool {
+    let first = unsafe{ &*first }.borrow();
+    let second = unsafe{ &*second }.borrow();
+    crate::atom::matcher::atoms_are_equivalent(first, second)
 }
 
 /////////////////////////////////////////////////////////////////
 // Code below is a boilerplate code to implement C API correctly.
 // It is not a part of C API.
 
-pub fn atom_into_ptr(atom: Atom) -> *mut atom_t {
-    Box::into_raw(Box::new(atom_t{ atom }))
-}
-
 pub fn bindings_into_ptr(bindings: Bindings) -> *mut bindings_t {
     Box::into_raw(Box::new(bindings_t{bindings}))
 }
 
-pub fn ptr_into_atom(atom: *mut atom_t) -> Atom {
-    unsafe{ Box::from_raw(atom) }.atom
-}
-
 pub fn ptr_into_bindings(bindings: *mut bindings_t) -> Bindings {
     unsafe {Box::from_raw(bindings)}.bindings
-}
-
-pub fn bindings_set_into_ptr(set: BindingsSet) -> *mut bindings_set_t {
-    Box::into_raw(Box::new(bindings_set_t{set}))
 }
 
 fn vec_atom_into_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {
@@ -560,8 +714,8 @@ fn vec_atom_into_ptr(vec: Vec<Atom>) -> *mut vec_atom_t {
 }
 
 pub fn return_atoms(atoms: &Vec<Atom>, callback: c_atoms_callback_t, context: *mut c_void) {
-    let results: Vec<*const atom_t> = atoms.iter()
-        .map(|atom| (atom as *const Atom).cast::<atom_t>()).collect();
+    let results: Vec<atom_ref_t> = atoms.iter()
+        .map(|atom| atom.into()).collect();
     callback((&results).into(), context);
 }
 
@@ -600,7 +754,7 @@ impl CGrounded {
 
 impl Grounded for CGrounded {
     fn type_(&self) -> Atom {
-        unsafe{ &*(*self.get_ptr()).typ }.atom.clone()
+        unsafe{ &(*self.get_ptr()).typ }.borrow().clone()
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -630,7 +784,8 @@ impl Grounded for CGrounded {
             Some(func) => {
                 let mut results: Vec<Bindings> = Vec::new();
                 let context = (&mut results as *mut Vec<Bindings>).cast::<c_void>();
-                func(self.get_ptr(), (other as *const Atom).cast::<atom_t>(),
+                let other: atom_ref_t = other.into();
+                func(self.get_ptr(), &other,
                     CGrounded::match_callback, context);
                 Box::new(results.into_iter())
             },

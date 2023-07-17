@@ -13,28 +13,33 @@ void teardown(void) {
 START_TEST (test_check_type)
 {
     space_t* space = space_new_grounding_space();
-    space_add(space, expr(atom_sym(":"), atom_sym("do"), atom_sym("Verb"), 0));
-    atom_t* verb = atom_sym("Verb");
+    space_add(space, expr(atom_sym(":"), atom_sym("do"), atom_sym("Verb"), atom_ref_null()));
+    atom_t verb = atom_sym("Verb");
 
-    atom_t* nonsense = atom_sym("nonsense");
-    ck_assert(check_type(space, nonsense, ATOM_TYPE_UNDEFINED()));
-    ck_assert(check_type(space, nonsense, verb));
+    atom_t nonsense = atom_sym("nonsense");
+    atom_t undefined = ATOM_TYPE_UNDEFINED();
+    ck_assert(check_type(space, &nonsense, &undefined));
+    ck_assert(check_type(space, &nonsense, &verb));
     atom_free(nonsense);
+    atom_free(undefined);
 
     atom_free(verb);
+    space_free(space);
 }
 END_TEST
 
 START_TEST (test_validate_atom)
 {
     space_t* space = space_new_grounding_space();
-    space_add(space, expr(atom_sym(":"), atom_sym("a"), atom_sym("A"), 0));
-    space_add(space, expr(atom_sym(":"), atom_sym("b"), atom_sym("B"), 0));
-    space_add(space, expr(atom_sym(":"), atom_sym("foo"), expr(atom_sym("->"), atom_sym("A"), atom_sym("B"), 0), 0));
+    space_add(space, expr(atom_sym(":"), atom_sym("a"), atom_sym("A"), atom_ref_null()));
+    space_add(space, expr(atom_sym(":"), atom_sym("b"), atom_sym("B"), atom_ref_null()));
+    space_add(space, expr(atom_sym(":"), atom_sym("foo"), expr(atom_sym("->"), atom_sym("A"), atom_sym("B"), atom_ref_null()), atom_ref_null()));
 
-    atom_t* foo = expr(atom_sym("foo"), atom_sym("a"), 0);
-    ck_assert(validate_atom(space, foo));
+    atom_t foo = expr(atom_sym("foo"), atom_sym("a"), atom_ref_null());
+    ck_assert(validate_atom(space, &foo));
     atom_free(foo);
+
+    space_free(space);
 }
 END_TEST
 
@@ -45,52 +50,56 @@ typedef struct _atoms_t {
 
 void check_atoms(atom_array_t act_atoms, void* context) {
     int i = 0;
-    atom_t const** exp_atoms = context;
+    atom_ref_t* exp_atoms = context;
 
-    while (i < act_atoms.size && exp_atoms[i]) {
-        atom_t const* expected = exp_atoms[i];
-        atom_t const* actual = act_atoms.items[i];
-        char* expected_str = stratom(expected);
-        char* actual_str = stratom(actual);
-        ck_assert_msg(atom_eq(expected, actual),
+    while (i < act_atoms.size && !atom_is_null(&exp_atoms[i])) {
+        atom_ref_t expected = exp_atoms[i];
+        atom_ref_t actual = act_atoms.items[i];
+        char* expected_str = stratom(&expected);
+        char* actual_str = stratom(&actual);
+        ck_assert_msg(atom_eq(&expected, &actual),
                 "expected atom [%u]: '%s', is not equal to actual atom [%u]: '%s'",
                 i, expected_str, i, actual_str);
         free(expected_str);
         free(actual_str);
         ++i;
     }
-    ck_assert_msg(i == act_atoms.size && !exp_atoms[i], "actual size: %lu, expected size: %u", act_atoms.size, i);
+    ck_assert_msg(i == act_atoms.size && atom_is_null(&exp_atoms[i]),
+        "actual size: %lu, expected size: %u", act_atoms.size, i);
 }
 
 START_TEST (test_get_atom_types)
 {
     space_t* space = space_new_grounding_space();
-    space_add(space, expr(atom_sym(":"), atom_sym("a"), expr(atom_sym("->"), atom_sym("C"), atom_sym("D"), 0), 0));
-    space_add(space, expr(atom_sym(":"), atom_sym("b"), atom_sym("B"), 0));
-    space_add(space, expr(atom_sym(":"), atom_sym("c"), atom_sym("C"), 0));
+    space_add(space, expr(atom_sym(":"), atom_sym("a"), expr(atom_sym("->"), atom_sym("C"), atom_sym("D"), atom_ref_null()), atom_ref_null()));
+    space_add(space, expr(atom_sym(":"), atom_sym("b"), atom_sym("B"), atom_ref_null()));
+    space_add(space, expr(atom_sym(":"), atom_sym("c"), atom_sym("C"), atom_ref_null()));
 
-    atom_t* D = atom_sym("D");
-    atom_t* a = atom_sym("a");
-    atom_t* a_type = expr(atom_sym("->"), atom_sym("C"), atom_sym("D"), 0);
-    atom_t* call_a_c = expr(atom_sym("a"), atom_sym("c"), 0);
-    atom_t* call_a_b = expr(atom_sym("a"), atom_sym("b"), 0);
+    atom_t D = atom_sym("D");
+    atom_t a = atom_sym("a");
+    atom_t a_type = expr(atom_sym("->"), atom_sym("C"), atom_sym("D"), atom_ref_null());
+    atom_t call_a_c = expr(atom_sym("a"), atom_sym("c"), atom_ref_null());
+    atom_t call_a_b = expr(atom_sym("a"), atom_sym("b"), atom_ref_null());
 
-    atom_t const* call_a_c_types[] = { D, 0 };
-    get_atom_types(space, call_a_c, &check_atoms, &call_a_c_types);
-    atom_t const* call_a_b_types[] = { 0 };
-    get_atom_types(space, call_a_b, &check_atoms, &call_a_b_types);
-    atom_t const* a_types[] = { a_type, 0 };
-    get_atom_types(space, a, &check_atoms, &a_types);
+    atom_t call_a_c_types[] = { D, atom_ref_null() };
+    get_atom_types(space, &call_a_c, &check_atoms, &call_a_c_types);
+    atom_t call_a_b_types[] = { atom_ref_null() };
+    get_atom_types(space, &call_a_b, &check_atoms, &call_a_b_types);
+    atom_t a_types[] = { a_type, atom_ref_null() };
+    get_atom_types(space, &a, &check_atoms, &a_types);
 
     atom_free(call_a_b);
     atom_free(call_a_c);
     atom_free(a_type);
     atom_free(a);
     atom_free(D);
+
+    space_free(space);
 }
 END_TEST
 
 void init_test(TCase* test_case) {
+    tcase_set_timeout(test_case, 300); //300s = 5min.  To test for memory leaks
     tcase_add_checked_fixture(test_case, setup, teardown);
     tcase_add_test(test_case, test_check_type);
     tcase_add_test(test_case, test_validate_atom);
