@@ -1,0 +1,64 @@
+# This workflow builds Python distribution packages using cibuildwheel tool and
+# environment and publishes packages as a part of a GitHub release.
+
+# This workflow uses actions that are not certified by GitHub.  They are
+# provided by a third-party and are governed by separate terms of service,
+# privacy policy, and support documentation.
+
+name: release python
+
+on:
+  workflow_dispatch:
+    inputs:
+      release-tag:
+        description: 'GitHub release tag to publish packages'
+        required: false
+        type: string
+      prerelease:
+        description: 'Flag to create a pre-release'
+        default: true
+        required: false
+        type: boolean
+
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-20.04, macos-11]
+      max-parallel: 3
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - name: Build wheels on Linux
+        if: runner.os == 'Linux'
+        uses: pypa/cibuildwheel@v2.13.1
+        env:
+          # Linux cannot call "sh -c ./python/install-hyperonc.sh" because
+          # before-all command is also called with "sh -c"
+          CIBW_BEFORE_ALL: ./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{github.ref}}
+        with:
+          package-dir: ./python
+
+      - name: Build wheels on MacOSX
+        if: runner.os == 'macOS'
+        uses: pypa/cibuildwheel@v2.13.1
+        env:
+          # Mac OS X cannot call "./python/install-hyperonc.sh" probably because
+          # "/bin/sh" is not correct path for the shell there
+          CIBW_BEFORE_ALL: sh -c ./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{github.ref}}
+        with:
+          package-dir: ./python
+
+      - name: Publish artifacts on GitHub
+        uses: svenstaro/upload-release-action@v2
+        with:
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
+          file: ./wheelhouse/*.whl
+          tag: ${{ inputs.release-tag }}
+          prerelease: ${{ inputs.prerelease }}
+          overwrite: true
+          file_glob: true
