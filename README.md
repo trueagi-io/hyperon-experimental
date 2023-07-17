@@ -137,6 +137,37 @@ One can run MeTTa script from command line:
 metta ./tests/scripts/<name>.metta
 ```
 
+### Logger
+
+You can enable logging by prefixing the `metta` command line by
+
+```
+RUST_LOG=hyperon[::COMPONENT]*=LEVEL
+```
+
+where
+- `[::COMPONENT]*` is a, possibly empty, sequence of modules and
+  submodules of hyperon, such as `::metta`, `::metta::runner`,
+  `::common`, `::common::multitrie`, etc.
+- `LEVEL` is the log level.  Possible log levels are: `error`, `warn`,
+  `info`, `debug` and `trace`.
+
+For example, to log all hyperon messages at the `debug` level and
+below, while running `script.metta`, you may type:
+
+```
+RUST_LOG=hyperon=debug metta script.metta
+```
+
+Or, to log all hyperon messages at the `trace` level and below,
+restricted to module `metta` and submodule `types`, you may type:
+
+```
+RUST_LOG=hyperon::metta::types=trace metta script.metta
+```
+
+By default all log messages are directed to stderr.
+
 ## Troubleshooting
 
 ### Conan claims it cannot find out the version of the C compiler

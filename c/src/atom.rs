@@ -517,7 +517,7 @@ pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> atom_t {
 }
 
 /// Returns a new grounded `atom_t` referencing the space
-/// 
+///
 /// This function does not consume the space and the space still must be freed with `space_free`
 #[no_mangle]
 pub extern "C" fn atom_gnd_for_space(space: *const space_t) -> atom_t {
@@ -576,7 +576,7 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_ref_t) -> *mut gnd_t 
 }
 
 /// Returns a space_t from a grounded atom referencing the space
-/// 
+///
 /// The returned space is borrowed from the atom, and should not be freed nor accessed after the atom
 /// has been freed.
 #[no_mangle]
