@@ -656,9 +656,13 @@ pub struct vec_atom_t {
     ptr: *mut RustOpaqueAtom,
     len: usize,
     capacity: usize,
+    owned: bool,
 }
 
 impl vec_atom_t {
+    fn new() -> Self {
+        Vec::<Atom>::new().into()
+    }
     fn as_slice(&self) -> &[Atom] {
         core::borrow::Borrow::borrow(self)
     }
@@ -671,21 +675,40 @@ impl From<Vec<Atom>> for vec_atom_t {
         Self {
             ptr: vec.as_mut_ptr().cast(),
             len: vec.len(),
-            capacity: vec.capacity()
+            capacity: vec.capacity(),
+            owned: true,
+        }
+    }
+}
+
+impl From<&[Atom]> for vec_atom_t {
+    fn from(slice: &[Atom]) -> Self {
+        Self {
+            ptr: slice.as_ptr().cast_mut().cast(),
+            len: slice.len(),
+            capacity: slice.len(),
+            owned: false,
         }
     }
 }
 
 impl From<vec_atom_t> for Vec<Atom> {
     fn from(vec: vec_atom_t) -> Self {
-        unsafe{ Vec::from_raw_parts(vec.ptr.cast(), vec.len, vec.capacity) }
+        if !vec.owned {
+            panic!("Error! Attempt to take ownership of borrowed atom_vec_t");
+        }
+        let rust_vec = unsafe{ Vec::from_raw_parts(vec.ptr.cast(), vec.len, vec.capacity) };
+        core::mem::forget(vec);
+        rust_vec
     }
 }
 
 impl Drop for vec_atom_t {
     fn drop(&mut self) {
-        let vec: Vec<Atom> = unsafe{ Vec::from_raw_parts(self.ptr.cast(), self.len, self.capacity) };
-        drop(vec);
+        if self.owned {
+            let vec: Vec<Atom> = unsafe{ Vec::from_raw_parts(self.ptr.cast(), self.len, self.capacity) };
+            drop(vec);
+        }
     }
 }
 
@@ -697,7 +720,7 @@ impl core::borrow::Borrow<[Atom]> for vec_atom_t {
 
 #[no_mangle]
 pub extern "C" fn vec_atom_new() -> vec_atom_t {
-    Vec::<Atom>::new().into()
+    vec_atom_t::new()
 }
 
 #[no_mangle]
@@ -713,6 +736,9 @@ pub unsafe extern "C" fn vec_atom_len(vec: *const vec_atom_t) -> usize {
 #[no_mangle]
 pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> atom_t {
     let vec_contents = core::mem::replace(&mut *vec, core::mem::zeroed());
+    if !vec_contents.owned {
+        panic!("Error! Attempt to modify read-only atom_vec_t");
+    }
     let mut rust_vec: Vec<Atom> = vec_contents.into();
     let result_atom: atom_t = rust_vec.pop().into();
     *vec = rust_vec.into();
@@ -722,6 +748,9 @@ pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> atom_t {
 #[no_mangle]
 pub unsafe extern "C" fn vec_atom_push(vec: *mut vec_atom_t, atom: atom_t) {
     let vec_contents = core::mem::replace(&mut *vec, core::mem::zeroed());
+    if !vec_contents.owned {
+        panic!("Error! Attempt to modify read-only atom_vec_t");
+    }
     let mut rust_vec: Vec<Atom> = vec_contents.into();
     rust_vec.push(atom.into_inner());
     *vec = rust_vec.into();
@@ -805,13 +834,13 @@ impl Grounded for CGrounded {
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let mut ret = Vec::new();
         match self.api().execute {
             Some(func) => {
-                let error = func(self.get_ptr(), (args as *mut Vec<Atom>).cast::<vec_atom_t>(), //TODO BEFORE MERGE, this will kill us if we leave it like this
-                    (&mut ret as *mut Vec<Atom>).cast::<vec_atom_t>());
+                let mut ret = vec_atom_t::new();
+                let c_args: vec_atom_t = args.into();
+                let error = func(self.get_ptr(), &c_args, &mut ret);
                 let ret = if error.is_null() {
-                    Ok(ret)
+                    Ok(ret.into())
                 } else {
                     let error = unsafe{ Box::from_raw(error) };
                     Err(error.error)

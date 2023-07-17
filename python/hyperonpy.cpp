@@ -82,7 +82,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 }
 
 extern "C" {
-    exec_error_t *py_execute(const struct gnd_t* _gnd, struct vec_atom_t* args, struct vec_atom_t* ret);
+    exec_error_t *py_execute(const struct gnd_t* _gnd, const struct vec_atom_t* args, struct vec_atom_t* ret);
     void py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom, bindings_mut_callback_t callback, void *context);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
@@ -119,7 +119,7 @@ py::object inc_ref(py::object obj) {
     return obj;
 }
 
-exec_error_t *py_execute(const struct gnd_t* _cgnd, struct vec_atom_t* _args, struct vec_atom_t* ret) {
+exec_error_t *py_execute(const struct gnd_t* _cgnd, const struct vec_atom_t* _args, struct vec_atom_t* ret) {
     py::object hyperon = py::module_::import("hyperon.atoms");
     py::function call_execute_on_grounded_atom = hyperon.attr("_priv_call_execute_on_grounded_atom");
     py::handle NoReduceError = hyperon.attr("NoReduceError");
@@ -448,46 +448,46 @@ PYBIND11_MODULE(hyperonpy, m) {
             }, "Create grounded atom");
     m.def("atom_free", [](CAtom atom) { atom_free(atom.obj); }, "Free C atom");
 
-    m.def("atom_eq", [](CAtom a, CAtom b) -> bool { return atom_eq(a.ptr(), b.ptr()); }, "Test if two atoms are equal");
-    m.def("atom_to_str", [](CAtom atom) {
+    m.def("atom_eq", [](CAtom& a, CAtom& b) -> bool { return atom_eq(a.ptr(), b.ptr()); }, "Test if two atoms are equal");
+    m.def("atom_to_str", [](CAtom& atom) {
             return func_to_string((write_to_buf_func_t)&atom_to_str, atom.ptr());
         }, "Convert atom to human readable string");
-    m.def("atom_get_type", [](CAtom atom) { return atom_get_type(atom.ptr()); }, "Get type of the atom");
-    m.def("atom_get_name", [](CAtom atom) {
+    m.def("atom_get_type", [](CAtom& atom) { return atom_get_type(atom.ptr()); }, "Get type of the atom");
+    m.def("atom_get_name", [](CAtom& atom) {
             return func_to_string((write_to_buf_func_t)&atom_get_name, atom.ptr());
         }, "Get name of the Symbol or Variable atom");
-    m.def("atom_get_space", [](CAtom atom) {
+    m.def("atom_get_space", [](CAtom& atom) {
             return CSpace(space_clone_ref(atom_get_space(atom.ptr())));
         }, "Get the space inside of a Grounded atom wrapping a space");
-    m.def("atom_get_object", [](CAtom atom) {
+    m.def("atom_get_object", [](CAtom& atom) {
             return static_cast<GroundedObject const*>(atom_get_object(atom.ptr()))->pyobj;
         }, "Get object of the grounded atom");
-    m.def("atom_get_grounded_type", [](CAtom atom) {
+    m.def("atom_get_grounded_type", [](CAtom& atom) {
             return CAtom(atom_get_grounded_type(atom.ptr()));
         }, "Get object of the grounded atom");
-    m.def("atom_get_children", [](CAtom atom) {
+    m.def("atom_get_children", [](CAtom& atom) {
             py::list atoms;
             atom_get_children(atom.ptr(), copy_atoms, &atoms);
             return atoms;
         }, "Get children atoms of the expression");
-    m.def("atom_iterate", [](CAtom atom) -> pybind11::list {
+    m.def("atom_iterate", [](CAtom& atom) -> pybind11::list {
             pybind11::list atoms_list;
             atom_iterate(atom.ptr(), atom_copy_to_list_callback, &atoms_list);
             return atoms_list;
         }, "Returns iterator to traverse child atoms recursively, depth first");
-    m.def("atom_match_atom", [](CAtom a, CAtom b) -> CBindingsSet {
+    m.def("atom_match_atom", [](CAtom& a, CAtom& b) -> CBindingsSet {
             return CBindingsSet(atom_match_atom(a.ptr(), b.ptr()));
         }, "Matches one atom against another, establishing Bindings between variables");
-    m.def("atoms_are_equivalent", [](CAtom first, CAtom second) {
+    m.def("atoms_are_equivalent", [](CAtom& first, CAtom& second) {
             return atoms_are_equivalent(first.ptr(), second.ptr());
         }, "Check atom for equivalence");
 
     py::class_<CVecAtom>(m, "CVecAtom");
     m.def("vec_atom_new", []() { return CVecAtom(vec_atom_new()); }, "New vector of atoms");
-    m.def("vec_atom_free", [](CVecAtom vec) { vec_atom_free(vec.obj); }, "Free vector of atoms");
-    m.def("vec_atom_size", [](CVecAtom vec) { return vec_atom_len(vec.ptr()); }, "Return size of the vector");
-    m.def("vec_atom_push", [](CVecAtom vec, CAtom atom) { vec_atom_push(vec.ptr(), atom_clone(atom.ptr())); }, "Push atom into vector");
-    m.def("vec_atom_pop", [](CVecAtom vec) { return CAtom(vec_atom_pop(vec.ptr())); }, "Push atom into vector");
+    m.def("vec_atom_free", [](CVecAtom& vec) { vec_atom_free(vec.obj); }, "Free vector of atoms");
+    m.def("vec_atom_size", [](CVecAtom& vec) { return vec_atom_len(vec.ptr()); }, "Return size of the vector");
+    m.def("vec_atom_push", [](CVecAtom& vec, CAtom atom) { vec_atom_push(vec.ptr(), atom_clone(atom.ptr())); }, "Push atom into vector");
+    m.def("vec_atom_pop", [](CVecAtom& vec) { return CAtom(vec_atom_pop(vec.ptr())); }, "Push atom into vector");
 
     py::class_<CBindings>(m, "CBindings");
     m.def("bindings_new", []() { return CBindings(bindings_new()); }, "New bindings");
@@ -506,7 +506,7 @@ PYBIND11_MODULE(hyperonpy, m) {
           "Links variable to atom" );
     m.def("bindings_is_empty", [](CBindings bindings){ return bindings_is_empty(bindings.ptr);}, "Returns true if bindings is empty");
 
-    m.def("bindings_narrow_vars", [](CBindings bindings, CVecAtom vars) {
+    m.def("bindings_narrow_vars", [](CBindings bindings, CVecAtom& vars) {
             bindings_narrow_vars(bindings.ptr, vars.ptr());
         }, "Remove vars from Bindings, except those specified" );
 
@@ -537,32 +537,32 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<CBindingsSet>(m, "CBindingsSet");
     m.def("bindings_set_empty", []() { return CBindingsSet(bindings_set_empty()); }, "New BindingsSet with no Bindings");
     m.def("bindings_set_single", []() { return CBindingsSet(bindings_set_single()); }, "New BindingsSet with one new Bindings");
-    m.def("bindings_set_free", [](CBindingsSet set) { bindings_set_free(set.obj); }, "Free BindingsSet");
-    m.def("bindings_set_eq", [](CBindingsSet set, CBindingsSet other) { return bindings_set_eq(set.ptr(), other.ptr()); }, "Free BindingsSet");
+    m.def("bindings_set_free", [](CBindingsSet& set) { bindings_set_free(set.obj); }, "Free BindingsSet");
+    m.def("bindings_set_eq", [](CBindingsSet& set, CBindingsSet& other) { return bindings_set_eq(set.ptr(), other.ptr()); }, "Free BindingsSet");
     //TODO: I think we need better words for these concepts.  "empty" & "single" are placeholders for now.
     //https://github.com/trueagi-io/hyperon-experimental/issues/281
-    m.def("bindings_set_is_empty", [](CBindingsSet set) {
+    m.def("bindings_set_is_empty", [](CBindingsSet& set) {
         return bindings_set_is_empty(set.ptr());
     }, "Returns true if BindingsSet contains no Bindings object (fully constrained)");
-    m.def("bindings_set_is_single", [](CBindingsSet set) {
+    m.def("bindings_set_is_single", [](CBindingsSet& set) {
         return bindings_set_is_single(set.ptr());
     }, "Returns true if BindingsSet contains no variable bindings (unconstrained)");
-    m.def("bindings_set_to_str", [](CBindingsSet set) {
+    m.def("bindings_set_to_str", [](CBindingsSet& set) {
         return func_to_string((write_to_buf_func_t)&bindings_set_to_str, (void*)set.ptr());
     }, "Convert BindingsSet to human readable string");
-    m.def("bindings_set_clone", [](CBindingsSet set) { return CBindingsSet(bindings_set_clone(set.ptr())); }, "Deep copy of BindingsSet");
+    m.def("bindings_set_clone", [](CBindingsSet& set) { return CBindingsSet(bindings_set_clone(set.ptr())); }, "Deep copy of BindingsSet");
     m.def("bindings_set_from_bindings", [](CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); return CBindingsSet(bindings_set_from_bindings(cloned_bindings)); }, "New BindingsSet from existing Bindings");
-    m.def("bindings_set_push", [](CBindingsSet set, CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); bindings_set_push(set.ptr(), cloned_bindings); }, "Adds the Bindings to the BindingsSet");
-    m.def("bindings_set_add_var_binding", [](CBindingsSet set, CAtom var, CAtom value) {
+    m.def("bindings_set_push", [](CBindingsSet& set, CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); bindings_set_push(set.ptr(), cloned_bindings); }, "Adds the Bindings to the BindingsSet");
+    m.def("bindings_set_add_var_binding", [](CBindingsSet& set, CAtom var, CAtom value) {
         bindings_set_add_var_binding(set.ptr(), var.ptr(), value.ptr());
     }, "Asserts a binding between a variable and an atom for every Bindings in the BindingsSet" );
-    m.def("bindings_set_add_var_equality", [](CBindingsSet set, CAtom var_a, CAtom var_b) {
+    m.def("bindings_set_add_var_equality", [](CBindingsSet& set, CAtom var_a, CAtom var_b) {
         bindings_set_add_var_equality(set.ptr(), var_a.ptr(), var_b.ptr());
     }, "Asserts a binding between two variables for every Bindings in the BindingsSet" );
-    m.def("bindings_set_merge_into", [](CBindingsSet set, CBindingsSet other) {
+    m.def("bindings_set_merge_into", [](CBindingsSet& set, CBindingsSet& other) {
         bindings_set_merge_into(set.ptr(), other.ptr());
     }, "Merges the contents of the `other` BindingsSet into the `set` BindingsSet" );
-    m.def("bindings_set_list", [](CBindingsSet set) -> pybind11::list {
+    m.def("bindings_set_list", [](CBindingsSet& set) -> pybind11::list {
         pybind11::list bindings_list;
         bindings_set_iterate(
                 set.ptr(),
@@ -570,7 +570,7 @@ PYBIND11_MODULE(hyperonpy, m) {
                 &bindings_list);
         return bindings_list;
     }, "Returns iterator to traverse Bindings within BindingsSet");
-    m.def("bindings_set_unpack", [](CBindingsSet set) -> pybind11::list {
+    m.def("bindings_set_unpack", [](CBindingsSet& set) -> pybind11::list {
         py::list results;
         bindings_set_iterate(
             set.ptr(),
@@ -594,8 +594,8 @@ PYBIND11_MODULE(hyperonpy, m) {
         return py_space->pyobj;
         }, "Accessor for the payload of a space implemented in Python");
     m.def("space_add", [](CSpace space, CAtom atom) { space_add(space.ptr, atom_clone(atom.ptr())); }, "Add atom into space");
-    m.def("space_remove", [](CSpace space, CAtom atom) { return space_remove(space.ptr, atom.ptr()); }, "Remove atom from space");
-    m.def("space_replace", [](CSpace space, CAtom from, CAtom to) { return space_replace(space.ptr, from.ptr(), atom_clone(to.ptr())); }, "Replace atom from space");
+    m.def("space_remove", [](CSpace space, CAtom& atom) { return space_remove(space.ptr, atom.ptr()); }, "Remove atom from space");
+    m.def("space_replace", [](CSpace space, CAtom& from, CAtom to) { return space_replace(space.ptr, from.ptr(), atom_clone(to.ptr())); }, "Replace atom from space");
     m.def("space_eq", [](CSpace a, CSpace b) { return space_eq(a.ptr, b.ptr); }, "Check if two spaces are equal");
     m.def("space_atom_count", [](CSpace space) { return space_atom_count(space.ptr); }, "Return number of atoms in space, or -1 if the space is unable to determine the value");
     m.def("space_list", [](CSpace space) -> std::optional<pybind11::list> {
@@ -606,11 +606,11 @@ PYBIND11_MODULE(hyperonpy, m) {
             return std::nullopt;
         }
     }, "Returns iterator to traverse atoms within a space");
-    m.def("space_query", [](CSpace space, CAtom pattern) {
+    m.def("space_query", [](CSpace space, CAtom& pattern) {
             bindings_set_t result_bindings_set = space_query(space.ptr, pattern.ptr());
             return CBindingsSet(result_bindings_set);
         }, "Query atoms from space by pattern");
-    m.def("space_subst", [](CSpace space, CAtom pattern, CAtom templ) {
+    m.def("space_subst", [](CSpace space, CAtom& pattern, CAtom& templ) {
             py::list atoms;
             space_subst(space.ptr, pattern.ptr(), templ.ptr(), copy_atoms, &atoms);
             return atoms;
@@ -659,13 +659,13 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_TYPE(EXPRESSION, "Expression")
         ADD_TYPE(GROUNDED, "Grounded")
         ADD_TYPE(GROUNDED_SPACE, "Space");
-    m.def("check_type", [](CSpace space, CAtom atom, CAtom type) {
+    m.def("check_type", [](CSpace space, CAtom& atom, CAtom& type) {
             return check_type(space.ptr, atom.ptr(), type.ptr());
         }, "Check if atom is an instance of the passed type");
-    m.def("validate_atom", [](CSpace space, CAtom atom) {
+    m.def("validate_atom", [](CSpace space, CAtom& atom) {
             return validate_atom(space.ptr, atom.ptr());
         }, "Validate expression arguments correspond to the operation type");
-    m.def("get_atom_types", [](CSpace space, CAtom atom) {
+    m.def("get_atom_types", [](CSpace space, CAtom& atom) {
             py::list atoms;
             get_atom_types(space.ptr, atom.ptr(), copy_atoms, &atoms);
             return atoms;
