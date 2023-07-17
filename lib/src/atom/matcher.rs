@@ -1307,7 +1307,7 @@ mod test {
         fn type_(&self) -> Atom {
             Atom::sym("Rand")
         }
-        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
@@ -1351,7 +1351,7 @@ mod test {
         fn type_(&self) -> Atom {
             Atom::sym("ReturnPairInX")
         }
-        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
         }
         fn match_(&self, _other: &Atom) -> matcher::MatchResultIter {
@@ -1556,7 +1556,7 @@ mod test {
             fn type_(&self) -> Atom {
                 Atom::sym("Assigner")
             }
-            fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+            fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 execute_not_executable(self)
             }
             fn match_(&self, other: &Atom) -> matcher::MatchResultIter {

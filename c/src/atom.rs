@@ -757,11 +757,14 @@ impl Grounded for CGrounded {
         unsafe{ &(*self.get_ptr()).typ }.borrow().clone()
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let mut ret = Vec::new();
         match self.api().execute {
             Some(func) => {
-                let error = func(self.get_ptr(), (args as *mut Vec<Atom>).cast::<vec_atom_t>(),
+                //NOTE to Vitaly: This vec copy below is a very short-term stop-gap, until I unify the C vec types
+                // But I want to change the Rust API first.
+                let mut args = args.to_vec();
+                let error = func(self.get_ptr(), (&mut args as *mut Vec<Atom>).cast::<vec_atom_t>(),
                 (&mut ret as *mut Vec<Atom>).cast::<vec_atom_t>());
                 let ret = if error.is_null() {
                     Ok(ret)

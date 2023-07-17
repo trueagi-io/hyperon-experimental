@@ -30,7 +30,7 @@ pub fn init_logger(is_test: bool) {
 // The instance has 'static lifetime and not copied when cloned.
 pub struct Operation {
     pub name: &'static str,
-    pub execute: fn(&Operation, &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError>,
+    pub execute: fn(&Operation, &[Atom]) -> Result<Vec<Atom>, ExecError>,
     pub typ: &'static str,
 }
 
@@ -39,7 +39,7 @@ impl Grounded for &'static Operation {
         metta_atom(self.typ)
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         (self.execute)(self, args)
     }
 
@@ -133,7 +133,7 @@ impl<T: Clone + std::hash::Hash + Eq + ?Sized, F: Fn(T) -> T> ReplacingMapper<T,
 mod tests {
     use super::*;
 
-    fn test_op(_this: &Operation, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn test_op(_this: &Operation, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         Ok(vec![])
     }
 

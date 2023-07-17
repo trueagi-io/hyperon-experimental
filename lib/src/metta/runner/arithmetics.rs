@@ -39,7 +39,7 @@ impl Grounded for Number {
         ATOM_TYPE_NUMBER
     }
 
-    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
     }
 
@@ -75,7 +75,7 @@ impl Grounded for Bool {
         ATOM_TYPE_BOOL
     }
 
-    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
     }
 
@@ -100,7 +100,7 @@ macro_rules! def_binary_number_op {
                 Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
             }
 
-            fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+            fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($op), " expects two number arguments"));
                 let a = args.get(0).ok_or_else(arg_error)?.as_gnd::<Number>().ok_or_else(arg_error)?;
                 let b = args.get(1).ok_or_else(arg_error)?.as_gnd::<Number>().ok_or_else(arg_error)?;

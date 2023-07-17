@@ -345,7 +345,7 @@ pub trait GroundedAtom : mopa::Any + Debug + Display {
     // TODO: type_() could return Vec<&Atom> as anyway each atom should be replaced
     // by its alpha equivalent with unique variables
     fn type_(&self) -> Atom;
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError>;
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError>;
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
 }
 
@@ -373,7 +373,7 @@ mopafy!(GroundedAtom);
 ///         rust_type_atom::<MyGrounded>()
 ///     }
 ///
-///     fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+///     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
 ///         execute_not_executable(self)
 ///     }
 ///
@@ -408,7 +408,7 @@ pub trait Grounded : Display {
 
     /// Executes grounded function on passed `args` and returns list of
     /// results as `Vec<Atom>` or [ExecError].
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError>;
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError>;
 
     /// Implements custom matching logic of the grounded atom.
     /// Gets `other` atom as input, returns the iterator of the
@@ -477,7 +477,7 @@ impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
         rust_type_atom::<T>()
     }
 
-    fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
     }
 
@@ -527,7 +527,7 @@ impl<T: CustomGroundedType> GroundedAtom for CustomGroundedAtom<T> {
         Grounded::type_(&self.0)
     }
 
-    fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         Grounded::execute(&self.0, args)
     }
 
@@ -895,7 +895,7 @@ mod test {
         fn type_(&self) -> Atom {
             Atom::sym("Integer")
         }
-        fn execute(&self, _args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
@@ -916,7 +916,7 @@ mod test {
         fn type_(&self) -> Atom {
             expr!("->" "i32" "i32")
         }
-        fn execute(&self, args: &mut Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
