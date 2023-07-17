@@ -526,11 +526,10 @@ fn execute_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input:
     log::debug!("execute_op: {}", input);
     match input {
         InterpretedAtom(Atom::Expression(ref expr), ref bindings) => {
-            let mut expr = expr.clone();
-            let op = expr.children().get(0).cloned();
+            let op = expr.children().get(0);
             if let Some(Atom::Grounded(op)) = op {
-                let args: Vec<Atom> = expr.children_mut().drain(1..).collect();
-                match op.execute(&args[..]) {
+                let args = expr.children();
+                match op.execute(&args[1..]) {
                     Ok(mut vec) => {
                         let results: Vec<InterpretedAtom> = vec.drain(0..)
                             .map(|atom| InterpretedAtom(atom, bindings.clone()))
