@@ -496,13 +496,18 @@ pub unsafe extern "C" fn atom_sym(name: *const c_char) -> atom_t {
     Atom::sym(cstr_as_str(name)).into()
 }
 
-//TODO BEFORE MERGE for Alpha: Make an interface that can construct an expression directly from an vec_atom_t
 #[no_mangle]
 pub unsafe extern "C" fn atom_expr(children: *mut atom_t, size: usize) -> atom_t {
     let c_arr = std::slice::from_raw_parts_mut(children, size);
     let children: Vec<Atom> = c_arr.into_iter().map(|atom| {
         core::mem::replace(atom, atom_t::null()).into_inner()
     }).collect();
+    Atom::expr(children).into()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn atom_expr_from_vec(children: vec_atom_t) -> atom_t {
+    let children: Vec<Atom> = children.into_owned().into();
     Atom::expr(children).into()
 }
 
@@ -646,9 +651,6 @@ pub unsafe extern "C" fn atom_eq(atoma: *const atom_ref_t, atomb: *const atom_re
 
 //TODO BEFORE MERGE, rename vec_atom_t to atom_vec_t
 
-//TODO BEFORE MERGE, add "from C array" method
-//TODO BEFORE MERGE, "from va_args" method
-
 /// Represents a list (aka Vec) of Atoms.  It is unsafe to directly access the fields of this struct, so
 /// accessors should be used instead
 #[repr(C)]
@@ -665,6 +667,15 @@ impl vec_atom_t {
     }
     fn as_slice(&self) -> &[Atom] {
         core::borrow::Borrow::borrow(self)
+    }
+    /// Converts a borrowed vec into an owned vec
+    fn into_owned(self) -> Self {
+        match self.owned {
+            true => self,
+            false => {
+                self.as_slice().to_vec().into()
+            }
+        }
     }
 }
 
@@ -721,6 +732,15 @@ impl core::borrow::Borrow<[Atom]> for vec_atom_t {
 #[no_mangle]
 pub extern "C" fn vec_atom_new() -> vec_atom_t {
     vec_atom_t::new()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn vec_atom_from_array(atoms: *mut atom_t, size: usize) -> vec_atom_t {
+    let c_arr = std::slice::from_raw_parts_mut(atoms, size);
+    let atoms: Vec<Atom> = c_arr.into_iter().map(|atom| {
+        core::mem::replace(atom, atom_t::null()).into_inner()
+    }).collect();
+    atoms.into()
 }
 
 #[no_mangle]
