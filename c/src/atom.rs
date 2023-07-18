@@ -147,12 +147,6 @@ pub struct exec_error_t {
     pub error: ExecError,
 }
 
-#[repr(C)]
-pub struct var_atom_t {
-    pub var: *const c_char,
-    pub atom: atom_t,
-}
-
 pub struct bindings_t {
     pub bindings: Bindings,
 }
@@ -260,24 +254,34 @@ pub extern "C" fn bindings_eq(bindingsa: *const bindings_t, bindingsb: *const bi
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_traverse(cbindings: *const bindings_t, callback: lambda_t<var_atom_t>, context: *mut c_void) {
+pub extern "C" fn bindings_traverse(cbindings: *const bindings_t, callback: c_var_binding_callback_t, context: *mut c_void) {
     let bindings = unsafe{&(*cbindings).bindings};
-    bindings.iter().for_each(|(var, atom)|  {
-            let name = string_as_cstr(var.name());
-            let var_atom = var_atom_t {
-                var: name.as_ptr(),
-                atom: atom.into()
-            };
-            callback(var_atom, context);
-        }
-    )
+
+    //EXPLANATION: The reason we do all the arg conversion in one loop, and then call the callback
+    // in a second loop is because the C API is fundamentally being given atom_refs, which the
+    // callback is not expected to free.  This makes sense for the API long-term.  But in
+    // the short term it creates a problem because atom_ref_t has a static lifetime but points
+    // to outside memory.  Using two loops and a temporary buffer ensures the temporary atoms aren't
+    // freed until the callbacks have finished.  When the Rust API is improved, this code should be
+    // simplified.
+    //
+    //TODO: We ought to rework the Rust Bindings API so Atoms in Bindings don't need to be copied and
+    // returned by value.  Probably best to save this work until we are implementing comprehensions,
+    // as part of non-determinism / inference control
+    let callback_args: Vec<(Atom, Atom)> = bindings.iter().map(|(var, atom)| {
+        (Atom::Variable(var.clone()), atom)
+    }).collect();
+    callback_args.iter().for_each(|(var, atom)| callback(var.into(), atom.into(), context));
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, var_atom: var_atom_t) -> bool {
+pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, var: atom_t, atom: atom_t) -> bool {
     let bindings = unsafe{ &mut(*bindings).bindings };
-    let var = VariableAtom::new(cstr_into_string ( var_atom.var ));
-    let atom = var_atom.atom.into_inner();
+    let var = match var.into_inner() {
+        Atom::Variable(variable) => variable,
+        _ => panic!("var argument must be variable atom")
+    };
+    let atom = atom.into_inner();
     match bindings.clone().add_var_binding_v2(var, atom) {
         Ok(new_bindings) => {
             *bindings = new_bindings;
@@ -786,6 +790,8 @@ pub unsafe extern "C" fn atom_vec_get(vec: *const atom_vec_t, idx: usize) -> ato
 pub type c_atoms_callback_t = lambda_t<*const atom_vec_t>;
 
 pub type c_atom_callback_t = lambda_t<atom_ref_t>;
+
+pub type c_var_binding_callback_t = extern "C" fn(var: atom_ref_t, value: atom_ref_t, context: *mut c_void);
 
 #[no_mangle]
 pub extern "C" fn atoms_are_equivalent(first: *const atom_ref_t, second: *const atom_ref_t) -> bool {

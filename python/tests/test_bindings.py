@@ -9,8 +9,8 @@ class BindingsTest(unittest.TestCase):
         self.emptyBindings = Bindings()
 
         self.bindings = Bindings()
-        self.bindings.add_var_bindings("a", S("b"))
-        self.bindings.add_var_bindings("x", S("y"))
+        self.bindings.add_var_binding("a", S("b"))
+        self.bindings.add_var_binding("x", S("y"))
 
 
     def tearDown(self) -> None:
@@ -24,8 +24,8 @@ class BindingsTest(unittest.TestCase):
 
         # uncomment this and assert on line 22 fails
         #self.assertEqual(hp.bindings_to_str(bindings), "{  }")
-        hp.bindings_add_var_bindings(bindings, "a", hp.atom_sym("b"))
-        hp.bindings_add_var_bindings(bindings, "x", hp.atom_sym("y"))
+        hp.bindings_add_var_binding(bindings, "a", hp.atom_sym("b"))
+        hp.bindings_add_var_binding(bindings, "x", hp.atom_sym("y"))
 
         bindings_as_str = hp.bindings_to_str(bindings)
 
@@ -109,7 +109,7 @@ class BindingsTest(unittest.TestCase):
         self.assertTrue(empty_set.is_empty())
 
         new_bindings = Bindings();
-        new_bindings.add_var_bindings(V("a"), S("A"))
+        new_bindings.add_var_binding(V("a"), S("A"))
         empty_set.push(new_bindings);
         no_longer_empty_set = empty_set;
 
@@ -123,7 +123,7 @@ class BindingsTest(unittest.TestCase):
         self.assertEqual(set, no_longer_empty_set);        
 
         new_bindings = Bindings();
-        new_bindings.add_var_bindings(V("a"), S("A"))
+        new_bindings.add_var_binding(V("a"), S("A"))
         set_2 = BindingsSet(new_bindings);
         self.assertEqual(set, set_2)
 
@@ -141,16 +141,16 @@ class BindingsTest(unittest.TestCase):
         self.assertEqual(1, bindings_counter)
 
         new_bindings = Bindings();
-        new_bindings.add_var_bindings(V("b"), S("B"))
+        new_bindings.add_var_binding(V("b"), S("B"))
         set.merge_into(new_bindings);
 
         new_bindings = Bindings();
-        new_bindings.add_var_bindings(V("c"), S("C"))
+        new_bindings.add_var_binding(V("c"), S("C"))
         new_set = BindingsSet(new_bindings);
         set.merge_into(new_set);
 
         new_bindings = Bindings();
-        new_bindings.add_var_bindings(V("d"), S("D"))
+        new_bindings.add_var_binding(V("d"), S("D"))
         for existing_bindings in set.iterator():
             new_set = new_bindings.merge_v2(existing_bindings);
         

@@ -259,11 +259,11 @@ class Bindings:
     def merge_v2(left, right) -> 'BindingsSet':
         return BindingsSet(hp.bindings_merge_v2(left.cbindings, right.cbindings))
 
-    def add_var_bindings(self, var: Union[str, Atom], atom: Atom) -> bool:
+    def add_var_binding(self, var: Union[str, Atom], atom: Atom) -> bool:
         if isinstance(var, Atom):
-            return hp.bindings_add_var_bindings(self.cbindings, var.get_name(), atom.catom)
+            return hp.bindings_add_var_binding(self.cbindings, var.get_name(), atom.catom)
         else:
-            return hp.bindings_add_var_bindings(self.cbindings, var, atom.catom)
+            return hp.bindings_add_var_binding(self.cbindings, var, atom.catom)
 
     def is_empty(self) -> bool:
         return hp.bindings_is_empty(self.cbindings)
@@ -347,9 +347,12 @@ class BindingsSet:
         self.shadow_list = None
         hp.bindings_set_push(self.c_set, bindings.cbindings)
 
-    def add_var_binding(self, var: Atom, value: Atom) -> bool:
+    def add_var_binding(self, var: Union[str, Atom], value: Atom) -> bool:
         self.shadow_list = None
-        return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)
+        if isinstance(var, Atom):
+            return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)
+        else:
+            return hp.bindings_set_add_var_binding(self.c_set, V(var), value.catom)
 
     def add_var_equality(self, a: Atom, b: Atom) -> bool:
         self.shadow_list = None
