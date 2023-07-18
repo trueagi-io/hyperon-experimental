@@ -48,13 +48,13 @@ typedef struct _atoms_t {
     size_t size;
 } atoms_t;
 
-void check_atoms(atom_array_t act_atoms, void* context) {
+void check_atoms(const vec_atom_t* act_atoms, void* context) {
     int i = 0;
     atom_ref_t* exp_atoms = context;
 
-    while (i < act_atoms.size && !atom_is_null(&exp_atoms[i])) {
+    while (i < vec_atom_len(act_atoms) && !atom_is_null(&exp_atoms[i])) {
         atom_ref_t expected = exp_atoms[i];
-        atom_ref_t actual = act_atoms.items[i];
+        atom_ref_t actual = vec_atom_get(act_atoms, i);
         char* expected_str = stratom(&expected);
         char* actual_str = stratom(&actual);
         ck_assert_msg(atom_eq(&expected, &actual),
@@ -64,8 +64,8 @@ void check_atoms(atom_array_t act_atoms, void* context) {
         free(actual_str);
         ++i;
     }
-    ck_assert_msg(i == act_atoms.size && atom_is_null(&exp_atoms[i]),
-        "actual size: %lu, expected size: %u", act_atoms.size, i);
+    ck_assert_msg(i == vec_atom_len(act_atoms) && atom_is_null(&exp_atoms[i]),
+        "actual size: %lu, expected size: %u", vec_atom_len(act_atoms), i);
 }
 
 START_TEST (test_get_atom_types)

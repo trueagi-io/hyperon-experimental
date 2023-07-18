@@ -54,10 +54,11 @@ std::string func_to_string(write_to_buf_func_t func, void* arg) {
     }
 }
 
-static void copy_atoms(atom_array_t atoms, void* context) {
+static void copy_atoms(const vec_atom_t* atoms, void* context) {
     py::list* list = static_cast<py::list*>(context);
-    for (size_t i = 0; i < atoms.size; ++i) {
-        list->append(CAtom(atom_clone(&atoms.items[i])));
+    for (size_t i = 0; i < vec_atom_len(atoms); ++i) {
+        atom_ref_t atom = vec_atom_get(atoms, i);
+        list->append(CAtom(atom_clone(&atom)));
     }
 }
 
@@ -66,7 +67,7 @@ static void copy_atom_to_dict(var_atom_t atom, void* context) {
     pybindings[atom.var] = CAtom(atom.atom);
 }
 
-static void copy_lists_of_atom(atom_array_t atoms, void* context) {
+static void copy_lists_of_atom(const vec_atom_t* atoms, void* context) {
     py::list* list_of_lists = static_cast<py::list*>(context);
     py::list list;
     copy_atoms(atoms, &list);

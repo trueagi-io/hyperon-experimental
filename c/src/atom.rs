@@ -765,8 +765,7 @@ pub unsafe extern "C" fn vec_atom_get(vec: *const vec_atom_t, idx: usize) -> ato
     atom.into()
 }
 
-pub type atom_array_t = array_t<atom_ref_t>;
-pub type c_atoms_callback_t = lambda_t<atom_array_t>;
+pub type c_atoms_callback_t = lambda_t<*const vec_atom_t>;
 
 pub type c_atom_callback_t = lambda_t<atom_ref_t>;
 
@@ -790,9 +789,7 @@ pub fn ptr_into_bindings(bindings: *mut bindings_t) -> Bindings {
 }
 
 pub fn return_atoms(atoms: &Vec<Atom>, callback: c_atoms_callback_t, context: *mut c_void) {
-    let results: Vec<atom_ref_t> = atoms.iter()
-        .map(|atom| atom.into()).collect();
-    callback((&results).into(), context);
+    callback(&(&atoms[..]).into(), context);
 }
 
 // C grounded atom wrapper
