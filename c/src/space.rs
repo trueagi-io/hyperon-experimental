@@ -529,7 +529,7 @@ pub extern "C" fn space_query(space: *const space_t, pattern: *const atom_ref_t)
 #[no_mangle]
 pub extern "C" fn space_subst(space: *const space_t,
         pattern: *const atom_ref_t, templ: *const atom_ref_t,
-        callback: c_atoms_callback_t, context: *mut c_void) {
+        callback: c_atom_vec_callback_t, context: *mut c_void) {
     let results = unsafe { (*space).0.borrow().subst((&*pattern).borrow(), (&*templ).borrow()) };
     return_atoms(&results, callback, context);
 }

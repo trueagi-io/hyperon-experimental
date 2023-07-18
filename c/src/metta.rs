@@ -107,7 +107,7 @@ pub unsafe extern "C" fn validate_atom(space: *const space_t, atom: *const atom_
 
 #[no_mangle]
 pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
-        callback: c_atoms_callback_t, context: *mut c_void) {
+        callback: c_atom_vec_callback_t, context: *mut c_void) {
     let space = unsafe{ &(*space).0.borrow() };
     let atom = unsafe{ (&*atom).borrow() };
     let types = hyperon::metta::types::get_atom_types(space.as_space(), atom);
@@ -142,7 +142,7 @@ pub extern "C" fn step_has_next(step: *const step_result_t) -> bool {
 
 #[no_mangle]
 pub extern "C" fn step_get_result(step: *mut step_result_t,
-        callback: c_atoms_callback_t, context: *mut c_void) {
+        callback: c_atom_vec_callback_t, context: *mut c_void) {
     let step = unsafe{ Box::from_raw(step) };
     match step.result {
         StepResult::Return(mut res) => {
@@ -197,7 +197,7 @@ pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> *mut tokenizer_t {
 
 #[no_mangle]
 pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
-        output: c_atoms_callback_t, out_context: *mut c_void) {
+        output: c_atom_vec_callback_t, out_context: *mut c_void) {
     let metta = unsafe{ &*metta }.borrow();
     let mut parser = unsafe{ &mut *parser }.borrow_mut();
     let results = metta.run(&mut parser);
@@ -209,7 +209,7 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
 
 #[no_mangle]
 pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
-        output: c_atoms_callback_t, out_context: *mut c_void) {
+        output: c_atom_vec_callback_t, out_context: *mut c_void) {
     let metta = unsafe{ &*metta }.borrow();
     let atom = atom.into_inner();
     let result = metta.evaluate_atom(atom)

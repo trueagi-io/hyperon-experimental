@@ -609,7 +609,7 @@ pub extern "C" fn atom_get_grounded_type(atom: *const atom_ref_t) -> atom_t {
 
 #[no_mangle]
 pub unsafe extern "C" fn atom_get_children(atom: *const atom_ref_t,
-        callback: c_atoms_callback_t, context: *mut c_void) {
+        callback: c_atom_vec_callback_t, context: *mut c_void) {
     if let Atom::Expression(ref e) = (&*atom).borrow() {
         return_atoms(e.children(), callback, context);
     } else {
@@ -668,7 +668,7 @@ impl atom_vec_t {
         Vec::<Atom>::new().into()
     }
     fn as_slice(&self) -> &[Atom] {
-        core::borrow::Borrow::borrow(self)
+        unsafe{ core::slice::from_raw_parts(self.ptr.cast(), self.len) }
     }
     /// Converts a borrowed vec into an owned vec
     fn into_owned(self) -> Self {
@@ -722,12 +722,6 @@ impl Drop for atom_vec_t {
             let vec: Vec<Atom> = unsafe{ Vec::from_raw_parts(self.ptr.cast(), self.len, self.capacity) };
             drop(vec);
         }
-    }
-}
-
-impl core::borrow::Borrow<[Atom]> for atom_vec_t {
-    fn borrow(&self) -> &[Atom] {
-        unsafe{ core::slice::from_raw_parts(self.ptr.cast(), self.len) }
     }
 }
 
@@ -787,7 +781,7 @@ pub unsafe extern "C" fn atom_vec_get(vec: *const atom_vec_t, idx: usize) -> ato
     atom.into()
 }
 
-pub type c_atoms_callback_t = lambda_t<*const atom_vec_t>;
+pub type c_atom_vec_callback_t = lambda_t<*const atom_vec_t>;
 
 pub type c_atom_callback_t = lambda_t<atom_ref_t>;
 
@@ -812,7 +806,7 @@ pub fn ptr_into_bindings(bindings: *mut bindings_t) -> Bindings {
     unsafe {Box::from_raw(bindings)}.bindings
 }
 
-pub fn return_atoms(atoms: &Vec<Atom>, callback: c_atoms_callback_t, context: *mut c_void) {
+pub fn return_atoms(atoms: &Vec<Atom>, callback: c_atom_vec_callback_t, context: *mut c_void) {
     callback(&(&atoms[..]).into(), context);
 }
 
