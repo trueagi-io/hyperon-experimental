@@ -269,11 +269,11 @@ class Bindings:
         return hp.bindings_is_empty(self.cbindings)
 
     def narrow_vars(self, vars ):
-        cvars = hp.CVecAtom = hp.vec_atom_new()
+        cvars = hp.CVecAtom = hp.atom_vec_new()
         for var in vars:
-            hp.vec_atom_push(cvars, var.catom)
+            hp.atom_vec_push(cvars, var.catom)
         hp.bindings_narrow_vars(self.cbindings, cvars)
-        hp.vec_atom_free(cvars)
+        hp.atom_vec_free(cvars)
 
     def resolve(self, var_name: str) -> Union[Atom, None]:
         raw_atom = hp.bindings_resolve(self.cbindings, var_name)

@@ -191,7 +191,7 @@ pub struct space_api_t {
     ///   \arg tmpl \c is the template atom.  This function should NOT take ownership of the template atom.
     ///   NOTE: If a subst function is provided, it will be called.  If NULL is provided, the default
     ///     implementation will be called.
-    subst: Option<extern "C" fn(params: *const space_params_t, pattern: *const atom_ref_t, tmpl: *const atom_ref_t) -> vec_atom_t>,
+    subst: Option<extern "C" fn(params: *const space_params_t, pattern: *const atom_ref_t, tmpl: *const atom_ref_t) -> atom_vec_t>,
 
     /// Adds an atom to the space
     ///   \arg params \c is the pointer to the space's params

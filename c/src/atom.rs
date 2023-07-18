@@ -192,7 +192,7 @@ pub type bindings_mut_callback_t = lambda_t<*mut bindings_t>;
 pub struct gnd_api_t {
     // TODO: replace args by C array and ret by callback
     // One can assign NULL to this field, it means the atom is not executable
-    execute: Option<extern "C" fn(*const gnd_t, *const vec_atom_t, *mut vec_atom_t) -> *mut exec_error_t>,
+    execute: Option<extern "C" fn(*const gnd_t, *const atom_vec_t, *mut atom_vec_t) -> *mut exec_error_t>,
     match_: Option<extern "C" fn(*const gnd_t, *const atom_ref_t, bindings_mut_callback_t, *mut c_void)>,
     eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
     clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
@@ -341,7 +341,7 @@ pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_nam
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_narrow_vars(bindings: *mut bindings_t, vars: *const vec_atom_t) {
+pub extern "C" fn bindings_narrow_vars(bindings: *mut bindings_t, vars: *const atom_vec_t) {
     let bindings = unsafe{&mut (*bindings).bindings};
     let vars = unsafe{&*vars}.as_slice();
     let vars_iter = vars.into_iter().map(|atom| {
@@ -506,7 +506,7 @@ pub unsafe extern "C" fn atom_expr(children: *mut atom_t, size: usize) -> atom_t
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn atom_expr_from_vec(children: vec_atom_t) -> atom_t {
+pub unsafe extern "C" fn atom_expr_from_vec(children: atom_vec_t) -> atom_t {
     let children: Vec<Atom> = children.into_owned().into();
     Atom::expr(children).into()
 }
@@ -649,19 +649,17 @@ pub unsafe extern "C" fn atom_eq(atoma: *const atom_ref_t, atomb: *const atom_re
     (&*atoma).borrow() == (&*atomb).borrow()
 }
 
-//TODO BEFORE MERGE, rename vec_atom_t to atom_vec_t
-
 /// Represents a list (aka Vec) of Atoms.  It is unsafe to directly access the fields of this struct, so
 /// accessors should be used instead
 #[repr(C)]
-pub struct vec_atom_t {
+pub struct atom_vec_t {
     ptr: *mut RustOpaqueAtom,
     len: usize,
     capacity: usize,
     owned: bool,
 }
 
-impl vec_atom_t {
+impl atom_vec_t {
     fn new() -> Self {
         Vec::<Atom>::new().into()
     }
@@ -679,7 +677,7 @@ impl vec_atom_t {
     }
 }
 
-impl From<Vec<Atom>> for vec_atom_t {
+impl From<Vec<Atom>> for atom_vec_t {
     fn from(vec: Vec<Atom>) -> Self {
         //When Vec::into_raw_parts is stabilized then use it.  https://github.com/rust-lang/rust/issues/65816
         let mut vec = core::mem::ManuallyDrop::new(vec);
@@ -692,7 +690,7 @@ impl From<Vec<Atom>> for vec_atom_t {
     }
 }
 
-impl From<&[Atom]> for vec_atom_t {
+impl From<&[Atom]> for atom_vec_t {
     fn from(slice: &[Atom]) -> Self {
         Self {
             ptr: slice.as_ptr().cast_mut().cast(),
@@ -703,8 +701,8 @@ impl From<&[Atom]> for vec_atom_t {
     }
 }
 
-impl From<vec_atom_t> for Vec<Atom> {
-    fn from(vec: vec_atom_t) -> Self {
+impl From<atom_vec_t> for Vec<Atom> {
+    fn from(vec: atom_vec_t) -> Self {
         if !vec.owned {
             panic!("Error! Attempt to take ownership of borrowed atom_vec_t");
         }
@@ -714,7 +712,7 @@ impl From<vec_atom_t> for Vec<Atom> {
     }
 }
 
-impl Drop for vec_atom_t {
+impl Drop for atom_vec_t {
     fn drop(&mut self) {
         if self.owned {
             let vec: Vec<Atom> = unsafe{ Vec::from_raw_parts(self.ptr.cast(), self.len, self.capacity) };
@@ -723,19 +721,19 @@ impl Drop for vec_atom_t {
     }
 }
 
-impl core::borrow::Borrow<[Atom]> for vec_atom_t {
+impl core::borrow::Borrow<[Atom]> for atom_vec_t {
     fn borrow(&self) -> &[Atom] {
         unsafe{ core::slice::from_raw_parts(self.ptr.cast(), self.len) }
     }
 }
 
 #[no_mangle]
-pub extern "C" fn vec_atom_new() -> vec_atom_t {
-    vec_atom_t::new()
+pub extern "C" fn atom_vec_new() -> atom_vec_t {
+    atom_vec_t::new()
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vec_atom_from_array(atoms: *mut atom_t, size: usize) -> vec_atom_t {
+pub unsafe extern "C" fn atom_vec_from_array(atoms: *mut atom_t, size: usize) -> atom_vec_t {
     let c_arr = std::slice::from_raw_parts_mut(atoms, size);
     let atoms: Vec<Atom> = c_arr.into_iter().map(|atom| {
         core::mem::replace(atom, atom_t::null()).into_inner()
@@ -744,17 +742,17 @@ pub unsafe extern "C" fn vec_atom_from_array(atoms: *mut atom_t, size: usize) ->
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vec_atom_free(vec: vec_atom_t) {
+pub unsafe extern "C" fn atom_vec_free(vec: atom_vec_t) {
     drop(vec);
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vec_atom_len(vec: *const vec_atom_t) -> usize {
+pub unsafe extern "C" fn atom_vec_len(vec: *const atom_vec_t) -> usize {
     (*vec).len
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> atom_t {
+pub unsafe extern "C" fn atom_vec_pop(vec: *mut atom_vec_t) -> atom_t {
     let vec_contents = core::mem::replace(&mut *vec, core::mem::zeroed());
     if !vec_contents.owned {
         panic!("Error! Attempt to modify read-only atom_vec_t");
@@ -766,7 +764,7 @@ pub unsafe extern "C" fn vec_atom_pop(vec: *mut vec_atom_t) -> atom_t {
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn vec_atom_push(vec: *mut vec_atom_t, atom: atom_t) {
+pub unsafe extern "C" fn atom_vec_push(vec: *mut atom_vec_t, atom: atom_t) {
     let vec_contents = core::mem::replace(&mut *vec, core::mem::zeroed());
     if !vec_contents.owned {
         panic!("Error! Attempt to modify read-only atom_vec_t");
@@ -776,16 +774,16 @@ pub unsafe extern "C" fn vec_atom_push(vec: *mut vec_atom_t, atom: atom_t) {
     *vec = rust_vec.into();
 }
 
-/// WARNING: The atom returned from this function remains owned by the vec_atom_t.  It must NOT be
-/// accessed after the vec_atom_get has been modified or freed
+/// WARNING: The atom returned from this function remains owned by the atom_vec_t.  It must NOT be
+/// accessed after the atom_vec_get has been modified or freed
 #[no_mangle]
-pub unsafe extern "C" fn vec_atom_get(vec: *const vec_atom_t, idx: usize) -> atom_ref_t {
+pub unsafe extern "C" fn atom_vec_get(vec: *const atom_vec_t, idx: usize) -> atom_ref_t {
     let vec = &*vec;
     let atom: &Atom = &vec.as_slice()[idx];
     atom.into()
 }
 
-pub type c_atoms_callback_t = lambda_t<*const vec_atom_t>;
+pub type c_atoms_callback_t = lambda_t<*const atom_vec_t>;
 
 pub type c_atom_callback_t = lambda_t<atom_ref_t>;
 
@@ -853,8 +851,8 @@ impl Grounded for CGrounded {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         match self.api().execute {
             Some(func) => {
-                let mut ret = vec_atom_t::new();
-                let c_args: vec_atom_t = args.into();
+                let mut ret = atom_vec_t::new();
+                let c_args: atom_vec_t = args.into();
                 let error = func(self.get_ptr(), &c_args, &mut ret);
                 let ret = if error.is_null() {
                     Ok(ret.into())
