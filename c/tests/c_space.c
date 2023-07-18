@@ -11,14 +11,14 @@ typedef struct _atom_list_item {
 } atom_list_item;
 
 void collect_variable_atoms(atom_ref_t atom, void* vec_ptr) {
-    vec_atom_t* vec = vec_ptr;
+    atom_vec_t* vec = vec_ptr;
     if (atom_get_type(&atom) == VARIABLE) {
-        vec_atom_push(vec, atom_clone(&atom));
+        atom_vec_push(vec, atom_clone(&atom));
     }
 }
 
 void narrow_vars_callback(bindings_t* bindings, void* vars_vec_ptr) {
-    vec_atom_t* vars = vars_vec_ptr;
+    atom_vec_t* vars = vars_vec_ptr;
     bindings_narrow_vars(bindings, vars);
 }
 
@@ -27,21 +27,21 @@ void narrow_vars_callback(bindings_t* bindings, void* vars_vec_ptr) {
 bindings_set_t query(const space_params_t* params, const atom_t* query_atom) {
     custom_space_buf* space = params->payload;
 
-    vec_atom_t* query_vars = vec_atom_new();
-    atom_iterate(query_atom, collect_variable_atoms, query_vars);
+    atom_vec_t query_vars = atom_vec_new();
+    atom_iterate(query_atom, collect_variable_atoms, &query_vars);
 
     bindings_set_t new_bindings_set = bindings_set_single();
 
     atom_list_item* cur_atom_item = space->atoms;
     while (cur_atom_item != NULL) {
         bindings_set_t match_results = atom_match_atom(&cur_atom_item->atom, query_atom);
-        bindings_set_iterate(&match_results, narrow_vars_callback, query_vars);
+        bindings_set_iterate(&match_results, narrow_vars_callback, &query_vars);
         bindings_set_merge_into(&new_bindings_set, &match_results);
         bindings_set_free(match_results);
         cur_atom_item = cur_atom_item->next;
     }
 
-    vec_atom_free(query_vars);
+    atom_vec_free(query_vars);
     return new_bindings_set;
 }
 

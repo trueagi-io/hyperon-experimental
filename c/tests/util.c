@@ -12,8 +12,6 @@ char* stratom(atom_t const* atom) {
     return buffer;
 }
 
-//TODO for ALPHA: This expr API would be useful in general, and should not be limited to the tests.
-
 #define MAXARGS 64
 atom_t expr(atom_t atom, ...) {
     va_list ap;
