@@ -16,14 +16,12 @@ constexpr size_t lenghtof(T (&)[N]) { return N; }
 
 template <typename T>
 struct CPtr {
-    using type = T;
     CPtr(T* ptr) : ptr(ptr) {}
     T* ptr;
 };
 
 template <typename T>
 struct CStruct {
-    using type = T;
     CStruct(T obj) : obj(obj) {}
     T obj;
     T* ptr () { return &(this->obj); }
