@@ -187,78 +187,68 @@ fn interpret_atom<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: InterpretedAt
     let InterpretedAtom(atom, bindings) = interpreted_atom;
     let expr = atom_as_slice(&atom);
     match expr {
-        Some([op, ..]) if *op == EVAL_SYMBOL => {
-            let [_, atom]: [Atom; 2] = atom_into_array(atom.clone()).unwrap();
-            evaluate_atom(space, atom, bindings)
-        },
-        Some([op, ..]) if *op == CHAIN_SYMBOL => {
-            let [_, nested, var, templ]: [Atom; 4] = atom_into_array(atom.clone()).unwrap();
-            if is_embedded_op(&nested) {
-                let result = interpret_atom(space, InterpretedAtom(nested, bindings.clone()));
-                result.into_iter()
-                    .flat_map(|InterpretedAtom(r, b)| {
-                        let var = var.clone();
-                        let templ = templ.clone();
-                        b.merge_v2(&bindings)
-                            .into_iter()
-                            .map(move |bindings| {
-                                // TODO: we could eliminate bindings application here
-                                // and below after pretty print for debug is ready,
-                                // before that it is difficult to look at the plans
-                                // with the variables and bindings separated.
-                                let result = apply_bindings_to_atom(&r, &bindings);
-                                InterpretedAtom(Atom::expr([CHAIN_SYMBOL, result, var.clone(), templ.clone()]), bindings)
-                            })
-                    })
-                .collect()
-            } else {
-                let var = VariableAtom::try_from(var).unwrap();
-                let b = Bindings::new().add_var_binding_v2(&var, nested).unwrap();
-                let result = apply_bindings_to_atom(&templ, &b);
-                vec![InterpretedAtom(result, bindings)]
+        Some([op, args @ ..]) if *op == EVAL_SYMBOL => {
+            match args {
+                [_atom] => {
+                    // atom is matched twice to not reconstruct atom in case of
+                    // error (see error branch below), don't think it is a best
+                    // way, but don't see a better solution
+                    match atom_into_array(atom) {
+                        Some([_, atom]) => eval(space, atom, bindings),
+                        _ => panic!("Unexpected state"),
+                    }
+                },
+                _ => {
+                    let error: String = format!("expected: ({} <atom>), found: {}", EVAL_SYMBOL, atom);
+                    vec![InterpretedAtom(error_atom(atom, error), bindings)]
+                },
             }
         },
-        Some([op, ..]) if *op == MATCH_SYMBOL => {
-            let [_, atom, pattern, then, else_]: [Atom; 5] = atom_into_array(atom).unwrap();
-            let matches: Vec<Bindings> = match_atoms(&atom, &pattern).collect();
-            if matches.is_empty() {
-                let result = apply_bindings_to_atom(&else_, &bindings);
-                vec![InterpretedAtom(result, bindings)]
-            } else {
-                matches.into_iter()
-                    .flat_map(|b| {
-                        b.merge_v2(&bindings).into_iter()
-                            .map(|b| {
-                                let then = apply_bindings_to_atom(&then, &b);
-                                InterpretedAtom(then.clone(), b)
-                            })
-                    })
-                .collect()
+        Some([op, args @ ..]) if *op == CHAIN_SYMBOL => {
+            match args {
+                [nested, Atom::Variable(var), templ] => chain(space, bindings, nested, var, templ),
+                _ => {
+                    let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_SYMBOL, atom);
+                    vec![InterpretedAtom(error_atom(atom, error), bindings)]
+                },
             }
         },
-        Some([op, ..]) if *op == DECONS_SYMBOL => {
-            // FIXME: add a macros to check the types of the arguments and return array of args.
-            // If check is performed before deconstruction then cloning should not be needed.
-            let [_, expr]: [Atom; 2] = atom_into_array(atom.clone()).unwrap();
-            let result = match atom_as_slice(&expr) {
-                Some([]) => InterpretedAtom(Atom::expr([]), bindings),
-                Some([_, ..]) => {
-                    let mut children = ExpressionAtom::try_from(expr).unwrap().into_children();
-                    let head = children.remove(0);
-                    let tail = children;
-                    InterpretedAtom(Atom::expr([head, Atom::expr(tail)]), bindings)
+        Some([op, args @ ..]) if *op == MATCH_SYMBOL => {
+            match args {
+                [atom, pattern, then, else_] => match_(bindings, atom, pattern, then, else_),
+                _ => {
+                    let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", MATCH_SYMBOL, atom);
+                    vec![InterpretedAtom(error_atom(atom, error), bindings)]
                 },
-                None => {
-                    InterpretedAtom(error_atom(atom, "decons expects an ExpressionAtom as an argument".into()), bindings)
-                },
-            };
-            vec![result]
+            }
         },
-        Some([op, ..]) if *op == CONS_SYMBOL => {
-            let [_, head, tail]: [Atom; 3] = atom_into_array(atom.clone()).unwrap();
-            let mut children = vec![head];
-            children.extend(ExpressionAtom::try_from(tail).unwrap().into_children());
-            vec![InterpretedAtom(Atom::expr(children), bindings)]
+        Some([op, args @ ..]) if *op == DECONS_SYMBOL => {
+            match args {
+                [Atom::Expression(_tail)] => {
+                    match atom_into_array(atom) {
+                        Some([_, Atom::Expression(expr)]) => decons(bindings, expr),
+                        _ => panic!("Unexpected state"),
+                    }
+                },
+                _ => {
+                    let error: String = format!("expected: ({} (: <expr> Expression)), found: {}", DECONS_SYMBOL, atom);
+                    vec![InterpretedAtom(error_atom(atom, error), bindings)]
+                },
+            }
+        },
+        Some([op, args @ ..]) if *op == CONS_SYMBOL => {
+            match args {
+                [_head, Atom::Expression(_tail)] => {
+                    match atom_into_array(atom) {
+                        Some([_, head, Atom::Expression(tail)]) => cons(bindings, head, tail),
+                        _ => panic!("Unexpected state"),
+                    }
+                },
+                _ => {
+                    let error: String = format!("expected: ({} <head> (: <tail> Expression)), found: {}", CONS_SYMBOL, atom);
+                    vec![InterpretedAtom(error_atom(atom, error), bindings)]
+                },
+            }
         },
         _ => {
             vec![InterpretedAtom(return_atom(atom), bindings)]
@@ -278,7 +268,7 @@ fn return_atom(atom: Atom) -> Atom {
     atom
 }
 
-fn evaluate_atom<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
+fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
     match atom_as_slice(&atom) {
         Some([Atom::Grounded(op), args @ ..]) => {
             match op.execute(args) {
@@ -297,11 +287,11 @@ fn evaluate_atom<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) 
                     vec![InterpretedAtom(return_atom(atom), bindings)],
             }
         },
-        _ => query_atom(space, atom, bindings),
+        _ => query(space, atom, bindings),
     }
 }
 
-fn query_atom<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
+fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
     let var = VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, atom, Atom::Variable(var.clone())]);
     let results = space.query(&query);
@@ -322,9 +312,78 @@ fn query_atom<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> 
     }
 }
 
+fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: &Atom, var: &VariableAtom, templ: &Atom) -> Vec<InterpretedAtom> {
+    if is_embedded_op(&nested) {
+        let result = interpret_atom(space, InterpretedAtom(nested.clone(), bindings.clone()));
+        result.into_iter()
+            .flat_map(|InterpretedAtom(r, b)| {
+                b.merge_v2(&bindings)
+                    .into_iter()
+                    .map(move |bindings| {
+                        // TODO: we could eliminate bindings application here
+                        // and below after pretty print for debug is ready,
+                        // before that it is difficult to look at the plans
+                        // with the variables and bindings separated.
+                        let result = apply_bindings_to_atom(&r, &bindings);
+                        InterpretedAtom(Atom::expr([CHAIN_SYMBOL, result, Atom::Variable(var.clone()), templ.clone()]), bindings)
+                    })
+            })
+        .collect()
+    } else {
+        let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
+        let result = apply_bindings_to_atom(&templ, &b);
+        vec![InterpretedAtom(result, bindings)]
+    }
+}
+
+fn match_(bindings: Bindings, atom: &Atom, pattern: &Atom, then: &Atom, else_: &Atom) -> Vec<InterpretedAtom> {
+    let matches: Vec<Bindings> = match_atoms(atom, pattern).collect();
+    if matches.is_empty() {
+        let result = apply_bindings_to_atom(else_, &bindings);
+        vec![InterpretedAtom(result, bindings)]
+    } else {
+        matches.into_iter()
+            .flat_map(|b| {
+                b.merge_v2(&bindings).into_iter()
+                    .map(|b| {
+                        let then = apply_bindings_to_atom(then, &b);
+                        InterpretedAtom(then.clone(), b)
+                    })
+            })
+        .collect()
+    }
+}
+
+fn decons(bindings: Bindings, expr: ExpressionAtom) -> Vec<InterpretedAtom> {
+    let result = match expr.children().len() {
+        0 => InterpretedAtom(Atom::expr([]), bindings),
+        _ => {
+            let mut children = expr.into_children();
+            let head = children.remove(0);
+            let tail = children;
+            InterpretedAtom(Atom::expr([head, Atom::expr(tail)]), bindings)
+        },
+    };
+    vec![result]
+}
+
+fn cons(bindings: Bindings, head: Atom, tail: ExpressionAtom) -> Vec<InterpretedAtom> {
+    let mut children = vec![head];
+    children.extend(tail.into_children());
+    vec![InterpretedAtom(Atom::expr(children), bindings)]
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn interpret_atom_evaluate_incorrect_args() {
+        assert_eq!(interpret_atom(&space(""), atom("(eval)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("eval") "expected: (eval <atom>), found: (eval)"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(eval a b)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("eval" "a" "b") "expected: (eval <atom>), found: (eval a b)"), bind!{})]);
+    }
 
     #[test]
     fn interpret_atom_evaluate_atom() {
@@ -413,6 +472,16 @@ mod tests {
 
 
     #[test]
+    fn interpret_atom_chain_incorrect_args() {
+        assert_eq!(interpret_atom(&space(""), atom("(chain n $v t o)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("chain" "n" v "t" "o") "expected: (chain <nested> (: <var> Variable) <templ>), found: (chain n $v t o)"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(chain n v t)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("chain" "n" "v" "t") "expected: (chain <nested> (: <var> Variable) <templ>), found: (chain n v t)"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(chain n $v)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("chain" "n" v) "expected: (chain <nested> (: <var> Variable) <templ>), found: (chain n $v)"), bind!{})]);
+    }
+
+    #[test]
     fn interpret_atom_chain_atom() {
         let result = interpret_atom(&space(""), InterpretedAtom(expr!("chain" ("A" () {6} y) x ("bar" x)), bind!{}));
         assert_eq!(result, vec![InterpretedAtom(expr!("bar" ("A" () {6} y)), bind!{})]);
@@ -462,6 +531,14 @@ mod tests {
 
 
     #[test]
+    fn interpret_atom_match_incorrect_args() {
+        assert_eq!(interpret_atom(&space(""), atom("(match a p t e o)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("match" "a" "p" "t" "e" "o") "expected: (match <atom> <pattern> <then> <else>), found: (match a p t e o)"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(match a p t)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("match" "a" "p" "t") "expected: (match <atom> <pattern> <then> <else>), found: (match a p t)"), bind!{})]);
+    }
+
+    #[test]
     fn interpret_atom_match_then() {
         let result = interpret_atom(&space(""), atom("(match (A $b) ($a B) ($a $b) Empty)", bind!{}));
         assert_eq!(result, vec![atom("(A B)", bind!{a: expr!("A"), b: expr!("B")})]);
@@ -473,6 +550,16 @@ mod tests {
         assert_eq!(result, vec![atom("Empty", bind!{})]);
     }
 
+
+    #[test]
+    fn interpret_atom_decons_incorrect_args() {
+        assert_eq!(interpret_atom(&space(""), atom("(decons a)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("decons" "a") "expected: (decons (: <expr> Expression)), found: (decons a)"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(decons (a) (b))", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("decons" ("a") ("b")) "expected: (decons (: <expr> Expression)), found: (decons (a) (b))"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(decons)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("decons") "expected: (decons (: <expr> Expression)), found: (decons)"), bind!{})]);
+    }
 
     #[test]
     fn interpret_atom_decons_empty() {
@@ -492,6 +579,16 @@ mod tests {
         assert_eq!(result, vec![atom("(a (b c))", bind!{})]);
     }
 
+
+    #[test]
+    fn interpret_atom_cons_incorrect_args() {
+        assert_eq!(interpret_atom(&space(""), atom("(cons a (e) o)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("cons" "a" ("e") "o") "expected: (cons <head> (: <tail> Expression)), found: (cons a (e) o)"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(cons a e)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("cons" "a" "e") "expected: (cons <head> (: <tail> Expression)), found: (cons a e)"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(cons a)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("cons" "a") "expected: (cons <head> (: <tail> Expression)), found: (cons a)"), bind!{})]);
+    }
 
     #[test]
     fn interpret_atom_cons_empty() {
