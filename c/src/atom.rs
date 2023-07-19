@@ -33,7 +33,7 @@ pub enum atom_type_t {
 #[repr(C)]
 enum RustAtom {
     None,
-    Owned(Box<RustOpaqueAtom>),
+    Owned(*mut RustOpaqueAtom),
     Borrowed(*const RustOpaqueAtom)
 }
 
@@ -50,7 +50,7 @@ impl RustAtom {
     pub(crate) fn borrow(&self) -> &Atom {
         match self {
             Self::None => panic!("Attempt to access NULL atom"),
-            Self::Owned(atom) => &atom.0,
+            Self::Owned(atom) => unsafe{ &(**atom).0 },
             Self::Borrowed(atom_ptr) => unsafe{ &(**atom_ptr).0 }
         }
     }
@@ -64,7 +64,7 @@ impl RustAtom {
     pub(crate) fn into_inner(self) -> Atom {
         match self {
             Self::None => panic!("Attempt to access NULL atom"),
-            Self::Owned(atom) => atom.0,
+            Self::Owned(atom) => unsafe{ Box::from_raw(atom).0 },
             Self::Borrowed(_) => panic!("Can't extract borrowed atom"),
         }
     }
@@ -83,7 +83,7 @@ pub struct atom_t {
 
 impl From<Atom> for atom_t {
     fn from(atom: Atom) -> Self {
-        Self{ atom: RustAtom::Owned(Box::new(RustOpaqueAtom(atom))) }
+        Self{ atom: RustAtom::Owned(Box::into_raw(Box::new(RustOpaqueAtom(atom)))) }
     }
 }
 
