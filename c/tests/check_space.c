@@ -29,12 +29,12 @@ void atom_string_callback(atom_ref_t atom, void* data)
     out->len += snprintf(out->str + out->len, 1024 - out->len, ", ");
 }
 
-void query_callback_single_atom(var_atom_t atom, void* data)
+void query_callback_single_atom(atom_ref_t var, atom_ref_t atom, void* data)
 {
     struct output_t* out = data;
-    out->len += snprintf(out->str + out->len, 1024 - out->len, "%s: ", atom.var);
-    atom_string_callback(atom_ref(&atom.atom), out);
-    atom_free(atom.atom);
+    out->len += atom_get_name(&var, out->str + out->len, 1024 - out->len);
+    out->len += snprintf(out->str + out->len, 1024 - out->len, ": ");
+    atom_string_callback(atom, out);
 }
 
 void query_callback(struct bindings_t* results, void* data)
