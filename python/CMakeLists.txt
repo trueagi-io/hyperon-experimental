@@ -18,7 +18,12 @@ if (${CMAKE_VERSION} GREATER_EQUAL "3.12")
     if (NOT DEFINED Python3_FIND_VIRTUALENV)
         set(Python3_FIND_VIRTUALENV "ONLY")
     endif()
-    find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
+    if (${CMAKE_VERSION} GREATER_EQUAL "3.18")
+        # Development.Embed is not supported by cibuildwheel environment
+        find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
+    else()
+        find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development)
+    endif()
 else() # support Ubuntu 18.04
     # pybind11 config looks for Python path again when deprecated PythonInterp
     # and PythonLibs packages are used. It should find the same version though
