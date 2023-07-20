@@ -194,8 +194,13 @@ pub static METTA_CODE: &'static str = "
         ($_ Empty) ))))))
 
 (= (is-function $type)
-  (eval (reduce (car $type) $head
-    (match $head -> True False) )))
+  (chain (eval (get-metatype $type)) $meta
+    (eval (switch ($type $meta)
+      (
+        (($_ Expression)
+          (eval (reduce (car-atom $type) $head
+            (match $head -> True False) )))
+        ($_ False) )))))
 
 (= (interpret $atom $type $space)
   (eval (reduce (get-metatype $atom) $meta
@@ -286,6 +291,16 @@ mod tests {
     }
 
     #[test]
+    fn metta_is_function() {
+        let result = run_program("!(eval (is-function (-> $t)))");
+        assert_eq!(result, Ok(vec![vec![expr!({Bool(true)})]]));
+        let result = run_program("!(eval (is-function (A $t)))");
+        assert_eq!(result, Ok(vec![vec![expr!({Bool(false)})]]));
+        let result = run_program("!(eval (is-function %Undefined%))");
+        assert_eq!(result, Ok(vec![vec![expr!({Bool(false)})]]));
+    }
+
+    #[test]
     fn metta_reduce_chain() {
         assert_eq!(run_program("
             (= (foo $x) (bar $x))
@@ -359,6 +374,12 @@ mod tests {
         assert_eq!(run_program("!(eval (interpret-children () &self))"), Ok(vec![vec![expr!(())]]));
         assert_eq!(run_program("!(eval (interpret-children (a) &self))"), Ok(vec![vec![expr!(("a"))]]));
         assert_eq!(run_program("!(eval (interpret-children (a b) &self))"), Ok(vec![vec![expr!(("a" "b"))]]));
+        assert_eq!(run_program("
+            (= (foo $x) (bar $x))
+            (= (bar $x) (baz $x))
+            (= (baz $x) $x)
+            !(eval (interpret-children ((foo A) (foo B)) &self))
+        "), Ok(vec![vec![expr!("A" "B")]]));
     }
 
     #[test]
@@ -366,5 +387,24 @@ mod tests {
         assert_eq!(run_program("(= (foo $x) $x) !(eval (interpret (foo a) %Undefined% &self))"), Ok(vec![vec![expr!("a")]]));
         assert_eq!(run_program("!(eval (interpret (foo a) %Undefined% &self))"), Ok(vec![vec![expr!("foo" "a")]]));
         assert_eq!(run_program("!(eval (interpret () SomeType &self))"), Ok(vec![vec![expr!(())]]));
+    }
+
+    #[test]
+    fn test_frog_reasoning() {
+        let program = "
+            (= (and True True) True)
+
+            (= (Fritz croaks) True)
+            (= (Fritz eats-flies) True)
+
+            (= (Tweety chirps) True)
+            (= (Tweety yello) True)
+            (= (Tweety eats-flies) True)
+
+            !(eval (interpret (if (and ($x croaks) ($x eats-flies)) (= ($x frog) True) Empty) %Undefined% &self))
+        ";
+
+        //let result = run_program(program);
+        //assert_eq!(result, Ok(vec![vec![expr!("=" ("Fritz" "frog") "True")]]));
     }
 }
