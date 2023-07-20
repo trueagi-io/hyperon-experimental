@@ -184,9 +184,13 @@ fn is_embedded_op(atom: &Atom) -> bool {
 }
 
 fn interpret_atom<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
+    interpret_atom_root(space, interpreted_atom, true)
+}
+
+fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: InterpretedAtom, root: bool) -> Vec<InterpretedAtom> {
     let InterpretedAtom(atom, bindings) = interpreted_atom;
     let expr = atom_as_slice(&atom);
-    match expr {
+    let mut result = match expr {
         Some([op, args @ ..]) if *op == EVAL_SYMBOL => {
             match args {
                 [_atom] => {
@@ -253,7 +257,14 @@ fn interpret_atom<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: InterpretedAt
         _ => {
             vec![InterpretedAtom(return_atom(atom), bindings)]
         },
+    };
+    if root {
+        result.iter_mut().for_each(|interpreted| {
+            let InterpretedAtom(atom, bindings) = interpreted;
+            bindings.cleanup(&atom.iter().filter_type::<&VariableAtom>().collect());
+        });
     }
+    result
 }
 
 fn return_empty() -> Atom {
@@ -302,19 +313,18 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<I
             .flat_map(|mut b| {
                 let atom = b.resolve_and_remove(&var).unwrap();
                 let bindings = b.merge_v2(&bindings);
-                bindings.into_iter().map(move |b| (atom.clone(), b))
+                bindings.into_iter().map(move |b| {
+                    let atom = apply_bindings_to_atom(&atom, &b);
+                    InterpretedAtom(atom, b)
+                })
             })
-        .map(|(atom, bindings)| {
-            let atom = apply_bindings_to_atom(&atom, &bindings);
-            InterpretedAtom(atom, bindings)
-        })
-        .collect()
+            .collect()
     }
 }
 
 fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: &Atom, var: &VariableAtom, templ: &Atom) -> Vec<InterpretedAtom> {
     if is_embedded_op(&nested) {
-        let result = interpret_atom(space, InterpretedAtom(nested.clone(), bindings.clone()));
+        let result = interpret_atom_root(space, InterpretedAtom(nested.clone(), bindings.clone()), false);
         result.into_iter()
             .flat_map(|InterpretedAtom(r, b)| {
                 b.merge_v2(&bindings)
@@ -344,11 +354,10 @@ fn match_(bindings: Bindings, atom: &Atom, pattern: &Atom, then: &Atom, else_: &
     } else {
         matches.into_iter()
             .flat_map(|b| {
-                b.merge_v2(&bindings).into_iter()
-                    .map(|b| {
-                        let then = apply_bindings_to_atom(then, &b);
-                        InterpretedAtom(then.clone(), b)
-                    })
+                let then = apply_bindings_to_atom(then, &b);
+                b.merge_v2(&bindings).into_iter().map(move |b| {
+                    InterpretedAtom(then.clone(), b)
+                })
             })
         .collect()
     }
@@ -414,7 +423,7 @@ mod tests {
     fn interpret_atom_evaluate_pure_expression() {
         let space = space("(= (foo $a B) $a)");
         let result = interpret_atom(&space, atom("(eval (foo A $b))", bind!{}));
-        assert_eq!(result, vec![atom("A", bind!{b: expr!("B")})]);
+        assert_eq!(result, vec![atom("A", bind!{})]);
     }
 
     #[test]
@@ -492,14 +501,14 @@ mod tests {
     fn interpret_atom_chain_evaluation() {
         let space = space("(= (foo $a B) $a)");
         let result = interpret_atom(&space, atom("(chain (eval (foo A $b)) $x (bar $x))", bind!{}));
-        assert_eq!(result, vec![atom("(chain A $x (bar $x))", bind!{b: expr!("B")})]);
+        assert_eq!(result, vec![atom("(chain A $x (bar $x))", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_chain_nested_evaluation() {
         let space = space("(= (foo $a B) $a)");
         let result = interpret_atom(&space, atom("(chain (chain (eval (foo A $b)) $x (bar $x)) $y (baz $y))", bind!{}));
-        assert_eq!(result, vec![atom("(chain (chain A $x (bar $x)) $y (baz $y))", bind!{b: expr!("B")})]);
+        assert_eq!(result, vec![atom("(chain (chain A $x (bar $x)) $y (baz $y))", bind!{})]);
     }
 
     #[test]
@@ -541,7 +550,7 @@ mod tests {
     #[test]
     fn interpret_atom_match_then() {
         let result = interpret_atom(&space(""), atom("(match (A $b) ($a B) ($a $b) Empty)", bind!{}));
-        assert_eq!(result, vec![atom("(A B)", bind!{a: expr!("A"), b: expr!("B")})]);
+        assert_eq!(result, vec![atom("(A B)", bind!{})]);
     }
 
     #[test]
