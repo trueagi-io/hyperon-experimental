@@ -172,10 +172,6 @@ pub static METTA_CODE: &'static str = "
     (Error (subst $atom $var $templ)
       \"subst expects a variable as a second argument\") ))
 
-(= (eval-or-default $atom $default)
-  (chain (eval $atom) $result
-    (match $result Empty $default $result) ))
-
 (= (reduce $atom $var $templ)
   (chain (eval $atom) $res
     (match $res (Error $a $m)
@@ -185,25 +181,25 @@ pub static METTA_CODE: &'static str = "
         (eval (reduce $res $var $templ)) ))))
 
 (= (type-cast $atom $type $space)
-  (eval (reduce (get-type $atom $space) $actual-type
+  (chain (eval (get-type $atom $space)) $actual-type
     (eval (switch ($actual-type $type)
       (
         ((%Undefined% $_) $atom)
         (($_ %Undefined%) $atom)
         (($type $_) $atom)
-        ($_ Empty) ))))))
+        ($_ Empty) )))))
 
 (= (is-function $type)
   (chain (eval (get-metatype $type)) $meta
     (eval (switch ($type $meta)
       (
         (($_ Expression)
-          (eval (reduce (car-atom $type) $head
-            (match $head -> True False) )))
+          (chain (eval (car-atom $type)) $head
+            (match $head -> True False) ))
         ($_ False) )))))
 
 (= (interpret $atom $type $space)
-  (eval (reduce (get-metatype $atom) $meta
+  (chain (eval (get-metatype $atom)) $meta
     (eval (switch ($type $meta)
       (
         ((Atom $_meta) $atom)
@@ -212,26 +208,32 @@ pub static METTA_CODE: &'static str = "
 
         (($_type Symbol) (eval (type-cast $atom $type $space)))
         (($_type Grounded) (eval (type-cast $atom $type $space)))
-        (($_type Expression) (eval (interpret-expression $atom $type $space))) ))))))
+        (($_type Expression) (eval (interpret-expression $atom $type $space))) )))))
 
 (= (interpret-expression $atom $type $space)
   (chain (decons $atom) $list
-    (match ($op $args) $list
-      (eval (reduce (get-type $op $space) $op-type
-        (eval (reduce (is-function $op-type) $is-func
+    (match $list ($op $args)
+      (chain (eval (get-type $op $space)) $op-type
+        (chain (eval (is-function $op-type)) $is-func
           (match $is-func True
             (Error $atom \"Functions processing is not implemented yet\")
-            (eval (reduce (interpret-children $atom $space) $tuple (eval (eval-or-default $tuple $tuple))))
-          )))))
+            (chain (eval (interpret-children $atom $space)) $tuple (eval (call $tuple $type $space))) )))
       (eval (type-cast $atom $type $space)) )))
 
 (= (interpret-children $atom $space)
   (chain (decons $atom) $list
-    (match ($head $tail) $list
-      (eval (reduce (interpret $head %Undefined% $space) $rhead
-        (eval (reduce (interpret-children $tail $space) $rtail
-          (chain (cons $rhead $rtail) $cons $cons)))))
+    (match $list ($head $tail)
+      (chain (eval (interpret $head %Undefined% $space)) $rhead
+        (chain (eval (interpret-children $tail $space)) $rtail
+          (chain (cons $rhead $rtail) $cons $cons)))
       $atom )))
+
+(= (call $atom $type $space)
+  (chain (eval $atom) $result
+    (match $result Empty $atom
+      (match $result (Error $_a $_m) $result
+        (eval (interpret $result $type $space))) )))
+
 ";
 
 #[cfg(test)]
