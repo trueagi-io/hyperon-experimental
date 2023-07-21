@@ -345,25 +345,6 @@ mod tests {
     }
 
     #[test]
-    fn test_frog_reasoning() {
-        let program = "
-            (= (and True True) True)
-
-            (= (Fritz croaks) True)
-            (= (Fritz eats-flies) True)
-
-            (= (Tweety chirps) True)
-            (= (Tweety yello) True)
-            (= (Tweety eats-flies) True)
-
-            !(if (and ($x croaks) ($x eats-flies)) (= ($x frog) True) Empty)
-        ";
-
-        //let result = run_program(program);
-        //assert_eq!(result, Ok(vec![vec![expr!("=" ("Fritz" "frog") "True")]]));
-    }
-
-    #[test]
     fn operation_is_expression() {
         let mut space = GroundingSpace::new();
         space.add(expr!(":" "foo" ("->" ("->" "A" "A"))));

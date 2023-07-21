@@ -216,8 +216,9 @@ pub static METTA_CODE: &'static str = "
       (chain (eval (get-type $op $space)) $op-type
         (chain (eval (is-function $op-type)) $is-func
           (match $is-func True
-            (Error $atom \"Functions processing is not implemented yet\")
-            (chain (eval (interpret-children $atom $space)) $tuple (eval (call $tuple $type $space))) )))
+            (chain (eval (interpret-children $args $space)) $reduced_args
+              (chain (cons $op $reduced_args) $reduced_atom (eval (call $reduced_atom %Undefined% $space))) )
+            (chain (eval (interpret-children $atom $space)) $reduced_atom (eval (call $reduced_atom $type $space))) )))
       (eval (type-cast $atom $type $space)) )))
 
 (= (interpret-children $atom $space)
@@ -392,21 +393,21 @@ mod tests {
     }
 
     #[test]
-    fn test_frog_reasoning() {
+    fn metta_frog_reasoning() {
         let program = "
             (= (and True True) True)
 
-            (= (Fritz croaks) True)
-            (= (Fritz eats-flies) True)
+            (= (is Fritz croaks) True)
+            (= (is Fritz eats-flies) True)
 
-            (= (Tweety chirps) True)
-            (= (Tweety yello) True)
-            (= (Tweety eats-flies) True)
+            (= (is Tweety chirps) True)
+            (= (is Tweety yellow) True)
+            (= (is Tweety eats-flies) True)
 
-            !(eval (interpret (if (and ($x croaks) ($x eats-flies)) (= ($x frog) True) Empty) %Undefined% &self))
+            !(eval (interpret (if (and (is $x croaks) (is $x eats-flies)) (= (is $x frog) True) Empty) %Undefined% &self))
         ";
 
-        //let result = run_program(program);
-        //assert_eq!(result, Ok(vec![vec![expr!("=" ("Fritz" "frog") "True")]]));
+        let result = run_program(program);
+        assert_eq!(result, Ok(vec![vec![expr!("=" ("is" "Fritz" "frog") {Bool(true)})]]));
     }
 }
