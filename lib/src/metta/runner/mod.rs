@@ -206,7 +206,6 @@ mod tests {
     use super::*;
 
     use crate::atom::matcher::*;
-    use arithmetics::*;
 
     #[test]
     fn test_space() {

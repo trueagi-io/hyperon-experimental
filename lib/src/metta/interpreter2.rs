@@ -294,6 +294,9 @@ fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<In
                 },
                 Err(ExecError::Runtime(err)) =>
                     vec![InterpretedAtom(error_atom(atom, err), bindings)],
+                // TODO: NoReduce should also be available for processing
+                // on MeTTa code level, to allow override code behavior in
+                // case when grounded expression cannot be reduced.
                 Err(ExecError::NoReduce) =>
                     vec![InterpretedAtom(return_atom(atom), bindings)],
             }

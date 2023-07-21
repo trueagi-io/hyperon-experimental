@@ -94,6 +94,71 @@ impl Grounded for GetMetaTypeOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct IsEmptyOp { }
+
+impl Display for IsEmptyOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "is-empty")
+    }
+}
+
+impl Grounded for IsEmptyOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("is-empty expects <atom> <then> <else> as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        let then = args.get(1).ok_or_else(arg_error)?;
+        let else_ = args.get(2).ok_or_else(arg_error)?;
+
+        if *atom == EMPTY_SYMBOL {
+            Ok(vec![then.clone()])
+        } else {
+            Ok(vec![else_.clone()])
+        }
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct IsErrorOp { }
+
+impl Display for IsErrorOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "is-error")
+    }
+}
+
+impl Grounded for IsErrorOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("is-error expects <atom> <then> <else> as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        let expr: Option<&[Atom]> = atom.try_into().ok();
+        let then = args.get(1).ok_or_else(arg_error)?;
+        let else_ = args.get(2).ok_or_else(arg_error)?;
+
+        let result = match expr {
+            Some([op, ..]) if *op == ERROR_SYMBOL => then.clone(),
+            _ => else_.clone(),
+        };
+        Ok(vec![result])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 
 fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
@@ -109,6 +174,10 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
     let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
     tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
+    let is_empty = Atom::gnd(IsEmptyOp{});
+    tref.register_token(regex(r"is-empty"), move |_| { is_empty.clone() });
+    let is_error = Atom::gnd(IsErrorOp{});
+    tref.register_token(regex(r"is-error"), move |_| { is_error.clone() });
 }
 
 pub fn register_runner_tokens(metta: &Metta, _cwd: PathBuf) {
@@ -174,11 +243,14 @@ pub static METTA_CODE: &'static str = "
 
 (= (reduce $atom $var $templ)
   (chain (eval $atom) $res
-    (match $res (Error $a $m)
-      (Error $a $m)
-      (match $res Empty
+    ; TODO: is-error and is-empty could be replaced by (match ...) but (match ...)
+    ; will always match variable with Empty or (Error ...) pattern. Thus we
+    ; need some way to match exactly atom or expression, some MeTTa analog of
+    ; atoms_are_equivalent() function.
+    (eval (is-error $res $res
+      (eval (is-empty $res
         (eval (subst $atom $var $templ))
-        (eval (reduce $res $var $templ)) ))))
+        (eval (reduce $res $var $templ)) ))))))
 
 (= (type-cast $atom $type $space)
   (chain (eval (get-type $atom $space)) $actual-type
@@ -231,9 +303,9 @@ pub static METTA_CODE: &'static str = "
 
 (= (call $atom $type $space)
   (chain (eval $atom) $result
-    (match $result Empty $atom
-      (match $result (Error $_a $_m) $result
-        (eval (interpret $result $type $space))) )))
+    (eval (is-empty $result $atom
+      (eval (is-error $result $result
+        (eval (interpret $result $type $space)) ))))))
 
 ";
 
@@ -407,7 +479,37 @@ mod tests {
             !(eval (interpret (if (and (is $x croaks) (is $x eats-flies)) (= (is $x frog) True) Empty) %Undefined% &self))
         ";
 
-        let result = run_program(program);
-        assert_eq!(result, Ok(vec![vec![expr!("=" ("is" "Fritz" "frog") {Bool(true)})]]));
+        assert_eq!(run_program(program),
+            Ok(vec![vec![expr!("=" ("is" "Fritz" "frog") {Bool(true)})]]));
+    }
+
+
+    #[test]
+    fn metta_match_all() {
+        let program = "
+            (= (color) blue)
+            (= (color) red)
+            (= (color) green)
+
+            !(eval (interpret (color) %Undefined% &self))
+        ";
+
+        assert_eq_metta_results!(run_program(program),
+            Ok(vec![vec![expr!("blue"), expr!("red"), expr!("green")]]));
+    }
+
+    #[test]
+    fn metta_variable_keeps_value_in_different_sub_expressions() {
+        let program = "
+            (= (eq $x $x) True)
+            (= (plus Z $y) $y)
+            (= (plus (S $k) $y) (S (plus $k $y)))
+
+            !(eval (interpret (eq (plus Z $n) $n) %Undefined% &self))
+            !(eval (interpret (eq (plus (S Z) $n) $n) %Undefined% &self))
+        ";
+
+        assert_eq_metta_results!(run_program(program),
+            Ok(vec![vec![expr!({Bool(true)})], vec![expr!("eq" ("S" n) n)]]));
     }
 }
