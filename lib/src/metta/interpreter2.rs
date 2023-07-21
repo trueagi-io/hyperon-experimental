@@ -680,7 +680,7 @@ mod tests {
             expr!("->" "&str" "Error")
         }
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            Err(args[0].as_gnd::<&str>().unwrap().deref().into())
+            Err((*args[0].as_gnd::<&str>().unwrap()).into())
         }
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
             match_by_equality(self, other)

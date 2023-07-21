@@ -313,6 +313,7 @@ pub static METTA_CODE: &'static str = "
 mod tests {
     use super::*;
     use crate::metta::runner::new_metta_rust;
+    use crate::matcher::atoms_are_equivalent;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
         let metta = new_metta_rust();
@@ -464,8 +465,9 @@ mod tests {
         assert_eq!(run_program("!(eval (interpret () SomeType &self))"), Ok(vec![vec![expr!(())]]));
     }
 
+
     #[test]
-    fn metta_frog_reasoning() {
+    fn test_frog_reasoning() {
         let program = "
             (= (and True True) True)
 
@@ -483,9 +485,8 @@ mod tests {
             Ok(vec![vec![expr!("=" ("is" "Fritz" "frog") {Bool(true)})]]));
     }
 
-
     #[test]
-    fn metta_match_all() {
+    fn test_match_all() {
         let program = "
             (= (color) blue)
             (= (color) red)
@@ -499,7 +500,7 @@ mod tests {
     }
 
     #[test]
-    fn metta_variable_keeps_value_in_different_sub_expressions() {
+    fn test_variable_keeps_value_in_different_sub_expressions() {
         let program = "
             (= (eq $x $x) True)
             (= (plus Z $y) $y)
@@ -511,5 +512,45 @@ mod tests {
 
         assert_eq_metta_results!(run_program(program),
             Ok(vec![vec![expr!({Bool(true)})], vec![expr!("eq" ("S" n) n)]]));
+    }
+
+    #[test]
+    fn test_variable_defined_via_variabe() {
+        let program = "
+            (= (if T $y) $y)
+            (= (not F) T)
+            (= (a $z) (not (b $z)))
+            (= (b d) F)
+
+            !(eval (interpret (if (a $x) $x) %Undefined% &self))
+        ";
+
+        assert_eq_metta_results!(run_program(program),
+            Ok(vec![vec![expr!("d")]]));
+    }
+
+    #[test]
+    fn test_variable_name_conflict() {
+        let program = "
+            (= (a ($W)) True)
+
+            !(eval (interpret (a $W) %Undefined% &self))
+        ";
+
+        assert_eq_metta_results!(run_program(program),
+            Ok(vec![vec![expr!({Bool(true)})]]));
+    }
+
+    #[test]
+    fn test_variable_name_conflict_renaming() {
+        let program = "
+            (= (b ($x $y)) (c $x $y))
+
+            !(eval (interpret (a (b $a) $x $y) %Undefined% &self))
+        ";
+
+        let result = run_program(program);
+        assert!(result.is_ok_and(|res| res.len() == 1 && res[0].len() == 1 &&
+            atoms_are_equivalent(&res[0][0], &expr!("a" ("c" a b) c d))));
     }
 }
