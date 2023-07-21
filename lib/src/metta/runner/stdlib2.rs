@@ -95,63 +95,31 @@ impl Grounded for GetMetaTypeOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct IsEmptyOp { }
+pub struct IsEqualOp { }
 
-impl Display for IsEmptyOp {
+impl Display for IsEqualOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "is-empty")
+        write!(f, "is-equal")
     }
 }
 
-impl Grounded for IsEmptyOp {
+impl Grounded for IsEqualOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("is-empty expects <atom> <then> <else> as an argument");
+        let arg_error = || ExecError::from("is-empty expects <atom> <pattern> <then> <else> as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
-        let then = args.get(1).ok_or_else(arg_error)?;
-        let else_ = args.get(2).ok_or_else(arg_error)?;
+        let pattern = args.get(1).ok_or_else(arg_error)?;
+        let then = args.get(2).ok_or_else(arg_error)?;
+        let else_ = args.get(3).ok_or_else(arg_error)?;
 
-        if *atom == EMPTY_SYMBOL {
+        if crate::matcher::atoms_are_equivalent(atom, pattern) {
             Ok(vec![then.clone()])
         } else {
             Ok(vec![else_.clone()])
         }
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct IsErrorOp { }
-
-impl Display for IsErrorOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "is-error")
-    }
-}
-
-impl Grounded for IsErrorOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
-    }
-
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("is-error expects <atom> <then> <else> as an argument");
-        let atom = args.get(0).ok_or_else(arg_error)?;
-        let expr: Option<&[Atom]> = atom.try_into().ok();
-        let then = args.get(1).ok_or_else(arg_error)?;
-        let else_ = args.get(2).ok_or_else(arg_error)?;
-
-        let result = match expr {
-            Some([op, ..]) if *op == ERROR_SYMBOL => then.clone(),
-            _ => else_.clone(),
-        };
-        Ok(vec![result])
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -174,10 +142,8 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
     let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
     tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
-    let is_empty = Atom::gnd(IsEmptyOp{});
-    tref.register_token(regex(r"is-empty"), move |_| { is_empty.clone() });
-    let is_error = Atom::gnd(IsErrorOp{});
-    tref.register_token(regex(r"is-error"), move |_| { is_error.clone() });
+    let is_equivalent = Atom::gnd(IsEqualOp{});
+    tref.register_token(regex(r"is-equal"), move |_| { is_equivalent.clone() });
 }
 
 pub fn register_runner_tokens(metta: &Metta, _cwd: PathBuf) {
@@ -231,6 +197,17 @@ pub static METTA_CODE: &'static str = "
 
 (: Error (-> Atom Atom ErrorType))
 
+(= (is-empty $atom $then $else) (eval (is-equal $atom Empty $then $else)))
+
+(= (is-error $atom $then $else)
+  (chain (eval (get-metatype $atom)) $meta
+    (eval (is-equal $meta Expression
+      (chain (decons $atom) $list
+        (match $list ($head $_)
+          (eval (is-equal $head Error $then $else))
+          (Error $atom \"Unexpected state\") ))
+      $else ))))
+
 (= (switch $atom $cases)
   (chain (decons $cases) $list (eval (switch-internal $atom $list))))
 (= (switch-internal $atom (($pattern $template) $tail))
@@ -243,10 +220,6 @@ pub static METTA_CODE: &'static str = "
 
 (= (reduce $atom $var $templ)
   (chain (eval $atom) $res
-    ; TODO: is-error and is-empty could be replaced by (match ...) but (match ...)
-    ; will always match variable with Empty or (Error ...) pattern. Thus we
-    ; need some way to match exactly atom or expression, some MeTTa analog of
-    ; atoms_are_equivalent() function.
     (eval (is-error $res $res
       (eval (is-empty $res
         (eval (subst $atom $var $templ))
