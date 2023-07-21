@@ -261,8 +261,8 @@ pub static METTA_CODE: &'static str = "
       (chain (eval (get-type $op $space)) $op-type
         (chain (eval (is-function $op-type)) $is-func
           (match $is-func True
-            (chain (eval (interpret-children $args $space)) $reduced_args
-              (chain (cons $op $reduced_args) $reduced_atom (eval (call $reduced_atom %Undefined% $space))) )
+            (chain (eval (interpret-children $atom $space)) $reduced_atom
+              (eval (call $reduced_atom $type $space)) )
             (chain (eval (interpret-children $atom $space)) $reduced_atom (eval (call $reduced_atom $type $space))) )))
       (eval (type-cast $atom $type $space)) )))
 
@@ -525,5 +525,19 @@ mod tests {
         let result = run_program(program);
         assert!(result.is_ok_and(|res| res.len() == 1 && res[0].len() == 1 &&
             atoms_are_equivalent(&res[0][0], &expr!("a" ("c" a b) c d))));
+    }
+
+    #[test]
+    fn test_operation_is_expression() {
+        let program = "
+            (: foo (-> (-> A A)))
+            (: a A)
+            (= (foo) bar)
+            (= (bar $x) $x)
+
+            !(eval (interpret ((foo) a) %Undefined% &self))
+        ";
+
+        assert_eq_metta_results!(run_program(program), Ok(vec![vec![expr!("a")]]));
     }
 }
