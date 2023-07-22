@@ -9,37 +9,8 @@ use crate::metta::types::{get_atom_types, get_meta_type};
 use std::fmt::Display;
 use std::path::PathBuf;
 use regex::Regex;
-use std::convert::TryInto;
 
 use super::arithmetics::*;
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct CarAtomOp {}
-
-impl Display for CarAtomOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "car-atom")
-    }
-}
-
-impl Grounded for CarAtomOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
-    }
-
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("car-atom expects one argument: expression");
-        let expr = args.get(0).ok_or_else(arg_error)?;
-        let expr: &ExpressionAtom = expr.try_into().map_err(|_| arg_error())?;
-        let chld = expr.children();
-        let car = chld.get(0).ok_or("car-atom expects non-empty expression")?;
-        Ok(vec![car.clone()])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct GetTypeOp {}
@@ -136,8 +107,6 @@ pub fn register_common_tokens(metta: &Metta) {
     let tokenizer = &metta.tokenizer;
     let mut tref = tokenizer.borrow_mut();
 
-    let car_atom_op = Atom::gnd(CarAtomOp{});
-    tref.register_token(regex(r"car-atom"), move |_| { car_atom_op.clone() });
     let get_type_op = Atom::gnd(GetTypeOp{});
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
     let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
@@ -205,8 +174,16 @@ pub static METTA_CODE: &'static str = "
       (chain (decons $atom) $list
         (match $list ($head $_)
           (eval (is-equal $head Error $then $else))
-          (Error $atom \"Unexpected state\") ))
+          $else ))
       $else ))))
+
+(= (car $atom)
+  (chain (decons $atom) $list
+    (eval (is-error $list
+      (Error (car $atom) \"car expects an expression as an argument\")
+      (match $list ($head $_)
+        $head
+        (Error (car $atom) \"car expects non-empty expression\") )))))
 
 (= (switch $atom $cases)
   (chain (decons $cases) $list (eval (switch-internal $atom $list))))
@@ -239,7 +216,7 @@ pub static METTA_CODE: &'static str = "
     (eval (switch ($type $meta)
       (
         (($_ Expression)
-          (chain (eval (car-atom $type)) $head
+          (chain (eval (car $type)) $head
             (match $head -> True False) ))
         ($_ False) )))))
 
@@ -294,12 +271,6 @@ mod tests {
     }
 
     #[test]
-    fn car_atom_op() {
-        let res = CarAtomOp{}.execute(&mut vec![expr!(("A" "C") "B")]).expect("No result returned");
-        assert_eq!(res, vec![expr!("A" "C")]);
-    }
-
-    #[test]
     fn get_type_op() {
         let space = DynSpace::new(metta_space("
             (: B Type)
@@ -328,6 +299,20 @@ mod tests {
             Vec::<Atom>::new());
     }
 
+
+    #[test]
+    fn metta_car() {
+        let result = run_program("!(eval (car (A $b)))");
+        assert_eq!(result, Ok(vec![vec![expr!("A")]]));
+        let result = run_program("!(eval (car ($a B)))");
+        //assert_eq!(result, Ok(vec![vec![expr!(a)]]));
+        assert!(result.is_ok_and(|res| res.len() == 1 && res[0].len() == 1 &&
+            atoms_are_equivalent(&res[0][0], &expr!(a))));
+        let result = run_program("!(eval (car ()))");
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car" ()) "\"car expects non-empty expression\"")]]));
+        let result = run_program("!(eval (car A))");
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car" "A") "\"car expects an expression as an argument\"")]]));
+    }
 
     #[test]
     fn metta_switch() {

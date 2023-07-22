@@ -350,6 +350,11 @@ fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: &Atom, var: 
 }
 
 fn match_(bindings: Bindings, atom: &Atom, pattern: &Atom, then: &Atom, else_: &Atom) -> Vec<InterpretedAtom> {
+    // TODO: Should match_() be symmetrical or not. While it is symmetrical then
+    // if variable is matched by variable then both variables have the same
+    // priority. Thus interpreter can use any of them further. This sometimes
+    // looks unexpected. For example see `metta_car` unit test where variable
+    // from car's argument is replaced.
     let matches: Vec<Bindings> = match_atoms(atom, pattern).collect();
     if matches.is_empty() {
         let result = apply_bindings_to_atom(else_, &bindings);
