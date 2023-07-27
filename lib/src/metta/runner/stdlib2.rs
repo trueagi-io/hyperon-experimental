@@ -177,6 +177,15 @@ pub static METTA_CODE: &'static str = "
           $else ))
       $else ))))
 
+(= (return-on-error $atom $then)
+  (eval (is-empty $atom Empty
+    (eval (is-error $atom $atom
+      $then )))))
+
+(= (chain-decons $atom $head $tail $then $else)
+  (chain (decons $atom) $list
+    (match $list ($head $tail) $then $else) ))
+
 (= (car $atom)
   (chain (decons $atom) $list
     (eval (is-error $list
@@ -209,7 +218,7 @@ pub static METTA_CODE: &'static str = "
         ((%Undefined% $_) $atom)
         (($_ %Undefined%) $atom)
         (($type $_) $atom)
-        ($_ Empty) )))))
+        ($_ (Error $atom BadType)) )))))
 
 (= (is-function $type)
   (chain (eval (get-metatype $type)) $meta
@@ -238,17 +247,49 @@ pub static METTA_CODE: &'static str = "
       (chain (eval (get-type $op $space)) $op-type
         (chain (eval (is-function $op-type)) $is-func
           (match $is-func True
-            (chain (eval (interpret-children $atom $space)) $reduced_atom
-              (eval (call $reduced_atom $type $space)) )
-            (chain (eval (interpret-children $atom $space)) $reduced_atom (eval (call $reduced_atom $type $space))) )))
+            (chain (eval (interpret-func $atom $op-type $space)) $reduced-atom
+              (eval (call $reduced-atom $type $space)) )
+            (chain (eval (interpret-tuple $atom $space)) $reduced-atom
+              (eval (call $reduced-atom $type $space)) ))))
       (eval (type-cast $atom $type $space)) )))
 
-(= (interpret-children $atom $space)
+(= (interpret-func $expr $type $space)
+  (eval (chain-decons $expr $op $args
+    (chain (eval (interpret $op $type $space)) $reduced-op
+      (eval (return-on-error $reduced-op
+        (eval (chain-decons $type $arrow $arg-types
+          (chain (eval (interpret-args $expr $args $arg-types $space)) $reduced-args
+            (eval (return-on-error $reduced-args
+              (cons $reduced-op $reduced-args) )))
+          (Error $type \"Function type expected\") )))))
+    (Error $expr \"Expression atom expected\") )))
+
+(= (interpret-args $atom $args $arg-types $space)
+  (match $args ()
+    (match $arg-types ($ret) () (Error $atom BadType))
+    (eval (chain-decons $args $head $tail
+      (eval (chain-decons $arg-types $head-type $tail-types
+        (chain (eval (interpret $head $head-type $space)) $reduced-head
+          ; check that head was changed otherwise Error or Empty in the head
+          ; can be just an argument which is passed by intention
+          (eval (is-equal $reduced-head $head
+            (eval (interpret-args-tail $atom $reduced-head $tail $tail-types $space))
+            (eval (return-on-error $reduced-head
+              (eval (interpret-args-tail $atom $reduced-head $tail $tail-types $space)) )))))
+        (Error $atom BadType) ))
+      (Error $args \"Unexpected state\") ))))
+
+(= (interpret-args-tail $atom $head $args-tail $args-tail-types $space)
+  (chain (eval (interpret-args $atom $args-tail $args-tail-types $space)) $reduced-tail
+    (eval (return-on-error $reduced-tail
+      (cons $head $reduced-tail) ))))
+
+(= (interpret-tuple $atom $space)
   (chain (decons $atom) $list
     (match $list ($head $tail)
       (chain (eval (interpret $head %Undefined% $space)) $rhead
-        (chain (eval (interpret-children $tail $space)) $rtail
-          (chain (cons $rhead $rtail) $cons $cons)))
+        (chain (eval (interpret-tuple $tail $space)) $rtail
+          (cons $rhead $rtail) ))
       $atom )))
 
 (= (call $atom $type $space)
@@ -363,7 +404,7 @@ mod tests {
     #[test]
     fn metta_type_cast() {
         assert_eq!(run_program("(: a A) !(eval (type-cast a A &self))"), Ok(vec![vec![expr!("a")]]));
-        assert_eq!(run_program("(: a A) !(eval (type-cast a B &self))"), Ok(vec![vec![]]));
+        assert_eq!(run_program("(: a A) !(eval (type-cast a B &self))"), Ok(vec![vec![expr!("Error" "a" "BadType")]]));
         assert_eq!(run_program("(: a A) !(eval (type-cast a %Undefined% &self))"), Ok(vec![vec![expr!("a")]]));
         assert_eq!(run_program("!(eval (type-cast a B &self))"), Ok(vec![vec![expr!("a")]]));
         assert_eq!(run_program("!(eval (type-cast 42 Number &self))"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
@@ -387,7 +428,7 @@ mod tests {
     #[test]
     fn metta_interpret_symbol_or_grounded_value_as_type() {
         assert_eq!(run_program("(: a A) !(eval (interpret a A &self))"), Ok(vec![vec![expr!("a")]]));
-        assert_eq!(run_program("(: a A) !(eval (interpret a B &self))"), Ok(vec![vec![]]));
+        assert_eq!(run_program("(: a A) !(eval (interpret a B &self))"), Ok(vec![vec![expr!("Error" "a" "BadType")]]));
         assert_eq!(run_program("!(eval (interpret 42 Number &self))"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
     }
 
@@ -405,14 +446,14 @@ mod tests {
 
     #[test]
     fn metta_interpret_children() {
-        assert_eq!(run_program("!(eval (interpret-children () &self))"), Ok(vec![vec![expr!(())]]));
-        assert_eq!(run_program("!(eval (interpret-children (a) &self))"), Ok(vec![vec![expr!(("a"))]]));
-        assert_eq!(run_program("!(eval (interpret-children (a b) &self))"), Ok(vec![vec![expr!(("a" "b"))]]));
+        assert_eq!(run_program("!(eval (interpret-tuple () &self))"), Ok(vec![vec![expr!(())]]));
+        assert_eq!(run_program("!(eval (interpret-tuple (a) &self))"), Ok(vec![vec![expr!(("a"))]]));
+        assert_eq!(run_program("!(eval (interpret-tuple (a b) &self))"), Ok(vec![vec![expr!(("a" "b"))]]));
         assert_eq!(run_program("
             (= (foo $x) (bar $x))
             (= (bar $x) (baz $x))
             (= (baz $x) $x)
-            !(eval (interpret-children ((foo A) (foo B)) &self))
+            !(eval (interpret-tuple ((foo A) (foo B)) &self))
         "), Ok(vec![vec![expr!("A" "B")]]));
     }
 
@@ -475,12 +516,12 @@ mod tests {
     #[test]
     fn test_variable_defined_via_variabe() {
         let program = "
-            (= (if T $y) $y)
+            (= (myif T $y) $y)
             (= (not F) T)
             (= (a $z) (not (b $z)))
             (= (b d) F)
 
-            !(eval (interpret (if (a $x) $x) %Undefined% &self))
+            !(eval (interpret (myif (a $x) $x) %Undefined% &self))
         ";
 
         assert_eq_metta_results!(run_program(program),
@@ -524,5 +565,22 @@ mod tests {
         ";
 
         assert_eq_metta_results!(run_program(program), Ok(vec![vec![expr!("a")]]));
+    }
+
+    #[test]
+    fn test_return_bad_type_error() {
+        let program = "
+            (: myAtom myType)
+            (: id_a (-> A A))
+            (= (id_a $a) $a)
+
+            !(eval (interpret (id_a myAtom) %Undefined% &self))
+            ;!(id_num myatom)
+        ";
+
+        assert_eq!(run_program(program),
+            Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
+        //assert_eq!(interpret(&space, &expr!({ID_NUM} "myAtom")),
+            //Ok(vec![Atom::expr([ERROR_SYMBOL, sym!("myAtom"), BAD_TYPE_SYMBOL])]));
     }
 }
