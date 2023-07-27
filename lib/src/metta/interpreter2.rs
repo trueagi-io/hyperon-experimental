@@ -228,7 +228,7 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
         },
         Some([op, args @ ..]) if *op == DECONS_SYMBOL => {
             match args {
-                [Atom::Expression(_tail)] => {
+                [Atom::Expression(tail)] if tail.children().len() > 0 => {
                     match atom_into_array(atom) {
                         Some([_, Atom::Expression(expr)]) => decons(bindings, expr),
                         _ => panic!("Unexpected state"),
@@ -581,7 +581,7 @@ mod tests {
     #[test]
     fn interpret_atom_decons_empty() {
         let result = interpret_atom(&space(""), atom("(decons ())", bind!{}));
-        assert_eq!(result, vec![atom("()", bind!{})]);
+        assert_eq!(result, vec![InterpretedAtom(expr!("Error" ("decons" ()) "expected: (decons (: <expr> Expression)), found: (decons ())"), bind!{})]);
     }
 
     #[test]

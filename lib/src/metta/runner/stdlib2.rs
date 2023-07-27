@@ -166,33 +166,35 @@ pub static METTA_CODE: &'static str = "
 
 (: Error (-> Atom Atom ErrorType))
 
-(= (is-empty $atom $then $else) (eval (is-equal $atom Empty $then $else)))
+(= (if-non-empty-expression $atom $then $else)
+  (chain (eval (get-metatype $atom)) $type
+    (eval (is-equal $type Expression
+      (eval (is-equal $atom () $else $then))
+      $else ))))
+
+(= (if-decons $atom $head $tail $then $else)
+  (eval (if-non-empty-expression $atom
+    (chain (decons $atom) $list
+      (match $list ($head $tail) $then $else) )
+    $else )))
+
+(= (is-empty $atom $then $else)
+  (eval (is-equal $atom Empty $then $else)))
 
 (= (is-error $atom $then $else)
-  (chain (eval (get-metatype $atom)) $meta
-    (eval (is-equal $meta Expression
-      (chain (decons $atom) $list
-        (match $list ($head $_)
-          (eval (is-equal $head Error $then $else))
-          $else ))
-      $else ))))
+  (eval (if-decons $atom $head $_
+    (eval (is-equal $head Error $then $else))
+    $else )))
 
 (= (return-on-error $atom $then)
   (eval (is-empty $atom Empty
     (eval (is-error $atom $atom
       $then )))))
 
-(= (chain-decons $atom $head $tail $then $else)
-  (chain (decons $atom) $list
-    (match $list ($head $tail) $then $else) ))
-
 (= (car $atom)
-  (chain (decons $atom) $list
-    (eval (is-error $list
-      (Error (car $atom) \"car expects an expression as an argument\")
-      (match $list ($head $_)
-        $head
-        (Error (car $atom) \"car expects non-empty expression\") )))))
+  (eval (if-decons $atom $head $_
+    $head
+    (Error (car $atom) \"car expects a non-empty expression as an argument\") )))
 
 (= (switch $atom $cases)
   (chain (decons $cases) $list (eval (switch-internal $atom $list))))
@@ -242,33 +244,32 @@ pub static METTA_CODE: &'static str = "
         (($_type Expression) (eval (interpret-expression $atom $type $space))) )))))
 
 (= (interpret-expression $atom $type $space)
-  (chain (decons $atom) $list
-    (match $list ($op $args)
-      (chain (eval (get-type $op $space)) $op-type
-        (chain (eval (is-function $op-type)) $is-func
-          (match $is-func True
-            (chain (eval (interpret-func $atom $op-type $space)) $reduced-atom
-              (eval (call $reduced-atom $type $space)) )
-            (chain (eval (interpret-tuple $atom $space)) $reduced-atom
-              (eval (call $reduced-atom $type $space)) ))))
-      (eval (type-cast $atom $type $space)) )))
+  (eval (if-decons $atom $op $args
+    (chain (eval (get-type $op $space)) $op-type
+      (chain (eval (is-function $op-type)) $is-func
+        (match $is-func True
+          (chain (eval (interpret-func $atom $op-type $space)) $reduced-atom
+            (eval (call $reduced-atom $type $space)) )
+          (chain (eval (interpret-tuple $atom $space)) $reduced-atom
+            (eval (call $reduced-atom $type $space)) ))))
+    (eval (type-cast $atom $type $space)) )))
 
 (= (interpret-func $expr $type $space)
-  (eval (chain-decons $expr $op $args
+  (eval (if-decons $expr $op $args
     (chain (eval (interpret $op $type $space)) $reduced-op
       (eval (return-on-error $reduced-op
-        (eval (chain-decons $type $arrow $arg-types
+        (eval (if-decons $type $arrow $arg-types
           (chain (eval (interpret-args $expr $args $arg-types $space)) $reduced-args
             (eval (return-on-error $reduced-args
               (cons $reduced-op $reduced-args) )))
           (Error $type \"Function type expected\") )))))
-    (Error $expr \"Expression atom expected\") )))
+    (Error $expr \"Non-empty expression atom is expected\") )))
 
 (= (interpret-args $atom $args $arg-types $space)
   (match $args ()
     (match $arg-types ($ret) () (Error $atom BadType))
-    (eval (chain-decons $args $head $tail
-      (eval (chain-decons $arg-types $head-type $tail-types
+    (eval (if-decons $args $head $tail
+      (eval (if-decons $arg-types $head-type $tail-types
         (chain (eval (interpret $head $head-type $space)) $reduced-head
           ; check that head was changed otherwise Error or Empty in the head
           ; can be just an argument which is passed by intention
@@ -277,7 +278,8 @@ pub static METTA_CODE: &'static str = "
             (eval (return-on-error $reduced-head
               (eval (interpret-args-tail $atom $reduced-head $tail $tail-types $space)) )))))
         (Error $atom BadType) ))
-      (Error $args \"Unexpected state\") ))))
+      (Error (interpret-atom $atom $args $arg-types $space)
+        \"Non-empty expression atom is expected\") ))))
 
 (= (interpret-args-tail $atom $head $args-tail $args-tail-types $space)
   (chain (eval (interpret-args $atom $args-tail $args-tail-types $space)) $reduced-tail
@@ -285,12 +287,13 @@ pub static METTA_CODE: &'static str = "
       (cons $head $reduced-tail) ))))
 
 (= (interpret-tuple $atom $space)
-  (chain (decons $atom) $list
-    (match $list ($head $tail)
+  (match $atom ()
+    $atom
+    (eval (if-decons $atom $head $tail
       (chain (eval (interpret $head %Undefined% $space)) $rhead
         (chain (eval (interpret-tuple $tail $space)) $rtail
           (cons $rhead $rtail) ))
-      $atom )))
+      (Error (interpret-tuple $atom $space) \"Non-empty expression atom is expected as an argument\") ))))
 
 (= (call $atom $type $space)
   (chain (eval $atom) $result
@@ -350,9 +353,9 @@ mod tests {
         assert!(result.is_ok_and(|res| res.len() == 1 && res[0].len() == 1 &&
             atoms_are_equivalent(&res[0][0], &expr!(a))));
         let result = run_program("!(eval (car ()))");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car" ()) "\"car expects non-empty expression\"")]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car" ()) "\"car expects a non-empty expression as an argument\"")]]));
         let result = run_program("!(eval (car A))");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car" "A") "\"car expects an expression as an argument\"")]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car" "A") "\"car expects a non-empty expression as an argument\"")]]));
     }
 
     #[test]
