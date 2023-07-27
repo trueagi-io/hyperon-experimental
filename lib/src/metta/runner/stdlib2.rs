@@ -66,21 +66,21 @@ impl Grounded for GetMetaTypeOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct IsEqualOp { }
+pub struct IfEqualOp { }
 
-impl Display for IsEqualOp {
+impl Display for IfEqualOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "is-equal")
+        write!(f, "if-equal")
     }
 }
 
-impl Grounded for IsEqualOp {
+impl Grounded for IfEqualOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("is-empty expects <atom> <pattern> <then> <else> as an argument");
+        let arg_error = || ExecError::from("if-equal expects <atom> <pattern> <then> <else> as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
         let pattern = args.get(1).ok_or_else(arg_error)?;
         let then = args.get(2).ok_or_else(arg_error)?;
@@ -111,8 +111,8 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
     let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
     tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
-    let is_equivalent = Atom::gnd(IsEqualOp{});
-    tref.register_token(regex(r"is-equal"), move |_| { is_equivalent.clone() });
+    let is_equivalent = Atom::gnd(IfEqualOp{});
+    tref.register_token(regex(r"if-equal"), move |_| { is_equivalent.clone() });
 }
 
 pub fn register_runner_tokens(metta: &Metta, _cwd: PathBuf) {
@@ -168,8 +168,8 @@ pub static METTA_CODE: &'static str = "
 
 (= (if-non-empty-expression $atom $then $else)
   (chain (eval (get-metatype $atom)) $type
-    (eval (is-equal $type Expression
-      (eval (is-equal $atom () $else $then))
+    (eval (if-equal $type Expression
+      (eval (if-equal $atom () $else $then))
       $else ))))
 
 (= (if-decons $atom $head $tail $then $else)
@@ -178,17 +178,17 @@ pub static METTA_CODE: &'static str = "
       (match $list ($head $tail) $then $else) )
     $else )))
 
-(= (is-empty $atom $then $else)
-  (eval (is-equal $atom Empty $then $else)))
+(= (if-empty $atom $then $else)
+  (eval (if-equal $atom Empty $then $else)))
 
-(= (is-error $atom $then $else)
+(= (if-error $atom $then $else)
   (eval (if-decons $atom $head $_
-    (eval (is-equal $head Error $then $else))
+    (eval (if-equal $head Error $then $else))
     $else )))
 
 (= (return-on-error $atom $then)
-  (eval (is-empty $atom Empty
-    (eval (is-error $atom $atom
+  (eval (if-empty $atom Empty
+    (eval (if-error $atom $atom
       $then )))))
 
 (= (car $atom)
@@ -208,8 +208,8 @@ pub static METTA_CODE: &'static str = "
 
 (= (reduce $atom $var $templ)
   (chain (eval $atom) $res
-    (eval (is-error $res $res
-      (eval (is-empty $res
+    (eval (if-error $res $res
+      (eval (if-empty $res
         (eval (subst $atom $var $templ))
         (eval (reduce $res $var $templ)) ))))))
 
@@ -273,7 +273,7 @@ pub static METTA_CODE: &'static str = "
         (chain (eval (interpret $head $head-type $space)) $reduced-head
           ; check that head was changed otherwise Error or Empty in the head
           ; can be just an argument which is passed by intention
-          (eval (is-equal $reduced-head $head
+          (eval (if-equal $reduced-head $head
             (eval (interpret-args-tail $atom $reduced-head $tail $tail-types $space))
             (eval (return-on-error $reduced-head
               (eval (interpret-args-tail $atom $reduced-head $tail $tail-types $space)) )))))
@@ -297,8 +297,8 @@ pub static METTA_CODE: &'static str = "
 
 (= (call $atom $type $space)
   (chain (eval $atom) $result
-    (eval (is-empty $result $atom
-      (eval (is-error $result $result
+    (eval (if-empty $result $atom
+      (eval (if-error $result $result
         (eval (interpret $result $type $space)) ))))))
 
 ";
