@@ -49,7 +49,7 @@ jobs:
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.2
         with:
-          version: 1.60.1
+          version: 1.60.2
 
       - name: Install cbindgen
         uses: actions-rs/cargo@v1.0.1
