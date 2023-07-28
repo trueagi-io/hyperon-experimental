@@ -43,5 +43,5 @@ message(STATUS "HYPERONPY_BINARY_DIR = ${HYPERONPY_BINARY_DIR}")
 
 enable_testing()
 add_custom_target(check
-    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --test-dir "${HYPERONC_BINARY_DIR}"
-    COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure --test-dir "${HYPERONPY_BINARY_DIR}")
+    COMMAND cd "${HYPERONC_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure
+    COMMAND cd "${HYPERONPY_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure)
