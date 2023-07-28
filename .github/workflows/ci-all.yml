@@ -18,17 +18,24 @@ on:
         required: true
         default: "[\"3.7\", \"3.8\", \"3.9\", \"3.10\", \"3.11\"]"
         type: string
+      cmake-version:
+        description: 'JSON array of CMake versions to be checked'
+        required: true
+        default: "[\"3.16.x\", \"3.22.x\", \"3.25.x\"]"
+        type: string
 
 jobs:
   build:
     strategy:
-      fail-fast: ${{inputs.fail-fast}}
+      fail-fast: ${{ inputs.fail-fast }}
       matrix:
-        os: ${{fromJson(inputs.os)}}
-        python-version: ${{fromJson(inputs.python-version)}}
+        os: ${{ fromJson(inputs.os) }}
+        python-version: ${{ fromJson(inputs.python-version) }}
+        cmake-version: ${{ fromJson(inputs.cmake-version) }}
       max-parallel: 5
 
     uses: ./.github/workflows/common.yml
     with:
       os: ${{ matrix.os }}
       python-version: ${{ matrix.python-version }}
+      cmake-version: ${{ matrix.cmake-version }}
