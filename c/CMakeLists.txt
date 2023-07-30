@@ -1,5 +1,5 @@
-# minimum version required by $<IF..> generator expression
-cmake_minimum_required(VERSION 3.10.2)
+# Minimal version which allows building dependencies from sources
+cmake_minimum_required(VERSION 3.15)
 project(hyperonc)
 
 enable_testing()
