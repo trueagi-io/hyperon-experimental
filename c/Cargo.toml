@@ -1,6 +1,6 @@
 [package]
 name = "hyperonc"
-version = "0.1.5"
+version = "0.1.6"
 authors = ["Vitaly Bogdanov <vsbogd@gmail.com>"]
 edition = "2018"
 
