@@ -1,0 +1,41 @@
+name: ci manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      fail-fast:
+        description: 'Fail the build after single job fails'
+        required: true
+        default: false
+        type: boolean
+      os:
+        description: 'JSON array of OS to be checked'
+        required: true
+        default: "[\"ubuntu-20.04\", \"ubuntu-22.04\", \"macos-11\", \"macos-12\", \"macos-13\"]"
+        type: string
+      python-version:
+        description: 'JSON array of Python versions to be checked'
+        required: true
+        default: "[\"3.7\", \"3.8\", \"3.9\", \"3.10\", \"3.11\"]"
+        type: string
+      cmake-version:
+        description: 'JSON array of CMake versions to be checked'
+        required: true
+        default: "[\"3.15.x\"]"
+        type: string
+
+jobs:
+  build:
+    strategy:
+      fail-fast: ${{ inputs.fail-fast }}
+      matrix:
+        os: ${{ fromJson(inputs.os) }}
+        python-version: ${{ fromJson(inputs.python-version) }}
+        cmake-version: ${{ fromJson(inputs.cmake-version) }}
+      max-parallel: 5
+
+    uses: ./.github/workflows/common.yml
+    with:
+      os: ${{ matrix.os }}
+      python-version: ${{ matrix.python-version }}
+      cmake-version: ${{ matrix.cmake-version }}

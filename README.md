@@ -50,7 +50,7 @@ Rust (see the Notes at the installation page).
   * Python3 and Python3-dev (3.7 or later)
   * Pip (23.1.2 or later)
   * GCC (7.5 or later)
-  * CMake (3.10 or later)
+  * CMake (3.15 or later)
 
 * Install cbindgen:
 ```
@@ -59,7 +59,7 @@ cargo install --force cbindgen
 
 * Install Conan and make default Conan profile:
 ```
-python3 -m pip install conan==1.60.1
+python3 -m pip install conan==1.60.2
 conan profile new --detect default
 ```
 

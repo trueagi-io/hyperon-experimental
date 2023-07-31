@@ -1,4 +1,4 @@
-name: ci
+name: ci auto
 
 on:
   push:
@@ -12,5 +12,6 @@ jobs:
   ci:
     uses: ./.github/workflows/common.yml
     with:
-      python-version: '3.7'
-      os: ubuntu-20.04
+      python-version: "3.7"
+      os: "ubuntu-20.04"
+      cmake-version: "3.16.x"
