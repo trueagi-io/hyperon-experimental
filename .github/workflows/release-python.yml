@@ -50,7 +50,7 @@ jobs:
         env:
           # Mac OS X cannot call "./python/install-hyperonc.sh" probably because
           # "/bin/sh" is not correct path for the shell there
-          CIBW_BEFORE_ALL: sh -c ./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{github.ref}}
+          CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{github.ref}}"
         with:
           package-dir: ./python
 
