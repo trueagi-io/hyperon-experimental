@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools==65.6.3", "conan==1.60.1", "cmake==3.26.4"]
+requires = ["setuptools==65.6.3", "conan==1.60.2", "cmake==3.26.4"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "hyperon"
-version = "0.1.5"
+version = "0.1.6"
 description = "Hyperon API in Python"
 requires-python = ">=3.7"
 keywords = ["metta", "hyperon", "opencog"]

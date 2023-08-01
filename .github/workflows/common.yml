@@ -19,6 +19,11 @@ on:
         default: ubuntu-20.04
         required: false
         type: string
+      cmake-version:
+        description: 'CMake version to use'
+        default: 3.16.x
+        required: false
+        type: string
 
 jobs:
   run:
@@ -34,22 +39,16 @@ jobs:
             toolchain: stable
             override: true
 
-      - name: Build and test
+      - name: Build Rust library
         working-directory: ./lib
         run: |
           cargo check
           cargo build
+
+      - name: Test Rust library
+        working-directory: ./lib
+        run: |
           RUST_LOG=hyperon=debug cargo test
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: ${{ inputs.python-version }}
-
-      - name: Install Conan
-        uses: turtlebrowser/get-conan@v1.2
-        with:
-          version: 1.60.1
 
       - name: Install cbindgen
         uses: actions-rs/cargo@v1.0.1
@@ -57,9 +56,46 @@ jobs:
           command: install
           args: cbindgen
 
-      - name: Setup C API build
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ inputs.python-version }}
+
+      - name: Install CMake
+        uses: jwlawson/actions-setup-cmake@v1.14.1
+        with:
+          cmake-version: ${{ inputs.cmake-version }}
+
+      - name: Install Conan
+        uses: turtlebrowser/get-conan@v1.2
+        with:
+          version: 1.60.2
+
+      - name: Setup Conan profile
         run: |
           conan profile new --detect default
+
+      - name: Print environment
+        run: |
+          echo "rustc --version"
+          rustc --version
+          echo "cbindgen --version"
+          cbindgen --version
+          echo "python --version"
+          python --version
+          echo "conan --version"
+          conan --version
+          echo "conan profile show default"
+          conan profile show default
+          echo "gcc --version"
+          gcc --version
+          echo "cmake --version"
+          cmake --version
+          echo "make --version"
+          make --version
+
+      - name: Setup C API build
+        run: |
           mkdir -p build
           cd build
           # specify C compiler as conan could not find it automatically
