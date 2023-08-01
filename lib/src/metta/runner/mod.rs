@@ -5,12 +5,19 @@ use super::*;
 use super::space::*;
 use super::text::{Tokenizer, SExprParser};
 use super::types::validate_atom;
-use super::interpreter::interpret;
 
 use std::path::PathBuf;
 use std::collections::HashMap;
 
 pub mod stdlib;
+use super::interpreter::interpret;
+use stdlib::*;
+
+// Uncomment three lines below and comment three lines above to
+// switch to the minimal MeTTa version
+//pub mod stdlib2;
+//use super::interpreter2::interpret;
+//use stdlib2::*;
 
 mod arithmetics;
 
@@ -38,8 +45,8 @@ impl Metta {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
         let metta = Self{ space, tokenizer, settings, modules };
-        stdlib::register_runner_tokens(&metta, cwd);
-        stdlib::register_common_tokens(&metta);
+        register_runner_tokens(&metta, cwd);
+        register_common_tokens(&metta);
         metta
     }
 
@@ -51,7 +58,7 @@ impl Metta {
         let settings = metta.settings.clone();
         let modules = metta.modules.clone();
         let metta = Metta{ space, tokenizer, settings, modules };
-        stdlib::register_runner_tokens(&metta, next_cwd);
+        register_runner_tokens(&metta, next_cwd);
         metta
     }
 
@@ -70,7 +77,7 @@ impl Metta {
                 // Load the module to the new space
                 let runner = Metta::new_loading_runner(self, path.clone());
                 let program = match path.to_str() {
-                    Some("stdlib") => stdlib::metta_code().to_string(),
+                    Some("stdlib") => METTA_CODE.to_string(),
                     _ => std::fs::read_to_string(&path).map_err(
                         |err| format!("Could not read file, path: {}, error: {}", path.display(), err))?,
                 };
@@ -189,7 +196,7 @@ impl Metta {
 pub fn new_metta_rust() -> Metta {
     let metta = Metta::new(DynSpace::new(GroundingSpace::new()),
         Shared::new(Tokenizer::new()));
-    stdlib::register_rust_tokens(&metta);
+    register_rust_tokens(&metta);
     metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
     metta
 }

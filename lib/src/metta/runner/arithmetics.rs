@@ -10,7 +10,7 @@ pub const ATOM_TYPE_BOOL : Atom = sym!("Bool");
 #[derive(Clone, PartialEq, Debug)]
 pub enum Number {
     Integer(i64),
-    Float(f64), 
+    Float(f64),
 }
 
 impl Number {
@@ -49,7 +49,7 @@ impl Grounded for Number {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct Bool(bool);
+pub struct Bool(pub bool);
 
 impl Bool {
     pub fn from_str(b: &str) -> Self {

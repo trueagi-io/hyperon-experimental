@@ -425,7 +425,7 @@ pub fn get_type_bindings(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Ato
     result
 }
 
-fn get_meta_type(atom: &Atom) -> Atom {
+pub fn get_meta_type(atom: &Atom) -> Atom {
     match atom {
         Atom::Symbol(_) => ATOM_TYPE_SYMBOL,
         Atom::Variable(_) => ATOM_TYPE_VARIABLE,
