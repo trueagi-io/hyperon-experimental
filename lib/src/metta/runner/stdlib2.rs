@@ -569,20 +569,38 @@ mod tests {
         assert_eq_metta_results!(run_program(program), Ok(vec![vec![expr!("a")]]));
     }
 
+    static ID_NUM: &Operation = &Operation{
+        name: "id_num",
+        execute: |_, args| {
+            let arg_error = || ExecError::from("id_num expects one argument: number");
+            let num = args.get(0).ok_or_else(arg_error)?;
+            Ok(vec![num.clone()])
+        },
+        typ: "(-> Number Number)",
+    };
+
     #[test]
     fn test_return_bad_type_error() {
-        let program = "
+        let program1 = "
             (: myAtom myType)
             (: id_a (-> A A))
             (= (id_a $a) $a)
 
             !(eval (interpret (id_a myAtom) %Undefined% &self))
-            ;!(id_num myatom)
         ";
 
-        assert_eq!(run_program(program),
+        let metta = new_metta_rust();
+        metta.tokenizer().borrow_mut().register_token(Regex::new("id_num").unwrap(),
+            |_| Atom::gnd(ID_NUM));
+
+        assert_eq!(metta.run(&mut SExprParser::new(program1)),
             Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
-        //assert_eq!(interpret(&space, &expr!({ID_NUM} "myAtom")),
-            //Ok(vec![Atom::expr([ERROR_SYMBOL, sym!("myAtom"), BAD_TYPE_SYMBOL])]));
+
+        let program2 = "
+            !(eval (interpret (id_num myAtom) %Undefined% &self))
+        ";
+
+        assert_eq!(metta.run(&mut SExprParser::new(program2)),
+            Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
     }
 }
