@@ -409,6 +409,13 @@ impl Drop for CSpace {
     }
 }
 
+/// @struct space_t
+/// @brief Contains a Space, in which atoms may exist in relation to other atoms
+/// @note `space_t` must be freed with `space_free()`, or passed by value
+/// to a function that takes ownership of the space.
+///
+/// Contains a Space in which atoms may exist in relation to other atoms.  `space_t` must be freed
+/// with `space_free()`, or passed by value to a function that takes ownership of the space.
 //INTERNAL NOTE: There are two reasons we need to box this space_t, rather than going directly from
 // the internal Rc to a raw pointer.
 // 1. The Rc inside DynSpace isn't pub, because we don't want to expose it to the Rust clients
@@ -566,9 +573,14 @@ pub extern "C" fn space_iterate(space: *const space_t,
 // Grounding Space
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
 
-/// Creates a new space_t, backed by a GroundSpace
+/// @func space_new_grounding_space
+/// @brief Creates a new space_t, backed by a GroundSpace
+/// @ingroup space_client_func_group
+/// @relates space_t
+/// @return a newly created `space_t` for the Grounding Space
+/// @note The caller takes responsibility for the returned `space_t`
 ///
-/// The returned space_t must be freed with space_free
+/// Creates a new `space_t`, backed by a GroundSpace.  The returned space_t must be freed with `space_free()`
 #[no_mangle]
 pub extern "C" fn space_new_grounding_space() -> *mut space_t {
     space_t::new(GroundingSpace::new())

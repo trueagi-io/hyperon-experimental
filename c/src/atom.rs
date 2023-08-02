@@ -16,11 +16,17 @@ use std::ptr;
 
 // Atom
 
+/// @brief Represents whether an atom is a Symbol, Variable, Expression, or Grounded atom.
+///
 #[repr(C)]
 pub enum atom_type_t {
+    /// @brief The atom is a Symbol atom
     SYMBOL,
+    /// @brief The atom is a Variable atom
     VARIABLE,
+    /// @brief The atom is an Expression atom
     EXPR,
+    /// @brief The atom is a Grounded atom
     GROUNDED,
 }
 
@@ -70,10 +76,13 @@ impl RustAtom {
     }
 }
 
-/// Contains an Atom of any type
+/// @struct atom_t
+/// @brief Contains an Atom of any type
+/// @note `atom_t` must be freed with `atom_free()`, or passed by value
+/// to a function that takes ownership of the atom.
 ///
-/// `atom_t` must be freed with `atom_free`, or passed by value to a function that takes ownership
-/// of the atom.
+/// Contains an Atom of any type.  `atom_t` must be freed with `atom_free()`, or passed by value
+/// to a function that takes ownership of the atom.
 //NOTE: In the future, we will want this struct to actually mirror a Rust atom's internals, or
 // possibly just reexport them.
 #[repr(transparent)]
@@ -108,9 +117,12 @@ impl atom_t {
     }
 }
 
-/// Refers to an Atom owned by another object.  It is not necessary to free `atom_ref_t`.
+/// @struct atom_ref_t
+/// @brief Refers to an Atom owned by another object
+/// 
+/// It is not necessary to free `atom_ref_t`.
 ///
-/// NOTE: A pointer to `atom_t` can be passed to any function requesting with a pointer to `atom_ref_t`.
+/// NOTE: A pointer to `atom_t` can be passed to any function requiring a pointer to `atom_ref_t`.
 ///
 /// WARNING: `atom_ref_t` must not be accessed beyond the lifetime of the object which owns the atom
 /// it references.
@@ -493,6 +505,14 @@ pub unsafe extern "C" fn atom_ref_null() -> atom_ref_t {
     atom_ref_t::null()
 }
 
+/// @func atom_sym
+/// @brief Create a new Symbol atom with the specified name
+/// @ingroup atom_func_group
+/// @relates atom_t
+/// @return a newly created `atom_t` for the Symbol Atom
+/// @note The caller takes responsibility for the returned `atom_t`
+///
+/// Create a new Symbol atom with the specified name.
 #[no_mangle]
 pub unsafe extern "C" fn atom_sym(name: *const c_char) -> atom_t {
     // cstr_as_str() keeps pointer ownership, but Atom::sym() copies resulting
@@ -653,13 +673,18 @@ pub unsafe extern "C" fn atom_eq(atoma: *const atom_ref_t, atomb: *const atom_re
     (&*atoma).borrow() == (&*atomb).borrow()
 }
 
-/// Represents a list (aka Vec) of Atoms.  It is unsafe to directly access the fields of this struct, so
-/// accessors should be used instead
+/// Represents a list (aka Vec) of Atoms
+///
+/// It is unsafe to directly access the fields of this struct, so accessor functions must be used.
 #[repr(C)]
 pub struct atom_vec_t {
+    /// Internal.  Should not be accessed directly
     ptr: *mut RustOpaqueAtom,
+    /// Internal.  Should not be accessed directly
     len: usize,
+    /// Internal.  Should not be accessed directly
     capacity: usize,
+    /// Internal.  Should not be accessed directly
     owned: bool,
 }
 
@@ -725,6 +750,9 @@ impl Drop for atom_vec_t {
     }
 }
 
+///
+/// @relates atom_vec_t
+///
 #[no_mangle]
 pub extern "C" fn atom_vec_new() -> atom_vec_t {
     atom_vec_t::new()
@@ -761,6 +789,16 @@ pub unsafe extern "C" fn atom_vec_pop(vec: *mut atom_vec_t) -> atom_t {
     result_atom
 }
 
+//TODO, include these tags soon.
+// @ingroup atom_vec_func_group
+// @relates atom_vec_t
+// @param    
+
+/// @func atom_vec_push
+/// @brief Push the atom onto the end of the vec
+/// @note This function takes ownership of the supplied `atom_t`
+///
+/// Push the atom onto the end of the vec.
 #[no_mangle]
 pub unsafe extern "C" fn atom_vec_push(vec: *mut atom_vec_t, atom: atom_t) {
     let vec_contents = core::mem::replace(&mut *vec, core::mem::zeroed());
