@@ -33,11 +33,12 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; More examples of pattern matching
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; `:=` is a custom symbol. These are still purely symbolic expressions
 (:= (Green Sam) T)
 (:= (White Tom) T)
 (:= (Green Tom) F)
-; More examples of pattern matching
 !(assertEqualToResult
   (match &self (:= (Green $who) T) ($who is really green))
   ((Sam is really green)))
@@ -55,7 +56,10 @@
   (match &self (:= (Green Tom) $tv) $tv)
   (F))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; One more example
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (isa red color)
 (isa green color)
 (isa blue color)
