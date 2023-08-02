@@ -14,9 +14,12 @@ use std::sync::atomic::{AtomicPtr, Ordering};
 use hyperon::matcher::{Bindings, BindingsSet};
 use std::ptr;
 
-// Atom
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Atom Interface
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 /// @brief Represents whether an atom is a Symbol, Variable, Expression, or Grounded atom.
+/// @ingroup atom_group
 ///
 #[repr(C)]
 pub enum atom_type_t {
@@ -34,8 +37,6 @@ pub enum atom_type_t {
 // which internally knows whether it owns or borrows the native `Atom` struct.  The reason for this
 // design choice is because at allows a pointer to `atom_ref` to be used interchangeably with a
 // pointer to `atom_t`
-//
-//TODO for Alpha: Explain this in user-facing API docs, along with ownership conventions
 #[repr(C)]
 enum RustAtom {
     None,
@@ -78,11 +79,11 @@ impl RustAtom {
 
 /// @struct atom_t
 /// @brief Contains an Atom of any type
+/// @ingroup atom_group
 /// @note `atom_t` must be freed with `atom_free()`, or passed by value
 /// to a function that takes ownership of the atom.
 ///
-/// Contains an Atom of any type.  `atom_t` must be freed with `atom_free()`, or passed by value
-/// to a function that takes ownership of the atom.
+/// Contains an Atom of any type.
 //NOTE: In the future, we will want this struct to actually mirror a Rust atom's internals, or
 // possibly just reexport them.
 #[repr(transparent)]
@@ -118,13 +119,11 @@ impl atom_t {
 }
 
 /// @struct atom_ref_t
+/// @ingroup atom_group
 /// @brief Refers to an Atom owned by another object
-/// 
-/// It is not necessary to free `atom_ref_t`.
-///
-/// NOTE: A pointer to `atom_t` can be passed to any function requiring a pointer to `atom_ref_t`.
-///
-/// WARNING: `atom_ref_t` must not be accessed beyond the lifetime of the object which owns the atom
+/// @note It is not necessary to free `atom_ref_t`
+/// @note A pointer to `atom_t` can be passed to any function requiring a pointer to `atom_ref_t`.
+/// @warning `atom_ref_t` must not be accessed beyond the lifetime of the object which owns the atom
 /// it references.
 ///
 //NOTE: In the future, atom_ref_t will probably just be a `*const Atom` internally, and may even be
@@ -153,6 +152,270 @@ impl atom_ref_t {
     pub(crate) fn into_ref(self) -> &'static Atom {
         self.atom.into_ref()
     }
+}
+
+/// @brief Create an `atom_ref_t` that points to another atom you own
+/// @ingroup atom_group
+/// @relates atom_t
+/// @relates atom_ref_t
+/// @param[in]  atom  The atom to reference
+/// @return an `atom_ref_t` referencing `atom`
+/// @warning The returned `atom_ref_t` must not be accessed after the atom it refers to has been freed,
+/// or after ownership of the original atom has been transferred to another function
+///
+/// Returns an `atom_ref_t` that points to the supplied atom.
+#[no_mangle]
+pub unsafe extern "C" fn atom_ref(atom: *const atom_t) -> atom_ref_t {
+    let atom = unsafe { (*atom).borrow() };
+    atom.into()
+}
+
+/// @brief Create an `atom_ref_t` that points nothing
+/// @ingroup atom_group
+/// @relates atom_ref_t
+/// @return an `atom_ref_t` referencing nothing
+///
+/// Returns an atom_ref_t that does not point to any atom
+#[no_mangle]
+pub unsafe extern "C" fn atom_ref_null() -> atom_ref_t {
+    atom_ref_t::null()
+}
+
+/// @brief Create a new Symbol atom with the specified name
+/// @ingroup atom_group
+/// @relates atom_t
+/// @param[in]  name  The name of the symbol
+/// @return a newly created `atom_t` for the Symbol Atom
+/// @note The caller takes ownership responsibility for the returned `atom_t`
+///
+/// Create a new Symbol atom with the specified name.
+#[no_mangle]
+pub unsafe extern "C" fn atom_sym(name: *const c_char) -> atom_t {
+    // cstr_as_str() keeps pointer ownership, but Atom::sym() copies resulting
+    // String into Atom::Symbol::symbol field.
+    Atom::sym(cstr_as_str(name)).into()
+}
+
+/// @brief Create a new Expression atom with the specified children atoms
+/// @ingroup atom_group
+/// @relates atom_t
+/// @param[in]  children  A packed buffer of `atom_t *`, representing the children atoms
+/// @param[in]  size  The number of elements in `children`
+/// @return an `atom_t` for the Expression atom, containing all 'children' atoms
+/// @note The caller takes ownership responsibility for the returned `atom_t`
+/// @warning This function takes ownership of all `children` atoms, so they must not be subsequently accessed
+///
+#[no_mangle]
+pub unsafe extern "C" fn atom_expr(children: *mut atom_t, size: usize) -> atom_t {
+    let c_arr = std::slice::from_raw_parts_mut(children, size);
+    let children: Vec<Atom> = c_arr.into_iter().map(|atom| {
+        core::mem::replace(atom, atom_t::null()).into_inner()
+    }).collect();
+    Atom::expr(children).into()
+}
+
+/// @brief Create a new Expression atom with the children contained in an `atom_vec_t`
+/// @ingroup atom_group
+/// @relates atom_t
+/// @param[in]  children  An `atom_vec_t` containing all children atoms
+/// @return an `atom_t` for the Expression atom, containing all 'children' atoms
+/// @note The caller takes ownership responsibility for the returned `atom_t`
+/// @warning This function takes ownership of the `children` vec, so it must not be subsequently accessed
+///
+#[no_mangle]
+pub unsafe extern "C" fn atom_expr_from_vec(children: atom_vec_t) -> atom_t {
+    let children: Vec<Atom> = children.into_owned().into();
+    Atom::expr(children).into()
+}
+
+/// @brief Create a new Variable atom with the specified identifier
+/// @ingroup atom_group
+/// @relates atom_t
+/// @param[in]  name  The identifier for the newly created Variable atom
+/// @return an `atom_t` for the Variable atom
+/// @note The caller takes ownership responsibility for the returned `atom_t`
+///
+#[no_mangle]
+pub unsafe extern "C" fn atom_var(name: *const c_char) -> atom_t {
+    Atom::var(cstr_as_str(name)).into()
+}
+
+/// @brief Returns the type of an atom
+/// @ingroup atom_group
+/// @relates atom_t
+/// @relates atom_ref_t
+/// @param[in]  atom  a pointer to an `atom_t` or an `atom_ref_t` to inspect
+/// @return an `atom_type_t` indicating the type of `atom`
+///
+#[no_mangle]
+pub unsafe extern "C" fn atom_get_type(atom: *const atom_ref_t) -> atom_type_t {
+    match (*atom).borrow() {
+        Atom::Symbol(_) => atom_type_t::SYMBOL,
+        Atom::Variable(_) => atom_type_t::VARIABLE,
+        Atom::Expression(_) => atom_type_t::EXPR,
+        Atom::Grounded(_) => atom_type_t::GROUNDED,
+    }
+}
+
+/// @brief Returns `true` if the referenced atom is invalid, otherwise returns `false`
+/// @ingroup atom_group
+/// @relates atom_t
+/// @relates atom_ref_t
+/// @param[in]  atom  a pointer to an `atom_t` or an `atom_ref_t` to inspect
+/// @return `true` if the referenced atom is invalid, otherwise returns `false`
+///
+#[no_mangle]
+pub unsafe extern "C" fn atom_is_null(atom: *const atom_ref_t) -> bool {
+    (*atom).is_null()
+}
+
+/// @brief Renders a human-readable text description of an atom
+/// @ingroup atom_group
+/// @relates atom_t
+/// @relates atom_ref_t
+/// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to render
+/// @param[out]  buf  A buffer into which the text will be rendered
+/// @param[in]  buf_len  The maximum allocated size of `buf`
+/// @return The length of the description string, minus the string terminator character.  If
+/// `return_value > buf_len + 1`, then the text was not fully rendered and this function should be
+/// called again with a larger buffer.
+///
+#[no_mangle]
+pub extern "C" fn atom_to_str(atom: *const atom_ref_t, buf: *mut c_char, buf_len: usize) -> usize {
+    let atom = unsafe{ (&*atom).borrow() };
+    write_into_buf(atom, buf, buf_len)
+}
+
+/// @brief Renders the name of an atom into a text buffer
+/// @ingroup atom_group
+/// @relates atom_t
+/// @relates atom_ref_t
+/// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to get the name of
+/// @param[out]  buf  A buffer into which the text will be written
+/// @param[in]  buf_len  The maximum allocated size of `buf`
+/// @return The length of the name string, minus the string terminator character.  If
+/// `return_value > buf_len + 1`, then the text was not fully written and this function should be
+/// called again with a larger buffer.
+///
+#[no_mangle]
+pub extern "C" fn atom_get_name(atom: *const atom_ref_t, buf: *mut c_char, buf_len: usize) -> usize {
+    let atom = unsafe{ (&*atom).borrow() };
+    match atom {
+        Atom::Symbol(s) => write_into_buf(s.name(), buf, buf_len),
+        Atom::Variable(v) => write_into_buf(v.name(), buf, buf_len),
+        _ => panic!("Only Symbol and Variable has name attribute!"),
+    }
+}
+
+//TODO
+#[no_mangle]
+pub unsafe extern "C" fn atom_get_children(atom: *const atom_ref_t,
+        callback: c_atom_vec_callback_t, context: *mut c_void) {
+    if let Atom::Expression(ref e) = (&*atom).borrow() {
+        return_atoms(e.children(), callback, context);
+    } else {
+        panic!("Only Expression atoms have children!");
+    }
+}
+
+/// Performs a depth-first exhaustive iteration of an atom and all its children recursively.
+/// The first result returned will be the atom itself
+#[no_mangle]
+pub unsafe extern "C" fn atom_iterate(atom: *const atom_ref_t,
+        callback: c_atom_callback_t, context: *mut c_void) {
+    let atom = (&*atom).borrow();
+    for inner_atom in AtomIter::new(atom) {
+        callback(inner_atom.into(), context);
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn atom_free(atom: atom_t) {
+    // drop() does nothing actually, but it is used here for clarity
+    drop(atom.into_inner());
+}
+
+#[no_mangle]
+pub extern "C" fn atom_clone(atom: *const atom_ref_t) -> atom_t {
+    unsafe{ &*atom }.borrow().clone().into()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn atom_eq(atoma: *const atom_ref_t, atomb: *const atom_ref_t) -> bool {
+    (&*atoma).borrow() == (&*atomb).borrow()
+}
+
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Grounded Atom Interface
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+//TODO, also in group grounded_atom_group
+/// @ingroup atom_group
+/// @relates atom_t
+/// @param[in]  children  An `atom_vec_t` containing all children atoms
+/// @return an `atom_t` for the Grounded atom
+/// @note The caller takes ownership responsibility for the returned `atom_t`
+///
+#[no_mangle]
+pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> atom_t {
+    Atom::gnd(CGrounded(AtomicPtr::new(gnd))).into()
+}
+
+/// Returns a new grounded `atom_t` referencing the space
+///
+/// This function does not consume the space and the space still must be freed with `space_free`
+#[no_mangle]
+pub extern "C" fn atom_gnd_for_space(space: *const space_t) -> atom_t {
+    let space = unsafe { &(*space).0 };
+    Atom::gnd(space.clone()).into()
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn atom_get_object(atom: *const atom_ref_t) -> *mut gnd_t {
+    if let Atom::Grounded(ref g) = (&*atom).borrow() {
+        match (*g).as_any_ref().downcast_ref::<CGrounded>() {
+            Some(g) => g.get_mut_ptr(),
+            None => panic!("Returning non C grounded objects is not implemented yet!"),
+        }
+    } else {
+        panic!("Only Grounded has object attribute!");
+    }
+}
+
+/// Returns a space_t from a grounded atom referencing the space
+///
+/// The returned space is borrowed from the atom, and should not be freed nor accessed after the atom
+/// has been freed.
+#[no_mangle]
+pub unsafe extern "C" fn atom_get_space(atom: *const atom_ref_t) -> *const space_t {
+    let atom = (&*atom).borrow();
+    if let Some(space) = Atom::as_gnd::<DynSpace>(atom) {
+        (space as *const DynSpace).cast()
+    } else {
+        panic!("Atom does not reference a space");
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn atom_get_grounded_type(atom: *const atom_ref_t) -> atom_t {
+    if let Atom::Grounded(ref g) = unsafe{ (&*atom).borrow() } {
+        g.type_().into()
+    } else {
+        panic!("Only Grounded atoms has grounded type attribute!");
+    }
+}
+
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Atom Vec Interface
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+/// The object returned from this function must be freed with bindings_set_free()
+#[no_mangle]
+pub extern "C" fn atom_match_atom(a: *const atom_ref_t, b: *const atom_ref_t) -> bindings_set_t {
+    let a = unsafe{ (&*a).borrow() };
+    let b = unsafe{ (&*b).borrow() };
+    let result_set: BindingsSet = crate::atom::matcher::match_atoms(a, b).collect();
+    result_set.into()
 }
 
 pub struct exec_error_t {
@@ -489,193 +752,12 @@ pub extern "C" fn bindings_set_merge_into(_self: *mut bindings_set_t, other: *co
 
 // end of bindings_set functions
 
-/// Returns an atom_ref_t that points to the supplied atom.
-///
-/// WARNING: The returned `atom_ref_t` must not be accessed after the atom it refers to has been freed,
-/// or after ownership of the original atom has been transferred to another function
-#[no_mangle]
-pub unsafe extern "C" fn atom_ref(atom: *const atom_t) -> atom_ref_t {
-    let atom = unsafe { (*atom).borrow() };
-    atom.into()
-}
-
-/// Returns an atom_ref_t that does not point to any atom
-#[no_mangle]
-pub unsafe extern "C" fn atom_ref_null() -> atom_ref_t {
-    atom_ref_t::null()
-}
-
-/// @func atom_sym
-/// @brief Create a new Symbol atom with the specified name
-/// @ingroup atom_func_group
-/// @relates atom_t
-/// @return a newly created `atom_t` for the Symbol Atom
-/// @note The caller takes responsibility for the returned `atom_t`
-///
-/// Create a new Symbol atom with the specified name.
-#[no_mangle]
-pub unsafe extern "C" fn atom_sym(name: *const c_char) -> atom_t {
-    // cstr_as_str() keeps pointer ownership, but Atom::sym() copies resulting
-    // String into Atom::Symbol::symbol field.
-    Atom::sym(cstr_as_str(name)).into()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn atom_expr(children: *mut atom_t, size: usize) -> atom_t {
-    let c_arr = std::slice::from_raw_parts_mut(children, size);
-    let children: Vec<Atom> = c_arr.into_iter().map(|atom| {
-        core::mem::replace(atom, atom_t::null()).into_inner()
-    }).collect();
-    Atom::expr(children).into()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn atom_expr_from_vec(children: atom_vec_t) -> atom_t {
-    let children: Vec<Atom> = children.into_owned().into();
-    Atom::expr(children).into()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn atom_var(name: *const c_char) -> atom_t {
-    Atom::var(cstr_as_str(name)).into()
-}
-
-#[no_mangle]
-pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> atom_t {
-    Atom::gnd(CGrounded(AtomicPtr::new(gnd))).into()
-}
-
-/// Returns a new grounded `atom_t` referencing the space
-///
-/// This function does not consume the space and the space still must be freed with `space_free`
-#[no_mangle]
-pub extern "C" fn atom_gnd_for_space(space: *const space_t) -> atom_t {
-    let space = unsafe { &(*space).0 };
-    Atom::gnd(space.clone()).into()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn atom_get_type(atom: *const atom_ref_t) -> atom_type_t {
-    match (*atom).borrow() {
-        Atom::Symbol(_) => atom_type_t::SYMBOL,
-        Atom::Variable(_) => atom_type_t::VARIABLE,
-        Atom::Expression(_) => atom_type_t::EXPR,
-        Atom::Grounded(_) => atom_type_t::GROUNDED,
-    }
-}
-
-/// Returns `true` if the referenced atom is invalid, otherwise returns `false`
-#[no_mangle]
-pub unsafe extern "C" fn atom_is_null(atom: *const atom_ref_t) -> bool {
-    (*atom).is_null()
-}
-
-/// Writes a text description of the atom into the provided buffer and returns the number of bytes
-/// written, or that would have been written had the buf_len been large enough, excluding the
-/// string terminator.
-#[no_mangle]
-pub extern "C" fn atom_to_str(atom: *const atom_ref_t, buf: *mut c_char, buf_len: usize) -> usize {
-    let atom = unsafe{ (&*atom).borrow() };
-    write_into_buf(atom, buf, buf_len)
-}
-
-/// Writes the name of the atom into the provided buffer and returns the number of bytes
-/// written, or that would have been written had the buf_len been large enough, excluding the
-/// string terminator.
-#[no_mangle]
-pub extern "C" fn atom_get_name(atom: *const atom_ref_t, buf: *mut c_char, buf_len: usize) -> usize {
-    let atom = unsafe{ (&*atom).borrow() };
-    match atom {
-        Atom::Symbol(s) => write_into_buf(s.name(), buf, buf_len),
-        Atom::Variable(v) => write_into_buf(v.name(), buf, buf_len),
-        _ => panic!("Only Symbol and Variable has name attribute!"),
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn atom_get_object(atom: *const atom_ref_t) -> *mut gnd_t {
-    if let Atom::Grounded(ref g) = (&*atom).borrow() {
-        match (*g).as_any_ref().downcast_ref::<CGrounded>() {
-            Some(g) => g.get_mut_ptr(),
-            None => panic!("Returning non C grounded objects is not implemented yet!"),
-        }
-    } else {
-        panic!("Only Grounded has object attribute!");
-    }
-}
-
-/// Returns a space_t from a grounded atom referencing the space
-///
-/// The returned space is borrowed from the atom, and should not be freed nor accessed after the atom
-/// has been freed.
-#[no_mangle]
-pub unsafe extern "C" fn atom_get_space(atom: *const atom_ref_t) -> *const space_t {
-    let atom = (&*atom).borrow();
-    if let Some(space) = Atom::as_gnd::<DynSpace>(atom) {
-        (space as *const DynSpace).cast()
-    } else {
-        panic!("Atom does not reference a space");
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn atom_get_grounded_type(atom: *const atom_ref_t) -> atom_t {
-    if let Atom::Grounded(ref g) = unsafe{ (&*atom).borrow() } {
-        g.type_().into()
-    } else {
-        panic!("Only Grounded atoms has grounded type attribute!");
-    }
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn atom_get_children(atom: *const atom_ref_t,
-        callback: c_atom_vec_callback_t, context: *mut c_void) {
-    if let Atom::Expression(ref e) = (&*atom).borrow() {
-        return_atoms(e.children(), callback, context);
-    } else {
-        panic!("Only Expression atoms have children!");
-    }
-}
-
-/// Performs a depth-first exhaustive iteration of an atom and all its children recursively.
-/// The first result returned will be the atom itself
-#[no_mangle]
-pub unsafe extern "C" fn atom_iterate(atom: *const atom_ref_t,
-        callback: c_atom_callback_t, context: *mut c_void) {
-    let atom = (&*atom).borrow();
-    for inner_atom in AtomIter::new(atom) {
-        callback(inner_atom.into(), context);
-    }
-}
-
-/// The object returned from this function must be freed with bindings_set_free()
-#[no_mangle]
-pub extern "C" fn atom_match_atom(a: *const atom_ref_t, b: *const atom_ref_t) -> bindings_set_t {
-    let a = unsafe{ (&*a).borrow() };
-    let b = unsafe{ (&*b).borrow() };
-    let result_set: BindingsSet = crate::atom::matcher::match_atoms(a, b).collect();
-    result_set.into()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn atom_free(atom: atom_t) {
-    // drop() does nothing actually, but it is used here for clarity
-    drop(atom.into_inner());
-}
-
-#[no_mangle]
-pub extern "C" fn atom_clone(atom: *const atom_ref_t) -> atom_t {
-    unsafe{ &*atom }.borrow().clone().into()
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn atom_eq(atoma: *const atom_ref_t, atomb: *const atom_ref_t) -> bool {
-    (&*atoma).borrow() == (&*atomb).borrow()
-}
-
-/// Represents a list (aka Vec) of Atoms
-///
-/// It is unsafe to directly access the fields of this struct, so accessor functions must be used.
+/// @struct atom_vec_t
+/// @brief Contains a vector (list) of Atoms
+/// @ingroup atom_vec_group
+/// @note `atom_vec_t` must be freed with `atom_vec_free()`, or passed by value
+/// to a function that takes ownership of the vec.
+/// @warning It is unsafe to directly access the fields of this struct, so accessor functions must be used.
 #[repr(C)]
 pub struct atom_vec_t {
     /// Internal.  Should not be accessed directly
@@ -789,14 +871,12 @@ pub unsafe extern "C" fn atom_vec_pop(vec: *mut atom_vec_t) -> atom_t {
     result_atom
 }
 
-//TODO, include these tags soon.
-// @ingroup atom_vec_func_group
-// @relates atom_vec_t
-// @param    
-
-/// @func atom_vec_push
 /// @brief Push the atom onto the end of the vec
-/// @note This function takes ownership of the supplied `atom_t`
+/// @ingroup atom_vec_group
+/// @relates atom_vec_t
+/// @param[in]  vec  a pointer to an `atom_vec_t` to push the atom onto
+/// @param[in]  atom  the atom to push onto the vec
+/// @warning This function takes ownership of the supplied `atom_t`, and it must not be subsequently accessed of freed.
 ///
 /// Push the atom onto the end of the vec.
 #[no_mangle]

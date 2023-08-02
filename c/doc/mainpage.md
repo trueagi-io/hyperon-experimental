@@ -59,14 +59,21 @@ Some functions return pointers or smart pointers (structs with types ending in "
 
 [//]: # (Atom Interface)
 
-@defgroup atom_func_group Atom Interface
+@defgroup atom_group Atom Interface
 @brief Functions for working directly with atoms
 
 These functions are used to create, inspect, modify, and free atoms.
 
+[//]: # (Atom Vec Interface)
+
+@defgroup atom_vec_group Atom Vec Interface
+@brief Functions for working with lists (vec) of atoms
+
+These functions are used to create, access, modify, and free atom vectors.
+
 [//]: # (Space Client Interface)
 
-@defgroup space_client_func_group Space Client Interface
+@defgroup space_client_group Space Client Interface
 @brief Functions for accessing a space directly
 
 These functions are used to manage spaces, including to create new spaces, free spaces, manipulate the atoms in a space as well as to query a space directly.
