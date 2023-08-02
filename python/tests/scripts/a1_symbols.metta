@@ -1,3 +1,5 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; `match` searches for all expressions corresponding to
 ; the given pattern and produces the output pattern.
 ; It doesn't search in subexpressions.
@@ -14,10 +16,11 @@
   (match &self (($x leaf2) leaf3) $x)
   (leaf1
    (leaf0 leaf1)))
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Symbols can be arranged in arbitrary expressions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (Sam is a frog)
 (Tom is a cat)
 (Sophia is a robot)
@@ -28,6 +31,8 @@
    (Tom the cat)
    (Sophia the robot)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; `:=` is a custom symbol. These are still purely symbolic expressions
 (:= (Green Sam) T)
 (:= (White Tom) T)
