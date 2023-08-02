@@ -58,6 +58,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Note that the same variable can be used multiple times on the left
 ; side of expression, and the "function" can be "non-total"
+; (a "non-total" function can be defined only for some inputs;
+; is not required to cover all possible inputs)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (= (eq $x $x) T)
 !(assertEqual
