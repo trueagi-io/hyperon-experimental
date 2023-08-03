@@ -7,6 +7,8 @@ use std::ffi::CStr;
 use hyperon::common::shared::Shared;
 use std::ops::{Deref, DerefMut};
 
+//TODO: This macro complicates the automatic documentation and doesn't provide much value
+// so I think it makes sense to remove it from the C API
 pub type lambda_t<T> = extern "C" fn(data: T, context: *mut c_void);
 
 pub fn cstr_as_str<'a>(s: *const c_char) -> &'a str {

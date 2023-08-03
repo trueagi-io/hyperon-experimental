@@ -67,9 +67,16 @@ These functions are used to create, inspect, modify, and free atoms.
 [//]: # (Atom Vec Interface)
 
 @defgroup atom_vec_group Atom Vec Interface
-@brief Functions for working with lists (vec) of atoms
+@brief Functions for working with vectors (lists) of atoms
 
 These functions are used to create, access, modify, and free atom vectors.
+
+[//]: # (Grounded Atom Interface)
+
+@defgroup grounded_atom_group Grounded Atom Interface
+@brief Interface to define and instantiate custom atoms implemented with C
+
+These functions are used to implement custom atom behaviors using C.
 
 [//]: # (Space Client Interface)
 
