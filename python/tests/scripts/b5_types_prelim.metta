@@ -152,8 +152,8 @@
 ; this argument is not reduced before passing to
 ; the function, so the function can process the
 ; original expression itself.
-
-; `match` expects the pattern of `Atom` type.
+; The `match` function expects an `Atom` type as argument.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; In the following example, `(Green $who)` is evaluated
 ; to `T`. However, it is not reduced as `match` argument,
 ; and the query returns `Sam`.
@@ -167,37 +167,52 @@
   (match &self (Green $who) $who)
   Sam)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; It should be noted that the result of `match` will be
 ; evaluated further. In the following, `match` first
 ; returns `(Green Sam)`, which is then evaluated to `T`.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(assertEqual
   (match &self (Green $who) (Green $who))
   T)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; If one wants to evaluate an expression before passing it
 ; to `match`, `let` can be used:
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(assertEqual
   (let $r (Add (S Z) Z)
     (match &self (= (eq $r (S Z)) $tv) $tv))
   T)
-; It will not work inside `match`:
+; but it will not work inside `match`:
 !(assertEqualToResult
   (match &self (= (eq (Add (S Z) Z) (S Z)) $tv) $tv)
   ())
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; The second argument of `let` is not `Atom` and evaluated
 ; by the interpreter before executing `let`, while
 ; the third argument is `Atom`, which is transformed by `let`
-; as an expression and then returned for further evaluation
+; as an expression, and then returned for further evaluation.
 ; `match` and `let` are implemented as an ordinary grounded operations
-
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; In fact, one can use patterns instead of variables in `let`
-; in order to deconstruct the result immediately
+; in order to deconstruct the result immediately.
+; This example binds the result of (Add (S Z) (S Z)) to
+; the whole pattern (S (S $r)), and extracts the inner variable $r
+; This is cleaner than binding and re-matching.
 !(assertEqual
   (let (S (S $r)) (Add (S Z) (S Z)) $r)
   Z)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; One can use `let*` for convenience, when multiple consequent
 ; substitutions are needed
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(assertEqual
   (let* (($r1 (Add Z Z))
          ($r2 (Add $r1 (S Z)))
