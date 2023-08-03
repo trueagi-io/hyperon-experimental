@@ -220,7 +220,10 @@
         (match &self (= (eq (S (S Z)) $r3) $tv) $tv))
   T)
 
-; Atom type can be used in custom functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Atom type can be required in custom functions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; `eqa` will compare expressions:
 (: eqa (-> Atom Atom Type))
 (= (eqa $x $x) T)
@@ -228,11 +231,13 @@
 !(assertEqual
    (eqa (Add Z Z) (Add Z Z))
    T)
-; While this will not be reduced
+; while this will not be reduced because the expressions
+; are not the same (even if their evaluation would be)
 ; (`eqa` is not total)
 !(assertEqualToResult
     (eqa Z (Add Z Z))
    ((eqa Z (Add Z Z))))
+
 ; In contrast to this:
 !(assertEqual
    (eq Z (Add Z Z))
