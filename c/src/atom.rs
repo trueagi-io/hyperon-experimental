@@ -162,8 +162,8 @@ impl atom_ref_t {
 
 /// @brief Create an `atom_ref_t` that points to another atom you own
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
+// @relates atom_t
+// @relates atom_ref_t
 /// @param[in]  atom  The atom to reference
 /// @return an `atom_ref_t` referencing `atom`
 /// @warning The returned `atom_ref_t` must not be accessed after the atom it refers to has been freed,
@@ -178,7 +178,7 @@ pub unsafe extern "C" fn atom_ref(atom: *const atom_t) -> atom_ref_t {
 
 /// @brief Create an `atom_ref_t` that points nothing
 /// @ingroup atom_group
-/// @relates atom_ref_t
+// @relates atom_ref_t
 /// @return an `atom_ref_t` referencing nothing
 ///
 /// Returns an atom_ref_t that does not point to any atom
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn atom_ref_null() -> atom_ref_t {
 
 /// @brief Create a new Symbol atom with the specified name
 /// @ingroup atom_group
-/// @relates atom_t
+// @relates atom_t
 /// @param[in]  name  The name of the symbol
 /// @return A newly created `atom_t` for the Symbol Atom
 /// @note The caller must take ownership responsibility for the returned `atom_t`
@@ -204,7 +204,7 @@ pub unsafe extern "C" fn atom_sym(name: *const c_char) -> atom_t {
 
 /// @brief Create a new Expression atom with the specified children atoms
 /// @ingroup atom_group
-/// @relates atom_t
+// @relates atom_t
 /// @param[in]  children  A packed buffer of `atom_t *`, representing the children atoms
 /// @param[in]  size  The number of elements in `children`
 /// @return An `atom_t` for the Expression atom, containing all 'children' atoms
@@ -222,7 +222,7 @@ pub unsafe extern "C" fn atom_expr(children: *mut atom_t, size: usize) -> atom_t
 
 /// @brief Create a new Expression atom with the children contained in an `atom_vec_t`
 /// @ingroup atom_group
-/// @relates atom_t
+// @relates atom_t
 /// @param[in]  children  An `atom_vec_t` containing all children atoms
 /// @return An `atom_t` for the Expression atom, containing all 'children' atoms
 /// @note The caller must take ownership responsibility for the returned `atom_t`
@@ -236,7 +236,7 @@ pub unsafe extern "C" fn atom_expr_from_vec(children: atom_vec_t) -> atom_t {
 
 /// @brief Create a new Variable atom with the specified identifier
 /// @ingroup atom_group
-/// @relates atom_t
+// @relates atom_t
 /// @param[in]  name  The identifier for the newly created Variable atom
 /// @return An `atom_t` for the Variable atom
 /// @note The caller must take ownership responsibility for the returned `atom_t`
@@ -247,8 +247,8 @@ pub unsafe extern "C" fn atom_var(name: *const c_char) -> atom_t {
 }
 
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates gnt_t
+// @relates atom_t
+// @relates gnt_t
 /// @param[in]  gnd  A pointer to a buffer to back the new Grounded Atom.  See the documentation of `gnd_t` for more info.
 /// @return an `atom_t` for the Grounded atom
 /// @note The caller must take ownership responsibility for the returned `atom_t`
@@ -260,9 +260,9 @@ pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> atom_t {
 
 /// @brief Creates a Grounded Atom referencing a Space
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
-/// @relates space_t
+// @relates atom_t
+// @relates atom_ref_t
+// @relates space_t
 /// @param[in]  space  A pointer to an `space_t` for accessing the space
 /// @return an `atom_t` for the Grounded atom
 /// @note The caller must take ownership responsibility for the returned `atom_t`
@@ -276,8 +276,8 @@ pub extern "C" fn atom_gnd_for_space(space: *const space_t) -> atom_t {
 
 /// @brief Frees an atom and all associated resources
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
+// @relates atom_t
+// @relates atom_ref_t
 /// @param[in]  atom  The atom to free
 ///
 #[no_mangle]
@@ -288,8 +288,8 @@ pub unsafe extern "C" fn atom_free(atom: atom_t) {
 
 /// @brief Makes a "deep copy" of an atom.  Useful to turn an `atom_ref_t` into an `atom_t`
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
+// @relates atom_t
+// @relates atom_ref_t
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to clone
 /// @return A newly created `atom_t` for the cloned atom
 /// @note The caller must take ownership responsibility for the returned `atom_t`
@@ -301,8 +301,8 @@ pub extern "C" fn atom_clone(atom: *const atom_ref_t) -> atom_t {
 
 /// @brief Checks if two atom objects represent the same conceptual atom
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
+// @relates atom_t
+// @relates atom_ref_t
 /// @param[in]  atoma  A pointer to an `atom_t` or an `atom_ref_t` representing the first atom
 /// @param[in]  atoma  A pointer to an `atom_t` or an `atom_ref_t` representing the second atom
 /// @return `true` is the atoms are conceptually identical
@@ -315,9 +315,9 @@ pub unsafe extern "C" fn atom_eq(atoma: *const atom_ref_t, atomb: *const atom_re
 
 /// @brief Returns the type of an atom
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
-/// @relates atom_type_t
+// @relates atom_t
+// @relates atom_ref_t
+// @relates atom_type_t
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to inspect
 /// @return An `atom_type_t` indicating the type of `atom`
 ///
@@ -333,8 +333,8 @@ pub unsafe extern "C" fn atom_get_type(atom: *const atom_ref_t) -> atom_type_t {
 
 /// @brief Returns `true` if the referenced atom is invalid, otherwise returns `false`
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
+// @relates atom_t
+// @relates atom_ref_t
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to inspect
 /// @return `true` if the referenced atom is invalid, otherwise returns `false`
 ///
@@ -345,8 +345,8 @@ pub unsafe extern "C" fn atom_is_null(atom: *const atom_ref_t) -> bool {
 
 /// @brief Renders a human-readable text description of an atom
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
+// @relates atom_t
+// @relates atom_ref_t
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to render
 /// @param[out]  buf  A buffer into which the text will be rendered
 /// @param[in]  buf_len  The maximum allocated size of `buf`
@@ -362,8 +362,8 @@ pub extern "C" fn atom_to_str(atom: *const atom_ref_t, buf: *mut c_char, buf_len
 
 /// @brief Renders the name of an atom into a text buffer
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
+// @relates atom_t
+// @relates atom_ref_t
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to get the name of
 /// @param[out]  buf  A buffer into which the text will be written
 /// @param[in]  buf_len  The maximum allocated size of `buf`
@@ -383,8 +383,8 @@ pub extern "C" fn atom_get_name(atom: *const atom_ref_t, buf: *mut c_char, buf_l
 
 /// @brief Provides access to all children atoms within an expression atom
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
+// @relates atom_t
+// @relates atom_ref_t
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to access
 /// @param[in]  callback  A function the implementation will call, to return access to the atoms
 /// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
@@ -402,8 +402,8 @@ pub unsafe extern "C" fn atom_get_children(atom: *const atom_ref_t,
 
 /// @brief Performs a depth-first exhaustive iteration of an atom and all its children recursively
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
+// @relates atom_t
+// @relates atom_ref_t
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to iterate
 /// @param[in]  callback  A function the implementation will call, to return access to each contained atom
 /// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
@@ -420,8 +420,8 @@ pub unsafe extern "C" fn atom_iterate(atom: *const atom_ref_t,
 
 /// @brief Retrieve the grounded type of a Grounded Atom
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
+// @relates atom_t
+// @relates atom_ref_t
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to access
 /// @return The `atom_t` expressing the grounded type of `atom`
 /// @note Grounded Types are themselves atoms used by the MeTTa type system for customized behavior.
@@ -440,8 +440,8 @@ pub extern "C" fn atom_get_grounded_type(atom: *const atom_ref_t) -> atom_t {
 
 /// @brief Access a pointer to an object backing a Grounded Atom
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
+// @relates atom_t
+// @relates atom_ref_t
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to access
 /// @return The pointer to the `gnd_t` orginally used to create the Grounded Atom
 /// @note This function is only valid for Grounded Atoms implemented via the HyperonC API
@@ -461,9 +461,9 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_ref_t) -> *mut gnd_t 
 
 /// @brief Access the space wrapped inside a Grounded atom
 /// @ingroup atom_group
-/// @relates atom_t
-/// @relates atom_ref_t
-/// @relates atom_gnd_for_space
+// @relates atom_t
+// @relates atom_ref_t
+/// @see atom_gnd_for_space
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` that wraps a Space
 /// @return The pointer to the `space_t` inside a grounded atom
 /// @warning The returned space is borrowed from the atom.  It must not be accessed after the atom has been freed or modified elsewhere
@@ -689,7 +689,7 @@ impl Drop for atom_vec_t {
 
 /// @brief Creates a new empty `atom_vec_t`
 /// @ingroup atom_vec_group
-/// @relates atom_vec_t
+// @relates atom_vec_t
 /// @return The newly created `atom_vec_t`
 /// @note The caller must take ownership responsibility for the returned `atom_vec_t`
 ///
@@ -700,7 +700,7 @@ pub extern "C" fn atom_vec_new() -> atom_vec_t {
 
 /// @brief Creates a new `atom_vec_t` from a C-style array
 /// @ingroup atom_vec_group
-/// @relates atom_vec_t
+// @relates atom_vec_t
 /// @param[in]  atoms  A packed buffer of `atom_t *`, representing the atoms to put into the vec.
 /// @param[in]  size  The number of elements in `atoms`
 /// @return The newly created `atom_vec_t`
@@ -718,7 +718,7 @@ pub unsafe extern "C" fn atom_vec_from_array(atoms: *mut atom_t, size: usize) ->
 
 /// @brief Frees a `atom_vec_t`
 /// @ingroup atom_vec_group
-/// @relates atom_vec_t
+// @relates atom_vec_t
 /// @param[in]  vec  The vec to free
 ///
 #[no_mangle]
@@ -728,7 +728,7 @@ pub unsafe extern "C" fn atom_vec_free(vec: atom_vec_t) {
 
 /// @brief Returns the number of elements in a vec
 /// @ingroup atom_vec_group
-/// @relates atom_vec_t
+// @relates atom_vec_t
 /// @param[in]  vec  The vec to be inspected
 /// @return The count of the number of elements contained within the vec
 ///
@@ -739,7 +739,7 @@ pub unsafe extern "C" fn atom_vec_len(vec: *const atom_vec_t) -> usize {
 
 /// @brief Removes the last element from a vec, and returns it
 /// @ingroup atom_vec_group
-/// @relates atom_vec_t
+// @relates atom_vec_t
 /// @param[in]  vec  The vec from which to pop the atom
 /// @return The last `atom_t` contained in the vec
 /// @note The caller must take ownership responsibility for the returned `atom_t`
@@ -759,7 +759,7 @@ pub unsafe extern "C" fn atom_vec_pop(vec: *mut atom_vec_t) -> atom_t {
 
 /// @brief Push the atom onto the end of the vec
 /// @ingroup atom_vec_group
-/// @relates atom_vec_t
+// @relates atom_vec_t
 /// @param[in]  vec  a pointer to an `atom_vec_t` to push the atom onto
 /// @param[in]  atom  the atom to push onto the vec
 /// @warning This function takes ownership of the supplied `atom_t`, and it must not be subsequently accessed of freed.
@@ -777,7 +777,7 @@ pub unsafe extern "C" fn atom_vec_push(vec: *mut atom_vec_t, atom: atom_t) {
 
 /// @brief Access an atom at a specified index in a vec
 /// @ingroup atom_vec_group
-/// @relates atom_vec_t
+// @relates atom_vec_t
 /// @param[in]  vec  The vec in which to access the atom
 /// @param[in]  idx  The index of the element to access
 /// @return A reference to the atom at the specified index

@@ -573,10 +573,9 @@ pub extern "C" fn space_iterate(space: *const space_t,
 // Grounding Space
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
 
-/// @func space_new_grounding_space
 /// @brief Creates a new space_t, backed by a GroundSpace
 /// @ingroup space_client_group
-/// @relates space_t
+// @relates space_t
 /// @return a newly created `space_t` for the Grounding Space
 /// @note The caller takes responsibility for the returned `space_t`
 ///
