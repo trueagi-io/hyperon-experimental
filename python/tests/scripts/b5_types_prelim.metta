@@ -91,8 +91,9 @@
 ; Another example
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (: T Type)
-; The type definition of `eq` here is left undefined,
-; just as a Type
+; The type definition of `eq` specifies both its arguments
+; must be of the same type, but its own type is left undefined,
+; just as a Type.
 (: eq (-> $t $t Type))
 ; The definition of `eq` specifies its actual type (T)
 (= (eq $x $x) T)
@@ -110,15 +111,23 @@
   (eq Z S)
   ((Error S BadType)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Type (symbols) are not prohibited from being elements
 ; of other custom types
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (: Color Property)
 (: Green Color)
 (: Red Color)
 (: Shape Property)
 (: Square Shape)
 (: Circle Shape)
+; This type definition is the same as that of `eq` above
 (: of-same-type (-> $t $t Type))
+; It returns True for any pair of arguments, as long as there
+; is not Type error
+
+; Accepted
 (= (of-same-type $x $y) T)
 !(assertEqual
   (of-same-type Color Shape)
@@ -126,6 +135,8 @@
 !(assertEqual
   (of-same-type Green Red)
   T)
+
+; Not accepted
 !(assertEqualToResult
   (of-same-type Green Color)
   ((Error Color BadType)))
@@ -133,6 +144,8 @@
   (of-same-type Green Circle)
   ((Error Circle BadType)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; There are some meta-types, which may influence
 ; the process of interpretation. One of them is `Atom`.
 ; If a function expects `Atom` as its argument,
@@ -144,6 +157,7 @@
 ; In the following example, `(Green $who)` is evaluated
 ; to `F`. However, it is not reduced as `match` argument,
 ; and the query returns `Sam`.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (Green Sam)
 (= (Green Sam) T)
 !(assertEqual
@@ -152,6 +166,7 @@
 !(assertEqual
   (match &self (Green $who) $who)
   Sam)
+
 ; It should be noted that the result of `match` will be
 ; evaluated further. In the following, `match` first
 ; returns `(Green Sam)`, which is then evaluated to `T`.
