@@ -1,3 +1,5 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Symbols are typed. If no type definition is provided,
 ; the type is %Undefined%, which can match against any
 ; other type in a gradual typing fashion.
@@ -5,6 +7,7 @@
 ; incorrectly typed expressions can be added to Atomspace.
 ; However, the interpreter checks types in runtime, and
 ; evaluation of badly typed expressions leads to a error expression.
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (= (Add $x Z) $x)
 (= (Add $x (S $y)) (Add (S $x) $y))
 
@@ -13,8 +16,12 @@
   (Add S Z)
   S)
 
-; Adding type definitions. Arrow is a built-in symbol of the type system
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Adding type definitions.
+; Arrow (->) is a built-in symbol of the type system
 ; `Nat` is a custom symbol
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (: Z Nat)
 (: S (-> Nat Nat))
 (: Add (-> Nat Nat Nat))
@@ -22,25 +29,38 @@
 !(assertEqualToResult
   (Add S Z)
   ((Error S BadType)))
-; This will still work, because `Something` is of undefined type,
-; and it might be `Nat`
-!(assertEqual
-  (Add Something Z)
-  Something)
-; This should work normally
+; But these other examples works normally
+!(assertEqualToResult
+  (Add (S Z) Z)
+  ((S Z)))
 !(assertEqual
   (Add Z (S Z))
   (S Z))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Adding to an untyped symbol (Something) will still work,
+; because it might be `Nat`
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+!(assertEqual
+  (Add Something Z)
+  Something)
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Types can be nondeterministic
-; The following will be accepted by the interpreter
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (: Ten Nat)
 (: Ten Int)
+; The following will be accepted by the interpreter
 !(assertEqualToResult
    (Add Z Ten)
   ((Add Z Ten)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Types can be parameterized
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (: List (-> Type Type))
 (: Nil (List $t))
 (: Cons (-> $t (List $t) (List $t)))
