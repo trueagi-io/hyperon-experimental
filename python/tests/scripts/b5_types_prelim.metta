@@ -155,7 +155,7 @@
 
 ; `match` expects the pattern of `Atom` type.
 ; In the following example, `(Green $who)` is evaluated
-; to `F`. However, it is not reduced as `match` argument,
+; to `T`. However, it is not reduced as `match` argument,
 ; and the query returns `Sam`.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (Green Sam)
