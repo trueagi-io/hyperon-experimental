@@ -61,31 +61,51 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Types can be parameterized
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; List is defined as a dependent function type that
+; takes a Type and returns a Type
 (: List (-> Type Type))
+
+; Nil's type is parametrized as the type returned by List when it
+; takes parameter $t (which, per the definition above,
+; is the same type as $t)
 (: Nil (List $t))
+
+; Cons is defined as a parametrized List constructor
+; Based on the definition of List above, Cons' arguments
+; are equally typed, and it returns the same type
+; as its arguments.
 (: Cons (-> $t (List $t) (List $t)))
+
 ; This list is well typed and evaluated to itself
 !(assertEqualToResult
    (Cons (S Z) (Cons Z Nil))
   ((Cons (S Z) (Cons Z Nil))))
-; This list is badly typed
+
+; This list is badly typed, because S and Z are not the same type
 !(assertEqualToResult
   (Cons S (Cons Z Nil))
   ((Error Z BadType)))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Another example
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (: T Type)
+; The type definition of `eq` here is left undefined,
+; just as a Type
 (: eq (-> $t $t Type))
+; The definition of `eq` specifies its actual type (T)
 (= (eq $x $x) T)
 ; Accepted and reduced
 !(assertEqual
   (eq (Add Z Z) Z)
   T)
-; Accepted, not reduced
+; Accepted, not reduced because no definition is known
+; for `eq` when its arguments are not the same
 !(assertEqualToResult
    (eq Z (S Z))
   ((eq Z (S Z))))
-; Not accepted
+; Not accepted, because Z and S are not the same type
 !(assertEqualToResult
   (eq Z S)
   ((Error S BadType)))
