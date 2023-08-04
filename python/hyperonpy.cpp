@@ -85,7 +85,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 }
 
 extern "C" {
-    exec_error_t *py_execute(const struct gnd_t* _gnd, const struct atom_vec_t* args, struct atom_vec_t* ret);
+    exec_error_t py_execute(const struct gnd_t* _gnd, const struct atom_vec_t* args, struct atom_vec_t* ret);
     void py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom, bindings_mut_callback_t callback, void *context);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
@@ -122,7 +122,7 @@ py::object inc_ref(py::object obj) {
     return obj;
 }
 
-exec_error_t *py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _args, struct atom_vec_t* ret) {
+exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _args, struct atom_vec_t* ret) {
     py::object hyperon = py::module_::import("hyperon.atoms");
     py::function call_execute_on_grounded_atom = hyperon.attr("_priv_call_execute_on_grounded_atom");
     py::handle NoReduceError = hyperon.attr("NoReduceError");
@@ -138,7 +138,7 @@ exec_error_t *py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _ar
         for (py::handle atom:  result) {
             atom_vec_push(ret, atom_clone(atom.attr("catom").cast<CAtom>().ptr()));
         }
-        return nullptr;
+        return exec_error_no_err();
     } catch (py::error_already_set &e) {
         if (e.matches(NoReduceError)) {
             return exec_error_no_reduce();

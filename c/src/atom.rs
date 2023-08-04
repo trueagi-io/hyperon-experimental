@@ -496,7 +496,7 @@ pub struct gnd_api_t {
     /// @return An `exec_error_t` status that informs the MeTTa interpreter if execution may continue or whether to handle a fault
     /// @note Assigning NULL to this field means the atom is not executable
     ///
-    execute: Option<extern "C" fn(gnd: *const gnd_t, args: *const atom_vec_t, out: *mut atom_vec_t) -> *mut exec_error_t>,
+    execute: Option<extern "C" fn(gnd: *const gnd_t, args: *const atom_vec_t, out: *mut atom_vec_t) -> exec_error_t>,
 
     /// @brief An optional function to match the atom with another atom
     /// @param[in]  gnd  A pointer to the Grounded Atom object
@@ -597,11 +597,11 @@ impl Grounded for CGrounded {
                 let mut ret = atom_vec_t::new();
                 let c_args: atom_vec_t = args.into();
                 let error = func(self.get_ptr(), &c_args, &mut ret);
-                let ret = if error.is_null() {
+                let ret = if error.is_no_err() {
                     Ok(ret.into())
                 } else {
-                    let error = unsafe{ Box::from_raw(error) };
-                    Err(error.error)
+                    let error = error.into_inner();
+                    Err(error)
                 };
                 log::trace!("CGrounded::execute: atom: {:?}, args: {:?}, ret: {:?}", self, args, ret);
                 ret
@@ -658,6 +658,88 @@ impl Drop for CGrounded {
     }
 }
 
+pub struct RustOpaqueExecError(ExecError);
+
+/// @struct exec_error_t
+/// @brief Represents a status used to communicate between Grounded Atom execution and the MeTTa interpreter
+/// @ingroup grounded_atom_group
+/// @note `exec_error_t` must be freed with `exec_error_free()`, or returned from an `execute` function
+/// @note The struct members should never be accessed directly, so accessor functions must be used
+///
+#[repr(C)]
+pub enum exec_error_t {
+    NoErr,
+    Status(*mut RustOpaqueExecError)
+}
+
+impl From<ExecError> for exec_error_t {
+    fn from(error: ExecError) -> Self {
+        exec_error_t::Status( Box::into_raw(Box::new(RustOpaqueExecError(error))) )
+    }
+}
+
+impl exec_error_t {
+    pub(crate) fn is_no_err(&self) -> bool {
+        match self {
+            Self::NoErr => true,
+            Self::Status(_) => false,
+        }
+    }
+    pub(crate) fn into_inner(self) -> ExecError {
+        match self {
+            Self::NoErr => panic!(),  //Illegal to access exec_error_t with NoErr status
+            Self::Status(box_ptr) => unsafe{ Box::from_raw(box_ptr).0 }
+        }
+    }
+}
+
+/// @brief Creates a new `exec_error_t` representing a runtime error that will halt the MeTTa interpreter
+/// @ingroup grounded_atom_group
+/// @param[in]  message  A human-readable error message, for the interpreter to propagate to the user
+/// @return The newly created `exec_error_t`
+/// @note The caller must take ownership responsibility for the returned `exec_error_t`, and ultimately free
+///   it with `exec_error_free()` or return it from an `execute` function
+///
+#[no_mangle]
+pub extern "C" fn exec_error_runtime(message: *const c_char) -> exec_error_t {
+    let error = ExecError::Runtime(cstr_into_string(message));
+    error.into()
+}
+
+/// @brief Creates a new `exec_error_t` representing a "Don't Reduce" status, telling the MeTTa interpreter to process the atoms as they are
+/// @ingroup grounded_atom_group
+/// @return The newly created `exec_error_t`
+/// @note The caller must take ownership responsibility for the returned `exec_error_t`, and ultimately free
+///   it with `exec_error_free()` or return it from an `execute` function
+///
+#[no_mangle]
+pub extern "C" fn exec_error_no_reduce() -> exec_error_t {
+    ExecError::NoReduce.into()
+}
+
+/// @brief Creates a new `exec_error_t` representing a "No Error" status.  This is the default interpreter status
+/// @ingroup grounded_atom_group
+/// @return The newly created `exec_error_t`
+/// @note The caller must take ownership responsibility for the returned `exec_error_t`, and ultimately free
+///   it with `exec_error_free()` or return it from an `execute` function
+///
+#[no_mangle]
+pub extern "C" fn exec_error_no_err() -> exec_error_t {
+    exec_error_t::NoErr
+}
+
+/// @brief Frees an `exec_error_t`
+/// @ingroup grounded_atom_group
+/// @param[in]  error  The `exec_error_t` to free
+///
+#[no_mangle]
+pub extern "C" fn exec_error_free(error: exec_error_t) {
+    if !error.is_no_err() {
+        let error = error.into_inner();
+        drop(error);
+    }
+}
+
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Atom Vec Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -667,7 +749,7 @@ impl Drop for CGrounded {
 /// @ingroup atom_vec_group
 /// @note `atom_vec_t` must be freed with `atom_vec_free()`, or passed by value
 /// to a function that takes ownership of the vec.
-/// @warning It is unsafe to directly access the fields of this struct, so accessor functions must be used.
+/// @warning It is unsafe to directly access the fields of this struct, so accessor functions must be used
 #[repr(C)]
 pub struct atom_vec_t {
     /// Internal.  Should not be accessed directly
@@ -858,17 +940,19 @@ pub unsafe extern "C" fn atom_vec_get(vec: *const atom_vec_t, idx: usize) -> ato
 // Matching and Binding Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-/// The object returned from this function must be freed with bindings_set_free()
+/// @brief Matches one atom with another, establishing bindings between them
+/// @ingroup matching_group
+/// @param[in]  a  A pointer to an `atom_t` or an `atom_ref_t` to match
+/// @param[in]  b  A pointer to another `atom_t` or an `atom_ref_t` to match against
+/// @return  A `bindings_set_t` representing all variable <-> atom bindings established by the match
+/// @note The caller must take ownership responsibility for the returned `bindings_set_t`, and free it with `bindings_set_free()`
+///
 #[no_mangle]
 pub extern "C" fn atom_match_atom(a: *const atom_ref_t, b: *const atom_ref_t) -> bindings_set_t {
     let a = unsafe{ (&*a).borrow() };
     let b = unsafe{ (&*b).borrow() };
     let result_set: BindingsSet = crate::atom::matcher::match_atoms(a, b).collect();
     result_set.into()
-}
-
-pub struct exec_error_t {
-    pub error: ExecError,
 }
 
 pub struct bindings_t {
@@ -905,21 +989,6 @@ impl bindings_set_t {
 
 pub type bindings_callback_t = lambda_t<*const bindings_t>;
 pub type bindings_mut_callback_t = lambda_t<*mut bindings_t>;
-
-#[no_mangle]
-pub extern "C" fn exec_error_runtime(message: *const c_char) -> *mut exec_error_t {
-    Box::into_raw(Box::new(exec_error_t{ error: ExecError::Runtime(cstr_into_string(message)) }))
-}
-
-#[no_mangle]
-pub extern "C" fn exec_error_no_reduce() -> *mut exec_error_t {
-    Box::into_raw(Box::new(exec_error_t{ error: ExecError::NoReduce }))
-}
-
-#[no_mangle]
-pub extern "C" fn exec_error_free(error: *mut exec_error_t) {
-    unsafe{ drop(Box::from_raw(error)); }
-}
 
 // bindings
 #[no_mangle]
