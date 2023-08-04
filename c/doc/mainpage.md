@@ -71,12 +71,17 @@ These functions are used to create, inspect, modify, and free atoms.
 
 These functions are used to create, access, modify, and free atom vectors.
 
+[//]: # (Matching and Binding Interface)
+
+@defgroup matching_group Matching and Binding Interface
+@brief Interface for working with atom matching and variable-to-atom binding
+
 [//]: # (Grounded Atom Interface)
 
 @defgroup grounded_atom_group Grounded Atom Interface
-@brief Interface to define and instantiate custom atoms implemented with C
+@brief Interface to define custom atoms implemented with C
 
-These functions are used to implement custom atom behaviors using C.
+Providing the functions in `gnd_api_t` allows custom atom behaviors to be implemented using C.
 
 [//]: # (Space Client Interface)
 

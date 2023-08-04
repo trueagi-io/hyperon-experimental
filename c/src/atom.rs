@@ -482,26 +482,77 @@ pub unsafe extern "C" fn atom_get_space(atom: *const atom_ref_t) -> *const space
 // Grounded Atom Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+/// @brief A table of callback functions to implement a Grounded Atom with behavior defined in C
+/// @ingroup grounded_atom_group
+/// @see atom_gnd
+/// @see atom_get_object
+///
 #[repr(C)]
 pub struct gnd_api_t {
-    // TODO: replace args by C array and ret by callback
-    // One can assign NULL to this field, it means the atom is not executable
-    execute: Option<extern "C" fn(*const gnd_t, *const atom_vec_t, *mut atom_vec_t) -> *mut exec_error_t>,
-    match_: Option<extern "C" fn(*const gnd_t, *const atom_ref_t, bindings_mut_callback_t, *mut c_void)>,
-    eq: extern "C" fn(*const gnd_t, *const gnd_t) -> bool,
-    clone: extern "C" fn(*const gnd_t) -> *mut gnd_t,
-    display: extern "C" fn(*const gnd_t, *mut c_char, usize) -> usize,
-    free: extern "C" fn(*mut gnd_t),
+    /// @brief An optional function to implement executable atom behavior
+    /// @param[in]  gnd  A pointer to the Grounded Atom object
+    /// @param[in]  args  A pointer to an `atom_vec_t` containing the argument atoms for this execution
+    /// @param[out]  out  A pointer to a mutable `atom_vec_t`, into which newly created atoms may be added by the execution
+    /// @return An `exec_error_t` status that informs the MeTTa interpreter if execution may continue or whether to handle a fault
+    /// @note Assigning NULL to this field means the atom is not executable
+    ///
+    execute: Option<extern "C" fn(gnd: *const gnd_t, args: *const atom_vec_t, out: *mut atom_vec_t) -> *mut exec_error_t>,
+
+    /// @brief An optional function to match the atom with another atom
+    /// @param[in]  gnd  A pointer to the Grounded Atom object
+    /// @param[in]  other  The other atom to match with
+    /// @param[out]  callback  A function to call, to supply the bindings.  If this function is never called that means the atoms do not match
+    /// @param[in]  context  The opaque context pointer to pass to the `callback` function when it is called
+    /// @note Assigning NULL to this field means the atom will match only other atoms which are considered equal by the `eq` function below
+    ///
+    match_: Option<extern "C" fn(gnd: *const gnd_t, other: *const atom_ref_t, callback: bindings_mut_callback_t, context: *mut c_void)>,
+
+    /// @brief Tests whether two atoms instantiated from the same interface are equal
+    /// @param[in]  gnd  A pointer to the Grounded Atom object
+    /// @param[in]  other  A pointer to the other grounded atom's object
+    /// @return  `true` if the two atoms are equal, and `false` if they are not
+    ///
+    eq: extern "C" fn(gnd: *const gnd_t, other: *const gnd_t) -> bool,
+
+    /// @brief Makes a deep copy of a Grounded Atom
+    /// @param[in]  gnd  A pointer to the Grounded Atom object
+    /// @return  A pointer to a newly allocated buffer to back a new Grounded Atom, which has been initialized as a clone of the atom backed by the incoming `gnd` argument.
+    /// @see atom_gnd
+    ///
+    clone: extern "C" fn(gnd: *const gnd_t) -> *mut gnd_t,
+
+    /// @brief Renders a human-readable text description of the Grounded Atom into a buffer
+    /// @param[in]  gnd  A pointer to the Grounded Atom object
+    /// @param[out]  buf  A buffer into which the text should be rendered
+    /// @param[in]  buf_len  The maximum allocated size of `buf`
+    /// @return The length of the fully rendered text description, minus the string terminator character.  Regardless of whether the text was able to be completely rendered into the buffer.
+    /// @see atom_to_str
+    /// @warning This function implementation must write a null terminator character at the end of the text, and must never overwrite the `buf_len` parameter.
+    ///
+    display: extern "C" fn(gnd: *const gnd_t, buf: *mut c_char, buf_len: usize) -> usize,
+
+    /// @brief Frees the backing object belonging to a Grounded Atom, and all associated resources
+    /// @param[in]  gnd  A pointer to the Grounded Atom object
+    /// @note This function must free the `typ` field in the `gnd_t` header
+    ///
+    free: extern "C" fn(gnd: *mut gnd_t),
 }
 
-/// Use this struct as a header the the buffer used to implement a grounded atom
+/// @brief A struct header that must preface a buffer used as a backing object for a Grounded Atom
+/// @ingroup grounded_atom_group
+/// @see atom_gnd
+/// @see atom_get_object
+///
 //FUTURE TODO: Asking the user to maintain this header on their allocation is error-prone.  For example
 //the user may forget to free the typ field.  I'd like to revisit this API after alpha, and make it
 //more opaque - and potentially also offer some small amount of allocation-free storage (like 16 bytes)
 //for grounded atom types that are fundamentally small.
 #[repr(C)]
 pub struct gnd_t {
+    /// @brief A pointer to the table of functions that implement the Grounded Atom's behavior
     api: *const gnd_api_t,
+    /// @brief An atom representing the grounded type of the Grounded Atom
+    /// @see atom_get_grounded_type
     typ: atom_t,
 }
 
@@ -519,16 +570,15 @@ impl CGrounded {
     }
 
     fn api(&self) -> &gnd_api_t {
-        unsafe {
-            &*(*self.get_ptr()).api
-        }
+        unsafe { &*(*self.get_ptr()).api }
     }
 
     fn free(&mut self) {
         (self.api().free)(self.get_mut_ptr());
     }
 
-    extern "C" fn match_callback(cbindings: *mut bindings_t, context: *mut c_void) {
+    #[no_mangle]
+    pub extern "C" fn grounded_match_callback(cbindings: *mut bindings_t, context: *mut c_void) {
         let bindings = ptr_into_bindings(cbindings);
         let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
         vec_bnd.push(bindings);
@@ -567,7 +617,7 @@ impl Grounded for CGrounded {
                 let context = (&mut results as *mut Vec<Bindings>).cast::<c_void>();
                 let other: atom_ref_t = other.into();
                 func(self.get_ptr(), &other,
-                    CGrounded::match_callback, context);
+                    CGrounded::grounded_match_callback, context);
                 Box::new(results.into_iter())
             },
             None => match_by_equality(self, other)
@@ -577,7 +627,13 @@ impl Grounded for CGrounded {
 
 impl PartialEq for CGrounded {
     fn eq(&self, other: &CGrounded) -> bool {
-        (self.api().eq)(self.get_ptr(), other.get_ptr())
+        let self_api_ptr = unsafe{ (&*self.get_ptr()).api };
+        let other_api_ptr = unsafe{ (&*other.get_ptr()).api };
+        if self_api_ptr == other_api_ptr {
+            (self.api().eq)(self.get_ptr(), other.get_ptr())
+        } else {
+            false
+        }
     }
 }
 
@@ -601,7 +657,6 @@ impl Drop for CGrounded {
         self.free();
     }
 }
-
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Atom Vec Interface
@@ -686,6 +741,13 @@ impl Drop for atom_vec_t {
         }
     }
 }
+
+/// @brief Function signature for a callback providing access to an `atom_vec_t`
+/// @ingroup atom_vec_group
+/// @param[in]  vec  The `atom_vec_t` being provided.  This vec should not be modified or freed by the callback.
+/// @param[in]  context  The context state pointer initially passed to the upstream function initiating the callback.
+///
+pub type c_atom_vec_callback_t = extern "C" fn(vec: *const atom_vec_t, context: *mut c_void);
 
 /// @brief Creates a new empty `atom_vec_t`
 /// @ingroup atom_vec_group
@@ -792,13 +854,9 @@ pub unsafe extern "C" fn atom_vec_get(vec: *const atom_vec_t, idx: usize) -> ato
     atom.into()
 }
 
-/// @brief Function signature for a callback providing access to an `atom_vec_t`
-/// @ingroup atom_vec_group
-/// @param[in]  vec  The `atom_vec_t` being provided.  This vec should not be modified or freed by the callback.
-/// @param[in]  context  The context state pointer initially passed to the upstream function initiating the callback.
-///
-pub type c_atom_vec_callback_t = extern "C" fn(vec: *const atom_vec_t, context: *mut c_void);
-
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Matching and Binding Interface
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 /// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
@@ -1159,7 +1217,7 @@ use std::ptr;
         let mut results: Vec<Bindings> = Vec::new();
         let context = ptr::addr_of_mut!(results).cast::<c_void>();
 
-        CGrounded::match_callback( cbindings, context);
+        CGrounded::grounded_match_callback( cbindings, context);
 
         assert_eq!(results, vec![Bindings::from(vec![
                 (VariableAtom::new("var"), Atom::sym("atom_test"))])]);
