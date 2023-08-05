@@ -29,7 +29,7 @@ struct CStruct {
 
 using CAtom = CStruct<atom_t>;
 using CVecAtom = CStruct<atom_vec_t>;
-using CBindings = CPtr<bindings_t>;
+using CBindings = CStruct<bindings_t>;
 using CBindingsSet = CStruct<bindings_set_t>;
 using CSpace = CPtr<space_t>;
 using CTokenizer = CPtr<tokenizer_t>;
@@ -86,7 +86,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 
 extern "C" {
     exec_error_t py_execute(const struct gnd_t* _gnd, const struct atom_vec_t* args, struct atom_vec_t* ret);
-    void py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom, bindings_mut_callback_t callback, void *context);
+    bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
     size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
@@ -150,7 +150,7 @@ exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _arg
     }
 }
 
-void py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom, bindings_mut_callback_t callback, void *context) {
+bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom) {
     py::object hyperon = py::module_::import("hyperon.atoms");
     py::function call_match_on_grounded_atom = hyperon.attr("_priv_call_match_on_grounded_atom");
 
@@ -158,18 +158,21 @@ void py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom, bindings_mut_c
     CAtom catom = atom_clone(_atom);
     py::list results = call_match_on_grounded_atom(pyobj, catom);
 
+    struct bindings_set_t result_set = bindings_set_empty();
     for (py::handle result: results) {
         py::dict pybindings = result.cast<py::dict>();
 
-        struct bindings_t* cbindings = bindings_new();
+        struct bindings_t cbindings = bindings_new();
         for (auto var_atom : pybindings) {
             const std::string var  = var_atom.first.cast<py::str>();
             atom_t atom = atom_clone(var_atom.second.attr("catom").cast<CAtom>().ptr());
-            bindings_add_var_binding(cbindings, atom_var(var.c_str()), atom);
+            bindings_add_var_binding(&cbindings, atom_var(var.c_str()), atom);
         }
 
-        callback(cbindings, context);
+        bindings_set_push(&result_set, cbindings);
     }
+
+    return result_set;
 }
 
 bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b) {
@@ -494,42 +497,41 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CBindings>(m, "CBindings");
     m.def("bindings_new", []() { return CBindings(bindings_new()); }, "New bindings");
-    m.def("bindings_free", [](CBindings bindings) { bindings_free(bindings.ptr);}, "Free bindings" );
-    m.def("bindings_clone", [](CBindings bindings) { return CBindings(bindings_clone(bindings.ptr)); }, "Deep copy of bindings");
-    m.def("bindings_merge", [](CBindings left, CBindings right) { return CBindings(bindings_merge(left.ptr, right.ptr));}, "Merges bindings");
-    m.def("bindings_merge_v2", [](CBindings self, CBindings other) {
-        return CBindingsSet(bindings_merge_v2(bindings_clone(self.ptr), other.ptr));
+    m.def("bindings_free", [](CBindings bindings) { bindings_free(bindings.obj);}, "Free bindings" );
+    m.def("bindings_clone", [](CBindings bindings) { return CBindings(bindings_clone(bindings.ptr())); }, "Deep copy of bindings");
+    m.def("bindings_merge", [](CBindings self, CBindings other) {
+        return CBindingsSet(bindings_merge(bindings_clone(self.ptr()), other.ptr()));
     }, "Merges bindings into a BindingsSet, allowing for conflicting bindings to split");
-    m.def("bindings_eq", [](CBindings left, CBindings right){ return bindings_eq(left.ptr, right.ptr);}, "Compares bindings"  );
+    m.def("bindings_eq", [](CBindings left, CBindings right){ return bindings_eq(left.ptr(), right.ptr());}, "Compares bindings"  );
     m.def("bindings_add_var_binding",
           [](CBindings bindings, char const* varName, CAtom atom) {
-              return bindings_add_var_binding(bindings.ptr, atom_var(varName), atom_clone(atom.ptr()));
+              return bindings_add_var_binding(bindings.ptr(), atom_var(varName), atom_clone(atom.ptr()));
           },
           "Links variable to atom" );
-    m.def("bindings_is_empty", [](CBindings bindings){ return bindings_is_empty(bindings.ptr);}, "Returns true if bindings is empty");
+    m.def("bindings_is_empty", [](CBindings bindings){ return bindings_is_empty(bindings.ptr());}, "Returns true if bindings is empty");
 
     m.def("bindings_narrow_vars", [](CBindings bindings, CVecAtom& vars) {
-            bindings_narrow_vars(bindings.ptr, vars.ptr());
+            bindings_narrow_vars(bindings.ptr(), vars.ptr());
         }, "Remove vars from Bindings, except those specified" );
 
     m.def("bindings_resolve", [](CBindings bindings, char const* varName) -> nonstd::optional<CAtom> {
-            auto const res = bindings_resolve(bindings.ptr, varName);
+            auto const res = bindings_resolve(bindings.ptr(), varName);
             return atom_is_null(&res) ? nonstd::nullopt : nonstd::optional<CAtom>(CAtom(res));
         }, "Resolve" );
 
     m.def("bindings_resolve_and_remove", [](CBindings bindings, char const* varName) -> nonstd::optional<CAtom> {
-            auto const res = bindings_resolve_and_remove(bindings.ptr, varName);
+            auto const res = bindings_resolve_and_remove(bindings.ptr(), varName);
             return atom_is_null(&res) ? nonstd::nullopt : nonstd::optional<CAtom>(CAtom(res));
         }, "Resolve and remove" );
 
     m.def("bindings_to_str", [](CBindings bindings) {
-        return func_to_string((write_to_buf_func_t)&bindings_to_str, bindings.ptr);
+        return func_to_string((write_to_buf_func_t)&bindings_to_str, bindings.ptr());
     }, "Convert bindings to human readable string");
 
     m.def("bindings_list", [](CBindings bindings) -> pybind11::list {
         pybind11::list var_atom_list;
         bindings_traverse(
-                bindings.ptr,
+                bindings.ptr(),
                 copy_to_list_callback,
                 &var_atom_list);
 
@@ -553,8 +555,8 @@ PYBIND11_MODULE(hyperonpy, m) {
         return func_to_string((write_to_buf_func_t)&bindings_set_to_str, (void*)set.ptr());
     }, "Convert BindingsSet to human readable string");
     m.def("bindings_set_clone", [](CBindingsSet& set) { return CBindingsSet(bindings_set_clone(set.ptr())); }, "Deep copy of BindingsSet");
-    m.def("bindings_set_from_bindings", [](CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); return CBindingsSet(bindings_set_from_bindings(cloned_bindings)); }, "New BindingsSet from existing Bindings");
-    m.def("bindings_set_push", [](CBindingsSet& set, CBindings bindings) { bindings_t* cloned_bindings = bindings_clone(bindings.ptr); bindings_set_push(set.ptr(), cloned_bindings); }, "Adds the Bindings to the BindingsSet");
+    m.def("bindings_set_from_bindings", [](CBindings bindings) { bindings_t cloned_bindings = bindings_clone(bindings.ptr()); return CBindingsSet(bindings_set_from_bindings(cloned_bindings)); }, "New BindingsSet from existing Bindings");
+    m.def("bindings_set_push", [](CBindingsSet& set, CBindings bindings) { bindings_t cloned_bindings = bindings_clone(bindings.ptr()); bindings_set_push(set.ptr(), cloned_bindings); }, "Adds the Bindings to the BindingsSet");
     m.def("bindings_set_add_var_binding", [](CBindingsSet& set, CAtom var, CAtom value) {
         bindings_set_add_var_binding(set.ptr(), var.ptr(), value.ptr());
     }, "Asserts a binding between a variable and an atom for every Bindings in the BindingsSet" );

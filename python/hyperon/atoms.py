@@ -252,12 +252,8 @@ class Bindings:
     def clone(self):
         return Bindings(hp.bindings_clone(self.cbindings))
 
-    @staticmethod
-    def merge(left, right):
-        return Bindings(hp.bindings_merge(left.cbindings, right.cbindings))
-
-    def merge_v2(left, right) -> 'BindingsSet':
-        return BindingsSet(hp.bindings_merge_v2(left.cbindings, right.cbindings))
+    def merge(self, other: 'Bindings') -> 'BindingsSet':
+        return BindingsSet(hp.bindings_merge(self.cbindings, other.cbindings))
 
     def add_var_binding(self, var: Union[str, Atom], atom: Atom) -> bool:
         if isinstance(var, Atom):

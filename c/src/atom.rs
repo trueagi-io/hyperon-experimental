@@ -12,7 +12,6 @@ use std::iter::FromIterator;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon::matcher::{Bindings, BindingsSet};
-use std::ptr;
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Atom Interface
@@ -478,6 +477,11 @@ pub unsafe extern "C" fn atom_get_space(atom: *const atom_ref_t) -> *const space
     }
 }
 
+/// Private convenience function to call an `c_atom_vec_callback_t` callback with each atom in a vec
+pub(crate) fn return_atoms(atoms: &Vec<Atom>, callback: c_atom_vec_callback_t, context: *mut c_void) {
+    callback(&(&atoms[..]).into(), context);
+}
+
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Grounded Atom Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -501,11 +505,11 @@ pub struct gnd_api_t {
     /// @brief An optional function to match the atom with another atom
     /// @param[in]  gnd  A pointer to the Grounded Atom object
     /// @param[in]  other  The other atom to match with
-    /// @param[out]  callback  A function to call, to supply the bindings.  If this function is never called that means the atoms do not match
-    /// @param[in]  context  The opaque context pointer to pass to the `callback` function when it is called
+    /// @return  A `bindings_set_t` that contains all matches between the Grounded Atom and the `other` atom.  Returning an empty
+    /// Bindings Set means the atom do not match
     /// @note Assigning NULL to this field means the atom will match only other atoms which are considered equal by the `eq` function below
     ///
-    match_: Option<extern "C" fn(gnd: *const gnd_t, other: *const atom_ref_t, callback: bindings_mut_callback_t, context: *mut c_void)>,
+    match_: Option<extern "C" fn(gnd: *const gnd_t, other: *const atom_ref_t) -> bindings_set_t>,
 
     /// @brief Tests whether two atoms instantiated from the same interface are equal
     /// @param[in]  gnd  A pointer to the Grounded Atom object
@@ -577,13 +581,6 @@ impl CGrounded {
         (self.api().free)(self.get_mut_ptr());
     }
 
-    #[no_mangle]
-    pub extern "C" fn grounded_match_callback(cbindings: *mut bindings_t, context: *mut c_void) {
-        let bindings = ptr_into_bindings(cbindings);
-        let vec_bnd = unsafe{ &mut *context.cast::<Vec<Bindings>>() };
-        vec_bnd.push(bindings);
-    }
-
 }
 
 impl Grounded for CGrounded {
@@ -613,12 +610,9 @@ impl Grounded for CGrounded {
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
         match self.api().match_ {
             Some(func) => {
-                let mut results: Vec<Bindings> = Vec::new();
-                let context = (&mut results as *mut Vec<Bindings>).cast::<c_void>();
                 let other: atom_ref_t = other.into();
-                func(self.get_ptr(), &other,
-                    CGrounded::grounded_match_callback, context);
-                Box::new(results.into_iter())
+                let set = func(self.get_ptr(), &other);
+                Box::new(set.into_inner().into_iter())
             },
             None => match_by_equality(self, other)
         }
@@ -955,8 +949,33 @@ pub extern "C" fn atom_match_atom(a: *const atom_ref_t, b: *const atom_ref_t) ->
     result_set.into()
 }
 
+//TODO: Document this
+#[repr(C)]
 pub struct bindings_t {
-    pub bindings: Bindings,
+    bindings: *mut RustBindings,
+}
+
+// Internal wrapper type so CBindgen doesn't try and export Bindings
+struct RustBindings(Bindings);
+
+impl From<Bindings> for bindings_t {
+    fn from(bindings: Bindings) -> Self {
+        Self {
+            bindings: Box::into_raw(Box::new(RustBindings(bindings)))
+        }
+    }
+}
+
+impl bindings_t {
+    pub(crate) fn borrow(&self) -> &Bindings {
+        unsafe{ &(*self.bindings).0 }
+    }
+    pub(crate) fn borrow_mut(&mut self) -> &mut Bindings {
+        unsafe{ &mut (*self.bindings).0 }
+    }
+    pub(crate) fn into_inner(self) -> Bindings {
+        unsafe{*Box::from_raw(self.bindings)}.0
+    }
 }
 
 #[repr(C)]
@@ -964,7 +983,7 @@ pub struct bindings_set_t {
     set: *mut RustBindingsSet,
 }
 
-// Internal wrapper type so CBindgen doesn't try and export it
+// Internal wrapper type so CBindgen doesn't try and export BindingsSet
 struct RustBindingsSet(BindingsSet);
 
 impl From<BindingsSet> for bindings_set_t {
@@ -987,24 +1006,24 @@ impl bindings_set_t {
     }
 }
 
-pub type bindings_callback_t = lambda_t<*const bindings_t>;
 pub type bindings_mut_callback_t = lambda_t<*mut bindings_t>;
 
 // bindings
 #[no_mangle]
-pub extern "C" fn bindings_new() -> *mut bindings_t {
-    bindings_into_ptr(Bindings::new())
+pub extern "C" fn bindings_new() -> bindings_t {
+    Bindings::new().into()
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_free(bindings: *mut bindings_t) {
-    // drop() does nothing actually, but it is used here for clarity
-    drop(unsafe{Box::from_raw(bindings)});
+pub extern "C" fn bindings_free(bindings: bindings_t) {
+    let bindings = bindings.into_inner();
+    drop(bindings); //Drop happens automatically, but we're explicit here for clarity
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_clone(bindings: *const bindings_t) -> *mut bindings_t {
-    bindings_into_ptr(unsafe{ &(*bindings) }.bindings.clone())
+pub extern "C" fn bindings_clone(bindings: *const bindings_t) -> bindings_t {
+    let bindings = unsafe{ &*bindings };
+    bindings.borrow().clone().into()
 }
 
 /// Writes a text description of the bindings_t into the provided buffer and returns the number of bytes
@@ -1012,20 +1031,20 @@ pub extern "C" fn bindings_clone(bindings: *const bindings_t) -> *mut bindings_t
 /// string terminator.
 #[no_mangle]
 pub extern "C" fn bindings_to_str(bindings: *const bindings_t, buf: *mut c_char, buf_len: usize) -> usize {
-    let bindings = unsafe{ &(*bindings).bindings };
-    write_into_buf(bindings, buf, buf_len)
+    let bindings = unsafe{ &*bindings };
+    write_into_buf(bindings.borrow(), buf, buf_len)
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_eq(bindingsa: *const bindings_t, bindingsb: *const bindings_t) -> bool {
-    let left = unsafe{&(*bindingsa).bindings};
-    let right = unsafe{&(*bindingsb).bindings};
-    left == right
+pub extern "C" fn bindings_eq(a: *const bindings_t, b: *const bindings_t) -> bool {
+    let left = unsafe{ &*a };
+    let right = unsafe{ &*b };
+    left.borrow() == right.borrow()
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_traverse(cbindings: *const bindings_t, callback: c_var_binding_callback_t, context: *mut c_void) {
-    let bindings = unsafe{&(*cbindings).bindings};
+pub extern "C" fn bindings_traverse(bindings: *const bindings_t, callback: c_var_binding_callback_t, context: *mut c_void) {
+    let bindings = unsafe{ &*bindings };
 
     //EXPLANATION: The reason we do all the arg conversion in one loop, and then call the callback
     // in a second loop is because the C API is fundamentally being given atom_refs, which the
@@ -1038,15 +1057,15 @@ pub extern "C" fn bindings_traverse(cbindings: *const bindings_t, callback: c_va
     //TODO: We ought to rework the Rust Bindings API so Atoms in Bindings don't need to be copied and
     // returned by value.  Probably best to save this work until we are implementing comprehensions,
     // as part of non-determinism / inference control
-    let callback_args: Vec<(Atom, Atom)> = bindings.iter().map(|(var, atom)| {
+    let callback_args: Vec<(Atom, Atom)> = bindings.borrow().iter().map(|(var, atom)| {
         (Atom::Variable(var.clone()), atom)
     }).collect();
     callback_args.iter().for_each(|(var, atom)| callback(var.into(), atom.into(), context));
 }
 
 #[no_mangle]
-pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, var: atom_t, atom: atom_t) -> bool {
-    let bindings = unsafe{ &mut(*bindings).bindings };
+pub extern "C" fn bindings_add_var_binding(bindings: *mut bindings_t, var: atom_t, atom: atom_t) -> bool {
+    let bindings = unsafe{ &mut*bindings }.borrow_mut();
     let var = match var.into_inner() {
         Atom::Variable(variable) => variable,
         _ => panic!("var argument must be variable atom")
@@ -1063,7 +1082,7 @@ pub extern "C" fn bindings_add_var_binding(bindings: * mut bindings_t, var: atom
 
 #[no_mangle]
 pub extern "C" fn bindings_is_empty(bindings: *const bindings_t) -> bool{
-    let bindings = unsafe{ &(*bindings).bindings };
+    let bindings = unsafe{ &*bindings }.borrow();
     bindings.is_empty()
 }
 
@@ -1072,22 +1091,10 @@ pub extern "C" fn bindings_is_empty(bindings: *const bindings_t) -> bool{
 #[no_mangle]
 pub extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const c_char) -> atom_t
 {
-    let bindings = unsafe{&(*bindings).bindings};
+    let bindings = unsafe{ &*bindings }.borrow();
     let var = VariableAtom::new(cstr_into_string(var_name));
 
     bindings.resolve(&var).into()
-}
-
-#[no_mangle]
-pub extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindings_right: *const bindings_t) -> *mut bindings_t
-{
-    let bindings_l = unsafe{ &(*bindings_left).bindings };
-    let bindings_r = unsafe{ &(*bindings_right).bindings };
-
-    match Bindings::merge(bindings_l, bindings_r){
-        None => { ptr::null_mut() }
-        Some(merged) => { bindings_into_ptr(merged)}
-    }
 }
 
 /// WARNING: This function takes ownership of the _self argument.
@@ -1095,10 +1102,10 @@ pub extern "C" fn bindings_merge(bindings_left: *const bindings_t, bindings_righ
 ///
 /// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
-pub extern "C" fn bindings_merge_v2(_self: *mut bindings_t, other: *const bindings_t) -> bindings_set_t
+pub extern "C" fn bindings_merge(_self: bindings_t, other: *const bindings_t) -> bindings_set_t
 {
-    let other = unsafe{ &(*other).bindings };
-    let owned_self = ptr_into_bindings(_self);
+    let other = unsafe{ &*other }.borrow();
+    let owned_self = _self.into_inner();
 
     let new_set = owned_self.merge_v2(other);
     new_set.into()
@@ -1108,7 +1115,7 @@ pub extern "C" fn bindings_merge_v2(_self: *mut bindings_t, other: *const bindin
 /// bindings.  Returns a NULL atom_ref if the variable is not present.
 #[no_mangle]
 pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_name: *const c_char) -> atom_t {
-    let bindings = unsafe{&mut(*bindings).bindings};
+    let bindings = unsafe{ &mut*bindings }.borrow_mut();
     let var = VariableAtom::new(cstr_into_string(var_name));
 
     bindings.resolve_and_remove(&var).into()
@@ -1116,7 +1123,7 @@ pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_nam
 
 #[no_mangle]
 pub extern "C" fn bindings_narrow_vars(bindings: *mut bindings_t, vars: *const atom_vec_t) {
-    let bindings = unsafe{&mut (*bindings).bindings};
+    let bindings = unsafe{ &mut*bindings}.borrow_mut();
     let vars = unsafe{&*vars}.as_slice();
     let vars_iter = vars.into_iter().map(|atom| {
         TryInto::<&VariableAtom>::try_into(atom)
@@ -1147,18 +1154,16 @@ pub extern "C" fn bindings_set_single() -> bindings_set_t {
 ///
 /// The object returned from this function must be freed with bindings_set_free()
 #[no_mangle]
-pub extern "C" fn bindings_set_from_bindings(bindings: *mut bindings_t) -> bindings_set_t {
-    let owned_bindings = ptr_into_bindings(bindings);
-    BindingsSet::from(owned_bindings).into()
+pub extern "C" fn bindings_set_from_bindings(bindings: bindings_t) -> bindings_set_t {
+    BindingsSet::from(bindings.into_inner()).into()
 }
 
 /// WARNING: This function takes ownership of the bindings argument.
 /// After calling this function, the bindings_t passed must not be accessed or freed
 #[no_mangle]
-pub extern "C" fn bindings_set_push(set: *mut bindings_set_t, bindings: *mut bindings_t) {
+pub extern "C" fn bindings_set_push(set: *mut bindings_set_t, bindings: bindings_t) {
     let set = unsafe{ (&mut *set).borrow_mut() };
-    let owned_bindings = ptr_into_bindings(bindings);
-    set.push(owned_bindings);
+    set.push(bindings.into_inner());
 }
 
 #[no_mangle]
@@ -1205,8 +1210,8 @@ pub extern "C" fn bindings_set_is_single(set: *const bindings_set_t) -> bool {
 pub extern "C" fn bindings_set_iterate(set: *mut bindings_set_t, callback: bindings_mut_callback_t, context: *mut c_void) {
     let set = unsafe{ (&mut *set).borrow_mut() };
     for bindings in set.iter_mut() {
-        let bindings_ptr = (bindings as *mut Bindings).cast::<bindings_t>();
-        callback(bindings_ptr, context);
+        let mut cbindings = bindings_t{bindings: (bindings as  *mut Bindings).cast()};
+        callback(&mut cbindings, context);
     }
 }
 
@@ -1254,42 +1259,4 @@ pub extern "C" fn atoms_are_equivalent(first: *const atom_ref_t, second: *const 
     let first = unsafe{ &*first }.borrow();
     let second = unsafe{ &*second }.borrow();
     crate::atom::matcher::atoms_are_equivalent(first, second)
-}
-
-/////////////////////////////////////////////////////////////////
-// Code below is a boilerplate code to implement C API correctly.
-// It is not a part of C API.
-
-pub fn bindings_into_ptr(bindings: Bindings) -> *mut bindings_t {
-    Box::into_raw(Box::new(bindings_t{bindings}))
-}
-
-pub fn ptr_into_bindings(bindings: *mut bindings_t) -> Bindings {
-    unsafe {Box::from_raw(bindings)}.bindings
-}
-
-pub fn return_atoms(atoms: &Vec<Atom>, callback: c_atom_vec_callback_t, context: *mut c_void) {
-    callback(&(&atoms[..]).into(), context);
-}
-
-
-#[cfg(test)]
-mod tests {
-use super::*;
-use std::ptr;
-
-    #[test]
-    pub fn test_match_callback() {
-
-        let cbindings = bindings_into_ptr(bind!{var: expr!("atom_test")} );
-
-        let mut results: Vec<Bindings> = Vec::new();
-        let context = ptr::addr_of_mut!(results).cast::<c_void>();
-
-        CGrounded::grounded_match_callback( cbindings, context);
-
-        assert_eq!(results, vec![Bindings::from(vec![
-                (VariableAtom::new("var"), Atom::sym("atom_test"))])]);
-    }
-
 }
