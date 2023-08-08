@@ -257,7 +257,7 @@ pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> atom_t {
 ///
 #[no_mangle]
 pub extern "C" fn atom_gnd_for_space(space: *const space_t) -> atom_t {
-    let space = unsafe { &(*space).0 };
+    let space = unsafe { &*space }.borrow();
     Atom::gnd(space.clone()).into()
 }
 
@@ -439,14 +439,14 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_ref_t) -> *mut gnd_t 
 /// @ingroup atom_group
 /// @see atom_gnd_for_space
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` that wraps a Space
-/// @return The pointer to the `space_t` inside a grounded atom
-/// @warning The returned space is borrowed from the atom.  It must not be accessed after the atom has been freed or modified elsewhere
+/// @return A Space handle to the space inside a grounded atom
+/// @note The returned space is borrowed from the atom.  It must not be accessed after the atom has been freed or modified elsewhere
 ///
 #[no_mangle]
-pub unsafe extern "C" fn atom_get_space(atom: *const atom_ref_t) -> *const space_t {
+pub unsafe extern "C" fn atom_get_space(atom: *const atom_ref_t) -> space_t {
     let atom = (&*atom).borrow();
     if let Some(space) = Atom::as_gnd::<DynSpace>(atom) {
-        (space as *const DynSpace).cast()
+        space.clone().into()
     } else {
         panic!("Atom does not reference a space");
     }
@@ -461,6 +461,7 @@ pub(crate) fn return_atoms(atoms: &Vec<Atom>, callback: c_atom_vec_callback_t, c
 // Grounded Atom Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+/// @struct gnd_api_t
 /// @brief A table of callback functions to implement a Grounded Atom with behavior defined in C
 /// @ingroup grounded_atom_group
 /// @see atom_gnd
@@ -471,7 +472,7 @@ pub struct gnd_api_t {
     /// @brief An optional function to implement executable atom behavior
     /// @param[in]  gnd  A pointer to the Grounded Atom object
     /// @param[in]  args  A pointer to an `atom_vec_t` containing the argument atoms for this execution
-    /// @param[out]  out  A pointer to a mutable `atom_vec_t`, into which newly created atoms may be added by the execution
+    /// @param[out]  out  A pointer to a mutable `atom_vec_t`, into which result atoms may be added by the execution
     /// @return An `exec_error_t` status that informs the MeTTa interpreter if execution may continue or whether to handle a fault
     /// @note Assigning NULL to this field means the atom is not executable
     ///
@@ -517,6 +518,7 @@ pub struct gnd_api_t {
     free: extern "C" fn(gnd: *mut gnd_t),
 }
 
+/// @struct gnd_t
 /// @brief A struct header that must preface a buffer used as a backing object for a Grounded Atom
 /// @ingroup grounded_atom_group
 /// @see atom_gnd

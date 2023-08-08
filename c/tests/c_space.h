@@ -10,7 +10,7 @@
 typedef struct _custom_space_buf custom_space_t;
 
 // Creates a new space using logic implemented in C
-space_t* custom_space_new();
+space_t custom_space_new();
 
 typedef struct _custom_space_buf {
     struct _atom_list_item* atoms;

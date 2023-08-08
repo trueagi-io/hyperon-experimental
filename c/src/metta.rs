@@ -96,21 +96,26 @@ pub unsafe extern "C" fn sexpr_parser_parse(
 #[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> atom_t { rust_type_atom::<DynSpace>().into() }
 
 #[no_mangle]
-pub unsafe extern "C" fn check_type(space: *const space_t, atom: *const atom_ref_t, typ: *const atom_ref_t) -> bool {
-    hyperon::metta::types::check_type((*space).0.borrow().as_space(), (&*atom).borrow(), (&*typ).borrow())
+pub extern "C" fn check_type(space: *const space_t, atom: *const atom_ref_t, typ: *const atom_ref_t) -> bool {
+    let dyn_space = unsafe{ &*space }.borrow();
+    let atom = unsafe{ &*atom }.borrow();
+    let typ = unsafe{ &*typ }.borrow();
+    hyperon::metta::types::check_type(dyn_space.borrow().as_space(), atom, typ)
 }
 
 #[no_mangle]
-pub unsafe extern "C" fn validate_atom(space: *const space_t, atom: *const atom_ref_t) -> bool {
-    hyperon::metta::types::validate_atom((*space).0.borrow().as_space(), (&*atom).borrow())
+pub extern "C" fn validate_atom(space: *const space_t, atom: *const atom_ref_t) -> bool {
+    let dyn_space = unsafe{ &*space }.borrow();
+    let atom = unsafe{ &*atom }.borrow();
+    hyperon::metta::types::validate_atom(dyn_space.borrow().as_space(), atom)
 }
 
 #[no_mangle]
 pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
-    let space = unsafe{ &(*space).0.borrow() };
+    let dyn_space = unsafe{ &*space }.borrow();
     let atom = unsafe{ (&*atom).borrow() };
-    let types = hyperon::metta::types::get_atom_types(space.as_space(), atom);
+    let types = hyperon::metta::types::get_atom_types(dyn_space.borrow().as_space(), atom);
     return_atoms(&types, callback, context);
 }
 
@@ -122,9 +127,9 @@ pub struct step_result_t<'a> {
 
 #[no_mangle]
 pub extern "C" fn interpret_init<'a>(space: *mut space_t, expr: *const atom_ref_t) -> *mut step_result_t<'a> {
-    let space = unsafe{ &(*space) };
+    let dyn_space = unsafe{ &*space }.borrow();
     let expr = unsafe{ (&*expr).borrow() };
-    let step = interpreter::interpret_init(space.shared(), expr);
+    let step = interpreter::interpret_init(dyn_space.clone(), expr);
     Box::into_raw(Box::new(step_result_t{ result: step }))
 }
 
@@ -167,9 +172,9 @@ pub type metta_t = SharedApi<Metta>;
 
 #[no_mangle]
 pub extern "C" fn metta_new(space: *mut space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> *mut metta_t {
-    let space = unsafe{ &mut *space }.shared();
+    let dyn_space = unsafe{ &*space }.borrow();
     let tokenizer = unsafe{ &mut *tokenizer }.shared();
-    metta_t::new(Metta::from_space_cwd(space, tokenizer, PathBuf::from(cstr_as_str(cwd))))
+    metta_t::new(Metta::from_space_cwd(dyn_space.clone(), tokenizer, PathBuf::from(cstr_as_str(cwd))))
 }
 
 #[no_mangle]
@@ -184,9 +189,9 @@ pub extern "C" fn metta_free(metta: *mut metta_t) {
 }
 
 #[no_mangle]
-pub extern "C" fn metta_space(metta: *mut metta_t) -> *mut space_t {
+pub extern "C" fn metta_space(metta: *mut metta_t) -> space_t {
     let space = unsafe{ &*metta }.borrow().space();
-    space_t::from_shared(space)
+    space.into()
 }
 
 #[no_mangle]

@@ -8,8 +8,281 @@ use crate::atom::*;
 
 use std::os::raw::*;
 
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Space Client Interface
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+/// @struct space_t
+/// @brief A Space handle, providing access to a Space in which atoms may exist in relation to other atoms
+/// @note Multiple `space_t` handles may refer to the same underlying space.  An underlying space
+///    will only be deallocated when all `space_t` handles that refer to it have been freed
+/// @note `space_t` must be freed with `space_free()`, or passed by value
+///    to a function that takes ownership of the space.
+///
+#[repr(C)]
+pub struct space_t(*const RustOpaqueSpace);
+
+struct RustOpaqueSpace(DynSpace);
+
+//INTERNAL NOTE: There are two reasons we need to box this space_t, rather than going directly from
+// the internal Rc to a raw pointer.
+// 1. The Rc inside DynSpace isn't pub, because we don't want to expose it to the Rust clients
+// 2. More importantly, the <dyn SpaceMut> type is unSized, so we can't recreate the Rc without
+//   knowing the size, and that knowledge is lost if we convert to a raw ptr.  So the indirection is
+//   neessary to preserve the allocation meta-data.
+impl space_t {
+    pub(crate) fn into_inner(self) -> DynSpace {
+        unsafe{ Box::from_raw(self.0.cast_mut()).0 }
+    }
+    pub(crate) fn borrow(&self) -> &DynSpace {
+        unsafe{ &(*self.0).0 }
+    }
+}
+
+impl From<DynSpace> for space_t {
+    fn from(space: DynSpace) -> Self {
+        space_t(Box::into_raw(Box::new(RustOpaqueSpace(space))))
+    }
+}
+
+impl PartialEq for space_t {
+    fn eq(&self, other: &Self) -> bool {
+        self.borrow() == other.borrow()
+    }
+}
+
+/// @brief Creates a new Space, backed by an implementation in C
+/// @ingroup space_client_group
+/// @param[in]  api  A pointer to the table of functions that implement the Space's behavior
+/// @param[in]  payload  A pointer to a buffer to back the new Space
+/// @return A newly created `space_t` handle, to access the Space
+/// @warning This function takes ownership of the payload buffer, and it should not be freed or accessed after it
+///    has been provided to this function
+/// @note The caller must take ownership responsibility for the returned `space_t`, and free it with `space_free()`
+///
+#[no_mangle]
+pub extern "C" fn space_new(api: *const space_api_t, payload: *mut c_void) -> space_t {
+    let c_space = CSpace::new(api, payload);
+    DynSpace::new(c_space).into()
+}
+
+/// @brief Frees a `space_t` handle
+/// @ingroup space_client_group
+/// @param[in]  space  The handle to free
+/// @note The underlying Space may be deallocated if all handles that refer to it have been freed, otherwise
+///    the Space itself won't be freed
+///
+#[no_mangle]
+pub extern "C" fn space_free(space: space_t) {
+    let space = space.into_inner();
+    drop(space)
+}
+
+/// @brief Creates a new `space_t` handle that refers to the same underlying space as another `space_t`
+/// @ingroup space_client_group
+/// @param[in]  space  A pointer to the `space_t` handle to clone
+/// @return A newly created `space_t` handle, providing access to the same underlying Space
+/// @note Each `space_t` is an independent object and must be individually freed, but both `space_t` objects
+///    reference the same underlying space, which is only deallocated when all references to it have been freed.
+/// @note The caller must take ownership responsibility for the returned `space_t`, and free it with `space_free()`
+///
+#[no_mangle]
+pub extern "C" fn space_clone_ref(space: *const space_t) -> *mut space_t {
+    let space = unsafe { &(*space).0 };
+    Box::into_raw(Box::new(space_t(space.clone())))
+}
+
+/// @brief Checks if two `space_t` handles refer to the same underlying Space
+/// @ingroup space_client_group
+/// @param[in]  a  A pointer to the first `space_t`
+/// @param[in]  b  A pointer to the second `space_t`
+/// @return `true` is the underlying Space is the same for both `space_t` objects, and `false` otherwise
+///
+#[no_mangle]
+pub extern "C" fn space_eq(a: *const space_t, b: *const space_t) -> bool {
+    let a = unsafe{ &*a }.borrow();
+    let b = unsafe{ &*b }.borrow();
+    *a == *b
+}
+
+/// @brief Access the payload object belonging to a space implemented in C
+/// @ingroup space_client_group
+/// @param[in]  space  A pointer to the `space_t` handle to access
+/// @return The pointer to the payload object orginally used to create the Space
+/// @note This function is only valid for Spaces implemented via the HyperonC API
+/// @note This API is likely to change in the future to implement multi-threading as the space's payload
+///    object must not be modified while other operations can access the space
+/// @warning The returned payload ptr must not be freed, nor may it be accessed after the space
+///    has been freed or modified
+///
+#[no_mangle]
+pub extern "C" fn space_get_payload(space: *mut space_t) -> *mut c_void {
+    let dyn_space = unsafe{ &*space }.borrow();
+    if let Some(any_ref) = dyn_space.borrow_mut().as_any() {
+        if let Some(c_space) = any_ref.downcast_ref::<CSpace>() {
+            return c_space.params.payload;
+        }
+    }
+    panic!("Only CSpace has a payload")
+}
+
+/// @brief Adds an atom to the Space
+/// @ingroup space_client_group
+/// @param[in]  space  A pointer to the `space_t` handle to access
+/// @param[in]  atom  An `atom_t` representing the Atom to add
+/// @warning This function takes ownership of the supplied atom, and it should not be freed or accessed after
+///    it has been provided to this function
+///
+#[no_mangle]
+pub extern "C" fn space_add(space: *mut space_t, atom: atom_t) {
+    let dyn_space = unsafe{ &*space }.borrow();
+    dyn_space.borrow_mut().add(atom.into_inner());
+}
+
+/// @brief Removes a specific atom from the Space
+/// @ingroup space_client_group
+/// @param[in]  space  A pointer to the `space_t` handle to access
+/// @param[in]  atom  A pointer to an `atom_t` or `atom_ref_t` to specifying the atom to remove from the Space
+/// @return `true` if the atom was found and removed from the Space, `false` otherwise
+///
+#[no_mangle]
+pub extern "C" fn space_remove(space: *mut space_t, atom: *const atom_ref_t) -> bool {
+    let dyn_space = unsafe{ &*space }.borrow();
+    let atom = unsafe{ &*atom }.borrow();
+    dyn_space.borrow_mut().remove(atom)
+}
+
+/// @brief Replaces an Atom in the Space with another Atom
+/// @ingroup space_client_group
+/// @param[in]  space  A pointer to the `space_t` handle to access
+/// @param[in]  from  A pointer to an `atom_t` or `atom_ref_t` to specify the atom to replace
+/// @param[in]  to  An `atom_t` to provide a new Atom, to replace the `from` atom in the Space
+/// @return `true` if an Atom was replaced in the Space, `false` otherwise
+/// @note The `to` atom will only be added to the Space if the `from` atom is found.  Regardless, this
+///    functino will take ownership of the `to` atom.
+/// @warning This function takes ownership of the `to` atom, and it should not be freed or accessed
+///    after it has been provided to this function
+///
+#[no_mangle]
+pub extern "C" fn space_replace(space: *mut space_t, from: *const atom_ref_t, to: atom_t) -> bool {
+    let dyn_space = unsafe{ &*space }.borrow();
+    let from = unsafe{ &*from }.borrow();
+    dyn_space.borrow_mut().replace(from, to.into_inner())
+}
+
+/// @brief Queries a Space for atoms matching a pattern
+/// @ingroup space_client_group
+/// @param[in]  space  A pointer to the `space_t` handle to access
+/// @param[in]  from  A pointer to an `atom_t` or `atom_ref_t` to specify the pattern to match within the Space
+/// @return A `bindings_set_t` representing all possible results of the match
+/// @note The caller must take ownership responsibility for the returned `bindings_set_t`, and free it with `bindings_set_free()`
+///
+#[no_mangle]
+pub extern "C" fn space_query(space: *const space_t, pattern: *const atom_ref_t) -> bindings_set_t
+{
+    let dyn_space = unsafe{ &*space }.borrow();
+    let pattern = unsafe{ &*pattern }.borrow();
+    let results = dyn_space.borrow().query(pattern);
+    results.into()
+}
+
+/// @brief Substitutes all Atoms matching a pattern with Atoms constructed from a template
+/// @ingroup space_client_group
+/// @param[in]  space  A pointer to the `space_t` handle to access
+/// @param[in]  pattern  A pointer to an `atom_t` or `atom_ref_t` to match Atom(s) in the Space
+/// @param[in]  templ  A pointer to an `atom_t` or `atom_ref_t` to specify a template from which to
+///    construct the new atoms
+/// @param[in]  callback  A function that will be called to provide access to a vec of newly created atoms
+/// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the
+///    `callback` function
+///
+#[no_mangle]
+pub extern "C" fn space_subst(space: *const space_t,
+        pattern: *const atom_ref_t, templ: *const atom_ref_t,
+        callback: c_atom_vec_callback_t, context: *mut c_void) {
+    let dyn_space = unsafe{ &*space }.borrow();
+    let pattern = unsafe{ &*pattern }.borrow();
+    let templ = unsafe{ &*templ }.borrow();
+    let results = dyn_space.borrow().subst(pattern, templ);
+    return_atoms(&results, callback, context);
+}
+
+/// @brief Returns the number of atoms in a Space, if it can be readily determined
+/// @ingroup space_client_group
+/// @param[in]  space  A pointer to the `space_t` handle to access
+/// @return The number of atoms in the Space, or -1 for spaces in which it is impossible or impractical
+///    to determine the number of atoms
+///
+#[no_mangle]
+pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
+    let dyn_space = unsafe{ &*space }.borrow();
+    match dyn_space.borrow().atom_count() {
+        Some(count) => count as isize,
+        None => -1
+    }
+}
+
+/// @brief Iterates all Atoms in a Space, if that is possible
+/// @ingroup space_client_group
+/// @param[in]  space  A pointer to the `space_t` handle to access
+/// @param[in]  callback  A function that will be called for each Atom in the Space
+/// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the
+///    `callback` function
+/// @return `true` if the space was sucessfully iterated, or `false` if the space does not support iteration
+///
+#[no_mangle]
+pub extern "C" fn space_iterate(space: *const space_t,
+        callback: c_atom_callback_t, context: *mut c_void) -> bool {
+    let dyn_space = unsafe{ &*space }.borrow();
+    match dyn_space.borrow().atom_iter() {
+        Some(atom_iter) => {
+            for atom in atom_iter {
+                callback(atom.into(), context);
+            }
+            true
+        },
+        None => false
+    }
+}
+
+/// @brief Registers a new observer, to monitor activity within the Space
+/// @ingroup space_client_group
+/// @param[in]  space  A pointer to the `space_t` handle of the space to observe
+/// @param[in]  observer_api  A pointer to the table of functions that implement the observer's behavior
+/// @param[in]  observer_payload  A pointer to a caller-defined object usable by the observer's implementation functions
+/// @return A `space_observer_t` created to observe the space
+/// @note The caller must take ownership responsibility for the returned `space_observer_t`, and it must be freed with `space_observer_free()`
+/// @warning This function takes ownership of the `observer_payload`, and it should not be freed after it
+///    has been provided to this function
+///
+//TODO, space_observer_t needs to be an owned struct to be consistent with the rest of the API
+//TODO: Question: Do Space Observers belong in a separate documentation module?
+#[no_mangle]
+pub extern "C" fn space_register_observer(space: *mut space_t, observer_api: *const space_observer_api_t, observer_payload: *mut c_void) -> *mut space_observer_t {
+    let dyn_space = unsafe{ &*space }.borrow();
+    let space = dyn_space.borrow_mut();
+    let observer = CObserver {api: observer_api, payload: observer_payload};
+    let observer = space.common().register_observer(observer);
+    Box::into_raw(Box::new(space_observer_t{ observer } ))
+}
+
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
-// Space & SpaceMut trait interface wrapper
+// Grounding Space
+//-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
+
+/// @brief Creates a new Space, backed by a GroundSpace
+/// @ingroup space_client_group
+/// @return a `space_t` handle to the newly created Grounding Space
+/// @note The caller takes ownership responsibility for the returned `space_t`, and it must be
+///    freed with `space_free()`
+///
+#[no_mangle]
+pub extern "C" fn space_new_grounding_space() -> space_t {
+    DynSpace::new(GroundingSpace::new()).into()
+}
+
+//-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
+// Space Implementation Interface (Space & SpaceMut trait interface wrapper)
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
 
 #[repr(C)]
@@ -409,178 +682,3 @@ impl Drop for CSpace {
     }
 }
 
-/// @struct space_t
-/// @brief Contains a Space, in which atoms may exist in relation to other atoms
-/// @note `space_t` must be freed with `space_free()`, or passed by value
-/// to a function that takes ownership of the space.
-///
-/// Contains a Space in which atoms may exist in relation to other atoms.  `space_t` must be freed
-/// with `space_free()`, or passed by value to a function that takes ownership of the space.
-//INTERNAL NOTE: There are two reasons we need to box this space_t, rather than going directly from
-// the internal Rc to a raw pointer.
-// 1. The Rc inside DynSpace isn't pub, because we don't want to expose it to the Rust clients
-// 2. More importantly, the <dyn SpaceMut> type is unSized, so we can't recreate the Rc without
-//   knowing the size, and that knowledge is lost if we convert to a raw ptr.  So the indirection is
-//   neessary to preserve the allocation meta-data.
-pub struct space_t(pub(crate) DynSpace);
-
-impl space_t {
-    pub fn new<T: SpaceMut + 'static>(space: T) -> *mut space_t {
-        Box::into_raw(Box::new(space_t(DynSpace::new(space))))
-    }
-    pub fn from_shared(space: DynSpace) -> *mut space_t {
-        Box::into_raw(Box::new(space_t(space)))
-    }
-    pub fn from_ptr(space_ptr: *mut space_t) -> Self {
-        *unsafe{ Box::from_raw(space_ptr) }
-    }
-    pub fn shared(&self) -> DynSpace {
-        self.0.clone()
-    }
-}
-
-impl PartialEq for space_t {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-
-/// Creates a new space_t, backed by an implementation in C
-///
-/// WARNING: This function takes ownership of the payload, and it should not be freed or
-/// accessed after it has been provided to this function
-///
-/// The returned space_t must be freed with space_free
-#[no_mangle]
-pub extern "C" fn space_new(api: *const space_api_t, payload: *mut c_void) -> *mut space_t {
-    let c_space = CSpace::new(api, payload);
-    space_t::new(c_space)
-}
-
-#[no_mangle]
-pub extern "C" fn space_free(space: *mut space_t) {
-    let space = space_t::from_ptr(space);
-    drop(space)
-}
-
-/// Clones a space_t reference.  The underlying space is still the same space.
-/// 
-/// The returned space_t must be freed with space_free
-#[no_mangle]
-pub extern "C" fn space_clone_ref(space: *const space_t) -> *mut space_t {
-    let space = unsafe { &(*space).0 };
-    Box::into_raw(Box::new(space_t(space.clone())))
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn space_eq(a: *const space_t, b: *const space_t) -> bool {
-    *a == *b
-}
-
-/// Returns the pointer to the payload for a space created from C
-///
-/// WARNING: The returned payload ptr must not be freed, nor must it be accessed after the space
-/// has been freed
-#[no_mangle]
-pub extern "C" fn space_get_payload(space: *mut space_t) -> *mut c_void {
-    if let Some(any_ref) = unsafe{ (*space).0.borrow_mut().as_any() } {
-        if let Some(c_space) = any_ref.downcast_ref::<CSpace>() {
-            return c_space.params.payload;
-        }
-    }
-    panic!("Only CSpace has a payload")
-}
-
-/// Registers a new observer with the space
-/// 
-/// WARNING: This function takes ownership of the payload, and it should not be freed after it
-/// has been provided to this function
-///
-/// The returned space_observer_t must be freed with space_observer_free
-#[no_mangle]
-pub extern "C" fn space_register_observer(space: *mut space_t, observer_api: *const space_observer_api_t, observer_payload: *mut c_void) -> *mut space_observer_t {
-    let space = unsafe{ (*space).0.borrow_mut() };
-    let observer = CObserver {api: observer_api, payload: observer_payload};
-    let observer = space.common().register_observer(observer);
-    Box::into_raw(Box::new(space_observer_t{ observer } ))
-}
-
-/// WARNING: This function takes ownership of the supplied atom, and it should not be freed or
-/// accessed after it has been provided to this function
-#[no_mangle]
-pub unsafe extern "C" fn space_add(space: *mut space_t, atom: atom_t) {
-    (*space).0.borrow_mut().add(atom.into_inner());
-}
-
-#[no_mangle]
-pub unsafe extern "C" fn space_remove(space: *mut space_t, atom: *const atom_ref_t) -> bool {
-    (*space).0.borrow_mut().remove((&*atom).borrow())
-}
-
-/// WARNING: This function takes ownership of the `to` atom, and it should not be freed or
-/// accessed after it has been provided to this function
-#[no_mangle]
-pub unsafe extern "C" fn space_replace(space: *mut space_t, from: *const atom_ref_t, to: atom_t) -> bool {
-    (*space).0.borrow_mut().replace((&*from).borrow(), to.into_inner())
-}
-
-/// NOTE: The returned BindingsSet needs to be freed with bindings_set_free
-#[no_mangle]
-pub extern "C" fn space_query(space: *const space_t, pattern: *const atom_ref_t) -> bindings_set_t
-{
-    let results = unsafe { (*space).0.borrow().query((&*pattern).borrow()) };
-    results.into()
-}
-
-#[no_mangle]
-pub extern "C" fn space_subst(space: *const space_t,
-        pattern: *const atom_ref_t, templ: *const atom_ref_t,
-        callback: c_atom_vec_callback_t, context: *mut c_void) {
-    let results = unsafe { (*space).0.borrow().subst((&*pattern).borrow(), (&*templ).borrow()) };
-    return_atoms(&results, callback, context);
-}
-
-/// NOTE: This function will return -1 for spaces on which it is impossible or impractical
-/// to determine the number of atoms
-#[no_mangle]
-pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
-    match unsafe { (*space).0.borrow().atom_count() } {
-        Some(count) => count as isize,
-        None => -1
-    }
-}
-
-/// Calls the specified `callback` for each atom in the space, if possible
-/// 
-/// Returns `true` if the space was sucessfully iterated, or `false` if the space does not
-/// support iteration.
-#[no_mangle]
-pub extern "C" fn space_iterate(space: *const space_t,
-        callback: c_atom_callback_t, context: *mut c_void) -> bool {
-    match unsafe { (*space).0.borrow().atom_iter() } {
-        Some(atom_iter) => {
-            for atom in atom_iter {
-                callback(atom.into(), context);
-            }
-            true
-        },
-        None => false
-    }
-}
-
-//-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
-// Grounding Space
-//-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
-
-/// @brief Creates a new space_t, backed by a GroundSpace
-/// @ingroup space_client_group
-// @relates space_t
-/// @return a newly created `space_t` for the Grounding Space
-/// @note The caller takes responsibility for the returned `space_t`
-///
-/// Creates a new `space_t`, backed by a GroundSpace.  The returned space_t must be freed with `space_free()`
-#[no_mangle]
-pub extern "C" fn space_new_grounding_space() -> *mut space_t {
-    space_t::new(GroundingSpace::new())
-}

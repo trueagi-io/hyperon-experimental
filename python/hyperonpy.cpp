@@ -31,7 +31,7 @@ using CAtom = CStruct<atom_t>;
 using CVecAtom = CStruct<atom_vec_t>;
 using CBindings = CStruct<bindings_t>;
 using CBindingsSet = CStruct<bindings_set_t>;
-using CSpace = CPtr<space_t>;
+using CSpace = CStruct<space_t>;
 using CTokenizer = CPtr<tokenizer_t>;
 using CStepResult = CPtr<step_result_t>;
 using CMetta = CPtr<metta_t>;
@@ -445,7 +445,7 @@ PYBIND11_MODULE(hyperonpy, m) {
                     throw std::runtime_error("Grounded Space Atoms can't have a custom type");
                 }
                 atom_free(undefined);
-                space_t* space = object.attr("cspace").cast<CSpace>().ptr;
+                space_t* space = object.attr("cspace").cast<CSpace>().ptr();
                 return CAtom(atom_gnd_for_space(space));
             } else {
                 atom_t typ = atom_clone(ctyp.ptr());
@@ -463,7 +463,7 @@ PYBIND11_MODULE(hyperonpy, m) {
             return func_to_string((write_to_buf_func_t)&atom_get_name, atom.ptr());
         }, "Get name of the Symbol or Variable atom");
     m.def("atom_get_space", [](CAtom& atom) {
-            return CSpace(space_clone_ref(atom_get_space(atom.ptr())));
+            return CSpace(atom_get_space(atom.ptr()));
         }, "Get the space inside of a Grounded atom wrapping a space");
     m.def("atom_get_object", [](CAtom& atom) {
             return static_cast<GroundedObject const*>(atom_get_object(atom.ptr()))->pyobj;
@@ -592,31 +592,31 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("space_new_custom", [](py::object object) {
         return CSpace( space_new(&PY_SPACE_NO_SUBST_API, new PySpace(object)));
         }, "Create new custom space implemented in Python");
-    m.def("space_free", [](CSpace space) { space_free(space.ptr); }, "Free space");
+    m.def("space_free", [](CSpace space) { space_free(space.obj); }, "Free space");
     m.def("space_get_payload", [](CSpace space) {
-        PySpace* py_space = (PySpace*)space_get_payload(space.ptr);
+        PySpace* py_space = (PySpace*)space_get_payload(space.ptr());
         return py_space->pyobj;
         }, "Accessor for the payload of a space implemented in Python");
-    m.def("space_add", [](CSpace space, CAtom atom) { space_add(space.ptr, atom_clone(atom.ptr())); }, "Add atom into space");
-    m.def("space_remove", [](CSpace space, CAtom& atom) { return space_remove(space.ptr, atom.ptr()); }, "Remove atom from space");
-    m.def("space_replace", [](CSpace space, CAtom& from, CAtom to) { return space_replace(space.ptr, from.ptr(), atom_clone(to.ptr())); }, "Replace atom from space");
-    m.def("space_eq", [](CSpace a, CSpace b) { return space_eq(a.ptr, b.ptr); }, "Check if two spaces are equal");
-    m.def("space_atom_count", [](CSpace space) { return space_atom_count(space.ptr); }, "Return number of atoms in space, or -1 if the space is unable to determine the value");
+    m.def("space_add", [](CSpace space, CAtom atom) { space_add(space.ptr(), atom_clone(atom.ptr())); }, "Add atom into space");
+    m.def("space_remove", [](CSpace space, CAtom& atom) { return space_remove(space.ptr(), atom.ptr()); }, "Remove atom from space");
+    m.def("space_replace", [](CSpace space, CAtom& from, CAtom to) { return space_replace(space.ptr(), from.ptr(), atom_clone(to.ptr())); }, "Replace atom from space");
+    m.def("space_eq", [](CSpace a, CSpace b) { return space_eq(a.ptr(), b.ptr()); }, "Check if two spaces are equal");
+    m.def("space_atom_count", [](CSpace space) { return space_atom_count(space.ptr()); }, "Return number of atoms in space, or -1 if the space is unable to determine the value");
     m.def("space_list", [](CSpace space) -> nonstd::optional<pybind11::list> {
         pybind11::list atoms_list;
-        if (space_iterate(space.ptr, atom_copy_to_list_callback, &atoms_list)) {
+        if (space_iterate(space.ptr(), atom_copy_to_list_callback, &atoms_list)) {
             return atoms_list;
         } else {
             return nonstd::nullopt;
         }
     }, "Returns iterator to traverse atoms within a space");
     m.def("space_query", [](CSpace space, CAtom& pattern) {
-            bindings_set_t result_bindings_set = space_query(space.ptr, pattern.ptr());
+            bindings_set_t result_bindings_set = space_query(space.ptr(), pattern.ptr());
             return CBindingsSet(result_bindings_set);
         }, "Query atoms from space by pattern");
     m.def("space_subst", [](CSpace space, CAtom& pattern, CAtom& templ) {
             py::list atoms;
-            space_subst(space.ptr, pattern.ptr(), templ.ptr(), copy_atoms, &atoms);
+            space_subst(space.ptr(), pattern.ptr(), templ.ptr(), copy_atoms, &atoms);
             return atoms;
         }, "Get bindings for pattern and apply to template");
 
@@ -638,7 +638,7 @@ PYBIND11_MODULE(hyperonpy, m) {
             return func_to_string((write_to_buf_func_t)&step_to_str, step.ptr);
         }, "Convert step to human readable string");
     m.def("interpret_init", [](CSpace space, CAtom expr) {
-            return CStepResult(interpret_init(space.ptr, expr.ptr()));
+            return CStepResult(interpret_init(space.ptr(), expr.ptr()));
         }, "Initialize interpreter of the expression");
     m.def("interpret_step", [](CStepResult step) {
             return CStepResult(interpret_step(step.ptr));
@@ -664,20 +664,20 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_TYPE(GROUNDED, "Grounded")
         ADD_TYPE(GROUNDED_SPACE, "Space");
     m.def("check_type", [](CSpace space, CAtom& atom, CAtom& type) {
-            return check_type(space.ptr, atom.ptr(), type.ptr());
+            return check_type(space.ptr(), atom.ptr(), type.ptr());
         }, "Check if atom is an instance of the passed type");
     m.def("validate_atom", [](CSpace space, CAtom& atom) {
-            return validate_atom(space.ptr, atom.ptr());
+            return validate_atom(space.ptr(), atom.ptr());
         }, "Validate expression arguments correspond to the operation type");
     m.def("get_atom_types", [](CSpace space, CAtom& atom) {
             py::list atoms;
-            get_atom_types(space.ptr, atom.ptr(), copy_atoms, &atoms);
+            get_atom_types(space.ptr(), atom.ptr(), copy_atoms, &atoms);
             return atoms;
         }, "Get types of the given atom");
 
     py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, CTokenizer tokenizer, char const* cwd) {
-        return CMetta(metta_new(space.ptr, tokenizer.ptr, cwd));
+        return CMetta(metta_new(space.ptr(), tokenizer.ptr, cwd));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.ptr); }, "Free MeTTa interpreter");
     m.def("metta_clone", [](CMetta metta) { metta_clone(metta.ptr); }, "Clone MeTTa interpreter");

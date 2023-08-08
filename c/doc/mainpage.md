@@ -90,4 +90,11 @@ Providing the functions in `gnd_api_t` allows custom atom behaviors to be implem
 
 These functions are used to manage spaces, including to create new spaces, free spaces, manipulate the atoms in a space as well as to query a space directly.
 
+[//]: # (Space Implementation Interface)
+
+@defgroup space_impl_group Space Implementation Interface
+@brief Functions for implementing a custom space in C
+
+This interface allows a custom space to be defined with C.  This allows for different space back-ends, such as a distributed database, or different space topologies, such as the multidimensional latent space of [word2vec](https://en.wikipedia.org/wiki/Word2vec).
+
 

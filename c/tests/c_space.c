@@ -179,12 +179,12 @@ static space_api_t const C_SPACE_API= {
     .free_payload = &free_payload
 };
 
-space_t* custom_space_new() {
+space_t custom_space_new() {
 
     custom_space_buf* c_space = malloc(sizeof(custom_space_buf));
     c_space->atoms = NULL;
     c_space->atom_count = 0;
-    space_t* space = space_new(&C_SPACE_API, c_space);
+    space_t space = space_new(&C_SPACE_API, c_space);
 
     return space;
 }
