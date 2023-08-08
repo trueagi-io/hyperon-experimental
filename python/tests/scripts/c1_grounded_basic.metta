@@ -139,7 +139,7 @@
 ; Grounded symbols work with non-determinism based "reasoning"
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Uses the grounded call `bin`, which returns a list of
-; both possible bits (0, 1), to recursively generate all possible
+; both possible bits (0, 1), to recursively construct all possible
 ; binary lists of length `$n`, appending bits one by one.
 (= (gen $n)
    (if (> $n 0)
@@ -153,8 +153,8 @@
       (subsum $xs $bs)))
 
 ; Non-determinism "reasoning":
-; Among all 3-bit binary lists, return the one whose "subsum"
-; with (:: 3 (:: 7 (:: 5 nil))) equals 8, or nop if not found
+; Among all 3-bit binary lists, return the one whose `subsum`
+; with (:: 3 (:: 7 (:: 5 nil))) equals 8, or `nop` if not found
 !(assertEqualToResult
   (let $t (gen 3)
     (if (== (subsum (:: 3 (:: 7 (:: 5 nil))) $t) 8) $t (nop)))
