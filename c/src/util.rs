@@ -1,13 +1,10 @@
 use core::slice;
 use std::io::{Cursor, Write};
-use std::ffi::c_void;
 use std::ffi::CString;
 use std::os::raw::c_char;
 use std::ffi::CStr;
 use hyperon::common::shared::Shared;
 use std::ops::{Deref, DerefMut};
-
-pub type lambda_t<T> = extern "C" fn(data: T, context: *mut c_void);
 
 pub fn cstr_as_str<'a>(s: *const c_char) -> &'a str {
     unsafe{ CStr::from_ptr(s) }.to_str().expect("Incorrect UTF-8 sequence")
