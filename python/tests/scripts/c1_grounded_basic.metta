@@ -145,6 +145,8 @@
    (if (> $n 0)
        (:: (bin) (gen (- $n 1)))
        nil))
+; Note: `::` is just a custom symbol, used here as a constructor,
+; but any other symbol can be used for this.
 
 ; Calculates the sum of element-wise products between two lists
 (= (subsum nil nil) 0)
