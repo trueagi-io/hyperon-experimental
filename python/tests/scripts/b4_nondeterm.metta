@@ -40,6 +40,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; `superpose` reverts `collapse`
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; `let` is used to introduce temporary variable bindings within an expression
 !(assertEqual
   (color)
   (let $x (collapse (color)) (superpose $x)))
