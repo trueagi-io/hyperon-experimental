@@ -157,9 +157,9 @@ START_TEST (test_custom_c_space)
 
     my_observer_t* observer_payload = malloc(sizeof(my_observer_t));
     observer_payload->atom_count = 0;
-    space_observer_t* observer = space_register_observer(&space, &C_OBSERVER_API, observer_payload);
+    space_observer_t observer = space_register_observer(&space, &C_OBSERVER_API, observer_payload);
 
-    space_observer_t* observer_2 = space_register_observer(&space, &C_OBSERVER_API, malloc(sizeof(my_observer_t)));
+    space_observer_t observer_2 = space_register_observer(&space, &C_OBSERVER_API, malloc(sizeof(my_observer_t)));
 
     atom_t a = atom_sym("A");
     atom_t b = atom_sym("B");
@@ -201,7 +201,7 @@ START_TEST (test_custom_c_space)
     custom_space_buf* c_space_buf = space_get_payload(&space);
     ck_assert(c_space_buf->atom_count == 1);
 
-    my_observer_t* payload_ptr = space_observer_get_payload(observer);
+    my_observer_t* payload_ptr = space_observer_get_payload(&observer);
     ck_assert(payload_ptr->atom_count == 1);
 
     space_observer_free(observer);

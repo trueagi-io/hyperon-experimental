@@ -370,8 +370,27 @@ impl Drop for CObserver {
 /// @brief Represents a Space Observer, registered with a Space
 /// @ingroup space_observer_group
 ///
+#[repr(C)]
 pub struct space_observer_t {
-    observer: SpaceObserverRef<CObserver>
+    observer: *const RustSpaceObserver
+}
+
+struct RustSpaceObserver(std::cell::RefCell<CObserver>);
+
+impl From<SpaceObserverRef<CObserver>> for space_observer_t {
+    fn from(observer: SpaceObserverRef<CObserver>) -> Self {
+        Self{ observer: std::rc::Rc::into_raw(observer.0).cast() }
+    }
+}
+
+impl space_observer_t {
+    fn borrow_inner(&self) -> &mut CObserver {
+        let cell = unsafe{ &mut *(&(&*self.observer).0 as *const std::cell::RefCell<CObserver>).cast_mut() };
+        cell.get_mut()
+    }
+    fn into_inner(self) -> SpaceObserverRef<CObserver> {
+        unsafe{ SpaceObserverRef(std::rc::Rc::from_raw(self.observer.cast())) }
+    }
 }
 
 /// @brief Gets the type of a Space Event
@@ -490,21 +509,20 @@ pub extern "C" fn space_event_free(event: space_event_t) {
 /// @warning This function takes ownership of the `observer_payload`, and it should not be freed after it
 ///    has been provided to this function
 ///
-//TODO, space_observer_t needs to be an owned struct to be consistent with the rest of the API
 #[no_mangle]
-pub extern "C" fn space_register_observer(space: *mut space_t, observer_api: *const space_observer_api_t, observer_payload: *mut c_void) -> *mut space_observer_t {
+pub extern "C" fn space_register_observer(space: *mut space_t, observer_api: *const space_observer_api_t, observer_payload: *mut c_void) -> space_observer_t {
     let dyn_space = unsafe{ &*space }.borrow();
     let space = dyn_space.borrow_mut();
     let observer = CObserver {api: observer_api, payload: observer_payload};
     let observer = space.common().register_observer(observer);
-    Box::into_raw(Box::new(space_observer_t{ observer } ))
+    observer.into()
 }
 
 //TODO Doxygen
 /// Frees an observer handle when the space implementation is finished with it.
 #[no_mangle]
-pub extern "C" fn space_observer_free(observer: *mut space_observer_t) {
-    let observer = unsafe{ Box::from_raw(observer) };
+pub extern "C" fn space_observer_free(observer: space_observer_t) {
+    let observer = observer.into_inner();
     drop(observer);
 }
 
@@ -518,8 +536,7 @@ pub extern "C" fn space_observer_free(observer: *mut space_observer_t) {
 /// you are finished with the observer.
 #[no_mangle]
 pub extern "C" fn space_observer_get_payload(observer: *const space_observer_t) -> *mut c_void {
-    let observer = unsafe{ &(*observer).observer };
-    let c_observer_ref = unsafe { observer.borrow_mut_unsafe() };
+    let c_observer_ref = unsafe{ &*observer }.borrow_inner();
     c_observer_ref.payload
 }
 
