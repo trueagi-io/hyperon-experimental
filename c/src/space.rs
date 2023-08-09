@@ -14,6 +14,7 @@ use std::os::raw::*;
 
 /// @struct space_t
 /// @brief A Space handle, providing access to a Space in which atoms may exist in relation to other atoms
+/// @ingroup space_client_group
 /// @note Multiple `space_t` handles may refer to the same underlying space.  An underlying space
 ///    will only be deallocated when all `space_t` handles that refer to it have been freed
 /// @note `space_t` must be freed with `space_free()`, or passed by value
@@ -245,27 +246,6 @@ pub extern "C" fn space_iterate(space: *const space_t,
     }
 }
 
-/// @brief Registers a new observer, to monitor activity within the Space
-/// @ingroup space_client_group
-/// @param[in]  space  A pointer to the `space_t` handle of the space to observe
-/// @param[in]  observer_api  A pointer to the table of functions that implement the observer's behavior
-/// @param[in]  observer_payload  A pointer to a caller-defined object usable by the observer's implementation functions
-/// @return A `space_observer_t` created to observe the space
-/// @note The caller must take ownership responsibility for the returned `space_observer_t`, and it must be freed with `space_observer_free()`
-/// @warning This function takes ownership of the `observer_payload`, and it should not be freed after it
-///    has been provided to this function
-///
-//TODO, space_observer_t needs to be an owned struct to be consistent with the rest of the API
-//TODO: Question: Do Space Observers belong in a separate documentation module?
-#[no_mangle]
-pub extern "C" fn space_register_observer(space: *mut space_t, observer_api: *const space_observer_api_t, observer_payload: *mut c_void) -> *mut space_observer_t {
-    let dyn_space = unsafe{ &*space }.borrow();
-    let space = dyn_space.borrow_mut();
-    let observer = CObserver {api: observer_api, payload: observer_payload};
-    let observer = space.common().register_observer(observer);
-    Box::into_raw(Box::new(space_observer_t{ observer } ))
-}
-
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
 // Grounding Space
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
@@ -281,32 +261,127 @@ pub extern "C" fn space_new_grounding_space() -> space_t {
     DynSpace::new(GroundingSpace::new()).into()
 }
 
-//-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
-// Space Implementation Interface (Space & SpaceMut trait interface wrapper)
-//-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Space Observer Interface
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
+/// @brief Represents different types of Space Events
+/// @ingroup space_observer_group
+///
 #[repr(C)]
 pub enum space_event_type_t {
+    /// @brief The event is an `Add` event
     SPACE_EVENT_TYPE_ADD,
+    /// @brief The event is a `Remove` event
     SPACE_EVENT_TYPE_REMOVE,
+    /// @brief The event is a `Replace` event
     SPACE_EVENT_TYPE_REPLACE,
 }
 
+/// @brief Accessor constants, to access the fields of a `space_event_t`
+/// @ingroup space_observer_group
+///
 #[repr(C)]
 pub enum space_event_field_t {
+    /// @brief Access the atom field of an `Add` event
     SPACE_EVENT_FIELD_ADD,
+    /// @brief Access the atom field of a `Remove` event
     SPACE_EVENT_FIELD_REMOVE,
+    /// @brief Access the pattern field of a `Replace` event
     SPACE_EVENT_FIELD_REPLACE_PATTERN,
+    /// @brief Access the template field of a `Replace` event
     SPACE_EVENT_FIELD_REPLACE_TEMPLATE,
 }
 
+/// @struct space_event_t
+/// @brief Represents a Space Event
+/// @ingroup space_observer_group
+/// @note Space Events can be read by observers monitoring a space, or created by custom by custom Space
+///    implementations, to communicate activity within the Space to observers
+///
+#[repr(C)]
 pub struct space_event_t {
-    event: SpaceEvent,
+    event: *mut RustSpaceEvent,
 }
 
+struct RustSpaceEvent(SpaceEvent);
+
+impl From<SpaceEvent> for space_event_t {
+    fn from(event: SpaceEvent) -> Self {
+        Self{ event: Box::into_raw(Box::new(RustSpaceEvent(event))) }
+    }
+}
+
+impl space_event_t {
+    /// WARNING: The output of this function must NOT be passed to into_inner
+    pub(crate) fn ref_wrapper(event: &SpaceEvent) -> Self {
+        Self{ event: (event as *const SpaceEvent).cast_mut().cast() }
+    }
+    pub(crate) fn borrow(&self) -> &SpaceEvent {
+        &unsafe{ &*self.event }.0
+    }
+    pub(crate) fn into_inner(self) -> SpaceEvent {
+        unsafe{ Box::from_raw(self.event).0 }
+    }
+}
+
+/// @struct space_observer_api_t
+/// @brief A table of callback functions to define the behavior of a SpaceObserver implemented in C
+/// @ingroup space_observer_group
+/// @see space_register_observer
+///
+#[repr(C)]
+pub struct space_observer_api_t {
+
+    /// @brief Called to pass an event to the observer
+    /// @param[in]  payload  The pointer to the observer's payload
+    /// @param[in]  event  The event the observer is notified about
+    ///
+    notify: extern "C" fn(payload: *mut c_void, event: *const space_event_t),
+
+    /// @brief Responsible for freeing the payload passed to `space_register_observer`
+    /// @param[in]  payload  The pointer to the observer's payload to free
+    /// @note This function is responsible for freeing the payload buffer, as well as any other objects
+    ///   and resources owned by the observer.
+    free_payload: extern "C" fn(payload: *mut c_void),
+}
+
+struct CObserver {
+    api: *const space_observer_api_t,
+    payload: *mut c_void,
+}
+
+impl SpaceObserver for CObserver {
+    fn notify(&mut self, event: &SpaceEvent) {
+        let api = unsafe{ &*self.api };
+        let event = space_event_t::ref_wrapper(event);
+        (api.notify)(self.payload, &event);
+    }
+}
+
+impl Drop for CObserver {
+    fn drop(&mut self) {
+        let api = unsafe{ &*self.api };
+        (api.free_payload)(self.payload);
+    }
+}
+
+/// @struct space_observer_t
+/// @brief Represents a Space Observer, registered with a Space
+/// @ingroup space_observer_group
+///
+pub struct space_observer_t {
+    observer: SpaceObserverRef<CObserver>
+}
+
+/// @brief Gets the type of a Space Event
+/// @ingroup space_observer_group
+/// @param[in]  event  A pointer to the event to inspect
+/// @return The type of the event
+///
 #[no_mangle]
 pub extern "C" fn space_event_get_type(event: *const space_event_t) -> space_event_type_t {
-    let event = unsafe{ &(*event).event };
+    let event = unsafe{ &*event }.borrow();
     match event {
         SpaceEvent::Add(_) => space_event_type_t::SPACE_EVENT_TYPE_ADD,
         SpaceEvent::Remove(_) => space_event_type_t::SPACE_EVENT_TYPE_REMOVE,
@@ -314,11 +389,17 @@ pub extern "C" fn space_event_get_type(event: *const space_event_t) -> space_eve
     }
 }
 
-/// Returned atom_ref_t is borrowed from the space_event_t. The return value must not be freed or
-/// accessed after the space_event_t has been freed
+/// @brief Accesses the atom associated with a field of a `space_event_t`
+/// @ingroup space_observer_group
+/// @param[in]  event  A pointer to the event to access
+/// @param[in]  field  A `space_event_field_t` specifying which field to access
+/// @return An `atom_ref_t` referencing the specified atom within the event
+/// @warning The returned `atom_ref_t` is borrowed from the `space_event_t`, and it must not be modified or
+///    accessed after the event has been freed
+///
 #[no_mangle]
 pub extern "C" fn space_event_get_field_atom(event: *const space_event_t, field: space_event_field_t) -> atom_ref_t {
-    let event = unsafe{ &(*event).event };
+    let event = unsafe{ &*event }.borrow();
     match field {
         space_event_field_t::SPACE_EVENT_FIELD_ADD => {
             if let SpaceEvent::Add(atom) = event {
@@ -349,84 +430,77 @@ pub extern "C" fn space_event_get_field_atom(event: *const space_event_t, field:
     }
 }
 
-/// Returned space_event_t must be freed with space_event_free
+/// @brief Creates a new `space_event_t` representing an `Add` event
+/// @ingroup space_observer_group
+/// @param[in]  atom  The atom that is being added to the Space, to embed into the event
+/// @return The newly created `space_event_t`
+/// @note The caller must take ownership responsibility for the returned `space_event_t` and it must be freed with `space_event_free()`
+/// @warning This function takes ownership of the `atom` parameter, so it must not be subsequently access or freed
 ///
-/// WARNING: This function takes ownership of the supplied atom, so it should not be freed or
-/// accessed subsequently
 #[no_mangle]
-pub extern "C" fn space_event_new_add(atom: atom_t) -> *mut space_event_t {
+pub extern "C" fn space_event_new_add(atom: atom_t) -> space_event_t {
     let event = SpaceEvent::Add(atom.into_inner());
-    Box::into_raw(Box::new(space_event_t{ event }))
+    event.into()
 }
 
-/// Returned space_event_t must be freed with space_event_free
+/// @brief Creates a new `space_event_t` representing a `Remove` event
+/// @ingroup space_observer_group
+/// @param[in]  atom  The atom that is being removed from the Space, to embed into the event
+/// @return The newly created `space_event_t`
+/// @note The caller must take ownership responsibility for the returned `space_event_t` and it must be freed with `space_event_free()`
+/// @warning This function takes ownership of the `atom` parameter, so it must not be subsequently access or freed
 ///
-/// WARNING: This function takes ownership of the supplied atom, so it should not be freed or
-/// accessed subsequently
 #[no_mangle]
-pub extern "C" fn space_event_new_remove(atom: atom_t) -> *mut space_event_t {
+pub extern "C" fn space_event_new_remove(atom: atom_t) -> space_event_t {
     let event = SpaceEvent::Remove(atom.into_inner());
-    Box::into_raw(Box::new(space_event_t{ event }))
+    event.into()
 }
 
-/// Returned space_event_t must be freed with space_event_free
+/// @brief Creates a new `space_event_t` representing a `Replace` event
+/// @ingroup space_observer_group
+/// @param[in]  pattern  The atom that is being matched in the Space, to embed into the event
+/// @param[in]  tmpl  The atom that is being used to construct new atoms in the Space, to embed into the event
+/// @return The newly created `space_event_t`
+/// @note The caller must take ownership responsibility for the returned `space_event_t` and it must be freed with `space_event_free()`
+/// @warning This function takes ownership of both the `pattern` and the `tmpl` parameter, so neither may be subsequently access nor freed
 ///
-/// WARNING: This function takes ownership of both supplied atoms, so they should not be freed or
-/// accessed subsequently
 #[no_mangle]
-pub extern "C" fn space_event_new_replace(pattern: atom_t, tmpl: atom_t) -> *mut space_event_t {
+pub extern "C" fn space_event_new_replace(pattern: atom_t, tmpl: atom_t) -> space_event_t {
     let event = SpaceEvent::Replace(pattern.into_inner(), tmpl.into_inner());
-    Box::into_raw(Box::new(space_event_t{ event }))
+    event.into()
 }
 
+/// @brief Frees a `space_event_t`
+/// @ingroup space_observer_group
+/// @param[in]  event  The `space_event_t` to free
+///
 #[no_mangle]
-pub extern "C" fn space_event_free(event: *mut space_event_t) {
-    let event = unsafe{ Box::from_raw(event) };
+pub extern "C" fn space_event_free(event: space_event_t) {
+    let event = event.into_inner();
     drop(event);
 }
 
-/// A table of functions to define the behavior of a SpaceObserver implemented in C
-#[repr(C)]
-pub struct space_observer_api_t {
-
-    /// Called to pass an event to the observer
-    ///   \arg payload \c is the pointer to the observer's payload
-    ///   \arg event \c is the event the observer is notified about.  This function should NOT take ownership
-    ///   of the event.
-    notify: extern "C" fn(payload: *mut c_void, event: *const space_event_t),
-
-    /// Responsible for freeing the payload passed to space_register_observer
-    ///   \arg payload \c is the pointer to the observer's payload
-    ///   NOTE: This function is responsible for freeing the payload buffer, as well as any other objects
-    ///   and resources stored by the observer.
-    free_payload: extern "C" fn(payload: *mut c_void),
+/// @brief Registers a new observer, to monitor activity within the Space
+/// @ingroup space_observer_group
+/// @param[in]  space  A pointer to the `space_t` handle of the space to observe
+/// @param[in]  observer_api  A pointer to the table of functions that implement the observer's behavior
+/// @param[in]  observer_payload  A pointer to a caller-defined object usable by the observer's implementation functions
+/// @return A `space_observer_t` created to observe the space
+/// @note The caller must take ownership responsibility for the returned `space_observer_t`, and it must be freed with `space_observer_free()`
+/// @warning This function takes ownership of the `observer_payload`, and it should not be freed after it
+///    has been provided to this function
+///
+//TODO, space_observer_t needs to be an owned struct to be consistent with the rest of the API
+#[no_mangle]
+pub extern "C" fn space_register_observer(space: *mut space_t, observer_api: *const space_observer_api_t, observer_payload: *mut c_void) -> *mut space_observer_t {
+    let dyn_space = unsafe{ &*space }.borrow();
+    let space = dyn_space.borrow_mut();
+    let observer = CObserver {api: observer_api, payload: observer_payload};
+    let observer = space.common().register_observer(observer);
+    Box::into_raw(Box::new(space_observer_t{ observer } ))
 }
 
-struct CObserver {
-    api: *const space_observer_api_t,
-    payload: *mut c_void,
-}
-
-impl SpaceObserver for CObserver {
-    fn notify(&mut self, event: &SpaceEvent) {
-        let api = unsafe{ &*self.api };
-        let event = (event as *const SpaceEvent).cast();
-        (api.notify)(self.payload, event);
-    }
-}
-
-impl Drop for CObserver {
-    fn drop(&mut self) {
-        let api = unsafe{ &*self.api };
-        (api.free_payload)(self.payload);
-    }
-}
-
-/// A handle to an observer, registered with a space
-pub struct space_observer_t{
-    observer: SpaceObserverRef<CObserver>
-}
-
+//TODO Doxygen
 /// Frees an observer handle when the space implementation is finished with it.
 #[no_mangle]
 pub extern "C" fn space_observer_free(observer: *mut space_observer_t) {
@@ -434,6 +508,7 @@ pub extern "C" fn space_observer_free(observer: *mut space_observer_t) {
     drop(observer);
 }
 
+//TODO Doxygen
 /// Returns a pointer to the payload associated with the space_observer_t
 /// 
 /// WARNING: The returned pointer must not be accessed after the space_observer_t has been freed,
@@ -447,6 +522,10 @@ pub extern "C" fn space_observer_get_payload(observer: *const space_observer_t) 
     let c_observer_ref = unsafe { observer.borrow_mut_unsafe() };
     c_observer_ref.payload
 }
+
+//-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
+// Space Implementation Interface (Space & SpaceMut trait interface wrapper)
+//-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
 
 /// A table of functions to define the behavior of a space implemented in C
 #[repr(C)]
@@ -534,7 +613,7 @@ pub struct space_params_t {
 #[no_mangle]
 pub extern "C" fn space_params_notify_all_observers(params: *const space_params_t, event: *const space_event_t) {
     let common = unsafe{ &(*params).common.common };
-    let event = unsafe{ &(*event).event };
+    let event = unsafe{ &*event }.borrow();
     common.notify_all_observers(event);
 }
 

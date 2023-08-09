@@ -259,8 +259,8 @@ void py_space_add(const struct space_params_t *params, atom_t atom) {
 
     //TODO: Create a mechanism so the Python code can do the notification manually, and bypass this
     // automatic notification code
-    space_event_t* event = space_event_new_add(notify_atom);
-    space_params_notify_all_observers(params, event);
+    space_event_t event = space_event_new_add(notify_atom);
+    space_params_notify_all_observers(params, &event);
     space_event_free(event);
 }
 
@@ -273,8 +273,8 @@ bool py_space_remove(const struct space_params_t *params, const atom_ref_t *atom
     py::object result = call_remove_on_python_space(pyobj, catom);
     if (result.cast<bool>()) {
         //TODO: See comment about manual notification above
-        space_event_t* event = space_event_new_remove(notify_atom);
-        space_params_notify_all_observers(params, event);
+        space_event_t event = space_event_new_remove(notify_atom);
+        space_params_notify_all_observers(params, &event);
         space_event_free(event);
         return true;
     } else {
@@ -294,8 +294,8 @@ bool py_space_replace(const struct space_params_t *params, const atom_ref_t *fro
     py::object result = call_replace_on_python_space(pyobj, catom_from, catom_to);
     if (result.cast<bool>()) {
         //TODO: See comment about manual notification above
-        space_event_t* event = space_event_new_replace(notify_from, notify_to);
-        space_params_notify_all_observers(params, event);
+        space_event_t event = space_event_new_replace(notify_from, notify_to);
+        space_params_notify_all_observers(params, &event);
         space_event_free(event);
         return true;
     } else {

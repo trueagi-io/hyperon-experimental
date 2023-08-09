@@ -64,8 +64,8 @@ void add_atom_internal(custom_space_buf* space, atom_t atom) {
 void add_atom(const space_params_t* params, atom_t atom) {
     custom_space_buf* space = params->payload;
 
-    space_event_t* event = space_event_new_add(atom_clone(&atom));
-    space_params_notify_all_observers(params, event);
+    space_event_t event = space_event_new_add(atom_clone(&atom));
+    space_params_notify_all_observers(params, &event);
     space_event_free(event);
 
     add_atom_internal(space, atom);
@@ -100,8 +100,8 @@ bool remove_atom(const space_params_t* params, const atom_t* atom) {
     custom_space_buf* space = params->payload;
 
     if (remove_atom_internal(space, atom)) {
-        space_event_t* event = space_event_new_remove(atom_clone(atom));
-        space_params_notify_all_observers(params, event);
+        space_event_t event = space_event_new_remove(atom_clone(atom));
+        space_params_notify_all_observers(params, &event);
         space_event_free(event);
         return true;
     }
@@ -114,8 +114,8 @@ bool replace_atom(const space_params_t* params, const atom_t* from, atom_t to) {
 
     if (remove_atom_internal(space, from)) {
         add_atom_internal(space, to);
-        space_event_t* event = space_event_new_replace(atom_clone(from), atom_clone(&to));
-        space_params_notify_all_observers(params, event);
+        space_event_t event = space_event_new_replace(atom_clone(from), atom_clone(&to));
+        space_params_notify_all_observers(params, &event);
         space_event_free(event);
         return true;
     } else {
