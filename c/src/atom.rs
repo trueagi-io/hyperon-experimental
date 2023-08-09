@@ -924,6 +924,7 @@ pub extern "C" fn atom_match_atom(a: *const atom_ref_t, b: *const atom_ref_t) ->
 ///
 #[repr(C)]
 pub struct bindings_t {
+    /// Internal.  Should not be accessed directly
     bindings: *mut RustBindings,
 }
 
@@ -955,6 +956,7 @@ impl bindings_t {
 ///
 #[repr(C)]
 pub struct bindings_set_t {
+    /// Internal.  Should not be accessed directly
     set: *mut RustBindingsSet,
 }
 

@@ -21,7 +21,10 @@ use std::os::raw::*;
 ///    to a function that takes ownership of the space.
 ///
 #[repr(C)]
-pub struct space_t(*const RustOpaqueSpace);
+pub struct space_t{
+    /// Internal.  Should not be accessed directly
+    space: *const RustOpaqueSpace
+}
 
 struct RustOpaqueSpace(DynSpace);
 
@@ -33,16 +36,16 @@ struct RustOpaqueSpace(DynSpace);
 //   neessary to preserve the allocation meta-data.
 impl space_t {
     pub(crate) fn into_inner(self) -> DynSpace {
-        unsafe{ Box::from_raw(self.0.cast_mut()).0 }
+        unsafe{ Box::from_raw(self.space.cast_mut()).0 }
     }
     pub(crate) fn borrow(&self) -> &DynSpace {
-        unsafe{ &(*self.0).0 }
+        unsafe{ &(*self.space).0 }
     }
 }
 
 impl From<DynSpace> for space_t {
     fn from(space: DynSpace) -> Self {
-        space_t(Box::into_raw(Box::new(RustOpaqueSpace(space))))
+        space_t{space: Box::into_raw(Box::new(RustOpaqueSpace(space))) }
     }
 }
 
@@ -89,8 +92,8 @@ pub extern "C" fn space_free(space: space_t) {
 ///
 #[no_mangle]
 pub extern "C" fn space_clone_ref(space: *const space_t) -> *mut space_t {
-    let space = unsafe { &(*space).0 };
-    Box::into_raw(Box::new(space_t(space.clone())))
+    let space = unsafe { &(*space).space };
+    Box::into_raw(Box::new(space_t{ space: space.clone() }))
 }
 
 /// @brief Checks if two `space_t` handles refer to the same underlying Space
@@ -174,7 +177,7 @@ pub extern "C" fn space_replace(space: *mut space_t, from: *const atom_ref_t, to
 /// @brief Queries a Space for atoms matching a pattern
 /// @ingroup space_client_group
 /// @param[in]  space  A pointer to the `space_t` handle to access
-/// @param[in]  from  A pointer to an `atom_t` or `atom_ref_t` to specify the pattern to match within the Space
+/// @param[in]  pattern  A pointer to an `atom_t` or `atom_ref_t` to specify the pattern to match within the Space
 /// @return A `bindings_set_t` representing all possible results of the match
 /// @note The caller must take ownership responsibility for the returned `bindings_set_t`, and free it with `bindings_set_free()`
 ///
@@ -301,6 +304,7 @@ pub enum space_event_field_t {
 ///
 #[repr(C)]
 pub struct space_event_t {
+    /// Internal.  Should not be accessed directly
     event: *mut RustSpaceEvent,
 }
 
@@ -372,6 +376,7 @@ impl Drop for CObserver {
 ///
 #[repr(C)]
 pub struct space_observer_t {
+    /// Internal.  Should not be accessed directly
     observer: *const RustSpaceObserver
 }
 
@@ -503,9 +508,11 @@ pub extern "C" fn space_event_free(event: space_event_t) {
 /// @ingroup space_observer_group
 /// @param[in]  space  A pointer to the `space_t` handle of the space to observe
 /// @param[in]  observer_api  A pointer to the table of functions that implement the observer's behavior
-/// @param[in]  observer_payload  A pointer to a caller-defined object usable by the observer's implementation functions
+/// @param[in]  observer_payload  A pointer to a caller-defined object usable by the observer's
+///    implementation functions
 /// @return A `space_observer_t` created to observe the space
-/// @note The caller must take ownership responsibility for the returned `space_observer_t`, and it must be freed with `space_observer_free()`
+/// @note The caller must take ownership responsibility for the returned `space_observer_t`, and it must
+///    be freed with `space_observer_free()`
 /// @warning This function takes ownership of the `observer_payload`, and it should not be freed after it
 ///    has been provided to this function
 ///
@@ -518,22 +525,27 @@ pub extern "C" fn space_register_observer(space: *mut space_t, observer_api: *co
     observer.into()
 }
 
-//TODO Doxygen
-/// Frees an observer handle when the space implementation is finished with it.
+/// @brief Frees a `space_observer_t`
+/// @ingroup space_observer_group
+/// @param[in]  observer  The `space_observer_t` to free
+/// @note Freeing a Space Observer will atomatically de-register it with its associated space
+///
 #[no_mangle]
 pub extern "C" fn space_observer_free(observer: space_observer_t) {
     let observer = observer.into_inner();
     drop(observer);
 }
 
-//TODO Doxygen
-/// Returns a pointer to the payload associated with the space_observer_t
-/// 
-/// WARNING: The returned pointer must not be accessed after the space_observer_t has been freed,
-/// or after any operations have occurred that may have caused events to occur in the space.
-/// 
-/// NOTE: The returned pointer should not be freed directly.  Call space_observer_free when
-/// you are finished with the observer.
+/// @brief Returns a pointer to the payload associated with the space_observer_t
+/// @ingroup space_observer_group
+/// @param[in]  observer  A pointer to the `space_observer_t` in which to access the payload
+/// @return A pointer to the payload object associated with the Space Observer
+/// @warning The returned pointer must not be accessed after the `space_observer_t` has been freed,
+///    or after any operations have occurred that may have caused events to occur in the associated
+///    space
+/// @warning The returned pointer should never be freed directly.  Call `space_observer_free()` when
+///    you are finished with the observer
+///
 #[no_mangle]
 pub extern "C" fn space_observer_get_payload(observer: *const space_observer_t) -> *mut c_void {
     let c_observer_ref = unsafe{ &*observer }.borrow_inner();
