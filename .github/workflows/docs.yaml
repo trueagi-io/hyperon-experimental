@@ -2,7 +2,7 @@ name: build docs
 on:
   push:
     branches:
-      - docs-py
+      - main
 permissions:
   contents: write
 jobs:
