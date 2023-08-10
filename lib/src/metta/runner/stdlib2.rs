@@ -361,9 +361,14 @@ pub static METTA_CODE: &'static str = "
       (chain (eval (is-function $op-type)) $is-func
         (unify $is-func True
           (chain (eval (interpret-func $atom $op-type $space)) $reduced-atom
-            (eval (call $reduced-atom $type $space)) )
+            ; When function is called then empty result means it is not defined
+            ; on such arguments and thus should not be called. In such case
+            ; the whole branch is removed from interpreter plan.
+            (eval (call $reduced-atom $type $space Empty)) )
           (chain (eval (interpret-tuple $atom $space)) $reduced-atom
-            (eval (call $reduced-atom $type $space)) ))))
+            ; When tuple is called then empty result means this tuple is not a
+            ; function call and should be returned as is.
+            (eval (call $reduced-atom $type $space $reduced-atom)) ))))
     (eval (type-cast $atom $type $space)) )))
 
 (= (interpret-func $expr $type $space)
@@ -403,15 +408,18 @@ pub static METTA_CODE: &'static str = "
     $atom
     (eval (if-decons $atom $head $tail
       (chain (eval (interpret $head %Undefined% $space)) $rhead
-        (chain (eval (interpret-tuple $tail $space)) $rtail
-          (cons $rhead $rtail) ))
+        (eval (if-empty $rhead Empty
+          (chain (eval (interpret-tuple $tail $space)) $rtail
+            (eval (if-empty $rtail Empty
+              (cons $rhead $rtail) ))))))
       (Error (interpret-tuple $atom $space) \"Non-empty expression atom is expected as an argument\") ))))
 
-(= (call $atom $type $space)
-  (chain (eval $atom) $result
-    (eval (if-empty $result $atom
-      (eval (if-error $result $result
-        (eval (interpret $result $type $space)) ))))))
+(= (call $atom $type $space $on-empty)
+  (eval (if-error $atom $atom
+    (chain (eval $atom) $result
+      (eval (if-empty $result $on-empty
+        (eval (if-error $result $result
+          (eval (interpret $result $type $space)) ))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Standard library written in MeTTa ;
