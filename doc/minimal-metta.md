@@ -89,9 +89,9 @@ as a first argument:
   nested in such a case only the most nested `chain` instruction is executed
   during the interpretation step.
 
-## match
+## unify
 
-Conditioning on the results can be done using `match` operation `(match <atom>
+Conditioning on the results can be done using `unify` operation `(unify <atom>
 <pattern> <then> <else>)`. This operation matches `<atom>` with a `<pattern>`. If
 match is successful then it returns `<then>` atom and merges bindings of the
 original `<atom>` to resulting variable bindings. If matching is not successful
@@ -117,22 +117,22 @@ Switch implementation:
 (= (switch $atom $cases)
   (chain (decons $cases) $list (eval (switch-internal $atom $list))))
 (= (switch-internal $atom (($pattern $template) $tail))
-  (match $atom $pattern $template (eval (switch $atom $tail))))
+  (unify $atom $pattern $template (eval (switch $atom $tail))))
 ```
 
 Reduce in loop until result is calculated:
 
 ```metta
 (= (subst $atom $var $templ)
-  (match $atom $var $templ
+  (unify $atom $var $templ
     (Error (subst $atom $var $templ)
       \"subst expects a variable as a second argument\") ))
 
 (= (reduce $atom $var $templ)
   (chain (eval $atom) $res
-    (match $res (Error $a $m)
+    (unify $res (Error $a $m)
       (Error $a $m)
-      (match $res Empty
+      (unify $res Empty
         (eval (subst $atom $var $templ))
         (eval (reduce $res $var $templ)) ))))
 ```
@@ -150,11 +150,11 @@ instruction set (the full code of the example can be found
 
 ```metta
            (= (tm $rule $state $tape)
-              (match $state HALT
+              (unify $state HALT
                 $tape
                 (chain (eval (read $tape)) $char
                   (chain (eval ($rule $state $char)) $res
-                    (match $res ($next-state $next-char $dir)
+                    (unify $res ($next-state $next-char $dir)
                       (chain (eval (move $tape $next-char $dir)) $next-tape
                         (eval (tm $rule $next-state $next-tape)) )
                       (Error (tm $rule $state $tape) \"Incorrect state\") )))))
@@ -165,13 +165,13 @@ instruction set (the full code of the example can be found
             (= (move ($head $hole $tail) $char L)
               (chain (cons $char $head) $next-head
                 (chain (decons $tail) $list
-                  (match $list ($next-hole $next-tail)
+                  (unify $list ($next-hole $next-tail)
                     ($next-head $next-hole $next-tail)
                     ($next-head 0 ()) ))))
             (= (move ($head $hole $tail) $char R)
               (chain (cons $char $tail) $next-tail
                 (chain (decons $head) $list
-                  (match $list ($next-hole $next-head)
+                  (unify $list ($next-hole $next-head)
                     ($next-head $next-hole $next-tail)
                     (() 0 $next-tail) ))))
 ```
@@ -181,7 +181,7 @@ instruction set (the full code of the example can be found
 One difference from MOPS [1] is that the minimal instruction set allows
 relatively easy write deterministic programs and non-determinism is injected
 only via matching and evaluation. `Query` and `Chain` from MOPS are very
-similar to `eval`. `Transform` is very similar to `match`. `chain` has no
+similar to `eval`. `Transform` is very similar to `unify`. `chain` has no
 analogue in MOPS, it is used to make deterministic computations.
 `cons`/`decons` to some extent are analogues of `AtomAdd`/`AtomRemove` in a
 sense that they can be used to change the state.
@@ -204,11 +204,11 @@ The version of the `reduce` written using `return` will look like the following:
 ```metta
 (= (reduce $atom $var $templ)
   (chain $atom $res
-    (match $res (return (Error $a $m))
+    (unify $res (return (Error $a $m))
       (return (Error $a $m))
-      (match $res (return Empty)
+      (unify $res (return Empty)
         (subst $atom $var $templ)
-        (match $res (return $val)
+        (unify $res (return $val)
           (subst $val $var $templ)
           (reduce $res $var $templ) )))))
 ```
@@ -224,9 +224,9 @@ into the template. It can make program even more compact:
 ```metta
 (= (reduce $atom $var $templ)
   (chain $atom $res
-    (match $res (Error $a $m)
+    (unify $res (Error $a $m)
       (Error $a $m)
-      (match $res Empty
+      (unify $res Empty
         (subst $atom $var $templ)
         (reduce $res $var $templ) ))))
 ```
@@ -245,7 +245,7 @@ Each instruction in a minimal instruction set is a complete function.
 Nevertheless `Empty` allows defining partial functions in MeTTa. For example
 partial `if` can be defined as follows:
 ```metta
-(= (if $condition $then) (match $condition True $then Empty))
+(= (if $condition $then) (unify $condition True $then Empty))
 ```
 
 # Future work
@@ -261,11 +261,11 @@ Making atomspace out of implicit context could make import semantics more
 straightforward. In the current implementation of the minimal instruction set
 it was needed to explicitly pass the atomspace to the interpreter because
 otherwise grounded `get-type` function didn't work properly.It also could allow
-defining `eval` via `match` which minimizes the number of instructions and
+defining `eval` via `unify` which minimizes the number of instructions and
 allows defining `eval` in a MeTTa program itself. Which in turn allows defining
 different versions of `eval` to program different kinds of chaining.
-Nevertheless defining `eval` through `match` requires rework of the grounded
-functions interface to allow calling them by executing `match` instructions.
+Nevertheless defining `eval` through `unify` requires rework of the grounded
+functions interface to allow calling them by executing `unify` instructions.
 Which is an interesting direction to follow.
 
 ## Scope of variables

@@ -174,7 +174,7 @@ pub static METTA_CODE: &'static str = "
 (= (if-decons $atom $head $tail $then $else)
   (eval (if-non-empty-expression $atom
     (chain (decons $atom) $list
-      (match $list ($head $tail) $then $else) )
+      (unify $list ($head $tail) $then $else) )
     $else )))
 
 (= (if-empty $atom $then $else)
@@ -198,10 +198,13 @@ pub static METTA_CODE: &'static str = "
 (= (switch $atom $cases)
   (chain (decons $cases) $list (eval (switch-internal $atom $list))))
 (= (switch-internal $atom (($pattern $template) $tail))
-  (match $atom $pattern $template (eval (switch $atom $tail))))
+  (unify $atom $pattern $template (eval (switch $atom $tail))))
+
+; FIXME: subst and reduce are not used in interpreter implementation
+; we could remove them
 
 (= (subst $atom $var $templ)
-  (match $atom $var $templ
+  (unify $atom $var $templ
     (Error (subst $atom $var $templ)
       \"subst expects a variable as a second argument\") ))
 
@@ -211,6 +214,10 @@ pub static METTA_CODE: &'static str = "
       (eval (if-empty $res
         (eval (subst $atom $var $templ))
         (eval (reduce $res $var $templ)) ))))))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; MeTTa interpreter implementation ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (= (type-cast $atom $type $space)
   (chain (eval (get-type $atom $space)) $actual-type
@@ -227,7 +234,7 @@ pub static METTA_CODE: &'static str = "
       (
         (($_ Expression)
           (chain (eval (car $type)) $head
-            (match $head -> True False) ))
+            (unify $head -> True False) ))
         ($_ False) )))))
 
 (= (interpret $atom $type $space)
@@ -246,7 +253,7 @@ pub static METTA_CODE: &'static str = "
   (eval (if-decons $atom $op $args
     (chain (eval (get-type $op $space)) $op-type
       (chain (eval (is-function $op-type)) $is-func
-        (match $is-func True
+        (unify $is-func True
           (chain (eval (interpret-func $atom $op-type $space)) $reduced-atom
             (eval (call $reduced-atom $type $space)) )
           (chain (eval (interpret-tuple $atom $space)) $reduced-atom
@@ -265,8 +272,8 @@ pub static METTA_CODE: &'static str = "
     (Error $expr \"Non-empty expression atom is expected\") )))
 
 (= (interpret-args $atom $args $arg-types $space)
-  (match $args ()
-    (match $arg-types ($ret) () (Error $atom BadType))
+  (unify $args ()
+    (unify $arg-types ($ret) () (Error $atom BadType))
     (eval (if-decons $args $head $tail
       (eval (if-decons $arg-types $head-type $tail-types
         (chain (eval (interpret $head $head-type $space)) $reduced-head
@@ -286,7 +293,7 @@ pub static METTA_CODE: &'static str = "
       (cons $head $reduced-tail) ))))
 
 (= (interpret-tuple $atom $space)
-  (match $atom ()
+  (unify $atom ()
     $atom
     (eval (if-decons $atom $head $tail
       (chain (eval (interpret $head %Undefined% $space)) $rhead
@@ -300,6 +307,13 @@ pub static METTA_CODE: &'static str = "
       (eval (if-error $result $result
         (eval (interpret $result $type $space)) ))))))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; Standard library written in MeTTa ;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(: match (-> Atom Atom Atom %Undefined%))
+(= (match $space $pattern $template)
+  (unify $pattern $space $template Empty))
 ";
 
 #[cfg(test)]

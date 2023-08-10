@@ -187,7 +187,7 @@ fn is_embedded_op(atom: &Atom) -> bool {
     match expr {
         Some([op, ..]) => *op == EVAL_SYMBOL
             || *op == CHAIN_SYMBOL
-            || *op == MATCH_SYMBOL
+            || *op == UNIFY_SYMBOL
             || *op == CONS_SYMBOL
             || *op == DECONS_SYMBOL,
         _ => false,
@@ -228,11 +228,11 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
                 },
             }
         },
-        Some([op, args @ ..]) if *op == MATCH_SYMBOL => {
+        Some([op, args @ ..]) if *op == UNIFY_SYMBOL => {
             match args {
                 [atom, pattern, then, else_] => match_(bindings, atom, pattern, then, else_),
                 _ => {
-                    let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", MATCH_SYMBOL, atom);
+                    let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", UNIFY_SYMBOL, atom);
                     vec![InterpretedAtom(error_atom(atom, error), bindings)]
                 },
             }
@@ -560,21 +560,21 @@ mod tests {
 
     #[test]
     fn interpret_atom_match_incorrect_args() {
-        assert_eq!(interpret_atom(&space(""), atom("(match a p t e o)", bind!{})),
-            vec![InterpretedAtom(expr!("Error" ("match" "a" "p" "t" "e" "o") "expected: (match <atom> <pattern> <then> <else>), found: (match a p t e o)"), bind!{})]);
-        assert_eq!(interpret_atom(&space(""), atom("(match a p t)", bind!{})),
-            vec![InterpretedAtom(expr!("Error" ("match" "a" "p" "t") "expected: (match <atom> <pattern> <then> <else>), found: (match a p t)"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(unify a p t e o)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("unify" "a" "p" "t" "e" "o") "expected: (unify <atom> <pattern> <then> <else>), found: (unify a p t e o)"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(unify a p t)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("unify" "a" "p" "t") "expected: (unify <atom> <pattern> <then> <else>), found: (unify a p t)"), bind!{})]);
     }
 
     #[test]
     fn interpret_atom_match_then() {
-        let result = interpret_atom(&space(""), atom("(match (A $b) ($a B) ($a $b) Empty)", bind!{}));
+        let result = interpret_atom(&space(""), atom("(unify (A $b) ($a B) ($a $b) Empty)", bind!{}));
         assert_eq!(result, vec![atom("(A B)", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_match_else() {
-        let result = interpret_atom(&space(""), atom("(match (A $b C) ($a B D) ($a $b) Empty)", bind!{}));
+        let result = interpret_atom(&space(""), atom("(unify (A $b C) ($a B D) ($a $b) Empty)", bind!{}));
         assert_eq!(result, vec![atom("Empty", bind!{})]);
     }
 
@@ -640,11 +640,11 @@ mod tests {
     fn metta_turing_machine() {
         let space = space("
             (= (tm $rule $state $tape)
-              (match $state HALT
+              (unify $state HALT
                 $tape
                 (chain (eval (read $tape)) $char
                   (chain (eval ($rule $state $char)) $res
-                    (match $res ($next-state $next-char $dir)
+                    (unify $res ($next-state $next-char $dir)
                       (chain (eval (move $tape $next-char $dir)) $next-tape
                         (eval (tm $rule $next-state $next-tape)) )
                       (Error (tm $rule $state $tape) \"Incorrect state\") )))))
@@ -655,13 +655,13 @@ mod tests {
             (= (move ($head $hole $tail) $char L)
               (chain (cons $char $head) $next-head
                 (chain (decons $tail) $list
-                  (match $list ($next-hole $next-tail)
+                  (unify $list ($next-hole $next-tail)
                     ($next-head $next-hole $next-tail)
                     ($next-head 0 ()) ))))
             (= (move ($head $hole $tail) $char R)
               (chain (cons $char $tail) $next-tail
                 (chain (decons $head) $list
-                  (match $list ($next-hole $next-head)
+                  (unify $list ($next-hole $next-head)
                     ($next-head $next-hole $next-tail)
                     (() 0 $next-tail) ))))
 
