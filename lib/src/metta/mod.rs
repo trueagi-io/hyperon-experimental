@@ -33,6 +33,8 @@ pub const NOT_REDUCIBLE_SYMBOL : Atom = sym!("NotReducible");
 pub const NO_VALID_ALTERNATIVES : Atom = sym!("NoValidAlternatives");
 
 pub const EMPTY_SYMBOL : Atom = sym!("Empty");
+pub const VOID_SYMBOL : Atom = sym!("Void");
+
 pub const EVAL_SYMBOL : Atom = sym!("eval");
 pub const CHAIN_SYMBOL : Atom = sym!("chain");
 pub const UNIFY_SYMBOL : Atom = sym!("unify");
