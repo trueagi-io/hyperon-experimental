@@ -200,6 +200,87 @@ impl Grounded for AssertEqualToResultOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct SuperposeOp {
+    space: DynSpace,
+}
+
+impl SuperposeOp {
+    fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for SuperposeOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "superpose")
+    }
+}
+
+impl Grounded for SuperposeOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("superpose expects single expression as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        let expr  = TryInto::<&ExpressionAtom>::try_into(atom).map_err(|_| arg_error())?;
+
+        let mut superposed = Vec::new();
+        for atom in expr.children() {
+            match interpret_no_error(self.space.clone(), atom) {
+                Ok(results) => { superposed.extend(results); },
+                Err(message) => { return Err(format!("Error: {}", message).into()) },
+            }
+        }
+        Ok(superposed)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct CollapseOp {
+    space: DynSpace,
+}
+
+impl CollapseOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for CollapseOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "collapse")
+    }
+}
+
+impl Grounded for CollapseOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("collapse expects single executable atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let result = interpret_no_error(self.space.clone(), atom)?;
+
+        Ok(vec![Atom::expr(result)])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+
 fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
 }
@@ -226,6 +307,10 @@ pub fn register_runner_tokens(metta: &Metta) {
     tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
     let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
     tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
+    let superpose_op = Atom::gnd(SuperposeOp::new(space.clone()));
+    tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
+    let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
+    tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
     // TODO: adding &self introduces self referencing and thus prevents space
@@ -428,6 +513,10 @@ pub static METTA_CODE: &'static str = "
 (: match (-> Atom Atom Atom %Undefined%))
 (= (match $space $pattern $template)
   (unify $pattern $space $template Empty))
+
+(: let (-> Atom %Undefined% Atom Atom))
+(= (let $pattern $atom $template)
+  (unify $atom $pattern $template Empty))
 ";
 
 #[cfg(test)]
@@ -435,6 +524,8 @@ mod tests {
     use super::*;
     use crate::metta::runner::new_metta_rust;
     use crate::matcher::atoms_are_equivalent;
+
+    use std::convert::TryFrom;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
         let metta = new_metta_rust();
@@ -635,6 +726,55 @@ mod tests {
         assert_eq!(metta.run(&mut SExprParser::new("!(assertEqualToResult (baz) (D))")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("baz") ("D")) "\nExpected: [D]\nGot: [D, D]\nExcessive result: D")]
         ]));
+    }
+
+    #[test]
+    fn metta_superpose() {
+        assert_eq_metta_results!(run_program("!(superpose (red yellow green))"),
+            Ok(vec![vec![expr!("red"), expr!("yellow"), expr!("green")]]));
+        let program = "
+            (= (foo) FOO)
+            (= (bar) BAR)
+            !(superpose ((foo) (bar) BAZ))
+        ";
+        assert_eq_metta_results!(run_program(program),
+            Ok(vec![vec![expr!("FOO"), expr!("BAR"), expr!("BAZ")]]));
+    }
+
+    #[test]
+    fn metta_collapse() {
+        let program = "
+            (= (color) red)
+            (= (color) green)
+            (= (color) blue)
+            !(collapse (color))
+        ";
+        let result = run_program(program).expect("Successful result is expected");
+        assert_eq!(result.len(), 1);
+        let result = result.get(0).unwrap();
+        assert_eq!(result.len(), 1);
+        let result = result.get(0).unwrap();
+        let actual = <&ExpressionAtom>::try_from(result)
+            .expect("Expression atom is expected").children();
+        assert_eq_no_order!(actual, vec![expr!("red"), expr!("green"), expr!("blue")]);
+    }
+
+    #[test]
+    fn metta_let() {
+        let result = run_program("!(let (P A $b) (P $a B) (P $b $a))");
+        assert_eq!(result, Ok(vec![vec![expr!("P" "B" "A")]]));
+        let result = run_program("
+            (= (foo) (P A B))
+            !(let (P A $b) (foo) (P $b A))
+            ");
+        assert_eq!(result, Ok(vec![vec![expr!("P" "B" "A")]]));
+        let result = run_program("
+            (= (foo) (P A B))
+            !(let (foo) (P A $b) (P $b A))
+            ");
+        assert_eq!(result, Ok(vec![vec![]]));
+        let result = run_program("!(let (P A $b) (P B C) (P C B))");
+        assert_eq!(result, Ok(vec![vec![]]));
     }
 
 
