@@ -211,11 +211,11 @@ pub extern "C" fn space_subst(space: *const space_t,
     return_atoms(&results, callback, context);
 }
 
-/// @brief Returns the number of atoms in a Space, if it can be readily determined
+/// @brief Returns the number of top-level atoms in a Space, if it can be readily determined
 /// @ingroup space_client_group
 /// @param[in]  space  A pointer to the `space_t` handle to access
-/// @return The number of atoms in the Space, or -1 for spaces in which it is impossible or impractical
-///    to determine the number of atoms
+/// @return The number of top-level atoms in the Space, or -1 for spaces in which it is impossible or
+///    impractical to determine the number of atoms
 ///
 #[no_mangle]
 pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
@@ -226,10 +226,10 @@ pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
     }
 }
 
-/// @brief Iterates all Atoms in a Space, if that is possible
+/// @brief Iterates all top-level Atoms in a Space, if that is possible
 /// @ingroup space_client_group
 /// @param[in]  space  A pointer to the `space_t` handle to access
-/// @param[in]  callback  A function that will be called for each Atom in the Space
+/// @param[in]  callback  A function that will be called for each top-level Atom in the Space
 /// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the
 ///    `callback` function
 /// @return `true` if the space was sucessfully iterated, or `false` if the space does not support iteration
@@ -454,56 +454,6 @@ pub extern "C" fn space_event_get_field_atom(event: *const space_event_t, field:
     }
 }
 
-/// @brief Creates a new `space_event_t` representing an `Add` event
-/// @ingroup space_observer_group
-/// @param[in]  atom  The atom that is being added to the Space, to embed into the event
-/// @return The newly created `space_event_t`
-/// @note The caller must take ownership responsibility for the returned `space_event_t` and it must be freed with `space_event_free()`
-/// @warning This function takes ownership of the `atom` parameter, so it must not be subsequently access or freed
-///
-#[no_mangle]
-pub extern "C" fn space_event_new_add(atom: atom_t) -> space_event_t {
-    let event = SpaceEvent::Add(atom.into_inner());
-    event.into()
-}
-
-/// @brief Creates a new `space_event_t` representing a `Remove` event
-/// @ingroup space_observer_group
-/// @param[in]  atom  The atom that is being removed from the Space, to embed into the event
-/// @return The newly created `space_event_t`
-/// @note The caller must take ownership responsibility for the returned `space_event_t` and it must be freed with `space_event_free()`
-/// @warning This function takes ownership of the `atom` parameter, so it must not be subsequently access or freed
-///
-#[no_mangle]
-pub extern "C" fn space_event_new_remove(atom: atom_t) -> space_event_t {
-    let event = SpaceEvent::Remove(atom.into_inner());
-    event.into()
-}
-
-/// @brief Creates a new `space_event_t` representing a `Replace` event
-/// @ingroup space_observer_group
-/// @param[in]  pattern  The atom that is being matched in the Space, to embed into the event
-/// @param[in]  tmpl  The atom that is being used to construct new atoms in the Space, to embed into the event
-/// @return The newly created `space_event_t`
-/// @note The caller must take ownership responsibility for the returned `space_event_t` and it must be freed with `space_event_free()`
-/// @warning This function takes ownership of both the `pattern` and the `tmpl` parameter, so neither may be subsequently access nor freed
-///
-#[no_mangle]
-pub extern "C" fn space_event_new_replace(pattern: atom_t, tmpl: atom_t) -> space_event_t {
-    let event = SpaceEvent::Replace(pattern.into_inner(), tmpl.into_inner());
-    event.into()
-}
-
-/// @brief Frees a `space_event_t`
-/// @ingroup space_observer_group
-/// @param[in]  event  The `space_event_t` to free
-///
-#[no_mangle]
-pub extern "C" fn space_event_free(event: space_event_t) {
-    let event = event.into_inner();
-    drop(event);
-}
-
 /// @brief Registers a new observer, to monitor activity within the Space
 /// @ingroup space_observer_group
 /// @param[in]  space  A pointer to the `space_t` handle of the space to observe
@@ -556,94 +506,189 @@ pub extern "C" fn space_observer_get_payload(observer: *const space_observer_t) 
 // Space Implementation Interface (Space & SpaceMut trait interface wrapper)
 //-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-=-+-
 
-/// A table of functions to define the behavior of a space implemented in C
+/// @struct space_api_t
+/// @brief A table of functions to define the behavior of a Space implemented in C
+/// @ingroup space_impl_group
+/// @see space_new
+///
 #[repr(C)]
 pub struct space_api_t {
 
-    /// Performs a query against atoms in a space
-    ///   Returns a bindings_set_t representing the query results
-    ///   \arg params \c is the pointer to the space's params
-    ///   \arg atom \c is the query atom.  This function should NOT take ownership of the query atom.
+    /// @brief Performs a query against atoms in a space
+    /// @param[in]  params  A pointer to the space's params
+    /// @param[in]  atom  A pointer to the query atom
+    /// @return A `bindings_set_t` representing the query results
+    /// @see space_query
+    ///
     query: extern "C" fn(params: *const space_params_t, atom: *const atom_ref_t) -> bindings_set_t,
 
-    /// Substitutes atoms match by a query with atoms in a form derived from a template
-    ///   \arg params \c is the pointer to the space's params
-    ///   \arg pattern \c is the pattern atom to match.  This function should NOT take ownership of the pattern atom.
-    ///   \arg tmpl \c is the template atom.  This function should NOT take ownership of the template atom.
-    ///   NOTE: If a subst function is provided, it will be called.  If NULL is provided, the default
-    ///     implementation will be called.
+    /// @brief Substitutes atoms matched by a query with atoms in a form derived from a template
+    /// @param[in]  params  A pointer to the space's params
+    /// @param[in]  pattern  A pointer to the the pattern atom to match
+    /// @param[in]  tmpl  A pointer to the the template atom from which to construct the substituted atoms
+    /// @return An `atom_vec_t` containing all newly created atoms from the substitution
+    /// @see space_subst
+    /// @note If a subst function is provided, it will be called.  If NULL is provided, the default
+    ///    implementation will be called.
+    ///
     subst: Option<extern "C" fn(params: *const space_params_t, pattern: *const atom_ref_t, tmpl: *const atom_ref_t) -> atom_vec_t>,
 
-    /// Adds an atom to the space
-    ///   \arg params \c is the pointer to the space's params
-    ///   \arg atom \c is the atom to add to the space.  This function SHOULD take ownership of the atom.
+    /// @brief Adds an atom to the space
+    /// @param[in]  params  A pointer to the space's params
+    /// @param[in]  atom  An `atom_t` representing the atom to add to the space
+    /// @see space_add
+    /// @note This function must take ownership responsibility for the provided `atom`, and ultimately free
+    ///    it when the space is freed
+    ///
     add: extern "C" fn(params: *const space_params_t, atom: atom_t),
 
-    /// Removes an atom from the space.  Returns `true` if the atom was removed, otherwise returns `false`
-    ///   \arg params \c is the pointer to the space's params
-    ///   \arg atom \c is the atom to remove from the space.  This function should NOT take ownership of the atom.
+    /// @brief Removes an atom from the space
+    /// @param[in]  params  A pointer to the space's params
+    /// @param[in]  atom  A pointer to an `atom_ref_t` or `atom_t` to specify which atom to remove from the space
+    /// @return `true` if the atom was removed, otherwise returns `false`
+    /// @see space_remove
+    /// @warning This function should NOT take ownership of the `atom` argument
+    ///
     remove: extern "C" fn(params: *const space_params_t, atom: *const atom_ref_t) -> bool,
 
-    /// Replaces one atom in the space with another.  Returns `true` if the atom was replaced, otherwise returns `false`
-    ///   \arg params \c is the pointer to the space's params
-    ///   \arg from \c is the atom to replace in the space.  This function should NOT take ownership of the `from` atom.
-    ///   \arg to \c is the atom to replace it with.  This function SHOULD take ownership of the `to` atom.
+    /// @brief Replaces one atom in the space with another
+    /// @param[in]  params  A pointer to the space's params
+    /// @param[in]  from  A pointer to an `atom_ref_t` or `atom_t` to specify the existing atom to replace in the space
+    /// @param[in]  to  An `atom_t` representing the atom to add to the space
+    /// @return `true` if the atom was replaced, otherwise returns `false`
+    /// @see space_replace
+    /// @warning This function should **NOT** take ownership of the `atom` argument, but this function
+    ///    **SHOULD** take ownership of the `to` atom
+    ///
     replace: extern "C" fn(params: *const space_params_t, from: *const atom_ref_t, to: atom_t) -> bool,
 
-    /// Returns the number of atoms contained within the space
-    ///   \arg params \c is the pointer to the space's params
-    ///   NOTE: If an atom_count function is provided, it will be called.  NULL should be provided for spaces
-    ///     that cannot readily determine the number of contained atoms
+    /// @brief Returns the number of atoms contained within the space
+    /// @param[in]  params  A pointer to the space's params
+    /// @return The number of top-level atoms contained within the Space
+    /// @see space_atom_count
+    /// @note If an `atom_count` function is provided, it will be called.  NULL should be provided for spaces
+    ///    that cannot readily determine the number of contained atoms
+    ///
     atom_count: Option<extern "C" fn(params: *const space_params_t) -> isize>,
 
-    /// Returns an allocated pointer to state necessary to perform an iteration over all atoms
-    ///   \arg params \c is the pointer to the space's params
-    ///   NOTE: The new_atom_iterator_state function is optional.  NULL should be provided for spaces
-    ///     that cannot traverse all contained atoms in an orderly way
+    /// @brief Initializes state necessary to perform an iteration over all top-level atoms
+    /// @param[in]  params  A pointer to the space's params
+    /// @return A pointer to an allocated "iterator state" object storing the necessary information to
+    ///    iterate each top-level atom contained within the space
+    /// @see space_iterate
+    /// @note If an `new_atom_iterator_state` function is provided, it will be called.  NULL should be
+    ///    provided for spaces that cannot iterate all top-level atoms in an orderly way
+    ///
     new_atom_iterator_state: Option<extern "C" fn(params: *const space_params_t) -> *mut c_void>,
 
-    /// Returns a pointer to the next atom in the iteration sequence.
-    ///   \arg params \c is the pointer to the space's params
-    ///   \arg state \c is the buffer allocated by new_atom_iterator_state
-    ///   NOTE: The returned pointer should point to an atom owned by the space, and thus the implementation
-    ///   will not free it.  This function should return NULL to signal the iteration has finished.
-    ///   NOTE: The next_atom function is optional.  NULL should be provided for spaces that cannot
-    ///     traverse all contained atoms in an orderly way.
+    /// @brief Advances to the next top-level atom in the iteration sequence of the Space
+    /// @param[in]  params  A pointer to the space's params
+    /// @param[in]  state  A pointer to the iteration state allocated by `new_atom_iterator_state()`
+    /// @return A reference to an atom owned by the space, or a `null` `atom_ref_t` to signal the
+    ///    iteration has finished
+    /// @see space_iterate
+    /// @note This function is optional for Spaces that don't support iteration.  However, if a
+    ///    `new_atom_iterator_state` implementation is provided then `next_atom` must also be provided
+    ///
     next_atom: Option<extern "C" fn(params: *const space_params_t, state: *mut c_void) -> atom_ref_t>,
 
-    /// Frees the iterator state allocated by [new_atom_iterator_state]
-    ///   \arg params \c is the pointer to the space's params
-    ///   \arg state \c is the buffer allocated by new_atom_iterator_state, that must be freed
-    ///   NOTE: The free_atom_iterator_state function is optional.  NULL should be provided for spaces
-    ///     that cannot traverse all contained atoms in an orderly way
+    /// @brief Frees the iterator state allocated by `new_atom_iterator_state`
+    /// @param[in]  params  A pointer to the space's params
+    /// @param[in]  state  A pointer to the iteration state allocated by `new_atom_iterator_state()`
+    /// @see space_iterate
+    /// @note This function is optional for Spaces that don't support iteration.  However, if a
+    ///    `new_atom_iterator_state` implementation is provided then `free_atom_iterator_state` must
+    ///    also be provided
+    ///
     free_atom_iterator_state: Option<extern "C" fn(params: *const space_params_t, state: *mut c_void)>,
 
-    /// Frees the payload buffer passed when the space was created
-    ///   \arg payload \c is the pointer to the space's payload
-    ///   NOTE: This function is responsible for freeing the payload buffer, as well as any other objects
-    ///   and resources stored by the space.  This includes `atom_t` objects, as well as any other buffers
-    ///   stored in the space
+    /// @brief Frees the payload buffer passed when the space was created
+    /// @param[in]  payload  The pointer to the space's payload
+    /// @see space_new
+    /// @note This function is responsible for freeing the payload buffer, as well as any other objects
+    ///    and resources stored by the space.  This includes freeing all `atom_t` objects and other buffers,
+    ///    as well as closing any connections and releasing any other resources held by the Space
+    ///
     free_payload: extern "C" fn(payload: *mut c_void),
 }
 
 #[derive(Default)]
-pub struct space_common_t {
+pub struct RustSpaceCommonData {
     common: SpaceCommon
 }
 
-/// Data associated with this particular space, including the space's payload and observers
+/// @struct space_params_t
+/// @brief Data associated with this particular space, including the space's payload and observers
+/// @ingroup space_impl_group
+///
 #[repr(C)]
 pub struct space_params_t {
+    /// @brief A pointer to the payload passed when the Space was created
     payload: *mut c_void,
-    common: Box<space_common_t>,
+    /// @brief Opaque Data maintained by Hyperon
+    common: Box<RustSpaceCommonData>,
 }
 
-/// Notifies all observers of an event
+/// @brief Notifies all associated observers of an event
+/// @ingroup space_impl_group
+/// @param[in]  params  A pointer to the space's params
+/// @param[in]  event  A pointer to the event, to broadcast to all observers of the Space
+///
 #[no_mangle]
 pub extern "C" fn space_params_notify_all_observers(params: *const space_params_t, event: *const space_event_t) {
     let common = unsafe{ &(*params).common.common };
     let event = unsafe{ &*event }.borrow();
     common.notify_all_observers(event);
+}
+
+/// @brief Creates a new `space_event_t` representing an `Add` event
+/// @ingroup space_impl_group
+/// @param[in]  atom  The atom that is being added to the Space, to embed into the event
+/// @return The newly created `space_event_t`
+/// @note The caller must take ownership responsibility for the returned `space_event_t` and it must be freed with `space_event_free()`
+/// @warning This function takes ownership of the `atom` parameter, so it must not be subsequently access or freed
+///
+#[no_mangle]
+pub extern "C" fn space_event_new_add(atom: atom_t) -> space_event_t {
+    let event = SpaceEvent::Add(atom.into_inner());
+    event.into()
+}
+
+/// @brief Creates a new `space_event_t` representing a `Remove` event
+/// @ingroup space_impl_group
+/// @param[in]  atom  The atom that is being removed from the Space, to embed into the event
+/// @return The newly created `space_event_t`
+/// @note The caller must take ownership responsibility for the returned `space_event_t` and it must be freed with `space_event_free()`
+/// @warning This function takes ownership of the `atom` parameter, so it must not be subsequently access or freed
+///
+#[no_mangle]
+pub extern "C" fn space_event_new_remove(atom: atom_t) -> space_event_t {
+    let event = SpaceEvent::Remove(atom.into_inner());
+    event.into()
+}
+
+/// @brief Creates a new `space_event_t` representing a `Replace` event
+/// @ingroup space_impl_group
+/// @param[in]  pattern  The atom that is being matched in the Space, to embed into the event
+/// @param[in]  tmpl  The atom that is being used to construct new atoms in the Space, to embed into the event
+/// @return The newly created `space_event_t`
+/// @note The caller must take ownership responsibility for the returned `space_event_t` and it must be freed with `space_event_free()`
+/// @warning This function takes ownership of both the `pattern` and the `tmpl` parameter, so neither may be subsequently access nor freed
+///
+#[no_mangle]
+pub extern "C" fn space_event_new_replace(pattern: atom_t, tmpl: atom_t) -> space_event_t {
+    let event = SpaceEvent::Replace(pattern.into_inner(), tmpl.into_inner());
+    event.into()
+}
+
+/// @brief Frees a `space_event_t`
+/// @ingroup space_impl_group
+/// @param[in]  event  The `space_event_t` to free
+///
+#[no_mangle]
+pub extern "C" fn space_event_free(event: space_event_t) {
+    let event = event.into_inner();
+    drop(event);
 }
 
 struct CSpace {
@@ -653,7 +698,7 @@ struct CSpace {
 
 impl CSpace {
     fn new(api: *const space_api_t, payload: *mut c_void) -> Self {
-        CSpace{api, params: space_params_t{payload, common: Box::new(space_common_t::default())}}
+        CSpace{api, params: space_params_t{payload, common: Box::new(RustSpaceCommonData::default())}}
     }
 }
 
@@ -789,4 +834,3 @@ impl Drop for CSpace {
         (api.free_payload)(self.params.payload);
     }
 }
-
