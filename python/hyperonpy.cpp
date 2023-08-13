@@ -395,18 +395,18 @@ static token_api_t TOKEN_API = { .construct_atom = &CConstr::apply, .free_contex
 struct CSExprParser {
 
     std::string text;
-    sexpr_parser_t* ptr;
+    sexpr_parser_t parser;
 
     CSExprParser(std::string text) : text(text) {
-        ptr = sexpr_parser_new(this->text.c_str());
+        parser = sexpr_parser_new(this->text.c_str());
     }
 
     virtual ~CSExprParser() {
-        sexpr_parser_free(ptr);
+        sexpr_parser_free(parser);
     }
 
     py::object parse(CTokenizer tokenizer) {
-        atom_t atom = sexpr_parser_parse(this->ptr, tokenizer.ptr());
+        atom_t atom = sexpr_parser_parse(&this->parser, tokenizer.ptr());
         return !atom_is_null(&atom) ? py::cast(CAtom(atom)) : py::none();
     }
 };
@@ -686,7 +686,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr)); }, "Get tokenizer of MeTTa interpreter");
     m.def("metta_run", [](CMetta metta, CSExprParser& parser) {
             py::list lists_of_atom;
-            metta_run(metta.ptr, parser.ptr, copy_lists_of_atom, &lists_of_atom);
+            metta_run(metta.ptr, &parser.parser, copy_lists_of_atom, &lists_of_atom);
             return lists_of_atom;
         }, "Run MeTTa interpreter on an input");
     m.def("metta_evaluate_atom", [](CMetta metta, CAtom atom) {

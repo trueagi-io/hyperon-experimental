@@ -20,7 +20,7 @@ use std::path::PathBuf;
 // Tokenizer and Parser Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-/// @brief Represents a handle to a Tokenizer state machine, able to recognize meaningful substrings in text
+/// @brief Represents a handle to a Tokenizer, capable of recognizing meaningful Token substrings in text
 /// @ingroup tokenizer_and_parser_group
 /// @note `tokenizer_t` handles must be freed with `tokenizer_free()`
 ///
@@ -52,10 +52,10 @@ impl tokenizer_t {
     }
 }
 
-/// @brief Creates a new Tokenizer
+/// @brief Creates a new Tokenizer, without any registered Tokens
 /// @ingroup tokenizer_and_parser_group
 /// @return an `tokenizer_t` handle to access the newly created Tokenizer
-/// @note The returned `tokenizer_t` handle must be freed with `tokenizer_free`
+/// @note The returned `tokenizer_t` handle must be freed with `tokenizer_free()`
 ///
 #[no_mangle]
 pub extern "C" fn tokenizer_new() -> tokenizer_t {
@@ -111,13 +111,13 @@ impl Drop for CToken {
     }
 }
 
-/// @brief Registers a new custom Token with a Tokenizer
+/// @brief Registers a new custom Token in a Tokenizer
 /// @ingroup tokenizer_and_parser_group
-/// @param[in]  tokenizer  A pointer to the Tokenizer with which to register the Token
-/// @param[in]  regex  A regular expression to match the incoming text, triggering this token to execute
-/// @param[in]  api  A table of functions to manage the parsing when a Token is matched
+/// @param[in]  tokenizer  A pointer to the Tokenizer in which to register the Token
+/// @param[in]  regex  A regular expression to match the incoming text, triggering this token to generate a new atom
+/// @param[in]  api  A table of functions to manage the token
 /// @param[in]  context  A caller-defined structure to communicate any state necessary to implement the Token parser
-/// @note Hyperon uses the Rust regex engine and syntax, [documented here](https://docs.rs/regex/latest/regex/).
+/// @note Hyperon uses the Rust RegEx engine and syntax, [documented here](https://docs.rs/regex/latest/regex/).
 ///
 #[no_mangle]
 pub extern "C" fn tokenizer_register_token(tokenizer: *mut tokenizer_t,
@@ -144,32 +144,85 @@ pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> tokenizer_t 
     Shared::new(tokenizer.clone()).into()
 }
 
-// SExprParser
-
-pub type sexpr_parser_t<'a> = SharedApi<SExprParser<'a>>;
-
-#[no_mangle]
-pub extern "C" fn sexpr_parser_new<'a>(text: *const c_char) -> *mut sexpr_parser_t<'a> {
-    sexpr_parser_t::new(SExprParser::new(cstr_as_str(text)))
+/// @brief Represents an S-Expression Parser state machine, to parse input text into an Atom
+/// @ingroup tokenizer_and_parser_group
+/// @note `sexpr_parser_t` handles must be freed with `sexpr_parser_free()`
+///
+//
+//QUESTION FOR VITALY: Do we need the sexpr_parser_t type in the C and Python interfaces?  It looks like
+// the only thing they can do is provide a path for text to be parsed either stand-alone or inside the
+// MeTTa interpreter.  So we could eliminate `sexpr_parser_t` type altogether, and just have a stand-alone
+// `parse_sexpr(tokenizer, input_text) -> atom_t` function, and change `metta_run` to take a text string
+// rather than a parser.
+//
+//Do you think it makes sense to simplify the C & Python APIs, or do you think more parsing control will
+// be added to the C & Python APIs in the future?
+//
+#[repr(C)]
+pub struct sexpr_parser_t {
+    /// Internal.  Should not be accessed directly
+    parser: *const RustSExprParser,
 }
 
-#[no_mangle]
-pub extern "C" fn sexpr_parser_free(parser: *mut sexpr_parser_t) {
-    sexpr_parser_t::drop(parser)
+struct RustSExprParser(std::cell::RefCell<SExprParser<'static>>);
+
+impl From<Shared<SExprParser<'static>>> for sexpr_parser_t {
+    fn from(parser: Shared<SExprParser>) -> Self {
+        Self{ parser: std::rc::Rc::into_raw(parser.0).cast() }
+    }
 }
 
+impl sexpr_parser_t {
+    fn borrow_inner(&self) -> &mut SExprParser<'static> {
+        let cell = unsafe{ &mut *(&(&*self.parser).0 as *const std::cell::RefCell<SExprParser>).cast_mut() };
+        cell.get_mut()
+    }
+    fn into_handle(self) -> Shared<SExprParser<'static>> {
+        unsafe{ Shared(std::rc::Rc::from_raw(self.parser.cast())) }
+    }
+}
+
+/// @brief Creates a new S-Expression Parser
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  text  A C-style string containing the input text to parse
+/// @return The new `sexpr_parser_t`, ready to parse the text
+/// @note The returned `sexpr_parser_t` must be freed with `sexpr_parser_free()`
+///
+#[no_mangle]
+pub extern "C" fn sexpr_parser_new<'a>(text: *const c_char) -> sexpr_parser_t {
+    Shared::new(SExprParser::new(cstr_as_str(text))).into()
+}
+
+/// @brief Frees an S-Expression Parser
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  parser  The `sexpr_parser_t` handle to free
+///
+#[no_mangle]
+pub extern "C" fn sexpr_parser_free(parser: sexpr_parser_t) {
+    let parser = parser.into_handle();
+    drop(parser);
+}
+
+/// @brief Parses the text associated with an `sexpr_parser_t`, and creates the corresponding Atom
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  parser  A pointer to the Parser, which is associated with the text to parse
+/// @param[in]  tokenizer  A pointer to the Tokenizer, to use to interpret atoms within the expression
+/// @return The new `atom_t`, which may be an Expression atom with many child atoms
+/// @note The caller must take ownership responsibility for the returned `atom_t`, and ultimately free
+///   it with `atom_free()` or pass it to another function that takes ownership responsibility
+///
 #[no_mangle]
 pub extern "C" fn sexpr_parser_parse(
     parser: *mut sexpr_parser_t,
     tokenizer: *const tokenizer_t) -> atom_t
 {
-    let parser = unsafe{ &mut *parser };
+    let parser = unsafe{ &*parser }.borrow_inner();
     let tokenizer = unsafe{ &*tokenizer }.borrow_inner();
-    parser.borrow_mut().parse(tokenizer).unwrap().into()
+    parser.parse(tokenizer).unwrap().into()
 }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-// MeTTa Type System
+// MeTTa Language and Types
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
 //TODO After Alpha.  These should be static rather than functions, once I get atom_t to be fully repr(C),
@@ -294,7 +347,7 @@ pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> tokenizer_t {
 pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
         output: c_atom_vec_callback_t, out_context: *mut c_void) {
     let metta = unsafe{ &*metta }.borrow();
-    let mut parser = unsafe{ &mut *parser }.borrow_mut();
+    let mut parser = unsafe{ &*parser }.borrow_inner();
     let results = metta.run(&mut parser);
     // TODO: return erorrs properly after step_get_result() is changed to return errors.
     for result in results.expect("Returning errors from C API is not implemented yet") {
