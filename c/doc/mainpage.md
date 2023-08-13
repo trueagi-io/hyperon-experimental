@@ -126,3 +126,10 @@ More complete documentation on the MeTTa language, type system, and the MeTTa st
 @brief Top-level API to execute MeTTa code
 
 This Interface includes the types and functions to instantiate a MeTTa interpreter and step through MeTTa code.
+
+[//]: # (Misc. Interfaces)
+
+@defgroup misc_group Misc Interfaces
+@brief Misc. Interfaces for integration and housekeeping
+
+This module is the catch-all for ancillary interfaces.
