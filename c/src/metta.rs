@@ -481,6 +481,14 @@ impl metta_t {
     }
 }
 
+/// @brief Creates a new MeTTa Interpreter
+/// @ingroup interpreter_group
+/// @param[in]  space  A pointer to a handle for the Space for use by the Interpreter
+/// @param[in]  tokenizer  A pointer to a handle for the Tokenizer for use by the Interpreter
+/// @param[in]  cwd  A C-style string specifying a path to a working directory, to search for modules to load
+/// @return A `metta_t` handle to the newly created Interpreter
+/// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
+///
 #[no_mangle]
 pub extern "C" fn metta_new(space: *mut space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> metta_t {
     let dyn_space = unsafe{ &*space }.borrow();
@@ -489,51 +497,95 @@ pub extern "C" fn metta_new(space: *mut space_t, tokenizer: *mut tokenizer_t, cw
     Shared::new(metta).into()
 }
 
+/// @brief Clones a `metta_t` handle to a MeTTa Interpreter.  The underlying Interpreter is the same
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the MeTTa Interpreter handle
+/// @return A `metta_t` handle to same underlying Interpreter
+/// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
+///
 #[no_mangle]
 pub extern "C" fn metta_clone_handle(metta: *const metta_t) -> metta_t {
     unsafe{ &*metta }.clone_handle().into()
 }
 
+/// @brief Frees a `metta_t` handle
+/// @ingroup interpreter_group
+/// @param[in]  metta  The handle to free
+/// @note The underlying Interpreter may be deallocated if all handles that refer to it have been freed, otherwise
+///    the Interpreter itself won't be freed
+///
 #[no_mangle]
 pub extern "C" fn metta_free(metta: metta_t) {
     let metta = metta.into_handle();
     drop(metta);
 }
 
+/// @brief Provides access to the Space associated with a MeTTa Interpreter
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the Interpreter handle
+/// @return A Space handle, to access the Space associated with the Interpreter
+/// @note The caller must take ownership responsibility for the returned `space_t` and free it with `space_free()`
+///
 #[no_mangle]
 pub extern "C" fn metta_space(metta: *mut metta_t) -> space_t {
     let space = unsafe{ &*metta }.borrow_inner().space();
     space.into()
 }
 
+/// @brief Provides access to the Tokenizer associated with a MeTTa Interpreter
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the Interpreter handle
+/// @return A Tokenizer handle, to access the Tokenizer associated with the Interpreter
+/// @note The caller must take ownership responsibility for the returned `tokenizer_t` and free it with `tokenizer_free()`
+///
 #[no_mangle]
 pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> tokenizer_t {
     let tokenizer = unsafe{ &*metta }.borrow_inner().tokenizer();
     tokenizer.into()
 }
 
+/// @brief Runs the MeTTa Interpreter until the input text has been parsed and evaluated
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the Interpreter handle
+/// @param[in]  parser  A pointer to the S-Expression Parser handle, containing the expression text
+/// @param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
+/// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
+///
 #[no_mangle]
 pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
-        output: c_atom_vec_callback_t, out_context: *mut c_void) {
+        callback: c_atom_vec_callback_t, context: *mut c_void) {
     let metta = unsafe{ &*metta }.borrow_inner();
     let mut parser = unsafe{ &*parser }.borrow_inner();
     let results = metta.run(&mut parser);
     // TODO: return erorrs properly after step_get_result() is changed to return errors.
     for result in results.expect("Returning errors from C API is not implemented yet") {
-        return_atoms(&result, output, out_context);
+        return_atoms(&result, callback, context);
     }
 }
 
+/// @brief Runs the MeTTa Interpreter to evaluate an input Atom
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the Interpreter handle
+/// @param[in]  atom  The `atom_t` representing the atom to evaluate
+/// @param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
+/// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
+/// @warning This function takes ownership of the provided `atom_t`, so it must not be subsequently accessed or freed
+///
 #[no_mangle]
 pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
-        output: c_atom_vec_callback_t, out_context: *mut c_void) {
+        callback: c_atom_vec_callback_t, context: *mut c_void) {
     let metta = unsafe{ &*metta }.borrow_inner();
     let atom = atom.into_inner();
     let result = metta.evaluate_atom(atom)
         .expect("Returning errors from C API is not implemented yet");
-    return_atoms(&result, output, out_context);
+    return_atoms(&result, callback, context);
 }
 
+/// @brief Loads a module into a MeTTa interpreter
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the handle specifying the interpreter into which to load the module
+/// @param[in]  name  A C-style string containing the module name
+///
 #[no_mangle]
 pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
     let metta = unsafe{ &*metta }.borrow_inner();
