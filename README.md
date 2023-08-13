@@ -242,8 +242,8 @@ All components which depend on `libhyperonc` are built using
 automatically.
 
 Diagram below demonstrates main components and dependencies between them:
-![Diagram of the structure](./doc/structure.svg)
-[Source code of the diagram](./doc/structure.plantuml)
+![Diagram of the structure](./docs/assets/structure.svg)
+[Source code of the diagram](./docs/assets/structure.plantuml)
 
 ## Language support for IDEs
 
