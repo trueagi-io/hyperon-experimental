@@ -111,3 +111,11 @@ This interface allows a custom space to be defined with C.  This allows for diff
 
 This interface facilitates parsing textual representations of MeTTa into atom representations, and can be extended to parse custom atom types with specialized syntax.
 
+[//]: # (MeTTa Language and Types)
+
+@defgroup metta_language_group MeTTa Language and Types
+@brief Components needed to interact with the MaTTa language and type system
+
+This interface includes Symbol atoms that have special meaning to the MeTTa interpreter, and it provides access to the MeTTa type system
+
+More complete documentation on the MeTTa language, type system, and the MeTTa standard library can be found here: **TODO: Where?**

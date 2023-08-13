@@ -225,17 +225,74 @@ pub extern "C" fn sexpr_parser_parse(
 // MeTTa Language and Types
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-//TODO After Alpha.  These should be static rather than functions, once I get atom_t to be fully repr(C),
-// so the caller doesn't need to worry about freeing them
+//TODO After Alpha.  These MeTTa keyword atoms should be static objects rather than functions, once I make
+// atom_t fully repr(C), then I will change this, so the caller doesn't need to worry about freeing the
+// return values
+
+/// @brief Creates a Symbol atom for the special MeTTa symbol: "%Undefined%"
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the Symbol atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_UNDEFINED() -> atom_t { hyperon::metta::ATOM_TYPE_UNDEFINED.into() }
+
+/// @brief Creates a Symbol atom for the special MeTTa symbol: "Type", used to indicate that an atom represents the type of another atom
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the Symbol atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_TYPE() -> atom_t { hyperon::metta::ATOM_TYPE_TYPE.into() }
+
+/// @brief Creates a Symbol atom for the special MeTTa symbol: "Atom", used to indicate that an atom's type is a generic atom
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the Symbol atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_ATOM() -> atom_t { hyperon::metta::ATOM_TYPE_ATOM.into() }
+
+/// @brief Creates a Symbol atom for the special MeTTa symbol: "Symbol", used to indicate that an atom's type is a symbol atom
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the Symbol atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_SYMBOL() -> atom_t { hyperon::metta::ATOM_TYPE_SYMBOL.into() }
+
+/// @brief Creates a Symbol atom for the special MeTTa symbol: "Variable", used to indicate that an atom's type is a variable atom
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the Symbol atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_VARIABLE() -> atom_t { hyperon::metta::ATOM_TYPE_VARIABLE.into() }
+
+/// @brief Creates a Symbol atom for the special MeTTa symbol: "Expression", used to indicate that an atom's type is an expression atom
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the Symbol atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_EXPRESSION() -> atom_t { hyperon::metta::ATOM_TYPE_EXPRESSION.into() }
+
+/// @brief Creates a Symbol atom for the special MeTTa symbol: "Grounded", used to indicate that an atom's type is a grounded atom
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the Symbol atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED() -> atom_t { hyperon::metta::ATOM_TYPE_GROUNDED.into() }
+
+/// @brief Creates a Symbol atom for the special MeTTa symbol used to indicate that an atom's type is a wrapper around a Space
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the Symbol atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> atom_t { rust_type_atom::<DynSpace>().into() }
 
+/// @brief Checks whether Atom `atom` has Type `typ` in context of `space`
+/// @ingroup metta_language_group
+/// @param[in]  space  A pointer to the `space_t` representing the space context in which to perform the check
+/// @param[in]  atom  A pointer to the `atom_t` or `atom_ref_t` representing the atom whose Type the function will check
+/// @param[in]  typ  A pointer to the `atom_t` or `atom_ref_t` representing the type to check against
+/// @return  `true` if the Atom's Type is a match, otherwise `false`
+/// @note This function can be used for a simple type check when there is no need to know type parameters
+///
 #[no_mangle]
 pub extern "C" fn check_type(space: *const space_t, atom: *const atom_ref_t, typ: *const atom_ref_t) -> bool {
     let dyn_space = unsafe{ &*space }.borrow();
@@ -244,6 +301,13 @@ pub extern "C" fn check_type(space: *const space_t, atom: *const atom_ref_t, typ
     hyperon::metta::types::check_type(dyn_space.borrow().as_space(), atom, typ)
 }
 
+/// @brief Checks whether `atom` is correctly typed
+/// @ingroup metta_language_group
+/// @param[in]  space  A pointer to the `space_t` representing the space context in which to perform the check
+/// @param[in]  atom  A pointer to the `atom_t` or `atom_ref_t` representing the atom whose Type the function will check
+/// @return  `true` if the Atom is correctly typed, otherwise `false`
+/// @note This function can be used to check if function arguments have correct types
+///
 #[no_mangle]
 pub extern "C" fn validate_atom(space: *const space_t, atom: *const atom_ref_t) -> bool {
     let dyn_space = unsafe{ &*space }.borrow();
@@ -251,6 +315,15 @@ pub extern "C" fn validate_atom(space: *const space_t, atom: *const atom_ref_t) 
     hyperon::metta::types::validate_atom(dyn_space.borrow().as_space(), atom)
 }
 
+/// @brief Provides all types for `atom` in the context of `space`
+/// @ingroup metta_language_group
+/// @param[in]  space  A pointer to the `space_t` representing the space context in which to access the Atom's types
+/// @param[in]  atom  A pointer to the `atom_t` or `atom_ref_t` representing the atom whose Types the function will access
+/// @param[in]  callback  A function that will be called to provide a vector of all type atoms associated with the `atom` argument atom
+/// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
+/// @note `%Undefined%` will be provided if `atom` has no type assigned. An empty vector will be provided if `atom`
+///    is a function call but expected types of arguments are not compatible with passed values
+///
 #[no_mangle]
 pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {

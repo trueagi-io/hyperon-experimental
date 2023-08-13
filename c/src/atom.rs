@@ -1061,7 +1061,7 @@ pub extern "C" fn bindings_eq(a: *const bindings_t, b: *const bindings_t) -> boo
 /// @brief Iterates each variable <-> Atom association within a `bindings_t`
 /// @ingroup matching_group
 /// @param[in]  bindings  A pointer to the `bindings_t` to iterate
-/// @param[in]  callback  A function, that will be called for each variable <-> atom pair within the Bindings frame
+/// @param[in]  callback  A function that will be called for each variable <-> atom pair within the Bindings frame
 /// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
 ///
 #[no_mangle]
