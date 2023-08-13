@@ -187,9 +187,11 @@ impl sexpr_parser_t {
 /// @param[in]  text  A C-style string containing the input text to parse
 /// @return The new `sexpr_parser_t`, ready to parse the text
 /// @note The returned `sexpr_parser_t` must be freed with `sexpr_parser_free()`
+/// @warning The returned `sexpr_parser_t` borrows a reference to the `text` pointer, so the returned
+///    `sexpr_parser_t` must be freed before the `text` is freed or allowed to go out of scope.
 ///
 #[no_mangle]
-pub extern "C" fn sexpr_parser_new<'a>(text: *const c_char) -> sexpr_parser_t {
+pub extern "C" fn sexpr_parser_new(text: *const c_char) -> sexpr_parser_t {
     Shared::new(SExprParser::new(cstr_as_str(text))).into()
 }
 
@@ -337,42 +339,52 @@ pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
 // MeTTa Intperpreter Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-pub struct step_result_t<'a> {
-    result: StepResult<'a, Vec<InterpretedAtom>, (Atom, Atom)>,
+/// @brief Contains the state for an in-flight interpreter operation
+/// @ingroup interpreter_group
+/// @note A `step_result_t` is initially created by `interpret_init()`.  Each call to `interpret_step()`, in
+///    a loop, consumes the `step_result_t` and creates a new one.  When the interpreter operation has
+///    fully resolved, `step_get_result()` can provide the final results.  Ownership of the `step_result_t`
+///    must ultimately be released with `step_get_result()`.
+/// @see interpret_init
+/// @see interpret_step
+/// @see step_get_result
+///
+#[repr(C)]
+pub struct step_result_t {
+    /// Internal.  Should not be accessed directly
+    result: *mut RustStepResult,
+}
+
+struct RustStepResult(StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)>);
+
+impl From<StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)>> for step_result_t {
+    fn from(result: StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)>) -> Self {
+        Self{ result: Box::into_raw(Box::new(RustStepResult(result))) }
+    }
+}
+
+impl step_result_t {
+    fn into_inner(self) -> StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)> {
+        unsafe{ Box::from_raw(self.result).0 }
+    }
+    fn borrow(&self) -> &StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)> {
+        &unsafe{ &*(&*self).result }.0
+    }
 }
 
 #[no_mangle]
-pub extern "C" fn interpret_init<'a>(space: *mut space_t, expr: *const atom_ref_t) -> *mut step_result_t<'a> {
+pub extern "C" fn interpret_init(space: *mut space_t, expr: *const atom_ref_t) -> step_result_t {
     let dyn_space = unsafe{ &*space }.borrow();
     let expr = unsafe{ (&*expr).borrow() };
     let step = interpreter::interpret_init(dyn_space.clone(), expr);
-    Box::into_raw(Box::new(step_result_t{ result: step }))
+    step.into()
 }
 
 #[no_mangle]
-pub extern "C" fn interpret_step(step: *mut step_result_t) -> *mut step_result_t {
-    let step = unsafe { Box::from_raw(step) };
-    let next = interpreter::interpret_step(step.result);
-    Box::into_raw(Box::new(step_result_t{ result: next }))
-}
-
-#[no_mangle]
-pub extern "C" fn step_has_next(step: *const step_result_t) -> bool {
-    unsafe{ (*step).result.has_next() }
-}
-
-#[no_mangle]
-pub extern "C" fn step_get_result(step: *mut step_result_t,
-        callback: c_atom_vec_callback_t, context: *mut c_void) {
-    let step = unsafe{ Box::from_raw(step) };
-    match step.result {
-        StepResult::Return(mut res) => {
-            let res = res.drain(0..).map(|res| res.into_tuple().0).collect();
-            return_atoms(&res, callback, context);
-        },
-        StepResult::Error(_) => return_atoms(&vec![], callback, context),
-        _ => panic!("Not expected step result: {:?}", step.result),
-    }
+pub extern "C" fn interpret_step(step: step_result_t) -> step_result_t {
+    let step = step.into_inner();
+    let next = interpreter::interpret_step(step);
+    next.into()
 }
 
 /// Writes a text description of the step_result_t into the provided buffer and returns the number of bytes
@@ -380,8 +392,29 @@ pub extern "C" fn step_get_result(step: *mut step_result_t,
 /// string terminator.
 #[no_mangle]
 pub extern "C" fn step_to_str(step: *const step_result_t, buf: *mut c_char, buf_len: usize) -> usize {
-    let result = unsafe{ &(*step).result };
-    write_debug_into_buf(result, buf, buf_len)
+    let step = unsafe{ &*step }.borrow();
+    write_debug_into_buf(step, buf, buf_len)
+}
+
+#[no_mangle]
+pub extern "C" fn step_has_next(step: *const step_result_t) -> bool {
+    let step = unsafe{ &*step }.borrow();
+    step.has_next()
+}
+
+// The outcome of the MeTTa interpreter session
+#[no_mangle]
+pub extern "C" fn step_get_result(step: step_result_t,
+        callback: c_atom_vec_callback_t, context: *mut c_void) {
+    let step = step.into_inner();
+    match step {
+        StepResult::Return(mut res) => {
+            let res = res.drain(0..).map(|res| res.into_tuple().0).collect();
+            return_atoms(&res, callback, context);
+        },
+        StepResult::Error(_) => return_atoms(&vec![], callback, context),
+        _ => panic!("Not expected step result: {:?}", step),
+    }
 }
 
 pub type metta_t = SharedApi<Metta>;

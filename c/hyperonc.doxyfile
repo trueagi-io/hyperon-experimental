@@ -1069,6 +1069,7 @@ EXCLUDE_SYMBOLS        = tag \
                          RustAtom_Tag \
                          RustOpaqueAtom \
                          RustOpaqueExecError \
+                         exec_error_t_Tag \
                          RustBindings \
                          RustBindingsSet \
                          RustOpaqueSpace \
@@ -1076,7 +1077,8 @@ EXCLUDE_SYMBOLS        = tag \
                          RustSpaceObserver \
                          RustSpaceCommonData \
                          RustTokenizer \
-                         RustSExprParser
+                         RustSExprParser \
+                         RustStepResult
 
 # The EXAMPLE_PATH tag can be used to specify one or more files or directories
 # that contain example code fragments that are included (see the \include

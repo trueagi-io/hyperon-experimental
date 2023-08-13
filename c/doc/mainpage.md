@@ -119,3 +119,10 @@ This interface facilitates parsing textual representations of MeTTa into atom re
 This interface includes Symbol atoms that have special meaning to the MeTTa interpreter, and it provides access to the MeTTa type system
 
 More complete documentation on the MeTTa language, type system, and the MeTTa standard library can be found here: **TODO: Where?**
+
+[//]: # (MeTTa Interpreter Interface)
+
+@defgroup interpreter_group MeTTa Interpreter Interface
+@brief Top-level API to execute MeTTa code
+
+This Interface includes the types and functions to instantiate a MeTTa interpreter and step through MeTTa code.

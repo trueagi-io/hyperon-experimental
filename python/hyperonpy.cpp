@@ -33,7 +33,7 @@ using CBindings = CStruct<bindings_t>;
 using CBindingsSet = CStruct<bindings_set_t>;
 using CSpace = CStruct<space_t>;
 using CTokenizer = CStruct<tokenizer_t>;
-using CStepResult = CPtr<step_result_t>;
+using CStepResult = CStruct<step_result_t>;
 using CMetta = CPtr<metta_t>;
 
 // Returns a string, created by executing a function that writes string data into a buffer
@@ -636,20 +636,20 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CStepResult>(m, "CStepResult")
         .def("__str__", [](CStepResult step) {
-            return func_to_string((write_to_buf_func_t)&step_to_str, step.ptr);
+            return func_to_string((write_to_buf_func_t)&step_to_str, step.ptr());
         }, "Convert step to human readable string");
     m.def("interpret_init", [](CSpace space, CAtom expr) {
             return CStepResult(interpret_init(space.ptr(), expr.ptr()));
         }, "Initialize interpreter of the expression");
     m.def("interpret_step", [](CStepResult step) {
-            return CStepResult(interpret_step(step.ptr));
+            return CStepResult(interpret_step(step.obj));
         }, "Do next step of the interpretataion");
     m.def("step_has_next", [](CStepResult step) {
-            return step_has_next(step.ptr);
+            return step_has_next(step.ptr());
         }, "Check whether next step of interpretation is posible");
     m.def("step_get_result", [](CStepResult step) {
             py::list atoms;
-            step_get_result(step.ptr, copy_atoms, &atoms);
+            step_get_result(step.obj, copy_atoms, &atoms);
             return atoms;
         }, "Return result of the interpretation");
 
