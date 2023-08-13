@@ -32,7 +32,7 @@ using CVecAtom = CStruct<atom_vec_t>;
 using CBindings = CStruct<bindings_t>;
 using CBindingsSet = CStruct<bindings_set_t>;
 using CSpace = CStruct<space_t>;
-using CTokenizer = CPtr<tokenizer_t>;
+using CTokenizer = CStruct<tokenizer_t>;
 using CStepResult = CPtr<step_result_t>;
 using CMetta = CPtr<metta_t>;
 
@@ -390,6 +390,8 @@ struct CConstr {
     }
 };
 
+static token_api_t TOKEN_API = { .construct_atom = &CConstr::apply, .free_context = &CConstr::free };
+
 struct CSExprParser {
 
     std::string text;
@@ -404,7 +406,7 @@ struct CSExprParser {
     }
 
     py::object parse(CTokenizer tokenizer) {
-        atom_t atom = sexpr_parser_parse(this->ptr, tokenizer.ptr);
+        atom_t atom = sexpr_parser_parse(this->ptr, tokenizer.ptr());
         return !atom_is_null(&atom) ? py::cast(CAtom(atom)) : py::none();
     }
 };
@@ -622,11 +624,10 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CTokenizer>(m, "CTokenizer");
     m.def("tokenizer_new", []() { return CTokenizer(tokenizer_new()); }, "New tokenizer");
-    m.def("tokenizer_free", [](CTokenizer tokenizer) { tokenizer_free(tokenizer.ptr); }, "Free tokenizer");
-    m.def("tokenizer_clone", [](CTokenizer tokenizer) { tokenizer_clone(tokenizer.ptr); }, "Clone tokenizer");
+    m.def("tokenizer_free", [](CTokenizer tokenizer) { tokenizer_free(tokenizer.obj); }, "Free tokenizer");
+    m.def("tokenizer_clone", [](CTokenizer tokenizer) { tokenizer_clone(tokenizer.ptr()); }, "Clone tokenizer");
     m.def("tokenizer_register_token", [](CTokenizer tokenizer, char const* regex, py::function constr) {
-            droppable_t context = { new CConstr(constr), CConstr::free };
-            tokenizer_register_token(tokenizer.ptr, regex, &CConstr::apply, context);
+            tokenizer_register_token(tokenizer.ptr(), regex, &TOKEN_API, new CConstr(constr));
         }, "Register token");
 
     py::class_<CSExprParser>(m, "CSExprParser")
@@ -677,7 +678,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, CTokenizer tokenizer, char const* cwd) {
-        return CMetta(metta_new(space.ptr(), tokenizer.ptr, cwd));
+        return CMetta(metta_new(space.ptr(), tokenizer.ptr(), cwd));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.ptr); }, "Free MeTTa interpreter");
     m.def("metta_clone", [](CMetta metta) { metta_clone(metta.ptr); }, "Clone MeTTa interpreter");

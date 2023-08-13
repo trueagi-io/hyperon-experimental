@@ -104,3 +104,10 @@ Space Observers permit code to monitor activity within a Space by receiving even
 
 This interface allows a custom space to be defined with C.  This allows for different space back-ends, such as a distributed database, or different space topologies, such as the multidimensional latent space of [word2vec](https://en.wikipedia.org/wiki/Word2vec).
 
+[//]: # (Tokenizer and Parser Interface)
+
+@defgroup tokenizer_and_parser_group Tokenizer and Parser Interface
+@brief API to parse the MeTTa language from text into Atoms
+
+This interface facilitates parsing textual representations of MeTTa into atom representations, and can be extended to parse custom atom types with specialized syntax.
+
