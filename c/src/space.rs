@@ -91,7 +91,7 @@ pub extern "C" fn space_free(space: space_t) {
 /// @note The caller must take ownership responsibility for the returned `space_t`, and free it with `space_free()`
 ///
 #[no_mangle]
-pub extern "C" fn space_clone_ref(space: *const space_t) -> *mut space_t {
+pub extern "C" fn space_clone_handle(space: *const space_t) -> *mut space_t {
     let space = unsafe { &(*space).space };
     Box::into_raw(Box::new(space_t{ space: space.clone() }))
 }

@@ -447,42 +447,75 @@ pub extern "C" fn step_get_result(step: step_result_t,
     }
 }
 
-pub type metta_t = SharedApi<Metta>;
+/// @brief A handle to a top-level MeTTa Interpreter
+/// @ingroup interpreter_group
+/// @note A `metta_t` must be freed with `metta_free()`
+/// @see metta_new
+/// @see metta_free
+///
+#[repr(C)]
+pub struct metta_t {
+    /// Internal.  Should not be accessed directly
+    metta: *const RustMettaInterpreter,
+}
+
+struct RustMettaInterpreter(std::cell::RefCell<Metta>);
+
+impl From<Shared<Metta>> for metta_t {
+    fn from(metta: Shared<Metta>) -> Self {
+        Self{ metta: std::rc::Rc::into_raw(metta.0).cast() }
+    }
+}
+
+impl metta_t {
+    fn borrow_inner(&self) -> &mut Metta {
+        let cell = unsafe{ &mut *(&(&*self.metta).0 as *const std::cell::RefCell<Metta>).cast_mut() };
+        cell.get_mut()
+    }
+    fn clone_handle(&self) -> Shared<Metta> {
+        unsafe{ std::rc::Rc::increment_strong_count(self.metta); }
+        unsafe{ Shared(std::rc::Rc::from_raw(self.metta.cast())) }
+    }
+    fn into_handle(self) -> Shared<Metta> {
+        unsafe{ Shared(std::rc::Rc::from_raw(self.metta.cast())) }
+    }
+}
 
 #[no_mangle]
-pub extern "C" fn metta_new(space: *mut space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> *mut metta_t {
+pub extern "C" fn metta_new(space: *mut space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> metta_t {
     let dyn_space = unsafe{ &*space }.borrow();
     let tokenizer = unsafe{ &*tokenizer }.clone_handle();
-    metta_t::new(Metta::from_space_cwd(dyn_space.clone(), tokenizer, PathBuf::from(cstr_as_str(cwd))))
+    let metta = Metta::from_space_cwd(dyn_space.clone(), tokenizer, PathBuf::from(cstr_as_str(cwd)));
+    Shared::new(metta).into()
 }
 
 #[no_mangle]
-pub extern "C" fn metta_clone(metta: *mut metta_t) -> *mut metta_t {
-    let metta = unsafe{ &(*metta) };
-    metta_t::from_shared(metta.shared())
+pub extern "C" fn metta_clone_handle(metta: *const metta_t) -> metta_t {
+    unsafe{ &*metta }.clone_handle().into()
 }
 
 #[no_mangle]
-pub extern "C" fn metta_free(metta: *mut metta_t) {
-    metta_t::drop(metta);
+pub extern "C" fn metta_free(metta: metta_t) {
+    let metta = metta.into_handle();
+    drop(metta);
 }
 
 #[no_mangle]
 pub extern "C" fn metta_space(metta: *mut metta_t) -> space_t {
-    let space = unsafe{ &*metta }.borrow().space();
+    let space = unsafe{ &*metta }.borrow_inner().space();
     space.into()
 }
 
 #[no_mangle]
 pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> tokenizer_t {
-    let tokenizer = unsafe{ &*metta }.borrow().tokenizer();
+    let tokenizer = unsafe{ &*metta }.borrow_inner().tokenizer();
     tokenizer.into()
 }
 
 #[no_mangle]
 pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
         output: c_atom_vec_callback_t, out_context: *mut c_void) {
-    let metta = unsafe{ &*metta }.borrow();
+    let metta = unsafe{ &*metta }.borrow_inner();
     let mut parser = unsafe{ &*parser }.borrow_inner();
     let results = metta.run(&mut parser);
     // TODO: return erorrs properly after step_get_result() is changed to return errors.
@@ -494,7 +527,7 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
 #[no_mangle]
 pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
         output: c_atom_vec_callback_t, out_context: *mut c_void) {
-    let metta = unsafe{ &*metta }.borrow();
+    let metta = unsafe{ &*metta }.borrow_inner();
     let atom = atom.into_inner();
     let result = metta.evaluate_atom(atom)
         .expect("Returning errors from C API is not implemented yet");
@@ -503,7 +536,7 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
 
 #[no_mangle]
 pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
-    let metta = unsafe{ &*metta }.borrow();
+    let metta = unsafe{ &*metta }.borrow_inner();
     // TODO: return erorrs properly
     metta.load_module(PathBuf::from(cstr_as_str(name)))
         .expect("Returning errors from C API is not implemented yet");

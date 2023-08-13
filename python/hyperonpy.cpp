@@ -34,7 +34,7 @@ using CBindingsSet = CStruct<bindings_set_t>;
 using CSpace = CStruct<space_t>;
 using CTokenizer = CStruct<tokenizer_t>;
 using CStepResult = CStruct<step_result_t>;
-using CMetta = CPtr<metta_t>;
+using CMetta = CStruct<metta_t>;
 
 // Returns a string, created by executing a function that writes string data into a buffer
 typedef size_t (*write_to_buf_func_t)(void*, char*, size_t);
@@ -680,23 +680,23 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("metta_new", [](CSpace space, CTokenizer tokenizer, char const* cwd) {
         return CMetta(metta_new(space.ptr(), tokenizer.ptr(), cwd));
     }, "New MeTTa interpreter instance");
-    m.def("metta_free", [](CMetta metta) { metta_free(metta.ptr); }, "Free MeTTa interpreter");
-    m.def("metta_clone", [](CMetta metta) { metta_clone(metta.ptr); }, "Clone MeTTa interpreter");
-    m.def("metta_space", [](CMetta metta) { return CSpace(metta_space(metta.ptr)); }, "Get space of MeTTa interpreter");
-    m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr)); }, "Get tokenizer of MeTTa interpreter");
+    m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
+    m.def("metta_clone", [](CMetta metta) { metta_clone_handle(metta.ptr()); }, "Clone MeTTa interpreter");
+    m.def("metta_space", [](CMetta metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");
+    m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
     m.def("metta_run", [](CMetta metta, CSExprParser& parser) {
             py::list lists_of_atom;
-            metta_run(metta.ptr, &parser.parser, copy_lists_of_atom, &lists_of_atom);
+            metta_run(metta.ptr(), &parser.parser, copy_lists_of_atom, &lists_of_atom);
             return lists_of_atom;
         }, "Run MeTTa interpreter on an input");
     m.def("metta_evaluate_atom", [](CMetta metta, CAtom atom) {
             py::list atoms;
-            metta_evaluate_atom(metta.ptr, atom_clone(atom.ptr()), copy_atoms, &atoms);
+            metta_evaluate_atom(metta.ptr(), atom_clone(atom.ptr()), copy_atoms, &atoms);
             return atoms;
         }, "Run MeTTa interpreter on an atom");
 
     m.def("metta_load_module", [](CMetta metta, std::string text) {
-        metta_load_module(metta.ptr, text.c_str());
+        metta_load_module(metta.ptr(), text.c_str());
     }, "Load MeTTa module");
 
 }
