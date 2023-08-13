@@ -372,6 +372,15 @@ impl step_result_t {
     }
 }
 
+/// @brief Initializes an interpreter operation and take the initial step
+/// @ingroup interpreter_group
+/// @param[in]  space  A pointer to the Space in which to perform the operation
+/// @param[in]  expr  A pointer to an `atom_t` or `atom_ref_t` Expression atom to interpret
+/// @return A `step_result_t` representing the outcome from the initial step
+/// @note The returned value may represent an error, an immediate result value, or it may be necessary to
+///    call `interpret_step()` in a loop to fully evaluate the execution plan.  Ultimately `step_get_result()`
+///    must be called to release the returned `step_result_t`
+///
 #[no_mangle]
 pub extern "C" fn interpret_init(space: *mut space_t, expr: *const atom_ref_t) -> step_result_t {
     let dyn_space = unsafe{ &*space }.borrow();
@@ -380,6 +389,11 @@ pub extern "C" fn interpret_init(space: *mut space_t, expr: *const atom_ref_t) -
     step.into()
 }
 
+/// @brief Takes a subsequent step in an in-flight interpreter operation
+/// @ingroup interpreter_group
+/// @param[in]  step  The existing state for the in-flight interpreter operation
+/// @return A new `step_result_t` representing the outcome from the step
+///
 #[no_mangle]
 pub extern "C" fn interpret_step(step: step_result_t) -> step_result_t {
     let step = step.into_inner();
@@ -387,22 +401,38 @@ pub extern "C" fn interpret_step(step: step_result_t) -> step_result_t {
     next.into()
 }
 
-/// Writes a text description of the step_result_t into the provided buffer and returns the number of bytes
-/// written, or that would have been written had the buf_len been large enough, excluding the
-/// string terminator.
+/// @brief Renders a text description of a `step_result_t` into a buffer
+/// @ingroup interpreter_group
+/// @param[in]  step  A pointer to a `step_result_t` to render
+/// @param[out]  buf  A buffer into which the text will be rendered
+/// @param[in]  buf_len  The maximum allocated size of `buf`
+/// @return The length of the description string, minus the string terminator character.  If
+///    `return_value > buf_len + 1`, then the text was not fully rendered and this function should be
+///    called again with a larger buffer.
+///
 #[no_mangle]
 pub extern "C" fn step_to_str(step: *const step_result_t, buf: *mut c_char, buf_len: usize) -> usize {
     let step = unsafe{ &*step }.borrow();
     write_debug_into_buf(step, buf, buf_len)
 }
 
+/// @brief Examines a `step_result_t` to determine if more work is needed
+/// @ingroup interpreter_group
+/// @param[in]  step  A pointer to the `step_result_t` representing the in-flight interpreter operation
+/// @return `true` if the operation plan indicates that more work is needed to finalize results, otherwise `false`
+///
 #[no_mangle]
 pub extern "C" fn step_has_next(step: *const step_result_t) -> bool {
     let step = unsafe{ &*step }.borrow();
     step.has_next()
 }
 
-// The outcome of the MeTTa interpreter session
+/// @brief Consumes a `step_result_t` and provides the ultimate outcome of a MeTTa interpreter session 
+/// @ingroup interpreter_group
+/// @param[in]  step  A pointer to a `step_result_t` to render
+/// @param[in]  callback  A function that will be called to provide a vector of all atoms resulting from the interpreter session
+/// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
+///
 #[no_mangle]
 pub extern "C" fn step_get_result(step: step_result_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
