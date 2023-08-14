@@ -1,7 +1,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; The examples in this file is inspired by OpenCog Classic examples
-; from github.com/opencog/pln
+; from github.com/opencog/pln, in particular from
+; examples/pln/conjunction, extended with implication
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Some helpful definitions
 (= (min $a $b) (if (< $a $b) $a $b))
@@ -11,6 +12,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; `TV` "metarule" based on `match` to run
+; `.tv` is a custom symbol, which is used to connect
+; PLN-like expressions with their truth values.
+; Some `.tv` facts will be defined below
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (= (TV $x)
    (match &self

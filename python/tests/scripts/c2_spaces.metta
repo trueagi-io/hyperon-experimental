@@ -14,7 +14,7 @@
     (Color of Planet $obj is $prop))
   ((Color of Planet Mars is Red)))
 
-; The knowledge in `&kb` is not `&self`
+; The knowledge in `&kb` is not in `&self`
 !(assertEqualToResult
   (match &self ($p is-a Color) $p)
   ())
