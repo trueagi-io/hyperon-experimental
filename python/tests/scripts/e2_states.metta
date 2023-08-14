@@ -3,7 +3,8 @@
 ; State atoms
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; `new-state` creates a new state atom wrapping the initial value (A B).
-; Then it binds this state atom to the variable `&state-token`.
+; Then it binds this state atom to the token `&state-token`,
+; which is replaced by the corresponding atom at parse-time.
 !(bind! &state-token (new-state (A B)))
 
 ; &state-token is replaced by the state atom in the code below its creation
@@ -11,8 +12,8 @@
 ; the content of the state atom
 (= (get-token) &state-token)
 
-; Although `new-state $x` creates a `State($x)` structure,
-; `get-token` will only show its content
+; `new-state $x` creates a `(State $x)` structure,
+; and `get-token` will show its content
 !(assertEqual
    (get-state (get-token))
    (A B))
