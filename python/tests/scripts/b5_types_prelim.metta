@@ -61,8 +61,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Types can be parameterized
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; List is defined as a dependent function type that
-; takes a Type and returns a Type
+; List is defined as a function type with
+; a typed argument
 (: List (-> Type Type))
 
 ; Nil's type is parametrized as the type returned by List when it

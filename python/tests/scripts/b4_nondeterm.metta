@@ -82,7 +82,7 @@
 (= (foo) boo)
 (= (eq $x $x) T)
 (= (find-equal $x $y)
-  (match &self (= (eq $x $y) T) $x))
+   (match &self (= (eq $x $y) T) $x))
 !(assertEqual
   (find-equal (color) (foo))
   red)
