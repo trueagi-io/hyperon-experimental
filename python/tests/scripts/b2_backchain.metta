@@ -65,10 +65,7 @@
   (deduce (Evaluation (mortal Plato)))
   T)
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; TODO : Some variables are not substituted
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (= (ift T $then) $then)
 (ift (deduce (Evaluation (mortal $x))) $x)
 

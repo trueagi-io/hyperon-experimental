@@ -7,7 +7,8 @@
 ; Some expressions to be matched
 ((leaf1 leaf2) leaf3)
 (((leaf0 leaf1) leaf2) leaf3)
-; This one will not be matched because it's a subexpression
+; This one contains `((leaf1 leaf2) leaf3)` as a subexpression
+; and thus will not be matched
 (top ((leaf1 leaf2) leaf3))
 ; `assertEqualToResult` checks all the results of the first
 ; expression; it doesn't evaluate the second expression,

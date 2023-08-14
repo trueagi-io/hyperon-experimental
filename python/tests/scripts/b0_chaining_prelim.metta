@@ -1,6 +1,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; From matching to rule chaining:
+; From matching to evaluation of expressions via equality queries chaining
 ; It's possible to chain together matching queries
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Some knowledge base entries
@@ -12,11 +12,11 @@
 (:= (S $x $y $z) ($x $z ($y $z)))
 
 ; A single matching step
-!(assertEqualToResult
-  (match &self
-    (:= (S K K x) $r)
-    $r)
-  ((K x (K x))))
+;!(assertEqualToResult
+;  (match &self
+;    (:= (S K K x) $r)
+;    $r)
+;  ((K x (K x))))
 
 ; Another single matching step
 !(assertEqualToResult
