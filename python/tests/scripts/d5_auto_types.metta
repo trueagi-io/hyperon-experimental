@@ -43,8 +43,12 @@ Auto type-checking can be enabled
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; match does not perform type checking on its pattern,
-; so it accepts a badly typed expression, which is expected
+; `match` does not perform type checking on its pattern,
+; so it accepts a badly typed expression, which is expected.
+; It can be useful to deal with "wrong" MeTTa programs on
+; a meta-level in MeTTa itself, so this behavior of `match`
+; allows us to write code that analyzes badly typed expressions
+; within MeTTa (e.g. for self-reflective genetic programming).
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (match &self (== SocratesIsHuman SamIsMortal) Really?)
 

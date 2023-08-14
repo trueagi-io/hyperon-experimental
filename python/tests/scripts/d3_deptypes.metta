@@ -8,7 +8,7 @@
 (: Z Nat)
 (: S (-> Nat Nat))
 
-; `Vec` is defined as a dependent type: it takes a type ``$t` and a `Nat` length.
+; `Vec` takes a `$t` type and a `Nat` length.
 (: Vec (-> $t Nat Type))
 ; `Cons` and `Nil` construct `Vec` values, with `Cons` incrementing the length by 1.
 (: Cons (-> $t (Vec $t $x) (Vec $t (S $x))))
