@@ -1,9 +1,9 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; MeTTa allows to use a separate knowledge base (AtomSpace) &kb
+; MeTTa allows to use a separate knowledge base (Space) &kb
 ; to accumulate inferred knowledge
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Bind &kb to a new empty AtomSpace
+; Bind &kb to a new empty Space
 !(bind! &kb (new-space))
 
 ; Some knowledge
