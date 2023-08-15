@@ -74,7 +74,7 @@
 ; Another example of backchaining
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Definition of explain when the desired Evaluation is
-; in  the knowledge base
+; in the knowledge base
 (= (explain (Evaluation ($P $x)))
    (match &self (Evaluation ($P $x)) ($P $x)))
 

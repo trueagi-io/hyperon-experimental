@@ -30,9 +30,9 @@
   (Add S Z)
   ((Error S BadType)))
 ; But these other examples works normally
-!(assertEqualToResult
+!(assertEqual
   (Add (S Z) Z)
-  ((S Z)))
+  (S Z))
 !(assertEqual
   (Add Z (S Z))
   (S Z))

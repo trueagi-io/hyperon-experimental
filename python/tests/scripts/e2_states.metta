@@ -85,8 +85,8 @@
      (change-state! $x (+ (get-state $x) 1)))
   (new-state 2))
 
-; Checking that state atoms don't conflict with surrounding scopes;
-; their variable names are fully isolated
+; Checking that there is no conflict between variable names in
+; let-expression and type definition of new-state
 !(assertEqual
    (let $tnso (new-state 1) $tnso)
    (new-state 1))
