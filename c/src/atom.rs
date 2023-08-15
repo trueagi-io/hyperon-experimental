@@ -293,11 +293,11 @@ pub unsafe extern "C" fn atom_eq(a: *const atom_ref_t, b: *const atom_ref_t) -> 
     (&*a).borrow() == (&*b).borrow()
 }
 
-/// @brief Checks if two atoms can be reduced to the same conceptual atom
+/// @brief Checks if two atoms are alpha equivalent.
 /// @ingroup atom_group
 /// @param[in]  a  A pointer to an `atom_t` or an `atom_ref_t` representing the first atom
 /// @param[in]  b  A pointer to an `atom_t` or an `atom_ref_t` representing the second atom
-/// @return `true` is the atoms are can be reduced to a state where they are equal, otherwise `false`
+/// @return `true` is the atoms can be converted to each other by renaming variables, otherwise `false`
 ///
 #[no_mangle]
 pub extern "C" fn atoms_are_equivalent(a: *const atom_ref_t, b: *const atom_ref_t) -> bool {
