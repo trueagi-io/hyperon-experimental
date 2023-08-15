@@ -148,16 +148,6 @@ pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> tokenizer_t 
 /// @ingroup tokenizer_and_parser_group
 /// @note `sexpr_parser_t` handles must be freed with `sexpr_parser_free()`
 ///
-//
-//QUESTION FOR VITALY: Do we need the sexpr_parser_t type in the C and Python interfaces?  It looks like
-// the only thing they can do is provide a path for text to be parsed either stand-alone or inside the
-// MeTTa interpreter.  So we could eliminate `sexpr_parser_t` type altogether, and just have a stand-alone
-// `parse_sexpr(tokenizer, input_text) -> atom_t` function, and change `metta_run` to take a text string
-// rather than a parser.
-//
-//Do you think it makes sense to simplify the C & Python APIs, or do you think more parsing control will
-// be added to the C & Python APIs in the future?
-//
 #[repr(C)]
 pub struct sexpr_parser_t {
     /// Internal.  Should not be accessed directly

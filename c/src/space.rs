@@ -384,7 +384,7 @@ struct RustSpaceObserver(std::cell::RefCell<CObserver>);
 
 impl From<SpaceObserverRef<CObserver>> for space_observer_t {
     fn from(observer: SpaceObserverRef<CObserver>) -> Self {
-        Self{ observer: std::rc::Rc::into_raw(observer.0).cast() }
+        Self{ observer: std::rc::Rc::into_raw(observer.into_inner()).cast() }
     }
 }
 
@@ -394,7 +394,7 @@ impl space_observer_t {
         cell.get_mut()
     }
     fn into_inner(self) -> SpaceObserverRef<CObserver> {
-        unsafe{ SpaceObserverRef(std::rc::Rc::from_raw(self.observer.cast())) }
+        unsafe{ std::rc::Rc::from_raw(self.observer.cast::<std::cell::RefCell<CObserver>>()).into() }
     }
 }
 

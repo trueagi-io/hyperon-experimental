@@ -61,14 +61,29 @@ pub trait SpaceObserver {
 
 /// A reference to a SpaceObserver that has been registered with a Space
 #[derive(Clone)]
-pub struct SpaceObserverRef<T: SpaceObserver> (pub Rc<RefCell<T>>);
+pub struct SpaceObserverRef<T: SpaceObserver> (Rc<RefCell<T>>);
 
 impl<T: SpaceObserver> SpaceObserverRef<T> {
+    /// Returns a [Ref] to mutably access the [SpaceObserver]
     pub fn borrow(&self) -> Ref<T> {
         self.0.borrow()
     }
+    /// Returns a [RefMut] to mutably access the [SpaceObserver]
     pub fn borrow_mut(&self) -> RefMut<T> {
         self.0.borrow_mut()
+    }
+    /// Returns the contents of the `SpaceObserverRef`
+    ///
+    /// This method is used in the implementation of the C API bindings, and is probably
+    /// not necessary for Rust API clients
+    pub fn into_inner(self) -> Rc<RefCell<T>> {
+        self.0
+    }
+}
+
+impl<T: SpaceObserver> From<Rc<RefCell<T>>> for SpaceObserverRef<T> {
+    fn from(observer: Rc<RefCell<T>>) -> Self {
+        Self(observer)
     }
 }
 
