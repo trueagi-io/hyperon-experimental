@@ -1,7 +1,10 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; We can use Nodes and Links in the OpenCog Classic style,
 ; because these are also symbolic expressions,
 ; although Concept and List will not be turned into types
 ; and will remain just symbols in expressions
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (EvaluationLink
   (PredicateNode "eats")
   (ListLink
