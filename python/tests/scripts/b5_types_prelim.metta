@@ -61,8 +61,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Types can be parameterized
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; List is defined as a function type with
-; a typed argument
+; List has a function type. Its argument should be of Type type.
+; The type of the whole expression, e.g. (List String), will also have Type type.
 (: List (-> Type Type))
 
 ; Nil's type is parametrized as the type returned by List when it
