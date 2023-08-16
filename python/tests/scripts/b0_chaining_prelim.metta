@@ -11,7 +11,7 @@
 (:= (K $x $y) $x)
 (:= (S $x $y $z) ($x $z ($y $z)))
 
-; A matching step
+; A single matching step
 ;!(assertEqualToResult
 ;  (match &self
 ;    (:= (S K K x) $r)
