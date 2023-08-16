@@ -1,14 +1,22 @@
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Basic types of grounded symbols
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; `get-type` returns the type of its argument
 !(assertEqual
   (get-type 5)
   Number)
 !(assertEqual
   (get-type (+ 5 7))
   Number)
+
+; It works for built-in symbols too
 !(assertEqual
   (get-type +)
   (-> Number Number Number))
-; Types are an empty set for badly typed expressions
+
+; If its argument is a badly typed expression,
+; `get-type` returns the empty set
 !(assertEqualToResult
   (get-type (+ 5 "4"))
   ())
@@ -16,11 +24,16 @@
   (get-type (+ -))
   ())
 
-; Custom types
+; Also works for custom types
 (: Either Type)
-!(assertEqual (get-type Either) Type)
+!(assertEqual
+  (get-type Either)
+  Type)
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Arrow types of functions and constructors
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (: Left (-> %Undefined% Either))
 (: Right (-> %Undefined% Either))
 
@@ -36,11 +49,15 @@
   (get-type (isLeft (Right 5)))
   Bool)
 
+; Badly typed expression
 !(assertEqualToResult
   (get-type (isLeft 5))
   ())
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Parameterized types
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (: EitherP (-> $t Type))
 (: LeftP (-> $t (EitherP $t)))
 (: RightP (-> $t (EitherP $t)))
@@ -56,7 +73,10 @@
   (get-type (pair (LeftP 5) "String"))
   (Pair (EitherP Number) String))
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Recursively parameterized types
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (: List (-> $a Type))
 (: Nil (List $a))
 (: Cons (-> $a (List $a) (List $a)))
@@ -68,7 +88,10 @@
   (get-type (Cons 5 (Cons "6" Nil)))
   ())
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; `let` can be convenient to extract information from `get-type` results
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(assertEqual
   (let (List $t) (get-type (Cons 5 (Cons 6 Nil)))
        $t)
