@@ -12,11 +12,11 @@
 (:= (S $x $y $z) ($x $z ($y $z)))
 
 ; A single matching step
-;!(assertEqualToResult
-;  (match &self
-;    (:= (S K K x) $r)
-;    $r)
-;  ((K x (K x))))
+!(assertEqualToResult
+  (match &self
+    (:= (S K K x) $r)
+    $r)
+  ((K x (K x))))
 
 ; A second matching step; the result of the previous
 ; step is manually used as input for the next query
