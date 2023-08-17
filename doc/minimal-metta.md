@@ -32,16 +32,25 @@ allowed developing the first stable version with less effort (see `eval` and
 `Return`). If an instruction returns the atom which is not from the minimal set
 it is not interpreted further and returned as a part of the final result.
 
-## Error/Empty
+## Error/Empty/NotReducible/Void
 
 There are atoms which can be returned to designate a special situation in a code:
 - `(Error <atom> <message>)` means the interpretation is finished with error;
 - `Empty` means the corresponding branch of the evaluation returned no results,
   such result is not returned among other results when interpreting is
-  finished.
+  finished;
+- `NotReducible` can be returned by `eval` in order to designate the situation
+  when function can not be reduced further; for example it can happen when code
+  tries to call a type constructor (which has no definition), partially defined
+  function (with argument values which are not handled), or grounded function
+  which returns `NotReducible` explicitly; this atom is introduced to separate
+  the situations when atom should be returned "as is" from `Empty` when atom
+  should be removed from results;
+- `Void` is a unit result which is mainly used by functions with side effects
+  which has no meaningful value to return.
 
-Both these atoms are not interpreted further as they are not a part of the
-minimal set of instructions.
+These atoms are not interpreted further as they are not a part of the minimal
+set of instructions.
 
 ## eval
 
@@ -58,15 +67,14 @@ the evaluation in this case. A grounded function can have side effects as well.
 In both cases bindings of the `eval`'s argument are merged to the bindings of
 the result.
 
-Atomspace search can bring the list of results which can be empty. When search
-returns no results then `Empty` atom is a result of the instruction. Grounded
+Atomspace search can bring the list of results which is empty. When search
+returns no results then `NotReducible` atom is a result of the instruction. Grounded
 function can return a list of atoms, empty result, `Error(<message>)` or
 `NoReduce` result. The result of the instruction for a special values are the
 following:
-- empty result returns `Empty` atom;
+- empty result returns `Void` atom;
 - `Error(<message>)` returns `(Error <original-atom> <message>)` atom;
-- `NoReduce` returns `<original-atom>` atom which is not evaluated further
-  because it is not an operation from the minimal set.
+- `NoReduce` returns `NotReducible` atom.
 
 ## chain
 
@@ -115,7 +123,9 @@ Switch implementation:
 
 ```metta
 (= (switch $atom $cases)
-  (chain (decons $cases) $list (eval (switch-internal $atom $list))))
+  (chain (decons $cases) $list
+    (chain (eval (switch-internal $atom $list)) $res
+      (unify $res NotReducible Empty $res) )))
 (= (switch-internal $atom (($pattern $template) $tail))
   (unify $atom $pattern $template (eval (switch $atom $tail))))
 ```
@@ -130,11 +140,13 @@ Reduce in loop until result is calculated:
 
 (= (reduce $atom $var $templ)
   (chain (eval $atom) $res
+    (unify $res Empty
+    Empty
     (unify $res (Error $a $m)
       (Error $a $m)
-      (unify $res Empty
+      (unify $res NotReducible
         (eval (subst $atom $var $templ))
-        (eval (reduce $res $var $templ)) ))))
+        (eval (reduce $res $var $templ)) )))))
 ```
 
 [Link](https://github.com/trueagi-io/hyperon-experimental/blob/27861e63af1417df4780d9314eaf2e8a3b5cde06/lib/src/metta/runner/stdlib2.rs#L234-L302)

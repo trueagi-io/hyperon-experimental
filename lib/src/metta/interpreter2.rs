@@ -278,8 +278,12 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
     result
 }
 
-fn return_empty() -> Atom {
-    EMPTY_SYMBOL
+fn return_unit() -> Atom {
+    VOID_SYMBOL
+}
+
+fn return_not_reducible() -> Atom {
+    NOT_REDUCIBLE_SYMBOL
 }
 
 fn error_atom(atom: Atom, err: String) -> Atom {
@@ -296,7 +300,16 @@ fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<In
             match op.execute(args) {
                 Ok(results) => {
                     if results.is_empty() {
-                        vec![InterpretedAtom(return_empty(), bindings)]
+                        // TODO: This is an open question how to interpret empty results
+                        // which are returned by grounded function. There is no
+                        // case to return empty result for now. If alternative
+                        // should be remove from plan Empty is a proper result.
+                        // If grounded atom returns no value Void should be returned.
+                        // NotReducible or Exec::NoReduce can be returned to
+                        // let a caller know that function is not defined on a
+                        // passed input data. Thus we can interpreter empty result
+                        // by any way we like.
+                        vec![InterpretedAtom(return_unit(), bindings)]
                     } else {
                         results.into_iter()
                             .map(|atom| InterpretedAtom(atom, bindings.clone()))
@@ -305,11 +318,10 @@ fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<In
                 },
                 Err(ExecError::Runtime(err)) =>
                     vec![InterpretedAtom(error_atom(atom, err), bindings)],
-                // TODO: NoReduce should also be available for processing
-                // on MeTTa code level, to allow override code behavior in
-                // case when grounded expression cannot be reduced.
                 Err(ExecError::NoReduce) =>
-                    vec![InterpretedAtom(return_atom(atom), bindings)],
+                    // TODO: we could remove ExecError::NoReduce and explicitly
+                    // return NOT_REDUCIBLE_SYMBOL from the grounded function instead.
+                    vec![InterpretedAtom(return_not_reducible(), bindings)],
             }
         },
         _ => query(space, atom, bindings),
@@ -321,7 +333,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<I
     let query = Atom::expr([EQUAL_SYMBOL, atom, Atom::Variable(var.clone())]);
     let results = space.query(&query);
     if results.is_empty() {
-        vec![InterpretedAtom(return_empty(), bindings)]
+        vec![InterpretedAtom(return_not_reducible(), bindings)]
     } else {
         results.into_iter()
             .flat_map(|mut b| {
@@ -422,19 +434,19 @@ mod tests {
     #[test]
     fn interpret_atom_evaluate_atom_no_definition() {
         let result = interpret_atom(&space(""), atom("(eval a)", bind!{}));
-        assert_eq!(result, vec![atom("Empty", bind!{})]);
+        assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_empty_expression() {
         let result = interpret_atom(&space(""), atom("(eval ())", bind!{}));
-        assert_eq!(result, vec![atom("Empty", bind!{})]);
+        assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_grounded_value() {
         let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" {6}), bind!{}));
-        assert_eq!(result, vec![atom("Empty", bind!{})]);
+        assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
 
@@ -463,7 +475,7 @@ mod tests {
     #[test]
     fn interpret_atom_evaluate_pure_expression_no_definition() {
         let result = interpret_atom(&space(""), atom("(eval (foo A))", bind!{}));
-        assert_eq!(result, vec![atom("Empty", bind!{})]);
+        assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
     #[test]
@@ -483,13 +495,13 @@ mod tests {
     #[test]
     fn interpret_atom_evaluate_grounded_expression_empty() {
         let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" ({ReturnNothing()} {6})), bind!{}));
-        assert_eq!(result, vec![atom("Empty", bind!{})]);
+        assert_eq!(result, vec![atom("Void", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_grounded_expression_noreduce() {
-        let result = interpret_atom(&space(""), InterpretedAtom(expr!({NonReducible()} {6}), bind!{}));
-        assert_eq!(result, vec![InterpretedAtom(expr!({NonReducible()} {6}), bind!{})]);
+        let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" ({NonReducible()} {6})), bind!{}));
+        assert_eq!(result, vec![InterpretedAtom(expr!("NotReducible"), bind!{})]);
     }
 
     #[test]

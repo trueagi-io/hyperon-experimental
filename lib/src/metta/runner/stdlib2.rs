@@ -371,6 +371,9 @@ pub static METTA_CODE: &'static str = "
 (= (if-empty $atom $then $else)
   (eval (if-equal $atom Empty $then $else)))
 
+(= (if-not-reducible $atom $then $else)
+  (eval (if-equal $atom NotReducible $then $else)))
+
 (= (if-error $atom $then $else)
   (eval (if-decons $atom $head $_
     (eval (if-equal $head Error $then $else))
@@ -387,7 +390,9 @@ pub static METTA_CODE: &'static str = "
     (Error (car $atom) \"car expects a non-empty expression as an argument\") )))
 
 (= (switch $atom $cases)
-  (chain (decons $cases) $list (eval (switch-internal $atom $list))))
+  (chain (decons $cases) $list
+    (chain (eval (switch-internal $atom $list)) $res
+      (eval (if-not-reducible $res Empty $res)) )))
 (= (switch-internal $atom (($pattern $template) $tail))
   (unify $atom $pattern $template (eval (switch $atom $tail))))
 
@@ -401,10 +406,11 @@ pub static METTA_CODE: &'static str = "
 
 (= (reduce $atom $var $templ)
   (chain (eval $atom) $res
-    (eval (if-error $res $res
-      (eval (if-empty $res
-        (eval (subst $atom $var $templ))
-        (eval (reduce $res $var $templ)) ))))))
+    (eval (if-empty $res Empty
+      (eval (if-error $res $res
+        (eval (if-not-reducible $res
+          (eval (subst $atom $var $templ))
+          (eval (reduce $res $var $templ)) ))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; MeTTa interpreter implementation ;
@@ -446,14 +452,9 @@ pub static METTA_CODE: &'static str = "
       (chain (eval (is-function $op-type)) $is-func
         (unify $is-func True
           (chain (eval (interpret-func $atom $op-type $space)) $reduced-atom
-            ; When function is called then empty result means it is not defined
-            ; on such arguments and thus should not be called. In such case
-            ; the whole branch is removed from interpreter plan.
-            (eval (call $reduced-atom $type $space Empty)) )
+            (eval (call $reduced-atom $type $space)) )
           (chain (eval (interpret-tuple $atom $space)) $reduced-atom
-            ; When tuple is called then empty result means this tuple is not a
-            ; function call and should be returned as is.
-            (eval (call $reduced-atom $type $space $reduced-atom)) ))))
+            (eval (call $reduced-atom $type $space)) ))))
     (eval (type-cast $atom $type $space)) )))
 
 (= (interpret-func $expr $type $space)
@@ -499,12 +500,13 @@ pub static METTA_CODE: &'static str = "
               (cons $rhead $rtail) ))))))
       (Error (interpret-tuple $atom $space) \"Non-empty expression atom is expected as an argument\") ))))
 
-(= (call $atom $type $space $on-empty)
+(= (call $atom $type $space)
   (eval (if-error $atom $atom
     (chain (eval $atom) $result
-      (eval (if-empty $result $on-empty
-        (eval (if-error $result $result
-          (eval (interpret $result $type $space)) ))))))))
+      (eval (if-not-reducible $result $atom
+        (eval (if-empty $result Empty
+          (eval (if-error $result $result
+            (eval (interpret $result $type $space)) ))))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Standard library written in MeTTa ;
