@@ -12,12 +12,12 @@ void teardown(void) {
 
 START_TEST (test_tokenizer_parser)
 {
-    tokenizer_t* tokenizer = tokenizer_new();
-    droppable_t empty_context = { 0, 0 };
-    tokenizer_register_token(tokenizer, "\\d+", int_atom_from_str, empty_context);
-    sexpr_parser_t* parser = sexpr_parser_new("(= (fac $n) (* $n (fac (- $n 1))))");
+    tokenizer_t tokenizer = tokenizer_new();
+    static token_api_t int_atom_token = { .construct_atom = &int_atom_from_str, .free_context = NULL };
+    tokenizer_register_token(&tokenizer, "\\d+", &int_atom_token, NULL);
+    sexpr_parser_t parser = sexpr_parser_new("(= (fac $n) (* $n (fac (- $n 1))))");
 
-    atom_t parse_result = sexpr_parser_parse(parser, tokenizer);
+    atom_t parse_result = sexpr_parser_parse(&parser, &tokenizer);
     atom_t expected_result = expr(
             atom_sym("="), 
             expr(atom_sym("fac"), atom_var("n"), atom_ref_null()),
@@ -31,7 +31,7 @@ START_TEST (test_tokenizer_parser)
     ck_assert(atom_eq(&parse_result, &expected_result));
 
     //Calling the parser a second time should produce nothing
-    atom_t second_parse_result = sexpr_parser_parse(parser, tokenizer);
+    atom_t second_parse_result = sexpr_parser_parse(&parser, &tokenizer);
     ck_assert(atom_is_null(&second_parse_result));
 
     atom_free(parse_result);
