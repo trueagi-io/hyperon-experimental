@@ -137,7 +137,7 @@ Reduce in loop until result is calculated:
         (eval (reduce $res $var $templ)) ))))
 ```
 
-[Link](https://github.com/vsbogd/hyperon-experimental/blob/f64bf92edf632a538aa6277b6048dbd418924435/lib/src/metta/runner/stdlib.rs#L1199-L1263)
+[Link](https://github.com/trueagi-io/hyperon-experimental/blob/27861e63af1417df4780d9314eaf2e8a3b5cde06/lib/src/metta/runner/stdlib2.rs#L234-L302)
 to the full code of the interpreter in MeTTa (not finished yet).
 
 # Properties
@@ -146,7 +146,7 @@ to the full code of the interpreter in MeTTa (not finished yet).
 
 The following program implements a Turing machine using the minimal MeTTa
 instruction set (the full code of the example can be found
-[here](https://github.com/vsbogd/hyperon-experimental/blob/f64bf92edf632a538aa6277b6048dbd418924435/lib/src/metta/interpreter2.rs#L526-L566)):
+[here](https://github.com/trueagi-io/hyperon-experimental/blob/27861e63af1417df4780d9314eaf2e8a3b5cde06/lib/src/metta/interpreter2.rs#L628-L669)):
 
 ```metta
            (= (tm $rule $state $tape)
