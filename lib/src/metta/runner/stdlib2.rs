@@ -416,14 +416,14 @@ pub static METTA_CODE: &'static str = "
 ; MeTTa interpreter implementation ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(= (match-types $type1 $type2 $then $else)
+    (eval (if-equal $type1 %Undefined% $then
+      (eval (if-equal $type2 %Undefined% $then
+        (unify $type1 $type2 $then $else) )))))
+
 (= (type-cast $atom $type $space)
   (chain (eval (get-type $atom $space)) $actual-type
-    (eval (switch ($actual-type $type)
-      (
-        ((%Undefined% $_) $atom)
-        (($_ %Undefined%) $atom)
-        (($type $_) $atom)
-        ($_ (Error $atom BadType)) )))))
+    (eval (match-types $actual-type $type $atom (Error $atom BadType))) ))
 
 (= (is-function $type)
   (chain (eval (get-metatype $type)) $meta
@@ -436,56 +436,56 @@ pub static METTA_CODE: &'static str = "
 
 (= (interpret $atom $type $space)
   (chain (eval (get-metatype $atom)) $meta
-    (eval (switch ($type $meta)
-      (
-        ((Atom $_meta) $atom)
-        (($meta $meta) $atom)
-        (($_type Variable) $atom)
-
-        (($_type Symbol) (eval (type-cast $atom $type $space)))
-        (($_type Grounded) (eval (type-cast $atom $type $space)))
-        (($_type Expression) (eval (interpret-expression $atom $type $space))) )))))
+    (eval (if-equal $type Atom $atom
+      (eval (if-equal $type $meta $atom
+        (eval (switch ($type $meta)
+          (
+            (($_type Variable) $atom)
+            (($_type Symbol) (eval (type-cast $atom $type $space)))
+            (($_type Grounded) (eval (type-cast $atom $type $space)))
+            (($_type Expression) (eval (interpret-expression $atom $type $space))) )))))))))
 
 (= (interpret-expression $atom $type $space)
   (eval (if-decons $atom $op $args
     (chain (eval (get-type $op $space)) $op-type
       (chain (eval (is-function $op-type)) $is-func
         (unify $is-func True
-          (chain (eval (interpret-func $atom $op-type $space)) $reduced-atom
+          (chain (eval (interpret-func $atom $op-type $type $space)) $reduced-atom
             (eval (call $reduced-atom $type $space)) )
           (chain (eval (interpret-tuple $atom $space)) $reduced-atom
             (eval (call $reduced-atom $type $space)) ))))
     (eval (type-cast $atom $type $space)) )))
 
-(= (interpret-func $expr $type $space)
+(= (interpret-func $expr $type $ret-type $space)
   (eval (if-decons $expr $op $args
     (chain (eval (interpret $op $type $space)) $reduced-op
       (eval (return-on-error $reduced-op
         (eval (if-decons $type $arrow $arg-types
-          (chain (eval (interpret-args $expr $args $arg-types $space)) $reduced-args
+          (chain (eval (interpret-args $expr $args $arg-types $ret-type $space)) $reduced-args
             (eval (return-on-error $reduced-args
               (cons $reduced-op $reduced-args) )))
           (Error $type \"Function type expected\") )))))
     (Error $expr \"Non-empty expression atom is expected\") )))
 
-(= (interpret-args $atom $args $arg-types $space)
+(= (interpret-args $atom $args $arg-types $ret-type $space)
   (unify $args ()
-    (unify $arg-types ($ret) () (Error $atom BadType))
+    (chain (eval (car $arg-types)) $actual-ret-type
+      (eval (match-types $actual-ret-type $ret-type () (Error $atom BadType))))
     (eval (if-decons $args $head $tail
       (eval (if-decons $arg-types $head-type $tail-types
         (chain (eval (interpret $head $head-type $space)) $reduced-head
           ; check that head was changed otherwise Error or Empty in the head
           ; can be just an argument which is passed by intention
           (eval (if-equal $reduced-head $head
-            (eval (interpret-args-tail $atom $reduced-head $tail $tail-types $space))
+            (eval (interpret-args-tail $atom $reduced-head $tail $tail-types $ret-type $space))
             (eval (return-on-error $reduced-head
-              (eval (interpret-args-tail $atom $reduced-head $tail $tail-types $space)) )))))
+              (eval (interpret-args-tail $atom $reduced-head $tail $tail-types $ret-type $space)) )))))
         (Error $atom BadType) ))
       (Error (interpret-atom $atom $args $arg-types $space)
         \"Non-empty expression atom is expected\") ))))
 
-(= (interpret-args-tail $atom $head $args-tail $args-tail-types $space)
-  (chain (eval (interpret-args $atom $args-tail $args-tail-types $space)) $reduced-tail
+(= (interpret-args-tail $atom $head $args-tail $args-tail-types $ret-type $space)
+  (chain (eval (interpret-args $atom $args-tail $args-tail-types $ret-type $space)) $reduced-tail
     (eval (return-on-error $reduced-tail
       (cons $head $reduced-tail) ))))
 
@@ -675,7 +675,43 @@ mod tests {
     }
 
     #[test]
-    fn metta_interpret_children() {
+    fn metta_interpret_single_atom_as_variable_type() {
+        let result = run_program("
+            (: S Int)
+            !(chain (eval (interpret S $t &self)) $res (: $res $t))
+        ");
+        assert_eq!(result, Ok(vec![vec![expr!(":" "S" "Int")]]));
+    }
+
+    #[test]
+    fn metta_interpret_func() {
+        let result = run_program("
+            (: a T)
+            (: foo (-> T T))
+            (= (foo $x) $x)
+            (= (bar $x) $x)
+            !(eval (interpret (foo (bar a)) %Undefined% &self))
+        ");
+        assert_eq!(result, Ok(vec![vec![expr!("a")]]));
+        let result = run_program("
+            (: b B)
+            (: foo (-> T T))
+            (= (foo $x) $x)
+            !(eval (interpret (foo b) %Undefined% &self))
+        ");
+        assert_eq!(result, Ok(vec![vec![expr!("Error" "b" "BadType")]]));
+        let result = run_program("
+            (: Nil (List $t))
+            (: Z Nat)
+            (: S (-> Nat Nat))
+            (: Cons (-> $t (List $t) (List $t)))
+            !(eval (interpret (Cons S (Cons Z Nil)) %Undefined% &self))
+        ");
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("Cons" "Z" "Nil") "BadType")]]));
+    }
+
+    #[test]
+    fn metta_interpret_tuple() {
         assert_eq!(run_program("!(eval (interpret-tuple () &self))"), Ok(vec![vec![expr!(())]]));
         assert_eq!(run_program("!(eval (interpret-tuple (a) &self))"), Ok(vec![vec![expr!(("a"))]]));
         assert_eq!(run_program("!(eval (interpret-tuple (a b) &self))"), Ok(vec![vec![expr!(("a" "b"))]]));
