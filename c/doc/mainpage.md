@@ -90,4 +90,46 @@ Providing the functions in `gnd_api_t` allows custom atom behaviors to be implem
 
 These functions are used to manage spaces, including to create new spaces, free spaces, manipulate the atoms in a space as well as to query a space directly.
 
+[//]: # (Space Observer Interface)
 
+@defgroup space_observer_group Space Observer Interface
+@brief Functions for implementing a Space Observer to monitor changes to a Space from C
+
+Space Observers permit code to monitor activity within a Space by receiving events.  Additionally, custom Space implementations must notify all observers by broadcasting events to communicate activity within the space.
+
+[//]: # (Space Implementation Interface)
+
+@defgroup space_impl_group Space Implementation Interface
+@brief Functions for implementing a custom space in C
+
+This interface allows a custom space to be defined with C.  This allows for different space back-ends, such as a distributed database, or different space topologies, such as the multidimensional latent space of [word2vec](https://en.wikipedia.org/wiki/Word2vec).
+
+[//]: # (Tokenizer and Parser Interface)
+
+@defgroup tokenizer_and_parser_group Tokenizer and Parser Interface
+@brief API to parse the MeTTa language from text into Atoms
+
+This interface facilitates parsing textual representations of MeTTa into atom representations, and can be extended to parse custom atom types with specialized syntax.
+
+[//]: # (MeTTa Language and Types)
+
+@defgroup metta_language_group MeTTa Language and Types
+@brief Components needed to interact with the MaTTa language and type system
+
+This interface includes Symbol atoms that have special meaning to the MeTTa interpreter, and it provides access to the MeTTa type system
+
+More complete documentation on the MeTTa language, type system, and the MeTTa standard library can be found here: **TODO: Where?**
+
+[//]: # (MeTTa Interpreter Interface)
+
+@defgroup interpreter_group MeTTa Interpreter Interface
+@brief Top-level API to execute MeTTa code
+
+This Interface includes the types and functions to instantiate a MeTTa interpreter and step through MeTTa code.
+
+[//]: # (Misc. Interfaces)
+
+@defgroup misc_group Misc Interfaces
+@brief Misc. Interfaces for integration and housekeeping
+
+This module is the catch-all for ancillary interfaces.

@@ -1064,12 +1064,22 @@ EXCLUDE_PATTERNS       =
 # wildcard * is used, a substring. Examples: ANamespace, AClass,
 # ANamespace::AClass, ANamespace::*Test
 
-EXCLUDE_SYMBOLS        = RustAtom \
+EXCLUDE_SYMBOLS        = tag \
+                         RustAtom \
                          RustAtom_Tag \
                          RustOpaqueAtom \
                          RustOpaqueExecError \
+                         exec_error_t_Tag \
                          RustBindings \
-                         RustBindingsSet
+                         RustBindingsSet \
+                         RustOpaqueSpace \
+                         RustSpaceEvent \
+                         RustSpaceObserver \
+                         RustSpaceCommonData \
+                         RustTokenizer \
+                         RustSExprParser \
+                         RustStepResult \
+                         RustMettaInterpreter
 
 # The EXAMPLE_PATH tag can be used to specify one or more files or directories
 # that contain example code fragments that are included (see the \include

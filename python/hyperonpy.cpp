@@ -31,10 +31,10 @@ using CAtom = CStruct<atom_t>;
 using CVecAtom = CStruct<atom_vec_t>;
 using CBindings = CStruct<bindings_t>;
 using CBindingsSet = CStruct<bindings_set_t>;
-using CSpace = CPtr<space_t>;
-using CTokenizer = CPtr<tokenizer_t>;
-using CStepResult = CPtr<step_result_t>;
-using CMetta = CPtr<metta_t>;
+using CSpace = CStruct<space_t>;
+using CTokenizer = CStruct<tokenizer_t>;
+using CStepResult = CStruct<step_result_t>;
+using CMetta = CStruct<metta_t>;
 
 // Returns a string, created by executing a function that writes string data into a buffer
 typedef size_t (*write_to_buf_func_t)(void*, char*, size_t);
@@ -259,8 +259,8 @@ void py_space_add(const struct space_params_t *params, atom_t atom) {
 
     //TODO: Create a mechanism so the Python code can do the notification manually, and bypass this
     // automatic notification code
-    space_event_t* event = space_event_new_add(notify_atom);
-    space_params_notify_all_observers(params, event);
+    space_event_t event = space_event_new_add(notify_atom);
+    space_params_notify_all_observers(params, &event);
     space_event_free(event);
 }
 
@@ -273,8 +273,8 @@ bool py_space_remove(const struct space_params_t *params, const atom_ref_t *atom
     py::object result = call_remove_on_python_space(pyobj, catom);
     if (result.cast<bool>()) {
         //TODO: See comment about manual notification above
-        space_event_t* event = space_event_new_remove(notify_atom);
-        space_params_notify_all_observers(params, event);
+        space_event_t event = space_event_new_remove(notify_atom);
+        space_params_notify_all_observers(params, &event);
         space_event_free(event);
         return true;
     } else {
@@ -294,8 +294,8 @@ bool py_space_replace(const struct space_params_t *params, const atom_ref_t *fro
     py::object result = call_replace_on_python_space(pyobj, catom_from, catom_to);
     if (result.cast<bool>()) {
         //TODO: See comment about manual notification above
-        space_event_t* event = space_event_new_replace(notify_from, notify_to);
-        space_params_notify_all_observers(params, event);
+        space_event_t event = space_event_new_replace(notify_from, notify_to);
+        space_params_notify_all_observers(params, &event);
         space_event_free(event);
         return true;
     } else {
@@ -390,21 +390,23 @@ struct CConstr {
     }
 };
 
+static token_api_t TOKEN_API = { .construct_atom = &CConstr::apply, .free_context = &CConstr::free };
+
 struct CSExprParser {
 
     std::string text;
-    sexpr_parser_t* ptr;
+    sexpr_parser_t parser;
 
     CSExprParser(std::string text) : text(text) {
-        ptr = sexpr_parser_new(this->text.c_str());
+        parser = sexpr_parser_new(this->text.c_str());
     }
 
     virtual ~CSExprParser() {
-        sexpr_parser_free(ptr);
+        sexpr_parser_free(parser);
     }
 
     py::object parse(CTokenizer tokenizer) {
-        atom_t atom = sexpr_parser_parse(this->ptr, tokenizer.ptr);
+        atom_t atom = sexpr_parser_parse(&this->parser, tokenizer.ptr());
         return !atom_is_null(&atom) ? py::cast(CAtom(atom)) : py::none();
     }
 };
@@ -445,7 +447,7 @@ PYBIND11_MODULE(hyperonpy, m) {
                     throw std::runtime_error("Grounded Space Atoms can't have a custom type");
                 }
                 atom_free(undefined);
-                space_t* space = object.attr("cspace").cast<CSpace>().ptr;
+                space_t* space = object.attr("cspace").cast<CSpace>().ptr();
                 return CAtom(atom_gnd_for_space(space));
             } else {
                 atom_t typ = atom_clone(ctyp.ptr());
@@ -463,7 +465,7 @@ PYBIND11_MODULE(hyperonpy, m) {
             return func_to_string((write_to_buf_func_t)&atom_get_name, atom.ptr());
         }, "Get name of the Symbol or Variable atom");
     m.def("atom_get_space", [](CAtom& atom) {
-            return CSpace(space_clone_ref(atom_get_space(atom.ptr())));
+            return CSpace(atom_get_space(atom.ptr()));
         }, "Get the space inside of a Grounded atom wrapping a space");
     m.def("atom_get_object", [](CAtom& atom) {
             return static_cast<GroundedObject const*>(atom_get_object(atom.ptr()))->pyobj;
@@ -592,41 +594,40 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("space_new_custom", [](py::object object) {
         return CSpace( space_new(&PY_SPACE_NO_SUBST_API, new PySpace(object)));
         }, "Create new custom space implemented in Python");
-    m.def("space_free", [](CSpace space) { space_free(space.ptr); }, "Free space");
+    m.def("space_free", [](CSpace space) { space_free(space.obj); }, "Free space");
     m.def("space_get_payload", [](CSpace space) {
-        PySpace* py_space = (PySpace*)space_get_payload(space.ptr);
+        PySpace* py_space = (PySpace*)space_get_payload(space.ptr());
         return py_space->pyobj;
         }, "Accessor for the payload of a space implemented in Python");
-    m.def("space_add", [](CSpace space, CAtom atom) { space_add(space.ptr, atom_clone(atom.ptr())); }, "Add atom into space");
-    m.def("space_remove", [](CSpace space, CAtom& atom) { return space_remove(space.ptr, atom.ptr()); }, "Remove atom from space");
-    m.def("space_replace", [](CSpace space, CAtom& from, CAtom to) { return space_replace(space.ptr, from.ptr(), atom_clone(to.ptr())); }, "Replace atom from space");
-    m.def("space_eq", [](CSpace a, CSpace b) { return space_eq(a.ptr, b.ptr); }, "Check if two spaces are equal");
-    m.def("space_atom_count", [](CSpace space) { return space_atom_count(space.ptr); }, "Return number of atoms in space, or -1 if the space is unable to determine the value");
+    m.def("space_add", [](CSpace space, CAtom atom) { space_add(space.ptr(), atom_clone(atom.ptr())); }, "Add atom into space");
+    m.def("space_remove", [](CSpace space, CAtom& atom) { return space_remove(space.ptr(), atom.ptr()); }, "Remove atom from space");
+    m.def("space_replace", [](CSpace space, CAtom& from, CAtom to) { return space_replace(space.ptr(), from.ptr(), atom_clone(to.ptr())); }, "Replace atom from space");
+    m.def("space_eq", [](CSpace a, CSpace b) { return space_eq(a.ptr(), b.ptr()); }, "Check if two spaces are equal");
+    m.def("space_atom_count", [](CSpace space) { return space_atom_count(space.ptr()); }, "Return number of atoms in space, or -1 if the space is unable to determine the value");
     m.def("space_list", [](CSpace space) -> nonstd::optional<pybind11::list> {
         pybind11::list atoms_list;
-        if (space_iterate(space.ptr, atom_copy_to_list_callback, &atoms_list)) {
+        if (space_iterate(space.ptr(), atom_copy_to_list_callback, &atoms_list)) {
             return atoms_list;
         } else {
             return nonstd::nullopt;
         }
     }, "Returns iterator to traverse atoms within a space");
     m.def("space_query", [](CSpace space, CAtom& pattern) {
-            bindings_set_t result_bindings_set = space_query(space.ptr, pattern.ptr());
+            bindings_set_t result_bindings_set = space_query(space.ptr(), pattern.ptr());
             return CBindingsSet(result_bindings_set);
         }, "Query atoms from space by pattern");
     m.def("space_subst", [](CSpace space, CAtom& pattern, CAtom& templ) {
             py::list atoms;
-            space_subst(space.ptr, pattern.ptr(), templ.ptr(), copy_atoms, &atoms);
+            space_subst(space.ptr(), pattern.ptr(), templ.ptr(), copy_atoms, &atoms);
             return atoms;
         }, "Get bindings for pattern and apply to template");
 
     py::class_<CTokenizer>(m, "CTokenizer");
     m.def("tokenizer_new", []() { return CTokenizer(tokenizer_new()); }, "New tokenizer");
-    m.def("tokenizer_free", [](CTokenizer tokenizer) { tokenizer_free(tokenizer.ptr); }, "Free tokenizer");
-    m.def("tokenizer_clone", [](CTokenizer tokenizer) { tokenizer_clone(tokenizer.ptr); }, "Clone tokenizer");
+    m.def("tokenizer_free", [](CTokenizer tokenizer) { tokenizer_free(tokenizer.obj); }, "Free tokenizer");
+    m.def("tokenizer_clone", [](CTokenizer tokenizer) { tokenizer_clone(tokenizer.ptr()); }, "Clone tokenizer");
     m.def("tokenizer_register_token", [](CTokenizer tokenizer, char const* regex, py::function constr) {
-            droppable_t context = { new CConstr(constr), CConstr::free };
-            tokenizer_register_token(tokenizer.ptr, regex, &CConstr::apply, context);
+            tokenizer_register_token(tokenizer.ptr(), regex, &TOKEN_API, new CConstr(constr));
         }, "Register token");
 
     py::class_<CSExprParser>(m, "CSExprParser")
@@ -635,20 +636,20 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CStepResult>(m, "CStepResult")
         .def("__str__", [](CStepResult step) {
-            return func_to_string((write_to_buf_func_t)&step_to_str, step.ptr);
+            return func_to_string((write_to_buf_func_t)&step_to_str, step.ptr());
         }, "Convert step to human readable string");
     m.def("interpret_init", [](CSpace space, CAtom expr) {
-            return CStepResult(interpret_init(space.ptr, expr.ptr()));
+            return CStepResult(interpret_init(space.ptr(), expr.ptr()));
         }, "Initialize interpreter of the expression");
     m.def("interpret_step", [](CStepResult step) {
-            return CStepResult(interpret_step(step.ptr));
+            return CStepResult(interpret_step(step.obj));
         }, "Do next step of the interpretataion");
     m.def("step_has_next", [](CStepResult step) {
-            return step_has_next(step.ptr);
+            return step_has_next(step.ptr());
         }, "Check whether next step of interpretation is posible");
     m.def("step_get_result", [](CStepResult step) {
             py::list atoms;
-            step_get_result(step.ptr, copy_atoms, &atoms);
+            step_get_result(step.obj, copy_atoms, &atoms);
             return atoms;
         }, "Return result of the interpretation");
 
@@ -664,38 +665,38 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_TYPE(GROUNDED, "Grounded")
         ADD_TYPE(GROUNDED_SPACE, "Space");
     m.def("check_type", [](CSpace space, CAtom& atom, CAtom& type) {
-            return check_type(space.ptr, atom.ptr(), type.ptr());
+            return check_type(space.ptr(), atom.ptr(), type.ptr());
         }, "Check if atom is an instance of the passed type");
     m.def("validate_atom", [](CSpace space, CAtom& atom) {
-            return validate_atom(space.ptr, atom.ptr());
+            return validate_atom(space.ptr(), atom.ptr());
         }, "Validate expression arguments correspond to the operation type");
     m.def("get_atom_types", [](CSpace space, CAtom& atom) {
             py::list atoms;
-            get_atom_types(space.ptr, atom.ptr(), copy_atoms, &atoms);
+            get_atom_types(space.ptr(), atom.ptr(), copy_atoms, &atoms);
             return atoms;
         }, "Get types of the given atom");
 
     py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, CTokenizer tokenizer, char const* cwd) {
-        return CMetta(metta_new(space.ptr, tokenizer.ptr, cwd));
+        return CMetta(metta_new(space.ptr(), tokenizer.ptr(), cwd));
     }, "New MeTTa interpreter instance");
-    m.def("metta_free", [](CMetta metta) { metta_free(metta.ptr); }, "Free MeTTa interpreter");
-    m.def("metta_clone", [](CMetta metta) { metta_clone(metta.ptr); }, "Clone MeTTa interpreter");
-    m.def("metta_space", [](CMetta metta) { return CSpace(metta_space(metta.ptr)); }, "Get space of MeTTa interpreter");
-    m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr)); }, "Get tokenizer of MeTTa interpreter");
+    m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
+    m.def("metta_clone", [](CMetta metta) { metta_clone_handle(metta.ptr()); }, "Clone MeTTa interpreter");
+    m.def("metta_space", [](CMetta metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");
+    m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
     m.def("metta_run", [](CMetta metta, CSExprParser& parser) {
             py::list lists_of_atom;
-            metta_run(metta.ptr, parser.ptr, copy_lists_of_atom, &lists_of_atom);
+            metta_run(metta.ptr(), &parser.parser, copy_lists_of_atom, &lists_of_atom);
             return lists_of_atom;
         }, "Run MeTTa interpreter on an input");
     m.def("metta_evaluate_atom", [](CMetta metta, CAtom atom) {
             py::list atoms;
-            metta_evaluate_atom(metta.ptr, atom_clone(atom.ptr()), copy_atoms, &atoms);
+            metta_evaluate_atom(metta.ptr(), atom_clone(atom.ptr()), copy_atoms, &atoms);
             return atoms;
         }, "Run MeTTa interpreter on an atom");
 
     m.def("metta_load_module", [](CMetta metta, std::string text) {
-        metta_load_module(metta.ptr, text.c_str());
+        metta_load_module(metta.ptr(), text.c_str());
     }, "Load MeTTa module");
 
 }

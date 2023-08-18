@@ -64,16 +64,26 @@ pub trait SpaceObserver {
 pub struct SpaceObserverRef<T: SpaceObserver> (Rc<RefCell<T>>);
 
 impl<T: SpaceObserver> SpaceObserverRef<T> {
+    /// Returns a [Ref] to mutably access the [SpaceObserver]
     pub fn borrow(&self) -> Ref<T> {
         self.0.borrow()
     }
+    /// Returns a [RefMut] to mutably access the [SpaceObserver]
     pub fn borrow_mut(&self) -> RefMut<T> {
         self.0.borrow_mut()
     }
-    /// Returns unchecked mutable access to the contents.  Used to implement the C API
-    pub unsafe fn borrow_mut_unsafe(&self) -> &mut T {
-        let cell = &mut *(&*self.0 as *const RefCell<T>).cast_mut();
-        cell.get_mut()
+    /// Returns the contents of the `SpaceObserverRef`
+    ///
+    /// This method is used in the implementation of the C API bindings, and is probably
+    /// not necessary for Rust API clients
+    pub fn into_inner(self) -> Rc<RefCell<T>> {
+        self.0
+    }
+}
+
+impl<T: SpaceObserver> From<Rc<RefCell<T>>> for SpaceObserverRef<T> {
+    fn from(observer: Rc<RefCell<T>>) -> Self {
+        Self(observer)
     }
 }
 

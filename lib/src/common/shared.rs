@@ -92,7 +92,7 @@ impl<T> LockBorrowMut<T> for &mut T {
     }
 }
 
-pub struct Shared<T: ?Sized>(pub(crate) Rc<RefCell<T>>);
+pub struct Shared<T: ?Sized>(pub Rc<RefCell<T>>);
 
 impl<T> Shared<T> {
     pub fn new(value: T) -> Self {
