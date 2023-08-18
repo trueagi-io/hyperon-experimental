@@ -294,6 +294,32 @@ such possibility the additional instruction is needed. It could mark a set of
 results as joined and when their evaluation is finished would assemble them
 into an expression.
 
+## Special matching syntax
+
+Sometimes it is convenient to change the semantics of the matching within a
+pattern. Some real examples are provided below. One possible way to extend
+matching syntax is embrace atoms by expressions with matching modifier on a
+first position. For instance `(:<mod> <atom>)` could apply `<mod>` rule to
+match the `<atom>`. How to eliminate interference of this syntax with symbol
+atoms used by programmers is an open question.
+
+### Syntax to match atom by equality
+
+In many situations we need to check that atom is equal to some symbol. `unify`
+doesn't work well in such cases because when checked atom is a variable it is
+matched with anything (for instance `(unify $x Empty then else)` returns
+`then`). It would be convenient to have a special syntax to match the atom by
+equality. For instance `(unify <atom> (:= Empty) then else)` should match
+`<atom>` with pattern only when `<atom>` is `Empty`.
+
+### Syntax to match part of the expression
+
+We could have a specific syntax which would allow matching part of the
+expressions. For example such syntax could be used to match head and tail of
+the expression without using `cons`/`decons`. Another example is matching part
+of the expression with some gap, i.e. `(A ... D ...)` could match `(A B C D E)`
+atom.
+
 # Links
 
 1. Lucius Gregory Meredith, Ben Goertzel, Jonathan Warrell, and Adam
