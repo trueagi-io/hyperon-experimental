@@ -55,7 +55,7 @@
 ; The following will be accepted by the interpreter
 !(assertEqualToResult
    (Add Z Ten)
-  ((Add Z Ten)))
+  ((Add Z Ten) (Error Ten BadType)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
