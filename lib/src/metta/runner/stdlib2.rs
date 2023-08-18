@@ -517,6 +517,13 @@ pub static METTA_CODE: &'static str = "
 (: let (-> Atom %Undefined% Atom Atom))
 (= (let $pattern $atom $template)
   (unify $atom $pattern $template Empty))
+
+(: let* (-> Expression Atom Atom))
+(= (let* $pairs $template)
+  (eval (if-decons $pairs ($pattern $atom) $tail
+    (let $pattern $atom (let* $tail $template))
+    $template )))
+
 ";
 
 #[cfg(test)]
@@ -774,6 +781,18 @@ mod tests {
             ");
         assert_eq!(result, Ok(vec![vec![]]));
         let result = run_program("!(let (P A $b) (P B C) (P C B))");
+        assert_eq!(result, Ok(vec![vec![]]));
+    }
+
+    #[test]
+    fn metta_let_var() {
+        let result = run_program("!(let* () result)");
+        assert_eq!(result, Ok(vec![vec![expr!("result")]]));
+        let result = run_program("!(let* ( ((P A $b) (P $a B)) ) (P $b $a))");
+        assert_eq!(result, Ok(vec![vec![expr!("P" "B" "A")]]));
+        let result = run_program("!(let* ( ((P $a) (P A)) ((P B) (P $b)) ) (P $b $a))");
+        assert_eq!(result, Ok(vec![vec![expr!("P" "B" "A")]]));
+        let result = run_program("!(let* ( ((P $a) (P A)) ((P B) (P C)) ) (P $b $a))");
         assert_eq!(result, Ok(vec![vec![]]));
     }
 
