@@ -387,7 +387,7 @@ mod tests {
             !(foo)
         ";
 
-        let metta = Metta::new(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = new_metta_rust();
         metta.tokenizer().borrow_mut().register_token(Regex::new("error").unwrap(),
             |_| Atom::gnd(ErrorOp{}));
         let result = metta.run(&mut SExprParser::new(program));
@@ -438,7 +438,7 @@ mod tests {
             !(empty)
         ";
 
-        let metta = Metta::new(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = new_metta_rust();
         metta.tokenizer().borrow_mut().register_token(Regex::new("empty").unwrap(),
             |_| Atom::gnd(ReturnAtomOp(expr!())));
         let result = metta.run(&mut SExprParser::new(program));
