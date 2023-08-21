@@ -365,39 +365,41 @@ pub static METTA_CODE: &'static str = "
 
 (: Error (-> Atom Atom ErrorType))
 
+(: if-non-empty-expression (-> Atom Atom Atom Atom))
 (= (if-non-empty-expression $atom $then $else)
   (chain (eval (get-metatype $atom)) $type
     (eval (if-equal $type Expression
       (eval (if-equal $atom () $else $then))
       $else ))))
 
+(: if-decons (-> Atom Variable Variable Atom Atom Atom))
 (= (if-decons $atom $head $tail $then $else)
   (eval (if-non-empty-expression $atom
     (chain (decons $atom) $list
       (unify $list ($head $tail) $then $else) )
     $else )))
 
+(: if-empty (-> Atom Atom Atom Atom))
 (= (if-empty $atom $then $else)
   (eval (if-equal $atom Empty $then $else)))
 
+(: if-not-reducible (-> Atom Atom Atom Atom))
 (= (if-not-reducible $atom $then $else)
   (eval (if-equal $atom NotReducible $then $else)))
 
+(: if-error (-> Atom Atom Atom Atom))
 (= (if-error $atom $then $else)
   (eval (if-decons $atom $head $_
     (eval (if-equal $head Error $then $else))
     $else )))
 
+(: return-on-error (-> Atom Atom Atom))
 (= (return-on-error $atom $then)
   (eval (if-empty $atom Empty
     (eval (if-error $atom $atom
       $then )))))
 
-(= (car $atom)
-  (eval (if-decons $atom $head $_
-    $head
-    (Error (car $atom) \"car expects a non-empty expression as an argument\") )))
-
+(: switch (-> %Undefined% Expression Atom))
 (= (switch $atom $cases)
   (chain (decons $cases) $list
     (chain (eval (switch-internal $atom $list)) $res
@@ -408,11 +410,13 @@ pub static METTA_CODE: &'static str = "
 ; FIXME: subst and reduce are not used in interpreter implementation
 ; we could remove them
 
+(: subst (-> Atom Variable Atom Atom))
 (= (subst $atom $var $templ)
   (unify $atom $var $templ
     (Error (subst $atom $var $templ)
       \"subst expects a variable as a second argument\") ))
 
+(: reduce (-> Atom Variable Atom Atom))
 (= (reduce $atom $var $templ)
   (chain (eval $atom) $res
     (eval (if-empty $res Empty
@@ -541,6 +545,18 @@ pub static METTA_CODE: &'static str = "
 
 (: case (-> %Undefined% Expression Atom))
 (= (case $atom $cases) (switch $atom $cases))
+
+(: car (-> Expression Atom))
+(= (car $atom)
+  (eval (if-decons $atom $head $_
+    $head
+    (Error (car $atom) \"car expects a non-empty expression as an argument\") )))
+
+(: cdr (-> Expression Expression))
+(= (cdr $atom)
+  (eval (if-decons $atom $_ $tail
+    $tail
+    (Error (cdr $atom) \"cdr expects a non-empty expression as an argument\") )))
 
 ";
 
