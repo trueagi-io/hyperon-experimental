@@ -33,7 +33,12 @@ impl Grounded for GetTypeOp {
         let atom = args.get(0).ok_or_else(arg_error)?;
         let space = args.get(1).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
-        Ok(get_atom_types(space, atom))
+        let types = get_atom_types(space, atom);
+        if types.is_empty() {
+            Ok(vec![EMPTY_SYMBOL])
+        } else {
+            Ok(types)
+        }
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -227,14 +232,18 @@ impl Grounded for SuperposeOp {
         let atom = args.get(0).ok_or_else(arg_error)?;
         let expr  = TryInto::<&ExpressionAtom>::try_into(atom).map_err(|_| arg_error())?;
 
-        let mut superposed = Vec::new();
-        for atom in expr.children() {
-            match interpret_no_error(self.space.clone(), atom) {
-                Ok(results) => { superposed.extend(results); },
-                Err(message) => { return Err(format!("Error: {}", message).into()) },
+        if expr.children().is_empty() {
+            Ok(vec![EMPTY_SYMBOL])
+        } else {
+            let mut superposed = Vec::new();
+            for atom in expr.children() {
+                match interpret_no_error(self.space.clone(), atom) {
+                    Ok(results) => { superposed.extend(results); },
+                    Err(message) => { return Err(format!("Error: {}", message).into()) },
+                }
             }
+            Ok(superposed)
         }
-        Ok(superposed)
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -567,7 +576,7 @@ mod tests {
         assert_eq_no_order!(get_type_op.execute(&mut vec![expr!("f" "42"), expr!({space.clone()})]).unwrap(),
             vec![sym!("String")]);
         assert_eq_no_order!(get_type_op.execute(&mut vec![expr!("f" "\"test\""), expr!({space.clone()})]).unwrap(),
-            Vec::<Atom>::new());
+            vec![EMPTY_SYMBOL]);
     }
 
 
