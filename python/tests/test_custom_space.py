@@ -132,7 +132,6 @@ class CustomSpaceTest(HyperonTestCase):
         space_atom = G(nested)
 
         runner = MeTTa()
-        runner.space().add_atom(space_atom)
         runner.tokenizer().register_token("nested", lambda token: space_atom)
 
         result = runner.run("!(match nested (A $x) $x)")
