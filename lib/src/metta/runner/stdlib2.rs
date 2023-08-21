@@ -428,11 +428,15 @@ pub static METTA_CODE: &'static str = "
 (= (match-types $type1 $type2 $then $else)
     (eval (if-equal $type1 %Undefined% $then
       (eval (if-equal $type2 %Undefined% $then
-        (unify $type1 $type2 $then $else) )))))
+        (eval (if-equal $type1 Atom $then
+          (eval (if-equal $type2 Atom $then
+            (unify $type1 $type2 $then $else) )))))))))
 
 (= (type-cast $atom $type $space)
   (chain (eval (get-type $atom $space)) $actual-type
-    (eval (match-types $actual-type $type $atom (Error $atom BadType))) ))
+    (chain (eval (get-metatype $atom)) $meta
+      (eval (if-equal $type $meta $atom
+        (eval (match-types $actual-type $type $atom (Error $atom BadType))) )))))
 
 (= (is-function $type)
   (chain (eval (get-metatype $type)) $meta
@@ -651,6 +655,13 @@ mod tests {
         assert_eq!(run_program("!(eval (type-cast a B &self))"), Ok(vec![vec![expr!("a")]]));
         assert_eq!(run_program("!(eval (type-cast 42 Number &self))"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
         assert_eq!(run_program("!(eval (type-cast 42 %Undefined% &self))"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
+        assert_eq!(run_program("(: a A) !(eval (type-cast a Atom &self))"), Ok(vec![vec![expr!("a")]]));
+        assert_eq!(run_program("(: a A) !(eval (type-cast a Symbol &self))"), Ok(vec![vec![expr!("a")]]));
+        assert_eq!(run_program("!(eval (type-cast 42 Grounded &self))"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
+        assert_eq!(run_program("!(eval (type-cast () Expression &self))"), Ok(vec![vec![expr!()]]));
+        assert_eq!(run_program("!(eval (type-cast (a b) Expression &self))"), Ok(vec![vec![expr!("a" "b")]]));
+        assert_eq!(run_program("!(eval (type-cast $v Variable &self))"), Ok(vec![vec![expr!(v)]]));
+        assert_eq!(run_program("(: a A) (: b B) !(eval (type-cast (a b) (A B) &self))"), Ok(vec![vec![expr!("a" "b")]]));
     }
 
     #[test]
