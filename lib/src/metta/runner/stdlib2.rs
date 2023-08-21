@@ -535,6 +535,9 @@ pub static METTA_CODE: &'static str = "
     (let $pattern $atom (let* $tail $template))
     $template )))
 
+(: case (-> %Undefined% Expression Atom))
+(= (case $atom $cases) (switch $atom $cases))
+
 ";
 
 #[cfg(test)]
