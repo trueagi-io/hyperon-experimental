@@ -437,7 +437,7 @@ pub extern "C" fn step_get_result(step: step_result_t,
     }
 }
 
-/// @brief A handle to a top-level MeTTa Interpreter
+/// @brief A top-level MeTTa Interpreter
 /// @ingroup interpreter_group
 /// @note A `metta_t` must be freed with `metta_free()`
 /// @see metta_new
@@ -446,28 +446,23 @@ pub extern "C" fn step_get_result(step: step_result_t,
 #[repr(C)]
 pub struct metta_t {
     /// Internal.  Should not be accessed directly
-    metta: *const RustMettaInterpreter,
+    metta: *mut RustMettaInterpreter,
 }
 
-struct RustMettaInterpreter(std::cell::RefCell<Metta>);
+struct RustMettaInterpreter(Metta);
 
-impl From<Shared<Metta>> for metta_t {
-    fn from(metta: Shared<Metta>) -> Self {
-        Self{ metta: std::rc::Rc::into_raw(metta.0).cast() }
+impl From<Metta> for metta_t {
+    fn from(metta: Metta) -> Self {
+        Self{ metta: Box::into_raw(Box::new(RustMettaInterpreter(metta))) }
     }
 }
 
 impl metta_t {
-    fn borrow_inner(&self) -> &mut Metta {
-        let cell = unsafe{ &mut *(&(&*self.metta).0 as *const std::cell::RefCell<Metta>).cast_mut() };
-        cell.get_mut()
+    fn borrow(&self) -> &Metta {
+        unsafe{ &(&*self.metta).0  }
     }
-    fn clone_handle(&self) -> Shared<Metta> {
-        unsafe{ std::rc::Rc::increment_strong_count(self.metta); }
-        unsafe{ Shared(std::rc::Rc::from_raw(self.metta.cast())) }
-    }
-    fn into_handle(self) -> Shared<Metta> {
-        unsafe{ Shared(std::rc::Rc::from_raw(self.metta.cast())) }
+    fn into_inner(self) -> Metta {
+        unsafe{ Box::from_raw(self.metta).0 }
     }
 }
 
@@ -484,18 +479,7 @@ pub extern "C" fn metta_new(space: *mut space_t, tokenizer: *mut tokenizer_t, cw
     let dyn_space = unsafe{ &*space }.borrow();
     let tokenizer = unsafe{ &*tokenizer }.clone_handle();
     let metta = Metta::from_space_cwd(dyn_space.clone(), tokenizer, PathBuf::from(cstr_as_str(cwd)));
-    Shared::new(metta).into()
-}
-
-/// @brief Clones a `metta_t` handle to a MeTTa Interpreter.  The underlying Interpreter is the same
-/// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the MeTTa Interpreter handle
-/// @return A `metta_t` handle to same underlying Interpreter
-/// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
-///
-#[no_mangle]
-pub extern "C" fn metta_clone_handle(metta: *const metta_t) -> metta_t {
-    unsafe{ &*metta }.clone_handle().into()
+    metta.into()
 }
 
 /// @brief Frees a `metta_t` handle
@@ -506,7 +490,7 @@ pub extern "C" fn metta_clone_handle(metta: *const metta_t) -> metta_t {
 ///
 #[no_mangle]
 pub extern "C" fn metta_free(metta: metta_t) {
-    let metta = metta.into_handle();
+    let metta = metta.into_inner();
     drop(metta);
 }
 
@@ -518,7 +502,7 @@ pub extern "C" fn metta_free(metta: metta_t) {
 ///
 #[no_mangle]
 pub extern "C" fn metta_space(metta: *mut metta_t) -> space_t {
-    let space = unsafe{ &*metta }.borrow_inner().space();
+    let space = unsafe{ &*metta }.borrow().space();
     space.into()
 }
 
@@ -530,7 +514,7 @@ pub extern "C" fn metta_space(metta: *mut metta_t) -> space_t {
 ///
 #[no_mangle]
 pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> tokenizer_t {
-    let tokenizer = unsafe{ &*metta }.borrow_inner().tokenizer();
+    let tokenizer = unsafe{ &*metta }.borrow().tokenizer();
     tokenizer.into()
 }
 
@@ -544,7 +528,7 @@ pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> tokenizer_t {
 #[no_mangle]
 pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
-    let metta = unsafe{ &*metta }.borrow_inner();
+    let metta = unsafe{ &*metta }.borrow();
     let mut parser = unsafe{ &*parser }.borrow_inner();
     let results = metta.run(&mut parser);
     // TODO: return erorrs properly after step_get_result() is changed to return errors.
@@ -564,7 +548,7 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
 #[no_mangle]
 pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
-    let metta = unsafe{ &*metta }.borrow_inner();
+    let metta = unsafe{ &*metta }.borrow();
     let atom = atom.into_inner();
     let result = metta.evaluate_atom(atom)
         .expect("Returning errors from C API is not implemented yet");
@@ -578,7 +562,7 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
 ///
 #[no_mangle]
 pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
-    let metta = unsafe{ &*metta }.borrow_inner();
+    let metta = unsafe{ &*metta }.borrow();
     // TODO: return erorrs properly
     metta.load_module(PathBuf::from(cstr_as_str(name)))
         .expect("Returning errors from C API is not implemented yet");
