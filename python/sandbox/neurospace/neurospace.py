@@ -33,7 +33,7 @@ class NeuralSpace(GroundingSpace):
         try:
             val = ValueAtom(int(val))
             bindings = Bindings()
-            bindings.add_var_bindings(var, val)
+            bindings.add_var_binding(var, val)
             new_bindings_set.push(bindings)
         except ValueError:
             ss = re.findall(r'\".*?\"', val)
@@ -42,7 +42,7 @@ class NeuralSpace(GroundingSpace):
             for s in ss:
                 val = S(s[1:-1])
                 bindings = Bindings()
-                bindings.add_var_bindings(var, val)
+                bindings.add_var_binding(var, val)
                 new_bindings_set.push(bindings)
         return new_bindings_set
 
