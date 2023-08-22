@@ -33,6 +33,7 @@ class TestSpace(AbstractSpace):
                     # it would return an empty result for multiple alternatives and merge bindings
                     # for different variables from alternative branches, which would be a funny
                     # modification of query, but with no real use case
+                    # new_bindings_set.push(bindings) adds an alternative binding to the binding set
                     new_bindings_set.push(bindings)
 
         return new_bindings_set
