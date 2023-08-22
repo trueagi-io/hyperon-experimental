@@ -14,20 +14,26 @@ class TestSpace(AbstractSpace):
     # Don't take this as a guide to implementing a space query function
     def query(self, query_atom):
 
-        #Extract only the variables from the query atom
+        # Extract only the variables from the query atom
         query_vars = list(filter(lambda atom: atom.get_type() == AtomKind.VARIABLE, query_atom.iterate()))
 
-        #Match the query atom against every atom in the space
-        new_bindings_set = BindingsSet()
+        # Match the query atom against every atom in the space
+        # BindingsSet() creates a binding set with the only matching result
+        # We use BindingsSet.empty() to support multiple results
+        new_bindings_set = BindingsSet.empty()
         for space_atom in self.atoms_list:
             match_results = space_atom.match_atom(query_atom)
 
-            #Merge in the bindings from this match, after we narrow the match_results to
+            # Merge in the bindings from this match, after we narrow the match_results to
             # only include variables vars in the query atom 
             for bindings in match_results.iterator():
                 bindings.narrow_vars(query_vars)
                 if not bindings.is_empty():
-                    new_bindings_set.merge_into(bindings)
+                    # new_bindings_set.merge_into(bindings) would work with BindingsSet(), but
+                    # it would return an empty result for multiple alternatives and merge bindings
+                    # for different variables from alternative branches, which would be a funny
+                    # modification of query, but with no real use case
+                    new_bindings_set.push(bindings)
 
         return new_bindings_set
 
@@ -93,20 +99,22 @@ class CustomSpaceTest(HyperonTestCase):
         kb = SpaceRef(TestSpace())
         kb.add_atom(E(S("A"), S("B")))
         kb.add_atom(E(S("C"), S("D")))
+        # Checking that multiple matches can be returned
+        kb.add_atom(E(S("A"), S("E")))
 
         result = kb.query(E(S("A"), V("x")))
-        self.assertEqualNoOrder(result, [{"x": S("B")}])
+        self.assertEqualNoOrder(result, [{"x": S("B")}, {"x": S("E")}])
 
     def test_atom_containing_space(self):
         m = MeTTa()
 
-        #Make a little space and add it to the MeTTa interpreter's space
+        # Make a little space and add it to the MeTTa interpreter's space
         little_space = SpaceRef(TestSpace())
         little_space.add_atom(E(S("A"), S("B")))
         space_atom = G(little_space)
         m.space().add_atom(E(S("little-space"), space_atom))
 
-        #Make sure we can get the little space back, and then query it
+        # Make sure we can get the little space back, and then query it
         kb_result = m.space().query(E(S("little-space"), V("s")))
         result_atom = kb_result[0].get("s")
         self.assertEqual(result_atom, space_atom)
@@ -114,7 +122,7 @@ class CustomSpaceTest(HyperonTestCase):
         result = result_atom.get_object().query(E(S("A"), V("v")))
         self.assertEqualNoOrder(result, [{"v": S("B")}])
 
-        #Add the MeTTa space to the little space for some space recursion
+        # Add the MeTTa space to the little space for some space recursion
         little_space.add_atom(E(S("big-space"), G(m.space())))
 
     def test_match_nested_custom_space(self):
@@ -128,3 +136,6 @@ class CustomSpaceTest(HyperonTestCase):
 
         result = runner.run("!(match nested (A $x) $x)")
         self.assertEqual([[S("B")]], result)
+
+if __name__ == "__main__":
+    unittest.main()
