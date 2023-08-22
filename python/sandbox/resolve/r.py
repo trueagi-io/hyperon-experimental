@@ -7,6 +7,12 @@ from hyperon.ext import register_atoms
 
 # It also demonstrates a possible way to embed `import` into `extend-py`
 
+class MeTTaC(MeTTa):
+
+    def copy(self):
+        return self
+
+
 @register_atoms
 def my_imported_runner_atom():
     # We don't use metta here, but we could...
@@ -27,7 +33,7 @@ def my_imported_runner_atom():
 
         (= (call_func $f $arg) ($f $arg))
     '''
-    runner = MeTTa()
+    runner = MeTTaC()
     runner.run(content)
     runnerAtom = G(runner, AtomType.ATOM)
     return {
