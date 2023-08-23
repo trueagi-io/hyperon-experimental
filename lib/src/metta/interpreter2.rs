@@ -221,7 +221,13 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
         },
         Some([op, args @ ..]) if *op == CHAIN_SYMBOL => {
             match args {
-                [nested, Atom::Variable(var), templ] => chain(space, bindings, nested, var, templ),
+                [_nested, Atom::Variable(_var), _templ] => {
+                    match atom_into_array(atom) {
+                        Some([_, nested, Atom::Variable(var), templ]) =>
+                            chain(space, bindings, nested, var, templ),
+                        _ => panic!("Unexpected state"),
+                    }
+                },
                 _ => {
                     let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_SYMBOL, atom);
                     vec![InterpretedAtom(error_atom(atom, error), bindings)]
@@ -348,23 +354,19 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<I
     }
 }
 
-fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: &Atom, var: &VariableAtom, templ: &Atom) -> Vec<InterpretedAtom> {
+fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: VariableAtom, templ: Atom) -> Vec<InterpretedAtom> {
     if is_embedded_op(&nested) {
-        let result = interpret_atom_root(space, InterpretedAtom(nested.clone(), bindings.clone()), false);
-        result.into_iter()
-            .flat_map(|InterpretedAtom(r, b)| {
-                b.merge_v2(&bindings)
-                    .into_iter()
-                    .map(move |bindings| {
-                        // TODO: we could eliminate bindings application here
-                        // and below after pretty print for debug is ready,
-                        // before that it is difficult to look at the plans
-                        // with the variables and bindings separated.
-                        let result = apply_bindings_to_atom(&r, &bindings);
-                        InterpretedAtom(Atom::expr([CHAIN_SYMBOL, result, Atom::Variable(var.clone()), templ.clone()]), bindings)
-                    })
-            })
-        .collect()
+        let mut result = interpret_atom_root(space, InterpretedAtom(nested, bindings), false);
+        if result.len() == 1 {
+            let InterpretedAtom(r, b) = result.pop().unwrap();
+            vec![InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var), templ]), b)]
+        } else {
+            result.into_iter()
+                .map(|InterpretedAtom(r, b)| {
+                    InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b)
+                })
+            .collect()
+        }
     } else {
         let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
         let result = apply_bindings_to_atom(&templ, &b);
