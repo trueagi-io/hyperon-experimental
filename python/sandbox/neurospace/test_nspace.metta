@@ -13,6 +13,12 @@
 
 ; !(match (my-nspace) (What is the user name $x) $x)
 ; !(match (my-nspace) (How old $x is William) $x)
-!(match (my-nspace) (How old ($x) is Mike) $x)
+; !(match (my-nspace) (How old ($x) is Mike) $x)
 ; !(match (my-nspace) (What $x is father name) $x)
 ; !(match (my-nspace) (What $x is Mike age) $x)
+
+; (match (my-nspace) (What are the names $x of William brothers?) $x)
+
+! (match (my-nspace) (What are the names $x of William brothers?)
+  (let $query (How old $z is $x ?)
+    (match (my-nspace) $query ($x is $z years old))))

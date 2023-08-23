@@ -20,21 +20,30 @@ class NeuralSpace(GroundingSpace):
                 temperature=0)
         txt = response['choices'][0]['message']['content']
         res = re.findall(r'\{.*?\}', txt)
-        new_bindings_set = BindingsSet()
+        new_bindings_set = BindingsSet.empty()
         if res == []:
-            return new_bindings_set()
+            return new_bindings_set
         res = res[0][1:-1]
-        var, val = res.split(':')
-        var = re.findall(r'\".*?\"', var)[0][1:-1]
+        _var, val = res.split(':')
+        var = re.findall(r'\".*?\"', _var)
+        var = var[0][1:-1]
         if var[0] == '$':
             var = var[1:]
         var = V(var)
         try:
             val = ValueAtom(int(val))
+            bindings = Bindings()
+            bindings.add_var_binding(var, val)
+            new_bindings_set.push(bindings)
         except ValueError:
-            s = re.findall(r'\".*?\"', val)
-            val = S(val if s == [] else s[0][1:-1])
-        new_bindings_set.add_var_binding(var, val)
+            ss = re.findall(r'\".*?\"', val)
+            if ss == []:
+                ss = ['"' + val + '"']
+            for s in ss:
+                val = S(s[1:-1])
+                bindings = Bindings()
+                bindings.add_var_binding(var, val)
+                new_bindings_set.push(bindings)
         return new_bindings_set
 
 

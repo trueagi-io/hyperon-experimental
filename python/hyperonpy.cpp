@@ -681,7 +681,6 @@ PYBIND11_MODULE(hyperonpy, m) {
         return CMetta(metta_new(space.ptr(), tokenizer.ptr(), cwd));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
-    m.def("metta_clone", [](CMetta metta) { metta_clone_handle(metta.ptr()); }, "Clone MeTTa interpreter");
     m.def("metta_space", [](CMetta metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");
     m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
     m.def("metta_run", [](CMetta metta, CSExprParser& parser) {
