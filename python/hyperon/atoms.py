@@ -7,20 +7,25 @@ from hyperonpy import AtomKind
 from typing import Union
 
 class Atom:
+    """Represents an Atom of any type"""
 
     def __init__(self, catom):
+        """Initialize an atom"""
         self.catom = catom
 
     def __del__(self):
+        """Frees an atom and all associated resources."""
         #import sys; sys.stderr.write("Atom._del_(" + str(self) + ")\n"); sys.stderr.flush()
         hp.atom_free(self.catom)
 
 
     def __eq__(self, other):
+        """Checks if two atom objects represent the same conceptual atom. """
         return (isinstance(other, Atom) and
                 hp.atom_eq(self.catom, other.catom))
 
     def __repr__(self):
+        """Renders a human-readable text description of an atom. """
         return hp.atom_to_str(self.catom)
 
     def get_type(self):
@@ -28,6 +33,7 @@ class Atom:
         return hp.atom_get_type(self.catom)
 
     def iterate(self):
+        """Performs a depth-first exhaustive iteration of an atom and all its children recursively."""
         res = hp.atom_iterate(self.catom)
         result = []
         for r in res:
@@ -35,6 +41,7 @@ class Atom:
         return result
 
     def match_atom(self, b):
+        """Matches one atom with another, establishing bindings between them."""
         return BindingsSet(hp.atom_match_atom(self.catom, b.catom))
 
     @staticmethod
@@ -57,9 +64,11 @@ class SymbolAtom(Atom):
     which have the same name reference the same concept."""
 
     def __init__(self, catom):
+        """Initialize a symbol atom"""
         super().__init__(catom)
 
     def get_name(self):
+        """Renders the name of an atom into a text buffer."""
         return hp.atom_get_name(self.catom)
 
 def S(name):
@@ -71,9 +80,11 @@ class VariableAtom(Atom):
     """
 
     def __init__(self, catom):
+        """Initialize a variable atom"""
         super().__init__(catom)
 
     def get_name(self):
+        """Renders the name of an atom into a text buffer."""
         return hp.atom_get_name(self.catom)
 
 def V(name):
@@ -83,6 +94,7 @@ class ExpressionAtom(Atom):
     """Expression Atom combines other kinds of atoms including expressions themselves."""
 
     def __init__(self, catom):
+        """Initialize an expression atom"""
         super().__init__(catom)
 
     def get_children(self):
@@ -117,9 +129,11 @@ class GroundedAtom(Atom):
     """
 
     def __init__(self, catom):
+        """Initialize a grounded atom"""
         super().__init__(catom)
 
     def get_object(self):
+        """Gets the Grounded Atom object or the space wrapped inside a Grounded Atom"""
         from .base import SpaceRef
         if self.get_grounded_type() == AtomType.GROUNDED_SPACE:
             return SpaceRef._from_cspace(hp.atom_get_space(self.catom))
@@ -127,26 +141,27 @@ class GroundedAtom(Atom):
             return hp.atom_get_object(self.catom)
 
     def get_grounded_type(self):
+        """Retrieve the grounded type of a Grounded Atom."""
         return Atom._from_catom(hp.atom_get_grounded_type(self.catom))
 
 def G(object, type=AtomType.UNDEFINED):
     assert hasattr(object, "copy"), "Method copy should be implemented by grounded object"
     return GroundedAtom(hp.atom_gnd(object, type.catom))
 
-"""
-Private glue for Hyperonpy implementation
-"""
 def _priv_call_execute_on_grounded_atom(gnd, typ, args):
+    """
+    Private glue for Hyperonpy implementation
+    """
     # ... if hp.atom_to_str(typ) == AtomType.UNDEFINED
     res_typ = AtomType.UNDEFINED if hp.atom_get_type(typ) != AtomKind.EXPR \
         else Atom._from_catom(hp.atom_get_children(typ)[-1])
     args = [Atom._from_catom(catom) for catom in args]
     return gnd.execute(*args, res_typ=res_typ)
 
-"""
-Private glue for Hyperonpy implementation
-"""
 def _priv_call_match_on_grounded_atom(gnd, catom):
+    """
+    Private glue for Hyperonpy implementation
+    """
     return gnd.match_(Atom._from_catom(catom))
 
 def atoms_are_equivalent(first, second):
@@ -243,25 +258,31 @@ def MatchableAtom(value, type_name=None, atom_id=None):
 
 
 class Bindings:
+    """Interface for working with atom matching and variable-to-atom binding."""
 
     def __init__(self, bindings: Union[hp.CBindings, None] = None):
+        """Initialize bindings"""
         if bindings is None:
             self.cbindings = hp.bindings_new()
         else:
             self.cbindings = bindings
 
     def __del__(self):
+        """Frees a binding"""
         if self.cbindings is not None:
             hp.bindings_free(self.cbindings)
 
     def __eq__(self, other):
+        """Checks if two bindings objects contain identical associations."""
         return (isinstance(other, Bindings) and
                 hp.bindings_eq(self.cbindings, other.cbindings))
 
     def __repr__(self):
+        """Renders a text description of the bindings set"""
         return hp.bindings_to_str(self.cbindings)
 
     def __deepcopy__(self, memodict={}):
+        """Makes a "deep copy" of the bindings set"""
         return self.clone()
 
     def __enter__(self):
@@ -273,21 +294,27 @@ class Bindings:
             self.cbindings = None
 
     def clone(self):
+        """Makes a "deep copy" of the bindings set"""
         return Bindings(hp.bindings_clone(self.cbindings))
 
     def merge(self, other: 'Bindings') -> 'BindingsSet':
+        """Merges two Bindings frames together into a Bindings Set."""
         return BindingsSet(hp.bindings_merge(self.cbindings, other.cbindings))
 
     def add_var_binding(self, var: Union[str, Atom], atom: Atom) -> bool:
+        """Adds a new variable <-> atom association within a bindings"""
         if isinstance(var, Atom):
             return hp.bindings_add_var_binding(self.cbindings, var.get_name(), atom.catom)
         else:
             return hp.bindings_add_var_binding(self.cbindings, var, atom.catom)
 
     def is_empty(self) -> bool:
+        """Checks if a bindings contains no associations. """
         return hp.bindings_is_empty(self.cbindings)
 
     def narrow_vars(self, vars ):
+        """Removes all variable associations from a bindings except those in the
+        supplied list."""
         cvars = hp.CVecAtom = hp.atom_vec_new()
         for var in vars:
             hp.atom_vec_push(cvars, var.catom)
@@ -295,6 +322,7 @@ class Bindings:
         hp.atom_vec_free(cvars)
 
     def resolve(self, var_name: str) -> Union[Atom, None]:
+        """Returns the atom bound to the supplied variable name in the bindings"""
         raw_atom = hp.bindings_resolve(self.cbindings, var_name)
         return None if raw_atom is None else Atom._from_catom(raw_atom)
 
