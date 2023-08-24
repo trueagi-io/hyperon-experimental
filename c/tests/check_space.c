@@ -209,6 +209,52 @@ START_TEST (test_custom_c_space)
     space_free(space);
 }
 
+atom_t clone_atom_token_constructor(char const* token, void* context) {
+    return atom_clone((atom_t*)context);
+}
+
+static token_api_t const TOKEN_API_CLONE_ATOM = { .construct_atom = &clone_atom_token_constructor, .free_context = NULL };
+
+void copy_atom_vec(const atom_vec_t* atoms, void* context) {
+    atom_vec_t* dst = (atom_vec_t*)context;
+    *dst = atom_vec_clone(atoms);
+}
+
+// This test logically corresponds to `test_match_nested_grounding_space` in the Python API,
+// and is written to exercise the same functionality without Python in the loop
+START_TEST (test_space_nested_in_atom)
+{
+    space_t nested = space_new_grounding_space();
+    space_add(&nested, expr(atom_sym("A"), atom_sym("B"), atom_ref_null()));
+    atom_t space_atom = atom_gnd_for_space(&nested);
+
+    space_t runner_space = space_new_grounding_space();
+    tokenizer_t tokenizer = tokenizer_new();
+    metta_t runner = metta_new(&runner_space, &tokenizer, ".");
+
+    tokenizer_register_token(&tokenizer, "nested", &TOKEN_API_CLONE_ATOM, &space_atom);
+
+    sexpr_parser_t parser = sexpr_parser_new("!(match nested (A $x) $x)");
+    atom_vec_t results;
+    metta_run(&runner, &parser, &copy_atom_vec, &results);
+
+    atom_ref_t result_atom = atom_vec_get(&results, 0);
+    atom_t expected_atom = atom_sym("B");
+    ck_assert(atom_eq(&result_atom, &expected_atom));
+    atom_free(expected_atom);
+
+    atom_vec_free(results);
+    sexpr_parser_free(parser);
+
+    metta_free(runner);
+    tokenizer_free(tokenizer);
+    space_free(runner_space);
+
+    atom_free(space_atom);
+    space_free(nested);
+}
+END_TEST
+
 void init_test(TCase* test_case) {
     tcase_set_timeout(test_case, 300); //300s = 5min.  To test for memory leaks
     tcase_add_checked_fixture(test_case, setup, teardown);
@@ -217,6 +263,7 @@ void init_test(TCase* test_case) {
     tcase_add_test(test_case, test_grounding_space_remove);
     tcase_add_test(test_case, test_grounding_space_replace);
     tcase_add_test(test_case, test_custom_c_space);
+    tcase_add_test(test_case, test_space_nested_in_atom);
 }
 
 TEST_MAIN(init_test);
