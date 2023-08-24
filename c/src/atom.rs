@@ -795,6 +795,12 @@ impl Drop for atom_vec_t {
     }
 }
 
+impl Clone for atom_vec_t {
+    fn clone(&self) -> Self {
+        self.as_slice().to_vec().into()
+    }
+}
+
 /// @brief Function signature for a callback providing access to an `atom_vec_t`
 /// @ingroup atom_vec_group
 /// @param[in]  vec  The `atom_vec_t` being provided.  This vec should not be modified or freed by the callback.
@@ -810,6 +816,18 @@ pub type c_atom_vec_callback_t = extern "C" fn(vec: *const atom_vec_t, context: 
 #[no_mangle]
 pub extern "C" fn atom_vec_new() -> atom_vec_t {
     atom_vec_t::new()
+}
+
+/// @brief Creates a new `atom_vec_t` by cloning an existing `atom_vec_t`
+/// @ingroup atom_vec_group
+/// @param[in]  vec  A pointer to an existing `atom_vec_t` to clone
+/// @return A newly created `atom_vec_t`
+/// @note The caller must take ownership responsibility for the returned `atom_vec_t`
+///
+#[no_mangle]
+pub extern "C" fn atom_vec_clone(vec: *const atom_vec_t) -> atom_vec_t {
+    let vec = unsafe{ &*vec };
+    vec.clone()
 }
 
 /// @brief Creates a new `atom_vec_t` from a C-style array
