@@ -1,2 +1,1 @@
-# Runner module
 ::: hyperon.runner

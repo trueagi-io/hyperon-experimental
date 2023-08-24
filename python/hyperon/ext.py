@@ -17,13 +17,13 @@ def register_results(method, args, kwargs):
             return metta_register
         return inner
 
-def register_atoms(*args, **kwargs):
+def register_atoms(*args, pass_metta=False, **kwargs):
     """Function decorator which registers returned pairs of regular expressions
     and atoms in MeTTa tokenizer using MeTTa.register_atom() method.
 
     Parameters
     ----------
-    pass_metta : bool, optional
+    pass_metta:
         Pass instance of MeTTa class to the decorated function as an argument.
         Default is False.
     """

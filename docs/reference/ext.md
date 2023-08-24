@@ -1,2 +1,1 @@
-# Ext module
 ::: hyperon.ext

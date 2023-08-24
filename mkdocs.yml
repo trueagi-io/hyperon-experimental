@@ -17,13 +17,13 @@ theme:
     # - content.tabs.link
     - content.tooltips
     # - header.autohide
-    # - navigation.expand
+    - navigation.expand
     - navigation.footer
     - navigation.indexes
-    # - navigation.instant
+    - navigation.instant
     # - navigation.prune
     - navigation.sections
-    - navigation.tabs
+    # - navigation.tabs
     # - navigation.tabs.sticky
     - navigation.top
     - navigation.tracking
@@ -132,12 +132,13 @@ markdown_extensions:
 
 # Page tree
 nav:
-  - Home: 
-    - Minimal Metta: minimal-metta.md
-    - Contribution: CONTRIBUTING.md
+  - Minimal Metta: minimal-metta.md
+  - Contribution: CONTRIBUTING.md
   - Python Reference:
     - Atoms: reference/atoms.md
     - Base: reference/base.md
     - Ext: reference/ext.md
     - Runner: reference/runner.md
     - Stdlib: reference/stdlib.md
+  - C Reference: mainpage.md
+  - Doxygen: html

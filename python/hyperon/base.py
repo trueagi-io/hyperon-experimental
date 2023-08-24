@@ -2,11 +2,10 @@ import hyperonpy as hp
 
 from .atoms import Atom, BindingsSet
 
-"""
-A virtual base class upon which Spaces can be implemented in Python
-"""
 class AbstractSpace:
-
+    """
+    A virtual base class upon which Spaces can be implemented in Python
+    """
     def __init__(self):
         return
 
@@ -33,11 +32,11 @@ class AbstractSpace:
     def atoms_iter(self):
         None
 
-"""
-A wrapper over the native GroundingSpace implementation, that can be subclassed and extended within Python
-"""
 class GroundingSpace(AbstractSpace):
-
+    """
+    A wrapper over the native GroundingSpace implementation, that can be subclassed 
+    and extended within Python
+    """
     def __init__(self, unwrap=True):
         super().__init__()
         # self.cspace = hp.space_new_grounding()
@@ -64,39 +63,39 @@ class GroundingSpace(AbstractSpace):
     def atoms_iter(self):
         return iter(self.gspace.get_atoms())
 
-"""
-Private glue for Hyperonpy implementation
-"""
 def _priv_call_query_on_python_space(space, query_catom):
+    """
+    Private glue for Hyperonpy implementation
+    """
     query_atom = Atom._from_catom(query_catom)
     return space.query(query_atom)
 
-"""
-Private glue for Hyperonpy implementation
-"""
 def _priv_call_add_on_python_space(space, catom):
+    """
+    Private glue for Hyperonpy implementation
+    """
     atom = Atom._from_catom(catom)
     space.add(atom)
 
-"""
-Private glue for Hyperonpy implementation
-"""
 def _priv_call_remove_on_python_space(space, catom):
+    """
+    Private glue for Hyperonpy implementation
+    """
     atom = Atom._from_catom(catom)
     return space.remove(atom)
 
-"""
-Private glue for Hyperonpy implementation
-"""
 def _priv_call_replace_on_python_space(space, cfrom, cto):
+    """
+    Private glue for Hyperonpy implementation
+    """
     from_atom = Atom._from_catom(cfrom)
     to_atom = Atom._from_catom(cto)
     return space.replace(from_atom, to_atom)
 
-"""
-Private glue for Hyperonpy implementation
-"""
 def _priv_call_atom_count_on_python_space(space):
+    """
+    Private glue for Hyperonpy implementation
+    """
     if hasattr(space, "atom_count"):
         count = space.atom_count()
         if count is not None:
@@ -106,20 +105,20 @@ def _priv_call_atom_count_on_python_space(space):
     else:
         return -1
 
-"""
-Private glue for Hyperonpy implementation
-"""
 def _priv_call_new_iter_state_on_python_space(space):
+    """
+    Private glue for Hyperonpy implementation
+    """
     if hasattr(space, "atoms_iter"):
         return space.atoms_iter()
     else:
         return None
 
-"""
-A reference to a Space, which may be accessed directly, wrapped in a grounded atom,
-or passed to a MeTTa interpreter
-"""
 class SpaceRef:
+    """
+    A reference to a Space, which may be accessed directly, wrapped in a grounded atom,
+    or passed to a MeTTa interpreter
+    """
 
     def __init__(self, space_obj):
         if type(space_obj) is hp.CSpace:
@@ -137,40 +136,40 @@ class SpaceRef:
     def _from_cspace(cspace):
         return SpaceRef(cspace)
 
-    """
-    Returns a new copy of the SpaceRef, referencing the same underlying Space
-    """
     def copy(self):
+        """
+        Returns a new copy of the SpaceRef, referencing the same underlying Space
+        """
         return self
 
-    """
-    Add an Atom to the Space
-    """
     def add_atom(self, atom):
+        """
+        Add an Atom to the Space
+        """
         hp.space_add(self.cspace, atom.catom)
 
-    """
-    Delete the specified atom from the Space
-    """
     def remove_atom(self, atom):
+        """
+        Delete the specified atom from the Space
+        """
         return hp.space_remove(self.cspace, atom.catom)
 
-    """
-    Replace the specified Atom, if it exists in the Space, with the supplied replacement Atom
-    """
     def replace_atom(self, atom, replacement):
+        """
+        Replace the specified Atom, if it exists in the Space, with the supplied replacement Atom
+        """
         return hp.space_replace(self.cspace, atom.catom, replacement.catom)
 
-    """
-    Returns the number of Atoms in the Space, or -1 if it cannot readily computed
-    """
     def atom_count(self):
+        """
+        Returns the number of Atoms in the Space, or -1 if it cannot readily computed
+        """
         return hp.space_atom_count(self.cspace)
 
-    """
-    Returns a list of all Atoms in the Space, or None if that is impossible
-    """
     def get_atoms(self):
+        """
+        Returns a list of all Atoms in the Space, or None if that is impossible
+        """
         res = hp.space_list(self.cspace)
         if res == None:
             return None
@@ -179,32 +178,32 @@ class SpaceRef:
             result.append(Atom._from_catom(r))
         return result
 
-    """
-    Returns the Space object referenced by the SpaceRef, or None if the object does not have a
-    direct Python interface
-    """
     def get_payload(self):
+        """
+        Returns the Space object referenced by the SpaceRef, or None if the object does not have a
+        direct Python interface
+        """
         return hp.space_get_payload(self.cspace)
 
-    """
-    Performs the specified query on the Space, and returns the result BindingsSet
-    """
     def query(self, pattern):
+        """
+        Performs the specified query on the Space, and returns the result BindingsSet
+        """
         result = hp.space_query(self.cspace, pattern.catom)
         return BindingsSet(result)
 
-    """
-    Performs a substitution within the Space
-    """
     def subst(self, pattern, templ):
+        """
+        Performs a substitution within the Space
+        """
         return [Atom._from_catom(catom) for catom in
                 hp.space_subst(self.cspace, pattern.catom,
                                          templ.catom)]
 
-"""
-A reference to a native GroundingSpace, implemented by the MeTTa core library
-"""
 class GroundingSpaceRef(SpaceRef):
+    """
+    A reference to a native GroundingSpace, implemented by the MeTTa core library
+    """
 
     def __init__(self, cspace = None):
         if cspace is None:
