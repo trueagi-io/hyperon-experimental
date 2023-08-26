@@ -39,7 +39,7 @@ impl space_t {
         unsafe{ Box::from_raw(self.space.cast_mut()).0 }
     }
     pub(crate) fn borrow(&self) -> &DynSpace {
-        unsafe{ &(*self.space).0 }
+        unsafe{ &(&*self.space).0 }
     }
 }
 
@@ -91,9 +91,9 @@ pub extern "C" fn space_free(space: space_t) {
 /// @note The caller must take ownership responsibility for the returned `space_t`, and free it with `space_free()`
 ///
 #[no_mangle]
-pub extern "C" fn space_clone_handle(space: *const space_t) -> *mut space_t {
-    let space = unsafe { &(*space).space };
-    Box::into_raw(Box::new(space_t{ space: space.clone() }))
+pub extern "C" fn space_clone_handle(space: *const space_t) -> space_t {
+    let space = unsafe { &*space }.borrow();
+    space.clone().into()
 }
 
 /// @brief Checks if two `space_t` handles refer to the same underlying Space

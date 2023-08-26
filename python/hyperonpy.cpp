@@ -447,7 +447,7 @@ PYBIND11_MODULE(hyperonpy, m) {
                     throw std::runtime_error("Grounded Space Atoms can't have a custom type");
                 }
                 atom_free(undefined);
-                space_t* space = object.attr("cspace").cast<CSpace>().ptr();
+                space_t* space = object.attr("cspace").cast<CSpace&>().ptr();
                 return CAtom(atom_gnd_for_space(space));
             } else {
                 atom_t typ = atom_clone(ctyp.ptr());
