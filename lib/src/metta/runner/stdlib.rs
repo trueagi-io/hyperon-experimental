@@ -36,11 +36,11 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
 #[derive(Clone, PartialEq, Debug)]
 pub struct ImportOp {
     cwd: PathBuf,
-    metta: Shared<Metta>,
+    metta: Metta,
 }
 
 impl ImportOp {
-    pub fn new(metta: Shared<Metta>, cwd: PathBuf) -> Self {
+    pub fn new(metta: Metta, cwd: PathBuf) -> Self {
         Self{ metta, cwd }
     }
 }
@@ -70,7 +70,7 @@ impl Grounded for ImportOp {
         } else {
             return Err("import! expects a file path as a second argument".into())
         }
-        let module_space = self.metta.borrow().load_module_space(path)?;
+        let module_space = self.metta.load_module_space(path)?;
 
         match space {
             // If the module is to be associated with a new space,
@@ -80,7 +80,7 @@ impl Grounded for ImportOp {
                 let space_atom = Atom::gnd(module_space);
                 let regex = Regex::new(name)
                     .map_err(|err| format!("Could not convert space name {} into regex: {}", name, err))?;
-                self.metta.borrow().tokenizer.borrow_mut()
+                self.metta.tokenizer().borrow_mut()
                     .register_token(regex, move |_| { space_atom.clone() });
             },
             // If the reference space exists, the module space atom is inserted into it
@@ -89,13 +89,12 @@ impl Grounded for ImportOp {
                 let space = Atom::as_gnd::<DynSpace>(space)
                     .ok_or("import! expects a space as a first argument")?;
                 // Moving space atoms from children to parent
-                let metta = self.metta.borrow();
-                let modules = metta.modules.borrow();
+                let modules = self.metta.modules().borrow();
                 for (_path, mspace) in modules.iter() {
                     let aspace = Atom::gnd(mspace.clone());
                     if module_space.borrow_mut().remove(&aspace) {
-                        self.metta.borrow().space().borrow_mut().remove(&aspace);
-                        self.metta.borrow().space().borrow_mut().add(aspace);
+                        self.metta.space().borrow_mut().remove(&aspace);
+                        self.metta.space().borrow_mut().add(aspace);
                     }
                 }
                 let module_space_atom = Atom::gnd(module_space);
@@ -1079,7 +1078,7 @@ fn regex(regex: &str) -> Regex {
 }
 
 pub fn register_common_tokens(metta: &Metta) {
-    let tokenizer = &metta.tokenizer;
+    let tokenizer = metta.tokenizer();
     let mut tref = tokenizer.borrow_mut();
 
     let match_op = Atom::gnd(MatchOp{});
@@ -1119,8 +1118,8 @@ pub fn register_common_tokens(metta: &Metta) {
 }
 
 pub fn register_runner_tokens(metta: &Metta, cwd: PathBuf) {
-    let space = &metta.space;
-    let tokenizer = &metta.tokenizer;
+    let space = metta.space();
+    let tokenizer = metta.tokenizer();
 
     let mut tref = tokenizer.borrow_mut();
 
@@ -1136,14 +1135,9 @@ pub fn register_runner_tokens(metta: &Metta, cwd: PathBuf) {
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
-    // TODO: here clone of the metta is moved into separate location in memory.
-    // It means that shared reference inside ImportOp points into a different
-    // instance of the Metta struct, not one which is referenced by metta.
-    // This can lead to inconsistence when Metta struct is changed and some
-    // non-shared field is added to it.
-    let import_op = Atom::gnd(ImportOp::new(Shared::new(metta.clone()), cwd.clone()));
+    let import_op = Atom::gnd(ImportOp::new(metta.clone(), cwd.clone()));
     tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
-    let pragma_op = Atom::gnd(PragmaOp::new(metta.settings.clone()));
+    let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
 
     // &self should be updated
@@ -1153,7 +1147,7 @@ pub fn register_runner_tokens(metta: &Metta, cwd: PathBuf) {
     // pointer and somehow use the same type to represent weak and strong
     // pointers to the atomspace. (2) resolve &self in GroundingSpace::query
     // method without adding it into container.
-    let self_atom = Atom::gnd(metta.space.clone());
+    let self_atom = Atom::gnd(metta.space().clone());
     tref.register_token(regex(r"&self"), move |_| { self_atom.clone() });
 }
 
@@ -1178,7 +1172,7 @@ pub fn register_rust_tokens(metta: &Metta) {
     let mod_op = Atom::gnd(ModOp{});
     tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
 
-    metta.tokenizer.borrow_mut().move_front(&mut rust_tokens);
+    metta.tokenizer().borrow_mut().move_front(&mut rust_tokens);
 }
 
 pub static METTA_CODE: &'static str = "

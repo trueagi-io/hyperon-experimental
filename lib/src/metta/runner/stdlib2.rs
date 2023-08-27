@@ -104,7 +104,7 @@ fn regex(regex: &str) -> Regex {
 }
 
 pub fn register_common_tokens(metta: &Metta) {
-    let tokenizer = &metta.tokenizer;
+    let tokenizer = metta.tokenizer();
     let mut tref = tokenizer.borrow_mut();
 
     let get_type_op = Atom::gnd(GetTypeOp{});
@@ -116,8 +116,8 @@ pub fn register_common_tokens(metta: &Metta) {
 }
 
 pub fn register_runner_tokens(metta: &Metta, _cwd: PathBuf) {
-    let _space = &metta.space;
-    let tokenizer = &metta.tokenizer;
+    let _space = metta.space();
+    let tokenizer = metta.tokenizer();
 
     let mut tref = tokenizer.borrow_mut();
 
@@ -128,7 +128,7 @@ pub fn register_runner_tokens(metta: &Metta, _cwd: PathBuf) {
     // pointer and somehow use the same type to represent weak and strong
     // pointers to the atomspace. (2) resolve &self in GroundingSpace::query
     // method without adding it into container.
-    let self_atom = Atom::gnd(metta.space.clone());
+    let self_atom = Atom::gnd(metta.space().clone());
     tref.register_token(regex(r"&self"), move |_| { self_atom.clone() });
 }
 
@@ -153,7 +153,7 @@ pub fn register_rust_tokens(metta: &Metta) {
     let mod_op = Atom::gnd(ModOp{});
     tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
 
-    metta.tokenizer.borrow_mut().move_front(&mut rust_tokens);
+    metta.tokenizer().borrow_mut().move_front(&mut rust_tokens);
 }
 
 pub static METTA_CODE: &'static str = "

@@ -107,7 +107,7 @@ impl<T> Shared<T> {
         Box::new(RefCell::borrow_mut(&self.0))
     }
 
-    pub fn cloned(&self) -> Self where T: Clone {
+    pub fn clone_inner(&self) -> Self where T: Clone {
         Self::new(RefCell::borrow(&self.0).clone())
     }
 
@@ -232,7 +232,7 @@ mod tests {
     fn shared_cloned() {
         let value = 0;
         let shared = Shared::new(value);
-        let cloned = shared.cloned();
+        let cloned = shared.clone_inner();
 
         **cloned.borrow_mut() = 1;
 
