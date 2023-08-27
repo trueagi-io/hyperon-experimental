@@ -18,18 +18,23 @@ class AbstractSpace:
     #     None
 
     def add(self, atom):
+        """Adds an atom to the atom space"""
         raise RuntimeError("Space::add() is not implemented")
 
     def remove(self, atom):
+        """Removes an atom from the atom space"""
         raise RuntimeError("Space::remove() is not implemented")
 
     def replace(self, atom, replacement):
+        """Replaces an atom in the atom space"""
         raise RuntimeError("Space::replace() is not implemented")
 
     def atom_count(self):
+        """Counts the number of atoms in the atom space"""
         None
 
     def atoms_iter(self):
+        """Gets the atom iterator"""
         None
 
 class GroundingSpace(AbstractSpace):
@@ -43,24 +48,32 @@ class GroundingSpace(AbstractSpace):
         self.gspace = GroundingSpaceRef()
 
     def query(self, query_atom):
+        """
+        Performs the specified query on the Space, and returns the result BindingsSet
+        """
         return self.gspace.query(query_atom)
 
     # TODO (INTERNAL): Currently unimplemented.
     # def subst(self, pattern, templ):
 
     def add(self, atom):
+        """Adds an atom to the atom space"""
         self.gspace.add_atom(atom)
 
     def remove(self, atom):
+        """Removes an atom from the atom space"""
         return self.gspace.remove_atom(atom)
 
     def replace(self, from_atom, to_atom):
+        """Replaces an atom in the atom space"""
         return self.gspace.replace_atom(from_atom, to_atom)
 
     def atom_count(self):
+        """Counts the number of atoms in the atom space"""
         return self.gspace.atom_count()
 
     def atoms_iter(self):
+        """Gets the atom iterator"""
         return iter(self.gspace.get_atoms())
 
 def _priv_call_query_on_python_space(space, query_catom):

@@ -72,6 +72,7 @@ class SymbolAtom(Atom):
         return hp.atom_get_name(self.catom)
 
 def S(name):
+    """A convenient method to construct a SymbolAtom"""
     return SymbolAtom(hp.atom_sym(name))
 
 class VariableAtom(Atom):
@@ -88,6 +89,7 @@ class VariableAtom(Atom):
         return hp.atom_get_name(self.catom)
 
 def V(name):
+    """A convenient method to construct a VariableAtom"""
     return VariableAtom(hp.atom_var(name))
 
 class ExpressionAtom(Atom):
@@ -103,6 +105,7 @@ class ExpressionAtom(Atom):
 
 
 def E(*args):
+    """A convenient method to construct a ExpressionAtom"""
     return ExpressionAtom(hp.atom_expr([atom.catom for atom in args]))
 
 class AtomType:
@@ -145,6 +148,7 @@ class GroundedAtom(Atom):
         return Atom._from_catom(hp.atom_get_grounded_type(self.catom))
 
 def G(object, type=AtomType.UNDEFINED):
+    """A convenient method to construct a GroundedAtom"""
     assert hasattr(object, "copy"), "Method copy should be implemented by grounded object"
     return GroundedAtom(hp.atom_gnd(object, type.catom))
 
