@@ -2,7 +2,6 @@ import unittest
 
 import torch
 from hyperon import *
-from test_common import HyperonTestCase
 
 class DummyModel(torch.nn.Module):
 
@@ -27,7 +26,7 @@ def do_step_loss(optimizer, loss):
     optimizer.step()
     return loss.item()
 
-class TorchDiffTest(HyperonTestCase):
+class TorchDiffTest(unittest.TestCase):
 
     def test_torch_diff(self):
         '''
@@ -40,6 +39,9 @@ class TorchDiffTest(HyperonTestCase):
         optimizer = torch.optim.RMSprop(model.parameters(), lr=0.1)
         loss_fn = torch.nn.CrossEntropyLoss()
         data = torch.rand(10, 2, generator = torch.manual_seed(1))
+        if torch.cuda.is_available():
+            model = model.to("cuda")
+            data = data.to("cuda")
         metta.register_atom("classify", OperationAtom("classify", lambda x: model(x)))
         metta.register_atom("&inputs", ValueAtom(data))
         metta.register_atom("get-labels", OperationAtom("get-labels", get_labels))
