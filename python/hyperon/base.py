@@ -10,6 +10,9 @@ class AbstractSpace:
         return
 
     def query(self, query_atom):
+        """
+        Performs the specified query on the Space, and returns the result BindingsSet
+        """
         raise RuntimeError("Space::query() is not implemented")
 
     # TODO (INTERNAL): Currently unimplemented.  We may do this differently depending on lazy / comprehensions
@@ -244,6 +247,17 @@ class Tokenizer:
         hp.tokenizer_free(self.ctokenizer)
 
     def register_token(self, regex, constr):
+        """Registers a new custom Token in a Tokenizer.
+
+        Hyperon uses the Rust RegEx engine and syntax
+        https://docs.rs/regex/latest/regex/
+
+        Parameters
+        ----------
+        regex: 
+            A regular expression to match the incoming text, triggering this token to
+            generate a new atom
+        """
         hp.tokenizer_register_token(self.ctokenizer, regex, constr)
 
 class SExprParser:
@@ -261,34 +275,71 @@ class Interpreter:
         self.step_result = hp.interpret_init(gnd_space.cspace, expr.catom)
 
     def has_next(self):
+        """Examines a Step Result to determine if more work is needed."""
         return hp.step_has_next(self.step_result)
 
     def next(self):
+        """Moves to the next Step Result"""
         if not self.has_next():
             raise StopIteration()
         self.step_result = hp.interpret_step(self.step_result)
 
     def get_result(self):
+        """Consumes a Step Result and provides the ultimate outcome of a MeTTa
+        interpreter session.
+        """
         if self.has_next():
             raise RuntimeError("Plan execution is not finished")
         return hp.step_get_result(self.step_result)
 
     def get_step_result(self):
+        """Gets the current Step Result"""
         return self.step_result
 
 
 def interpret(gnd_space, expr):
+    """Parses the expression in the grounded space"""
     interpreter = Interpreter(gnd_space, expr)
     while interpreter.has_next():
         interpreter.next()
     return [Atom._from_catom(catom) for catom in interpreter.get_result()]
 
 def check_type(gnd_space, atom, type):
+    """Checks whether the atom has the type `type` in context of space
+
+    Parameters
+    ----------
+    space:
+        A pointer to the space_t representing the space context in which to perform
+        the check
+    atom:
+        A pointer to the atom_t or atom_ref_t representing the atom whose Type the
+        function will check
+    type:
+        A pointer to the atom_t or atom_ref_t representing the type to check against
+    """
+
     return hp.check_type(gnd_space.cspace, atom.catom, type.catom)
 
 def validate_atom(gnd_space, atom):
+    """Checks whether atom is correctly typed.
+
+    Parameters
+    ----------
+    gnd_space:
+        A pointer to the space_t representing the space context in which to perform
+        the check
+    atom:
+        A pointer to the atom_t or atom_ref_t representing the atom whose Type the
+        function will check
+
+    Returns
+    -------
+    if the Atom is correctly typed, otherwise false
+    """
     return hp.validate_atom(gnd_space.cspace, atom.catom)
 
 def get_atom_types(gnd_space, atom):
+    """Provides all types for atom in the context of space"""
     result = hp.get_atom_types(gnd_space.cspace, atom.catom)
     return [Atom._from_catom(catom) for catom in result]
