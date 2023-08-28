@@ -42,15 +42,15 @@ enum Mode {
 
 impl Metta {
     pub fn new(space: DynSpace, tokenizer: Shared<Tokenizer>) -> Self {
-        Metta::from_space_cwd(space, tokenizer, PathBuf::from("."))
+        Metta::from_space(space, tokenizer, vec![PathBuf::from(".")])
     }
 
-    pub fn from_space_cwd(space: DynSpace, tokenizer: Shared<Tokenizer>, cwd: PathBuf) -> Self {
+    pub fn from_space(space: DynSpace, tokenizer: Shared<Tokenizer>, search_paths: Vec<PathBuf>) -> Self {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
         let contents = MettaContents{ space, tokenizer, settings, modules };
         let metta = Self(Rc::new(contents));
-        register_runner_tokens(&metta, cwd);
+        register_runner_tokens(&metta, search_paths);
         register_common_tokens(&metta);
         metta
     }
@@ -63,7 +63,7 @@ impl Metta {
         let settings = metta.0.settings.clone();
         let modules = metta.0.modules.clone();
         let metta = Self(Rc::new(MettaContents { space, tokenizer, settings, modules }));
-        register_runner_tokens(&metta, next_cwd);
+        register_runner_tokens(&metta, vec![next_cwd]);
         metta
     }
 

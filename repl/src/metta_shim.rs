@@ -14,6 +14,8 @@ use hyperon::metta::text::Tokenizer;
 use hyperon::metta::text::SExprParser;
 use hyperon::common::shared::Shared;
 
+use crate::ReplParams;
+
 /// MettaShim is responsible for **ALL** calls between the repl and MeTTa, and is in charge of keeping
 /// Python happy (and perhaps other languages in the future).
 ///
@@ -55,13 +57,13 @@ impl Drop for MettaShim {
 
 impl MettaShim {
 
-    pub fn new() -> Self {
+    pub fn new(repl_params: Shared<ReplParams>) -> Self {
 
         //Init the MeTTa interpreter
         let space = DynSpace::new(GroundingSpace::new());
         let tokenizer = Shared::new(Tokenizer::new());
         let mut new_shim = Self {
-            metta: Metta::from_space_cwd(space, tokenizer, std::env::current_dir().unwrap()),
+            metta: Metta::from_space(space, tokenizer, repl_params.borrow().modules_search_paths().collect()),
             result: vec![]
         };
 
@@ -76,7 +78,7 @@ impl MettaShim {
         //Add the extend-py! token, if we have Python support
         #[cfg(feature = "python")]
         {
-            let extendpy_atom = Atom::gnd(py_mod_loading::ImportPyOp{metta: new_shim.metta.clone()});
+            let extendpy_atom = Atom::gnd(py_mod_loading::ImportPyOp{metta: new_shim.metta.clone(), repl_params: repl_params.clone()});
             new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { extendpy_atom.clone() });
         }
 
@@ -142,32 +144,48 @@ mod py_mod_loading {
     use hyperon::matcher::MatchResultIter;
     use hyperon::metta::*;
     use hyperon::metta::runner::Metta;
+    use hyperon::common::shared::Shared;
+    use crate::ReplParams;
 
-    pub fn load_python_module_from_mod_or_file(metta: &Metta, module_name: &str) -> Result<(), String> {
+    pub fn load_python_module_from_mod_or_file(repl_params: &ReplParams, metta: &Metta, module_name: &str) -> Result<(), String> {
 
         // First, see if the module is already registered with Python
         match load_python_module(metta, module_name) {
             Err(_) => {
                 // If that failed, try and load the module from a file
-                //TODO: Check every import dir
-                let path = PathBuf::from(module_name).with_extension("py");
-                if path.exists() {
-                    let code = std::fs::read_to_string(&path).or_else(|err| Err(format!("Error reading file {path:?} - {err}")))?;
-                    Python::with_gil(|py| -> PyResult<()> {
-                        let _py_mod = PyModule::from_code(py, &code, path.to_str().unwrap(), module_name)?;
-                        Ok(())
-                    }).map_err(|err| {
-                        format!("{err}")
-                    })?;
 
-                    // If we suceeded in loading the module from source, then register the MeTTa extensions
-                    load_python_module(metta, module_name)
-                } else {
-                    Err(format!("Failed to load module {module_name}; could not locate file: {path:?}"))
+                //Check each include directory in order, until we find the module we're looking for
+                let file_name = PathBuf::from(module_name).with_extension("py");
+                let mut found_path = None;
+                for include_path in repl_params.modules_search_paths() {
+                    let path = include_path.join(&file_name);
+                    if path.exists() {
+                        found_path = Some(path);
+                        break;
+                    }
+                }
+
+                match found_path {
+                    Some(path) => load_python_module_from_known_path(metta, module_name, &path),
+                    None => Err(format!("Failed to load module {module_name}; could not locate file: {file_name:?}"))
                 }
             }
             _ => Ok(())
         }
+    }
+
+    pub fn load_python_module_from_known_path(metta: &Metta, module_name: &str, path: &PathBuf) -> Result<(), String> {
+
+        let code = std::fs::read_to_string(&path).or_else(|err| Err(format!("Error reading file {path:?} - {err}")))?;
+        Python::with_gil(|py| -> PyResult<()> {
+            let _py_mod = PyModule::from_code(py, &code, path.to_str().unwrap(), module_name)?;
+            Ok(())
+        }).map_err(|err| {
+            format!("{err}")
+        })?;
+
+        // If we suceeded in loading the module from source, then register the MeTTa extensions
+        load_python_module(metta, module_name)
     }
 
     pub fn load_python_module(metta: &Metta, module_name: &str) -> Result<(), String> {
@@ -212,7 +230,8 @@ mod py_mod_loading {
 
     #[derive(Clone, PartialEq, Debug)]
     pub struct ImportPyOp {
-        pub metta: Metta
+        pub metta: Metta,
+        pub repl_params: Shared<ReplParams>,
     }
 
     impl Display for ImportPyOp {
@@ -233,7 +252,7 @@ mod py_mod_loading {
                 .ok_or_else(arg_error)?
                 .try_into().map_err(|_| arg_error())?;
 
-            match load_python_module_from_mod_or_file(&self.metta, module_path_sym_atom.name()) {
+            match load_python_module_from_mod_or_file(&self.repl_params.borrow(), &self.metta, module_path_sym_atom.name()) {
                 Ok(()) => Ok(vec![]),
                 Err(err) => Err(ExecError::from(err)),
             }

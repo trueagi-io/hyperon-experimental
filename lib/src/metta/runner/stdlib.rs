@@ -35,13 +35,13 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ImportOp {
-    cwd: PathBuf,
+    search_paths: Vec<PathBuf>,
     metta: Metta,
 }
 
 impl ImportOp {
-    pub fn new(metta: Metta, cwd: PathBuf) -> Self {
-        Self{ metta, cwd }
+    pub fn new(metta: Metta, search_paths: Vec<PathBuf>) -> Self {
+        Self{ metta, search_paths }
     }
 }
 
@@ -60,17 +60,31 @@ impl Grounded for ImportOp {
         let arg_error = || ExecError::from("import! expects two arguments: space and file path");
         let space = args.get(0).ok_or_else(arg_error)?;
         let file = args.get(1).ok_or_else(arg_error)?;
+        let mut module_path = None;
 
-        let mut path = self.cwd.clone();
         // TODO: replace Symbol by grounded String?
         if let Atom::Symbol(file) = file {
-            path.push(file.name());
-            path = path.canonicalize().unwrap_or(path);
-            log::debug!("import! load file, full path: {}", path.display());
+
+            //Check each include directory in order, until we find the module we're looking for
+            for include_dir in self.search_paths.iter() {
+                let mut path = include_dir.clone();
+                path.push(file.name());
+                path = path.canonicalize().unwrap_or(path);
+                if path.exists() {
+                    module_path = Some(path);
+                    break;
+                }
+            }
         } else {
             return Err("import! expects a file path as a second argument".into())
         }
-        let module_space = self.metta.load_module_space(path)?;
+        let module_space = match module_path {
+            Some(path) => {
+                log::debug!("import! load file, full path: {}", path.display());
+                self.metta.load_module_space(path)?
+            }
+            None => return Err(format!("Failed to load module {file:?}; could not locate file").into())
+        };
 
         match space {
             // If the module is to be associated with a new space,
@@ -1117,7 +1131,8 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
 }
 
-pub fn register_runner_tokens(metta: &Metta, cwd: PathBuf) {
+//TODO: We should move search_paths into the execution environment, so they can be updated at runtime
+pub fn register_runner_tokens(metta: &Metta, search_paths: Vec<PathBuf>) {
     let space = metta.space();
     let tokenizer = metta.tokenizer();
 
@@ -1135,7 +1150,7 @@ pub fn register_runner_tokens(metta: &Metta, cwd: PathBuf) {
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
-    let import_op = Atom::gnd(ImportOp::new(metta.clone(), cwd.clone()));
+    let import_op = Atom::gnd(ImportOp::new(metta.clone(), search_paths));
     tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });

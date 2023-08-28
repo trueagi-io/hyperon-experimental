@@ -478,7 +478,7 @@ impl metta_t {
 pub extern "C" fn metta_new(space: *mut space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> metta_t {
     let dyn_space = unsafe{ &*space }.borrow();
     let tokenizer = unsafe{ &*tokenizer }.clone_handle();
-    let metta = Metta::from_space_cwd(dyn_space.clone(), tokenizer, PathBuf::from(cstr_as_str(cwd)));
+    let metta = Metta::from_space(dyn_space.clone(), tokenizer, vec![PathBuf::from(cstr_as_str(cwd))]);
     metta.into()
 }
 

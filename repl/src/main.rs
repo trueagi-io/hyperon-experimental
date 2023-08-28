@@ -1,79 +1,66 @@
 
 use std::path::PathBuf;
-use std::borrow::Cow::{self, Borrowed, Owned};
 
-use rustyline::completion::FilenameCompleter;
 use rustyline::error::ReadlineError;
-use rustyline::highlight::{Highlighter, MatchingBracketHighlighter};
-use rustyline::hint::HistoryHinter;
-use rustyline::validate::MatchingBracketValidator;
 use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent};
-use rustyline::{Completer, Helper, Hinter, Validator};
 
 use anyhow::Result;
 use clap::Parser;
+use directories::ProjectDirs;
+
+use hyperon::common::shared::Shared;
 
 mod metta_shim;
 use metta_shim::*;
 
+mod config_params;
+use config_params::*;
+
+mod interactive_helper;
+use interactive_helper::*;
+
 #[derive(Parser)]
 #[command(version, about)]
 struct CliArgs {
-    /// .metta file to execute.  `metta` will run in interactive mode if no file is supplied
-    file: Option<PathBuf>,
+    /// .metta files to execute.  `metta` will run in interactive mode if no files are supplied
+    files: Vec<PathBuf>,
 
-    /// Additional files to include or directories to append to the search path
+    /// Additional include directory paths
     #[arg(short, long)]
-    includes: Vec<PathBuf>,
-}
-
-#[derive(Helper, Completer, Hinter, Validator)]
-struct ReplHelper {
-    #[rustyline(Completer)]
-    completer: FilenameCompleter,
-    highlighter: MatchingBracketHighlighter,
-    #[rustyline(Validator)]
-    validator: MatchingBracketValidator,
-    #[rustyline(Hinter)]
-    hinter: HistoryHinter,
-    colored_prompt: String,
-}
-
-impl Highlighter for ReplHelper {
-    fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
-        &'s self,
-        prompt: &'p str,
-        default: bool,
-    ) -> Cow<'b, str> {
-        if default {
-            Borrowed(&self.colored_prompt)
-        } else {
-            Borrowed(prompt)
-        }
-    }
-
-    fn highlight_hint<'h>(&self, hint: &'h str) -> Cow<'h, str> {
-        Owned("\x1b[1m".to_owned() + hint + "\x1b[m")
-    }
-
-    fn highlight<'l>(&self, line: &'l str, pos: usize) -> Cow<'l, str> {
-        self.highlighter.highlight(line, pos)
-    }
-
-    fn highlight_char(&self, line: &str, pos: usize) -> bool {
-        self.highlighter.highlight_char(line, pos)
-    }
+    include_paths: Vec<PathBuf>,
 }
 
 fn main() -> Result<()> {
     let cli_args = CliArgs::parse();
 
-    let mut metta = MettaShim::new();
+    //Config directory will be here: TODO: Document this in README.
+    // Linux: ~/.config/metta/
+    // Windows: ~\AppData\Roaming\OpenCog\metta\config\
+    // Mac: ~/Library/Application Support/org.OpenCog.metta/
+    let mut repl_params = match ProjectDirs::from("org", "OpenCog",  "metta") {
+        Some(proj_dirs) => ReplParams::from_config_dir(proj_dirs.config_dir()),
+        None => {
+            eprint!("Failed to initialize config!");
+            ReplParams::default()
+        }
+    };
+    repl_params.push_include_paths(cli_args.include_paths);
+    let repl_params = Shared::new(repl_params);
 
-    if let Some(metta_file) = &cli_args.file {
+    let mut metta = MettaShim::new(repl_params.clone());
 
-        //If we have a .metta file to run, then run it
-        let metta_code = std::fs::read_to_string(&metta_file)?;
+    //If we have .metta files to run, then run them
+    if cli_args.files.len() > 0 {
+
+        //Treat all files except the last as imports, and don't print the output
+        let (last_path, other_paths) = cli_args.files.split_last().unwrap();
+
+        for import_file in other_paths {
+            metta.load_metta_module(import_file.clone());
+        }
+
+        //Only print the output from the last path
+        let metta_code = std::fs::read_to_string(last_path)?;
         metta.exec(metta_code.as_str());
         metta.inside_env(|metta| {
             for result in metta.result.iter() {
@@ -85,13 +72,13 @@ fn main() -> Result<()> {
     } else {
 
         //Otherwise enter interactive mode
-        start_interactive_mode(&mut metta).map_err(|err| err.into())
+        start_interactive_mode(repl_params, &mut metta).map_err(|err| err.into())
     }
 }
 
 // To debug rustyline:
 // RUST_LOG=rustyline=debug cargo run --example example 2> debug.log
-fn start_interactive_mode(metta: &mut MettaShim) -> rustyline::Result<()> {
+fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: &mut MettaShim) -> rustyline::Result<()> {
 
     //Init RustyLine
     let config = Config::builder()
@@ -99,19 +86,15 @@ fn start_interactive_mode(metta: &mut MettaShim) -> rustyline::Result<()> {
         .completion_type(CompletionType::List)
         .edit_mode(EditMode::Emacs)
         .build();
-    let h = ReplHelper {
-        completer: FilenameCompleter::new(),
-        highlighter: MatchingBracketHighlighter::new(),
-        hinter: HistoryHinter {},
-        colored_prompt: "".to_owned(),
-        validator: MatchingBracketValidator::new(),
-    };
+    let helper = ReplHelper::new();
     let mut rl = Editor::with_config(config)?;
-    rl.set_helper(Some(h));
+    rl.set_helper(Some(helper));
     rl.bind_sequence(KeyEvent::alt('n'), Cmd::HistorySearchForward);
     rl.bind_sequence(KeyEvent::alt('p'), Cmd::HistorySearchBackward);
-    if rl.load_history("history.txt").is_err() {
-        println!("No previous history.");
+    if let Some(history_path) = &repl_params.borrow().history_file {
+        if rl.load_history(history_path).is_err() {
+            println!("No previous history found.");
+        }
     }
 
     //The Interpreter Loop
@@ -140,5 +123,10 @@ fn start_interactive_mode(metta: &mut MettaShim) -> rustyline::Result<()> {
             }
         }
     }
-    rl.append_history("history.txt")
+
+    if let Some(history_path) = &repl_params.borrow().history_file {
+        rl.append_history(history_path)?
+    }
+
+    Ok(())
 }
