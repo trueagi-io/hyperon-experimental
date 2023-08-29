@@ -136,6 +136,9 @@ exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _arg
         }
         py::list result = call_execute_on_grounded_atom(pyobj, pytyp, args);
         for (py::handle atom:  result) {
+            if (!py::hasattr(atom, "catom")) {
+                return exec_error_runtime("Grounded operation which is defined using unwrap=False should return atom instead of Python type");
+            }
             atom_vec_push(ret, atom_clone(atom.attr("catom").cast<CAtom>().ptr()));
         }
         return exec_error_no_err();
