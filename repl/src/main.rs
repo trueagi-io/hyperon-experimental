@@ -35,9 +35,9 @@ fn main() -> Result<()> {
 
     //Config directory will be here: TODO: Document this in README.
     // Linux: ~/.config/metta/
-    // Windows: ~\AppData\Roaming\OpenCog\metta\config\
-    // Mac: ~/Library/Application Support/org.OpenCog.metta/
-    let mut repl_params = match ProjectDirs::from("org", "OpenCog",  "metta") {
+    // Windows: ~\AppData\Roaming\TrueAGI\metta\config\
+    // Mac: ~/Library/Application Support/io.TrueAGI.metta/
+    let mut repl_params = match ProjectDirs::from("io", "TrueAGI",  "metta") {
         Some(proj_dirs) => ReplParams::from_config_dir(proj_dirs.config_dir()),
         None => {
             eprint!("Failed to initialize config!");
