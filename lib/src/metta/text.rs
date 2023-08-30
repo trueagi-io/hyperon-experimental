@@ -38,7 +38,7 @@ impl Tokenizer {
 
     pub fn register_token_with_regex_str<C: 'static + Fn(&str) -> Atom>(&mut self, regex: &str, constr: C) {
         let regex = Regex::new(regex).unwrap();
-        self.tokens.push(TokenDescr{ regex, constr: Rc::new(constr) })
+        self.register_token(regex, constr)
     }
 
     pub fn move_front(&mut self, from: &mut Tokenizer) {
