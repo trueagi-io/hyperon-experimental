@@ -8,6 +8,8 @@ use hyperon::metta::runner::*;
 use hyperon::metta::text::SExprParser;
 use hyperon::atom::Atom;
 
+// TODO: use a better benchmark framework with parameterization or somehow else get rid of copypaste code
+
 /* 
 This benchmark is intended to compare the time of querying and changing entries
 in the space with States and remove/add atoms. The problem with querying states
