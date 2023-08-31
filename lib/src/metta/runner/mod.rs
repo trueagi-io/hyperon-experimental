@@ -33,6 +33,7 @@ pub struct MettaContents {
     tokenizer: Shared<Tokenizer>,
     settings: Shared<HashMap<String, String>>,
     modules: Shared<HashMap<PathBuf, DynSpace>>,
+    search_paths: Vec<PathBuf>,
 }
 
 enum Mode {
@@ -48,9 +49,9 @@ impl Metta {
     pub fn from_space(space: DynSpace, tokenizer: Shared<Tokenizer>, search_paths: Vec<PathBuf>) -> Self {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
-        let contents = MettaContents{ space, tokenizer, settings, modules };
+        let contents = MettaContents{ space, tokenizer, settings, modules, search_paths };
         let metta = Self(Rc::new(contents));
-        register_runner_tokens(&metta, search_paths);
+        register_runner_tokens(&metta);
         register_common_tokens(&metta);
         metta
     }
@@ -58,12 +59,16 @@ impl Metta {
     fn new_loading_runner(metta: &Metta, path: PathBuf) -> Self {
         let space = DynSpace::new(GroundingSpace::new());
         let tokenizer = metta.tokenizer().clone_inner();
-        let mut next_cwd = path;
-        next_cwd.pop();
         let settings = metta.0.settings.clone();
         let modules = metta.0.modules.clone();
-        let metta = Self(Rc::new(MettaContents { space, tokenizer, settings, modules }));
-        register_runner_tokens(&metta, vec![next_cwd]);
+
+        //Search only the parent directory of the module we're loading
+        let mut path = path;
+        path.pop();
+        let search_paths = vec![path];
+
+        let metta = Self(Rc::new(MettaContents { space, tokenizer, settings, modules, search_paths }));
+        register_runner_tokens(&metta);
         metta
     }
 
@@ -113,6 +118,10 @@ impl Metta {
 
     pub fn tokenizer(&self) -> &Shared<Tokenizer> {
         &self.0.tokenizer
+    }
+
+    pub fn search_paths(&self) -> &Vec<PathBuf> {
+        &self.0.search_paths
     }
 
     pub(crate) fn modules(&self) -> &Shared<HashMap<PathBuf, DynSpace>> {

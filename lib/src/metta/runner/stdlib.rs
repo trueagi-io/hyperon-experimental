@@ -13,7 +13,6 @@ use crate::common::ReplacingMapper;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::Display;
-use std::path::PathBuf;
 use std::collections::HashMap;
 use std::iter::FromIterator;
 use regex::Regex;
@@ -35,13 +34,12 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct ImportOp {
-    search_paths: Vec<PathBuf>,
     metta: Metta,
 }
 
 impl ImportOp {
-    pub fn new(metta: Metta, search_paths: Vec<PathBuf>) -> Self {
-        Self{ metta, search_paths }
+    pub fn new(metta: Metta) -> Self {
+        Self{ metta }
     }
 }
 
@@ -66,7 +64,7 @@ impl Grounded for ImportOp {
         if let Atom::Symbol(file) = file {
 
             //Check each include directory in order, until we find the module we're looking for
-            for include_dir in self.search_paths.iter() {
+            for include_dir in self.metta.search_paths().iter() {
                 let mut path = include_dir.clone();
                 path.push(file.name());
                 path = path.canonicalize().unwrap_or(path);
@@ -1131,8 +1129,7 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
 }
 
-//TODO: We should move search_paths into the execution environment, so they can be updated at runtime
-pub fn register_runner_tokens(metta: &Metta, search_paths: Vec<PathBuf>) {
+pub fn register_runner_tokens(metta: &Metta) {
     let space = metta.space();
     let tokenizer = metta.tokenizer();
 
@@ -1150,7 +1147,7 @@ pub fn register_runner_tokens(metta: &Metta, search_paths: Vec<PathBuf>) {
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
-    let import_op = Atom::gnd(ImportOp::new(metta.clone(), search_paths));
+    let import_op = Atom::gnd(ImportOp::new(metta.clone()));
     tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
