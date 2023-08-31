@@ -33,34 +33,37 @@ struct CliArgs {
 fn main() -> Result<()> {
     let cli_args = CliArgs::parse();
 
+    //The repl will treat all file args except the last one as imports
+    let (primary_metta_file, other_metta_files) = if let Some((first_path, other_paths)) = cli_args.files.split_last() {
+        (Some(first_path), other_paths)
+    } else {
+        (None, &[] as &[PathBuf])
+    };
+
     //Config directory will be here: TODO: Document this in README.
     // Linux: ~/.config/metta/
     // Windows: ~\AppData\Roaming\TrueAGI\metta\config\
     // Mac: ~/Library/Application Support/io.TrueAGI.metta/
-    let mut repl_params = match ProjectDirs::from("io", "TrueAGI",  "metta") {
-        Some(proj_dirs) => ReplParams::from_config_dir(proj_dirs.config_dir()),
+    let repl_params = match ProjectDirs::from("io", "TrueAGI",  "metta") {
+        Some(proj_dirs) => ReplParams::new(proj_dirs.config_dir(), cli_args.include_paths, primary_metta_file),
         None => {
             eprint!("Failed to initialize config!");
             ReplParams::default()
         }
     };
-    repl_params.push_include_paths(cli_args.include_paths);
     let repl_params = Shared::new(repl_params);
 
     let mut metta = MettaShim::new(repl_params.clone());
 
     //If we have .metta files to run, then run them
-    if cli_args.files.len() > 0 {
+    if let Some(metta_file) = primary_metta_file {
 
-        //Treat all files except the last as imports, and don't print the output
-        let (last_path, other_paths) = cli_args.files.split_last().unwrap();
-
-        for import_file in other_paths {
+        for import_file in other_metta_files {
             metta.load_metta_module(import_file.clone());
         }
 
-        //Only print the output from the last path
-        let metta_code = std::fs::read_to_string(last_path)?;
+        //Only print the output from the primary .metta file
+        let metta_code = std::fs::read_to_string(metta_file)?;
         metta.exec(metta_code.as_str());
         metta.inside_env(|metta| {
             for result in metta.result.iter() {
