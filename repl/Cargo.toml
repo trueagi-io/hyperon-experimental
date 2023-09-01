@@ -1,0 +1,21 @@
+[package]
+name = "metta-repl"
+version = "0.1.0"
+edition = "2021"
+description = "A shell to execute MeTTa"
+
+[dependencies]
+anyhow = { version = "1.0.75", features = ["std"] }
+hyperon = { path = "../lib/" }
+rustyline = { version = "12.0.0", features = ["derive"] }
+clap = { version = "4.4.0", features = ["derive"] }
+directories = "5.0.1"
+pyo3 = { version = "0.19.2", features = ["auto-initialize"], optional = true }
+
+[[bin]]
+name = "metta"
+path = "src/main.rs"
+
+[features]
+# default = ["python"]
+python = ["pyo3"]

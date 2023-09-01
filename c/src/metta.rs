@@ -478,7 +478,7 @@ impl metta_t {
 pub extern "C" fn metta_new(space: *mut space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> metta_t {
     let dyn_space = unsafe{ &*space }.borrow();
     let tokenizer = unsafe{ &*tokenizer }.clone_handle();
-    let metta = Metta::from_space_cwd(dyn_space.clone(), tokenizer, PathBuf::from(cstr_as_str(cwd)));
+    let metta = Metta::from_space(dyn_space.clone(), tokenizer, vec![PathBuf::from(cstr_as_str(cwd))]);
     metta.into()
 }
 
@@ -502,8 +502,8 @@ pub extern "C" fn metta_free(metta: metta_t) {
 ///
 #[no_mangle]
 pub extern "C" fn metta_space(metta: *mut metta_t) -> space_t {
-    let space = unsafe{ &*metta }.borrow().space();
-    space.into()
+    let metta = unsafe{ &*metta }.borrow();
+    metta.space().clone().into()
 }
 
 /// @brief Provides access to the Tokenizer associated with a MeTTa Interpreter
@@ -514,8 +514,8 @@ pub extern "C" fn metta_space(metta: *mut metta_t) -> space_t {
 ///
 #[no_mangle]
 pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> tokenizer_t {
-    let tokenizer = unsafe{ &*metta }.borrow().tokenizer();
-    tokenizer.into()
+    let metta = unsafe{ &*metta }.borrow();
+    metta.tokenizer().clone().into()
 }
 
 /// @brief Runs the MeTTa Interpreter until the input text has been parsed and evaluated

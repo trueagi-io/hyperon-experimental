@@ -6,6 +6,7 @@ use super::space::*;
 use super::text::{Tokenizer, SExprParser};
 use super::types::validate_atom;
 
+use std::rc::Rc;
 use std::path::PathBuf;
 use std::collections::HashMap;
 
@@ -23,12 +24,16 @@ mod arithmetics;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
-#[derive(Debug, Clone)]
-pub struct Metta {
+#[derive(Clone, Debug, PartialEq)]
+pub struct Metta(Rc<MettaContents>);
+
+#[derive(Debug, PartialEq)]
+pub struct MettaContents {
     space: DynSpace,
     tokenizer: Shared<Tokenizer>,
     settings: Shared<HashMap<String, String>>,
     modules: Shared<HashMap<PathBuf, DynSpace>>,
+    search_paths: Vec<PathBuf>,
 }
 
 enum Mode {
@@ -38,33 +43,38 @@ enum Mode {
 
 impl Metta {
     pub fn new(space: DynSpace, tokenizer: Shared<Tokenizer>) -> Self {
-        Metta::from_space_cwd(space, tokenizer, PathBuf::from("."))
+        Metta::from_space(space, tokenizer, vec![PathBuf::from(".")])
     }
 
-    pub fn from_space_cwd(space: DynSpace, tokenizer: Shared<Tokenizer>, cwd: PathBuf) -> Self {
+    pub fn from_space(space: DynSpace, tokenizer: Shared<Tokenizer>, search_paths: Vec<PathBuf>) -> Self {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
-        let metta = Self{ space, tokenizer, settings, modules };
-        register_runner_tokens(&metta, cwd);
+        let contents = MettaContents{ space, tokenizer, settings, modules, search_paths };
+        let metta = Self(Rc::new(contents));
+        register_runner_tokens(&metta);
         register_common_tokens(&metta);
         metta
     }
 
     fn new_loading_runner(metta: &Metta, path: PathBuf) -> Self {
         let space = DynSpace::new(GroundingSpace::new());
-        let tokenizer = metta.tokenizer.cloned();
-        let mut next_cwd = path;
-        next_cwd.pop();
-        let settings = metta.settings.clone();
-        let modules = metta.modules.clone();
-        let metta = Metta{ space, tokenizer, settings, modules };
-        register_runner_tokens(&metta, next_cwd);
+        let tokenizer = metta.tokenizer().clone_inner();
+        let settings = metta.0.settings.clone();
+        let modules = metta.0.modules.clone();
+
+        //Search only the parent directory of the module we're loading
+        let mut path = path;
+        path.pop();
+        let search_paths = vec![path];
+
+        let metta = Self(Rc::new(MettaContents { space, tokenizer, settings, modules, search_paths }));
+        register_runner_tokens(&metta);
         metta
     }
 
     pub fn load_module_space(&self, path: PathBuf) -> Result<DynSpace, String> {
         log::debug!("Metta::load_module_space: load module space {}", path.display());
-        let loaded_module = self.modules.borrow().get(&path).cloned();
+        let loaded_module = self.0.modules.borrow().get(&path).cloned();
 
         // Loading the module only once
         // TODO: force_reload?
@@ -83,10 +93,10 @@ impl Metta {
                 };
                 // Make the imported module be immediately available to itself
                 // to mitigate circular imports
-                self.modules.borrow_mut().insert(path.clone(), runner.space());
+                self.0.modules.borrow_mut().insert(path.clone(), runner.space().clone());
                 runner.run(&mut SExprParser::new(program.as_str()))
                     .map_err(|err| format!("Cannot import module, path: {}, error: {}", path.display(), err))?;
-                Ok(runner.space())
+                Ok(runner.space().clone())
             }
         }
     }
@@ -98,25 +108,37 @@ impl Metta {
         // TODO: check if it is already there (if the module is newly loaded)
         let module_space = self.load_module_space(path)?;
         let space_atom = Atom::gnd(module_space);
-        self.space.borrow_mut().add(space_atom); // self.add_atom(space_atom)
+        self.0.space.borrow_mut().add(space_atom); // self.add_atom(space_atom)
         Ok(())
     }
 
-    pub fn space(&self) -> DynSpace {
-        self.space.clone()
+    pub fn space(&self) -> &DynSpace {
+        &self.0.space
     }
 
-    pub fn tokenizer(&self) -> Shared<Tokenizer> {
-        self.tokenizer.clone()
+    pub fn tokenizer(&self) -> &Shared<Tokenizer> {
+        &self.0.tokenizer
+    }
+
+    pub fn search_paths(&self) -> &Vec<PathBuf> {
+        &self.0.search_paths
+    }
+
+    pub(crate) fn modules(&self) -> &Shared<HashMap<PathBuf, DynSpace>> {
+        &self.0.modules
+    }
+
+    pub(crate) fn settings(&self) -> &Shared<HashMap<String, String>> {
+        &self.0.settings
     }
 
     #[cfg(test)]
     fn set_setting(&self, key: String, value: String) {
-        self.settings.borrow_mut().insert(key, value);
+        self.0.settings.borrow_mut().insert(key, value);
     }
 
     fn get_setting(&self, key: &str) -> Option<String> {
-        self.settings.borrow().get(key.into()).cloned()
+        self.0.settings.borrow().get(key.into()).cloned()
     }
 
     pub fn run(&self, parser: &mut SExprParser) -> Result<Vec<Vec<Atom>>, String> {
@@ -124,7 +146,7 @@ impl Metta {
         let mut results: Vec<Vec<Atom>> = Vec::new();
 
         loop {
-            let atom = parser.parse(&self.tokenizer.borrow())?;
+            let atom = parser.parse(&self.0.tokenizer.borrow())?;
 
             if let Some(atom) = atom {
                 if atom == EXEC_SYMBOL {
@@ -172,19 +194,19 @@ impl Metta {
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
         match self.type_check(atom) {
             Err(atom) => Ok(vec![atom]),
-            Ok(atom) => interpret(self.space.clone(), &atom),
+            Ok(atom) => interpret(self.space(), &atom),
         }
     }
 
     fn add_atom(&self, atom: Atom) -> Result<(), Atom>{
         let atom = self.type_check(atom)?;
-        self.space.borrow_mut().add(atom);
+        self.0.space.borrow_mut().add(atom);
         Ok(())
     }
 
     fn type_check(&self, atom: Atom) -> Result<Atom, Atom> {
         let is_type_check_enabled = self.get_setting("type-check").map_or(false, |val| val == "auto");
-        if  is_type_check_enabled && !validate_atom(self.space.borrow().as_space(), &atom) {
+        if  is_type_check_enabled && !validate_atom(self.0.space.borrow().as_space(), &atom) {
             Err(Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]))
         } else {
             Ok(atom)
