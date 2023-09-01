@@ -2,7 +2,8 @@
 
 use crate::*;
 
-use std::str::Chars;
+use core::ops::Range;
+use std::str::CharIndices;
 use std::iter::Peekable;
 use regex::Regex;
 use std::rc::Rc;
@@ -61,53 +62,157 @@ impl Tokenizer {
 
 }
 
+/// The meaning of a parsed token, generated from a substring in the input text
+#[derive(Clone, Debug)]
+pub enum ParseTokenType {
+    /// Comment line.  All text between a non-escaped ';' and a newline
+    Comment,
+    /// Variable.  A symbol immediately preceded by a '$' sigil
+    Variable,
+    /// String Literal.  All text between non-escaped '"' (double quote) characters
+    StringLiteral,
+    /// Special Token.  A token matched by a regex registered with the [Tokenizer]
+    //TODO: Currently this `Special` token is never generated.  When I split the atom generation from the parsing, I will
+    //  roll the Tokenizer check into `next_token_with_visitor`, and eliminate `parse_atom_with_visitor`
+    Special,
+    /// Symbol Token.  Any other whitespace-delimited token that isn't a [Variable](ParseTokenType::Variable),
+    ///   [StringLiteral](ParseTokenType::ParseTokenType), or [Special](ParseTokenType::Special)
+    MiscSymbol,
+    /// Open Parenthesis.  A non-escaped '(' character indicating the beginning of an expression
+    OpenParen,
+    /// Close Parenthesis.  A non-escaped ')' character indicating the end of an expression
+    CloseParen,
+    /// Whitespace. One or more whitespace chars
+    Whitespace,
+    /// Expression.  All input text composing an Expression, from the opening '(' to the close
+    Expression,
+    /// Atom.  A Symbol Atom or Grounded Atom
+    //TODO, check since I'm not sure about this one.  Maybe I'll want different intermediate tokens
+    // when I generate atoms from parse tokens
+    Atom,
+    /// Unparsed Leftover Text.  Text remaining after the parser has encountered an error
+    LeftoverText,
+}
+
+#[derive(Clone, Debug)]
+pub struct ParseToken<'a> {
+    pub token_type: ParseTokenType,
+    pub src_range: Range<usize>,
+    pub substr: &'a str,
+}
+
 pub struct SExprParser<'a> {
-    it: Peekable<Chars<'a>>,
+    text: &'a str,
+    it: Peekable<CharIndices<'a>>,
 }
 
 impl<'a> SExprParser<'a> {
     pub fn new(text: &'a str) -> Self {
-        Self{ it: text.chars().peekable() }
+        Self{ text, it: text.char_indices().peekable() }
     }
 
+    //TODO: Consider reorganizing this function as a visitor
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
-        while let Some(c) = self.it.peek() {
+        self.parse_with_visitor(tokenizer, |_tok| ())
+    }
+
+    pub fn parse_with_visitor<C>(&mut self, tokenizer: &Tokenizer, mut callback: C) -> Result<Option<Atom>, String>
+        where C: FnMut(ParseToken)
+    {
+        self.parse_with_visitor_internal(tokenizer, &mut callback)
+    }
+
+    fn parse_with_visitor_internal<C>(&mut self, tokenizer: &Tokenizer, callback: &mut C) -> Result<Option<Atom>, String>
+        where C: FnMut(ParseToken)
+    {
+        while let Some((idx, c)) = self.it.peek().cloned() {
             match c {
                 ';' => {
+                    let start_idx = idx;
                     self.skip_line();
+                    let range = start_idx..self.cur_idx();
+                    callback(self.new_parse_token(ParseTokenType::Comment, range));
                 },
                 _ if c.is_whitespace() => {
+                    let range = idx..idx+1;
+                    callback(self.new_parse_token(ParseTokenType::Whitespace, range));
                     self.it.next();
                 },
                 '$' => {
-                    self.it.next();
-                    let token = next_var(&mut self.it)?;
+                    let token = self.next_var_with_visitor(callback)?;
                     return Ok(Some(Atom::var(token)));
                 },
                 '(' => {
+                    let range = idx..idx+1;
+                    callback(self.new_parse_token(ParseTokenType::OpenParen, range));
+
                     self.it.next();
-                    return self.parse_expr(tokenizer).map(Some);
+                    let start_idx = idx;
+                    let expr = self.parse_expr_with_visitor(tokenizer, callback)?;
+                    let range = start_idx..self.cur_idx();
+                    callback(self.new_parse_token(ParseTokenType::Expression, range));
+                    return Ok(Some(expr));
                 },
-                ')' => return Err("Unexpected right bracket".to_string()),
+                ')' => {
+                    let range = idx..idx+1;
+                    callback(self.new_parse_token(ParseTokenType::CloseParen, range));
+                    self.it.next();
+
+                    self.parse_leftovers_with_visitor(callback);
+                    return Err("Unexpected right bracket".to_string())
+                },
                 _ => {
-                    return Ok(Some(self.parse_atom(tokenizer)?));
+                    let start_idx = idx;
+                    let atom = self.parse_atom_with_visitor(tokenizer, callback)?;
+                    let range = start_idx..self.cur_idx();
+                    callback(self.new_parse_token(ParseTokenType::Atom, range));
+                    return Ok(Some(atom));
                 },
             }
         }
         Ok(None)
     }
 
+    ///WARNING: may be (often is) == to text.len(), and thus can't be used as an index to read a char
+    fn cur_idx(&mut self) -> usize {
+        if let Some((idx, _)) = self.it.peek() {
+            *idx
+        } else {
+            self.text.len()
+        }
+    }
+
+    fn new_parse_token(&self, token_type: ParseTokenType, src_range: Range<usize>) -> ParseToken {
+        ParseToken {
+            token_type,
+            src_range: src_range.clone(),
+            substr: &self.text[src_range],
+        }
+    }
+
     fn skip_line(&mut self) -> () {
-        while let Some(n) = self.it.peek() {
-            match n {
+        while let Some((_idx, c)) = self.it.peek() {
+            match c {
                 '\n' => break,
                 _ => { self.it.next(); }
             }
         }
     }
 
-    fn parse_atom(&mut self, tokenizer: &Tokenizer) -> Result<Atom, String> {
-        let token = next_token(&mut self.it)?;
+    fn parse_leftovers_with_visitor<C>(&mut self, callback: &mut C)
+        where C: FnMut(ParseToken)
+    {
+        if let Some((start_idx, _c)) = self.it.peek().cloned() {
+            let (last, _c) = self.it.clone().last().unwrap();
+            let range = start_idx..last+1;
+            callback(self.new_parse_token(ParseTokenType::LeftoverText, range));
+        }
+    }
+
+    fn parse_atom_with_visitor<C>(&mut self, tokenizer: &Tokenizer, callback: &mut C) -> Result<Atom, String>
+        where C: FnMut(ParseToken)
+    {
+        let token = self.next_token_with_visitor(callback)?;
         let constr = tokenizer.find_token(token.as_str());
         if let Some(constr) = constr {
             return Ok(constr(token.as_str()));
@@ -116,21 +221,32 @@ impl<'a> SExprParser<'a> {
         }
     }
 
-    fn parse_expr(&mut self, tokenizer: &Tokenizer) -> Result<Atom, String> {
+    fn parse_expr_with_visitor<C>(&mut self, tokenizer: &Tokenizer, callback: &mut C) -> Result<Atom, String>
+        where C: FnMut(ParseToken)
+    {
         let mut children: Vec<Atom> = Vec::new();
-        while let Some(c) = self.it.peek() {
+        while let Some((idx, c)) = self.it.peek().cloned() {
             match c {
                 ';' => {
+                    let start_idx = idx;
                     self.skip_line();
+                    let range = start_idx..self.cur_idx();
+                    callback(self.new_parse_token(ParseTokenType::Comment, range));
                 },
-                _ if c.is_whitespace() => { self.it.next(); },
+                _ if c.is_whitespace() => {
+                    let range = idx..idx+1;
+                    callback(self.new_parse_token(ParseTokenType::Whitespace, range));
+                    self.it.next();
+                },
                 ')' => {
+                    let range = idx..idx+1;
+                    callback(self.new_parse_token(ParseTokenType::CloseParen, range));
                     self.it.next();
                     let expr = Atom::expr(children);
                     return Ok(expr);
                 },
                 _ => {
-                    if let Ok(Some(child)) = self.parse(tokenizer) {
+                    if let Ok(Some(child)) = self.parse_with_visitor_internal(tokenizer, callback) {
                         children.push(child);
                     } else {
                         return Err("Unexpected end of expression member".to_string());
@@ -141,67 +257,91 @@ impl<'a> SExprParser<'a> {
         Err("Unexpected end of expression".to_string())
     }
 
-}
-
-fn next_token(it: &mut Peekable<Chars<'_>>) -> Result<String, String> {
-    match it.peek() {
-        Some('"') => next_string(it),
-        _ => Ok(next_word(it)?),
+    fn next_token_with_visitor<C>(&mut self, callback: &mut C) -> Result<String, String>
+        where C: FnMut(ParseToken)
+    {
+        match self.it.peek().cloned() {
+            Some((idx, '"')) => {
+                let start_idx = idx;
+                let str_token = self.next_string()?;
+                let range = start_idx..self.cur_idx();
+                callback(self.new_parse_token(ParseTokenType::StringLiteral, range));
+                Ok(str_token)
+            },
+            Some((idx, _)) => {
+                let start_idx = idx;
+                let tok = self.next_word()?;
+                let range = start_idx..self.cur_idx();
+                callback(self.new_parse_token(ParseTokenType::MiscSymbol, range));
+                Ok(tok)
+            },
+            None => Ok(String::new())
+        }
     }
-}
 
+    fn next_string(&mut self) -> Result<String, String> {
+        let mut token = String::new();
 
-fn next_string(it: &mut Peekable<Chars<'_>>) -> Result<String, String> {
-    let mut token = String::new();
-
-    if it.next() != Some('"') {
-        return Err("Double quote expected".to_string());
-    } else {
-        token.push('"');
-    }
-    while let Some(c) = it.next() {
-        if c == '"' {
+        if let Some((_idx, '"')) = self.it.next() {
             token.push('"');
-            break;
-        }
-        let c = if c == '\\' {
-            match it.next() {
-                Some(c) => c,
-                None => return Err("Escaping sequence is not finished".to_string()),
-            }
         } else {
-            c
-        };
-        token.push(c);
+            return Err("Double quote expected".to_string());
+        }
+        while let Some((_idx, c)) = self.it.next() {
+            if c == '"' {
+                token.push('"');
+                break;
+            }
+            let c = if c == '\\' {
+                match self.it.next() {
+                    Some((_idx, c)) => c,
+                    None => return Err("Escaping sequence is not finished".to_string()),
+                }
+            } else {
+                c
+            };
+            token.push(c);
+        }
+        Ok(token)
     }
-    Ok(token)
-}
 
-fn next_word(it: &mut Peekable<Chars<'_>>) -> Result<String, String> {
-    let mut token = String::new();
-    while let Some(&c) = it.peek() {
-        if c.is_whitespace() || c == '(' || c == ')' {
-            break;
+    fn next_word(&mut self) -> Result<String, String> {
+        let mut token = String::new();
+        while let Some((_idx, c)) = self.it.peek() {
+            if c.is_whitespace() || *c == '(' || *c == ')' {
+                break;
+            }
+            token.push(*c);
+            self.it.next();
         }
-        token.push(c);
-        it.next();
+        Ok(token) 
     }
-    Ok(token) 
-}
 
-fn next_var(it: &mut Peekable<Chars<'_>>) -> Result<String, String> {
-    let mut token = String::new();
-    while let Some(&c) = it.peek() {
-        if c.is_whitespace() || c == '(' || c == ')' {
-            break;
+    fn next_var_with_visitor<C>(&mut self, callback: &mut C) -> Result<String, String>
+        where C: FnMut(ParseToken)
+    {
+        let (start_idx, _c) = self.it.peek().cloned().unwrap();
+        let mut tmp_it = self.it.clone();
+        tmp_it.next();
+
+        let mut token = String::new();
+        while let Some((_idx, c)) = tmp_it.peek() {
+            if c.is_whitespace() || *c == '(' || *c == ')' {
+                break;
+            }
+            if *c == '#' {
+                self.parse_leftovers_with_visitor(callback);
+                return Err("'#' char is reserved for internal usage".to_string());
+            }
+            token.push(*c);
+            tmp_it.next();
         }
-        if c == '#' {
-            return Err("'#' char is reserved for internal usage".to_string());
-        }
-        token.push(c);
-        it.next();
+        self.it = tmp_it;
+        let range = start_idx..self.cur_idx();
+        callback(self.new_parse_token(ParseTokenType::Variable, range));
+        Ok(token)
     }
-    Ok(token)
+
 }
 
 #[cfg(test)]
@@ -261,24 +401,19 @@ mod tests {
 
     #[test]
     fn test_next_token() {
-        let mut it = "n)".chars().peekable();
+        let mut parser = SExprParser::new("n)");
 
-        assert_eq!("n".to_string(), next_token(&mut it).unwrap());
-        assert_eq!(Some(')'), it.next());
+        assert_eq!("n".to_string(), parser.next_token_with_visitor(&mut |_tok| ()).unwrap());
+        assert_eq!(Some((1, ')')), parser.it.next());
     }
 
     #[test]
     fn test_next_string_errors() {
-        let mut token = String::new();
-        token.push('a');
-        let mut it = token.chars().peekable();
-        assert_eq!(Err(String::from("Double quote expected")), next_string(&mut it));
+        let mut parser = SExprParser::new("a");
+        assert_eq!(Err(String::from("Double quote expected")), parser.next_string());
 
-        let mut token = String::new();
-        token.push('"');
-        token.push('\\');
-        let mut it = token.chars().peekable();
-        assert_eq!(Err(String::from("Escaping sequence is not finished")), next_string(&mut it));
+        let mut parser = SExprParser::new("\"\\");
+        assert_eq!(Err(String::from("Escaping sequence is not finished")), parser.next_string());
     }
 
     #[test]

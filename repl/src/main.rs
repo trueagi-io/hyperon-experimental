@@ -75,13 +75,13 @@ fn main() -> Result<()> {
     } else {
 
         //Otherwise enter interactive mode
-        start_interactive_mode(repl_params, &mut metta).map_err(|err| err.into())
+        start_interactive_mode(repl_params, metta).map_err(|err| err.into())
     }
 }
 
 // To debug rustyline:
 // RUST_LOG=rustyline=debug cargo run --example example 2> debug.log
-fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: &mut MettaShim) -> rustyline::Result<()> {
+fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> rustyline::Result<()> {
 
     //Init RustyLine
     let config = Config::builder()
@@ -89,7 +89,7 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: &mut MettaShim
         .completion_type(CompletionType::List)
         .edit_mode(EditMode::Emacs)
         .build();
-    let helper = ReplHelper::new();
+    let helper = ReplHelper::new(metta);
     let mut rl = Editor::with_config(config)?;
     rl.set_helper(Some(helper));
     rl.bind_sequence(KeyEvent::alt('n'), Cmd::HistorySearchForward);
@@ -109,6 +109,7 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: &mut MettaShim
             Ok(line) => {
                 rl.add_history_entry(line.as_str())?;
 
+                let mut metta = rl.helper().unwrap().metta.borrow_mut();
                 metta.exec(line.as_str());
                 metta.inside_env(|metta| {
                     for result in metta.result.iter() {
