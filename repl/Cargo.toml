@@ -9,8 +9,8 @@ anyhow = { version = "1.0.75", features = ["std"] }
 hyperon = { path = "../lib/" }
 # rustyline = { version = "12.0.0", features = ["derive"] }
 # rustyline = {git = "https://github.com/luketpeterson/rustyline", version = "12.0.0", features = ["derive"] }
-# TODO: I hope these changes stabilize inside rustyline before we need to publish Hyperon
-rustyline = {git = "https://github.com/gwenn/rustyline.git", branch="no_highlight_char_on_final_refresh", version = "12.0.0", features = ["derive"] }
+# TODO: Yay, our fix landed in main.  Still needs to publish however.  One step closer
+rustyline = {git = "https://github.com/kkawakam/rustyline", version = "12.0.0", features = ["derive"] }
 clap = { version = "4.4.0", features = ["derive"] }
 directories = "5.0.1"
 pyo3 = { version = "0.19.2", features = ["auto-initialize"], optional = true }
