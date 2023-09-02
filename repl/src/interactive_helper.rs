@@ -31,7 +31,7 @@ const COMMENT_COLOR: &str = "32";
 const VARIABLE_COLOR: &str = "33";
 const MISC_SYMBOL_COLOR: &str = "34";
 const STRING_LITERAL_COLOR: &str = "31";
-const SPECIAL_SYMBOL_COLOR: &str = "36";
+// const SPECIAL_SYMBOL_COLOR: &str = "36";
 const ERROR_COLOR: &str = "91";
 
 impl Highlighter for ReplHelper {
@@ -67,82 +67,73 @@ impl Highlighter for ReplHelper {
         self.metta.borrow_mut().inside_env(|metta| {
             let mut parser = SExprParser::new(line);
             loop {
-                let result = parser.parse_with_visitor(&metta.metta.tokenizer().borrow(), |node| {
-                    let mut style_sequence = vec![];
+                match parser.parse_to_syntax_tree(&metta.metta.tokenizer().borrow()) {
+                    Some(root_node) => {
+                        root_node.visit_syntactic(|node| {
+                            let mut style_sequence = vec![];
 
-                    //Set up the style for the node
-                    match node.node_type {
-                        SyntaxNodeType::Comment => {
-                            style_sequence.push(COMMENT_COLOR);
-                        },
-                        SyntaxNodeType::Variable => {
-                            style_sequence.push(VARIABLE_COLOR);
-                        },
-                        SyntaxNodeType::MiscSymbol => {
-                            style_sequence.push(MISC_SYMBOL_COLOR);
-                        },
-                        SyntaxNodeType::StringLiteral => {
-                            style_sequence.push(STRING_LITERAL_COLOR);
-                        },
-                        SyntaxNodeType::Special => {
-                            //TODO: We'll want to use the type system to assign styling here
-                            style_sequence.push(SPECIAL_SYMBOL_COLOR);
-                        },
-                        SyntaxNodeType::OpenParen => {
-                            style_sequence.push(BRACKET_COLORS[bracket_depth%BRACKET_COLORS.len()]);
-                            bracket_depth += 1;
-                        },
-                        SyntaxNodeType::CloseParen => {
-                            if bracket_depth > 0 {
-                                bracket_depth -= 1;
-                                style_sequence.push(BRACKET_COLORS[bracket_depth%BRACKET_COLORS.len()]);
-                            } else {
-                                style_sequence.push(ERROR_COLOR);
+                            //Set up the style for the node
+                            match node.node_type {
+                                SyntaxNodeType::Comment => {
+                                    style_sequence.push(COMMENT_COLOR);
+                                },
+                                SyntaxNodeType::VariableToken => {
+                                    style_sequence.push(VARIABLE_COLOR);
+                                },
+                                SyntaxNodeType::StringToken => {
+                                    style_sequence.push(STRING_LITERAL_COLOR);
+                                },
+                                SyntaxNodeType::WordToken => {
+                                    style_sequence.push(MISC_SYMBOL_COLOR);
+                                },
+                                SyntaxNodeType::OpenParen => {
+                                    style_sequence.push(BRACKET_COLORS[bracket_depth%BRACKET_COLORS.len()]);
+                                    bracket_depth += 1;
+                                },
+                                SyntaxNodeType::CloseParen => {
+                                    if bracket_depth > 0 {
+                                        bracket_depth -= 1;
+                                        style_sequence.push(BRACKET_COLORS[bracket_depth%BRACKET_COLORS.len()]);
+                                    } else {
+                                        style_sequence.push(ERROR_COLOR);
+                                    }
+                                },
+                                SyntaxNodeType::LeftoverText => {
+                                    style_sequence.push(ERROR_COLOR);
+                                }
+                                _ => { }
                             }
-                        },
-                        SyntaxNodeType::LeftoverText => {
-                            style_sequence.push(ERROR_COLOR);
-                        }
-                        _ => { } // We don't do anything with the compound nodes, e.g. Expression & Atom
-                    }
 
-                    //See if we need to render this node with the "bracket blink"
-                    if let Some((_matching_char, blink_idx)) = &blink_char {
-                        if node.src_range.contains(blink_idx) {
-                            style_sequence.push("1;7");
-                        }
-                    }
-
-                    //Render the node to the buffer if it's one of the ones we choose to render
-                    if node_type_should_render(node.node_type) {
-
-                        //Push the styles to the buffer
-                        let style_count = style_sequence.len();
-                        if style_count > 0 {
-                            colored_line.push_str("\x1b[");
-                            for (style_idx, style) in style_sequence.into_iter().enumerate() {
-                                colored_line.push_str(style);
-                                if style_idx < style_count-1 {
-                                    colored_line.push(';');
+                            //See if we need to render this node with the "bracket blink"
+                            if let Some((_matching_char, blink_idx)) = &blink_char {
+                                if node.src_range.contains(blink_idx) {
+                                    style_sequence.push("1;7");
                                 }
                             }
-                            colored_line.push('m');
-                        }
 
-                        //Push the node itself to the buffer
-                        colored_line.push_str(&line[node.src_range]);
+                            //Push the styles to the buffer
+                            let style_count = style_sequence.len();
+                            if style_count > 0 {
+                                colored_line.push_str("\x1b[");
+                                for (style_idx, style) in style_sequence.into_iter().enumerate() {
+                                    colored_line.push_str(style);
+                                    if style_idx < style_count-1 {
+                                        colored_line.push(';');
+                                    }
+                                }
+                                colored_line.push('m');
+                            }
 
-                        //And push an undo sequence, if the node was stylized
-                        if style_count > 0 {
-                            colored_line.push_str("\x1b[0m");
-                        }
-                    }
-                });
+                            //Push the node itself to the buffer
+                            colored_line.push_str(&line[node.src_range.clone()]);
 
-                match result {
-                    Ok(Some(_atom)) => (),
-                    Ok(None) => break,
-                    Err(_err) => break,
+                            //And push an undo sequence, if the node was stylized
+                            if style_count > 0 {
+                                colored_line.push_str("\x1b[0m");
+                            }
+                        });
+                    },
+                    None => break,
                 }
             }
         });
@@ -187,23 +178,6 @@ impl Validator for ReplHelper {
         Ok(validation_result)
     }
 
-}
-
-fn node_type_should_render(node_type: SyntaxNodeType) -> bool {
-    match node_type {
-        SyntaxNodeType::Comment |
-        SyntaxNodeType::Variable |
-        SyntaxNodeType::OpenParen |
-        SyntaxNodeType::CloseParen |
-        SyntaxNodeType::StringLiteral |
-        SyntaxNodeType::Special |
-        SyntaxNodeType::MiscSymbol |
-        SyntaxNodeType::Whitespace |
-        SyntaxNodeType::LeftoverText => true,
-
-        SyntaxNodeType::Atom |
-        SyntaxNodeType::Expression => false,
-    }
 }
 
 impl ReplHelper {
