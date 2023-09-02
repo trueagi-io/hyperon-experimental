@@ -124,7 +124,7 @@ impl Metta {
         &self.0.search_paths
     }
 
-    pub(crate) fn modules(&self) -> &Shared<HashMap<PathBuf, DynSpace>> {
+    pub fn modules(&self) -> &Shared<HashMap<PathBuf, DynSpace>> {
         &self.0.modules
     }
 

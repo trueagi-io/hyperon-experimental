@@ -22,17 +22,20 @@ pub struct ReplHelper {
     hinter: HistoryHinter,
     pub colored_prompt: String,
     cursor_bracket: std::cell::Cell<Option<(u8, usize)>>, // If the cursor is over or near a bracket to match
+    style: StyleSettings,
 }
 
-//TODO: this information needs to come from the config.metta.
-// This is just a stop-gap to make sure parsing & rendering is correct
-const BRACKET_COLORS: &[&str] = &["94", "93", "95", "96"];
-const COMMENT_COLOR: &str = "32";
-const VARIABLE_COLOR: &str = "33";
-const MISC_SYMBOL_COLOR: &str = "34";
-const STRING_LITERAL_COLOR: &str = "31";
-// const SPECIAL_SYMBOL_COLOR: &str = "36";
-const ERROR_COLOR: &str = "91";
+#[derive(Default)]
+struct StyleSettings {
+    bracket_styles: Vec<String>,
+    comment_style: String,
+    variable_style: String,
+    symbol_style: String,
+    string_style: String,
+    error_style: String,
+    bracket_match_style: String,
+    // bracket_match_enabled: bool, //TODO
+}
 
 impl Highlighter for ReplHelper {
     fn highlight_prompt<'b, 's: 'b, 'p: 'b>(
@@ -70,36 +73,36 @@ impl Highlighter for ReplHelper {
                 match parser.parse_to_syntax_tree(&metta.metta.tokenizer().borrow()) {
                     Some(root_node) => {
                         root_node.visit_syntactic(|node| {
-                            let mut style_sequence = vec![];
+                            let mut style_sequence: Vec<&str> = vec![];
 
                             //Set up the style for the node
                             match node.node_type {
                                 SyntaxNodeType::Comment => {
-                                    style_sequence.push(COMMENT_COLOR);
+                                    style_sequence.push(&self.style.comment_style);
                                 },
                                 SyntaxNodeType::VariableToken => {
-                                    style_sequence.push(VARIABLE_COLOR);
+                                    style_sequence.push(&self.style.variable_style);
                                 },
                                 SyntaxNodeType::StringToken => {
-                                    style_sequence.push(STRING_LITERAL_COLOR);
+                                    style_sequence.push(&self.style.string_style);
                                 },
                                 SyntaxNodeType::WordToken => {
-                                    style_sequence.push(MISC_SYMBOL_COLOR);
+                                    style_sequence.push(&self.style.symbol_style);
                                 },
                                 SyntaxNodeType::OpenParen => {
-                                    style_sequence.push(BRACKET_COLORS[bracket_depth%BRACKET_COLORS.len()]);
+                                    style_sequence.push(&self.style.bracket_styles[bracket_depth%self.style.bracket_styles.len()]);
                                     bracket_depth += 1;
                                 },
                                 SyntaxNodeType::CloseParen => {
                                     if bracket_depth > 0 {
                                         bracket_depth -= 1;
-                                        style_sequence.push(BRACKET_COLORS[bracket_depth%BRACKET_COLORS.len()]);
+                                        style_sequence.push(&self.style.bracket_styles[bracket_depth%self.style.bracket_styles.len()]);
                                     } else {
-                                        style_sequence.push(ERROR_COLOR);
+                                        style_sequence.push(&self.style.error_style);
                                     }
                                 },
                                 SyntaxNodeType::LeftoverText => {
-                                    style_sequence.push(ERROR_COLOR);
+                                    style_sequence.push(&self.style.error_style);
                                 }
                                 _ => { }
                             }
@@ -107,7 +110,7 @@ impl Highlighter for ReplHelper {
                             //See if we need to render this node with the "bracket blink"
                             if let Some((_matching_char, blink_idx)) = &blink_char {
                                 if node.src_range.contains(blink_idx) {
-                                    style_sequence.push("1;7");
+                                    style_sequence.push(&self.style.bracket_match_style);
                                 }
                             }
 
@@ -168,7 +171,7 @@ impl Validator for ReplHelper {
                     },
                     Err(err) => {
                         validation_result = ValidationResult::Invalid(Some(
-                            format!(" - \x1b[0;{}m{}\x1b[0m", ERROR_COLOR, err)
+                            format!(" - \x1b[0;{}m{}\x1b[0m", self.style.error_style, err)
                         ));
                         break;
                     }
@@ -181,13 +184,31 @@ impl Validator for ReplHelper {
 }
 
 impl ReplHelper {
-    pub fn new(metta: MettaShim) -> Self {
+    pub fn new(mut metta: MettaShim) -> Self {
+
+        let style = StyleSettings::new(&mut metta);
+
         Self {
             metta: RefCell::new(metta),
             completer: FilenameCompleter::new(),
             hinter: HistoryHinter {},
             colored_prompt: "".to_owned(),
             cursor_bracket: std::cell::Cell::new(None),
+            style,
+        }
+    }
+}
+
+impl StyleSettings {
+    pub fn new(metta_shim: &mut MettaShim) -> Self {
+        Self {
+            bracket_styles: metta_shim.get_config_expr_vec("BracketStyles").unwrap_or(vec!["94".to_string(), "93".to_string(), "95".to_string(), "96".to_string()]),
+            comment_style: metta_shim.get_config_string("CommentStyle").unwrap_or("32".to_string()),
+            variable_style: metta_shim.get_config_string("VariableStyle").unwrap_or("33".to_string()),
+            symbol_style: metta_shim.get_config_string("SymbolStyle").unwrap_or("34".to_string()),
+            string_style: metta_shim.get_config_string("StringStyle").unwrap_or("31".to_string()),
+            error_style: metta_shim.get_config_string("ErrorStyle").unwrap_or("91".to_string()),
+            bracket_match_style: metta_shim.get_config_string("BracketMatchStyle").unwrap_or("1;7".to_string()),
         }
     }
 }

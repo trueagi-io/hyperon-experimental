@@ -2,8 +2,9 @@
 use std::fmt::Display;
 use std::path::PathBuf;
 
+use hyperon::{sym, expr, ExpressionAtom};
 use hyperon::Atom;
-use hyperon::atom::{Grounded, ExecError, match_by_equality};
+use hyperon::atom::{Grounded, VariableAtom, ExecError, match_by_equality};
 use hyperon::matcher::MatchResultIter;
 use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
@@ -25,6 +26,7 @@ use crate::ReplParams;
 pub struct MettaShim {
     pub metta: Metta,
     pub result: Vec<Vec<Atom>>,
+    repl_params: Shared<ReplParams>,
 }
 
 #[macro_export]
@@ -64,7 +66,8 @@ impl MettaShim {
         let tokenizer = Shared::new(Tokenizer::new());
         let mut new_shim = Self {
             metta: Metta::from_space(space, tokenizer, repl_params.borrow().modules_search_paths().collect()),
-            result: vec![]
+            result: vec![],
+            repl_params: repl_params.clone(),
         };
 
         //Load the hyperonpy Python stdlib, if the repl includes Python support
@@ -85,6 +88,11 @@ impl MettaShim {
         //extend-py! should throw an error if we don't
         #[cfg(not(feature = "python"))]
         new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(ImportPyErr) });
+
+        //Run the config.metta file
+        let repl_params = repl_params.borrow();
+        let config_metta_path = repl_params.config_metta_path();
+        new_shim.load_metta_module(config_metta_path.clone());
 
         new_shim
     }
@@ -107,6 +115,47 @@ impl MettaShim {
             func(self)
         }}
     }
+
+    pub fn get_config_atom(&mut self, config_name: &str) -> Option<Atom> {
+        let mut result = None;
+        metta_shim_env!{{
+            let repl_params = self.repl_params.borrow();
+            let config_metta_path = repl_params.config_metta_path();
+            let metta_modules = self.metta.modules().borrow();
+            let config_space = metta_modules.get(config_metta_path).unwrap();
+            let bindings_set = config_space.query(&Atom::expr(vec![sym!("="), Atom::sym(config_name.to_string()), expr!(val)]));
+            if let Some(bindings) = bindings_set.into_iter().next() {
+                result = bindings.resolve(&VariableAtom::new("val"));
+            }
+        }}
+        result
+    }
+
+    pub fn get_config_string(&mut self, config_name: &str) -> Option<String> {
+        let atom = self.get_config_atom(config_name)?;
+
+        #[allow(unused_assignments)]
+        let mut result = None;
+        metta_shim_env!{{
+            result = Some(atom.to_string());
+        }}
+        result
+    }
+
+    pub fn get_config_expr_vec(&mut self, config_name: &str) -> Option<Vec<String>> {
+        let atom = self.get_config_atom(config_name)?;
+        let mut result = None;
+        metta_shim_env!{{
+            if let Ok(expr) = ExpressionAtom::try_from(atom) {
+                result = Some(expr.into_children()
+                    .into_iter()
+                    .map(|atom| atom.to_string())
+                    .collect())
+            }
+        }}
+        result
+    }
+
 }
 
 #[derive(Clone, PartialEq, Debug)]

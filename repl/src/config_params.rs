@@ -10,6 +10,9 @@ pub struct ReplParams {
     /// Path to the config dir for the whole repl, in an OS-specific location
     config_dir: PathBuf,
 
+    /// Path to the config.metta file, used to configure the repl
+    config_metta_path: PathBuf,
+
     /// Path to the dir containing the script being run, or the cwd the repl was invoked from in interactive mode
     metta_working_dir: PathBuf,
 
@@ -37,6 +40,16 @@ impl ReplParams {
             }
         };
 
+        //Create the default config.metta file, if none exists
+        let config_metta_path = config_dir.join("config.metta");
+        if !config_metta_path.exists() {
+            let mut file = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(&config_metta_path).unwrap();
+            file.write_all(&DEFAULT_CONFIG_METTA).unwrap();
+        }
+
         //Create the modules dir inside the config dir, if it doesn't already exist
         let modules_dir = config_dir.join("modules");
         std::fs::create_dir_all(&modules_dir).unwrap();
@@ -49,6 +62,7 @@ impl ReplParams {
 
         Self {
             config_dir: config_dir.into(),
+            config_metta_path,
             metta_working_dir,
             include_paths,
             history_file: Some(config_dir.join("history.txt")),
@@ -64,18 +78,12 @@ impl ReplParams {
     }
 
     /// A path to the config.metta file that's run to configure the repl environment
-    pub fn config_metta_path(&self) -> PathBuf {
-        let config_path = self.config_dir.join("config.metta");
+    pub fn config_metta_path(&self) -> &PathBuf {
 
-        //Create the default config.metta file, if none exists
-        if !config_path.exists() {
-            let mut file = fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .open(&config_path).unwrap();
-            file.write_all(&DEFAULT_CONFIG_METTA).unwrap();
-        }
-        config_path
+        //TODO: Temporary access to avoid warning.  Delete soon
+        let _ = self.config_dir;
+
+        &self.config_metta_path
     }
 
 }
