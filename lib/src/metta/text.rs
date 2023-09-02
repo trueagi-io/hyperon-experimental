@@ -62,9 +62,9 @@ impl Tokenizer {
 
 }
 
-/// The meaning of a parsed token, generated from a substring in the input text
+/// The meaning of a parsed syntactic element, generated from a substring in the input text
 #[derive(Clone, Debug)]
-pub enum ParseTokenType {
+pub enum SyntaxNodeType {
     /// Comment line.  All text between a non-escaped ';' and a newline
     Comment,
     /// Variable.  A symbol immediately preceded by a '$' sigil
@@ -75,8 +75,8 @@ pub enum ParseTokenType {
     //TODO: Currently this `Special` token is never generated.  When I split the atom generation from the parsing, I will
     //  roll the Tokenizer check into `next_token_with_visitor`, and eliminate `parse_atom_with_visitor`
     Special,
-    /// Symbol Token.  Any other whitespace-delimited token that isn't a [Variable](ParseTokenType::Variable),
-    ///   [StringLiteral](ParseTokenType::ParseTokenType), or [Special](ParseTokenType::Special)
+    /// Symbol Token.  Any other whitespace-delimited token that isn't a [Variable](SyntaxNodeType::Variable),
+    ///   [StringLiteral](SyntaxNodeType::StringLiteral), or [Special](SyntaxNodeType::Special)
     MiscSymbol,
     /// Open Parenthesis.  A non-escaped '(' character indicating the beginning of an expression
     OpenParen,
@@ -95,10 +95,9 @@ pub enum ParseTokenType {
 }
 
 #[derive(Clone, Debug)]
-pub struct ParseToken<'a> {
-    pub token_type: ParseTokenType,
+pub struct SyntaxNode {
+    pub node_type: SyntaxNodeType,
     pub src_range: Range<usize>,
-    pub substr: &'a str,
 }
 
 pub struct SExprParser<'a> {
@@ -117,13 +116,13 @@ impl<'a> SExprParser<'a> {
     }
 
     pub fn parse_with_visitor<C>(&mut self, tokenizer: &Tokenizer, mut callback: C) -> Result<Option<Atom>, String>
-        where C: FnMut(ParseToken)
+        where C: FnMut(SyntaxNode)
     {
         self.parse_with_visitor_internal(tokenizer, &mut callback)
     }
 
     fn parse_with_visitor_internal<C>(&mut self, tokenizer: &Tokenizer, callback: &mut C) -> Result<Option<Atom>, String>
-        where C: FnMut(ParseToken)
+        where C: FnMut(SyntaxNode)
     {
         while let Some((idx, c)) = self.it.peek().cloned() {
             match c {
@@ -131,11 +130,11 @@ impl<'a> SExprParser<'a> {
                     let start_idx = idx;
                     self.skip_line();
                     let range = start_idx..self.cur_idx();
-                    callback(self.new_parse_token(ParseTokenType::Comment, range));
+                    callback(self.new_syntax_node(SyntaxNodeType::Comment, range));
                 },
                 _ if c.is_whitespace() => {
                     let range = idx..idx+1;
-                    callback(self.new_parse_token(ParseTokenType::Whitespace, range));
+                    callback(self.new_syntax_node(SyntaxNodeType::Whitespace, range));
                     self.it.next();
                 },
                 '$' => {
@@ -144,18 +143,18 @@ impl<'a> SExprParser<'a> {
                 },
                 '(' => {
                     let range = idx..idx+1;
-                    callback(self.new_parse_token(ParseTokenType::OpenParen, range));
+                    callback(self.new_syntax_node(SyntaxNodeType::OpenParen, range));
 
                     self.it.next();
                     let start_idx = idx;
                     let expr = self.parse_expr_with_visitor(tokenizer, callback)?;
                     let range = start_idx..self.cur_idx();
-                    callback(self.new_parse_token(ParseTokenType::Expression, range));
+                    callback(self.new_syntax_node(SyntaxNodeType::Expression, range));
                     return Ok(Some(expr));
                 },
                 ')' => {
                     let range = idx..idx+1;
-                    callback(self.new_parse_token(ParseTokenType::CloseParen, range));
+                    callback(self.new_syntax_node(SyntaxNodeType::CloseParen, range));
                     self.it.next();
 
                     self.parse_leftovers_with_visitor(callback);
@@ -165,7 +164,7 @@ impl<'a> SExprParser<'a> {
                     let start_idx = idx;
                     let atom = self.parse_atom_with_visitor(tokenizer, callback)?;
                     let range = start_idx..self.cur_idx();
-                    callback(self.new_parse_token(ParseTokenType::Atom, range));
+                    callback(self.new_syntax_node(SyntaxNodeType::Atom, range));
                     return Ok(Some(atom));
                 },
             }
@@ -182,11 +181,10 @@ impl<'a> SExprParser<'a> {
         }
     }
 
-    fn new_parse_token(&self, token_type: ParseTokenType, src_range: Range<usize>) -> ParseToken {
-        ParseToken {
-            token_type,
+    fn new_syntax_node(&self, node_type: SyntaxNodeType, src_range: Range<usize>) -> SyntaxNode {
+        SyntaxNode {
+            node_type,
             src_range: src_range.clone(),
-            substr: &self.text[src_range],
         }
     }
 
@@ -200,17 +198,17 @@ impl<'a> SExprParser<'a> {
     }
 
     fn parse_leftovers_with_visitor<C>(&mut self, callback: &mut C)
-        where C: FnMut(ParseToken)
+        where C: FnMut(SyntaxNode)
     {
         if let Some((start_idx, _c)) = self.it.peek().cloned() {
             let (last, _c) = self.it.clone().last().unwrap();
             let range = start_idx..last+1;
-            callback(self.new_parse_token(ParseTokenType::LeftoverText, range));
+            callback(self.new_syntax_node(SyntaxNodeType::LeftoverText, range));
         }
     }
 
     fn parse_atom_with_visitor<C>(&mut self, tokenizer: &Tokenizer, callback: &mut C) -> Result<Atom, String>
-        where C: FnMut(ParseToken)
+        where C: FnMut(SyntaxNode)
     {
         let token = self.next_token_with_visitor(callback)?;
         let constr = tokenizer.find_token(token.as_str());
@@ -222,7 +220,7 @@ impl<'a> SExprParser<'a> {
     }
 
     fn parse_expr_with_visitor<C>(&mut self, tokenizer: &Tokenizer, callback: &mut C) -> Result<Atom, String>
-        where C: FnMut(ParseToken)
+        where C: FnMut(SyntaxNode)
     {
         let mut children: Vec<Atom> = Vec::new();
         while let Some((idx, c)) = self.it.peek().cloned() {
@@ -231,16 +229,16 @@ impl<'a> SExprParser<'a> {
                     let start_idx = idx;
                     self.skip_line();
                     let range = start_idx..self.cur_idx();
-                    callback(self.new_parse_token(ParseTokenType::Comment, range));
+                    callback(self.new_syntax_node(SyntaxNodeType::Comment, range));
                 },
                 _ if c.is_whitespace() => {
                     let range = idx..idx+1;
-                    callback(self.new_parse_token(ParseTokenType::Whitespace, range));
+                    callback(self.new_syntax_node(SyntaxNodeType::Whitespace, range));
                     self.it.next();
                 },
                 ')' => {
                     let range = idx..idx+1;
-                    callback(self.new_parse_token(ParseTokenType::CloseParen, range));
+                    callback(self.new_syntax_node(SyntaxNodeType::CloseParen, range));
                     self.it.next();
                     let expr = Atom::expr(children);
                     return Ok(expr);
@@ -258,21 +256,21 @@ impl<'a> SExprParser<'a> {
     }
 
     fn next_token_with_visitor<C>(&mut self, callback: &mut C) -> Result<String, String>
-        where C: FnMut(ParseToken)
+        where C: FnMut(SyntaxNode)
     {
         match self.it.peek().cloned() {
             Some((idx, '"')) => {
                 let start_idx = idx;
                 let str_token = self.next_string()?;
                 let range = start_idx..self.cur_idx();
-                callback(self.new_parse_token(ParseTokenType::StringLiteral, range));
+                callback(self.new_syntax_node(SyntaxNodeType::StringLiteral, range));
                 Ok(str_token)
             },
             Some((idx, _)) => {
                 let start_idx = idx;
                 let tok = self.next_word()?;
                 let range = start_idx..self.cur_idx();
-                callback(self.new_parse_token(ParseTokenType::MiscSymbol, range));
+                callback(self.new_syntax_node(SyntaxNodeType::MiscSymbol, range));
                 Ok(tok)
             },
             None => Ok(String::new())
@@ -318,7 +316,7 @@ impl<'a> SExprParser<'a> {
     }
 
     fn next_var_with_visitor<C>(&mut self, callback: &mut C) -> Result<String, String>
-        where C: FnMut(ParseToken)
+        where C: FnMut(SyntaxNode)
     {
         let (start_idx, _c) = self.it.peek().cloned().unwrap();
         let mut tmp_it = self.it.clone();
@@ -338,7 +336,7 @@ impl<'a> SExprParser<'a> {
         }
         self.it = tmp_it;
         let range = start_idx..self.cur_idx();
-        callback(self.new_parse_token(ParseTokenType::Variable, range));
+        callback(self.new_syntax_node(SyntaxNodeType::Variable, range));
         Ok(token)
     }
 
