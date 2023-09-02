@@ -1,5 +1,9 @@
 
 use std::path::{Path, PathBuf};
+use std::io::Write;
+use std::fs;
+
+const DEFAULT_CONFIG_METTA: &[u8] = include_bytes!("config.default.metta");
 
 #[derive(Default, Debug)]
 pub struct ReplParams {
@@ -55,12 +59,23 @@ impl ReplParams {
     ///
     /// The metta_working_dir is always returned first
     pub fn modules_search_paths<'a>(&'a self) -> impl Iterator<Item=PathBuf> + 'a {
-
-        //TODO: This is here to temporarily squish a warning.
-        let _ = self.config_dir;
-
         [self.metta_working_dir.clone()].into_iter().chain(
             self.include_paths.iter().cloned())
+    }
+
+    /// A path to the config.metta file that's run to configure the repl environment
+    pub fn config_metta_path(&self) -> PathBuf {
+        let config_path = self.config_dir.join("config.metta");
+
+        //Create the default config.metta file, if none exists
+        if !config_path.exists() {
+            let mut file = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(&config_path).unwrap();
+            file.write_all(&DEFAULT_CONFIG_METTA).unwrap();
+        }
+        config_path
     }
 
 }

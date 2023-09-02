@@ -53,7 +53,12 @@ fn main() -> Result<()> {
     };
     let repl_params = Shared::new(repl_params);
 
+    //Create our MeTTa runtime environment
     let mut metta = MettaShim::new(repl_params.clone());
+
+    //Run the config.metta file
+    let config_metta_path = repl_params.borrow().config_metta_path();
+    metta.load_metta_module(config_metta_path);
 
     //If we have .metta files to run, then run them
     if let Some(metta_file) = primary_metta_file {
