@@ -103,9 +103,18 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> 
 
     //The Interpreter Loop
     loop {
-        let p = format!("> ");
-        rl.helper_mut().expect("No helper").colored_prompt = format!("\x1b[1;32m{p}\x1b[0m");
-        let readline = rl.readline(&p);
+
+        //Set the prompt based on resolving a MeTTa variable
+        let prompt = {
+            let helper = rl.helper_mut().unwrap();
+            let mut metta = helper.metta.borrow_mut();
+            let prompt = metta.get_config_string("DefaultPrompt").unwrap_or("> ".to_string());
+            let styled_prompt = metta.get_config_string("StyledPrompt").unwrap_or(format!("\x1b[1;32m{prompt}\x1b[0m"));
+            helper.colored_prompt = styled_prompt;
+            prompt
+        };
+
+        let readline = rl.readline(&prompt);
         match readline {
             Ok(line) => {
                 rl.add_history_entry(line.as_str())?;

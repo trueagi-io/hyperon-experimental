@@ -137,9 +137,27 @@ impl MettaShim {
         #[allow(unused_assignments)]
         let mut result = None;
         metta_shim_env!{{
-            result = Some(atom.to_string());
+            result = Some(Self::strip_quotes(atom.to_string()));
         }}
         result
+    }
+
+    /// A utility function to return the part of a string in between starting and ending quotes
+    // TODO: Roll this into a stdlib grounded string module, maybe as a test case for
+    //   https://github.com/trueagi-io/hyperon-experimental/issues/351
+    fn strip_quotes(the_string: String) -> String {
+        if let Some(first) = the_string.chars().next() {
+            if first == '"' {
+                if let Some(last) = the_string.chars().last() {
+                    if last == '"' {
+                        if the_string.len() > 1 {
+                            return String::from_utf8(the_string.as_bytes()[1..the_string.len()-1].to_vec()).unwrap();
+                        }
+                    }
+                }
+            }
+        }
+        the_string
     }
 
     pub fn get_config_expr_vec(&mut self, config_name: &str) -> Option<Vec<String>> {
@@ -149,7 +167,7 @@ impl MettaShim {
             if let Ok(expr) = ExpressionAtom::try_from(atom) {
                 result = Some(expr.into_children()
                     .into_iter()
-                    .map(|atom| atom.to_string())
+                    .map(|atom| Self::strip_quotes(atom.to_string()))
                     .collect())
             }
         }}
