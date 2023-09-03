@@ -6,13 +6,14 @@ use hyperon::Atom;
 use hyperon::atom::VariableAtom;
 use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
-use hyperon::metta::runner::Metta;
+use hyperon::metta::runner::{Metta, MettaRunnerMode};
 use hyperon::metta::runner::stdlib::register_rust_tokens;
 use hyperon::metta::text::Tokenizer;
 use hyperon::metta::text::SExprParser;
 use hyperon::common::shared::Shared;
 
 use crate::ReplParams;
+use crate::SIGNAL_STATE;
 
 /// MettaShim is responsible for **ALL** calls between the repl and MeTTa, and is in charge of keeping
 /// Python happy (and perhaps other languages in the future).
@@ -103,7 +104,26 @@ impl MettaShim {
     pub fn exec(&mut self, line: &str) {
         metta_shim_env!{{
             let mut parser = SExprParser::new(line);
-            self.result = self.metta.run(&mut parser).unwrap();
+            let mut runner_mode = MettaRunnerMode::ADD;
+            self.result = Vec::new();
+
+            while runner_mode != MettaRunnerMode::TERMINATE {
+                //If we received an interrupt, then clear it and break the loop
+                if *SIGNAL_STATE.lock().unwrap() {
+                    *SIGNAL_STATE.lock().unwrap() = false;
+                    break;
+                }
+
+                //Run the next step
+                match self.metta.run_step(&mut parser, runner_mode, &mut self.result) {
+                    Ok(mode) => {
+                        runner_mode = mode;
+                    },
+                    Err(err) => {
+                        panic!("Unhandled MeTTa error: {}", err);
+                    }
+                }
+            }
         }}
     }
 

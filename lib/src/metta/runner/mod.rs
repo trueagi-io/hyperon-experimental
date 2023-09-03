@@ -36,9 +36,11 @@ pub struct MettaContents {
     search_paths: Vec<PathBuf>,
 }
 
-enum Mode {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MettaRunnerMode {
     ADD,
     INTERPRET,
+    TERMINATE,
 }
 
 impl Metta {
@@ -142,54 +144,59 @@ impl Metta {
     }
 
     pub fn run(&self, parser: &mut SExprParser) -> Result<Vec<Vec<Atom>>, String> {
-        let mut mode = Mode::ADD;
+        let mut mode = MettaRunnerMode::ADD;
         let mut results: Vec<Vec<Atom>> = Vec::new();
 
-        loop {
-            let atom = parser.parse(&self.0.tokenizer.borrow())?;
-
-            if let Some(atom) = atom {
-                if atom == EXEC_SYMBOL {
-                    mode = Mode::INTERPRET;
-                    continue;
-                }
-                match mode {
-                    Mode::ADD => {
-                        if let Err(atom) = self.add_atom(atom) {
-                            results.push(vec![atom]);
-                            break;
-                        }
-                    },
-                    Mode::INTERPRET => {
-                        match self.evaluate_atom(atom) {
-                            Err(msg) => return Err(msg),
-                            Ok(result) => {
-                                fn is_error(atom: &Atom) -> bool {
-                                    match atom {
-                                        Atom::Expression(expr) => {
-                                            expr.children().len() > 0 && expr.children()[0] == ERROR_SYMBOL
-                                        },
-                                        _ => false,
-                                    }
-                                }
-                                let error = result.iter().any(|atom| is_error(atom));
-                                results.push(result);
-                                if error {
-                                    break;
-                                }
-                            }
-                        }
-                    },
-                }
-                mode = Mode::ADD;
-            } else {
-                break;
-            }
+        while mode != MettaRunnerMode::TERMINATE {
+            mode = self.run_step(parser, mode, &mut results)?;
         }
         Ok(results)
     }
 
+    pub fn run_step(&self, parser: &mut SExprParser, mode: MettaRunnerMode, intermediate_results: &mut Vec<Vec<Atom>>) -> Result<MettaRunnerMode, String> {
 
+        let atom = parser.parse(&self.0.tokenizer.borrow())?;
+
+        if let Some(atom) = atom {
+            if atom == EXEC_SYMBOL {
+                return Ok(MettaRunnerMode::INTERPRET);
+            }
+            match mode {
+                MettaRunnerMode::ADD => {
+                    if let Err(atom) = self.add_atom(atom) {
+                        intermediate_results.push(vec![atom]);
+                        return Ok(MettaRunnerMode::TERMINATE);
+                    }
+                },
+                MettaRunnerMode::INTERPRET => {
+                    match self.evaluate_atom(atom) {
+                        Err(msg) => return Err(msg),
+                        Ok(result) => {
+                            fn is_error(atom: &Atom) -> bool {
+                                match atom {
+                                    Atom::Expression(expr) => {
+                                        expr.children().len() > 0 && expr.children()[0] == ERROR_SYMBOL
+                                    },
+                                    _ => false,
+                                }
+                            }
+                            let error = result.iter().any(|atom| is_error(atom));
+                            intermediate_results.push(result);
+                            if error {
+                                return Ok(MettaRunnerMode::TERMINATE);
+                            }
+                        }
+                    }
+                },
+                MettaRunnerMode::TERMINATE => {
+                    return Ok(MettaRunnerMode::TERMINATE);
+                },
+            }
+            Ok(MettaRunnerMode::ADD)
+        }  else {
+            Ok(MettaRunnerMode::TERMINATE)
+        }
+    }
 
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
         match self.type_check(atom) {

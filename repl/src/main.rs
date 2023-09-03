@@ -1,5 +1,7 @@
 
 use std::path::PathBuf;
+use std::thread;
+use std::sync::Mutex;
 
 use rustyline::error::ReadlineError;
 use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent};
@@ -7,6 +9,7 @@ use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent};
 use anyhow::Result;
 use clap::Parser;
 use directories::ProjectDirs;
+use signal_hook::{consts::SIGINT, iterator::Signals};
 
 use hyperon::common::shared::Shared;
 
@@ -18,6 +21,8 @@ use config_params::*;
 
 mod interactive_helper;
 use interactive_helper::*;
+
+static SIGNAL_STATE: Mutex<bool> = Mutex::new(false);
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -56,9 +61,21 @@ fn main() -> Result<()> {
     //Create our MeTTa runtime environment
     let mut metta = MettaShim::new(repl_params.clone());
 
+    //Spawn a signal handler background thread, to deal with passing interrupts to the execution loop
+    let mut signals = Signals::new(&[SIGINT])?;
+    thread::spawn(move || {
+        for _sig in signals.forever() {
+            //Assume SIGINT, since that's the only registered handler
+            println!("Interrupt Received, Stopping MeTTa Operation...");
+            *SIGNAL_STATE.lock().unwrap() = true;
+        }
+    });
+
     //If we have .metta files to run, then run them
     if let Some(metta_file) = primary_metta_file {
 
+        //All non-primary .metta files run without printing output
+        //TODO: Currently the interrupt handler does not break these
         for import_file in other_metta_files {
             metta.load_metta_module(import_file.clone());
         }
