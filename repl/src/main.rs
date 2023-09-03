@@ -67,15 +67,17 @@ fn main() -> Result<()> {
     thread::spawn(move || {
         for _sig in signals.forever() {
             //Assume SIGINT, since that's the only registered handler
-            match *SIGNAL_STATE.lock().unwrap() {
-                0 => println!("Interrupt received, stopping MeTTa.  Please wait..."),
-                1 => println!("Stopping in progress..."),
+            let mut signal_state = SIGNAL_STATE.lock().unwrap();
+            match *signal_state {
+                0 => println!("Interrupt received, stopping MeTTa..."),
+                1 => println!("Stopping in progress.  Please wait..."),
                 _ => {
                     println!("Ok, I get it!  Yeesh!");
                     exit(-1);
                 },
             }
-            *SIGNAL_STATE.lock().unwrap() += 1;
+            *signal_state += 1;
+            drop(signal_state);
         }
     });
 

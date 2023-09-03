@@ -107,12 +107,17 @@ impl MettaShim {
             let mut runner_mode = MettaRunnerMode::ADD;
             self.result = Vec::new();
 
+            //We don't want any leftover interrupts to break us this time
+            *SIGNAL_STATE.lock().unwrap() = 0;
+
             while runner_mode != MettaRunnerMode::TERMINATE {
                 //If we received an interrupt, then clear it and break the loop
-                if *SIGNAL_STATE.lock().unwrap() > 0 {
-                    *SIGNAL_STATE.lock().unwrap() = 0;
+                let mut signal_state = SIGNAL_STATE.lock().unwrap();
+                if *signal_state > 0 {
+                    *signal_state = 0;
                     break;
                 }
+                drop(signal_state);
 
                 //Run the next step
                 match self.metta.run_step(&mut parser, runner_mode, &mut self.result) {
