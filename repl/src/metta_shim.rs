@@ -1,14 +1,11 @@
 
-use std::fmt::Display;
 use std::path::PathBuf;
 
 use hyperon::{sym, expr, ExpressionAtom};
 use hyperon::Atom;
-use hyperon::atom::{Grounded, VariableAtom, ExecError, match_by_equality};
-use hyperon::matcher::MatchResultIter;
+use hyperon::atom::VariableAtom;
 use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
-use hyperon::metta::*;
 use hyperon::metta::runner::Metta;
 use hyperon::metta::runner::stdlib::register_rust_tokens;
 use hyperon::metta::text::Tokenizer;
@@ -87,7 +84,7 @@ impl MettaShim {
 
         //extend-py! should throw an error if we don't
         #[cfg(not(feature = "python"))]
-        new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(ImportPyErr) });
+        new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(py_mod_err::ImportPyErr) });
 
         //Run the config.metta file
         let repl_params = repl_params.borrow();
@@ -176,26 +173,35 @@ impl MettaShim {
 
 }
 
-#[derive(Clone, PartialEq, Debug)]
-pub struct ImportPyErr;
+#[cfg(not(feature = "python"))]
+mod py_mod_err {
+    use std::fmt::Display;
+    use hyperon::Atom;
+    use hyperon::atom::{Grounded, ExecError, match_by_equality};
+    use hyperon::matcher::MatchResultIter;
+    use hyperon::metta::*;
 
-impl Display for ImportPyErr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "extend-py!")
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct ImportPyErr;
+
+    impl Display for ImportPyErr {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "extend-py!")
+        }
     }
-}
 
-impl Grounded for ImportPyErr {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED])
-    }
+    impl Grounded for ImportPyErr {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED])
+        }
 
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        Err(ExecError::from("extend-py! not available in metta repl without Python support"))
-    }
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            Err(ExecError::from("extend-py! not available in metta repl without Python support"))
+        }
 
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
     }
 }
 
