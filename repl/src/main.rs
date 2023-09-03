@@ -1,6 +1,7 @@
 
 use std::path::PathBuf;
 use std::thread;
+use std::process::exit;
 use std::sync::Mutex;
 
 use rustyline::error::ReadlineError;
@@ -22,7 +23,7 @@ use config_params::*;
 mod interactive_helper;
 use interactive_helper::*;
 
-static SIGNAL_STATE: Mutex<bool> = Mutex::new(false);
+static SIGNAL_STATE: Mutex<usize> = Mutex::new(0);
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -66,8 +67,15 @@ fn main() -> Result<()> {
     thread::spawn(move || {
         for _sig in signals.forever() {
             //Assume SIGINT, since that's the only registered handler
-            println!("Interrupt Received, Stopping MeTTa Operation...");
-            *SIGNAL_STATE.lock().unwrap() = true;
+            match *SIGNAL_STATE.lock().unwrap() {
+                0 => println!("Interrupt received, stopping MeTTa.  Please wait..."),
+                1 => println!("Stopping in progress..."),
+                _ => {
+                    println!("Ok, I get it!  Yeesh!");
+                    exit(-1);
+                },
+            }
+            *SIGNAL_STATE.lock().unwrap() += 1;
         }
     });
 

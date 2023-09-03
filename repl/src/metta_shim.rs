@@ -109,8 +109,8 @@ impl MettaShim {
 
             while runner_mode != MettaRunnerMode::TERMINATE {
                 //If we received an interrupt, then clear it and break the loop
-                if *SIGNAL_STATE.lock().unwrap() {
-                    *SIGNAL_STATE.lock().unwrap() = false;
+                if *SIGNAL_STATE.lock().unwrap() > 0 {
+                    *SIGNAL_STATE.lock().unwrap() = 0;
                     break;
                 }
 
