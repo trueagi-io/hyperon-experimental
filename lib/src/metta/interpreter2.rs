@@ -91,6 +91,16 @@ fn atom_into_array<const N: usize>(atom: Atom) -> Option<[Atom; N]> {
 
 impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
 
+    /// INTERNAL USE ONLY. Create an InterpreterState that is ready to yield results
+    #[allow(dead_code)] //TODO: only silence the warning until interpreter2 replaces interpreter
+    pub(crate) fn new_finished(space: T, results: Vec<Atom>) -> Self {
+        Self {
+            plan: vec![],
+            finished: results,
+            context: InterpreterContextRef::new(space),
+        }
+    }
+
     pub fn has_next(&self) -> bool {
         !self.plan.is_empty()
     }

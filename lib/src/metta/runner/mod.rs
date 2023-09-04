@@ -11,13 +11,13 @@ use std::path::PathBuf;
 use std::collections::HashMap;
 
 pub mod stdlib;
-use super::interpreter::interpret;
+use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
 use stdlib::*;
 
 // Uncomment three lines below and comment three lines above to
 // switch to the minimal MeTTa version
 //pub mod stdlib2;
-//use super::interpreter2::interpret;
+//use super::interpreter2::{interpret, interpret_init, interpret_step, InterpreterState};
 //use stdlib2::*;
 
 mod arithmetics;
@@ -36,16 +36,16 @@ pub struct MettaContents {
     search_paths: Vec<PathBuf>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq)]
 enum MettaRunnerMode {
     ADD,
     INTERPRET,
     TERMINATE,
 }
 
-#[derive(Clone, Debug)]
-pub struct RunnerState {
+pub struct RunnerState<'a> {
     mode: MettaRunnerMode,
+    interpreter_state: Option<InterpreterState<'a, DynSpace>>,
     results: Vec<Vec<Atom>>,
 }
 
@@ -164,50 +164,75 @@ impl Metta {
 
     pub fn run_step(&self, parser: &mut SExprParser, state: &mut RunnerState) -> Result<(), String> {
 
-        let atom = parser.parse(&self.0.tokenizer.borrow())?;
+        // If we're in the middle of interpreting an atom...
+        if let Some(interpreter_state) = core::mem::replace(&mut state.interpreter_state, None) {
 
-        if let Some(atom) = atom {
-            if atom == EXEC_SYMBOL {
-                state.mode = MettaRunnerMode::INTERPRET;
-                return Ok(());
-            }
-            match state.mode {
-                MettaRunnerMode::ADD => {
-                    if let Err(atom) = self.add_atom(atom) {
-                        state.results.push(vec![atom]);
-                        state.mode = MettaRunnerMode::TERMINATE;
-                        return Ok(());
-                    }
-                },
-                MettaRunnerMode::INTERPRET => {
-                    match self.evaluate_atom(atom) {
-                        Err(msg) => return Err(msg),
-                        Ok(result) => {
-                            fn is_error(atom: &Atom) -> bool {
-                                match atom {
-                                    Atom::Expression(expr) => {
-                                        expr.children().len() > 0 && expr.children()[0] == ERROR_SYMBOL
-                                    },
-                                    _ => false,
-                                }
-                            }
-                            let error = result.iter().any(|atom| is_error(atom));
-                            state.results.push(result);
-                            if error {
-                                state.mode = MettaRunnerMode::TERMINATE;
-                                return Ok(());
+            if interpreter_state.has_next() {
+
+                //Take a step with the interpreter, and put it back for next time
+                state.interpreter_state = Some(interpret_step(interpreter_state))
+            } else {
+
+                //This interpreter is finished, process the results
+                match interpreter_state.into_result() {
+                    Err(msg) => return Err(msg),
+                    Ok(result) => {
+                        fn is_error(atom: &Atom) -> bool {
+                            match atom {
+                                Atom::Expression(expr) => {
+                                    expr.children().len() > 0 && expr.children()[0] == ERROR_SYMBOL
+                                },
+                                _ => false,
                             }
                         }
+
+                        let error = result.iter().any(|atom| is_error(atom));
+                        state.results.push(result);
+                        if error {
+                            state.mode = MettaRunnerMode::TERMINATE;
+                            return Ok(());
+                        }
                     }
-                },
-                MettaRunnerMode::TERMINATE => {
-                    return Ok(());
-                },
+                }
             }
-            state.mode = MettaRunnerMode::ADD;
-        }  else {
-            state.mode = MettaRunnerMode::TERMINATE;
+
+        } else {
+
+            // We'll parse the next atom, and start a new intperpreter
+            if let Some(atom) = parser.parse(&self.0.tokenizer.borrow())? {
+                if atom == EXEC_SYMBOL {
+                    state.mode = MettaRunnerMode::INTERPRET;
+                    return Ok(());
+                }
+                match state.mode {
+                    MettaRunnerMode::ADD => {
+                        if let Err(atom) = self.add_atom(atom) {
+                            state.results.push(vec![atom]);
+                            state.mode = MettaRunnerMode::TERMINATE;
+                            return Ok(());
+                        }
+                    },
+                    MettaRunnerMode::INTERPRET => {
+
+                        state.interpreter_state = Some(match self.type_check(atom) {
+                            Err(atom) => {
+                                InterpreterState::new_finished(self.space().clone(), vec![atom])
+                            },
+                            Ok(atom) => {
+                                interpret_init(self.space().clone(), &atom)
+                            },
+                        });
+                    },
+                    MettaRunnerMode::TERMINATE => {
+                        return Ok(());
+                    },
+                }
+                state.mode = MettaRunnerMode::ADD;
+            }  else {
+                state.mode = MettaRunnerMode::TERMINATE;
+            }
         }
+
         Ok(())
     }
 
@@ -235,10 +260,11 @@ impl Metta {
 
 }
 
-impl RunnerState {
+impl<'a> RunnerState<'a> {
     fn new() -> Self {
         Self {
             mode: MettaRunnerMode::ADD,
+            interpreter_state: None,
             results: vec![],
         }
     }

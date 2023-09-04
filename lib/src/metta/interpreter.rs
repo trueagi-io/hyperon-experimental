@@ -86,6 +86,15 @@ pub struct InterpreterState<'a, T: SpaceRef<'a>> {
 }
 
 impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
+
+    /// INTERNAL USE ONLY. Create an InterpreterState that is ready to yield results
+    pub(crate) fn new_finished(_space: T, results: Vec<Atom>) -> Self {
+        Self {
+            step_result: StepResult::Return(results.into_iter().map(|atom| InterpretedAtom(atom, Bindings::new())).collect()),
+            phantom: <_>::default(),
+        }
+    }
+
     pub fn has_next(&self) -> bool {
         self.step_result.has_next()
     }
@@ -95,7 +104,7 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
                 let res = res.drain(0..).map(|res| res.into_tuple().0).collect();
                 Ok(res)
             },
-            StepResult::Error(_) => Ok(vec![]),
+            StepResult::Error((atom, err)) => Ok(vec![Atom::expr([ERROR_SYMBOL, atom, err])]),
             StepResult::Execute(_) => Err("Evaluation is not finished".into())
         }
     }
