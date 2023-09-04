@@ -37,9 +37,8 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v3
 
-      - name: Set env
-        run: echo "GITHUB_REF_NAME=${{github.ref_name}}" | tee $GITHUB_ENV
-        run: echo "GITHUB_EVENT_NAME=${{github.event_name}}" | tee $GITHUB_ENV
+      - run: echo "GITHUB_REF_NAME=${{github.ref_name}}" | tee $GITHUB_ENV
+      - run: echo "GITHUB_EVENT_NAME=${{github.event_name}}" | tee $GITHUB_ENV
 
       - name: Build wheels on {{ matrix.os }}
         uses: pypa/cibuildwheel@v2.13.1
@@ -49,7 +48,7 @@ jobs:
           package-dir: ./python
 
       - name: Publish artifacts on GitHub
-        if: ${{github.event_name}} == 'pubished'
+        if: github.event_name == 'pubished'
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.WORKFLOW_GITHUB_TOKEN }}
