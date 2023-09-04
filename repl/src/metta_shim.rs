@@ -6,7 +6,7 @@ use hyperon::Atom;
 use hyperon::atom::VariableAtom;
 use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
-use hyperon::metta::runner::{Metta, MettaRunnerMode};
+use hyperon::metta::runner::Metta;
 use hyperon::metta::runner::stdlib::register_rust_tokens;
 use hyperon::metta::text::Tokenizer;
 use hyperon::metta::text::SExprParser;
@@ -104,13 +104,12 @@ impl MettaShim {
     pub fn exec(&mut self, line: &str) {
         metta_shim_env!{{
             let mut parser = SExprParser::new(line);
-            let mut runner_mode = MettaRunnerMode::ADD;
-            self.result = Vec::new();
+            let mut runner_state = self.metta.start_run();
 
             //We don't want any leftover interrupts to break us this time
             *SIGNAL_STATE.lock().unwrap() = 0;
 
-            while runner_mode != MettaRunnerMode::TERMINATE {
+            while !runner_state.is_complete() {
                 //If we received an interrupt, then clear it and break the loop
                 let mut signal_state = SIGNAL_STATE.lock().unwrap();
                 if *signal_state > 0 {
@@ -120,14 +119,9 @@ impl MettaShim {
                 drop(signal_state);
 
                 //Run the next step
-                match self.metta.run_step(&mut parser, runner_mode, &mut self.result) {
-                    Ok(mode) => {
-                        runner_mode = mode;
-                    },
-                    Err(err) => {
-                        panic!("Unhandled MeTTa error: {}", err);
-                    }
-                }
+                self.metta.run_step(&mut parser, &mut runner_state)
+                    .unwrap_or_else(|err| panic!("Unhandled MeTTa error: {}", err));
+                self.result = runner_state.intermediate_results().clone();
             }
         }}
     }

@@ -1,10 +1,8 @@
 use hyperon::common::shared::Shared;
 use hyperon::space::DynSpace;
-use hyperon::Atom;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
-use hyperon::metta::interpreter::InterpretedAtom;
-use hyperon::common::plan::StepResult;
+use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::Metta;
 use hyperon::rust_type_atom;
 
@@ -345,19 +343,19 @@ pub struct step_result_t {
     result: *mut RustStepResult,
 }
 
-struct RustStepResult(StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)>);
+struct RustStepResult(InterpreterState<'static, DynSpace>);
 
-impl From<StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)>> for step_result_t {
-    fn from(result: StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)>) -> Self {
-        Self{ result: Box::into_raw(Box::new(RustStepResult(result))) }
+impl From<InterpreterState<'static, DynSpace>> for step_result_t {
+    fn from(state: InterpreterState<'static, DynSpace>) -> Self {
+        Self{ result: Box::into_raw(Box::new(RustStepResult(state))) }
     }
 }
 
 impl step_result_t {
-    fn into_inner(self) -> StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)> {
+    fn into_inner(self) -> InterpreterState<'static, DynSpace> {
         unsafe{ Box::from_raw(self.result).0 }
     }
-    fn borrow(&self) -> &StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)> {
+    fn borrow(&self) -> &InterpreterState<'static, DynSpace> {
         &unsafe{ &*(&*self).result }.0
     }
 }
@@ -427,13 +425,9 @@ pub extern "C" fn step_has_next(step: *const step_result_t) -> bool {
 pub extern "C" fn step_get_result(step: step_result_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
     let step = step.into_inner();
-    match step {
-        StepResult::Return(mut res) => {
-            let res = res.drain(0..).map(|res| res.into_tuple().0).collect();
-            return_atoms(&res, callback, context);
-        },
-        StepResult::Error(_) => return_atoms(&vec![], callback, context),
-        _ => panic!("Not expected step result: {:?}", step),
+    match step.into_result() {
+        Ok(res) => return_atoms(&res, callback, context),
+        Err(_) => return_atoms(&vec![], callback, context),
     }
 }
 

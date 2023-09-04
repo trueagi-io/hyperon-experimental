@@ -91,11 +91,11 @@ fn atom_into_array<const N: usize>(atom: Atom) -> Option<[Atom; N]> {
 
 impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
 
-    fn has_next(&self) -> bool {
+    pub fn has_next(&self) -> bool {
         !self.plan.is_empty()
     }
 
-    fn into_result(self) -> Result<Vec<Atom>, String> {
+    pub fn into_result(self) -> Result<Vec<Atom>, String> {
         if self.has_next() {
             Err("Evaluation is not finished".into())
         } else {
@@ -142,6 +142,7 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
     }
 }
 
+//TODO: These docs are out of date for the new interpreter
 /// Perform next step of the interpretation plan and return the result. Panics
 /// when [StepResult::Return] or [StepResult::Error] are passed as input.
 /// See [crate::metta::interpreter] for algorithm explanation.

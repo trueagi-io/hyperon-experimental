@@ -37,10 +37,16 @@ pub struct MettaContents {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum MettaRunnerMode {
+enum MettaRunnerMode {
     ADD,
     INTERPRET,
     TERMINATE,
+}
+
+#[derive(Clone, Debug)]
+pub struct RunnerState {
+    mode: MettaRunnerMode,
+    results: Vec<Vec<Atom>>,
 }
 
 impl Metta {
@@ -144,28 +150,33 @@ impl Metta {
     }
 
     pub fn run(&self, parser: &mut SExprParser) -> Result<Vec<Vec<Atom>>, String> {
-        let mut mode = MettaRunnerMode::ADD;
-        let mut results: Vec<Vec<Atom>> = Vec::new();
+        let mut state = self.start_run();
 
-        while mode != MettaRunnerMode::TERMINATE {
-            mode = self.run_step(parser, mode, &mut results)?;
+        while !state.is_complete() {
+            self.run_step(parser, &mut state)?;
         }
-        Ok(results)
+        Ok(state.into_results())
     }
 
-    pub fn run_step(&self, parser: &mut SExprParser, mode: MettaRunnerMode, intermediate_results: &mut Vec<Vec<Atom>>) -> Result<MettaRunnerMode, String> {
+    pub fn start_run(&self) -> RunnerState {
+        RunnerState::new()
+    }
+
+    pub fn run_step(&self, parser: &mut SExprParser, state: &mut RunnerState) -> Result<(), String> {
 
         let atom = parser.parse(&self.0.tokenizer.borrow())?;
 
         if let Some(atom) = atom {
             if atom == EXEC_SYMBOL {
-                return Ok(MettaRunnerMode::INTERPRET);
+                state.mode = MettaRunnerMode::INTERPRET;
+                return Ok(());
             }
-            match mode {
+            match state.mode {
                 MettaRunnerMode::ADD => {
                     if let Err(atom) = self.add_atom(atom) {
-                        intermediate_results.push(vec![atom]);
-                        return Ok(MettaRunnerMode::TERMINATE);
+                        state.results.push(vec![atom]);
+                        state.mode = MettaRunnerMode::TERMINATE;
+                        return Ok(());
                     }
                 },
                 MettaRunnerMode::INTERPRET => {
@@ -181,21 +192,23 @@ impl Metta {
                                 }
                             }
                             let error = result.iter().any(|atom| is_error(atom));
-                            intermediate_results.push(result);
+                            state.results.push(result);
                             if error {
-                                return Ok(MettaRunnerMode::TERMINATE);
+                                state.mode = MettaRunnerMode::TERMINATE;
+                                return Ok(());
                             }
                         }
                     }
                 },
                 MettaRunnerMode::TERMINATE => {
-                    return Ok(MettaRunnerMode::TERMINATE);
+                    return Ok(());
                 },
             }
-            Ok(MettaRunnerMode::ADD)
+            state.mode = MettaRunnerMode::ADD;
         }  else {
-            Ok(MettaRunnerMode::TERMINATE)
+            state.mode = MettaRunnerMode::TERMINATE;
         }
+        Ok(())
     }
 
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
@@ -220,6 +233,24 @@ impl Metta {
         }
     }
 
+}
+
+impl RunnerState {
+    fn new() -> Self {
+        Self {
+            mode: MettaRunnerMode::ADD,
+            results: vec![],
+        }
+    }
+    pub fn is_complete(&self) -> bool {
+        self.mode == MettaRunnerMode::TERMINATE
+    }
+    pub fn intermediate_results(&self) -> &Vec<Vec<Atom>> {
+        &self.results
+    }
+    pub fn into_results(self) -> Vec<Vec<Atom>> {
+        self.results
+    }
 }
 
 pub fn new_metta_rust() -> Metta {

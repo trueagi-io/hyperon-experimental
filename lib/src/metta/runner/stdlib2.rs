@@ -7,7 +7,6 @@ use crate::metta::runner::Metta;
 use crate::metta::types::{get_atom_types, get_meta_type};
 
 use std::fmt::Display;
-use std::path::PathBuf;
 use regex::Regex;
 
 use super::arithmetics::*;
@@ -115,7 +114,7 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"if-equal"), move |_| { is_equivalent.clone() });
 }
 
-pub fn register_runner_tokens(metta: &Metta, _cwd: PathBuf) {
+pub fn register_runner_tokens(metta: &Metta) {
     let _space = metta.space();
     let tokenizer = metta.tokenizer();
 
