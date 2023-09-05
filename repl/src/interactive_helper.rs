@@ -170,7 +170,6 @@ impl Validator for ReplHelper {
         // * if user hits enter and line is valid, it will be submitted.
         // * if user hits enter and line is invalid, it will treat it as a newline
         // * If user hits enter twice in a row, it will report a syntax error
-
         let mut validation_result = ValidationResult::Incomplete;
         self.metta.borrow_mut().inside_env(|metta| {
             let mut parser = SExprParser::new(ctx.input());
@@ -189,7 +188,7 @@ impl Validator for ReplHelper {
                         if input.len() < 1 {
                             break;
                         }
-                        if *self.checked_line.borrow() != &input[0..input.len()-1] {
+                        if *self.checked_line.borrow() != &input[0..input.len()-1] || input.as_bytes()[input.len()-1] != b'\n' {
                             *self.checked_line.borrow_mut() = ctx.input().to_string();
                         } else {
                             validation_result = ValidationResult::Invalid(Some(
