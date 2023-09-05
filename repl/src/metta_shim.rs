@@ -68,9 +68,16 @@ impl MettaShim {
             repl_params: repl_params.clone(),
         };
 
-        //Load the hyperonpy Python stdlib, if the repl includes Python support
+        //Init HyperonPy if the repl includes Python support
         #[cfg(feature = "python")]
-        py_mod_loading::load_python_module(&new_shim.metta, "hyperon.stdlib").unwrap();
+        {
+            //Confirm the hyperonpy version is compatible
+            //TODO, re-enable this check when hyperonpy version is semver-compatible
+            // py_mod_loading::confirm_hyperonpy_version(">=0.1.0, <0.2.0").unwrap();
+
+            //Load the hyperonpy Python stdlib
+            py_mod_loading::load_python_module(&new_shim.metta, "hyperon.stdlib").unwrap();
+        }
 
         //Load the Rust stdlib
         register_rust_tokens(&new_shim.metta);
@@ -228,6 +235,7 @@ mod py_mod_err {
 mod py_mod_loading {
     use std::fmt::Display;
     use std::path::PathBuf;
+    use semver::{Version, VersionReq};
     use pyo3::prelude::*;
     use pyo3::types::{PyTuple, PyDict};
     use hyperon::*;
@@ -238,6 +246,29 @@ mod py_mod_loading {
     use hyperon::metta::runner::Metta;
     use hyperon::common::shared::Shared;
     use crate::ReplParams;
+
+    /// Load the hyperon module, and get the "__version__" attribute
+    pub fn get_hyperonpy_version() -> Result<String, String> {
+        Python::with_gil(|py| -> PyResult<String> {
+            let hyperon_mod = PyModule::import(py, "hyperon")?;
+            let version_obj = hyperon_mod.getattr("__version__")?;
+            Ok(version_obj.str()?.to_str()?.into())
+        }).map_err(|err| {
+            format!("{err}")
+        })
+    }
+
+    pub fn confirm_hyperonpy_version(req_str: &str) -> Result<(), String> {
+
+        let req = VersionReq::parse(req_str).unwrap();
+        let version_string = get_hyperonpy_version()?;
+        let version = Version::parse(&version_string).map_err(|e| format!("Error parsing HyperonPy version: '{version_string}', {e}"))?;
+        if req.matches(&version) {
+            Ok(())
+        } else {
+            Err(format!("MeTTa repl requires HyperonPy version matching '{req}'.  Found version: '{version}'"))
+        }
+    }
 
     pub fn load_python_module_from_mod_or_file(repl_params: &ReplParams, metta: &Metta, module_name: &str) -> Result<(), String> {
 
