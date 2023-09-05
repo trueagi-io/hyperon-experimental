@@ -13,7 +13,7 @@ use hyperon::metta::text::SExprParser;
 use hyperon::common::shared::Shared;
 
 use crate::ReplParams;
-use crate::SIGNAL_STATE;
+use crate::SIGINT_RECEIVED_COUNT;
 
 /// MettaShim is responsible for **ALL** calls between the repl and MeTTa, and is in charge of keeping
 /// Python happy (and perhaps other languages in the future).
@@ -107,11 +107,11 @@ impl MettaShim {
             let mut runner_state = self.metta.start_run();
 
             //We don't want any leftover interrupts to break us this time
-            *SIGNAL_STATE.lock().unwrap() = 0;
+            *SIGINT_RECEIVED_COUNT.lock().unwrap() = 0;
 
             while !runner_state.is_complete() {
                 //If we received an interrupt, then clear it and break the loop
-                let mut signal_state = SIGNAL_STATE.lock().unwrap();
+                let mut signal_state = SIGINT_RECEIVED_COUNT.lock().unwrap();
                 if *signal_state > 0 {
                     *signal_state = 0;
                     break;

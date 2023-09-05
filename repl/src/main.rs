@@ -23,7 +23,7 @@ use config_params::*;
 mod interactive_helper;
 use interactive_helper::*;
 
-static SIGNAL_STATE: Mutex<usize> = Mutex::new(0);
+static SIGINT_RECEIVED_COUNT: Mutex<usize> = Mutex::new(0);
 
 #[derive(Parser)]
 #[command(version, about)]
@@ -67,7 +67,7 @@ fn main() -> Result<()> {
     thread::spawn(move || {
         for _sig in signals.forever() {
             //Assume SIGINT, since that's the only registered handler
-            let mut signal_state = SIGNAL_STATE.lock().unwrap();
+            let mut signal_state = SIGINT_RECEIVED_COUNT.lock().unwrap();
             match *signal_state {
                 0 => println!("Interrupt received, stopping MeTTa..."),
                 1 => println!("Stopping in progress.  Please wait..."),
