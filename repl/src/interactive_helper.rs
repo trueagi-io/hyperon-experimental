@@ -22,6 +22,7 @@ pub struct ReplHelper {
     hinter: HistoryHinter,
     pub colored_prompt: String,
     cursor_bracket: std::cell::Cell<Option<(u8, usize)>>, // If the cursor is over or near a bracket to match
+    checked_line: std::cell::RefCell<String>,
     style: StyleSettings,
 }
 
@@ -165,6 +166,11 @@ impl Highlighter for ReplHelper {
 impl Validator for ReplHelper {
     fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult, ReadlineError> {
 
+        //This validator implements the following behavior:
+        // * if user hits enter and line is valid, it will be submitted.
+        // * if user hits enter and line is invalid, it will treat it as a newline
+        // * If user hits enter twice in a row, it will report a syntax error
+
         let mut validation_result = ValidationResult::Incomplete;
         self.metta.borrow_mut().inside_env(|metta| {
             let mut parser = SExprParser::new(ctx.input());
@@ -175,12 +181,21 @@ impl Validator for ReplHelper {
                     Ok(Some(_atom)) => (),
                     Ok(None) => {
                         validation_result = ValidationResult::Valid(None);
+                        *self.checked_line.borrow_mut() = "".to_string();
                         break
                     },
                     Err(err) => {
-                        validation_result = ValidationResult::Invalid(Some(
-                            format!(" - \x1b[0;{}m{}\x1b[0m", self.style.error_style, err)
-                        ));
+                        let input = ctx.input();
+                        if input.len() < 1 {
+                            break;
+                        }
+                        if *self.checked_line.borrow() != &input[0..input.len()-1] {
+                            *self.checked_line.borrow_mut() = ctx.input().to_string();
+                        } else {
+                            validation_result = ValidationResult::Invalid(Some(
+                                format!(" - \x1b[0;{}m{}\x1b[0m", self.style.error_style, err)
+                            ));
+                        }
                         break;
                     }
                 }
@@ -202,6 +217,7 @@ impl ReplHelper {
             hinter: HistoryHinter {},
             colored_prompt: "".to_owned(),
             cursor_bracket: std::cell::Cell::new(None),
+            checked_line: std::cell::RefCell::new(String::new()),
             style,
         }
     }
