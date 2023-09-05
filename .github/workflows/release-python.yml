@@ -51,7 +51,7 @@ jobs:
         if: github.event_name == 'release'
         uses: svenstaro/upload-release-action@v2
         with:
-          repo_token: ${{ secrets.WORKFLOW_GITHUB_TOKEN }}
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ./wheelhouse/*.whl
           tag: ${{ github.ref_name }}
           prerelease: ${{ inputs.prerelease }}
