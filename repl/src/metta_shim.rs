@@ -72,8 +72,7 @@ impl MettaShim {
         #[cfg(feature = "python")]
         {
             //Confirm the hyperonpy version is compatible
-            //TODO, re-enable this check when hyperonpy version is semver-compatible
-            // py_mod_loading::confirm_hyperonpy_version(">=0.1.0, <0.2.0").unwrap();
+            py_mod_loading::confirm_hyperonpy_version(">=0.1.0, <0.2.0").unwrap();
 
             //Load the hyperonpy Python stdlib
             py_mod_loading::load_python_module(&new_shim.metta, "hyperon.stdlib").unwrap();
