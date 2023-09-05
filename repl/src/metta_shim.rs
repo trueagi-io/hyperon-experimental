@@ -1,11 +1,12 @@
 
 use std::path::PathBuf;
 
-use hyperon::{sym, expr, ExpressionAtom};
+use hyperon::ExpressionAtom;
 use hyperon::Atom;
 use hyperon::atom::VariableAtom;
 use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
+use hyperon::metta::*;
 use hyperon::metta::runner::Metta;
 use hyperon::metta::runner::stdlib::register_rust_tokens;
 use hyperon::metta::text::Tokenizer;
@@ -24,7 +25,7 @@ use crate::SIGINT_RECEIVED_COUNT;
 pub struct MettaShim {
     pub metta: Metta,
     pub result: Vec<Vec<Atom>>,
-    repl_params: Shared<ReplParams>,
+    _repl_params: Shared<ReplParams>, //TODO: We'll likely want this back soon, but so I'm not un-plumbing it just yet
 }
 
 #[macro_export]
@@ -65,7 +66,7 @@ impl MettaShim {
         let mut new_shim = Self {
             metta: Metta::from_space(space, tokenizer, repl_params.borrow().modules_search_paths().collect()),
             result: vec![],
-            repl_params: repl_params.clone(),
+            _repl_params: repl_params.clone(),
         };
 
         //Init HyperonPy if the repl includes Python support
@@ -144,13 +145,10 @@ impl MettaShim {
     pub fn get_config_atom(&mut self, config_name: &str) -> Option<Atom> {
         let mut result = None;
         metta_shim_env!{{
-            let repl_params = self.repl_params.borrow();
-            let config_metta_path = repl_params.config_metta_path();
-            let metta_modules = self.metta.modules().borrow();
-            let config_space = metta_modules.get(config_metta_path).unwrap();
-            let bindings_set = config_space.query(&Atom::expr(vec![sym!("="), Atom::sym(config_name.to_string()), expr!(val)]));
+            let val = VariableAtom::new("val");
+            let bindings_set = self.metta.space().query(&Atom::expr(vec![EQUAL_SYMBOL, Atom::sym(config_name.to_string()), Atom::Variable(val.clone())]));
             if let Some(bindings) = bindings_set.into_iter().next() {
-                result = bindings.resolve(&VariableAtom::new("val"));
+                result = bindings.resolve(&val);
             }
         }}
         result
