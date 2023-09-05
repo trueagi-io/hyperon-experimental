@@ -148,7 +148,7 @@ impl SyntaxNode {
     ///
     /// This method is useful to render syntax styling.
     ///
-    /// TODO: Inthe future, We'll want to be able to use the type system to assign styling,
+    /// TODO: In the future, We'll want to be able to use the type system to assign styling,
     ///   which is going to mean looking at Atoms, and not the tokens they were built from
     pub fn visit_syntactic<C>(&self, mut callback: C)
         where C: FnMut(&SyntaxNode)
