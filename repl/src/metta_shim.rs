@@ -117,12 +117,12 @@ impl MettaShim {
 
             while !runner_state.is_complete() {
                 //If we received an interrupt, then clear it and break the loop
-                let mut signal_state = SIGINT_RECEIVED_COUNT.lock().unwrap();
-                if *signal_state > 0 {
-                    *signal_state = 0;
+                let mut signal_received_cnt = SIGINT_RECEIVED_COUNT.lock().unwrap();
+                if *signal_received_cnt > 0 {
+                    *signal_received_cnt = 0;
                     break;
                 }
-                drop(signal_state);
+                drop(signal_received_cnt);
 
                 //Run the next step
                 self.metta.run_step(&mut parser, &mut runner_state)

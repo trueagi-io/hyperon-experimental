@@ -67,8 +67,8 @@ fn main() -> Result<()> {
     thread::spawn(move || {
         for _sig in signals.forever() {
             //Assume SIGINT, since that's the only registered handler
-            let mut signal_state = SIGINT_RECEIVED_COUNT.lock().unwrap();
-            match *signal_state {
+            let mut signal_received_cnt = SIGINT_RECEIVED_COUNT.lock().unwrap();
+            match *signal_received_cnt {
                 0 => println!("Interrupt received, stopping MeTTa..."),
                 1 => println!("Stopping in progress.  Please wait..."),
                 _ => {
@@ -76,8 +76,8 @@ fn main() -> Result<()> {
                     exit(-1);
                 },
             }
-            *signal_state += 1;
-            drop(signal_state);
+            *signal_received_cnt += 1;
+            drop(signal_received_cnt);
         }
     });
 
