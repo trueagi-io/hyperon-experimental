@@ -40,19 +40,20 @@ impl ReplParams {
             }
         };
 
+        //Create the modules dir inside the config dir, if it doesn't already exist
+        let modules_dir = config_dir.join("modules");
+        std::fs::create_dir_all(&modules_dir).unwrap();
+
         //Create the default config.metta file, if none exists
         let config_metta_path = config_dir.join("config.metta");
         if !config_metta_path.exists() {
             let mut file = fs::OpenOptions::new()
                 .create(true)
                 .write(true)
-                .open(&config_metta_path).unwrap();
+                .open(&config_metta_path)
+                .expect(&format!("Error creating default config file at {config_metta_path:?}"));
             file.write_all(&DEFAULT_CONFIG_METTA).unwrap();
         }
-
-        //Create the modules dir inside the config dir, if it doesn't already exist
-        let modules_dir = config_dir.join("modules");
-        std::fs::create_dir_all(&modules_dir).unwrap();
 
         //Push the "modules" dir, as the last place to search after the paths specified on the cmd line
         //TODO: the config.metta file will be able to append / modify the search paths, and can choose not to
