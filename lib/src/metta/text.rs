@@ -1,7 +1,5 @@
 //! MeTTa parser implementation.
 
-use core::convert::TryFrom;
-
 use crate::*;
 
 use core::ops::Range;
@@ -83,91 +81,123 @@ pub enum SyntaxNodeType {
     /// Whitespace. One or more whitespace chars
     Whitespace,
     /// Symbol Atom.  A Symbol Atom
-    SymbolAtom,
-    /// Variable Atom.  A [VariableAtom] constructed from a [VariableToken](SyntaxNodeType::VariableToken)
-    VariableAtom,
-    /// Expression.  All input text composing an Expression, from the opening '(' to the close
-    ExpressionAtom,
-    /// Special Atom.  A token matched by a regex registered with the [Tokenizer].  Might be a Grounded
-    ///   Atom, but might also be another type of Atom
-    SpecialAtom,
-    /// Unparsed Leftover Text.  Unparsed text remaining after the parser has encountered an error
     LeftoverText,
+    /// A Group of [SyntaxNode]s between an [OpenParen](SyntaxNodeType::OpenParen) and a matching
+    ///   [CloseParen](SyntaxNodeType::CloseParen)
+    ExpressionGroup,
     /// Syntax Nodes that cannot be combined into a coherent atom due to a parse error, even if some
     /// of the individual nodes are valid
     ErrorGroup,
+}
+
+impl SyntaxNodeType {
+    /// Returns `true` is the SyntaxNodeType is a leaf (incapable of hosting sub-nodes).  Returns `false`
+    ///   for "group" node tyes.
+    pub fn is_leaf(&self) -> bool {
+        match self {
+            Self::ExpressionGroup |
+            Self::ErrorGroup => false,
+            _ => true
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct SyntaxNode {
     pub node_type: SyntaxNodeType,
     pub src_range: Range<usize>,
-    pub atom: Option<Atom>,
     pub sub_nodes: Vec<SyntaxNode>,
+    pub parsed_text: Option<String>,
     pub message: Option<String>,
     pub is_complete: bool,
 }
 
 impl SyntaxNode {
-    fn new(node_type: SyntaxNodeType, src_range: Range<usize>, atom: Option<Atom>, sub_nodes: Vec<SyntaxNode>) -> SyntaxNode {
+    fn new(node_type: SyntaxNodeType, src_range: Range<usize>, sub_nodes: Vec<SyntaxNode>) -> SyntaxNode {
         Self {
             node_type,
             src_range,
-            atom,
+            parsed_text: None,
             sub_nodes,
             message: None,
             is_complete: true
         }
     }
 
+    fn new_token_node(node_type: SyntaxNodeType, src_range: Range<usize>, parsed_text: String) -> SyntaxNode {
+        let mut node = SyntaxNode::new(node_type, src_range, vec![]);
+        node.parsed_text = Some(parsed_text);
+        node
+    }
+
     fn incomplete_with_message(node_type: SyntaxNodeType, src_range: Range<usize>, sub_nodes: Vec<SyntaxNode>, message: String) -> SyntaxNode {
-        Self {
-            node_type,
-            src_range,
-            atom: None,
-            sub_nodes,
-            message: Some(message),
-            is_complete: false
-        }
+        let mut node = SyntaxNode::new(node_type, src_range, sub_nodes);
+        node.message = Some(message);
+        node.is_complete = false;
+        node
     }
 
     /// Creates a new error group.  Gets the error message associated with the last node
     fn new_error_group(src_range: Range<usize>, sub_nodes: Vec<SyntaxNode>) -> SyntaxNode {
         let message = sub_nodes[sub_nodes.len()-1].message.clone();
-        Self {
-            node_type: SyntaxNodeType::ErrorGroup,
-            src_range,
-            atom: None,
-            sub_nodes,
-            message,
-            is_complete: false
-        }
+        let mut node = SyntaxNode::new(SyntaxNodeType::ErrorGroup, src_range, sub_nodes);
+        node.message = message;
+        node.is_complete = false;
+        node
     }
 
-    /// Visits all the syntactic nodes (vs. semantic) in a parsed syntax tree
-    ///
-    /// This method is useful to render syntax styling.
-    ///
-    /// TODO: In the future, We'll want to be able to use the type system to assign styling,
-    ///   which is going to mean looking at Atoms, and not the tokens they were built from
-    pub fn visit_syntactic<C>(&self, mut callback: C)
-        where C: FnMut(&SyntaxNode)
-    {
-        self.visit_depth_first(|node| {
-            match node.node_type {
-                SyntaxNodeType::Comment |
-                SyntaxNodeType::VariableToken |
-                SyntaxNodeType::StringToken |
-                SyntaxNodeType::WordToken |
-                SyntaxNodeType::OpenParen |
-                SyntaxNodeType::CloseParen |
-                SyntaxNodeType::Whitespace |
-                SyntaxNodeType::LeftoverText => {
-                    callback(node);
+    /// Transforms a root SyntaxNode into an [Atom]
+    pub fn as_atom(&self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
+
+        //If we have an incomplete node, it's an error
+        if !self.is_complete {
+            return Err(self.message.clone().unwrap())
+        }
+
+        match self.node_type {
+            SyntaxNodeType::Comment |
+            SyntaxNodeType::Whitespace => Ok(None),
+            SyntaxNodeType::OpenParen |
+            SyntaxNodeType::CloseParen => Ok(None),
+            SyntaxNodeType::VariableToken => {
+                let token_text = self.parsed_text.as_ref().unwrap();
+                let new_var_atom = Atom::var(token_text);
+                Ok(Some(new_var_atom))
+            },
+            SyntaxNodeType::StringToken |
+            SyntaxNodeType::WordToken => {
+                let token_text = self.parsed_text.as_ref().unwrap();
+                let constr = tokenizer.find_token(token_text);
+                if let Some(constr) = constr {
+                    let new_atom = constr(token_text);
+                    Ok(Some(new_atom))
+                } else {
+                    let new_atom = Atom::sym(token_text);
+                    Ok(Some(new_atom))
                 }
-                _ => {}
-            }
-        })
+            },
+            SyntaxNodeType::ExpressionGroup => {
+                let mut err_encountered = Ok(());
+                let expr_children: Vec<Atom> = self.sub_nodes.iter().filter_map(|node| {
+                    match node.as_atom(tokenizer) {
+                        Err(err) => {
+                            err_encountered = Err(err);
+                            None
+                        },
+                        Ok(atom) => atom
+                    }
+                }).collect();
+                match err_encountered {
+                    Ok(_) => {
+                        let new_expr_atom = Atom::expr(expr_children);
+                        Ok(Some(new_expr_atom))
+                    },
+                    Err(err) => Err(err)
+                }
+            },
+            SyntaxNodeType::LeftoverText |
+            SyntaxNodeType::ErrorGroup => {unreachable!()}
+        }
     }
 
     /// Visits all the nodes in a parsed syntax tree in a depth-first order
@@ -199,22 +229,10 @@ impl<'a> SExprParser<'a> {
 
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
         loop {
-            match self.parse_to_syntax_tree(tokenizer) {
+            match self.parse_to_syntax_tree() {
                 Some(node) => {
-                    //If we have an incomplete node, it's an error
-                    if !node.is_complete {
-                        return Err(node.message.unwrap())
-                    }
-
-                    //We are only interested in nodes that represent atoms
-                    match node.node_type {
-                        SyntaxNodeType::SymbolAtom |
-                        SyntaxNodeType::VariableAtom |
-                        SyntaxNodeType::ExpressionAtom |
-                        SyntaxNodeType::SpecialAtom => {
-                            return Ok(node.atom)
-                        },
-                        _ => ()
+                    if let Some(atom) = node.as_atom(tokenizer)? {
+                        return Ok(Some(atom))
                     }
                 },
                 None => {
@@ -224,7 +242,7 @@ impl<'a> SExprParser<'a> {
         }
     }
 
-    pub fn parse_to_syntax_tree(&mut self, tokenizer: &Tokenizer) -> Option<SyntaxNode> {
+    pub fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode> {
         if let Some((idx, c)) = self.it.peek().cloned() {
             match c {
                 ';' => {
@@ -232,7 +250,7 @@ impl<'a> SExprParser<'a> {
                     return Some(comment_node);
                 },
                 _ if c.is_whitespace() => {
-                    let whispace_node = SyntaxNode::new(SyntaxNodeType::Whitespace, idx..idx+1, None, vec![]);
+                    let whispace_node = SyntaxNode::new(SyntaxNodeType::Whitespace, idx..idx+1, vec![]);
                     self.it.next();
                     return Some(whispace_node);
                 },
@@ -241,19 +259,19 @@ impl<'a> SExprParser<'a> {
                     return Some(var_node);
                 },
                 '(' => {
-                    let expr_node = self.parse_expr(tokenizer);
+                    let expr_node = self.parse_expr();
                     return Some(expr_node);
                 },
                 ')' => {
-                    let close_paren_node = SyntaxNode::new(SyntaxNodeType::CloseParen, idx..idx+1, None, vec![]);
+                    let close_paren_node = SyntaxNode::new(SyntaxNodeType::CloseParen, idx..idx+1, vec![]);
                     self.it.next();
                     let leftover_text_node = self.parse_leftovers("Unexpected right bracket".to_string());
                     let error_group_node = SyntaxNode::new_error_group(idx..self.cur_idx(), vec![close_paren_node, leftover_text_node]);
                     return Some(error_group_node);
                 },
                 _ => {
-                    let atom_node = self.parse_atom(tokenizer);
-                    return atom_node;
+                    let token_node = self.parse_token();
+                    return token_node;
                 },
             }
         }
@@ -279,7 +297,7 @@ impl<'a> SExprParser<'a> {
                 }
             }
             let range = start_idx..self.cur_idx();
-            Some(SyntaxNode::new(SyntaxNodeType::Comment, range, None, vec![]))
+            Some(SyntaxNode::new(SyntaxNodeType::Comment, range, vec![]))
         } else {
             None
         }
@@ -292,32 +310,11 @@ impl<'a> SExprParser<'a> {
         SyntaxNode::incomplete_with_message(SyntaxNodeType::LeftoverText, range, vec![], message)
     }
 
-    fn parse_atom(&mut self, tokenizer: &Tokenizer) -> Option<SyntaxNode> {
-        if let Some(token_node) = self.parse_token() {
-            if token_node.is_complete {
-                let token_text = <&SymbolAtom>::try_from(token_node.atom.as_ref().unwrap()).unwrap().name();
-                let constr = tokenizer.find_token(token_text);
-                if let Some(constr) = constr {
-                    let new_atom = constr(token_text);
-                    let special_atom_node = SyntaxNode::new(SyntaxNodeType::SpecialAtom, token_node.src_range.clone(), Some(new_atom), vec![token_node]);
-                    return Some(special_atom_node);
-                } else {
-                    let symbol_atom_node = SyntaxNode::new(SyntaxNodeType::SymbolAtom, token_node.src_range.clone(), token_node.atom.clone(), vec![token_node]);
-                    return Some(symbol_atom_node);
-                }
-            } else {
-                Some(token_node)
-            }
-        } else {
-            None
-        }
-    }
-
-    fn parse_expr(&mut self, tokenizer: &Tokenizer) -> SyntaxNode {
+    fn parse_expr(&mut self) -> SyntaxNode {
         let start_idx = self.cur_idx();
         let mut child_nodes: Vec<SyntaxNode> = Vec::new();
 
-        let open_paren_node = SyntaxNode::new(SyntaxNodeType::OpenParen, start_idx..start_idx+1, None, vec![]);
+        let open_paren_node = SyntaxNode::new(SyntaxNodeType::OpenParen, start_idx..start_idx+1, vec![]);
         child_nodes.push(open_paren_node);
         self.it.next();
 
@@ -328,22 +325,20 @@ impl<'a> SExprParser<'a> {
                     child_nodes.push(comment_node);
                 },
                 _ if c.is_whitespace() => {
-                    let whitespace_node = SyntaxNode::new(SyntaxNodeType::Whitespace, idx..idx+1, None, vec![]);
+                    let whitespace_node = SyntaxNode::new(SyntaxNodeType::Whitespace, idx..idx+1, vec![]);
                     child_nodes.push(whitespace_node);
                     self.it.next();
                 },
                 ')' => {
-                    let close_paren_node = SyntaxNode::new(SyntaxNodeType::CloseParen, idx..idx+1, None, vec![]);
+                    let close_paren_node = SyntaxNode::new(SyntaxNodeType::CloseParen, idx..idx+1, vec![]);
                     child_nodes.push(close_paren_node);
                     self.it.next();
 
-                    let expr_children: Vec<Atom> = child_nodes.iter().filter_map(|node| node.atom.clone()).collect();
-                    let new_expr_atom = Atom::expr(expr_children);
-                    let expr_node = SyntaxNode::new(SyntaxNodeType::ExpressionAtom, start_idx..self.cur_idx(), Some(new_expr_atom), child_nodes);
+                    let expr_node = SyntaxNode::new(SyntaxNodeType::ExpressionGroup, start_idx..self.cur_idx(), child_nodes);
                     return expr_node;
                 },
                 _ => {
-                    if let Some(parsed_node) = self.parse_to_syntax_tree(tokenizer) {
+                    if let Some(parsed_node) = self.parse_to_syntax_tree() {
                         let is_err = !parsed_node.is_complete;
                         child_nodes.push(parsed_node);
 
@@ -390,8 +385,7 @@ impl<'a> SExprParser<'a> {
         while let Some((_idx, c)) = self.it.next() {
             if c == '"' {
                 token.push('"');
-                let string_symbol_atom = Atom::sym(token);
-                let string_node = SyntaxNode::new(SyntaxNodeType::StringToken, start_idx..self.cur_idx(), Some(string_symbol_atom), vec![]);
+                let string_node = SyntaxNode::new_token_node(SyntaxNodeType::StringToken, start_idx..self.cur_idx(), token);
                 return string_node;
             }
             let c = if c == '\\' {
@@ -423,8 +417,7 @@ impl<'a> SExprParser<'a> {
             self.it.next();
         }
 
-        let word_symbol_atom = Atom::sym(token);
-        let word_node = SyntaxNode::new(SyntaxNodeType::WordToken, start_idx..self.cur_idx(), Some(word_symbol_atom), vec![]);
+        let word_node = SyntaxNode::new_token_node(SyntaxNodeType::WordToken, start_idx..self.cur_idx(), token);
         word_node
     }
 
@@ -446,11 +439,8 @@ impl<'a> SExprParser<'a> {
             tmp_it.next();
         }
         self.it = tmp_it;
-        let range = start_idx..self.cur_idx();
-        let var_token_node = SyntaxNode::new(SyntaxNodeType::VariableToken, range.clone(), None, vec![]);
-        let new_var_atom = Atom::var(token);
-        let variable_atom_node = SyntaxNode::new(SyntaxNodeType::VariableAtom, range, Some(new_var_atom), vec![var_token_node]);
-        variable_atom_node
+        let var_token_node = SyntaxNode::new_token_node(SyntaxNodeType::VariableToken, start_idx..self.cur_idx(), token);
+        var_token_node
     }
 
 }
