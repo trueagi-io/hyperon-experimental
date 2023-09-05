@@ -112,7 +112,10 @@ impl MettaShim {
             let mut parser = SExprParser::new(line);
             let mut runner_state = self.metta.start_run();
 
-            //We don't want any leftover interrupts to break us this time
+            // This clears any leftover count that might have happened if the user pressed Ctrl+C just after MeTTa
+            // interpreter finished processing, but before control returned to rustyline's prompt.  That signal is
+            // not intended for the new execution we are about to begin.
+            //See https://github.com/trueagi-io/hyperon-experimental/pull/419#discussion_r1315598220 for more details
             *SIGINT_RECEIVED_COUNT.lock().unwrap() = 0;
 
             while !runner_state.is_complete() {
