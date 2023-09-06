@@ -225,13 +225,13 @@ impl ReplHelper {
 impl StyleSettings {
     pub fn new(metta_shim: &mut MettaShim) -> Self {
         Self {
-            bracket_styles: metta_shim.get_config_expr_vec("BracketStyles").unwrap_or(vec!["94".to_string(), "93".to_string(), "95".to_string(), "96".to_string()]),
-            comment_style: metta_shim.get_config_string("CommentStyle").unwrap_or("32".to_string()),
-            variable_style: metta_shim.get_config_string("VariableStyle").unwrap_or("33".to_string()),
-            symbol_style: metta_shim.get_config_string("SymbolStyle").unwrap_or("34".to_string()),
-            string_style: metta_shim.get_config_string("StringStyle").unwrap_or("31".to_string()),
-            error_style: metta_shim.get_config_string("ErrorStyle").unwrap_or("91".to_string()),
-            bracket_match_style: metta_shim.get_config_string("BracketMatchStyle").unwrap_or("1;7".to_string()),
+            bracket_styles: metta_shim.get_config_expr_vec("ReplBracketStyles").unwrap_or(vec!["94".to_string(), "93".to_string(), "95".to_string(), "96".to_string()]),
+            comment_style: metta_shim.get_config_string("ReplCommentStyle").unwrap_or("32".to_string()),
+            variable_style: metta_shim.get_config_string("ReplVariableStyle").unwrap_or("33".to_string()),
+            symbol_style: metta_shim.get_config_string("ReplSymbolStyle").unwrap_or("34".to_string()),
+            string_style: metta_shim.get_config_string("ReplStringStyle").unwrap_or("31".to_string()),
+            error_style: metta_shim.get_config_string("ReplErrorStyle").unwrap_or("91".to_string()),
+            bracket_match_style: metta_shim.get_config_string("ReplBracketMatchStyle").unwrap_or("1;7".to_string()),
         }
     }
 }

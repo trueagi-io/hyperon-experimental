@@ -5,7 +5,7 @@ use std::process::exit;
 use std::sync::Mutex;
 
 use rustyline::error::ReadlineError;
-use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent};
+use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent, KeyCode, Modifiers};
 
 use anyhow::Result;
 use clap::Parser;
@@ -119,7 +119,22 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> 
         .build();
     let helper = ReplHelper::new(metta);
     let mut rl = Editor::with_config(config)?;
+
+    //QUESTION: Should we provide a config to use vi key bindings vs. Emacs?
+
     rl.set_helper(Some(helper));
+    //KEY BEHAVIOR: Enter and ctrl-M will add a newline when the cursor is in the middle of a line, while
+    // ctrl-J will submit the line.
+    //TODO: Rustyline seems to have a bug where this is only true sometimes.  Needs to be debugged.
+    // Ideally Rustyline could just subsume the whole "accept_in_the_middle" behavior with a design that
+    // allows the Validator to access the key event, so the Validator could make the decision without
+    // special logic inside rustyline.
+    rl.bind_sequence(KeyEvent( KeyCode::Enter, Modifiers::NONE ), Cmd::AcceptOrInsertLine {
+        accept_in_the_middle: false,
+    });
+    rl.bind_sequence(KeyEvent::ctrl('j'), Cmd::AcceptOrInsertLine {
+        accept_in_the_middle: true,
+    });
     rl.bind_sequence(KeyEvent::alt('n'), Cmd::HistorySearchForward);
     rl.bind_sequence(KeyEvent::alt('p'), Cmd::HistorySearchBackward);
     if let Some(history_path) = &repl_params.borrow().history_file {
@@ -135,8 +150,8 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> 
         let prompt = {
             let helper = rl.helper_mut().unwrap();
             let mut metta = helper.metta.borrow_mut();
-            let prompt = metta.get_config_string("DefaultPrompt").unwrap_or("> ".to_string());
-            let styled_prompt = metta.get_config_string("StyledPrompt").unwrap_or(format!("\x1b[1;32m{prompt}\x1b[0m"));
+            let prompt = metta.get_config_string("ReplDefaultPrompt").unwrap_or("> ".to_string());
+            let styled_prompt = metta.get_config_string("ReplStyledPrompt").unwrap_or(format!("\x1b[1;32m{prompt}\x1b[0m"));
             helper.colored_prompt = styled_prompt;
             prompt
         };
