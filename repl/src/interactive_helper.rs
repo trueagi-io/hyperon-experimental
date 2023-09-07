@@ -1,5 +1,6 @@
 
 use std::borrow::Cow::{self, Borrowed, Owned};
+use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
 
 use rustyline::completion::FilenameCompleter;
@@ -22,7 +23,8 @@ pub struct ReplHelper {
     hinter: HistoryHinter,
     pub colored_prompt: String,
     cursor_bracket: std::cell::Cell<Option<(u8, usize)>>, // If the cursor is over or near a bracket to match
-    checked_line: std::cell::RefCell<String>,
+    pub force_submit: Arc<Mutex<bool>>, // We use this to communicate between the key event handler and the Validator
+    checked_line: RefCell<String>,
     style: StyleSettings,
 }
 
@@ -167,9 +169,13 @@ impl Validator for ReplHelper {
     fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult, ReadlineError> {
 
         //This validator implements the following behavior:
-        // * if user hits enter and line is valid, it will be submitted.
-        // * if user hits enter and line is invalid, it will treat it as a newline
-        // * If user hits enter twice in a row, it will report a syntax error
+        // * if user hits enter and the line is valid, and the cursor is at the end of the line, it will be submitted.
+        // * if user hits ctrl-J (force submit) and the line is valid, it will be submitted regardless of cursor position
+        // * if user hits enter and the line is invalid, a newline will be inserted at the cursor position, unless
+        //     a linefeed has just been added to the end of the line, in which case a syntax error is reported
+        // * if user hits ctrl-J (force submit) and line is invalid, it will be a syntax error, regardless of cursor position
+        let force_submit = *self.force_submit.lock().unwrap();
+        *self.force_submit.lock().unwrap() = false;
         let mut validation_result = ValidationResult::Incomplete;
         self.metta.borrow_mut().inside_env(|metta| {
             let mut parser = SExprParser::new(ctx.input());
@@ -188,7 +194,8 @@ impl Validator for ReplHelper {
                         if input.len() < 1 {
                             break;
                         }
-                        if *self.checked_line.borrow() != &input[0..input.len()-1] || input.as_bytes()[input.len()-1] != b'\n' {
+                        if !force_submit &&
+                            (*self.checked_line.borrow() != &input[0..input.len()-1] || input.as_bytes()[input.len()-1] != b'\n') {
                             *self.checked_line.borrow_mut() = ctx.input().to_string();
                         } else {
                             validation_result = ValidationResult::Invalid(Some(
@@ -216,7 +223,8 @@ impl ReplHelper {
             hinter: HistoryHinter {},
             colored_prompt: "".to_owned(),
             cursor_bracket: std::cell::Cell::new(None),
-            checked_line: std::cell::RefCell::new(String::new()),
+            force_submit: Arc::new(Mutex::new(false)),
+            checked_line: RefCell::new(String::new()),
             style,
         }
     }

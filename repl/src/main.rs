@@ -2,10 +2,10 @@
 use std::path::PathBuf;
 use std::thread;
 use std::process::exit;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use rustyline::error::ReadlineError;
-use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent, KeyCode, Modifiers};
+use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent, KeyCode, Modifiers, EventContext, RepeatCount, EventHandler, ConditionalEventHandler, Event};
 
 use anyhow::Result;
 use clap::Parser;
@@ -125,16 +125,11 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> 
     rl.set_helper(Some(helper));
     //KEY BEHAVIOR: Enter and ctrl-M will add a newline when the cursor is in the middle of a line, while
     // ctrl-J will submit the line.
-    //TODO: Rustyline seems to have a bug where this is only true sometimes.  Needs to be debugged.
-    // Ideally Rustyline could just subsume the whole "accept_in_the_middle" behavior with a design that
-    // allows the Validator to access the key event, so the Validator could make the decision without
-    // special logic inside rustyline.
+    //TODO: Document this behavior in the README.md, and possibly other key bindings also
     rl.bind_sequence(KeyEvent( KeyCode::Enter, Modifiers::NONE ), Cmd::AcceptOrInsertLine {
         accept_in_the_middle: false,
     });
-    rl.bind_sequence(KeyEvent::ctrl('j'), Cmd::AcceptOrInsertLine {
-        accept_in_the_middle: true,
-    });
+    rl.bind_sequence(KeyEvent::ctrl('j'), EventHandler::Conditional(Box::new(EnterKeyHandler::new(rl.helper().unwrap().force_submit.clone()))));
     rl.bind_sequence(KeyEvent::alt('n'), Cmd::HistorySearchForward);
     rl.bind_sequence(KeyEvent::alt('p'), Cmd::HistorySearchBackward);
     if let Some(history_path) = &repl_params.borrow().history_file {
@@ -185,4 +180,31 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> 
     }
 
     Ok(())
+}
+
+struct EnterKeyHandler {
+    force_submit: Arc<Mutex<bool>>
+}
+
+impl EnterKeyHandler {
+    fn new(force_submit: Arc<Mutex<bool>>) -> Self {
+        Self {
+            force_submit
+        }
+    }
+}
+
+impl ConditionalEventHandler for EnterKeyHandler {
+    fn handle(
+        &self,
+        _evt: &Event,
+        _n: RepeatCount,
+        _positive: bool,
+        _ctx: &EventContext<'_>
+    ) -> Option<Cmd> {
+        *self.force_submit.lock().unwrap() = true;
+        Some(Cmd::AcceptOrInsertLine {
+            accept_in_the_middle: true,
+        })
+    }
 }
