@@ -230,20 +230,77 @@ class NoReduceError(Exception):
     pass
 
 class OperationObject(GroundedObject):
+    """
+    An OperationObject represents an operation as a grounded object, allowing for more
+    advanced logic like lazy evaluation, type-checking, and more.
+
+    Inherits:
+        GroundedObject: The parent class that provides the basic wrapper around content.
+
+    Attributes:
+        unwrap (bool): Determines whether to unwrap the content of GroundedAtoms
+                       when passed as arguments to the operation.
+
+    Properties:
+        op: Returns the operation function.
+        name: Returns the identifier name for this operation object.
+
+    Methods:
+        __init__(name, op, unwrap): Initializes an OperationObject instance.
+        execute(*args, res_typ): Executes the operation with the provided arguments.
+        __eq__(other): Compares the equality of this OperationObject instance with another.
+
+    Example:
+        def add(a, b):
+            return a + b
+
+        op_obj = OperationObject("addition", add)
+        result = op_obj.execute(3, 4)
+    """
 
     def __init__(self, name, op, unwrap=True):
+        """
+        Initializes a new OperationObject with a name identifier, operation function,
+        and an optional unwrap flag.
+        Parameters:
+            name (str): The identifier for this operation.
+            op (function): The function representing the operation.
+            unwrap (bool, optional): Whether to unwrap GroundedAtom content when applying
+                                     the operation. Defaults to True.
+
+        """
         super().__init__(op, name)
         self.unwrap = unwrap
 
     @property
     def op(self):
+        """Returns the operation function."""
         return self.content
 
     @property
     def name(self):
+        """Returns the identifier name for this operation object."""
         return self.id
 
     def execute(self, *args, res_typ=AtomType.UNDEFINED):
+        """
+        Executes the operation with the provided arguments.
+
+        Parameters:
+            *args: Arguments to pass to the operation function.
+            res_typ (AtomType, optional): The expected result type. Defaults to AtomType.UNDEFINED.
+
+        Returns:
+            The result of the operation.
+
+        Raises:
+            NoReduceError: Raised when `unwrap=True` and a non-GroundedAtom argument is provided.
+            RuntimeError: Raised when the result of the operation is not a list.
+
+        Note:
+            Depending on the `unwrap` attribute, this method will either unwrap GroundedAtoms
+            before passing them to the operation or pass them as is.
+        """
         # type-check?
         if self.unwrap:
             for arg in args:
@@ -263,6 +320,15 @@ class OperationObject(GroundedObject):
             return result
 
     def __eq__(self, other):
+        """
+        Compares the equality of this OperationObject with another based on their names.
+
+        Parameters:
+            other (OperationObject): Another OperationObject instance to compare.
+
+        Returns:
+            True if both OperationObjects have the same name; False otherwise.
+        """
         return isinstance(other, OperationObject) and self.name == other.name
 
 class MatchableObject(ValueObject):
