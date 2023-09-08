@@ -30,7 +30,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-20.04, macos-11]
+        #os: [ubuntu-20.04, macos-11]
+        os: [macos-11]
       max-parallel: 3
 
     steps:
@@ -44,7 +45,7 @@ jobs:
         uses: pypa/cibuildwheel@v2.13.1
         env:
           CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{github.ref}}"
-          CIBW_BUILD: cp37-*  # For test
+          CIBW_BUILD: cp37-manylinux*  # For test
         with:
           package-dir: ./python
 
