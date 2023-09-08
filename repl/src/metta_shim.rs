@@ -1,10 +1,9 @@
 
-use std::fmt::Display;
 use std::path::PathBuf;
 
+use hyperon::ExpressionAtom;
 use hyperon::Atom;
-use hyperon::atom::{Grounded, ExecError, match_by_equality};
-use hyperon::matcher::MatchResultIter;
+use hyperon::atom::VariableAtom;
 use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
 use hyperon::metta::*;
@@ -15,6 +14,7 @@ use hyperon::metta::text::SExprParser;
 use hyperon::common::shared::Shared;
 
 use crate::ReplParams;
+use crate::SIGINT_RECEIVED_COUNT;
 
 /// MettaShim is responsible for **ALL** calls between the repl and MeTTa, and is in charge of keeping
 /// Python happy (and perhaps other languages in the future).
@@ -25,6 +25,7 @@ use crate::ReplParams;
 pub struct MettaShim {
     pub metta: Metta,
     pub result: Vec<Vec<Atom>>,
+    _repl_params: Shared<ReplParams>, //TODO: We'll likely want this back soon, but so I'm not un-plumbing it just yet
 }
 
 #[macro_export]
@@ -64,12 +65,19 @@ impl MettaShim {
         let tokenizer = Shared::new(Tokenizer::new());
         let mut new_shim = Self {
             metta: Metta::from_space(space, tokenizer, repl_params.borrow().modules_search_paths().collect()),
-            result: vec![]
+            result: vec![],
+            _repl_params: repl_params.clone(),
         };
 
-        //Load the hyperonpy Python stdlib, if the repl includes Python support
+        //Init HyperonPy if the repl includes Python support
         #[cfg(feature = "python")]
-        py_mod_loading::load_python_module(&new_shim.metta, "hyperon.stdlib").unwrap();
+        {
+            //Confirm the hyperonpy version is compatible
+            py_mod_loading::confirm_hyperonpy_version(">=0.1.0, <0.2.0").unwrap();
+
+            //Load the hyperonpy Python stdlib
+            py_mod_loading::load_python_module(&new_shim.metta, "hyperon.stdlib").unwrap();
+        }
 
         //Load the Rust stdlib
         register_rust_tokens(&new_shim.metta);
@@ -84,7 +92,12 @@ impl MettaShim {
 
         //extend-py! should throw an error if we don't
         #[cfg(not(feature = "python"))]
-        new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(ImportPyErr) });
+        new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(py_mod_err::ImportPyErr) });
+
+        //Run the config.metta file
+        let repl_params = repl_params.borrow();
+        let config_metta_path = repl_params.config_metta_path();
+        new_shim.load_metta_module(config_metta_path.clone());
 
         new_shim
     }
@@ -98,7 +111,28 @@ impl MettaShim {
     pub fn exec(&mut self, line: &str) {
         metta_shim_env!{{
             let mut parser = SExprParser::new(line);
-            self.result = self.metta.run(&mut parser).unwrap();
+            let mut runner_state = self.metta.start_run();
+
+            // This clears any leftover count that might have happened if the user pressed Ctrl+C just after MeTTa
+            // interpreter finished processing, but before control returned to rustyline's prompt.  That signal is
+            // not intended for the new execution we are about to begin.
+            //See https://github.com/trueagi-io/hyperon-experimental/pull/419#discussion_r1315598220 for more details
+            *SIGINT_RECEIVED_COUNT.lock().unwrap() = 0;
+
+            while !runner_state.is_complete() {
+                //If we received an interrupt, then clear it and break the loop
+                let mut signal_received_cnt = SIGINT_RECEIVED_COUNT.lock().unwrap();
+                if *signal_received_cnt > 0 {
+                    *signal_received_cnt = 0;
+                    break;
+                }
+                drop(signal_received_cnt);
+
+                //Run the next step
+                self.metta.run_step(&mut parser, &mut runner_state)
+                    .unwrap_or_else(|err| panic!("Unhandled MeTTa error: {}", err));
+                self.result = runner_state.intermediate_results().clone();
+            }
         }}
     }
 
@@ -107,28 +141,93 @@ impl MettaShim {
             func(self)
         }}
     }
+
+    pub fn get_config_atom(&mut self, config_name: &str) -> Option<Atom> {
+        let mut result = None;
+        metta_shim_env!{{
+            let val = VariableAtom::new("val");
+            let bindings_set = self.metta.space().query(&Atom::expr(vec![EQUAL_SYMBOL, Atom::sym(config_name.to_string()), Atom::Variable(val.clone())]));
+            if let Some(bindings) = bindings_set.into_iter().next() {
+                result = bindings.resolve(&val);
+            }
+        }}
+        result
+    }
+
+    pub fn get_config_string(&mut self, config_name: &str) -> Option<String> {
+        let atom = self.get_config_atom(config_name)?;
+
+        #[allow(unused_assignments)]
+        let mut result = None;
+        metta_shim_env!{{
+            result = Some(Self::strip_quotes(atom.to_string()));
+        }}
+        result
+    }
+
+    /// A utility function to return the part of a string in between starting and ending quotes
+    // TODO: Roll this into a stdlib grounded string module, maybe as a test case for
+    //   https://github.com/trueagi-io/hyperon-experimental/issues/351
+    fn strip_quotes(the_string: String) -> String {
+        if let Some(first) = the_string.chars().next() {
+            if first == '"' {
+                if let Some(last) = the_string.chars().last() {
+                    if last == '"' {
+                        if the_string.len() > 1 {
+                            return String::from_utf8(the_string.as_bytes()[1..the_string.len()-1].to_vec()).unwrap();
+                        }
+                    }
+                }
+            }
+        }
+        the_string
+    }
+
+    pub fn get_config_expr_vec(&mut self, config_name: &str) -> Option<Vec<String>> {
+        let atom = self.get_config_atom(config_name)?;
+        let mut result = None;
+        metta_shim_env!{{
+            if let Ok(expr) = ExpressionAtom::try_from(atom) {
+                result = Some(expr.into_children()
+                    .into_iter()
+                    .map(|atom| Self::strip_quotes(atom.to_string()))
+                    .collect())
+            }
+        }}
+        result
+    }
+
 }
 
-#[derive(Clone, PartialEq, Debug)]
-pub struct ImportPyErr;
+#[cfg(not(feature = "python"))]
+mod py_mod_err {
+    use std::fmt::Display;
+    use hyperon::Atom;
+    use hyperon::atom::{Grounded, ExecError, match_by_equality};
+    use hyperon::matcher::MatchResultIter;
+    use hyperon::metta::*;
 
-impl Display for ImportPyErr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "extend-py!")
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct ImportPyErr;
+
+    impl Display for ImportPyErr {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "extend-py!")
+        }
     }
-}
 
-impl Grounded for ImportPyErr {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED])
-    }
+    impl Grounded for ImportPyErr {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED])
+        }
 
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        Err(ExecError::from("extend-py! not available in metta repl without Python support"))
-    }
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            Err(ExecError::from("extend-py! not available in metta repl without Python support"))
+        }
 
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
     }
 }
 
@@ -136,6 +235,7 @@ impl Grounded for ImportPyErr {
 mod py_mod_loading {
     use std::fmt::Display;
     use std::path::PathBuf;
+    use semver::{Version, VersionReq};
     use pyo3::prelude::*;
     use pyo3::types::{PyTuple, PyDict};
     use hyperon::*;
@@ -146,6 +246,29 @@ mod py_mod_loading {
     use hyperon::metta::runner::Metta;
     use hyperon::common::shared::Shared;
     use crate::ReplParams;
+
+    /// Load the hyperon module, and get the "__version__" attribute
+    pub fn get_hyperonpy_version() -> Result<String, String> {
+        Python::with_gil(|py| -> PyResult<String> {
+            let hyperon_mod = PyModule::import(py, "hyperon")?;
+            let version_obj = hyperon_mod.getattr("__version__")?;
+            Ok(version_obj.str()?.to_str()?.into())
+        }).map_err(|err| {
+            format!("{err}")
+        })
+    }
+
+    pub fn confirm_hyperonpy_version(req_str: &str) -> Result<(), String> {
+
+        let req = VersionReq::parse(req_str).unwrap();
+        let version_string = get_hyperonpy_version()?;
+        let version = Version::parse(&version_string).map_err(|e| format!("Error parsing HyperonPy version: '{version_string}', {e}"))?;
+        if req.matches(&version) {
+            Ok(())
+        } else {
+            Err(format!("MeTTa repl requires HyperonPy version matching '{req}'.  Found version: '{version}'"))
+        }
+    }
 
     pub fn load_python_module_from_mod_or_file(repl_params: &ReplParams, metta: &Metta, module_name: &str) -> Result<(), String> {
 

@@ -1,10 +1,17 @@
 
 use std::path::{Path, PathBuf};
+use std::io::Write;
+use std::fs;
+
+const DEFAULT_CONFIG_METTA: &[u8] = include_bytes!("config.default.metta");
 
 #[derive(Default, Debug)]
 pub struct ReplParams {
     /// Path to the config dir for the whole repl, in an OS-specific location
     config_dir: PathBuf,
+
+    /// Path to the config.metta file, used to configure the repl
+    config_metta_path: PathBuf,
 
     /// Path to the dir containing the script being run, or the cwd the repl was invoked from in interactive mode
     metta_working_dir: PathBuf,
@@ -37,6 +44,17 @@ impl ReplParams {
         let modules_dir = config_dir.join("modules");
         std::fs::create_dir_all(&modules_dir).unwrap();
 
+        //Create the default config.metta file, if none exists
+        let config_metta_path = config_dir.join("config.metta");
+        if !config_metta_path.exists() {
+            let mut file = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .open(&config_metta_path)
+                .expect(&format!("Error creating default config file at {config_metta_path:?}"));
+            file.write_all(&DEFAULT_CONFIG_METTA).unwrap();
+        }
+
         //Push the "modules" dir, as the last place to search after the paths specified on the cmd line
         //TODO: the config.metta file will be able to append / modify the search paths, and can choose not to
         // include the "modules" dir in the future.
@@ -45,6 +63,7 @@ impl ReplParams {
 
         Self {
             config_dir: config_dir.into(),
+            config_metta_path,
             metta_working_dir,
             include_paths,
             history_file: Some(config_dir.join("history.txt")),
@@ -55,12 +74,17 @@ impl ReplParams {
     ///
     /// The metta_working_dir is always returned first
     pub fn modules_search_paths<'a>(&'a self) -> impl Iterator<Item=PathBuf> + 'a {
-
-        //TODO: This is here to temporarily squish a warning.
-        let _ = self.config_dir;
-
         [self.metta_working_dir.clone()].into_iter().chain(
             self.include_paths.iter().cloned())
+    }
+
+    /// A path to the config.metta file that's run to configure the repl environment
+    pub fn config_metta_path(&self) -> &PathBuf {
+
+        //TODO: Temporary access to avoid warning.  Delete soon
+        let _ = self.config_dir;
+
+        &self.config_metta_path
     }
 
 }
