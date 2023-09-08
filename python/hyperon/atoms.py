@@ -332,10 +332,72 @@ class OperationObject(GroundedObject):
         return isinstance(other, OperationObject) and self.name == other.name
 
 class MatchableObject(ValueObject):
+    """
+    Represents an object that can be involved in a matching operation with an Atom.
+
+    This class is meant to be subclassed by objects that define specific matching behavior
+    with an Atom. It provides a stub method for the matching operation that raises
+    a RuntimeError when called, which must be overridden by subclasses.
+
+    Inherits:
+        ValueObject: The parent class that provides basic value-based equality and representation.
+
+    Methods:
+        match_(atom): A stub method for matching the object with an Atom.
+
+    Example:
+        class MyMatchableObject(MatchableObject):
+            def match_(self, atom):
+                # Implement the matching logic here
+                pass
+
+        my_obj = MyMatchableObject("some_value")
+        my_obj.match_(some_atom)  # Should not raise RuntimeError
+
+    Raises:
+        RuntimeError: Raised when the match_ method is called without being overridden by a subclass.
+    """
+
     def match_(self, atom):
+        """
+        A stub method for matching the object with an Atom.
+
+        This method is intended to be overridden by subclasses to provide specific
+        matching behavior with an Atom.
+
+        Parameters:
+            atom (Atom): An Atom object to match against.
+
+        Raises:
+            RuntimeError: Raised when this method is called without being overridden in a subclass.
+        """
         raise RuntimeError("MatchableObject::match_() is not implemented")
 
 def _type_sugar(type_names):
+    """
+    Transforms a variety of type representations into a unified Atom-based format.
+
+    This utility function is intended for internal use to handle different ways in which
+    type information can be provided. It converts `type_names` into a form that can be
+    readily used for type checking or other internal operations.
+
+    Parameters:
+        type_names (Union[None, list, str, AtomType]): The type information to be converted.
+            - If None, will return AtomType.UNDEFINED.
+            - If list, will recursively transform each element.
+            - If str, will return a Variable Atom (`V`) if the string starts with '$'; otherwise, returns a Symbol Atom (`S`).
+            - If already an AtomType, returns it as is.
+
+    Returns:
+        AtomType: The transformed type information in AtomType format.
+
+    Examples:
+        _type_sugar(None)                 => AtomType.UNDEFINED
+        _type_sugar(["int", "str"])       => E(S("->"), S("int"), S("str"))
+        _type_sugar("$var")               => V("var")
+        _type_sugar("int")                => S("int")
+        _type_sugar(AtomType.SOME_TYPE)   => AtomType.SOME_TYPE
+    """
     if type_names is None:
         return AtomType.UNDEFINED
     if isinstance(type_names, list):
