@@ -407,12 +407,21 @@ def _type_sugar(type_names):
     return type_names
 
 def OperationAtom(name, op, type_names=None, unwrap=True):
+    """
+    An OperationAtom wraps an operation with optional type information into a GroundedAtom
+    and associates a name with it. Useful for registering custom operations
+    that can be executed in an Atom-based computational environment.
+    """
     return G(OperationObject(name, op, unwrap), _type_sugar(type_names))
 
 def ValueAtom(value, type_name=None, atom_id=None):
+    """Creates a GroundedAtom that wraps a given value, optionally specifying its type and identifier."""
     return G(ValueObject(value, atom_id), _type_sugar(type_name))
 
 def MatchableAtom(value, type_name=None, atom_id=None):
+    """
+    Creates a Grounded Atom that wraps a matchable value, optionally specifying its type and identifier.
+    """
     return G(MatchableObject(value, atom_id), _type_sugar(type_name))
 
 
@@ -420,14 +429,14 @@ class Bindings:
     """Interface for working with atom matching and variable-to-atom binding."""
 
     def __init__(self, bindings: Union[hp.CBindings, None] = None):
-        """Initialize bindings"""
+        """Initializes with or without pre-existing bindings."""
         if bindings is None:
             self.cbindings = hp.bindings_new()
         else:
             self.cbindings = bindings
 
     def __del__(self):
-        """Frees a bindings"""
+        """Frees the binding resources."""
         if self.cbindings is not None:
             hp.bindings_free(self.cbindings)
 
@@ -441,13 +450,15 @@ class Bindings:
         return hp.bindings_to_str(self.cbindings)
 
     def __deepcopy__(self, memodict={}):
-        """Makes a "deep copy" of the bindings"""
+        """Makes a "deep copy" of the bindings."""
         return self.clone()
 
     def __enter__(self):
+        """For context management."""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Frees resources on exit."""
         if self.cbindings is not None:
             hp.bindings_free(self.cbindings)
             self.cbindings = None
@@ -457,23 +468,22 @@ class Bindings:
         return Bindings(hp.bindings_clone(self.cbindings))
 
     def merge(self, other: 'Bindings') -> 'BindingsSet':
-        """Merges two Bindings frames together into a Bindings Set."""
+        """Merges with another Bindings instance, into a Bindings Set."""
         return BindingsSet(hp.bindings_merge(self.cbindings, other.cbindings))
 
     def add_var_binding(self, var: Union[str, Atom], atom: Atom) -> bool:
-        """Adds a new variable <-> atom association within a bindings"""
+        """Adds a binding between a variable and an Atom."""
         if isinstance(var, Atom):
             return hp.bindings_add_var_binding(self.cbindings, var.get_name(), atom.catom)
         else:
             return hp.bindings_add_var_binding(self.cbindings, var, atom.catom)
 
     def is_empty(self) -> bool:
-        """Checks if a bindings contains no associations. """
+        """Checks if a bindings contains no associations."""
         return hp.bindings_is_empty(self.cbindings)
 
     def narrow_vars(self, vars ):
-        """Removes all variable associations from a bindings except those in the
-        supplied list."""
+        """Keeps only specific variable associations."""
         cvars = hp.CVecAtom = hp.atom_vec_new()
         for var in vars:
             hp.atom_vec_push(cvars, var.catom)
@@ -481,15 +491,17 @@ class Bindings:
         hp.atom_vec_free(cvars)
 
     def resolve(self, var_name: str) -> Union[Atom, None]:
-        """Returns the atom bound to the supplied variable name in the bindings"""
+        """Finds the atom for a given variable name"""
         raw_atom = hp.bindings_resolve(self.cbindings, var_name)
         return None if raw_atom is None else Atom._from_catom(raw_atom)
 
     def resolve_and_remove(self, var_name: str) -> Union[Atom, None]:
+        """Finds anr removes the atom for a given variable name"""
         raw_atom = hp.bindings_resolve_and_remove(self.cbindings, var_name)
         return None if raw_atom is None else Atom._from_catom(raw_atom)
 
     def iterator(self):
+        """Iterates through all variable-atom pairs in the bindings"""
         res = hp.bindings_list(self.cbindings)
         result = []
         for r in res:
@@ -498,11 +510,11 @@ class Bindings:
         return iter(result)
 
 class BindingsSet:
-    """Represents a set of Bindings frames. Potentially expressing all possible
-    matches produced by a match operarion. """
+    """Represents a set of Bindings frames, potentially expressing all possible
+    matches produced by a match operation."""
 
     def __init__(self, input: Union[hp.CBindingsSet, Bindings, None] = None):
-        """Initialize Bindings set"""
+        """Initializes with optional input."""
         self.shadow_list = None # A lazily initialized list that shadows the BindingsSet values for indexed access
         if input is None:
             self.c_set = hp.bindings_set_single()
@@ -512,74 +524,77 @@ class BindingsSet:
             self.c_set = input
 
     def __del__(self):
-        """Frees a Frees a Bindings set"""
+        """Frees the BindingsSet"""
         if self.c_set is not None:
             hp.bindings_set_free(self.c_set)
             self.c_set = None
 
     def __eq__(self, other):
-        """Checks if two Bindings set objects contain identical associations."""
+        """Checks if other BindingsSet contains identical associations."""
         return (isinstance(other, BindingsSet) and
                 hp.bindings_set_eq(self.c_set, other.c_set))
 
     def __repr__(self):
-        """Renders a text description of a Bindings set"""
+        """Renders a text description of a BindingsSet"""
         return hp.bindings_set_to_str(self.c_set)
 
     def __deepcopy__(self, memodict={}):
-        """Makes a "deep copy" of a Bindings set"""
+        """Makes a "deep copy" of a BindingsSet"""
         return self.clone()
 
     def __enter__(self):
+        """For context management."""
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """Frees resources on exit."""
         if self.c_set is not None:
             hp.bindings_set_free(self.c_set)
             self.c_set = None
 
     def __getitem__(self, key):
+        """Gets a Bindings frame by index"""
         if self.shadow_list is None:
             result = hp.bindings_set_unpack(self.c_set)
             self.shadow_list = [{k: Atom._from_catom(v) for k, v in bindings.items()} for bindings in result]
         return self.shadow_list[key]
 
     def empty():
-        """Creates a new Bindings set without any Bindings frames.
-        Conceptually this means no valid matches exist.
+        """Creates a new BindingsSet without any Bindings frames.
+        Conceptually, this means no valid matches exist.
         """
         return BindingsSet(hp.bindings_set_empty())
 
     def clone(self):
-        """Makes a "deep copy" of a Bindings set"""
+        """Makes a "deep copy" of a BindingsSet"""
         return BindingsSet(hp.bindings_set_clone(self.c_set))
 
     def is_empty(self) -> bool:
-        """Checks if a Bindings set contains no Bindings frames, and thus indicates
+        """Checks if a BindingsSet contains no Bindings frames, and thus indicates
         no match."""
         return hp.bindings_set_is_empty(self.c_set)
 
     def is_single(self) -> bool:
-        """Checks if a Bindings set contains a frame with no associations, and is
-        thus allows variables to take on any value.
+        """Checks if a Bindings set contains a frame with no associations, and
+        thus allows variables to take any value.
         """
         return hp.bindings_set_is_single(self.c_set)
 
     def push(self, bindings: Bindings):
-        """Adds a Bindings frame to an existing Bindings set
+        """Adds a Bindings frame to an existing BindingsSet
 
         Parameters
         ----------
         bindings:
             The Bindings set to incorporate into set. Ownership of this argument is
-            taken by this function
+            taken by this function.
         """
         self.shadow_list = None
         hp.bindings_set_push(self.c_set, bindings.cbindings)
 
     def add_var_binding(self, var: Union[str, Atom], value: Atom) -> bool:
-        """Adds a new variable <-> atom association to every Bindings frame in a 
-        Bindings set.
+        """Adds a new variable to atom association to every Bindings frame in a
+        BindingsSet.
         """
         self.shadow_list = None
         if isinstance(var, Atom):
@@ -588,12 +603,12 @@ class BindingsSet:
             return hp.bindings_set_add_var_binding(self.c_set, V(var), value.catom)
 
     def add_var_equality(self, a: Atom, b: Atom) -> bool:
-        """Asserts equality between two Variable atoms in a Bindings set."""
+        """Asserts equality between two Variable atoms in a BindingsSet."""
         self.shadow_list = None
         return hp.bindings_set_add_var_equality(self.c_set, a.catom, b.catom)
 
     def merge_into(self, input: Union['BindingsSet', Bindings]):
-        """Merges the contents of one Bindings set into another Bindings set.  """
+        """Merges the contents of another BindingsSet or Bindings frame."""
         self.shadow_list = None
         if isinstance(input, BindingsSet):
             hp.bindings_set_merge_into(self.c_set, input.c_set);
@@ -602,7 +617,7 @@ class BindingsSet:
             hp.bindings_set_merge_into(self.c_set, new_set.c_set);
 
     def iterator(self):
-        """Gets Bindings set iterator"""
+        """Iterates through all Bindings frames."""
         res = hp.bindings_set_list(self.c_set)
         result = []
         for r in res:
