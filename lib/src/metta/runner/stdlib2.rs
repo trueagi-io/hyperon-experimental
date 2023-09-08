@@ -7,10 +7,12 @@ use crate::metta::runner::Metta;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::assert::vec_eq_no_order;
 use crate::metta::runner::interpret;
+use crate::common::shared::Shared;
 
 use std::fmt::Display;
 use regex::Regex;
 use std::convert::TryInto;
+use std::collections::HashMap;
 
 use super::arithmetics::*;
 
@@ -289,6 +291,45 @@ impl Grounded for CollapseOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct PragmaOp {
+    settings: Shared<HashMap<String, String>>,
+}
+
+impl PragmaOp {
+    pub fn new(settings: Shared<HashMap<String, String>>) -> Self {
+        Self{ settings }
+    }
+}
+
+impl Display for PragmaOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "pragma!")
+    }
+}
+
+impl Grounded for PragmaOp {
+    fn type_(&self) -> Atom {
+        ATOM_TYPE_UNDEFINED
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("pragma! expects key and value as arguments");
+        let key = TryInto::<&SymbolAtom>::try_into(args.get(0).ok_or_else(arg_error)?)
+            .map_err(|_| "pragma! expects symbol atom as a key")?.name();
+        let value = TryInto::<&SymbolAtom>::try_into(args.get(1).ok_or_else(arg_error)?)
+            .map_err(|_| "pragma! expects symbol atom as a value")?.name();
+
+        // TODO: add support for Grounded values when needed
+        self.settings.borrow_mut().insert(key.into(), value.into());
+
+        Ok(vec![])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
 
 fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
@@ -320,6 +361,8 @@ pub fn register_runner_tokens(metta: &Metta) {
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
     tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
+    let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
+    tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
     // TODO: adding &self introduces self referencing and thus prevents space
