@@ -38,7 +38,7 @@ class MeTTa:
         self.tokenizer().register_token(regexp, constr)
 
     def register_atom(self, name, symbol):
-        """Registers an atom"""
+        """Registers an Atom"""
         self.register_token(name, lambda _: symbol)
 
     def _parse_all(self, program):
@@ -58,7 +58,7 @@ class MeTTa:
         return next(self._parse_all(program))
 
     def load_py_module(self, name):
-        """Loads the give python module"""
+        """Loads the given python module"""
         if not isinstance(name, str):
             name = repr(name)
         mod = import_module(name)
@@ -68,7 +68,7 @@ class MeTTa:
                 obj(self)
 
     def import_file(self, fname):
-        """Loads the program file and run it"""
+        """Loads the program file and runs it"""
         path = fname.split(os.sep)
         if len(path) == 1:
             path = ['.'] + path
