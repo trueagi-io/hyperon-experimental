@@ -10,30 +10,29 @@ class Atom:
     """Represents an Atom of any type"""
 
     def __init__(self, catom):
-        """Initialize an atom"""
+        """Initialize an Atom"""
         self.catom = catom
 
     def __del__(self):
-        """Frees an atom and all associated resources."""
+        """Frees an Atom and all associated resources."""
         #import sys; sys.stderr.write("Atom._del_(" + str(self) + ")\n"); sys.stderr.flush()
         hp.atom_free(self.catom)
 
-
     def __eq__(self, other):
-        """Checks if two atom objects represent the same conceptual atom. """
+        """Checks if two atom objects represent the same conceptual Atom."""
         return (isinstance(other, Atom) and
                 hp.atom_eq(self.catom, other.catom))
 
     def __repr__(self):
-        """Renders a human-readable text description of an atom. """
+        """Renders a human-readable text description of the Atom."""
         return hp.atom_to_str(self.catom)
 
     def get_type(self):
-        """Gets the type of this Atom"""
+        """Gets the type of the current Atom instance"""
         return hp.atom_get_type(self.catom)
 
     def iterate(self):
-        """Performs a depth-first exhaustive iteration of an atom and all its children recursively."""
+        """Performs a depth-first exhaustive iteration of an Atom and all its children recursively."""
         res = hp.atom_iterate(self.catom)
         result = []
         for r in res:
@@ -41,7 +40,7 @@ class Atom:
         return result
 
     def match_atom(self, b):
-        """Matches one atom with another, establishing bindings between them."""
+        """Matches one Atom with another, establishing bindings between them."""
         return BindingsSet(hp.atom_match_atom(self.catom, b.catom))
 
     @staticmethod
@@ -57,18 +56,18 @@ class Atom:
         elif type == AtomKind.GROUNDED:
             return GroundedAtom(catom)
         else:
-            raise Exception("Unexpected type of the atom: " + str(type))
+            raise Exception("Unexpected type of the Atom: " + str(type))
 
 class SymbolAtom(Atom):
-    """Symbol Atom represents a single concepts which is identified by name. Two symbols
-    which have the same name reference the same concept."""
+    """A SymbolAtom represents a single concept, identified by name. If two symbols
+    have the same name, they reference the same concept."""
 
     def __init__(self, catom):
-        """Initialize a symbol atom"""
+        """Initialize a SymbolAtom"""
         super().__init__(catom)
 
     def get_name(self):
-        """Renders the name of an atom into a text buffer."""
+        """Renders the name of the Atom into a text buffer."""
         return hp.atom_get_name(self.catom)
 
 def S(name):
@@ -76,16 +75,15 @@ def S(name):
     return SymbolAtom(hp.atom_sym(name))
 
 class VariableAtom(Atom):
-    """
-    Variable Atom represents a variable like a variable in the pattern.
-    """
+    """A VariableAtom represents a variable in an expression. It serves as a
+    placeholder that can be matched with, or bound to other Atoms."""
 
     def __init__(self, catom):
-        """Initialize a variable atom"""
+        """Initialize a VariableAtom"""
         super().__init__(catom)
 
     def get_name(self):
-        """Renders the name of an atom into a text buffer."""
+        """Renders the name of the Atom into a text buffer."""
         return hp.atom_get_name(self.catom)
 
 def V(name):
@@ -93,23 +91,23 @@ def V(name):
     return VariableAtom(hp.atom_var(name))
 
 class ExpressionAtom(Atom):
-    """Expression Atom combines other kinds of atoms including expressions themselves."""
+    """An ExpressionAtom combines different kinds of Atoms, including expressions."""
 
     def __init__(self, catom):
         """Initialize an expression atom"""
         super().__init__(catom)
 
     def get_children(self):
-        """Gets all of the children Atoms"""
+        """Gets all children Atoms"""
         return [Atom._from_catom(catom) for catom in hp.atom_get_children(self.catom)]
 
 
 def E(*args):
-    """A convenient method to construct a ExpressionAtom"""
+    """A convenient method to construct an ExpressionAtom"""
     return ExpressionAtom(hp.atom_expr([atom.catom for atom in args]))
 
 class AtomType:
-    """Defines all the types of Atom"""
+    """Defines all Atom types"""
 
     UNDEFINED = Atom._from_catom(hp.CAtomType.UNDEFINED)
     TYPE = Atom._from_catom(hp.CAtomType.TYPE)
@@ -121,22 +119,23 @@ class AtomType:
     GROUNDED_SPACE = Atom._from_catom(hp.CAtomType.GROUNDED_SPACE)
 
 class GroundedAtom(Atom):
-    """Grounded Atom represents sub-symbolic knowledge. On the API level it allows
-    keeping data and behaviour inside an atom. There are three aspects of the grounded
-    atom which can be customized:
+    """
+    A GroundedAtom represents sub-symbolic knowledge. At the API level, it allows
+    keeping data and behaviour inside an Atom. There are three aspects of a GroundedAtom
+    which can be customized:
 
-        - the type of grounded atom is provided by the atom itself;
-        - matching algorithm of the atom can be modified by the user;
-        - atom can be made executable; such atom can be used to apply some sub-symbolic
-          operations to other atoms as arguments.
+        - the type of GroundedAtom is provided by the Atom itself;
+        - the matching algorithm used by the Atom;
+        - an Atom can be made executable, and used to apply sub-symbolic
+          operations to other Atoms as arguments.
     """
 
     def __init__(self, catom):
-        """Initialize a grounded atom"""
+        """Initialize a GroundedAtom"""
         super().__init__(catom)
 
     def get_object(self):
-        """Gets the Grounded Atom object or the space wrapped inside a Grounded Atom"""
+        """Gets the GroundedAtom object, or the space wrapped inside a GroundedAtom"""
         from .base import SpaceRef
         if self.get_grounded_type() == AtomType.GROUNDED_SPACE:
             return SpaceRef._from_cspace(hp.atom_get_space(self.catom))
@@ -144,7 +143,7 @@ class GroundedAtom(Atom):
             return hp.atom_get_object(self.catom)
 
     def get_grounded_type(self):
-        """Retrieve the grounded type of a Grounded Atom."""
+        """Retrieve the grounded type of the GroundedAtom."""
         return Atom._from_catom(hp.atom_get_grounded_type(self.catom))
 
 def G(object, type=AtomType.UNDEFINED):
@@ -154,7 +153,8 @@ def G(object, type=AtomType.UNDEFINED):
 
 def _priv_call_execute_on_grounded_atom(gnd, typ, args):
     """
-    Private glue for Hyperonpy implementation
+    Private glue for Hyperonpy implementation.
+    Executes grounded Atoms.
     """
     # ... if hp.atom_to_str(typ) == AtomType.UNDEFINED
     res_typ = AtomType.UNDEFINED if hp.atom_get_type(typ) != AtomKind.EXPR \
@@ -164,20 +164,26 @@ def _priv_call_execute_on_grounded_atom(gnd, typ, args):
 
 def _priv_call_match_on_grounded_atom(gnd, catom):
     """
-    Private glue for Hyperonpy implementation
+    Private glue for Hyperonpy implementation.
+    Matches grounded atoms
     """
     return gnd.match_(Atom._from_catom(catom))
 
 def atoms_are_equivalent(first, second):
+    """Check if two atoms are equivalent"""
     return hp.atoms_are_equivalent(first.catom, second.catom)
 
 class GroundedObject:
+    """A GroundedObject holds some content and, optionally, an identifier."""
 
     def __init__(self, content, id=None):
+        """Initializes a new GroundedObject with the given content and identifier."""
         self.content = content
         self.id = id
 
     def __repr__(self):
+        """Returns the object's ID if present, or a string representation of 
+        its content if not."""
         # Overwrite Python default representation of a string to use
         # double quotes instead of single quotes.
         if isinstance(self.content, str):
@@ -187,19 +193,40 @@ class GroundedObject:
         return repr(self.content) if self.id is None else self.id
 
     def copy(self):
+        """
+        Returns a copy of this GroundedObject instance.
+
+        Note: Currently, this method returns the original
+        instance, effectively making the GroundedObject immutable.
+        """
         return self
 
 class ValueObject(GroundedObject):
+    """
+    A ValueObject is a specialized form of GroundedObject, which treats its content
+    as a value. It allows for equality comparison between the content of two ValueObjects.
+
+    Example:
+        obj1 = ValueObject(5)
+        obj2 = ValueObject(5)
+        obj3 = ValueObject(6)
+        
+        print(obj1 == obj2)  # True
+        print(obj1 == obj3)  # False
+    """
 
     @property
     def value(self):
+        """Gets the value of the object, which is its content."""
         return self.content
 
     def __eq__(self, other):
-        # TODO: ?typecheck
+        """Compares the equality of this ValueObject with another based on their content."""
+        # TODO: ?typecheck for the contents
         return isinstance(other, ValueObject) and self.content == other.content
 
 class NoReduceError(Exception):
+    """Custom exception raised when a reduction operation cannot be performed."""
     pass
 
 class OperationObject(GroundedObject):
@@ -223,7 +250,7 @@ class OperationObject(GroundedObject):
                 if not isinstance(arg, GroundedAtom):
                     # REM:
                     # Currently, applying grounded operations to pure atoms is not reduced.
-                    # If we want, we can raise an exception, or to form a error expression instead,
+                    # If we want, we can raise an exception, or form an error expression instead,
                     # so a MeTTa program can catch and analyze it.
                     # raise RuntimeError("Grounded operation " + self.name + " with unwrap=True expects only grounded arguments")
                     raise NoReduceError()

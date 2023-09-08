@@ -241,7 +241,7 @@ All components which depend on `libhyperonc` are built using
 [CMake](https://cmake.org/) build tool in order to manage dependencies
 automatically.
 
-Diagram below demonstrates main components and dependencies between them:
+The diagram below demonstrates main components and dependencies between them:
 ![Diagram of the structure](./docs/assets/structure.svg)
 [Source code of the diagram](./docs/assets/structure.plantuml)
 
