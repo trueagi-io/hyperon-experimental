@@ -1,18 +1,30 @@
 from .runner import MeTTa
 
 def register_results(method, args, kwargs):
+    """Returns a decorator for registering the results of a method.
+    The behavior of the decorator depends on whether it is used with or without arguments."""
+    
+    # Case 1: Decorator used without arguments (i.e., @decorator instead of @decorator(args))
     if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-        # no arguments
-        func = args[0]
+        func = args[0]  # func is the decorated function
+
+        # Define the decorator
         def metta_register(metta):
+            # Register the results of calling the decorated function using the provided method
             method(metta, func())
         return metta_register
+
+    # Case 2: Decorator used with arguments (i.e., @decorator(args))
     else:
-        # with arguments
+        # Check if the decorator is used with arguments
         pass_metta = kwargs.get('pass_metta', False)
+
+        # Define the decorator
         def inner(func):
             def metta_register(metta):
+                # Get the results of calling the decorated function
                 regs = func(metta) if pass_metta else func()
+                # Register the results using the provided method
                 method(metta, regs)
             return metta_register
         return inner
