@@ -10,15 +10,20 @@ use std::rc::Rc;
 use std::path::PathBuf;
 use std::collections::HashMap;
 
+
+#[cfg(not(feature = "minimal"))]
 pub mod stdlib;
+#[cfg(not(feature = "minimal"))]
 use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
+#[cfg(not(feature = "minimal"))]
 use stdlib::*;
 
-// Uncomment three lines below and comment three lines above to
-// switch to the minimal MeTTa version
-//pub mod stdlib2;
-//use super::interpreter2::{interpret, interpret_init, interpret_step, InterpreterState};
-//use stdlib2::*;
+#[cfg(feature = "minimal")]
+pub mod stdlib2;
+#[cfg(feature = "minimal")]
+use super::interpreter2::{interpret, interpret_init, interpret_step, InterpreterState};
+#[cfg(feature = "minimal")]
+use stdlib2::*;
 
 mod arithmetics;
 
@@ -219,6 +224,8 @@ impl Metta {
                                 InterpreterState::new_finished(self.space().clone(), vec![atom])
                             },
                             Ok(atom) => {
+                                #[cfg(feature = "minimal")]
+                                let atom = wrap_atom_by_metta_interpreter(self, atom);
                                 interpret_init(self.space().clone(), &atom)
                             },
                         });
@@ -236,7 +243,11 @@ impl Metta {
         Ok(())
     }
 
+    // TODO: this method is deprecated and should be removed after switching
+    // to the minimal MeTTa
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
+        #[cfg(feature = "minimal")]
+        let atom = wrap_atom_by_metta_interpreter(self, atom);
         match self.type_check(atom) {
             Err(atom) => Ok(vec![atom]),
             Ok(atom) => interpret(self.space(), &atom),
@@ -258,6 +269,14 @@ impl Metta {
         }
     }
 
+}
+
+#[cfg(feature = "minimal")]
+fn wrap_atom_by_metta_interpreter(runner: &Metta, atom: Atom) -> Atom {
+    let space = Atom::gnd(runner.space().clone());
+    let interpret = Atom::expr([Atom::sym("interpret"), atom, ATOM_TYPE_UNDEFINED, space]);
+    let eval = Atom::expr([EVAL_SYMBOL, interpret]);
+    eval
 }
 
 impl<'a> RunnerState<'a> {

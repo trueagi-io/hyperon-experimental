@@ -2,6 +2,7 @@
 
 pub mod text;
 pub mod interpreter;
+#[cfg(feature = "minimal")]
 pub mod interpreter2;
 pub mod types;
 pub mod runner;

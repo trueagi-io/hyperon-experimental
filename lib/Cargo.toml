@@ -16,3 +16,6 @@ smallvec = "1.10.0"
 name = "hyperon"
 path = "src/lib.rs"
 crate-type = ["lib"]
+
+[features]
+minimal = []
