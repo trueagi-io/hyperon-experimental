@@ -10,7 +10,7 @@ name: Build Python Release
 on:
   workflow_dispatch:
     inputs:
-      release-tag:
+      release_tag:
         description: 'GitHub release tag to publish packages'
         required: false
         type: string
@@ -44,10 +44,11 @@ jobs:
         uses: pypa/cibuildwheel@v2.13.1
         env:
           CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{github.ref}}"
+          CIBW_BUILD: cp37-*  # For test
         with:
           package-dir: ./python
 
-      - name: Publish artifacts on GitHub
+      - name: Publish Artifacts on GitHub Release
         if: github.event_name == 'release'
         uses: svenstaro/upload-release-action@v2
         with:
@@ -57,3 +58,29 @@ jobs:
           prerelease: ${{ inputs.prerelease }}
           overwrite: true
           file_glob: true
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: python-wheels
+          path: ./wheelhouse/*.whl
+
+  publish-pypi:
+    name: Publish to PyPI
+    permissions:
+      id-token: write
+    environment:
+      name: production
+    runs-on: ubuntu-latest
+    needs: [build_wheels]
+    if: github.event_name == 'release' && github.event.action == 'published'
+    steps:
+    - uses: actions/download-artifact@v3
+      with:
+        name: python-wheels
+        path: dist
+    - name: Publish package distributions to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        password: ${{ secrets.PYPI_API_TOKEN }}
+        repository-url: https://test.pypi.org/legacy/
