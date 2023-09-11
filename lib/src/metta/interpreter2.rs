@@ -10,8 +10,6 @@ use crate::space::*;
 use crate::space::grounding::*;
 use crate::metta::*;
 
-use std::ops::Deref;
-use std::rc::Rc;
 use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
 
@@ -52,32 +50,16 @@ struct InterpreterContext<'a, T: SpaceRef<'a>> {
     phantom: PhantomData<&'a GroundingSpace>,
 }
 
-struct InterpreterContextRef<'a, T: SpaceRef<'a>>(Rc<InterpreterContext<'a, T>>);
-
-impl<'a, T: SpaceRef<'a>> InterpreterContextRef<'a, T> {
+impl<'a, T: SpaceRef<'a>> InterpreterContext<'a, T> {
     fn new(space: T) -> Self {
-        Self(Rc::new(InterpreterContext{ space, phantom: PhantomData }))
-    }
-}
-
-impl<'a, T: SpaceRef<'a>> Deref for InterpreterContextRef<'a, T> {
-    type Target = InterpreterContext<'a, T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<'a, T: SpaceRef<'a>> Clone for InterpreterContextRef<'a, T> {
-    fn clone(&self) -> Self {
-        Self(Rc::clone(&self.0))
+        Self{ space, phantom: PhantomData }
     }
 }
 
 pub struct InterpreterState<'a, T: SpaceRef<'a>> {
     plan: Vec<InterpretedAtom>,
     finished: Vec<Atom>,
-    context: InterpreterContextRef<'a, T>,
+    context: InterpreterContext<'a, T>,
 }
 
 fn atom_as_slice(atom: &Atom) -> Option<&[Atom]> {
@@ -97,7 +79,7 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
         Self {
             plan: vec![],
             finished: results,
-            context: InterpreterContextRef::new(space),
+            context: InterpreterContext::new(space),
         }
     }
 
@@ -144,7 +126,7 @@ impl<'a, T: SpaceRef<'a>> std::fmt::Display for InterpreterState<'a, T> {
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
 pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterState<'a, T> {
-    let context = InterpreterContextRef::new(space);
+    let context = InterpreterContext::new(space);
     InterpreterState {
         plan: vec![InterpretedAtom(expr.clone(), Bindings::new())],
         finished: vec![],
