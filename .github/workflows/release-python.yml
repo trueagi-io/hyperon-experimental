@@ -38,12 +38,12 @@ jobs:
           echo "GITHUB_EVENT_NAME=${{github.event_name}}" | tee $GITHUB_ENV
           echo "GITHUB_PRERELEASE=${{github.event.release.prerelease}}" | tee $GITHUB_ENV
           echo "GITHUB_TAG_NAME=${{github.event.release.tag_name}}" | tee $GITHUB_ENV
-          echo "GITHUB_SHA=${{env.GITHUB_SHA}}"
+          echo "COMMIT_HEAD=${{github.ref_name != '' && github.ref_name || env.GITHUB_SHA}}" | tee $GITHUB_ENV
 
       - name: Build wheels on ${{ matrix.os }}
         uses: pypa/cibuildwheel@v2.13.1
         env:
-          CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{env.GITHUB_SHA}}"
+          CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{COMMIT_HEAD}}"
           CIBW_BUILD: cp37-*  # For test
           CIBW_SKIP: "*musllinux*"
         with:
