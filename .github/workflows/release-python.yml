@@ -5,16 +5,10 @@
 # provided by a third-party and are governed by separate terms of service,
 # privacy policy, and support documentation.
 
-name: Build Python Release
+name: Build Python Package and Publish
 
 on:
   workflow_dispatch:
-    inputs:
-      prerelease:
-        description: 'Flag to create a pre-release'
-        default: true
-        required: false
-        type: boolean
   release:
     types: [published]
 
@@ -50,13 +44,13 @@ jobs:
           package-dir: ./python
 
       - name: Publish Artifacts on GitHub Release
-        if: github.event_name == 'release'
+        if: github.event.action == 'published'
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ./wheelhouse/*.whl
           tag: ${{ github.ref }}
-          prerelease: ${{ inputs.prerelease }}
+          prerelease: ${{ github.event.release.prerelease }}
           overwrite: true
           file_glob: true
 
