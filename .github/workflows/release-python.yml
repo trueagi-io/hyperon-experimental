@@ -38,7 +38,7 @@ jobs:
           echo "GITHUB_EVENT_NAME=${{github.event_name}}" | tee $GITHUB_ENV
           echo "GITHUB_PRERELEASE=${{github.event.release.prerelease}}" | tee $GITHUB_ENV
           echo "GITHUB_TAG_NAME=${{github.event.release.tag_name}}" | tee $GITHUB_ENV
-          echo "GITHUB_SHA=${{GITHUB_SHA}}"
+          echo "GITHUB_SHA=${{env.GITHUB_SHA}}"
 
       - name: Build wheels on ${{ matrix.os }}
         uses: pypa/cibuildwheel@v2.13.1
