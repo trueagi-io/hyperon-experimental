@@ -1,4 +1,5 @@
-from .atoms import GroundedAtom, OperationAtom, ValueAtom, NoReduceError
+from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError
+from .base import Tokenizer, SExprParser
 from .ext import register_atoms, register_tokens
 
 class Char:
@@ -50,6 +51,23 @@ def bool_ops():
         r"or": orAtom,
         r"and": andAtom,
         r"not": notAtom
+    }
+
+@register_atoms
+def text_ops():
+    reprAtom = OperationAtom('repr', lambda a: [ValueAtom(repr(a))],
+                             ['Atom', 'String'], unwrap=False)
+    unreprAtom = OperationAtom('unrepr', lambda s: [ValueAtom(SExprParser(str(s)[1:-1]).parse(Tokenizer()))],
+                               ['String', 'Atom'], unwrap=False)
+    toCharsAtom = OperationAtom('toChars', lambda s: [ValueAtom(E(*[ValueAtom(Char(c)) for c in str(s)[1:-1]]))],
+                                ['String', 'Atom'], unwrap=False)
+    toStringAtom = OperationAtom('toString', lambda a: [ValueAtom("".join([str(c)[1:-1] for c in a.get_children()]))],
+                                 ['Atom', 'String'], unwrap=False)
+    return {
+        r"repr": reprAtom,
+        r"unrepr": unreprAtom,
+        r"toChars": toCharsAtom,
+        r"toString": toStringAtom
     }
 
 @register_tokens
