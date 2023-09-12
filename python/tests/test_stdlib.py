@@ -1,9 +1,17 @@
 import unittest
 
 from hyperon import *
+from hyperon.stdlib import Char
 from test_common import *
 
 class StdlibTest(HyperonTestCase):
+    def test_text_ops(self):
+        metta = MeTTa()
+        self.assertEqualMettaRunnerResults(metta.run("!(repr (my atom))"), [[ValueAtom("(my atom)")]])
+        self.assertEqualMettaRunnerResults(metta.run("!(unrepr \"(my atom)\")"), [[ValueAtom(E(S("my"), S("atom")))]])
+        self.assertEqualMettaRunnerResults(metta.run("!(toChars \"ABC\")"), [[ValueAtom(E(ValueAtom(Char("A")), ValueAtom(Char("B")), ValueAtom(Char("C"))))]])
+        self.assertEqualMettaRunnerResults(metta.run("!(toString ('A' 'B' 'C'))"), [[ValueAtom("ABC")]])
+
     def test_number_parsing(self):
         metta = MeTTa()
         self.assertEqualMettaRunnerResults(metta.run("!(+ 1 2)"), [[ValueAtom(3)]])
