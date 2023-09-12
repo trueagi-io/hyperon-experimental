@@ -55,7 +55,7 @@ jobs:
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ./wheelhouse/*.whl
-          tag: ${{ github.ref_name }}
+          tag: ${{ github.ref }}
           prerelease: ${{ inputs.prerelease }}
           overwrite: true
           file_glob: true
