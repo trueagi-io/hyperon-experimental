@@ -55,6 +55,16 @@ def bool_ops():
 
 @register_atoms
 def text_ops():
+    """Add text operators
+
+    repr: convert Atom to string.
+    unrepr: convert String to Atom.
+    toChars: convert String to a tuple of Char.
+    toString: convert a tuple of Char to a String.
+
+    see test_stdlib.py for examples.
+
+    """
     reprAtom = OperationAtom('repr', lambda a: [ValueAtom(repr(a))],
                              ['Atom', 'String'], unwrap=False)
     unreprAtom = OperationAtom('unrepr', lambda s: [ValueAtom(SExprParser(str(s)[1:-1]).parse(Tokenizer()))],
