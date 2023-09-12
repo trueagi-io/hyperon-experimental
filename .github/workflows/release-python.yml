@@ -33,14 +33,17 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v3
 
-      - run: echo "GITHUB_REF_NAME=${{github.ref_name}}" | tee $GITHUB_ENV
-      - run: echo "GITHUB_EVENT_NAME=${{github.event_name}}" | tee $GITHUB_ENV
-      - run: echo "GITHUB_PRERELEASE=${{github.event.release.prerelease}}" | tee $GITHUB_ENV
+      - run: |
+          echo "GITHUB_REF_NAME=${{github.ref_name}}" | tee $GITHUB_ENV
+          echo "GITHUB_EVENT_NAME=${{github.event_name}}" | tee $GITHUB_ENV
+          echo "GITHUB_PRERELEASE=${{github.event.release.prerelease}}" | tee $GITHUB_ENV
+          echo "GITHUB_TAG_NAME=${{github.event.release.tag_name}}" | tee $GITHUB_ENV
+          echo "GITHUB_SHA=${{GITHUB_SHA}}"
 
       - name: Build wheels on ${{ matrix.os }}
         uses: pypa/cibuildwheel@v2.13.1
         env:
-          CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{env.GITHUB_REF}}"
+          CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{env.GITHUB_SHA}}"
           CIBW_BUILD: cp37-*  # For test
           CIBW_SKIP: "*musllinux*"
         with:

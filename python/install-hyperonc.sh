@@ -34,12 +34,9 @@ python3 -m pip install conan==1.60.2 pip==23.1.2
 PATH="${PATH}:${HOME}/.local/bin"
 conan profile new --detect default
 
-mkdir -p ${HOME}/hyperonc
-cd ${HOME}/hyperonc
-git init
-git remote add origin $HYPERONC_URL
-git fetch origin $HYPERONC_REV
-git reset --hard FETCH_HEAD
+cd ${HOME}
+git clone $HYPERONC_URL hyperonc
+git reset --hard $HYPERONC_REV
 
 mkdir -p ${HOME}/hyperonc/c/build
 cd ${HOME}/hyperonc/c/build
