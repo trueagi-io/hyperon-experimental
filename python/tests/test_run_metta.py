@@ -72,7 +72,7 @@ class MeTTaTest(HyperonTestCase):
 
     def process_exceptions(self, results):
         for result in results:
-            self.assertEqual(result, [Atoms.VOID])
+            self.assertEqual(result, [])
 
     def test_scripts(self):
         self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/a1_symbols.metta"))
