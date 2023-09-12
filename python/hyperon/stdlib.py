@@ -37,7 +37,7 @@ def arithm_ops():
 @register_atoms
 def bool_ops():
     equalAtom = OperationAtom('==', lambda a, b: [ValueAtom(a == b, 'Bool')],
-                            ['$t', '$t', 'Bool'], unwrap=False)
+                              ['$t', '$t', 'Bool'], unwrap=False)
     greaterAtom = OperationAtom('>', lambda a, b: a > b, ['Number', 'Number', 'Bool'])
     lessAtom = OperationAtom('<', lambda a, b: a < b, ['Number', 'Number', 'Bool'])
     orAtom = OperationAtom('or', lambda a, b: a or b, ['Bool', 'Bool', 'Bool'])
