@@ -43,7 +43,7 @@ jobs:
       - name: Build wheels on ${{ matrix.os }}
         uses: pypa/cibuildwheel@v2.13.1
         env:
-          CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{COMMIT_HEAD}}"
+          CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r $COMMIT_HEAD"
           CIBW_BUILD: cp37-*  # For test
           CIBW_SKIP: "*musllinux*"
         with:
