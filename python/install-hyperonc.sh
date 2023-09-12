@@ -36,6 +36,7 @@ conan profile new --detect default
 
 cd ${HOME}
 git clone $HYPERONC_URL hyperonc
+cd ${HOME}/hyperonc
 git reset --hard $HYPERONC_REV
 
 mkdir -p ${HOME}/hyperonc/c/build
