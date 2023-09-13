@@ -22,5 +22,6 @@ name = "metta"
 path = "src/main.rs"
 
 [features]
-# default = ["python"]
+# default = ["python", "minimal"]
 python = ["pyo3", "semver"]
+minimal = ["hyperon/minimal"]

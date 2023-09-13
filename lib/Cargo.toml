@@ -18,4 +18,5 @@ path = "src/lib.rs"
 crate-type = ["lib"]
 
 [features]
+#default = ["minimal"]
 minimal = []
