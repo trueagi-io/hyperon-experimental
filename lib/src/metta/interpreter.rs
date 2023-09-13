@@ -88,6 +88,7 @@ pub struct InterpreterState<'a, T: SpaceRef<'a>> {
 impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
 
     /// INTERNAL USE ONLY. Create an InterpreterState that is ready to yield results
+    #[cfg(not(feature = "minimal"))]
     pub(crate) fn new_finished(_space: T, results: Vec<Atom>) -> Self {
         Self {
             step_result: StepResult::Return(results.into_iter().map(|atom| InterpretedAtom(atom, Bindings::new())).collect()),

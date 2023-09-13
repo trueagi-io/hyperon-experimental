@@ -1,6 +1,6 @@
 import unittest
 
-from hyperon import MeTTa
+from hyperon import MeTTa, Atoms
 from test_common import HyperonTestCase
 
 from pathlib import Path

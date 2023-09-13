@@ -426,6 +426,7 @@ struct CSExprParser {
 };
 
 struct CAtomType {};
+struct CAtoms {};
 
 PYBIND11_MODULE(hyperonpy, m) {
     m.doc() = "Python API of the Hyperon library";
@@ -689,6 +690,11 @@ PYBIND11_MODULE(hyperonpy, m) {
             get_atom_types(space.ptr(), atom.ptr(), copy_atoms, &atoms);
             return atoms;
         }, "Get types of the given atom");
+
+#define ADD_SYMBOL(t, d) .def_property_readonly_static(#t, [](py::object) { return CAtom(t ## _SYMBOL()); }, d " atom type")
+
+    py::class_<CAtoms>(m, "CAtoms")
+        ADD_SYMBOL(VOID, "Void");
 
     py::class_<CMetta>(m, "CMetta").def(py::init(&cmetta_from_inner_ptr_as_int));
     m.def("metta_new", [](CSpace space, CTokenizer tokenizer, char const* cwd) {

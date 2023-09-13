@@ -2,6 +2,7 @@
 
 pub mod text;
 pub mod interpreter;
+#[cfg(feature = "minimal")]
 pub mod interpreter2;
 pub mod types;
 pub mod runner;
@@ -32,9 +33,11 @@ pub const NOT_REDUCIBLE_SYMBOL : Atom = sym!("NotReducible");
 pub const NO_VALID_ALTERNATIVES : Atom = sym!("NoValidAlternatives");
 
 pub const EMPTY_SYMBOL : Atom = sym!("Empty");
+pub const VOID_SYMBOL : Atom = sym!("Void");
+
 pub const EVAL_SYMBOL : Atom = sym!("eval");
 pub const CHAIN_SYMBOL : Atom = sym!("chain");
-pub const MATCH_SYMBOL : Atom = sym!("match");
+pub const UNIFY_SYMBOL : Atom = sym!("unify");
 pub const DECONS_SYMBOL : Atom = sym!("decons");
 pub const CONS_SYMBOL : Atom = sym!("cons");
 
