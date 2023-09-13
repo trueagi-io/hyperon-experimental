@@ -11,16 +11,16 @@ class StdlibTest(HyperonTestCase):
         self.assertEqualMettaRunnerResults(metta.run("!(repr (my atom))"),
                                            [[ValueAtom("(my atom)")]])
 
-        # Check that (unrepr "(my atom)") == (my atom)
-        self.assertEqualMettaRunnerResults(metta.run("!(unrepr \"(my atom)\")"),
+        # Check that (parse "(my atom)") == (my atom)
+        self.assertEqualMettaRunnerResults(metta.run("!(parse \"(my atom)\")"),
                                            [[ValueAtom(E(S("my"), S("atom")))]])
 
-        # Check that (toChars "ABC") == ('A' 'B' 'C')
-        self.assertEqualMettaRunnerResults(metta.run("!(toChars \"ABC\")"),
+        # Check that (stringToChars "ABC") == ('A' 'B' 'C')
+        self.assertEqualMettaRunnerResults(metta.run("!(stringToChars \"ABC\")"),
                                            [[ValueAtom(E(ValueAtom(Char("A")), ValueAtom(Char("B")), ValueAtom(Char("C"))))]])
 
-        # Check that (toString ('A' 'B' 'C')) == "ABC"
-        self.assertEqualMettaRunnerResults(metta.run("!(toString ('A' 'B' 'C'))"),
+        # Check that (charsToString ('A' 'B' 'C')) == "ABC"
+        self.assertEqualMettaRunnerResults(metta.run("!(charsToString ('A' 'B' 'C'))"),
                                            [[ValueAtom("ABC")]])
 
     def test_number_parsing(self):
