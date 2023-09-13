@@ -32,16 +32,25 @@ allowed developing the first stable version with less effort (see `eval` and
 `Return`). If an instruction returns the atom which is not from the minimal set
 it is not interpreted further and returned as a part of the final result.
 
-## Error/Empty
+## Error/Empty/NotReducible/Void
 
 There are atoms which can be returned to designate a special situation in a code:
 - `(Error <atom> <message>)` means the interpretation is finished with error;
 - `Empty` means the corresponding branch of the evaluation returned no results,
   such result is not returned among other results when interpreting is
-  finished.
+  finished;
+- `NotReducible` can be returned by `eval` in order to designate the situation
+  when function can not be reduced further; for example it can happen when code
+  tries to call a type constructor (which has no definition), partially defined
+  function (with argument values which are not handled), or grounded function
+  which returns `NotReducible` explicitly; this atom is introduced to separate
+  the situations when atom should be returned "as is" from `Empty` when atom
+  should be removed from results;
+- `Void` is a unit result which is mainly used by functions with side effects
+  which has no meaningful value to return.
 
-Both these atoms are not interpreted further as they are not a part of the
-minimal set of instructions.
+These atoms are not interpreted further as they are not a part of the minimal
+set of instructions.
 
 ## eval
 
@@ -58,15 +67,14 @@ the evaluation in this case. A grounded function can have side effects as well.
 In both cases bindings of the `eval`'s argument are merged to the bindings of
 the result.
 
-Atomspace search can bring the list of results which can be empty. When search
-returns no results then `Empty` atom is a result of the instruction. Grounded
+Atomspace search can bring the list of results which is empty. When search
+returns no results then `NotReducible` atom is a result of the instruction. Grounded
 function can return a list of atoms, empty result, `Error(<message>)` or
 `NoReduce` result. The result of the instruction for a special values are the
 following:
-- empty result returns `Empty` atom;
+- empty result returns `Void` atom;
 - `Error(<message>)` returns `(Error <original-atom> <message>)` atom;
-- `NoReduce` returns `<original-atom>` atom which is not evaluated further
-  because it is not an operation from the minimal set.
+- `NoReduce` returns `NotReducible` atom.
 
 ## chain
 
@@ -89,9 +97,9 @@ as a first argument:
   nested in such a case only the most nested `chain` instruction is executed
   during the interpretation step.
 
-## match
+## unify
 
-Conditioning on the results can be done using `match` operation `(match <atom>
+Conditioning on the results can be done using `unify` operation `(unify <atom>
 <pattern> <then> <else>)`. This operation matches `<atom>` with a `<pattern>`. If
 match is successful then it returns `<then>` atom and merges bindings of the
 original `<atom>` to resulting variable bindings. If matching is not successful
@@ -115,29 +123,33 @@ Switch implementation:
 
 ```metta
 (= (switch $atom $cases)
-  (chain (decons $cases) $list (eval (switch-internal $atom $list))))
+  (chain (decons $cases) $list
+    (chain (eval (switch-internal $atom $list)) $res
+      (unify $res NotReducible Empty $res) )))
 (= (switch-internal $atom (($pattern $template) $tail))
-  (match $atom $pattern $template (eval (switch $atom $tail))))
+  (unify $atom $pattern $template (eval (switch $atom $tail))))
 ```
 
 Reduce in loop until result is calculated:
 
 ```metta
 (= (subst $atom $var $templ)
-  (match $atom $var $templ
+  (unify $atom $var $templ
     (Error (subst $atom $var $templ)
       \"subst expects a variable as a second argument\") ))
 
 (= (reduce $atom $var $templ)
   (chain (eval $atom) $res
-    (match $res (Error $a $m)
+    (unify $res Empty
+    Empty
+    (unify $res (Error $a $m)
       (Error $a $m)
-      (match $res Empty
+      (unify $res NotReducible
         (eval (subst $atom $var $templ))
-        (eval (reduce $res $var $templ)) ))))
+        (eval (reduce $res $var $templ)) )))))
 ```
 
-[Link](https://github.com/vsbogd/hyperon-experimental/blob/f64bf92edf632a538aa6277b6048dbd418924435/lib/src/metta/runner/stdlib.rs#L1199-L1263)
+[Link](https://github.com/trueagi-io/hyperon-experimental/blob/27861e63af1417df4780d9314eaf2e8a3b5cde06/lib/src/metta/runner/stdlib2.rs#L234-L302)
 to the full code of the interpreter in MeTTa (not finished yet).
 
 # Properties
@@ -146,15 +158,15 @@ to the full code of the interpreter in MeTTa (not finished yet).
 
 The following program implements a Turing machine using the minimal MeTTa
 instruction set (the full code of the example can be found
-[here](https://github.com/vsbogd/hyperon-experimental/blob/f64bf92edf632a538aa6277b6048dbd418924435/lib/src/metta/interpreter2.rs#L526-L566)):
+[here](https://github.com/trueagi-io/hyperon-experimental/blob/27861e63af1417df4780d9314eaf2e8a3b5cde06/lib/src/metta/interpreter2.rs#L628-L669)):
 
 ```metta
            (= (tm $rule $state $tape)
-              (match $state HALT
+              (unify $state HALT
                 $tape
                 (chain (eval (read $tape)) $char
                   (chain (eval ($rule $state $char)) $res
-                    (match $res ($next-state $next-char $dir)
+                    (unify $res ($next-state $next-char $dir)
                       (chain (eval (move $tape $next-char $dir)) $next-tape
                         (eval (tm $rule $next-state $next-tape)) )
                       (Error (tm $rule $state $tape) \"Incorrect state\") )))))
@@ -165,13 +177,13 @@ instruction set (the full code of the example can be found
             (= (move ($head $hole $tail) $char L)
               (chain (cons $char $head) $next-head
                 (chain (decons $tail) $list
-                  (match $list ($next-hole $next-tail)
+                  (unify $list ($next-hole $next-tail)
                     ($next-head $next-hole $next-tail)
                     ($next-head 0 ()) ))))
             (= (move ($head $hole $tail) $char R)
               (chain (cons $char $tail) $next-tail
                 (chain (decons $head) $list
-                  (match $list ($next-hole $next-head)
+                  (unify $list ($next-hole $next-head)
                     ($next-head $next-hole $next-tail)
                     (() 0 $next-tail) ))))
 ```
@@ -181,7 +193,7 @@ instruction set (the full code of the example can be found
 One difference from MOPS [1] is that the minimal instruction set allows
 relatively easy write deterministic programs and non-determinism is injected
 only via matching and evaluation. `Query` and `Chain` from MOPS are very
-similar to `eval`. `Transform` is very similar to `match`. `chain` has no
+similar to `eval`. `Transform` is very similar to `unify`. `chain` has no
 analogue in MOPS, it is used to make deterministic computations.
 `cons`/`decons` to some extent are analogues of `AtomAdd`/`AtomRemove` in a
 sense that they can be used to change the state.
@@ -204,11 +216,11 @@ The version of the `reduce` written using `return` will look like the following:
 ```metta
 (= (reduce $atom $var $templ)
   (chain $atom $res
-    (match $res (return (Error $a $m))
+    (unify $res (return (Error $a $m))
       (return (Error $a $m))
-      (match $res (return Empty)
+      (unify $res (return Empty)
         (subst $atom $var $templ)
-        (match $res (return $val)
+        (unify $res (return $val)
           (subst $val $var $templ)
           (reduce $res $var $templ) )))))
 ```
@@ -224,9 +236,9 @@ into the template. It can make program even more compact:
 ```metta
 (= (reduce $atom $var $templ)
   (chain $atom $res
-    (match $res (Error $a $m)
+    (unify $res (Error $a $m)
       (Error $a $m)
-      (match $res Empty
+      (unify $res Empty
         (subst $atom $var $templ)
         (reduce $res $var $templ) ))))
 ```
@@ -245,7 +257,7 @@ Each instruction in a minimal instruction set is a complete function.
 Nevertheless `Empty` allows defining partial functions in MeTTa. For example
 partial `if` can be defined as follows:
 ```metta
-(= (if $condition $then) (match $condition True $then Empty))
+(= (if $condition $then) (unify $condition True $then Empty))
 ```
 
 # Future work
@@ -261,11 +273,11 @@ Making atomspace out of implicit context could make import semantics more
 straightforward. In the current implementation of the minimal instruction set
 it was needed to explicitly pass the atomspace to the interpreter because
 otherwise grounded `get-type` function didn't work properly.It also could allow
-defining `eval` via `match` which minimizes the number of instructions and
+defining `eval` via `unify` which minimizes the number of instructions and
 allows defining `eval` in a MeTTa program itself. Which in turn allows defining
 different versions of `eval` to program different kinds of chaining.
-Nevertheless defining `eval` through `match` requires rework of the grounded
-functions interface to allow calling them by executing `match` instructions.
+Nevertheless defining `eval` through `unify` requires rework of the grounded
+functions interface to allow calling them by executing `unify` instructions.
 Which is an interesting direction to follow.
 
 ## Scope of variables
@@ -281,6 +293,32 @@ cannot implement `collapse` using the instruction set above. In order to add
 such possibility the additional instruction is needed. It could mark a set of
 results as joined and when their evaluation is finished would assemble them
 into an expression.
+
+## Special matching syntax
+
+Sometimes it is convenient to change the semantics of the matching within a
+pattern. Some real examples are provided below. One possible way to extend
+matching syntax is embrace atoms by expressions with matching modifier on a
+first position. For instance `(:<mod> <atom>)` could apply `<mod>` rule to
+match the `<atom>`. How to eliminate interference of this syntax with symbol
+atoms used by programmers is an open question.
+
+### Syntax to match atom by equality
+
+In many situations we need to check that atom is equal to some symbol. `unify`
+doesn't work well in such cases because when checked atom is a variable it is
+matched with anything (for instance `(unify $x Empty then else)` returns
+`then`). It would be convenient to have a special syntax to match the atom by
+equality. For instance `(unify <atom> (:= Empty) then else)` should match
+`<atom>` with pattern only when `<atom>` is `Empty`.
+
+### Syntax to match part of the expression
+
+We could have a specific syntax which would allow matching part of the
+expressions. For example such syntax could be used to match head and tail of
+the expression without using `cons`/`decons`. Another example is matching part
+of the expression with some gap, i.e. `(A ... D ...)` could match `(A B C D E)`
+atom.
 
 # Links
 

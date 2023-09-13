@@ -8,7 +8,10 @@ use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
 use hyperon::metta::*;
 use hyperon::metta::runner::Metta;
+#[cfg(not(feature = "minimal"))]
 use hyperon::metta::runner::stdlib::register_rust_tokens;
+#[cfg(feature = "minimal")]
+use hyperon::metta::runner::stdlib2::register_rust_tokens;
 use hyperon::metta::text::Tokenizer;
 use hyperon::metta::text::SExprParser;
 use hyperon::common::shared::Shared;

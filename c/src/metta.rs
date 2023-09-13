@@ -275,6 +275,14 @@ pub extern "C" fn sexpr_parser_parse(
 ///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> atom_t { rust_type_atom::<DynSpace>().into() }
 
+/// @brief Creates a Symbol atom for the special MeTTa symbol used to indicate empty results in
+/// case expressions.
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the Void atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
+#[no_mangle] pub extern "C" fn VOID_SYMBOL() -> atom_t { hyperon::metta::VOID_SYMBOL.into() }
+
 /// @brief Checks whether Atom `atom` has Type `typ` in context of `space`
 /// @ingroup metta_language_group
 /// @param[in]  space  A pointer to the `space_t` representing the space context in which to perform the check
