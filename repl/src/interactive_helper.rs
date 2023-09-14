@@ -12,6 +12,7 @@ use rustyline::{Completer, Helper, Hinter};
 
 use hyperon::metta::text::{SExprParser, SyntaxNodeType};
 
+use crate::config_params::*;
 use crate::metta_shim::MettaShim;
 
 #[derive(Helper, Completer, Hinter)]
@@ -37,7 +38,7 @@ struct StyleSettings {
     string_style: String,
     error_style: String,
     bracket_match_style: String,
-    // bracket_match_enabled: bool, //TODO
+    bracket_match_enabled: bool,
 }
 
 impl Highlighter for ReplHelper {
@@ -119,9 +120,11 @@ impl Highlighter for ReplHelper {
                             }
 
                             //See if we need to render this node with the "bracket blink"
-                            if let Some((_matching_char, blink_idx)) = &blink_char {
-                                if node.src_range.contains(blink_idx) {
-                                    style_sequence.push(&self.style.bracket_match_style);
+                            if self.style.bracket_match_enabled {
+                                if let Some((_matching_char, blink_idx)) = &blink_char {
+                                    if node.src_range.contains(blink_idx) {
+                                        style_sequence.push(&self.style.bracket_match_style);
+                                    }
                                 }
                             }
 
@@ -233,13 +236,14 @@ impl ReplHelper {
 impl StyleSettings {
     pub fn new(metta_shim: &mut MettaShim) -> Self {
         Self {
-            bracket_styles: metta_shim.get_config_expr_vec("ReplBracketStyles").unwrap_or(vec!["94".to_string(), "93".to_string(), "95".to_string(), "96".to_string()]),
-            comment_style: metta_shim.get_config_string("ReplCommentStyle").unwrap_or("32".to_string()),
-            variable_style: metta_shim.get_config_string("ReplVariableStyle").unwrap_or("33".to_string()),
-            symbol_style: metta_shim.get_config_string("ReplSymbolStyle").unwrap_or("34".to_string()),
-            string_style: metta_shim.get_config_string("ReplStringStyle").unwrap_or("31".to_string()),
-            error_style: metta_shim.get_config_string("ReplErrorStyle").unwrap_or("91".to_string()),
-            bracket_match_style: metta_shim.get_config_string("ReplBracketMatchStyle").unwrap_or("1;7".to_string()),
+            bracket_styles: metta_shim.get_config_expr_vec(CFG_BRACKET_STYLES).unwrap_or(vec!["94".to_string(), "93".to_string(), "95".to_string(), "96".to_string()]),
+            comment_style: metta_shim.get_config_string(CFG_COMMENT_STYLE).unwrap_or("32".to_string()),
+            variable_style: metta_shim.get_config_string(CFG_VARIABLE_STYLE).unwrap_or("33".to_string()),
+            symbol_style: metta_shim.get_config_string(CFG_SYMBOL_STYLE).unwrap_or("34".to_string()),
+            string_style: metta_shim.get_config_string(CFG_STRING_STYLE).unwrap_or("31".to_string()),
+            error_style: metta_shim.get_config_string(CFG_ERROR_STYLE).unwrap_or("91".to_string()),
+            bracket_match_style: metta_shim.get_config_string(CFG_BRACKET_MATCH_STYLE).unwrap_or("1;7".to_string()),
+            bracket_match_enabled: metta_shim.get_config_atom(CFG_BRACKET_MATCH_ENABLED).map(|_bool_atom| true).unwrap_or(true), //TODO, make this work when we can bridge value atoms
         }
     }
 }

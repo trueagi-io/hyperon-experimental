@@ -3,10 +3,8 @@ use std::path::PathBuf;
 
 use hyperon::ExpressionAtom;
 use hyperon::Atom;
-use hyperon::atom::VariableAtom;
 use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
-use hyperon::metta::*;
 use hyperon::metta::runner::Metta;
 #[cfg(not(feature = "minimal"))]
 use hyperon::metta::runner::stdlib::register_rust_tokens;
@@ -97,10 +95,9 @@ impl MettaShim {
         #[cfg(not(feature = "python"))]
         new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(py_mod_err::ImportPyErr) });
 
-        //Run the config.metta file
+        //Run the init.metta file
         let repl_params = repl_params.borrow();
-        let config_metta_path = repl_params.config_metta_path();
-        new_shim.load_metta_module(config_metta_path.clone());
+        new_shim.load_metta_module(repl_params.init_metta_path.clone());
 
         new_shim
     }
@@ -146,13 +143,10 @@ impl MettaShim {
     }
 
     pub fn get_config_atom(&mut self, config_name: &str) -> Option<Atom> {
+        #[allow(unused_assignments)]
         let mut result = None;
         metta_shim_env!{{
-            let val = VariableAtom::new("val");
-            let bindings_set = self.metta.space().query(&Atom::expr(vec![EQUAL_SYMBOL, Atom::sym(config_name.to_string()), Atom::Variable(val.clone())]));
-            if let Some(bindings) = bindings_set.into_iter().next() {
-                result = bindings.resolve(&val);
-            }
+            result = self.metta.get_setting(config_name);
         }}
         result
     }

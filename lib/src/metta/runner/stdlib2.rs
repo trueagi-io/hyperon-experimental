@@ -293,11 +293,11 @@ impl Grounded for CollapseOp {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct PragmaOp {
-    settings: Shared<HashMap<String, String>>,
+    settings: Shared<HashMap<String, Atom>>,
 }
 
 impl PragmaOp {
-    pub fn new(settings: Shared<HashMap<String, String>>) -> Self {
+    pub fn new(settings: Shared<HashMap<String, Atom>>) -> Self {
         Self{ settings }
     }
 }
@@ -317,12 +317,8 @@ impl Grounded for PragmaOp {
         let arg_error = || ExecError::from("pragma! expects key and value as arguments");
         let key = TryInto::<&SymbolAtom>::try_into(args.get(0).ok_or_else(arg_error)?)
             .map_err(|_| "pragma! expects symbol atom as a key")?.name();
-        let value = TryInto::<&SymbolAtom>::try_into(args.get(1).ok_or_else(arg_error)?)
-            .map_err(|_| "pragma! expects symbol atom as a value")?.name();
-
-        // TODO: add support for Grounded values when needed
-        self.settings.borrow_mut().insert(key.into(), value.into());
-
+        let value = args.get(1).ok_or_else(arg_error)?;
+        self.settings.borrow_mut().insert(key.into(), value.clone());
         Ok(vec![])
     }
 

@@ -109,7 +109,10 @@ fn main() -> Result<()> {
 
 // To debug rustyline:
 // RUST_LOG=rustyline=debug cargo run --example example 2> debug.log
-fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> rustyline::Result<()> {
+fn start_interactive_mode(repl_params: Shared<ReplParams>, mut metta: MettaShim) -> rustyline::Result<()> {
+
+    //Run the repl init file
+    metta.load_metta_module(repl_params.borrow().repl_config_metta_path.clone());
 
     //Init RustyLine
     let config = Config::builder()
@@ -141,12 +144,12 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> 
     //The Interpreter Loop
     loop {
 
-        //Set the prompt based on resolving a MeTTa variable
+        //Set the prompt based on the MeTTa pragma settings
         let prompt = {
             let helper = rl.helper_mut().unwrap();
             let mut metta = helper.metta.borrow_mut();
-            let prompt = metta.get_config_string("ReplDefaultPrompt").unwrap_or("> ".to_string());
-            let styled_prompt = metta.get_config_string("ReplStyledPrompt").unwrap_or(format!("\x1b[1;32m{prompt}\x1b[0m"));
+            let prompt = metta.get_config_string(CFG_DEFAULT_PROMPT).unwrap_or_else(|| "> ".to_string());
+            let styled_prompt = metta.get_config_string(CFG_STYLED_PROMPT).unwrap_or_else(|| format!("\x1b[1;32m{prompt}\x1b[0m"));
             helper.colored_prompt = styled_prompt;
             prompt
         };
