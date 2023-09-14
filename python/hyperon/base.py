@@ -262,7 +262,6 @@ class SpaceRef:
 class GroundingSpaceRef(SpaceRef):
     """
     A reference to a native GroundingSpace, implemented by the MeTTa core library.
-    This class extends SpaceRef to provide the same set of functionalities,
     """
 
     def __init__(self, cspace = None):
