@@ -72,12 +72,17 @@ impl MettaShim {
 
         //Init HyperonPy if the repl includes Python support
         #[cfg(feature = "python")]
-        {
+        if let Err(err) = || -> Result<(), String> {
             //Confirm the hyperonpy version is compatible
-            py_mod_loading::confirm_hyperonpy_version(">=0.1.0, <0.2.0").unwrap();
+            py_mod_loading::confirm_hyperonpy_version(">=0.1.0, <0.2.0")?;
 
             //Load the hyperonpy Python stdlib
-            py_mod_loading::load_python_module(&new_shim.metta, "hyperon.stdlib").unwrap();
+            py_mod_loading::load_python_module(&new_shim.metta, "hyperon.stdlib")?;
+
+            Ok(())
+        }() {
+            eprintln!("Fatal Error: {err}");
+            std::process::exit(-1);
         }
 
         //Load the Rust stdlib
@@ -262,7 +267,10 @@ mod py_mod_loading {
 
         let req = VersionReq::parse(req_str).unwrap();
         let version_string = get_hyperonpy_version()?;
-        let version = Version::parse(&version_string).map_err(|e| format!("Error parsing HyperonPy version: '{version_string}', {e}"))?;
+        //NOTE: Version parsing errors will be encountered by users building hyperonpy from source with an abnormal configuration
+        // Therefore references to the "hyperon source directory" are ok.  Users who get hyperonpy from PyPi won't have hit issue
+        let version = Version::parse(&version_string)
+            .map_err(|_e| format!("Invalid HyperonPy version found: '{version_string}'.\nPlease update pip by running `python -m pip install -eU ./python[dev]` from your hyperon source directory."))?;
         if req.matches(&version) {
             Ok(())
         } else {
