@@ -3,8 +3,7 @@ This is the MeTTa entrypoint
 """
 import sys
 import argparse
-
-from hyperon import MeTTa
+import hyperon
 
 def main():
     """
@@ -20,11 +19,16 @@ def main():
 
     """
     parser = argparse.ArgumentParser(description='Metta script interpreter')
-    parser.add_argument(
-        'file', metavar="metta file", help='metta script')
-    if len(sys.argv) > 1:
-        args = parser.parse_args()
-        metta = MeTTa()
+    group = parser.add_mutually_exclusive_group()
+    group.add_argument(
+        '--version', action='store_true', help='prints the version')
+    group.add_argument(
+        'file', nargs='?', metavar="MeTTa script", help='the MeTTa script')
+    args = parser.parse_args()
+    if args.version:
+        print(hyperon.__version__)
+    elif args.file:
+        metta = hyperon.MeTTa()
         for result in metta.import_file(args.file):
             print(result)
     else:

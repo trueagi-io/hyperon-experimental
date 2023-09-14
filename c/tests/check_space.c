@@ -231,6 +231,7 @@ START_TEST (test_space_nested_in_atom)
     space_t runner_space = space_new_grounding_space();
     tokenizer_t tokenizer = tokenizer_new();
     metta_t runner = metta_new(&runner_space, &tokenizer, ".");
+    metta_load_module(&runner, "stdlib");
 
     tokenizer_register_token(&tokenizer, "nested", &TOKEN_API_CLONE_ATOM, &space_atom);
 

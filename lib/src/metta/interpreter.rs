@@ -79,6 +79,44 @@ use std::ops::Deref;
 use std::rc::Rc;
 use std::fmt::{Debug, Display, Formatter};
 
+/// Wrapper, So the old interpreter can present the same public interface as the new intperpreter
+pub struct InterpreterState<'a, T: SpaceRef<'a>> {
+    step_result: StepResult<'a, Results, InterpreterError>,
+    phantom: core::marker::PhantomData<T>
+}
+
+impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
+
+    /// INTERNAL USE ONLY. Create an InterpreterState that is ready to yield results
+    #[cfg(not(feature = "minimal"))]
+    pub(crate) fn new_finished(_space: T, results: Vec<Atom>) -> Self {
+        Self {
+            step_result: StepResult::Return(results.into_iter().map(|atom| InterpretedAtom(atom, Bindings::new())).collect()),
+            phantom: <_>::default(),
+        }
+    }
+
+    pub fn has_next(&self) -> bool {
+        self.step_result.has_next()
+    }
+    pub fn into_result(self) -> Result<Vec<Atom>, String> {
+        match self.step_result {
+            StepResult::Return(mut res) => {
+                let res = res.drain(0..).map(|res| res.into_tuple().0).collect();
+                Ok(res)
+            },
+            StepResult::Error((atom, err)) => Ok(vec![Atom::expr([ERROR_SYMBOL, atom, err])]),
+            StepResult::Execute(_) => Err("Evaluation is not finished".into())
+        }
+    }
+}
+
+impl<'a, T: SpaceRef<'a>> Debug for InterpreterState<'a, T> {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        Debug::fmt(&self.step_result, f)
+    }
+}
+
 /// Result of atom interpretation plus variable bindings found
 #[derive(Clone, PartialEq)]
 pub struct InterpretedAtom(Atom, Bindings);
@@ -132,7 +170,12 @@ type NoInputPlan<'a> = Box<dyn Plan<'a, (), Results, InterpreterError> + 'a>;
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
-pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> StepResult<'a, Results, InterpreterError> {
+pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterState<'a, T> {
+    let step_result = interpret_init_internal(space, expr);
+    InterpreterState { step_result: step_result, phantom: <_>::default() }
+}
+
+fn interpret_init_internal<'a, T: Space + 'a>(space: T, expr: &Atom) -> StepResult<'a, Results, InterpreterError> {
     let context = InterpreterContextRef::new(space);
     interpret_as_type_plan(context,
         InterpretedAtom(expr.clone(), Bindings::new()),
@@ -145,10 +188,10 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> StepResult<'a
 ///
 /// # Arguments
 /// * `step` - [StepResult::Execute] result from the previous step.
-pub fn interpret_step<'a>(step: StepResult<'a, Results, InterpreterError>) -> StepResult<'a, Results, InterpreterError> {
+pub fn interpret_step<'a, T: Space + 'a>(step: InterpreterState<'a, T>) -> InterpreterState<'a, T> {
     log::debug!("current plan:\n{:?}", step);
-    match step {
-        StepResult::Execute(plan) => plan.step(()),
+    match step.step_result {
+        StepResult::Execute(plan) => InterpreterState { step_result: plan.step(()), phantom: <_>::default() },
         StepResult::Return(_) => panic!("Plan execution is finished already"),
         StepResult::Error(_) => panic!("Plan execution is finished with error"),
     }
@@ -162,10 +205,10 @@ pub fn interpret_step<'a>(step: StepResult<'a, Results, InterpreterError>) -> St
 /// * `expr` - atom to interpret
 pub fn interpret<T: Space>(space: T, expr: &Atom) -> Result<Vec<Atom>, String> {
     let mut step = interpret_init(space, expr);
-    while step.has_next() {
+    while step.step_result.has_next() {
         step = interpret_step(step);
     }
-    match step {
+    match step.step_result {
         StepResult::Return(mut result) => Ok(result.drain(0..)
             .map(|InterpretedAtom(atom, _)| atom).collect()),
         // TODO: return (Error atom err) expression
@@ -226,7 +269,7 @@ impl SpaceObserver for InterpreterCache {
 
 use std::marker::PhantomData;
 
-trait SpaceRef<'a> : Space + 'a {}
+pub trait SpaceRef<'a> : Space + 'a {}
 impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
 
 struct InterpreterContext<'a, T: SpaceRef<'a>> {

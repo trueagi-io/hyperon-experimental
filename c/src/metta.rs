@@ -1,10 +1,8 @@
 use hyperon::common::shared::Shared;
 use hyperon::space::DynSpace;
-use hyperon::Atom;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
-use hyperon::metta::interpreter::InterpretedAtom;
-use hyperon::common::plan::StepResult;
+use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::Metta;
 use hyperon::rust_type_atom;
 
@@ -277,6 +275,14 @@ pub extern "C" fn sexpr_parser_parse(
 ///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> atom_t { rust_type_atom::<DynSpace>().into() }
 
+/// @brief Creates a Symbol atom for the special MeTTa symbol used to indicate empty results in
+/// case expressions.
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the Void atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
+#[no_mangle] pub extern "C" fn VOID_SYMBOL() -> atom_t { hyperon::metta::VOID_SYMBOL.into() }
+
 /// @brief Checks whether Atom `atom` has Type `typ` in context of `space`
 /// @ingroup metta_language_group
 /// @param[in]  space  A pointer to the `space_t` representing the space context in which to perform the check
@@ -345,19 +351,19 @@ pub struct step_result_t {
     result: *mut RustStepResult,
 }
 
-struct RustStepResult(StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)>);
+struct RustStepResult(InterpreterState<'static, DynSpace>);
 
-impl From<StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)>> for step_result_t {
-    fn from(result: StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)>) -> Self {
-        Self{ result: Box::into_raw(Box::new(RustStepResult(result))) }
+impl From<InterpreterState<'static, DynSpace>> for step_result_t {
+    fn from(state: InterpreterState<'static, DynSpace>) -> Self {
+        Self{ result: Box::into_raw(Box::new(RustStepResult(state))) }
     }
 }
 
 impl step_result_t {
-    fn into_inner(self) -> StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)> {
+    fn into_inner(self) -> InterpreterState<'static, DynSpace> {
         unsafe{ Box::from_raw(self.result).0 }
     }
-    fn borrow(&self) -> &StepResult<'static, Vec<InterpretedAtom>, (Atom, Atom)> {
+    fn borrow(&self) -> &InterpreterState<'static, DynSpace> {
         &unsafe{ &*(&*self).result }.0
     }
 }
@@ -427,13 +433,9 @@ pub extern "C" fn step_has_next(step: *const step_result_t) -> bool {
 pub extern "C" fn step_get_result(step: step_result_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
     let step = step.into_inner();
-    match step {
-        StepResult::Return(mut res) => {
-            let res = res.drain(0..).map(|res| res.into_tuple().0).collect();
-            return_atoms(&res, callback, context);
-        },
-        StepResult::Error(_) => return_atoms(&vec![], callback, context),
-        _ => panic!("Not expected step result: {:?}", step),
+    match step.into_result() {
+        Ok(res) => return_atoms(&res, callback, context),
+        Err(_) => return_atoms(&vec![], callback, context),
     }
 }
 
@@ -478,7 +480,7 @@ impl metta_t {
 pub extern "C" fn metta_new(space: *mut space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> metta_t {
     let dyn_space = unsafe{ &*space }.borrow();
     let tokenizer = unsafe{ &*tokenizer }.clone_handle();
-    let metta = Metta::from_space_cwd(dyn_space.clone(), tokenizer, PathBuf::from(cstr_as_str(cwd)));
+    let metta = Metta::from_space(dyn_space.clone(), tokenizer, vec![PathBuf::from(cstr_as_str(cwd))]);
     metta.into()
 }
 
@@ -502,8 +504,8 @@ pub extern "C" fn metta_free(metta: metta_t) {
 ///
 #[no_mangle]
 pub extern "C" fn metta_space(metta: *mut metta_t) -> space_t {
-    let space = unsafe{ &*metta }.borrow().space();
-    space.into()
+    let metta = unsafe{ &*metta }.borrow();
+    metta.space().clone().into()
 }
 
 /// @brief Provides access to the Tokenizer associated with a MeTTa Interpreter
@@ -514,8 +516,8 @@ pub extern "C" fn metta_space(metta: *mut metta_t) -> space_t {
 ///
 #[no_mangle]
 pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> tokenizer_t {
-    let tokenizer = unsafe{ &*metta }.borrow().tokenizer();
-    tokenizer.into()
+    let metta = unsafe{ &*metta }.borrow();
+    metta.tokenizer().clone().into()
 }
 
 /// @brief Runs the MeTTa Interpreter until the input text has been parsed and evaluated

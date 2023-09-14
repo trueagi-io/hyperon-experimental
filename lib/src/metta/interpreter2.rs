@@ -10,8 +10,6 @@ use crate::space::*;
 use crate::space::grounding::*;
 use crate::metta::*;
 
-use std::ops::Deref;
-use std::rc::Rc;
 use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
 
@@ -52,32 +50,16 @@ struct InterpreterContext<'a, T: SpaceRef<'a>> {
     phantom: PhantomData<&'a GroundingSpace>,
 }
 
-struct InterpreterContextRef<'a, T: SpaceRef<'a>>(Rc<InterpreterContext<'a, T>>);
-
-impl<'a, T: SpaceRef<'a>> InterpreterContextRef<'a, T> {
+impl<'a, T: SpaceRef<'a>> InterpreterContext<'a, T> {
     fn new(space: T) -> Self {
-        Self(Rc::new(InterpreterContext{ space, phantom: PhantomData }))
-    }
-}
-
-impl<'a, T: SpaceRef<'a>> Deref for InterpreterContextRef<'a, T> {
-    type Target = InterpreterContext<'a, T>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-
-impl<'a, T: SpaceRef<'a>> Clone for InterpreterContextRef<'a, T> {
-    fn clone(&self) -> Self {
-        Self(Rc::clone(&self.0))
+        Self{ space, phantom: PhantomData }
     }
 }
 
 pub struct InterpreterState<'a, T: SpaceRef<'a>> {
     plan: Vec<InterpretedAtom>,
     finished: Vec<Atom>,
-    context: InterpreterContextRef<'a, T>,
+    context: InterpreterContext<'a, T>,
 }
 
 fn atom_as_slice(atom: &Atom) -> Option<&[Atom]> {
@@ -91,11 +73,21 @@ fn atom_into_array<const N: usize>(atom: Atom) -> Option<[Atom; N]> {
 
 impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
 
-    fn has_next(&self) -> bool {
+    /// INTERNAL USE ONLY. Create an InterpreterState that is ready to yield results
+    #[allow(dead_code)] //TODO: only silence the warning until interpreter2 replaces interpreter
+    pub(crate) fn new_finished(space: T, results: Vec<Atom>) -> Self {
+        Self {
+            plan: vec![],
+            finished: results,
+            context: InterpreterContext::new(space),
+        }
+    }
+
+    pub fn has_next(&self) -> bool {
         !self.plan.is_empty()
     }
 
-    fn into_result(self) -> Result<Vec<Atom>, String> {
+    pub fn into_result(self) -> Result<Vec<Atom>, String> {
         if self.has_next() {
             Err("Evaluation is not finished".into())
         } else {
@@ -134,7 +126,7 @@ impl<'a, T: SpaceRef<'a>> std::fmt::Display for InterpreterState<'a, T> {
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
 pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterState<'a, T> {
-    let context = InterpreterContextRef::new(space);
+    let context = InterpreterContext::new(space);
     InterpreterState {
         plan: vec![InterpretedAtom(expr.clone(), Bindings::new())],
         finished: vec![],
@@ -142,6 +134,7 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
     }
 }
 
+//TODO: These docs are out of date for the new interpreter
 /// Perform next step of the interpretation plan and return the result. Panics
 /// when [StepResult::Return] or [StepResult::Error] are passed as input.
 /// See [crate::metta::interpreter] for algorithm explanation.
@@ -176,7 +169,7 @@ fn is_embedded_op(atom: &Atom) -> bool {
     match expr {
         Some([op, ..]) => *op == EVAL_SYMBOL
             || *op == CHAIN_SYMBOL
-            || *op == MATCH_SYMBOL
+            || *op == UNIFY_SYMBOL
             || *op == CONS_SYMBOL
             || *op == DECONS_SYMBOL,
         _ => false,
@@ -210,18 +203,24 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
         },
         Some([op, args @ ..]) if *op == CHAIN_SYMBOL => {
             match args {
-                [nested, Atom::Variable(var), templ] => chain(space, bindings, nested, var, templ),
+                [_nested, Atom::Variable(_var), _templ] => {
+                    match atom_into_array(atom) {
+                        Some([_, nested, Atom::Variable(var), templ]) =>
+                            chain(space, bindings, nested, var, templ),
+                        _ => panic!("Unexpected state"),
+                    }
+                },
                 _ => {
                     let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_SYMBOL, atom);
                     vec![InterpretedAtom(error_atom(atom, error), bindings)]
                 },
             }
         },
-        Some([op, args @ ..]) if *op == MATCH_SYMBOL => {
+        Some([op, args @ ..]) if *op == UNIFY_SYMBOL => {
             match args {
                 [atom, pattern, then, else_] => match_(bindings, atom, pattern, then, else_),
                 _ => {
-                    let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", MATCH_SYMBOL, atom);
+                    let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", UNIFY_SYMBOL, atom);
                     vec![InterpretedAtom(error_atom(atom, error), bindings)]
                 },
             }
@@ -267,8 +266,12 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
     result
 }
 
-fn return_empty() -> Atom {
-    EMPTY_SYMBOL
+fn return_unit() -> Atom {
+    VOID_SYMBOL
+}
+
+fn return_not_reducible() -> Atom {
+    NOT_REDUCIBLE_SYMBOL
 }
 
 fn error_atom(atom: Atom, err: String) -> Atom {
@@ -285,7 +288,16 @@ fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<In
             match op.execute(args) {
                 Ok(results) => {
                     if results.is_empty() {
-                        vec![InterpretedAtom(return_empty(), bindings)]
+                        // TODO: This is an open question how to interpret empty results
+                        // which are returned by grounded function. There is no
+                        // case to return empty result for now. If alternative
+                        // should be remove from plan Empty is a proper result.
+                        // If grounded atom returns no value Void should be returned.
+                        // NotReducible or Exec::NoReduce can be returned to
+                        // let a caller know that function is not defined on a
+                        // passed input data. Thus we can interpreter empty result
+                        // by any way we like.
+                        vec![InterpretedAtom(return_unit(), bindings)]
                     } else {
                         results.into_iter()
                             .map(|atom| InterpretedAtom(atom, bindings.clone()))
@@ -294,11 +306,10 @@ fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<In
                 },
                 Err(ExecError::Runtime(err)) =>
                     vec![InterpretedAtom(error_atom(atom, err), bindings)],
-                // TODO: NoReduce should also be available for processing
-                // on MeTTa code level, to allow override code behavior in
-                // case when grounded expression cannot be reduced.
                 Err(ExecError::NoReduce) =>
-                    vec![InterpretedAtom(return_atom(atom), bindings)],
+                    // TODO: we could remove ExecError::NoReduce and explicitly
+                    // return NOT_REDUCIBLE_SYMBOL from the grounded function instead.
+                    vec![InterpretedAtom(return_not_reducible(), bindings)],
             }
         },
         _ => query(space, atom, bindings),
@@ -310,7 +321,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<I
     let query = Atom::expr([EQUAL_SYMBOL, atom, Atom::Variable(var.clone())]);
     let results = space.query(&query);
     if results.is_empty() {
-        vec![InterpretedAtom(return_empty(), bindings)]
+        vec![InterpretedAtom(return_not_reducible(), bindings)]
     } else {
         results.into_iter()
             .flat_map(|mut b| {
@@ -325,23 +336,19 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<I
     }
 }
 
-fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: &Atom, var: &VariableAtom, templ: &Atom) -> Vec<InterpretedAtom> {
+fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: VariableAtom, templ: Atom) -> Vec<InterpretedAtom> {
     if is_embedded_op(&nested) {
-        let result = interpret_atom_root(space, InterpretedAtom(nested.clone(), bindings.clone()), false);
-        result.into_iter()
-            .flat_map(|InterpretedAtom(r, b)| {
-                b.merge_v2(&bindings)
-                    .into_iter()
-                    .map(move |bindings| {
-                        // TODO: we could eliminate bindings application here
-                        // and below after pretty print for debug is ready,
-                        // before that it is difficult to look at the plans
-                        // with the variables and bindings separated.
-                        let result = apply_bindings_to_atom(&r, &bindings);
-                        InterpretedAtom(Atom::expr([CHAIN_SYMBOL, result, Atom::Variable(var.clone()), templ.clone()]), bindings)
-                    })
-            })
-        .collect()
+        let mut result = interpret_atom_root(space, InterpretedAtom(nested, bindings), false);
+        if result.len() == 1 {
+            let InterpretedAtom(r, b) = result.pop().unwrap();
+            vec![InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var), templ]), b)]
+        } else {
+            result.into_iter()
+                .map(|InterpretedAtom(r, b)| {
+                    InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b)
+                })
+            .collect()
+        }
     } else {
         let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
         let result = apply_bindings_to_atom(&templ, &b);
@@ -411,19 +418,19 @@ mod tests {
     #[test]
     fn interpret_atom_evaluate_atom_no_definition() {
         let result = interpret_atom(&space(""), atom("(eval a)", bind!{}));
-        assert_eq!(result, vec![atom("Empty", bind!{})]);
+        assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_empty_expression() {
         let result = interpret_atom(&space(""), atom("(eval ())", bind!{}));
-        assert_eq!(result, vec![atom("Empty", bind!{})]);
+        assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_grounded_value() {
         let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" {6}), bind!{}));
-        assert_eq!(result, vec![atom("Empty", bind!{})]);
+        assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
 
@@ -452,7 +459,7 @@ mod tests {
     #[test]
     fn interpret_atom_evaluate_pure_expression_no_definition() {
         let result = interpret_atom(&space(""), atom("(eval (foo A))", bind!{}));
-        assert_eq!(result, vec![atom("Empty", bind!{})]);
+        assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
     #[test]
@@ -472,13 +479,13 @@ mod tests {
     #[test]
     fn interpret_atom_evaluate_grounded_expression_empty() {
         let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" ({ReturnNothing()} {6})), bind!{}));
-        assert_eq!(result, vec![atom("Empty", bind!{})]);
+        assert_eq!(result, vec![atom("Void", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_grounded_expression_noreduce() {
-        let result = interpret_atom(&space(""), InterpretedAtom(expr!({NonReducible()} {6}), bind!{}));
-        assert_eq!(result, vec![InterpretedAtom(expr!({NonReducible()} {6}), bind!{})]);
+        let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" ({NonReducible()} {6})), bind!{}));
+        assert_eq!(result, vec![InterpretedAtom(expr!("NotReducible"), bind!{})]);
     }
 
     #[test]
@@ -549,21 +556,21 @@ mod tests {
 
     #[test]
     fn interpret_atom_match_incorrect_args() {
-        assert_eq!(interpret_atom(&space(""), atom("(match a p t e o)", bind!{})),
-            vec![InterpretedAtom(expr!("Error" ("match" "a" "p" "t" "e" "o") "expected: (match <atom> <pattern> <then> <else>), found: (match a p t e o)"), bind!{})]);
-        assert_eq!(interpret_atom(&space(""), atom("(match a p t)", bind!{})),
-            vec![InterpretedAtom(expr!("Error" ("match" "a" "p" "t") "expected: (match <atom> <pattern> <then> <else>), found: (match a p t)"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(unify a p t e o)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("unify" "a" "p" "t" "e" "o") "expected: (unify <atom> <pattern> <then> <else>), found: (unify a p t e o)"), bind!{})]);
+        assert_eq!(interpret_atom(&space(""), atom("(unify a p t)", bind!{})),
+            vec![InterpretedAtom(expr!("Error" ("unify" "a" "p" "t") "expected: (unify <atom> <pattern> <then> <else>), found: (unify a p t)"), bind!{})]);
     }
 
     #[test]
     fn interpret_atom_match_then() {
-        let result = interpret_atom(&space(""), atom("(match (A $b) ($a B) ($a $b) Empty)", bind!{}));
+        let result = interpret_atom(&space(""), atom("(unify (A $b) ($a B) ($a $b) Empty)", bind!{}));
         assert_eq!(result, vec![atom("(A B)", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_match_else() {
-        let result = interpret_atom(&space(""), atom("(match (A $b C) ($a B D) ($a $b) Empty)", bind!{}));
+        let result = interpret_atom(&space(""), atom("(unify (A $b C) ($a B D) ($a $b) Empty)", bind!{}));
         assert_eq!(result, vec![atom("Empty", bind!{})]);
     }
 
@@ -629,11 +636,11 @@ mod tests {
     fn metta_turing_machine() {
         let space = space("
             (= (tm $rule $state $tape)
-              (match $state HALT
+              (unify $state HALT
                 $tape
                 (chain (eval (read $tape)) $char
                   (chain (eval ($rule $state $char)) $res
-                    (match $res ($next-state $next-char $dir)
+                    (unify $res ($next-state $next-char $dir)
                       (chain (eval (move $tape $next-char $dir)) $next-tape
                         (eval (tm $rule $next-state $next-tape)) )
                       (Error (tm $rule $state $tape) \"Incorrect state\") )))))
@@ -644,13 +651,13 @@ mod tests {
             (= (move ($head $hole $tail) $char L)
               (chain (cons $char $head) $next-head
                 (chain (decons $tail) $list
-                  (match $list ($next-hole $next-tail)
+                  (unify $list ($next-hole $next-tail)
                     ($next-head $next-hole $next-tail)
                     ($next-head 0 ()) ))))
             (= (move ($head $hole $tail) $char R)
               (chain (cons $char $tail) $next-tail
                 (chain (decons $head) $list
-                  (match $list ($next-hole $next-head)
+                  (unify $list ($next-hole $next-head)
                     ($next-head $next-hole $next-tail)
                     (() 0 $next-tail) ))))
 

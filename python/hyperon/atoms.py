@@ -118,6 +118,10 @@ class AtomType:
     GROUNDED = Atom._from_catom(hp.CAtomType.GROUNDED)
     GROUNDED_SPACE = Atom._from_catom(hp.CAtomType.GROUNDED_SPACE)
 
+class Atoms:
+
+    VOID = Atom._from_catom(hp.CAtoms.VOID)
+
 class GroundedAtom(Atom):
     """
     A GroundedAtom represents sub-symbolic knowledge. At the API level, it allows

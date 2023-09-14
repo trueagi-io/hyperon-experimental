@@ -36,6 +36,17 @@ using CTokenizer = CStruct<tokenizer_t>;
 using CStepResult = CStruct<step_result_t>;
 using CMetta = CStruct<metta_t>;
 
+//TODO: This entire CStruct template, and especially these functions should go away when hyperonpy is
+//  implemented directly on Rust, rather than on top of hyperonc
+//This method is an ugly hack to push C structs through pyo3 and pybind11 without a type that
+//  Python can understand.  Ironically these C structs just wrap Rust objects originating in
+//  Rust, which are then converted by calling hyperonc directly.
+static CMetta cmetta_from_inner_ptr_as_int(size_t buf_as_int) {
+    metta_t tmp_metta_t;
+    tmp_metta_t.metta = (RustMettaInterpreter*)buf_as_int;
+    return CMetta(tmp_metta_t);
+}
+
 // Returns a string, created by executing a function that writes string data into a buffer
 typedef size_t (*write_to_buf_func_t)(void*, char*, size_t);
 std::string func_to_string(write_to_buf_func_t func, void* arg) {
@@ -415,6 +426,7 @@ struct CSExprParser {
 };
 
 struct CAtomType {};
+struct CAtoms {};
 
 PYBIND11_MODULE(hyperonpy, m) {
     m.doc() = "Python API of the Hyperon library";
@@ -679,7 +691,12 @@ PYBIND11_MODULE(hyperonpy, m) {
             return atoms;
         }, "Get types of the given atom");
 
-    py::class_<CMetta>(m, "CMetta");
+#define ADD_SYMBOL(t, d) .def_property_readonly_static(#t, [](py::object) { return CAtom(t ## _SYMBOL()); }, d " atom type")
+
+    py::class_<CAtoms>(m, "CAtoms")
+        ADD_SYMBOL(VOID, "Void");
+
+    py::class_<CMetta>(m, "CMetta").def(py::init(&cmetta_from_inner_ptr_as_int));
     m.def("metta_new", [](CSpace space, CTokenizer tokenizer, char const* cwd) {
         return CMetta(metta_new(space.ptr(), tokenizer.ptr(), cwd));
     }, "New MeTTa interpreter instance");
