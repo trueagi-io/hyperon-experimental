@@ -286,7 +286,7 @@ class GroundingSpaceRef(SpaceRef):
 class Tokenizer:
     """
     A class responsible for text tokenization in the context of Hyperon.
-    This class wraps around a CTokenizer object from the core library.
+    This class wraps around a Tokenizer object from the core library.
     """
 
     def __init__(self, ctokenizer = None):
