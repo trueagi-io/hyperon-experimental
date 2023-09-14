@@ -67,7 +67,7 @@ class SymbolAtom(Atom):
         super().__init__(catom)
 
     def get_name(self):
-        """Renders the name of the Atom into a text buffer."""
+        """Returns the name of the Atom."""
         return hp.atom_get_name(self.catom)
 
 def S(name):
