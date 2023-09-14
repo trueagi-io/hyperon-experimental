@@ -268,9 +268,9 @@ mod py_mod_loading {
         let req = VersionReq::parse(req_str).unwrap();
         let version_string = get_hyperonpy_version()?;
         //NOTE: Version parsing errors will be encountered by users building hyperonpy from source with an abnormal configuration
-        // Therefore references to the "hyperon source directory" are ok.  Users who get hyperonpy from PyPi won't have hit issue
+        // Therefore references to the "hyperon source directory" are ok.  Users who get hyperonpy from PyPi won't hit this issue
         let version = Version::parse(&version_string)
-            .map_err(|_e| format!("Invalid HyperonPy version found: '{version_string}'.\nPlease update pip by running `python -m pip install -eU ./python[dev]` from your hyperon source directory."))?;
+            .map_err(|_e| format!("Invalid HyperonPy version found: '{version_string}'.\nPlease update the package by running `python -m pip install -eU ./python[dev]` from your hyperon source directory."))?;
         if req.matches(&version) {
             Ok(())
         } else {
