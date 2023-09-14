@@ -384,7 +384,7 @@ class Interpreter:
 
 def interpret(gnd_space, expr):
     """
-    Parses the given expression in the specified grounded space.
+    Parses the given expression in the specified grounding space.
     """
     interpreter = Interpreter(gnd_space, expr)
     while interpreter.has_next():
