@@ -307,7 +307,7 @@ class Tokenizer:
 
     def __del__(self):
         """
-        Destructor that frees the CTokenizer object when the Tokenizer instance is destroyed.
+        Destructor that frees the underlying resources when the Tokenizer instance is destroyed.
         """
         hp.tokenizer_free(self.ctokenizer)
 
