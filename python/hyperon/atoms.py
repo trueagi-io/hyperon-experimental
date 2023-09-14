@@ -139,7 +139,7 @@ class GroundedAtom(Atom):
         super().__init__(catom)
 
     def get_object(self):
-        """Gets the GroundedAtom object, or the space wrapped inside a GroundedAtom"""
+        """Returns the GroundedAtom object, or the Space wrapped inside a GroundedAtom"""
         from .base import SpaceRef
         if self.get_grounded_type() == AtomType.GROUNDED_SPACE:
             return SpaceRef._from_cspace(hp.atom_get_space(self.catom))
