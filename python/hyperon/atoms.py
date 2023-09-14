@@ -45,7 +45,7 @@ class Atom:
 
     @staticmethod
     def _from_catom(catom):
-        """Constructs an Atom from C Atom of the same type"""
+        """Constructs an Atom by wrapping a C Atom"""
         type = hp.atom_get_type(catom)
         if type == AtomKind.SYMBOL:
             return SymbolAtom(catom)
