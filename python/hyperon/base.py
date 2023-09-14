@@ -328,7 +328,7 @@ class Tokenizer:
 class SExprParser:
     """
     A class responsible for parsing S-expressions (Symbolic Expressions).
-    This class wraps around a CSExprParser object from the core library.
+    This class wraps around a SExprParser object from the core library.
     """
 
     def __init__(self, text):
