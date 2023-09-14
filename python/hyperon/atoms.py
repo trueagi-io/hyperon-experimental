@@ -196,8 +196,7 @@ class GroundedObject:
         """
         Returns a copy of this GroundedObject instance.
 
-        Note: Currently, this method returns the original
-        instance, effectively making the GroundedObject immutable.
+        Note: Currently, this method returns the original instance.
         """
         return self
 
@@ -226,7 +225,7 @@ class ValueObject(GroundedObject):
         return isinstance(other, ValueObject) and self.content == other.content
 
 class NoReduceError(Exception):
-    """Custom exception raised when a reduction operation cannot be performed."""
+    """Custom exception; raised when a reduction operation cannot be performed."""
     pass
 
 class OperationObject(GroundedObject):
@@ -496,12 +495,12 @@ class Bindings:
         return None if raw_atom is None else Atom._from_catom(raw_atom)
 
     def resolve_and_remove(self, var_name: str) -> Union[Atom, None]:
-        """Finds anr removes the atom for a given variable name"""
+        """Finds and removes the atom for a given variable name"""
         raw_atom = hp.bindings_resolve_and_remove(self.cbindings, var_name)
         return None if raw_atom is None else Atom._from_catom(raw_atom)
 
     def iterator(self):
-        """Iterates through all variable-atom pairs in the bindings"""
+        """Returns an iterator over the variable-atom pairs in the bindings"""
         res = hp.bindings_list(self.cbindings)
         result = []
         for r in res:
@@ -617,7 +616,7 @@ class BindingsSet:
             hp.bindings_set_merge_into(self.c_set, new_set.c_set);
 
     def iterator(self):
-        """Iterates through all Bindings frames."""
+        """Returns an iterator over all Bindings frames"""
         res = hp.bindings_set_list(self.c_set)
         result = []
         for r in res:

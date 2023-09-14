@@ -215,7 +215,7 @@ class SpaceRef:
 
     def replace_atom(self, atom, replacement):
         """
-        Replaces an existing Atom in the Space with a new one.
+        Replaces the specified Atom, if it exists in the Space, with the supplied replacement.
         """
         return hp.space_replace(self.cspace, atom.catom, replacement.catom)
 
