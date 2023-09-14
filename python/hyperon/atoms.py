@@ -98,7 +98,7 @@ class ExpressionAtom(Atom):
         super().__init__(catom)
 
     def get_children(self):
-        """Gets all children Atoms"""
+        """Returns all children Atoms of an expression"""
         return [Atom._from_catom(catom) for catom in hp.atom_get_children(self.catom)]
 
 
