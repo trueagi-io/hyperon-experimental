@@ -1,0 +1,144 @@
+site_name: OpenCog Hyperon
+repo_name: trueagi-io/hyperon-experimental
+repo_url: https://github.com/trueagi-io/hyperon-experimental
+
+copyright: |
+  &copy; 2023 <a href="https://github.com/trueagi-io/hyperon-experimental" target='_blank' rel="noopener">OpenCog Hyperon</a>
+
+theme:
+  name: material
+  custom_dir: docs/.overrides
+  features:
+    - announce.dismiss
+    - content.action.edit
+    - content.action.view
+    - content.code.annotate
+    - content.code.copy
+    # - content.tabs.link
+    - content.tooltips
+    # - header.autohide
+    - navigation.expand
+    - navigation.footer
+    - navigation.indexes
+    - navigation.instant
+    # - navigation.prune
+    - navigation.sections
+    # - navigation.tabs
+    # - navigation.tabs.sticky
+    - navigation.top
+    - navigation.tracking
+    - search.highlight
+    - search.share
+    - search.suggest
+    - toc.follow
+    # - toc.integrate
+  language: en
+  palette:
+    - scheme: default
+      toggle:
+        icon: material/toggle-switch-off-outline
+        name: Switch to dark mode
+      primary: teal
+      accent: purple
+    - scheme: slate
+      toggle:
+        icon: material/toggle-switch
+        name: Switch to light mode
+      primary: teal
+      accent: lime
+  font:
+    text: Roboto
+    code: Roboto Mono
+  favicon: assets/P8T2_ASO_400x400.jpg
+  icon:
+    logo: logo
+
+plugins:
+  - search:
+      separator: '[\s\-,:!=\[\]()"`/]+|\.(?!\d)|&[lg]t;|(?!\b)(?=[A-Z][a-z])'
+  - minify:
+      minify_html: true
+  - mkdocstrings:
+      default_hander: python
+      handlers:
+        python:
+          paths: [python]
+          import:
+          - https://docs.python.org/3/objects.inv
+          options:
+            docstring_options:
+              ignore_init_summary: true
+            docstring_section_style: list
+            heading_level: 1
+            inherited_members: true
+            merge_init_into_class: true
+            separate_signature: true
+            show_root_heading: true
+            show_root_full_path: false
+            show_signature_annotations: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
+            signature_crossrefs: true
+  - autorefs
+
+extra:
+  social:
+    - icon: fontawesome/brands/github-alt
+      link: https://github.com/trueagi-io/hyperon-experimental
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/OpenCog
+
+markdown_extensions:
+  - pymdownx.snippets
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - toc:
+      permalink: true
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+      emoji_index: !!python/name:materialx.emoji.twemoji
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.magiclink:
+      repo_url_shorthand: true
+      user: squidfunk
+      repo: mkdocs-material
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Page tree
+nav:
+  - Minimal Metta: minimal-metta.md
+  - Contribution: CONTRIBUTING.md
+  - Python Reference:
+    - Atoms: reference/atoms.md
+    - Base: reference/base.md
+    - Ext: reference/ext.md
+    - Runner: reference/runner.md
+    - Stdlib: reference/stdlib.md
+  - C Reference: mainpage.md
+  - Doxygen: html
