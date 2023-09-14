@@ -349,7 +349,7 @@ class Interpreter:
 
     def __init__(self, gnd_space, expr):
         """
-        Initializes the interpreter with the given grounded space and expression.
+        Initializes the interpreter with the given grounding space and expression.
         """
         self.step_result = hp.interpret_init(gnd_space.cspace, expr.catom)
 
