@@ -113,10 +113,13 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, mut metta: MettaShim)
 
     //Run the repl init file
     metta.load_metta_module(repl_params.borrow().repl_config_metta_path.clone());
+    let max_len = metta.get_config_int(CFG_HISTORY_MAX_LEN).unwrap_or_else(|| 500);
 
     //Init RustyLine
     let config = Config::builder()
         .history_ignore_space(true)
+        .max_history_size(max_len as usize).unwrap()
+        .history_ignore_dups(false).unwrap()
         .completion_type(CompletionType::List)
         .edit_mode(EditMode::Emacs)
         .build();

@@ -16,6 +16,7 @@ pub const CFG_STRING_STYLE: &str = "ReplStringStyle";
 pub const CFG_ERROR_STYLE: &str = "ReplErrorStyle";
 pub const CFG_BRACKET_MATCH_STYLE: &str = "ReplBracketMatchStyle";
 pub const CFG_BRACKET_MATCH_ENABLED: &str = "ReplBracketMatchEnabled";
+pub const CFG_HISTORY_MAX_LEN: &str = "ReplHistoryMaxLen";
 
 #[derive(Default, Debug)]
 pub struct ReplParams {

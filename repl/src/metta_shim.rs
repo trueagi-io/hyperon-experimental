@@ -194,6 +194,9 @@ impl MettaShim {
         result
     }
 
+    pub fn get_config_int(&mut self, _config_name: &str) -> Option<isize> {
+        None //TODO.  Make this work when I have reliable value atom bridging
+    }
 }
 
 #[cfg(not(feature = "python"))]

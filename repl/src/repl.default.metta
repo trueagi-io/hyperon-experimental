@@ -1,4 +1,6 @@
 
+; !(pragma! ReplHistoryMaxLen 500) ; TODO: enable this when I have value bridging implemented.
+
 !(pragma! ReplDefaultPrompt "> ")
 ; !(pragma! ReplStyledPrompt "\x1b[1;32m> \x1b[0m") ; TODO: currently the MeTTa string parser doesn't resolve escape chars, although perhaps it should
 
