@@ -38,7 +38,7 @@ mkdir -p ${HOME}/hyperonc
 cd ${HOME}/hyperonc
 git init
 git remote add origin $HYPERONC_URL
-git fetch origin $HYPERONC_REV
+git fetch --depth=1 origin $HYPERONC_REV
 git reset --hard FETCH_HEAD
 
 mkdir -p ${HOME}/hyperonc/c/build

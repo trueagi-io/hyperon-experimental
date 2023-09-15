@@ -9,16 +9,9 @@ name: release python
 
 on:
   workflow_dispatch:
-    inputs:
-      release-tag:
-        description: 'GitHub release tag to publish packages'
-        required: false
-        type: string
-      prerelease:
-        description: 'Flag to create a pre-release'
-        default: true
-        required: false
-        type: boolean
+  release:
+    types: [published]
+
 
 jobs:
   build_wheels:
@@ -34,32 +27,70 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v3
 
-      - name: Build wheels on Linux
-        if: runner.os == 'Linux'
+      - run: |
+          echo "REF_NAME=${{github.ref_name}}" | tee -a $GITHUB_ENV
+          echo "EVENT_NAME=${{github.event_name}}" | tee -a $GITHUB_ENV
+          echo "PRERELEASE=${{github.event.release.prerelease}}" | tee -a $GITHUB_ENV
+          echo "TAG_NAME=${{github.event.release.tag_name}}" | tee -a $GITHUB_ENV
+          echo "COMMIT_HEAD=${{github.ref_name != '' && github.ref_name || env.GITHUB_SHA}}" | tee -a $GITHUB_ENV
+
+      - name: Build wheels on ${{ matrix.os }}
         uses: pypa/cibuildwheel@v2.13.1
         env:
-          # Linux cannot call "sh -c ./python/install-hyperonc.sh" because
-          # before-all command is also called with "sh -c"
-          CIBW_BEFORE_ALL: ./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{github.ref}}
+          CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{env.COMMIT_HEAD}}"
+          CIBW_SKIP: "*musllinux*"
         with:
           package-dir: ./python
 
-      - name: Build wheels on MacOSX
-        if: runner.os == 'macOS'
-        uses: pypa/cibuildwheel@v2.13.1
-        env:
-          # Mac OS X cannot call "./python/install-hyperonc.sh" probably because
-          # "/bin/sh" is not correct path for the shell there
-          CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{github.ref}}"
-        with:
-          package-dir: ./python
-
-      - name: Publish artifacts on GitHub
+      - name: Publish Artifacts on GitHub Release
+        if: github.event.action == 'published'
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ./wheelhouse/*.whl
-          tag: ${{ inputs.release-tag }}
-          prerelease: ${{ inputs.prerelease }}
+          tag: ${{ github.ref }}
+          prerelease: ${{ github.event.release.prerelease }}
           overwrite: true
           file_glob: true
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: python-wheels
+          path: ./wheelhouse/*.whl
+
+  publish-test-pypi:
+    name: Publish to Test PyPI
+    permissions:
+      id-token: write
+    environment:
+      name: test
+    runs-on: ubuntu-latest
+    needs: [build_wheels]
+    if: github.event.action == 'published'
+    steps:
+    - uses: actions/download-artifact@v3
+      with:
+        name: python-wheels
+        path: dist
+    - name: Publish package distributions to Test PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
+      with:
+        repository-url: https://test.pypi.org/legacy/
+
+  publish-pypi:
+    name: Publish to PyPI
+    permissions:
+      id-token: write
+    environment:
+      name: production
+    runs-on: ubuntu-latest
+    needs: [build_wheels]
+    if: github.event.action == 'published'
+    steps:
+    - uses: actions/download-artifact@v3
+      with:
+        name: python-wheels
+        path: dist
+    - name: Publish package distributions to PyPI
+      uses: pypa/gh-action-pypi-publish@release/v1
