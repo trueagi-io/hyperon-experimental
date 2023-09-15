@@ -330,13 +330,13 @@ impl PartialEq for GroundingSpace {
 
 impl Debug for GroundingSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GroundingSpace")
+        write!(f, "GroundingSpace-{self:p}")
     }
 }
 
 impl Display for GroundingSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GroundingSpace")
+        write!(f, "GroundingSpace-{self:p}")
     }
 }
 
