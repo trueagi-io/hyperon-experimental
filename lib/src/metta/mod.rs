@@ -40,6 +40,7 @@ pub const CHAIN_SYMBOL : Atom = sym!("chain");
 pub const UNIFY_SYMBOL : Atom = sym!("unify");
 pub const DECONS_SYMBOL : Atom = sym!("decons");
 pub const CONS_SYMBOL : Atom = sym!("cons");
+pub const INTERPRET_SYMBOL : Atom = sym!("interpret");
 
 /// Initializes an error expression atom
 pub fn error_atom(err_atom: Option<Atom>, err_code: Option<Atom>, message: String) -> Atom {

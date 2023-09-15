@@ -184,9 +184,6 @@
     (let $pattern $atom (let* $tail $template))
     $template )))
 
-(: case (-> %Undefined% Expression Atom))
-(= (case $atom $cases) (switch $atom $cases))
-
 (: car (-> Expression Atom))
 (= (car $atom)
   (eval (if-decons $atom $head $_

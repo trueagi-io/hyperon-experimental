@@ -6,7 +6,6 @@ use crate::metta::text::Tokenizer;
 use crate::metta::runner::Metta;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::assert::vec_eq_no_order;
-use crate::metta::runner::interpret;
 use crate::common::shared::Shared;
 
 use std::fmt::Display;
@@ -122,13 +121,17 @@ impl Grounded for IfEqualOp {
 // TODO: remove hiding errors completely after making it possible passing
 // them to the user
 fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
-    let expr = Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::sym("interpret"), expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())])]);
     let result = interpret(space, &expr);
     log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
     match result {
         Ok(result) => Ok(result),
         Err(_) => Ok(vec![]),
     }
+}
+
+fn interpret(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
+    let expr = Atom::expr([EVAL_SYMBOL, Atom::expr([INTERPRET_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())])]);
+    crate::metta::interpreter2::interpret(space, &expr)
 }
 
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
@@ -339,6 +342,66 @@ impl Grounded for PragmaOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct CaseOp {
+    space: DynSpace,
+}
+
+impl CaseOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for CaseOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "case")
+    }
+}
+
+impl Grounded for CaseOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("case expects two arguments: atom and expression of cases");
+        let cases = args.get(1).ok_or_else(arg_error)?;
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        log::debug!("CaseOp::execute: atom: {}, cases: {:?}", atom, cases);
+
+        let switch = |interpreted: Atom| -> Atom {
+            Atom::expr([sym!("switch"), interpreted, cases.clone()])
+        };
+
+        // Interpreting argument inside CaseOp is required because otherwise `Empty` result
+        // calculated inside interpreter cuts the whole branch of the interpretation. Also we
+        // cannot use `unify` in a unit test because after interpreting `(chain... (chain (eval
+        // (interpret (unify ...) Atom <space>))) ...)` `chain` executes `unify` and also gets
+        // `Empty` even if we have `Atom` as a resulting type. It can be solved by different ways.
+        // One way is to invent new type `EmptyType` (type of the `Empty` atom) and use this type
+        // in a function to allow `Empty` atoms as an input. `EmptyType` type should not be
+        // casted to the `%Undefined%` thus one cannot pass `Empty` to the function which accepts
+        // `%Undefined%`. Another way is to introduce "call" level. Thus if function called
+        // returned the result to the `chain` it should stop reducing it and insert it into the
+        // last argument.
+        let results = interpret(self.space.clone(), atom);
+        log::debug!("CaseOp::execute: atom results: {:?}", results);
+        let results = match results {
+            Ok(results) if results.is_empty() =>
+                vec![switch(EMPTY_SYMBOL)],
+            Ok(results) =>
+                results.into_iter().map(|atom| switch(atom)).collect(),
+            Err(err) => vec![Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::sym(err)])],
+        };
+        Ok(results)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
 }
@@ -371,6 +434,8 @@ pub fn register_runner_tokens(metta: &Metta) {
     tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
+    let case_op = Atom::gnd(CaseOp::new(space.clone()));
+    tref.register_token(regex(r"case"), move |_| { case_op.clone() });
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
     // TODO: adding &self introduces self referencing and thus prevents space
@@ -473,6 +538,18 @@ mod tests {
         assert_eq!(result, Ok(vec![vec![expr!("B" "A")]]));
         let result = run_program("!(eval (switch (A $b) ( ((B C) (C B)) ((D E) (E B)) )))");
         assert_eq!(result, Ok(vec![vec![]]));
+    }
+
+    #[test]
+    fn metta_case_empty() {
+        let result = run_program("!(case Empty ( (ok ok) (Empty nok) ))");
+        assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
+        let result = run_program("!(case (unify (C B) (C B) ok Empty) ( (ok ok) (Empty nok) ))");
+        assert_eq!(result, Ok(vec![vec![expr!("ok")]]));
+        let result = run_program("!(case (unify (B C) (C B) ok nok) ( (ok ok) (nok nok) ))");
+        assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
+        let result = run_program("!(case (match (B C) (C B) ok) ( (ok ok) (Empty nok) ))");
+        assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
     }
 
     #[test]
