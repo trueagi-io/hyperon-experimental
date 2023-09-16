@@ -5,6 +5,7 @@ from .atoms import Atom, AtomType, OperationAtom
 from .base import GroundingSpaceRef, Tokenizer, SExprParser
 
 class MeTTa:
+    """This class contains the MeTTa program execution utilities"""
 
     def __init__(self, space = None, cwd = ".", cmetta = None):
         if cmetta is not None:
@@ -25,15 +26,19 @@ class MeTTa:
         hp.metta_free(self.cmetta)
 
     def space(self):
+        """Gets the metta space"""
         return GroundingSpaceRef._from_cspace(hp.metta_space(self.cmetta))
 
     def tokenizer(self):
+        """Gets the tokenizer"""
         return Tokenizer._from_ctokenizer(hp.metta_tokenizer(self.cmetta))
 
     def register_token(self, regexp, constr):
+        """Registers a token"""
         self.tokenizer().register_token(regexp, constr)
 
     def register_atom(self, name, symbol):
+        """Registers an Atom"""
         self.register_token(name, lambda _: symbol)
 
     def _parse_all(self, program):
@@ -45,12 +50,15 @@ class MeTTa:
             yield atom
 
     def parse_all(self, program):
+        """Parse the entire program"""
         return list(self._parse_all(program))
 
     def parse_single(self, program):
+        """Parse the next single line in the program"""
         return next(self._parse_all(program))
 
     def load_py_module(self, name):
+        """Loads the given python module"""
         if not isinstance(name, str):
             name = repr(name)
         mod = import_module(name)
@@ -60,6 +68,7 @@ class MeTTa:
                 obj(self)
 
     def import_file(self, fname):
+        """Loads the program file and runs it"""
         path = fname.split(os.sep)
         if len(path) == 1:
             path = ['.'] + path
@@ -75,6 +84,7 @@ class MeTTa:
         return result
 
     def run(self, program, flat=False):
+        """Runs the program"""
         parser = SExprParser(program)
         results = hp.metta_run(self.cmetta, parser.cparser)
         if flat:
