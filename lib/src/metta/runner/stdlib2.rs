@@ -798,6 +798,18 @@ mod tests {
         assert_eq!(result, Ok(vec![vec![]]));
     }
 
+    #[test]
+    fn metta_quote_unquote() {
+        let header = "
+            (= (foo) A)
+            (= (bar $x) $x)
+        ";
+        assert_eq!(run_program(&format!("{header} !(bar (foo))")), Ok(vec![vec![sym!("A")]]), "sanity check");
+        assert_eq!(run_program(&format!("{header} !(bar (quote (foo)))")), Ok(vec![vec![expr!("quote" ("foo"))]]), "quote");
+        assert_eq!(run_program(&format!("{header} !(bar (unquote (quote (foo))))")), Ok(vec![vec![expr!("A")]]), "unquote before call");
+        assert_eq!(run_program(&format!("{header} !(unquote (bar (quote (foo))))")), Ok(vec![vec![expr!("A")]]), "unquote after call");
+    }
+
 
     #[test]
     fn test_frog_reasoning() {

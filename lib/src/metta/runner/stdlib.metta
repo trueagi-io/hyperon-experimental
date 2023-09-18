@@ -195,3 +195,9 @@
   (eval (if-decons $atom $_ $tail
     $tail
     (Error (cdr $atom) "cdr expects a non-empty expression as an argument") )))
+
+(: quote (-> Atom Atom))
+(= (quote $atom) NotReducible)
+
+(: unquote (-> (Atom %Undefined%)))
+(= (unquote (quote $atom)) $atom)
