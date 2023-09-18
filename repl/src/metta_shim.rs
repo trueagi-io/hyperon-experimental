@@ -239,8 +239,9 @@ mod py_mod_err {
 #[cfg(feature = "python")]
 mod py_mod_loading {
     use std::fmt::Display;
+    use std::str::FromStr;
     use std::path::PathBuf;
-    use semver::{Version, VersionReq};
+    use pep440_rs::{parse_version_specifiers, Version};
     use pyo3::prelude::*;
     use pyo3::types::{PyTuple, PyDict};
     use hyperon::*;
@@ -265,16 +266,16 @@ mod py_mod_loading {
 
     pub fn confirm_hyperonpy_version(req_str: &str) -> Result<(), String> {
 
-        let req = VersionReq::parse(req_str).unwrap();
+        let req = parse_version_specifiers(req_str).unwrap();
         let version_string = get_hyperonpy_version()?;
         //NOTE: Version parsing errors will be encountered by users building hyperonpy from source with an abnormal configuration
         // Therefore references to the "hyperon source directory" are ok.  Users who get hyperonpy from PyPi won't hit this issue
-        let version = Version::parse(&version_string)
-            .map_err(|_e| format!("Invalid HyperonPy version found: '{version_string}'.\nPlease update the package by running `python -m pip install -eU ./python[dev]` from your hyperon source directory."))?;
-        if req.matches(&version) {
+        let version = Version::from_str(&version_string)
+            .map_err(|_e| format!("Invalid HyperonPy version found: '{version_string}'.\nPlease update the package by running `python -m pip install -e ./python[dev]` from your hyperon source directory."))?;
+        if req.iter().all(|specifier| specifier.contains(&version)) {
             Ok(())
         } else {
-            Err(format!("MeTTa repl requires HyperonPy version matching '{req}'.  Found version: '{version}'"))
+            Err(format!("MeTTa repl requires HyperonPy version matching '{req_str}'.  Found version: '{version}'"))
         }
     }
 
