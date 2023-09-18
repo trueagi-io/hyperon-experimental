@@ -130,17 +130,17 @@ mod test {
 
     #[test]
     fn atom_iter_mut_collect() {
-        assert_eq!(expr!("A").iter().collect::<Vec<&Atom>>(), vec![&expr!("A")]);
-        assert_eq!(expr!(a).iter().collect::<Vec<&Atom>>(), vec![&expr!(a)]);
-        assert_eq!(expr!({1}).iter().collect::<Vec<&Atom>>(), vec![&expr!({1})]);
+        assert_eq!(expr!("A").iter_mut().collect::<Vec<&mut Atom>>(), vec![&mut expr!("A")]);
+        assert_eq!(expr!(a).iter_mut().collect::<Vec<&mut Atom>>(), vec![&mut expr!(a)]);
+        assert_eq!(expr!({1}).iter_mut().collect::<Vec<&mut Atom>>(), vec![&mut expr!({1})]);
     }
 
     #[test]
     fn expr_iter_mut_collect() {
-        assert_eq!(expr!("A" a {1}).iter().collect::<Vec<&Atom>>(),
-            vec![&expr!("A"), &expr!(a), &expr!({1})]);
-        assert_eq!(expr!("A" (a {1})).iter().collect::<Vec<&Atom>>(),
-            vec![&expr!("A"), &expr!(a), &expr!({1})]);
+        assert_eq!(expr!("A" a {1}).iter_mut().collect::<Vec<&mut Atom>>(),
+            vec![&mut expr!("A"), &mut expr!(a), &mut expr!({1})]);
+        assert_eq!(expr!("A" (a {1})).iter_mut().collect::<Vec<&mut Atom>>(),
+            vec![&mut expr!("A"), &mut expr!(a), &mut expr!({1})]);
     }
 
     #[test]
