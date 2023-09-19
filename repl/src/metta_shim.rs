@@ -5,7 +5,7 @@ use hyperon::ExpressionAtom;
 use hyperon::Atom;
 use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
-use hyperon::metta::runner::Metta;
+use hyperon::metta::runner::{Metta, atom_is_error};
 #[cfg(not(feature = "minimal"))]
 use hyperon::metta::runner::stdlib::register_rust_tokens;
 #[cfg(feature = "minimal")]
@@ -148,10 +148,15 @@ impl MettaShim {
     }
 
     pub fn get_config_atom(&mut self, config_name: &str) -> Option<Atom> {
+        self.exec(&format!("!(get-state {config_name})"));
+
         #[allow(unused_assignments)]
         let mut result = None;
         metta_shim_env!{{
-            result = self.metta.get_setting(config_name);
+            result = self.result.get(0)
+                .and_then(|vec| vec.get(0))
+                .and_then(|atom| (!atom_is_error(atom)).then_some(atom))
+                .cloned()
         }}
         result
     }
@@ -162,6 +167,7 @@ impl MettaShim {
         #[allow(unused_assignments)]
         let mut result = None;
         metta_shim_env!{{
+            //TODO: We need to do atom type checking here
             result = Some(Self::strip_quotes(atom.to_string()));
         }}
         result
@@ -192,7 +198,10 @@ impl MettaShim {
             if let Ok(expr) = ExpressionAtom::try_from(atom) {
                 result = Some(expr.into_children()
                     .into_iter()
-                    .map(|atom| Self::strip_quotes(atom.to_string()))
+                    .map(|atom| {
+                        //TODO: We need to do atom type checking here
+                        Self::strip_quotes(atom.to_string())
+                    })
                     .collect())
             }
         }}

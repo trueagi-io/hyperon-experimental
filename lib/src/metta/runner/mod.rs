@@ -29,6 +29,15 @@ mod arithmetics;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
+pub fn atom_is_error(atom: &Atom) -> bool {
+    match atom {
+        Atom::Expression(expr) => {
+            expr.children().len() > 0 && expr.children()[0] == ERROR_SYMBOL
+        },
+        _ => false,
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Metta(Rc<MettaContents>);
 
@@ -185,16 +194,7 @@ impl Metta {
                 match interpreter_state.into_result() {
                     Err(msg) => return Err(msg),
                     Ok(result) => {
-                        fn is_error(atom: &Atom) -> bool {
-                            match atom {
-                                Atom::Expression(expr) => {
-                                    expr.children().len() > 0 && expr.children()[0] == ERROR_SYMBOL
-                                },
-                                _ => false,
-                            }
-                        }
-
-                        let error = result.iter().any(|atom| is_error(atom));
+                        let error = result.iter().any(|atom| atom_is_error(atom));
                         state.results.push(result);
                         if error {
                             state.mode = MettaRunnerMode::TERMINATE;

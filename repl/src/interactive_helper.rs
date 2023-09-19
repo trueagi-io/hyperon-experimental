@@ -234,15 +234,16 @@ impl ReplHelper {
 }
 
 impl StyleSettings {
+    const ERR_STR: &str = "Fatal Error: Invalid REPL config";
     pub fn new(metta_shim: &mut MettaShim) -> Self {
         Self {
-            bracket_styles: metta_shim.get_config_expr_vec(CFG_BRACKET_STYLES).unwrap_or(vec!["94".to_string(), "93".to_string(), "95".to_string(), "96".to_string()]),
-            comment_style: metta_shim.get_config_string(CFG_COMMENT_STYLE).unwrap_or("32".to_string()),
-            variable_style: metta_shim.get_config_string(CFG_VARIABLE_STYLE).unwrap_or("33".to_string()),
-            symbol_style: metta_shim.get_config_string(CFG_SYMBOL_STYLE).unwrap_or("34".to_string()),
-            string_style: metta_shim.get_config_string(CFG_STRING_STYLE).unwrap_or("31".to_string()),
-            error_style: metta_shim.get_config_string(CFG_ERROR_STYLE).unwrap_or("91".to_string()),
-            bracket_match_style: metta_shim.get_config_string(CFG_BRACKET_MATCH_STYLE).unwrap_or("1;7".to_string()),
+            bracket_styles: metta_shim.get_config_expr_vec(CFG_BRACKET_STYLES).expect(Self::ERR_STR),
+            comment_style: metta_shim.get_config_string(CFG_COMMENT_STYLE).expect(Self::ERR_STR),
+            variable_style: metta_shim.get_config_string(CFG_VARIABLE_STYLE).expect(Self::ERR_STR),
+            symbol_style: metta_shim.get_config_string(CFG_SYMBOL_STYLE).expect(Self::ERR_STR),
+            string_style: metta_shim.get_config_string(CFG_STRING_STYLE).expect(Self::ERR_STR),
+            error_style: metta_shim.get_config_string(CFG_ERROR_STYLE).expect(Self::ERR_STR),
+            bracket_match_style: metta_shim.get_config_string(CFG_BRACKET_MATCH_STYLE).expect(Self::ERR_STR),
             bracket_match_enabled: metta_shim.get_config_atom(CFG_BRACKET_MATCH_ENABLED).map(|_bool_atom| true).unwrap_or(true), //TODO, make this work when we can bridge value atoms
         }
     }
