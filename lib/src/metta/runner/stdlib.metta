@@ -1,9 +1,4 @@
-;`$then`, `$else` should be of `Atom` type to avoid evaluation
-; and infinite cycle in inference
-(: if (-> Bool Atom Atom $t))
-(= (if True $then $else) $then)
-(= (if False $then $else) $else)
-
+(: ErrorType Type)
 (: Error (-> Atom Atom ErrorType))
 
 (: if-non-empty-expression (-> Atom Atom Atom Atom))
@@ -151,6 +146,12 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Standard library written in MeTTa ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;`$then`, `$else` should be of `Atom` type to avoid evaluation
+; and infinite cycle in inference
+(: if (-> Bool Atom Atom $t))
+(= (if True $then $else) $then)
+(= (if False $then $else) $else)
 
 (: match (-> Atom Atom Atom %Undefined%))
 (= (match $space $pattern $template)
