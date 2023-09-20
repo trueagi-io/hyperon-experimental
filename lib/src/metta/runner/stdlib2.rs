@@ -743,7 +743,7 @@ mod tests {
     }
 
     #[test]
-    fn metta_let() {
+    fn metta_let_novar() {
         let result = run_program("!(let (P A $b) (P $a B) (P $b $a))");
         assert_eq!(result, Ok(vec![vec![expr!("P" "B" "A")]]));
         let result = run_program("

@@ -171,6 +171,7 @@ fn is_embedded_op(atom: &Atom) -> bool {
     match expr {
         Some([op, ..]) => *op == EVAL_SYMBOL
             || *op == CHAIN_SYMBOL
+            || *op == CHAIN_PLUS_SYMBOL
             || *op == UNIFY_SYMBOL
             || *op == CONS_SYMBOL
             || *op == DECONS_SYMBOL,
@@ -214,6 +215,21 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
                 },
                 _ => {
                     let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_SYMBOL, atom);
+                    vec![InterpretedAtom(error_atom(atom, error), bindings)]
+                },
+            }
+        },
+        Some([op, args @ ..]) if *op == CHAIN_PLUS_SYMBOL => {
+            match args {
+                [_nested, Atom::Variable(_var), _templ] => {
+                    match atom_into_array(atom) {
+                        Some([_, nested, Atom::Variable(var), templ]) =>
+                            chain_plus(space, bindings, nested, var, templ),
+                        _ => panic!("Unexpected state"),
+                    }
+                },
+                _ => {
+                    let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_PLUS_SYMBOL, atom);
                     vec![InterpretedAtom(error_atom(atom, error), bindings)]
                 },
             }
@@ -340,14 +356,31 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<I
 
 fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: VariableAtom, templ: Atom) -> Vec<InterpretedAtom> {
     if is_embedded_op(&nested) {
+        let result = interpret_atom_root(space, InterpretedAtom(nested, bindings), false);
+        result.into_iter()
+            .map(|InterpretedAtom(r, b)| {
+                let vb = Bindings::new().add_var_binding_v2(var.clone(), r).unwrap();
+                let result = apply_bindings_to_atom(&templ, &vb);
+                InterpretedAtom(result, b)
+            })
+        .collect()
+    } else {
+        let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
+        let result = apply_bindings_to_atom(&templ, &b);
+        vec![InterpretedAtom(result, bindings)]
+    }
+}
+
+fn chain_plus<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: VariableAtom, templ: Atom) -> Vec<InterpretedAtom> {
+    if is_embedded_op(&nested) {
         let mut result = interpret_atom_root(space, InterpretedAtom(nested, bindings), false);
         if result.len() == 1 {
             let InterpretedAtom(r, b) = result.pop().unwrap();
-            vec![InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var), templ]), b)]
+            vec![InterpretedAtom(Atom::expr([CHAIN_PLUS_SYMBOL, r, Atom::Variable(var), templ]), b)]
         } else {
             result.into_iter()
                 .map(|InterpretedAtom(r, b)| {
-                    InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b)
+                    InterpretedAtom(Atom::expr([CHAIN_PLUS_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b)
                 })
             .collect()
         }
@@ -518,20 +551,20 @@ mod tests {
     fn interpret_atom_chain_evaluation() {
         let space = space("(= (foo $a B) $a)");
         let result = interpret_atom(&space, atom("(chain (eval (foo A $b)) $x (bar $x))", bind!{}));
-        assert_eq!(result, vec![atom("(chain A $x (bar $x))", bind!{})]);
+        assert_eq!(result, vec![atom("(bar A)", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_chain_nested_evaluation() {
         let space = space("(= (foo $a B) $a)");
         let result = interpret_atom(&space, atom("(chain (chain (eval (foo A $b)) $x (bar $x)) $y (baz $y))", bind!{}));
-        assert_eq!(result, vec![atom("(chain (chain A $x (bar $x)) $y (baz $y))", bind!{})]);
+        assert_eq!(result, vec![atom("(baz (bar A))", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_chain_nested_value() {
         let result = interpret_atom(&space(""), atom("(chain (chain A $x (bar $x)) $y (baz $y))", bind!{}));
-        assert_eq!(result, vec![atom("(chain (bar A) $y (baz $y))", bind!{})]);
+        assert_eq!(result, vec![atom("(baz (bar A))", bind!{})]);
     }
 
     #[test]
@@ -543,9 +576,9 @@ mod tests {
         ");
         let result = interpret_atom(&space, atom("(chain (eval (color)) $x (bar $x))", bind!{}));
         assert_eq_no_order!(result, vec![
-            atom("(chain red $x (bar $x))", bind!{}),
-            atom("(chain green $x (bar $x))", bind!{}),
-            atom("(chain blue $x (bar $x))", bind!{})
+            atom("(bar red)", bind!{}),
+            atom("(bar green)", bind!{}),
+            atom("(bar blue)", bind!{})
         ]);
     }
 
@@ -637,14 +670,29 @@ mod tests {
     #[test]
     fn metta_turing_machine() {
         let space = space("
+            (= (if-embedded-op $atom $then $else)
+              (chain (decons $atom) $list
+                (unify $list (cons $_) $then
+                  (unify $list (decons $_) $then
+                    (unify $list (chain $_) $then
+                      (unify $list (eval $_) $then
+                        (unify $list (unify $_) $then
+                          $else )))))))
+
+            (= (chain-loop $atom $var $templ)
+              (chain $atom $x
+                (eval (if-embedded-op $x
+                  (eval (chain-loop $x $var $templ))
+                  (chain $x $var $templ) ))))
+
             (= (tm $rule $state $tape)
               (unify $state HALT
                 $tape
                 (chain (eval (read $tape)) $char
                   (chain (eval ($rule $state $char)) $res
                     (unify $res ($next-state $next-char $dir)
-                      (chain (eval (move $tape $next-char $dir)) $next-tape
-                        (eval (tm $rule $next-state $next-tape)) )
+                      (eval (chain-loop (eval (move $tape $next-char $dir)) $next-tape
+                        (eval (tm $rule $next-state $next-tape)) ))
                       (Error (tm $rule $state $tape) \"Incorrect state\") )))))
 
             (= (read ($head $hole $tail)) $hole)
