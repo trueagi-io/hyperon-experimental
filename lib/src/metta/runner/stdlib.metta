@@ -48,24 +48,6 @@
 (= (switch-internal $atom (($pattern $template) $tail))
   (unify $atom $pattern $template (eval (switch $atom $tail))))
 
-; FIXME: subst and reduce are not used in interpreter implementation
-; we could remove them
-
-(: subst (-> Atom Variable Atom Atom))
-(= (subst $atom $var $templ)
-  (unify $atom $var $templ
-    (Error (subst $atom $var $templ)
-      "subst expects a variable as a second argument") ))
-
-(: reduce (-> Atom Variable Atom Atom))
-(= (reduce $atom $var $templ)
-  (chain (eval $atom) $res
-    (eval (if-empty $res Empty
-      (eval (if-error $res $res
-        (eval (if-not-reducible $res
-          (eval (subst $atom $var $templ))
-          (eval (reduce $res $var $templ)) ))))))))
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; MeTTa interpreter implementation ;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

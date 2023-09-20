@@ -563,32 +563,6 @@ mod tests {
     }
 
     #[test]
-    fn metta_reduce_chain() {
-        assert_eq!(run_program("
-            (= (foo $x) (bar $x))
-            (= (bar $x) (baz $x))
-            (= (baz $x) $x)
-            !(eval (reduce (foo A) $x (reduced $x)))
-        "), Ok(vec![vec![expr!("reduced" "A")]]));
-        assert_eq!(run_program("
-            !(eval (reduce (foo A) $x (reduced $x)))
-        "), Ok(vec![vec![expr!("reduced" ("foo" "A"))]]));
-        assert_eq!(run_program("
-            (= (foo A) (Error (foo A) \"Test error\"))
-            !(eval (reduce (foo A) $x (reduced $x)))
-        "), Ok(vec![vec![expr!("Error" ("foo" "A") "\"Test error\"")]]));
-    }
-
-    #[test]
-    fn metta_reduce_reduce() {
-        assert_eq!(run_program("
-            (= (foo $x) (reduce (bar $x) $t $t))
-            (= (bar $x) $x)
-            !(eval (reduce (foo A) $x $x))
-        "), Ok(vec![vec![expr!("A")]]));
-    }
-
-    #[test]
     fn metta_type_cast() {
         assert_eq!(run_program("(: a A) !(eval (type-cast a A &self))"), Ok(vec![vec![expr!("a")]]));
         assert_eq!(run_program("(: a A) !(eval (type-cast a B &self))"), Ok(vec![vec![expr!("Error" "a" "BadType")]]));
