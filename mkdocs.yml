@@ -132,7 +132,7 @@ markdown_extensions:
 
 # Page tree
 nav:
-  - Minimal Metta: minimal-metta.md
+  - Minimal Metta: index.md
   - Contribution: CONTRIBUTING.md
   - Python Reference:
     - Atoms: reference/atoms.md
