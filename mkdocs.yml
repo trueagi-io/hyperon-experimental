@@ -140,5 +140,3 @@ nav:
     - Ext: reference/ext.md
     - Runner: reference/runner.md
     - Stdlib: reference/stdlib.md
-  - C Reference: mainpage.md
-  - Doxygen: html
