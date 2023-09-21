@@ -49,9 +49,8 @@ theme:
   font:
     text: Roboto
     code: Roboto Mono
-  favicon: assets/P8T2_ASO_400x400.jpg
-  icon:
-    logo: logo
+  favicon: assets/hyperon-logo.png
+  logo: assets/hyperon-logo.png
 
 plugins:
   - search:
