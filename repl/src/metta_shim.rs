@@ -5,6 +5,7 @@ use hyperon::ExpressionAtom;
 use hyperon::Atom;
 use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
+use hyperon::metta::Environment;
 use hyperon::metta::runner::{Metta, atom_is_error};
 #[cfg(not(feature = "minimal"))]
 use hyperon::metta::runner::stdlib::register_rust_tokens;
@@ -14,7 +15,6 @@ use hyperon::metta::text::Tokenizer;
 use hyperon::metta::text::SExprParser;
 use hyperon::common::shared::Shared;
 
-use crate::ReplParams;
 use crate::SIGINT_RECEIVED_COUNT;
 
 /// MettaShim is responsible for **ALL** calls between the repl and MeTTa, and is in charge of keeping
@@ -26,7 +26,6 @@ use crate::SIGINT_RECEIVED_COUNT;
 pub struct MettaShim {
     pub metta: Metta,
     pub result: Vec<Vec<Atom>>,
-    _repl_params: Shared<ReplParams>, //TODO: We'll likely want this back soon, but so I'm not un-plumbing it just yet
 }
 
 #[macro_export]
@@ -59,15 +58,14 @@ impl Drop for MettaShim {
 
 impl MettaShim {
 
-    pub fn new(repl_params: Shared<ReplParams>) -> Self {
+    pub fn new() -> Self {
 
         //Init the MeTTa interpreter
         let space = DynSpace::new(GroundingSpace::new());
         let tokenizer = Shared::new(Tokenizer::new());
         let mut new_shim = Self {
-            metta: Metta::from_space(space, tokenizer, repl_params.borrow().modules_search_paths().collect()),
+            metta: Metta::from_space(space, tokenizer, Environment::platform_env().modules_search_paths().map(|path| path.into()).collect()),
             result: vec![],
-            _repl_params: repl_params.clone(),
         };
 
         //Init HyperonPy if the repl includes Python support
@@ -92,7 +90,7 @@ impl MettaShim {
         //Add the extend-py! token, if we have Python support
         #[cfg(feature = "python")]
         {
-            let extendpy_atom = Atom::gnd(py_mod_loading::ImportPyOp{metta: new_shim.metta.clone(), repl_params: repl_params.clone()});
+            let extendpy_atom = Atom::gnd(py_mod_loading::ImportPyOp{metta: new_shim.metta.clone()});
             new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { extendpy_atom.clone() });
         }
 
@@ -101,8 +99,9 @@ impl MettaShim {
         new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(py_mod_err::ImportPyErr) });
 
         //Run the init.metta file
-        let repl_params = repl_params.borrow();
-        new_shim.load_metta_module(repl_params.init_metta_path.clone());
+        if let Some(init_meta_file) = Environment::platform_env().initialization_metta_file_path() {
+            new_shim.load_metta_module(init_meta_file.into());
+        }
 
         new_shim
     }
@@ -259,8 +258,6 @@ mod py_mod_loading {
     use hyperon::matcher::MatchResultIter;
     use hyperon::metta::*;
     use hyperon::metta::runner::Metta;
-    use hyperon::common::shared::Shared;
-    use crate::ReplParams;
 
     /// Load the hyperon module, and get the "__version__" attribute
     pub fn get_hyperonpy_version() -> Result<String, String> {
@@ -288,7 +285,7 @@ mod py_mod_loading {
         }
     }
 
-    pub fn load_python_module_from_mod_or_file(repl_params: &ReplParams, metta: &Metta, module_name: &str) -> Result<(), String> {
+    pub fn load_python_module_from_mod_or_file(metta: &Metta, module_name: &str) -> Result<(), String> {
 
         // First, see if the module is already registered with Python
         match load_python_module(metta, module_name) {
@@ -298,7 +295,7 @@ mod py_mod_loading {
                 //Check each include directory in order, until we find the module we're looking for
                 let file_name = PathBuf::from(module_name).with_extension("py");
                 let mut found_path = None;
-                for include_path in repl_params.modules_search_paths() {
+                for include_path in Environment::platform_env().modules_search_paths() {
                     let path = include_path.join(&file_name);
                     if path.exists() {
                         found_path = Some(path);
@@ -372,7 +369,6 @@ mod py_mod_loading {
     #[derive(Clone, PartialEq, Debug)]
     pub struct ImportPyOp {
         pub metta: Metta,
-        pub repl_params: Shared<ReplParams>,
     }
 
     impl Display for ImportPyOp {
@@ -393,7 +389,7 @@ mod py_mod_loading {
                 .ok_or_else(arg_error)?
                 .try_into().map_err(|_| arg_error())?;
 
-            match load_python_module_from_mod_or_file(&self.repl_params.borrow(), &self.metta, module_path_sym_atom.name()) {
+            match load_python_module_from_mod_or_file(&self.metta, module_path_sym_atom.name()) {
                 Ok(()) => Ok(vec![]),
                 Err(err) => Err(ExecError::from(err)),
             }

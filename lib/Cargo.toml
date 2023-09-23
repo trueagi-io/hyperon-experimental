@@ -2,13 +2,14 @@
 name = "hyperon"
 version = "0.1.6"
 authors = ["Vitaly Bogdanov <vsbogd@gmail.com>"]
-edition = "2018"
+edition = "2021"
 
 [dependencies]
 mopa = "0.2.2"
 regex = "1.5.4"
 log = "0.4.0"
 env_logger = "0.8.4"
+directories = "5.0.1" # For Environment to find platform-specific config location
 ctor = "0.2.0"
 smallvec = "1.10.0"
 
