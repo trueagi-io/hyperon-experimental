@@ -468,21 +468,37 @@ impl metta_t {
     }
 }
 
-/// @brief Creates a new MeTTa Interpreter
+/// @brief Creates a new top-level MeTTa Interpreter
 /// @ingroup interpreter_group
-/// @param[in]  space  A pointer to a handle for the Space for use by the Interpreter
-/// @param[in]  tokenizer  A pointer to a handle for the Tokenizer for use by the Interpreter
-/// @param[in]  cwd  A C-style string specifying a path to a working directory, to search for modules to load
 /// @return A `metta_t` handle to the newly created Interpreter
 /// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
 ///
 #[no_mangle]
-pub extern "C" fn metta_new(space: *mut space_t, tokenizer: *mut tokenizer_t, cwd: *const c_char) -> metta_t {
-    let dyn_space = unsafe{ &*space }.borrow();
-    let tokenizer = unsafe{ &*tokenizer }.clone_handle();
-    let metta = Metta::from_space(dyn_space.clone(), tokenizer, vec![PathBuf::from(cstr_as_str(cwd))]);
+pub extern "C" fn metta_new() -> metta_t {
+    let metta = Metta::new_top_level_runner();
     metta.into()
 }
+
+/// @brief Creates a new MeTTa Interpreter with a provided Space and Tokenizer
+/// @ingroup interpreter_group
+/// @param[in]  space  A pointer to a handle for the Space for use by the Interpreter
+/// @param[in]  tokenizer  A pointer to a handle for the Tokenizer for use by the Interpreter
+/// @return A `metta_t` handle to the newly created Interpreter
+/// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
+///
+#[no_mangle]
+pub extern "C" fn metta_new_with_space(space: *mut space_t, tokenizer: *mut tokenizer_t) -> metta_t {
+    let dyn_space = unsafe{ &*space }.borrow();
+    let tokenizer = unsafe{ &*tokenizer }.clone_handle();
+    let metta = Metta::new_with_space(dyn_space.clone(), tokenizer);
+    metta.into()
+}
+
+//TODO_NOW... Implement path setters for environment like this
+// /// @param[in]  cwd  A C-style string specifying a path to a working directory, to search for modules to load
+// func( cwd: *const c_char)
+// vec![PathBuf::from(cstr_as_str(cwd))]
+
 
 /// @brief Frees a `metta_t` handle
 /// @ingroup interpreter_group

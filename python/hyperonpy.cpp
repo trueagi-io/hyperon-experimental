@@ -697,8 +697,8 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_SYMBOL(VOID, "Void");
 
     py::class_<CMetta>(m, "CMetta").def(py::init(&cmetta_from_inner_ptr_as_int));
-    m.def("metta_new", [](CSpace space, CTokenizer tokenizer, char const* cwd) {
-        return CMetta(metta_new(space.ptr(), tokenizer.ptr(), cwd));
+    m.def("metta_new", [](CSpace space, CTokenizer tokenizer) {
+        return CMetta(metta_new_with_space(space.ptr(), tokenizer.ptr()));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
     m.def("metta_space", [](CMetta metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");

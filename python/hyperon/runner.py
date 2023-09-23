@@ -7,14 +7,14 @@ from .base import GroundingSpaceRef, Tokenizer, SExprParser
 class MeTTa:
     """This class contains the MeTTa program execution utilities"""
 
-    def __init__(self, space = None, cwd = ".", cmetta = None):
+    def __init__(self, space = None, cmetta = None):
         if cmetta is not None:
             self.cmetta = cmetta
         else:
             if space is None:
                 space = GroundingSpaceRef()
             tokenizer = Tokenizer()
-            self.cmetta = hp.metta_new(space.cspace, tokenizer.ctokenizer, cwd)
+            self.cmetta = hp.metta_new(space.cspace, tokenizer.ctokenizer)
             self.load_py_module("hyperon.stdlib")
             hp.metta_load_module(self.cmetta, "stdlib")
             self.register_atom('extend-py!',

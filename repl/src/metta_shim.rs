@@ -3,17 +3,13 @@ use std::path::PathBuf;
 
 use hyperon::ExpressionAtom;
 use hyperon::Atom;
-use hyperon::space::*;
-use hyperon::space::grounding::GroundingSpace;
 use hyperon::metta::environment::Environment;
 use hyperon::metta::runner::{Metta, atom_is_error};
 #[cfg(not(feature = "minimal"))]
 use hyperon::metta::runner::stdlib::register_rust_tokens;
 #[cfg(feature = "minimal")]
 use hyperon::metta::runner::stdlib2::register_rust_tokens;
-use hyperon::metta::text::Tokenizer;
 use hyperon::metta::text::SExprParser;
-use hyperon::common::shared::Shared;
 
 use crate::SIGINT_RECEIVED_COUNT;
 
@@ -61,10 +57,8 @@ impl MettaShim {
     pub fn new() -> Self {
 
         //Init the MeTTa interpreter
-        let space = DynSpace::new(GroundingSpace::new());
-        let tokenizer = Shared::new(Tokenizer::new());
         let mut new_shim = Self {
-            metta: Metta::from_space(space, tokenizer, Environment::platform_env().modules_search_paths().map(|path| path.into()).collect()),
+            metta: Metta::new_top_level_runner(),
             result: vec![],
         };
 

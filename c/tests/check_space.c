@@ -228,11 +228,10 @@ START_TEST (test_space_nested_in_atom)
     space_add(&nested, expr(atom_sym("A"), atom_sym("B"), atom_ref_null()));
     atom_t space_atom = atom_gnd_for_space(&nested);
 
-    space_t runner_space = space_new_grounding_space();
-    tokenizer_t tokenizer = tokenizer_new();
-    metta_t runner = metta_new(&runner_space, &tokenizer, ".");
+    metta_t runner = metta_new();
     metta_load_module(&runner, "stdlib");
 
+    tokenizer_t tokenizer = metta_tokenizer(&runner);
     tokenizer_register_token(&tokenizer, "nested", &TOKEN_API_CLONE_ATOM, &space_atom);
 
     sexpr_parser_t parser = sexpr_parser_new("!(match nested (A $x) $x)");
@@ -247,9 +246,8 @@ START_TEST (test_space_nested_in_atom)
     atom_vec_free(results);
     sexpr_parser_free(parser);
 
-    metta_free(runner);
     tokenizer_free(tokenizer);
-    space_free(runner_space);
+    metta_free(runner);
 
     atom_free(space_atom);
     space_free(nested);

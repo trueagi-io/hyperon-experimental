@@ -171,6 +171,16 @@ impl EnvBuilder {
             env.init_metta_path = Some(init_metta_path);
         }
 
+        //TODO: This line below is a stop-gap to match old behavior
+        //As discussed with Vitaly, searching the current working dir can be a potential security hole
+        // However, that is mitigated by "." being the last directory searched.
+        // Anyway, the issue is that the Metta::import_file method in runner.py relies on using the
+        // same runner but being able to change the search path by changing the working dir.
+        // A better fix is to fork a "child runner" with access to the same space and tokenizer,
+        // but an updated search path.  This is really hard to implement currently given the ImportOp
+        // actually owns a reference to the runner it's associated with.  However this must be fixed soon.
+        env.extra_include_paths.push(".".into());
+
         env
     }
 

@@ -10,6 +10,7 @@ use std::rc::Rc;
 use std::path::PathBuf;
 use std::collections::HashMap;
 
+use metta::environment::Environment;
 
 #[cfg(not(feature = "minimal"))]
 pub mod stdlib;
@@ -64,20 +65,26 @@ pub struct RunnerState<'a> {
 }
 
 impl Metta {
-    pub fn new(space: DynSpace, tokenizer: Shared<Tokenizer>) -> Self {
-        Metta::from_space(space, tokenizer, vec![PathBuf::from(".")])
+    /// A 1-liner to get a MeTTa interpreter using the default configuration
+    //TODO, see comment on `new_metta_rust`.  That function should merge into this one
+    pub fn new_top_level_runner() -> Self {
+        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()),
+        Shared::new(Tokenizer::new()));
+        metta
     }
 
-    pub fn from_space(space: DynSpace, tokenizer: Shared<Tokenizer>, search_paths: Vec<PathBuf>) -> Self {
+    /// Returns a new MeTTa interpreter, using the provided Space and Tokenizer
+    pub fn new_with_space(space: DynSpace, tokenizer: Shared<Tokenizer>) -> Self {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
-        let contents = MettaContents{ space, tokenizer, settings, modules, search_paths };
+        let contents = MettaContents{ space, tokenizer, settings, modules, search_paths: Environment::platform_env().modules_search_paths().map(|path| path.into()).collect() };
         let metta = Self(Rc::new(contents));
         register_runner_tokens(&metta);
         register_common_tokens(&metta);
         metta
     }
 
+    /// Returns a new MeTTa interpreter intended for use loading MeTTa modules during import
     fn new_loading_runner(metta: &Metta, path: PathBuf) -> Self {
         let space = DynSpace::new(GroundingSpace::new());
         let tokenizer = metta.tokenizer().clone_inner();
@@ -301,8 +308,11 @@ impl<'a> RunnerState<'a> {
     }
 }
 
+//TODO: this function should be totally subsumed into Metta::new_top_level_runner(), but
+// first we have to be able to load the "rust" stdlib before the python stdlib, which requires TODO_NOW-lookup-issue-number
+// to be fixed, which in-turn requires value-bridging
 pub fn new_metta_rust() -> Metta {
-    let metta = Metta::new(DynSpace::new(GroundingSpace::new()),
+    let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()),
         Shared::new(Tokenizer::new()));
     register_rust_tokens(&metta);
     metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
@@ -339,7 +349,7 @@ mod tests {
             (foo b)
         ";
 
-        let metta = Metta::new(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -353,7 +363,7 @@ mod tests {
             !(foo b)
         ";
 
-        let metta = Metta::new(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -408,7 +418,7 @@ mod tests {
             !(foo a)
         ";
 
-        let metta = Metta::new(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
