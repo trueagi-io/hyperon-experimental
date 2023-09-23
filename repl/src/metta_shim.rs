@@ -5,7 +5,7 @@ use hyperon::ExpressionAtom;
 use hyperon::Atom;
 use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
-use hyperon::metta::Environment;
+use hyperon::metta::environment::Environment;
 use hyperon::metta::runner::{Metta, atom_is_error};
 #[cfg(not(feature = "minimal"))]
 use hyperon::metta::runner::stdlib::register_rust_tokens;
@@ -257,6 +257,7 @@ mod py_mod_loading {
     use hyperon::atom::{Grounded, ExecError, match_by_equality};
     use hyperon::matcher::MatchResultIter;
     use hyperon::metta::*;
+    use hyperon::metta::environment::Environment;
     use hyperon::metta::runner::Metta;
 
     /// Load the hyperon module, and get the "__version__" attribute

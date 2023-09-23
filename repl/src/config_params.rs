@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::io::Write;
 use std::fs;
 
-use hyperon::metta::Environment;
+use hyperon::metta::environment::Environment;
 
 const DEFAULT_REPL_METTA: &[u8] = include_bytes!("repl.default.metta");
 

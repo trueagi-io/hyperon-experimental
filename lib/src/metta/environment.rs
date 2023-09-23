@@ -26,29 +26,7 @@ impl Environment {
 
     /// Returns a reference to the shared "platform" Environment
     pub fn platform_env() -> &'static Self {
-        PLATFORM_ENV.get_or_init(|| Self::new_with_defaults(None))
-    }
-
-    /// Initializes the shared "platform" Environment with with the OS-Specific platform configuration
-    ///
-    /// Config directory locations will be:
-    /// Linux: ~/.config/metta/
-    /// Windows: ~\AppData\Roaming\TrueAGI\metta\config\
-    /// Mac: ~/Library/Application Support/io.TrueAGI.metta/
-    ///
-    /// TODO: Repeat this documentation somewhere more prominent, like the top-level README
-    ///
-    /// NOTE: This method will panic if the platform Environment has already been initialized
-    pub fn init(working_dir: Option<&Path>) {
-        PLATFORM_ENV.set(Self::new_with_defaults(working_dir)).expect("Fatal Error: Platform Environment already initialized");
-    }
-
-    /// Initializes the shared "platform" Environment with with the configuration stored in the `config_dir`.  Will create
-    /// `config_dir` and its contents if it does not exist
-    ///
-    /// NOTE: This method will panic if the platform Environment has already been initialized
-    pub fn init_with_cfg_dir(working_dir: Option<&Path>, config_dir: &Path) {
-        PLATFORM_ENV.set(Self::new_with_config_dir(working_dir, config_dir)).expect("Fatal Error: Platform Environment already initialized");
+        PLATFORM_ENV.get_or_init(|| EnvBuilder::new().build())
     }
 
     /// Returns the Path to the config dir, in an OS-specific location
@@ -69,80 +47,131 @@ impl Environment {
             .chain(self.extra_include_paths.iter().map(|path| path.borrow()))
     }
 
-    /// Returns a newly created Environment with the OS-specific platform defaults
-    ///
-    /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [platform_env].
-    pub fn new_with_defaults(working_dir: Option<&Path>) -> Self {
-        match ProjectDirs::from("io", "TrueAGI",  "metta") {
-            Some(proj_dirs) => {
-                Self::new_with_config_dir(working_dir, proj_dirs.config_dir())
-            },
-            None => {
-                eprint!("Failed to initialize config!");
-                Self::new_without_config_dir(working_dir)
-            }
-        }
-    }
-
-    /// Returns a newly created Environment with the configuration stored in the `config_dir`.  Will create
-    /// `config_dir` and its contents if it does not exist
-    ///
-    /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [platform_env].
-    pub fn new_with_config_dir(working_dir: Option<&Path>, config_dir: &Path) -> Self {
-
-        //Create the modules dir inside the config dir, if it doesn't already exist.
-        // This will create the cfg_dir iteslf in the process
-        let modules_dir = config_dir.join("modules");
-        std::fs::create_dir_all(&modules_dir).unwrap();
-
-        //Create the default init.metta file if they don't already exist
-        let init_metta_path = config_dir.join("init.metta");
-        if !init_metta_path.exists() {
-            let mut file = fs::OpenOptions::new()
-                .create(true)
-                .write(true)
-                .open(&init_metta_path)
-                .expect(&format!("Error creating default init file at {init_metta_path:?}"));
-            file.write_all(&DEFAULT_INIT_METTA).unwrap();
-        }
-
-        //TODO_NOW, come back here and rethink what we do with include_paths.  ie. where they are stored
-        // //Push the "modules" dir, as the last place to search after the paths specified on the cmd line
-        // //TODO: the config.metta file will be able to append / modify the search paths, and can choose not to
-        // // include the "modules" dir in the future.
-        // let mut include_paths = include_paths;
-        // include_paths.push(modules_dir);
-
-        Self {
-            config_dir: Some(config_dir.into()),
-            init_metta_path: Some(init_metta_path),
-            working_dir: working_dir.map(|dir| dir.into()),
-            extra_include_paths: vec![], //TODO_NOW, need a way to pass in extra include paths.  This is the straw that pushes me over to a builder API
-        }
-    }
-
-    /// Returns a newly created Environment with no specialized configuration.  This method will not touch any files.
-    ///
-    /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [platform_env].
-    pub fn new_without_config_dir(working_dir: Option<&Path>) -> Self {
+    /// Private "default" function
+    fn new() -> Self {
         Self {
             config_dir: None,
             init_metta_path: None,
-            working_dir: working_dir.map(|dir| dir.into()),
+            working_dir: None,
             extra_include_paths: vec![],
         }
     }
 }
 
-//TODO_NOW: Transition to a builder API
-// pub struct EnvBuilder {
-//     env: Environment
-// }
+pub struct EnvBuilder {
+    env: Environment,
+    no_cfg_dir: bool,
+}
 
-// impl EnvBuilder {
+impl EnvBuilder {
 
-//     /// Returns a new EnvBuilder, to set the parameters for the MeTTa Environment
-//     pub fn new() -> Self {
+    /// Returns a new EnvBuilder, to set the parameters for the MeTTa Environment
+    ///
+    /// NOTE: Unless otherwise specified by calling either [set_no_config_dir] or [set_config_dir], the
+    ///   [Environment] will be configured using the OS-Specific platform configuration files.
+    ///
+    /// Depending on the host OS, the config directory locations will be:
+    /// * Linux: ~/.config/metta/
+    /// * Windows: ~\AppData\Roaming\TrueAGI\metta\config\
+    /// * Mac: ~/Library/Application Support/io.TrueAGI.metta/
+    ///
+    /// TODO: Repeat this documentation somewhere more prominent, like the top-level README
+    pub fn new() -> Self {
+        Self {
+            env: Environment::new(),
+            no_cfg_dir: false,
+        }
+    }
 
-//     }
-// }
+    /// Sets (or unsets) the working_dir for the environment
+    pub fn set_working_dir(mut self, working_dir: Option<&Path>) -> Self {
+        self.env.working_dir = working_dir.map(|dir| dir.into());
+        self
+    }
+
+    /// Sets the `config_dir` that the environment will load.  A directory at the specified path will
+    /// be created its contents populated with default values, if one does not already exist
+    pub fn set_config_dir(mut self, config_dir: &Path) -> Self {
+        self.env.config_dir = Some(config_dir.into());
+        if self.no_cfg_dir {
+            panic!("Fatal Error: set_config_dir is incompatible with set_no_config_dir");
+        }
+        self
+    }
+
+    /// Configures the Environment not to load nor create any config files
+    pub fn set_no_config_dir(mut self) -> Self {
+        self.no_cfg_dir = true;
+        if self.env.config_dir.is_some() {
+            panic!("Fatal Error: set_config_dir is incompatible with set_no_config_dir");
+        }
+        self
+    }
+
+    /// Adds additional include paths to search for MeTTa modules
+    ///
+    /// NOTE: The most recently added paths will have the highest search priority, save for the `working_dir`,
+    ///   and paths returned first by the iterator will have higher priority within the same call to add_include_paths.
+    pub fn add_include_paths<P: Borrow<Path>, I: IntoIterator<Item=P>>(mut self, paths: I) -> Self {
+        let mut additional_paths: Vec<PathBuf> = paths.into_iter().map(|path| path.borrow().into()).collect();
+        additional_paths.extend(self.env.extra_include_paths);
+        self.env.extra_include_paths = additional_paths;
+        self
+    }
+
+    /// Initializes the shared platform Environment, accessible with [platform_env]
+    ///
+    /// NOTE: This method will panic if the platform Environment has already been initialized
+    pub fn init_platform_env(self) {
+        PLATFORM_ENV.set(self.build()).expect("Fatal Error: Platform Environment already initialized");
+    }
+
+    /// Returns a newly created Environment from the builder configuration
+    ///
+    /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [platform_env] method.
+    pub fn build(self) -> Environment {
+
+        let mut env = self.env;
+
+        if !self.no_cfg_dir {
+            if env.config_dir.is_none() {
+                match ProjectDirs::from("io", "TrueAGI",  "metta") {
+                    Some(proj_dirs) => {
+                        env.config_dir = Some(proj_dirs.config_dir().into());
+                    },
+                    None => {
+                        eprint!("Failed to initialize config with OS config directory!");
+                    }
+                }
+            }
+        }
+
+        if let Some(config_dir) = &env.config_dir {
+
+            //Create the modules dir inside the config dir, if it doesn't already exist.
+            // This will create the cfg_dir iteslf in the process
+            let modules_dir = config_dir.join("modules");
+            std::fs::create_dir_all(&modules_dir).unwrap();
+
+            //Push the "modules" dir, as the last place to search after the other paths that were specified
+            //TODO: the config.metta file will be able to append / modify the search paths, and can choose not to
+            // include the "modules" dir in the future.
+            env.extra_include_paths.push(modules_dir);
+
+            //Create the default init.metta file if it doesn't already exist
+            let init_metta_path = config_dir.join("init.metta");
+            if !init_metta_path.exists() {
+                let mut file = fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .open(&init_metta_path)
+                    .expect(&format!("Error creating default init file at {init_metta_path:?}"));
+                file.write_all(&DEFAULT_INIT_METTA).unwrap();
+            }
+            env.init_metta_path = Some(init_metta_path);
+        }
+
+        env
+    }
+
+}

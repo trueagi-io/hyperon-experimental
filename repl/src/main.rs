@@ -11,7 +11,7 @@ use anyhow::Result;
 use clap::Parser;
 use signal_hook::{consts::SIGINT, iterator::Signals};
 
-use hyperon::metta::Environment;
+use hyperon::metta::environment::EnvBuilder;
 
 mod metta_shim;
 use metta_shim::*;
@@ -59,16 +59,11 @@ fn main() -> Result<()> {
         }
     };
 
-    //TODO_NOW, Pass the extra include paths into the environment creation, when we have
-    // the environment builder API.
-    // //Push the "modules" dir, as the last place to search after the paths specified on the cmd line
-    // //TODO: the config.metta file will be able to append / modify the search paths, and can choose not to
-    // // include the "modules" dir in the future.
-    // let mut include_paths = cli_args.include_paths;
-    // include_paths.push(modules_dir);
-
     //Init our runtime environment
-    Environment::init(Some(&metta_working_dir));
+    EnvBuilder::new()
+        .set_working_dir(Some(&metta_working_dir))
+        .add_include_paths(cli_args.include_paths)
+        .init_platform_env();
     let repl_params = ReplParams::new();
 
     //Create our MeTTa runtime environment
