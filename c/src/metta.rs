@@ -214,6 +214,160 @@ pub extern "C" fn sexpr_parser_parse(
     parser.parse(tokenizer).unwrap().into()
 }
 
+/// @brief Represents a component in a syntax tree created by parsing MeTTa code
+/// @ingroup tokenizer_and_parser_group
+/// @note `syntax_node_t` objects must be freed with `syntax_node_free()`
+///
+#[repr(C)]
+pub struct syntax_node_t {
+    /// Internal.  Should not be accessed directly
+    node: *mut RustSyntaxNode,
+}
+
+struct RustSyntaxNode(SyntaxNode);
+
+impl From<SyntaxNode> for syntax_node_t {
+    fn from(node: SyntaxNode) -> Self {
+        Self{ node: Box::into_raw(Box::new(RustSyntaxNode(node))) }
+    }
+}
+
+impl syntax_node_t {
+    fn into_inner(self) -> SyntaxNode {
+        unsafe{ (*Box::from_raw(self.node)).0 }
+    }
+    fn borrow(&self) -> &SyntaxNode {
+        &unsafe{ &*(&*self).node }.0
+    }
+}
+
+/// @brief The type of language construct respresented by a syntax_node_t
+/// @ingroup tokenizer_and_parser_group
+///
+#[repr(C)]
+pub enum syntax_node_type_t {
+    /// @brief A Comment, beginning with a ';' character
+    COMMENT,
+    /// @brief A variable.  A symbol immediately preceded by a '$' sigil
+    VARIABLE_TOKEN,
+    /// @brief A String Literal.  All text between non-escaped '"' (double quote) characters
+    STRING_TOKEN,
+    /// @brief Word Token.  Any other whitespace-delimited token that isn't a VARIABLE_TOKEN or STRING_TOKEN
+    WORD_TOKEN,
+    /// @brief Open Parenthesis.  A non-escaped '(' character indicating the beginning of an expression
+    OPEN_PAREN,
+    /// @brief Close Parenthesis.  A non-escaped ')' character indicating the end of an expression
+    CLOSE_PAREN,
+    /// @brief Whitespace. One or more whitespace chars
+    WHITESPACE,
+    /// @brief Leftover Text that remains unparsed after a parse error has occurred
+    LEFTOVER_TEXT,
+    /// @brief A Group of nodes between an `OPEN_PAREN` and a matching `CLOSE_PAREN`
+    EXPRESSION_GROUP,
+    /// @brief A Group of nodes that cannot be combined into a coherent atom due to a parse error,
+    ///     even if some of the individual nodes could represent valid atoms
+    ERROR_GROUP,
+}
+
+impl From<SyntaxNodeType> for syntax_node_type_t {
+    fn from(node_type: SyntaxNodeType) -> Self {
+        match node_type {
+            SyntaxNodeType::Comment => Self::COMMENT,
+            SyntaxNodeType::VariableToken => Self::VARIABLE_TOKEN,
+            SyntaxNodeType::StringToken => Self::STRING_TOKEN,
+            SyntaxNodeType::WordToken => Self::WORD_TOKEN,
+            SyntaxNodeType::OpenParen => Self::OPEN_PAREN,
+            SyntaxNodeType::CloseParen => Self::CLOSE_PAREN,
+            SyntaxNodeType::Whitespace => Self::WHITESPACE,
+            SyntaxNodeType::LeftoverText => Self::LEFTOVER_TEXT,
+            SyntaxNodeType::ExpressionGroup => Self::EXPRESSION_GROUP,
+            SyntaxNodeType::ErrorGroup => Self::ERROR_GROUP,
+        }
+    }
+}
+
+/// @brief Function signature for a callback providing access to a `syntax_node_t`
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  node  The `syntax_node_t` being provided.  This node should not be modified or freed by the callback.
+/// @param[in]  context  The context state pointer initially passed to the upstream function initiating the callback.
+///
+pub type c_syntax_node_callback_t = extern "C" fn(node: *const syntax_node_t, context: *mut c_void);
+
+/// @brief Parses the text associated with an `sexpr_parser_t`, and creates a syntax tree
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  parser  A pointer to the Parser, which is associated with the text to parse
+/// @return The new `syntax_node_t` representing the root of the parsed tree
+/// @note The caller must take ownership responsibility for the returned `syntax_node_t`, and ultimately free
+///   it with `syntax_node_free()`
+///
+#[no_mangle]
+pub extern "C" fn sexpr_parser_parse_to_syntax_tree(parser: *mut sexpr_parser_t) -> syntax_node_t
+{
+    let parser = unsafe{ &*parser }.borrow_inner();
+    parser.parse_to_syntax_tree().unwrap().into()
+}
+
+/// @brief Frees a syntax_node_t
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  node  The `sexpr_parser_t` handle to free
+///
+#[no_mangle]
+pub extern "C" fn syntax_node_free(node: syntax_node_t) {
+    let node = node.into_inner();
+    drop(node);
+}
+
+/// @brief Performs a depth-first iteration of all child syntax nodes within a syntax tree
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  node  A pointer to the top-level `syntax_node_t` representing the syntax tree
+/// @param[in]  callback  A function that will be called to provide a vector of all type atoms associated with the `atom` argument atom
+/// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
+///
+#[no_mangle]
+pub extern "C" fn syntax_node_iterate(node: *const syntax_node_t,
+    callback: c_syntax_node_callback_t, context: *mut c_void) {
+    let node = unsafe{ &*node }.borrow();
+    node.visit_depth_first(|node| {
+        let node = syntax_node_t{node: (node as *const SyntaxNode).cast_mut().cast()};
+        callback(&node, context);
+    });
+}
+
+/// @brief Returns the type of a `syntax_node_t`
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  node  A pointer to the `syntax_node_t`
+/// @return The `syntax_node_type_t` representing the type of the syntax node
+///
+#[no_mangle]
+pub extern "C" fn syntax_node_type(node: *const syntax_node_t) -> syntax_node_type_t {
+    let node = unsafe{ &*node }.borrow();
+    node.node_type.into()
+}
+
+/// @brief Returns `true` if a syntax node is a leaf (has no children) and `false` otherwise
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  node  A pointer to the `syntax_node_t`
+/// @return The boolean value indicating if the node is a leaf
+///
+#[no_mangle]
+pub extern "C" fn syntax_node_is_leaf(node: *const syntax_node_t) -> bool {
+    let node = unsafe{ &*node }.borrow();
+    node.node_type.is_leaf()
+}
+
+/// @brief Returns the beginning and end positions in the parsed source of the text represented by the syntax node
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  node  A pointer to the `syntax_node_t`
+/// @param[out]  range_start  A pointer to a value, into which the starting offset of the range will be written
+/// @param[out]  range_end  A pointer to a value, into which the ending offset of the range will be written
+///
+#[no_mangle]
+pub extern "C" fn syntax_node_src_range(node: *const syntax_node_t, range_start: *mut usize, range_end: *mut usize) {
+    let node = unsafe{ &*node }.borrow();
+    unsafe{ *range_start = node.src_range.start; }
+    unsafe{ *range_end = node.src_range.end; }
+}
+
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // MeTTa Language and Types
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -609,6 +763,7 @@ pub extern "C" fn environment_config_dir(buf: *mut c_char, buf_len: usize) -> us
 // one, which is probably more trouble than it's worth.  So I'll leave the stateful builder API the
 // way it is for now, but create a nicer API for Python using kwargs
 
+/// cbindgen:ignore
 static CURRENT_ENV_BUILDER: Mutex<(EnvInitState, Option<EnvBuilder>)> = std::sync::Mutex::new((EnvInitState::Uninitialized, None));
 
 #[derive(Default, PartialEq, Eq)]
