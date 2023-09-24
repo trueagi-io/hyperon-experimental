@@ -58,6 +58,9 @@ impl Environment {
     }
 }
 
+/// Used to customize the [Environment] configuration
+///
+/// NOTE: It is not necessary to use the EnvBuilder if the default environment is acceptable
 pub struct EnvBuilder {
     env: Environment,
     no_cfg_dir: bool,

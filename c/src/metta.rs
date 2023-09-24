@@ -4,12 +4,15 @@ use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::Metta;
+use hyperon::metta::environment::{Environment, EnvBuilder};
 use hyperon::rust_type_atom;
 
 use crate::util::*;
 use crate::atom::*;
 use crate::space::*;
 
+use core::borrow::Borrow;
+use std::sync::Mutex;
 use std::os::raw::*;
 use regex::Regex;
 use std::path::PathBuf;
@@ -494,12 +497,6 @@ pub extern "C" fn metta_new_with_space(space: *mut space_t, tokenizer: *mut toke
     metta.into()
 }
 
-//TODO_NOW... Implement path setters for environment like this
-// /// @param[in]  cwd  A C-style string specifying a path to a working directory, to search for modules to load
-// func( cwd: *const c_char)
-// vec![PathBuf::from(cstr_as_str(cwd))]
-
-
 /// @brief Frees a `metta_t` handle
 /// @ingroup interpreter_group
 /// @param[in]  metta  The handle to free
@@ -585,3 +582,138 @@ pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
     metta.load_module(PathBuf::from(cstr_as_str(name)))
         .expect("Returning errors from C API is not implemented yet");
 }
+
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Environment Interface
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+/// @brief Renders the config_dir path from the platform environment into a text buffer
+/// @ingroup environment_group
+/// @param[out]  buf  A buffer into which the text will be written
+/// @param[in]  buf_len  The maximum allocated size of `buf`
+/// @return The length of the path string, minus the string terminator character.  If
+/// `return_value > buf_len + 1`, then the text was not fully written and this function should be
+/// called again with a larger buffer.  This function will return 0 if there is no config_dir.
+///
+#[no_mangle]
+pub extern "C" fn environment_config_dir(buf: *mut c_char, buf_len: usize) -> usize {
+    match Environment::platform_env().config_dir() {
+        Some(path) => write_into_buf(path.display(), buf, buf_len),
+        None => 0
+    }
+}
+
+//QUESTION / TODO?: It would be nice to wrap the environment_init all in a va_args call, unfortunately cbindgen
+// doesn't work with va_args and it's not worth requiring an additional build step for this.
+// Also, C doesn't have a natural way to express key-value pairs or named args, so we'd need to invent
+// one, which is probably more trouble than it's worth.  So I'll leave the stateful builder API the
+// way it is for now, but create a nicer API for Python using kwargs
+
+static CURRENT_ENV_BUILDER: Mutex<(EnvInitState, Option<EnvBuilder>)> = std::sync::Mutex::new((EnvInitState::Uninitialized, None));
+
+#[derive(Default, PartialEq, Eq)]
+enum EnvInitState {
+    #[default]
+    Uninitialized,
+    InProcess,
+    Finished
+}
+
+fn take_current_builder(expected_state: EnvInitState) -> EnvBuilder {
+    let mut builder_state = CURRENT_ENV_BUILDER.lock().unwrap();
+    if builder_state.0 != expected_state {
+        panic!("Fatal Error: no active initialization in process.  Call environment_init_start first");
+    }
+    core::mem::take(&mut builder_state.1).unwrap()
+}
+
+fn replace_current_builder(new_state: EnvInitState, builder: Option<EnvBuilder>) {
+    let mut builder_state = CURRENT_ENV_BUILDER.lock().unwrap();
+    builder_state.0 = new_state;
+    builder_state.1 = builder;
+}
+
+/// @brief Begins the initialization of the platform environment
+/// @note environment_init_finish must be called after environment initialization is finished
+/// @ingroup environment_group
+///
+#[no_mangle]
+pub extern "C" fn environment_init_start() {
+    let mut builder_state = CURRENT_ENV_BUILDER.lock().unwrap();
+    if builder_state.0 != EnvInitState::Uninitialized {
+        panic!("Fatal Error: environment_init_start must be called only once");
+    }
+    builder_state.0 = EnvInitState::InProcess;
+    builder_state.1 = Some(EnvBuilder::new());
+}
+
+/// @brief Finishes initialization of the platform environment
+/// @ingroup environment_group
+///
+#[no_mangle]
+pub extern "C" fn environment_init_finish() {
+    let builder = take_current_builder(EnvInitState::InProcess);
+    builder.init_platform_env();
+    replace_current_builder(EnvInitState::Finished, None);
+}
+
+/// @brief Sets the working directory for the platform environment
+/// @ingroup environment_group
+/// @param[in]  path  A C-style string specifying a path to a working directory, to search for modules to load.
+///     Passing `NULL` will unset the working directory
+/// @note This working directory is not required to be the same as the process working directory, and
+///   it will not change as the process' working directory is changed
+///
+#[no_mangle]
+pub extern "C" fn environment_init_set_working_dir(path: *const c_char) {
+    let builder = take_current_builder(EnvInitState::InProcess);
+    let builder = if path.is_null() {
+        builder.set_working_dir(None)
+    } else {
+        builder.set_working_dir(Some(&PathBuf::from(cstr_as_str(path))))
+    };
+    replace_current_builder(EnvInitState::InProcess, Some(builder));
+}
+
+/// @brief Sets the config directory for the platform environment.  A directory at the specified path
+/// will be created its contents populated with default values, if one does not already exist
+/// @ingroup environment_group
+/// @param[in]  path  A C-style string specifying a path to a working directory, to search for modules to load
+///
+#[no_mangle]
+pub extern "C" fn environment_init_set_config_dir(path: *const c_char) {
+    let builder = take_current_builder(EnvInitState::InProcess);
+    let builder = if path.is_null() {
+        panic!("Fatal Error: path cannot be NULL");
+    } else {
+        builder.set_config_dir(&PathBuf::from(cstr_as_str(path)))
+    };
+    replace_current_builder(EnvInitState::InProcess, Some(builder));
+}
+
+/// @brief Configures the platform environment so that no config directory will be read nor created
+/// @ingroup environment_group
+///
+#[no_mangle]
+pub extern "C" fn environment_init_disable_config_dir() {
+    let builder = take_current_builder(EnvInitState::InProcess);
+    let builder = builder.set_no_config_dir();
+    replace_current_builder(EnvInitState::InProcess, Some(builder));
+}
+
+/// @brief Adds a config directory to search for imports.  The most recently added paths will be searched
+///     first, continuing in inverse order
+/// @ingroup environment_group
+/// @param[in]  path  A C-style string specifying a path to a working directory, to search for modules to load
+///
+#[no_mangle]
+pub extern "C" fn environment_init_add_include_path(path: *const c_char) {
+    let builder = take_current_builder(EnvInitState::InProcess);
+    let builder = if path.is_null() {
+        panic!("Fatal Error: path cannot be NULL");
+    } else {
+        builder.add_include_paths(vec![PathBuf::from(cstr_as_str(path).borrow())])
+    };
+    replace_current_builder(EnvInitState::InProcess, Some(builder));
+}
+
