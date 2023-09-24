@@ -63,6 +63,22 @@ std::string func_to_string(write_to_buf_func_t func, void* arg) {
     }
 }
 
+// Similar to func_to_string, but for functions that don't take any args
+typedef size_t (*write_to_buf_no_arg_func_t)(char*, size_t);
+std::string func_to_string_no_arg(write_to_buf_no_arg_func_t func) {
+    //First try with a 1K stack buffer, because that will work in the vast majority of cases
+    char dst_buf[1024];
+    size_t len = func(dst_buf, 1024);
+    if (len < 1024) {
+        return std::string(dst_buf);
+    } else {
+        char* data = new char[len+1];
+        func(data, len+1);
+        std::string new_string = std::string(data);
+        return new_string;
+    }
+}
+
 static void copy_atoms(const atom_vec_t* atoms, void* context) {
     py::list* list = static_cast<py::list*>(context);
     for (size_t i = 0; i < atom_vec_len(atoms); ++i) {
@@ -718,6 +734,15 @@ PYBIND11_MODULE(hyperonpy, m) {
         metta_load_module(metta.ptr(), text.c_str());
     }, "Load MeTTa module");
 
+    m.def("environment_config_dir", []() {
+        return func_to_string_no_arg((write_to_buf_no_arg_func_t)&environment_config_dir);
+    }, "Return the config_dir for the platform environment");
+    m.def("environment_init_start", []() { environment_init_start(); }, "Begin initialization of the platform environment");
+    m.def("environment_init_finish", []() { environment_init_finish(); }, "Finish initialization of the platform environment");
+    m.def("environment_init_set_working_dir", [](std::string path) { environment_init_set_working_dir(path.c_str()); }, "Sets the working dir in the platform environment");
+    m.def("environment_init_set_config_dir", [](std::string path) { environment_init_set_config_dir(path.c_str()); }, "Sets the config dir in the platform environment");
+    m.def("environment_init_disable_config_dir", []() { environment_init_disable_config_dir(); }, "Disables the config dir in the platform environment");
+    m.def("environment_init_add_include_path", [](std::string path) { environment_init_add_include_path(path.c_str()); }, "Adds an include path to the platform environment");
 }
 
 __attribute__((constructor))

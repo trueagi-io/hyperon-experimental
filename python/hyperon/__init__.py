@@ -1,6 +1,6 @@
 from .atoms import *
 from .base import *
-from .runner import MeTTa
+from .runner import *
 
 def _version(dist_name):
     try:
