@@ -33,6 +33,7 @@ using CBindings = CStruct<bindings_t>;
 using CBindingsSet = CStruct<bindings_set_t>;
 using CSpace = CStruct<space_t>;
 using CTokenizer = CStruct<tokenizer_t>;
+using CSyntaxNode = CStruct<syntax_node_t>;
 using CStepResult = CStruct<step_result_t>;
 using CMetta = CStruct<metta_t>;
 
@@ -402,6 +403,13 @@ void bindings_copy_to_list_callback(bindings_t* bindings, void* context){
     bindings_list.append(CBindings(bindings_clone(bindings)));
 }
 
+void syntax_node_copy_to_list_callback(const syntax_node_t* node, void *context) {
+    pybind11::list& nodes_list = *( (pybind11::list*)(context) );
+    if (syntax_node_is_leaf(node)) {
+        nodes_list.append(CSyntaxNode(syntax_node_clone(node)));
+    }
+};
+
 struct CConstr {
 
     py::function pyconstr;
@@ -438,6 +446,11 @@ struct CSExprParser {
     py::object parse(CTokenizer tokenizer) {
         atom_t atom = sexpr_parser_parse(&this->parser, tokenizer.ptr());
         return !atom_is_null(&atom) ? py::cast(CAtom(atom)) : py::none();
+    }
+
+    py::object parse_to_syntax_tree() {
+        syntax_node_t root_node = sexpr_parser_parse_to_syntax_tree(&this->parser);
+        return !syntax_node_is_null(&root_node) ? py::cast(CSyntaxNode(root_node)) : py::none();
     }
 };
 
@@ -661,9 +674,40 @@ PYBIND11_MODULE(hyperonpy, m) {
             tokenizer_register_token(tokenizer.ptr(), regex, &TOKEN_API, new CConstr(constr));
         }, "Register token");
 
+    py::enum_<syntax_node_type_t>(m, "SyntaxNodeType")
+        .value("COMMENT", syntax_node_type_t::COMMENT)
+        .value("VARIABLE_TOKEN", syntax_node_type_t::VARIABLE_TOKEN)
+        .value("STRING_TOKEN", syntax_node_type_t::STRING_TOKEN)
+        .value("WORD_TOKEN", syntax_node_type_t::WORD_TOKEN)
+        .value("OPEN_PAREN", syntax_node_type_t::OPEN_PAREN)
+        .value("CLOSE_PAREN", syntax_node_type_t::CLOSE_PAREN)
+        .value("WHITESPACE", syntax_node_type_t::WHITESPACE)
+        .value("LEFTOVER_TEXT", syntax_node_type_t::LEFTOVER_TEXT)
+        .value("EXPRESSION_GROUP", syntax_node_type_t::EXPRESSION_GROUP)
+        .value("ERROR_GROUP", syntax_node_type_t::ERROR_GROUP)
+        .export_values();
+
+    py::class_<CSyntaxNode>(m, "CSyntaxNode");
+    m.def("syntax_node_free", [](CSyntaxNode node) { syntax_node_free(node.obj); }, "Free a syntax node at the top level of a syntax tree");
+    m.def("syntax_node_clone", [](CSyntaxNode& node) { return CSyntaxNode(syntax_node_clone(node.ptr())); }, "Create a deep copy of the syntax node");
+    m.def("syntax_node_type", [](CSyntaxNode& node) { return syntax_node_type(node.ptr()); }, "Get type of the syntax node");
+    m.def("syntax_node_is_null", [](CSyntaxNode& node) { return syntax_node_is_null(node.ptr()); }, "Returns True if a syntax node is Null");
+    m.def("syntax_node_is_leaf", [](CSyntaxNode& node) { return syntax_node_is_leaf(node.ptr()); }, "Returns True if a syntax node is Null");
+    m.def("syntax_node_src_range", [](CSyntaxNode& node) -> py::object {
+        size_t start, end;
+        syntax_node_src_range(node.ptr(), &start, &end);
+        return py::make_tuple(start, end);
+    }, "Get range in source code offsets for the text represented by the node");
+    m.def("syntax_node_unroll", [](CSyntaxNode& node) {
+        pybind11::list nodes_list;
+        syntax_node_iterate(node.ptr(), syntax_node_copy_to_list_callback, &nodes_list);
+        return nodes_list;
+    }, "Returns a list of all leaf nodes recursively contained within a SyntaxNode");
+
     py::class_<CSExprParser>(m, "CSExprParser")
         .def(py::init<std::string>())
-        .def("parse", &CSExprParser::parse,  "Return next parser atom or None");
+        .def("parse", &CSExprParser::parse,  "Return next parser atom or None")
+        .def("parse_to_syntax_tree", &CSExprParser::parse_to_syntax_tree,  "Return next parser atom or None, as a syntax node at the root of a syntax tree");
 
     py::class_<CStepResult>(m, "CStepResult")
         .def("__str__", [](CStepResult step) {

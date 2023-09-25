@@ -1,6 +1,7 @@
 import hyperonpy as hp
 
 from .atoms import Atom, BindingsSet
+from hyperonpy import SyntaxNodeType
 
 class AbstractSpace:
     """
@@ -323,6 +324,45 @@ class Tokenizer:
        """
         hp.tokenizer_register_token(self.ctokenizer, regex, constr)
 
+class SyntaxNode:
+    """
+    A class representing a node in a parsed syntax tree
+    """
+
+    def __init__(self, cnode):
+        """
+        Initialize a new Tokenizer.
+        """
+        self.cnode = cnode
+
+    def __del__(self):
+        """
+        Destructor for the SyntaxNode
+        """
+        hp.syntax_node_free(self.cnode)
+
+    def get_type(self):
+        """
+        Returns the type of a SyntaxNode
+        """
+        return hp.syntax_node_type(self.cnode)
+
+    def src_range(self):
+        """
+        Returns the range of offsets into the source code of the text represented by the SyntaxNode
+        """
+        range_tuple = hp.syntax_node_src_range(self.cnode)
+        return range(range_tuple[0], range_tuple[1])
+
+    def unroll(self):
+        """
+        Returns a list of all leaf nodes recursively contained within a SyntaxNode
+        """
+        syntax_nodes = []
+        for cnode in hp.syntax_node_unroll(self.cnode):
+            syntax_nodes.append(SyntaxNode(cnode))
+        return syntax_nodes
+
 class SExprParser:
     """
     A class responsible for parsing S-expressions (Symbolic Expressions).
@@ -339,6 +379,13 @@ class SExprParser:
         """
         catom = self.cparser.parse(tokenizer.ctokenizer)
         return Atom._from_catom(catom) if catom is not None else None
+
+    def parse_to_syntax_tree(self):
+        """
+        Parses the S-expression into a SyntaxNode representing the top-level of a syntax tree.
+        """
+        cnode = self.cparser.parse_to_syntax_tree()
+        return SyntaxNode(cnode) if cnode is not None else None
 
 class Interpreter:
     """

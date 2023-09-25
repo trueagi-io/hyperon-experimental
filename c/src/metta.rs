@@ -232,12 +232,27 @@ impl From<SyntaxNode> for syntax_node_t {
     }
 }
 
+impl From<Option<SyntaxNode>> for syntax_node_t {
+    fn from(node: Option<SyntaxNode>) -> Self {
+        match node {
+            Some(node) => Self{ node: Box::into_raw(Box::new(RustSyntaxNode(node))) },
+            None => syntax_node_t::null()
+        }
+    }
+}
+
 impl syntax_node_t {
     fn into_inner(self) -> SyntaxNode {
         unsafe{ (*Box::from_raw(self.node)).0 }
     }
     fn borrow(&self) -> &SyntaxNode {
         &unsafe{ &*(&*self).node }.0
+    }
+    fn is_null(&self) -> bool {
+        self.node == core::ptr::null_mut()
+    }
+    fn null() -> Self {
+        Self{node: core::ptr::null_mut()}
     }
 }
 
@@ -304,7 +319,7 @@ pub type c_syntax_node_callback_t = extern "C" fn(node: *const syntax_node_t, co
 pub extern "C" fn sexpr_parser_parse_to_syntax_tree(parser: *mut sexpr_parser_t) -> syntax_node_t
 {
     let parser = unsafe{ &*parser }.borrow_inner();
-    parser.parse_to_syntax_tree().unwrap().into()
+    parser.parse_to_syntax_tree().into()
 }
 
 /// @brief Frees a syntax_node_t
@@ -315,6 +330,19 @@ pub extern "C" fn sexpr_parser_parse_to_syntax_tree(parser: *mut sexpr_parser_t)
 pub extern "C" fn syntax_node_free(node: syntax_node_t) {
     let node = node.into_inner();
     drop(node);
+}
+
+/// @brief Creates a deep copy of a `syntax_node_t`
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  node  A pointer to the `syntax_node_t`
+/// @return The `syntax_node_t` representing the cloned syntax node
+/// @note The caller must take ownership responsibility for the returned `syntax_node_t`, and ultimately free
+///   it with `syntax_node_free()`
+///
+#[no_mangle]
+pub extern "C" fn syntax_node_clone(node: *const syntax_node_t) -> syntax_node_t {
+    let node = unsafe{ &*node }.borrow();
+    node.clone().into()
 }
 
 /// @brief Performs a depth-first iteration of all child syntax nodes within a syntax tree
@@ -342,6 +370,16 @@ pub extern "C" fn syntax_node_iterate(node: *const syntax_node_t,
 pub extern "C" fn syntax_node_type(node: *const syntax_node_t) -> syntax_node_type_t {
     let node = unsafe{ &*node }.borrow();
     node.node_type.into()
+}
+
+/// @brief Returns `true` if a syntax node represents the end of the stream
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  node  A pointer to the `syntax_node_t`
+/// @return The boolean value indicating if the node is a a null node
+///
+#[no_mangle]
+pub extern "C" fn syntax_node_is_null(node: *const syntax_node_t) -> bool {
+    unsafe{ &*node }.is_null()
 }
 
 /// @brief Returns `true` if a syntax node is a leaf (has no children) and `false` otherwise
