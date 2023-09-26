@@ -4,8 +4,6 @@
 #include "util.h"
 #include "int_gnd.h"
 
-#include <stdio.h>//GOAT
-
 void setup(void) {
 }
 

@@ -300,9 +300,11 @@ impl<'a> RunnerState<'a> {
     pub fn is_complete(&self) -> bool {
         self.mode == MettaRunnerMode::TERMINATE
     }
-    pub fn intermediate_results(&self) -> &Vec<Vec<Atom>> {
+    /// Returns a reference to the current in-progress results within the RunnerState
+    pub fn current_results(&self) -> &Vec<Vec<Atom>> {
         &self.results
     }
+    /// Consumes the RunnerState and returns the final results
     pub fn into_results(self) -> Vec<Vec<Atom>> {
         self.results
     }

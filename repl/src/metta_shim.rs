@@ -129,7 +129,7 @@ impl MettaShim {
                 //Run the next step
                 self.metta.run_step(&mut parser, &mut runner_state)
                     .unwrap_or_else(|err| panic!("Unhandled MeTTa error: {}", err));
-                self.result = runner_state.intermediate_results().clone();
+                self.result = runner_state.current_results().clone();
             }
         }}
     }

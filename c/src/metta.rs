@@ -3,7 +3,7 @@ use hyperon::space::DynSpace;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
-use hyperon::metta::runner::Metta;
+use hyperon::metta::runner::{Metta, RunnerState, stdlib};
 use hyperon::metta::environment::{Environment, EnvBuilder};
 use hyperon::rust_type_atom;
 
@@ -324,7 +324,7 @@ pub extern "C" fn sexpr_parser_parse_to_syntax_tree(parser: *mut sexpr_parser_t)
 
 /// @brief Frees a syntax_node_t
 /// @ingroup tokenizer_and_parser_group
-/// @param[in]  node  The `sexpr_parser_t` handle to free
+/// @param[in]  node  The `syntax_node_t` to free
 ///
 #[no_mangle]
 pub extern "C" fn syntax_node_free(node: syntax_node_t) {
@@ -529,6 +529,10 @@ pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // MeTTa Intperpreter Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+//QUESTION: It feels like a runner_state_t and a step_result_t are getting at the same functionality,
+// but at different levels.  I think it probably makes sense to remove step_result_t from the C
+// and Python APIs to cut down on API surface area
 
 /// @brief Contains the state for an in-flight interpreter operation
 /// @ingroup interpreter_group
@@ -744,6 +748,102 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
     }
 }
 
+/// @brief Represents the state of a MeTTa runner
+/// @ingroup interpreter_group
+/// @note `runner_state_t` handles must be freed with `runner_state_free()`
+///
+#[repr(C)]
+pub struct runner_state_t {
+    /// Internal.  Should not be accessed directly
+    state: *mut RustRunnerState,
+}
+
+struct RustRunnerState(RunnerState<'static>);
+
+impl From<RunnerState<'static>> for runner_state_t {
+    fn from(state: RunnerState<'static>) -> Self {
+        Self{ state: Box::into_raw(Box::new(RustRunnerState(state))) }
+    }
+}
+
+impl runner_state_t {
+    fn into_inner(self) -> RunnerState<'static> {
+        unsafe{ Box::from_raw(self.state).0 }
+    }
+    fn borrow(&self) -> &RunnerState<'static> {
+        &unsafe{ &*(&*self).state }.0
+    }
+    fn borrow_mut(&mut self) -> &mut RunnerState<'static> {
+        &mut unsafe{ &mut *(&*self).state }.0
+    }
+}
+
+/// @brief Creates a runner_state_t, to use for step-wise execution
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the Interpreter handle
+/// @return The newly created `runner_state_t`, which can begin evaluating MeTTa code
+/// @note The returned `runner_state_t` handle must be freed with `runner_state_free()`
+///
+#[no_mangle]
+pub extern "C" fn metta_start_run(metta: *mut metta_t) -> runner_state_t {
+    let metta = unsafe{ &*metta }.borrow();
+    let state = metta.start_run();
+    state.into()
+}
+
+/// @brief Frees a runner_state_t
+/// @ingroup interpreter_group
+/// @param[in]  node  The `runner_state_t` to free
+///
+#[no_mangle]
+pub extern "C" fn runner_state_free(state: runner_state_t) {
+    let state = state.into_inner();
+    drop(state);
+}
+
+/// @brief Runs one step of the interpreter
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the Interpreter handle
+/// @param[in]  parser  A pointer to the S-Expression Parser handle, containing the expression text
+/// @param[in]  state  A pointer to the in-flight runner state
+///
+#[no_mangle]
+pub extern "C" fn metta_run_step(metta: *mut metta_t, parser: *mut sexpr_parser_t, state: *mut runner_state_t) {
+    let metta = unsafe{ &*metta }.borrow();
+    let parser = unsafe{ &*parser }.borrow_inner();
+    let state = unsafe{ &mut *state }.borrow_mut();
+    metta.run_step(parser, state).unwrap_or_else(|err| panic!("Unhandled MeTTa error: {}", err));
+}
+
+/// @brief Returns whether or not the runner_state_t has completed all outstanding work
+/// @ingroup interpreter_group
+/// @param[in]  state  The `runner_state_t` to inspect
+/// @return `true` if the runner has already concluded, or `false` if there is more work to do
+///
+#[no_mangle]
+pub extern "C" fn runner_state_is_complete(state: *const runner_state_t) -> bool {
+    let state = unsafe{ &*state }.borrow();
+    state.is_complete()
+}
+
+/// @brief Accesses the current in-flight results in the runner_state_t
+/// @ingroup interpreter_group
+/// @param[in]  state  The `runner_state_t` within which to preview results
+/// @param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
+/// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
+/// @warning The provided results will be overwritten by the next call to `metta_run_step`, so the caller
+///     must clone the result atoms if they are needed for an extended period of time
+///
+#[no_mangle]
+pub extern "C" fn runner_state_current_results(state: *const runner_state_t,
+        callback: c_atom_vec_callback_t, context: *mut c_void) {
+    let state = unsafe{ &*state }.borrow();
+    let results = state.current_results();
+    for result in results {
+        return_atoms(result, callback, context);
+    }
+}
+
 /// @brief Runs the MeTTa Interpreter to evaluate an input Atom
 /// @ingroup interpreter_group
 /// @param[in]  metta  A pointer to the Interpreter handle
@@ -773,6 +873,12 @@ pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
     // TODO: return erorrs properly
     metta.load_module(PathBuf::from(cstr_as_str(name)))
         .expect("Returning errors from C API is not implemented yet");
+
+    // TODO: This is a hack, We need a way to register grounded tokens with a module
+    let name_cstr = unsafe{ std::ffi::CStr::from_ptr(name) };
+    if name_cstr.to_str().unwrap() == "stdlib" {
+        stdlib::register_rust_tokens(&metta);
+    }
 }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
