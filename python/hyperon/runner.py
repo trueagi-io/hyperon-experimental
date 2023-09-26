@@ -4,6 +4,29 @@ import hyperonpy as hp
 from .atoms import Atom, AtomType, OperationAtom
 from .base import GroundingSpaceRef, Tokenizer, SExprParser
 
+class RunnerState:
+    def __init__(self, cstate):
+        """Initialize a RunnerState"""
+        self.cstate = cstate
+
+    def __del__(self):
+        """Frees a RunnerState and all associated resources."""
+        hp.runner_state_free(self.cstate)
+
+    def run_step(self):
+        hp.metta_run_step(self.runner.cmetta, self.parser.cparser, self.cstate)
+
+    def is_complete(self):
+        return hp.runner_state_is_complete(self.cstate)
+
+    def current_results(self, flat=False):
+        """Returns the current in-progress results from an in-flight program evaluation"""
+        results = hp.runner_state_current_results(self.cstate)
+        if flat:
+            return [Atom._from_catom(catom) for result in results for catom in result]
+        else:
+            return [[Atom._from_catom(catom) for catom in result] for result in results]
+
 class MeTTa:
     """This class contains the MeTTa program execution utilities"""
 
@@ -91,6 +114,14 @@ class MeTTa:
             return [Atom._from_catom(catom) for result in results for catom in result]
         else:
             return [[Atom._from_catom(catom) for catom in result] for result in results]
+
+    def start_run(self, program):
+        """Initializes a RunnerState to begin evaluation of MeTTa code"""
+        parser = SExprParser(program)
+        state = RunnerState(hp.metta_start_run(self.cmetta))
+        state.parser = parser
+        state.runner = self
+        return state
 
 class Environment:
     """This class contains the API for shared platform configuration"""

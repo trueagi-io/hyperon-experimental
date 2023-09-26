@@ -34,6 +34,21 @@ class MettaTest(unittest.TestCase):
 
         self.assertEqual([[S('T')]], result)
 
+    def test_incremental_runner(self):
+        program = '''
+            !(+ 1 (+ 2 (+ 3 4)))
+        '''
+        runner = MeTTa()
+        runner_state = runner.start_run(program)
+
+        step_count = 0
+        while not runner_state.is_complete():
+            runner_state.run_step()
+            step_count += 1
+
+        results = runner_state.current_results()
+        self.assertEqual(repr(results), "[[10]]")
+
     def test_gnd_type_error(self):
         program = '''
           !(+ 2 "String")

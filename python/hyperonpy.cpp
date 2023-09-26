@@ -35,6 +35,7 @@ using CSpace = CStruct<space_t>;
 using CTokenizer = CStruct<tokenizer_t>;
 using CSyntaxNode = CStruct<syntax_node_t>;
 using CStepResult = CStruct<step_result_t>;
+using CRunnerState = CStruct<runner_state_t>;
 using CMetta = CStruct<metta_t>;
 
 //TODO: This entire CStruct template, and especially these functions should go away when hyperonpy is
@@ -443,6 +444,8 @@ struct CSExprParser {
         sexpr_parser_free(parser);
     }
 
+    sexpr_parser_t* ptr () { return &(this->parser); }
+
     py::object parse(CTokenizer tokenizer) {
         atom_t atom = sexpr_parser_parse(&this->parser, tokenizer.ptr());
         return !atom_is_null(&atom) ? py::cast(CAtom(atom)) : py::none();
@@ -773,10 +776,20 @@ PYBIND11_MODULE(hyperonpy, m) {
             metta_evaluate_atom(metta.ptr(), atom_clone(atom.ptr()), copy_atoms, &atoms);
             return atoms;
         }, "Run MeTTa interpreter on an atom");
-
+    m.def("metta_start_run", [](CMetta& metta) { return CRunnerState(metta_start_run(metta.ptr())); }, "Initializes the MeTTa interpreter for incremental execution");
+    m.def("metta_run_step", [](CMetta& metta, CSExprParser& parser, CRunnerState& state) { metta_run_step(metta.ptr(), parser.ptr(), state.ptr()); }, "Runs one incremental step of the MeTTa interpreter");
     m.def("metta_load_module", [](CMetta metta, std::string text) {
         metta_load_module(metta.ptr(), text.c_str());
     }, "Load MeTTa module");
+
+    py::class_<CRunnerState>(m, "CRunnerState");
+    m.def("runner_state_free", [](CRunnerState state) { runner_state_free(state.obj); }, "Frees a Runner State");
+    m.def("runner_state_is_complete", [](CRunnerState& state) { return runner_state_is_complete(state.ptr()); }, "Returns whether a RunnerState is finished");
+    m.def("runner_state_current_results", [](CRunnerState& state) {
+        py::list lists_of_atom;
+        runner_state_current_results(state.ptr(), copy_lists_of_atom, &lists_of_atom);
+        return lists_of_atom;
+    }, "Returns the in-flight results from a runner state");
 
     m.def("environment_config_dir", []() {
         return func_to_string_no_arg((write_to_buf_no_arg_func_t)&environment_config_dir);
