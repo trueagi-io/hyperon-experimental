@@ -316,7 +316,6 @@ impl<'a> RunnerState<'a> {
 pub fn new_metta_rust() -> Metta {
     let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()),
         Shared::new(Tokenizer::new()));
-    register_rust_tokens(&metta);
     metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
     metta
 }

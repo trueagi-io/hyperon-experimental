@@ -451,6 +451,11 @@ struct CSExprParser {
         return !atom_is_null(&atom) ? py::cast(CAtom(atom)) : py::none();
     }
 
+    py::object err_str() {
+        const char* err_str = sexpr_parser_err_str(&this->parser);
+        return err_str != NULL ? py::cast(std::string(err_str)) : py::none();
+    }
+
     py::object parse_to_syntax_tree() {
         syntax_node_t root_node = sexpr_parser_parse_to_syntax_tree(&this->parser);
         return !syntax_node_is_null(&root_node) ? py::cast(CSyntaxNode(root_node)) : py::none();
@@ -710,6 +715,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<CSExprParser>(m, "CSExprParser")
         .def(py::init<std::string>())
         .def("parse", &CSExprParser::parse,  "Return next parser atom or None")
+        .def("sexpr_parser_err_str", &CSExprParser::err_str,  "Return the parse error from the previous parse operation or None")
         .def("parse_to_syntax_tree", &CSExprParser::parse_to_syntax_tree,  "Return next parser atom or None, as a syntax node at the root of a syntax tree");
 
     py::class_<CStepResult>(m, "CStepResult")
