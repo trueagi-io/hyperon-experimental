@@ -29,7 +29,7 @@ def register_results(method, args, kwargs):
             return metta_register
         return inner
 
-def register_atoms(*args, pass_metta=False, **kwargs):
+def register_atoms(*args, **kwargs):
     """Function decorator which registers returned pairs of regular expressions
     and atoms in MeTTa tokenizer using MeTTa.register_atom() method.
 

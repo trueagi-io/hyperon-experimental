@@ -1,5 +1,6 @@
 
 use std::borrow::Cow::{self, Borrowed, Owned};
+use std::sync::{Arc, Mutex};
 use std::cell::RefCell;
 
 use rustyline::completion::FilenameCompleter;
@@ -11,6 +12,7 @@ use rustyline::{Completer, Helper, Hinter};
 
 use hyperon::metta::text::{SExprParser, SyntaxNodeType};
 
+use crate::config_params::*;
 use crate::metta_shim::MettaShim;
 
 #[derive(Helper, Completer, Hinter)]
@@ -22,7 +24,8 @@ pub struct ReplHelper {
     hinter: HistoryHinter,
     pub colored_prompt: String,
     cursor_bracket: std::cell::Cell<Option<(u8, usize)>>, // If the cursor is over or near a bracket to match
-    checked_line: std::cell::RefCell<String>,
+    pub force_submit: Arc<Mutex<bool>>, // We use this to communicate between the key event handler and the Validator
+    checked_line: RefCell<String>,
     style: StyleSettings,
 }
 
@@ -35,7 +38,7 @@ struct StyleSettings {
     string_style: String,
     error_style: String,
     bracket_match_style: String,
-    // bracket_match_enabled: bool, //TODO
+    bracket_match_enabled: bool,
 }
 
 impl Highlighter for ReplHelper {
@@ -117,9 +120,11 @@ impl Highlighter for ReplHelper {
                             }
 
                             //See if we need to render this node with the "bracket blink"
-                            if let Some((_matching_char, blink_idx)) = &blink_char {
-                                if node.src_range.contains(blink_idx) {
-                                    style_sequence.push(&self.style.bracket_match_style);
+                            if self.style.bracket_match_enabled {
+                                if let Some((_matching_char, blink_idx)) = &blink_char {
+                                    if node.src_range.contains(blink_idx) {
+                                        style_sequence.push(&self.style.bracket_match_style);
+                                    }
                                 }
                             }
 
@@ -167,9 +172,13 @@ impl Validator for ReplHelper {
     fn validate(&self, ctx: &mut ValidationContext) -> Result<ValidationResult, ReadlineError> {
 
         //This validator implements the following behavior:
-        // * if user hits enter and line is valid, it will be submitted.
-        // * if user hits enter and line is invalid, it will treat it as a newline
-        // * If user hits enter twice in a row, it will report a syntax error
+        // * if user hits enter and the line is valid, and the cursor is at the end of the line, it will be submitted.
+        // * if user hits ctrl-J (force submit) and the line is valid, it will be submitted regardless of cursor position
+        // * if user hits enter and the line is invalid, a newline will be inserted at the cursor position, unless
+        //     a linefeed has just been added to the end of the line, in which case a syntax error is reported
+        // * if user hits ctrl-J (force submit) and line is invalid, it will be a syntax error, regardless of cursor position
+        let force_submit = *self.force_submit.lock().unwrap();
+        *self.force_submit.lock().unwrap() = false;
         let mut validation_result = ValidationResult::Incomplete;
         self.metta.borrow_mut().inside_env(|metta| {
             let mut parser = SExprParser::new(ctx.input());
@@ -188,7 +197,8 @@ impl Validator for ReplHelper {
                         if input.len() < 1 {
                             break;
                         }
-                        if *self.checked_line.borrow() != &input[0..input.len()-1] || input.as_bytes()[input.len()-1] != b'\n' {
+                        if !force_submit &&
+                            (*self.checked_line.borrow() != &input[0..input.len()-1] || input.as_bytes()[input.len()-1] != b'\n') {
                             *self.checked_line.borrow_mut() = ctx.input().to_string();
                         } else {
                             validation_result = ValidationResult::Invalid(Some(
@@ -216,22 +226,25 @@ impl ReplHelper {
             hinter: HistoryHinter {},
             colored_prompt: "".to_owned(),
             cursor_bracket: std::cell::Cell::new(None),
-            checked_line: std::cell::RefCell::new(String::new()),
+            force_submit: Arc::new(Mutex::new(false)),
+            checked_line: RefCell::new(String::new()),
             style,
         }
     }
 }
 
 impl StyleSettings {
+    const ERR_STR: &str = "Fatal Error: Invalid REPL config";
     pub fn new(metta_shim: &mut MettaShim) -> Self {
         Self {
-            bracket_styles: metta_shim.get_config_expr_vec("ReplBracketStyles").unwrap_or(vec!["94".to_string(), "93".to_string(), "95".to_string(), "96".to_string()]),
-            comment_style: metta_shim.get_config_string("ReplCommentStyle").unwrap_or("32".to_string()),
-            variable_style: metta_shim.get_config_string("ReplVariableStyle").unwrap_or("33".to_string()),
-            symbol_style: metta_shim.get_config_string("ReplSymbolStyle").unwrap_or("34".to_string()),
-            string_style: metta_shim.get_config_string("ReplStringStyle").unwrap_or("31".to_string()),
-            error_style: metta_shim.get_config_string("ReplErrorStyle").unwrap_or("91".to_string()),
-            bracket_match_style: metta_shim.get_config_string("ReplBracketMatchStyle").unwrap_or("1;7".to_string()),
+            bracket_styles: metta_shim.get_config_expr_vec(CFG_BRACKET_STYLES).expect(Self::ERR_STR),
+            comment_style: metta_shim.get_config_string(CFG_COMMENT_STYLE).expect(Self::ERR_STR),
+            variable_style: metta_shim.get_config_string(CFG_VARIABLE_STYLE).expect(Self::ERR_STR),
+            symbol_style: metta_shim.get_config_string(CFG_SYMBOL_STYLE).expect(Self::ERR_STR),
+            string_style: metta_shim.get_config_string(CFG_STRING_STYLE).expect(Self::ERR_STR),
+            error_style: metta_shim.get_config_string(CFG_ERROR_STYLE).expect(Self::ERR_STR),
+            bracket_match_style: metta_shim.get_config_string(CFG_BRACKET_MATCH_STYLE).expect(Self::ERR_STR),
+            bracket_match_enabled: metta_shim.get_config_atom(CFG_BRACKET_MATCH_ENABLED).map(|_bool_atom| true).unwrap_or(true), //TODO, make this work when we can bridge value atoms
         }
     }
 }

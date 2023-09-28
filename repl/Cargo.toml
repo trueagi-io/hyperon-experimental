@@ -15,7 +15,7 @@ clap = { version = "4.4.0", features = ["derive"] }
 directories = "5.0.1"
 signal-hook = "0.3.17"
 pyo3 = { version = "0.19.2", features = ["auto-initialize"], optional = true }
-semver = { version = "1.0.18", optional = true }
+pep440_rs = { version = "0.3.11", optional = true }
 
 [[bin]]
 name = "metta"
@@ -23,5 +23,5 @@ path = "src/main.rs"
 
 [features]
 # default = ["python", "minimal"]
-python = ["pyo3", "semver"]
+python = ["pyo3", "pep440_rs"]
 minimal = ["hyperon/minimal"]

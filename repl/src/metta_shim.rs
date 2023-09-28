@@ -3,11 +3,9 @@ use std::path::PathBuf;
 
 use hyperon::ExpressionAtom;
 use hyperon::Atom;
-use hyperon::atom::VariableAtom;
 use hyperon::space::*;
 use hyperon::space::grounding::GroundingSpace;
-use hyperon::metta::*;
-use hyperon::metta::runner::Metta;
+use hyperon::metta::runner::{Metta, atom_is_error};
 #[cfg(not(feature = "minimal"))]
 use hyperon::metta::runner::stdlib::register_rust_tokens;
 #[cfg(feature = "minimal")]
@@ -74,12 +72,17 @@ impl MettaShim {
 
         //Init HyperonPy if the repl includes Python support
         #[cfg(feature = "python")]
-        {
+        if let Err(err) = || -> Result<(), String> {
             //Confirm the hyperonpy version is compatible
-            py_mod_loading::confirm_hyperonpy_version(">=0.1.0, <0.2.0").unwrap();
+            py_mod_loading::confirm_hyperonpy_version(">=0.1.0, <0.2.0")?;
 
             //Load the hyperonpy Python stdlib
-            py_mod_loading::load_python_module(&new_shim.metta, "hyperon.stdlib").unwrap();
+            py_mod_loading::load_python_module(&new_shim.metta, "hyperon.stdlib")?;
+
+            Ok(())
+        }() {
+            eprintln!("Fatal Error: {err}");
+            std::process::exit(-1);
         }
 
         //Load the Rust stdlib
@@ -97,10 +100,9 @@ impl MettaShim {
         #[cfg(not(feature = "python"))]
         new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(py_mod_err::ImportPyErr) });
 
-        //Run the config.metta file
+        //Run the init.metta file
         let repl_params = repl_params.borrow();
-        let config_metta_path = repl_params.config_metta_path();
-        new_shim.load_metta_module(config_metta_path.clone());
+        new_shim.load_metta_module(repl_params.init_metta_path.clone());
 
         new_shim
     }
@@ -146,13 +148,15 @@ impl MettaShim {
     }
 
     pub fn get_config_atom(&mut self, config_name: &str) -> Option<Atom> {
+        self.exec(&format!("!(get-state {config_name})"));
+
+        #[allow(unused_assignments)]
         let mut result = None;
         metta_shim_env!{{
-            let val = VariableAtom::new("val");
-            let bindings_set = self.metta.space().query(&Atom::expr(vec![EQUAL_SYMBOL, Atom::sym(config_name.to_string()), Atom::Variable(val.clone())]));
-            if let Some(bindings) = bindings_set.into_iter().next() {
-                result = bindings.resolve(&val);
-            }
+            result = self.result.get(0)
+                .and_then(|vec| vec.get(0))
+                .and_then(|atom| (!atom_is_error(atom)).then_some(atom))
+                .cloned()
         }}
         result
     }
@@ -163,6 +167,7 @@ impl MettaShim {
         #[allow(unused_assignments)]
         let mut result = None;
         metta_shim_env!{{
+            //TODO: We need to do atom type checking here
             result = Some(Self::strip_quotes(atom.to_string()));
         }}
         result
@@ -193,13 +198,19 @@ impl MettaShim {
             if let Ok(expr) = ExpressionAtom::try_from(atom) {
                 result = Some(expr.into_children()
                     .into_iter()
-                    .map(|atom| Self::strip_quotes(atom.to_string()))
+                    .map(|atom| {
+                        //TODO: We need to do atom type checking here
+                        Self::strip_quotes(atom.to_string())
+                    })
                     .collect())
             }
         }}
         result
     }
 
+    pub fn get_config_int(&mut self, _config_name: &str) -> Option<isize> {
+        None //TODO.  Make this work when I have reliable value atom bridging
+    }
 }
 
 #[cfg(not(feature = "python"))]
@@ -237,8 +248,9 @@ mod py_mod_err {
 #[cfg(feature = "python")]
 mod py_mod_loading {
     use std::fmt::Display;
+    use std::str::FromStr;
     use std::path::PathBuf;
-    use semver::{Version, VersionReq};
+    use pep440_rs::{parse_version_specifiers, Version};
     use pyo3::prelude::*;
     use pyo3::types::{PyTuple, PyDict};
     use hyperon::*;
@@ -263,13 +275,16 @@ mod py_mod_loading {
 
     pub fn confirm_hyperonpy_version(req_str: &str) -> Result<(), String> {
 
-        let req = VersionReq::parse(req_str).unwrap();
+        let req = parse_version_specifiers(req_str).unwrap();
         let version_string = get_hyperonpy_version()?;
-        let version = Version::parse(&version_string).map_err(|e| format!("Error parsing HyperonPy version: '{version_string}', {e}"))?;
-        if req.matches(&version) {
+        //NOTE: Version parsing errors will be encountered by users building hyperonpy from source with an abnormal configuration
+        // Therefore references to the "hyperon source directory" are ok.  Users who get hyperonpy from PyPi won't hit this issue
+        let version = Version::from_str(&version_string)
+            .map_err(|_e| format!("Invalid HyperonPy version found: '{version_string}'.\nPlease update the package by running `python -m pip install -e ./python[dev]` from your hyperon source directory."))?;
+        if req.iter().all(|specifier| specifier.contains(&version)) {
             Ok(())
         } else {
-            Err(format!("MeTTa repl requires HyperonPy version matching '{req}'.  Found version: '{version}'"))
+            Err(format!("MeTTa repl requires HyperonPy version matching '{req_str}'.  Found version: '{version}'"))
         }
     }
 
