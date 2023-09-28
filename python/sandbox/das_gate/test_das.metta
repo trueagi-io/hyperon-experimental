@@ -6,4 +6,5 @@
 !(add-atom &das Test)
 
 !(match &das ($v1 (Test 2)) (This $v1 works))
+!(match &das (Test $v2) (This $v2 works))
 ; !(match &das ($v1 ($v2 2)) (This $v1 works))

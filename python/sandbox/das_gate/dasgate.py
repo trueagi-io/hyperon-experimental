@@ -46,6 +46,12 @@ class DASpace(AbstractSpace):
             else:
                 return Node("Symbol", repr(atom))
 
+    def _handle2atom(self, h):
+        try:
+            return S(self.das.get_node_name(h))
+        except Exception as e:
+            return E(*[self._handle2atom(ch) for ch in self.das.get_link_targets(h)])
+
     def query(self, query_atom):
         query = self._atom2query(query_atom)
         answer = PatternMatchingAnswer()
@@ -56,7 +62,7 @@ class DASpace(AbstractSpace):
             bindings = Bindings()
             for var, val in a.mapping.items():
                 # remove '$', because it is automatically added
-                bindings.add_var_binding(V(var[1:]), S(self.das.get_node_name(val)))
+                bindings.add_var_binding(V(var[1:]), self._handle2atom(val))
             new_bindings_set.push(bindings)
         return new_bindings_set
 
