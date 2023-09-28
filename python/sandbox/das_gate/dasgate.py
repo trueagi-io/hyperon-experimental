@@ -38,8 +38,11 @@ class DASpace(AbstractSpace):
 
     def _atom2query(self, atom):
         if isinstance(atom, ExpressionAtom):
+            targets = atom.get_children()
+            if isinstance(targets[0], SymbolAtom) and targets[0].get_name() == ',':
+                return And([self._atom2query(ch) for ch in targets[1:]])
             return Link("Expression", ordered=True,
-                targets=[self._atom2query(ch) for ch in atom.get_children()])
+                targets=[self._atom2query(ch) for ch in targets])
         else:
             if isinstance(atom, VariableAtom):
                 return Variable(repr(atom))
