@@ -20,6 +20,7 @@ use std::collections::HashMap;
 
 use crate::metta::metta_atom;
 
+//TODO: logger init params should be moved into the Environment
 pub fn init_logger(is_test: bool) {
    let _ = env_logger::builder().is_test(is_test).try_init();
 }

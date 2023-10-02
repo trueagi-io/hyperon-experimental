@@ -6,6 +6,8 @@ use std::borrow::Borrow;
 
 use directories::ProjectDirs;
 
+use crate::common;
+
 /// Contains state and platform interfaces shared by all MeTTa runners.  This includes config settings
 /// and logger
 ///
@@ -127,6 +129,7 @@ impl EnvBuilder {
     /// NOTE: This method will panic if the platform Environment has already been initialized
     pub fn init_platform_env(self) {
         PLATFORM_ENV.set(self.build()).expect("Fatal Error: Platform Environment already initialized");
+        common::init_logger(false);
     }
 
     /// Returns a newly created Environment from the builder configuration
