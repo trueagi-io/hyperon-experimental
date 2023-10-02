@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::io::Write;
 use std::fs;
 
-use hyperon::metta::environment::Environment;
+use crate::MettaShim;
 
 const DEFAULT_REPL_METTA: &[u8] = include_bytes!("repl.default.metta");
 
@@ -29,9 +29,9 @@ pub struct ReplParams {
 }
 
 impl ReplParams {
-    pub fn new() -> Self {
+    pub fn new(shim: &MettaShim) -> Self {
 
-        if let Some(config_dir) = Environment::platform_env().config_dir() {
+        if let Some(config_dir) = shim.config_dir() {
 
             //Create the default repl.meta file, if it doesn't already exist
             let repl_config_metta_path = config_dir.join("repl.metta");

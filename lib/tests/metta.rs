@@ -1,5 +1,5 @@
 use hyperon::metta::text::*;
-use hyperon::metta::runner::new_metta_rust;
+use hyperon::metta::runner::Metta;
 
 #[test]
 fn test_reduce_higher_order() {
@@ -13,7 +13,7 @@ fn test_reduce_higher_order() {
 
         !(assertEqualToResult ((inc) 2) (3))
     ";
-    let metta = new_metta_rust();
+    let metta = Metta::new_rust();
 
     let result = metta.run(&mut SExprParser::new(program));
 

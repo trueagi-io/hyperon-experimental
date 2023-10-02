@@ -1189,11 +1189,11 @@ pub static METTA_CODE: &'static str = "
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::runner::new_metta_rust;
+    use crate::metta::runner::Metta;
     use crate::metta::types::validate_atom;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = new_metta_rust();
+        let metta = Metta::new_rust();
         metta.run(&mut SExprParser::new(program))
     }
 
@@ -1406,7 +1406,7 @@ mod tests {
 
     #[test]
     fn superpose_op_multiple_interpretations() {
-        let metta = new_metta_rust();
+        let metta = Metta::new_rust();
         let mut parser = SExprParser::new("
             (= (f) A)
             (= (f) B)
@@ -1422,7 +1422,7 @@ mod tests {
 
     #[test]
     fn superpose_op_superposed_with_collapse() {
-        let metta = new_metta_rust();
+        let metta = Metta::new_rust();
         let mut parser = SExprParser::new("
             (= (f) A)
             (= (f) B)
@@ -1436,7 +1436,7 @@ mod tests {
 
     #[test]
     fn superpose_op_consumes_interpreter_errors() {
-        let metta = new_metta_rust();
+        let metta = Metta::new_rust();
         let mut parser = SExprParser::new("
             (: f (-> A B))
             (= (f $x) $x)

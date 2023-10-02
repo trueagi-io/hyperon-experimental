@@ -6,7 +6,6 @@ description = "A shell to execute MeTTa"
 
 [dependencies]
 anyhow = { version = "1.0.75", features = ["std"] }
-hyperon = { path = "../lib/" }
 # rustyline = { version = "12.0.0", features = ["derive"] }
 # rustyline = {git = "https://github.com/luketpeterson/rustyline", version = "12.0.0", features = ["derive"] }
 # TODO: Yay, our fix landed in main.  Still needs to publish however.  One step closer
@@ -15,12 +14,14 @@ clap = { version = "4.4.0", features = ["derive"] }
 signal-hook = "0.3.17"
 pyo3 = { version = "0.19.2", features = ["auto-initialize"], optional = true }
 pep440_rs = { version = "0.3.11", optional = true }
+hyperon = { path = "../lib/", optional = true } #TODO: We can only link Hyperon directly or through Python, but not both at the same time.  The right fix is to allow HyperonPy to be built within Hyperon, See https://github.com/trueagi-io/hyperon-experimental/issues/283
 
 [[bin]]
 name = "metta"
 path = "src/main.rs"
 
 [features]
-# default = ["python", "minimal"]
+default = ["python"]
+no_python = ["hyperon"]
 python = ["pyo3", "pep440_rs"]
-minimal = ["hyperon/minimal"]
+minimal = ["hyperon/minimal", "no_python"]

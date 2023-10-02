@@ -1,13 +1,19 @@
 ; NOTE: this behavior can change in the future
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Even at the very beginning of the main script `(get-atoms &self)`
-; returns one atom, which wraps the space of stdlib.
+; At the very beginning of the main script, the space
+; contains an atom wrapping the space of stdlib.
 ; The type of this atom is the same as of `&self`
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; QUESTION: Are space implementations really required to preserve ordering of atoms?
+; QUESTION / TODO: Is there a better way to find this sub-space than `get-atoms`?
+;    Now that we load the init.metta file as a module, the previous comment about the
+;    &self space containing only one atom at the beginning is no longer true
 !(assertEqual
-  ((let $x (get-atoms &self) (get-type $x)))
-  ((get-type &self)))
+  (let* (($x (collapse (get-atoms &self)))
+         ($y (car-atom $x)))
+        (get-type $y))
+  (get-type &self))
 
 ; stdlib is already loaded
 !(assertEqual
@@ -20,7 +26,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(import! &m f1_moduleA.metta)
 
-; It's first atom is a space
+; Its first atom is a space
 !(assertEqual
   (let* (($x (collapse (get-atoms &m)))
          ($y (car-atom $x)))
@@ -53,15 +59,17 @@
 !(assertEqual (g 2) 102)
 !(assertEqual (f 2) 103)
 
-; `&self` contains 3 atoms-spaces now:
+; `&self` contains 4 atoms-spaces now:
 ; - stdlib
+; - init.metta
 ; - moduleC imported by moduleA and removed from A after its import to &self
 ; - moduleA itself, which is the same as &m
 !(assertEqual &m
   (let* (($a (collapse (get-atoms &self)))
           ($x (cdr-atom $a))
-          ($y (cdr-atom $x)))
-         (car-atom $y)))
+          ($y (cdr-atom $x))
+          ($z (cdr-atom $y)))
+         (car-atom $z)))
 
 ; NOTE: now the first atom, which was a space, is removed from `&m`,
 ; because we load modules only once, and we collect atoms-spaces to

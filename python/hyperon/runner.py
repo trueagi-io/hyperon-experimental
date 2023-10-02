@@ -1,5 +1,7 @@
 import os
 from importlib import import_module
+import importlib.util
+import sys
 import hyperonpy as hp
 from .atoms import Atom, AtomType, OperationAtom
 from .base import GroundingSpaceRef, Tokenizer, SExprParser
@@ -42,8 +44,9 @@ class MeTTa:
             hp.metta_load_module(self.cmetta, "stdlib")
             self.register_atom('extend-py!',
                 OperationAtom('extend-py!',
-                              lambda name: self.load_py_module(name) or [],
+                              lambda name: self.load_py_module_from_mod_or_file(name) or [],
                               [AtomType.UNDEFINED, AtomType.ATOM], unwrap=False))
+            hp.metta_init_with_platform_env(self.cmetta)
 
     def __del__(self):
         hp.metta_free(self.cmetta)
@@ -84,11 +87,53 @@ class MeTTa:
         """Loads the given python module"""
         if not isinstance(name, str):
             name = repr(name)
-        mod = import_module(name)
-        for n in dir(mod):
-            obj = getattr(mod, n)
-            if '__name__' in dir(obj) and obj.__name__ == 'metta_register':
-                obj(self)
+        try:
+            mod = import_module(name)
+            for n in dir(mod):
+                obj = getattr(mod, n)
+                if '__name__' in dir(obj) and obj.__name__ == 'metta_register':
+                    obj(self)
+            return mod
+        except:
+            return None
+
+    def load_py_module_from_mod_or_file(self, mod_name):
+        """Loads the given python-implemented MeTTa module, first using python's module-namespace logic,
+        then by searching for files in the MeTTa environment's search path"""
+
+        # First, see if the module is already available to Python
+        if not isinstance(mod_name, str):
+            mod_name = repr(mod_name)
+        mod = MeTTa.load_py_module(self, mod_name)
+        if (mod is None):
+            # If that failed, try and load the module from a file
+            file_name = mod_name + ".py"
+
+            # Check each search path directory in order, until we find the module we're looking for
+            num_search_paths = hp.environment_search_path_cnt()
+            search_path_idx = 0
+            found_path = None
+            while (search_path_idx < num_search_paths):
+                search_path = hp.environment_nth_search_path(search_path_idx)
+                test_path = os.path.join(search_path, file_name)
+                if (os.path.exists(test_path)):
+                    found_path = test_path
+                    break
+                search_path_idx += 1
+
+            if (found_path is not None):
+                MeTTa.load_py_module_from_path(self, mod_name, found_path)
+            else:
+                raise RuntimeError("Failed to load module " + mod_name + "; could not locate file: " + file_name)
+
+    def load_py_module_from_path(self, mod_name, path):
+        """Loads the given python-implemented MeTTa module from a file at the specified path"""
+
+        spec = importlib.util.spec_from_file_location(mod_name, path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[mod_name] = module
+        spec.loader.exec_module(module)
+        MeTTa.load_py_module(self, mod_name)
 
     def import_file(self, fname):
         """Loads the program file and runs it"""

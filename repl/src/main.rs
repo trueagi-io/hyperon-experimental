@@ -11,8 +11,6 @@ use anyhow::Result;
 use clap::Parser;
 use signal_hook::{consts::SIGINT, iterator::Signals};
 
-use hyperon::metta::environment::EnvBuilder;
-
 mod metta_shim;
 use metta_shim::*;
 
@@ -59,15 +57,11 @@ fn main() -> Result<()> {
         }
     };
 
-    //Init our runtime environment
-    EnvBuilder::new()
-        .set_working_dir(Some(&metta_working_dir))
-        .add_include_paths(cli_args.include_paths)
-        .init_platform_env();
-    let repl_params = ReplParams::new();
-
     //Create our MeTTa runtime environment
-    let mut metta = MettaShim::new();
+    let mut metta = MettaShim::new(metta_working_dir, cli_args.include_paths);
+
+    //Init our runtime environment
+    let repl_params = ReplParams::new(&metta);
 
     //Spawn a signal handler background thread, to deal with passing interrupts to the execution loop
     let mut signals = Signals::new(&[SIGINT])?;
@@ -100,11 +94,7 @@ fn main() -> Result<()> {
         //Only print the output from the primary .metta file
         let metta_code = std::fs::read_to_string(metta_file)?;
         metta.exec(metta_code.as_str());
-        metta.inside_env(|metta| {
-            for result in metta.result.iter() {
-                println!("{result:?}");
-            }
-        });
+        metta.print_result();
         Ok(())
 
     } else {
@@ -177,11 +167,7 @@ fn start_interactive_mode(repl_params: ReplParams, mut metta: MettaShim) -> rust
 
                 let mut metta = rl.helper().unwrap().metta.borrow_mut();
                 metta.exec(line.as_str());
-                metta.inside_env(|metta| {
-                    for result in metta.result.iter() {
-                        println!("{result:?}");
-                    }
-                });
+                metta.print_result();
             }
             Err(ReadlineError::Interrupted) |
             Err(ReadlineError::Eof) => {

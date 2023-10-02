@@ -65,15 +65,44 @@ pub struct RunnerState<'a> {
 }
 
 impl Metta {
+
     /// A 1-liner to get a MeTTa interpreter using the default configuration
-    //TODO, see comment on `new_metta_rust`.  That function should merge into this one
-    pub fn new_top_level_runner() -> Self {
+    /// 
+    /// NOTE: This function is appropriate for Rust or C clients, but if other language-specific
+    ///   stdlibs are involved then see the documentation for [Metta::init]
+    pub fn new_rust() -> Metta {
         let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()),
-        Shared::new(Tokenizer::new()));
+            Shared::new(Tokenizer::new()));
+        metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
+        metta.init_with_platform_env();
         metta
     }
 
+    /// Performs initialization of a MeTTa interpreter.  Presently this involves running the `init.metta`
+    /// file from the platform environment.
+    ///
+    /// DISCUSSION: Creating a fully-initialized MeTTa environment should usually be done with with
+    /// a top-level initialization function, such as [new_metta_rust] or `MeTTa.new()` in Python.
+    ///
+    /// Doing it manually involves several steps:
+    /// 1. Create the MeTTa runner, using [new_with_space].  This provides a working interpreter, but
+    ///     doesn't load any stdlibs
+    /// 2. Load each language-specific stdlib (Currently only Python has an extended stdlib)
+    /// 3. Load the Rust `stdlib` (TODO: Conceptually I'd like to load Rust's stdlib first, so other
+    ///      stdlibs can utilize the Rust stdlib's atoms, but that depends on value bridging)
+    /// 4. Run the `init.metta` file by calling this function
+    ///
+    /// TODO: When we are able to load the Rust stdlib before the Python stdlib, which requires value-bridging,
+    ///     we can refactor this function to load the appropriate stdlib(s) and simplify the init process
+    pub fn init_with_platform_env(&self) {
+        if let Some(init_meta_file) = Environment::platform_env().initialization_metta_file_path() {
+            self.load_module(init_meta_file.into()).unwrap();
+        }
+    }
+
     /// Returns a new MeTTa interpreter, using the provided Space and Tokenizer
+    ///
+    /// NOTE: This function does not load any stdlib atoms, nor run the [Environment]'s 'init.metta'
     pub fn new_with_space(space: DynSpace, tokenizer: Shared<Tokenizer>) -> Self {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
@@ -125,6 +154,12 @@ impl Metta {
                 self.0.modules.borrow_mut().insert(path.clone(), runner.space().clone());
                 runner.run(&mut SExprParser::new(program.as_str()))
                     .map_err(|err| format!("Cannot import module, path: {}, error: {}", path.display(), err))?;
+
+                // TODO: This is a hack. We need a way to register tokens at module-load-time, for any module
+                if path.to_str().unwrap() == "stdlib" {
+                    register_rust_tokens(self);
+                }
+
                 Ok(runner.space().clone())
             }
         }
@@ -137,7 +172,7 @@ impl Metta {
         // TODO: check if it is already there (if the module is newly loaded)
         let module_space = self.load_module_space(path)?;
         let space_atom = Atom::gnd(module_space);
-        self.0.space.borrow_mut().add(space_atom); // self.add_atom(space_atom)
+        self.0.space.borrow_mut().add(space_atom);
         Ok(())
     }
 
@@ -310,16 +345,6 @@ impl<'a> RunnerState<'a> {
     }
 }
 
-//TODO: this function should be totally subsumed into Metta::new_top_level_runner(), but
-// first we have to be able to load the "rust" stdlib before the python stdlib, which requires TODO_NOW-lookup-issue-number
-// to be fixed, which in-turn requires value-bridging
-pub fn new_metta_rust() -> Metta {
-    let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()),
-        Shared::new(Tokenizer::new()));
-    metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
-    metta
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -337,7 +362,7 @@ mod tests {
             !(green Fritz)
         ";
 
-        let metta = new_metta_rust();
+        let metta = Metta::new_rust();
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![Atom::sym("T")]]));
     }
@@ -401,7 +426,7 @@ mod tests {
             !(foo)
         ";
 
-        let metta = new_metta_rust();
+        let metta = Metta::new_rust();
         metta.tokenizer().borrow_mut().register_token(Regex::new("error").unwrap(),
             |_| Atom::gnd(ErrorOp{}));
         let result = metta.run(&mut SExprParser::new(program));
@@ -452,7 +477,7 @@ mod tests {
             !(empty)
         ";
 
-        let metta = new_metta_rust();
+        let metta = Metta::new_rust();
         metta.tokenizer().borrow_mut().register_token(Regex::new("empty").unwrap(),
             |_| Atom::gnd(ReturnAtomOp(expr!())));
         let result = metta.run(&mut SExprParser::new(program));

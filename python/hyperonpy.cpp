@@ -38,17 +38,6 @@ using CStepResult = CStruct<step_result_t>;
 using CRunnerState = CStruct<runner_state_t>;
 using CMetta = CStruct<metta_t>;
 
-//TODO: This entire CStruct template, and especially these functions should go away when hyperonpy is
-//  implemented directly on Rust, rather than on top of hyperonc
-//This method is an ugly hack to push C structs through pyo3 and pybind11 without a type that
-//  Python can understand.  Ironically these C structs just wrap Rust objects originating in
-//  Rust, which are then converted by calling hyperonc directly.
-static CMetta cmetta_from_inner_ptr_as_int(size_t buf_as_int) {
-    metta_t tmp_metta_t;
-    tmp_metta_t.metta = (RustMettaInterpreter*)buf_as_int;
-    return CMetta(tmp_metta_t);
-}
-
 // Returns a string, created by executing a function that writes string data into a buffer
 typedef size_t (*write_to_buf_func_t)(void*, char*, size_t);
 std::string func_to_string(write_to_buf_func_t func, void* arg) {
@@ -509,6 +498,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("atom_free", [](CAtom atom) { atom_free(atom.obj); }, "Free C atom");
 
     m.def("atom_eq", [](CAtom& a, CAtom& b) -> bool { return atom_eq(a.ptr(), b.ptr()); }, "Test if two atoms are equal");
+    m.def("atom_is_error", [](CAtom& atom) -> bool { return atom_is_error(atom.ptr()); }, "Returns True if an atom is a MeTTa error expression");
     m.def("atom_to_str", [](CAtom& atom) {
             return func_to_string((write_to_buf_func_t)&atom_to_str, atom.ptr());
         }, "Convert atom to human readable string");
@@ -765,11 +755,12 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<CAtoms>(m, "CAtoms")
         ADD_SYMBOL(VOID, "Void");
 
-    py::class_<CMetta>(m, "CMetta").def(py::init(&cmetta_from_inner_ptr_as_int));
+    py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, CTokenizer tokenizer) {
         return CMetta(metta_new_with_space(space.ptr(), tokenizer.ptr()));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
+    m.def("metta_init_with_platform_env", [](CMetta metta) { metta_init_with_platform_env(metta.ptr()); }, "Inits a MeTTa interpreter by running the init.metta file from the environment");
     m.def("metta_space", [](CMetta metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");
     m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
     m.def("metta_run", [](CMetta metta, CSExprParser& parser) {
@@ -800,6 +791,10 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("environment_config_dir", []() {
         return func_to_string_no_arg((write_to_buf_no_arg_func_t)&environment_config_dir);
     }, "Return the config_dir for the platform environment");
+    m.def("environment_search_path_cnt", []() { return environment_search_path_cnt(); }, "Returns the number of module search paths in the environment");
+    m.def("environment_nth_search_path", [](size_t idx) {
+        return func_to_string((write_to_buf_func_t)&environment_nth_search_path, (void*)idx);
+    }, "Returns the module search path at the specified index, in the environment");
     m.def("environment_init_start", []() { environment_init_start(); }, "Begin initialization of the platform environment");
     m.def("environment_init_finish", []() { environment_init_finish(); }, "Finish initialization of the platform environment");
     m.def("environment_init_set_working_dir", [](std::string path) { environment_init_set_working_dir(path.c_str()); }, "Sets the working dir in the platform environment");

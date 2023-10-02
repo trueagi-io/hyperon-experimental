@@ -3,7 +3,7 @@ use hyperon::space::DynSpace;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
-use hyperon::metta::runner::{Metta, RunnerState, stdlib};
+use hyperon::metta::runner::{Metta, RunnerState};
 use hyperon::metta::environment::{Environment, EnvBuilder};
 use hyperon::rust_type_atom;
 
@@ -455,6 +455,17 @@ pub extern "C" fn syntax_node_src_range(node: *const syntax_node_t, range_start:
 // atom_t fully repr(C), then I will change this, so the caller doesn't need to worry about freeing the
 // return values
 
+/// @brief Checks if an atom is a MeTTa error expression
+/// @ingroup metta_language_group
+/// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` representing the atom to check
+/// @return `true` is the atom is a MeTTa error expression
+///
+#[no_mangle]
+pub extern "C" fn atom_is_error(atom: *const atom_ref_t) -> bool {
+    let atom = unsafe{ &*atom }.borrow();
+    hyperon::metta::runner::atom_is_error(atom)
+}
+
 /// @brief Creates a Symbol atom for the special MeTTa symbol: "%Undefined%"
 /// @ingroup metta_language_group
 /// @return  The `atom_t` representing the Symbol atom
@@ -708,14 +719,14 @@ impl metta_t {
     }
 }
 
-/// @brief Creates a new top-level MeTTa Interpreter
+/// @brief Creates a new top-level MeTTa Interpreter, with only the Rust stdlib loaded
 /// @ingroup interpreter_group
 /// @return A `metta_t` handle to the newly created Interpreter
 /// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
 ///
 #[no_mangle]
-pub extern "C" fn metta_new() -> metta_t {
-    let metta = Metta::new_top_level_runner();
+pub extern "C" fn metta_new_rust() -> metta_t {
+    let metta = Metta::new_rust();
     metta.into()
 }
 
@@ -725,6 +736,7 @@ pub extern "C" fn metta_new() -> metta_t {
 /// @param[in]  tokenizer  A pointer to a handle for the Tokenizer for use by the Interpreter
 /// @return A `metta_t` handle to the newly created Interpreter
 /// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
+/// @note This function does not load any stdlib, nor does it run the `init.metta` file from the environment
 ///
 #[no_mangle]
 pub extern "C" fn metta_new_with_space(space: *mut space_t, tokenizer: *mut tokenizer_t) -> metta_t {
@@ -744,6 +756,18 @@ pub extern "C" fn metta_new_with_space(space: *mut space_t, tokenizer: *mut toke
 pub extern "C" fn metta_free(metta: metta_t) {
     let metta = metta.into_inner();
     drop(metta);
+}
+
+/// @brief Initializes a MeTTa interpreter, for manually bootstrapping a multi-language interpreter
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the Interpreter handle
+/// @note Most callers can simply call `metta_new_rust`.  This function is provided to support languages
+///     with their own stdlib, that needs to be loaded before the init.metta file is run
+///
+#[no_mangle]
+pub extern "C" fn metta_init_with_platform_env(metta: *mut metta_t) {
+    let metta = unsafe{ &*metta }.borrow();
+    metta.init_with_platform_env()
 }
 
 /// @brief Provides access to the Space associated with a MeTTa Interpreter
@@ -914,12 +938,6 @@ pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
     // TODO: return erorrs properly
     metta.load_module(PathBuf::from(cstr_as_str(name)))
         .expect("Returning errors from C API is not implemented yet");
-
-    // TODO: This is a hack, We need a way to register grounded tokens with a module
-    let name_cstr = unsafe{ std::ffi::CStr::from_ptr(name) };
-    if name_cstr.to_str().unwrap() == "stdlib" {
-        stdlib::register_rust_tokens(&metta);
-    }
 }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -937,6 +955,36 @@ pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
 #[no_mangle]
 pub extern "C" fn environment_config_dir(buf: *mut c_char, buf_len: usize) -> usize {
     match Environment::platform_env().config_dir() {
+        Some(path) => write_into_buf(path.display(), buf, buf_len),
+        None => 0
+    }
+}
+
+/// @brief Returns the number of module search paths in the environment
+/// @ingroup environment_group
+/// @return The number of paths in the Environment
+///
+#[no_mangle]
+pub extern "C" fn environment_search_path_cnt() -> usize {
+    Environment::platform_env().modules_search_paths().count()
+}
+
+/// @brief Renders nth module search path from the platform environment into a text buffer
+/// @ingroup environment_group
+/// @param[in]  idx  The index of the search path to render, with 0 being the highest priority search
+///     path, and subsequent indices having decreasing search priority.
+///     If `i > environment_search_path_cnt()`, this function will return 0.
+/// @param[out]  buf  A buffer into which the text will be written
+/// @param[in]  buf_len  The maximum allocated size of `buf`
+/// @return The length of the path string, minus the string terminator character.  If
+///     `return_value > buf_len + 1`, then the text was not fully written and this function should be
+///     called again with a larger buffer.  This function will return 0 if the input arguments don't
+///     specify a valid search path.
+///
+#[no_mangle]
+pub extern "C" fn environment_nth_search_path(idx: usize, buf: *mut c_char, buf_len: usize) -> usize {
+    let path = Environment::platform_env().modules_search_paths().nth(idx);
+    match path {
         Some(path) => write_into_buf(path.display(), buf, buf_len),
         None => 0
     }
