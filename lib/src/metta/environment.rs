@@ -28,7 +28,7 @@ impl Environment {
 
     /// Returns a reference to the shared "platform" Environment
     pub fn platform_env() -> &'static Self {
-        PLATFORM_ENV.get_or_init(|| EnvBuilder::new().build())
+        PLATFORM_ENV.get_or_init(|| EnvBuilder::new().build_platform_env())
     }
 
     /// Returns the Path to the config dir, in an OS-specific location
@@ -128,8 +128,13 @@ impl EnvBuilder {
     ///
     /// NOTE: This method will panic if the platform Environment has already been initialized
     pub fn init_platform_env(self) {
-        PLATFORM_ENV.set(self.build()).expect("Fatal Error: Platform Environment already initialized");
+        PLATFORM_ENV.set(self.build_platform_env()).expect("Fatal Error: Platform Environment already initialized");
+    }
+
+    /// Internal function to finalize the building of the shared platform environment
+    fn build_platform_env(self) -> Environment {
         common::init_logger(false);
+        self.build()
     }
 
     /// Returns a newly created Environment from the builder configuration
