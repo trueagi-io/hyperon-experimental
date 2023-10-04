@@ -66,8 +66,8 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Changing the content of the state atom
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; (nop ...) provides a way to obtain side-effects of a statement
-; while ignoring unwanted return values.
+; nop is used to ignore the result and return unit
+; as expected by unit tests
 !(nop (change-state! &state-token (C D)))
 
 ; The same state atom has different content now

@@ -1,6 +1,4 @@
-import unittest
-
-from hyperon import MeTTa, Atoms
+from hyperon import MeTTa, E
 from test_common import HyperonTestCase
 
 from pathlib import Path
@@ -72,7 +70,7 @@ class MeTTaTest(HyperonTestCase):
 
     def process_exceptions(self, results):
         for result in results:
-            self.assertEqual(result, [])
+            self.assertEqual(result, [E()])
 
     def test_scripts(self):
         self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/a1_symbols.metta"))
