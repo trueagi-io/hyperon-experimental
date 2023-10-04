@@ -40,7 +40,8 @@ pub const CHAIN_SYMBOL : Atom = sym!("chain");
 pub const UNIFY_SYMBOL : Atom = sym!("unify");
 pub const DECONS_SYMBOL : Atom = sym!("decons");
 pub const CONS_SYMBOL : Atom = sym!("cons");
-pub const CHAIN_PLUS_SYMBOL : Atom = sym!("chain+");
+pub const FUNCTION_SYMBOL : Atom = sym!("function");
+pub const RETURN_SYMBOL : Atom = sym!("return");
 
 pub const INTERPRET_SYMBOL : Atom = sym!("interpret");
 

@@ -171,10 +171,26 @@ fn is_embedded_op(atom: &Atom) -> bool {
     match expr {
         Some([op, ..]) => *op == EVAL_SYMBOL
             || *op == CHAIN_SYMBOL
-            || *op == CHAIN_PLUS_SYMBOL
             || *op == UNIFY_SYMBOL
             || *op == CONS_SYMBOL
-            || *op == DECONS_SYMBOL,
+            || *op == DECONS_SYMBOL
+            || *op == FUNCTION_SYMBOL,
+        _ => false,
+    }
+}
+
+fn is_function_op(atom: &Atom) -> bool {
+    let expr = atom_as_slice(&atom);
+    match expr {
+        Some([op, ..]) => *op == FUNCTION_SYMBOL,
+        _ => false,
+    }
+}
+
+fn is_eval_op(atom: &Atom) -> bool {
+    let expr = atom_as_slice(&atom);
+    match expr {
+        Some([op, ..]) => *op == EVAL_SYMBOL,
         _ => false,
     }
 }
@@ -219,21 +235,6 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
                 },
             }
         },
-        Some([op, args @ ..]) if *op == CHAIN_PLUS_SYMBOL => {
-            match args {
-                [_nested, Atom::Variable(_var), _templ] => {
-                    match atom_into_array(atom) {
-                        Some([_, nested, Atom::Variable(var), templ]) =>
-                            chain_plus(space, bindings, nested, var, templ),
-                        _ => panic!("Unexpected state"),
-                    }
-                },
-                _ => {
-                    let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_PLUS_SYMBOL, atom);
-                    vec![InterpretedAtom(error_atom(atom, error), bindings)]
-                },
-            }
-        },
         Some([op, args @ ..]) if *op == UNIFY_SYMBOL => {
             match args {
                 [atom, pattern, then, else_] => match_(bindings, atom, pattern, then, else_),
@@ -267,6 +268,21 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
                 },
                 _ => {
                     let error: String = format!("expected: ({} <head> (: <tail> Expression)), found: {}", CONS_SYMBOL, atom);
+                    vec![InterpretedAtom(error_atom(atom, error), bindings)]
+                },
+            }
+        },
+        Some([op, args @ ..]) if *op == FUNCTION_SYMBOL => {
+            match args {
+                [Atom::Expression(_body)] => {
+                    match atom_into_array(atom) {
+                        Some([_, body]) =>
+                            function(space, bindings, body),
+                        _ => panic!("Unexpected state"),
+                    }
+                },
+                _ => {
+                    let error: String = format!("expected: ({} (: <body> Expression)), found: {}", FUNCTION_SYMBOL, atom);
                     vec![InterpretedAtom(error_atom(atom, error), bindings)]
                 },
             }
@@ -309,8 +325,8 @@ fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<In
                         // TODO: This is an open question how to interpret empty results
                         // which are returned by grounded function. There is no
                         // case to return empty result for now. If alternative
-                        // should be remove from plan Empty is a proper result.
-                        // If grounded atom returns no value Void should be returned.
+                        // should be removed from the plan then Empty is a proper result.
+                        // If grounded atom returns no value then unit should be returned.
                         // NotReducible or Exec::NoReduce can be returned to
                         // let a caller know that function is not defined on a
                         // passed input data. Thus we can interpreter empty result
@@ -330,6 +346,8 @@ fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<In
                     vec![InterpretedAtom(return_not_reducible(), bindings)],
             }
         },
+        _ if is_embedded_op(&atom) =>
+            interpret_atom_root(space, InterpretedAtom(atom, bindings), false),
         _ => query(space, atom, bindings),
     }
 }
@@ -355,39 +373,74 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<I
 }
 
 fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: VariableAtom, templ: Atom) -> Vec<InterpretedAtom> {
-    if is_embedded_op(&nested) {
+    fn apply(bindings: Bindings, nested: Atom, var: VariableAtom, templ: &Atom) -> InterpretedAtom {
+        let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
+        let result = apply_bindings_to_atom(templ, &b);
+        InterpretedAtom(result, bindings)
+    }
+
+    let is_eval = is_eval_op(&nested);
+    if is_function_op(&nested) {
+      let mut result = interpret_atom_root(space, InterpretedAtom(nested, bindings), false);
+      if result.len() == 1 {
+          let InterpretedAtom(r, b) = result.pop().unwrap();
+          if is_function_op(&r) {
+              vec![InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var), templ]), b)]
+          } else {
+              vec![apply(b, r, var.clone(), &templ)]
+          }
+      } else {
+          result.into_iter()
+              .map(|InterpretedAtom(r, b)| {
+                  if is_function_op(&r) {
+                      InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b)
+                  } else {
+                      apply(b, r, var.clone(), &templ)
+                  }
+              })
+          .collect()
+      }
+    } else if is_embedded_op(&nested) {
         let result = interpret_atom_root(space, InterpretedAtom(nested, bindings), false);
         result.into_iter()
             .map(|InterpretedAtom(r, b)| {
-                let vb = Bindings::new().add_var_binding_v2(var.clone(), r).unwrap();
-                let result = apply_bindings_to_atom(&templ, &vb);
-                InterpretedAtom(result, b)
+                if is_eval && is_function_op(&r) {
+                    InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b)
+                } else {
+                    apply(b, r, var.clone(), &templ)
+                }
             })
         .collect()
     } else {
-        let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
-        let result = apply_bindings_to_atom(&templ, &b);
-        vec![InterpretedAtom(result, bindings)]
+        vec![apply(bindings, nested, var, &templ)]
     }
 }
 
-fn chain_plus<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: VariableAtom, templ: Atom) -> Vec<InterpretedAtom> {
-    if is_embedded_op(&nested) {
-        let mut result = interpret_atom_root(space, InterpretedAtom(nested, bindings), false);
-        if result.len() == 1 {
-            let InterpretedAtom(r, b) = result.pop().unwrap();
-            vec![InterpretedAtom(Atom::expr([CHAIN_PLUS_SYMBOL, r, Atom::Variable(var), templ]), b)]
-        } else {
-            result.into_iter()
-                .map(|InterpretedAtom(r, b)| {
-                    InterpretedAtom(Atom::expr([CHAIN_PLUS_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b)
-                })
-            .collect()
+fn function<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, body: Atom) -> Vec<InterpretedAtom> {
+    match atom_as_slice(&body) {
+        Some([op, _result]) if *op == RETURN_SYMBOL => {
+            if let Some([_, result]) = atom_into_array(body) {
+                //log::debug!("function: return {:?}", result);
+                // FIXME: check return arguments size
+                vec![InterpretedAtom(result, bindings)]
+            } else {
+                panic!("Unexpected state");
+            }
+        },
+        _ => {
+            let mut result = interpret_atom_root(space, InterpretedAtom(body, bindings), false);
+            //log::debug!("function: result of execution {:?}", result);
+            if result.len() == 1 {
+                let InterpretedAtom(r, b) = result.pop().unwrap();
+                vec![InterpretedAtom(Atom::expr([FUNCTION_SYMBOL, r]), b)]
+            } else {
+                result.into_iter()
+                    .map(|InterpretedAtom(r, b)| {
+                        InterpretedAtom(Atom::expr([FUNCTION_SYMBOL, r]), b)
+                    })
+                .collect()
+            }
         }
-    } else {
-        let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
-        let result = apply_bindings_to_atom(&templ, &b);
-        vec![InterpretedAtom(result, bindings)]
     }
 }
 
