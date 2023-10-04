@@ -39,10 +39,10 @@ pub fn atom_is_error(atom: &Atom) -> bool {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Metta(Rc<MettaContents>);
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug)]
 pub struct MettaContents {
     space: DynSpace,
     tokenizer: Shared<Tokenizer>,
@@ -121,6 +121,10 @@ impl Metta {
         let modules = metta.0.modules.clone();
 
         //Search only the parent directory of the module we're loading
+        //TODO: I think we want all the same search path behavior as the parent runner, but with
+        // a different working_dir.  Consider using the working_dir from the environment only to
+        // init the top-level runner, and moving search-path composition logic from the environment
+        // to the runner.
         let mut path = path;
         path.pop();
         let search_paths = vec![path];

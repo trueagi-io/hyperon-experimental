@@ -37,6 +37,7 @@ using CSyntaxNode = CStruct<syntax_node_t>;
 using CStepResult = CStruct<step_result_t>;
 using CRunnerState = CStruct<runner_state_t>;
 using CMetta = CStruct<metta_t>;
+using CEnvBuilder = CStruct<env_builder_t>;
 
 // Returns a string, created by executing a function that writes string data into a buffer
 typedef size_t (*write_to_buf_func_t)(void*, char*, size_t);
@@ -788,6 +789,7 @@ PYBIND11_MODULE(hyperonpy, m) {
         return lists_of_atom;
     }, "Returns the in-flight results from a runner state");
 
+    py::class_<CEnvBuilder>(m, "CEnvBuilder");
     m.def("environment_config_dir", []() {
         return func_to_string_no_arg((write_to_buf_no_arg_func_t)&environment_config_dir);
     }, "Return the config_dir for the platform environment");
@@ -795,12 +797,12 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("environment_nth_search_path", [](size_t idx) {
         return func_to_string((write_to_buf_func_t)&environment_nth_search_path, (void*)idx);
     }, "Returns the module search path at the specified index, in the environment");
-    m.def("environment_init_start", []() { environment_init_start(); }, "Begin initialization of the platform environment");
-    m.def("environment_init_finish", []() { environment_init_finish(); }, "Finish initialization of the platform environment");
-    m.def("environment_init_set_working_dir", [](std::string path) { environment_init_set_working_dir(path.c_str()); }, "Sets the working dir in the platform environment");
-    m.def("environment_init_set_config_dir", [](std::string path) { environment_init_set_config_dir(path.c_str()); }, "Sets the config dir in the platform environment");
-    m.def("environment_init_disable_config_dir", []() { environment_init_disable_config_dir(); }, "Disables the config dir in the platform environment");
-    m.def("environment_init_add_include_path", [](std::string path) { environment_init_add_include_path(path.c_str()); }, "Adds an include path to the platform environment");
+    m.def("environment_init_start", []() { return CEnvBuilder(environment_init_start()); }, "Begin initialization of the platform environment");
+    m.def("environment_init_finish", [](CEnvBuilder builder) { return environment_init_finish(builder.obj); }, "Finish initialization of the platform environment");
+    m.def("environment_init_set_working_dir", [](CEnvBuilder& builder, std::string path) { environment_init_set_working_dir(builder.ptr(), path.c_str()); }, "Sets the working dir in the platform environment");
+    m.def("environment_init_set_config_dir", [](CEnvBuilder& builder, std::string path) { environment_init_set_config_dir(builder.ptr(), path.c_str()); }, "Sets the config dir in the platform environment");
+    m.def("environment_init_disable_config_dir", [](CEnvBuilder& builder) { environment_init_disable_config_dir(builder.ptr()); }, "Disables the config dir in the platform environment");
+    m.def("environment_init_add_include_path", [](CEnvBuilder& builder, std::string path) { environment_init_add_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the platform environment");
 }
 
 __attribute__((constructor))

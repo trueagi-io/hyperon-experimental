@@ -176,14 +176,14 @@ class Environment:
         return hp.environment_config_dir()
     def init_platform_env(working_dir = None, config_dir = None, disable_config = False, include_paths = []):
         """Initialize the platform environment with the supplied args"""
-        hp.environment_init_start()
+        builder = hp.environment_init_start()
         if (working_dir is not None):
-            hp.environment_init_set_working_dir(working_dir)
+            hp.environment_init_set_working_dir(builder, working_dir)
         if (config_dir is not None):
-            hp.environment_init_set_config_dir(config_dir)
+            hp.environment_init_set_config_dir(builder, config_dir)
         if (disable_config):
-            hp.environment_init_disable_config_dir()
+            hp.environment_init_disable_config_dir(builder)
         for path in reversed(include_paths):
-            hp.environment_init_add_include_path(path)
-        hp.environment_init_finish()
+            hp.environment_init_add_include_path(builder, path)
+        return hp.environment_init_finish(builder)
 

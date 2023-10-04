@@ -128,10 +128,16 @@ impl EnvBuilder {
     ///
     /// NOTE: This method will panic if the platform Environment has already been initialized
     pub fn init_platform_env(self) {
-        PLATFORM_ENV.set(self.build_platform_env()).expect("Fatal Error: Platform Environment already initialized");
+        self.try_init_platform_env().expect("Fatal Error: Platform Environment already initialized");
     }
 
-    /// Internal function to finalize the building of the shared platform environment
+    /// Initializes the shared platform Environment.  Non-panicking version of [init_platform_env]
+    pub fn try_init_platform_env(self) -> Result<(), &'static str> {
+        PLATFORM_ENV.set(self.build_platform_env()).map_err(|_| "Platform Environment already initialized")
+    }
+
+    /// Internal function to finalize the building of the shared platform environment.  Will always be called
+    ///   from inside the init closure of a OnceLock, so it will only be called once per process.
     fn build_platform_env(self) -> Environment {
         common::init_logger(false);
         self.build()

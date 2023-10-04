@@ -33,9 +33,13 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct ImportOp {
     metta: Metta,
+}
+
+impl PartialEq for ImportOp {
+    fn eq(&self, _other: &Self) -> bool { true }
 }
 
 impl ImportOp {
