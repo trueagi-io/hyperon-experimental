@@ -2,10 +2,10 @@
 use std::path::PathBuf;
 use std::thread;
 use std::process::exit;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use rustyline::error::ReadlineError;
-use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent, KeyCode, Modifiers};
+use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent, KeyCode, Modifiers, EventContext, RepeatCount, EventHandler, ConditionalEventHandler, Event};
 
 use anyhow::Result;
 use clap::Parser;
@@ -109,11 +109,20 @@ fn main() -> Result<()> {
 
 // To debug rustyline:
 // RUST_LOG=rustyline=debug cargo run --example example 2> debug.log
-fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> rustyline::Result<()> {
+fn start_interactive_mode(repl_params: Shared<ReplParams>, mut metta: MettaShim) -> rustyline::Result<()> {
+
+    //Run the built-in repl-init code
+    metta.exec(&builtin_init_metta_code());
+
+    //Run the repl init file
+    metta.load_metta_module(repl_params.borrow().repl_config_metta_path.clone());
+    let max_len = metta.get_config_int(CFG_HISTORY_MAX_LEN).unwrap_or_else(|| 500);
 
     //Init RustyLine
     let config = Config::builder()
         .history_ignore_space(true)
+        .max_history_size(max_len as usize).unwrap()
+        .history_ignore_dups(false).unwrap()
         .completion_type(CompletionType::List)
         .edit_mode(EditMode::Emacs)
         .build();
@@ -125,16 +134,11 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> 
     rl.set_helper(Some(helper));
     //KEY BEHAVIOR: Enter and ctrl-M will add a newline when the cursor is in the middle of a line, while
     // ctrl-J will submit the line.
-    //TODO: Rustyline seems to have a bug where this is only true sometimes.  Needs to be debugged.
-    // Ideally Rustyline could just subsume the whole "accept_in_the_middle" behavior with a design that
-    // allows the Validator to access the key event, so the Validator could make the decision without
-    // special logic inside rustyline.
+    //TODO: Document this behavior in the README.md, and possibly other key bindings also
     rl.bind_sequence(KeyEvent( KeyCode::Enter, Modifiers::NONE ), Cmd::AcceptOrInsertLine {
         accept_in_the_middle: false,
     });
-    rl.bind_sequence(KeyEvent::ctrl('j'), Cmd::AcceptOrInsertLine {
-        accept_in_the_middle: true,
-    });
+    rl.bind_sequence(KeyEvent::ctrl('j'), EventHandler::Conditional(Box::new(EnterKeyHandler::new(rl.helper().unwrap().force_submit.clone()))));
     rl.bind_sequence(KeyEvent::alt('n'), Cmd::HistorySearchForward);
     rl.bind_sequence(KeyEvent::alt('p'), Cmd::HistorySearchBackward);
     if let Some(history_path) = &repl_params.borrow().history_file {
@@ -146,12 +150,12 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> 
     //The Interpreter Loop
     loop {
 
-        //Set the prompt based on resolving a MeTTa variable
+        //Set the prompt based on the MeTTa pragma settings
         let prompt = {
             let helper = rl.helper_mut().unwrap();
             let mut metta = helper.metta.borrow_mut();
-            let prompt = metta.get_config_string("ReplDefaultPrompt").unwrap_or("> ".to_string());
-            let styled_prompt = metta.get_config_string("ReplStyledPrompt").unwrap_or(format!("\x1b[1;32m{prompt}\x1b[0m"));
+            let prompt = metta.get_config_string(CFG_PROMPT).expect("Fatal Error: Invalid REPL config");
+            let styled_prompt = metta.get_config_string(CFG_STYLED_PROMPT).unwrap_or_else(|| format!("\x1b[1;32m{prompt}\x1b[0m")); //TODO, Let this default be set inside builtin_init_metta_code() when strings can be parsed with escape chars
             helper.colored_prompt = styled_prompt;
             prompt
         };
@@ -185,4 +189,31 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, metta: MettaShim) -> 
     }
 
     Ok(())
+}
+
+struct EnterKeyHandler {
+    force_submit: Arc<Mutex<bool>>
+}
+
+impl EnterKeyHandler {
+    fn new(force_submit: Arc<Mutex<bool>>) -> Self {
+        Self {
+            force_submit
+        }
+    }
+}
+
+impl ConditionalEventHandler for EnterKeyHandler {
+    fn handle(
+        &self,
+        _evt: &Event,
+        _n: RepeatCount,
+        _positive: bool,
+        _ctx: &EventContext<'_>
+    ) -> Option<Cmd> {
+        *self.force_submit.lock().unwrap() = true;
+        Some(Cmd::AcceptOrInsertLine {
+            accept_in_the_middle: true,
+        })
+    }
 }
