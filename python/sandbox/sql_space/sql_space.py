@@ -79,29 +79,20 @@ class SqlHelper:
     def get_fields_and_values(query_atom):
         ''' parse sql query and get columns to select and conditions for filtering '''
         atoms = query_atom.get_children()
-        fields = {}
-        vars_map = {}
+        fields_map = {}
         for atom in atoms:
             if isinstance(atom, ExpressionAtom):
                 items = atom.get_children()
-                if len(items) == 2:
-                    current_field_info = items[1].get_children()
-                    if len(current_field_info) != 2:
-                        raise SyntaxError("Incorrect number of arguments")
-                    # (musicbrainz.artist (id $id) (name $name)
-                    # field to select
-                    field_name = repr(current_field_info[0])
-                    vars_map[field_name] = repr(current_field_info[1])
-                    # table
-                    table = repr(items[0])
-                    if table not in fields:
-                        fields[table] = set()
-                    # add selected field to corresponding category (filed/condition)
-                    fields[table].add(field_name)
-        return fields, vars_map
+                if len(items) != 2:
+                    raise SyntaxError("Incorrect number of arguments")
+                # (musicbrainz.artist (id $id) (name $name)
+                # field to select
+                field_name = repr(items[0])
+                fields_map[field_name] = repr(items[1])
+        return fields_map
 
     def save_query_result(self, sql_space, space, query_atom):
-        # if no fields provided get them from information_schema.columns
+        # if no fields provided get them from information_schema.columns     
         res = sql_space.query(query_atom)
         variables = []
         for val in res:
@@ -123,17 +114,17 @@ class SqlHelper:
         return res
 
     def insert(self, space, query_atom):
-        fields, vars_map = SqlHelper.get_fields_and_values(query_atom)
+        fields_map = SqlHelper.get_fields_and_values(query_atom)
         res = []
-        for table, field_names in fields.items():
-            values = []
-            for v in field_names:
-                values.append(vars_map[v].replace('"', "") if "(" in vars_map[v] and vars_map[v][-2] == ')'
-                              else vars_map[v].replace('"', "'"))
-            fields_str = ", ".join(list(field_names))
-            values_str = ", ".join(list(values))
-            query = f'''{self.insert_command_sql} {table} ({fields_str}) VALUES ({values_str}) RETURNING 0;'''
-            res.extend(space.query(E(S(query))))
+        table = fields_map.pop("table")
+        values = []
+        for field_name, field_value in fields_map.items():
+            values.append(field_value.replace('"', "") if "(" in field_value and field_value[-2] == ')'
+                          else field_value.replace('"', "'"))
+        fields_str = ", ".join(list(fields_map.keys()))
+        values_str = ", ".join(list(values))
+        query = f'''{self.insert_command_sql} {table} ({fields_str}) VALUES ({values_str}) RETURNING 0;'''
+        res.extend(space.query(E(S(query))))
         return res
 
 

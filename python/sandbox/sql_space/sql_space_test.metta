@@ -10,7 +10,7 @@
 !(match &sql_space (, (musicbrainz.artist (id $id) (name $name)) (musicbrainz.artist (id $id) (begin_date_year 1983)) (limit 3)) $name)
 ;result ["NOFX", "Red Hot Chili Peppers", "Bon Jovi"]
 
-!(sql.insert &sql_space  ((musicbrainz.artist (gid "uuid_generate_v4()"))
-(musicbrainz.artist (name "some name")) (musicbrainz.artist (sort_name "name some")) (musicbrainz.artist (begin_date_year 1988)) (musicbrainz.artist (begin_date_month 1))
-(musicbrainz.artist (begin_date_day 1)) (musicbrainz.artist (type 1)) (musicbrainz.artist (area 222)) (musicbrainz.artist (gender 2))))
+!(sql.insert &sql_space  ((table musicbrainz.artist) (gid "uuid_generate_v4()")
+ (name "some name3") (sort_name "name some3") (begin_date_year 1988)  (begin_date_month 1)
+(begin_date_day 1) (type 1) (area 222) (gender 2)))
 
