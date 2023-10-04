@@ -22,8 +22,11 @@
 (= (ift True $then) $then)
 
 ; For anything that is green, assert it is Green in &kb
-!(ift (green $x)
-      (add-atom &kb (Green $x)))
+; There should be two green things
+!(assertEqualToResult
+  (ift (green $x)
+       (add-atom &kb (Green $x)))
+  (() ()))
 
 ; Retrieve the inferred Green things: Fritz and Sam.
 !(assertEqualToResult
