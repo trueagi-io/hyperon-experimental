@@ -103,24 +103,28 @@ class SqlHelper:
     def save_query_result(self, sql_space, space, query_atom):
         # if no fields provided get them from information_schema.columns
         res = sql_space.query(query_atom)
-        variables = {}
+        variables = []
         for val in res:
+            temp_dict = {}
             for k, v in val.items():
-                variables["$" + str(k)] = str(v)
+                temp_dict['$' + str(k)] = str(v)
+            variables.append(temp_dict)
         atoms = self.get_query_atoms(query_atom)
         new_atoms = []
-        for atom in atoms:
-            if isinstance(atom, ExpressionAtom):
-                temp = repr(atom)
-                for k, v in variables.items():
-                    temp = temp.replace(k, v)
-                new_atoms.append(temp)
+        for var in variables:
+            for atom in atoms:
+                if isinstance(atom, ExpressionAtom):
+                    temp = repr(atom)
+                    for k, v in var.items():
+                        temp = temp.replace(k, v)
+                    new_atoms.append(temp)
         for atom in new_atoms:
             space.add_atom(E(S(atom)))
         return res
 
     def insert(self, space, query_atom):
         fields, vars_map = SqlHelper.get_fields_and_values(query_atom)
+        res = []
         for table, field_names in fields.items():
             values = []
             for v in field_names:
@@ -129,8 +133,7 @@ class SqlHelper:
             fields_str = ", ".join(list(field_names))
             values_str = ", ".join(list(values))
             query = f'''{self.insert_command_sql} {table} ({fields_str}) VALUES ({values_str}) RETURNING 0;'''
-            space.query(E(S(query)))
-        res = []
+            res.extend(space.query(E(S(query))))
         return res
 
 
@@ -179,8 +182,11 @@ class SqlSpace(GroundingSpace):
                 self.cursor.execute(sql_query)
                 self.conn.commit()
         except (Exception, psycopg2.DatabaseError) as error:
-            print(error)
-            raise error
+            bindings_set = BindingsSet.empty()
+            bindings = Bindings()
+            bindings.add_var_binding("error on insert: ", ValueAtom(error))
+            bindings_set.push(bindings)
+            return bindings_set
         return BindingsSet.empty()
 
     def query(self, query_atom):
