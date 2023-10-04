@@ -30,7 +30,6 @@ def newMineOp(inventory):
         lambda obj, tool: mine_op(inventory, obj, tool),
         unwrap=False)
 
-@unittest.skip("no reason")
 class MinecraftTest(unittest.TestCase):
 
     def test_minecraft_planning(self):
