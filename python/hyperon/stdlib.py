@@ -1,4 +1,5 @@
-from .atoms import GroundedAtom, OperationAtom, ValueAtom, NoReduceError
+from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError
+from .base import Tokenizer, SExprParser
 from .ext import register_atoms, register_tokens
 
 class Char:
@@ -37,7 +38,7 @@ def arithm_ops():
 @register_atoms
 def bool_ops():
     equalAtom = OperationAtom('==', lambda a, b: [ValueAtom(a == b, 'Bool')],
-                            ['$t', '$t', 'Bool'], unwrap=False)
+                              ['$t', '$t', 'Bool'], unwrap=False)
     greaterAtom = OperationAtom('>', lambda a, b: a > b, ['Number', 'Number', 'Bool'])
     lessAtom = OperationAtom('<', lambda a, b: a < b, ['Number', 'Number', 'Bool'])
     orAtom = OperationAtom('or', lambda a, b: a or b, ['Bool', 'Bool', 'Bool'])
@@ -50,6 +51,33 @@ def bool_ops():
         r"or": orAtom,
         r"and": andAtom,
         r"not": notAtom
+    }
+
+@register_atoms
+def text_ops():
+    """Add text operators
+
+    repr: convert Atom to string.
+    parse: convert String to Atom.
+    stringToChars: convert String to tuple of Char.
+    charsToString: convert tuple of Char to String.
+
+    see test_stdlib.py for examples.
+
+    """
+    reprAtom = OperationAtom('repr', lambda a: [ValueAtom(repr(a))],
+                             ['Atom', 'String'], unwrap=False)
+    parseAtom = OperationAtom('parse', lambda s: [ValueAtom(SExprParser(str(s)[1:-1]).parse(Tokenizer()))],
+                              ['String', 'Atom'], unwrap=False)
+    stringToCharsAtom = OperationAtom('stringToChars', lambda s: [ValueAtom(E(*[ValueAtom(Char(c)) for c in str(s)[1:-1]]))],
+                                      ['String', 'Atom'], unwrap=False)
+    charsToStringAtom = OperationAtom('charsToString', lambda a: [ValueAtom("".join([str(c)[1:-1] for c in a.get_children()]))],
+                                      ['Atom', 'String'], unwrap=False)
+    return {
+        r"repr": reprAtom,
+        r"parse": parseAtom,
+        r"stringToChars": stringToCharsAtom,
+        r"charsToString": charsToStringAtom
     }
 
 @register_tokens

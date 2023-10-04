@@ -10,6 +10,7 @@ use crate::common::shared::Shared;
 use crate::common::assert::vec_eq_no_order;
 use crate::common::ReplacingMapper;
 
+use std::convert::TryFrom;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::Display;
@@ -170,14 +171,6 @@ impl Display for BindOp {
     }
 }
 
-// TODO: move it into hyperon::atom module?
-fn atom_as_sym(atom: &Atom) -> Option<&SymbolAtom> {
-    match atom {
-        Atom::Symbol(sym) => Some(sym),
-        _ => None,
-    }
-}
-
 impl Grounded for BindOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_UNDEFINED])
@@ -185,7 +178,7 @@ impl Grounded for BindOp {
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("bind! expects two arguments: token and atom");
-        let token = atom_as_sym(args.get(0).ok_or_else(arg_error)?).ok_or("bind! expects symbol atom as a token")?.name();
+        let token = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "bind! expects symbol atom as a token")?.name();
         let atom = args.get(1).ok_or_else(arg_error)?.clone();
 
         let token_regex = Regex::new(token).map_err(|err| format!("Could convert token {} into regex: {}", token, err))?;
@@ -678,11 +671,11 @@ impl Grounded for SuperposeOp {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct PragmaOp {
-    settings: Shared<HashMap<String, String>>,
+    settings: Shared<HashMap<String, Atom>>,
 }
 
 impl PragmaOp {
-    pub fn new(settings: Shared<HashMap<String, String>>) -> Self {
+    pub fn new(settings: Shared<HashMap<String, Atom>>) -> Self {
         Self{ settings }
     }
 }
@@ -700,12 +693,9 @@ impl Grounded for PragmaOp {
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("pragma! expects key and value as arguments");
-        let key = atom_as_sym(args.get(0).ok_or_else(arg_error)?).ok_or("pragma! expects symbol atom as a key")?.name();
-        let value = atom_as_sym(args.get(1).ok_or_else(arg_error)?).ok_or("pragma! expects symbol atom as a value")?.name();
-
-        // TODO: add support for Grounded values when needed
-        self.settings.borrow_mut().insert(key.into(), value.into());
-
+        let key = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "pragma! expects symbol atom as a key")?.name();
+        let value = args.get(1).ok_or_else(arg_error)?;
+        self.settings.borrow_mut().insert(key.into(), value.clone());
         Ok(vec![])
     }
 

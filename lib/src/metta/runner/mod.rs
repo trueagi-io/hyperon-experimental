@@ -29,6 +29,15 @@ mod arithmetics;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
+pub fn atom_is_error(atom: &Atom) -> bool {
+    match atom {
+        Atom::Expression(expr) => {
+            expr.children().len() > 0 && expr.children()[0] == ERROR_SYMBOL
+        },
+        _ => false,
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Metta(Rc<MettaContents>);
 
@@ -36,7 +45,7 @@ pub struct Metta(Rc<MettaContents>);
 pub struct MettaContents {
     space: DynSpace,
     tokenizer: Shared<Tokenizer>,
-    settings: Shared<HashMap<String, String>>,
+    settings: Shared<HashMap<String, Atom>>,
     modules: Shared<HashMap<PathBuf, DynSpace>>,
     search_paths: Vec<PathBuf>,
 }
@@ -141,17 +150,20 @@ impl Metta {
         &self.0.modules
     }
 
-    pub(crate) fn settings(&self) -> &Shared<HashMap<String, String>> {
+    pub fn settings(&self) -> &Shared<HashMap<String, Atom>> {
         &self.0.settings
     }
 
-    #[cfg(test)]
-    fn set_setting(&self, key: String, value: String) {
+    pub fn set_setting(&self, key: String, value: Atom) {
         self.0.settings.borrow_mut().insert(key, value);
     }
 
-    fn get_setting(&self, key: &str) -> Option<String> {
+    pub fn get_setting(&self, key: &str) -> Option<Atom> {
         self.0.settings.borrow().get(key.into()).cloned()
+    }
+
+    pub fn get_setting_string(&self, key: &str) -> Option<String> {
+        self.0.settings.borrow().get(key.into()).map(|a| a.to_string())
     }
 
     pub fn run(&self, parser: &mut SExprParser) -> Result<Vec<Vec<Atom>>, String> {
@@ -182,16 +194,7 @@ impl Metta {
                 match interpreter_state.into_result() {
                     Err(msg) => return Err(msg),
                     Ok(result) => {
-                        fn is_error(atom: &Atom) -> bool {
-                            match atom {
-                                Atom::Expression(expr) => {
-                                    expr.children().len() > 0 && expr.children()[0] == ERROR_SYMBOL
-                                },
-                                _ => false,
-                            }
-                        }
-
-                        let error = result.iter().any(|atom| is_error(atom));
+                        let error = result.iter().any(|atom| atom_is_error(atom));
                         state.results.push(result);
                         if error {
                             state.mode = MettaRunnerMode::TERMINATE;
@@ -261,7 +264,7 @@ impl Metta {
     }
 
     fn type_check(&self, atom: Atom) -> Result<Atom, Atom> {
-        let is_type_check_enabled = self.get_setting("type-check").map_or(false, |val| val == "auto");
+        let is_type_check_enabled = self.get_setting_string("type-check").map_or(false, |val| val == "auto");
         if  is_type_check_enabled && !validate_atom(self.0.space.borrow().as_space(), &atom) {
             Err(Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]))
         } else {
@@ -337,7 +340,7 @@ mod tests {
         ";
 
         let metta = Metta::new(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
-        metta.set_setting("type-check".into(), "auto".into());
+        metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
@@ -351,7 +354,7 @@ mod tests {
         ";
 
         let metta = Metta::new(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
-        metta.set_setting("type-check".into(), "auto".into());
+        metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
@@ -406,7 +409,7 @@ mod tests {
         ";
 
         let metta = Metta::new(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
-        metta.set_setting("type-check".into(), "auto".into());
+        metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
