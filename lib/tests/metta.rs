@@ -1,4 +1,7 @@
+#[cfg(not(feature = "minimal"))]
 use hyperon::metta::runner::stdlib::UNIT_ATOM;
+#[cfg(feature = "minimal")]
+use hyperon::metta::runner::stdlib2::UNIT_ATOM;
 use hyperon::metta::text::*;
 use hyperon::metta::runner::new_metta_rust;
 
