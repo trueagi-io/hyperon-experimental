@@ -22,6 +22,16 @@ use super::arithmetics::*;
 
 pub const VOID_SYMBOL : Atom = sym!("%void%");
 
+pub fn UNIT_ATOM() -> Atom {
+    Atom::expr([])
+}
+pub fn UNIT_TYPE() -> Atom {
+    Atom::expr([ARROW_SYMBOL])
+}
+fn unit_result() -> Result<Vec<Atom>, ExecError> {
+    Ok(vec![UNIT_ATOM()])
+}
+
 // TODO: remove hiding errors completely after making it possible passing
 // them to the user
 fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
@@ -52,7 +62,7 @@ impl Display for ImportOp {
 
 impl Grounded for ImportOp {
     fn type_(&self) -> Atom {
-        ATOM_TYPE_UNDEFINED
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -117,7 +127,7 @@ impl Grounded for ImportOp {
             },
             _ => return Err("import! expects space as a first argument".into()),
         };
-        Ok(vec![])
+        unit_result()
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -173,7 +183,7 @@ impl Display for BindOp {
 
 impl Grounded for BindOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_UNDEFINED])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE()])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -183,7 +193,7 @@ impl Grounded for BindOp {
 
         let token_regex = Regex::new(token).map_err(|err| format!("Could convert token {} into regex: {}", token, err))?;
         self.tokenizer.borrow_mut().register_token(token_regex, move |_| { atom.clone() });
-        Ok(vec![])
+        unit_result()
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -231,7 +241,7 @@ impl Display for AddAtomOp {
 impl Grounded for AddAtomOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(),
-            ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
+            ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -240,7 +250,7 @@ impl Grounded for AddAtomOp {
         let atom = args.get(1).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("add-atom expects a space as the first argument")?;
         space.borrow_mut().add(atom.clone());
-        Ok(vec![])
+        unit_result()
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -260,7 +270,7 @@ impl Display for RemoveAtomOp {
 impl Grounded for RemoveAtomOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(),
-            ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+            ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -269,8 +279,8 @@ impl Grounded for RemoveAtomOp {
         let atom = args.get(1).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("remove-atom expects a space as the first argument")?;
         space.borrow_mut().remove(atom);
-        // TODO? return Bool
-        Ok(vec![])
+        // TODO? Is it necessary to distinguish whether the atom was removed or not?
+        unit_result()
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -507,7 +517,7 @@ fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -
     log::debug!("assert_results_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
     let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
     match vec_eq_no_order(actual.iter(), expected.iter()) {
-        Ok(()) => Ok(vec![]),
+        Ok(()) => unit_result(),
         Err(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
 }
@@ -696,7 +706,7 @@ impl Grounded for PragmaOp {
         let key = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "pragma! expects symbol atom as a key")?.name();
         let value = args.get(1).ok_or_else(arg_error)?;
         self.settings.borrow_mut().insert(key.into(), value.clone());
-        Ok(vec![])
+        unit_result()
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -749,14 +759,14 @@ impl Display for PrintlnOp {
 
 impl Grounded for PrintlnOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, sym!("IO")])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE()])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("println! expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
         println!("{}", atom);
-        Ok(vec![])
+        unit_result()
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -838,7 +848,7 @@ impl Grounded for NopOp {
     }
 
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        Ok(vec![])
+        unit_result()
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -1224,7 +1234,7 @@ mod tests {
         let space = DynSpace::new(GroundingSpace::new());
         let satom = Atom::gnd(space.clone());
         let res = AddAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
-        assert!(res.is_empty());
+        assert_eq!(res, vec![UNIT_ATOM()]);
         let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
         assert_eq_no_order!(space_atoms, vec![expr!(("foo" "bar"))]);
     }
@@ -1238,7 +1248,7 @@ mod tests {
         let satom = Atom::gnd(space.clone());
         let res = RemoveAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         // REM: can return Bool in future
-        assert!(res.is_empty());
+        assert_eq!(res, vec![UNIT_ATOM()]);
         let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
         assert_eq_no_order!(space_atoms, vec![expr!(("bar" "foo"))]);
     }
@@ -1286,7 +1296,7 @@ mod tests {
 
         let bind_op = BindOp::new(tokenizer.clone());
 
-        assert_eq!(bind_op.execute(&mut vec![sym!("&my"), sym!("definition")]), Ok(vec![]));
+        assert_eq!(bind_op.execute(&mut vec![sym!("&my"), sym!("definition")]), unit_result());
         let borrowed = tokenizer.borrow();
         let constr = borrowed.find_token("&my");
         assert!(constr.is_some());
@@ -1349,7 +1359,7 @@ mod tests {
 
         let assert_equal_op = AssertEqualOp::new(space);
 
-        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]), Ok(vec![]));
+        assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]), unit_result());
 
         let actual = assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("err"))]);
         let expected = Regex::new("\nExpected: \\[(A B)\\]\nGot: \\[\\((B C)|, |(A B)\\){3}\\]\nExcessive result: (B C)").unwrap();
@@ -1370,7 +1380,7 @@ mod tests {
 
         assert_eq!(assert_equal_to_result_op.execute(&mut vec![
                 expr!(("foo")), expr!(("B" "C") ("A" "B"))]),
-                Ok(vec![]));
+                unit_result());
     }
 
     #[test]
@@ -1444,11 +1454,11 @@ mod tests {
             (: a A)
             (: b B)
 
-            !(superpose ((f (nop)) (f a) (f b)))
+            !(superpose ((f (superpose ())) (f a) (f b)))
         ");
 
         assert_eq!(metta.run(&mut parser), Ok(vec![vec![
-                expr!("Error" ("f" ({NopOp{}})) "NoValidAlternatives"),
+                expr!("Error" ("f" ({SuperposeOp{space:metta.space().clone()}} ())) "NoValidAlternatives"),
                 expr!("a"), expr!("Error" "b" "BadType")]]));
     }
 
@@ -1483,7 +1493,7 @@ mod tests {
 
     #[test]
     fn println_op() {
-        assert_eq!(PrintlnOp{}.execute(&mut vec![sym!("A")]), Ok(vec![]));
+        assert_eq!(PrintlnOp{}.execute(&mut vec![sym!("A")]), unit_result());
     }
 
     #[test]
@@ -1494,7 +1504,7 @@ mod tests {
 
     #[test]
     fn nop_op() {
-        assert_eq!(NopOp{}.execute(&mut vec![]), Ok(vec![]));
+        assert_eq!(NopOp{}.execute(&mut vec![]), unit_result());
     }
 
     #[test]
