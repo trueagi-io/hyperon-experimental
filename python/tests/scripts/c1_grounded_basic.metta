@@ -157,8 +157,9 @@
 ; Non-determinism "reasoning":
 ; Among all 3-bit binary lists, return the one whose `subsum`
 ; with (:: 3 (:: 7 (:: 5 nil))) equals 8, or `nop` if not found
-; (`nop` is a grounded function that consumes its arguments and returns nothing)
+; (`superpose` is used to return an empty result acting as termination
+; of evaluation of the branch)
 !(assertEqualToResult
   (let $t (gen 3)
-    (if (== (subsum (:: 3 (:: 7 (:: 5 nil))) $t) 8) $t (nop)))
+    (if (== (subsum (:: 3 (:: 7 (:: 5 nil))) $t) 8) $t (superpose ())))
   ((:: 1 (:: 0 (:: 1 nil)))))
