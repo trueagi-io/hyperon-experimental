@@ -277,7 +277,14 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
                 [Atom::Expression(_body)] => {
                     match atom_into_array(atom) {
                         Some([_, body]) =>
-                            function(space, bindings, body),
+                            function(space, bindings, body, None),
+                        _ => panic!("Unexpected state"),
+                    }
+                },
+                [Atom::Expression(_body), Atom::Expression(_call)] => {
+                    match atom_into_array(atom) {
+                        Some([_, body, call]) =>
+                            function(space, bindings, body, Some(call)),
                         _ => panic!("Unexpected state"),
                     }
                 },
@@ -401,11 +408,15 @@ fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: V
           .collect()
       }
     } else if is_embedded_op(&nested) {
-        let result = interpret_atom_root(space, InterpretedAtom(nested, bindings), false);
+        let result = interpret_atom_root(space, InterpretedAtom(nested.clone(), bindings), false);
         result.into_iter()
             .map(|InterpretedAtom(r, b)| {
                 if is_eval && is_function_op(&r) {
-                    InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b)
+                    match atom_into_array(r) {
+                        Some([_, body]) =>
+                            InterpretedAtom(Atom::expr([CHAIN_SYMBOL, Atom::expr([FUNCTION_SYMBOL, body, nested.clone()]), Atom::Variable(var.clone()), templ.clone()]), b),
+                        _ => panic!("Unexpected state"),
+                    }
                 } else {
                     apply(b, r, var.clone(), &templ)
                 }
@@ -416,31 +427,37 @@ fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: V
     }
 }
 
-fn function<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, body: Atom) -> Vec<InterpretedAtom> {
+fn function<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, body: Atom, call: Option<Atom>) -> Vec<InterpretedAtom> {
+    let call = match call {
+        Some(call) => call,
+        None => Atom::expr([FUNCTION_SYMBOL, body.clone()]),
+    };
     match atom_as_slice(&body) {
         Some([op, _result]) if *op == RETURN_SYMBOL => {
             if let Some([_, result]) = atom_into_array(body) {
-                //log::debug!("function: return {:?}", result);
                 // FIXME: check return arguments size
                 vec![InterpretedAtom(result, bindings)]
             } else {
                 panic!("Unexpected state");
             }
         },
-        _ => {
+        _ if is_embedded_op(&body) => {
             let mut result = interpret_atom_root(space, InterpretedAtom(body, bindings), false);
-            //log::debug!("function: result of execution {:?}", result);
             if result.len() == 1 {
                 let InterpretedAtom(r, b) = result.pop().unwrap();
-                vec![InterpretedAtom(Atom::expr([FUNCTION_SYMBOL, r]), b)]
+                vec![InterpretedAtom(Atom::expr([FUNCTION_SYMBOL, r, call]), b)]
             } else {
                 result.into_iter()
                     .map(|InterpretedAtom(r, b)| {
-                        InterpretedAtom(Atom::expr([FUNCTION_SYMBOL, r]), b)
+                        InterpretedAtom(Atom::expr([FUNCTION_SYMBOL, r, call.clone()]), b)
                     })
                 .collect()
             }
-        }
+        },
+        _ => {
+            let error = format!("function doesn't have return statement");
+            vec![InterpretedAtom(error_atom(call, error), bindings)]
+        },
     }
 }
 

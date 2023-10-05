@@ -10,11 +10,12 @@
 (: cons (-> Atom Atom Atom))
 (: decons (-> Atom Atom))
 
+(: id (-> Atom Atom))
+(= (id $x) $x)
+
 (: insert (-> Atom Variable Atom Atom))
 (= (insert $atom $var $templ)
-  (function (chain (eval (quote $atom)) $x
-    (chain (eval (unquote $x)) $var
-      (return $templ) ))))
+  (function (chain (eval (id $atom)) $var (return $templ))) )
 
 (: if-non-empty-expression (-> Atom Atom Atom Atom))
 (= (if-non-empty-expression $atom $then $else)
@@ -46,7 +47,7 @@
 
 (: return-on-error (-> Atom Atom Atom))
 (= (return-on-error $atom $then)
-  (function (eval (if-empty $atom Empty
+  (function (eval (if-empty $atom (return (return Empty))
     (eval (if-error $atom (return (return $atom))
       (return $then) ))))))
 
