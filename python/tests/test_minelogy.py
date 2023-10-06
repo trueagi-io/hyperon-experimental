@@ -10,7 +10,7 @@ class MinelogyTest(HyperonTestCase):
         # A nearly direct reimplementation of minelogy as it
         # was in the minecraft demo. Not optimal representation -
         # just testing.
-        mines = MeTTa()
+        mines = MeTTa(env_builder=Environment.test_env())
         mines.run('''
             (((: log type) (: $x variant))
              (: (stone_axe wooden_axe None) tools)
@@ -33,7 +33,7 @@ class MinelogyTest(HyperonTestCase):
              ((: stone type) (: $x variant))
             )
             ''')
-        crafts = MeTTa()
+        crafts = MeTTa(env_builder=Environment.test_env())
         crafts.run('''
             (((: log type) (: $x variant) (: 1 quantity))
              ((: planks type) (: $x variant) (: 4 quantity)))
@@ -43,7 +43,7 @@ class MinelogyTest(HyperonTestCase):
                   ((: planks type) (: $y variant) (: 3 quantity))))
              ((: wooden_pickaxe type) (: $_ variant) (: 1 quantity)))
             ''')
-        utils = MeTTa()
+        utils = MeTTa(env_builder=Environment.test_env())
         utils.register_atom("&mines", mines.run("! &self")[0][0])
         utils.register_atom("&crafts", crafts.run("! &self")[0][0])
         utils.run('''
@@ -114,11 +114,11 @@ class MinelogyTest(HyperonTestCase):
             '[(do-mine ((: stone type) (: stone variant)))]')
         output = utils.run('!(how-get stick)')[0]
         self.assertAtomsAreEquivalent(output,
-                MeTTa().parse_all('(do-craft ((: planks type) (: $x variant) (: 2 quantity)))'))
+                MeTTa(env_builder=Environment.test_env()).parse_all('(do-craft ((: planks type) (: $x variant) (: 2 quantity)))'))
 
     def test_minelogy_wtypes(self):
         # TODO: revisit this example, when types are automatically checked
-        kb = MeTTa()
+        kb = MeTTa(env_builder=Environment.test_env())
         kb.run('''
             (: BlockT Type)
             (: log BlockT)
@@ -169,7 +169,7 @@ class MinelogyTest(HyperonTestCase):
                             ((CEntityV planks $_) 3)))
                ((CEntityT wooden_pickaxe) 1))
             ''')
-        utils = MeTTa()
+        utils = MeTTa(env_builder=Environment.test_env())
         utils.register_atom("&kb", kb.run("! &self")[0][0])
         utils.run('''
             (= (get-mine-block $t)
@@ -216,7 +216,7 @@ class MinelogyTest(HyperonTestCase):
         )
         output = utils.run('!(get-ingredients wooden_pickaxe)')[0]
         self.assertAtomsAreEquivalent(output,
-                MeTTa().parse_all('(list ((CEntityT stick) 2) ((CEntityV planks $_) 3))'))
+                MeTTa(env_builder=Environment.test_env()).parse_all('(list ((CEntityT stick) 2) ((CEntityV planks $_) 3))'))
 
 
 if __name__ == "__main__":

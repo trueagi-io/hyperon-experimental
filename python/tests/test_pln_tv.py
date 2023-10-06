@@ -6,7 +6,7 @@ from test_common import HyperonTestCase
 class PLNTVTest(HyperonTestCase):
 
     def test_fuzzy_conjunction_fn(self):
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
         # `stv` as a mix of function and constructor
         # working through ordinary equalities
         metta.run('''

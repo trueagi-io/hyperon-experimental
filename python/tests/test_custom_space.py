@@ -107,7 +107,7 @@ class CustomSpaceTest(HyperonTestCase):
         self.assertEqualNoOrder(result, [{"x": S("B")}, {"x": S("E")}])
 
     def test_atom_containing_space(self):
-        m = MeTTa()
+        m = MeTTa(env_builder=Environment.test_env())
 
         # Make a little space and add it to the MeTTa interpreter's space
         little_space = SpaceRef(TestSpace())
@@ -131,7 +131,7 @@ class CustomSpaceTest(HyperonTestCase):
         nested.add_atom(E(S("A"), S("B")))
         space_atom = G(nested)
 
-        runner = MeTTa()
+        runner = MeTTa(env_builder=Environment.test_env())
         runner.tokenizer().register_token("nested", lambda token: space_atom)
 
         result = runner.run("!(match nested (A $x) $x)")

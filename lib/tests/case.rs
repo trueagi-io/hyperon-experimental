@@ -1,10 +1,11 @@
 use hyperon::assert_eq_metta_results;
 use hyperon::metta::text::SExprParser;
 use hyperon::metta::runner::Metta;
+use hyperon::metta::environment::EnvBuilder;
 
 #[test]
 fn test_case_operation() {
-    let metta = Metta::new_rust();
+    let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
     let result = metta.run(&mut SExprParser::new("
         ; cases are processed sequentially
         !(case (+ 1 5)
@@ -39,7 +40,7 @@ fn test_case_operation() {
     "));
     assert_eq!(result, expected);
 
-    let metta = Metta::new_rust();
+    let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
     let result = metta.run(&mut SExprParser::new("
         (Rel-P A B)
         (Rel-Q A C)

@@ -37,7 +37,7 @@ using CSyntaxNode = CStruct<syntax_node_t>;
 using CStepResult = CStruct<step_result_t>;
 using CRunnerState = CStruct<runner_state_t>;
 using CMetta = CStruct<metta_t>;
-using CEnvBuilder = CStruct<env_builder_t>;
+using EnvBuilder = CStruct<env_builder_t>;
 
 // Returns a string, created by executing a function that writes string data into a buffer
 typedef size_t (*write_to_buf_func_t)(void*, char*, size_t);
@@ -66,6 +66,22 @@ std::string func_to_string_no_arg(write_to_buf_no_arg_func_t func) {
     } else {
         char* data = new char[len+1];
         func(data, len+1);
+        std::string new_string = std::string(data);
+        return new_string;
+    }
+}
+
+// Similar to func_to_string, but for functions that that take two args
+typedef size_t (*write_to_buf_two_arg_func_t)(void*, void*, char*, size_t);
+std::string func_to_string_two_args(write_to_buf_two_arg_func_t func, void* arg1, void* arg2) {
+    //First try with a 1K stack buffer, because that will work in the vast majority of cases
+    char dst_buf[1024];
+    size_t len = func(arg1, arg2, dst_buf, 1024);
+    if (len < 1024) {
+        return std::string(dst_buf);
+    } else {
+        char* data = new char[len+1];
+        func(arg1, arg2, data, len+1);
         std::string new_string = std::string(data);
         return new_string;
     }
@@ -757,11 +773,15 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_SYMBOL(VOID, "Void");
 
     py::class_<CMetta>(m, "CMetta");
-    m.def("metta_new", [](CSpace space, CTokenizer tokenizer) {
-        return CMetta(metta_new_with_space(space.ptr(), tokenizer.ptr()));
+    m.def("metta_new", [](CSpace space, CTokenizer tokenizer, EnvBuilder env_builder) {
+        return CMetta(metta_new_with_space(space.ptr(), tokenizer.ptr(), env_builder.obj));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
-    m.def("metta_init_with_platform_env", [](CMetta metta) { metta_init_with_platform_env(metta.ptr()); }, "Inits a MeTTa interpreter by running the init.metta file from the environment");
+    m.def("metta_init", [](CMetta metta) { metta_init(metta.ptr()); }, "Inits a MeTTa interpreter by running the init.metta file from its environment");
+    m.def("metta_search_path_cnt", [](CMetta metta) { return metta_search_path_cnt(metta.ptr()); }, "Returns the number of module search paths in the runner's environment");
+    m.def("metta_nth_search_path", [](CMetta metta, size_t idx) {
+        return func_to_string_two_args((write_to_buf_two_arg_func_t)&metta_nth_search_path, metta.ptr(), (void*)idx);
+    }, "Returns the module search path at the specified index, in the runner's environment");
     m.def("metta_space", [](CMetta metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");
     m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
     m.def("metta_run", [](CMetta metta, CSExprParser& parser) {
@@ -789,25 +809,18 @@ PYBIND11_MODULE(hyperonpy, m) {
         return lists_of_atom;
     }, "Returns the in-flight results from a runner state");
 
-    py::class_<CEnvBuilder>(m, "CEnvBuilder");
+    py::class_<EnvBuilder>(m, "EnvBuilder");
     m.def("environment_config_dir", []() {
         return func_to_string_no_arg((write_to_buf_no_arg_func_t)&environment_config_dir);
     }, "Return the config_dir for the platform environment");
-    m.def("environment_search_path_cnt", []() { return environment_search_path_cnt(); }, "Returns the number of module search paths in the environment");
-    m.def("environment_nth_search_path", [](size_t idx) {
-        return func_to_string((write_to_buf_func_t)&environment_nth_search_path, (void*)idx);
-    }, "Returns the module search path at the specified index, in the environment");
-    m.def("environment_init_start", []() { return CEnvBuilder(environment_init_start()); }, "Begin initialization of the platform environment");
-    m.def("environment_init_finish", [](CEnvBuilder builder) { return environment_init_finish(builder.obj); }, "Finish initialization of the platform environment");
-    m.def("environment_init_set_working_dir", [](CEnvBuilder& builder, std::string path) { environment_init_set_working_dir(builder.ptr(), path.c_str()); }, "Sets the working dir in the platform environment");
-    m.def("environment_init_set_config_dir", [](CEnvBuilder& builder, std::string path) { environment_init_set_config_dir(builder.ptr(), path.c_str()); }, "Sets the config dir in the platform environment");
-    m.def("environment_init_disable_config_dir", [](CEnvBuilder& builder) { environment_init_disable_config_dir(builder.ptr()); }, "Disables the config dir in the platform environment");
-    m.def("environment_init_add_include_path", [](CEnvBuilder& builder, std::string path) { environment_init_add_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the platform environment");
-}
-
-__attribute__((constructor))
-static void init_library() {
-    // TODO: integrate Rust logs with Python logger
-    init_logger();
+    m.def("env_builder_start", []() { return EnvBuilder(env_builder_start()); }, "Begin initialization of the environment");
+    m.def("env_builder_use_default", []() { return EnvBuilder(env_builder_use_default()); }, "Use the platform environment");
+    m.def("env_builder_use_test_env", []() { return EnvBuilder(env_builder_use_test_env()); }, "Use an environment for unit testing");
+    m.def("env_builder_init_platform_env", [](EnvBuilder builder) { return env_builder_init_platform_env(builder.obj); }, "Finish initialization of the platform environment");
+    m.def("env_builder_set_working_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_working_dir(builder.ptr(), path.c_str()); }, "Sets the working dir in the platform environment");
+    m.def("env_builder_set_config_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_config_dir(builder.ptr(), path.c_str()); }, "Sets the config dir in the platform environment");
+    m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the platform environment");
+    m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the platform environment");
+    m.def("env_builder_add_include_path", [](EnvBuilder& builder, std::string path) { env_builder_add_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the platform environment");
 }
 

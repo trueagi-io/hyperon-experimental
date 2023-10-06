@@ -2,13 +2,15 @@ use crate::*;
 use crate::common::shared::Shared;
 
 use super::*;
+use super::environment::EnvBuilder;
 use super::space::*;
 use super::text::{Tokenizer, SExprParser};
 use super::types::validate_atom;
 
 use std::rc::Rc;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use metta::environment::Environment;
 
@@ -48,7 +50,8 @@ pub struct MettaContents {
     tokenizer: Shared<Tokenizer>,
     settings: Shared<HashMap<String, Atom>>,
     modules: Shared<HashMap<PathBuf, DynSpace>>,
-    search_paths: Vec<PathBuf>,
+    working_dir: Option<PathBuf>,
+    environment: Arc<Environment>,
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -66,23 +69,24 @@ pub struct RunnerState<'a> {
 
 impl Metta {
 
-    /// A 1-liner to get a MeTTa interpreter using the default configuration
-    /// 
+    /// A 1-line method to create a fully initialized MeTTa interpreter
+    ///
+    /// NOTE: pass `None` for `env_builder` to use the platform environment
     /// NOTE: This function is appropriate for Rust or C clients, but if other language-specific
     ///   stdlibs are involved then see the documentation for [Metta::init]
-    pub fn new_rust() -> Metta {
+    pub fn new_rust(env_builder: Option<EnvBuilder>) -> Metta {
         let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()),
-            Shared::new(Tokenizer::new()));
+            Shared::new(Tokenizer::new()), env_builder);
         metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
-        metta.init_with_platform_env();
+        metta.init();
         metta
     }
 
     /// Performs initialization of a MeTTa interpreter.  Presently this involves running the `init.metta`
-    /// file from the platform environment.
+    /// file from the associated environment.
     ///
-    /// DISCUSSION: Creating a fully-initialized MeTTa environment should usually be done with with
-    /// a top-level initialization function, such as [new_metta_rust] or `MeTTa.new()` in Python.
+    /// DISCUSSION: Creating a fully-initialized MeTTa runner should usually be done with with
+    /// a top-level initialization function, such as [Metta::new_rust] or `MeTTa()` in Python.
     ///
     /// Doing it manually involves several steps:
     /// 1. Create the MeTTa runner, using [new_with_space].  This provides a working interpreter, but
@@ -94,19 +98,31 @@ impl Metta {
     ///
     /// TODO: When we are able to load the Rust stdlib before the Python stdlib, which requires value-bridging,
     ///     we can refactor this function to load the appropriate stdlib(s) and simplify the init process
-    pub fn init_with_platform_env(&self) {
-        if let Some(init_meta_file) = Environment::platform_env().initialization_metta_file_path() {
+    pub fn init(&self) {
+        if let Some(init_meta_file) = self.0.environment.initialization_metta_file_path() {
             self.load_module(init_meta_file.into()).unwrap();
         }
     }
 
-    /// Returns a new MeTTa interpreter, using the provided Space and Tokenizer
+    /// Returns a new MeTTa interpreter, using the provided Space, Tokenizer
     ///
+    /// NOTE: If `env_builder` is `None`, the platform environment will be used
     /// NOTE: This function does not load any stdlib atoms, nor run the [Environment]'s 'init.metta'
-    pub fn new_with_space(space: DynSpace, tokenizer: Shared<Tokenizer>) -> Self {
+    pub fn new_with_space(space: DynSpace, tokenizer: Shared<Tokenizer>, env_builder: Option<EnvBuilder>) -> Self {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
-        let contents = MettaContents{ space, tokenizer, settings, modules, search_paths: Environment::platform_env().modules_search_paths().map(|path| path.into()).collect() };
+        let environment = match env_builder {
+            Some(env_builder) => Arc::new(env_builder.build()),
+            None => Environment::platform_env_arc()
+        };
+        let contents = MettaContents{
+            space,
+            tokenizer,
+            settings,
+            modules,
+            working_dir: environment.working_dir().map(|path| path.into()),
+            environment,
+        };
         let metta = Self(Rc::new(contents));
         register_runner_tokens(&metta);
         register_common_tokens(&metta);
@@ -114,22 +130,17 @@ impl Metta {
     }
 
     /// Returns a new MeTTa interpreter intended for use loading MeTTa modules during import
-    fn new_loading_runner(metta: &Metta, path: PathBuf) -> Self {
+    fn new_loading_runner(metta: &Metta, path: &Path) -> Self {
         let space = DynSpace::new(GroundingSpace::new());
         let tokenizer = metta.tokenizer().clone_inner();
+        let environment = metta.0.environment.clone();
         let settings = metta.0.settings.clone();
         let modules = metta.0.modules.clone();
 
-        //Search only the parent directory of the module we're loading
-        //TODO: I think we want all the same search path behavior as the parent runner, but with
-        // a different working_dir.  Consider using the working_dir from the environment only to
-        // init the top-level runner, and moving search-path composition logic from the environment
-        // to the runner.
-        let mut path = path;
-        path.pop();
-        let search_paths = vec![path];
+        //Start search for sub-modules in the parent directory of the module we're loading
+        let working_dir = path.parent().map(|path| path.into());
 
-        let metta = Self(Rc::new(MettaContents { space, tokenizer, settings, modules, search_paths }));
+        let metta = Self(Rc::new(MettaContents { space, tokenizer, settings, modules, environment, working_dir }));
         register_runner_tokens(&metta);
         metta
     }
@@ -147,7 +158,7 @@ impl Metta {
             },
             None => {
                 // Load the module to the new space
-                let runner = Metta::new_loading_runner(self, path.clone());
+                let runner = Metta::new_loading_runner(self, &path);
                 let program = match path.to_str() {
                     Some("stdlib") => METTA_CODE.to_string(),
                     _ => std::fs::read_to_string(&path).map_err(
@@ -188,8 +199,12 @@ impl Metta {
         &self.0.tokenizer
     }
 
-    pub fn search_paths(&self) -> &Vec<PathBuf> {
-        &self.0.search_paths
+    /// Returns the search paths to explore for MeTTa modules, in search priority order
+    ///
+    /// The runner's working_dir is always returned first
+    pub fn search_paths<'a>(&'a self) -> impl Iterator<Item=&Path> + 'a {
+        [&self.0.working_dir].into_iter().filter_map(|opt| opt.as_deref())
+            .chain(self.0.environment.extra_include_paths())
     }
 
     pub fn modules(&self) -> &Shared<HashMap<PathBuf, DynSpace>> {
@@ -366,7 +381,7 @@ mod tests {
             !(green Fritz)
         ";
 
-        let metta = Metta::new_rust();
+        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![Atom::sym("T")]]));
     }
@@ -379,7 +394,7 @@ mod tests {
             (foo b)
         ";
 
-        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -393,7 +408,7 @@ mod tests {
             !(foo b)
         ";
 
-        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -430,7 +445,7 @@ mod tests {
             !(foo)
         ";
 
-        let metta = Metta::new_rust();
+        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         metta.tokenizer().borrow_mut().register_token(Regex::new("error").unwrap(),
             |_| Atom::gnd(ErrorOp{}));
         let result = metta.run(&mut SExprParser::new(program));
@@ -448,7 +463,7 @@ mod tests {
             !(foo a)
         ";
 
-        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()));
+        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(&mut SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -481,7 +496,7 @@ mod tests {
             !(empty)
         ";
 
-        let metta = Metta::new_rust();
+        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         metta.tokenizer().borrow_mut().register_token(Regex::new("empty").unwrap(),
             |_| Atom::gnd(ReturnAtomOp(expr!())));
         let result = metta.run(&mut SExprParser::new(program));

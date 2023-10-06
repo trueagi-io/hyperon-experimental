@@ -5,7 +5,7 @@ from hyperon import *
 class MettaTest(unittest.TestCase):
 
     def test_adding_tokens_while_parsing(self):
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
 
         atom = metta.parse_single('(A B)')
         self.assertEqual(atom, E(S('A'), S('B')))
@@ -29,7 +29,7 @@ class MettaTest(unittest.TestCase):
             (= (green $x) (frog $x))
             !(green Fritz)
         '''
-        runner = MeTTa()
+        runner = MeTTa(env_builder=Environment.test_env())
         result = runner.run(program)
 
         self.assertEqual([[S('T')]], result)
@@ -38,7 +38,7 @@ class MettaTest(unittest.TestCase):
         program = '''
             !(+ 1 (+ 2 (+ 3 4)))
         '''
-        runner = MeTTa()
+        runner = MeTTa(env_builder=Environment.test_env())
         runner_state = runner.start_run(program)
 
         step_count = 0
@@ -53,7 +53,7 @@ class MettaTest(unittest.TestCase):
         program = '''
           !(+ 2 "String")
         '''
-        runner = MeTTa()
+        runner = MeTTa(env_builder=Environment.test_env())
         result = runner.run(program)
 
         self.assertEqual([[E(S('Error'), ValueAtom('String'), S('BadType'))]], result)

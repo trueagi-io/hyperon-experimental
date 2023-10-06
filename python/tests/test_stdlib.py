@@ -6,7 +6,7 @@ from test_common import *
 
 class StdlibTest(HyperonTestCase):
     def test_text_ops(self):
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
         # Check that (repr (my atom)) == "(my atom)"
         self.assertEqualMettaRunnerResults(metta.run("!(repr (my atom))"),
                                            [[ValueAtom("(my atom)")]])
@@ -24,7 +24,7 @@ class StdlibTest(HyperonTestCase):
                                            [[ValueAtom("ABC")]])
 
     def test_number_parsing(self):
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
         self.assertEqualMettaRunnerResults(metta.run("!(+ 1 2)"), [[ValueAtom(3)]])
         self.assertEqualMettaRunnerResults(metta.run("!(+ 5.0 -2.0)"), [[ValueAtom(3.0)]])
         self.assertEqualMettaRunnerResults(metta.run("!(+ 1.0e3 2.0e3)"), [[ValueAtom(3e3)]])

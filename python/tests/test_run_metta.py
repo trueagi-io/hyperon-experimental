@@ -1,4 +1,4 @@
-from hyperon import MeTTa, E
+from hyperon import MeTTa, Environment, E
 from test_common import HyperonTestCase
 
 from pathlib import Path
@@ -18,7 +18,7 @@ class MeTTaTest(HyperonTestCase):
             !(f)
         '''
 
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
         self.assertEqualMettaRunnerResults(metta.run(program),
             [metta.parse_all('red  green  blue'), metta.parse_all('5')])
 
@@ -30,7 +30,7 @@ class MeTTaTest(HyperonTestCase):
             !(match &self (, (A $x) (C $x)) $x)
         '''
 
-        result = MeTTa().run(program)
+        result = MeTTa(env_builder=Environment.test_env()).run(program)
         self.assertEqual('[[B]]', repr(result))
 
     def test_list_concatenation(self):
@@ -46,7 +46,7 @@ class MeTTaTest(HyperonTestCase):
             !(Concat (lst1) (lst2))
         '''
 
-        result = MeTTa().run(program)
+        result = MeTTa(env_builder=Environment.test_env()).run(program)
         self.assertEqual('[[(Cons a1 (Cons a2 (Cons b1 (Cons b2 Nil))))]]', repr(result))
 
     def test_comments(self):
@@ -56,7 +56,7 @@ class MeTTaTest(HyperonTestCase):
                 !(match &self (a $W) $W)
             '''
 
-        result = MeTTa().run(program)
+        result = MeTTa(env_builder=Environment.test_env()).run(program)
         self.assertEqual('[[5]]', repr(result))
 
         program = '''
@@ -65,7 +65,7 @@ class MeTTaTest(HyperonTestCase):
                         &self (a $W) $W)
            '''
 
-        result = MeTTa().run(program)
+        result = MeTTa(env_builder=Environment.test_env()).run(program)
         self.assertEqual('[[1]]', repr(result))
 
     def process_exceptions(self, results):
@@ -73,25 +73,25 @@ class MeTTaTest(HyperonTestCase):
             self.assertEqual(result, [E()])
 
     def test_scripts(self):
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/a1_symbols.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/a2_opencoggy.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/a3_twoside.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/b0_chaining_prelim.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/b1_equal_chain.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/b2_backchain.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/b3_direct.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/b4_nondeterm.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/b5_types_prelim.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/c1_grounded_basic.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/c2_spaces.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/c3_pln_stv.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/d1_gadt.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/d2_higherfunc.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/d3_deptypes.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/d4_type_prop.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/d5_auto_types.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/e1_kb_write.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/e2_states.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/e3_match_states.metta"))
-        self.process_exceptions(MeTTa().import_file(f"{pwd}/scripts/f1_imports.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/a1_symbols.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/a2_opencoggy.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/a3_twoside.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b0_chaining_prelim.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b1_equal_chain.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b2_backchain.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b3_direct.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b4_nondeterm.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b5_types_prelim.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/c1_grounded_basic.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/c2_spaces.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/c3_pln_stv.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/d1_gadt.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/d2_higherfunc.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/d3_deptypes.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/d4_type_prop.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/d5_auto_types.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/e1_kb_write.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/e2_states.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/e3_match_states.metta"))
+        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/f1_imports.metta"))
 

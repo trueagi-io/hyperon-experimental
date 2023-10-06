@@ -16,6 +16,7 @@ use std::cell::RefCell;
 use std::fmt::Display;
 use std::collections::HashMap;
 use std::iter::FromIterator;
+use std::path::PathBuf;
 use regex::Regex;
 
 use super::arithmetics::*;
@@ -82,8 +83,8 @@ impl Grounded for ImportOp {
         if let Atom::Symbol(file) = file {
 
             //Check each include directory in order, until we find the module we're looking for
-            for include_dir in self.metta.search_paths().iter() {
-                let mut path = include_dir.clone();
+            for include_dir in self.metta.search_paths() {
+                let mut path: PathBuf = include_dir.into();
                 path.push(file.name());
                 path = path.canonicalize().unwrap_or(path);
                 if path.exists() {
@@ -1206,11 +1207,12 @@ pub static METTA_CODE: &'static str = "
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metta::environment::EnvBuilder;
     use crate::metta::runner::Metta;
     use crate::metta::types::validate_atom;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = Metta::new_rust();
+        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         metta.run(&mut SExprParser::new(program))
     }
 
@@ -1423,7 +1425,7 @@ mod tests {
 
     #[test]
     fn superpose_op_multiple_interpretations() {
-        let metta = Metta::new_rust();
+        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         let mut parser = SExprParser::new("
             (= (f) A)
             (= (f) B)
@@ -1439,7 +1441,7 @@ mod tests {
 
     #[test]
     fn superpose_op_superposed_with_collapse() {
-        let metta = Metta::new_rust();
+        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         let mut parser = SExprParser::new("
             (= (f) A)
             (= (f) B)
@@ -1453,7 +1455,7 @@ mod tests {
 
     #[test]
     fn superpose_op_consumes_interpreter_errors() {
-        let metta = Metta::new_rust();
+        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         let mut parser = SExprParser::new("
             (: f (-> A B))
             (= (f $x) $x)

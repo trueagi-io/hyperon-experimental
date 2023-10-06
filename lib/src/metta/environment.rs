@@ -3,10 +3,9 @@ use std::path::{Path, PathBuf};
 use std::io::Write;
 use std::fs;
 use std::borrow::Borrow;
+use std::sync::Arc;
 
 use directories::ProjectDirs;
-
-use crate::common;
 
 /// Contains state and platform interfaces shared by all MeTTa runners.  This includes config settings
 /// and logger
@@ -18,17 +17,23 @@ pub struct Environment {
     init_metta_path: Option<PathBuf>,
     working_dir: Option<PathBuf>,
     extra_include_paths: Vec<PathBuf>,
+    is_test: bool,
 }
 
 const DEFAULT_INIT_METTA: &[u8] = include_bytes!("init.default.metta");
 
-static PLATFORM_ENV: std::sync::OnceLock<Environment> = std::sync::OnceLock::new();
+static PLATFORM_ENV: std::sync::OnceLock<Arc<Environment>> = std::sync::OnceLock::new();
 
 impl Environment {
 
     /// Returns a reference to the shared "platform" Environment
     pub fn platform_env() -> &'static Self {
-        PLATFORM_ENV.get_or_init(|| EnvBuilder::new().build_platform_env())
+        PLATFORM_ENV.get_or_init(|| Arc::new(EnvBuilder::new().build()))
+    }
+
+    /// Internal function to get a copy of the platform Environment's Arc ptr
+    pub(crate) fn platform_env_arc() -> Arc<Self> {
+        PLATFORM_ENV.get_or_init(|| Arc::new(EnvBuilder::new().build())).clone()
     }
 
     /// Returns the Path to the config dir, in an OS-specific location
@@ -36,17 +41,23 @@ impl Environment {
         self.config_dir.as_deref()
     }
 
+    /// Returns the Path to the environment's working_dir
+    ///
+    /// NOTE: The Environment's working_dir is not the same as the process working directory, and
+    /// changing the process's working directory will not affect the environment
+    pub fn working_dir(&self) -> Option<&Path> {
+        self.working_dir.as_deref()
+    }
+
     /// Returns the path to the init.metta file, that is run to initialize a MeTTa runner and customize the MeTTa environment
     pub fn initialization_metta_file_path(&self) -> Option<&Path> {
         self.init_metta_path.as_deref()
     }
 
-    /// Returns the search paths to look in for MeTTa modules, in search priority order
-    ///
-    /// The working_dir is always returned first
-    pub fn modules_search_paths<'a>(&'a self) -> impl Iterator<Item=&Path> + 'a {
-        [&self.working_dir].into_iter().filter_map(|opt| opt.as_deref())
-            .chain(self.extra_include_paths.iter().map(|path| path.borrow()))
+    /// Returns the extra search paths in the environment, in search priority order.  Results do not
+    /// include the working_dir
+    pub fn extra_include_paths<'a>(&'a self) -> impl Iterator<Item=&Path> + 'a {
+        self.extra_include_paths.iter().map(|path| path.borrow())
     }
 
     /// Private "default" function
@@ -56,6 +67,7 @@ impl Environment {
             init_metta_path: None,
             working_dir: None,
             extra_include_paths: vec![],
+            is_test: false,
         }
     }
 }
@@ -88,6 +100,14 @@ impl EnvBuilder {
         }
     }
 
+    /// A convenience function to construct an environment suitable for unit tests
+    ///
+    /// The `test_env` Environment will not load or create any files.  Additionally
+    /// this method will initialize the logger for the test environment
+    pub fn test_env() -> Self {
+        EnvBuilder::new().set_is_test(true).set_no_config_dir()
+    }
+
     /// Sets (or unsets) the working_dir for the environment
     pub fn set_working_dir(mut self, working_dir: Option<&Path>) -> Self {
         self.env.working_dir = working_dir.map(|dir| dir.into());
@@ -113,6 +133,15 @@ impl EnvBuilder {
         self
     }
 
+    /// Sets the `is_test` flag for the environment, to specify whether the environment is a unit-test
+    ///
+    /// NOTE: This currently applies to the logger, but may affect other behaviors in the future.
+    ///     See [env_logger::is_test](https://docs.rs/env_logger/latest/env_logger/struct.Builder.html#method.is_test)
+    pub fn set_is_test(mut self, is_test: bool) -> Self {
+        self.env.is_test = is_test;
+        self
+    }
+
     /// Adds additional include paths to search for MeTTa modules
     ///
     /// NOTE: The most recently added paths will have the highest search priority, save for the `working_dir`,
@@ -133,22 +162,18 @@ impl EnvBuilder {
 
     /// Initializes the shared platform Environment.  Non-panicking version of [init_platform_env]
     pub fn try_init_platform_env(self) -> Result<(), &'static str> {
-        PLATFORM_ENV.set(self.build_platform_env()).map_err(|_| "Platform Environment already initialized")
-    }
-
-    /// Internal function to finalize the building of the shared platform environment.  Will always be called
-    ///   from inside the init closure of a OnceLock, so it will only be called once per process.
-    fn build_platform_env(self) -> Environment {
-        common::init_logger(false);
-        self.build()
+        PLATFORM_ENV.set(Arc::new(self.build())).map_err(|_| "Platform Environment already initialized")
     }
 
     /// Returns a newly created Environment from the builder configuration
     ///
     /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [platform_env] method.
-    pub fn build(self) -> Environment {
+    pub(crate) fn build(self) -> Environment {
 
         let mut env = self.env;
+
+        //Init the logger.  This will have no effect if the logger has already been initialized
+        let _ = env_logger::builder().is_test(env.is_test).try_init();
 
         if !self.no_cfg_dir {
             if env.config_dir.is_none() {

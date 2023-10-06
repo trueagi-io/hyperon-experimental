@@ -22,8 +22,7 @@ void copy_atom_vec(const atom_vec_t* atoms, void* context) {
 
 START_TEST (test_incremental_runner)
 {
-    metta_t runner = metta_new_rust();
-    metta_load_module(&runner, "stdlib");
+    metta_t runner = new_test_metta();
 
     runner_state_t runner_state = metta_start_run(&runner);
 

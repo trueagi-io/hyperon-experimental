@@ -411,12 +411,13 @@ pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metta::environment::EnvBuilder;
     use crate::matcher::atoms_are_equivalent;
 
     use std::convert::TryFrom;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = Metta::new_rust();
+        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         metta.run(&mut SExprParser::new(program))
     }
 
@@ -618,7 +619,7 @@ mod tests {
 
     #[test]
     fn metta_assert_equal_op() {
-        let metta = Metta::new_rust();
+        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         let assert = AssertEqualOp::new(metta.space().clone());
         let program = "
             (= (foo $x) $x)
@@ -638,7 +639,7 @@ mod tests {
 
     #[test]
     fn metta_assert_equal_to_result_op() {
-        let metta = Metta::new_rust();
+        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         let assert = AssertEqualToResultOp::new(metta.space().clone());
         let program = "
             (= (foo) A)
@@ -843,7 +844,7 @@ mod tests {
             !(eval (interpret (id_a myAtom) %Undefined% &self))
         ";
 
-        let metta = Metta::new_rust();
+        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         metta.tokenizer().borrow_mut().register_token(Regex::new("id_num").unwrap(),
             |_| Atom::gnd(ID_NUM));
 

@@ -5,6 +5,7 @@ import sys
 import hyperonpy as hp
 from .atoms import Atom, AtomType, OperationAtom
 from .base import GroundingSpaceRef, Tokenizer, SExprParser
+from hyperonpy import EnvBuilder
 
 class RunnerState:
     def __init__(self, cstate):
@@ -32,21 +33,23 @@ class RunnerState:
 class MeTTa:
     """This class contains the MeTTa program execution utilities"""
 
-    def __init__(self, space = None, cmetta = None):
+    def __init__(self, space = None, cmetta = None, env_builder = None):
         if cmetta is not None:
             self.cmetta = cmetta
         else:
             if space is None:
                 space = GroundingSpaceRef()
             tokenizer = Tokenizer()
-            self.cmetta = hp.metta_new(space.cspace, tokenizer.ctokenizer)
+            if env_builder is None:
+                env_builder = hp.env_builder_use_default()
+            self.cmetta = hp.metta_new(space.cspace, tokenizer.ctokenizer, env_builder)
             self.load_py_module("hyperon.stdlib")
             hp.metta_load_module(self.cmetta, "stdlib")
             self.register_atom('extend-py!',
                 OperationAtom('extend-py!',
                               lambda name: self.load_py_module_from_mod_or_file(name) or [],
                               [AtomType.UNDEFINED, AtomType.ATOM], unwrap=False))
-            hp.metta_init_with_platform_env(self.cmetta)
+            hp.metta_init(self.cmetta)
 
     def __del__(self):
         hp.metta_free(self.cmetta)
@@ -110,11 +113,11 @@ class MeTTa:
             file_name = mod_name + ".py"
 
             # Check each search path directory in order, until we find the module we're looking for
-            num_search_paths = hp.environment_search_path_cnt()
+            num_search_paths = hp.metta_search_path_cnt(self.cmetta)
             search_path_idx = 0
             found_path = None
             while (search_path_idx < num_search_paths):
-                search_path = hp.environment_nth_search_path(search_path_idx)
+                search_path = hp.metta_nth_search_path(self.cmetta, search_path_idx)
                 test_path = os.path.join(search_path, file_name)
                 if (os.path.exists(test_path)):
                     found_path = test_path
@@ -173,17 +176,32 @@ class Environment:
 
     def config_dir():
         """Returns the config dir in the platform environment"""
-        return hp.environment_config_dir()
-    def init_platform_env(working_dir = None, config_dir = None, disable_config = False, include_paths = []):
-        """Initialize the platform environment with the supplied args"""
-        builder = hp.environment_init_start()
-        if (working_dir is not None):
-            hp.environment_init_set_working_dir(builder, working_dir)
-        if (config_dir is not None):
-            hp.environment_init_set_config_dir(builder, config_dir)
-        if (disable_config):
-            hp.environment_init_disable_config_dir(builder)
-        for path in reversed(include_paths):
-            hp.environment_init_add_include_path(builder, path)
-        return hp.environment_init_finish(builder)
+        path = hp.environment_config_dir()
+        if (len(path) > 0):
+            return path
+        else:
+            return None
 
+    def init_platform_env(working_dir = None, config_dir = None, disable_config = False, is_test = False, include_paths = []):
+        """Initialize the platform environment with the supplied args"""
+        builder = Environment.custom_env(working_dir, config_dir, disable_config, is_test, include_paths)
+        return hp.env_builder_init_platform_env(builder)
+
+    def test_env():
+        """Returns an EnvBuilder object specifying a unit-test environment, that can be used to init a MeTTa runner"""
+        return hp.env_builder_use_test_env()
+
+    def custom_env(working_dir = None, config_dir = None, disable_config = False, is_test = False, include_paths = []):
+        """Returns an EnvBuilder object that can be used to init a MeTTa runner, if you need multiple environments to coexist in the same process"""
+        builder = hp.env_builder_start()
+        if (working_dir is not None):
+            hp.env_builder_set_working_dir(builder, working_dir)
+        if (config_dir is not None):
+            hp.env_builder_set_config_dir(builder, config_dir)
+        if (disable_config):
+            hp.env_builder_disable_config_dir(builder)
+        if (is_test):
+            hp.env_builder_set_is_test(True)
+        for path in reversed(include_paths):
+            hp.env_builder_add_include_path(builder, path)
+        return builder

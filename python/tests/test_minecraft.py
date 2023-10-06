@@ -33,7 +33,7 @@ def newMineOp(inventory):
 class MinecraftTest(unittest.TestCase):
 
     def test_minecraft_planning(self):
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
         inventory = [S('inventory'), S('hands')]
         metta.register_token("in-inventory", lambda _: newInInventory(inventory))
         metta.register_token("craft", lambda _: newCraftOp(inventory))
@@ -68,7 +68,7 @@ class MinecraftTest(unittest.TestCase):
         self.assertTrue(S('wooden-pickaxe') in inventory)
 
     def test_minecraft_planning_with_abstractions(self):
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
 
         inventory = [S('inventory'), S('hands'), S('crafting-table'), S('stick'),
                      S('iron-ingot'), S('iron-pickaxe')]

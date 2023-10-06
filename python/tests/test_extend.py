@@ -8,7 +8,7 @@ class ExtendTest(unittest.TestCase):
         '''
         This test verifies that extend-py! along with @register_atoms and @register_tokens works
         '''
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
         self.assertEqual(
             metta.run('''
               !(extend-py! extension)
@@ -33,7 +33,7 @@ class ExtendGlobalTest(unittest.TestCase):
         from extension import g_object
         # Sanity check
         self.assertEqual(g_object, None)
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
         metta.run('''
           !(extend-py! extension)
           !(set-global! 42)

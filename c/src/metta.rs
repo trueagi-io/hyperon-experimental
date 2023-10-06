@@ -725,23 +725,29 @@ impl metta_t {
 ///
 #[no_mangle]
 pub extern "C" fn metta_new_rust() -> metta_t {
-    let metta = Metta::new_rust();
+    let metta = Metta::new_rust(None);
     metta.into()
 }
 
-/// @brief Creates a new MeTTa Interpreter with a provided Space and Tokenizer
+/// @brief Creates a new MeTTa Interpreter with a provided Space, Tokenizer and Environment
 /// @ingroup interpreter_group
 /// @param[in]  space  A pointer to a handle for the Space for use by the Interpreter
 /// @param[in]  tokenizer  A pointer to a handle for the Tokenizer for use by the Interpreter
+/// @param[in]  environment  An `environment_t` handle representing the environment to use
 /// @return A `metta_t` handle to the newly created Interpreter
 /// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
 /// @note This function does not load any stdlib, nor does it run the `init.metta` file from the environment
 ///
 #[no_mangle]
-pub extern "C" fn metta_new_with_space(space: *mut space_t, tokenizer: *mut tokenizer_t) -> metta_t {
+pub extern "C" fn metta_new_with_space(space: *mut space_t, tokenizer: *mut tokenizer_t, env_builder: env_builder_t) -> metta_t {
     let dyn_space = unsafe{ &*space }.borrow();
     let tokenizer = unsafe{ &*tokenizer }.clone_handle();
-    let metta = Metta::new_with_space(dyn_space.clone(), tokenizer);
+    let env_builder = if env_builder.is_default() {
+        None
+    } else {
+        Some(env_builder.into_inner())
+    };
+    let metta = Metta::new_with_space(dyn_space.clone(), tokenizer, env_builder);
     metta.into()
 }
 
@@ -764,9 +770,45 @@ pub extern "C" fn metta_free(metta: metta_t) {
 ///     with their own stdlib, that needs to be loaded before the init.metta file is run
 ///
 #[no_mangle]
-pub extern "C" fn metta_init_with_platform_env(metta: *mut metta_t) {
+pub extern "C" fn metta_init(metta: *mut metta_t) {
     let metta = unsafe{ &*metta }.borrow();
-    metta.init_with_platform_env()
+    metta.init()
+}
+
+/// @brief Returns the number of module search paths that will be searched when importing modules into
+///     the runner
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the Interpreter handle
+/// @return The number of paths that will be searched before the search is considered unsuccessful
+///
+#[no_mangle]
+pub extern "C" fn metta_search_path_cnt(metta: *const metta_t) -> usize {
+    let metta = unsafe{ &*metta }.borrow();
+    metta.search_paths().count()
+}
+
+/// @brief Renders nth module search path for a given runner into a text buffer
+/// @ingroup interpreter_group
+/// @param[in]  idx  The index of the search path to render, with 0 being the highest priority search
+///     path, and subsequent indices having decreasing search priority.
+///     If `i > metta_search_path_cnt()`, this function will return 0.
+/// @param[out]  buf  A buffer into which the text will be written
+/// @param[in]  buf_len  The maximum allocated size of `buf`
+/// @return The length of the path string, minus the string terminator character.  If
+///     `return_value > buf_len + 1`, then the text was not fully written and this function should be
+///     called again with a larger buffer.  This function will return 0 if the input arguments don't
+///     specify a valid search path.
+/// @note This function is primarily useful for implementing additional language-specific module-loading
+///     logic, such as the `extend-py!` operation in the Python MeTTa extensions.
+///
+#[no_mangle]
+pub extern "C" fn metta_nth_search_path(metta: *const metta_t, idx: usize, buf: *mut c_char, buf_len: usize) -> usize {
+    let metta = unsafe{ &*metta }.borrow();
+    let path = metta.search_paths().nth(idx);
+    match path {
+        Some(path) => write_into_buf(path.display(), buf, buf_len),
+        None => 0
+    }
 }
 
 /// @brief Provides access to the Space associated with a MeTTa Interpreter
@@ -959,37 +1001,7 @@ pub extern "C" fn environment_config_dir(buf: *mut c_char, buf_len: usize) -> us
     }
 }
 
-/// @brief Returns the number of module search paths in the environment
-/// @ingroup environment_group
-/// @return The number of paths in the Environment
-///
-#[no_mangle]
-pub extern "C" fn environment_search_path_cnt() -> usize {
-    Environment::platform_env().modules_search_paths().count()
-}
-
-/// @brief Renders nth module search path from the platform environment into a text buffer
-/// @ingroup environment_group
-/// @param[in]  idx  The index of the search path to render, with 0 being the highest priority search
-///     path, and subsequent indices having decreasing search priority.
-///     If `i > environment_search_path_cnt()`, this function will return 0.
-/// @param[out]  buf  A buffer into which the text will be written
-/// @param[in]  buf_len  The maximum allocated size of `buf`
-/// @return The length of the path string, minus the string terminator character.  If
-///     `return_value > buf_len + 1`, then the text was not fully written and this function should be
-///     called again with a larger buffer.  This function will return 0 if the input arguments don't
-///     specify a valid search path.
-///
-#[no_mangle]
-pub extern "C" fn environment_nth_search_path(idx: usize, buf: *mut c_char, buf_len: usize) -> usize {
-    let path = Environment::platform_env().modules_search_paths().nth(idx);
-    match path {
-        Some(path) => write_into_buf(path.display(), buf, buf_len),
-        None => 0
-    }
-}
-
-/// @brief Represents the environment initialization, in progress
+/// @brief Represents an environment initialization, in progress
 /// @ingroup environment_group
 /// @note `env_builder_t` must be given to `environment_init_finish()` to properly release it
 ///
@@ -1008,7 +1020,13 @@ impl From<EnvBuilder> for env_builder_t {
 }
 
 impl env_builder_t {
+    fn is_default(&self) -> bool {
+        self.builder.is_null()
+    }
     fn into_inner(self) -> EnvBuilder {
+        if self.is_default() {
+            panic!("Fatal Error, default env_builder_t cannot be accessed")
+        }
         unsafe{ Box::from_raw(self.builder).0 }
     }
     fn null() -> Self {
@@ -1016,14 +1034,38 @@ impl env_builder_t {
     }
 }
 
-/// @brief Begins the initialization of the platform environment
+/// @brief Begins initialization of an environment
 /// @ingroup environment_group
 /// @return The `env_builder_t` object representing the in-process environment initialization
-/// @note environment_init_finish must be called after environment initialization is finished
+/// @note The `env_builder_t` must be passed to either `env_builder_init_platform_env`
+///     or `metta_new_with_space` in order to properly deallocate it
 ///
 #[no_mangle]
-pub extern "C" fn environment_init_start() -> env_builder_t {
+pub extern "C" fn env_builder_start() -> env_builder_t {
     EnvBuilder::new().into()
+}
+
+/// @brief Creates an `env_builder_t` to specify that the default platform environment should be used
+/// @ingroup environment_group
+/// @return The `env_builder_t` object specifying the default platform environment
+/// @note This function exists to supply an argument to `metta_new_with_space` when no special
+///     behavior is desired
+/// @note The `env_builder_t` must be passed to `metta_new_with_space`
+///
+#[no_mangle]
+pub extern "C" fn env_builder_use_default() -> env_builder_t {
+    env_builder_t::null()
+}
+
+/// @brief A convenience to create an `env_builder_t`, to specify that a unit-test environment should be used
+/// @ingroup environment_group
+/// @return The `env_builder_t` object specifying the unit test environment
+/// @note This function exists to supply an argument to `metta_new_with_space` when performing unit testing
+/// @note The `env_builder_t` must be passed to `metta_new_with_space`
+///
+#[no_mangle]
+pub extern "C" fn env_builder_use_test_env() -> env_builder_t {
+    EnvBuilder::test_env().into()
 }
 
 /// @brief Finishes initialization of the platform environment
@@ -1033,7 +1075,7 @@ pub extern "C" fn environment_init_start() -> env_builder_t {
 ///     if the environment had already been initialized by a prior call
 ///
 #[no_mangle]
-pub extern "C" fn environment_init_finish(builder: env_builder_t) -> bool {
+pub extern "C" fn env_builder_init_platform_env(builder: env_builder_t) -> bool {
     let builder = builder.into_inner();
     builder.try_init_platform_env().is_ok()
 }
@@ -1047,7 +1089,7 @@ pub extern "C" fn environment_init_finish(builder: env_builder_t) -> bool {
 ///   it will not change as the process' working directory is changed
 ///
 #[no_mangle]
-pub extern "C" fn environment_init_set_working_dir(builder: *mut env_builder_t, path: *const c_char) {
+pub extern "C" fn env_builder_set_working_dir(builder: *mut env_builder_t, path: *const c_char) {
     let builder_arg_ref = unsafe{ &mut *builder };
     let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
     let builder = if path.is_null() {
@@ -1065,7 +1107,7 @@ pub extern "C" fn environment_init_set_working_dir(builder: *mut env_builder_t, 
 /// @param[in]  path  A C-style string specifying a path to a working directory, to search for modules to load
 ///
 #[no_mangle]
-pub extern "C" fn environment_init_set_config_dir(builder: *mut env_builder_t, path: *const c_char) {
+pub extern "C" fn env_builder_set_config_dir(builder: *mut env_builder_t, path: *const c_char) {
     let builder_arg_ref = unsafe{ &mut *builder };
     let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
     let builder = if path.is_null() {
@@ -1081,10 +1123,23 @@ pub extern "C" fn environment_init_set_config_dir(builder: *mut env_builder_t, p
 /// @param[in]  builder  A pointer to the in-process environment builder state
 ///
 #[no_mangle]
-pub extern "C" fn environment_init_disable_config_dir(builder: *mut env_builder_t) {
+pub extern "C" fn env_builder_disable_config_dir(builder: *mut env_builder_t) {
     let builder_arg_ref = unsafe{ &mut *builder };
     let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
     let builder = builder.set_no_config_dir();
+    *builder_arg_ref = builder.into();
+}
+
+/// @brief Configures the platform environment for use in unit testing
+/// @ingroup environment_group
+/// @param[in]  builder  A pointer to the in-process environment builder state
+/// @param[in]  is_test  True if the environment is a unit-test environment, False otherwise
+///
+#[no_mangle]
+pub extern "C" fn env_builder_set_is_test(builder: *mut env_builder_t, is_test: bool) {
+    let builder_arg_ref = unsafe{ &mut *builder };
+    let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
+    let builder = builder.set_is_test(is_test);
     *builder_arg_ref = builder.into();
 }
 
@@ -1095,7 +1150,7 @@ pub extern "C" fn environment_init_disable_config_dir(builder: *mut env_builder_
 /// @param[in]  path  A C-style string specifying a path to a working directory, to search for modules to load
 ///
 #[no_mangle]
-pub extern "C" fn environment_init_add_include_path(builder: *mut env_builder_t, path: *const c_char) {
+pub extern "C" fn env_builder_add_include_path(builder: *mut env_builder_t, path: *const c_char) {
     let builder_arg_ref = unsafe{ &mut *builder };
     let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
     let builder = if path.is_null() {

@@ -228,8 +228,7 @@ START_TEST (test_space_nested_in_atom)
     space_add(&nested, expr(atom_sym("A"), atom_sym("B"), atom_ref_null()));
     atom_t space_atom = atom_gnd_for_space(&nested);
 
-    metta_t runner = metta_new_rust();
-    metta_load_module(&runner, "stdlib");
+    metta_t runner = new_test_metta();
 
     tokenizer_t tokenizer = metta_tokenizer(&runner);
     tokenizer_register_token(&tokenizer, "nested", &TOKEN_API_CLONE_ATOM, &space_atom);
