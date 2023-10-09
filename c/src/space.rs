@@ -390,7 +390,7 @@ impl From<SpaceObserverRef<CObserver>> for space_observer_t {
 
 impl space_observer_t {
     fn borrow_inner(&self) -> &mut CObserver {
-        let cell = unsafe{ &mut *(&(&*self.observer).0 as *const std::cell::RefCell<CObserver>).cast_mut() };
+        let cell = unsafe{ &mut (&mut *self.observer.cast_mut()).0 };
         cell.get_mut()
     }
     fn into_inner(self) -> SpaceObserverRef<CObserver> {

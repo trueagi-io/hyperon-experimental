@@ -40,7 +40,7 @@ impl From<Shared<Tokenizer>> for tokenizer_t {
 
 impl tokenizer_t {
     fn borrow_inner(&self) -> &mut Tokenizer {
-        let cell = unsafe{ &mut *(&(&*self.tokenizer).0 as *const std::cell::RefCell<Tokenizer>).cast_mut() };
+        let cell = unsafe{ &mut (&mut *self.tokenizer.cast_mut()).0 };
         cell.get_mut()
     }
     fn clone_handle(&self) -> Shared<Tokenizer> {
@@ -178,7 +178,7 @@ impl From<Shared<SExprParser<'static>>> for sexpr_parser_t {
 
 impl sexpr_parser_t {
     fn borrow_inner(&self) -> &mut SExprParser<'static> {
-        let cell = unsafe{ &mut *(&(&*self.parser).0 as *const std::cell::RefCell<SExprParser>).cast_mut() };
+        let cell = unsafe{ &mut (&mut *self.parser.cast_mut()).0 };
         cell.get_mut()
     }
     fn into_handle(self) -> Shared<SExprParser<'static>> {
