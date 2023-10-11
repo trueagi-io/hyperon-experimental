@@ -250,7 +250,7 @@ The diagram below demonstrates main components and dependencies between them:
 Different IDEs may require different tweaks to support the languages
 used in the codebase. The language servers which we use
 for development are:
-- [Rust Language Server](https://github.com/rust-lang/rls#setup);
+- [rust-analyzer](https://github.com/rust-lang/rust-analyzer);
 - [clangd](https://clangd.llvm.org/installation), generate compile
   commands for the `clangd` using `cmake` variable:
   ```
