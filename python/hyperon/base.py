@@ -396,6 +396,8 @@ class SExprParser:
 class Interpreter:
     """
     A wrapper class for the MeTTa interpreter that handles the interpretation of expressions in a given grounding space.
+
+    NOTE: This is a low-level API, and most applications would be better served by a `MeTTa` runner object
     """
 
     def __init__(self, gnd_space, expr):

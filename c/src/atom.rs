@@ -737,7 +737,7 @@ impl atom_vec_t {
     fn new() -> Self {
         Vec::<Atom>::new().into()
     }
-    fn as_slice(&self) -> &[Atom] {
+    pub(crate) fn as_slice(&self) -> &[Atom] {
         unsafe{ core::slice::from_raw_parts(self.ptr.cast(), self.len) }
     }
     /// Converts a borrowed vec into an owned vec

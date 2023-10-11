@@ -39,7 +39,7 @@ class MettaTest(unittest.TestCase):
             !(+ 1 (+ 2 (+ 3 4)))
         '''
         runner = MeTTa(env_builder=Environment.test_env())
-        runner_state = runner.start_run(program)
+        runner_state = RunnerState(runner, program)
 
         step_count = 0
         while not runner_state.is_complete():

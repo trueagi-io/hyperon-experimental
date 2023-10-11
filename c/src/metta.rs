@@ -11,7 +11,6 @@ use crate::util::*;
 use crate::atom::*;
 use crate::space::*;
 
-use core::borrow::Borrow;
 use std::os::raw::*;
 use regex::Regex;
 use std::path::PathBuf;
@@ -146,13 +145,36 @@ pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> tokenizer_t 
 
 /// @brief Represents an S-Expression Parser state machine, to parse input text into an Atom
 /// @ingroup tokenizer_and_parser_group
-/// @note `sexpr_parser_t` handles must be freed with `sexpr_parser_free()`
+/// @note `sexpr_parser_t` objects must be freed with `sexpr_parser_free()`
 ///
 #[repr(C)]
 pub struct sexpr_parser_t {
     /// Internal.  Should not be accessed directly
-    parser: *const RustSExprParser,
+    parser: *mut RustSExprParser,
     err_string: *mut c_char,
+}
+
+struct RustSExprParser(SExprParser<'static>);
+
+impl From<SExprParser<'static>> for sexpr_parser_t {
+    fn from(parser: SExprParser<'static>) -> Self {
+        Self{
+            parser: Box::into_raw(Box::new(RustSExprParser(parser))),
+            err_string: core::ptr::null_mut()
+        }
+    }
+}
+
+impl sexpr_parser_t {
+    fn into_inner(self) -> SExprParser<'static> {
+        unsafe{ (*Box::from_raw(self.parser)).0 }
+    }
+    fn borrow(&self) -> &SExprParser<'static> {
+        &unsafe{ &*self.parser }.0
+    }
+    fn borrow_mut(&mut self) -> &mut SExprParser<'static> {
+        &mut unsafe{ &mut *self.parser }.0
+    }
 }
 
 impl sexpr_parser_t {
@@ -165,38 +187,32 @@ impl sexpr_parser_t {
     }
 }
 
-struct RustSExprParser(std::cell::RefCell<SExprParser<'static>>);
-
-impl From<Shared<SExprParser<'static>>> for sexpr_parser_t {
-    fn from(parser: Shared<SExprParser>) -> Self {
-        Self{
-            parser: std::rc::Rc::into_raw(parser.0).cast(),
-            err_string: core::ptr::null_mut()
-        }
-    }
-}
-
-impl sexpr_parser_t {
-    fn borrow_inner(&self) -> &mut SExprParser<'static> {
-        let cell = unsafe{ &mut (&mut *self.parser.cast_mut()).0 };
-        cell.get_mut()
-    }
-    fn into_handle(self) -> Shared<SExprParser<'static>> {
-        unsafe{ Shared(std::rc::Rc::from_raw(self.parser.cast())) }
-    }
-}
-
 /// @brief Creates a new S-Expression Parser
 /// @ingroup tokenizer_and_parser_group
 /// @param[in]  text  A C-style string containing the input text to parse
 /// @return The new `sexpr_parser_t`, ready to parse the text
 /// @note The returned `sexpr_parser_t` must be freed with `sexpr_parser_free()`
-/// @warning The returned `sexpr_parser_t` borrows a reference to the `text` pointer, so the returned
+/// @warning The returned `sexpr_parser_t` borrows a reference to the `text`, so the returned
 ///    `sexpr_parser_t` must be freed before the `text` is freed or allowed to go out of scope.
 ///
 #[no_mangle]
 pub extern "C" fn sexpr_parser_new(text: *const c_char) -> sexpr_parser_t {
-    Shared::new(SExprParser::new(cstr_as_str(text))).into()
+    SExprParser::new(cstr_as_str(text)).into()
+}
+
+/// @brief Creates a new S-Expression Parser from an existing `sexpr_parser_t`
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  parser  The source `sexpr_parser_t` to clone
+/// @return The new `sexpr_parser_t`, ready to parse the text
+/// @note The returned `sexpr_parser_t` must be freed with `sexpr_parser_free()`
+/// @note A cloned parser can be thought of as an independent read cursor referencing the same source text.
+/// @warning The returned `sexpr_parser_t` borrows a reference to the same `text` pointer as the original,
+///    so the returned `sexpr_parser_t` must be freed before the `text` is freed or allowed to go out of scope.
+///
+#[no_mangle]
+pub extern "C" fn sexpr_parser_clone(parser: *const sexpr_parser_t) -> sexpr_parser_t {
+    let parser = unsafe{ &*parser }.borrow();
+    parser.clone().into()
 }
 
 /// @brief Frees an S-Expression Parser
@@ -205,7 +221,7 @@ pub extern "C" fn sexpr_parser_new(text: *const c_char) -> sexpr_parser_t {
 ///
 #[no_mangle]
 pub extern "C" fn sexpr_parser_free(parser: sexpr_parser_t) {
-    let parser = parser.into_handle();
+    let parser = parser.into_inner();
     drop(parser);
 }
 
@@ -224,7 +240,7 @@ pub extern "C" fn sexpr_parser_parse(
 {
     let parser = unsafe{ &mut *parser };
     parser.free_err_string();
-    let rust_parser = parser.borrow_inner();
+    let rust_parser = parser.borrow_mut();
     let tokenizer = unsafe{ &*tokenizer }.borrow_inner();
     match rust_parser.parse(tokenizer) {
         Ok(atom) => atom.into(),
@@ -284,7 +300,7 @@ impl syntax_node_t {
         unsafe{ (*Box::from_raw(self.node)).0 }
     }
     fn borrow(&self) -> &SyntaxNode {
-        &unsafe{ &*(&*self).node }.0
+        &unsafe{ &*self.node }.0
     }
     fn is_null(&self) -> bool {
         self.node == core::ptr::null_mut()
@@ -358,7 +374,7 @@ pub extern "C" fn sexpr_parser_parse_to_syntax_tree(parser: *mut sexpr_parser_t)
 {
     let parser = unsafe{ &mut *parser };
     parser.free_err_string();
-    let rust_parser = parser.borrow_inner();
+    let rust_parser = parser.borrow_mut();
     rust_parser.parse_to_syntax_tree().into()
 }
 
@@ -581,12 +597,11 @@ pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
 // MeTTa Intperpreter Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-//QUESTION: It feels like a runner_state_t and a step_result_t are getting at the same functionality,
-// but at different levels.  I think it probably makes sense to remove step_result_t from the C
-// and Python APIs to cut down on API surface area
-
 /// @brief Contains the state for an in-flight interpreter operation
 /// @ingroup interpreter_group
+/// @note The `step_result_t` API is very low-level; It provides direct access to the interpreter
+///    without a an environment, parser, or tokenizer.  Usually the `runner_state_t` API is a better
+///    choice for executing MeTTa code in most situations.
 /// @note A `step_result_t` is initially created by `interpret_init()`.  Each call to `interpret_step()`, in
 ///    a loop, consumes the `step_result_t` and creates a new one.  When the interpreter operation has
 ///    fully resolved, `step_get_result()` can provide the final results.  Ownership of the `step_result_t`
@@ -838,25 +853,30 @@ pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> tokenizer_t {
 /// @brief Runs the MeTTa Interpreter until the input text has been parsed and evaluated
 /// @ingroup interpreter_group
 /// @param[in]  metta  A pointer to the Interpreter handle
-/// @param[in]  parser  A pointer to the S-Expression Parser handle, containing the expression text
+/// @param[in]  parser  An S-Expression Parser containing the MeTTa text
 /// @param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
 /// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
+/// @warning  Ownership of the provided parser will be taken by this function, so it must not be subsequently accessed
+///     nor freed.
 ///
 #[no_mangle]
-pub extern "C" fn metta_run(metta: *mut metta_t, parser: *mut sexpr_parser_t,
+pub extern "C" fn metta_run(metta: *mut metta_t, parser: sexpr_parser_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
     let metta = unsafe{ &*metta }.borrow();
-    let mut parser = unsafe{ &*parser }.borrow_inner();
-    let results = metta.run(&mut parser);
+    let parser = parser.into_inner();
+    let results = metta.run(parser);
     // TODO: return erorrs properly after step_get_result() is changed to return errors.
     for result in results.expect("Returning errors from C API is not implemented yet") {
         return_atoms(&result, callback, context);
     }
 }
 
-/// @brief Represents the state of a MeTTa runner
+/// @brief Represents the state of an in-flight MeTTa execution run
 /// @ingroup interpreter_group
-/// @note `runner_state_t` handles must be freed with `runner_state_free()`
+/// @note A `runner_state_t` is initially created by `runner_state_new_with_parser()`.  Each call to `metta_run_step()`, in
+///    a loop, advances the evaluation progress by some amount.  When the interpreter operation has
+///    fully resolved, `runner_state_is_complete()` will return true.  Ownership of the `runner_state_t`
+///    must ultimately be released with `runner_state_free()`.
 ///
 #[repr(C)]
 pub struct runner_state_t {
@@ -884,16 +904,37 @@ impl runner_state_t {
     }
 }
 
-/// @brief Creates a runner_state_t, to use for step-wise execution
+/// @brief Creates a runner_state_t, to use for step-wise execution of MeTTa text
 /// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the Interpreter handle
+/// @param[in]  metta  A pointer to the Interpreter handle in which to perform the run
+/// @param[in]  parser An S-Expression Parser containing the MeTTa text
 /// @return The newly created `runner_state_t`, which can begin evaluating MeTTa code
+/// @warning  Ownership of the provided parser will be taken by this function, so it must not be subsequently accessed
+///     nor freed.
 /// @note The returned `runner_state_t` handle must be freed with `runner_state_free()`
 ///
 #[no_mangle]
-pub extern "C" fn metta_start_run(metta: *mut metta_t) -> runner_state_t {
+pub extern "C" fn runner_state_new_with_parser(metta: *const metta_t, parser: sexpr_parser_t) -> runner_state_t {
     let metta = unsafe{ &*metta }.borrow();
-    let state = metta.start_run();
+    let parser = parser.into_inner();
+    let state = RunnerState::new_with_parser(metta, parser);
+    state.into()
+}
+
+/// @brief Creates a runner_state_t, to use for step-wise execution of a list of atoms
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the Interpreter handle in which to perform the run
+/// @param[in]  atoms A pointer to an `atom_vec_t` containing the atoms to run
+/// @return The newly created `runner_state_t`, which can begin evaluating MeTTa code
+/// @warning  The referenced `atoms` `atom_vec_t` must not be modified nor freed while the
+///    `runner_state_t` remains active
+/// @note The returned `runner_state_t` handle must be freed with `runner_state_free()`
+///
+#[no_mangle]
+pub extern "C" fn runner_state_new_with_atoms(metta: *const metta_t, atoms: *const atom_vec_t) -> runner_state_t {
+    let metta = unsafe{ &*metta }.borrow();
+    let atoms = unsafe{ &*atoms }.as_slice();
+    let state = RunnerState::new_with_atoms(metta, atoms);
     state.into()
 }
 
@@ -909,16 +950,12 @@ pub extern "C" fn runner_state_free(state: runner_state_t) {
 
 /// @brief Runs one step of the interpreter
 /// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the Interpreter handle
-/// @param[in]  parser  A pointer to the S-Expression Parser handle, containing the expression text
 /// @param[in]  state  A pointer to the in-flight runner state
 ///
 #[no_mangle]
-pub extern "C" fn metta_run_step(metta: *mut metta_t, parser: *mut sexpr_parser_t, state: *mut runner_state_t) {
-    let metta = unsafe{ &*metta }.borrow();
-    let parser = unsafe{ &*parser }.borrow_inner();
+pub extern "C" fn runner_state_step(state: *mut runner_state_t) {
     let state = unsafe{ &mut *state }.borrow_mut();
-    metta.run_step(parser, state).unwrap_or_else(|err| panic!("Unhandled MeTTa error: {}", err));
+    state.run_step().unwrap_or_else(|err| panic!("Unhandled MeTTa error: {}", err));
 }
 
 /// @brief Returns whether or not the runner_state_t has completed all outstanding work
@@ -930,6 +967,21 @@ pub extern "C" fn metta_run_step(metta: *mut metta_t, parser: *mut sexpr_parser_
 pub extern "C" fn runner_state_is_complete(state: *const runner_state_t) -> bool {
     let state = unsafe{ &*state }.borrow();
     state.is_complete()
+}
+
+/// @brief Renders a text description of a `runner_state_t` into a buffer
+/// @ingroup interpreter_group
+/// @param[in]  state  A pointer to a `runner_state_t` to render
+/// @param[out]  buf  A buffer into which the text will be rendered
+/// @param[in]  buf_len  The maximum allocated size of `buf`
+/// @return The length of the description string, minus the string terminator character.  If
+///    `return_value > buf_len + 1`, then the text was not fully rendered and this function should be
+///    called again with a larger buffer.
+///
+#[no_mangle]
+pub extern "C" fn runner_state_to_str(state: *const runner_state_t, buf: *mut c_char, buf_len: usize) -> usize {
+    let state = unsafe{ &*state }.borrow();
+    write_debug_into_buf(state, buf, buf_len)
 }
 
 /// @brief Accesses the current in-flight results in the runner_state_t
@@ -1156,7 +1208,7 @@ pub extern "C" fn env_builder_add_include_path(builder: *mut env_builder_t, path
     let builder = if path.is_null() {
         panic!("Fatal Error: path cannot be NULL");
     } else {
-        builder.add_include_paths(vec![PathBuf::from(cstr_as_str(path).borrow())])
+        builder.add_include_paths(vec![PathBuf::from(cstr_as_str(path))])
     };
     *builder_arg_ref = builder.into();
 }

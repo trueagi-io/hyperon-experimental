@@ -1213,7 +1213,7 @@ mod tests {
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
         let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
-        metta.run(&mut SExprParser::new(program))
+        metta.run(SExprParser::new(program))
     }
 
     #[test]
@@ -1426,7 +1426,7 @@ mod tests {
     #[test]
     fn superpose_op_multiple_interpretations() {
         let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
-        let mut parser = SExprParser::new("
+        let parser = SExprParser::new("
             (= (f) A)
             (= (f) B)
             (= (g) C)
@@ -1435,28 +1435,28 @@ mod tests {
             !(superpose ((f) (g)))
         ");
 
-        assert_eq_metta_results!(metta.run(&mut parser),
+        assert_eq_metta_results!(metta.run(parser),
             Ok(vec![vec![expr!("A"), expr!("B"), expr!("C"), expr!("D")]]));
     }
 
     #[test]
     fn superpose_op_superposed_with_collapse() {
         let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
-        let mut parser = SExprParser::new("
+        let parser = SExprParser::new("
             (= (f) A)
             (= (f) B)
 
             !(let $x (collapse (f)) (superpose $x))
         ");
 
-        assert_eq_metta_results!(metta.run(&mut parser),
+        assert_eq_metta_results!(metta.run(parser),
             Ok(vec![vec![expr!("A"), expr!("B")]]));
     }
 
     #[test]
     fn superpose_op_consumes_interpreter_errors() {
         let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
-        let mut parser = SExprParser::new("
+        let parser = SExprParser::new("
             (: f (-> A B))
             (= (f $x) $x)
 
@@ -1466,7 +1466,7 @@ mod tests {
             !(superpose ((f (superpose ())) (f a) (f b)))
         ");
 
-        assert_eq!(metta.run(&mut parser), Ok(vec![vec![
+        assert_eq!(metta.run(parser), Ok(vec![vec![
                 expr!("Error" ("f" ({SuperposeOp{space:metta.space().clone()}} ())) "NoValidAlternatives"),
                 expr!("a"), expr!("Error" "b" "BadType")]]));
     }

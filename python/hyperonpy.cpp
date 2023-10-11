@@ -550,6 +550,15 @@ PYBIND11_MODULE(hyperonpy, m) {
         }, "Check atom for equivalence");
 
     py::class_<CVecAtom>(m, "CVecAtom");
+    m.def("atom_vec_from_list", [](pybind11::list pylist) {
+        atom_vec_t new_vec = atom_vec_new();
+        for(py::handle pyobj : pylist) {
+            py::handle atom_pyhandle = pyobj.attr("catom");
+            CAtom atom = atom_pyhandle.cast<CAtom>();
+            atom_vec_push(&new_vec, atom_clone(atom.ptr()));
+        }
+        return CVecAtom(new_vec);
+    }, "Create a vector of atoms from a Python list");
     m.def("atom_vec_new", []() { return CVecAtom(atom_vec_new()); }, "New vector of atoms");
     m.def("atom_vec_free", [](CVecAtom& vec) { atom_vec_free(vec.obj); }, "Free vector of atoms");
     m.def("atom_vec_len", [](CVecAtom& vec) { return atom_vec_len(vec.ptr()); }, "Return size of the vector");
@@ -786,7 +795,8 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
     m.def("metta_run", [](CMetta metta, CSExprParser& parser) {
             py::list lists_of_atom;
-            metta_run(metta.ptr(), &parser.parser, copy_lists_of_atom, &lists_of_atom);
+            sexpr_parser_t cloned_parser = sexpr_parser_clone(&parser.parser);
+            metta_run(metta.ptr(), cloned_parser, copy_lists_of_atom, &lists_of_atom);
             return lists_of_atom;
         }, "Run MeTTa interpreter on an input");
     m.def("metta_evaluate_atom", [](CMetta metta, CAtom atom) {
@@ -794,13 +804,22 @@ PYBIND11_MODULE(hyperonpy, m) {
             metta_evaluate_atom(metta.ptr(), atom_clone(atom.ptr()), copy_atoms, &atoms);
             return atoms;
         }, "Run MeTTa interpreter on an atom");
-    m.def("metta_start_run", [](CMetta& metta) { return CRunnerState(metta_start_run(metta.ptr())); }, "Initializes the MeTTa interpreter for incremental execution");
-    m.def("metta_run_step", [](CMetta& metta, CSExprParser& parser, CRunnerState& state) { metta_run_step(metta.ptr(), parser.ptr(), state.ptr()); }, "Runs one incremental step of the MeTTa interpreter");
     m.def("metta_load_module", [](CMetta metta, std::string text) {
         metta_load_module(metta.ptr(), text.c_str());
     }, "Load MeTTa module");
 
-    py::class_<CRunnerState>(m, "CRunnerState");
+    py::class_<CRunnerState>(m, "CRunnerState")
+        .def("__str__", [](CRunnerState state) {
+            return func_to_string((write_to_buf_func_t)&runner_state_to_str, state.ptr());
+        }, "Render a RunnerState as a human readable string");
+    m.def("runner_state_new_with_parser", [](CMetta& metta, CSExprParser& parser) {
+        sexpr_parser_t cloned_parser = sexpr_parser_clone(&parser.parser);
+        return CRunnerState(runner_state_new_with_parser(metta.ptr(), cloned_parser));
+    }, "Initializes the MeTTa runner state for incremental execution");
+    m.def("runner_state_new_with_atoms", [](CMetta& metta, CVecAtom& atoms) {
+        return CRunnerState(runner_state_new_with_atoms(metta.ptr(), atoms.ptr()));
+    }, "Initializes the MeTTa runner state for incremental execution");
+    m.def("runner_state_step", [](CRunnerState& state) { runner_state_step(state.ptr()); }, "Runs one incremental step of the MeTTa interpreter");
     m.def("runner_state_free", [](CRunnerState state) { runner_state_free(state.obj); }, "Frees a Runner State");
     m.def("runner_state_is_complete", [](CRunnerState& state) { return runner_state_is_complete(state.ptr()); }, "Returns whether a RunnerState is finished");
     m.def("runner_state_current_results", [](CRunnerState& state) {

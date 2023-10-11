@@ -63,8 +63,20 @@ enum MettaRunnerMode {
 
 pub struct RunnerState<'a> {
     mode: MettaRunnerMode,
+    metta: &'a Metta,
+    parser: Option<SExprParser<'a>>,
+    atoms: Option<&'a [Atom]>,
     interpreter_state: Option<InterpreterState<'a, DynSpace>>,
     results: Vec<Vec<Atom>>,
+}
+
+impl std::fmt::Debug for RunnerState<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RunnerState")
+            .field("mode", &self.mode)
+            .field("interpreter_state", &self.interpreter_state)
+            .finish()
+    }
 }
 
 impl Metta {
@@ -167,7 +179,7 @@ impl Metta {
                 // Make the imported module be immediately available to itself
                 // to mitigate circular imports
                 self.0.modules.borrow_mut().insert(path.clone(), runner.space().clone());
-                runner.run(&mut SExprParser::new(program.as_str()))
+                runner.run(SExprParser::new(program.as_str()))
                     .map_err(|err| format!("Cannot import module, path: {}, error: {}", path.display(), err))?;
 
                 // TODO: This is a hack. We need a way to register tokens at module-load-time, for any module
@@ -227,84 +239,9 @@ impl Metta {
         self.0.settings.borrow().get(key.into()).map(|a| a.to_string())
     }
 
-    pub fn run(&self, parser: &mut SExprParser) -> Result<Vec<Vec<Atom>>, String> {
-        let mut state = self.start_run();
-
-        while !state.is_complete() {
-            self.run_step(parser, &mut state)?;
-        }
-        Ok(state.into_results())
-    }
-
-    pub fn start_run(&self) -> RunnerState {
-        RunnerState::new()
-    }
-
-    pub fn run_step(&self, parser: &mut SExprParser, state: &mut RunnerState) -> Result<(), String> {
-
-        // If we're in the middle of interpreting an atom...
-        if let Some(interpreter_state) = core::mem::replace(&mut state.interpreter_state, None) {
-
-            if interpreter_state.has_next() {
-
-                //Take a step with the interpreter, and put it back for next time
-                state.interpreter_state = Some(interpret_step(interpreter_state))
-            } else {
-
-                //This interpreter is finished, process the results
-                match interpreter_state.into_result() {
-                    Err(msg) => return Err(msg),
-                    Ok(result) => {
-                        let error = result.iter().any(|atom| atom_is_error(atom));
-                        state.results.push(result);
-                        if error {
-                            state.mode = MettaRunnerMode::TERMINATE;
-                            return Ok(());
-                        }
-                    }
-                }
-            }
-
-        } else {
-
-            // We'll parse the next atom, and start a new intperpreter
-            if let Some(atom) = parser.parse(&self.0.tokenizer.borrow())? {
-                if atom == EXEC_SYMBOL {
-                    state.mode = MettaRunnerMode::INTERPRET;
-                    return Ok(());
-                }
-                match state.mode {
-                    MettaRunnerMode::ADD => {
-                        if let Err(atom) = self.add_atom(atom) {
-                            state.results.push(vec![atom]);
-                            state.mode = MettaRunnerMode::TERMINATE;
-                            return Ok(());
-                        }
-                    },
-                    MettaRunnerMode::INTERPRET => {
-
-                        state.interpreter_state = Some(match self.type_check(atom) {
-                            Err(atom) => {
-                                InterpreterState::new_finished(self.space().clone(), vec![atom])
-                            },
-                            Ok(atom) => {
-                                #[cfg(feature = "minimal")]
-                                let atom = wrap_atom_by_metta_interpreter(self, atom);
-                                interpret_init(self.space().clone(), &atom)
-                            },
-                        });
-                    },
-                    MettaRunnerMode::TERMINATE => {
-                        return Ok(());
-                    },
-                }
-                state.mode = MettaRunnerMode::ADD;
-            }  else {
-                state.mode = MettaRunnerMode::TERMINATE;
-            }
-        }
-
-        Ok(())
+    pub fn run<'p, 'a: 'p>(&'a self, parser: SExprParser<'p>) -> Result<Vec<Vec<Atom>>, String> {
+        let state = RunnerState::new_with_parser(self, parser);
+        state.run_to_completion()
     }
 
     // TODO: this method is deprecated and should be removed after switching
@@ -344,13 +281,121 @@ fn wrap_atom_by_metta_interpreter(runner: &Metta, atom: Atom) -> Atom {
 }
 
 impl<'a> RunnerState<'a> {
-    fn new() -> Self {
+    fn new(metta: &'a Metta) -> Self {
         Self {
+            metta,
             mode: MettaRunnerMode::ADD,
             interpreter_state: None,
+            parser: None,
+            atoms: None,
             results: vec![],
         }
     }
+    /// Returns a new RunnerState, for running code from the [SExprParser] with the specified [Metta] runner
+    pub fn new_with_parser(metta: &'a Metta, parser: SExprParser<'a>) -> Self {
+        let mut state = Self::new(metta);
+        state.parser = Some(parser);
+        state
+    }
+
+    /// Returns a new RunnerState, for running code encoded as a slice of [Atom]s with the specified [Metta] runner
+    pub fn new_with_atoms(metta: &'a Metta, atoms: &'a[Atom]) -> Self {
+        let mut state = Self::new(metta);
+        state.atoms = Some(atoms);
+        state
+    }
+
+    /// Repeatedly steps a RunnerState until it is complete, and then returns the results
+    pub fn run_to_completion(mut self) -> Result<Vec<Vec<Atom>>, String> {
+        while !self.is_complete() {
+            self.run_step()?;
+        }
+        Ok(self.into_results())
+    }
+
+    /// Runs one step of the interpreter
+    pub fn run_step(&mut self) -> Result<(), String> {
+
+        // If we're in the middle of interpreting an atom...
+        if let Some(interpreter_state) = core::mem::take(&mut self.interpreter_state) {
+
+            if interpreter_state.has_next() {
+
+                //Take a step with the interpreter, and put it back for next time
+                self.interpreter_state = Some(interpret_step(interpreter_state))
+            } else {
+
+                //This interpreter is finished, process the results
+                match interpreter_state.into_result() {
+                    Err(msg) => return Err(msg),
+                    Ok(result) => {
+                        let error = result.iter().any(|atom| atom_is_error(atom));
+                        self.results.push(result);
+                        if error {
+                            self.mode = MettaRunnerMode::TERMINATE;
+                            return Ok(());
+                        }
+                    }
+                }
+            }
+
+        } else {
+
+            // Get the next atom, and start a new intperpreter
+            let next_atom = if let Some(parser) = self.parser.as_mut() {
+                parser.parse(&self.metta.0.tokenizer.borrow())?
+            } else {
+                if let Some(atoms) = self.atoms.as_mut() {
+                    if let Some((atom, rest)) = atoms.split_first() {
+                        *atoms = rest;
+                        Some(atom.clone())
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            };
+
+            if let Some(atom) = next_atom {
+                if atom == EXEC_SYMBOL {
+                    self.mode = MettaRunnerMode::INTERPRET;
+                    return Ok(());
+                }
+                match self.mode {
+                    MettaRunnerMode::ADD => {
+                        if let Err(atom) = self.metta.add_atom(atom) {
+                            self.results.push(vec![atom]);
+                            self.mode = MettaRunnerMode::TERMINATE;
+                            return Ok(());
+                        }
+                    },
+                    MettaRunnerMode::INTERPRET => {
+
+                        self.interpreter_state = Some(match self.metta.type_check(atom) {
+                            Err(atom) => {
+                                InterpreterState::new_finished(self.metta.space().clone(), vec![atom])
+                            },
+                            Ok(atom) => {
+                                #[cfg(feature = "minimal")]
+                                let atom = wrap_atom_by_metta_interpreter(&self.metta, atom);
+                                interpret_init(self.metta.space().clone(), &atom)
+                            },
+                        });
+                    },
+                    MettaRunnerMode::TERMINATE => {
+                        return Ok(());
+                    },
+                }
+                self.mode = MettaRunnerMode::ADD;
+            }  else {
+                self.mode = MettaRunnerMode::TERMINATE;
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn is_complete(&self) -> bool {
         self.mode == MettaRunnerMode::TERMINATE
     }
@@ -382,7 +427,7 @@ mod tests {
         ";
 
         let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
-        let result = metta.run(&mut SExprParser::new(program));
+        let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![Atom::sym("T")]]));
     }
 
@@ -396,7 +441,7 @@ mod tests {
 
         let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
-        let result = metta.run(&mut SExprParser::new(program));
+        let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
 
@@ -410,7 +455,7 @@ mod tests {
 
         let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
-        let result = metta.run(&mut SExprParser::new(program));
+        let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
 
@@ -448,7 +493,7 @@ mod tests {
         let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         metta.tokenizer().borrow_mut().register_token(Regex::new("error").unwrap(),
             |_| Atom::gnd(ErrorOp{}));
-        let result = metta.run(&mut SExprParser::new(program));
+        let result = metta.run(SExprParser::new(program));
 
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("error") "TestError")]]));
     }
@@ -465,7 +510,7 @@ mod tests {
 
         let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
-        let result = metta.run(&mut SExprParser::new(program));
+        let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
 
@@ -499,7 +544,7 @@ mod tests {
         let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
         metta.tokenizer().borrow_mut().register_token(Regex::new("empty").unwrap(),
             |_| Atom::gnd(ReturnAtomOp(expr!())));
-        let result = metta.run(&mut SExprParser::new(program));
+        let result = metta.run(SExprParser::new(program));
 
         assert_eq!(result, Ok(vec![vec![expr!()]]));
     }

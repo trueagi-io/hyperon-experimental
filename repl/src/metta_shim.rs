@@ -126,10 +126,10 @@ pub mod metta_interface_mod {
             let runner_state = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
                 let line = PyString::new(py, line);
                 let py_metta = self.py_metta.as_ref(py);
-                let args = PyTuple::new(py, &[py_metta, line]);
                 let module: &PyModule = self.py_mod.as_ref(py);
-                let func = module.getattr("start_run")?;
-                let result = func.call1(args)?;
+                let runner_class = module.getattr("RunnerState")?;
+                let args = PyTuple::new(py, &[py_metta, line]);
+                let result = runner_class.call1(args)?;
                 Ok(result.into())
             }).unwrap();
 
@@ -329,7 +329,7 @@ pub mod metta_interface_mod {
     use hyperon::ExpressionAtom;
     use hyperon::Atom;
     use hyperon::metta::environment::Environment;
-    use hyperon::metta::runner::{Metta, atom_is_error};
+    use hyperon::metta::runner::{Metta, RunnerState, atom_is_error};
     use super::{strip_quotes, exec_state_prepare, exec_state_should_break};
 
     pub use hyperon::metta::text::SyntaxNodeType as SyntaxNodeType;
@@ -413,8 +413,8 @@ pub mod metta_interface_mod {
         }
 
         pub fn exec(&mut self, line: &str) {
-            let mut parser = SExprParser::new(line);
-            let mut runner_state = self.metta.start_run();
+            let parser = SExprParser::new(line);
+            let mut runner_state = RunnerState::new_with_parser(&self.metta, parser);
 
             exec_state_prepare();
 
@@ -424,8 +424,7 @@ pub mod metta_interface_mod {
                 }
 
                 //Run the next step
-                self.metta.run_step(&mut parser, &mut runner_state)
-                    .unwrap_or_else(|err| panic!("Unhandled MeTTa error: {}", err));
+                runner_state.run_step().unwrap_or_else(|err| panic!("Unhandled MeTTa error: {}", err));
                 self.result = runner_state.current_results().clone();
             }
         }

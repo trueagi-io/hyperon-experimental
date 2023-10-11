@@ -217,6 +217,7 @@ impl SyntaxNode {
     }
 }
 
+#[derive(Clone)]
 pub struct SExprParser<'a> {
     text: &'a str,
     it: Peekable<CharIndices<'a>>,

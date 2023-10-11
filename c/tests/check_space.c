@@ -235,7 +235,7 @@ START_TEST (test_space_nested_in_atom)
 
     sexpr_parser_t parser = sexpr_parser_new("!(match nested (A $x) $x)");
     atom_vec_t results;
-    metta_run(&runner, &parser, &copy_atom_vec, &results);
+    metta_run(&runner, parser, &copy_atom_vec, &results);
 
     atom_ref_t result_atom = atom_vec_get(&results, 0);
     atom_t expected_atom = atom_sym("B");
@@ -243,7 +243,6 @@ START_TEST (test_space_nested_in_atom)
     atom_free(expected_atom);
 
     atom_vec_free(results);
-    sexpr_parser_free(parser);
 
     tokenizer_free(tokenizer);
     metta_free(runner);

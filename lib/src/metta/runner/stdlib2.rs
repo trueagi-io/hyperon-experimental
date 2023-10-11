@@ -418,7 +418,7 @@ mod tests {
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
         let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
-        metta.run(&mut SExprParser::new(program))
+        metta.run(SExprParser::new(program))
     }
 
     #[test]
@@ -625,14 +625,14 @@ mod tests {
             (= (foo $x) $x)
             (= (bar $x) $x)
         ";
-        assert_eq!(metta.run(&mut SExprParser::new(program)), Ok(vec![]));
-        assert_eq!(metta.run(&mut SExprParser::new("!(assertEqual (foo A) (bar A))")), Ok(vec![
+        assert_eq!(metta.run(SExprParser::new(program)), Ok(vec![]));
+        assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) (bar A))")), Ok(vec![
             vec![VOID_SYMBOL],
         ]));
-        assert_eq!(metta.run(&mut SExprParser::new("!(assertEqual (foo A) (bar B))")), Ok(vec![
+        assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) (bar B))")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("foo" "A") ("bar" "B")) "\nExpected: [B]\nGot: [A]\nMissed result: B")],
         ]));
-        assert_eq!(metta.run(&mut SExprParser::new("!(assertEqual (foo A) Empty)")), Ok(vec![
+        assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) Empty)")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("foo" "A") "Empty") "\nExpected: []\nGot: [A]\nExcessive result: A")]
         ]));
     }
@@ -648,14 +648,14 @@ mod tests {
             (= (baz) D)
             (= (baz) D)
         ";
-        assert_eq!(metta.run(&mut SExprParser::new(program)), Ok(vec![]));
-        assert_eq!(metta.run(&mut SExprParser::new("!(assertEqualToResult (foo) (A B))")), Ok(vec![
+        assert_eq!(metta.run(SExprParser::new(program)), Ok(vec![]));
+        assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (foo) (A B))")), Ok(vec![
             vec![VOID_SYMBOL],
         ]));
-        assert_eq!(metta.run(&mut SExprParser::new("!(assertEqualToResult (bar) (A))")), Ok(vec![
+        assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (bar) (A))")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("bar") ("A")) "\nExpected: [A]\nGot: [C]\nMissed result: A")],
         ]));
-        assert_eq!(metta.run(&mut SExprParser::new("!(assertEqualToResult (baz) (D))")), Ok(vec![
+        assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (baz) (D))")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("baz") ("D")) "\nExpected: [D]\nGot: [D, D]\nExcessive result: D")]
         ]));
     }
@@ -848,14 +848,14 @@ mod tests {
         metta.tokenizer().borrow_mut().register_token(Regex::new("id_num").unwrap(),
             |_| Atom::gnd(ID_NUM));
 
-        assert_eq!(metta.run(&mut SExprParser::new(program1)),
+        assert_eq!(metta.run(SExprParser::new(program1)),
             Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
 
         let program2 = "
             !(eval (interpret (id_num myAtom) %Undefined% &self))
         ";
 
-        assert_eq!(metta.run(&mut SExprParser::new(program2)),
+        assert_eq!(metta.run(SExprParser::new(program2)),
             Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
     }
 }

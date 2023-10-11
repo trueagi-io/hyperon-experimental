@@ -8,22 +8,38 @@ from .base import GroundingSpaceRef, Tokenizer, SExprParser
 from hyperonpy import EnvBuilder
 
 class RunnerState:
-    def __init__(self, cstate):
-        """Initialize a RunnerState"""
-        self.cstate = cstate
+    """
+    The state for an in-flight MeTTa interpreter handling the interpretation and evaluation of atoms in a given grounding space.
+    """
+    def __init__(self, metta, program):
+        """Initialize a RunnerState with a MeTTa object and a program to run"""
+        parser = SExprParser(program)
+        #WARNING the C parser object has a reference to the text buffer, and hyperonpy's CSExprParser
+        #  copies the buffer into an owned string.  So we need to make sure this parser isn't freed
+        #  until the RunnerState is done with it.
+        self.parser = parser
+        self.cstate = hp.runner_state_new_with_parser(metta.cmetta, parser.cparser)
 
     def __del__(self):
         """Frees a RunnerState and all associated resources."""
         hp.runner_state_free(self.cstate)
 
     def run_step(self):
-        hp.metta_run_step(self.runner.cmetta, self.parser.cparser, self.cstate)
+        """
+        Executes the next step in the interpretation plan, or begins interpretation of the next atom in the stream of MeTTa code.
+        """
+        hp.runner_state_step(self.cstate)
 
     def is_complete(self):
+        """
+        Returns True if the runner has concluded, or False if there are more steps remaining to execute
+        """
         return hp.runner_state_is_complete(self.cstate)
 
     def current_results(self, flat=False):
-        """Returns the current in-progress results from an in-flight program evaluation"""
+        """
+        Returns the current in-progress results from an in-flight program evaluation
+        """
         results = hp.runner_state_current_results(self.cstate)
         if flat:
             return [Atom._from_catom(catom) for result in results for catom in result]
@@ -162,14 +178,6 @@ class MeTTa:
             return [Atom._from_catom(catom) for result in results for catom in result]
         else:
             return [[Atom._from_catom(catom) for catom in result] for result in results]
-
-    def start_run(self, program):
-        """Initializes a RunnerState to begin evaluation of MeTTa code"""
-        parser = SExprParser(program)
-        state = RunnerState(hp.metta_start_run(self.cmetta))
-        state.parser = parser
-        state.runner = self
-        return state
 
 class Environment:
     """This class contains the API for shared platform configuration"""

@@ -24,15 +24,14 @@ START_TEST (test_incremental_runner)
 {
     metta_t runner = new_test_metta();
 
-    runner_state_t runner_state = metta_start_run(&runner);
-
     sexpr_parser_t parser = sexpr_parser_new("!(+ 1 (+ 2 (+ 3 4)))");
+    runner_state_t runner_state = runner_state_new_with_parser(&runner, parser);
 
     int step_count = 0;
     char atom_str_buf[64];
     atom_str_buf[0] = 0;
     while (!runner_state_is_complete(&runner_state)) {
-        metta_run_step(&runner, &parser, &runner_state);
+        runner_state_step(&runner_state);
 
         atom_vec_t* results = NULL;
         runner_state_current_results(&runner_state, &copy_atom_vec, &results);
@@ -49,8 +48,6 @@ START_TEST (test_incremental_runner)
         step_count++;
     }
     ck_assert_str_eq(atom_str_buf, "10");
-
-    sexpr_parser_free(parser);
 
     runner_state_free(runner_state);
     metta_free(runner);

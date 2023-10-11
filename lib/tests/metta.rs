@@ -20,7 +20,7 @@ fn test_reduce_higher_order() {
     ";
     let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
 
-    let result = metta.run(&mut SExprParser::new(program));
+    let result = metta.run(SExprParser::new(program));
 
     assert_eq!(result, Ok(vec![vec![UNIT_ATOM()]]));
 }
