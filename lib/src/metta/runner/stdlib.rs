@@ -1207,8 +1207,7 @@ pub static METTA_CODE: &'static str = "
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::environment::EnvBuilder;
-    use crate::metta::runner::Metta;
+    use crate::metta::runner::{Metta, EnvBuilder};
     use crate::metta::types::validate_atom;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {

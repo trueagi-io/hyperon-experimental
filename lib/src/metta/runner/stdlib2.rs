@@ -411,7 +411,7 @@ pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::environment::EnvBuilder;
+    use crate::metta::runner::EnvBuilder;
     use crate::matcher::atoms_are_equivalent;
 
     use std::convert::TryFrom;

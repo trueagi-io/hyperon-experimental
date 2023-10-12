@@ -1,7 +1,6 @@
 use hyperon::assert_eq_metta_results;
 use hyperon::metta::text::SExprParser;
-use hyperon::metta::runner::Metta;
-use hyperon::metta::environment::EnvBuilder;
+use hyperon::metta::runner::{Metta, EnvBuilder};
 
 #[test]
 fn test_case_operation() {

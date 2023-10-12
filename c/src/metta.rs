@@ -3,8 +3,7 @@ use hyperon::space::DynSpace;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
-use hyperon::metta::runner::{Metta, RunnerState};
-use hyperon::metta::environment::{Environment, EnvBuilder};
+use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
 use hyperon::rust_type_atom;
 
 use crate::util::*;

@@ -6,7 +6,6 @@ pub mod interpreter;
 pub mod interpreter2;
 pub mod types;
 pub mod runner;
-pub mod environment;
 
 use text::{SExprParser, Tokenizer};
 use regex::Regex;

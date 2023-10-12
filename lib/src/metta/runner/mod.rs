@@ -2,7 +2,6 @@ use crate::*;
 use crate::common::shared::Shared;
 
 use super::*;
-use super::environment::EnvBuilder;
 use super::space::*;
 use super::text::{Tokenizer, SExprParser};
 use super::types::validate_atom;
@@ -12,7 +11,8 @@ use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use metta::environment::Environment;
+mod environment;
+pub use environment::{Environment, EnvBuilder};
 
 #[cfg(not(feature = "minimal"))]
 pub mod stdlib;
