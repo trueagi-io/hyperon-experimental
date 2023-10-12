@@ -49,7 +49,7 @@ def get_config_atom(metta, config_name):
     result = metta.run("!(get-state " + config_name + ")")
     try:
         atom = result[0][0]
-        if (atom.is_error()):
+        if (atom_is_error(atom)):
             return None
         else:
             return atom

@@ -485,3 +485,7 @@ def get_atom_types(gnd_space, atom):
     """Provides all types for the given Atom in the context of the given Space."""
     result = hp.get_atom_types(gnd_space.cspace, atom.catom)
     return [Atom._from_catom(catom) for catom in result]
+
+def atom_is_error(atom):
+    """Checks whether an Atom is an error expression"""
+    return hp.atom_is_error(atom.catom)

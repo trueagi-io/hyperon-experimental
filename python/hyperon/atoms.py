@@ -27,9 +27,6 @@ class Atom:
         """Renders a human-readable text description of the Atom."""
         return hp.atom_to_str(self.catom)
 
-    def is_error(self):
-        return hp.atom_is_error(self.catom)
-
     def get_type(self):
         """Gets the type of the current Atom instance"""
         return hp.atom_get_type(self.catom)
