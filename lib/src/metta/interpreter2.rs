@@ -307,10 +307,6 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
     result
 }
 
-fn return_unit() -> Atom {
-    VOID_SYMBOL
-}
-
 fn return_not_reducible() -> Atom {
     NOT_REDUCIBLE_SYMBOL
 }
@@ -338,7 +334,7 @@ fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<In
                         // let a caller know that function is not defined on a
                         // passed input data. Thus we can interpreter empty result
                         // by any way we like.
-                        vec![InterpretedAtom(return_unit(), bindings)]
+                        vec![]
                     } else {
                         results.into_iter()
                             .map(|atom| InterpretedAtom(atom, bindings.clone()))
@@ -584,7 +580,7 @@ mod tests {
     #[test]
     fn interpret_atom_evaluate_grounded_expression_empty() {
         let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" ({ReturnNothing()} {6})), bind!{}));
-        assert_eq!(result, vec![atom("Void", bind!{})]);
+        assert_eq!(result, vec![]);
     }
 
     #[test]

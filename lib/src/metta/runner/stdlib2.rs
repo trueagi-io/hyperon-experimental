@@ -17,16 +17,6 @@ use super::arithmetics::*;
 
 pub const VOID_SYMBOL : Atom = sym!("%void%");
 
-//TODO: convert these from functions to static strcutures, when Atoms are Send+Sync
-#[allow(non_snake_case)]
-pub fn UNIT_ATOM() -> Atom {
-    Atom::expr([])
-}
-#[allow(non_snake_case)]
-pub fn UNIT_TYPE() -> Atom {
-    Atom::expr([ARROW_SYMBOL])
-}
-
 #[derive(Clone, PartialEq, Debug)]
 pub struct GetTypeOp {}
 
@@ -138,7 +128,7 @@ fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -
     log::debug!("assert_results_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
     let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
     match vec_eq_no_order(actual.iter(), expected.iter()) {
-        Ok(()) => Ok(vec![VOID_SYMBOL]),
+        Ok(()) => Ok(vec![UNIT_ATOM()]),
         Err(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
 }
@@ -678,7 +668,7 @@ mod tests {
         ";
         assert_eq!(metta.run(SExprParser::new(program)), Ok(vec![]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) (bar A))")), Ok(vec![
-            vec![VOID_SYMBOL],
+            vec![UNIT_ATOM()],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) (bar B))")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("foo" "A") ("bar" "B")) "\nExpected: [B]\nGot: [A]\nMissed result: B")],
@@ -701,7 +691,7 @@ mod tests {
         ";
         assert_eq!(metta.run(SExprParser::new(program)), Ok(vec![]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (foo) (A B))")), Ok(vec![
-            vec![VOID_SYMBOL],
+            vec![UNIT_ATOM()],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (bar) (A))")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("bar") ("A")) "\nExpected: [A]\nGot: [C]\nMissed result: A")],

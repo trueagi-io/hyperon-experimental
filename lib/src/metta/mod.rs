@@ -33,7 +33,6 @@ pub const NOT_REDUCIBLE_SYMBOL : Atom = sym!("NotReducible");
 pub const NO_VALID_ALTERNATIVES : Atom = sym!("NoValidAlternatives");
 
 pub const EMPTY_SYMBOL : Atom = sym!("Empty");
-pub const VOID_SYMBOL : Atom = sym!("Void");
 
 pub const EVAL_SYMBOL : Atom = sym!("eval");
 pub const CHAIN_SYMBOL : Atom = sym!("chain");
@@ -44,6 +43,17 @@ pub const FUNCTION_SYMBOL : Atom = sym!("function");
 pub const RETURN_SYMBOL : Atom = sym!("return");
 
 pub const INTERPRET_SYMBOL : Atom = sym!("interpret");
+
+//TODO: convert these from functions to static strcutures, when Atoms are Send+Sync
+#[allow(non_snake_case)]
+pub fn UNIT_ATOM() -> Atom {
+    Atom::expr([])
+}
+
+#[allow(non_snake_case)]
+pub fn UNIT_TYPE() -> Atom {
+    Atom::expr([ARROW_SYMBOL])
+}
 
 /// Initializes an error expression atom
 pub fn error_atom(err_atom: Option<Atom>, err_code: Option<Atom>, message: String) -> Atom {

@@ -23,15 +23,6 @@ use super::arithmetics::*;
 
 pub const VOID_SYMBOL : Atom = sym!("%void%");
 
-//TODO: convert these from functions to static strcutures, when Atoms are Send+Sync
-#[allow(non_snake_case)]
-pub fn UNIT_ATOM() -> Atom {
-    Atom::expr([])
-}
-#[allow(non_snake_case)]
-pub fn UNIT_TYPE() -> Atom {
-    Atom::expr([ARROW_SYMBOL])
-}
 fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
 }
