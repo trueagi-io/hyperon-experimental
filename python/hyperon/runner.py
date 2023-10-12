@@ -177,20 +177,20 @@ class MeTTa:
             return [[Atom._from_catom(catom) for catom in result] for result in results]
 
 class Environment:
-    """This class contains the API for shared platform configuration"""
+    """This class contains the API for configuring the host platform interface used by MeTTa"""
 
     def config_dir():
-        """Returns the config dir in the platform environment"""
+        """Returns the config dir in the common environment"""
         path = hp.environment_config_dir()
         if (len(path) > 0):
             return path
         else:
             return None
 
-    def init_platform_env(working_dir = None, config_dir = None, disable_config = False, is_test = False, include_paths = []):
-        """Initialize the platform environment with the supplied args"""
+    def init_common_env(working_dir = None, config_dir = None, disable_config = False, is_test = False, include_paths = []):
+        """Initialize the common environment with the supplied args"""
         builder = Environment.custom_env(working_dir, config_dir, disable_config, is_test, include_paths)
-        return hp.env_builder_init_platform_env(builder)
+        return hp.env_builder_init_common_env(builder)
 
     def test_env():
         """Returns an EnvBuilder object specifying a unit-test environment, that can be used to init a MeTTa runner"""

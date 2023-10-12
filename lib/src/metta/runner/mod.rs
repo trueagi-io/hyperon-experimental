@@ -83,14 +83,14 @@ impl Metta {
 
     /// A 1-line method to create a fully initialized MeTTa interpreter
     ///
-    /// NOTE: pass `None` for `env_builder` to use the platform environment
+    /// NOTE: pass `None` for `env_builder` to use the common environment
     pub fn new(env_builder: Option<EnvBuilder>) -> Metta {
         Self::new_with_stdlib_loader(|_| {}, env_builder)
     }
 
     /// Create and initialize a MeTTa interpreter with a language-specific stdlib
     ///
-    /// NOTE: pass `None` for `env_builder` to use the platform environment
+    /// NOTE: pass `None` for `env_builder` to use the common environment
     pub fn new_with_stdlib_loader<F>(loader: F, env_builder: Option<EnvBuilder>) -> Metta
         where F: FnOnce(&Self)
     {
@@ -118,14 +118,14 @@ impl Metta {
 
     /// Returns a new MeTTa interpreter, using the provided Space, Tokenizer
     ///
-    /// NOTE: If `env_builder` is `None`, the platform environment will be used
+    /// NOTE: If `env_builder` is `None`, the common environment will be used
     /// NOTE: This function does not load any stdlib atoms, nor run the [Environment]'s 'init.metta'
     pub fn new_with_space(space: DynSpace, tokenizer: Shared<Tokenizer>, env_builder: Option<EnvBuilder>) -> Self {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
         let environment = match env_builder {
             Some(env_builder) => Arc::new(env_builder.build()),
-            None => Environment::platform_env_arc()
+            None => Environment::common_env_arc()
         };
         let contents = MettaContents{
             space,

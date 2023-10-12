@@ -1067,7 +1067,7 @@ pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
 // Environment Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 
-/// @brief Renders the config_dir path from the platform environment into a text buffer
+/// @brief Renders the config_dir path from the common environment into a text buffer
 /// @ingroup environment_group
 /// @param[out]  buf  A buffer into which the text will be written
 /// @param[in]  buf_len  The maximum allocated size of `buf`
@@ -1077,7 +1077,7 @@ pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
 ///
 #[no_mangle]
 pub extern "C" fn environment_config_dir(buf: *mut c_char, buf_len: usize) -> usize {
-    match Environment::platform_env().config_dir() {
+    match Environment::common_env().config_dir() {
         Some(path) => write_into_buf(path.display(), buf, buf_len),
         None => 0
     }
@@ -1119,7 +1119,7 @@ impl env_builder_t {
 /// @brief Begins initialization of an environment
 /// @ingroup environment_group
 /// @return The `env_builder_t` object representing the in-process environment initialization
-/// @note The `env_builder_t` must be passed to either `env_builder_init_platform_env`
+/// @note The `env_builder_t` must be passed to either `env_builder_init_common_env`
 ///     or `metta_new_with_space` in order to properly deallocate it
 ///
 #[no_mangle]
@@ -1127,9 +1127,9 @@ pub extern "C" fn env_builder_start() -> env_builder_t {
     EnvBuilder::new().into()
 }
 
-/// @brief Creates an `env_builder_t` to specify that the default platform environment should be used
+/// @brief Creates an `env_builder_t` to specify that the default common environment should be used
 /// @ingroup environment_group
-/// @return The `env_builder_t` object specifying the default platform environment
+/// @return The `env_builder_t` object specifying the common environment
 /// @note This function exists to supply an argument to `metta_new_with_space` when no special
 ///     behavior is desired
 /// @note The `env_builder_t` must be passed to `metta_new_with_space`
@@ -1150,19 +1150,19 @@ pub extern "C" fn env_builder_use_test_env() -> env_builder_t {
     EnvBuilder::test_env().into()
 }
 
-/// @brief Finishes initialization of the platform environment
+/// @brief Finishes initialization of the common environment
 /// @ingroup environment_group
-/// @param[in]  builder  The in-process environment builder state to install as the platform environment
+/// @param[in]  builder  The in-process environment builder state to install as the common environment
 /// @return  True if the environment was sucessfully initialized with the provided builder state.  False
 ///     if the environment had already been initialized by a prior call
 ///
 #[no_mangle]
-pub extern "C" fn env_builder_init_platform_env(builder: env_builder_t) -> bool {
+pub extern "C" fn env_builder_init_common_env(builder: env_builder_t) -> bool {
     let builder = builder.into_inner();
-    builder.try_init_platform_env().is_ok()
+    builder.try_init_common_env().is_ok()
 }
 
-/// @brief Sets the working directory for the platform environment
+/// @brief Sets the working directory for the environment
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
 /// @param[in]  path  A C-style string specifying a path to a working directory, to search for modules to load.
@@ -1182,7 +1182,7 @@ pub extern "C" fn env_builder_set_working_dir(builder: *mut env_builder_t, path:
     *builder_arg_ref = builder.into();
 }
 
-/// @brief Sets the config directory for the platform environment.  A directory at the specified path
+/// @brief Sets the config directory for the environment.  A directory at the specified path
 /// will be created, and its contents populated with default values, if one does not already exist
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
@@ -1200,7 +1200,7 @@ pub extern "C" fn env_builder_set_config_dir(builder: *mut env_builder_t, path: 
     *builder_arg_ref = builder.into();
 }
 
-/// @brief Configures the platform environment so that no config directory will be read nor created
+/// @brief Configures the environment so that no config directory will be read nor created
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
 ///
@@ -1212,7 +1212,7 @@ pub extern "C" fn env_builder_disable_config_dir(builder: *mut env_builder_t) {
     *builder_arg_ref = builder.into();
 }
 
-/// @brief Configures the platform environment for use in unit testing
+/// @brief Configures the environment for use in unit testing
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
 /// @param[in]  is_test  True if the environment is a unit-test environment, False otherwise

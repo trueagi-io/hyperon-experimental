@@ -81,7 +81,7 @@ pub mod metta_interface_mod {
                 confirm_hyperonpy_version(">=0.1.0, <0.2.0")?;
 
                 //Initialize the Hyperon environment
-                let new_shim = MettaShim::init_platform_env(working_dir, include_paths)?;
+                let new_shim = MettaShim::init_common_env(working_dir, include_paths)?;
 
                 Ok(new_shim)
             }() {
@@ -93,7 +93,7 @@ pub mod metta_interface_mod {
             }
         }
 
-        pub fn init_platform_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
+        pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
             match Python::with_gil(|py| -> PyResult<(Py<PyModule>, Py<PyAny>)> {
                 let py_mod = PyModule::from_code(py, Self::PY_CODE, "", "")?;
                 let init_func = py_mod.getattr("init_metta")?;
@@ -324,12 +324,10 @@ pub mod metta_interface_mod {
     use hyperon::atom::{Grounded, ExecError, match_by_equality};
     use hyperon::matcher::MatchResultIter;
     use hyperon::metta::*;
-    use hyperon::metta::environment::EnvBuilder;
     use hyperon::metta::text::SExprParser;
     use hyperon::ExpressionAtom;
     use hyperon::Atom;
-    use hyperon::metta::environment::Environment;
-    use hyperon::metta::runner::{Metta, RunnerState, atom_is_error};
+    use hyperon::metta::runner::{Metta, RunnerState, atom_is_error, Environment, EnvBuilder};
     use super::{strip_quotes, exec_state_prepare, exec_state_should_break};
 
     pub use hyperon::metta::text::SyntaxNodeType as SyntaxNodeType;
@@ -343,7 +341,7 @@ pub mod metta_interface_mod {
 
         pub fn new(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Self {
             match || -> Result<_, String> {
-                let new_shim = MettaShim::init_platform_env(working_dir, include_paths)?;
+                let new_shim = MettaShim::init_common_env(working_dir, include_paths)?;
                 Ok(new_shim)
             }() {
                 Ok(shim) => shim,
@@ -354,11 +352,11 @@ pub mod metta_interface_mod {
             }
         }
 
-        pub fn init_platform_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
+        pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
             EnvBuilder::new()
                 .set_working_dir(Some(&working_dir))
                 .add_include_paths(include_paths)
-                .init_platform_env();
+                .init_common_env();
 
             let new_shim = MettaShim {
                 metta: Metta::new(None),
@@ -436,7 +434,7 @@ pub mod metta_interface_mod {
         }
 
         pub fn config_dir(&self) -> Option<&Path> {
-            Environment::platform_env().config_dir()
+            Environment::common_env().config_dir()
         }
 
         pub fn get_config_atom(&mut self, config_name: &str) -> Option<Atom> {

@@ -839,15 +839,15 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<EnvBuilder>(m, "EnvBuilder");
     m.def("environment_config_dir", []() {
         return func_to_string_no_arg((write_to_buf_no_arg_func_t)&environment_config_dir);
-    }, "Return the config_dir for the platform environment");
+    }, "Return the config_dir for the common environment");
     m.def("env_builder_start", []() { return EnvBuilder(env_builder_start()); }, "Begin initialization of the environment");
-    m.def("env_builder_use_default", []() { return EnvBuilder(env_builder_use_default()); }, "Use the platform environment");
+    m.def("env_builder_use_default", []() { return EnvBuilder(env_builder_use_default()); }, "Use the common environment");
     m.def("env_builder_use_test_env", []() { return EnvBuilder(env_builder_use_test_env()); }, "Use an environment for unit testing");
-    m.def("env_builder_init_platform_env", [](EnvBuilder builder) { return env_builder_init_platform_env(builder.obj); }, "Finish initialization of the platform environment");
-    m.def("env_builder_set_working_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_working_dir(builder.ptr(), path.c_str()); }, "Sets the working dir in the platform environment");
-    m.def("env_builder_set_config_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_config_dir(builder.ptr(), path.c_str()); }, "Sets the config dir in the platform environment");
-    m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the platform environment");
-    m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the platform environment");
-    m.def("env_builder_add_include_path", [](EnvBuilder& builder, std::string path) { env_builder_add_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the platform environment");
+    m.def("env_builder_init_common_env", [](EnvBuilder builder) { return env_builder_init_common_env(builder.obj); }, "Finish initialization of the common environment");
+    m.def("env_builder_set_working_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_working_dir(builder.ptr(), path.c_str()); }, "Sets the working dir in the environment");
+    m.def("env_builder_set_config_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_config_dir(builder.ptr(), path.c_str()); }, "Sets the config dir in the environment");
+    m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the environment");
+    m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
+    m.def("env_builder_add_include_path", [](EnvBuilder& builder, std::string path) { env_builder_add_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
 }
 

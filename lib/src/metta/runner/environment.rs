@@ -7,10 +7,10 @@ use std::sync::Arc;
 
 use directories::ProjectDirs;
 
-/// Contains state and platform interfaces shared by all MeTTa runners.  This includes config settings
+/// Contains state and host platform interfaces shared by all MeTTa runners.  This includes config settings
 /// and logger
 ///
-/// Generally there will be only one environment object needed, and it can be accessed by calling the [platform_env] method
+/// Generally there will be only one environment object needed, and it can be accessed by calling the [common_env] method
 #[derive(Debug)]
 pub struct Environment {
     config_dir: Option<PathBuf>,
@@ -22,18 +22,18 @@ pub struct Environment {
 
 const DEFAULT_INIT_METTA: &[u8] = include_bytes!("init.default.metta");
 
-static PLATFORM_ENV: std::sync::OnceLock<Arc<Environment>> = std::sync::OnceLock::new();
+static COMMON_ENV: std::sync::OnceLock<Arc<Environment>> = std::sync::OnceLock::new();
 
 impl Environment {
 
-    /// Returns a reference to the shared "platform" Environment
-    pub fn platform_env() -> &'static Self {
-        PLATFORM_ENV.get_or_init(|| Arc::new(EnvBuilder::new().build()))
+    /// Returns a reference to the shared common Environment
+    pub fn common_env() -> &'static Self {
+        COMMON_ENV.get_or_init(|| Arc::new(EnvBuilder::new().build()))
     }
 
-    /// Internal function to get a copy of the platform Environment's Arc ptr
-    pub(crate) fn platform_env_arc() -> Arc<Self> {
-        PLATFORM_ENV.get_or_init(|| Arc::new(EnvBuilder::new().build())).clone()
+    /// Internal function to get a copy of the common Environment's Arc ptr
+    pub(crate) fn common_env_arc() -> Arc<Self> {
+        COMMON_ENV.get_or_init(|| Arc::new(EnvBuilder::new().build())).clone()
     }
 
     /// Returns the Path to the config dir, in an OS-specific location
@@ -85,7 +85,7 @@ impl EnvBuilder {
     /// Returns a new EnvBuilder, to set the parameters for the MeTTa Environment
     ///
     /// NOTE: Unless otherwise specified by calling either [set_no_config_dir] or [set_config_dir], the
-    ///   [Environment] will be configured using the OS-Specific platform configuration files.
+    ///   [Environment] will be configured using files in the OS-Specific configuration file locations.
     ///
     /// Depending on the host OS, the config directory locations will be:
     /// * Linux: ~/.config/metta/
@@ -153,21 +153,21 @@ impl EnvBuilder {
         self
     }
 
-    /// Initializes the shared platform Environment, accessible with [platform_env]
+    /// Initializes the shared common Environment, accessible with [common_env]
     ///
-    /// NOTE: This method will panic if the platform Environment has already been initialized
-    pub fn init_platform_env(self) {
-        self.try_init_platform_env().expect("Fatal Error: Platform Environment already initialized");
+    /// NOTE: This method will panic if the common Environment has already been initialized
+    pub fn init_common_env(self) {
+        self.try_init_common_env().expect("Fatal Error: Common Environment already initialized");
     }
 
-    /// Initializes the shared platform Environment.  Non-panicking version of [init_platform_env]
-    pub fn try_init_platform_env(self) -> Result<(), &'static str> {
-        PLATFORM_ENV.set(Arc::new(self.build())).map_err(|_| "Platform Environment already initialized")
+    /// Initializes the shared common Environment.  Non-panicking version of [init_common_env]
+    pub fn try_init_common_env(self) -> Result<(), &'static str> {
+        COMMON_ENV.set(Arc::new(self.build())).map_err(|_| "Common Environment already initialized")
     }
 
     /// Returns a newly created Environment from the builder configuration
     ///
-    /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [platform_env] method.
+    /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [common_env] method.
     pub(crate) fn build(self) -> Environment {
 
         let mut env = self.env;
