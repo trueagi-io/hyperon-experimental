@@ -739,8 +739,39 @@ impl metta_t {
 /// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
 ///
 #[no_mangle]
-pub extern "C" fn metta_new_rust() -> metta_t {
-    let metta = Metta::new_rust(None);
+pub extern "C" fn metta_new() -> metta_t {
+    let metta = Metta::new(None);
+    metta.into()
+}
+
+/// @brief Function signature for a callback to load a language-specific stdlib in a MeTTa runner
+/// @ingroup interpreter_group
+/// @param[in]  metta  The `metta_t` into which to load the stdlib.
+/// @param[in]  context  The context state pointer initially passed to the upstream function initiating the callback.
+///
+pub type c_stdlib_loader_callback_t = extern "C" fn(metta: *mut metta_t, context: *mut c_void);
+
+/// @brief Creates a new top-level MeTTa Interpreter, bootstrapped with the a custom stdlib
+/// @ingroup interpreter_group
+/// @return A `metta_t` handle to the newly created Interpreter
+/// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
+/// @note Most callers can simply call `metta_new`.  This function is provided to support languages
+///     with their own stdlib, that needs to be loaded before the init.metta file is run
+///
+#[no_mangle]
+pub extern "C" fn metta_new_with_environment_and_stdlib(env_builder: env_builder_t,
+        callback: c_stdlib_loader_callback_t, context: *mut c_void) -> metta_t
+{
+    let env_builder = if env_builder.is_default() {
+        None
+    } else {
+        Some(env_builder.into_inner())
+    };
+
+    let metta = Metta::new_with_stdlib_loader(|metta| {
+        let mut metta = metta_t{metta: (metta as *const Metta).cast_mut().cast()};
+        callback(&mut metta, context);
+    }, env_builder);
     metta.into()
 }
 
@@ -766,6 +797,18 @@ pub extern "C" fn metta_new_with_space(space: *mut space_t, tokenizer: *mut toke
     metta.into()
 }
 
+/// @brief Clones a `metta_t` handle
+/// @ingroup interpreter_group
+/// @param[in]  metta  The handle to clone
+/// @return The newly cloned `metta_t` handle, pointing to the same underlying interpreter
+/// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
+///
+#[no_mangle]
+pub extern "C" fn metta_clone_handle(metta: *const metta_t) -> metta_t {
+    let metta = unsafe{ &*metta }.borrow();
+    metta.clone().into()
+}
+
 /// @brief Frees a `metta_t` handle
 /// @ingroup interpreter_group
 /// @param[in]  metta  The handle to free
@@ -776,18 +819,6 @@ pub extern "C" fn metta_new_with_space(space: *mut space_t, tokenizer: *mut toke
 pub extern "C" fn metta_free(metta: metta_t) {
     let metta = metta.into_inner();
     drop(metta);
-}
-
-/// @brief Initializes a MeTTa interpreter, for manually bootstrapping a multi-language interpreter
-/// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the Interpreter handle
-/// @note Most callers can simply call `metta_new_rust`.  This function is provided to support languages
-///     with their own stdlib, that needs to be loaded before the init.metta file is run
-///
-#[no_mangle]
-pub extern "C" fn metta_init(metta: *mut metta_t) {
-    let metta = unsafe{ &*metta }.borrow();
-    metta.init()
 }
 
 /// @brief Returns the number of module search paths that will be searched when importing modules into

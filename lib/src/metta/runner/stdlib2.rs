@@ -417,7 +417,7 @@ mod tests {
     use std::convert::TryFrom;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
         metta.run(SExprParser::new(program))
     }
 
@@ -619,7 +619,7 @@ mod tests {
 
     #[test]
     fn metta_assert_equal_op() {
-        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
         let assert = AssertEqualOp::new(metta.space().clone());
         let program = "
             (= (foo $x) $x)
@@ -639,7 +639,7 @@ mod tests {
 
     #[test]
     fn metta_assert_equal_to_result_op() {
-        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
         let assert = AssertEqualToResultOp::new(metta.space().clone());
         let program = "
             (= (foo) A)
@@ -844,7 +844,7 @@ mod tests {
             !(eval (interpret (id_a myAtom) %Undefined% &self))
         ";
 
-        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
         metta.tokenizer().borrow_mut().register_token(Regex::new("id_num").unwrap(),
             |_| Atom::gnd(ID_NUM));
 

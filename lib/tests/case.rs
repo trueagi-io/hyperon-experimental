@@ -5,7 +5,7 @@ use hyperon::metta::environment::EnvBuilder;
 
 #[test]
 fn test_case_operation() {
-    let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+    let metta = Metta::new(Some(EnvBuilder::test_env()));
     let result = metta.run(SExprParser::new("
         ; cases are processed sequentially
         !(case (+ 1 5)
@@ -40,7 +40,7 @@ fn test_case_operation() {
     "));
     assert_eq!(result, expected);
 
-    let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+    let metta = Metta::new(Some(EnvBuilder::test_env()));
     let result = metta.run(SExprParser::new("
         (Rel-P A B)
         (Rel-Q A C)

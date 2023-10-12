@@ -30,14 +30,9 @@ atom_t expr(atom_t atom, ...) {
     return atom_expr(children, argno);
 }
 
-metta_t new_test_metta(void) {
+void noop_metta_init(metta_t* metta, void* context) {}
 
-    space_t space = space_new_grounding_space();
-    tokenizer_t tokenizer = tokenizer_new();
-    metta_t metta = metta_new_with_space(&space, &tokenizer, env_builder_use_test_env());
-    metta_load_module(&metta, "stdlib");
-    metta_init(&metta);
-    space_free(space);
-    tokenizer_free(tokenizer);
+metta_t new_test_metta(void) {
+    metta_t metta = metta_new_with_environment_and_stdlib(env_builder_use_test_env(), &noop_metta_init, NULL);
     return metta;
 }

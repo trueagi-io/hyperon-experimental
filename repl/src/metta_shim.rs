@@ -361,7 +361,7 @@ pub mod metta_interface_mod {
                 .init_platform_env();
 
             let new_shim = MettaShim {
-                metta: Metta::new_rust(None),
+                metta: Metta::new(None),
                 result: vec![],
             };
             new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(ImportPyErr) });

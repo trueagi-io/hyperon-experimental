@@ -84,36 +84,36 @@ impl Metta {
     /// A 1-line method to create a fully initialized MeTTa interpreter
     ///
     /// NOTE: pass `None` for `env_builder` to use the platform environment
-    /// NOTE: This function is appropriate for Rust or C clients, but if other language-specific
-    ///   stdlibs are involved then see the documentation for [Metta::init]
-    pub fn new_rust(env_builder: Option<EnvBuilder>) -> Metta {
-        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()),
-            Shared::new(Tokenizer::new()), env_builder);
-        metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
-        metta.init();
-        metta
+    pub fn new(env_builder: Option<EnvBuilder>) -> Metta {
+        Self::new_with_stdlib_loader(|_| {}, env_builder)
     }
 
-    /// Performs initialization of a MeTTa interpreter.  Presently this involves running the `init.metta`
-    /// file from the associated environment.
+    /// Create and initialize a MeTTa interpreter with a language-specific stdlib
     ///
-    /// DISCUSSION: Creating a fully-initialized MeTTa runner should usually be done with with
-    /// a top-level initialization function, such as [Metta::new_rust] or `MeTTa()` in Python.
-    ///
-    /// Doing it manually involves several steps:
-    /// 1. Create the MeTTa runner, using [new_with_space].  This provides a working interpreter, but
-    ///     doesn't load any stdlibs
-    /// 2. Load each language-specific stdlib (Currently only Python has an extended stdlib)
-    /// 3. Load the Rust `stdlib` (TODO: Conceptually I'd like to load Rust's stdlib first, so other
-    ///      stdlibs can utilize the Rust stdlib's atoms, but that depends on value bridging)
-    /// 4. Run the `init.metta` file by calling this function
-    ///
-    /// TODO: When we are able to load the Rust stdlib before the Python stdlib, which requires value-bridging,
-    ///     we can refactor this function to load the appropriate stdlib(s) and simplify the init process
-    pub fn init(&self) {
-        if let Some(init_meta_file) = self.0.environment.initialization_metta_file_path() {
-            self.load_module(init_meta_file.into()).unwrap();
+    /// NOTE: pass `None` for `env_builder` to use the platform environment
+    pub fn new_with_stdlib_loader<F>(loader: F, env_builder: Option<EnvBuilder>) -> Metta
+        where F: FnOnce(&Self)
+    {
+        //Create the raw MeTTa runner
+        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()),
+            Shared::new(Tokenizer::new()), env_builder);
+
+        // TODO: Reverse the loading order between the Rust stdlib and user-supplied stdlib loader,
+        // because user-supplied stdlibs might need to build on top of the Rust stdlib.
+        // Currently this is problematic because https://github.com/trueagi-io/hyperon-experimental/issues/408,
+        // and the right fix is value-bridging (https://github.com/trueagi-io/hyperon-experimental/issues/351)
+
+        //Load the custom stdlib
+        loader(&metta);
+
+        //Load the Rust stdlib
+        metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
+
+        //Run the `init.metta` file
+        if let Some(init_meta_file) = metta.0.environment.initialization_metta_file_path() {
+            metta.load_module(init_meta_file.into()).unwrap();
         }
+        metta
     }
 
     /// Returns a new MeTTa interpreter, using the provided Space, Tokenizer
@@ -426,7 +426,7 @@ mod tests {
             !(green Fritz)
         ";
 
-        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![Atom::sym("T")]]));
     }
@@ -490,7 +490,7 @@ mod tests {
             !(foo)
         ";
 
-        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
         metta.tokenizer().borrow_mut().register_token(Regex::new("error").unwrap(),
             |_| Atom::gnd(ErrorOp{}));
         let result = metta.run(SExprParser::new(program));
@@ -541,7 +541,7 @@ mod tests {
             !(empty)
         ";
 
-        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
         metta.tokenizer().borrow_mut().register_token(Regex::new("empty").unwrap(),
             |_| Atom::gnd(ReturnAtomOp(expr!())));
         let result = metta.run(SExprParser::new(program));

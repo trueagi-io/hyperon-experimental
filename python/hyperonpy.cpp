@@ -417,6 +417,15 @@ void syntax_node_copy_to_list_callback(const syntax_node_t* node, void *context)
     }
 };
 
+void run_python_loader_callback(metta_t* metta, void* context) {
+    py::object runner_mod = py::module_::import("hyperon.runner");
+    py::object metta_class = runner_mod.attr("MeTTa");
+    py::function load_metta_py_stdlib = metta_class.attr("_priv_load_metta_py_stdlib");
+    metta_t cloned_metta = metta_clone_handle(metta);
+    py::object py_metta = metta_class(CMetta(cloned_metta));
+    load_metta_py_stdlib(py_metta);
+}
+
 struct CConstr {
 
     py::function pyconstr;
@@ -782,11 +791,10 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_SYMBOL(VOID, "Void");
 
     py::class_<CMetta>(m, "CMetta");
-    m.def("metta_new", [](CSpace space, CTokenizer tokenizer, EnvBuilder env_builder) {
-        return CMetta(metta_new_with_space(space.ptr(), tokenizer.ptr(), env_builder.obj));
+    m.def("metta_new", [](EnvBuilder env_builder) {
+        return CMetta(metta_new_with_environment_and_stdlib(env_builder.obj, &run_python_loader_callback, NULL));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
-    m.def("metta_init", [](CMetta metta) { metta_init(metta.ptr()); }, "Inits a MeTTa interpreter by running the init.metta file from its environment");
     m.def("metta_search_path_cnt", [](CMetta metta) { return metta_search_path_cnt(metta.ptr()); }, "Returns the number of module search paths in the runner's environment");
     m.def("metta_nth_search_path", [](CMetta metta, size_t idx) {
         return func_to_string_two_args((write_to_buf_two_arg_func_t)&metta_nth_search_path, metta.ptr(), (void*)idx);

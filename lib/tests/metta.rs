@@ -18,7 +18,7 @@ fn test_reduce_higher_order() {
 
         !(assertEqualToResult ((inc) 2) (3))
     ";
-    let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+    let metta = Metta::new(Some(EnvBuilder::test_env()));
 
     let result = metta.run(SExprParser::new(program));
 

@@ -1212,7 +1212,7 @@ mod tests {
     use crate::metta::types::validate_atom;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
         metta.run(SExprParser::new(program))
     }
 
@@ -1425,7 +1425,7 @@ mod tests {
 
     #[test]
     fn superpose_op_multiple_interpretations() {
-        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
         let parser = SExprParser::new("
             (= (f) A)
             (= (f) B)
@@ -1441,7 +1441,7 @@ mod tests {
 
     #[test]
     fn superpose_op_superposed_with_collapse() {
-        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
         let parser = SExprParser::new("
             (= (f) A)
             (= (f) B)
@@ -1455,7 +1455,7 @@ mod tests {
 
     #[test]
     fn superpose_op_consumes_interpreter_errors() {
-        let metta = Metta::new_rust(Some(EnvBuilder::test_env()));
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
         let parser = SExprParser::new("
             (: f (-> A B))
             (= (f $x) $x)

@@ -49,26 +49,23 @@ class RunnerState:
 class MeTTa:
     """This class contains the MeTTa program execution utilities"""
 
-    def __init__(self, space = None, cmetta = None, env_builder = None):
+    def __init__(self, cmetta = None, env_builder = None):
         if cmetta is not None:
             self.cmetta = cmetta
         else:
-            if space is None:
-                space = GroundingSpaceRef()
-            tokenizer = Tokenizer()
             if env_builder is None:
                 env_builder = hp.env_builder_use_default()
-            self.cmetta = hp.metta_new(space.cspace, tokenizer.ctokenizer, env_builder)
-            self.load_py_module("hyperon.stdlib")
-            hp.metta_load_module(self.cmetta, "stdlib")
-            self.register_atom('extend-py!',
-                OperationAtom('extend-py!',
-                              lambda name: self.load_py_module_from_mod_or_file(name) or [],
-                              [AtomType.UNDEFINED, AtomType.ATOM], unwrap=False))
-            hp.metta_init(self.cmetta)
+            self.cmetta = hp.metta_new(env_builder)
 
     def __del__(self):
         hp.metta_free(self.cmetta)
+
+    def _priv_load_metta_py_stdlib(self):
+        self.load_py_module("hyperon.stdlib")
+        self.register_atom('extend-py!',
+            OperationAtom('extend-py!',
+                            lambda name: self.load_py_module_from_mod_or_file(name) or [],
+                            [AtomType.UNDEFINED, AtomType.ATOM], unwrap=False))
 
     def space(self):
         """Gets the metta space"""
