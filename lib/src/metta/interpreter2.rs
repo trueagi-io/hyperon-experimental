@@ -237,7 +237,7 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
         },
         Some([op, args @ ..]) if *op == UNIFY_SYMBOL => {
             match args {
-                [atom, pattern, then, else_] => match_(bindings, atom, pattern, then, else_),
+                [atom, pattern, then, else_] => unify(bindings, atom, pattern, then, else_),
                 _ => {
                     let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", UNIFY_SYMBOL, atom);
                     vec![InterpretedAtom(error_atom(atom, error), bindings)]
@@ -457,8 +457,8 @@ fn function<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, body: Atom, call:
     }
 }
 
-fn match_(bindings: Bindings, atom: &Atom, pattern: &Atom, then: &Atom, else_: &Atom) -> Vec<InterpretedAtom> {
-    // TODO: Should match_() be symmetrical or not. While it is symmetrical then
+fn unify(bindings: Bindings, atom: &Atom, pattern: &Atom, then: &Atom, else_: &Atom) -> Vec<InterpretedAtom> {
+    // TODO: Should unify() be symmetrical or not. While it is symmetrical then
     // if variable is matched by variable then both variables have the same
     // priority. Thus interpreter can use any of them further. This sometimes
     // looks unexpected. For example see `metta_car` unit test where variable
