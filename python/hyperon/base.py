@@ -378,13 +378,11 @@ class SExprParser:
         Parses the S-expression using the provided Tokenizer.
         """
         catom = self.cparser.parse(tokenizer.ctokenizer)
-        return Atom._from_catom(catom) if catom is not None else None
-
-    def parse_err(self):
-        """
-        Returns the parse error string from the previous parse, or None.
-        """
-        return self.cparser.sexpr_parser_err_str()
+        if (catom is None):
+            return None
+        if (hp.atom_is_error(catom)):
+            raise SyntaxError(hp.atom_error_message(catom))
+        return Atom._from_catom(catom)
 
     def parse_to_syntax_tree(self):
         """

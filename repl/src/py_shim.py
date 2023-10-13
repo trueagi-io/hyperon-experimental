@@ -22,12 +22,12 @@ def parse_line(metta, line):
     tokenizer = metta.tokenizer()
     parser = SExprParser(line)
     while True:
-        parsed_atom = parser.parse(tokenizer)
-        if (parsed_atom is None):
-            if (parser.parse_err() is None):
+        try:
+            parsed_atom = parser.parse(tokenizer)
+            if (parsed_atom is None):
                 return None
-            else:
-                return parser.parse_err()
+        except SyntaxError as e:
+            return e.args[0]
 
 def parse_line_to_syntax_tree(line):
     leaf_node_types = [];

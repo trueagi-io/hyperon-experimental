@@ -41,6 +41,56 @@ pub const UNIFY_SYMBOL : Atom = sym!("unify");
 pub const DECONS_SYMBOL : Atom = sym!("decons");
 pub const CONS_SYMBOL : Atom = sym!("cons");
 
+/// Initializes an error expression atom
+pub fn error_atom(err_atom: Option<Atom>, err_code: Option<Atom>, message: String) -> Atom {
+    let err_atom = match err_atom {
+        Some(err_atom) => err_atom,
+        None => EMPTY_SYMBOL,
+    };
+    if let Some(err_code) = err_code {
+        Atom::expr([ERROR_SYMBOL, err_atom, err_code, Atom::sym(message)])
+    } else {
+        Atom::expr([ERROR_SYMBOL, err_atom, Atom::sym(message)])
+    }
+}
+
+/// Tests whether or not an atom is an error expression
+pub fn atom_is_error(atom: &Atom) -> bool {
+    match atom {
+        Atom::Expression(expr) => {
+            expr.children().len() > 0 && expr.children()[0] == ERROR_SYMBOL
+        },
+        _ => false,
+    }
+}
+
+/// Returns a message string from an error expression
+///
+/// NOTE: this function will panic if the suppoed atom is not a valid error expression
+pub fn atom_error_message(atom: &Atom) -> &str {
+    const PANIC_STR: &str = "Atom is not error expression";
+    match atom {
+        Atom::Expression(expr) => {
+            let sym_atom = match expr.children().len() {
+                3 => expr.children().get(2).unwrap(),
+                4 => expr.children().get(3).unwrap(),
+                _ => panic!("{}", PANIC_STR)
+            };
+            let sym_atom = <&SymbolAtom>::try_from(sym_atom).expect(PANIC_STR);
+            sym_atom.name()
+        },
+        _ => panic!("{}", PANIC_STR)
+    }
+}
+
+//QUESTION: These functions below seem to only be used in tests.  If that's the case, should we
+// move them into a test-only module so they aren't exposed as part of the public API?
+//Alternatively rewrite the tests to use a runner?
+//
+//Also, a "Metta::parse_atoms() -> Vec<Atom>" method
+// might be useful to parse atoms with the context of a runner's tokenizer as a compliment to
+// RunnerState::new_with_atoms
+
 // TODO: use stdlib to parse input text
 pub fn metta_space(text: &str) -> GroundingSpace {
     let tokenizer = common_tokenizer();

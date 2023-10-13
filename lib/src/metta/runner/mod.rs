@@ -32,15 +32,6 @@ mod arithmetics;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
-pub fn atom_is_error(atom: &Atom) -> bool {
-    match atom {
-        Atom::Expression(expr) => {
-            expr.children().len() > 0 && expr.children()[0] == ERROR_SYMBOL
-        },
-        _ => false,
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct Metta(Rc<MettaContents>);
 

@@ -28,16 +28,17 @@ class HyperonTestCase(unittest.TestCase):
     def testParseErr(self):
         tokenizer = Tokenizer()
         parser = SExprParser("(+ one \"one")
-        parsed_atom = parser.parse(tokenizer)
-        self.assertEqual(parsed_atom, None)
-        self.assertEqual(parser.parse_err(), "Unclosed String Literal")
+        try:
+            parsed_atom = parser.parse(tokenizer)
+        except SyntaxError as e:
+            self.assertEqual(e.args[0], 'Unclosed String Literal')
 
         parser = SExprParser("(+ one \"one\"")
-        parsed_atom = parser.parse(tokenizer)
-        self.assertEqual(parsed_atom, None)
-        self.assertEqual(parser.parse_err(), "Unexpected end of expression")
+        try:
+            parsed_atom = parser.parse(tokenizer)
+        except SyntaxError as e:
+            self.assertEqual(e.args[0], 'Unexpected end of expression')
 
         parser = SExprParser("(+ one \"one\")")
         parsed_atom = parser.parse(tokenizer)
         self.assertTrue(parsed_atom is not None)
-        self.assertEqual(parser.parse_err(), None)

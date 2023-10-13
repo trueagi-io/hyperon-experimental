@@ -1,4 +1,5 @@
 use hyperon::common::shared::Shared;
+use hyperon::metta::error_atom;
 use hyperon::space::DynSpace;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
@@ -149,18 +150,14 @@ pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> tokenizer_t 
 #[repr(C)]
 pub struct sexpr_parser_t {
     /// Internal.  Should not be accessed directly
-    parser: *mut RustSExprParser,
-    err_string: *mut c_char,
+    parser: *mut RustSExprParser
 }
 
 struct RustSExprParser(SExprParser<'static>);
 
 impl From<SExprParser<'static>> for sexpr_parser_t {
     fn from(parser: SExprParser<'static>) -> Self {
-        Self{
-            parser: Box::into_raw(Box::new(RustSExprParser(parser))),
-            err_string: core::ptr::null_mut()
-        }
+        Self{parser: Box::into_raw(Box::new(RustSExprParser(parser)))}
     }
 }
 
@@ -173,16 +170,6 @@ impl sexpr_parser_t {
     }
     fn borrow_mut(&mut self) -> &mut SExprParser<'static> {
         &mut unsafe{ &mut *self.parser }.0
-    }
-}
-
-impl sexpr_parser_t {
-    fn free_err_string(&mut self) {
-        if !self.err_string.is_null() {
-            let string = unsafe{ std::ffi::CString::from_raw(self.err_string) };
-            drop(string);
-            self.err_string = core::ptr::null_mut();
-        }
     }
 }
 
@@ -228,43 +215,22 @@ pub extern "C" fn sexpr_parser_free(parser: sexpr_parser_t) {
 /// @ingroup tokenizer_and_parser_group
 /// @param[in]  parser  A pointer to the Parser, which is associated with the text to parse
 /// @param[in]  tokenizer  A pointer to the Tokenizer, to use to interpret atoms within the expression
-/// @return The new `atom_t`, which may be an Expression atom with many child atoms
+/// @return The new `atom_t`, which may be an Expression atom with many child atoms.  Returns a `none`
+///    atom if parsing is finished, or an error expression atom if a parse error occurred.
 /// @note The caller must take ownership responsibility for the returned `atom_t`, and ultimately free
-///   it with `atom_free()` or pass it to another function that takes ownership responsibility
+///    it with `atom_free()` or pass it to another function that takes ownership responsibility
 ///
 #[no_mangle]
 pub extern "C" fn sexpr_parser_parse(
     parser: *mut sexpr_parser_t,
     tokenizer: *const tokenizer_t) -> atom_t
 {
-    let parser = unsafe{ &mut *parser };
-    parser.free_err_string();
-    let rust_parser = parser.borrow_mut();
+    let parser = unsafe{ &mut *parser }.borrow_mut();
     let tokenizer = unsafe{ &*tokenizer }.borrow_inner();
-    match rust_parser.parse(tokenizer) {
+    match parser.parse(tokenizer) {
         Ok(atom) => atom.into(),
-        Err(err) => {
-            let err_cstring = std::ffi::CString::new(err).unwrap();
-            parser.err_string = err_cstring.into_raw();
-            atom_t::null()
-        }
+        Err(err) => error_atom(None, None, err).into()
     }
-}
-
-/// @brief Returns the error string associated with the last `sexpr_parser_parse` call
-/// @ingroup tokenizer_and_parser_group
-/// @param[in]  parser  A pointer to the Parser, which is associated with the text to parse
-/// @return A pointer to the C-string containing the parse error that occurred, or NULL if no
-///     parse error occurred
-/// @warning The returned pointer should NOT be freed.  It must never be accessed after the
-///     sexpr_parser_t has been freed, or any subsequent `sexpr_parser_parse` or
-///     `sexpr_parser_parse_to_syntax_tree` has been made.
-///
-#[no_mangle]
-pub extern "C" fn sexpr_parser_err_str(
-    parser: *mut sexpr_parser_t) -> *const c_char {
-    let parser = unsafe{ &*parser };
-    parser.err_string
 }
 
 /// @brief Represents a component in a syntax tree created by parsing MeTTa code
@@ -371,10 +337,8 @@ pub type c_syntax_node_callback_t = extern "C" fn(node: *const syntax_node_t, co
 #[no_mangle]
 pub extern "C" fn sexpr_parser_parse_to_syntax_tree(parser: *mut sexpr_parser_t) -> syntax_node_t
 {
-    let parser = unsafe{ &mut *parser };
-    parser.free_err_string();
-    let rust_parser = parser.borrow_mut();
-    rust_parser.parse_to_syntax_tree().into()
+    let parser = unsafe{ &mut *parser }.borrow_mut();
+    parser.parse_to_syntax_tree().into()
 }
 
 /// @brief Frees a syntax_node_t
@@ -477,7 +441,23 @@ pub extern "C" fn syntax_node_src_range(node: *const syntax_node_t, range_start:
 #[no_mangle]
 pub extern "C" fn atom_is_error(atom: *const atom_ref_t) -> bool {
     let atom = unsafe{ &*atom }.borrow();
-    hyperon::metta::runner::atom_is_error(atom)
+    hyperon::metta::atom_is_error(atom)
+}
+
+/// @brief Renders the text message from an error expression atom into a buffer
+/// @ingroup metta_language_group
+/// @param[in]  atom  The error expression atom from which to extract the error message
+/// @param[out]  buf  A buffer into which the text will be rendered
+/// @param[in]  buf_len  The maximum allocated size of `buf`
+/// @return The length of the message string, minus the string terminator character.  If
+///    `return_value > buf_len + 1`, then the text was not fully rendered and this function should be
+///    called again with a larger buffer.
+/// @warning The `atom` argument must be an error expression, otherwise this function will panic
+///
+#[no_mangle]
+pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, buf_len: usize) -> usize {
+    let atom = unsafe{ &*atom }.borrow();
+    write_into_buf(hyperon::metta::atom_error_message(atom), buf, buf_len)
 }
 
 /// @brief Creates a Symbol atom for the special MeTTa symbol: "%Undefined%"
