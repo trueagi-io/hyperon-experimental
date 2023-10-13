@@ -301,7 +301,7 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
     if root {
         result.iter_mut().for_each(|interpreted| {
             let InterpretedAtom(atom, bindings) = interpreted;
-            bindings.cleanup(&atom.iter().filter_type::<&VariableAtom>().collect());
+            *bindings = bindings.narrow_vars(&atom.iter().filter_type::<&VariableAtom>().collect());
         });
     }
     result

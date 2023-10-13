@@ -1597,10 +1597,11 @@ mod test {
     fn bindings_cleanup() -> Result<(), &'static str> {
         let mut bindings = Bindings::new()
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
-            .add_var_binding_v2(VariableAtom::new("b"), expr!("B"))?
-            .add_var_binding_v2(VariableAtom::new("c"), expr!("C"))?;
+            .add_var_binding_v2(VariableAtom::new("b"), expr!("B" d))?
+            .add_var_binding_v2(VariableAtom::new("c"), expr!("c"))?
+            .add_var_binding_v2(VariableAtom::new("d"), expr!("D"))?;
         bindings.cleanup(&[&VariableAtom::new("b")].into());
-        assert_eq!(bindings, bind!{ b: expr!("B") });
+        assert_eq!(bindings, bind!{ b: expr!("B" d) });
         Ok(())
     }
 
