@@ -732,15 +732,21 @@ pub type c_stdlib_loader_callback_t = extern "C" fn(metta: *mut metta_t, context
 
 /// @brief Creates a new top-level MeTTa Interpreter, bootstrapped with the a custom stdlib
 /// @ingroup interpreter_group
+/// @param[in]  space  A pointer to a handle for the Space for use by the Interpreter
+/// @param[in]  environment  An `env_builder_t` handle to configure the environment to use
+/// @param[in]  callback  The c_stdlib_loader_callback_t function to load the stdlib
+/// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
 /// @return A `metta_t` handle to the newly created Interpreter
 /// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
 /// @note Most callers can simply call `metta_new`.  This function is provided to support languages
 ///     with their own stdlib, that needs to be loaded before the init.metta file is run
 ///
 #[no_mangle]
-pub extern "C" fn metta_new_with_environment_and_stdlib(env_builder: env_builder_t,
-        callback: c_stdlib_loader_callback_t, context: *mut c_void) -> metta_t
+pub extern "C" fn metta_new_with_space_environment_and_stdlib(space: *mut space_t,
+        env_builder: env_builder_t, callback: c_stdlib_loader_callback_t, context: *mut c_void) -> metta_t
 {
+    let dyn_space = unsafe{ &*space }.borrow();
+
     let env_builder = if env_builder.is_default() {
         None
     } else {
@@ -750,21 +756,21 @@ pub extern "C" fn metta_new_with_environment_and_stdlib(env_builder: env_builder
     let metta = Metta::new_with_stdlib_loader(|metta| {
         let mut metta = metta_t{metta: (metta as *const Metta).cast_mut().cast()};
         callback(&mut metta, context);
-    }, env_builder);
+    }, Some(dyn_space.clone()), env_builder);
     metta.into()
 }
 
-/// @brief Creates a new MeTTa Interpreter with a provided Space, Tokenizer and Environment
+/// @brief Creates a new core MeTTa Interpreter, with no loaded stdlib nor initialization
 /// @ingroup interpreter_group
 /// @param[in]  space  A pointer to a handle for the Space for use by the Interpreter
 /// @param[in]  tokenizer  A pointer to a handle for the Tokenizer for use by the Interpreter
-/// @param[in]  environment  An `environment_t` handle representing the environment to use
+/// @param[in]  environment  An `env_builder_t` handle to configure the environment to use
 /// @return A `metta_t` handle to the newly created Interpreter
 /// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
 /// @note This function does not load any stdlib, nor does it run the `init.metta` file from the environment
 ///
 #[no_mangle]
-pub extern "C" fn metta_new_with_space(space: *mut space_t, tokenizer: *mut tokenizer_t, env_builder: env_builder_t) -> metta_t {
+pub extern "C" fn metta_new_core(space: *mut space_t, tokenizer: *mut tokenizer_t, env_builder: env_builder_t) -> metta_t {
     let dyn_space = unsafe{ &*space }.borrow();
     let tokenizer = unsafe{ &*tokenizer }.clone_handle();
     let env_builder = if env_builder.is_default() {
@@ -772,7 +778,7 @@ pub extern "C" fn metta_new_with_space(space: *mut space_t, tokenizer: *mut toke
     } else {
         Some(env_builder.into_inner())
     };
-    let metta = Metta::new_with_space(dyn_space.clone(), tokenizer, env_builder);
+    let metta = Metta::new_core(dyn_space.clone(), tokenizer, env_builder);
     metta.into()
 }
 

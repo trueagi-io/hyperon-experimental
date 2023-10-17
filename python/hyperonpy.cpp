@@ -788,8 +788,8 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_SYMBOL(VOID, "Void");
 
     py::class_<CMetta>(m, "CMetta");
-    m.def("metta_new", [](EnvBuilder env_builder) {
-        return CMetta(metta_new_with_environment_and_stdlib(env_builder.obj, &run_python_loader_callback, NULL));
+    m.def("metta_new", [](CSpace space, EnvBuilder env_builder) {
+        return CMetta(metta_new_with_space_environment_and_stdlib(space.ptr(), env_builder.obj, &run_python_loader_callback, NULL));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
     m.def("metta_search_path_cnt", [](CMetta metta) { return metta_search_path_cnt(metta.ptr()); }, "Returns the number of module search paths in the runner's environment");

@@ -33,6 +33,8 @@ atom_t expr(atom_t atom, ...) {
 void noop_metta_init(metta_t* metta, void* context) {}
 
 metta_t new_test_metta(void) {
-    metta_t metta = metta_new_with_environment_and_stdlib(env_builder_use_test_env(), &noop_metta_init, NULL);
+    space_t space = space_new_grounding_space();
+    metta_t metta = metta_new_with_space_environment_and_stdlib(&space, env_builder_use_test_env(), &noop_metta_init, NULL);
+    space_free(space);
     return metta;
 }

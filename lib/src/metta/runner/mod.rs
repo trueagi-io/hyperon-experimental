@@ -76,18 +76,23 @@ impl Metta {
     ///
     /// NOTE: pass `None` for `env_builder` to use the common environment
     pub fn new(env_builder: Option<EnvBuilder>) -> Metta {
-        Self::new_with_stdlib_loader(|_| {}, env_builder)
+        Self::new_with_stdlib_loader(|_| {}, None, env_builder)
     }
 
     /// Create and initialize a MeTTa interpreter with a language-specific stdlib
     ///
-    /// NOTE: pass `None` for `env_builder` to use the common environment
-    pub fn new_with_stdlib_loader<F>(loader: F, env_builder: Option<EnvBuilder>) -> Metta
+    /// NOTE: pass `None` for space to create a new [GroundingSpace]
+    /// pass `None` for `env_builder` to use the common environment
+    pub fn new_with_stdlib_loader<F>(loader: F, space: Option<DynSpace>, env_builder: Option<EnvBuilder>) -> Metta
         where F: FnOnce(&Self)
     {
+        let space = match space {
+            Some(space) => space,
+            None => DynSpace::new(GroundingSpace::new())
+        };
+
         //Create the raw MeTTa runner
-        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()),
-            Shared::new(Tokenizer::new()), env_builder);
+        let metta = Metta::new_core(space, Shared::new(Tokenizer::new()), env_builder);
 
         // TODO: Reverse the loading order between the Rust stdlib and user-supplied stdlib loader,
         // because user-supplied stdlibs might need to build on top of the Rust stdlib.
@@ -107,11 +112,11 @@ impl Metta {
         metta
     }
 
-    /// Returns a new MeTTa interpreter, using the provided Space, Tokenizer
+    /// Returns a new core MeTTa interpreter without any stdlib or initialization
     ///
     /// NOTE: If `env_builder` is `None`, the common environment will be used
     /// NOTE: This function does not load any stdlib atoms, nor run the [Environment]'s 'init.metta'
-    pub fn new_with_space(space: DynSpace, tokenizer: Shared<Tokenizer>, env_builder: Option<EnvBuilder>) -> Self {
+    pub fn new_core(space: DynSpace, tokenizer: Shared<Tokenizer>, env_builder: Option<EnvBuilder>) -> Self {
         let settings = Shared::new(HashMap::new());
         let modules = Shared::new(HashMap::new());
         let environment = match env_builder {
@@ -430,7 +435,7 @@ mod tests {
             (foo b)
         ";
 
-        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
+        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -444,7 +449,7 @@ mod tests {
             !(foo b)
         ";
 
-        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
+        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -499,7 +504,7 @@ mod tests {
             !(foo a)
         ";
 
-        let metta = Metta::new_with_space(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
+        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));

@@ -137,5 +137,20 @@ class CustomSpaceTest(HyperonTestCase):
         result = runner.run("!(match nested (A $x) $x)")
         self.assertEqual([[S("B")]], result)
 
+    def test_runner_with_custom_space(self):
+
+        test_space = TestSpace()
+        test_space.test_attrib = "Test Space Payload Attrib"
+
+        space = SpaceRef(test_space)
+        space.add_atom(E(S("="), S("key"), S("val")))
+
+        metta = MeTTa(space=space)
+
+        self.assertEqual(metta.space().get_payload().test_attrib, "Test Space Payload Attrib")
+        self.assertEqualMettaRunnerResults(metta.run("!(match &self (= key $val) $val)"),
+            [[S("val")]]
+        )
+
 if __name__ == "__main__":
     unittest.main()

@@ -49,13 +49,15 @@ class RunnerState:
 class MeTTa:
     """This class contains the MeTTa program execution utilities"""
 
-    def __init__(self, cmetta = None, env_builder = None):
+    def __init__(self, cmetta = None, space = None, env_builder = None):
         if cmetta is not None:
             self.cmetta = cmetta
         else:
+            if space is None:
+                space = GroundingSpaceRef()
             if env_builder is None:
                 env_builder = hp.env_builder_use_default()
-            self.cmetta = hp.metta_new(env_builder)
+            self.cmetta = hp.metta_new(space.cspace, env_builder)
 
     def __del__(self):
         hp.metta_free(self.cmetta)
