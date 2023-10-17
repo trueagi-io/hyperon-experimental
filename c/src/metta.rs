@@ -1,5 +1,4 @@
 use hyperon::common::shared::Shared;
-use hyperon::metta::error_atom;
 use hyperon::space::DynSpace;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
@@ -150,19 +149,34 @@ pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> tokenizer_t 
 #[repr(C)]
 pub struct sexpr_parser_t {
     /// Internal.  Should not be accessed directly
-    parser: *mut RustSExprParser
+    parser: *mut RustSExprParser,
+    err_string: *mut c_char,
+}
+
+impl sexpr_parser_t {
+    fn free_err_string(&mut self) {
+        if !self.err_string.is_null() {
+            let string = unsafe{ std::ffi::CString::from_raw(self.err_string) };
+            drop(string);
+            self.err_string = core::ptr::null_mut();
+        }
+    }
 }
 
 struct RustSExprParser(SExprParser<'static>);
 
 impl From<SExprParser<'static>> for sexpr_parser_t {
     fn from(parser: SExprParser<'static>) -> Self {
-        Self{parser: Box::into_raw(Box::new(RustSExprParser(parser)))}
+        Self{
+            parser: Box::into_raw(Box::new(RustSExprParser(parser))),
+            err_string: core::ptr::null_mut(),
+        }
     }
 }
 
 impl sexpr_parser_t {
-    fn into_inner(self) -> SExprParser<'static> {
+    fn into_inner(mut self) -> SExprParser<'static> {
+        self.free_err_string();
         unsafe{ (*Box::from_raw(self.parser)).0 }
     }
     fn borrow(&self) -> &SExprParser<'static> {
@@ -225,12 +239,34 @@ pub extern "C" fn sexpr_parser_parse(
     parser: *mut sexpr_parser_t,
     tokenizer: *const tokenizer_t) -> atom_t
 {
-    let parser = unsafe{ &mut *parser }.borrow_mut();
+    let parser = unsafe{ &mut *parser };
+    parser.free_err_string();
+    let rust_parser = parser.borrow_mut();
     let tokenizer = unsafe{ &*tokenizer }.borrow_inner();
-    match parser.parse(tokenizer) {
+    match rust_parser.parse(tokenizer) {
         Ok(atom) => atom.into(),
-        Err(err) => error_atom(None, None, err).into()
+        Err(err) => {
+            let err_cstring = std::ffi::CString::new(err).unwrap();
+            parser.err_string = err_cstring.into_raw();
+            atom_t::null()
+        }
     }
+}
+
+/// @brief Returns the error string associated with the last `sexpr_parser_parse` call
+/// @ingroup tokenizer_and_parser_group
+/// @param[in]  parser  A pointer to the Parser, which is associated with the text to parse
+/// @return A pointer to the C-string containing the parse error that occurred, or NULL if no
+///     parse error occurred
+/// @warning The returned pointer should NOT be freed.  It must never be accessed after the
+///     sexpr_parser_t has been freed, or any subsequent `sexpr_parser_parse` or
+///     `sexpr_parser_parse_to_syntax_tree` has been made.
+///
+#[no_mangle]
+pub extern "C" fn sexpr_parser_err_str(
+    parser: *mut sexpr_parser_t) -> *const c_char {
+    let parser = unsafe{ &*parser };
+    parser.err_string
 }
 
 /// @brief Represents a component in a syntax tree created by parsing MeTTa code
@@ -337,8 +373,10 @@ pub type c_syntax_node_callback_t = extern "C" fn(node: *const syntax_node_t, co
 #[no_mangle]
 pub extern "C" fn sexpr_parser_parse_to_syntax_tree(parser: *mut sexpr_parser_t) -> syntax_node_t
 {
-    let parser = unsafe{ &mut *parser }.borrow_mut();
-    parser.parse_to_syntax_tree().into()
+    let parser = unsafe{ &mut *parser };
+    parser.free_err_string();
+    let rust_parser = parser.borrow_mut();
+    rust_parser.parse_to_syntax_tree().into()
 }
 
 /// @brief Frees a syntax_node_t

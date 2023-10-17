@@ -379,10 +379,13 @@ class SExprParser:
         """
         catom = self.cparser.parse(tokenizer.ctokenizer)
         if (catom is None):
-            return None
-        if (hp.atom_is_error(catom)):
-            raise SyntaxError(hp.atom_error_message(catom))
-        return Atom._from_catom(catom)
+            err_str = self.cparser.sexpr_parser_err_str()
+            if (err_str is None):
+                return None
+            else:
+                raise SyntaxError(err_str)
+        else:
+            return Atom._from_catom(catom)
 
     def parse_to_syntax_tree(self):
         """
