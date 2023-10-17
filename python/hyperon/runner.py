@@ -62,6 +62,10 @@ class MeTTa:
     def __del__(self):
         hp.metta_free(self.cmetta)
 
+    def __eq__(self, other):
+        """Checks if two MeTTa runner handles point to the same runner."""
+        return (hp.metta_eq(self.cmetta, other.cmetta))
+
     def _priv_load_metta_py_stdlib(self):
         self.load_py_module("hyperon.stdlib")
         self.register_atom('extend-py!',

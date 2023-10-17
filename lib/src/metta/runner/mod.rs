@@ -35,6 +35,12 @@ const EXEC_SYMBOL : Atom = sym!("!");
 #[derive(Clone, Debug)]
 pub struct Metta(Rc<MettaContents>);
 
+impl PartialEq for Metta {
+    fn eq(&self, other: &Self) -> bool {
+        Rc::ptr_eq(&self.0, &other.0)
+    }
+}
+
 #[derive(Debug)]
 pub struct MettaContents {
     space: DynSpace,

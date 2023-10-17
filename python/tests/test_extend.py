@@ -18,6 +18,8 @@ class ExtendTest(unittest.TestCase):
             [[],
              [ValueAtom(5)],
              [ValueAtom('B')]])
+        self.assertEqual(
+              metta.run('! &runner')[0][0].get_object().value, metta)
 
 class ExtendGlobalTest(unittest.TestCase):
 

@@ -806,6 +806,19 @@ pub extern "C" fn metta_free(metta: metta_t) {
     drop(metta);
 }
 
+/// @brief Compares two `metta_t` handles to test whether the referenced MeTTa runner is the same
+/// @ingroup interpreter_group
+/// @param[in]  a  A pointer to the first Interpreter handle
+/// @param[in]  b  A pointer to the first Interpreter handle
+/// @return True if the two handles reference the same runner, otherwise False
+///
+#[no_mangle]
+pub extern "C" fn metta_eq(a: *const metta_t, b: *const metta_t) -> bool {
+    let a = unsafe{ &*a }.borrow();
+    let b = unsafe{ &*b }.borrow();
+    *a == *b
+}
+
 /// @brief Returns the number of module search paths that will be searched when importing modules into
 ///     the runner
 /// @ingroup interpreter_group

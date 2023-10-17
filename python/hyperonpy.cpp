@@ -792,24 +792,25 @@ PYBIND11_MODULE(hyperonpy, m) {
         return CMetta(metta_new_with_space_environment_and_stdlib(space.ptr(), env_builder.obj, &run_python_loader_callback, NULL));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
-    m.def("metta_search_path_cnt", [](CMetta metta) { return metta_search_path_cnt(metta.ptr()); }, "Returns the number of module search paths in the runner's environment");
-    m.def("metta_nth_search_path", [](CMetta metta, size_t idx) {
+    m.def("metta_eq", [](CMetta& a, CMetta& b) { return metta_eq(a.ptr(), b.ptr()); }, "Compares two MeTTa handles");
+    m.def("metta_search_path_cnt", [](CMetta& metta) { return metta_search_path_cnt(metta.ptr()); }, "Returns the number of module search paths in the runner's environment");
+    m.def("metta_nth_search_path", [](CMetta& metta, size_t idx) {
         return func_to_string_two_args((write_to_buf_two_arg_func_t)&metta_nth_search_path, metta.ptr(), (void*)idx);
     }, "Returns the module search path at the specified index, in the runner's environment");
-    m.def("metta_space", [](CMetta metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");
-    m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
-    m.def("metta_run", [](CMetta metta, CSExprParser& parser) {
+    m.def("metta_space", [](CMetta& metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");
+    m.def("metta_tokenizer", [](CMetta& metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
+    m.def("metta_run", [](CMetta& metta, CSExprParser& parser) {
             py::list lists_of_atom;
             sexpr_parser_t cloned_parser = sexpr_parser_clone(&parser.parser);
             metta_run(metta.ptr(), cloned_parser, copy_lists_of_atom, &lists_of_atom);
             return lists_of_atom;
         }, "Run MeTTa interpreter on an input");
-    m.def("metta_evaluate_atom", [](CMetta metta, CAtom atom) {
+    m.def("metta_evaluate_atom", [](CMetta& metta, CAtom atom) {
             py::list atoms;
             metta_evaluate_atom(metta.ptr(), atom_clone(atom.ptr()), copy_atoms, &atoms);
             return atoms;
         }, "Run MeTTa interpreter on an atom");
-    m.def("metta_load_module", [](CMetta metta, std::string text) {
+    m.def("metta_load_module", [](CMetta& metta, std::string text) {
         metta_load_module(metta.ptr(), text.c_str());
     }, "Load MeTTa module");
 
