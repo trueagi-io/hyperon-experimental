@@ -81,10 +81,18 @@
   (function (chain (eval (get-metatype $atom)) $meta
     (eval (if-equal $type $meta
       (return $atom)
-      (chain (eval (get-type $atom $space)) $actual-type
-        (eval (match-types $actual-type $type
-          (return $atom)
-          (return (Error $atom BadType)) ))))))))
+      ; TODO: the proper way to get types is something like
+      ; `(collapse (get-type <atom> <space>))` but it leads to the infinite
+      ; recursion because interpreter called by `collapse` evaluates
+      ; `type-cast` again.
+      (chain (eval (collapse-get-type $atom $space)) $actual-types
+        (chain (eval (foldl $actual-types False
+          $a $b (chain (eval (match-types $b $type True False)) $is-b-comp
+            (chain (eval (or $a $is-b-comp)) $or $or) ))) $is-some-comp
+          (eval (if $is-some-comp
+            (return $atom)
+            (return (Error $atom BadType)) )))))))))
+
 
 (= (is-function $type)
   (function (chain (eval (get-metatype $type)) $meta
