@@ -1,5 +1,6 @@
 #![feature(test)]
-
+#[cfg(feature = "minimal")]
+mod interpreter2_bench {
 extern crate test;
 
 use test::Bencher;
@@ -26,4 +27,5 @@ fn chain_x100(bencher: &mut Bencher) {
         let res = interpret(space, &atom);
         assert_eq!(res, expected);
     })
+}
 }

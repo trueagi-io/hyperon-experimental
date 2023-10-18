@@ -145,7 +145,7 @@ class CustomSpaceTest(HyperonTestCase):
         space = SpaceRef(test_space)
         space.add_atom(E(S("="), S("key"), S("val")))
 
-        metta = MeTTa(space=space)
+        metta = MeTTa(space=space, env_builder=Environment.test_env())
 
         self.assertEqual(metta.space().get_payload().test_attrib, "Test Space Payload Attrib")
         self.assertEqualMettaRunnerResults(metta.run("!(match &self (= key $val) $val)"),
