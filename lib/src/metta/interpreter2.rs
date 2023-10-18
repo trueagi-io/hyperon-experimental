@@ -179,20 +179,24 @@ fn is_embedded_op(atom: &Atom) -> bool {
     }
 }
 
-fn is_function_op(atom: &Atom) -> bool {
+fn is_op(atom: &Atom, op: &Atom) -> bool {
     let expr = atom_as_slice(&atom);
     match expr {
-        Some([op, ..]) => *op == FUNCTION_SYMBOL,
+        Some([opp, ..]) => opp == op,
         _ => false,
     }
 }
 
+fn is_function_op(atom: &Atom) -> bool {
+    is_op(atom, &FUNCTION_SYMBOL)
+}
+
 fn is_eval_op(atom: &Atom) -> bool {
-    let expr = atom_as_slice(&atom);
-    match expr {
-        Some([op, ..]) => *op == EVAL_SYMBOL,
-        _ => false,
-    }
+    is_op(atom, &EVAL_SYMBOL)
+}
+
+fn is_chain_op(atom: &Atom) -> bool {
+    is_op(atom, &CHAIN_SYMBOL)
 }
 
 fn interpret_atom<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
@@ -405,7 +409,7 @@ fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: V
       }
     } else if is_embedded_op(&nested) {
         let result = interpret_atom_root(space, InterpretedAtom(nested.clone(), bindings), false);
-        result.into_iter()
+        let result = result.into_iter()
             .map(|InterpretedAtom(r, b)| {
                 if is_eval && is_function_op(&r) {
                     match atom_into_array(r) {
@@ -413,11 +417,14 @@ fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: V
                             InterpretedAtom(Atom::expr([CHAIN_SYMBOL, Atom::expr([FUNCTION_SYMBOL, body, nested.clone()]), Atom::Variable(var.clone()), templ.clone()]), b),
                         _ => panic!("Unexpected state"),
                     }
+                } else if is_chain_op(&r) {
+                    InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b)
                 } else {
                     apply(b, r, var.clone(), &templ)
                 }
             })
-        .collect()
+        .collect();
+        result
     } else {
         vec![apply(bindings, nested, var, &templ)]
     }
