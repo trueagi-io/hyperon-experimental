@@ -96,6 +96,35 @@
       ($_ (return False))
     ))))))
 
+(: filter (-> Expression Variable Atom Expression))
+(= (filter $list $var $filter)
+  (function (eval (if-decons $list $head $tail
+    (chain (eval (filter $tail $var $filter)) $tail-filtered
+      (chain (eval (insert $head $var $filter)) $filter-expr
+        (chain $filter-expr $is-filtered
+          (eval (if $is-filtered
+            (chain (cons $head $tail-filtered) $res (return $res))
+            (return $tail-filtered) )))))
+    (return ()) ))))
+
+(: map (-> Expression Variable Atom Expression))
+(= (map $list $var $map)
+  (function (eval (if-decons $list $head $tail
+    (chain (eval (map $tail $var $map)) $tail-mapped
+      (chain (eval (insert $head $var $map)) $map-expr
+        (chain $map-expr $head-mapped
+          (chain (cons $head-mapped $tail-mapped) $res (return $res)) )))
+    (return ()) ))))
+
+(: foldl (-> Expression Atom Variable Variable Atom Atom))
+(= (foldl $list $init $a $b $op)
+  (function (eval (if-decons $list $head $tail
+    (chain (eval (insert $init $a $op)) $op-init
+      (chain (eval (insert $head $b $op-init)) $op-head
+        (chain $op-head $head-folded
+          (chain (eval (foldl $tail $head-folded $a $b $op)) $res (return $res)) )))
+    (return $init) ))))
+
 (= (interpret $atom $type $space)
   (function (chain (eval (get-metatype $atom)) $meta
     (eval (if-equal $type Atom
@@ -186,6 +215,12 @@
 (: if (-> Bool Atom Atom $t))
 (= (if True $then $else) $then)
 (= (if False $then $else) $else)
+
+(: or (-> Bool Bool Bool))
+(= (or False False) False)
+(= (or False True) True)
+(= (or True False) True)
+(= (or True True) True)
 
 (: match (-> Atom Atom Atom %Undefined%))
 (= (match $space $pattern $template)

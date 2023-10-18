@@ -570,6 +570,25 @@ mod tests {
     }
 
     #[test]
+    fn metta_filter_out_errors() {
+        assert_eq!(run_program("!(eval (filter () $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!()]]));
+        assert_eq!(run_program("!(eval (filter (a (b) $c) $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!("a" ("b") c)]]));
+        assert_eq!(run_program("!(eval (filter (a (Error (b) \"Test error\") $c) $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!("a" c)]]));
+    }
+
+    #[test]
+    fn metta_map() {
+        assert_eq!(run_program("!(eval (map () $x ($x mapped)))"), Ok(vec![vec![expr!()]]));
+        assert_eq!(run_program("!(eval (map (a (b) $c) $x (mapped $x)))"), Ok(vec![vec![expr!(("mapped" "a") ("mapped" ("b")) ("mapped" c))]]));
+    }
+
+    #[test]
+    fn metta_foldl() {
+        assert_eq!(run_program("!(eval (foldl () 1 $a $b (eval (+ $a $b))))"), Ok(vec![vec![expr!({Number::Integer(1)})]]));
+        assert_eq!(run_program("!(eval (foldl (1 2 3) 0 $a $b (eval (+ $a $b))))"), Ok(vec![vec![expr!({Number::Integer(6)})]]));
+    }
+
+    #[test]
     fn metta_interpret_single_atom_as_atom() {
         let result = run_program("!(eval (interpret A Atom &self))");
         assert_eq!(result, Ok(vec![vec![expr!("A")]]));
