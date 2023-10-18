@@ -327,7 +327,7 @@ pub mod metta_interface_mod {
     use hyperon::metta::text::SExprParser;
     use hyperon::ExpressionAtom;
     use hyperon::Atom;
-    use hyperon::metta::runner::{Metta, RunnerState, atom_is_error, Environment, EnvBuilder};
+    use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
     use super::{strip_quotes, exec_state_prepare, exec_state_should_break};
 
     pub use hyperon::metta::text::SyntaxNodeType as SyntaxNodeType;
