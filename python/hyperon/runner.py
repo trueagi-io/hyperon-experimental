@@ -8,6 +8,7 @@ class MeTTa:
     """This class contains the MeTTa program execution utilities"""
 
     def __init__(self, space = None, cwd = ".", cmetta = None):
+        self.pymods = {}
         if cmetta is not None:
             self.cmetta = cmetta
         else:
@@ -62,6 +63,7 @@ class MeTTa:
         if not isinstance(name, str):
             name = repr(name)
         mod = import_module(name)
+        self.pymods[name] = mod
         for n in dir(mod):
             obj = getattr(mod, n)
             if '__name__' in dir(obj) and obj.__name__ == 'metta_register':
