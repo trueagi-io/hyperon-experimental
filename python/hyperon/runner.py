@@ -49,10 +49,10 @@ class RunnerState:
 class MeTTa:
     """This class contains the MeTTa program execution utilities"""
 
-    def __init__(self, space = None, env_builder = None, cmetta = None):
+    def __init__(self, cmetta = None, space = None, env_builder = None):
         self.pymods = {}
 
-      if cmetta is not None:
+        if cmetta is not None:
             self.cmetta = cmetta
         else:
             if space is None:
