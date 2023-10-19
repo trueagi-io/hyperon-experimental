@@ -23,7 +23,17 @@ fn unit_result() -> Result<Vec<Atom>, ExecError> {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct GetTypeOp {}
+pub struct GetTypeOp {
+    // TODO: MINIMAL this is temporary compatibility fix to be removed after
+    // migration to the minimal MeTTa
+    space: DynSpace,
+}
+
+impl GetTypeOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
 
 impl Display for GetTypeOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -39,8 +49,11 @@ impl Grounded for GetTypeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-type expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
-        let space = args.get(1).ok_or_else(arg_error)?;
-        let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
+        let space = match args.get(1) {
+            Some(space) => Atom::as_gnd::<DynSpace>(space)
+                .ok_or("match expects a space as the first argument"),
+            None => Ok(&self.space),
+        }?;
         let types = get_atom_types(space, atom);
         if types.is_empty() {
             Ok(vec![EMPTY_SYMBOL])
@@ -532,8 +545,9 @@ fn regex(regex: &str) -> Regex {
 pub fn register_common_tokens(metta: &Metta) {
     let tokenizer = metta.tokenizer();
     let mut tref = tokenizer.borrow_mut();
+    let space = metta.space();
 
-    let get_type_op = Atom::gnd(GetTypeOp{});
+    let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
     let collapse_get_type_op = Atom::gnd(CollapseGetTypeOp{});
     tref.register_token(regex(r"collapse-get-type"), move |_| { collapse_get_type_op.clone() });
@@ -622,7 +636,7 @@ mod tests {
             (: A C)
         "));
 
-        let get_type_op = GetTypeOp{};
+        let get_type_op = GetTypeOp::new(space.clone());
         assert_eq_no_order!(get_type_op.execute(&mut vec![sym!("A"), expr!({space.clone()})]).unwrap(),
             vec![sym!("B"), sym!("C")]);
     }
@@ -635,7 +649,7 @@ mod tests {
             (: \"test\" String)
         "));
 
-        let get_type_op = GetTypeOp{};
+        let get_type_op = GetTypeOp::new(space.clone());
         assert_eq_no_order!(get_type_op.execute(&mut vec![expr!("f" "42"), expr!({space.clone()})]).unwrap(),
             vec![sym!("String")]);
         assert_eq_no_order!(get_type_op.execute(&mut vec![expr!("f" "\"test\""), expr!({space.clone()})]).unwrap(),
