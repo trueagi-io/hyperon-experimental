@@ -1,8 +1,8 @@
-use hyperon::metta::*;
-use hyperon::metta::interpreter::*;
+use hyperon::metta::runner::*;
 
-fn main() {
-    let space = metta_space("
+fn main() -> Result<(), String> {
+    let metta = Metta::new(None);
+    metta.run_program_str("
         (: List (-> $a Type))
         (: Nil (List $a))
         (: Cons (-> $a (List $a) (List $a)))
@@ -15,11 +15,12 @@ fn main() {
         (= (insert $x (Cons $head $tail)) (if (< $x $head)
                                               (Cons $x (Cons $head $tail))
                                               (Cons $head (insert $x $tail))))
-    ");
+    ")?;
 
+    assert_eq!(metta.run_program_str("!(insert 1 Nil)")?[0],
+        vec![metta.parse_one_atom("(Cons 1 Nil)")?]);
+    assert_eq!(metta.run_program_str("(insert 3 (insert 2 (insert 1 Nil)))")?[0],
+        vec![metta.parse_one_atom("(Cons 1 (Cons 2 (Cons 3 Nil)))")?]);
 
-    assert_eq!(interpret(&space, &metta_atom("(insert 1 Nil)")),
-        Ok(vec![metta_atom("(Cons 1 Nil)")]));
-    assert_eq!(interpret(&space, &metta_atom("(insert 3 (insert 2 (insert 1 Nil)))")),
-        Ok(vec![metta_atom("(Cons 1 (Cons 2 (Cons 3 Nil)))")]));
+    Ok(())
 }

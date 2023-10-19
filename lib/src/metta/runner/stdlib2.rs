@@ -411,8 +411,11 @@ pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
     use crate::matcher::atoms_are_equivalent;
+    use crate::common::Operation;
+    use crate::common::test_utils::metta_space;
 
     use std::convert::TryFrom;
 

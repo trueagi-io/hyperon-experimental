@@ -241,9 +241,41 @@ impl Metta {
         self.0.settings.borrow().get(key.into()).map(|a| a.to_string())
     }
 
+    /// Runs a MeTTa program expressed as a string of characters
+    pub fn run_program_str(&self, program: &str) -> Result<Vec<Vec<Atom>>, String> {
+        let parser = SExprParser::new(program);
+        self.run(parser)
+    }
+
     pub fn run<'p, 'a: 'p>(&'a self, parser: SExprParser<'p>) -> Result<Vec<Vec<Atom>>, String> {
         let state = RunnerState::new_with_parser(self, parser);
         state.run_to_completion()
+    }
+
+    /// Parses a string into a single Atom
+    pub fn parse_one_atom(&self, text: &str) -> Result<Atom, String> {
+        let mut parser = SExprParser::new(text);
+        let atom = parser.parse(&*self.tokenizer().borrow())?;
+        if let Some(atom) = atom {
+            Ok(atom)
+        } else {
+            panic!("Expected a single atom");
+        }
+    }
+
+    /// Parses a string into a vector of Atoms
+    pub fn parse_all_atoms(&self, text: &str) -> Result<Vec<Atom>, String> {
+        let mut parser = SExprParser::new(text);
+        let mut atoms = vec![];
+        loop {
+            let atom = parser.parse(&*self.tokenizer().borrow())?;
+            if let Some(atom) = atom {
+                atoms.push(atom)
+            } else {
+                break;
+            }
+        }
+        Ok(atoms)
     }
 
     // TODO: this method is deprecated and should be removed after switching
@@ -493,7 +525,7 @@ mod tests {
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.tokenizer().borrow_mut().register_token(Regex::new("error").unwrap(),
+        metta.tokenizer().borrow_mut().register_token_with_regex_str("error",
             |_| Atom::gnd(ErrorOp{}));
         let result = metta.run(SExprParser::new(program));
 
@@ -544,7 +576,7 @@ mod tests {
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.tokenizer().borrow_mut().register_token(Regex::new("empty").unwrap(),
+        metta.tokenizer().borrow_mut().register_token_with_regex_str("empty",
             |_| Atom::gnd(ReturnAtomOp(expr!())));
         let result = metta.run(SExprParser::new(program));
 
