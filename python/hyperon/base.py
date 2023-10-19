@@ -57,7 +57,7 @@ class GroundingSpace(AbstractSpace):
     A wrapper over the native GroundingSpace implementation, which can be subclassed
     and extended within Python
     """
-    def __init__(self, unwrap=True):
+    def __init__(self):
         """Initialize GroundingSpace and its underlying native implementation."""
         super().__init__()
         # self.cspace = hp.space_new_grounding()

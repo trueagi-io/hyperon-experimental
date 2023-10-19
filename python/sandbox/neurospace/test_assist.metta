@@ -3,8 +3,14 @@
 (= (append-expr $xs $x)
    (collapse (superpose ((superpose $xs) $x))))
 
+; We could use $_, so this message would be automatically added to any prompt,
+; but in this case it would be difficult to avoid its duplication
 (= (message init)
    (system "You are the SingularityNet AI platform and marketplace assistant"))
+
+; We need to duplicate this message
+(= (message platform-desc)
+   (message init))
 
 (= (message platform-desc)
    (system "SingularityNET (SNET) is an open and decentralized network of AI services made accessible through the Blockchain. Developers publish their services to the SingularityNET network, where they can be used by anyone with an internet connection. Developers are able to charge for the use of their services using the native AGIX token.
@@ -33,17 +39,28 @@ Finally, to make our marketplace compliant with regulations without compromising
      ))
 )
 
-(= (set_subgoal ("general question about platform") $msgs)
-   (llm (append-expr $msgs (message platform-desc)))
+; We suppose that the second argument has a certain structure built by compose-prompt
+; so it can be deconstructed by the corresponding argument pattern
+(= (set_subgoal
+     ("general question about platform")
+     (Messages $history $prev-state-msg $user-msg))
+   (llm (compose-prompt platform-desc $history $user-msg))
+   ; (llm (append-expr $msgs (message platform-desc))
 )
 
-(= (set_subgoal ("search for particular service") $msgs)
+; Extracting components of input messages, ignoring $prev-state-msg and calling
+; compose-prompt is a standard pattern to keep the user message at the end
+; of the message list inserting new system messages in-between
+(= (set_subgoal
+     ("search for particular service")
+     (Messages $history $prev-state-msg $user-msg))
    (llm
-     (append-expr $msgs (message service-list))
+     (compose-prompt service-list $history $user-msg)
      (Functions describe_service))
 )
 
-
+; In this example, we just append the list of messages with the new system message
+; for further elaboration on the service.
 (= (describe_service ($args) $msgs)
    (llm
       (append-expr $msgs (system ("You selected the service " $args " Please describe it.")))))
@@ -56,22 +73,28 @@ Finally, to make our marketplace compliant with regulations without compromising
      ))
 )
 
-(= (compose-prompt $state $user-msg)
-   (Messages
-     (message $state)
-     (user $user-msg)))
+(= (compose-prompt $state $history $new-msg)
+   (let $msgs-state (collapse (message $state))
+     (Messages
+       $history
+       (cons-atom Messages $msgs-state)
+       $new-msg)))
 
-(= (compose-functions $state) (Functions (function $state)))
+(= (compose-functions $state)
+   (let $fn-calls (collapse (function $state))
+     (cons-atom Functions $fn-calls)))
 
-(= (respond $state $user-msg)
+; TODO? Assuming that $user-msg is not wrapped into (user ...) is convenient
+; for the first call, but not convenient for using `respond` from functional calls
+(= (respond $state $history $user-msg)
    (llm
-     (compose-prompt $state $user-msg)
+     (compose-prompt $state $history (user $user-msg))
      (compose-functions $state)
     ))
 
-; !(compose-prompt init "What services do you have on the platform?")
+; !(compose-prompt init () (user "What services do you have on the platform?"))
 ; !(compose-functions init)
-;!(respond init "What services do you have on the platform?")
-!(respond init "What can I use for style transfer?")
-;!(respond init "Hello. What can you do?")
-;!(respond init "What is the SingularityNET platform?")
+;!(respond init () "What services do you have on the platform?")
+;!(respond init () "What can I use for style transfer?")
+;!(respond init () "Hello. What can you do?")
+!(respond init () "What is the SingularityNET platform?")
