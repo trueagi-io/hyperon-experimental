@@ -49,8 +49,10 @@ class RunnerState:
 class MeTTa:
     """This class contains the MeTTa program execution utilities"""
 
-    def __init__(self, cmetta = None, space = None, env_builder = None):
-        if cmetta is not None:
+    def __init__(self, space = None, env_builder = None, cmetta = None):
+        self.pymods = {}
+
+      if cmetta is not None:
             self.cmetta = cmetta
         else:
             if space is None:
@@ -111,6 +113,7 @@ class MeTTa:
             name = repr(name)
         try:
             mod = import_module(name)
+            self.pymods[name] = mod
             for n in dir(mod):
                 obj = getattr(mod, n)
                 if '__name__' in dir(obj) and obj.__name__ == 'metta_register':
