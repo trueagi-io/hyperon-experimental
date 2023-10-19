@@ -178,7 +178,7 @@ fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -
     log::debug!("assert_results_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
     let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
     match vec_eq_no_order(actual.iter(), expected.iter()) {
-        Ok(()) => Ok(vec![UNIT_ATOM()]),
+        Ok(()) => unit_result(),
         Err(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
 }
@@ -374,7 +374,7 @@ impl Grounded for PragmaOp {
             .map_err(|_| "pragma! expects symbol atom as a key")?.name();
         let value = args.get(1).ok_or_else(arg_error)?;
         self.settings.borrow_mut().insert(key.into(), value.clone());
-        Ok(vec![])
+        unit_result()
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
