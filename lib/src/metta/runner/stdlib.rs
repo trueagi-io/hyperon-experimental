@@ -1592,4 +1592,9 @@ mod tests {
         let result = GetStateOp{}.execute(&mut vec![new_state.clone()]);
         assert_eq!(result, Ok(vec![expr!("C" "D")]))
     }
+
+    #[test]
+    fn test_stdlib_uses_rust_grounded_tokens() {
+        assert_eq!(run_program("!(if True ok nok)"), Ok(vec![vec![Atom::sym("ok")]]));
+    }
 }
