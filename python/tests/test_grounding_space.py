@@ -46,7 +46,7 @@ class GroundingSpaceTest(HyperonTestCase):
         nested.add_atom(E(S("A"), S("B")))
         space_atom = G(nested)
 
-        runner = MeTTa()
+        runner = MeTTa(env_builder=Environment.test_env())
         runner.space().add_atom(space_atom)
         runner.tokenizer().register_token("nested", lambda token: space_atom)
 

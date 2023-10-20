@@ -5,7 +5,7 @@ from hyperon import *
 class GroundedTypeTest(unittest.TestCase):
 
     def test_apply_type(self):
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
         self.assertEqual(
             metta.parse_single("+").get_grounded_type(),
             metta.parse_single("*").get_grounded_type())
@@ -31,7 +31,7 @@ class GroundedTypeTest(unittest.TestCase):
             metta.run("!(+ 1 1)")[0][0].get_grounded_type())
 
     def test_higher_func(self):
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
         metta.register_atom(
             r"curry_num",
             OperationAtom(
@@ -47,7 +47,7 @@ class GroundedTypeTest(unittest.TestCase):
                          metta.run("! 3"))
 
     def test_meta_types(self):
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
         ### Basic functional types
         metta.register_atom(r"id_num", OperationAtom("id_num", lambda x: x, ['Number', 'Number']))
         metta.register_atom(r"as_int", OperationAtom("as_int", lambda x: x, ['Number', 'Int']))
@@ -134,7 +134,7 @@ class GroundedTypeTest(unittest.TestCase):
     # (-> *Undefined Undefined) in the future.
     @unittest.skip("Behavior to be defined")
     def test_undefined_operation_type(self):
-        metta = MeTTa()
+        metta = MeTTa(env_builder=Environment.test_env())
         metta.register_atom("untyped", ValueAtom(None))
         metta.register_atom("untop", OperationAtom("untop", lambda: None))
         self.assertNotEqual(metta.parse_single("untop").get_grounded_type(),

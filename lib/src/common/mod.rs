@@ -20,10 +20,6 @@ use std::collections::HashMap;
 
 use crate::metta::metta_atom;
 
-pub fn init_logger(is_test: bool) {
-   let _ = env_logger::builder().is_test(is_test).try_init();
-}
-
 // TODO: move Operation and arithmetics under metta package as it uses metta_atom
 // Operation implements stateless operations as GroundedAtom.
 // Each operation has the only instance which is identified by unique name.

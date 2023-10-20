@@ -1,11 +1,11 @@
 use hyperon::assert_eq_metta_results;
 use hyperon::metta::text::SExprParser;
-use hyperon::metta::runner::new_metta_rust;
+use hyperon::metta::runner::{Metta, EnvBuilder};
 
 #[test]
 fn test_case_operation() {
-    let metta = new_metta_rust();
-    let result = metta.run(&mut SExprParser::new("
+    let metta = Metta::new(Some(EnvBuilder::test_env()));
+    let result = metta.run(SExprParser::new("
         ; cases are processed sequentially
         !(case (+ 1 5)
           ((5 Error)
@@ -30,7 +30,7 @@ fn test_case_operation() {
         !(case 5
           ((6 OK)))
     "));
-    let expected = metta.run(&mut SExprParser::new("
+    let expected = metta.run(SExprParser::new("
         ! OK
         ! 7
         ! (superpose (OK-3 OK-4))
@@ -39,8 +39,8 @@ fn test_case_operation() {
     "));
     assert_eq!(result, expected);
 
-    let metta = new_metta_rust();
-    let result = metta.run(&mut SExprParser::new("
+    let metta = Metta::new(Some(EnvBuilder::test_env()));
+    let result = metta.run(SExprParser::new("
         (Rel-P A B)
         (Rel-Q A C)
 
@@ -64,7 +64,7 @@ fn test_case_operation() {
         !(maybe-inc Nothing)
         !(maybe-inc (Just 2))
     "));
-    let expected = metta.run(&mut SExprParser::new("
+    let expected = metta.run(SExprParser::new("
         ! (superpose ((Q C) (P B)))
         ! no-match
         ! Nothing

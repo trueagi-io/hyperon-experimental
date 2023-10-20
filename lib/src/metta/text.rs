@@ -63,7 +63,7 @@ impl Tokenizer {
 }
 
 /// The meaning of a parsed syntactic element, generated from a substring in the input text
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug)]
 pub enum SyntaxNodeType {
     /// Comment line.  All text between a non-escaped ';' and a newline
     Comment,
@@ -80,13 +80,13 @@ pub enum SyntaxNodeType {
     CloseParen,
     /// Whitespace. One or more whitespace chars
     Whitespace,
-    /// Symbol Atom.  A Symbol Atom
+    /// Text that remains unparsed after a parse error has occurred
     LeftoverText,
     /// A Group of [SyntaxNode]s between an [OpenParen](SyntaxNodeType::OpenParen) and a matching
     ///   [CloseParen](SyntaxNodeType::CloseParen)
     ExpressionGroup,
     /// Syntax Nodes that cannot be combined into a coherent atom due to a parse error, even if some
-    /// of the individual nodes are valid
+    /// of the individual nodes could represent valid atoms
     ErrorGroup,
 }
 
@@ -217,6 +217,7 @@ impl SyntaxNode {
     }
 }
 
+#[derive(Clone)]
 pub struct SExprParser<'a> {
     text: &'a str,
     it: Peekable<CharIndices<'a>>,

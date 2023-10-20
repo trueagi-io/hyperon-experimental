@@ -1,4 +1,6 @@
-; NOTE: this behavior can change in the future
+; NOTE: This test won't work outside the test environment because it relies on
+;  specific atoms in a specific order in the space, and loading the default environment's
+;  init.metta will break the assumptions in this test
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Even at the very beginning of the main script `(get-atoms &self)`

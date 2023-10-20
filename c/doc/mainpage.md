@@ -127,6 +127,13 @@ More complete documentation on the MeTTa language, type system, and the MeTTa st
 
 This Interface includes the types and functions to instantiate a MeTTa interpreter and step through MeTTa code.
 
+[//]: # (Platform Environment Interface)
+
+@defgroup environment_group Platform Environment Interface
+@brief Configuration and settings shared by MeTTa runners
+
+This interface allows configuration of shared properties for MeTTa interpreters
+
 [//]: # (Misc. Interfaces)
 
 @defgroup misc_group Misc Interfaces

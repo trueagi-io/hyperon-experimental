@@ -16,6 +16,7 @@ use std::cell::RefCell;
 use std::fmt::Display;
 use std::collections::HashMap;
 use std::iter::FromIterator;
+use std::path::PathBuf;
 use regex::Regex;
 
 use super::arithmetics::*;
@@ -46,9 +47,13 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct ImportOp {
     metta: Metta,
+}
+
+impl PartialEq for ImportOp {
+    fn eq(&self, _other: &Self) -> bool { true }
 }
 
 impl ImportOp {
@@ -78,8 +83,8 @@ impl Grounded for ImportOp {
         if let Atom::Symbol(file) = file {
 
             //Check each include directory in order, until we find the module we're looking for
-            for include_dir in self.metta.search_paths().iter() {
-                let mut path = include_dir.clone();
+            for include_dir in self.metta.search_paths() {
+                let mut path: PathBuf = include_dir.into();
                 path.push(file.name());
                 path = path.canonicalize().unwrap_or(path);
                 if path.exists() {
@@ -1202,12 +1207,12 @@ pub static METTA_CODE: &'static str = "
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::runner::new_metta_rust;
+    use crate::metta::runner::{Metta, EnvBuilder};
     use crate::metta::types::validate_atom;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = new_metta_rust();
-        metta.run(&mut SExprParser::new(program))
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        metta.run(SExprParser::new(program))
     }
 
     #[test]
@@ -1419,8 +1424,8 @@ mod tests {
 
     #[test]
     fn superpose_op_multiple_interpretations() {
-        let metta = new_metta_rust();
-        let mut parser = SExprParser::new("
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new("
             (= (f) A)
             (= (f) B)
             (= (g) C)
@@ -1429,28 +1434,28 @@ mod tests {
             !(superpose ((f) (g)))
         ");
 
-        assert_eq_metta_results!(metta.run(&mut parser),
+        assert_eq_metta_results!(metta.run(parser),
             Ok(vec![vec![expr!("A"), expr!("B"), expr!("C"), expr!("D")]]));
     }
 
     #[test]
     fn superpose_op_superposed_with_collapse() {
-        let metta = new_metta_rust();
-        let mut parser = SExprParser::new("
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new("
             (= (f) A)
             (= (f) B)
 
             !(let $x (collapse (f)) (superpose $x))
         ");
 
-        assert_eq_metta_results!(metta.run(&mut parser),
+        assert_eq_metta_results!(metta.run(parser),
             Ok(vec![vec![expr!("A"), expr!("B")]]));
     }
 
     #[test]
     fn superpose_op_consumes_interpreter_errors() {
-        let metta = new_metta_rust();
-        let mut parser = SExprParser::new("
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new("
             (: f (-> A B))
             (= (f $x) $x)
 
@@ -1460,7 +1465,7 @@ mod tests {
             !(superpose ((f (superpose ())) (f a) (f b)))
         ");
 
-        assert_eq!(metta.run(&mut parser), Ok(vec![vec![
+        assert_eq!(metta.run(parser), Ok(vec![vec![
                 expr!("Error" ("f" ({SuperposeOp{space:metta.space().clone()}} ())) "NoValidAlternatives"),
                 expr!("a"), expr!("Error" "b" "BadType")]]));
     }

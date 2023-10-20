@@ -9,10 +9,7 @@ use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent, KeyCode
 
 use anyhow::Result;
 use clap::Parser;
-use directories::ProjectDirs;
 use signal_hook::{consts::SIGINT, iterator::Signals};
-
-use hyperon::common::shared::Shared;
 
 mod metta_shim;
 use metta_shim::*;
@@ -46,21 +43,25 @@ fn main() -> Result<()> {
         (None, &[] as &[PathBuf])
     };
 
-    //Config directory will be here: TODO: Document this in README.
-    // Linux: ~/.config/metta/
-    // Windows: ~\AppData\Roaming\TrueAGI\metta\config\
-    // Mac: ~/Library/Application Support/io.TrueAGI.metta/
-    let repl_params = match ProjectDirs::from("io", "TrueAGI",  "metta") {
-        Some(proj_dirs) => ReplParams::new(proj_dirs.config_dir(), cli_args.include_paths, primary_metta_file),
+    //If we have a metta_file, then the working dir is the parent of that file
+    //If we are running in interactive mode, it's the working dir at the time the repl is invoked
+    let metta_working_dir: PathBuf = match primary_metta_file {
+        Some(metta_file) => {
+            metta_file.parent().unwrap().into()
+        },
         None => {
-            eprint!("Failed to initialize config!");
-            ReplParams::default()
+            match std::env::current_dir() {
+                Ok(cwd) => cwd,
+                Err(_) => PathBuf::from("./").canonicalize().unwrap(),
+            }
         }
     };
-    let repl_params = Shared::new(repl_params);
 
     //Create our MeTTa runtime environment
-    let mut metta = MettaShim::new(repl_params.clone());
+    let mut metta = MettaShim::new(metta_working_dir, cli_args.include_paths);
+
+    //Init our runtime environment
+    let repl_params = ReplParams::new(&metta);
 
     //Spawn a signal handler background thread, to deal with passing interrupts to the execution loop
     let mut signals = Signals::new(&[SIGINT])?;
@@ -93,11 +94,7 @@ fn main() -> Result<()> {
         //Only print the output from the primary .metta file
         let metta_code = std::fs::read_to_string(metta_file)?;
         metta.exec(metta_code.as_str());
-        metta.inside_env(|metta| {
-            for result in metta.result.iter() {
-                println!("{result:?}");
-            }
-        });
+        metta.print_result();
         Ok(())
 
     } else {
@@ -109,13 +106,16 @@ fn main() -> Result<()> {
 
 // To debug rustyline:
 // RUST_LOG=rustyline=debug cargo run --example example 2> debug.log
-fn start_interactive_mode(repl_params: Shared<ReplParams>, mut metta: MettaShim) -> rustyline::Result<()> {
+fn start_interactive_mode(repl_params: ReplParams, mut metta: MettaShim) -> rustyline::Result<()> {
 
     //Run the built-in repl-init code
     metta.exec(&builtin_init_metta_code());
 
     //Run the repl init file
-    metta.load_metta_module(repl_params.borrow().repl_config_metta_path.clone());
+    if let Some(repl_config_metta_path) = &repl_params.repl_config_metta_path {
+        metta.load_metta_module(repl_config_metta_path.clone());
+    }
+
     let max_len = metta.get_config_int(CFG_HISTORY_MAX_LEN).unwrap_or_else(|| 500);
 
     //Init RustyLine
@@ -141,7 +141,7 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, mut metta: MettaShim)
     rl.bind_sequence(KeyEvent::ctrl('j'), EventHandler::Conditional(Box::new(EnterKeyHandler::new(rl.helper().unwrap().force_submit.clone()))));
     rl.bind_sequence(KeyEvent::alt('n'), Cmd::HistorySearchForward);
     rl.bind_sequence(KeyEvent::alt('p'), Cmd::HistorySearchBackward);
-    if let Some(history_path) = &repl_params.borrow().history_file {
+    if let Some(history_path) = &repl_params.history_file {
         if rl.load_history(history_path).is_err() {
             println!("No previous history found.");
         }
@@ -167,11 +167,7 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, mut metta: MettaShim)
 
                 let mut metta = rl.helper().unwrap().metta.borrow_mut();
                 metta.exec(line.as_str());
-                metta.inside_env(|metta| {
-                    for result in metta.result.iter() {
-                        println!("{result:?}");
-                    }
-                });
+                metta.print_result();
             }
             Err(ReadlineError::Interrupted) |
             Err(ReadlineError::Eof) => {
@@ -184,7 +180,7 @@ fn start_interactive_mode(repl_params: Shared<ReplParams>, mut metta: MettaShim)
         }
     }
 
-    if let Some(history_path) = &repl_params.borrow().history_file {
+    if let Some(history_path) = &repl_params.history_file {
         rl.append_history(history_path)?
     }
 

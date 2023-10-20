@@ -45,6 +45,7 @@ use std::marker::PhantomData;
 pub trait SpaceRef<'a> : Space + 'a {}
 impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
 
+#[derive(Debug)]
 struct InterpreterContext<'a, T: SpaceRef<'a>> {
     space: T,
     phantom: PhantomData<&'a GroundingSpace>,
@@ -56,6 +57,7 @@ impl<'a, T: SpaceRef<'a>> InterpreterContext<'a, T> {
     }
 }
 
+#[derive(Debug)]
 pub struct InterpreterState<'a, T: SpaceRef<'a>> {
     plan: Vec<InterpretedAtom>,
     finished: Vec<Atom>,

@@ -1,266 +1,43 @@
 
-use std::path::PathBuf;
+//! MettaShim is responsible for **ALL** calls between the repl and MeTTa, and is in charge of keeping
+//! Python happy (and perhaps other languages in the future).
+//!
+//! Because so much functionality can be extended with Python, MettaShim must handle many operations
+//! you might not expect, such as rendering atoms to text or even dropping atoms
+//!
 
-use hyperon::ExpressionAtom;
-use hyperon::Atom;
-use hyperon::space::*;
-use hyperon::space::grounding::GroundingSpace;
-use hyperon::metta::runner::{Metta, atom_is_error};
-#[cfg(not(feature = "minimal"))]
-use hyperon::metta::runner::stdlib::register_rust_tokens;
-#[cfg(feature = "minimal")]
-use hyperon::metta::runner::stdlib2::register_rust_tokens;
-use hyperon::metta::text::Tokenizer;
-use hyperon::metta::text::SExprParser;
-use hyperon::common::shared::Shared;
+pub use metta_interface_mod::MettaShim;
 
-use crate::ReplParams;
 use crate::SIGINT_RECEIVED_COUNT;
 
-/// MettaShim is responsible for **ALL** calls between the repl and MeTTa, and is in charge of keeping
-/// Python happy (and perhaps other languages in the future).
-///
-/// Because so much functionality can be extended with Python, MettaShim must handle many operations
-/// you might not expect, such as rendering atoms to text or even dropping atoms
-///
-pub struct MettaShim {
-    pub metta: Metta,
-    pub result: Vec<Vec<Atom>>,
-    _repl_params: Shared<ReplParams>, //TODO: We'll likely want this back soon, but so I'm not un-plumbing it just yet
+/// Prepares to enter an interruptible exec loop
+pub fn exec_state_prepare() {
+    // Clear any leftover count that might have happened if the user pressed Ctrl+C just after MeTTa
+    // interpreter finished processing, but before control returned to rustyline's prompt.  That signal is
+    // not intended for the new execution we are about to begin.
+    //See https://github.com/trueagi-io/hyperon-experimental/pull/419#discussion_r1315598220 for more details
+    *SIGINT_RECEIVED_COUNT.lock().unwrap() = 0;
 }
 
-#[macro_export]
-macro_rules! metta_shim_env {
-    ( $body:block ) => {
-        {
-            #[cfg(feature = "python")]
-            {
-                use pyo3::prelude::*;
-                Python::with_gil(|_py| -> PyResult<()> {
-                    $body
-                    Ok(())
-                }).unwrap();
-            }
-            #[cfg(not(feature = "python"))]
-            {
-                $body
-            }
-        }
-    };
-}
-
-impl Drop for MettaShim {
-    fn drop(&mut self) {
-        metta_shim_env!{{
-            self.result = vec![];
-        }}
+/// Check whether an exec loop should break based on an interrupt, and clear the interrupt state
+pub fn exec_state_should_break() -> bool {
+    let mut signal_received_cnt = SIGINT_RECEIVED_COUNT.lock().unwrap();
+    if *signal_received_cnt > 0 {
+        *signal_received_cnt = 0;
+        true
+    } else {
+        false
     }
 }
 
-impl MettaShim {
-
-    pub fn new(repl_params: Shared<ReplParams>) -> Self {
-
-        //Init the MeTTa interpreter
-        let space = DynSpace::new(GroundingSpace::new());
-        let tokenizer = Shared::new(Tokenizer::new());
-        let mut new_shim = Self {
-            metta: Metta::from_space(space, tokenizer, repl_params.borrow().modules_search_paths().collect()),
-            result: vec![],
-            _repl_params: repl_params.clone(),
-        };
-
-        //Init HyperonPy if the repl includes Python support
-        #[cfg(feature = "python")]
-        if let Err(err) = || -> Result<(), String> {
-            //Confirm the hyperonpy version is compatible
-            py_mod_loading::confirm_hyperonpy_version(">=0.1.0, <0.2.0")?;
-
-            //Load the hyperonpy Python stdlib
-            py_mod_loading::load_python_module(&new_shim.metta, "hyperon.stdlib")?;
-
-            Ok(())
-        }() {
-            eprintln!("Fatal Error: {err}");
-            std::process::exit(-1);
-        }
-
-        //Load the Rust stdlib
-        register_rust_tokens(&new_shim.metta);
-        new_shim.load_metta_module("stdlib".into());
-
-        //Add the extend-py! token, if we have Python support
-        #[cfg(feature = "python")]
-        {
-            let extendpy_atom = Atom::gnd(py_mod_loading::ImportPyOp{metta: new_shim.metta.clone(), repl_params: repl_params.clone()});
-            new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { extendpy_atom.clone() });
-        }
-
-        //extend-py! should throw an error if we don't
-        #[cfg(not(feature = "python"))]
-        new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(py_mod_err::ImportPyErr) });
-
-        //Run the init.metta file
-        let repl_params = repl_params.borrow();
-        new_shim.load_metta_module(repl_params.init_metta_path.clone());
-
-        new_shim
-    }
-
-    pub fn load_metta_module(&mut self, module: PathBuf) {
-        metta_shim_env!{{
-            self.metta.load_module(module).unwrap();
-        }}
-    }
-
-    pub fn exec(&mut self, line: &str) {
-        metta_shim_env!{{
-            let mut parser = SExprParser::new(line);
-            let mut runner_state = self.metta.start_run();
-
-            // This clears any leftover count that might have happened if the user pressed Ctrl+C just after MeTTa
-            // interpreter finished processing, but before control returned to rustyline's prompt.  That signal is
-            // not intended for the new execution we are about to begin.
-            //See https://github.com/trueagi-io/hyperon-experimental/pull/419#discussion_r1315598220 for more details
-            *SIGINT_RECEIVED_COUNT.lock().unwrap() = 0;
-
-            while !runner_state.is_complete() {
-                //If we received an interrupt, then clear it and break the loop
-                let mut signal_received_cnt = SIGINT_RECEIVED_COUNT.lock().unwrap();
-                if *signal_received_cnt > 0 {
-                    *signal_received_cnt = 0;
-                    break;
-                }
-                drop(signal_received_cnt);
-
-                //Run the next step
-                self.metta.run_step(&mut parser, &mut runner_state)
-                    .unwrap_or_else(|err| panic!("Unhandled MeTTa error: {}", err));
-                self.result = runner_state.intermediate_results().clone();
-            }
-        }}
-    }
-
-    pub fn inside_env<F: FnOnce(&mut MettaShim)>(&mut self, func: F) {
-        metta_shim_env!{{
-            func(self)
-        }}
-    }
-
-    pub fn get_config_atom(&mut self, config_name: &str) -> Option<Atom> {
-        self.exec(&format!("!(get-state {config_name})"));
-
-        #[allow(unused_assignments)]
-        let mut result = None;
-        metta_shim_env!{{
-            result = self.result.get(0)
-                .and_then(|vec| vec.get(0))
-                .and_then(|atom| (!atom_is_error(atom)).then_some(atom))
-                .cloned()
-        }}
-        result
-    }
-
-    pub fn get_config_string(&mut self, config_name: &str) -> Option<String> {
-        let atom = self.get_config_atom(config_name)?;
-
-        #[allow(unused_assignments)]
-        let mut result = None;
-        metta_shim_env!{{
-            //TODO: We need to do atom type checking here
-            result = Some(Self::strip_quotes(atom.to_string()));
-        }}
-        result
-    }
-
-    /// A utility function to return the part of a string in between starting and ending quotes
-    // TODO: Roll this into a stdlib grounded string module, maybe as a test case for
-    //   https://github.com/trueagi-io/hyperon-experimental/issues/351
-    fn strip_quotes(the_string: String) -> String {
-        if let Some(first) = the_string.chars().next() {
-            if first == '"' {
-                if let Some(last) = the_string.chars().last() {
-                    if last == '"' {
-                        if the_string.len() > 1 {
-                            return String::from_utf8(the_string.as_bytes()[1..the_string.len()-1].to_vec()).unwrap();
-                        }
-                    }
-                }
-            }
-        }
-        the_string
-    }
-
-    pub fn get_config_expr_vec(&mut self, config_name: &str) -> Option<Vec<String>> {
-        let atom = self.get_config_atom(config_name)?;
-        let mut result = None;
-        metta_shim_env!{{
-            if let Ok(expr) = ExpressionAtom::try_from(atom) {
-                result = Some(expr.into_children()
-                    .into_iter()
-                    .map(|atom| {
-                        //TODO: We need to do atom type checking here
-                        Self::strip_quotes(atom.to_string())
-                    })
-                    .collect())
-            }
-        }}
-        result
-    }
-
-    pub fn get_config_int(&mut self, _config_name: &str) -> Option<isize> {
-        None //TODO.  Make this work when I have reliable value atom bridging
-    }
-}
-
-#[cfg(not(feature = "python"))]
-mod py_mod_err {
-    use std::fmt::Display;
-    use hyperon::Atom;
-    use hyperon::atom::{Grounded, ExecError, match_by_equality};
-    use hyperon::matcher::MatchResultIter;
-    use hyperon::metta::*;
-
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct ImportPyErr;
-
-    impl Display for ImportPyErr {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "extend-py!")
-        }
-    }
-
-    impl Grounded for ImportPyErr {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED])
-        }
-
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            Err(ExecError::from("extend-py! not available in metta repl without Python support"))
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
-    }
-}
-
-#[cfg(feature = "python")]
-mod py_mod_loading {
-    use std::fmt::Display;
+#[cfg(all(feature = "python", not(feature = "no_python")))]
+pub mod metta_interface_mod {
     use std::str::FromStr;
     use std::path::PathBuf;
     use pep440_rs::{parse_version_specifiers, Version};
     use pyo3::prelude::*;
-    use pyo3::types::{PyTuple, PyDict};
-    use hyperon::*;
-    use hyperon::Atom;
-    use hyperon::atom::{Grounded, ExecError, match_by_equality};
-    use hyperon::matcher::MatchResultIter;
-    use hyperon::metta::*;
-    use hyperon::metta::runner::Metta;
-    use hyperon::common::shared::Shared;
-    use crate::ReplParams;
+    use pyo3::types::{PyTuple, PyString, PyBool, PyList, PyDict};
+    use super::{strip_quotes, exec_state_prepare, exec_state_should_break};
 
     /// Load the hyperon module, and get the "__version__" attribute
     pub fn get_hyperonpy_version() -> Result<String, String> {
@@ -288,119 +65,450 @@ mod py_mod_loading {
         }
     }
 
-    pub fn load_python_module_from_mod_or_file(repl_params: &ReplParams, metta: &Metta, module_name: &str) -> Result<(), String> {
+    pub struct MettaShim {
+        py_mod: Py<PyModule>,
+        py_metta: Py<PyAny>,
+        result: Vec<Vec<Py<PyAny>>>,
+    }
 
-        // First, see if the module is already registered with Python
-        match load_python_module(metta, module_name) {
-            Err(_) => {
-                // If that failed, try and load the module from a file
+    impl MettaShim {
+        const PY_CODE: &str = include_str!("py_shim.py");
 
-                //Check each include directory in order, until we find the module we're looking for
-                let file_name = PathBuf::from(module_name).with_extension("py");
-                let mut found_path = None;
-                for include_path in repl_params.modules_search_paths() {
-                    let path = include_path.join(&file_name);
-                    if path.exists() {
-                        found_path = Some(path);
-                        break;
-                    }
-                }
+        pub fn new(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Self {
 
-                match found_path {
-                    Some(path) => load_python_module_from_known_path(metta, module_name, &path),
-                    None => Err(format!("Failed to load module {module_name}; could not locate file: {file_name:?}"))
+            match || -> Result<_, String> {
+                //Confirm the hyperonpy version is compatible
+                confirm_hyperonpy_version(">=0.1.0, <0.2.0")?;
+
+                //Initialize the Hyperon environment
+                let new_shim = MettaShim::init_common_env(working_dir, include_paths)?;
+
+                Ok(new_shim)
+            }() {
+                Ok(shim) => shim,
+                Err(err) => {
+                    eprintln!("Fatal Error: {err}");
+                    std::process::exit(-1);
                 }
             }
-            _ => Ok(())
+        }
+
+        pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
+            match Python::with_gil(|py| -> PyResult<(Py<PyModule>, Py<PyAny>)> {
+                let py_mod = PyModule::from_code(py, Self::PY_CODE, "", "")?;
+                let init_func = py_mod.getattr("init_metta")?;
+                let kwargs = PyDict::new(py);
+                kwargs.set_item("working_dir", working_dir)?;
+                kwargs.set_item("include_paths", include_paths)?;
+                let py_metta = init_func.call((), Some(kwargs))?;
+                Ok((py_mod.into(), py_metta.into()))
+            }) {
+                Err(err) => Err(format!("{err}")),
+                Ok((py_mod, py_metta)) => Ok(Self { py_mod, py_metta, result: vec![] }),
+            }
+        }
+
+        pub fn load_metta_module(&mut self, module: PathBuf) {
+            Python::with_gil(|py| -> PyResult<()> {
+                let path = PyString::new(py, &module.into_os_string().into_string().unwrap());
+                let py_metta = self.py_metta.as_ref(py);
+                let args = PyTuple::new(py, &[py_metta, path]);
+                let module: &PyModule = self.py_mod.as_ref(py);
+                let func = module.getattr("load_metta_module")?;
+                func.call1(args)?;
+                Ok(())
+            }).unwrap();
+        }
+
+        pub fn exec(&mut self, line: &str) {
+
+            //Initialize the runner state
+            let runner_state = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
+                let line = PyString::new(py, line);
+                let py_metta = self.py_metta.as_ref(py);
+                let module: &PyModule = self.py_mod.as_ref(py);
+                let runner_class = module.getattr("RunnerState")?;
+                let args = PyTuple::new(py, &[py_metta, line]);
+                let result = runner_class.call1(args)?;
+                Ok(result.into())
+            }).unwrap();
+
+            exec_state_prepare();
+
+            loop {
+                //See if we've already finished processing
+                if Python::with_gil(|py| -> PyResult<bool> {
+                    let module: &PyModule = self.py_mod.as_ref(py);
+                    let func = module.getattr("run_is_complete")?;
+                    let args = PyTuple::new(py, &[&runner_state]);
+                    let result = func.call1(args)?;
+                    Ok(result.downcast::<PyBool>().unwrap().is_true())
+                }).unwrap() {
+                    break;
+                }
+
+                //See if we should exit
+                if exec_state_should_break() {
+                    break;
+                }
+
+                //Run the next step
+                self.result = Python::with_gil(|py| -> PyResult<Vec<Vec<Py<PyAny>>>> {
+                    let module: &PyModule = self.py_mod.as_ref(py);
+                    let func = module.getattr("run_step")?;
+                    let args = PyTuple::new(py, &[&runner_state]);
+                    let result = func.call1(args)?;
+                    let results_list = result.downcast::<PyList>().unwrap();
+                    let mut results: Vec<Vec<Py<PyAny>>> = vec![];
+                    for result in results_list {
+                        let inner_list = result.downcast::<PyList>().unwrap();
+                        results.push(inner_list.iter().map(|atom| atom.into()).collect());
+                    }
+                    Ok(results)
+                }).unwrap();
+            }
+        }
+
+        pub fn print_result(&self) {
+            Python::with_gil(|py| -> PyResult<()> {
+                for result_vec in self.result.iter() {
+                    let result_vec: Vec<&PyAny> = result_vec.iter().map(|atom| atom.as_ref(py)).collect();
+                    println!("{result_vec:?}");
+                }
+                Ok(())
+            }).unwrap()
+        }
+
+        pub fn parse_line(&mut self, line: &str) -> Result<(), String> {
+            Python::with_gil(|py| -> PyResult<Result<(), String>> {
+                let py_line = PyString::new(py, line);
+                let py_metta = self.py_metta.as_ref(py);
+                let args = PyTuple::new(py, &[py_metta, py_line]);
+                let module: &PyModule = self.py_mod.as_ref(py);
+                let func = module.getattr("parse_line")?;
+                let result = func.call1(args)?;
+                Ok(if result.is_none() {
+                    Ok(())
+                } else {
+                    Err(result.to_string())
+                })
+            }).unwrap()
+        }
+
+        pub fn parse_and_unroll_syntax_tree(&self, line: &str) -> Vec<(SyntaxNodeType, std::ops::Range<usize>)> {
+
+            Python::with_gil(|py| -> PyResult<Vec<(SyntaxNodeType, std::ops::Range<usize>)>> {
+                let mut result_nodes = vec![];
+                let py_line = PyString::new(py, line);
+                let args = PyTuple::new(py, &[py_line]);
+                let module: &PyModule = self.py_mod.as_ref(py);
+                let func = module.getattr("parse_line_to_syntax_tree")?;
+                let nodes = func.call1(args)?;
+                let result_list = nodes.downcast::<PyList>().unwrap();
+                for result in result_list {
+                    let result = result.downcast::<PyTuple>().unwrap();
+                    let node_type = SyntaxNodeType::from_py_str(&result[0].to_string());
+                    let start: usize = result[1].getattr("start")?.extract().unwrap();
+                    let end: usize = result[1].getattr("stop")?.extract().unwrap();
+                    let range = core::ops::Range{start, end};
+                    result_nodes.push((node_type, range))
+                }
+                Ok(result_nodes)
+            }).unwrap()
+        }
+
+        pub fn config_dir(&self) -> Option<PathBuf> {
+            Python::with_gil(|py| -> PyResult<Option<PathBuf>> {
+                let module: &PyModule = self.py_mod.as_ref(py);
+                let func = module.getattr("get_config_dir")?;
+                let result = func.call0()?;
+                Ok(if result.is_none() {
+                    None
+                } else {
+                    Some(PathBuf::from(result.to_string()))
+                })
+            }).unwrap()
+        }
+
+        pub fn get_config_expr_vec(&mut self, config_name: &str) -> Option<Vec<String>> {
+            Python::with_gil(|py| -> PyResult<Option<Vec<String>>> {
+                let config_name = PyString::new(py, config_name);
+                let py_metta = self.py_metta.as_ref(py);
+                let args = PyTuple::new(py, &[py_metta, config_name]);
+                let module: &PyModule = self.py_mod.as_ref(py);
+                let func = module.getattr("get_config_expr_vec")?;
+                let result = func.call1(args)?;
+
+                Ok(if result.is_none() {
+                    None
+                } else {
+                    match result.downcast::<PyList>() {
+                        Ok(result_list) => {
+                            Some(result_list.iter().map(|atom| strip_quotes(atom.to_string())).collect())
+                        },
+                        Err(_) => None
+                    }
+                })
+            }).unwrap()
+        }
+
+        pub fn get_config_string(&mut self, config_name: &str) -> Option<String> {
+            Python::with_gil(|py| -> PyResult<Option<String>> {
+                let config_name = PyString::new(py, config_name);
+                let py_metta = self.py_metta.as_ref(py);
+                let args = PyTuple::new(py, &[py_metta, config_name]);
+                let module: &PyModule = self.py_mod.as_ref(py);
+                let func = module.getattr("get_config_string")?;
+                let result = func.call1(args)?;
+
+                Ok(if result.is_none() {
+                    None
+                } else {
+                    Some(strip_quotes(result.to_string()))
+                })
+            }).unwrap()
+        }
+
+        pub fn get_config_int(&mut self, _config_name: &str) -> Option<isize> {
+            None //TODO.  Make this work when I have reliable value atom bridging
         }
     }
 
-    pub fn load_python_module_from_known_path(metta: &Metta, module_name: &str, path: &PathBuf) -> Result<(), String> {
-
-        let code = std::fs::read_to_string(&path).or_else(|err| Err(format!("Error reading file {path:?} - {err}")))?;
-        Python::with_gil(|py| -> PyResult<()> {
-            let _py_mod = PyModule::from_code(py, &code, path.to_str().unwrap(), module_name)?;
-            Ok(())
-        }).map_err(|err| {
-            format!("{err}")
-        })?;
-
-        // If we suceeded in loading the module from source, then register the MeTTa extensions
-        load_python_module(metta, module_name)
+    /// Duplicated from Hyperon because linking hyperon directly is not yet allowed
+    #[derive(Debug)]
+    pub enum SyntaxNodeType {
+        Comment,
+        VariableToken,
+        StringToken,
+        WordToken,
+        OpenParen,
+        CloseParen,
+        Whitespace,
+        LeftoverText,
+        ExpressionGroup,
+        ErrorGroup,
     }
 
-    pub fn load_python_module(metta: &Metta, module_name: &str) -> Result<(), String> {
+    impl SyntaxNodeType {
+        fn from_py_str(the_str: &str) -> Self {
+            match the_str {
+                "SyntaxNodeType.COMMENT" => Self::Comment,
+                "SyntaxNodeType.VARIABLE_TOKEN" => Self::VariableToken,
+                "SyntaxNodeType.STRING_TOKEN" => Self::StringToken,
+                "SyntaxNodeType.WORD_TOKEN" => Self::WordToken,
+                "SyntaxNodeType.OPEN_PAREN" => Self::OpenParen,
+                "SyntaxNodeType.CLOSE_PAREN" => Self::CloseParen,
+                "SyntaxNodeType.WHITESPACE" => Self::Whitespace,
+                "SyntaxNodeType.LEFTOVER_TEXT" => Self::LeftoverText,
+                "SyntaxNodeType.EXPRESSION_GROUP" => Self::ExpressionGroup,
+                "SyntaxNodeType.ERROR_GROUP" => Self::ErrorGroup,
+                _ => panic!("Unrecognized syntax node type: {the_str}")
+            }
+        }
+    }
 
-        Python::with_gil(|py| -> PyResult<()> {
+}
 
-            // Load the module
-            let py_mod = PyModule::import(py, module_name)?;
+/// The "no_python" path involves a reimplementation of all of the MeTTa interface points calling MeTTa
+/// directly instead of through Python.  Maintaining two paths is a temporary stop-gap solution because
+/// we can only link the Hyperon Rust library through one pathway and the HyperonPy module is that path
+/// when the Python repl is used.
+///
+/// When we have the ability to statically link HyperonPy, we can remove this shim and call
+/// Hyperon and MeTTa from everywhere in the code.  This will likely mean we can get rid of the clumsy
+/// implementations in the "python" version of metta_interface_mod.  See See https://github.com/trueagi-io/hyperon-experimental/issues/283
+#[cfg(feature = "no_python")]
+pub mod metta_interface_mod {
+    use std::path::{PathBuf, Path};
+    use std::fmt::Display;
+    use hyperon::atom::{Grounded, ExecError, match_by_equality};
+    use hyperon::matcher::MatchResultIter;
+    use hyperon::metta::*;
+    use hyperon::metta::text::SExprParser;
+    use hyperon::ExpressionAtom;
+    use hyperon::Atom;
+    use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
+    use super::{strip_quotes, exec_state_prepare, exec_state_should_break};
 
-            // Clone the Rust Metta handle and turn it into a CMetta object that hyperonpy can work with
-            let boxed_metta = Box::into_raw(Box::new(metta.clone()));
-            let hyperonpy_mod = PyModule::import(py, "hyperonpy")?;
-            let metta_class_obj = hyperonpy_mod.getattr("CMetta")?;
-            let args = PyTuple::new(py, &[boxed_metta as usize]);
-            let wrapped_metta = metta_class_obj.call1(args)?;
+    pub use hyperon::metta::text::SyntaxNodeType as SyntaxNodeType;
 
-            // Init a MeTTa Python object from our CMetta
-            let hyperon_mod = PyModule::import(py, "hyperon")?;
-            let metta_class_obj = hyperon_mod.getattr("MeTTa")?;
-            let kwargs = PyDict::new(py);
-            kwargs.set_item("cmetta", wrapped_metta)?;
-            let py_metta = metta_class_obj.call((), Some(kwargs))?;
+    pub struct MettaShim {
+        pub metta: Metta,
+        pub result: Vec<Vec<Atom>>,
+    }
 
-            // Register all the items in the module
-            for item in py_mod.dir() {
-                let obj = py_mod.getattr(item.str()?)?;
+    impl MettaShim {
 
-                if let Ok(obj_name) = obj.getattr("__name__") {
-                    if obj_name.eq("metta_register")? {
-                        let args = PyTuple::new(py, &[py_metta]);
-                        obj.call1(args)?;
+        pub fn new(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Self {
+            match || -> Result<_, String> {
+                let new_shim = MettaShim::init_common_env(working_dir, include_paths)?;
+                Ok(new_shim)
+            }() {
+                Ok(shim) => shim,
+                Err(err) => {
+                    eprintln!("Fatal Error: {err}");
+                    std::process::exit(-1);
+                }
+            }
+        }
+
+        pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
+            EnvBuilder::new()
+                .set_working_dir(Some(&working_dir))
+                .add_include_paths(include_paths)
+                .init_common_env();
+
+            let new_shim = MettaShim {
+                metta: Metta::new(None),
+                result: vec![],
+            };
+            new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(ImportPyErr) });
+
+            Ok(new_shim)
+        }
+
+        pub fn load_metta_module(&mut self, module: PathBuf) {
+            self.metta.load_module(module).unwrap();
+        }
+
+        pub fn parse_and_unroll_syntax_tree(&self, line: &str) -> Vec<(SyntaxNodeType, std::ops::Range<usize>)> {
+
+            let mut nodes = vec![];
+            let mut parser = SExprParser::new(line);
+            loop {
+                match parser.parse_to_syntax_tree() {
+                    Some(root_node) => {
+                        root_node.visit_depth_first(|node| {
+                            // We will only render the leaf nodes in the syntax tree
+                            if !node.node_type.is_leaf() {
+                                return;
+                            }
+
+                            nodes.push((node.node_type, node.src_range.clone()))
+                        });
+                    },
+                    None => break,
+                }
+            }
+            nodes
+        }
+
+        pub fn parse_line(&mut self, line: &str) -> Result<(), String> {
+            let mut parser = SExprParser::new(line);
+            loop {
+                let result = parser.parse(&self.metta.tokenizer().borrow());
+
+                match result {
+                    Ok(Some(_atom)) => (),
+                    Ok(None) => {
+                        return Ok(());
+                    },
+                    Err(err) => {
+                        return Err(err);
                     }
                 }
             }
+        }
 
-            Ok(())
-        }).map_err(|err| {
-            format!("{err}")
-        })
+        pub fn exec(&mut self, line: &str) {
+            let parser = SExprParser::new(line);
+            let mut runner_state = RunnerState::new_with_parser(&self.metta, parser);
 
+            exec_state_prepare();
+
+            while !runner_state.is_complete() {
+                if exec_state_should_break() {
+                    break;
+                }
+
+                //Run the next step
+                runner_state.run_step().unwrap_or_else(|err| panic!("Unhandled MeTTa error: {}", err));
+                self.result = runner_state.current_results().clone();
+            }
+        }
+
+        pub fn print_result(&self) {
+            for result in self.result.iter() {
+                println!("{result:?}");
+            }
+        }
+
+        pub fn config_dir(&self) -> Option<&Path> {
+            Environment::common_env().config_dir()
+        }
+
+        pub fn get_config_atom(&mut self, config_name: &str) -> Option<Atom> {
+            self.exec(&format!("!(get-state {config_name})"));
+            self.result.get(0)
+                .and_then(|vec| vec.get(0))
+                .and_then(|atom| (!atom_is_error(atom)).then_some(atom))
+                .cloned()
+        }
+
+        pub fn get_config_string(&mut self, config_name: &str) -> Option<String> {
+            let atom = self.get_config_atom(config_name)?;
+            //TODO: We need to do atom type checking here
+            Some(strip_quotes(atom.to_string()))
+        }
+
+        pub fn get_config_expr_vec(&mut self, config_name: &str) -> Option<Vec<String>> {
+            let atom = self.get_config_atom(config_name)?;
+            if let Ok(expr) = ExpressionAtom::try_from(atom) {
+                Some(expr.into_children()
+                    .into_iter()
+                    .map(|atom| {
+                        //TODO: We need to do atom type checking here
+                        strip_quotes(atom.to_string())
+                    })
+                    .collect())
+            } else {
+                None
+            }
+        }
+
+        pub fn get_config_int(&mut self, _config_name: &str) -> Option<isize> {
+            None //TODO.  Make this work when I have reliable value atom bridging
+        }
     }
 
     #[derive(Clone, PartialEq, Debug)]
-    pub struct ImportPyOp {
-        pub metta: Metta,
-        pub repl_params: Shared<ReplParams>,
-    }
+    pub struct ImportPyErr;
 
-    impl Display for ImportPyOp {
+    impl Display for ImportPyErr {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
             write!(f, "extend-py!")
         }
     }
 
-    impl Grounded for ImportPyOp {
+    impl Grounded for ImportPyErr {
         fn type_(&self) -> Atom {
-            //TODO: The Repl std atoms should include a "RESOURCE_PATH" atom type
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED])
         }
 
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = || ExecError::from("extend-py! expects a resource path argument");
-            let module_path_sym_atom: &SymbolAtom = args.get(0)
-                .ok_or_else(arg_error)?
-                .try_into().map_err(|_| arg_error())?;
-
-            match load_python_module_from_mod_or_file(&self.repl_params.borrow(), &self.metta, module_path_sym_atom.name()) {
-                Ok(()) => Ok(vec![]),
-                Err(err) => Err(ExecError::from(err)),
-            }
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            Err(ExecError::from("extend-py! not available in metta repl without Python support"))
         }
 
         fn match_(&self, other: &Atom) -> MatchResultIter {
             match_by_equality(self, other)
         }
     }
+}
+
+/// A utility function to return the part of a string in between starting and ending quotes
+// TODO: Roll this into a stdlib grounded string module, maybe as a test case for
+//   https://github.com/trueagi-io/hyperon-experimental/issues/351
+fn strip_quotes(the_string: String) -> String {
+    if let Some(first) = the_string.chars().next() {
+        if first == '"' {
+            if let Some(last) = the_string.chars().last() {
+                if last == '"' {
+                    if the_string.len() > 1 {
+                        return String::from_utf8(the_string.as_bytes()[1..the_string.len()-1].to_vec()).unwrap();
+                    }
+                }
+            }
+        }
+    }
+    the_string
 }

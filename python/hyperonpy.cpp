@@ -33,19 +33,11 @@ using CBindings = CStruct<bindings_t>;
 using CBindingsSet = CStruct<bindings_set_t>;
 using CSpace = CStruct<space_t>;
 using CTokenizer = CStruct<tokenizer_t>;
+using CSyntaxNode = CStruct<syntax_node_t>;
 using CStepResult = CStruct<step_result_t>;
+using CRunnerState = CStruct<runner_state_t>;
 using CMetta = CStruct<metta_t>;
-
-//TODO: This entire CStruct template, and especially these functions should go away when hyperonpy is
-//  implemented directly on Rust, rather than on top of hyperonc
-//This method is an ugly hack to push C structs through pyo3 and pybind11 without a type that
-//  Python can understand.  Ironically these C structs just wrap Rust objects originating in
-//  Rust, which are then converted by calling hyperonc directly.
-static CMetta cmetta_from_inner_ptr_as_int(size_t buf_as_int) {
-    metta_t tmp_metta_t;
-    tmp_metta_t.metta = (RustMettaInterpreter*)buf_as_int;
-    return CMetta(tmp_metta_t);
-}
+using EnvBuilder = CStruct<env_builder_t>;
 
 // Returns a string, created by executing a function that writes string data into a buffer
 typedef size_t (*write_to_buf_func_t)(void*, char*, size_t);
@@ -58,6 +50,38 @@ std::string func_to_string(write_to_buf_func_t func, void* arg) {
     } else {
         char* data = new char[len+1];
         func(arg, data, len+1);
+        std::string new_string = std::string(data);
+        return new_string;
+    }
+}
+
+// Similar to func_to_string, but for functions that don't take any args
+typedef size_t (*write_to_buf_no_arg_func_t)(char*, size_t);
+std::string func_to_string_no_arg(write_to_buf_no_arg_func_t func) {
+    //First try with a 1K stack buffer, because that will work in the vast majority of cases
+    char dst_buf[1024];
+    size_t len = func(dst_buf, 1024);
+    if (len < 1024) {
+        return std::string(dst_buf);
+    } else {
+        char* data = new char[len+1];
+        func(data, len+1);
+        std::string new_string = std::string(data);
+        return new_string;
+    }
+}
+
+// Similar to func_to_string, but for functions that that take two args
+typedef size_t (*write_to_buf_two_arg_func_t)(void*, void*, char*, size_t);
+std::string func_to_string_two_args(write_to_buf_two_arg_func_t func, void* arg1, void* arg2) {
+    //First try with a 1K stack buffer, because that will work in the vast majority of cases
+    char dst_buf[1024];
+    size_t len = func(arg1, arg2, dst_buf, 1024);
+    if (len < 1024) {
+        return std::string(dst_buf);
+    } else {
+        char* data = new char[len+1];
+        func(arg1, arg2, data, len+1);
         std::string new_string = std::string(data);
         return new_string;
     }
@@ -386,6 +410,22 @@ void bindings_copy_to_list_callback(bindings_t* bindings, void* context){
     bindings_list.append(CBindings(bindings_clone(bindings)));
 }
 
+void syntax_node_copy_to_list_callback(const syntax_node_t* node, void *context) {
+    pybind11::list& nodes_list = *( (pybind11::list*)(context) );
+    if (syntax_node_is_leaf(node)) {
+        nodes_list.append(CSyntaxNode(syntax_node_clone(node)));
+    }
+};
+
+void run_python_loader_callback(metta_t* metta, void* context) {
+    py::object runner_mod = py::module_::import("hyperon.runner");
+    py::object metta_class = runner_mod.attr("MeTTa");
+    py::function load_metta_py_stdlib = metta_class.attr("_priv_load_metta_py_stdlib");
+    metta_t cloned_metta = metta_clone_handle(metta);
+    py::object py_metta = metta_class(CMetta(cloned_metta));
+    load_metta_py_stdlib(py_metta);
+}
+
 struct CConstr {
 
     py::function pyconstr;
@@ -419,9 +459,21 @@ struct CSExprParser {
         sexpr_parser_free(parser);
     }
 
+    sexpr_parser_t* ptr () { return &(this->parser); }
+
     py::object parse(CTokenizer tokenizer) {
         atom_t atom = sexpr_parser_parse(&this->parser, tokenizer.ptr());
         return !atom_is_null(&atom) ? py::cast(CAtom(atom)) : py::none();
+    }
+
+    py::object err_str() {
+        const char* err_str = sexpr_parser_err_str(&this->parser);
+        return err_str != NULL ? py::cast(std::string(err_str)) : py::none();
+    }
+
+    py::object parse_to_syntax_tree() {
+        syntax_node_t root_node = sexpr_parser_parse_to_syntax_tree(&this->parser);
+        return !syntax_node_is_null(&root_node) ? py::cast(CSyntaxNode(root_node)) : py::none();
     }
 };
 
@@ -472,6 +524,10 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("atom_free", [](CAtom atom) { atom_free(atom.obj); }, "Free C atom");
 
     m.def("atom_eq", [](CAtom& a, CAtom& b) -> bool { return atom_eq(a.ptr(), b.ptr()); }, "Test if two atoms are equal");
+    m.def("atom_is_error", [](CAtom& atom) -> bool { return atom_is_error(atom.ptr()); }, "Returns True if an atom is a MeTTa error expression");
+    m.def("atom_error_message", [](CAtom& atom) {
+            return func_to_string((write_to_buf_func_t)&atom_error_message, atom.ptr());
+        }, "Renders the error message from an error expression atom");
     m.def("atom_to_str", [](CAtom& atom) {
             return func_to_string((write_to_buf_func_t)&atom_to_str, atom.ptr());
         }, "Convert atom to human readable string");
@@ -506,6 +562,15 @@ PYBIND11_MODULE(hyperonpy, m) {
         }, "Check atom for equivalence");
 
     py::class_<CVecAtom>(m, "CVecAtom");
+    m.def("atom_vec_from_list", [](pybind11::list pylist) {
+        atom_vec_t new_vec = atom_vec_new();
+        for(py::handle pyobj : pylist) {
+            py::handle atom_pyhandle = pyobj.attr("catom");
+            CAtom atom = atom_pyhandle.cast<CAtom>();
+            atom_vec_push(&new_vec, atom_clone(atom.ptr()));
+        }
+        return CVecAtom(new_vec);
+    }, "Create a vector of atoms from a Python list");
     m.def("atom_vec_new", []() { return CVecAtom(atom_vec_new()); }, "New vector of atoms");
     m.def("atom_vec_free", [](CVecAtom& vec) { atom_vec_free(vec.obj); }, "Free vector of atoms");
     m.def("atom_vec_len", [](CVecAtom& vec) { return atom_vec_len(vec.ptr()); }, "Return size of the vector");
@@ -645,9 +710,41 @@ PYBIND11_MODULE(hyperonpy, m) {
             tokenizer_register_token(tokenizer.ptr(), regex, &TOKEN_API, new CConstr(constr));
         }, "Register token");
 
+    py::enum_<syntax_node_type_t>(m, "SyntaxNodeType")
+        .value("COMMENT", syntax_node_type_t::COMMENT)
+        .value("VARIABLE_TOKEN", syntax_node_type_t::VARIABLE_TOKEN)
+        .value("STRING_TOKEN", syntax_node_type_t::STRING_TOKEN)
+        .value("WORD_TOKEN", syntax_node_type_t::WORD_TOKEN)
+        .value("OPEN_PAREN", syntax_node_type_t::OPEN_PAREN)
+        .value("CLOSE_PAREN", syntax_node_type_t::CLOSE_PAREN)
+        .value("WHITESPACE", syntax_node_type_t::WHITESPACE)
+        .value("LEFTOVER_TEXT", syntax_node_type_t::LEFTOVER_TEXT)
+        .value("EXPRESSION_GROUP", syntax_node_type_t::EXPRESSION_GROUP)
+        .value("ERROR_GROUP", syntax_node_type_t::ERROR_GROUP)
+        .export_values();
+
+    py::class_<CSyntaxNode>(m, "CSyntaxNode");
+    m.def("syntax_node_free", [](CSyntaxNode node) { syntax_node_free(node.obj); }, "Free a syntax node at the top level of a syntax tree");
+    m.def("syntax_node_clone", [](CSyntaxNode& node) { return CSyntaxNode(syntax_node_clone(node.ptr())); }, "Create a deep copy of the syntax node");
+    m.def("syntax_node_type", [](CSyntaxNode& node) { return syntax_node_type(node.ptr()); }, "Get type of the syntax node");
+    m.def("syntax_node_is_null", [](CSyntaxNode& node) { return syntax_node_is_null(node.ptr()); }, "Returns True if a syntax node is Null");
+    m.def("syntax_node_is_leaf", [](CSyntaxNode& node) { return syntax_node_is_leaf(node.ptr()); }, "Returns True if a syntax node is Null");
+    m.def("syntax_node_src_range", [](CSyntaxNode& node) -> py::object {
+        size_t start, end;
+        syntax_node_src_range(node.ptr(), &start, &end);
+        return py::make_tuple(start, end);
+    }, "Get range in source code offsets for the text represented by the node");
+    m.def("syntax_node_unroll", [](CSyntaxNode& node) {
+        pybind11::list nodes_list;
+        syntax_node_iterate(node.ptr(), syntax_node_copy_to_list_callback, &nodes_list);
+        return nodes_list;
+    }, "Returns a list of all leaf nodes recursively contained within a SyntaxNode");
+
     py::class_<CSExprParser>(m, "CSExprParser")
         .def(py::init<std::string>())
-        .def("parse", &CSExprParser::parse,  "Return next parser atom or None");
+        .def("parse", &CSExprParser::parse,  "Return next parsed atom, None, or an error expression")
+        .def("sexpr_parser_err_str", &CSExprParser::err_str,  "Return the parse error from the previous parse operation or None")
+        .def("parse_to_syntax_tree", &CSExprParser::parse_to_syntax_tree,  "Return next parser atom or None, as a syntax node at the root of a syntax tree");
 
     py::class_<CStepResult>(m, "CStepResult")
         .def("__str__", [](CStepResult step) {
@@ -696,33 +793,65 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<CAtoms>(m, "CAtoms")
         ADD_SYMBOL(VOID, "Void");
 
-    py::class_<CMetta>(m, "CMetta").def(py::init(&cmetta_from_inner_ptr_as_int));
-    m.def("metta_new", [](CSpace space, CTokenizer tokenizer, char const* cwd) {
-        return CMetta(metta_new(space.ptr(), tokenizer.ptr(), cwd));
+    py::class_<CMetta>(m, "CMetta");
+    m.def("metta_new", [](CSpace space, EnvBuilder env_builder) {
+        return CMetta(metta_new_with_space_environment_and_stdlib(space.ptr(), env_builder.obj, &run_python_loader_callback, NULL));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
-    m.def("metta_space", [](CMetta metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");
-    m.def("metta_tokenizer", [](CMetta metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
-    m.def("metta_run", [](CMetta metta, CSExprParser& parser) {
+    m.def("metta_eq", [](CMetta& a, CMetta& b) { return metta_eq(a.ptr(), b.ptr()); }, "Compares two MeTTa handles");
+    m.def("metta_search_path_cnt", [](CMetta& metta) { return metta_search_path_cnt(metta.ptr()); }, "Returns the number of module search paths in the runner's environment");
+    m.def("metta_nth_search_path", [](CMetta& metta, size_t idx) {
+        return func_to_string_two_args((write_to_buf_two_arg_func_t)&metta_nth_search_path, metta.ptr(), (void*)idx);
+    }, "Returns the module search path at the specified index, in the runner's environment");
+    m.def("metta_space", [](CMetta& metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");
+    m.def("metta_tokenizer", [](CMetta& metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
+    m.def("metta_run", [](CMetta& metta, CSExprParser& parser) {
             py::list lists_of_atom;
-            metta_run(metta.ptr(), &parser.parser, copy_lists_of_atom, &lists_of_atom);
+            sexpr_parser_t cloned_parser = sexpr_parser_clone(&parser.parser);
+            metta_run(metta.ptr(), cloned_parser, copy_lists_of_atom, &lists_of_atom);
             return lists_of_atom;
         }, "Run MeTTa interpreter on an input");
-    m.def("metta_evaluate_atom", [](CMetta metta, CAtom atom) {
+    m.def("metta_evaluate_atom", [](CMetta& metta, CAtom atom) {
             py::list atoms;
             metta_evaluate_atom(metta.ptr(), atom_clone(atom.ptr()), copy_atoms, &atoms);
             return atoms;
         }, "Run MeTTa interpreter on an atom");
-
-    m.def("metta_load_module", [](CMetta metta, std::string text) {
+    m.def("metta_load_module", [](CMetta& metta, std::string text) {
         metta_load_module(metta.ptr(), text.c_str());
     }, "Load MeTTa module");
 
-}
+    py::class_<CRunnerState>(m, "CRunnerState")
+        .def("__str__", [](CRunnerState state) {
+            return func_to_string((write_to_buf_func_t)&runner_state_to_str, state.ptr());
+        }, "Render a RunnerState as a human readable string");
+    m.def("runner_state_new_with_parser", [](CMetta& metta, CSExprParser& parser) {
+        sexpr_parser_t cloned_parser = sexpr_parser_clone(&parser.parser);
+        return CRunnerState(runner_state_new_with_parser(metta.ptr(), cloned_parser));
+    }, "Initializes the MeTTa runner state for incremental execution");
+    m.def("runner_state_new_with_atoms", [](CMetta& metta, CVecAtom& atoms) {
+        return CRunnerState(runner_state_new_with_atoms(metta.ptr(), atoms.ptr()));
+    }, "Initializes the MeTTa runner state for incremental execution");
+    m.def("runner_state_step", [](CRunnerState& state) { runner_state_step(state.ptr()); }, "Runs one incremental step of the MeTTa interpreter");
+    m.def("runner_state_free", [](CRunnerState state) { runner_state_free(state.obj); }, "Frees a Runner State");
+    m.def("runner_state_is_complete", [](CRunnerState& state) { return runner_state_is_complete(state.ptr()); }, "Returns whether a RunnerState is finished");
+    m.def("runner_state_current_results", [](CRunnerState& state) {
+        py::list lists_of_atom;
+        runner_state_current_results(state.ptr(), copy_lists_of_atom, &lists_of_atom);
+        return lists_of_atom;
+    }, "Returns the in-flight results from a runner state");
 
-__attribute__((constructor))
-static void init_library() {
-    // TODO: integrate Rust logs with Python logger
-    init_logger();
+    py::class_<EnvBuilder>(m, "EnvBuilder");
+    m.def("environment_config_dir", []() {
+        return func_to_string_no_arg((write_to_buf_no_arg_func_t)&environment_config_dir);
+    }, "Return the config_dir for the common environment");
+    m.def("env_builder_start", []() { return EnvBuilder(env_builder_start()); }, "Begin initialization of the environment");
+    m.def("env_builder_use_default", []() { return EnvBuilder(env_builder_use_default()); }, "Use the common environment");
+    m.def("env_builder_use_test_env", []() { return EnvBuilder(env_builder_use_test_env()); }, "Use an environment for unit testing");
+    m.def("env_builder_init_common_env", [](EnvBuilder builder) { return env_builder_init_common_env(builder.obj); }, "Finish initialization of the common environment");
+    m.def("env_builder_set_working_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_working_dir(builder.ptr(), path.c_str()); }, "Sets the working dir in the environment");
+    m.def("env_builder_set_config_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_config_dir(builder.ptr(), path.c_str()); }, "Sets the config dir in the environment");
+    m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the environment");
+    m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
+    m.def("env_builder_add_include_path", [](EnvBuilder& builder, std::string path) { env_builder_add_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
 }
 
