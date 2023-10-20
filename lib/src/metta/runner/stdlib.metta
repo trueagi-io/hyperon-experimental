@@ -244,20 +244,25 @@
     (let $pattern $atom (let* $tail $template))
     $template )))
 
-(: car (-> Expression Atom))
-(= (car $atom)
+(: car-atom (-> Expression Atom))
+(= (car-atom $atom)
   (eval (if-decons $atom $head $_
     $head
-    (Error (car $atom) "car expects a non-empty expression as an argument") )))
+    (Error (car-atom $atom) "car-atom expects a non-empty expression as an argument") )))
 
-(: cdr (-> Expression Expression))
-(= (cdr $atom)
+(: cdr-atom (-> Expression Expression))
+(= (cdr-atom $atom)
   (eval (if-decons $atom $_ $tail
     $tail
-    (Error (cdr $atom) "cdr expects a non-empty expression as an argument") )))
+    (Error (cdr-atom $atom) "cdr-atom expects a non-empty expression as an argument") )))
 
 (: quote (-> Atom Atom))
 (= (quote $atom) NotReducible)
 
 (: unquote (-> %Undefined% %Undefined%))
 (= (unquote (quote $atom)) $atom)
+
+; TODO: there is no way to define operation which consumes any number of
+; arguments  and returns unit
+(= (nop) ())
+(= (nop $x) ())
