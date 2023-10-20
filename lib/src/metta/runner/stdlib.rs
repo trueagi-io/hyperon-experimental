@@ -1195,7 +1195,7 @@ pub static METTA_CODE: &'static str = "
     (: Error (-> Atom Atom ErrorType))
 ";
 
-#[cfg(test)]
+#[cfg(all(test, not(feature = "minimal")))]
 mod tests {
     use super::*;
     use crate::metta::runner::{Metta, EnvBuilder};
