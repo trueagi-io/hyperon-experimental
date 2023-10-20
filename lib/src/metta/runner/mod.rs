@@ -171,6 +171,11 @@ impl Metta {
                 Ok(module_space)
             },
             None => {
+                // TODO: This is a hack. We need a way to register tokens at module-load-time, for any module
+                if path.to_str().unwrap() == "stdlib" {
+                    register_rust_tokens(self);
+                }
+
                 // Load the module to the new space
                 let runner = Metta::new_loading_runner(self, &path);
                 let program = match path.to_str() {
@@ -183,11 +188,6 @@ impl Metta {
                 self.0.modules.borrow_mut().insert(path.clone(), runner.space().clone());
                 runner.run(SExprParser::new(program.as_str()))
                     .map_err(|err| format!("Cannot import module, path: {}, error: {}", path.display(), err))?;
-
-                // TODO: This is a hack. We need a way to register tokens at module-load-time, for any module
-                if path.to_str().unwrap() == "stdlib" {
-                    register_rust_tokens(self);
-                }
 
                 Ok(runner.space().clone())
             }
