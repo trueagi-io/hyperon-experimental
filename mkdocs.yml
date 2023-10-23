@@ -49,9 +49,8 @@ theme:
   font:
     text: Roboto
     code: Roboto Mono
-  favicon: assets/P8T2_ASO_400x400.jpg
-  icon:
-    logo: logo
+  favicon: assets/hyperon-logo.png
+  logo: assets/hyperon-logo.png
 
 plugins:
   - search:
@@ -132,7 +131,7 @@ markdown_extensions:
 
 # Page tree
 nav:
-  - Minimal Metta: minimal-metta.md
+  - Minimal Metta: index.md
   - Contribution: CONTRIBUTING.md
   - Python Reference:
     - Atoms: reference/atoms.md
@@ -140,5 +139,3 @@ nav:
     - Ext: reference/ext.md
     - Runner: reference/runner.md
     - Stdlib: reference/stdlib.md
-  - C Reference: mainpage.md
-  - Doxygen: html
