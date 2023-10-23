@@ -24,6 +24,9 @@ class RunnerState:
         """Frees a RunnerState and all associated resources."""
         hp.runner_state_free(self.cstate)
 
+    def __str__(self):
+        return self.cstate.__str__()
+
     def run_step(self):
         """
         Executes the next step in the interpretation plan, or begins interpretation of the next atom in the stream of MeTTa code.
@@ -191,6 +194,18 @@ class MeTTa:
             return [Atom._from_catom(catom) for result in results for catom in result]
         else:
             return [[Atom._from_catom(catom) for catom in result] for result in results]
+
+    def run_step_by_step(self, program):
+        """Runs program step by step, yielding state and result"""
+        state = RunnerState(self, program)
+        state.run_step()
+        results = state.current_results()
+        yield state, results
+        while not state.is_complete():
+            state.run_step()
+            results = state.current_results()
+            yield state, results
+
 
 class Environment:
     """This class contains the API for configuring the host platform interface used by MeTTa"""
