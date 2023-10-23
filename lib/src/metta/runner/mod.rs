@@ -10,6 +10,7 @@ use std::rc::Rc;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::sync::Arc;
+use core::borrow::Borrow;
 
 mod environment;
 pub use environment::{Environment, EnvBuilder};
@@ -221,7 +222,12 @@ impl Metta {
             .chain(self.0.environment.extra_include_paths())
     }
 
-    pub fn modules(&self) -> &Shared<HashMap<PathBuf, DynSpace>> {
+    /// Returns the space of a given loaded module
+    pub fn get_module_space<P: Borrow<Path>>(&self, module: P) -> Option<DynSpace> {
+        self.0.modules.borrow().get(module.borrow()).map(|space| space.clone())
+    }
+
+    pub(crate) fn modules(&self) -> &Shared<HashMap<PathBuf, DynSpace>> {
         &self.0.modules
     }
 

@@ -1,17 +1,16 @@
-; NOTE: This test won't work outside the test environment because it relies on
-;  specific atoms in a specific order in the space, and loading the default environment's
-;  init.metta will break the assumptions in this test
+; NOTE: This test relies on specific atoms in a specific order in the space,
+;  and that behavior is subject to change with different Space implementations
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Even at the very beginning of the main script `(get-atoms &self)`
-; returns one atom, which wraps the space of stdlib.
-; The type of this atom is the same as of `&self`
+; At the very beginning of the main script, `stdlib`
+; will be loaded.  Confirm the type of the `stdlib`
+; module's space is the same as the type of `&self`
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(assertEqual
-  ((let $x (get-atoms &self) (get-type $x)))
+  ((let $x (module-space stdlib) (get-type $x)))
   ((get-type &self)))
 
-; stdlib is already loaded
+; confirm stdlib is working
 !(assertEqual
   (if (> 1 2) 1 2)
   2)

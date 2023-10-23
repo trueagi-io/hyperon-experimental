@@ -144,6 +144,44 @@ impl Grounded for ImportOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub struct ModuleSpaceOp {
+    metta: Metta,
+}
+
+impl ModuleSpaceOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{metta}
+    }
+}
+
+impl Display for ModuleSpaceOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "module-space")
+    }
+}
+
+impl Grounded for ModuleSpaceOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL,
+            ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("module-space expects one argument: module");
+        let module_name_atom: &SymbolAtom = args.get(0).ok_or_else(arg_error)?.try_into().map_err(|_| arg_error())?;
+        let module_name = module_name_atom.name();
+        match self.metta.get_module_space(PathBuf::from(module_name)) {
+            Some(module_space) => Ok(vec![Atom::gnd(module_space)]),
+            None => Err(ExecError::Runtime(format!("No loaded module named: {module_name}")))
+        }
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct MatchOp {}
 
 impl Display for MatchOp {
@@ -1157,6 +1195,8 @@ pub fn register_runner_tokens(metta: &Metta) {
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
     let import_op = Atom::gnd(ImportOp::new(metta.clone()));
     tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+    let module_space_op = Atom::gnd(ModuleSpaceOp::new(metta.clone()));
+    tref.register_token(regex(r"module-space"), move |_| { module_space_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
 
