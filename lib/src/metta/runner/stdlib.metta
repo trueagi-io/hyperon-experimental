@@ -230,6 +230,12 @@
 (= (or True False) True)
 (= (or True True) True)
 
+(: and (-> Bool Bool Bool))
+(= (and False False) False)
+(= (and False True) False)
+(= (and True False) False)
+(= (and True True) True)
+
 (: match (-> Atom Atom Atom %Undefined%))
 (= (match $space $pattern $template)
   (unify $pattern $space $template Empty))
