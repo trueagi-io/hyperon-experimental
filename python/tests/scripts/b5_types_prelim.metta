@@ -84,7 +84,9 @@
 ; This list is badly typed, because S and Z are not the same type
 !(assertEqualToResult
   (Cons S (Cons Z Nil))
-  ((Error (Cons Z Nil) BadType)))
+  ((Error Z BadType)))
+  ; TODO: MINIMAL replace test result after migration on minimal MeTTa
+  ;((Error (Cons Z Nil) BadType)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
