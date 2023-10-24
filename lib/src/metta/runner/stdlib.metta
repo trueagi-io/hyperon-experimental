@@ -86,7 +86,7 @@
       ; recursion because interpreter called by `collapse` evaluates
       ; `type-cast` again.
       (chain (eval (collapse-get-type $atom $space)) $actual-types
-        (chain (eval (foldl $actual-types False
+        (chain (eval (foldl-atom $actual-types False
           $a $b (chain (eval (match-types $b $type True False)) $is-b-comp
             (chain (eval (or $a $is-b-comp)) $or $or) ))) $is-some-comp
           (eval (if $is-some-comp
@@ -104,10 +104,10 @@
       ($_ (return False))
     ))))))
 
-(: filter (-> Expression Variable Atom Expression))
-(= (filter $list $var $filter)
+(: filter-atom (-> Expression Variable Atom Expression))
+(= (filter-atom $list $var $filter)
   (function (eval (if-decons $list $head $tail
-    (chain (eval (filter $tail $var $filter)) $tail-filtered
+    (chain (eval (filter-atom $tail $var $filter)) $tail-filtered
       (chain (eval (apply $head $var $filter)) $filter-expr
         (chain $filter-expr $is-filtered
           (eval (if $is-filtered
@@ -115,22 +115,22 @@
             (return $tail-filtered) )))))
     (return ()) ))))
 
-(: map (-> Expression Variable Atom Expression))
-(= (map $list $var $map)
+(: map-atom (-> Expression Variable Atom Expression))
+(= (map-atom $list $var $map)
   (function (eval (if-decons $list $head $tail
-    (chain (eval (map $tail $var $map)) $tail-mapped
+    (chain (eval (map-atom $tail $var $map)) $tail-mapped
       (chain (eval (apply $head $var $map)) $map-expr
         (chain $map-expr $head-mapped
           (chain (cons $head-mapped $tail-mapped) $res (return $res)) )))
     (return ()) ))))
 
-(: foldl (-> Expression Atom Variable Variable Atom Atom))
-(= (foldl $list $init $a $b $op)
+(: foldl-atom (-> Expression Atom Variable Variable Atom Atom))
+(= (foldl-atom $list $init $a $b $op)
   (function (eval (if-decons $list $head $tail
     (chain (eval (apply $init $a $op)) $op-init
       (chain (eval (apply $head $b $op-init)) $op-head
         (chain $op-head $head-folded
-          (chain (eval (foldl $tail $head-folded $a $b $op)) $res (return $res)) )))
+          (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) )))
     (return $init) ))))
 
 (= (interpret $atom $type $space)

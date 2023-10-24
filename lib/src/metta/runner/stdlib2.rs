@@ -604,22 +604,22 @@ mod tests {
     }
 
     #[test]
-    fn metta_filter_out_errors() {
-        assert_eq!(run_program("!(eval (filter () $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!()]]));
-        assert_eq!(run_program("!(eval (filter (a (b) $c) $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!("a" ("b") c)]]));
-        assert_eq!(run_program("!(eval (filter (a (Error (b) \"Test error\") $c) $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!("a" c)]]));
+    fn metta_filter_atom() {
+        assert_eq!(run_program("!(eval (filter-atom () $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!()]]));
+        assert_eq!(run_program("!(eval (filter-atom (a (b) $c) $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!("a" ("b") c)]]));
+        assert_eq!(run_program("!(eval (filter-atom (a (Error (b) \"Test error\") $c) $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!("a" c)]]));
     }
 
     #[test]
-    fn metta_map() {
-        assert_eq!(run_program("!(eval (map () $x ($x mapped)))"), Ok(vec![vec![expr!()]]));
-        assert_eq!(run_program("!(eval (map (a (b) $c) $x (mapped $x)))"), Ok(vec![vec![expr!(("mapped" "a") ("mapped" ("b")) ("mapped" c))]]));
+    fn metta_map_atom() {
+        assert_eq!(run_program("!(eval (map-atom () $x ($x mapped)))"), Ok(vec![vec![expr!()]]));
+        assert_eq!(run_program("!(eval (map-atom (a (b) $c) $x (mapped $x)))"), Ok(vec![vec![expr!(("mapped" "a") ("mapped" ("b")) ("mapped" c))]]));
     }
 
     #[test]
-    fn metta_foldl() {
-        assert_eq!(run_program("!(eval (foldl () 1 $a $b (eval (+ $a $b))))"), Ok(vec![vec![expr!({Number::Integer(1)})]]));
-        assert_eq!(run_program("!(eval (foldl (1 2 3) 0 $a $b (eval (+ $a $b))))"), Ok(vec![vec![expr!({Number::Integer(6)})]]));
+    fn metta_foldl_atom() {
+        assert_eq!(run_program("!(eval (foldl-atom () 1 $a $b (eval (+ $a $b))))"), Ok(vec![vec![expr!({Number::Integer(1)})]]));
+        assert_eq!(run_program("!(eval (foldl-atom (1 2 3) 0 $a $b (eval (+ $a $b))))"), Ok(vec![vec![expr!({Number::Integer(6)})]]));
     }
 
     #[test]
