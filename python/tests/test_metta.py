@@ -57,3 +57,14 @@ class MettaTest(unittest.TestCase):
         result = runner.run(program)
 
         self.assertEqual([[E(S('Error'), ValueAtom('String'), S('BadType'))]], result)
+
+    def test_runner_error(self):
+        program = '''
+          !(+ 2 3
+        '''
+        runner = MeTTa(env_builder=Environment.test_env())
+        try:
+            runner.run(program)
+            self.assertTrue(False, "Parse error expected")
+        except RuntimeError as e:
+            self.assertEqual(e.args[0], 'Unexpected end of expression')

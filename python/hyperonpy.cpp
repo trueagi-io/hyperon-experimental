@@ -798,6 +798,10 @@ PYBIND11_MODULE(hyperonpy, m) {
         return CMetta(metta_new_with_space_environment_and_stdlib(space.ptr(), env_builder.obj, &run_python_loader_callback, NULL));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
+    m.def("metta_err_str", [](CMetta& metta) {
+        const char* err_str = metta_err_str(metta.ptr());
+        return err_str != NULL ? py::cast(std::string(err_str)) : py::none();
+    }, "Returns the error string from the last MeTTa operation or None");
     m.def("metta_eq", [](CMetta& a, CMetta& b) { return metta_eq(a.ptr(), b.ptr()); }, "Compares two MeTTa handles");
     m.def("metta_search_path_cnt", [](CMetta& metta) { return metta_search_path_cnt(metta.ptr()); }, "Returns the number of module search paths in the runner's environment");
     m.def("metta_nth_search_path", [](CMetta& metta, size_t idx) {
@@ -816,6 +820,8 @@ PYBIND11_MODULE(hyperonpy, m) {
             metta_evaluate_atom(metta.ptr(), atom_clone(atom.ptr()), copy_atoms, &atoms);
             return atoms;
         }, "Run MeTTa interpreter on an atom");
+    //QUESTION: Should we eliminate the `metta_load_module` function from the native APIs, in favor of
+    // allowing the caller to load modules using the `import` operation in MeTTa code?
     m.def("metta_load_module", [](CMetta& metta, std::string text) {
         metta_load_module(metta.ptr(), text.c_str());
     }, "Load MeTTa module");
@@ -833,6 +839,10 @@ PYBIND11_MODULE(hyperonpy, m) {
     }, "Initializes the MeTTa runner state for incremental execution");
     m.def("runner_state_step", [](CRunnerState& state) { runner_state_step(state.ptr()); }, "Runs one incremental step of the MeTTa interpreter");
     m.def("runner_state_free", [](CRunnerState state) { runner_state_free(state.obj); }, "Frees a Runner State");
+    m.def("runner_state_err_str", [](CRunnerState& state) {
+        const char* err_str = runner_state_err_str(state.ptr());
+        return err_str != NULL ? py::cast(std::string(err_str)) : py::none();
+    }, "Returns the error string from the last RunnerState operation or None");
     m.def("runner_state_is_complete", [](CRunnerState& state) { return runner_state_is_complete(state.ptr()); }, "Returns whether a RunnerState is finished");
     m.def("runner_state_current_results", [](CRunnerState& state) {
         py::list lists_of_atom;
