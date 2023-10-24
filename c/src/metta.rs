@@ -233,6 +233,7 @@ pub extern "C" fn sexpr_parser_free(parser: sexpr_parser_t) {
 ///    atom if parsing is finished, or an error expression atom if a parse error occurred.
 /// @note The caller must take ownership responsibility for the returned `atom_t`, and ultimately free
 ///    it with `atom_free()` or pass it to another function that takes ownership responsibility
+/// @note If this function encounters an error, the error may be accessed with `sexpr_parser_err_str()`
 ///
 #[no_mangle]
 pub extern "C" fn sexpr_parser_parse(
@@ -259,12 +260,12 @@ pub extern "C" fn sexpr_parser_parse(
 /// @return A pointer to the C-string containing the parse error that occurred, or NULL if no
 ///     parse error occurred
 /// @warning The returned pointer should NOT be freed.  It must never be accessed after the
-///     sexpr_parser_t has been freed, or any subsequent `sexpr_parser_parse` or
+///     sexpr_parser_t has been freed, or any subsequent call to `sexpr_parser_parse` or
 ///     `sexpr_parser_parse_to_syntax_tree` has been made.
 ///
 #[no_mangle]
 pub extern "C" fn sexpr_parser_err_str(
-    parser: *mut sexpr_parser_t) -> *const c_char {
+    parser: *const sexpr_parser_t) -> *const c_char {
     let parser = unsafe{ &*parser };
     parser.err_string
 }
@@ -731,21 +732,36 @@ pub extern "C" fn step_get_result(step: step_result_t,
 pub struct metta_t {
     /// Internal.  Should not be accessed directly
     metta: *mut RustMettaInterpreter,
+    err_string: *mut c_char,
+}
+
+impl metta_t {
+    fn free_err_string(&mut self) {
+        if !self.err_string.is_null() {
+            let string = unsafe{ std::ffi::CString::from_raw(self.err_string) };
+            drop(string);
+            self.err_string = core::ptr::null_mut();
+        }
+    }
 }
 
 struct RustMettaInterpreter(Metta);
 
 impl From<Metta> for metta_t {
     fn from(metta: Metta) -> Self {
-        Self{ metta: Box::into_raw(Box::new(RustMettaInterpreter(metta))) }
+        Self{
+            metta: Box::into_raw(Box::new(RustMettaInterpreter(metta))),
+            err_string: core::ptr::null_mut(),
+        }
     }
 }
 
 impl metta_t {
     fn borrow(&self) -> &Metta {
-        unsafe{ &(&*self.metta).0  }
+        &unsafe{ &*self.metta }.0
     }
-    fn into_inner(self) -> Metta {
+    fn into_inner(mut self) -> Metta {
+        self.free_err_string();
         unsafe{ Box::from_raw(self.metta).0 }
     }
 }
@@ -792,7 +808,10 @@ pub extern "C" fn metta_new_with_space_environment_and_stdlib(space: *mut space_
     };
 
     let metta = Metta::new_with_stdlib_loader(|metta| {
-        let mut metta = metta_t{metta: (metta as *const Metta).cast_mut().cast()};
+        let mut metta = metta_t{
+            metta: (metta as *const Metta).cast_mut().cast(),
+            err_string: core::ptr::null_mut(),
+        };
         callback(&mut metta, context);
     }, Some(dyn_space.clone()), env_builder);
     metta.into()
@@ -842,6 +861,22 @@ pub extern "C" fn metta_clone_handle(metta: *const metta_t) -> metta_t {
 pub extern "C" fn metta_free(metta: metta_t) {
     let metta = metta.into_inner();
     drop(metta);
+}
+
+/// @brief Returns the error string associated with the last `metta_run`, `metta_evaluate_atom`,
+///     or `metta_load_module` call
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the MeTTa handle
+/// @return A pointer to the C-string containing the error that occurred, or NULL if no
+///     error occurred
+/// @warning The returned pointer should NOT be freed.  It must never be accessed after the
+///     metta_t has been freed, or any subsequent call to `metta_run`, `metta_evaluate_atom`, or
+///     `metta_load_module` has been made.
+///
+#[no_mangle]
+pub extern "C" fn metta_err_str(metta: *const metta_t) -> *const c_char {
+    let metta = unsafe{ &*metta };
+    metta.err_string
 }
 
 /// @brief Compares two `metta_t` handles to test whether the referenced MeTTa runner is the same
@@ -923,18 +958,75 @@ pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> tokenizer_t {
 /// @param[in]  parser  An S-Expression Parser containing the MeTTa text
 /// @param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
 /// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
+/// @note If this function encounters an error, the callback will not be called and the error may be accessed with `metta_err_str()`
 /// @warning  Ownership of the provided parser will be taken by this function, so it must not be subsequently accessed
 ///     nor freed.
 ///
 #[no_mangle]
 pub extern "C" fn metta_run(metta: *mut metta_t, parser: sexpr_parser_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
-    let metta = unsafe{ &*metta }.borrow();
+    let metta = unsafe{ &mut *metta };
+    metta.free_err_string();
     let parser = parser.into_inner();
-    let results = metta.run(parser);
-    // TODO: return erorrs properly after step_get_result() is changed to return errors.
-    for result in results.expect("Returning errors from C API is not implemented yet") {
-        return_atoms(&result, callback, context);
+    let rust_metta = metta.borrow();
+    let results = rust_metta.run(parser);
+    match results {
+        Ok(results) => {
+            for result in results {
+                return_atoms(&result, callback, context);
+            }
+        },
+        Err(err) => {
+            let err_cstring = std::ffi::CString::new(err).unwrap();
+            metta.err_string = err_cstring.into_raw();
+        }
+    }
+}
+
+/// @brief Runs the MeTTa Interpreter to evaluate an input Atom
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the Interpreter handle
+/// @param[in]  atom  The `atom_t` representing the atom to evaluate
+/// @param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
+/// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
+/// @note If this function encounters an error, the callback will not be called and the error may be accessed with `metta_err_str()`
+/// @warning This function takes ownership of the provided `atom_t`, so it must not be subsequently accessed or freed
+///
+#[no_mangle]
+pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
+        callback: c_atom_vec_callback_t, context: *mut c_void) {
+    let metta = unsafe{ &mut *metta };
+    metta.free_err_string();
+    let atom = atom.into_inner();
+    let rust_metta = metta.borrow();
+    let result = rust_metta.evaluate_atom(atom);
+    match result {
+        Ok(result) => return_atoms(&result, callback, context),
+        Err(err) => {
+            let err_cstring = std::ffi::CString::new(err).unwrap();
+            metta.err_string = err_cstring.into_raw();
+        }
+    }
+}
+
+/// @brief Loads a module into a MeTTa interpreter
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the handle specifying the interpreter into which to load the module
+/// @param[in]  name  A C-style string containing the module name
+/// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
+///
+#[no_mangle]
+pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
+    let metta = unsafe{ &mut *metta };
+    metta.free_err_string();
+    let rust_metta = metta.borrow();
+    let result = rust_metta.load_module(PathBuf::from(cstr_as_str(name)));
+    match result {
+        Ok(()) => {},
+        Err(err) => {
+            let err_cstring = std::ffi::CString::new(err).unwrap();
+            metta.err_string = err_cstring.into_raw();
+        }
     }
 }
 
@@ -949,24 +1041,39 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: sexpr_parser_t,
 pub struct runner_state_t {
     /// Internal.  Should not be accessed directly
     state: *mut RustRunnerState,
+    err_string: *mut c_char,
 }
 
-struct RustRunnerState(RunnerState<'static>);
+struct RustRunnerState(RunnerState<'static, 'static>);
 
-impl From<RunnerState<'static>> for runner_state_t {
-    fn from(state: RunnerState<'static>) -> Self {
-        Self{ state: Box::into_raw(Box::new(RustRunnerState(state))) }
+impl runner_state_t {
+    fn free_err_string(&mut self) {
+        if !self.err_string.is_null() {
+            let string = unsafe{ std::ffi::CString::from_raw(self.err_string) };
+            drop(string);
+            self.err_string = core::ptr::null_mut();
+        }
+    }
+}
+
+impl From<RunnerState<'static, 'static>> for runner_state_t {
+    fn from(state: RunnerState<'static, 'static>) -> Self {
+        Self{
+            state: Box::into_raw(Box::new(RustRunnerState(state))),
+            err_string: core::ptr::null_mut(),
+        }
     }
 }
 
 impl runner_state_t {
-    fn into_inner(self) -> RunnerState<'static> {
+    fn into_inner(mut self) -> RunnerState<'static, 'static> {
+        self.free_err_string();
         unsafe{ Box::from_raw(self.state).0 }
     }
-    fn borrow(&self) -> &RunnerState<'static> {
+    fn borrow(&self) -> &RunnerState<'static, 'static> {
         &unsafe{ &*(&*self).state }.0
     }
-    fn borrow_mut(&mut self) -> &mut RunnerState<'static> {
+    fn borrow_mut(&mut self) -> &mut RunnerState<'static, 'static> {
         &mut unsafe{ &mut *(&*self).state }.0
     }
 }
@@ -1015,14 +1122,37 @@ pub extern "C" fn runner_state_free(state: runner_state_t) {
     drop(state);
 }
 
+/// @brief Returns the error string associated with the last `runner_state_step`
+/// @ingroup interpreter_group
+/// @param[in]  state  A pointer to the runner state
+/// @return A pointer to the C-string containing the error that occurred, or NULL if no
+///     error occurred
+/// @warning The returned pointer should NOT be freed.  It must never be accessed after the
+///     runner_state_t has been freed, or any subsequent call to `runner_state_step` has been made.
+///
+#[no_mangle]
+pub extern "C" fn runner_state_err_str(state: *const runner_state_t) -> *const c_char {
+    let state = unsafe{ &*state };
+    state.err_string
+}
+
 /// @brief Runs one step of the interpreter
 /// @ingroup interpreter_group
 /// @param[in]  state  A pointer to the in-flight runner state
+/// @note If this function encounters an error, the error may be accessed with `runner_state_err_str()`
 ///
 #[no_mangle]
 pub extern "C" fn runner_state_step(state: *mut runner_state_t) {
-    let state = unsafe{ &mut *state }.borrow_mut();
-    state.run_step().unwrap_or_else(|err| panic!("Unhandled MeTTa error: {}", err));
+    let state = unsafe{ &mut *state };
+    state.free_err_string();
+    let rust_state = state.borrow_mut();
+    match rust_state.run_step() {
+        Ok(_) => {},
+        Err(err) => {
+            let err_cstring = std::ffi::CString::new(err).unwrap();
+            state.err_string = err_cstring.into_raw();
+        }
+    }
 }
 
 /// @brief Returns whether or not the runner_state_t has completed all outstanding work
@@ -1067,37 +1197,6 @@ pub extern "C" fn runner_state_current_results(state: *const runner_state_t,
     for result in results {
         return_atoms(result, callback, context);
     }
-}
-
-/// @brief Runs the MeTTa Interpreter to evaluate an input Atom
-/// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the Interpreter handle
-/// @param[in]  atom  The `atom_t` representing the atom to evaluate
-/// @param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
-/// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
-/// @warning This function takes ownership of the provided `atom_t`, so it must not be subsequently accessed or freed
-///
-#[no_mangle]
-pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
-        callback: c_atom_vec_callback_t, context: *mut c_void) {
-    let metta = unsafe{ &*metta }.borrow();
-    let atom = atom.into_inner();
-    let result = metta.evaluate_atom(atom)
-        .expect("Returning errors from C API is not implemented yet");
-    return_atoms(&result, callback, context);
-}
-
-/// @brief Loads a module into a MeTTa interpreter
-/// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the handle specifying the interpreter into which to load the module
-/// @param[in]  name  A C-style string containing the module name
-///
-#[no_mangle]
-pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
-    let metta = unsafe{ &*metta }.borrow();
-    // TODO: return erorrs properly
-    metta.load_module(PathBuf::from(cstr_as_str(name)))
-        .expect("Returning errors from C API is not implemented yet");
 }
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
