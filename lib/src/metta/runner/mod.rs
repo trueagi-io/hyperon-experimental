@@ -6,7 +6,6 @@ use super::space::*;
 use super::text::{Tokenizer, SExprParser};
 use super::types::validate_atom;
 
-use core::borrow::Borrow;
 use std::rc::Rc;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
@@ -243,8 +242,8 @@ impl Metta {
     }
 
     /// Runs the MeTTa code in the specified file
-    pub fn run_from_file<P: Borrow<Path>>(&self, program_path: P) -> Result<Vec<Vec<Atom>>, String> {
-        let path = program_path.borrow();
+    pub fn run_from_file<P: AsRef<Path>>(&self, path: P) -> Result<Vec<Vec<Atom>>, String> {
+        let path = path.as_ref();
         let program = std::fs::read_to_string(path)
             .map_err(|err| format!("Could not read file, path: {}, error: {}", path.display(), err))?;
         self.run(SExprParser::new(program.as_str()))
