@@ -1,12 +1,9 @@
 from hyperon import *
 from hyperon.ext import register_atoms
 
-import os
-import re
-import json
 
-from hyperon_das import DasAPI
-from hyperon_das.das import QueryOutputFormat as Format
+from hyperon_das import DistributedAtomSpace
+
 from hyperon_das.pattern_matcher import (
     Link,
     Node,
@@ -21,7 +18,7 @@ class DASpace(AbstractSpace):
 
     def __init__(self, unwrap=True):
         super().__init__()
-        self.das = DasAPI('hash_table')
+        self.das = DistributedAtomSpace('ram_only')
         self.unwrap = unwrap
 
     def _atom2dict(self, atom):
