@@ -112,8 +112,13 @@ impl Metta {
         metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
 
         //Run the `init.metta` file
-        if let Some(init_meta_file) = metta.0.environment.initialization_metta_file_path() {
-            metta.run_from_file(init_meta_file).unwrap();
+        if let Some(init_meta_file_path) = metta.0.environment.initialization_metta_file_path() {
+            let program = match std::fs::read_to_string(init_meta_file_path)
+            {
+                Ok(program) => program,
+                Err(err) => panic!("Could not read file, path: {}, error: {}", init_meta_file_path.display(), err)
+            };
+            metta.run(SExprParser::new(program.as_str())).unwrap();
         }
         metta
     }
@@ -239,14 +244,6 @@ impl Metta {
 
     pub fn get_setting_string(&self, key: &str) -> Option<String> {
         self.0.settings.borrow().get(key.into()).map(|a| a.to_string())
-    }
-
-    /// Runs the MeTTa code in the specified file
-    pub fn run_from_file<P: AsRef<Path>>(&self, path: P) -> Result<Vec<Vec<Atom>>, String> {
-        let path = path.as_ref();
-        let program = std::fs::read_to_string(path)
-            .map_err(|err| format!("Could not read file, path: {}, error: {}", path.display(), err))?;
-        self.run(SExprParser::new(program.as_str()))
     }
 
     pub fn run<'p, 'a: 'p>(&'a self, parser: SExprParser<'p>) -> Result<Vec<Vec<Atom>>, String> {
