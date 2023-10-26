@@ -114,13 +114,13 @@ class ExamplesTest(HyperonTestCase):
         metta = MeTTa(env_builder=Environment.test_env())
 
         metta.run('''
-           (= (: (apply $f $x) $r) (and (: $f (=> $a $r)) (: $x $a)))
+           (= (: (apply\' $f $x) $r) (and (: $f (=> $a $r)) (: $x $a)))
 
            (= (: reverse (=> String String)) True)
            (= (: "Hello" String) True)
         ''')
 
-        output = metta.run('!(if (: (apply reverse "Hello") $t) $t Wrong)')
+        output = metta.run('!(if (: (apply\' reverse "Hello") $t) $t Wrong)')
         self.assertEqualMettaRunnerResults(output, [[S('String')]])
 
     def test_plus_reduces_Z(self):
