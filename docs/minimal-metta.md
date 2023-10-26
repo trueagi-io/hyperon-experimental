@@ -32,7 +32,7 @@ allowed developing the first stable version with less effort (see `eval` and
 `Return`). If an instruction returns the atom which is not from the minimal set
 it is not interpreted further and returned as a part of the final result.
 
-## Error/Empty/NotReducible/Void
+## Error/Empty/NotReducible/()
 
 There are atoms which can be returned to designate a special situation in a code:
 - `(Error <atom> <message>)` means the interpretation is finished with error;
@@ -46,8 +46,8 @@ There are atoms which can be returned to designate a special situation in a code
   which returns `NotReducible` explicitly; this atom is introduced to separate
   the situations when atom should be returned "as is" from `Empty` when atom
   should be removed from results;
-- `Void` is a unit result which is mainly used by functions with side effects
-  which has no meaningful value to return.
+- Empty expression `()` is a unit result which is mainly used by functions with
+  side effects which has no meaningful value to return.
 
 These atoms are not interpreted further as they are not a part of the minimal
 set of instructions.
@@ -72,7 +72,7 @@ returns no results then `NotReducible` atom is a result of the instruction. Grou
 function can return a list of atoms, empty result, `Error(<message>)` or
 `NoReduce` result. The result of the instruction for a special values are the
 following:
-- empty result returns `Void` atom;
+- empty result returns unit `()` result;
 - `Error(<message>)` returns `(Error <original-atom> <message>)` atom;
 - `NoReduce` returns `NotReducible` atom.
 
