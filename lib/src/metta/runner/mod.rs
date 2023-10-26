@@ -14,7 +14,6 @@ use std::sync::Arc;
 mod environment;
 pub use environment::{Environment, EnvBuilder};
 
-#[cfg(not(feature = "minimal"))]
 pub mod stdlib;
 #[cfg(not(feature = "minimal"))]
 use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
