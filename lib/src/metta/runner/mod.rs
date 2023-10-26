@@ -111,8 +111,13 @@ impl Metta {
         metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
 
         //Run the `init.metta` file
-        if let Some(init_meta_file) = metta.0.environment.initialization_metta_file_path() {
-            metta.load_module(init_meta_file.into()).unwrap();
+        if let Some(init_meta_file_path) = metta.0.environment.initialization_metta_file_path() {
+            let program = match std::fs::read_to_string(init_meta_file_path)
+            {
+                Ok(program) => program,
+                Err(err) => panic!("Could not read file, path: {}, error: {}", init_meta_file_path.display(), err)
+            };
+            metta.run(SExprParser::new(program.as_str())).unwrap();
         }
         metta
     }
