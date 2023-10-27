@@ -555,13 +555,15 @@ pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, 
 ///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> atom_t { rust_type_atom::<DynSpace>().into() }
 
-/// @brief Creates a Symbol atom for the special MeTTa symbol used to indicate empty results in
-/// case expressions.
+/// @brief Creates a Symbol atom for the special MeTTa symbol used to indicate empty results
+/// returned by function.
 /// @ingroup metta_language_group
 /// @return  The `atom_t` representing the Void atom
 /// @note The returned `atom_t` must be freed with `atom_free()`
 ///
-#[no_mangle] pub extern "C" fn VOID_SYMBOL() -> atom_t { hyperon::metta::VOID_SYMBOL.into() }
+#[no_mangle] pub extern "C" fn EMPTY_SYMBOL() -> atom_t {
+    hyperon::metta::EMPTY_SYMBOL.into()
+}
 
 /// @brief Checks whether Atom `atom` has Type `typ` in context of `space`
 /// @ingroup metta_language_group
@@ -706,7 +708,7 @@ pub extern "C" fn step_has_next(step: *const step_result_t) -> bool {
     step.has_next()
 }
 
-/// @brief Consumes a `step_result_t` and provides the ultimate outcome of a MeTTa interpreter session 
+/// @brief Consumes a `step_result_t` and provides the ultimate outcome of a MeTTa interpreter session
 /// @ingroup interpreter_group
 /// @param[in]  step  A pointer to a `step_result_t` to render
 /// @param[in]  callback  A function that will be called to provide a vector of all atoms resulting from the interpreter session

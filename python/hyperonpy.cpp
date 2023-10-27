@@ -791,7 +791,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 #define ADD_SYMBOL(t, d) .def_property_readonly_static(#t, [](py::object) { return CAtom(t ## _SYMBOL()); }, d " atom type")
 
     py::class_<CAtoms>(m, "CAtoms")
-        ADD_SYMBOL(VOID, "Void");
+        ADD_SYMBOL(EMPTY, "Empty");
 
     py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, EnvBuilder env_builder) {
