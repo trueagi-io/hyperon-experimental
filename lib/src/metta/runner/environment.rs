@@ -146,8 +146,8 @@ impl EnvBuilder {
     ///
     /// NOTE: The most recently added paths will have the highest search priority, save for the `working_dir`,
     ///   and paths returned first by the iterator will have higher priority within the same call to add_include_paths.
-    pub fn add_include_paths<P: Borrow<Path>, I: IntoIterator<Item=P>>(mut self, paths: I) -> Self {
-        let mut additional_paths: Vec<PathBuf> = paths.into_iter().map(|path| path.borrow().into()).collect();
+    pub fn add_include_paths<P: AsRef<Path>, I: IntoIterator<Item=P>>(mut self, paths: I) -> Self {
+        let mut additional_paths: Vec<PathBuf> = paths.into_iter().map(|path| path.as_ref().into()).collect();
         additional_paths.extend(self.env.extra_include_paths);
         self.env.extra_include_paths = additional_paths;
         self
