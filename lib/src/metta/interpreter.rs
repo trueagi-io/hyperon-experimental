@@ -559,7 +559,11 @@ fn interpret_reducted_plan<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'
         if is_grounded_op(expr) {
             Box::new(execute_plan(context, input))
         } else if is_variable_op(expr) {
-            Box::new(StepResult::ret(vec![input]))
+            #[cfg(feature = "variable_operation")]
+            let result = Box::new(match_plan(context, input));
+            #[cfg(not(feature = "variable_operation"))]
+            let result = Box::new(StepResult::ret(vec![input]));
+            result
         } else {
             Box::new(match_plan(context, input))
         }
@@ -1090,12 +1094,17 @@ mod tests {
     }
 
     #[test]
-    fn interpret_variable_does_not_match_operation_issue_242() {
+    fn interpret_match_variable_operation() {
         let mut space = GroundingSpace::new();
         space.add(expr!("=" ("foo" x) ("foo result" x)));
         space.add(expr!("=" ("bar" x) ("bar result" x)));
 
-        assert_eq!(interpret(&space, &expr!(op "arg")), Ok(vec![expr!(op "arg")]));
+        let actual = interpret(&space, &expr!(op "arg")).unwrap();
+
+        #[cfg(feature = "variable_operation")]
+        assert_eq_no_order!(actual, vec![expr!("foo result" "arg"), expr!("bar result" "arg")]);
+        #[cfg(not(feature = "variable_operation"))]
+        assert_eq!(actual, vec![expr!(op "arg")]);
     }
 }
 
