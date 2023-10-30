@@ -332,16 +332,12 @@ impl<'m, 'i> RunnerState<'m, 'i> {
             } else {
 
                 //This interpreter is finished, process the results
-                match interpreter_state.into_result() {
-                    Err(msg) => return Err(msg),
-                    Ok(result) => {
-                        let error = result.iter().any(|atom| atom_is_error(atom));
-                        self.results.push(result);
-                        if error {
-                            self.mode = MettaRunnerMode::TERMINATE;
-                            return Ok(());
-                        }
-                    }
+                let result = interpreter_state.into_result().unwrap();
+                let error = result.iter().any(|atom| atom_is_error(atom));
+                self.results.push(result);
+                if error {
+                    self.mode = MettaRunnerMode::TERMINATE;
+                    return Ok(());
                 }
             }
 
