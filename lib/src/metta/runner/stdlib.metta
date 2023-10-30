@@ -107,7 +107,7 @@
   (function
     (chain (eval (collapse-min $expr $space)) $collapsed
       (chain (eval (foldl-atom $collapsed (() ()) $acc $x
-        (chain (eval (distribute-result $acc $x)) $res $res) )) $folded 
+        (chain (eval (distribute-result $acc $x)) $res $res) )) $folded
         (chain
           (function
             (unify $folded ($success $errors)
@@ -256,6 +256,10 @@
 (= (and False True) False)
 (= (and True False) False)
 (= (and True True) True)
+
+(: not (-> Bool Bool))
+(= (not True) False)
+(= (not False) True)
 
 (: match (-> Atom Atom Atom %Undefined%))
 (= (match $space $pattern $template)

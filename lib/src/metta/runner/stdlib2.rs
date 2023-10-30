@@ -923,8 +923,6 @@ mod tests {
     #[test]
     fn test_frog_reasoning() {
         let program = "
-            (= (and True True) True)
-
             (= (is Fritz croaks) True)
             (= (is Fritz eats-flies) True)
 
