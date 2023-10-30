@@ -850,6 +850,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("env_builder_init_common_env", [](EnvBuilder builder) { return env_builder_init_common_env(builder.obj); }, "Finish initialization of the common environment");
     m.def("env_builder_set_working_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_working_dir(builder.ptr(), path.c_str()); }, "Sets the working dir in the environment");
     m.def("env_builder_set_config_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_config_dir(builder.ptr(), path.c_str()); }, "Sets the config dir in the environment");
+    m.def("env_builder_create_config_dir", [](EnvBuilder& builder) { env_builder_create_config_dir(builder.ptr()); }, "Creates the config dir if it doesn't exist");
     m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the environment");
     m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
     m.def("env_builder_add_include_path", [](EnvBuilder& builder, std::string path) { env_builder_add_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
