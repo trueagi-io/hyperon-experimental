@@ -105,8 +105,9 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
         if is_embedded_op(&atom.0) {
             self.plan.push(atom);
         } else {
-            let InterpretedAtom(atom, _bindings) = atom;
+            let InterpretedAtom(atom, bindings) = atom;
             if atom != EMPTY_SYMBOL {
+                let atom = apply_bindings_to_atom(&atom, &bindings);
                 self.finished.push(atom);
             }
         }
