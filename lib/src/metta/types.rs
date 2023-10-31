@@ -158,15 +158,16 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 /// use hyperon::{Atom, expr, assert_eq_no_order};
 /// use hyperon::metta::ATOM_TYPE_UNDEFINED;
 /// use hyperon::metta::runner::*;
+/// use hyperon::metta::text::SExprParser;
 /// use hyperon::metta::types::get_atom_types;
 ///
 /// let metta = Metta::new(None);
-/// metta.run_program_str("
+/// metta.run(SExprParser::new("
 ///     (: f (-> A B))
 ///     (: a A)
 ///     (: a B)
 ///     (: b B)
-/// ").unwrap();
+/// ")).unwrap();
 ///
 /// let space = metta.space();
 /// assert_eq_no_order!(get_atom_types(&space, &expr!(x)), vec![ATOM_TYPE_UNDEFINED]);
@@ -390,10 +391,11 @@ fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, B
 /// ```
 /// use hyperon::expr;
 /// use hyperon::metta::runner::*;
+/// use hyperon::metta::text::SExprParser;
 /// use hyperon::metta::types::check_type;
 ///
 /// let metta = Metta::new(None);
-/// metta.run_program_str("(: a A) (: a B)").unwrap();
+/// metta.run(SExprParser::new("(: a A) (: a B)")).unwrap();
 ///
 /// assert!(check_type(&metta.space(), &expr!("a"), &expr!("B")));
 /// ```
@@ -410,10 +412,11 @@ pub fn check_type(space: &dyn Space, atom: &Atom, typ: &Atom) -> bool {
 /// ```
 /// use hyperon::{expr, bind};
 /// use hyperon::metta::runner::*;
+/// use hyperon::metta::text::SExprParser;
 /// use hyperon::metta::types::get_type_bindings;
 ///
 /// let metta = Metta::new(None);
-/// metta.run_program_str("(: a (List A))").unwrap();
+/// metta.run(SExprParser::new("(: a (List A))")).unwrap();
 /// let types = get_type_bindings(&metta.space(), &expr!("a"), &expr!("List" t));
 ///
 /// assert_eq!(types, vec![(expr!("List" "A"), bind!{ t: expr!("A") })]);
@@ -451,10 +454,11 @@ fn check_meta_type(atom: &Atom, typ: &Atom) -> bool {
 /// ```
 /// use hyperon::expr;
 /// use hyperon::metta::runner::*;
+/// use hyperon::metta::text::SExprParser;
 /// use hyperon::metta::types::validate_atom;
 ///
 /// let metta = Metta::new(None);
-/// metta.run_program_str("(: foo (-> A B)) (: a A) (: b B)").unwrap();
+/// metta.run(SExprParser::new("(: foo (-> A B)) (: a A) (: b B)")).unwrap();
 ///
 /// let space = metta.space();
 /// assert!(validate_atom(&space, &expr!("foo" "a")));
