@@ -13,6 +13,22 @@ pub enum Number {
     Float(f64),
 }
 
+trait IntoNumber {
+    fn into_num(self) -> Number;
+}
+
+impl IntoNumber for i64 {
+    fn into_num(self) -> Number {
+        Number::Integer(self)
+    }
+}
+
+impl IntoNumber for f64 {
+    fn into_num(self) -> Number {
+        Number::Float(self)
+    }
+}
+
 impl Number {
     pub fn from_int_str(num: &str) -> Self {
         let n = num.parse::<i64>().expect("Could not parse integer");
@@ -85,7 +101,7 @@ impl Grounded for Bool {
 }
 
 macro_rules! def_binary_number_op {
-    ($name:ident, $op:tt) => {
+    ($name:ident, $op:tt, $r:ident, $cast:expr) => {
         #[derive(Clone, PartialEq, Debug)]
         pub struct $name{}
 
@@ -97,7 +113,7 @@ macro_rules! def_binary_number_op {
 
         impl Grounded for $name {
             fn type_(&self) -> Atom {
-                Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+                Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, $r])
             }
 
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -106,10 +122,10 @@ macro_rules! def_binary_number_op {
                 let b = args.get(1).ok_or_else(arg_error)?.as_gnd::<Number>().ok_or_else(arg_error)?;
 
                 let res = match (a, b) {
-                    (Number::Integer(a), Number::Integer(b)) => Number::Integer(a $op b),
-                    (Number::Integer(a), Number::Float(b)) => Number::Float((*a as f64) $op b),
-                    (Number::Float(a), Number::Integer(b)) => Number::Float(a $op (*b as f64)),
-                    (Number::Float(a), Number::Float(b)) => Number::Float(a $op b),
+                    (Number::Integer(a), Number::Integer(b)) => $cast(a $op b),
+                    (Number::Integer(a), Number::Float(b)) => $cast((*a as f64) $op *b),
+                    (Number::Float(a), Number::Integer(b)) => $cast(*a $op (*b as f64)),
+                    (Number::Float(a), Number::Float(b)) => $cast(a $op b),
                 };
 
                 Ok(vec![Atom::gnd(res)])
@@ -122,11 +138,16 @@ macro_rules! def_binary_number_op {
     }
 }
 
-def_binary_number_op!(SumOp, +);
-def_binary_number_op!(SubOp, -);
-def_binary_number_op!(MulOp, *);
-def_binary_number_op!(DivOp, /);
-def_binary_number_op!(ModOp, %);
+def_binary_number_op!(SumOp, +, ATOM_TYPE_NUMBER, IntoNumber::into_num);
+def_binary_number_op!(SubOp, -, ATOM_TYPE_NUMBER, IntoNumber::into_num);
+def_binary_number_op!(MulOp, *, ATOM_TYPE_NUMBER, IntoNumber::into_num);
+def_binary_number_op!(DivOp, /, ATOM_TYPE_NUMBER, IntoNumber::into_num);
+def_binary_number_op!(ModOp, %, ATOM_TYPE_NUMBER, IntoNumber::into_num);
+def_binary_number_op!(LessOp, <, ATOM_TYPE_BOOL, Bool);
+def_binary_number_op!(GreaterOp, >, ATOM_TYPE_BOOL, Bool);
+def_binary_number_op!(LessEqOp, <=, ATOM_TYPE_BOOL, Bool);
+def_binary_number_op!(GreaterEqOp, >=, ATOM_TYPE_BOOL, Bool);
+def_binary_number_op!(EqualOp, ==, ATOM_TYPE_BOOL, Bool);
 
 #[cfg(test)]
 mod tests {

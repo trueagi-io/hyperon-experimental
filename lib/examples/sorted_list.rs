@@ -1,4 +1,7 @@
-use hyperon::metta::{runner::*, text::SExprParser};
+use hyperon::*;
+use hyperon::metta::runner::*;
+use hyperon::metta::runner::arithmetics::*;
+use hyperon::metta::text::SExprParser;
 
 fn main() -> Result<(), String> {
     let metta = Metta::new(None);
@@ -7,10 +10,7 @@ fn main() -> Result<(), String> {
         (: Nil (List $a))
         (: Cons (-> $a (List $a) (List $a)))
 
-        (: if (-> bool Any Any) Any)
-        (= (if true $then $else) $then)
-        (= (if false $then $else) $else)
-
+        (: insert (-> $a (List $a) (List $a)))
         (= (insert $x Nil) (Cons $x Nil))
         (= (insert $x (Cons $head $tail)) (if (< $x $head)
                                               (Cons $x (Cons $head $tail))
@@ -18,9 +18,9 @@ fn main() -> Result<(), String> {
     "))?;
 
     assert_eq!(metta.run(SExprParser::new("!(insert 1 Nil)"))?[0],
-        vec![SExprParser::new("(Cons 1 Nil)").parse(&*metta.tokenizer().borrow())?.unwrap()]);
-    assert_eq!(metta.run(SExprParser::new("(insert 3 (insert 2 (insert 1 Nil)))"))?[0],
-        vec![SExprParser::new("(Cons 1 (Cons 2 (Cons 3 Nil)))").parse(&*metta.tokenizer().borrow())?.unwrap()]);
+        vec![expr!("Cons" {Number::Integer(1)} "Nil")]);
+    assert_eq!(metta.run(SExprParser::new("!(insert 3 (insert 2 (insert 1 Nil)))"))?[0],
+        vec![expr!("Cons" {Number::Integer(1)} ("Cons" {Number::Integer(2)} ("Cons" {Number::Integer(3)} "Nil")))]);
 
     Ok(())
 }
