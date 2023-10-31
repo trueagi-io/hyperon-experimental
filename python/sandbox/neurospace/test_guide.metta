@@ -2,6 +2,10 @@
 
 ! (bind! &messages (new-space))
 
+(= (messages)
+   (let $messages (collapse (get-atoms &messages))
+        (cons-atom Messages $messages)))
+
 ; All these functions might not be needed if the prompt program is in a separate script
 (: system! (-> Atom Atom))
 (: user! (-> Atom Atom))
@@ -25,7 +29,7 @@
           "\\nUPDATED\\n"
           "Where there is no guidance" (get-state (rewrite))))
 
-! (nop (change-state! (rewrite) (llm (Messages (get-atoms &messages)))))
+! (nop (change-state! (rewrite) (llm (messages))))
 
 ! (atom2msg (get-atoms &messages))
 
