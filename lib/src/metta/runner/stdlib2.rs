@@ -6,30 +6,32 @@ use crate::metta::text::Tokenizer;
 use crate::metta::runner::Metta;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::assert::vec_eq_no_order;
-use crate::metta::runner::interpret;
-use crate::common::shared::Shared;
+use crate::metta::runner::stdlib;
 
 use std::fmt::Display;
 use regex::Regex;
 use std::convert::TryInto;
-use std::collections::HashMap;
 
 use super::arithmetics::*;
 
 pub const VOID_SYMBOL : Atom = sym!("%void%");
 
-//TODO: convert these from functions to static strcutures, when Atoms are Send+Sync
-#[allow(non_snake_case)]
-pub fn UNIT_ATOM() -> Atom {
-    Atom::expr([])
-}
-#[allow(non_snake_case)]
-pub fn UNIT_TYPE() -> Atom {
-    Atom::expr([ARROW_SYMBOL])
+fn unit_result() -> Result<Vec<Atom>, ExecError> {
+    Ok(vec![UNIT_ATOM()])
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct GetTypeOp {}
+pub struct GetTypeOp {
+    // TODO: MINIMAL this is temporary compatibility fix to be removed after
+    // migration to the minimal MeTTa
+    space: DynSpace,
+}
+
+impl GetTypeOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
 
 impl Display for GetTypeOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -45,13 +47,48 @@ impl Grounded for GetTypeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-type expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
-        let space = args.get(1).ok_or_else(arg_error)?;
-        let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
+        let space = match args.get(1) {
+            Some(space) => Atom::as_gnd::<DynSpace>(space)
+                .ok_or("match expects a space as the first argument"),
+            None => Ok(&self.space),
+        }?;
         let types = get_atom_types(space, atom);
         if types.is_empty() {
             Ok(vec![EMPTY_SYMBOL])
         } else {
             Ok(types)
+        }
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct CollapseGetTypeOp {}
+
+impl Display for CollapseGetTypeOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "collapse-get-type")
+    }
+}
+
+impl Grounded for CollapseGetTypeOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("get-type expects single atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        let space = args.get(1).ok_or_else(arg_error)?;
+        let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
+        let types = get_atom_types(space, atom);
+        if types.is_empty() {
+            Ok(vec![Atom::expr([])])
+        } else {
+            Ok(vec![Atom::expr(types)])
         }
     }
 
@@ -122,7 +159,6 @@ impl Grounded for IfEqualOp {
 // TODO: remove hiding errors completely after making it possible passing
 // them to the user
 fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
-    let expr = Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::sym("interpret"), expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())])]);
     let result = interpret(space, &expr);
     log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
     match result {
@@ -131,11 +167,16 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
     }
 }
 
+fn interpret(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
+    let expr = Atom::expr([EVAL_SYMBOL, Atom::expr([INTERPRET_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())])]);
+    crate::metta::interpreter2::interpret(space, &expr)
+}
+
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
     log::debug!("assert_results_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
     let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
     match vec_eq_no_order(actual.iter(), expected.iter()) {
-        Ok(()) => Ok(vec![VOID_SYMBOL]),
+        Ok(()) => unit_result(),
         Err(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
 }
@@ -304,34 +345,58 @@ impl Grounded for CollapseOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct PragmaOp {
-    settings: Shared<HashMap<String, Atom>>,
+pub struct CaseOp {
+    space: DynSpace,
 }
 
-impl PragmaOp {
-    pub fn new(settings: Shared<HashMap<String, Atom>>) -> Self {
-        Self{ settings }
+impl CaseOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
     }
 }
 
-impl Display for PragmaOp {
+impl Display for CaseOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "pragma!")
+        write!(f, "case")
     }
 }
 
-impl Grounded for PragmaOp {
+impl Grounded for CaseOp {
     fn type_(&self) -> Atom {
-        ATOM_TYPE_UNDEFINED
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("pragma! expects key and value as arguments");
-        let key = TryInto::<&SymbolAtom>::try_into(args.get(0).ok_or_else(arg_error)?)
-            .map_err(|_| "pragma! expects symbol atom as a key")?.name();
-        let value = args.get(1).ok_or_else(arg_error)?;
-        self.settings.borrow_mut().insert(key.into(), value.clone());
-        Ok(vec![])
+        let arg_error = || ExecError::from("case expects two arguments: atom and expression of cases");
+        let cases = args.get(1).ok_or_else(arg_error)?;
+        let atom = args.get(0).ok_or_else(arg_error)?;
+        log::debug!("CaseOp::execute: atom: {}, cases: {:?}", atom, cases);
+
+        let switch = |interpreted: Atom| -> Atom {
+            Atom::expr([sym!("switch"), interpreted, cases.clone()])
+        };
+
+        // Interpreting argument inside CaseOp is required because otherwise `Empty` result
+        // calculated inside interpreter cuts the whole branch of the interpretation. Also we
+        // cannot use `unify` in a unit test because after interpreting `(chain... (chain (eval
+        // (interpret (unify ...) Atom <space>))) ...)` `chain` executes `unify` and also gets
+        // `Empty` even if we have `Atom` as a resulting type. It can be solved by different ways.
+        // One way is to invent new type `EmptyType` (type of the `Empty` atom) and use this type
+        // in a function to allow `Empty` atoms as an input. `EmptyType` type should not be
+        // casted to the `%Undefined%` thus one cannot pass `Empty` to the function which accepts
+        // `%Undefined%`. Another way is to introduce "call" level. Thus if function called
+        // returned the result to the `chain` it should stop reducing it and insert it into the
+        // last argument.
+        let results = interpret(self.space.clone(), atom);
+        log::debug!("CaseOp::execute: atom results: {:?}", results);
+        let results = match results {
+            Ok(results) if results.is_empty() =>
+                vec![switch(EMPTY_SYMBOL)],
+            Ok(results) =>
+                results.into_iter().map(|atom| switch(atom)).collect(),
+            Err(err) => vec![Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::sym(err)])],
+        };
+        Ok(results)
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -346,13 +411,30 @@ fn regex(regex: &str) -> Regex {
 pub fn register_common_tokens(metta: &Metta) {
     let tokenizer = metta.tokenizer();
     let mut tref = tokenizer.borrow_mut();
+    let space = metta.space();
 
-    let get_type_op = Atom::gnd(GetTypeOp{});
+    let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
+    let collapse_get_type_op = Atom::gnd(CollapseGetTypeOp{});
+    tref.register_token(regex(r"collapse-get-type"), move |_| { collapse_get_type_op.clone() });
     let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
     tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
     let is_equivalent = Atom::gnd(IfEqualOp{});
     tref.register_token(regex(r"if-equal"), move |_| { is_equivalent.clone() });
+    let new_space_op = Atom::gnd(stdlib::NewSpaceOp{});
+    tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
+    let add_atom_op = Atom::gnd(stdlib::AddAtomOp{});
+    tref.register_token(regex(r"add-atom"), move |_| { add_atom_op.clone() });
+    let remove_atom_op = Atom::gnd(stdlib::RemoveAtomOp{});
+    tref.register_token(regex(r"remove-atom"), move |_| { remove_atom_op.clone() });
+    let get_atoms_op = Atom::gnd(stdlib::GetAtomsOp{});
+    tref.register_token(regex(r"get-atoms"), move |_| { get_atoms_op.clone() });
+    let new_state_op = Atom::gnd(stdlib::NewStateOp{});
+    tref.register_token(regex(r"new-state"), move |_| { new_state_op.clone() });
+    let change_state_op = Atom::gnd(stdlib::ChangeStateOp{});
+    tref.register_token(regex(r"change-state!"), move |_| { change_state_op.clone() });
+    let get_state_op = Atom::gnd(stdlib::GetStateOp{});
+    tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
 }
 
 pub fn register_runner_tokens(metta: &Metta) {
@@ -369,8 +451,14 @@ pub fn register_runner_tokens(metta: &Metta) {
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
     tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
-    let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
+    let case_op = Atom::gnd(CaseOp::new(space.clone()));
+    tref.register_token(regex(r"case"), move |_| { case_op.clone() });
+    let pragma_op = Atom::gnd(stdlib::PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
+    let import_op = Atom::gnd(stdlib::ImportOp::new(metta.clone()));
+    tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+    let bind_op = Atom::gnd(stdlib::BindOp::new(tokenizer.clone()));
+    tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
     // TODO: adding &self introduces self referencing and thus prevents space
@@ -433,7 +521,7 @@ mod tests {
             (: A C)
         "));
 
-        let get_type_op = GetTypeOp{};
+        let get_type_op = GetTypeOp::new(space.clone());
         assert_eq_no_order!(get_type_op.execute(&mut vec![sym!("A"), expr!({space.clone()})]).unwrap(),
             vec![sym!("B"), sym!("C")]);
     }
@@ -446,7 +534,7 @@ mod tests {
             (: \"test\" String)
         "));
 
-        let get_type_op = GetTypeOp{};
+        let get_type_op = GetTypeOp::new(space.clone());
         assert_eq_no_order!(get_type_op.execute(&mut vec![expr!("f" "42"), expr!({space.clone()})]).unwrap(),
             vec![sym!("String")]);
         assert_eq_no_order!(get_type_op.execute(&mut vec![expr!("f" "\"test\""), expr!({space.clone()})]).unwrap(),
@@ -455,17 +543,17 @@ mod tests {
 
 
     #[test]
-    fn metta_car() {
-        let result = run_program("!(eval (car (A $b)))");
+    fn metta_car_atom() {
+        let result = run_program("!(eval (car-atom (A $b)))");
         assert_eq!(result, Ok(vec![vec![expr!("A")]]));
-        let result = run_program("!(eval (car ($a B)))");
+        let result = run_program("!(eval (car-atom ($a B)))");
         //assert_eq!(result, Ok(vec![vec![expr!(a)]]));
         assert!(result.is_ok_and(|res| res.len() == 1 && res[0].len() == 1 &&
             atoms_are_equivalent(&res[0][0], &expr!(a))));
-        let result = run_program("!(eval (car ()))");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car" ()) "\"car expects a non-empty expression as an argument\"")]]));
-        let result = run_program("!(eval (car A))");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car" "A") "\"car expects a non-empty expression as an argument\"")]]));
+        let result = run_program("!(eval (car-atom ()))");
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car-atom" ()) "\"car-atom expects a non-empty expression as an argument\"")]]));
+        let result = run_program("!(eval (car-atom A))");
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car-atom" "A") "\"car-atom expects a non-empty expression as an argument\"")]]));
     }
 
     #[test]
@@ -479,6 +567,18 @@ mod tests {
     }
 
     #[test]
+    fn metta_case_empty() {
+        let result = run_program("!(case Empty ( (ok ok) (Empty nok) ))");
+        assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
+        let result = run_program("!(case (unify (C B) (C B) ok Empty) ( (ok ok) (Empty nok) ))");
+        assert_eq!(result, Ok(vec![vec![expr!("ok")]]));
+        let result = run_program("!(case (unify (B C) (C B) ok nok) ( (ok ok) (nok nok) ))");
+        assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
+        let result = run_program("!(case (match (B C) (C B) ok) ( (ok ok) (Empty nok) ))");
+        assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
+    }
+
+    #[test]
     fn metta_is_function() {
         let result = run_program("!(eval (is-function (-> $t)))");
         assert_eq!(result, Ok(vec![vec![expr!({Bool(true)})]]));
@@ -486,32 +586,6 @@ mod tests {
         assert_eq!(result, Ok(vec![vec![expr!({Bool(false)})]]));
         let result = run_program("!(eval (is-function %Undefined%))");
         assert_eq!(result, Ok(vec![vec![expr!({Bool(false)})]]));
-    }
-
-    #[test]
-    fn metta_reduce_chain() {
-        assert_eq!(run_program("
-            (= (foo $x) (bar $x))
-            (= (bar $x) (baz $x))
-            (= (baz $x) $x)
-            !(eval (reduce (foo A) $x (reduced $x)))
-        "), Ok(vec![vec![expr!("reduced" "A")]]));
-        assert_eq!(run_program("
-            !(eval (reduce (foo A) $x (reduced $x)))
-        "), Ok(vec![vec![expr!("reduced" ("foo" "A"))]]));
-        assert_eq!(run_program("
-            (= (foo A) (Error (foo A) \"Test error\"))
-            !(eval (reduce (foo A) $x (reduced $x)))
-        "), Ok(vec![vec![expr!("Error" ("foo" "A") "\"Test error\"")]]));
-    }
-
-    #[test]
-    fn metta_reduce_reduce() {
-        assert_eq!(run_program("
-            (= (foo $x) (reduce (bar $x) $t $t))
-            (= (bar $x) $x)
-            !(eval (reduce (foo A) $x $x))
-        "), Ok(vec![vec![expr!("A")]]));
     }
 
     #[test]
@@ -529,6 +603,26 @@ mod tests {
         assert_eq!(run_program("!(eval (type-cast (a b) Expression &self))"), Ok(vec![vec![expr!("a" "b")]]));
         assert_eq!(run_program("!(eval (type-cast $v Variable &self))"), Ok(vec![vec![expr!(v)]]));
         assert_eq!(run_program("(: a A) (: b B) !(eval (type-cast (a b) (A B) &self))"), Ok(vec![vec![expr!("a" "b")]]));
+        assert_eq!(run_program("(: a A) (: a B) !(eval (type-cast a A &self))"), Ok(vec![vec![expr!("a")]]));
+    }
+
+    #[test]
+    fn metta_filter_atom() {
+        assert_eq!(run_program("!(eval (filter-atom () $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!()]]));
+        assert_eq!(run_program("!(eval (filter-atom (a (b) $c) $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!("a" ("b") c)]]));
+        assert_eq!(run_program("!(eval (filter-atom (a (Error (b) \"Test error\") $c) $x (eval (if-error $x False True))))"), Ok(vec![vec![expr!("a" c)]]));
+    }
+
+    #[test]
+    fn metta_map_atom() {
+        assert_eq!(run_program("!(eval (map-atom () $x ($x mapped)))"), Ok(vec![vec![expr!()]]));
+        assert_eq!(run_program("!(eval (map-atom (a (b) $c) $x (mapped $x)))"), Ok(vec![vec![expr!(("mapped" "a") ("mapped" ("b")) ("mapped" c))]]));
+    }
+
+    #[test]
+    fn metta_foldl_atom() {
+        assert_eq!(run_program("!(eval (foldl-atom () 1 $a $b (eval (+ $a $b))))"), Ok(vec![vec![expr!({Number::Integer(1)})]]));
+        assert_eq!(run_program("!(eval (foldl-atom (1 2 3) 0 $a $b (eval (+ $a $b))))"), Ok(vec![vec![expr!({Number::Integer(6)})]]));
     }
 
     #[test]
@@ -621,6 +715,12 @@ mod tests {
     }
 
     #[test]
+    fn metta_interpret_single_atom_with_two_types() {
+        let result = run_program("(: a A) (: a B) !(eval (interpret a %Undefined% &self))");
+        assert_eq!(result, Ok(vec![vec![expr!("a")]]));
+    }
+
+    #[test]
     fn metta_assert_equal_op() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
         let assert = AssertEqualOp::new(metta.space().clone());
@@ -630,7 +730,7 @@ mod tests {
         ";
         assert_eq!(metta.run(SExprParser::new(program)), Ok(vec![]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) (bar A))")), Ok(vec![
-            vec![VOID_SYMBOL],
+            vec![UNIT_ATOM()],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) (bar B))")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("foo" "A") ("bar" "B")) "\nExpected: [B]\nGot: [A]\nMissed result: B")],
@@ -653,7 +753,7 @@ mod tests {
         ";
         assert_eq!(metta.run(SExprParser::new(program)), Ok(vec![]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (foo) (A B))")), Ok(vec![
-            vec![VOID_SYMBOL],
+            vec![UNIT_ATOM()],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (bar) (A))")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("bar") ("A")) "\nExpected: [A]\nGot: [C]\nMissed result: A")],
@@ -695,7 +795,7 @@ mod tests {
     }
 
     #[test]
-    fn metta_let() {
+    fn metta_let_novar() {
         let result = run_program("!(let (P A $b) (P $a B) (P $b $a))");
         assert_eq!(result, Ok(vec![vec![expr!("P" "B" "A")]]));
         let result = run_program("
@@ -722,6 +822,18 @@ mod tests {
         assert_eq!(result, Ok(vec![vec![expr!("P" "B" "A")]]));
         let result = run_program("!(let* ( ((P $a) (P A)) ((P B) (P C)) ) (P $b $a))");
         assert_eq!(result, Ok(vec![vec![]]));
+    }
+
+    #[test]
+    fn metta_quote_unquote() {
+        let header = "
+            (= (foo) A)
+            (= (bar $x) $x)
+        ";
+        assert_eq!(run_program(&format!("{header} !(bar (foo))")), Ok(vec![vec![sym!("A")]]), "sanity check");
+        assert_eq!(run_program(&format!("{header} !(bar (quote (foo)))")), Ok(vec![vec![expr!("quote" ("foo"))]]), "quote");
+        assert_eq!(run_program(&format!("{header} !(bar (unquote (quote (foo))))")), Ok(vec![vec![expr!("A")]]), "unquote before call");
+        assert_eq!(run_program(&format!("{header} !(unquote (bar (quote (foo))))")), Ok(vec![vec![expr!("A")]]), "unquote after call");
     }
 
 
