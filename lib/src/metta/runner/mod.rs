@@ -250,32 +250,6 @@ impl Metta {
         state.run_to_completion()
     }
 
-    /// Parses a string into a single Atom
-    pub fn parse_one_atom(&self, text: &str) -> Result<Atom, String> {
-        let mut parser = SExprParser::new(text);
-        let atom = parser.parse(&*self.tokenizer().borrow())?;
-        if let Some(atom) = atom {
-            Ok(atom)
-        } else {
-            panic!("Expected a single atom");
-        }
-    }
-
-    /// Parses a string into a vector of Atoms
-    pub fn parse_all_atoms(&self, text: &str) -> Result<Vec<Atom>, String> {
-        let mut parser = SExprParser::new(text);
-        let mut atoms = vec![];
-        loop {
-            let atom = parser.parse(&*self.tokenizer().borrow())?;
-            if let Some(atom) = atom {
-                atoms.push(atom)
-            } else {
-                break;
-            }
-        }
-        Ok(atoms)
-    }
-
     // TODO: this method is deprecated and should be removed after switching
     // to the minimal MeTTa
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {

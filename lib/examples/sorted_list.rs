@@ -18,9 +18,9 @@ fn main() -> Result<(), String> {
     "))?;
 
     assert_eq!(metta.run(SExprParser::new("!(insert 1 Nil)"))?[0],
-        vec![metta.parse_one_atom("(Cons 1 Nil)")?]);
+        vec![SExprParser::new("(Cons 1 Nil)").parse(&*metta.tokenizer().borrow())?.unwrap()]);
     assert_eq!(metta.run(SExprParser::new("(insert 3 (insert 2 (insert 1 Nil)))"))?[0],
-        vec![metta.parse_one_atom("(Cons 1 (Cons 2 (Cons 3 Nil)))")?]);
+        vec![SExprParser::new("(Cons 1 (Cons 2 (Cons 3 Nil)))").parse(&*metta.tokenizer().borrow())?.unwrap()]);
 
     Ok(())
 }

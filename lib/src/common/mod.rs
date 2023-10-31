@@ -14,11 +14,7 @@ mod arithmetics;
 pub use arithmetics::*;
 
 use crate::*;
-use crate::metta::runner::*;
-use crate::space::DynSpace;
-use crate::space::grounding::GroundingSpace;
-use crate::common::shared::Shared;
-use crate::metta::text::Tokenizer;
+use crate::metta::text::{Tokenizer, SExprParser};
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::collections::HashMap;
@@ -38,10 +34,9 @@ pub struct Operation {
 
 impl Grounded for &'static Operation {
     fn type_(&self) -> Atom {
-        //TODO: I think we want to be able to parse the type in the context of the current runner, rather than makeing a new one
-        //QUESTION: Why don't we parse the type once, and store the parsed type atom, rather than parsing it each time the accessor is called?
-        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), None);
-        metta.parse_one_atom(self.typ).unwrap()
+        //TODO: Replace this parsing with a static Atom
+        let mut parser = SExprParser::new(self.typ);
+        parser.parse(&Tokenizer::new()).unwrap().unwrap()
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
