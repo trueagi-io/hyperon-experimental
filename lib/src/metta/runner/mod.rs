@@ -57,16 +57,16 @@ enum MettaRunnerMode {
     TERMINATE,
 }
 
-pub struct RunnerState<'a> {
+pub struct RunnerState<'m, 'i> {
     mode: MettaRunnerMode,
-    metta: &'a Metta,
-    parser: Option<SExprParser<'a>>,
-    atoms: Option<&'a [Atom]>,
-    interpreter_state: Option<InterpreterState<'a, DynSpace>>,
+    metta: &'m Metta,
+    parser: Option<SExprParser<'i>>,
+    atoms: Option<&'i [Atom]>,
+    interpreter_state: Option<InterpreterState<'m, DynSpace>>,
     results: Vec<Vec<Atom>>,
 }
 
-impl std::fmt::Debug for RunnerState<'_> {
+impl std::fmt::Debug for RunnerState<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RunnerState")
             .field("mode", &self.mode)
@@ -245,7 +245,7 @@ impl Metta {
         self.0.settings.borrow().get(key.into()).map(|a| a.to_string())
     }
 
-    pub fn run<'p, 'a: 'p>(&'a self, parser: SExprParser<'p>) -> Result<Vec<Vec<Atom>>, String> {
+    pub fn run(&self, parser: SExprParser) -> Result<Vec<Vec<Atom>>, String> {
         let state = RunnerState::new_with_parser(self, parser);
         state.run_to_completion()
     }
@@ -286,8 +286,8 @@ fn wrap_atom_by_metta_interpreter(runner: &Metta, atom: Atom) -> Atom {
     eval
 }
 
-impl<'a> RunnerState<'a> {
-    fn new(metta: &'a Metta) -> Self {
+impl<'m, 'i> RunnerState<'m, 'i> {
+    fn new(metta: &'m Metta) -> Self {
         Self {
             metta,
             mode: MettaRunnerMode::ADD,
@@ -298,14 +298,14 @@ impl<'a> RunnerState<'a> {
         }
     }
     /// Returns a new RunnerState, for running code from the [SExprParser] with the specified [Metta] runner
-    pub fn new_with_parser(metta: &'a Metta, parser: SExprParser<'a>) -> Self {
+    pub fn new_with_parser(metta: &'m Metta, parser: SExprParser<'i>) -> Self {
         let mut state = Self::new(metta);
         state.parser = Some(parser);
         state
     }
 
     /// Returns a new RunnerState, for running code encoded as a slice of [Atom]s with the specified [Metta] runner
-    pub fn new_with_atoms(metta: &'a Metta, atoms: &'a[Atom]) -> Self {
+    pub fn new_with_atoms(metta: &'m Metta, atoms: &'i[Atom]) -> Self {
         let mut state = Self::new(metta);
         state.atoms = Some(atoms);
         state
@@ -332,16 +332,12 @@ impl<'a> RunnerState<'a> {
             } else {
 
                 //This interpreter is finished, process the results
-                match interpreter_state.into_result() {
-                    Err(msg) => return Err(msg),
-                    Ok(result) => {
-                        let error = result.iter().any(|atom| atom_is_error(atom));
-                        self.results.push(result);
-                        if error {
-                            self.mode = MettaRunnerMode::TERMINATE;
-                            return Ok(());
-                        }
-                    }
+                let result = interpreter_state.into_result().unwrap();
+                let error = result.iter().any(|atom| atom_is_error(atom));
+                self.results.push(result);
+                if error {
+                    self.mode = MettaRunnerMode::TERMINATE;
+                    return Ok(());
                 }
             }
 
@@ -349,7 +345,13 @@ impl<'a> RunnerState<'a> {
 
             // Get the next atom, and start a new intperpreter
             let next_atom = if let Some(parser) = self.parser.as_mut() {
-                parser.parse(&self.metta.0.tokenizer.borrow())?
+                match parser.parse(&self.metta.0.tokenizer.borrow()) {
+                    Ok(atom) => atom,
+                    Err(err) => {
+                        self.mode = MettaRunnerMode::TERMINATE;
+                        return Err(err);
+                    }
+                }
             } else {
                 if let Some(atoms) = self.atoms.as_mut() {
                     if let Some((atom, rest)) = atoms.split_first() {

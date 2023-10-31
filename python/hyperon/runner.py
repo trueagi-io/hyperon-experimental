@@ -29,6 +29,9 @@ class RunnerState:
         Executes the next step in the interpretation plan, or begins interpretation of the next atom in the stream of MeTTa code.
         """
         hp.runner_state_step(self.cstate)
+        err_str = hp.runner_state_err_str(self.cstate)
+        if (err_str is not None):
+            raise RuntimeError(err_str)
 
     def is_complete(self):
         """
@@ -169,6 +172,7 @@ class MeTTa:
         program = f.read()
         f.close()
         # changing cwd
+        # TODO: Changing the working dir will not be necessary when the stdlib ops can access the correct runner context.  See https://github.com/trueagi-io/hyperon-experimental/issues/410
         prev_cwd = os.getcwd()
         os.chdir(os.sep.join(path[:-1]))
         result = self.run(program)
@@ -180,6 +184,9 @@ class MeTTa:
         """Runs the program"""
         parser = SExprParser(program)
         results = hp.metta_run(self.cmetta, parser.cparser)
+        err_str = hp.metta_err_str(self.cmetta)
+        if (err_str is not None):
+            raise RuntimeError(err_str)
         if flat:
             return [Atom._from_catom(catom) for result in results for catom in result]
         else:

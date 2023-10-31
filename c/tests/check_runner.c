@@ -54,10 +54,27 @@ START_TEST (test_incremental_runner)
 }
 END_TEST
 
+START_TEST (test_runner_errors)
+{
+    metta_t runner = new_test_metta();
+
+    sexpr_parser_t parser = sexpr_parser_new("!(+ 1 (+ 2 (+ 3 4))");
+    atom_vec_t* results = NULL;
+    metta_run(&runner, parser, &copy_atom_vec, &results);
+
+    //We have a parse error, so the callback should never be called
+    ck_assert(results == NULL);
+    ck_assert_str_eq(metta_err_str(&runner), "Unexpected end of expression");
+
+    metta_free(runner);
+}
+END_TEST
+
 void init_test(TCase* test_case) {
     tcase_set_timeout(test_case, 300); //300s = 5min.  To test for memory leaks
     tcase_add_checked_fixture(test_case, setup, teardown);
     tcase_add_test(test_case, test_incremental_runner);
+    tcase_add_test(test_case, test_runner_errors);
 }
 
 TEST_MAIN(init_test);
