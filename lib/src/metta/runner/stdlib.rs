@@ -1182,6 +1182,16 @@ pub fn register_rust_tokens(metta: &Metta) {
     tref.register_token(regex(r"/"), move |_| { div_op.clone() });
     let mod_op = Atom::gnd(ModOp{});
     tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
+    let lt_op = Atom::gnd(LessOp{});
+    tref.register_token(regex(r"<"), move |_| { lt_op.clone() });
+    let gt_op = Atom::gnd(GreaterOp{});
+    tref.register_token(regex(r">"), move |_| { gt_op.clone() });
+    let le_op = Atom::gnd(LessEqOp{});
+    tref.register_token(regex(r"<="), move |_| { le_op.clone() });
+    let ge_op = Atom::gnd(GreaterEqOp{});
+    tref.register_token(regex(r">="), move |_| { ge_op.clone() });
+    let eq_op = Atom::gnd(EqualOp{});
+    tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
 
     metta.tokenizer().borrow_mut().move_front(&mut rust_tokens);
 }

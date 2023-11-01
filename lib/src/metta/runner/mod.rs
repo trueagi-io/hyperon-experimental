@@ -27,7 +27,7 @@ use super::interpreter2::{interpret, interpret_init, interpret_step, Interpreter
 #[cfg(feature = "minimal")]
 use stdlib2::*;
 
-mod arithmetics;
+pub mod arithmetics;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
