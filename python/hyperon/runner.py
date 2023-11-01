@@ -19,6 +19,7 @@ class RunnerState:
         #  until the RunnerState is done with it.
         self.parser = parser
         self.cstate = hp.runner_state_new_with_parser(metta.cmetta, parser.cparser)
+        self.cmetta = metta.cmetta
 
     def __del__(self):
         """Frees a RunnerState and all associated resources."""
@@ -47,6 +48,11 @@ class RunnerState:
         Returns the current in-progress results from an in-flight program evaluation
         """
         results = hp.runner_state_current_results(self.cstate)
+
+        err_str = hp.metta_err_str(self.cmetta)
+        if (err_str is not None):
+            raise RuntimeError(err_str)
+
         if flat:
             return [Atom._from_catom(catom) for result in results for catom in result]
         else:
@@ -187,6 +193,9 @@ class MeTTa:
         """Runs the program"""
         parser = SExprParser(program)
         results = hp.metta_run(self.cmetta, parser.cparser)
+        return self.process_results(results, flat=flat)
+
+    def process_results(self, results, flat=False):
         err_str = hp.metta_err_str(self.cmetta)
         if (err_str is not None):
             raise RuntimeError(err_str)
@@ -195,15 +204,15 @@ class MeTTa:
         else:
             return [[Atom._from_catom(catom) for catom in result] for result in results]
 
-    def run_step_by_step(self, program):
+    def run_step_by_step(self, program, flat=False):
         """Runs program step by step, yielding state and result"""
         state = RunnerState(self, program)
         state.run_step()
-        results = state.current_results()
+        results = state.current_results(flat=flat)
         yield state, results
         while not state.is_complete():
             state.run_step()
-            results = state.current_results()
+            results = state.current_results(flat=flat)
             yield state, results
 
 
