@@ -10,6 +10,23 @@ def to_nested_expr(xs):
         return E(*list(map(to_nested_expr, xs)))
     return ValueAtom(xs)
 
+def atom2msg(atom):
+    if isinstance(atom, ExpressionAtom):
+        # Avoid () in Expression representation
+        txt = ""
+        for ch in atom.get_children():
+            txt += atom2msg(ch) + " "
+        return txt[:-1] + "\n"
+    if isinstance(atom, GroundedAtom):
+        if isinstance(atom.get_grounded_type(), ExpressionAtom):
+            return repr(atom)
+        if isinstance(atom.get_object(), ValueObject):
+            # Parse String separately to avoid "" in its repr
+            v = atom.get_object().value
+            if isinstance(v, str):
+                return v.replace("\\n", "\n")
+    return repr(atom)
+
 def get_message_list(msg_atoms):
     '''
     Convert atoms to ChatGPT messages and flatten a possibly nested message list
@@ -23,7 +40,7 @@ def get_message_list(msg_atoms):
             if ch[0].get_name() == 'Messages':
                 messages += get_message_list(ch[1:])
             else:
-                messages += [{"role": ch[0].get_name(), "content": repr(ch[1])}]
+                messages += [{"role": ch[0].get_name(), "content": atom2msg(ch[1])}]
         else:
             raise TypeError("Messages should be tagged by the role")
     return messages
@@ -93,7 +110,12 @@ def llm(metta: MeTTa, *args):
 @register_atoms(pass_metta=True)
 def llmgate_atoms(metta):
     llmAtom = OperationAtom('llm', lambda *args: llm(metta, *args), unwrap=False)
+    # Just a helper function if one needs to print from a metta-script
+    # the message converted from expression to text
+    msgAtom = OperationAtom('atom2msg',
+                 lambda atom: [ValueAtom(atom2msg(atom))], unwrap=False)
     return {
-        r"llm": llmAtom
+        r"llm": llmAtom,
+        r"atom2msg": msgAtom
     }
 
