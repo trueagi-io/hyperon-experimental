@@ -1083,6 +1083,32 @@ impl Grounded for ChangeStateOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct EqualOp {}
+
+impl Display for EqualOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "==")
+    }
+}
+
+impl Grounded for EqualOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_BOOL])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from(concat!(stringify!($op), " expects two arguments"));
+        let a = args.get(0).ok_or_else(arg_error)?;
+        let b = args.get(1).ok_or_else(arg_error)?;
+
+        Ok(vec![Atom::gnd(Bool(a == b))])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
 
 fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()

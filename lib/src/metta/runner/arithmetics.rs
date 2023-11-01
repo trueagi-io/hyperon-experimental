@@ -7,10 +7,21 @@ use std::fmt::Display;
 pub const ATOM_TYPE_NUMBER : Atom = sym!("Number");
 pub const ATOM_TYPE_BOOL : Atom = sym!("Bool");
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub enum Number {
     Integer(i64),
     Float(f64),
+}
+
+impl PartialEq<Self> for Number {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Number::Integer(a), Number::Integer(b)) => a == b,
+            (Number::Integer(a), Number::Float(b)) => (*a as f64) == *b,
+            (Number::Float(a), Number::Integer(b)) => *a == (*b as f64),
+            (Number::Float(a), Number::Float(b)) => a == b,
+        }
+    }
 }
 
 trait IntoNumber {
@@ -147,7 +158,6 @@ def_binary_number_op!(LessOp, <, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(GreaterOp, >, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(LessEqOp, <=, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(GreaterEqOp, >=, ATOM_TYPE_BOOL, Bool);
-def_binary_number_op!(EqualOp, ==, ATOM_TYPE_BOOL, Bool);
 
 #[cfg(test)]
 mod tests {
