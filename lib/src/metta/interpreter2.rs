@@ -575,9 +575,8 @@ mod tests {
     fn interpret_atom_evaluate_pure_expression_variable_name_conflict() {
         let space = space("(= (foo ($W)) True)");
         let result = interpret_atom(&space, atom("(eval (foo $W))", bind!{}));
-        assert_eq!(result[0].0, metta_atom("True"));
+        assert_eq!(result[0].0, sym!("True"));
     }
-
 
     #[test]
     fn interpret_atom_evaluate_grounded_expression() {

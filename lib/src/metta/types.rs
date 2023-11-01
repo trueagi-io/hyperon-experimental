@@ -472,7 +472,25 @@ pub fn validate_atom(space: &dyn Space, atom: &Atom) -> bool {
 mod tests {
     use super::*;
     use crate::atom::matcher::atoms_are_equivalent;
-    use crate::common::test_utils::{metta_atom as atom, metta_space};
+    use crate::metta::runner::*;
+    use crate::metta::text::SExprParser;
+
+    fn metta_space(text: &str) -> GroundingSpace {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let mut space = GroundingSpace::new();
+        let mut parser = SExprParser::new(text);
+        while let Some(atom) = parser.parse(&*metta.tokenizer().borrow()).unwrap() {
+            space.add(atom);
+        }
+        space
+    }
+
+    fn atom(atom_str: &str) -> Atom {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let mut parser = SExprParser::new(atom_str);
+        let atom = parser.parse(&*metta.tokenizer().borrow()).unwrap().expect("Single atom is expected");
+        atom
+    }
 
     fn grammar_space() -> GroundingSpace {
         let mut space = GroundingSpace::new();
