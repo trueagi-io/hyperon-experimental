@@ -758,7 +758,7 @@ impl Display for PrintlnOp {
 
 impl Grounded for PrintlnOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -816,7 +816,7 @@ impl Display for TraceOp {
 
 impl Grounded for TraceOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, Atom::var("a"), Atom::var("a")])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, Atom::var("a"), Atom::var("a")])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
