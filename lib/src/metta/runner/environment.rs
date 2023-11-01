@@ -140,6 +140,9 @@ impl EnvBuilder {
     /// Configures the Environment not to load nor create any config files
     pub fn set_no_config_dir(mut self) -> Self {
         self.no_cfg_dir = true;
+        if self.create_cfg_dir {
+            panic!("Fatal Error: set_no_config_dir is incompatible with create_config_dir");
+        }
         if self.env.config_dir.is_some() {
             panic!("Fatal Error: set_config_dir is incompatible with set_no_config_dir");
         }
