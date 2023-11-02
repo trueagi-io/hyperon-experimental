@@ -156,16 +156,20 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 ///
 /// ```
 /// use hyperon::{Atom, expr, assert_eq_no_order};
-/// use hyperon::metta::{metta_space, ATOM_TYPE_UNDEFINED};
+/// use hyperon::metta::ATOM_TYPE_UNDEFINED;
+/// use hyperon::metta::runner::*;
+/// use hyperon::metta::text::SExprParser;
 /// use hyperon::metta::types::get_atom_types;
 ///
-/// let space = metta_space("
+/// let metta = Metta::new(None);
+/// metta.run(SExprParser::new("
 ///     (: f (-> A B))
 ///     (: a A)
 ///     (: a B)
 ///     (: b B)
-/// ");
+/// ")).unwrap();
 ///
+/// let space = metta.space();
 /// assert_eq_no_order!(get_atom_types(&space, &expr!(x)), vec![ATOM_TYPE_UNDEFINED]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!({1})), vec![expr!("i32")]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("na")), vec![ATOM_TYPE_UNDEFINED]);
@@ -386,12 +390,14 @@ fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, B
 ///
 /// ```
 /// use hyperon::expr;
-/// use hyperon::metta::metta_space;
+/// use hyperon::metta::runner::*;
+/// use hyperon::metta::text::SExprParser;
 /// use hyperon::metta::types::check_type;
 ///
-/// let space = metta_space("(: a A) (: a B)");
+/// let metta = Metta::new(None);
+/// metta.run(SExprParser::new("(: a A) (: a B)")).unwrap();
 ///
-/// assert!(check_type(&space, &expr!("a"), &expr!("B")));
+/// assert!(check_type(&metta.space(), &expr!("a"), &expr!("B")));
 /// ```
 pub fn check_type(space: &dyn Space, atom: &Atom, typ: &Atom) -> bool {
     check_meta_type(atom, typ) || !get_matched_types(space, atom, typ).is_empty()
@@ -405,11 +411,13 @@ pub fn check_type(space: &dyn Space, atom: &Atom, typ: &Atom) -> bool {
 ///
 /// ```
 /// use hyperon::{expr, bind};
-/// use hyperon::metta::metta_space;
+/// use hyperon::metta::runner::*;
+/// use hyperon::metta::text::SExprParser;
 /// use hyperon::metta::types::get_type_bindings;
 ///
-/// let space = metta_space("(: a (List A))");
-/// let types = get_type_bindings(&space, &expr!("a"), &expr!("List" t));
+/// let metta = Metta::new(None);
+/// metta.run(SExprParser::new("(: a (List A))")).unwrap();
+/// let types = get_type_bindings(&metta.space(), &expr!("a"), &expr!("List" t));
 ///
 /// assert_eq!(types, vec![(expr!("List" "A"), bind!{ t: expr!("A") })]);
 /// ```
@@ -445,11 +453,14 @@ fn check_meta_type(atom: &Atom, typ: &Atom) -> bool {
 ///
 /// ```
 /// use hyperon::expr;
-/// use hyperon::metta::metta_space;
+/// use hyperon::metta::runner::*;
+/// use hyperon::metta::text::SExprParser;
 /// use hyperon::metta::types::validate_atom;
 ///
-/// let space = metta_space("(: foo (-> A B)) (: a A) (: b B)");
+/// let metta = Metta::new(None);
+/// metta.run(SExprParser::new("(: foo (-> A B)) (: a A) (: b B)")).unwrap();
 ///
+/// let space = metta.space();
 /// assert!(validate_atom(&space, &expr!("foo" "a")));
 /// assert!(!validate_atom(&space, &expr!("foo" "b")));
 /// ```
@@ -461,8 +472,25 @@ pub fn validate_atom(space: &dyn Space, atom: &Atom) -> bool {
 mod tests {
     use super::*;
     use crate::atom::matcher::atoms_are_equivalent;
-    use crate::metta::metta_space;
-    use crate::metta::metta_atom as atom;
+    use crate::metta::runner::*;
+    use crate::metta::text::SExprParser;
+
+    fn metta_space(text: &str) -> GroundingSpace {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let mut space = GroundingSpace::new();
+        let mut parser = SExprParser::new(text);
+        while let Some(atom) = parser.parse(&*metta.tokenizer().borrow()).unwrap() {
+            space.add(atom);
+        }
+        space
+    }
+
+    fn atom(atom_str: &str) -> Atom {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let mut parser = SExprParser::new(atom_str);
+        let atom = parser.parse(&*metta.tokenizer().borrow()).unwrap().expect("Single atom is expected");
+        atom
+    }
 
     fn grammar_space() -> GroundingSpace {
         let mut space = GroundingSpace::new();
@@ -890,7 +918,7 @@ mod tests {
             (: p X)
             (: p P)
         ");
-        assert_eq!(get_atom_types(&space, &metta_atom("(= (foo) (bar p))")),
+        assert_eq!(get_atom_types(&space, &atom("(= (foo) (bar p))")),
             vec![expr!("Type")]);
     }
 
