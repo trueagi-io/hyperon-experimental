@@ -724,6 +724,8 @@ impl<T: Debug> Debug for AlternativeInterpretationsPlan<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::*;
+    use crate::common::test_utils::*;
 
     #[test]
     fn test_match_all() {
