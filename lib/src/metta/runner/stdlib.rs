@@ -1218,6 +1218,12 @@ pub fn register_rust_tokens(metta: &Metta) {
     tref.register_token(regex(r">="), move |_| { ge_op.clone() });
     let eq_op = Atom::gnd(EqualOp{});
     tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
+    let and_op = Atom::gnd(AndOp{});
+    tref.register_token(regex(r"and"), move |_| { and_op.clone() });
+    let or_op = Atom::gnd(OrOp{});
+    tref.register_token(regex(r"or"), move |_| { or_op.clone() });
+    let not_op = Atom::gnd(NotOp{});
+    tref.register_token(regex(r"not"), move |_| { not_op.clone() });
 
     metta.tokenizer().borrow_mut().move_front(&mut rust_tokens);
 }
@@ -1625,5 +1631,10 @@ mod tests {
     #[test]
     fn test_stdlib_uses_rust_grounded_tokens() {
         assert_eq!(run_program("!(if True ok nok)"), Ok(vec![vec![Atom::sym("ok")]]));
+    }
+
+    #[test]
+    fn test_let_op_inside_other_operation() {
+        assert_eq!(run_program("!(and True (let $x False $x))"), Ok(vec![vec![expr!({Bool(false)})]]));
     }
 }
