@@ -203,22 +203,24 @@ class Environment:
         else:
             return None
 
-    def init_common_env(working_dir = None, config_dir = None, disable_config = False, is_test = False, include_paths = []):
+    def init_common_env(working_dir = None, config_dir = None, create_config = False, disable_config = False, is_test = False, include_paths = []):
         """Initialize the common environment with the supplied args"""
-        builder = Environment.custom_env(working_dir, config_dir, disable_config, is_test, include_paths)
+        builder = Environment.custom_env(working_dir, config_dir, create_config, disable_config, is_test, include_paths)
         return hp.env_builder_init_common_env(builder)
 
     def test_env():
         """Returns an EnvBuilder object specifying a unit-test environment, that can be used to init a MeTTa runner"""
         return hp.env_builder_use_test_env()
 
-    def custom_env(working_dir = None, config_dir = None, disable_config = False, is_test = False, include_paths = []):
+    def custom_env(working_dir = None, config_dir = None, create_config = False, disable_config = False, is_test = False, include_paths = []):
         """Returns an EnvBuilder object that can be used to init a MeTTa runner, if you need multiple environments to coexist in the same process"""
         builder = hp.env_builder_start()
         if (working_dir is not None):
             hp.env_builder_set_working_dir(builder, working_dir)
         if (config_dir is not None):
             hp.env_builder_set_config_dir(builder, config_dir)
+        if (create_config):
+            hp.env_builder_create_config_dir(builder)
         if (disable_config):
             hp.env_builder_disable_config_dir(builder)
         if (is_test):

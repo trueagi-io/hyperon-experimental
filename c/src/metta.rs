@@ -926,7 +926,7 @@ pub extern "C" fn metta_nth_search_path(metta: *const metta_t, idx: usize, buf: 
     let path = metta.search_paths().nth(idx);
     match path {
         Some(path) => write_into_buf(path.display(), buf, buf_len),
-        None => 0
+        None => write_into_buf("", buf, buf_len) //Write just the terminator char, if there is room
     }
 }
 
@@ -1217,7 +1217,7 @@ pub extern "C" fn runner_state_current_results(state: *const runner_state_t,
 pub extern "C" fn environment_config_dir(buf: *mut c_char, buf_len: usize) -> usize {
     match Environment::common_env().config_dir() {
         Some(path) => write_into_buf(path.display(), buf, buf_len),
-        None => 0
+        None => write_into_buf("", buf, buf_len) //Write just the terminator char, if there is room
     }
 }
 
@@ -1335,6 +1335,18 @@ pub extern "C" fn env_builder_set_config_dir(builder: *mut env_builder_t, path: 
     } else {
         builder.set_config_dir(&PathBuf::from(cstr_as_str(path)))
     };
+    *builder_arg_ref = builder.into();
+}
+
+/// @brief Configures the environment to create the config dir if it doesn't already exist
+/// @ingroup environment_group
+/// @param[in]  builder  A pointer to the in-process environment builder state
+///
+#[no_mangle]
+pub extern "C" fn env_builder_create_config_dir(builder: *mut env_builder_t) {
+    let builder_arg_ref = unsafe{ &mut *builder };
+    let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
+    let builder = builder.create_config_dir();
     *builder_arg_ref = builder.into();
 }
 

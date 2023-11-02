@@ -355,6 +355,7 @@ pub mod metta_interface_mod {
         pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
             EnvBuilder::new()
                 .set_working_dir(Some(&working_dir))
+                .create_config_dir()
                 .add_include_paths(include_paths)
                 .init_common_env();
 
