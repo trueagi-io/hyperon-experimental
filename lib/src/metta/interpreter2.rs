@@ -508,6 +508,7 @@ fn cons(bindings: Bindings, head: Atom, tail: ExpressionAtom) -> Vec<Interpreted
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::test_utils::{metta_atom, metta_space};
 
     #[test]
     fn interpret_atom_evaluate_incorrect_args() {
@@ -576,7 +577,6 @@ mod tests {
         let result = interpret_atom(&space, atom("(eval (foo $W))", bind!{}));
         assert_eq!(result[0].0, sym!("True"));
     }
-
 
     #[test]
     fn interpret_atom_evaluate_grounded_expression() {
