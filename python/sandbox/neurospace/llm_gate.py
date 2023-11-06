@@ -159,3 +159,13 @@ def llmgate_atoms(metta):
         r"atom2msg": msgAtom
     }
 
+
+def str_find_all(str, values):
+    return list(filter(lambda v: v in str, values))
+
+@register_atoms
+def postproc_atoms():
+    strfindAtom = OperationAtom('str-find-all', str_find_all)
+    return {
+        r"str-find-all": strfindAtom,
+    }
