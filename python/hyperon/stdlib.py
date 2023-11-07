@@ -41,6 +41,8 @@ def bool_ops():
                               ['$t', '$t', 'Bool'], unwrap=False)
     greaterAtom = OperationAtom('>', lambda a, b: a > b, ['Number', 'Number', 'Bool'])
     lessAtom = OperationAtom('<', lambda a, b: a < b, ['Number', 'Number', 'Bool'])
+    greaterEqAtom = OperationAtom('>=', lambda a, b: a >= b, ['Number', 'Number', 'Bool'])
+    lessEqAtom = OperationAtom('<=', lambda a, b: a <= b, ['Number', 'Number', 'Bool'])
     orAtom = OperationAtom('or', lambda a, b: a or b, ['Bool', 'Bool', 'Bool'])
     andAtom = OperationAtom('and', lambda a, b: a and b, ['Bool', 'Bool', 'Bool'])
     notAtom = OperationAtom('not', lambda a: not a, ['Bool', 'Bool'])
@@ -48,6 +50,8 @@ def bool_ops():
         r"==": equalAtom,
         r"<": lessAtom,
         r">": greaterAtom,
+        r"<=": lessEqAtom,
+        r">=": greaterEqAtom,
         r"or": orAtom,
         r"and": andAtom,
         r"not": notAtom
