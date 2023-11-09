@@ -18,7 +18,8 @@ path = "src/lib.rs"
 crate-type = ["lib"]
 
 [features]
-default = ["variable_operation"]
-#default = ["variable_operation", "minimal"]
-minimal = []
-variable_operation = []
+default = []
+minimal = [] # enables minimal MeTTa interpreter
+variable_operation = [] # enables evaluation of the expressions which have
+                        # a variable on the first position, doesn't affect
+                        # minimal MeTTa functionality
