@@ -79,6 +79,12 @@ cargo build
 cargo test
 ```
 
+The experimental features can be enabled by editing
+[Cargo.toml](./lib/Cargo.toml) file before compilation or by using `--features`
+[command line option](https://doc.rust-lang.org/cargo/reference/features.html#command-line-feature-options).
+See comments in the `[features]` section of the file for the features
+descriptions.
+
 Run examples:
 ```
 cargo run --example sorted_list
