@@ -317,13 +317,14 @@ fn is_variable_op(expr: &ExpressionAtom) -> bool {
     }
 }
 
-fn has_grounded_sub_expr(expr: &Atom) -> bool {
-    return SubexprStream::from_expr(expr.clone(), TOP_DOWN_DEPTH_WALK)
-        .any(|sub| if let Atom::Expression(sub) = sub {
-            is_grounded_op(&sub)
-        } else {
-            panic!("Expression is expected");
-        });
+fn has_grounded_sub_expr(expr: &ExpressionAtom) -> bool {
+    return is_grounded_op(expr) ||
+        SubexprStream::from_expr(Atom::Expression(expr.clone()), TOP_DOWN_DEPTH_WALK)
+            .any(|sub| if let Atom::Expression(sub) = sub {
+                    is_grounded_op(&sub)
+                } else {
+                    panic!("Expression is expected");
+                });
 }
 
 fn interpret_as_type_plan<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>,
@@ -520,8 +521,8 @@ fn call_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input: In
         }).collect();
         return_cached_result_plan(result)
     } else {
-        if let Atom::Expression(_) = input.atom() {
-            if !has_grounded_sub_expr(input.atom()) {
+        if let Atom::Expression(expr) = input.atom() {
+            if !has_grounded_sub_expr(expr) {
                 let key = input.atom().clone();
                 StepResult::execute(SequencePlan::new(
                     OrPlan::new(
