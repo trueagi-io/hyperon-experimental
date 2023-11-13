@@ -3,6 +3,7 @@ from hyperon.ext import register_atoms
 
 
 from hyperon_das import DistributedAtomSpace
+from hyperon_das.utils import QueryOutputFormat
 
 from hyperon_das.pattern_matcher import (
     Link,
@@ -54,11 +55,12 @@ class DASpace(AbstractSpace):
 
     def query(self, query_atom):
         query = self._atom2query(query_atom)
-        answer = PatternMatchingAnswer()
+        answer = self.das.query(query,
+            {'return_type': QueryOutputFormat.HANDLE, 'toplevel_only': True})
         new_bindings_set = BindingsSet.empty()
-        if not query.matched(self.das.db, answer):
+        if answer is None:
             return new_bindings_set
-        for a in answer.assignments:
+        for a in answer['mapping']:
             bindings = Bindings()
             for var, val in a.mapping.items():
                 # remove '$', because it is automatically added
