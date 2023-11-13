@@ -78,6 +78,7 @@ impl Environment {
 pub struct EnvBuilder {
     env: Environment,
     no_cfg_dir: bool,
+    create_cfg_dir: bool,
 }
 
 impl EnvBuilder {
@@ -97,6 +98,7 @@ impl EnvBuilder {
         Self {
             env: Environment::new(),
             no_cfg_dir: false,
+            create_cfg_dir: false,
         }
     }
 
@@ -124,9 +126,23 @@ impl EnvBuilder {
         self
     }
 
+    /// Configures the environment to create a config directory with default config files, if no directory is found
+    ///
+    /// NOTE: If the config directory exists but some config files are missing, default files will not be created.
+    pub fn create_config_dir(mut self) -> Self {
+        self.create_cfg_dir = true;
+        if self.no_cfg_dir {
+            panic!("Fatal Error: create_config_dir is incompatible with set_no_config_dir");
+        }
+        self
+    }
+
     /// Configures the Environment not to load nor create any config files
     pub fn set_no_config_dir(mut self) -> Self {
         self.no_cfg_dir = true;
+        if self.create_cfg_dir {
+            panic!("Fatal Error: set_no_config_dir is incompatible with create_config_dir");
+        }
         if self.env.config_dir.is_some() {
             panic!("Fatal Error: set_config_dir is incompatible with set_no_config_dir");
         }
@@ -146,8 +162,8 @@ impl EnvBuilder {
     ///
     /// NOTE: The most recently added paths will have the highest search priority, save for the `working_dir`,
     ///   and paths returned first by the iterator will have higher priority within the same call to add_include_paths.
-    pub fn add_include_paths<P: Borrow<Path>, I: IntoIterator<Item=P>>(mut self, paths: I) -> Self {
-        let mut additional_paths: Vec<PathBuf> = paths.into_iter().map(|path| path.borrow().into()).collect();
+    pub fn add_include_paths<P: AsRef<Path>, I: IntoIterator<Item=P>>(mut self, paths: I) -> Self {
+        let mut additional_paths: Vec<PathBuf> = paths.into_iter().map(|path| path.as_ref().into()).collect();
         additional_paths.extend(self.env.extra_include_paths);
         self.env.extra_include_paths = additional_paths;
         self
@@ -169,12 +185,12 @@ impl EnvBuilder {
     ///
     /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [common_env] method.
     pub(crate) fn build(self) -> Environment {
-
         let mut env = self.env;
 
         //Init the logger.  This will have no effect if the logger has already been initialized
         let _ = env_logger::builder().is_test(env.is_test).try_init();
 
+        //Construct the platform-specific config dir location, if an explicit location wasn't provided
         if !self.no_cfg_dir {
             if env.config_dir.is_none() {
                 match ProjectDirs::from("io", "TrueAGI",  "metta") {
@@ -190,19 +206,17 @@ impl EnvBuilder {
 
         if let Some(config_dir) = &env.config_dir {
 
-            //Create the modules dir inside the config dir, if it doesn't already exist.
-            // This will create the cfg_dir iteslf in the process
             let modules_dir = config_dir.join("modules");
-            std::fs::create_dir_all(&modules_dir).unwrap();
-
-            //Push the "modules" dir, as the last place to search after the other paths that were specified
-            //TODO: the config.metta file will be able to append / modify the search paths, and can choose not to
-            // include the "modules" dir in the future.
-            env.extra_include_paths.push(modules_dir);
-
-            //Create the default init.metta file if it doesn't already exist
             let init_metta_path = config_dir.join("init.metta");
-            if !init_metta_path.exists() {
+
+            //Create the default config dir, if that part of our directive
+            if self.create_cfg_dir && !config_dir.exists() {
+
+                //Create the modules dir inside the config dir
+                // This will create the cfg_dir iteslf in the process
+                std::fs::create_dir_all(&modules_dir).unwrap();
+
+                //Create the default init.metta file
                 let mut file = fs::OpenOptions::new()
                     .create(true)
                     .write(true)
@@ -210,7 +224,22 @@ impl EnvBuilder {
                     .expect(&format!("Error creating default init file at {init_metta_path:?}"));
                 file.write_all(&DEFAULT_INIT_METTA).unwrap();
             }
-            env.init_metta_path = Some(init_metta_path);
+
+            //If the config_dir in the Environment still doesn't exist (and we couldn't create it), then set it to None
+            if !config_dir.exists() {
+                env.config_dir = None;
+            }
+
+            //Push the "modules" dir, as the last place to search after the other paths that were specified
+            //TODO: the config.metta file should be able to append / modify the search paths, and can choose not to
+            // include the "modules" dir in the future.
+            if modules_dir.exists() {
+                env.extra_include_paths.push(modules_dir);
+            }
+
+            if init_metta_path.exists() {
+                env.init_metta_path = Some(init_metta_path);
+            }
         }
 
         //TODO: This line below is a stop-gap to match old behavior

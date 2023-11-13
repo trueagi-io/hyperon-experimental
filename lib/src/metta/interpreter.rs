@@ -310,13 +310,21 @@ fn is_grounded_op(expr: &ExpressionAtom) -> bool {
     }
 }
 
-fn has_grounded_sub_expr(expr: &Atom) -> bool {
-    return SubexprStream::from_expr(expr.clone(), TOP_DOWN_DEPTH_WALK)
-        .any(|sub| if let Atom::Expression(sub) = sub {
-            is_grounded_op(&sub)
-        } else {
-            panic!("Expression is expected");
-        });
+fn is_variable_op(expr: &ExpressionAtom) -> bool {
+    match expr.children().get(0) {
+        Some(Atom::Variable(_)) => true,
+        _ => false,
+    }
+}
+
+fn has_grounded_sub_expr(expr: &ExpressionAtom) -> bool {
+    return is_grounded_op(expr) ||
+        SubexprStream::from_expr(Atom::Expression(expr.clone()), TOP_DOWN_DEPTH_WALK)
+            .any(|sub| if let Atom::Expression(sub) = sub {
+                    is_grounded_op(&sub)
+                } else {
+                    panic!("Expression is expected");
+                });
 }
 
 fn interpret_as_type_plan<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>,
@@ -513,8 +521,8 @@ fn call_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input: In
         }).collect();
         return_cached_result_plan(result)
     } else {
-        if let Atom::Expression(_) = input.atom() {
-            if !has_grounded_sub_expr(input.atom()) {
+        if let Atom::Expression(expr) = input.atom() {
+            if !has_grounded_sub_expr(expr) {
                 let key = input.atom().clone();
                 StepResult::execute(SequencePlan::new(
                     OrPlan::new(
@@ -551,6 +559,12 @@ fn interpret_reducted_plan<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'
     if let Atom::Expression(ref expr) = input.atom() {
         if is_grounded_op(expr) {
             Box::new(execute_plan(context, input))
+        } else if is_variable_op(expr) {
+            #[cfg(feature = "variable_operation")]
+            let result = Box::new(match_plan(context, input));
+            #[cfg(not(feature = "variable_operation"))]
+            let result = Box::new(StepResult::ret(vec![input]));
+            result
         } else {
             Box::new(match_plan(context, input))
         }
@@ -724,6 +738,8 @@ impl<T: Debug> Debug for AlternativeInterpretationsPlan<'_, T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::*;
+    use crate::common::test_utils::*;
 
     #[test]
     fn test_match_all() {
@@ -743,16 +759,16 @@ mod tests {
         space.add(expr!("=" ("and" "True" "True") "True"));
         space.add(expr!("=" ("if" "True" then else) then));
         space.add(expr!("=" ("if" "False" then else) else));
-        space.add(expr!("=" ("Fritz" "croaks") "True"));
-        space.add(expr!("=" ("Fritz" "eats-flies") "True"));
-        space.add(expr!("=" ("Tweety" "chirps") "True"));
-        space.add(expr!("=" ("Tweety" "yellow") "True"));
-        space.add(expr!("=" ("Tweety" "eats-flies") "True"));
-        let expr = expr!("if" ("and" (x "croaks") (x "eats-flies"))
-            ("=" (x "frog") "True") "nop");
+        space.add(expr!("=" ("croaks" "Fritz") "True"));
+        space.add(expr!("=" ("eats-flies" "Fritz") "True"));
+        space.add(expr!("=" ("chirps" "Tweety") "True"));
+        space.add(expr!("=" ("yellow" "Tweety") "True"));
+        space.add(expr!("=" ("eats-flies" "Tweety") "True"));
+        let expr = expr!("if" ("and" ("croaks" x) ("eats-flies" x))
+            ("=" ("frog" x) "True") "nop");
 
         assert_eq!(interpret(&space, &expr),
-            Ok(vec![expr!("=" ("Fritz" "frog") "True")]));
+            Ok(vec![expr!("=" ("frog" "Fritz") "True")]));
     }
 
     fn results_are_equivalent(actual: &Result<Vec<Atom>, String>,
@@ -1078,6 +1094,20 @@ mod tests {
         } else {
             panic!("Non-empty result is expected");
         }
+    }
+
+    #[test]
+    fn interpret_match_variable_operation() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("=" ("foo" x) ("foo result" x)));
+        space.add(expr!("=" ("bar" x) ("bar result" x)));
+
+        let actual = interpret(&space, &expr!(op "arg")).unwrap();
+
+        #[cfg(feature = "variable_operation")]
+        assert_eq_no_order!(actual, vec![expr!("foo result" "arg"), expr!("bar result" "arg")]);
+        #[cfg(not(feature = "variable_operation"))]
+        assert_eq!(actual, vec![expr!(op "arg")]);
     }
 }
 

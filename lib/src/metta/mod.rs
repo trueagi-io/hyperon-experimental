@@ -7,11 +7,7 @@ pub mod interpreter2;
 pub mod types;
 pub mod runner;
 
-use text::{SExprParser, Tokenizer};
-use regex::Regex;
-
 use crate::*;
-use crate::common::*;
 use crate::space::grounding::GroundingSpace;
 
 pub const ATOM_TYPE_UNDEFINED : Atom = sym!("%Undefined%");
@@ -33,13 +29,27 @@ pub const NOT_REDUCIBLE_SYMBOL : Atom = sym!("NotReducible");
 pub const NO_VALID_ALTERNATIVES : Atom = sym!("NoValidAlternatives");
 
 pub const EMPTY_SYMBOL : Atom = sym!("Empty");
-pub const VOID_SYMBOL : Atom = sym!("Void");
 
 pub const EVAL_SYMBOL : Atom = sym!("eval");
 pub const CHAIN_SYMBOL : Atom = sym!("chain");
 pub const UNIFY_SYMBOL : Atom = sym!("unify");
 pub const DECONS_SYMBOL : Atom = sym!("decons");
 pub const CONS_SYMBOL : Atom = sym!("cons");
+pub const FUNCTION_SYMBOL : Atom = sym!("function");
+pub const RETURN_SYMBOL : Atom = sym!("return");
+
+pub const INTERPRET_SYMBOL : Atom = sym!("interpret");
+
+//TODO: convert these from functions to static strcutures, when Atoms are Send+Sync
+#[allow(non_snake_case)]
+pub fn UNIT_ATOM() -> Atom {
+    Atom::expr([])
+}
+
+#[allow(non_snake_case)]
+pub fn UNIT_TYPE() -> Atom {
+    Atom::expr([ARROW_SYMBOL])
+}
 
 /// Initializes an error expression atom
 pub fn error_atom(err_atom: Option<Atom>, err_code: Option<Atom>, message: String) -> Atom {
@@ -82,51 +92,4 @@ pub fn atom_error_message(atom: &Atom) -> &str {
         _ => panic!("{}", PANIC_STR)
     }
 }
-
-//QUESTION: These functions below seem to only be used in tests.  If that's the case, should we
-// move them into a test-only module so they aren't exposed as part of the public API?
-//Alternatively rewrite the tests to use a runner?
-//
-//Also, a "Metta::parse_atoms() -> Vec<Atom>" method
-// might be useful to parse atoms with the context of a runner's tokenizer as a compliment to
-// RunnerState::new_with_atoms
-
-// TODO: use stdlib to parse input text
-pub fn metta_space(text: &str) -> GroundingSpace {
-    let tokenizer = common_tokenizer();
-    let mut parser = SExprParser::new(text);
-    let mut space = GroundingSpace::new();
-    loop {
-        let atom = parser.parse(&tokenizer).unwrap();
-        if let Some(atom) = atom {
-            space.add(atom);
-        } else {
-            break;
-        }
-    }
-    space
-}
-
-fn common_tokenizer() -> Tokenizer {
-    let mut tokenizer = Tokenizer::new();
-    tokenizer.register_token(Regex::new(r"\d+").unwrap(),
-        |n| Atom::value(n.parse::<i32>().unwrap()));
-    tokenizer.register_token(Regex::new(r"true|false").unwrap(),
-        |b| Atom::value(b.parse::<bool>().unwrap()));
-    tokenizer.register_token(Regex::new(r"<").unwrap(), |_| Atom::gnd(LT));
-    tokenizer
-}
-
-// TODO: use stdlib to parse input text
-pub fn metta_atom(atom: &str) -> Atom {
-    let tokenizer = common_tokenizer();
-    let mut parser = SExprParser::new(atom);
-    let atom = parser.parse(&tokenizer).unwrap();
-    if let Some(atom) = atom {
-        atom
-    } else {
-        panic!("Single atom is expected");
-    }
-}
-
 

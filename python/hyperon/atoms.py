@@ -120,7 +120,7 @@ class AtomType:
 
 class Atoms:
 
-    VOID = Atom._from_catom(hp.CAtoms.VOID)
+    EMPTY = Atom._from_catom(hp.CAtoms.EMPTY)
 
 class GroundedAtom(Atom):
     """
@@ -186,7 +186,7 @@ class GroundedObject:
         self.id = id
 
     def __repr__(self):
-        """Returns the object's ID if present, or a string representation of 
+        """Returns the object's ID if present, or a string representation of
         its content if not."""
         # Overwrite Python default representation of a string to use
         # double quotes instead of single quotes.
@@ -213,7 +213,7 @@ class ValueObject(GroundedObject):
         obj1 = ValueObject(5)
         obj2 = ValueObject(5)
         obj3 = ValueObject(6)
-        
+
         print(obj1 == obj2)  # True
         print(obj1 == obj3)  # False
     """
