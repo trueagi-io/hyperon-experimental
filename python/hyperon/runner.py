@@ -133,9 +133,10 @@ class MeTTa:
         if not isinstance(mod_name, str):
             mod_name = repr(mod_name)
         mod = MeTTa.load_py_module(self, mod_name)
-        if (mod is None):
+        if mod is None:
             # If that failed, try and load the module from a file
-            file_name = mod_name + ".py"
+            file_name = mod_name if ".py" in mod_name else \
+                        mod_name.replace('.', '/') + ".py"
 
             # Check each search path directory in order, until we find the module we're looking for
             num_search_paths = hp.metta_search_path_cnt(self.cmetta)
