@@ -142,15 +142,15 @@ class MeTTa:
             num_search_paths = hp.metta_search_path_cnt(self.cmetta)
             search_path_idx = 0
             found_path = None
-            while (search_path_idx < num_search_paths):
+            while search_path_idx < num_search_paths:
                 search_path = hp.metta_nth_search_path(self.cmetta, search_path_idx)
                 test_path = os.path.join(search_path, file_name)
-                if (os.path.exists(test_path)):
+                if os.path.exists(test_path):
                     found_path = test_path
                     break
                 search_path_idx += 1
 
-            if (found_path is not None):
+            if found_path is not None:
                 MeTTa.load_py_module_from_path(self, mod_name, found_path)
             else:
                 raise RuntimeError("Failed to load module " + mod_name + "; could not locate file: " + file_name)
