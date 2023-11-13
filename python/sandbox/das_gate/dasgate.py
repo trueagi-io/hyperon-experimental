@@ -55,7 +55,8 @@ class DASpace(AbstractSpace):
 
     def query(self, query_atom):
         query = self._atom2query(query_atom)
-        answer = self.das.query(query, {'return_type': QueryOutputFormat.HANDLE})
+        answer = self.das.query(query,
+            {'return_type': QueryOutputFormat.HANDLE, 'toplevel_only': True})
         new_bindings_set = BindingsSet.empty()
         if answer is None:
             return new_bindings_set
