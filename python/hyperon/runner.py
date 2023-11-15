@@ -116,7 +116,6 @@ class MeTTa:
             name = repr(name)
         try:
             mod = import_module(name)
-            print("HERE2 ", name, ":", mod)
             self.pymods[name] = mod
             for n in dir(mod):
                 obj = getattr(mod, n)
@@ -124,7 +123,6 @@ class MeTTa:
                     obj(self)
             return mod
         except:
-            print("HERE1111: ", name)
             return None
 
     def load_py_module_from_mod_or_file(self, mod_name):
