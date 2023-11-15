@@ -1250,7 +1250,8 @@ mod test {
 
     #[test]
     fn match_variable_with_unique_itself() {
-        let x_uniq = Atom::Variable(VariableAtom::new_id("x", 1));
+        let last_id = VariableAtom::new("x").make_unique().id;
+        let x_uniq = Atom::Variable(VariableAtom::new_id("x", last_id + 1));
         assert_match(
             make_variables_unique(expr!(("A" x) ("B" x))),
                                   expr!(("A" x)    z   ),
