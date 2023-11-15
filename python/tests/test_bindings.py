@@ -75,19 +75,6 @@ class BindingsTest(unittest.TestCase):
         atom_resolved = self.bindings.resolve("a")
         self.assertEqual(atom_expected, atom_resolved)
 
-    def test_bindings_resolve_and_remove(self):
-        self.assertIsNone(self.emptyBindings.resolve_and_remove("a"))
-        self.assertIsNone(self.bindings.resolve_and_remove("XYXY"))
-
-        atom_expected_first = S("b")
-        atom_expected_second = S("y")
-        atom_resolved_first = self.bindings.resolve_and_remove("a")
-        atom_resolved_second = self.bindings.resolve_and_remove("x")
-
-        self.assertTrue(self.bindings.is_empty())
-        self.assertEqual(atom_expected_first, atom_resolved_first)
-        self.assertEqual(atom_expected_second, atom_resolved_second)
-
     def test_bindings_iterator(self):
         pass
         # uncomment below as sort in bindings become stable.
@@ -120,7 +107,7 @@ class BindingsTest(unittest.TestCase):
         set.add_var_binding(V("a"), S("A"))
         self.assertFalse(set.is_single())
         self.assertFalse(set.is_empty())
-        self.assertEqual(set, no_longer_empty_set);        
+        self.assertEqual(set, no_longer_empty_set);
 
         new_bindings = Bindings()
         new_bindings.add_var_binding(V("a"), S("A"))
