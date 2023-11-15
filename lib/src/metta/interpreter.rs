@@ -624,9 +624,8 @@ fn match_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input: I
     let mut query_bindings = context.space.query(&query);
     let results: Vec<InterpretedAtom> = query_bindings
         .drain(0..)
-        .map(|mut query_binding| {
-            let result = query_binding.resolve_and_remove(&var_x).unwrap();
-            let result = apply_bindings_to_atom(&result, &query_binding);
+        .map(|query_binding| {
+            let result = apply_bindings_to_atom(&Atom::Variable(var_x.clone()), &query_binding);
             // TODO: sometimes we apply bindings twice: first time here,
             // second time when inserting matched argument into nesting
             // expression.  It should be enough doing it only once.

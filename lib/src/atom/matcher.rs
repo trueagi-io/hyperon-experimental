@@ -429,25 +429,6 @@ impl Bindings {
         var_by_id
     }
 
-    /// Resolve variable, remove it from [Bindings] and return result.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use hyperon::*;
-    ///
-    /// let mut bindings = bind!{ x: expr!(y), y: expr!("A" z), z: expr!("B") };
-    ///
-    /// assert_eq!(bindings.resolve_and_remove(&VariableAtom::new("x")), Some(expr!("A" "B")));
-    /// assert_eq!(bindings.resolve(&VariableAtom::new("x")), None);
-    /// assert_eq!(bindings.resolve(&VariableAtom::new("y")), Some(expr!("A" "B")));
-    /// ```
-    pub fn resolve_and_remove(&mut self, var: &VariableAtom) -> Option<Atom> {
-        let result = self.resolve(&var);
-        self.remove(&var);
-        result
-    }
-
     fn remove(&mut self, var: &VariableAtom) -> Option<Atom> {
         match self.id_by_var.remove(var) {
             None => None,
