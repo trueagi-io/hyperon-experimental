@@ -1235,6 +1235,21 @@ pub static METTA_CODE: &'static str = "
     (= (if True $then $else) $then)
     (= (if False $then $else) $else)
     (: Error (-> Atom Atom ErrorType))
+
+
+    ; quote prevents atom from being reduced
+    (: quote (-> Atom Atom))
+
+    ; unify matches two atoms and returns $then if they are matched
+    ; and $else otherwise.
+    (: unify (-> Atom Atom Atom Atom %Undefined%))
+    (= (unify $a $a $then $else) $then)
+    (= (unify $a $b $then $else)
+      (case (let (quote $a) (quote $b) no-result) ((%void% $else))) )
+
+    ; empty removes current result from a non-deterministic result
+    (: empty (-> %Undefined%))
+    (= (empty) (let a b never-happens))
 ";
 
 #[cfg(all(test, not(feature = "minimal")))]
@@ -1636,5 +1651,54 @@ mod tests {
     #[test]
     fn test_let_op_inside_other_operation() {
         assert_eq!(run_program("!(and True (let $x False $x))"), Ok(vec![vec![expr!({Bool(false)})]]));
+    }
+
+    #[test]
+    fn test_quote() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new("
+            (= (foo) a)
+            (= (foo) b)
+            !(foo)
+            !(quote (foo))
+        ");
+
+        assert_eq_metta_results!(metta.run(parser),
+            Ok(vec![
+                vec![expr!("a"), expr!("b")],
+                vec![expr!("quote" ("foo"))],
+            ]));
+    }
+
+    #[test]
+    fn test_unify() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new("
+            !(unify (a $b 1 (d)) (a $a 1 (d)) ok nok)
+            !(unify (a $b c) (a b $c) (ok $b $c) nok)
+            !(unify $a (a b c) (ok $a) nok)
+            !(unify (a b c) $a (ok $a) nok)
+            !(unify (a b c) (a b d) ok nok)
+        ");
+
+        assert_eq_metta_results!(metta.run(parser),
+            Ok(vec![
+                vec![expr!("ok")],
+                vec![expr!("ok" "b" "c")],
+                vec![expr!("ok" ("a" "b" "c"))],
+                vec![expr!("ok" ("a" "b" "c"))],
+                vec![expr!("nok")]
+            ]));
+    }
+
+    #[test]
+    fn test_empty() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new("
+            !(empty)
+        ");
+
+        assert_eq_metta_results!(metta.run(parser),
+            Ok(vec![vec![]]));
     }
 }
