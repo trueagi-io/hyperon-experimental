@@ -160,6 +160,7 @@ class MeTTa:
 
         spec = importlib.util.spec_from_file_location(mod_name, path)
         module = importlib.util.module_from_spec(spec)
+        mod_name = mod_name.split(os.sep)[-1]
         sys.modules[mod_name] = module
         spec.loader.exec_module(module)
         MeTTa.load_py_module(self, mod_name)
