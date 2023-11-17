@@ -37,6 +37,7 @@ pub const DECONS_SYMBOL : Atom = sym!("decons");
 pub const CONS_SYMBOL : Atom = sym!("cons");
 pub const FUNCTION_SYMBOL : Atom = sym!("function");
 pub const RETURN_SYMBOL : Atom = sym!("return");
+pub const CHECK_ALTERNATIVES_SYMBOL : Atom = sym!("check-alternatives");
 
 pub const INTERPRET_SYMBOL : Atom = sym!("interpret");
 

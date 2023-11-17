@@ -440,7 +440,9 @@ impl Grounded for CaseOp {
         log::debug!("CaseOp::execute: atom results: {:?}", results);
         let results = match results {
             Ok(results) if results.is_empty() =>
-                vec![switch(EMPTY_SYMBOL)],
+                // TODO: MINIMAL in minimal MeTTa we should use Empty in both
+                // places here and in (case ...) calls in code
+                vec![switch(VOID_SYMBOL)],
             Ok(results) =>
                 results.into_iter().map(|atom| switch(atom)).collect(),
             Err(err) => vec![Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::sym(err)])],
@@ -623,13 +625,13 @@ mod tests {
 
     #[test]
     fn metta_case_empty() {
-        let result = run_program("!(case Empty ( (ok ok) (Empty nok) ))");
+        let result = run_program("!(case Empty ( (ok ok) (%void% nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
-        let result = run_program("!(case (unify (C B) (C B) ok Empty) ( (ok ok) (Empty nok) ))");
+        let result = run_program("!(case (unify (C B) (C B) ok Empty) ( (ok ok) (%void% nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("ok")]]));
         let result = run_program("!(case (unify (B C) (C B) ok nok) ( (ok ok) (nok nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
-        let result = run_program("!(case (match (B C) (C B) ok) ( (ok ok) (Empty nok) ))");
+        let result = run_program("!(case (match (B C) (C B) ok) ( (ok ok) (%void% nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
     }
 

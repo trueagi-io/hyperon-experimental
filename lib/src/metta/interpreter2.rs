@@ -175,7 +175,8 @@ fn is_embedded_op(atom: &Atom) -> bool {
             || *op == UNIFY_SYMBOL
             || *op == CONS_SYMBOL
             || *op == DECONS_SYMBOL
-            || *op == FUNCTION_SYMBOL,
+            || *op == FUNCTION_SYMBOL
+            || *op == CHECK_ALTERNATIVES_SYMBOL,
         _ => false,
     }
 }
@@ -295,6 +296,30 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: Interpre
                 },
                 _ => {
                     let error: String = format!("expected: ({} (: <body> Expression)), found: {}", FUNCTION_SYMBOL, atom);
+                    vec![InterpretedAtom(error_atom(atom, error), bindings)]
+                },
+            }
+        },
+        Some([op, args @ ..]) if *op == CHECK_ALTERNATIVES_SYMBOL => {
+            match args {
+                [_atom] => {
+                    match atom_into_array(atom) {
+                        Some([_, atom]) => {
+                            let current = vec![interpreted_atom_into_atom(InterpretedAtom(atom, bindings.clone()))];
+                            check_alternatives(space, ExpressionAtom::new(current), ExpressionAtom::new(vec![]))
+                        },
+                        _ => panic!("Unexpected state"),
+                    }
+                },
+                [Atom::Expression(_current), Atom::Expression(_finished)] => {
+                    match atom_into_array(atom) {
+                        Some([_, Atom::Expression(current), Atom::Expression(finished)]) =>
+                            check_alternatives(space, current, finished),
+                        _ => panic!("Unexpected state"),
+                    }
+                },
+                _ => {
+                    let error: String = format!("expected: ({} (: <current> Expression) [(: <finished> Expression)]), found: {}", CHECK_ALTERNATIVES_SYMBOL, atom);
                     vec![InterpretedAtom(error_atom(atom, error), bindings)]
                 },
             }
@@ -458,9 +483,70 @@ fn function<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, body: Atom, call:
             }
         },
         _ => {
-            let error = format!("function doesn't have return statement");
+            let error = format!("function doesn't have return statement, last atom: {}", body);
             vec![InterpretedAtom(error_atom(call, error), bindings)]
         },
+    }
+}
+
+fn atom_into_interpreted_atom(atom: Atom) -> InterpretedAtom {
+    match atom {
+        Atom::Expression(_) => match atom_into_array(atom) {
+            Some([atom, bindings]) => {
+                match bindings.as_gnd::<Bindings>() {
+                    Some(bindings) => {
+                        // TODO: cloning is ineffective, but it is not possible
+                        // to convert grounded atom into internal value at the
+                        // moment
+                        InterpretedAtom(atom, bindings.clone())
+                    },
+                    _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
+                }
+            }
+            _ => panic!("Unexpected state: atom is not a pair"),
+        },
+        _ => panic!("Unexpected state: atom is not an expression"),
+    }
+}
+
+fn interpreted_atom_into_atom(interpreted: InterpretedAtom) -> Atom {
+    let InterpretedAtom(atom, bindings) = interpreted;
+    Atom::expr([atom, Atom::value(bindings)])
+}
+
+fn check_alternatives<'a, T: SpaceRef<'a>>(space: T, current: ExpressionAtom, finished: ExpressionAtom) -> Vec<InterpretedAtom> {
+    let mut current = current.into_children();
+    let mut finished = finished.into_children();
+    if current.is_empty() {
+        let mut error = Vec::new();
+        let mut success = Vec::new();
+        finished.into_iter()
+            .map(atom_into_interpreted_atom)
+            .for_each(|InterpretedAtom(atom, bindings)| {
+                let is_error = atom_is_error(&atom);
+                let interpreted = InterpretedAtom(Atom::expr([RETURN_SYMBOL, atom]), bindings);
+                if is_error {
+                    error.push(interpreted);
+                } else {
+                    success.push(interpreted);
+                }
+            });
+        if success.is_empty() {
+            error
+        } else {
+            success
+        }
+    } else {
+        let interpreted = atom_into_interpreted_atom(current.pop().unwrap());
+        let InterpretedAtom(ref atom, ref _bindings) = interpreted;
+        if is_embedded_op(atom) {
+            interpret_atom_root(space, interpreted, false).into_iter()
+                .map(interpreted_atom_into_atom)
+                .for_each(|atom| current.push(atom));
+        } else {
+            finished.push(interpreted_atom_into_atom(interpreted));
+        }
+        vec![InterpretedAtom(Atom::expr([CHECK_ALTERNATIVES_SYMBOL, Atom::expr(current), Atom::expr(finished)]), Bindings::new())]
     }
 }
 

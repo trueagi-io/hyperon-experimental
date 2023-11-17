@@ -9,6 +9,7 @@
 (: unify (-> Atom Atom Atom Atom Atom))
 (: cons (-> Atom Atom Atom))
 (: decons (-> Atom Atom))
+(: check-alternatives (-> Atom Atom))
 
 (: id (-> Atom Atom))
 (= (id $x) $x)
@@ -186,7 +187,7 @@
     (chain (eval (interpret $op $type $space)) $reduced-op
       (eval (return-on-error $reduced-op
         (eval (if-decons $type $arrow $arg-types
-          (chain (eval (filter-out-errors (eval (interpret-args $expr $args $arg-types $ret-type $space)) $space)) $reduced-args
+          (chain (function (check-alternatives (eval (interpret-args $expr $args $arg-types $ret-type $space)))) $reduced-args
             (eval (return-on-error $reduced-args
               (chain (cons $reduced-op $reduced-args) $r (return $r)))))
           (return (Error $type "Function type expected")) )))))
