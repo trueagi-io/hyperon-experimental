@@ -34,6 +34,19 @@ class DASpace(AbstractSpace):
                 "name": repr(atom)
             }
 
+    def _atom2dict_new(self, atom):
+        if isinstance(atom, ExpressionAtom):
+            targets = atom.get_children()
+            return {"atom_type": 'link', "type": "Expression", "targets":
+                [self._atom2dict_new(ch) for ch in targets]}
+        else:
+            if isinstance(atom, VariableAtom):
+                return {"atom_type": "variable", "name": repr(atom)}
+            elif isinstance(atom, SymbolAtom):
+                return {"atom_type": "node", "type": "Symbol", "name": repr(atom)}
+            elif isinstance(atom, GroundedAtom):
+                return {"atom_type": "node", "type": "Symbol", "name": repr(atom)}
+
     def _atom2query(self, atom):
         if isinstance(atom, ExpressionAtom):
             targets = atom.get_children()
@@ -54,6 +67,24 @@ class DASpace(AbstractSpace):
             return E(*[self._handle2atom(ch) for ch in self.das.get_link_targets(h)])
 
     def query(self, query_atom):
+        query = self._atom2dict_new(query_atom)
+        answer = self.das.query(query,
+                                {'return_type': QueryOutputFormat.HANDLE, 'toplevel_only': True})
+        new_bindings_set = BindingsSet.empty()
+        if not answer:
+            return new_bindings_set
+        for a in answer:
+            bindings = Bindings()
+            val = a['handle']
+            if a["type"] == "Expression":
+                var = 'ex'
+            else:
+                var = a['name']
+            bindings.add_var_binding(V(var), self._handle2atom(val))
+            new_bindings_set.push(bindings)
+        return new_bindings_set
+
+    def query_old(self, query_atom):
         query = self._atom2query(query_atom)
         answer = self.das.pattern_matcher_query(query,
             {'return_type': QueryOutputFormat.HANDLE, 'toplevel_only': True})
