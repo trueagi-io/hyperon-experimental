@@ -1116,35 +1116,35 @@ impl Grounded for SealedOp {
     }
 }
 
+use uuid::Uuid;
+use std::collections::HashMap;
+
 fn replace_vars(var_list: &mut Atom, template: &mut Atom) -> HashSet<VariableAtom> {
     let mut external_vars = HashSet::new();
-    println!("var_list {:?}", var_list);
-    println!("template {:?}", template);
     collect_vars(&var_list, &mut external_vars);
-    println!("external_vars {:?}", external_vars);
     seal_vars(var_list, template, &external_vars);
-    println!("sealed external_vars {:?}", external_vars);
     external_vars
 }
 
 fn seal_vars(var_list: &mut Atom, term: &mut Atom, external_vars: &HashSet<VariableAtom>) {
-    let mut local_var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
+    let mut var_to_uuid = HashMap::new();
 
-    println!("seal_vars var_list {:?}", var_list);
-    println!("seal_vars external_vars {:?}", external_vars);
     var_list.iter_mut().filter_type::<&mut VariableAtom>()
         .filter(|var| external_vars.contains(var))
-        .for_each(|var| local_var_mapper.replace(var));
-
-    println!("seal_vars var_list {:?}", var_list);
-    println!("seal_vars external_vars {:?}", external_vars);
-    term.iter_mut().filter_type::<&mut VariableAtom>()
-        .for_each(|var| match local_var_mapper.mapping_mut().get(var) {
-            Some(v) => *var = v.clone(),
-            None => {},
+        .for_each(|var| {
+            let var_name = var.name();
+            let uuid = var_to_uuid.entry(var_name.to_string())
+                .or_insert_with(Uuid::new_v4)
+                .to_string();
+            *var = Atom::sym(&format!("${}", uuid));
         });
-    println!("seal_vars var_list {:?}", var_list);
-    println!("seal_vars external_vars {:?}", external_vars);
+
+    term.iter_mut().filter_type::<&mut VariableAtom>()
+        .for_each(|var| {
+            if let Some(uuid) = var_to_uuid.get(&var.name().to_string()) {
+                *var = Atom::sym(&format!("${}", uuid));
+            }
+        });
 }
 
 #[derive(Clone, PartialEq, Debug)]
