@@ -3,9 +3,10 @@ use crate::matcher::MatchResultIter;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-use crate::metta::runner::Metta;
+use crate::metta::runner::{Metta, RunContext, ModuleDescriptor};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::assert::vec_eq_no_order;
+use crate::common::shared::Shared;
 use crate::metta::runner::stdlib;
 
 use std::fmt::Display;
@@ -408,9 +409,9 @@ fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
 }
 
-pub fn register_common_tokens(metta: &Metta) {
-    let tokenizer = metta.tokenizer();
-    let mut tref = tokenizer.borrow_mut();
+//TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
+// to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
+pub fn register_common_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, metta: &Metta) {
     let space = metta.space();
 
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
@@ -437,11 +438,10 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
 }
 
-pub fn register_runner_tokens(metta: &Metta) {
+//TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
+// to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
+pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, metta: &Metta) {
     let space = metta.space();
-    let tokenizer = metta.tokenizer();
-
-    let mut tref = tokenizer.borrow_mut();
 
     let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
     tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
@@ -455,8 +455,9 @@ pub fn register_runner_tokens(metta: &Metta) {
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
     let pragma_op = Atom::gnd(stdlib::PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
-    let import_op = Atom::gnd(stdlib::ImportOp::new(metta.clone()));
-    tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+    //LP-TODO-NEXT
+    // let import_op = Atom::gnd(stdlib::ImportOp::new(metta.clone()));
+    // tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
     let bind_op = Atom::gnd(stdlib::BindOp::new(tokenizer.clone()));
     tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
     // &self should be updated
@@ -470,7 +471,7 @@ pub fn register_runner_tokens(metta: &Metta) {
     tref.register_token(regex(r"&self"), move |_| { self_atom.clone() });
 }
 
-pub fn register_rust_tokens(metta: &Metta) {
+pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     let mut rust_tokens = Tokenizer::new();
     let tref = &mut rust_tokens;
 
@@ -491,10 +492,24 @@ pub fn register_rust_tokens(metta: &Metta) {
     let mod_op = Atom::gnd(ModOp{});
     tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
 
-    metta.tokenizer().borrow_mut().move_front(&mut rust_tokens);
+    target.move_front(&mut rust_tokens);
 }
 
 pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
+
+/// Initializes the Rust stdlib module
+pub(crate) fn init_rust_stdlib(context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+
+    let space = DynSpace::new(GroundingSpace::new());
+    context.init_self_module(descriptor, space, None);
+
+    register_rust_stdlib_tokens(&mut *context.module().tokenizer().borrow_mut());
+
+    let parser = SExprParser::new(METTA_CODE);
+    context.push_parser(parser);
+
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {

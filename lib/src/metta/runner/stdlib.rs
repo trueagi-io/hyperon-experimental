@@ -4,7 +4,7 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::interpreter::interpret;
-use crate::metta::runner::Metta;
+use crate::metta::runner::{Metta, RunContext, ModuleDescriptor};
 use crate::metta::types::get_atom_types;
 use crate::common::shared::Shared;
 use crate::common::assert::vec_eq_no_order;
@@ -16,7 +16,6 @@ use std::cell::RefCell;
 use std::fmt::Display;
 use std::collections::HashMap;
 use std::iter::FromIterator;
-use std::path::PathBuf;
 use regex::Regex;
 
 use super::arithmetics::*;
@@ -38,101 +37,102 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct ImportOp {
-    metta: Metta,
-}
+//LP-TODO-NEXT, come back and fix this
+// #[derive(Clone, Debug)]
+// pub struct ImportOp {
+//     metta: Metta,
+// }
 
-impl PartialEq for ImportOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+// impl PartialEq for ImportOp {
+//     fn eq(&self, _other: &Self) -> bool { true }
+// }
 
-impl ImportOp {
-    pub fn new(metta: Metta) -> Self {
-        Self{ metta }
-    }
-}
+// impl ImportOp {
+//     pub fn new(metta: Metta) -> Self {
+//         Self{ metta }
+//     }
+// }
 
-impl Display for ImportOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "import!")
-    }
-}
+// impl Display for ImportOp {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         write!(f, "import!")
+//     }
+// }
 
-impl Grounded for ImportOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE()])
-    }
+// impl Grounded for ImportOp {
+//     fn type_(&self) -> Atom {
+//         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE()])
+//     }
 
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("import! expects two arguments: space and file path");
-        let space = args.get(0).ok_or_else(arg_error)?;
-        let file = args.get(1).ok_or_else(arg_error)?;
-        let mut module_path = None;
+//     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+//         let arg_error = || ExecError::from("import! expects two arguments: space and file path");
+//         let space = args.get(0).ok_or_else(arg_error)?;
+//         let file = args.get(1).ok_or_else(arg_error)?;
+//         let mut module_path = None;
 
-        // TODO: replace Symbol by grounded String?
-        if let Atom::Symbol(file) = file {
+//         // TODO: replace Symbol by grounded String?
+//         if let Atom::Symbol(file) = file {
 
-            //Check each include directory in order, until we find the module we're looking for
-            for include_dir in self.metta.search_paths() {
-                let mut path: PathBuf = include_dir.into();
-                path.push(file.name());
-                path = path.canonicalize().unwrap_or(path);
-                if path.exists() {
-                    module_path = Some(path);
-                    break;
-                }
-            }
-        } else {
-            return Err("import! expects a file path as a second argument".into())
-        }
-        let module_space = match module_path {
-            Some(path) => {
-                log::debug!("import! load file, full path: {}", path.display());
-                self.metta.load_module_space(path)?
-            }
-            None => return Err(format!("Failed to load module {file:?}; could not locate file").into())
-        };
+//             //Check each include directory in order, until we find the module we're looking for
+//             for include_dir in self.metta.search_paths() {
+//                 let mut path: PathBuf = include_dir.into();
+//                 path.push(file.name());
+//                 path = path.canonicalize().unwrap_or(path);
+//                 if path.exists() {
+//                     module_path = Some(path);
+//                     break;
+//                 }
+//             }
+//         } else {
+//             return Err("import! expects a file path as a second argument".into())
+//         }
+//         let module_space = match module_path {
+//             Some(path) => {
+//                 log::debug!("import! load file, full path: {}", path.display());
+//                 self.metta.load_module_space(path)?
+//             }
+//             None => return Err(format!("Failed to load module {file:?}; could not locate file").into())
+//         };
 
-        match space {
-            // If the module is to be associated with a new space,
-            // we register it in the tokenizer - works as "import as"
-            Atom::Symbol(space) => {
-                let name = space.name();
-                let space_atom = Atom::gnd(module_space);
-                let regex = Regex::new(name)
-                    .map_err(|err| format!("Could not convert space name {} into regex: {}", name, err))?;
-                self.metta.tokenizer().borrow_mut()
-                    .register_token(regex, move |_| { space_atom.clone() });
-            },
-            // If the reference space exists, the module space atom is inserted into it
-            // (but the token is not added) - works as "import to"
-            Atom::Grounded(_) => {
-                let space = Atom::as_gnd::<DynSpace>(space)
-                    .ok_or("import! expects a space as a first argument")?;
-                // Moving space atoms from children to parent
-                let modules = self.metta.modules().borrow();
-                for (_path, mspace) in modules.iter() {
-                    let aspace = Atom::gnd(mspace.clone());
-                    if module_space.borrow_mut().remove(&aspace) {
-                        self.metta.space().borrow_mut().remove(&aspace);
-                        self.metta.space().borrow_mut().add(aspace);
-                    }
-                }
-                let module_space_atom = Atom::gnd(module_space);
-                if space.borrow_mut().query(&module_space_atom).is_empty() {
-                    space.borrow_mut().add(module_space_atom);
-                }
-            },
-            _ => return Err("import! expects space as a first argument".into()),
-        };
-        unit_result()
-    }
+//         match space {
+//             // If the module is to be associated with a new space,
+//             // we register it in the tokenizer - works as "import as"
+//             Atom::Symbol(space) => {
+//                 let name = space.name();
+//                 let space_atom = Atom::gnd(module_space);
+//                 let regex = Regex::new(name)
+//                     .map_err(|err| format!("Could not convert space name {} into regex: {}", name, err))?;
+//                 self.metta.tokenizer().borrow_mut()
+//                     .register_token(regex, move |_| { space_atom.clone() });
+//             },
+//             // If the reference space exists, the module space atom is inserted into it
+//             // (but the token is not added) - works as "import to"
+//             Atom::Grounded(_) => {
+//                 let space = Atom::as_gnd::<DynSpace>(space)
+//                     .ok_or("import! expects a space as a first argument")?;
+//                 // Moving space atoms from children to parent
+//                 let modules = self.metta.modules().borrow();
+//                 for (_path, mspace) in modules.iter() {
+//                     let aspace = Atom::gnd(mspace.clone());
+//                     if module_space.borrow_mut().remove(&aspace) {
+//                         self.metta.space().borrow_mut().remove(&aspace);
+//                         self.metta.space().borrow_mut().add(aspace);
+//                     }
+//                 }
+//                 let module_space_atom = Atom::gnd(module_space);
+//                 if space.borrow_mut().query(&module_space_atom).is_empty() {
+//                     space.borrow_mut().add(module_space_atom);
+//                 }
+//             },
+//             _ => return Err("import! expects space as a first argument".into()),
+//         };
+//         unit_result()
+//     }
 
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
+//     fn match_(&self, other: &Atom) -> MatchResultIter {
+//         match_by_equality(self, other)
+//     }
+// }
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct MatchOp {}
@@ -1088,13 +1088,13 @@ fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
 }
 
-pub fn register_common_tokens(metta: &Metta) {
-    let tokenizer = metta.tokenizer();
-    let mut tref = tokenizer.borrow_mut();
+//TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
+// to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
+pub fn register_common_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, _metta: &Metta) {
 
     let match_op = Atom::gnd(MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
-    let bind_op = Atom::gnd(BindOp::new(tokenizer.clone()));
+    let bind_op = Atom::gnd(BindOp::new(tokenizer));
     tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
     let new_space_op = Atom::gnd(NewSpaceOp{});
     tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
@@ -1128,11 +1128,10 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
 }
 
-pub fn register_runner_tokens(metta: &Metta) {
+//TODO: The metta argument is a temporary hack on account of the way the operation atoms store references
+// to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
+pub fn register_runner_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, metta: &Metta) {
     let space = metta.space();
-    let tokenizer = metta.tokenizer();
-
-    let mut tref = tokenizer.borrow_mut();
 
     let case_op = Atom::gnd(CaseOp::new(space.clone()));
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
@@ -1146,8 +1145,9 @@ pub fn register_runner_tokens(metta: &Metta) {
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
-    let import_op = Atom::gnd(ImportOp::new(metta.clone()));
-    tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+//LP-TODO-NEXT, come back and fix this
+    // let import_op = Atom::gnd(ImportOp::new(metta.clone()));
+    // tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
 
@@ -1162,7 +1162,7 @@ pub fn register_runner_tokens(metta: &Metta) {
     tref.register_token(regex(r"&self"), move |_| { self_atom.clone() });
 }
 
-pub fn register_rust_tokens(metta: &Metta) {
+pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     let mut rust_tokens = Tokenizer::new();
     let tref = &mut rust_tokens;
 
@@ -1183,7 +1183,7 @@ pub fn register_rust_tokens(metta: &Metta) {
     let mod_op = Atom::gnd(ModOp{});
     tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
 
-    metta.tokenizer().borrow_mut().move_front(&mut rust_tokens);
+    target.move_front(&mut rust_tokens);
 }
 
 pub static METTA_CODE: &'static str = "
@@ -1194,6 +1194,20 @@ pub static METTA_CODE: &'static str = "
     (= (if False $then $else) $else)
     (: Error (-> Atom Atom ErrorType))
 ";
+
+/// Initializes the Rust stdlib module
+pub(crate) fn init_rust_stdlib(context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+
+    let space = DynSpace::new(GroundingSpace::new());
+    context.init_self_module(descriptor, space, None);
+
+    register_rust_stdlib_tokens(&mut *context.module().tokenizer().borrow_mut());
+
+    let parser = SExprParser::new(METTA_CODE);
+    context.push_parser(parser);
+
+    Ok(())
+}
 
 #[cfg(all(test, not(feature = "minimal")))]
 mod tests {

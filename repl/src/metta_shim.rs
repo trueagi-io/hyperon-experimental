@@ -369,7 +369,8 @@ pub mod metta_interface_mod {
         }
 
         pub fn load_metta_module(&mut self, module: PathBuf) {
-            self.metta.load_module(module).unwrap();
+            //LP-TODO-NEXT, put this back when it's working again
+            //self.metta.load_module(module).unwrap();
         }
 
         pub fn parse_and_unroll_syntax_tree(&self, line: &str) -> Vec<(SyntaxNodeType, std::ops::Range<usize>)> {

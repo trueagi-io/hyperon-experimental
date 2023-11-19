@@ -34,7 +34,7 @@ impl Tokenizer {
     }
 
     pub fn register_token<C: 'static + Fn(&str) -> Atom>(&mut self, regex: Regex, constr: C) {
-        self.tokens.push(TokenDescr{ regex, constr: Rc::new(constr) })
+        self.register_token_with_func_ptr(regex, Rc::new(constr))
     }
 
     pub fn register_token_with_regex_str<C: 'static + Fn(&str) -> Atom>(&mut self, regex: &str, constr: C) {
@@ -58,6 +58,19 @@ impl Tokenizer {
                 None => false,
             }
         }).map(|descr| &*(descr.constr))
+    }
+
+    /// Registers the regex-function pair, for a function that's already wrapped in an RC pointer
+    pub(crate) fn register_token_with_func_ptr(&mut self, regex: Regex, constr: Rc<AtomConstr>) {
+        self.tokens.push(TokenDescr{ regex, constr: constr })
+    }
+
+    /// Returns the constructor function associated with an exact regex string, or None if the Tokenizer
+    /// does not contain the specified regex
+    pub(crate) fn find_exact(&self, regex_str: &str) -> Option<Rc<AtomConstr>> {
+        self.tokens.iter().rfind(|descr| {
+            descr.regex.as_str() == regex_str
+        }).map(|descr| descr.constr.clone())
     }
 
 }

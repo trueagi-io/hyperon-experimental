@@ -1,3 +1,59 @@
+//!
+//! # MeTTa Runner Implementation
+//!
+//! This documentation addresses the different objects involved with the MeTTa runner, and how they fit together.
+//!
+//! ## [Environment]
+//! [Environment] is the gateway to the outside world.  It creates a platform-abstraction layer for MeTTa, and
+//! is responsible for managing configuration and implementing a security model with permissions.  In a typical
+//! situation, there will only be one [Environment] needed.
+//!
+//! ## [Metta]
+//! [Metta] is the runner object.  It is owned by the caller and hosts all state associated with MeTTa execution,
+//! including loaded [MettaMod] modules.  A [Metta] has one top-level module, (known as the runner's `&self`) and
+//! all other modules are loaded as dependents (or transitive dependents) of the top-level module. [Metta] is a
+//! long-lived object, and it may be sufficient to create one [Metta] runner that lasts for the duration of the
+//! host program.
+//!
+//! ## [RunnerState]
+//! A [RunnerState] object encapsulates one conceptual "thread" of MeTTa execution (although it may be
+//! parallelized in its implementation)  A [RunnerState] is short-lived; it is created to evaluate some
+//! MeTTa code, and can be run until it finishes or encounters an error.  Multiple [RunnerState] objects may
+//! be executing within the same [Metta] at the same time.
+//! UPDATE: I think I will be removing the [RunnerState] shortly, in favor of a delegate interface that allows
+//! a function to interact with the runner in specific ways for the implementation of a debugger.
+//!
+//! ## [ModuleDescriptor]
+//! A self-contained data-structure that uniquely identifies a specific version of a specific module.  Two
+//! modules that have the same ModuleDescriptor are considered to be the same module from the perspective of
+//! the implementation.
+//!
+//! ## [MettaMod]
+//! A [MettaMod] represents a loaded module.  A module is fundamentally a [Space] of atoms, although it also
+//! contains an associated [Tokenizer] to help with the conversion from text to [Atom]s and a set of sub-modules
+//! upon which it depends.  Modules can be implemented in pure MeTTa as well as through extensions in other host
+//! languages, namely Rust, C, and Python.
+//!
+//! ## [RunContext]
+//! A [RunContext] objects encapsulates the interface accessible to code running inside a [RunnerState].  It
+//! provides access to the currently loaded module and any other shared state required for the atoms executing
+//! within the MeTTa interpreter.  A [RunContext] is created inside the runner, and it is not possible for
+//! code outside the MeTTa core library to own a [RunContext].
+//!
+//!  Metta (Runner)
+//!  ┌─────────────────────────────────────────────────────────────────┐
+//!  │ MettaMods (Modules)                                             │
+//!  │ ┌────────────────────────────────────────────────────┐          │
+//!  │ │ Space                  Tokenizer                   ├─┐        │
+//!  │ │ ┌─────────────────┐    ┌─────────────────────┐     │ ├─┐      │
+//!  │ │ │                 │    │                     │     │ │ │      │
+//!  │ │ └─────────────────┘    └─────────────────────┘     │ │ │      │
+//!  │ └─┬──────────────────────────────────────────────────┘ │ │      │
+//!  │   └─┬──────────────────────────────────────────────────┘ │      │
+//!  │     └────────────────────────────────────────────────────┘      │
+//!  └─────────────────────────────────────────────────────────────────┘
+//! 
+
 use crate::*;
 use crate::common::shared::Shared;
 
@@ -6,10 +62,13 @@ use super::space::*;
 use super::text::{Tokenizer, SExprParser};
 use super::types::validate_atom;
 
+mod modules;
+use modules::*;
+
 use std::rc::Rc;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 
 mod environment;
 pub use environment::{Environment, EnvBuilder};
@@ -31,6 +90,11 @@ mod arithmetics;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
+// *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
+// Metta & related objects
+// *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
+
+/// A Metta object encapsulates everything needed to execute MeTTa code
 #[derive(Clone, Debug)]
 pub struct Metta(Rc<MettaContents>);
 
@@ -42,37 +106,27 @@ impl PartialEq for Metta {
 
 #[derive(Debug)]
 pub struct MettaContents {
-    space: DynSpace,
-    tokenizer: Shared<Tokenizer>,
+    /// All the runner's loaded modules
+    modules: RwLock<Vec<MettaMod>>,
+    /// An index, to find a loaded module from a ModuleDescriptor
+    module_descriptors: Mutex<HashMap<ModuleDescriptor, ModId>>,
+    /// A clone of the top module's Space, so we don't need to do any locking to access it,
+    /// to support the metta.space() public function
+    top_mod_space: DynSpace,
+    /// A clone of the top module's Tokenizer
+    top_mod_tokenizer: Shared<Tokenizer>,
+    /// The runner's pragmas, affecting runner-wide behavior
     settings: Shared<HashMap<String, Atom>>,
-    modules: Shared<HashMap<PathBuf, DynSpace>>,
-    working_dir: Option<PathBuf>,
+    /// The runner's Environment
     environment: Arc<Environment>,
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum MettaRunnerMode {
-    ADD,
-    INTERPRET,
-    TERMINATE,
-}
+/// A reference to a [MettaMod] that is loaded into a [Metta] runner
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ModId(usize);
 
-pub struct RunnerState<'m, 'i> {
-    mode: MettaRunnerMode,
-    metta: &'m Metta,
-    parser: Option<SExprParser<'i>>,
-    atoms: Option<&'i [Atom]>,
-    interpreter_state: Option<InterpreterState<'m, DynSpace>>,
-    results: Vec<Vec<Atom>>,
-}
-
-impl std::fmt::Debug for RunnerState<'_, '_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("RunnerState")
-            .field("mode", &self.mode)
-            .field("interpreter_state", &self.interpreter_state)
-            .finish()
-    }
+impl ModId {
+    pub const TOP_MOD: ModId = ModId(0);
 }
 
 impl Metta {
@@ -97,18 +151,34 @@ impl Metta {
         };
 
         //Create the raw MeTTa runner
-        let metta = Metta::new_core(space, Shared::new(Tokenizer::new()), env_builder);
+        let metta = Metta::new_core(space, env_builder);
 
+        //LP-TODO-NEXT, revisit this below, once all tests are passing
         // TODO: Reverse the loading order between the Rust stdlib and user-supplied stdlib loader,
         // because user-supplied stdlibs might need to build on top of the Rust stdlib.
         // Currently this is problematic because https://github.com/trueagi-io/hyperon-experimental/issues/408,
         // and the right fix is value-bridging (https://github.com/trueagi-io/hyperon-experimental/issues/351)
 
+        //LP-TODO-NEXT, need to get the Python stdlib loading via hyperonpy
         //Load the custom stdlib
         loader(&metta);
 
-        //Load the Rust stdlib
-        metta.load_module(PathBuf::from("stdlib")).expect("Could not load stdlib");
+        //Load the Rust stdlib into the runner
+        let rust_stdlib_desc = ModuleDescriptor::new("stdlib".to_string(), None);
+        let rust_stdlib_id = metta.get_or_init_module(rust_stdlib_desc, |context, descriptor| {
+            init_rust_stdlib(context, descriptor)
+        }).expect("Could not load stdlib");
+
+        //Add the libs
+        let mut runner_state = RunnerState::new(&metta);
+        runner_state.run_in_context(|context| {
+
+            //Import the Rust stdlib into &self
+            context.module().import_dependency_legacy(&metta, rust_stdlib_id).unwrap();
+
+            Ok(())
+        }).unwrap();
+        drop(runner_state);
 
         //Run the `init.metta` file
         if let Some(init_meta_file_path) = metta.0.environment.initialization_metta_file_path() {
@@ -126,107 +196,82 @@ impl Metta {
     ///
     /// NOTE: If `env_builder` is `None`, the common environment will be used
     /// NOTE: This function does not load any stdlib atoms, nor run the [Environment]'s 'init.metta'
-    pub fn new_core(space: DynSpace, tokenizer: Shared<Tokenizer>, env_builder: Option<EnvBuilder>) -> Self {
+    pub fn new_core(space: DynSpace, env_builder: Option<EnvBuilder>) -> Self {
         let settings = Shared::new(HashMap::new());
-        let modules = Shared::new(HashMap::new());
         let environment = match env_builder {
             Some(env_builder) => Arc::new(env_builder.build()),
             None => Environment::common_env_arc()
         };
+        let top_mod_working_dir = environment.working_dir().map(|path| path.into());
+        let top_mod_tokenizer = Shared::new(Tokenizer::new());
         let contents = MettaContents{
-            space,
-            tokenizer,
+            modules: RwLock::new(vec![]),
+            module_descriptors: Mutex::new(HashMap::new()),
+            top_mod_space: space.clone(),
+            top_mod_tokenizer: top_mod_tokenizer.clone(),
             settings,
-            modules,
-            working_dir: environment.working_dir().map(|path| path.into()),
-            environment,
+            environment
         };
         let metta = Self(Rc::new(contents));
-        register_runner_tokens(&metta);
-        register_common_tokens(&metta);
+
+        let top_mod = MettaMod::new_with_tokenizer(&metta, ModuleDescriptor::top(), space, top_mod_tokenizer, top_mod_working_dir);
+        assert_eq!(metta.add_module(top_mod), ModId::TOP_MOD);
+
         metta
     }
 
-    /// Returns a new MeTTa interpreter intended for use loading MeTTa modules during import
-    fn new_loading_runner(metta: &Metta, path: &Path) -> Self {
-        let space = DynSpace::new(GroundingSpace::new());
-        let tokenizer = metta.tokenizer().clone_inner();
-        let environment = metta.0.environment.clone();
-        let settings = metta.0.settings.clone();
-        let modules = metta.0.modules.clone();
-
-        //Start search for sub-modules in the parent directory of the module we're loading
-        let working_dir = path.parent().map(|path| path.into());
-
-        let metta = Self(Rc::new(MettaContents { space, tokenizer, settings, modules, environment, working_dir }));
-        register_runner_tokens(&metta);
-        metta
+    /// Returns the ModId of a module, or None if it isn't loaded
+    pub fn get_module(&self, descriptor: &ModuleDescriptor) -> Option<ModId> {
+        let descriptors = self.0.module_descriptors.lock().unwrap();
+        descriptors.get(descriptor).cloned()
     }
 
-    pub fn load_module_space(&self, path: PathBuf) -> Result<DynSpace, String> {
-        log::debug!("Metta::load_module_space: load module space {}", path.display());
-        let loaded_module = self.0.modules.borrow().get(&path).cloned();
-
-        // Loading the module only once
-        // TODO: force_reload?
-        match loaded_module {
-            Some(module_space) => {
-                log::debug!("Metta::load_module_space: module is already loaded {}", path.display());
-                Ok(module_space)
-            },
-            None => {
-                // TODO: This is a hack. We need a way to register tokens at module-load-time, for any module
-                if path.to_str().unwrap() == "stdlib" {
-                    register_rust_tokens(self);
-                }
-
-                // Load the module to the new space
-                let runner = Metta::new_loading_runner(self, &path);
-                let program = match path.to_str() {
-                    Some("stdlib") => METTA_CODE.to_string(),
-                    _ => std::fs::read_to_string(&path).map_err(
-                        |err| format!("Could not read file, path: {}, error: {}", path.display(), err))?,
-                };
-                // Make the imported module be immediately available to itself
-                // to mitigate circular imports
-                self.0.modules.borrow_mut().insert(path.clone(), runner.space().clone());
-                runner.run(SExprParser::new(program.as_str()))
-                    .map_err(|err| format!("Cannot import module, path: {}, error: {}", path.display(), err))?;
-
-                Ok(runner.space().clone())
-            }
-        }
-    }
-
-    pub fn load_module(&self, path: PathBuf) -> Result<(), String> {
-        // Load module to &self
-        // TODO: Should we register the module name?
-        // self.tokenizer.borrow_mut().register_token(stdlib::regex(name), move |_| { space_atom.clone() });
-        // TODO: check if it is already there (if the module is newly loaded)
-        let module_space = self.load_module_space(path)?;
-        let space_atom = Atom::gnd(module_space);
-        self.0.space.borrow_mut().add(space_atom);
-        Ok(())
-    }
-
-    pub fn space(&self) -> &DynSpace {
-        &self.0.space
-    }
-
-    pub fn tokenizer(&self) -> &Shared<Tokenizer> {
-        &self.0.tokenizer
-    }
-
-    /// Returns the search paths to explore for MeTTa modules, in search priority order
+    /// Returns the ModId of a module, initializing it with the provided function if it isn't already loaded
     ///
-    /// The runner's working_dir is always returned first
-    pub fn search_paths<'a>(&'a self) -> impl Iterator<Item=&Path> + 'a {
-        [&self.0.working_dir].into_iter().filter_map(|opt| opt.as_deref())
-            .chain(self.0.environment.extra_include_paths())
+    /// The init function will then call `context.init_self_module()` along with any other initialization code
+    pub fn get_or_init_module<F: FnOnce(&mut RunContext, ModuleDescriptor) -> Result<(), String>>(&self, descriptor: ModuleDescriptor, f: F) -> Result<ModId, String> {
+
+        //If we already have the module loaded, then return it
+        if let Some(mod_id) = self.get_module(&descriptor) {
+            return Ok(mod_id);
+        }
+
+        //Create a new RunnerState in order to initialize the new module, and push the init function
+        // to run within the new RunnerState.  The init function will then call `context.init_self_module()`
+        let mut runner_state = RunnerState::new_internal(&self);
+        runner_state.run_in_context(|context| {
+            context.push_func(|context| f(context, descriptor));
+            Ok(())
+        })?;
+
+        //Finish the execution, and add the newly initialized module to the Runner
+        while !runner_state.is_complete() {
+            runner_state.run_step()?;
+        }
+        let module = runner_state.into_module();
+        Ok(self.add_module(module))
     }
 
-    pub fn modules(&self) -> &Shared<HashMap<PathBuf, DynSpace>> {
-        &self.0.modules
+    /// Internal function to add a loaded module to the runner
+    pub(crate) fn add_module(&self, module: MettaMod) -> ModId {
+        let mut vec_ref = self.0.modules.write().unwrap();
+        let new_id = ModId(vec_ref.len());
+        let mut descriptors = self.0.module_descriptors.lock().unwrap();
+        if descriptors.insert(module.descriptor().clone(), new_id).is_some() {
+            panic!(); //We should never try and add the same module twice.
+        }
+        vec_ref.push(module);
+        new_id
+    }
+
+    /// Returns a reference to the Space associated with the runner's top module
+    pub fn space(&self) -> &DynSpace {
+        &self.0.top_mod_space
+    }
+
+    /// Returns a reference to the Tokenizer associated with the runner's top module
+    pub fn tokenizer(&self) -> &Shared<Tokenizer> {
+        &self.0.top_mod_tokenizer
     }
 
     pub fn settings(&self) -> &Shared<HashMap<String, Atom>> {
@@ -250,64 +295,116 @@ impl Metta {
         state.run_to_completion()
     }
 
+    pub fn run_in_module(&self, mod_id: ModId, parser: SExprParser) -> Result<Vec<Vec<Atom>>, String> {
+        let mut state = RunnerState::new_with_module(self, mod_id);
+        state.i_wrapper.input_src.push_parser(parser);
+        state.run_to_completion()
+    }
+
     // TODO: this method is deprecated and should be removed after switching
     // to the minimal MeTTa
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
         #[cfg(feature = "minimal")]
-        let atom = wrap_atom_by_metta_interpreter(self, atom);
-        match self.type_check(atom) {
-            Err(atom) => Ok(vec![atom]),
-            Ok(atom) => interpret(self.space(), &atom),
-        }
-    }
-
-    fn add_atom(&self, atom: Atom) -> Result<(), Atom>{
-        let atom = self.type_check(atom)?;
-        self.0.space.borrow_mut().add(atom);
-        Ok(())
-    }
-
-    fn type_check(&self, atom: Atom) -> Result<Atom, Atom> {
-        let is_type_check_enabled = self.get_setting_string("type-check").map_or(false, |val| val == "auto");
-        if  is_type_check_enabled && !validate_atom(self.0.space.borrow().as_space(), &atom) {
-            Err(Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]))
+        let atom = wrap_atom_by_metta_interpreter(self.0.top_mod_space.clone(), atom);
+        if self.type_check_is_enabled() && !validate_atom(self.0.top_mod_space.borrow().as_space(), &atom) {
+            Ok(vec![Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL])])
         } else {
-            Ok(atom)
+            interpret(self.space(), &atom)
         }
+    }
+
+    fn type_check_is_enabled(&self) -> bool {
+        self.get_setting_string("type-check").map_or(false, |val| val == "auto")
     }
 
 }
 
-#[cfg(feature = "minimal")]
-fn wrap_atom_by_metta_interpreter(runner: &Metta, atom: Atom) -> Atom {
-    let space = Atom::gnd(runner.space().clone());
-    let interpret = Atom::expr([Atom::sym("interpret"), atom, ATOM_TYPE_UNDEFINED, space]);
-    let eval = Atom::expr([EVAL_SYMBOL, interpret]);
-    eval
+// *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
+// RunnerState & related objects
+// *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
+
+//TODO: Proposed API change to eliminate RunnerState from public API
+// After a lot of experimentation with a design that is capable of moving execution work across threads,
+// I think it makes sense to reverse course on the idea to expose "RunnerState" public API object.
+//
+//In essence, I am running into all exactly the same set of challenges that async Rust went through,
+// but their solution is very involved.  For example: https://rust-lang.github.io/async-book/04_pinning/01_chapter.html 
+// We could end up using the same approaches (and possibly utilizing the same mechanims (like pinning)), but
+// I feel like that is overkill for what we require from Rust-language interoperability.
+//
+//Instead, I would like to simplify the Runner API to include a delegate interface that the runner will call
+// with periodic events and status updates.  This delegate interface would then be used to implement a
+// debugger and any other code that needs to influence execution from outside the MeTTa runner.
+//
+//Multi-threading inside a single Runner is tricky no matter which design we choose, but my thinking is that
+// the delegate would be an FnMut closure that is called by the receiver on a mpsc channel, so delegate
+// callbacks will always happen on the same thread, and the callback won't need to be Send nor Sync.
+//
+//So, the API change will be:
+// - `run_step` goes away, and is replaced by a delegate that is called periodically, and has the ability to:
+//  * receive incremental new results
+//  * interrupt (terminate) execution early
+//  * access additional debug info (specifics TBD)
+// - New runner APIs including: `Metta::run_from_parser`, `Metta::run_atoms`, etc. will replace existing
+//    RunnerState APIs like `RunnerState::new_with_parser`, etc.
+//
+
+/// A RunnerState encapsulates a single in-flight process, executing code within a [Metta] runner
+pub struct RunnerState<'m, 'i> {
+    metta: &'m Metta,
+    module: StateMod,
+    i_wrapper: InterpreterWrapper<'m, 'i>,
 }
 
-impl<'m, 'i> RunnerState<'m, 'i> {
-    fn new(metta: &'m Metta) -> Self {
+impl std::fmt::Debug for RunnerState<'_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RunnerState")
+            .field("mode", &self.i_wrapper.mode)
+            .field("interpreter_state", &self.i_wrapper.interpreter_state)
+            .finish()
+    }
+}
+
+/// Internal, refers to the MeTTa module used by a RunnerState
+enum StateMod {
+    None,
+    UseLoaded(ModId),
+    Initializing(MettaMod),
+}
+
+impl<'m, 'input> RunnerState<'m, 'input> {
+
+    fn new_internal(metta: &'m Metta) -> Self {
         Self {
             metta,
-            mode: MettaRunnerMode::ADD,
-            interpreter_state: None,
-            parser: None,
-            atoms: None,
-            results: vec![],
+            module: StateMod::None,
+            i_wrapper: InterpreterWrapper::default()
         }
     }
+
+    /// Returns a new RunnerState to execute code in the context of a MeTTa runner's top module
+    pub fn new(metta: &'m Metta) -> Self {
+        Self::new_with_module(metta, ModId::TOP_MOD)
+    }
+
+    /// Returns a new RunnerState to execute code in the context of any loaded module
+    pub(crate) fn new_with_module(metta: &'m Metta, mod_id: ModId) -> Self {
+        let mut state = Self::new_internal(metta);
+        state.module = StateMod::UseLoaded(mod_id);
+        state
+    }
+
     /// Returns a new RunnerState, for running code from the [SExprParser] with the specified [Metta] runner
-    pub fn new_with_parser(metta: &'m Metta, parser: SExprParser<'i>) -> Self {
+    pub fn new_with_parser(metta: &'m Metta, parser: SExprParser<'input>) -> Self {
         let mut state = Self::new(metta);
-        state.parser = Some(parser);
+        state.i_wrapper.input_src.push_parser(parser);
         state
     }
 
     /// Returns a new RunnerState, for running code encoded as a slice of [Atom]s with the specified [Metta] runner
-    pub fn new_with_atoms(metta: &'m Metta, atoms: &'i[Atom]) -> Self {
+    pub fn new_with_atoms(metta: &'m Metta, atoms: &'input[Atom]) -> Self {
         let mut state = Self::new(metta);
-        state.atoms = Some(atoms);
+        state.i_wrapper.input_src.push_atoms(atoms);
         state
     }
 
@@ -321,101 +418,337 @@ impl<'m, 'i> RunnerState<'m, 'i> {
 
     /// Runs one step of the interpreter
     pub fn run_step(&mut self) -> Result<(), String> {
+        self.run_in_context(|context| context.step())
+    }
+
+    /// Returns `true` if the RunnerState has completed execution of all input or has encountered a
+    ///    fatal error, otherwise returns `false`
+    pub fn is_complete(&self) -> bool {
+        self.i_wrapper.mode == MettaRunnerMode::TERMINATE
+    }
+
+    /// Returns a reference to the current in-progress results within the RunnerState
+    pub fn current_results(&self) -> &Vec<Vec<Atom>> {
+        &self.i_wrapper.results
+    }
+
+    /// Consumes the RunnerState and returns the final results
+    pub fn into_results(self) -> Vec<Vec<Atom>> {
+        self.i_wrapper.results
+    }
+
+    /// Private method.  Creates the Runner's context, and executes an arbitrary function within that context
+    //TODO: When we eliminate the RunnerState, this method should become a private method of Metta,
+    // and an argument of type `Option<ModId>` should be added.  When this function is used to initialize
+    // modules, the module type can be returned from this function
+    fn run_in_context<T, F: FnOnce(&mut RunContext<'_, 'm, 'input>) -> Result<T, String>>(&mut self, f: F) -> Result<T, String> {
+
+        // Construct the RunContext
+        let mod_ref;
+        let module = match &mut self.module {
+            StateMod::UseLoaded(mod_id) => {
+                mod_ref = self.metta.0.modules.read().unwrap();
+                ModRef::Borrowed(mod_ref.get(mod_id.0).unwrap())
+            },
+            StateMod::Initializing(_) |
+            StateMod::None =>  ModRef::Local(&mut self.module)
+        };
+        let mut context = RunContext {
+            metta: &self.metta,
+            i_wrapper: &mut self.i_wrapper,
+            module,
+        };
+
+        // Call our function
+        f(&mut context)
+    }
+
+    /// Internal method to return the MettaMod for a RunnerState that just initialized the module
+    pub(crate) fn into_module(self) -> MettaMod {
+        match self.module {
+            StateMod::Initializing(module) => module,
+            _ => unreachable!()
+        }
+    }
+}
+
+// *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
+// RunContext & related objects
+// *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
+
+/// Runtime data that is available to Grounded Atom execution
+// TODO: I think we may be able to remove the `'interpreter`` lifetime after the minimal MeTTa migration
+//  because the lifetime is separated on account of the inability of the compiler to shorten a lifetime
+//  used as a generic parameter on a trait.  In this case, the `Plan` trait.
+pub struct RunContext<'a, 'interpreter, 'input> {
+    metta: &'a Metta,
+    module: ModRef<'a>,
+    i_wrapper: &'a mut InterpreterWrapper<'interpreter, 'input>
+}
+
+enum ModRef<'a> {
+    Local(&'a mut StateMod),
+    Borrowed(&'a MettaMod)
+}
+
+impl ModRef<'_> {
+    fn try_borrow(&self) -> Option<&MettaMod> {
+        match &self {
+            ModRef::Borrowed(module) => Some(*module),
+            ModRef::Local(state_mod) => {
+                match state_mod {
+                    StateMod::Initializing(module) => Some(module),
+                    _ => None
+                }
+            }
+        }
+    }
+    pub fn try_borrow_mut(&mut self) -> Option<&mut MettaMod> {
+        match self {
+            ModRef::Borrowed(_) => None,
+            ModRef::Local(state_mod) => {
+                match state_mod {
+                    StateMod::Initializing(module) => Some(module),
+                    _ => None
+                }
+            }
+        }
+    }
+}
+
+impl<'input> RunContext<'_, '_, 'input> {
+    /// Returns access to the context's current module
+    pub fn module(&self) -> &MettaMod {
+        self.module.try_borrow().unwrap_or_else(|| panic!("No module available"))
+    }
+
+    /// Returns mutable access the context's current module, if possible
+    pub fn module_mut(&mut self) -> Option<&mut MettaMod> {
+        self.module.try_borrow_mut()
+    }
+
+    /// Pushes the parser as a source of operations to subsequently execute
+    pub fn push_parser(&mut self, parser: SExprParser<'input>) {
+        self.i_wrapper.input_src.push_parser(parser);
+    }
+
+    /// Pushes the atoms as a source of operations to subsequently execute
+    pub fn push_atoms(&mut self, atoms: &'input[Atom]) {
+        self.i_wrapper.input_src.push_atoms(atoms);
+    }
+
+    /// Pushes an executable function as an operation to be executed
+    pub fn push_func<F: FnOnce(&mut RunContext) -> Result<(), String> + 'input>(&mut self, f: F) {
+        self.i_wrapper.input_src.push_func(f);
+    }
+
+    /// Initializes the context's module.  Used in the implementation of a module loader function
+    pub fn init_self_module(&mut self, descriptor: ModuleDescriptor, space: DynSpace, working_dir: Option<PathBuf>) {
+        match &mut self.module {
+            ModRef::Borrowed(_) => panic!("Module already initialized"),
+            ModRef::Local(ref mut state_mod_ref) => {
+                if matches!(state_mod_ref, StateMod::Initializing(_)) {
+                    panic!("Module already initialized");
+                }
+                let tokenizer = Shared::new(Tokenizer::new());
+                **state_mod_ref = StateMod::Initializing(MettaMod::new_with_tokenizer(self.metta, descriptor, space, tokenizer, working_dir));
+            }
+        }
+    }
+
+    /// Private method to advance the context forward one step
+    fn step(&mut self) -> Result<(), String> {
 
         // If we're in the middle of interpreting an atom...
-        if let Some(interpreter_state) = core::mem::take(&mut self.interpreter_state) {
+        if let Some(interpreter_state) = core::mem::take(&mut self.i_wrapper.interpreter_state) {
 
             if interpreter_state.has_next() {
 
                 //Take a step with the interpreter, and put it back for next time
-                self.interpreter_state = Some(interpret_step(interpreter_state))
+                self.i_wrapper.interpreter_state = Some(interpret_step(interpreter_state))
             } else {
 
                 //This interpreter is finished, process the results
                 let result = interpreter_state.into_result().unwrap();
                 let error = result.iter().any(|atom| atom_is_error(atom));
-                self.results.push(result);
+                self.i_wrapper.results.push(result);
                 if error {
-                    self.mode = MettaRunnerMode::TERMINATE;
+                    self.i_wrapper.mode = MettaRunnerMode::TERMINATE;
                     return Ok(());
                 }
             }
 
+            Ok(())
         } else {
 
-            // Get the next atom, and start a new intperpreter
-            let next_atom = if let Some(parser) = self.parser.as_mut() {
-                match parser.parse(&self.metta.0.tokenizer.borrow()) {
-                    Ok(atom) => atom,
-                    Err(err) => {
-                        self.mode = MettaRunnerMode::TERMINATE;
-                        return Err(err);
-                    }
+            // Get the next operation
+            let tokenizer_option = self.module.try_borrow().map(|module| module.tokenizer().borrow());
+            let tokenizer = tokenizer_option.as_ref().map(|tok| &**tok as &Tokenizer);
+            let next_op = match self.i_wrapper.input_src.next_op(tokenizer) {
+                Ok(atom) => atom,
+                Err(err) => {
+                    self.i_wrapper.mode = MettaRunnerMode::TERMINATE;
+                    return Err(err);
                 }
-            } else {
-                if let Some(atoms) = self.atoms.as_mut() {
-                    if let Some((atom, rest)) = atoms.split_first() {
-                        *atoms = rest;
-                        Some(atom.clone())
-                    } else {
-                        None
+            };
+            drop(tokenizer_option);
+
+            // Start execution of the operation
+            match next_op {
+                Some(Executable::Func(func)) => {
+                    func(self)
+                },
+                // If the next operation is an atom, start a new intperpreter
+                Some(Executable::Atom(atom)) => {
+                    if atom == EXEC_SYMBOL {
+                        self.i_wrapper.mode = MettaRunnerMode::INTERPRET;
+                        return Ok(());
                     }
+                    match self.i_wrapper.mode {
+                        MettaRunnerMode::ADD => {
+                            if let Err(atom) = self.module().add_atom(atom, self.metta.type_check_is_enabled()) {
+                                self.i_wrapper.results.push(vec![atom]);
+                                self.i_wrapper.mode = MettaRunnerMode::TERMINATE;
+                                return Ok(());
+                            }
+                        },
+                        MettaRunnerMode::INTERPRET => {
+
+                            if self.metta.type_check_is_enabled() && !validate_atom(self.module().space().borrow().as_space(), &atom) {
+                                let type_err_exp = Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]);
+                                self.i_wrapper.interpreter_state = Some(InterpreterState::new_finished(self.module().space().clone(), vec![type_err_exp]));
+                            } else {
+                                #[cfg(feature = "minimal")]
+                                let atom = wrap_atom_by_metta_interpreter(self.module().space().clone(), atom);
+                                self.i_wrapper.interpreter_state = Some(interpret_init(self.module().space().clone(), &atom));
+                            }
+                        },
+                        MettaRunnerMode::TERMINATE => {
+                            return Ok(());
+                        },
+                    }
+                    self.i_wrapper.mode = MettaRunnerMode::ADD;
+                    Ok(())
+                },
+                None => {
+                    self.i_wrapper.mode = MettaRunnerMode::TERMINATE;
+                    Ok(())
+                }
+            }
+        }
+    }
+
+}
+
+// *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
+// InterpreterWrapper & related objects
+// *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
+
+/// Private structure to contain everything associated with an InterpreterState.
+/// This is basically the part of RunContext that lasts across calls to run_step
+#[derive(Default)]
+struct InterpreterWrapper<'interpreter, 'i> {
+    mode: MettaRunnerMode,
+    input_src: InputStream<'i>,
+    interpreter_state: Option<InterpreterState<'interpreter, DynSpace>>,
+    results: Vec<Vec<Atom>>,
+}
+
+#[derive(Debug, Default, PartialEq, Eq)]
+enum MettaRunnerMode {
+    #[default]
+    ADD,
+    INTERPRET,
+    TERMINATE,
+}
+
+/// Private type representing a source for operations for the runner
+enum InputSource<'i> {
+    Parser(SExprParser<'i>),
+    Slice(&'i [Atom]),
+    //TODO: Func should be deleted in favor of just an Atom.  See comment on Executable::Func below
+    Func(Box<dyn FnOnce(&mut RunContext) -> Result<(), String> + 'i>)
+}
+
+impl InputSource<'_> {
+    fn next_atom(&mut self, tokenizer: Option<&Tokenizer>) -> Result<Option<Atom>, String> {
+        let atom = match self {
+            InputSource::Parser(parser) => {
+                parser.parse(tokenizer.as_ref().unwrap_or_else(|| panic!("Module must be initialized to parse MeTTa code")))?
+            },
+            InputSource::Slice(atoms) => {
+                if let Some((atom, rest)) = atoms.split_first() {
+                    *atoms = rest;
+                    Some(atom.clone())
                 } else {
                     None
                 }
-            };
-
-            if let Some(atom) = next_atom {
-                if atom == EXEC_SYMBOL {
-                    self.mode = MettaRunnerMode::INTERPRET;
-                    return Ok(());
-                }
-                match self.mode {
-                    MettaRunnerMode::ADD => {
-                        if let Err(atom) = self.metta.add_atom(atom) {
-                            self.results.push(vec![atom]);
-                            self.mode = MettaRunnerMode::TERMINATE;
-                            return Ok(());
-                        }
-                    },
-                    MettaRunnerMode::INTERPRET => {
-
-                        self.interpreter_state = Some(match self.metta.type_check(atom) {
-                            Err(atom) => {
-                                InterpreterState::new_finished(self.metta.space().clone(), vec![atom])
-                            },
-                            Ok(atom) => {
-                                #[cfg(feature = "minimal")]
-                                let atom = wrap_atom_by_metta_interpreter(&self.metta, atom);
-                                interpret_init(self.metta.space().clone(), &atom)
-                            },
-                        });
-                    },
-                    MettaRunnerMode::TERMINATE => {
-                        return Ok(());
-                    },
-                }
-                self.mode = MettaRunnerMode::ADD;
-            }  else {
-                self.mode = MettaRunnerMode::TERMINATE;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub fn is_complete(&self) -> bool {
-        self.mode == MettaRunnerMode::TERMINATE
-    }
-    /// Returns a reference to the current in-progress results within the RunnerState
-    pub fn current_results(&self) -> &Vec<Vec<Atom>> {
-        &self.results
-    }
-    /// Consumes the RunnerState and returns the final results
-    pub fn into_results(self) -> Vec<Vec<Atom>> {
-        self.results
+            },
+            InputSource::Func(_) => unreachable!() //If we got here, there is a bug in the calling function
+        };
+        Ok(atom)
     }
 }
+
+/// Private type representing an operation for the runner
+/// TODO: Delete this type, once I can wrap any function in an Atom, and have access to the RunContext
+enum Executable<'i> {
+    Atom(Atom),
+    Func(Box<dyn FnOnce(&mut RunContext) -> Result<(), String> + 'i>)
+}
+
+/// A private structure representing a heterogeneous source of operations for the runner to execute
+#[derive(Default)]
+struct InputStream<'a>(Vec<InputSource<'a>>);
+
+impl<'i> InputStream<'i> {
+    fn push_parser(&mut self, parser: SExprParser<'i>) {
+        self.0.push(InputSource::Parser(parser))
+    }
+    fn push_atoms(&mut self, atoms: &'i[Atom]) {
+        self.0.push(InputSource::Slice(atoms));
+    }
+    fn push_func<F: FnOnce(&mut RunContext) -> Result<(), String> + 'i>(&mut self, f: F) {
+        self.0.push(InputSource::Func(Box::new(f)))
+    }
+    /// Returns the next operation in the InputStream, and removes it from the stream.  Returns None if the
+    /// InputStream is empty.
+    fn next_op(&mut self, tokenizer: Option<&Tokenizer>) -> Result<Option<Executable<'i>>, String> {
+        match self.0.get_mut(0) {
+            None => Ok(None),
+            Some(src) => {
+                match src {
+                    InputSource::Func(_) => match self.0.remove(0) {
+                        InputSource::Func(f) => Ok(Some(Executable::Func(f))),
+                        _ => unreachable!()
+                    },
+                    InputSource::Parser(_) |
+                    InputSource::Slice(_) => {
+                        match src.next_atom(tokenizer)? {
+                            Some(atom) => Ok(Some(Executable::Atom(atom))),
+                            None => {
+                                self.0.remove(0);
+                                self.next_op(tokenizer)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+#[cfg(feature = "minimal")]
+fn wrap_atom_by_metta_interpreter(space: DynSpace, atom: Atom) -> Atom {
+    let space = Atom::gnd(space);
+    let interpret = Atom::expr([Atom::sym("interpret"), atom, ATOM_TYPE_UNDEFINED, space]);
+    let eval = Atom::expr([EVAL_SYMBOL, interpret]);
+    eval
+}
+
+// *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
+// Tests
+// *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
 
 #[cfg(test)]
 mod tests {
@@ -447,7 +780,7 @@ mod tests {
             (foo b)
         ";
 
-        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
+        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -461,7 +794,7 @@ mod tests {
             !(foo b)
         ";
 
-        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
+        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -516,7 +849,7 @@ mod tests {
             !(foo a)
         ";
 
-        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Shared::new(Tokenizer::new()), Some(EnvBuilder::test_env()));
+        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
