@@ -78,11 +78,12 @@ class MeTTaTest(HyperonTestCase):
         '''
         runner = MeTTa(env_builder=Environment.test_env())
         i = 0
-        for _state, results in runner.run_step_by_step(program):
+        for state in runner.run_step_by_step(program):
             pass
             i += 1
         print('number of steps ' + str(i))
         self.assertLess(i, 600)
+        results = state.current_results()
         self.assertEqual(len(results[0]), 2)
 
     def process_exceptions(self, results):

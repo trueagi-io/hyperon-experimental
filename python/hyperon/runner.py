@@ -204,16 +204,12 @@ class MeTTa:
         else:
             return [[Atom._from_catom(catom) for catom in result] for result in results]
 
-    def run_step_by_step(self, program, flat=False):
-        """Runs program step by step, yielding state and result"""
+    def run_step_by_step(self, program):
+        """Runs program step by step, yielding state"""
         state = RunnerState(self, program)
-        state.run_step()
-        results = state.current_results(flat=flat)
-        yield state, results
         while not state.is_complete():
             state.run_step()
-            results = state.current_results(flat=flat)
-            yield state, results
+            yield state
 
 
 class Environment:
