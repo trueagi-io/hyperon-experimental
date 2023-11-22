@@ -363,14 +363,13 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<I
     let var = VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, atom, Atom::Variable(var.clone())]);
     let results = space.query(&query);
+    let atom = Atom::Variable(var);
     if results.is_empty() {
         vec![InterpretedAtom(return_not_reducible(), bindings)]
     } else {
         results.into_iter()
-            .flat_map(|mut b| {
-                let atom = b.resolve_and_remove(&var).unwrap();
-                let bindings = b.merge_v2(&bindings);
-                bindings.into_iter().map(move |b| {
+            .flat_map(|b| {
+                b.merge_v2(&bindings).into_iter().map(|b| {
                     let atom = apply_bindings_to_atom(&atom, &b);
                     InterpretedAtom(atom, b)
                 })
@@ -508,6 +507,7 @@ fn cons(bindings: Bindings, head: Atom, tail: ExpressionAtom) -> Vec<Interpreted
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::common::test_utils::{metta_atom, metta_space};
 
     #[test]
     fn interpret_atom_evaluate_incorrect_args() {
@@ -576,7 +576,6 @@ mod tests {
         let result = interpret_atom(&space, atom("(eval (foo $W))", bind!{}));
         assert_eq!(result[0].0, sym!("True"));
     }
-
 
     #[test]
     fn interpret_atom_evaluate_grounded_expression() {

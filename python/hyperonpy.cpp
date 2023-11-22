@@ -601,11 +601,6 @@ PYBIND11_MODULE(hyperonpy, m) {
             return atom_is_null(&res) ? nonstd::nullopt : nonstd::optional<CAtom>(CAtom(res));
         }, "Resolve" );
 
-    m.def("bindings_resolve_and_remove", [](CBindings bindings, char const* varName) -> nonstd::optional<CAtom> {
-            auto const res = bindings_resolve_and_remove(bindings.ptr(), varName);
-            return atom_is_null(&res) ? nonstd::nullopt : nonstd::optional<CAtom>(CAtom(res));
-        }, "Resolve and remove" );
-
     m.def("bindings_to_str", [](CBindings bindings) {
         return func_to_string((write_to_buf_func_t)&bindings_to_str, bindings.ptr());
     }, "Convert bindings to human readable string");

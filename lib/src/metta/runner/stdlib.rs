@@ -325,7 +325,7 @@ impl Display for CarAtomOp {
 
 impl Grounded for CarAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -352,7 +352,7 @@ impl Display for CdrAtomOp {
 
 impl Grounded for CdrAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -869,7 +869,7 @@ use std::collections::HashSet;
 impl Grounded for LetOp {
     fn type_(&self) -> Atom {
         // TODO: Undefined for the argument is necessary to make argument reductable.
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -930,7 +930,7 @@ impl Display for LetVarOp {
 impl Grounded for LetVarOp {
     fn type_(&self) -> Atom {
         // The first argument is an Atom, because it has to be evaluated iteratively
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -1083,6 +1083,32 @@ impl Grounded for ChangeStateOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct EqualOp {}
+
+impl Display for EqualOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "==")
+    }
+}
+
+impl Grounded for EqualOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_BOOL])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from(concat!(stringify!($op), " expects two arguments"));
+        let a = args.get(0).ok_or_else(arg_error)?;
+        let b = args.get(1).ok_or_else(arg_error)?;
+
+        Ok(vec![Atom::gnd(Bool(a == b))])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
 
 fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
@@ -1182,6 +1208,22 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     tref.register_token(regex(r"/"), move |_| { div_op.clone() });
     let mod_op = Atom::gnd(ModOp{});
     tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
+    let lt_op = Atom::gnd(LessOp{});
+    tref.register_token(regex(r"<"), move |_| { lt_op.clone() });
+    let gt_op = Atom::gnd(GreaterOp{});
+    tref.register_token(regex(r">"), move |_| { gt_op.clone() });
+    let le_op = Atom::gnd(LessEqOp{});
+    tref.register_token(regex(r"<="), move |_| { le_op.clone() });
+    let ge_op = Atom::gnd(GreaterEqOp{});
+    tref.register_token(regex(r">="), move |_| { ge_op.clone() });
+    let eq_op = Atom::gnd(EqualOp{});
+    tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
+    let and_op = Atom::gnd(AndOp{});
+    tref.register_token(regex(r"and"), move |_| { and_op.clone() });
+    let or_op = Atom::gnd(OrOp{});
+    tref.register_token(regex(r"or"), move |_| { or_op.clone() });
+    let not_op = Atom::gnd(NotOp{});
+    tref.register_token(regex(r"not"), move |_| { not_op.clone() });
 
     target.move_front(&mut rust_tokens);
 }
@@ -1193,6 +1235,21 @@ pub static METTA_CODE: &'static str = "
     (= (if True $then $else) $then)
     (= (if False $then $else) $else)
     (: Error (-> Atom Atom ErrorType))
+
+
+    ; quote prevents atom from being reduced
+    (: quote (-> Atom Atom))
+
+    ; unify matches two atoms and returns $then if they are matched
+    ; and $else otherwise.
+    (: unify (-> Atom Atom Atom Atom %Undefined%))
+    (= (unify $a $a $then $else) $then)
+    (= (unify $a $b $then $else)
+      (case (let (quote $a) (quote $b) no-result) ((%void% $else))) )
+
+    ; empty removes current result from a non-deterministic result
+    (: empty (-> %Undefined%))
+    (= (empty) (let a b never-happens))
 ";
 
 /// Initializes the Rust stdlib module
@@ -1212,8 +1269,10 @@ pub(crate) fn init_rust_stdlib(context: &mut RunContext, descriptor: ModuleDescr
 #[cfg(all(test, not(feature = "minimal")))]
 mod tests {
     use super::*;
+    use crate::metta::text::*;
     use crate::metta::runner::{Metta, EnvBuilder};
     use crate::metta::types::validate_atom;
+    use crate::common::test_utils::*;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1601,5 +1660,59 @@ mod tests {
     #[test]
     fn test_stdlib_uses_rust_grounded_tokens() {
         assert_eq!(run_program("!(if True ok nok)"), Ok(vec![vec![Atom::sym("ok")]]));
+    }
+
+    #[test]
+    fn test_let_op_inside_other_operation() {
+        assert_eq!(run_program("!(and True (let $x False $x))"), Ok(vec![vec![expr!({Bool(false)})]]));
+    }
+
+    #[test]
+    fn test_quote() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new("
+            (= (foo) a)
+            (= (foo) b)
+            !(foo)
+            !(quote (foo))
+        ");
+
+        assert_eq_metta_results!(metta.run(parser),
+            Ok(vec![
+                vec![expr!("a"), expr!("b")],
+                vec![expr!("quote" ("foo"))],
+            ]));
+    }
+
+    #[test]
+    fn test_unify() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new("
+            !(unify (a $b 1 (d)) (a $a 1 (d)) ok nok)
+            !(unify (a $b c) (a b $c) (ok $b $c) nok)
+            !(unify $a (a b c) (ok $a) nok)
+            !(unify (a b c) $a (ok $a) nok)
+            !(unify (a b c) (a b d) ok nok)
+        ");
+
+        assert_eq_metta_results!(metta.run(parser),
+            Ok(vec![
+                vec![expr!("ok")],
+                vec![expr!("ok" "b" "c")],
+                vec![expr!("ok" ("a" "b" "c"))],
+                vec![expr!("ok" ("a" "b" "c"))],
+                vec![expr!("nok")]
+            ]));
+    }
+
+    #[test]
+    fn test_empty() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new("
+            !(empty)
+        ");
+
+        assert_eq_metta_results!(metta.run(parser),
+            Ok(vec![vec![]]));
     }
 }

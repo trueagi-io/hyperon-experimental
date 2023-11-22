@@ -14,11 +14,13 @@ mod arithmetics;
 pub use arithmetics::*;
 
 use crate::*;
+use crate::metta::text::{Tokenizer, SExprParser};
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use std::collections::HashMap;
 
-use crate::metta::metta_atom;
+#[cfg(test)]
+pub(crate) mod test_utils;
 
 // TODO: move Operation and arithmetics under metta package as it uses metta_atom
 // Operation implements stateless operations as GroundedAtom.
@@ -32,7 +34,9 @@ pub struct Operation {
 
 impl Grounded for &'static Operation {
     fn type_(&self) -> Atom {
-        metta_atom(self.typ)
+        //TODO: Replace this parsing with a static Atom
+        let mut parser = SExprParser::new(self.typ);
+        parser.parse(&Tokenizer::new()).unwrap().unwrap()
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {

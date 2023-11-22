@@ -514,8 +514,11 @@ pub(crate) fn init_rust_stdlib(context: &mut RunContext, descriptor: ModuleDescr
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
     use crate::matcher::atoms_are_equivalent;
+    use crate::common::Operation;
+    use crate::common::test_utils::metta_space;
 
     use std::convert::TryFrom;
 

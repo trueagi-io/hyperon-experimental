@@ -86,7 +86,7 @@ use super::interpreter2::{interpret, interpret_init, interpret_step, Interpreter
 #[cfg(feature = "minimal")]
 use stdlib2::*;
 
-mod arithmetics;
+pub mod arithmetics;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
@@ -832,7 +832,7 @@ mod tests {
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.tokenizer().borrow_mut().register_token(Regex::new("error").unwrap(),
+        metta.tokenizer().borrow_mut().register_token_with_regex_str("error",
             |_| Atom::gnd(ErrorOp{}));
         let result = metta.run(SExprParser::new(program));
 
@@ -883,7 +883,7 @@ mod tests {
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.tokenizer().borrow_mut().register_token(Regex::new("empty").unwrap(),
+        metta.tokenizer().borrow_mut().register_token_with_regex_str("empty",
             |_| Atom::gnd(ReturnAtomOp(expr!())));
         let result = metta.run(SExprParser::new(program));
 

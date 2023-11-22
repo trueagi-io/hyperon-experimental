@@ -498,11 +498,6 @@ class Bindings:
         raw_atom = hp.bindings_resolve(self.cbindings, var_name)
         return None if raw_atom is None else Atom._from_catom(raw_atom)
 
-    def resolve_and_remove(self, var_name: str) -> Union[Atom, None]:
-        """Finds and removes the atom for a given variable name"""
-        raw_atom = hp.bindings_resolve_and_remove(self.cbindings, var_name)
-        return None if raw_atom is None else Atom._from_catom(raw_atom)
-
     def iterator(self):
         """Returns an iterator over the variable-atom pairs in the bindings"""
         res = hp.bindings_list(self.cbindings)

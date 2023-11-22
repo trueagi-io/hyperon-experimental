@@ -1155,21 +1155,6 @@ pub extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const
     bindings.resolve(&var).into()
 }
 
-/// @brief Returns the atom bound to the supplied variable name in the `bindings_t`, and removes it from the `bindings_t`
-/// @ingroup matching_group
-/// @param[in]  bindings  A pointer to the `bindings_t` to inspect
-/// @param[in]  var_name  A NULL-terminated C-style string containing the name of the variable
-/// @return The `atom_t` representing the atom that corresponds to the specified variable, or a NULL `atom_ref_t` if the variable is not present.
-/// @note The caller must take ownership responsibility for the returned `atom_t`, if it is not NULL
-///
-#[no_mangle]
-pub extern "C" fn bindings_resolve_and_remove(bindings: *mut bindings_t, var_name: *const c_char) -> atom_t {
-    let bindings = unsafe{ &mut*bindings }.borrow_mut();
-    let var = VariableAtom::new(cstr_into_string(var_name));
-
-    bindings.resolve_and_remove(&var).into()
-}
-
 /// @brief Merges two `bindings_t` Bindings frames together into a Bindings Set
 /// @ingroup matching_group
 /// @param[in]  _self  The first `bindings_t` to merge.  Ownership of this argument is taken by this function
