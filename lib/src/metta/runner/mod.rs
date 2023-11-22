@@ -3,7 +3,7 @@ use crate::common::shared::Shared;
 
 use super::*;
 use super::space::*;
-use super::text::{Tokenizer, SExprParser};
+use super::text::{Tokenizer, Parser, SExprParser};
 use super::types::validate_atom;
 
 use std::rc::Rc;
@@ -60,7 +60,7 @@ enum MettaRunnerMode {
 pub struct RunnerState<'m, 'i> {
     mode: MettaRunnerMode,
     metta: &'m Metta,
-    parser: Option<SExprParser<'i>>,
+    parser: Option<Box<dyn Parser + 'i>>,
     atoms: Option<&'i [Atom]>,
     interpreter_state: Option<InterpreterState<'m, DynSpace>>,
     results: Vec<Vec<Atom>>,
@@ -245,8 +245,8 @@ impl Metta {
         self.0.settings.borrow().get(key.into()).map(|a| a.to_string())
     }
 
-    pub fn run(&self, parser: SExprParser) -> Result<Vec<Vec<Atom>>, String> {
-        let state = RunnerState::new_with_parser(self, parser);
+    pub fn run(&self, parser: impl Parser) -> Result<Vec<Vec<Atom>>, String> {
+        let state = RunnerState::new_with_parser(self, Box::new(parser));
         state.run_to_completion()
     }
 
@@ -297,8 +297,8 @@ impl<'m, 'i> RunnerState<'m, 'i> {
             results: vec![],
         }
     }
-    /// Returns a new RunnerState, for running code from the [SExprParser] with the specified [Metta] runner
-    pub fn new_with_parser(metta: &'m Metta, parser: SExprParser<'i>) -> Self {
+    /// Returns a new RunnerState, for running code from the [Parser] with the specified [Metta] runner
+    pub fn new_with_parser(metta: &'m Metta, parser: Box<dyn Parser + 'i>) -> Self {
         let mut state = Self::new(metta);
         state.parser = Some(parser);
         state
@@ -345,7 +345,7 @@ impl<'m, 'i> RunnerState<'m, 'i> {
 
             // Get the next atom, and start a new intperpreter
             let next_atom = if let Some(parser) = self.parser.as_mut() {
-                match parser.parse(&self.metta.0.tokenizer.borrow()) {
+                match parser.next_atom(&self.metta.0.tokenizer.borrow()) {
                     Ok(atom) => atom,
                     Err(err) => {
                         self.mode = MettaRunnerMode::TERMINATE;
