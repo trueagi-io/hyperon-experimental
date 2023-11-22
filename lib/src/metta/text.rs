@@ -217,6 +217,22 @@ impl SyntaxNode {
     }
 }
 
+/// Implemented on a type that yields atoms to be interpreted as MeTTa code.  Typically
+/// by parsing source text
+pub trait Parser {
+    fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String>;
+}
+
+impl Parser for SExprParser<'_> {
+    fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
+        self.parse(tokenizer)
+    }
+}
+
+/// Provides a parser for MeTTa code written in S-Expression Syntax
+///
+/// NOTE: The SExprParser type is short-lived, and can be created cheaply to evaluate a specific block
+/// of MeTTa source code.
 #[derive(Clone)]
 pub struct SExprParser<'a> {
     text: &'a str,
