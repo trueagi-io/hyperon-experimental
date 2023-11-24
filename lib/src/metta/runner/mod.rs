@@ -59,7 +59,7 @@ use crate::common::shared::Shared;
 
 use super::*;
 use super::space::*;
-use super::text::{Tokenizer, SExprParser};
+use super::text::{Tokenizer, Parser, SExprParser};
 use super::types::validate_atom;
 
 mod modules;
@@ -290,14 +290,14 @@ impl Metta {
         self.0.settings.borrow().get(key.into()).map(|a| a.to_string())
     }
 
-    pub fn run(&self, parser: SExprParser) -> Result<Vec<Vec<Atom>>, String> {
-        let state = RunnerState::new_with_parser(self, parser);
+    pub fn run(&self, parser: impl Parser) -> Result<Vec<Vec<Atom>>, String> {
+        let state = RunnerState::new_with_parser(self, Box::new(parser));
         state.run_to_completion()
     }
 
-    pub fn run_in_module(&self, mod_id: ModId, parser: SExprParser) -> Result<Vec<Vec<Atom>>, String> {
+    pub fn run_in_module(&self, mod_id: ModId, parser: impl Parser) -> Result<Vec<Vec<Atom>>, String> {
         let mut state = RunnerState::new_with_module(self, mod_id);
-        state.i_wrapper.input_src.push_parser(parser);
+        state.i_wrapper.input_src.push_parser(Box::new(parser));
         state.run_to_completion()
     }
 
@@ -395,7 +395,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
     }
 
     /// Returns a new RunnerState, for running code from the [SExprParser] with the specified [Metta] runner
-    pub fn new_with_parser(metta: &'m Metta, parser: SExprParser<'input>) -> Self {
+    pub fn new_with_parser(metta: &'m Metta, parser: Box<dyn Parser + 'input>) -> Self {
         let mut state = Self::new(metta);
         state.i_wrapper.input_src.push_parser(parser);
         state
@@ -528,8 +528,8 @@ impl<'input> RunContext<'_, '_, 'input> {
     }
 
     /// Pushes the parser as a source of operations to subsequently execute
-    pub fn push_parser(&mut self, parser: SExprParser<'input>) {
-        self.i_wrapper.input_src.push_parser(parser);
+    pub fn push_parser(&mut self, parser: impl Parser + 'input) {
+        self.i_wrapper.input_src.push_parser(Box::new(parser));
     }
 
     /// Pushes the atoms as a source of operations to subsequently execute
@@ -664,7 +664,7 @@ enum MettaRunnerMode {
 
 /// Private type representing a source for operations for the runner
 enum InputSource<'i> {
-    Parser(SExprParser<'i>),
+    Parser(Box<dyn Parser + 'i>),
     Slice(&'i [Atom]),
     //TODO: Func should be deleted in favor of just an Atom.  See comment on Executable::Func below
     Func(Box<dyn FnOnce(&mut RunContext) -> Result<(), String> + 'i>)
@@ -674,7 +674,7 @@ impl InputSource<'_> {
     fn next_atom(&mut self, tokenizer: Option<&Tokenizer>) -> Result<Option<Atom>, String> {
         let atom = match self {
             InputSource::Parser(parser) => {
-                parser.parse(tokenizer.as_ref().unwrap_or_else(|| panic!("Module must be initialized to parse MeTTa code")))?
+                parser.next_atom(tokenizer.as_ref().unwrap_or_else(|| panic!("Module must be initialized to parse MeTTa code")))?
             },
             InputSource::Slice(atoms) => {
                 if let Some((atom, rest)) = atoms.split_first() {
@@ -702,7 +702,7 @@ enum Executable<'i> {
 struct InputStream<'a>(Vec<InputSource<'a>>);
 
 impl<'i> InputStream<'i> {
-    fn push_parser(&mut self, parser: SExprParser<'i>) {
+    fn push_parser(&mut self, parser: Box<(dyn Parser + 'i)>) {
         self.0.push(InputSource::Parser(parser))
     }
     fn push_atoms(&mut self, atoms: &'i[Atom]) {

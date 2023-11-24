@@ -6,6 +6,7 @@ use std::sync::Mutex;
 use crate::*;
 use crate::space::DynSpace;
 use crate::metta::*;
+use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, ModId, RunnerState};
 use crate::metta::types::validate_atom;
 use crate::metta::text::Tokenizer;

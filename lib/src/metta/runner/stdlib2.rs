@@ -2,7 +2,7 @@ use crate::*;
 use crate::matcher::MatchResultIter;
 use crate::space::*;
 use crate::metta::*;
-use crate::metta::text::Tokenizer;
+use crate::metta::text::{Tokenizer, SExprParser};
 use crate::metta::runner::{Metta, RunContext, ModuleDescriptor};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::assert::vec_eq_no_order;
@@ -411,7 +411,7 @@ fn regex(regex: &str) -> Regex {
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
 // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
-pub fn register_common_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, metta: &Metta) {
+pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, metta: &Metta) {
     let space = metta.space();
 
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));

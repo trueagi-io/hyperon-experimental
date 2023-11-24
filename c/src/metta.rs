@@ -1091,7 +1091,7 @@ impl runner_state_t {
 pub extern "C" fn runner_state_new_with_parser(metta: *const metta_t, parser: sexpr_parser_t) -> runner_state_t {
     let metta = unsafe{ &*metta }.borrow();
     let parser = parser.into_inner();
-    let state = RunnerState::new_with_parser(metta, parser);
+    let state = RunnerState::new_with_parser(metta, Box::new(parser));
     state.into()
 }
 

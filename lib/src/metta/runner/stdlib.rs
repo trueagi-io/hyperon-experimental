@@ -4,6 +4,7 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::interpreter::interpret;
+use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleDescriptor};
 use crate::metta::types::get_atom_types;
 use crate::common::shared::Shared;
