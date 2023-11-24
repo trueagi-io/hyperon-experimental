@@ -202,11 +202,11 @@ fn is_chain_op(atom: &Atom) -> bool {
 }
 
 fn interpret_atom<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
-    interpret_atom_root(space, interpreted_atom, true)
+    let InterpretedAtom(atom, bindings) = interpreted_atom;
+    interpret_atom_root(space, atom, bindings, true)
 }
 
-fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: InterpretedAtom, root: bool) -> Vec<InterpretedAtom> {
-    let InterpretedAtom(atom, bindings) = interpreted_atom;
+fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings, root: bool) -> Vec<InterpretedAtom> {
     let expr = atom_as_slice(&atom);
     let mut result = match expr {
         Some([op, args @ ..]) if *op == EVAL_SYMBOL => {
@@ -380,7 +380,7 @@ fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<In
             }
         },
         _ if is_embedded_op(&atom) =>
-            interpret_atom_root(space, InterpretedAtom(atom, bindings), false),
+            interpret_atom_root(space, atom, bindings, false),
         _ => query(space, atom, bindings),
     }
 }
@@ -413,7 +413,7 @@ fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: V
 
     let is_eval = is_eval_op(&nested);
     if is_function_op(&nested) {
-      let mut result = interpret_atom_root(space, InterpretedAtom(nested, bindings), false);
+      let mut result = interpret_atom_root(space, nested, bindings, false);
       if result.len() == 1 {
           let InterpretedAtom(r, b) = result.pop().unwrap();
           if is_function_op(&r) {
@@ -433,7 +433,7 @@ fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: V
           .collect()
       }
     } else if is_embedded_op(&nested) {
-        let result = interpret_atom_root(space, InterpretedAtom(nested.clone(), bindings), false);
+        let result = interpret_atom_root(space, nested.clone(), bindings, false);
         let result = result.into_iter()
             .map(|InterpretedAtom(r, b)| {
                 if is_eval && is_function_op(&r) {
@@ -470,7 +470,7 @@ fn function<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, body: Atom, call:
             }
         },
         _ if is_embedded_op(&body) => {
-            let mut result = interpret_atom_root(space, InterpretedAtom(body, bindings), false);
+            let mut result = interpret_atom_root(space, body, bindings, false);
             if result.len() == 1 {
                 let InterpretedAtom(r, b) = result.pop().unwrap();
                 vec![InterpretedAtom(Atom::expr([FUNCTION_SYMBOL, r, call]), b)]
@@ -538,13 +538,13 @@ fn check_alternatives<'a, T: SpaceRef<'a>>(space: T, current: ExpressionAtom, fi
         }
     } else {
         let interpreted = atom_into_interpreted_atom(current.pop().unwrap());
-        let InterpretedAtom(ref atom, ref _bindings) = interpreted;
-        if is_embedded_op(atom) {
-            interpret_atom_root(space, interpreted, false).into_iter()
+        let InterpretedAtom(atom, bindings) = interpreted;
+        if is_embedded_op(&atom) {
+            interpret_atom_root(space, atom, bindings, false).into_iter()
                 .map(interpreted_atom_into_atom)
                 .for_each(|atom| current.push(atom));
         } else {
-            finished.push(interpreted_atom_into_atom(interpreted));
+            finished.push(interpreted_atom_into_atom(InterpretedAtom(atom, bindings)));
         }
         vec![InterpretedAtom(Atom::expr([CHECK_ALTERNATIVES_SYMBOL, Atom::expr(current), Atom::expr(finished)]), Bindings::new())]
     }
