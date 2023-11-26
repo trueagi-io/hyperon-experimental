@@ -386,17 +386,17 @@ fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<In
 }
 
 fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let var = VariableAtom::new("X").make_unique();
-    let query = Atom::expr([EQUAL_SYMBOL, atom, Atom::Variable(var.clone())]);
+    let var_x = VariableAtom::new("X").make_unique();
+    let query = Atom::expr([EQUAL_SYMBOL, atom.clone(), Atom::Variable(var_x.clone())]);
     let results = space.query(&query);
-    let atom = Atom::Variable(var);
+    let atom_x = Atom::Variable(var_x);
     if results.is_empty() {
         vec![InterpretedAtom(return_not_reducible(), bindings)]
     } else {
         results.into_iter()
             .flat_map(|b| {
                 b.merge_v2(&bindings).into_iter().map(|b| {
-                    let atom = apply_bindings_to_atom(&atom, &b);
+                    let atom = apply_bindings_to_atom(&atom_x, &b);
                     InterpretedAtom(atom, b)
                 })
             })
@@ -537,7 +537,8 @@ fn check_alternatives<'a, T: SpaceRef<'a>>(space: T, current: ExpressionAtom, fi
             success
         }
     } else {
-        let interpreted = atom_into_interpreted_atom(current.pop().unwrap());
+        let next = current.pop().unwrap();
+        let interpreted = atom_into_interpreted_atom(next);
         let InterpretedAtom(atom, bindings) = interpreted;
         if is_embedded_op(&atom) {
             interpret_atom_root(space, atom, bindings, false).into_iter()
