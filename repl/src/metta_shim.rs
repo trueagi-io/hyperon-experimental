@@ -108,11 +108,11 @@ pub mod metta_interface_mod {
             }
         }
 
-        pub fn load_metta_module(&mut self, module: PathBuf) {
+        pub fn load_metta_module(&mut self, module_name: &str) {
             Python::with_gil(|py| -> PyResult<()> {
-                let path = PyString::new(py, &module.into_os_string().into_string().unwrap());
+                let name = PyString::new(py, module_name);
                 let py_metta = self.py_metta.as_ref(py);
-                let args = PyTuple::new(py, &[py_metta, path]);
+                let args = PyTuple::new(py, &[py_metta, name]);
                 let module: &PyModule = self.py_mod.as_ref(py);
                 let func = module.getattr("load_metta_module")?;
                 func.call1(args)?;
@@ -353,11 +353,14 @@ pub mod metta_interface_mod {
         }
 
         pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
-            EnvBuilder::new()
+            let mut builder = EnvBuilder::new()
                 .set_working_dir(Some(&working_dir))
-                .create_config_dir()
-                .add_include_paths(include_paths)
-                .init_common_env();
+                .create_config_dir();
+
+            for path in include_paths.into_iter().rev() {
+                builder = builder.push_include_path(path);
+            }
+            builder.init_common_env();
 
             let new_shim = MettaShim {
                 metta: Metta::new(None),
@@ -368,6 +371,14 @@ pub mod metta_interface_mod {
             Ok(new_shim)
         }
 
+//LP-TODO-NEXT, I don't think we actually want a "load_metta_module" function.  I think what we actually want is
+// something that runs the file inline.  But I need to think through which files are run first.
+//In fact, it's totally possible (likely) that we ought to get rid of the idea that one invocation
+// of the repl runs multiple top-level files without the files explicitly importing each other.
+//
+//Or if we want to keep the functionality, perhaps the concept of a "primary" MeTTa script needs to go.  But
+// if the files are supposed to interact, then they should import each other.  And if they aren't then there
+// is no reason the user couldn't just spawn multiple instances of the repl to run them.
         pub fn load_metta_module(&mut self, module: PathBuf) {
             //LP-TODO-NEXT, put this back when it's working again
             //self.metta.load_module(module).unwrap();
@@ -414,7 +425,7 @@ pub mod metta_interface_mod {
 
         pub fn exec(&mut self, line: &str) {
             let parser = SExprParser::new(line);
-            let mut runner_state = RunnerState::new_with_parser(&self.metta, parser);
+            let mut runner_state = RunnerState::new_with_parser(&self.metta, Box::new(parser));
 
             exec_state_prepare();
 

@@ -2,8 +2,9 @@
 use std::path::{Path, PathBuf};
 use std::io::Write;
 use std::fs;
-use std::borrow::Borrow;
 use std::sync::Arc;
+
+use crate::metta::runner::modules::{ModuleCatalog, DirCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt};
 
 use directories::ProjectDirs;
 
@@ -16,8 +17,9 @@ pub struct Environment {
     config_dir: Option<PathBuf>,
     init_metta_path: Option<PathBuf>,
     working_dir: Option<PathBuf>,
-    extra_include_paths: Vec<PathBuf>,
     is_test: bool,
+    catalogs: Vec<Box<dyn ModuleCatalog>>,
+    fs_mod_formats: Arc<Vec<Box<dyn FsModuleFormat>>>,
 }
 
 const DEFAULT_INIT_METTA: &[u8] = include_bytes!("init.default.metta");
@@ -54,10 +56,14 @@ impl Environment {
         self.init_metta_path.as_deref()
     }
 
-    /// Returns the extra search paths in the environment, in search priority order.  Results do not
-    /// include the working_dir
-    pub fn extra_include_paths<'a>(&'a self) -> impl Iterator<Item=&Path> + 'a {
-        self.extra_include_paths.iter().map(|path| path.borrow())
+    /// Returns the [ModuleCatalog]s from the Environment, in search priority order
+    pub fn catalogs<'a>(&'a self) -> impl Iterator<Item=&dyn ModuleCatalog> + 'a {
+        self.catalogs.iter().map(|catalog| &**catalog as &dyn ModuleCatalog)
+    }
+
+    /// Returns the [FsModuleFormat]s from the Environment, in priority order
+    pub fn fs_mod_formats<'a>(&'a self) -> impl Iterator<Item=&dyn FsModuleFormat> + 'a {
+        self.fs_mod_formats.iter().map(|fmt| &**fmt as &dyn FsModuleFormat)
     }
 
     /// Private "default" function
@@ -66,8 +72,9 @@ impl Environment {
             config_dir: None,
             init_metta_path: None,
             working_dir: None,
-            extra_include_paths: vec![],
             is_test: false,
+            catalogs: vec![],
+            fs_mod_formats: Arc::new(vec![]),
         }
     }
 }
@@ -79,6 +86,14 @@ pub struct EnvBuilder {
     env: Environment,
     no_cfg_dir: bool,
     create_cfg_dir: bool,
+    proto_catalogs: Vec<ProtoCatalog>,
+    fs_mod_formats: Vec<Box<dyn FsModuleFormat>>
+}
+
+/// Private type representing something that will become an entry in the "Environment::catalogs" Vec
+enum ProtoCatalog {
+    Path(PathBuf),
+    Other(Box<dyn ModuleCatalog>),
 }
 
 impl EnvBuilder {
@@ -99,6 +114,8 @@ impl EnvBuilder {
             env: Environment::new(),
             no_cfg_dir: false,
             create_cfg_dir: false,
+            proto_catalogs: vec![],
+            fs_mod_formats: vec![],
         }
     }
 
@@ -158,14 +175,34 @@ impl EnvBuilder {
         self
     }
 
-    /// Adds additional include paths to search for MeTTa modules
+    /// Adds additional search paths to search for MeTTa modules in the file system
     ///
-    /// NOTE: The most recently added paths will have the highest search priority, save for the `working_dir`,
-    ///   and paths returned first by the iterator will have higher priority within the same call to add_include_paths.
-    pub fn add_include_paths<P: AsRef<Path>, I: IntoIterator<Item=P>>(mut self, paths: I) -> Self {
-        let mut additional_paths: Vec<PathBuf> = paths.into_iter().map(|path| path.as_ref().into()).collect();
-        additional_paths.extend(self.env.extra_include_paths);
-        self.env.extra_include_paths = additional_paths;
+    /// NOTE: include paths are a type of [ModuleCatalog], and the first catalog added will have the highest
+    /// search priority, with subsequently added catalogs being search in order.  The `working_dir` will
+    /// always be searched before any other catalogs.
+    pub fn push_include_path<P: AsRef<Path>>(mut self, path: P) -> Self {
+        self.proto_catalogs.push(ProtoCatalog::Path(path.as_ref().into()));
+        self
+    }
+
+    /// Adds an additional [ModuleCatalog] search for MeTTa modules
+    ///
+    /// NOTE: The first catalog added will have the highest search priority, with subsequently added catalogs
+    /// being search in order.  The `working_dir` will always be searched before any other catalogs.
+    pub fn push_module_catalog<C: ModuleCatalog + 'static>(mut self, catalog: C) -> Self {
+        self.proto_catalogs.push(ProtoCatalog::Other(Box::new(catalog)));
+        self
+    }
+
+    /// Registers a [FsModuleFormat] to identify and load modules stored on file-system media
+    ///
+    /// This is the mechanism used to detect and load modules in foreign formats, like a format specific
+    /// to a host language such as Python
+    ///
+    /// NOTE: The first format added will have the highest search priority, with subsequently added formats
+    /// being tried in order.  Built-in formats [SingleFileModuleFmt] and [DirModuleFmt] will be tried last.
+    pub fn register_fs_module_format<F: FsModuleFormat + 'static>(mut self, fmt: F) -> Self {
+        self.fs_mod_formats.push(Box::new(fmt));
         self
     }
 
@@ -184,11 +221,16 @@ impl EnvBuilder {
     /// Returns a newly created Environment from the builder configuration
     ///
     /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [common_env] method.
-    pub(crate) fn build(self) -> Environment {
+    pub(crate) fn build(mut self) -> Environment {
         let mut env = self.env;
 
         //Init the logger.  This will have no effect if the logger has already been initialized
         let _ = env_logger::builder().is_test(env.is_test).try_init();
+
+        //If we have a working_dir, make sure it gets searched first by building catalogs for it
+        if let Some(working_dir) = &env.working_dir {
+            self.proto_catalogs.insert(0, ProtoCatalog::Path(working_dir.into()));
+        }
 
         //Construct the platform-specific config dir location, if an explicit location wasn't provided
         if !self.no_cfg_dir {
@@ -231,10 +273,10 @@ impl EnvBuilder {
             }
 
             //Push the "modules" dir, as the last place to search after the other paths that were specified
-            //TODO: the config.metta file should be able to append / modify the search paths, and can choose not to
+            //TODO: the config.metta file should be able to append / modify the catalogs, and can choose not to
             // include the "modules" dir in the future.
             if modules_dir.exists() {
-                env.extra_include_paths.push(modules_dir);
+                self.proto_catalogs.push(ProtoCatalog::Path(modules_dir));
             }
 
             if init_metta_path.exists() {
@@ -242,15 +284,37 @@ impl EnvBuilder {
             }
         }
 
-        //TODO: This line below is a stop-gap to match old behavior
-        //As discussed with Vitaly, searching the current working dir can be a potential security hole
-        // However, that is mitigated by "." being the last directory searched.
-        // Anyway, the issue is that the Metta::import_file method in runner.py relies on using the
-        // same runner but being able to change the search path by changing the working dir.
-        // A better fix is to fork a "child runner" with access to the same space and tokenizer,
-        // but an updated search path.  This is really hard to implement currently given the ImportOp
-        // actually owns a reference to the runner it's associated with.  However this must be fixed soon.
-        env.extra_include_paths.push(".".into());
+        // //LP-TODO-NEXT, remove this, since I think we don't need it anymore.  But first confirm
+        // // all tests are passing, including Python sandbox examples
+        // //TODO: This line below is a stop-gap to match old behavior
+        // //As discussed with Vitaly, searching the current working dir can be a potential security hole
+        // // However, that is mitigated by "." being the last directory searched.
+        // // Anyway, the issue is that the Metta::import_file method in runner.py relies on using the
+        // // same runner but being able to change the search path by changing the working dir.
+        // // A better fix is to fork a "child runner" with access to the same space and tokenizer,
+        // // but an updated search path.  This is really hard to implement currently given the ImportOp
+        // // actually owns a reference to the runner it's associated with.  However this must be fixed soon.
+        // env.extra_include_paths.push(".".into());
+
+        //Append the built-in [FSModuleFormat]s, [SingleFileModuleFmt] and [DirModuleFmt]
+        self.fs_mod_formats.push(Box::new(SingleFileModuleFmt));
+        self.fs_mod_formats.push(Box::new(DirModuleFmt));
+
+        //Wrap the fs_mod_formats in an Arc, so it can be shared with the instances of DirCatalog
+        env.fs_mod_formats = Arc::new(self.fs_mod_formats);
+
+        //Convert each proto_catalog into a real ModuleCatalog
+        for proto in self.proto_catalogs.into_iter() {
+            match proto {
+                ProtoCatalog::Path(path) => {
+                    //Make a DirCatalog for the directory
+                    env.catalogs.push(Box::new(DirCatalog::new(path, env.fs_mod_formats.clone())));
+                }
+                ProtoCatalog::Other(catalog) => {
+                    env.catalogs.push(catalog);
+                }
+            }
+        }
 
         env
     }

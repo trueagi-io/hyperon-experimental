@@ -455,9 +455,8 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
     let pragma_op = Atom::gnd(stdlib::PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
-    //LP-TODO-NEXT
-    // let import_op = Atom::gnd(stdlib::ImportOp::new(metta.clone()));
-    // tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+    let import_op = Atom::gnd(stdlib::ImportOp::new(metta.clone()));
+    tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
     let bind_op = Atom::gnd(stdlib::BindOp::new(tokenizer.clone()));
     tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
     // &self should be updated

@@ -475,6 +475,32 @@ impl<'a> SExprParser<'a> {
 
 }
 
+/// An version of [SExprParser] that owns its input text buffer
+#[derive(Clone)]
+pub(crate) struct OwnedSExprParser {
+    text: String,
+    last_pos: usize,
+}
+
+impl OwnedSExprParser {
+    pub fn new(text: String) -> Self {
+        Self{text, last_pos: 0}
+    }
+}
+
+impl Parser for OwnedSExprParser {
+    fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
+        if self.last_pos >= self.text.len() {
+            return Ok(None);
+        }
+        let slice = &self.text[self.last_pos..self.text.len()];
+        let mut parser = SExprParser::new(slice);
+        let result = parser.parse(tokenizer);
+        self.last_pos = self.last_pos + parser.cur_idx();
+        result
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -620,4 +646,17 @@ mod tests {
         tokenizer.register_token(Regex::new(r"A").unwrap(), |_| Atom::sym("B"));
         assert_eq!(tokenizer.find_token("A").unwrap()("A"), Atom::sym("B"));
     }
+
+    #[test]
+    fn test_owned_sexprparser() {
+        let tokenizer = Tokenizer::new();
+        let mut parser = OwnedSExprParser::new(r#"One (two 3) "four""#.to_string());
+        let mut results: Vec<Atom> = vec![];
+        while let Ok(Some(atom)) = parser.next_atom(&tokenizer) {
+            results.push(atom);
+        }
+        let expected = vec![sym!("One"), expr!("two" "3"), sym!(r#""four""#)];
+        assert_eq!(results, expected);
+    }
+
 }

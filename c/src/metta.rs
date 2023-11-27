@@ -892,6 +892,25 @@ pub extern "C" fn metta_eq(a: *const metta_t, b: *const metta_t) -> bool {
     *a == *b
 }
 
+//LP-TODO-NEXT.
+// What do we want from a module search API with regard to host-language interoperation??
+//
+// * A module tries to load a dependency by name
+//
+// - First the local module's dependency table is consulted to see if there is an entry for that module
+// - If no, the 
+//
+// * The host language needs to be able to identify what a module looks like - ie. where to get it, and
+//     what the file format looks like, and how to load it.
+//
+// * A module defines an (optional) table to map 
+//
+//
+//1. Search path API needs to be part of a module
+//2. 
+
+
+
 /// @brief Returns the number of module search paths that will be searched when importing modules into
 ///     the runner
 /// @ingroup interpreter_group

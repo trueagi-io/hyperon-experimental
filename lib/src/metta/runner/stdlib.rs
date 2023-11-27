@@ -38,102 +38,107 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
     }
 }
 
-//LP-TODO-NEXT, come back and fix this
-// #[derive(Clone, Debug)]
-// pub struct ImportOp {
-//     metta: Metta,
-// }
+#[derive(Clone, Debug)]
+pub struct ImportOp {
+    //TODO-HACK: This is a terrible horrible ugly hack that should not be merged
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<&'static mut RunContext<'static, 'static, 'static>>>>>,
+}
 
-// impl PartialEq for ImportOp {
-//     fn eq(&self, _other: &Self) -> bool { true }
-// }
+impl PartialEq for ImportOp {
+    fn eq(&self, _other: &Self) -> bool { true }
+}
 
-// impl ImportOp {
-//     pub fn new(metta: Metta) -> Self {
-//         Self{ metta }
-//     }
-// }
+impl ImportOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{ context: metta.0.context.clone() }
+    }
+}
 
-// impl Display for ImportOp {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         write!(f, "import!")
-//     }
-// }
+impl Display for ImportOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "import!")
+    }
+}
 
-// impl Grounded for ImportOp {
-//     fn type_(&self) -> Atom {
-//         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE()])
-//     }
+impl Grounded for ImportOp {
+    fn type_(&self) -> Atom {
+        //QUESTION: How do we express that we can accept a variable number of arguments?
+        // Ideally the "import as" / "import into" part would be optional
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE()])
+    }
 
-//     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-//         let arg_error = || ExecError::from("import! expects two arguments: space and file path");
-//         let space = args.get(0).ok_or_else(arg_error)?;
-//         let file = args.get(1).ok_or_else(arg_error)?;
-//         let mut module_path = None;
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        //QUESTION: "Import" can mean several (3) different things.  In Python parlance, it can mean
+        //1. "import module" opt. ("as bar")
+        //2. "from module import foo" opt. ("as bar")
+        //3. "from module import *"
+        //
+        //Do we want one MeTTa operation with multiple ways of invoking it?  Or do we want different
+        // implementations for different versions of the import operation?  (since we don't have key-words)
+        // like "from" and "as" (unless we want to add them)
+        //
+        //The old version of this operation supported 1. or 3., depending on whether a "space" argument
+        // mapped to an atom that already existed or not.  If the space atom existed and was a Space, then
+        // the operation would perform behavior 3 (by importing only the space atom and no token).
+        // Otherwise it would perform behavior 1, by adding a token, but not adding the child space atom to
+        // the parent space.
+        //
+        //For now, in order to not lose functionality, I have kept this behavior although reversed the
+        // order of the module name and the destination arguments.  To summarize, if the destination argument
+        // is the &self Space atom, the behavior is (3) "from module import *", and if the destination argument
+        // is a Symbol atom, the behavior is (1) "import module as foo"
+        //
+        //The Underlying functionality for behavior 2 exists in MettaMod::import_item_from_dependency_as,
+        //  but it isn't called yet because I wanted to discuss the way to expose it as a MeTTa op.
+        //For behavior 3, there are deeper questions about desired behavior around tokenizer entries,
+        //  transitive imports, etc.  I have summarized those concerns in the discussion comments above
+        //  MettaMod::import_all_from_dependency
+        //
 
-//         // TODO: replace Symbol by grounded String?
-//         if let Atom::Symbol(file) = file {
+        let arg_error = || ExecError::from("import! expects a module name argument, and an optional destination");
+        let mod_name_atom = args.get(0).ok_or_else(arg_error)?;
+        let dest_arg = args.get(1);
 
-//             //Check each include directory in order, until we find the module we're looking for
-//             for include_dir in self.metta.search_paths() {
-//                 let mut path: PathBuf = include_dir.into();
-//                 path.push(file.name());
-//                 path = path.canonicalize().unwrap_or(path);
-//                 if path.exists() {
-//                     module_path = Some(path);
-//                     break;
-//                 }
-//             }
-//         } else {
-//             return Err("import! expects a file path as a second argument".into())
-//         }
-//         let module_space = match module_path {
-//             Some(path) => {
-//                 log::debug!("import! load file, full path: {}", path.display());
-//                 self.metta.load_module_space(path)?
-//             }
-//             None => return Err(format!("Failed to load module {file:?}; could not locate file").into())
-//         };
+        // TODO: replace Symbol by grounded String?
+        let mod_name = match mod_name_atom {
+            Atom::Symbol(mod_name) => mod_name.name(),
+            _ => return Err("import! expects a module name as the first argument".into())
+        };
 
-//         match space {
-//             // If the module is to be associated with a new space,
-//             // we register it in the tokenizer - works as "import as"
-//             Atom::Symbol(space) => {
-//                 let name = space.name();
-//                 let space_atom = Atom::gnd(module_space);
-//                 let regex = Regex::new(name)
-//                     .map_err(|err| format!("Could not convert space name {} into regex: {}", name, err))?;
-//                 self.metta.tokenizer().borrow_mut()
-//                     .register_token(regex, move |_| { space_atom.clone() });
-//             },
-//             // If the reference space exists, the module space atom is inserted into it
-//             // (but the token is not added) - works as "import to"
-//             Atom::Grounded(_) => {
-//                 let space = Atom::as_gnd::<DynSpace>(space)
-//                     .ok_or("import! expects a space as a first argument")?;
-//                 // Moving space atoms from children to parent
-//                 let modules = self.metta.modules().borrow();
-//                 for (_path, mspace) in modules.iter() {
-//                     let aspace = Atom::gnd(mspace.clone());
-//                     if module_space.borrow_mut().remove(&aspace) {
-//                         self.metta.space().borrow_mut().remove(&aspace);
-//                         self.metta.space().borrow_mut().add(aspace);
-//                     }
-//                 }
-//                 let module_space_atom = Atom::gnd(module_space);
-//                 if space.borrow_mut().query(&module_space_atom).is_empty() {
-//                     space.borrow_mut().add(module_space_atom);
-//                 }
-//             },
-//             _ => return Err("import! expects space as a first argument".into()),
-//         };
-//         unit_result()
-//     }
+        // Load the module into the runner, or get the ModId if it's already loaded
+        //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
+        let context = self.context.lock().unwrap().last().unwrap().clone();
+        let mod_id = context.load_module(mod_name)?;
 
-//     fn match_(&self, other: &Atom) -> MatchResultIter {
-//         match_by_equality(self, other)
-//     }
-// }
+        // Import the module, as per the behavior described above
+        match dest_arg {
+            Some(Atom::Symbol(dest_sym)) => {
+                context.module().import_dependency_as(&context.metta, mod_id, Some(dest_sym.name().to_string()))?;
+            }
+            None => {
+                //TODO: Currently this pattern is unreachable on account of arity-checking in the MeTTa
+                // interpreter, but I have the code path in here for when it is possible
+                context.module().import_dependency_as(&context.metta, mod_id, None)?;
+            },
+            Some(other_atom) => {
+                match &other_atom {
+                    Atom::Grounded(_) if Atom::as_gnd::<DynSpace>(other_atom) == Some(context.module().space()) => {
+                        context.module().import_all_from_dependency(&context.metta, mod_id)?;
+                    },
+                    _ => {
+                        return Err(format!("import! destination argument must be a symbol atom or &self.  Found: {other_atom:?}").into());
+                    }
+                }
+            }
+        }
+
+        unit_result()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct MatchOp {}
@@ -1172,9 +1177,8 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
-//LP-TODO-NEXT, come back and fix this
-    // let import_op = Atom::gnd(ImportOp::new(metta.clone()));
-    // tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+    let import_op = Atom::gnd(ImportOp::new(metta.clone()));
+    tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
 

@@ -68,7 +68,7 @@ use modules::*;
 use std::rc::Rc;
 use std::path::PathBuf;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::{Arc, Mutex};
 
 mod environment;
 pub use environment::{Environment, EnvBuilder};
@@ -90,6 +90,12 @@ pub mod arithmetics;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
+//LP-TODO-NEXT.
+// - Simplify AtomSource, now that Parser is a trit
+// - Simplify Boxed Exec functions, now that I have a hack-bridge to get the context
+// - Consider getting rid of the "deps" field in MettaMod, until I have a clearer vision of when it's needed for all import behavior
+// - Convert Metta::get_or_init_module to use the ModuleLoader abstraction
+
 // *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
 // Metta & related objects
 // *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
@@ -107,7 +113,7 @@ impl PartialEq for Metta {
 #[derive(Debug)]
 pub struct MettaContents {
     /// All the runner's loaded modules
-    modules: RwLock<Vec<MettaMod>>,
+    modules: Mutex<Vec<Rc<MettaMod>>>,
     /// An index, to find a loaded module from a ModuleDescriptor
     module_descriptors: Mutex<HashMap<ModuleDescriptor, ModId>>,
     /// A clone of the top module's Space, so we don't need to do any locking to access it,
@@ -119,6 +125,10 @@ pub struct MettaContents {
     settings: Shared<HashMap<String, Atom>>,
     /// The runner's Environment
     environment: Arc<Environment>,
+    //TODO-HACK: This is a terrible horrible ugly hack that should not be merged.  Delete this field
+    // The real context is an interface to the state in a run, and should not live across runs
+    // This hack will fail badly if we end up running code from two different modules in parallel
+    context: Arc<Mutex<Vec<Arc<&'static mut RunContext<'static, 'static, 'static>>>>>,
 }
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
@@ -205,12 +215,13 @@ impl Metta {
         let top_mod_working_dir = environment.working_dir().map(|path| path.into());
         let top_mod_tokenizer = Shared::new(Tokenizer::new());
         let contents = MettaContents{
-            modules: RwLock::new(vec![]),
+            modules: Mutex::new(vec![]),
             module_descriptors: Mutex::new(HashMap::new()),
             top_mod_space: space.clone(),
             top_mod_tokenizer: top_mod_tokenizer.clone(),
             settings,
-            environment
+            environment,
+            context: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
         };
         let metta = Self(Rc::new(contents));
 
@@ -254,14 +265,19 @@ impl Metta {
 
     /// Internal function to add a loaded module to the runner
     pub(crate) fn add_module(&self, module: MettaMod) -> ModId {
-        let mut vec_ref = self.0.modules.write().unwrap();
+        let mut vec_ref = self.0.modules.lock().unwrap();
         let new_id = ModId(vec_ref.len());
         let mut descriptors = self.0.module_descriptors.lock().unwrap();
         if descriptors.insert(module.descriptor().clone(), new_id).is_some() {
             panic!(); //We should never try and add the same module twice.
         }
-        vec_ref.push(module);
+        vec_ref.push(Rc::new(module));
         new_id
+    }
+
+    /// Returns a reference to the Environment used by the runner
+    pub fn environment(&self) -> &Environment {
+        &self.0.environment
     }
 
     /// Returns a reference to the Space associated with the runner's top module
@@ -366,6 +382,7 @@ impl std::fmt::Debug for RunnerState<'_, '_> {
 }
 
 /// Internal, refers to the MeTTa module used by a RunnerState
+#[derive(Debug)]
 enum StateMod {
     None,
     UseLoaded(ModId),
@@ -444,11 +461,10 @@ impl<'m, 'input> RunnerState<'m, 'input> {
     fn run_in_context<T, F: FnOnce(&mut RunContext<'_, 'm, 'input>) -> Result<T, String>>(&mut self, f: F) -> Result<T, String> {
 
         // Construct the RunContext
-        let mod_ref;
         let module = match &mut self.module {
             StateMod::UseLoaded(mod_id) => {
-                mod_ref = self.metta.0.modules.read().unwrap();
-                ModRef::Borrowed(mod_ref.get(mod_id.0).unwrap())
+                let mod_ref = self.metta.0.modules.lock().unwrap();
+                ModRef::Borrowed(mod_ref.get(mod_id.0).unwrap().clone())
             },
             StateMod::Initializing(_) |
             StateMod::None =>  ModRef::Local(&mut self.module)
@@ -459,8 +475,21 @@ impl<'m, 'input> RunnerState<'m, 'input> {
             module,
         };
 
+        //TODO-HACK: This is a terrible horrible ugly hack that should not be merged
+        //Push the RunContext so the MeTTa Ops can access it.  The context ought to be passed as an argument
+        // to the execute functions, in the absence of the hack
+        self.metta.0.context.lock().unwrap().push(Arc::new( unsafe{ std::mem::transmute(&mut context) } ));
+        //END HORRIBLE HACK
+
         // Call our function
-        f(&mut context)
+        let result = f(&mut context);
+
+        //TODO-HACK: This is a terrible horrible ugly hack that should not be merged
+        //pop the context in the runner
+        self.metta.0.context.lock().unwrap().pop();
+        //END HORRIBLE HACK
+
+        result
     }
 
     /// Internal method to return the MettaMod for a RunnerState that just initialized the module
@@ -486,15 +515,22 @@ pub struct RunContext<'a, 'interpreter, 'input> {
     i_wrapper: &'a mut InterpreterWrapper<'interpreter, 'input>
 }
 
+impl std::fmt::Debug for RunContext<'_, '_, '_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RunContext")
+         .finish()
+    }
+}
+
 enum ModRef<'a> {
     Local(&'a mut StateMod),
-    Borrowed(&'a MettaMod)
+    Borrowed(Rc<MettaMod>)
 }
 
 impl ModRef<'_> {
     fn try_borrow(&self) -> Option<&MettaMod> {
         match &self {
-            ModRef::Borrowed(module) => Some(*module),
+            ModRef::Borrowed(module) => Some(&*module),
             ModRef::Local(state_mod) => {
                 match state_mod {
                     StateMod::Initializing(module) => Some(module),
@@ -554,6 +590,22 @@ impl<'input> RunContext<'_, '_, 'input> {
                 **state_mod_ref = StateMod::Initializing(MettaMod::new_with_tokenizer(self.metta, descriptor, space, tokenizer, working_dir));
             }
         }
+    }
+
+    /// Resolves a dependency module from a name, according to the [ModuleBom] of the current module,
+    /// and loads it into the runner, if it's not already loaded
+    pub fn load_module(&self, name: &str) -> Result<ModId, String> {
+
+        // Resolve the module name into a descriptor in a catalog using the bom
+        let (loader, descriptor) = match self.module().bom().resolve_module(self, name)? {
+            Some((loader, descriptor)) => (loader, descriptor),
+            None => return Err(format!("Failed to resolve module {name}"))
+        };
+
+        // Load the module from the catalog
+        self.metta.get_or_init_module(descriptor, |context, _descriptor| {
+            loader.loader(context)
+        })
     }
 
     /// Private method to advance the context forward one step
