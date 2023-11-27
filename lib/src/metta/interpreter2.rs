@@ -147,7 +147,7 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
 pub fn interpret_step<'a, T: Space + 'a>(mut state: InterpreterState<'a, T>) -> InterpreterState<'a, T> {
     let interpreted_atom = state.pop().unwrap();
     log::debug!("interpret_step: {:?}", interpreted_atom);
-    for result in interpret_atom(&state.context.space, interpreted_atom) {
+    for result in interpret_atom(&state.context, interpreted_atom) {
         state.push(result);
     }
     state
@@ -201,12 +201,12 @@ fn is_chain_op(atom: &Atom) -> bool {
     is_op(atom, &CHAIN_SYMBOL)
 }
 
-fn interpret_atom<'a, T: SpaceRef<'a>>(space: T, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
+fn interpret_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
     let InterpretedAtom(atom, bindings) = interpreted_atom;
-    interpret_atom_root(space, atom, bindings, true)
+    interpret_atom_root(context, atom, bindings, true)
 }
 
-fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings, root: bool) -> Vec<InterpretedAtom> {
+fn interpret_atom_root<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, atom: Atom, bindings: Bindings, root: bool) -> Vec<InterpretedAtom> {
     let expr = atom_as_slice(&atom);
     let mut result = match expr {
         Some([op, args @ ..]) if *op == EVAL_SYMBOL => {
@@ -216,7 +216,7 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bind
                     // error (see error branch below), don't think it is a best
                     // way, but don't see a better solution
                     match atom_into_array(atom) {
-                        Some([_, atom]) => eval(space, atom, bindings),
+                        Some([_, atom]) => eval(context, atom, bindings),
                         _ => panic!("Unexpected state"),
                     }
                 },
@@ -231,7 +231,7 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bind
                 [_nested, Atom::Variable(_var), _templ] => {
                     match atom_into_array(atom) {
                         Some([_, nested, Atom::Variable(var), templ]) =>
-                            chain(space, bindings, nested, var, templ),
+                            chain(context, bindings, nested, var, templ),
                         _ => panic!("Unexpected state"),
                     }
                 },
@@ -283,14 +283,14 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bind
                 [Atom::Expression(_body)] => {
                     match atom_into_array(atom) {
                         Some([_, body]) =>
-                            function(space, bindings, body, None),
+                            function(context, bindings, body, None),
                         _ => panic!("Unexpected state"),
                     }
                 },
                 [Atom::Expression(_body), Atom::Expression(_call)] => {
                     match atom_into_array(atom) {
                         Some([_, body, call]) =>
-                            function(space, bindings, body, Some(call)),
+                            function(context, bindings, body, Some(call)),
                         _ => panic!("Unexpected state"),
                     }
                 },
@@ -306,7 +306,7 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bind
                     match atom_into_array(atom) {
                         Some([_, atom]) => {
                             let current = vec![interpreted_atom_into_atom(InterpretedAtom(atom, bindings.clone()))];
-                            check_alternatives(space, ExpressionAtom::new(current), ExpressionAtom::new(vec![]))
+                            check_alternatives(context, ExpressionAtom::new(current), ExpressionAtom::new(vec![]))
                         },
                         _ => panic!("Unexpected state"),
                     }
@@ -314,7 +314,7 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bind
                 [Atom::Expression(_current), Atom::Expression(_finished)] => {
                     match atom_into_array(atom) {
                         Some([_, Atom::Expression(current), Atom::Expression(finished)]) =>
-                            check_alternatives(space, current, finished),
+                            check_alternatives(context, current, finished),
                         _ => panic!("Unexpected state"),
                     }
                 },
@@ -349,7 +349,7 @@ fn return_atom(atom: Atom) -> Atom {
     atom
 }
 
-fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
+fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
     match atom_as_slice(&atom) {
         Some([Atom::Grounded(op), args @ ..]) => {
             match op.execute(args) {
@@ -380,8 +380,8 @@ fn eval<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<In
             }
         },
         _ if is_embedded_op(&atom) =>
-            interpret_atom_root(space, atom, bindings, false),
-        _ => query(space, atom, bindings),
+            interpret_atom_root(context, atom, bindings, false),
+        _ => query(&context.space, atom, bindings),
     }
 }
 
@@ -404,7 +404,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<I
     }
 }
 
-fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: VariableAtom, templ: Atom) -> Vec<InterpretedAtom> {
+fn chain<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bindings, nested: Atom, var: VariableAtom, templ: Atom) -> Vec<InterpretedAtom> {
     fn apply(bindings: Bindings, nested: Atom, var: VariableAtom, templ: &Atom) -> InterpretedAtom {
         let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
         let result = apply_bindings_to_atom(templ, &b);
@@ -413,7 +413,7 @@ fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: V
 
     let is_eval = is_eval_op(&nested);
     if is_function_op(&nested) {
-      let mut result = interpret_atom_root(space, nested, bindings, false);
+      let mut result = interpret_atom_root(context, nested, bindings, false);
       if result.len() == 1 {
           let InterpretedAtom(r, b) = result.pop().unwrap();
           if is_function_op(&r) {
@@ -433,7 +433,7 @@ fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: V
           .collect()
       }
     } else if is_embedded_op(&nested) {
-        let result = interpret_atom_root(space, nested.clone(), bindings, false);
+        let result = interpret_atom_root(context, nested.clone(), bindings, false);
         let result = result.into_iter()
             .map(|InterpretedAtom(r, b)| {
                 if is_eval && is_function_op(&r) {
@@ -455,7 +455,7 @@ fn chain<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, nested: Atom, var: V
     }
 }
 
-fn function<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, body: Atom, call: Option<Atom>) -> Vec<InterpretedAtom> {
+fn function<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bindings, body: Atom, call: Option<Atom>) -> Vec<InterpretedAtom> {
     let call = match call {
         Some(call) => call,
         None => Atom::expr([FUNCTION_SYMBOL, body.clone()]),
@@ -470,7 +470,7 @@ fn function<'a, T: SpaceRef<'a>>(space: T, bindings: Bindings, body: Atom, call:
             }
         },
         _ if is_embedded_op(&body) => {
-            let mut result = interpret_atom_root(space, body, bindings, false);
+            let mut result = interpret_atom_root(context, body, bindings, false);
             if result.len() == 1 {
                 let InterpretedAtom(r, b) = result.pop().unwrap();
                 vec![InterpretedAtom(Atom::expr([FUNCTION_SYMBOL, r, call]), b)]
@@ -514,7 +514,7 @@ fn interpreted_atom_into_atom(interpreted: InterpretedAtom) -> Atom {
     Atom::expr([atom, Atom::value(bindings)])
 }
 
-fn check_alternatives<'a, T: SpaceRef<'a>>(space: T, current: ExpressionAtom, finished: ExpressionAtom) -> Vec<InterpretedAtom> {
+fn check_alternatives<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, current: ExpressionAtom, finished: ExpressionAtom) -> Vec<InterpretedAtom> {
     let mut current = current.into_children();
     let mut finished = finished.into_children();
     if current.is_empty() {
@@ -541,7 +541,7 @@ fn check_alternatives<'a, T: SpaceRef<'a>>(space: T, current: ExpressionAtom, fi
         let interpreted = atom_into_interpreted_atom(next);
         let InterpretedAtom(atom, bindings) = interpreted;
         if is_embedded_op(&atom) {
-            interpret_atom_root(space, atom, bindings, false).into_iter()
+            interpret_atom_root(context, atom, bindings, false).into_iter()
                 .map(interpreted_atom_into_atom)
                 .for_each(|atom| current.push(atom));
         } else {
@@ -599,33 +599,33 @@ mod tests {
 
     #[test]
     fn interpret_atom_evaluate_incorrect_args() {
-        assert_eq!(interpret_atom(&space(""), atom("(eval)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(eval)")),
             vec![InterpretedAtom(expr!("Error" ("eval") "expected: (eval <atom>), found: (eval)"), bind!{})]);
-        assert_eq!(interpret_atom(&space(""), atom("(eval a b)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(eval a b)")),
             vec![InterpretedAtom(expr!("Error" ("eval" "a" "b") "expected: (eval <atom>), found: (eval a b)"), bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_atom() {
-        let result = interpret_atom(&space("(= a b)"), atom("(eval a)", bind!{}));
+        let result = call_interpret_atom(&space("(= a b)"), &metta_atom("(eval a)"));
         assert_eq!(result, vec![atom("b", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_atom_no_definition() {
-        let result = interpret_atom(&space(""), atom("(eval a)", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(eval a)"));
         assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_empty_expression() {
-        let result = interpret_atom(&space(""), atom("(eval ())", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(eval ())"));
         assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_grounded_value() {
-        let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" {6}), bind!{}));
+        let result = call_interpret_atom(&space(""), &expr!("eval" {6}));
         assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
@@ -633,7 +633,7 @@ mod tests {
     #[test]
     fn interpret_atom_evaluate_pure_expression() {
         let space = space("(= (foo $a B) $a)");
-        let result = interpret_atom(&space, atom("(eval (foo A $b))", bind!{}));
+        let result = call_interpret_atom(&space, &metta_atom("(eval (foo A $b))"));
         assert_eq!(result, vec![atom("A", bind!{})]);
     }
 
@@ -644,7 +644,7 @@ mod tests {
             (= color green)
             (= color blue)
         ");
-        let result = interpret_atom(&space, atom("(eval color)", bind!{}));
+        let result = call_interpret_atom(&space, &metta_atom("(eval color)"));
         assert_eq_no_order!(result, vec![
             atom("red", bind!{}),
             atom("green", bind!{}),
@@ -654,55 +654,55 @@ mod tests {
 
     #[test]
     fn interpret_atom_evaluate_pure_expression_no_definition() {
-        let result = interpret_atom(&space(""), atom("(eval (foo A))", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(eval (foo A))"));
         assert_eq!(result, vec![atom("NotReducible", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_pure_expression_variable_name_conflict() {
         let space = space("(= (foo ($W)) True)");
-        let result = interpret_atom(&space, atom("(eval (foo $W))", bind!{}));
+        let result = call_interpret_atom(&space, &metta_atom("(eval (foo $W))"));
         assert_eq!(result[0].0, sym!("True"));
     }
 
     #[test]
     fn interpret_atom_evaluate_grounded_expression() {
-        let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" ({MulXUndefinedType(7)} {6})), bind!{}));
+        let result = call_interpret_atom(&space(""), &expr!("eval" ({MulXUndefinedType(7)} {6})));
         assert_eq!(result, vec![InterpretedAtom(expr!({42}), bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_grounded_expression_empty() {
-        let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" ({ReturnNothing()} {6})), bind!{}));
+        let result = call_interpret_atom(&space(""), &expr!("eval" ({ReturnNothing()} {6})));
         assert_eq!(result, vec![]);
     }
 
     #[test]
     fn interpret_atom_evaluate_grounded_expression_noreduce() {
-        let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" ({NonReducible()} {6})), bind!{}));
+        let result = call_interpret_atom(&space(""), &expr!("eval" ({NonReducible()} {6})));
         assert_eq!(result, vec![InterpretedAtom(expr!("NotReducible"), bind!{})]);
     }
 
     #[test]
     fn interpret_atom_evaluate_grounded_expression_error() {
-        let result = interpret_atom(&space(""), InterpretedAtom(expr!("eval" ({ThrowError()} {"Test error"})), bind!{}));
+        let result = call_interpret_atom(&space(""), &expr!("eval" ({ThrowError()} {"Test error"})));
         assert_eq!(result, vec![InterpretedAtom(expr!("Error" ({ThrowError()} {"Test error"}) "Test error"), bind!{})]);
     }
 
 
     #[test]
     fn interpret_atom_chain_incorrect_args() {
-        assert_eq!(interpret_atom(&space(""), atom("(chain n $v t o)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(chain n $v t o)")),
             vec![InterpretedAtom(expr!("Error" ("chain" "n" v "t" "o") "expected: (chain <nested> (: <var> Variable) <templ>), found: (chain n $v t o)"), bind!{})]);
-        assert_eq!(interpret_atom(&space(""), atom("(chain n v t)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(chain n v t)")),
             vec![InterpretedAtom(expr!("Error" ("chain" "n" "v" "t") "expected: (chain <nested> (: <var> Variable) <templ>), found: (chain n v t)"), bind!{})]);
-        assert_eq!(interpret_atom(&space(""), atom("(chain n $v)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(chain n $v)")),
             vec![InterpretedAtom(expr!("Error" ("chain" "n" v) "expected: (chain <nested> (: <var> Variable) <templ>), found: (chain n $v)"), bind!{})]);
     }
 
     #[test]
     fn interpret_atom_chain_atom() {
-        let result = interpret_atom(&space(""), InterpretedAtom(expr!("chain" ("A" () {6} y) x ("bar" x)), bind!{}));
+        let result = call_interpret_atom(&space(""), &expr!("chain" ("A" () {6} y) x ("bar" x)));
         assert_eq!(result, vec![InterpretedAtom(expr!("bar" ("A" () {6} y)), bind!{})]);
     }
 
@@ -710,20 +710,20 @@ mod tests {
     #[test]
     fn interpret_atom_chain_evaluation() {
         let space = space("(= (foo $a B) $a)");
-        let result = interpret_atom(&space, atom("(chain (eval (foo A $b)) $x (bar $x))", bind!{}));
+        let result = call_interpret_atom(&space, &metta_atom("(chain (eval (foo A $b)) $x (bar $x))"));
         assert_eq!(result, vec![atom("(bar A)", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_chain_nested_evaluation() {
         let space = space("(= (foo $a B) $a)");
-        let result = interpret_atom(&space, atom("(chain (chain (eval (foo A $b)) $x (bar $x)) $y (baz $y))", bind!{}));
+        let result = call_interpret_atom(&space, &metta_atom("(chain (chain (eval (foo A $b)) $x (bar $x)) $y (baz $y))"));
         assert_eq!(result, vec![atom("(baz (bar A))", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_chain_nested_value() {
-        let result = interpret_atom(&space(""), atom("(chain (chain A $x (bar $x)) $y (baz $y))", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(chain (chain A $x (bar $x)) $y (baz $y))"));
         assert_eq!(result, vec![atom("(baz (bar A))", bind!{})]);
     }
 
@@ -734,7 +734,7 @@ mod tests {
             (= (color) green)
             (= (color) blue)
         ");
-        let result = interpret_atom(&space, atom("(chain (eval (color)) $x (bar $x))", bind!{}));
+        let result = call_interpret_atom(&space, &metta_atom("(chain (eval (color)) $x (bar $x))"));
         assert_eq_no_order!(result, vec![
             atom("(bar red)", bind!{}),
             atom("(bar green)", bind!{}),
@@ -744,86 +744,86 @@ mod tests {
 
     #[test]
     fn interpret_atom_chain_return() {
-        let result = interpret_atom(&space(""), atom("(chain Empty $x (bar $x))", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(chain Empty $x (bar $x))"));
         assert_eq!(result, vec![atom("(bar Empty)", bind!{})]);
     }
 
 
     #[test]
     fn interpret_atom_match_incorrect_args() {
-        assert_eq!(interpret_atom(&space(""), atom("(unify a p t e o)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(unify a p t e o)")),
             vec![InterpretedAtom(expr!("Error" ("unify" "a" "p" "t" "e" "o") "expected: (unify <atom> <pattern> <then> <else>), found: (unify a p t e o)"), bind!{})]);
-        assert_eq!(interpret_atom(&space(""), atom("(unify a p t)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(unify a p t)")),
             vec![InterpretedAtom(expr!("Error" ("unify" "a" "p" "t") "expected: (unify <atom> <pattern> <then> <else>), found: (unify a p t)"), bind!{})]);
     }
 
     #[test]
     fn interpret_atom_match_then() {
-        let result = interpret_atom(&space(""), atom("(unify (A $b) ($a B) ($a $b) Empty)", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(unify (A $b) ($a B) ($a $b) Empty)"));
         assert_eq!(result, vec![atom("(A B)", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_match_else() {
-        let result = interpret_atom(&space(""), atom("(unify (A $b C) ($a B D) ($a $b) Empty)", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(unify (A $b C) ($a B D) ($a $b) Empty)"));
         assert_eq!(result, vec![atom("Empty", bind!{})]);
     }
 
 
     #[test]
     fn interpret_atom_decons_incorrect_args() {
-        assert_eq!(interpret_atom(&space(""), atom("(decons a)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(decons a)")),
             vec![InterpretedAtom(expr!("Error" ("decons" "a") "expected: (decons (: <expr> Expression)), found: (decons a)"), bind!{})]);
-        assert_eq!(interpret_atom(&space(""), atom("(decons (a) (b))", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(decons (a) (b))")),
             vec![InterpretedAtom(expr!("Error" ("decons" ("a") ("b")) "expected: (decons (: <expr> Expression)), found: (decons (a) (b))"), bind!{})]);
-        assert_eq!(interpret_atom(&space(""), atom("(decons)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(decons)")),
             vec![InterpretedAtom(expr!("Error" ("decons") "expected: (decons (: <expr> Expression)), found: (decons)"), bind!{})]);
     }
 
     #[test]
     fn interpret_atom_decons_empty() {
-        let result = interpret_atom(&space(""), atom("(decons ())", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(decons ())"));
         assert_eq!(result, vec![InterpretedAtom(expr!("Error" ("decons" ()) "expected: (decons (: <expr> Expression)), found: (decons ())"), bind!{})]);
     }
 
     #[test]
     fn interpret_atom_decons_single() {
-        let result = interpret_atom(&space(""), atom("(decons (a))", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(decons (a))"));
         assert_eq!(result, vec![atom("(a ())", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_decons_list() {
-        let result = interpret_atom(&space(""), atom("(decons (a b c))", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(decons (a b c))"));
         assert_eq!(result, vec![atom("(a (b c))", bind!{})]);
     }
 
 
     #[test]
     fn interpret_atom_cons_incorrect_args() {
-        assert_eq!(interpret_atom(&space(""), atom("(cons a (e) o)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(cons a (e) o)")),
             vec![InterpretedAtom(expr!("Error" ("cons" "a" ("e") "o") "expected: (cons <head> (: <tail> Expression)), found: (cons a (e) o)"), bind!{})]);
-        assert_eq!(interpret_atom(&space(""), atom("(cons a e)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(cons a e)")),
             vec![InterpretedAtom(expr!("Error" ("cons" "a" "e") "expected: (cons <head> (: <tail> Expression)), found: (cons a e)"), bind!{})]);
-        assert_eq!(interpret_atom(&space(""), atom("(cons a)", bind!{})),
+        assert_eq!(call_interpret_atom(&space(""), &metta_atom("(cons a)")),
             vec![InterpretedAtom(expr!("Error" ("cons" "a") "expected: (cons <head> (: <tail> Expression)), found: (cons a)"), bind!{})]);
     }
 
     #[test]
     fn interpret_atom_cons_empty() {
-        let result = interpret_atom(&space(""), atom("(cons a ())", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(cons a ())"));
         assert_eq!(result, vec![atom("(a)", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_cons_single() {
-        let result = interpret_atom(&space(""), atom("(cons a (b))", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(cons a (b))"));
         assert_eq!(result, vec![atom("(a b)", bind!{})]);
     }
 
     #[test]
     fn interpret_atom_cons_list() {
-        let result = interpret_atom(&space(""), atom("(cons a (b c))", bind!{}));
+        let result = call_interpret_atom(&space(""), &metta_atom("(cons a (b c))"));
         assert_eq!(result, vec![atom("(a b c)", bind!{})]);
     }
 
@@ -892,6 +892,12 @@ mod tests {
 
     fn space(text: &str) -> GroundingSpace {
         metta_space(text)
+    }
+
+    fn call_interpret_atom<'a, T: SpaceRef<'a>>(space: T, atom: &Atom) -> Vec<InterpretedAtom> {
+        let mut state = interpret_init(space, atom);
+        let interpreted = state.pop().unwrap();
+        interpret_atom(&state.context, interpreted)
     }
 
     #[derive(PartialEq, Clone, Debug)]
