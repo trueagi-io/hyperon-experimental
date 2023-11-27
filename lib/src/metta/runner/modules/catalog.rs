@@ -1,7 +1,33 @@
 //!
 //! # Module Resolution
 //!
-//! LP-TODO-NEXT: Make a flow-chart
+//! ## Behavior of Module Resolution
+//!
+//!       ┌────────────────────┐           ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽                    ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽
+//!      ╱                    ╱       ⎽⎼⎻⎺  bom in &self ⎺⎻⎼⎽ Yes      ⎽⎼⎻⎺ bom entry has ⎺⎻⎼⎽ No
+//!     ╱  (import! module)  ╱─────►<      has entry for      >─────►<     fs_path attrib?     >───┐
+//!    ╱                    ╱         ⎺⎻⎼⎽   module?     ⎽⎼⎻⎺          ⎺⎻⎼⎽               ⎽⎼⎻⎺     │
+//!   └────────────────────┘               ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺                    ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺          │
+//!                                              │ No                             │ Yes            │
+//!  ┌─────────────────────────┐     ┌───────────▼─────────────┐      /───────────▼─────────────\  │
+//!  │  Query ModuleCatalogs   │     │    Assume any module    │      │    Load the module at   │  │
+//!  │     in order, with      │◄──┬─┤  version will satisfy   │      │   the file-system path  │  │
+//!  │   version requirement   │   │ │       dependency        │      │   with first successful │  │
+//!  │                         │   │ │                         │      │      FsModuleFormat     │  │
+//!  └───────────┬─────────────┘   │ └───────────▲─────────────┘      \───────────▲─────────────/  │
+//!              │                 │             │                                │                │
+//!  /───────────▼─────────────\   │             │                    ┌───────────┴─────────────┐  │
+//!  │  Load the module from   │   │             │                    │    clone module from    │  │
+//!  │   the first catalog     │   │             │                    │     remote repo to      │  │
+//!  │     that reports a      │   │             │                    │    local resource dir   │  │
+//!  │    successful match     │   │             │                    │                         │  │
+//!  \─────────────────────────/   │             │                    └───────────▲─────────────┘  │
+//!                                │             │ No                             │ Yes            │
+//!                                │Yes    ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽                    ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽          │
+//!                                │  ⎽⎼⎻⎺ bom entry has ⎺⎻⎼⎽       No ⎽⎼⎻⎺ bom entry has ⎺⎻⎼⎽     │
+//!                                └<     version attrib?     >◄─────<       git attrib?       >───┘
+//!                                   ⎺⎻⎼⎽               ⎽⎼⎻⎺          ⎺⎻⎼⎽               ⎽⎼⎻⎺
+//!                                        ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺                    ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺
 //!
 
 use std::ffi::{OsStr, OsString};
