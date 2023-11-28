@@ -73,11 +73,18 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
 pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
 
     /// Returns the [ModuleDescriptor] for the module the `ModuleLoader` is able to load
+    ///
+    /// NOTE: the [ModuleDescriptor] returned by this method may be different from the ModuleDescriptor
+    ///   that gets passed to the loader method, on account of collision avoidance logic between two
+    ///   different instances of a module that report the same version
     fn descriptor(&self) -> Result<ModuleDescriptor, String>;
 
     /// A function to load the module my making MeTTa API calls.  This function will be called by
     /// [Metta::get_or_init_module]
-    fn loader(&self, context: &mut RunContext) -> Result<(), String>;
+    ///
+    /// NOTE: the [ModuleDescriptor] received in the `descriptor` argument should be passed unmodified
+    ///   to `context.init_self_module()`
+    fn loader(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String>;
 }
 
 /// The object responsible for locating and selecting dependency modules for each [MettaMod]
@@ -140,7 +147,12 @@ impl ModuleBom {
                 for fmt in context.metta.environment().fs_mod_formats() {
                     if let Some(loader) = fmt.try_path(&path) {
                         match loader.descriptor() {
-                            Ok(descriptor) => {
+                            Ok(mut descriptor) => {
+                                //Construct a uid based on a stable-hash of the path, because a module
+                                // loaded by explicit path shouldn't be imported by any other module unless
+                                // it explicitly imports it from the same path.
+                                descriptor.uid = Some(xxh3_64(path.as_os_str().as_encoded_bytes()));
+
                                 return Ok(Some((loader, descriptor)))
                             },
                             Err(err) => {
@@ -153,8 +165,8 @@ impl ModuleBom {
                 //
             }
 
-            //TODO, if git URI is specified in the bom entry, clone the repo to a location in the environment dir with a unique path
-            // (based on a random uuid), and resolve it within that directory's catalog
+            //TODO, if git URI is specified in the bom entry, clone the repo to a location in the environment
+            // dir with a unique path (based on a random uuid), and resolve it within that directory's catalog
 
             //TODO, If a version range is specified in the bom entry, then use that version range
 
@@ -186,19 +198,6 @@ impl ModuleBom {
     }
 }
 
-//Maybe unneeded
-// // A reference to a ModuleCatalog should be a ModuleCatalog
-// impl ModuleCatalog for &dyn ModuleCatalog {
-//     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
-//         (*self).lookup(name)
-//     }
-//     //TODO fn lookup_within_version_range(name: &str, version_range: ) -> Vec<ModuleDescriptor>
-//     //TODO fn lookup_newest_within_version_range(name: &str, version_range: ) -> Option<ModuleDescriptor>;
-//     fn get_loader(&self, descriptor: ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
-//         (*self).get_loader(descriptor)
-//     }
-// }
-
 /// A loader for a MeTTa module that lives within a single `.metta` file
 #[derive(Debug)]
 pub(crate) struct SingleFileModule(pub(crate) PathBuf);
@@ -214,16 +213,13 @@ impl ModuleLoader for SingleFileModule {
         //If there is no internal name in the module, parse it from the module's path
         let name = self.0.file_stem().unwrap().to_str().unwrap();
 
-        //If there is no version in the module, use a stable hash of the path as the uid
-        let uid = Some(xxh3_64(name.as_bytes()));
-
-        Ok(ModuleDescriptor::new(name.to_string(), uid))
+        Ok(ModuleDescriptor::new(name.to_string()))
     }
-    fn loader(&self, context: &mut RunContext) -> Result<(), String> {
+    fn loader(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
         let working_dir = self.0.parent().unwrap();
-        context.init_self_module(self.descriptor().unwrap(), space, Some(working_dir.into()));
+        context.init_self_module(descriptor, space, Some(working_dir.into()));
 
         let program_text = std::fs::read_to_string(&self.0)
             .map_err(|err| format!("Could not read file, path: {}, error: {}", self.0.display(), err))?;
@@ -249,16 +245,13 @@ impl ModuleLoader for DirModule {
         //If we still have not found an internal name, use the file-system name
         let name = self.0.file_stem().unwrap().to_str().unwrap();
 
-        //If there is no version in the module, use a stable hash of the path as the uid
-        let uid = Some(xxh3_64(name.as_bytes()));
-
-        Ok(ModuleDescriptor::new(name.to_string(), uid))
+        Ok(ModuleDescriptor::new(name.to_string()))
     }
-    fn loader(&self, context: &mut RunContext) -> Result<(), String> {
+    fn loader(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
         let working_dir = self.0.parent().unwrap();
-        context.init_self_module(self.descriptor().unwrap(), space, Some(working_dir.into()));
+        context.init_self_module(descriptor, space, Some(working_dir.into()));
 
         let module_metta_path = self.0.join("module.metta");
         let program_text = std::fs::read_to_string(&module_metta_path)
@@ -356,7 +349,12 @@ impl ModuleCatalog for DirCatalog {
         let mut found_modules = vec![];
 
         //Inspect the directory using each FsModuleFormat, in order
-        visit_modules_in_dir_using_mod_formats(&self.fmts, &self.path, name, |_loader, descriptor| {
+        visit_modules_in_dir_using_mod_formats(&self.fmts, &self.path, name, |path, _loader, mut descriptor| {
+
+            //Update the descriptor's uid with a stable-hash based on the path, because we might get
+            // multiple instances purporting to be the same module
+            descriptor.uid = Some(xxh3_64(path.as_os_str().as_encoded_bytes()));
+
             found_modules.push(descriptor);
             false
         });
@@ -366,7 +364,9 @@ impl ModuleCatalog for DirCatalog {
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
 
         let mut matching_module = None;
-        visit_modules_in_dir_using_mod_formats(&self.fmts, &self.path, &descriptor.name, |loader, resolved_descriptor| {
+        visit_modules_in_dir_using_mod_formats(&self.fmts, &self.path, &descriptor.name, |path, loader, mut resolved_descriptor| {
+            //Reconstruct the descriptor using the same logic as above
+            resolved_descriptor.uid = Some(xxh3_64(path.as_os_str().as_encoded_bytes()));
             if &resolved_descriptor == descriptor {
                 matching_module = Some(loader);
                 true
@@ -392,14 +392,14 @@ fn push_extension(path: PathBuf, extension: impl AsRef<OsStr>) -> PathBuf {
 
 /// Internal function to try FsModuleFormat formats in order.  If the closure returns `true` this function
 /// will exit, otherwise it will try every path returned by every format
-fn visit_modules_in_dir_using_mod_formats(fmts: &[Box<dyn FsModuleFormat>], dir_path: &Path, mod_name: &str, mut f: impl FnMut(Box<dyn ModuleLoader>, ModuleDescriptor) -> bool) {
+fn visit_modules_in_dir_using_mod_formats(fmts: &[Box<dyn FsModuleFormat>], dir_path: &Path, mod_name: &str, mut f: impl FnMut(PathBuf, Box<dyn ModuleLoader>, ModuleDescriptor) -> bool) {
 
     for fmt in fmts {
         for path in fmt.paths_for_name(dir_path, mod_name) {
             if let Some(loader) = fmt.try_path(&path) {
                 match loader.descriptor() {
                     Ok(resolved_descriptor) => {
-                        if f(loader, resolved_descriptor) {
+                        if f(path, loader, resolved_descriptor) {
                             return;
                         }
                     },

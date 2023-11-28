@@ -43,11 +43,15 @@ pub struct ModuleDescriptor {
 impl ModuleDescriptor {
     /// Internal method to create a ModuleDescriptor for a runner's "top" module
     pub(crate) fn top() -> Self {
-        Self::new("top".to_string(), None)
+        Self::new("top".to_string())
     }
     /// Create a new ModuleDescriptor
-    pub fn new(name: String, uid: Option<u64>) -> Self {
-        Self { name, uid }
+    pub fn new(name: String) -> Self {
+        Self { name, uid: None }
+    }
+    /// Create a new ModuleDescriptor
+    pub fn new_with_uid(name: String, uid: u64) -> Self {
+        Self { name, uid: Some(uid) }
     }
 }
 

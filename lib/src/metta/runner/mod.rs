@@ -62,7 +62,7 @@ use super::space::*;
 use super::text::{Tokenizer, Parser, SExprParser};
 use super::types::validate_atom;
 
-mod modules;
+pub mod modules;
 use modules::*;
 
 use std::rc::Rc;
@@ -174,7 +174,7 @@ impl Metta {
         loader(&metta);
 
         //Load the Rust stdlib into the runner
-        let rust_stdlib_desc = ModuleDescriptor::new("stdlib".to_string(), None);
+        let rust_stdlib_desc = ModuleDescriptor::new("stdlib".to_string());
         let rust_stdlib_id = metta.get_or_init_module(rust_stdlib_desc, |context, descriptor| {
             init_rust_stdlib(context, descriptor)
         }).expect("Could not load stdlib");
@@ -579,6 +579,9 @@ impl<'input> RunContext<'_, '_, 'input> {
     }
 
     /// Initializes the context's module.  Used in the implementation of a module loader function
+    ///
+    /// Prior to calling this function, any attempt to access the active module in the RunContext will
+    /// lead to a panic.
     pub fn init_self_module(&mut self, descriptor: ModuleDescriptor, space: DynSpace, working_dir: Option<PathBuf>) {
         match &mut self.module {
             ModRef::Borrowed(_) => panic!("Module already initialized"),
@@ -603,8 +606,8 @@ impl<'input> RunContext<'_, '_, 'input> {
         };
 
         // Load the module from the catalog
-        self.metta.get_or_init_module(descriptor, |context, _descriptor| {
-            loader.loader(context)
+        self.metta.get_or_init_module(descriptor, |context, descriptor| {
+            loader.loader(context, descriptor)
         })
     }
 

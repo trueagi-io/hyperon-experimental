@@ -194,14 +194,14 @@ impl EnvBuilder {
         self
     }
 
-    /// Registers a [FsModuleFormat] to identify and load modules stored on file-system media
+    /// Adds a [FsModuleFormat] to identify and load modules stored on file-system media
     ///
-    /// This is the mechanism used to detect and load modules in foreign formats, like a format specific
-    /// to a host language such as Python
+    /// This is the mechanism used to detect and load modules from the file system in foreign formats.
+    /// For example a format specific to a host language such as Python
     ///
     /// NOTE: The first format added will have the highest search priority, with subsequently added formats
     /// being tried in order.  Built-in formats [SingleFileModuleFmt] and [DirModuleFmt] will be tried last.
-    pub fn register_fs_module_format<F: FsModuleFormat + 'static>(mut self, fmt: F) -> Self {
+    pub fn push_fs_module_format<F: FsModuleFormat + 'static>(mut self, fmt: F) -> Self {
         self.fs_mod_formats.push(Box::new(fmt));
         self
     }
