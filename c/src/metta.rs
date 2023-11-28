@@ -1622,3 +1622,5 @@ impl ModuleLoader for CModLoader {
         Ok(())
     }
 }
+
+//LP-TODO-NEXT: Add custom format loading tests for both Rust & C

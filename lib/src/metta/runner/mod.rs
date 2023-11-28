@@ -93,7 +93,6 @@ const EXEC_SYMBOL : Atom = sym!("!");
 //LP-TODO-NEXT.
 // - Simplify AtomSource, now that Parser is a trit
 // - Simplify Boxed Exec functions, now that I have a hack-bridge to get the context
-// - Consider getting rid of the "deps" field in MettaMod, until I have a clearer vision of when it's needed for all import behavior
 // - Convert Metta::get_or_init_module to use the ModuleLoader abstraction
 
 // *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*

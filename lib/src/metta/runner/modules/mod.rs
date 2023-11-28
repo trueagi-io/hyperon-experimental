@@ -1,7 +1,6 @@
 
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
-use std::sync::Mutex;
 
 use crate::*;
 use crate::space::DynSpace;
@@ -63,7 +62,6 @@ pub struct MettaMod {
     space: DynSpace,
     tokenizer: Shared<Tokenizer>,
     bom: ModuleBom,
-    deps: Mutex<HashMap<String, ModId>>,
 }
 
 impl Clone for MettaMod {
@@ -74,7 +72,6 @@ impl Clone for MettaMod {
             tokenizer: self.tokenizer.clone(),
             working_dir: self.working_dir.clone(),
             bom: self.bom.clone(),
-            deps: Mutex::new(self.deps.lock().unwrap().clone())
         }
     }
 }
@@ -90,7 +87,6 @@ impl MettaMod {
             tokenizer,
             working_dir,
             bom: ModuleBom::default(),
-            deps: Mutex::new(HashMap::new()),
         };
 
         // Load the base tokens for the module's new Tokenizer
@@ -119,10 +115,6 @@ impl MettaMod {
         let new_token = format!("&{name}");
         let dep_space_atom = Atom::gnd(dep_space);
         self.tokenizer.borrow_mut().register_token_with_regex_str(&new_token, move |_| { dep_space_atom.clone() });
-
-        // Include the dependent module's mod_id in our deps
-        let mut deps = self.deps.lock().unwrap();
-        deps.insert(name, mod_id);
 
         Ok(())
     }
