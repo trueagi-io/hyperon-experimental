@@ -91,8 +91,6 @@ pub mod arithmetics;
 const EXEC_SYMBOL : Atom = sym!("!");
 
 //LP-TODO-NEXT.
-// - Simplify AtomSource, now that Parser is a trit
-// - Simplify Boxed Exec functions, now that I have a hack-bridge to get the context
 // - Convert Metta::get_or_init_module to use the ModuleLoader abstraction
 
 // *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
@@ -719,33 +717,26 @@ enum MettaRunnerMode {
 /// Private type representing a source for operations for the runner
 enum InputSource<'i> {
     Parser(Box<dyn Parser + 'i>),
-    Slice(&'i [Atom]),
-    //TODO: Func should be deleted in favor of just an Atom.  See comment on Executable::Func below
     Func(Box<dyn FnOnce(&mut RunContext) -> Result<(), String> + 'i>)
 }
 
-impl InputSource<'_> {
-    fn next_atom(&mut self, tokenizer: Option<&Tokenizer>) -> Result<Option<Atom>, String> {
-        let atom = match self {
-            InputSource::Parser(parser) => {
-                parser.next_atom(tokenizer.as_ref().unwrap_or_else(|| panic!("Module must be initialized to parse MeTTa code")))?
-            },
-            InputSource::Slice(atoms) => {
-                if let Some((atom, rest)) = atoms.split_first() {
-                    *atoms = rest;
-                    Some(atom.clone())
-                } else {
-                    None
-                }
-            },
-            InputSource::Func(_) => unreachable!() //If we got here, there is a bug in the calling function
-        };
-        Ok(atom)
-    }
-}
-
-/// Private type representing an operation for the runner
-/// TODO: Delete this type, once I can wrap any function in an Atom, and have access to the RunContext
+/// Private type representing an input operation for the runner
+/// FUTURE-CLEANUP-TODO: I would like to be able to delete this `Executable` type and simplify this code
+/// by making the runner's only instructions be a stream of atoms.  However, it an important aspect of
+/// the runner's abstactions (and necessary functionality for module loading, etc.) is the ability to
+/// dispatch one-off functions to execute inside the runner.  Therefore, the most sensible design would
+/// be to allow those functions to be embedded within grounded atoms.  Right now, there are two things
+/// that stand in the way of that design:
+/// 1.  Atoms have a 'static lifetime, but a lot of the value of dispatching special functions is to
+///   interact with the caller, and this requiring a 'static lifetime bound on the function drastically
+///   limits the usefullness of the feature.
+///     More specifically, the module loader functions are borrowed from the Environment, and the
+///   environment may not be 'static.  So we would need to move loader functions out of the Environment,
+///   Which is doable.
+///     However, if we implement "inside-out atoms" (atoms with a lifetime bound) we may be able to solve
+///   this more elegantly.
+/// 2.  The runner's RunContext is not available to execution of atoms in the current API.  Although
+///   hopefully this will be addressed shortly
 enum Executable<'i> {
     Atom(Atom),
     Func(Box<dyn FnOnce(&mut RunContext) -> Result<(), String> + 'i>)
@@ -760,7 +751,7 @@ impl<'i> InputStream<'i> {
         self.0.push(InputSource::Parser(parser))
     }
     fn push_atoms(&mut self, atoms: &'i[Atom]) {
-        self.0.push(InputSource::Slice(atoms));
+        self.0.push(InputSource::Parser(Box::new(atoms)));
     }
     fn push_func<F: FnOnce(&mut RunContext) -> Result<(), String> + 'i>(&mut self, f: F) {
         self.0.push(InputSource::Func(Box::new(f)))
@@ -776,9 +767,9 @@ impl<'i> InputStream<'i> {
                         InputSource::Func(f) => Ok(Some(Executable::Func(f))),
                         _ => unreachable!()
                     },
-                    InputSource::Parser(_) |
-                    InputSource::Slice(_) => {
-                        match src.next_atom(tokenizer)? {
+                    InputSource::Parser(parser) => {
+                        match parser.next_atom(tokenizer.as_ref()
+                            .unwrap_or_else(|| panic!("Module must be initialized to parse MeTTa code")))? {
                             Some(atom) => Ok(Some(Executable::Atom(atom))),
                             None => {
                                 self.0.remove(0);

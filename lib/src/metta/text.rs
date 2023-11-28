@@ -501,6 +501,17 @@ impl Parser for OwnedSExprParser {
     }
 }
 
+impl Parser for &[Atom] {
+    fn next_atom(&mut self, _tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
+        if let Some((atom, rest)) = self.split_first() {
+            *self = rest;
+            Ok(Some(atom.clone()))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
