@@ -3,7 +3,8 @@ use hyperon::space::DynSpace;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
-use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
+use hyperon::metta::runner::{Metta, RunContext, RunnerState, Environment, EnvBuilder};
+use hyperon::metta::runner::modules::{FsModuleFormat, ModuleLoader, ModuleDescriptor};
 use hyperon::rust_type_atom;
 
 use crate::util::*;
@@ -11,8 +12,17 @@ use crate::atom::*;
 use crate::space::*;
 
 use std::os::raw::*;
+use std::path::{Path, PathBuf};
+
 use regex::Regex;
-use std::path::PathBuf;
+
+//LONG-TERM ISSUE: There is no cross-platform way to go from a Path to a CString and back.
+//This is in no small part caused by the fact that the code we are interacting with needs to know how
+// to interpret the path encoding, which is platform-dependent.  Paths on Windows are particularly
+// problematic.
+//Going via UTF-8 encoded `str` is definitely wrong, but at least it's the same kind of wrong on
+// all platforms.  https://internals.rust-lang.org/t/pathbuf-to-cstring/12560/10
+//
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Tokenizer and Parser Interface
@@ -40,10 +50,6 @@ impl tokenizer_t {
     fn borrow_inner(&self) -> &mut Tokenizer {
         let cell = unsafe{ &mut (&mut *self.tokenizer.cast_mut()).0 };
         cell.get_mut()
-    }
-    fn clone_handle(&self) -> Shared<Tokenizer> {
-        unsafe{ std::rc::Rc::increment_strong_count(self.tokenizer); }
-        unsafe{ Shared(std::rc::Rc::from_raw(self.tokenizer.cast())) }
     }
     fn into_handle(self) -> Shared<Tokenizer> {
         unsafe{ Shared(std::rc::Rc::from_raw(self.tokenizer.cast())) }
@@ -892,61 +898,6 @@ pub extern "C" fn metta_eq(a: *const metta_t, b: *const metta_t) -> bool {
     *a == *b
 }
 
-//LP-TODO-NEXT.
-// What do we want from a module search API with regard to host-language interoperation??
-//
-// * A module tries to load a dependency by name
-//
-// - First the local module's dependency table is consulted to see if there is an entry for that module
-// - If no, the 
-//
-// * The host language needs to be able to identify what a module looks like - ie. where to get it, and
-//     what the file format looks like, and how to load it.
-//
-// * A module defines an (optional) table to map 
-//
-//
-//1. Search path API needs to be part of a module
-//2. 
-
-
-
-/// @brief Returns the number of module search paths that will be searched when importing modules into
-///     the runner
-/// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the Interpreter handle
-/// @return The number of paths that will be searched before the search is considered unsuccessful
-///
-#[no_mangle]
-pub extern "C" fn metta_search_path_cnt(metta: *const metta_t) -> usize {
-    let metta = unsafe{ &*metta }.borrow();
-    metta.search_paths().count()
-}
-
-/// @brief Renders nth module search path for a given runner into a text buffer
-/// @ingroup interpreter_group
-/// @param[in]  idx  The index of the search path to render, with 0 being the highest priority search
-///     path, and subsequent indices having decreasing search priority.
-///     If `i > metta_search_path_cnt()`, this function will return 0.
-/// @param[out]  buf  A buffer into which the text will be written
-/// @param[in]  buf_len  The maximum allocated size of `buf`
-/// @return The length of the path string, minus the string terminator character.  If
-///     `return_value > buf_len + 1`, then the text was not fully written and this function should be
-///     called again with a larger buffer.  This function will return 0 if the input arguments don't
-///     specify a valid search path.
-/// @note This function is primarily useful for implementing additional language-specific module-loading
-///     logic, such as the `extend-py!` operation in the Python MeTTa extensions.
-///
-#[no_mangle]
-pub extern "C" fn metta_nth_search_path(metta: *const metta_t, idx: usize, buf: *mut c_char, buf_len: usize) -> usize {
-    let metta = unsafe{ &*metta }.borrow();
-    let path = metta.search_paths().nth(idx);
-    match path {
-        Some(path) => write_into_buf(path.display(), buf, buf_len),
-        None => write_into_buf("", buf, buf_len) //Write just the terminator char, if there is room
-    }
-}
-
 /// @brief Provides access to the Space associated with a MeTTa Interpreter
 /// @ingroup interpreter_group
 /// @param[in]  metta  A pointer to the Interpreter handle
@@ -1028,25 +979,38 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
     }
 }
 
-/// @brief Loads a module into a MeTTa interpreter
+//LP-TODO-NEXT - unclear exactly what is API needs to look like.  Most module loading is initiated from
+// within MeTTa code execution itself (i.e. an import! statement), however, one exception is the 
+// language-specific stdlib modules
+//
+// /// @brief Loads a module into a MeTTa interpreter
+// /// @ingroup interpreter_group
+// /// @param[in]  metta  A pointer to the handle specifying the interpreter into which to load the module
+// /// @param[in]  name  A C-style string containing the module name
+// /// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
+// ///
+// #[no_mangle]
+// pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
+//     let metta = unsafe{ &mut *metta };
+//     metta.free_err_string();
+//     let rust_metta = metta.borrow();
+//     let result = rust_metta.load_module(PathBuf::from(cstr_as_str(name)));
+//     match result {
+//         Ok(()) => {},
+//         Err(err) => {
+//             let err_cstring = std::ffi::CString::new(err).unwrap();
+//             metta.err_string = err_cstring.into_raw();
+//         }
+//     }
+// }
+
+/// @brief An interface object providing access to the MeTTa run interface
 /// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the handle specifying the interpreter into which to load the module
-/// @param[in]  name  A C-style string containing the module name
-/// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
 ///
-#[no_mangle]
-pub extern "C" fn metta_load_module(metta: *mut metta_t, name: *const c_char) {
-    let metta = unsafe{ &mut *metta };
-    metta.free_err_string();
-    let rust_metta = metta.borrow();
-    let result = rust_metta.load_module(PathBuf::from(cstr_as_str(name)));
-    match result {
-        Ok(()) => {},
-        Err(err) => {
-            let err_cstring = std::ffi::CString::new(err).unwrap();
-            metta.err_string = err_cstring.into_raw();
-        }
-    }
+#[repr(C)]
+pub struct run_context_t {
+    /// Internal.  Should not be accessed directly
+    context: *mut c_void, //LP-TODO-NEXT Actually implement this!!
 }
 
 /// @brief Represents the state of an in-flight MeTTa execution run
@@ -1392,21 +1356,269 @@ pub extern "C" fn env_builder_set_is_test(builder: *mut env_builder_t, is_test: 
     *builder_arg_ref = builder.into();
 }
 
-/// @brief Adds a config directory to search for imports.  The most recently added paths will be searched
-///     first, continuing in inverse order
+/// @brief Adds a directory to search for module imports
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
 /// @param[in]  path  A C-style string specifying a path to a working directory, to search for modules to load
+/// @note The paths will be searched in the order they are added to the `env_builder_t``
 ///
 #[no_mangle]
-pub extern "C" fn env_builder_add_include_path(builder: *mut env_builder_t, path: *const c_char) {
+pub extern "C" fn env_builder_push_include_path(builder: *mut env_builder_t, path: *const c_char) {
     let builder_arg_ref = unsafe{ &mut *builder };
     let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
     let builder = if path.is_null() {
         panic!("Fatal Error: path cannot be NULL");
     } else {
-        builder.add_include_paths(vec![PathBuf::from(cstr_as_str(path))])
+        builder.push_include_path(PathBuf::from(cstr_as_str(path)))
     };
     *builder_arg_ref = builder.into();
 }
 
+/// @brief Adds logic to interpret a foreign format for MeTTa modules loaded from the file system
+/// @ingroup environment_group
+/// @param[in]  builder  A pointer to the in-process environment builder state
+/// @param[in]  api  A pointer to the `mod_loader_api_t` table of functions to define the behavior of the
+///    module format
+/// @param[in]  payload  A pointer to a user-defined structure to store information related to this format
+/// @warning The data referenced by both the `api` and the `payload` pointers must remain valid for the
+///    entire life of the environment.  In the case of the common_env, that is the entire life of the program
+/// @note Formats will be tried in the order they are added to the `env_builder_t``
+///
+#[no_mangle]
+pub extern "C" fn env_builder_push_fs_module_format(builder: *mut env_builder_t, api: *const mod_loader_api_t, payload: *const c_void) {
+    let builder_arg_ref = unsafe{ &mut *builder };
+    let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
+    let c_loader = CModLoader::new(api, payload);
+    let builder = builder.push_fs_module_format(c_loader);
+    *builder_arg_ref = builder.into();
+}
+
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+// Module Interface
+// =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+
+/// @brief Identifies the properties on a specific module, including its name and version
+/// @ingroup module_group
+/// @note `module_descriptor_t` objects must be freed with `module_descriptor_free` or passed to
+///    a function that assumes responsibility for freeing them
+///
+#[repr(C)]
+pub struct module_descriptor_t {
+    /// Internal.  Should not be accessed directly
+    descriptor: *mut RustModuleDescriptor,
+}
+
+enum RustModuleDescriptor {
+    Descriptor(ModuleDescriptor),
+    Err(String)
+}
+
+impl From<ModuleDescriptor> for module_descriptor_t {
+    fn from(descriptor: ModuleDescriptor) -> Self {
+        Self{ descriptor: Box::into_raw(Box::new(RustModuleDescriptor::Descriptor(descriptor))) }
+    }
+}
+
+impl module_descriptor_t {
+    fn new_err(err: String) -> Self {
+        Self{ descriptor: Box::into_raw(Box::new(RustModuleDescriptor::Err(err))) }
+    }
+    fn into_rust_enum(self) -> RustModuleDescriptor {
+        unsafe{ *Box::from_raw(self.descriptor) }
+    }
+    //LP-TODO-NEXT.  I don't know if we actually need these
+    // fn into_inner(self) -> ModuleDescriptor {
+    //     match self.into_rust_enum() {
+    //         RustModuleDescriptor::Descriptor(desc) => desc,
+    //         RustModuleDescriptor::Err(_err) => panic!("Fatal error.  Attempt to access Error module_descriptor_t")
+    //     }
+    // }
+    // fn borrow(&self) -> &ModuleDescriptor {
+    //     match unsafe{ &*self.descriptor } {
+    //         RustModuleDescriptor::Descriptor(desc) => desc,
+    //         RustModuleDescriptor::Err(_err) => panic!("Fatal error.  Attempt to access Error module_descriptor_t")
+    //     }
+    // }
+}
+
+/// @brief Creates a new module_descriptor_t with the specified name
+/// @ingroup module_group
+/// @param[in]  name  A C-style string containing the name of the module
+/// @return The new `module_descriptor_t`
+/// @note The returned `module_descriptor_t` must be freed with `module_descriptor_free()`
+///
+#[no_mangle]
+pub extern "C" fn module_descriptor_new(name: *const c_char) -> module_descriptor_t {
+    ModuleDescriptor::new(cstr_as_str(name).to_string()).into()
+}
+
+/// @brief Creates a new module_descriptor_t that represents the error attempting to interpret a module
+/// @ingroup module_group
+/// @param[in]  err_str  A C-style string containing the error message
+/// @return The new error `module_descriptor_t`
+///
+#[no_mangle]
+pub extern "C" fn module_descriptor_error(err_str: *const c_char) -> module_descriptor_t {
+    module_descriptor_t::new_err(cstr_as_str(err_str).to_string()).into()
+}
+
+/// @brief Frees a module_descriptor_t
+/// @ingroup module_group
+/// @param[in]  descriptor  The `module_descriptor_t` to free
+///
+#[no_mangle]
+pub extern "C" fn module_descriptor_free(descriptor: module_descriptor_t) {
+    let descriptor = descriptor.into_rust_enum();
+    drop(descriptor);
+}
+
+/// @struct mod_loader_api_t
+/// @brief A table of functions to load MeTTa modules from an arbitrary format
+/// @ingroup module_group
+/// @warning All of the functions in this interface may be called from threads outside the main
+///    thread, and may be called concurrently.  Therefore these functions must be fully reentrant.
+///
+#[repr(C)]
+pub struct mod_loader_api_t {
+
+    /// @brief Constructs a path for a module with a given name that resides in a parent directory
+    /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
+    ///    format was initialized.  This function must not modify the payload
+    /// @param[in]  parent_dir  A NULL-terminated string, representing the path to the parent directory
+    ///    in the file system
+    /// @param[in]  mod_name  A NULL-terminated string, representing the name of the module
+    /// @param[out]  dst_buf  The buffer into which to write the output path, followed by a NULL character
+    /// @param[in]  buf_size  The size of the allocated dst_buf.  This function must not overwrite the
+    ///    output buffer
+    /// @return the number of bytes written into the `dst_buf` by the function, including a NULL terminator
+    ///    character.
+    /// @note The Rust interface allows for a single module loader to check multiple path variations.  That
+    ///    could be implemented here in the C interface but it would complicate the API functions by
+    ///    requiring multiple buffers to be returned, and currently it's not needed.
+    ///
+    path_for_name: extern "C" fn(payload: *const c_void, parent_dir: *const c_char, mod_name: *const c_char, dst_buf: *mut c_char, buf_size: usize) -> usize,
+
+    /// @brief Tests a path in the file system to determine if a valid module resides at the path
+    /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
+    ///    format was initialized.  This function must not modify the payload
+    /// @param[in]  path  A NULL-terminated string, representing a path in the file system to test
+    /// @return `true` if the `path` contains a valid module in the format, otherwise `false`
+    ///
+    try_path: extern "C" fn(payload: *const c_void, path: *const c_char) -> bool,
+
+    /// @brief Constructs a `module_descriptor_t` for the module at a specified path in the file system
+    /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
+    ///    format was initialized.  This function must not modify the payload
+    /// @param[in]  path  A NULL-terminated string, representing a path in the file system pointing to
+    ///    the module
+    /// @return A newly created `module_descriptor_t` representing the module at the path.  If the module
+    ///    at the path is found to be defective, this function should return an error using
+    ///    `module_descriptor_error()`, because the act of inspecting a module should not cause MeTTa
+    ///    to halt
+    ///
+    descriptor: extern "C" fn(payload: *const c_void, path: *const c_char) -> module_descriptor_t,
+
+    /// @brief Loads the module into the runner, by making calls into the `run_context_t`
+    /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
+    ///    format was initialized.  This function must not modify the payload
+    /// @param[in]  path  A NULL-terminated string, representing a path in the file system pointing to
+    ///    the module
+    /// @param[in]  context  The `run_context_t` to provide access to the MeTTa run interface
+    /// @param[in]  descriptor  The `module_descriptor_t` to pass to `run_context_init_self_module`.
+    ///    This descriptor may not necessarily be the same descriptor returned from the api's
+    ///    descriptor function.
+    ///
+    ///QUESTION: What should the error reporting pathway look like?
+    ///LP-TODO-NEXT: We probably want to break out the definition of a loader function from the
+    /// part that is tied to an fs_module_format, so the same function prototype can be used to
+    /// load the stdlib, etc.
+    loader: extern "C" fn(payload: *const c_void, path: *const c_char, context: *const run_context_t, descriptor: module_descriptor_t),
+}
+
+#[derive(Clone, Debug)]
+struct CModLoader {
+    api: *const mod_loader_api_t,
+    payload: *const c_void,
+    path: Option<PathBuf>
+}
+
+impl CModLoader {
+    fn new(api: *const mod_loader_api_t, payload: *const c_void) -> Self {
+        Self {api, payload, path: None }
+    }
+}
+
+//QUESTION: What should our multi-thread cross-language API look like?  (I am seeing this as establishing
+//  a pattern we can also use for Grounded Atoms, Spaces, etc.)
+//
+//I see several possible approaches:
+// 1.) Let the C implementations ensure their own concurrency.  This preserves the option for optimal speed,
+//  but might invite problems with badly-behaved extensions.  Especially for host languages where the
+//  interpreter is bound to a specific thread such as Python or JavaScript.
+// 2.) Implement a single-threaded API where we transact all interactions with the host language through
+//  queues to a single interface thread.  This is less rope for the user to hang themselves, but will be
+//  a fundamental bottleneck, so I'd prefer not to go this route
+//
+//My strong opinion is we leave the C API unlimited (ie. Option 1).  Then we can implement the queueing
+//  & synchronization for Python within the hyperonpy layer.  My preference would be to undertake
+//  https://github.com/trueagi-io/hyperon-experimental/issues/283 before trying to implement the queueing &
+//  synchronization layer.  My reasoning is that the bug-surface-area will be a lot smaller in Rust than in C++
+unsafe impl Send for CModLoader {}
+unsafe impl Sync for CModLoader {}
+
+impl FsModuleFormat for CModLoader {
+    fn paths_for_name(&self, parent_dir: &Path, mod_name: &str) -> Vec<PathBuf> {
+        let api = unsafe{ &*self.api };
+
+        let parent_dir_c_string = str_as_cstr(parent_dir.to_str().unwrap());
+        let mod_name_c_string = str_as_cstr(mod_name);
+        const BUF_SIZE: usize = 512;
+        let mut buffer = [0i8; BUF_SIZE];
+
+        let bytes_written = (api.path_for_name)(
+            self.payload,
+            parent_dir_c_string.as_ptr(),
+            mod_name_c_string.as_ptr(),
+            buffer.as_mut_ptr(),
+            BUF_SIZE
+        );
+        vec![PathBuf::from(cstr_as_str(buffer[0..=bytes_written].as_ptr()))]
+    }
+    fn try_path(&self, path: &Path) -> Option<Box<dyn ModuleLoader>> {
+        let api = unsafe{ &*self.api };
+        let path_c_string = str_as_cstr(path.to_str().unwrap());
+
+        if (api.try_path)(self.payload, path_c_string.as_ptr()) {
+            let mut new_loader = self.clone();
+            new_loader.path = Some(path.into());
+            Some(Box::new(new_loader))
+        } else {
+            None
+        }
+    }
+}
+
+impl ModuleLoader for CModLoader {
+    fn descriptor(&self) -> Result<ModuleDescriptor, String> {
+        let api = unsafe{ &*self.api };
+        let path_c_string = str_as_cstr(self.path.as_ref().unwrap().to_str().unwrap());
+
+        let descriptor = (api.descriptor)(self.payload, path_c_string.as_ptr());
+
+        match descriptor.into_rust_enum() {
+            RustModuleDescriptor::Descriptor(desc) => Ok(desc),
+            RustModuleDescriptor::Err(err) => Err(err)
+        }
+    }
+    fn loader(&self, _context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+        let api = unsafe{ &*self.api };
+        let path_c_string = str_as_cstr(self.path.as_ref().unwrap().to_str().unwrap());
+
+        //LP-TODO-NEXT: this is a placeholder
+        let c_context = run_context_t {context: core::ptr::null_mut() };
+
+        (api.loader)(self.payload, path_c_string.as_ptr(), &c_context, descriptor.into());
+
+        Ok(())
+    }
+}
