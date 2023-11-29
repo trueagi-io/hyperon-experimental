@@ -242,6 +242,12 @@ impl Parser for SExprParser<'_> {
     }
 }
 
+impl Parser for &mut (dyn Parser + '_) {
+    fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
+        (**self).next_atom(tokenizer)
+    }
+}
+
 /// Provides a parser for MeTTa code written in S-Expression Syntax
 ///
 /// NOTE: The SExprParser type is short-lived, and can be created cheaply to evaluate a specific block

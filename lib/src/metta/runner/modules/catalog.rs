@@ -3,6 +3,7 @@
 //!
 //! ## Behavior of Module Resolution
 //!
+//! ```ignore
 //!       ┌────────────────────┐           ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽                    ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽
 //!      ╱                    ╱       ⎽⎼⎻⎺  bom in &self ⎺⎻⎼⎽ Yes      ⎽⎼⎻⎺ bom entry has ⎺⎻⎼⎽ No
 //!     ╱  (import! module)  ╱─────►<      has entry for      >─────►<     fs_path attrib?     >───┐
@@ -28,6 +29,7 @@
 //!                                └<     version attrib?     >◄─────<       git attrib?       >───┘
 //!                                   ⎺⎻⎼⎽               ⎽⎼⎻⎺          ⎺⎻⎼⎽               ⎽⎼⎻⎺
 //!                                        ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺                    ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺
+//! ```
 //!
 
 //QUESTION: Should modules loaded manually (without a catalog) be findable by import statements?
