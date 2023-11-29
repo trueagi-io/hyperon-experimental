@@ -90,9 +90,6 @@ pub mod arithmetics;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
-//LP-TODO-NEXT.
-// - Convert Metta::get_or_init_module to use the ModuleLoader abstraction
-
 // *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
 // Metta & related objects
 // *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*

@@ -30,6 +30,55 @@
 //!                                        ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺                    ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺
 //!
 
+//QUESTION: Should modules loaded manually (without a catalog) be findable by import statements?
+//  Currently it's a moot point because the only modules loaded manually are the stdlibs, and those are
+//  included by default.  However, an API user might want to forego a catalog just to offer some specific
+//  modules, e.g. repl control commands, debug accessors, etc.
+//LP-TODO-NEXT Decision: I'll add a flag to `get_or_init_module` called `register`.  If it is true, the module will be
+// published by a catalog that is part of the Runner, that is searched before any other catalogs.  If no,
+// then the module will only be found by an attempt to load exactly the same ModuleDescriptor
+//
+
+//LP-TODO-NEXT validate that the search path includes the working dir by default
+//
+
+//LP-TODO-NEXT make a test to make sure circular imports are caught and don't lead to infinite recursion
+//QUESTION: Should circular imports between modules be allowed?  The current implementation (and possibly
+// the MeTTa language itself) disallow circular imports because there is no concept of forward declaration.
+// It *may* be possible to pre-parse the language in order to make recursive imports possible, but I have
+// not yet thought in detail about this.
+//
+
+//QUESTION on shared base dependencies & sat-set solving:
+//The currently implemented design resolves each module's dependencies in a straightforward depth-first
+//  order.  This is possible because the module system allows multiple instances of the same module to
+//  be loaded simultaneously.  So each module can pick its best dependencies based on its bom and the
+//  available catalogs.
+//However, consider the following situation:
+//  ModA depends on ModI for some interface types (for example a special String type)
+//  ModB depends on ModI for the same interface types, but ModA and ModB don't know about each other
+//  ModTop depends on both ModA and ModB, and uses functionality in ModA to create some objects that
+//   it expects ModB to be able to use.  Therefore the system must guarantee the same version of ModI
+//   gets imported by both ModA and ModB.
+//This is precisely the opposite behavior from the ability of a module to carry around "private"
+//  dependencies and know that those dependencies will always be loaded, and they won't be substituted
+//  for another version.
+//
+//I see several possible solutions:
+// 1.) We could disallow private dependencies altogether.  This is the approach taken by Cargo.
+//  However this contravenes some of the desiderata outlined in this issue:
+//  https://github.com/trueagi-io/hyperon-experimental/issues/470
+// 2.) We could require explicit re-exporting of a dependency module used in a module's interface, which
+//   would give the implementation an opportunity to find dependency module versions that work for
+//   all other modules that use them in common.  ie. solve for the sat set.  Optionally, with this approach,
+//   the module could also opt to re-export a private dependency as part of itself, making the interface
+//   between ModA and ModB in the example deliberately incompatible. 
+// 3.) We could require private dependencies to be explicitly specified as private in the bom.  With the
+//  default behavior being a single module for each module name.  This might be a reasonable compromise
+//  between 1 & 2, however we would likely need some form of linting, so that a user doesn't shoot
+//  themselves in the foot by exporting an interface that includes items from a private dependency
+//
+
 use std::ffi::{OsStr, OsString};
 
 use crate::metta::text::OwnedSExprParser;
