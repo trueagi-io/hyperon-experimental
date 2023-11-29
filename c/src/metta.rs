@@ -1010,7 +1010,23 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
 #[repr(C)]
 pub struct run_context_t {
     /// Internal.  Should not be accessed directly
-    context: *mut c_void, //LP-TODO-NEXT Actually implement this!!
+    context: *mut RustRunContext,
+}
+
+struct RustRunContext(RunContext<'static, 'static, 'static>);
+
+impl From<&mut RunContext<'_, '_, '_>> for run_context_t {
+    fn from(context_ref: &mut RunContext<'_, '_, '_>) -> Self {
+        Self {
+            context: (context_ref as *mut RunContext<'_, '_, '_>).cast()
+        }
+    }
+}
+
+impl run_context_t {
+    fn borrow_mut(&mut self) -> &mut RunContext<'static, 'static, 'static> {
+        unsafe{ &mut *self.context.cast::<RunContext<'static, 'static, 'static>>() }
+    }
 }
 
 /// @brief Represents the state of an in-flight MeTTa execution run
@@ -1426,13 +1442,13 @@ impl module_descriptor_t {
     fn into_rust_enum(self) -> RustModuleDescriptor {
         unsafe{ *Box::from_raw(self.descriptor) }
     }
+    fn into_inner(self) -> ModuleDescriptor {
+        match self.into_rust_enum() {
+            RustModuleDescriptor::Descriptor(desc) => desc,
+            RustModuleDescriptor::Err(_err) => panic!("Fatal error.  Attempt to access Error module_descriptor_t")
+        }
+    }
     //LP-TODO-NEXT.  I don't know if we actually need these
-    // fn into_inner(self) -> ModuleDescriptor {
-    //     match self.into_rust_enum() {
-    //         RustModuleDescriptor::Descriptor(desc) => desc,
-    //         RustModuleDescriptor::Err(_err) => panic!("Fatal error.  Attempt to access Error module_descriptor_t")
-    //     }
-    // }
     // fn borrow(&self) -> &ModuleDescriptor {
     //     match unsafe{ &*self.descriptor } {
     //         RustModuleDescriptor::Descriptor(desc) => desc,
@@ -1491,7 +1507,7 @@ pub struct mod_loader_api_t {
     /// @param[in]  buf_size  The size of the allocated dst_buf.  This function must not overwrite the
     ///    output buffer
     /// @return the number of bytes written into the `dst_buf` by the function, including a NULL terminator
-    ///    character.
+    ///    character.  If the path does not fit in the `dst_buf`, then this function should return 0
     /// @note The Rust interface allows for a single module loader to check multiple path variations.  That
     ///    could be implemented here in the C interface but it would complicate the API functions by
     ///    requiring multiple buffers to be returned, and currently it's not needed.
@@ -1502,21 +1518,23 @@ pub struct mod_loader_api_t {
     /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
     ///    format was initialized.  This function must not modify the payload
     /// @param[in]  path  A NULL-terminated string, representing a path in the file system to test
+    /// @param[in]  mod_name  A NULL-terminated string, representing the name of the module
     /// @return `true` if the `path` contains a valid module in the format, otherwise `false`
     ///
-    try_path: extern "C" fn(payload: *const c_void, path: *const c_char) -> bool,
+    try_path: extern "C" fn(payload: *const c_void, path: *const c_char, mod_name: *const c_char) -> bool,
 
     /// @brief Constructs a `module_descriptor_t` for the module at a specified path in the file system
     /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
     ///    format was initialized.  This function must not modify the payload
     /// @param[in]  path  A NULL-terminated string, representing a path in the file system pointing to
     ///    the module
+    /// @param[in]  mod_name  A NULL-terminated string, representing the name of the module
     /// @return A newly created `module_descriptor_t` representing the module at the path.  If the module
     ///    at the path is found to be defective, this function should return an error using
     ///    `module_descriptor_error()`, because the act of inspecting a module should not cause MeTTa
     ///    to halt
     ///
-    descriptor: extern "C" fn(payload: *const c_void, path: *const c_char) -> module_descriptor_t,
+    descriptor: extern "C" fn(payload: *const c_void, path: *const c_char, mod_name: *const c_char) -> module_descriptor_t,
 
     /// @brief Loads the module into the runner, by making calls into the `run_context_t`
     /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
@@ -1532,19 +1550,19 @@ pub struct mod_loader_api_t {
     ///LP-TODO-NEXT: We probably want to break out the definition of a loader function from the
     /// part that is tied to an fs_module_format, so the same function prototype can be used to
     /// load the stdlib, etc.
-    loader: extern "C" fn(payload: *const c_void, path: *const c_char, context: *const run_context_t, descriptor: module_descriptor_t),
+    loader: extern "C" fn(payload: *const c_void, path: *const c_char, context: *mut run_context_t, descriptor: module_descriptor_t),
 }
 
 #[derive(Clone, Debug)]
 struct CModLoader {
     api: *const mod_loader_api_t,
     payload: *const c_void,
-    path: Option<PathBuf>
+    name_and_path: Option<(String, PathBuf)>
 }
 
 impl CModLoader {
     fn new(api: *const mod_loader_api_t, payload: *const c_void) -> Self {
-        Self {api, payload, path: None }
+        Self {api, payload, name_and_path: None }
     }
 }
 
@@ -1582,15 +1600,20 @@ impl FsModuleFormat for CModLoader {
             buffer.as_mut_ptr(),
             BUF_SIZE
         );
-        vec![PathBuf::from(cstr_as_str(buffer[0..=bytes_written].as_ptr()))]
+        if bytes_written > 0 {
+            vec![PathBuf::from(cstr_as_str(buffer[0..=bytes_written].as_ptr()))]
+        } else {
+            vec![]
+        }
     }
-    fn try_path(&self, path: &Path) -> Option<Box<dyn ModuleLoader>> {
+    fn try_path(&self, path: &Path, mod_name: &str) -> Option<Box<dyn ModuleLoader>> {
         let api = unsafe{ &*self.api };
         let path_c_string = str_as_cstr(path.to_str().unwrap());
+        let mod_name_c_string = str_as_cstr(mod_name);
 
-        if (api.try_path)(self.payload, path_c_string.as_ptr()) {
+        if (api.try_path)(self.payload, path_c_string.as_ptr(), mod_name_c_string.as_ptr()) {
             let mut new_loader = self.clone();
-            new_loader.path = Some(path.into());
+            new_loader.name_and_path = Some((mod_name.to_string(), path.into()));
             Some(Box::new(new_loader))
         } else {
             None
@@ -1601,26 +1624,62 @@ impl FsModuleFormat for CModLoader {
 impl ModuleLoader for CModLoader {
     fn descriptor(&self) -> Result<ModuleDescriptor, String> {
         let api = unsafe{ &*self.api };
-        let path_c_string = str_as_cstr(self.path.as_ref().unwrap().to_str().unwrap());
+        let name_and_path = self.name_and_path.as_ref().unwrap();
+        let path_c_string = str_as_cstr(name_and_path.1.to_str().unwrap());
+        let name_c_string = str_as_cstr(&name_and_path.0);
 
-        let descriptor = (api.descriptor)(self.payload, path_c_string.as_ptr());
+        let descriptor = (api.descriptor)(self.payload, path_c_string.as_ptr(), name_c_string.as_ptr());
 
         match descriptor.into_rust_enum() {
             RustModuleDescriptor::Descriptor(desc) => Ok(desc),
             RustModuleDescriptor::Err(err) => Err(err)
         }
     }
-    fn loader(&self, _context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+    fn loader(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
         let api = unsafe{ &*self.api };
-        let path_c_string = str_as_cstr(self.path.as_ref().unwrap().to_str().unwrap());
+        let name_and_path = self.name_and_path.as_ref().unwrap();
+        let path_c_string = str_as_cstr(name_and_path.1.to_str().unwrap());
+        let mut c_context = run_context_t::from(context);
 
-        //LP-TODO-NEXT: this is a placeholder
-        let c_context = run_context_t {context: core::ptr::null_mut() };
-
-        (api.loader)(self.payload, path_c_string.as_ptr(), &c_context, descriptor.into());
+        (api.loader)(self.payload, path_c_string.as_ptr(), &mut c_context, descriptor.into());
 
         Ok(())
     }
 }
 
-//LP-TODO-NEXT: Add custom format loading tests for both Rust & C
+/// @brief Called within a module `loader` function to initialize the new module
+/// @ingroup module_group
+/// @param[in]  context  A pointer to the `run_context_t` to access the runner API
+/// @param[in]  descriptor  A `module_descriptor_t` for the new module being initialized.  This should
+///    be the descriptor argument received in the loader function.  This function takes ownership of the
+///    the `module_descriptor_t` so it should not be freed
+/// @param[in]  space  A `space_t` handle for the new module's space.  This function takes ownership
+///    of the `space_t` handle, and it should not be freed
+/// @param[in]  working_dir_path   A C-style string specifying a file system path to use as the module's
+///    working directory.  Passing `NULL` means the module does not have a working directory
+/// @note this function must be called exactly once within a module loader function
+///
+#[no_mangle]
+pub extern "C" fn run_context_init_self_module(context: *mut run_context_t,
+        descriptor: module_descriptor_t,
+        space: space_t,
+        working_dir_path: *const c_char) {
+
+    let context = unsafe{ &mut *context }.borrow_mut();
+    let dyn_space = space.into_inner();
+    let path = if working_dir_path.is_null() {
+        None
+    } else {
+        Some(PathBuf::from(cstr_as_str(working_dir_path)))
+    };
+
+    context.init_self_module(descriptor.into_inner(), dyn_space, path);
+}
+
+//LP-TODO-NEXT: I need to implement `run_context_push_parser` in the C API,
+// 
+// but the loader function needs to return before a parser has fully evaluated, and yet we may not want
+// to copy the whole file buffer into memory.  Therefore I want to implement a file-backed Parser
+//
+
+//LP-TODO-NEXT: Add custom format loading tests for Rust

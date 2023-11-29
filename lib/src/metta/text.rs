@@ -475,9 +475,9 @@ impl<'a> SExprParser<'a> {
 
 }
 
-/// An version of [SExprParser] that owns its input text buffer
+/// An version of [SExprParser] that owns its input text buffer so it has a `'static` lifetime
 #[derive(Clone)]
-pub(crate) struct OwnedSExprParser {
+pub struct OwnedSExprParser {
     text: String,
     last_pos: usize,
 }

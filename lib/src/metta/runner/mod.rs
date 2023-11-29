@@ -415,7 +415,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
     /// Returns a new RunnerState, for running code encoded as a slice of [Atom]s with the specified [Metta] runner
     pub fn new_with_atoms(metta: &'m Metta, atoms: &'input[Atom]) -> Self {
         let mut state = Self::new(metta);
-        state.i_wrapper.input_src.push_atoms(atoms);
+        state.i_wrapper.input_src.push_parser(Box::new(atoms));
         state
     }
 
@@ -490,7 +490,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
     pub(crate) fn into_module(self) -> MettaMod {
         match self.module {
             StateMod::Initializing(module) => module,
-            _ => unreachable!()
+            _ => panic!("Fatal Error: Module loader function exited without calling RunContext::init_self_module")
         }
     }
 }
@@ -564,7 +564,7 @@ impl<'input> RunContext<'_, '_, 'input> {
 
     /// Pushes the atoms as a source of operations to subsequently execute
     pub fn push_atoms(&mut self, atoms: &'input[Atom]) {
-        self.i_wrapper.input_src.push_atoms(atoms);
+        self.i_wrapper.input_src.push_parser(Box::new(atoms));
     }
 
     /// Pushes an executable function as an operation to be executed
@@ -746,9 +746,6 @@ struct InputStream<'a>(Vec<InputSource<'a>>);
 impl<'i> InputStream<'i> {
     fn push_parser(&mut self, parser: Box<(dyn Parser + 'i)>) {
         self.0.push(InputSource::Parser(parser))
-    }
-    fn push_atoms(&mut self, atoms: &'i[Atom]) {
-        self.0.push(InputSource::Parser(Box::new(atoms)));
     }
     fn push_func<F: FnOnce(&mut RunContext) -> Result<(), String> + 'i>(&mut self, f: F) {
         self.0.push(InputSource::Func(Box::new(f)))

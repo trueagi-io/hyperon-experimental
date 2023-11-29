@@ -78,6 +78,7 @@
 //  between 1 & 2, however we would likely need some form of linting, so that a user doesn't shoot
 //  themselves in the foot by exporting an interface that includes items from a private dependency
 //
+// I think my personal preference is for #2.
 
 use std::ffi::{OsStr, OsString};
 
@@ -95,8 +96,24 @@ use xxhash_rust::xxh3::xxh3_64;
 ///
 /// `ModuleCatalog` types are closely connected with [ModuleLoader] types because the `ModuleCatalog` must
 /// recognize the module in whatever media it exists, and supply the `ModuleLoader` to load that module
+//
+//QUESTION: Should it be legal for a catalog to alias a module?  In other words, can a catalog's `lookup`
+// method return a ModuleDescriptor where the name field of the ModuleDescriptor doesn't match the query
+// name passed to `lookup()`?
+//
+// * Arguments *Against* it being legal:
+//  If it is allowed, we have destroyed the direct mapping between loaded modules and the names they
+//  have in the import! operation.  In other words, if we start with a ModuleDescriptor, and import!
+//  its name field, there is no guarantee we will get the same module at all.
+//
+//UPDATE: I started by writing a balanced view of the pros and cons, but ultimately I found the arguments
+// in favor to be weak, and potentially anti-features.  So I think it should be illegal to return a
+// ModuleDescriptor where the name field doesn't match the `lookup` name.
 pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
+    ///
+    /// It is illegal for a ModuleCatalog to return a [ModuleDescriptor] from `lookup` where the name
+    /// field does not match the query name
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor>;
 
     //TODO: Add this function when I add module versioning
@@ -126,6 +143,11 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     /// NOTE: the [ModuleDescriptor] returned by this method may be different from the ModuleDescriptor
     ///   that gets passed to the loader method, on account of collision avoidance logic between two
     ///   different instances of a module that report the same version
+    //
+    //LP-TODO-Next I am *Strongly* considering replacing this descriptor accessor with separate name and
+    // version accessors, because returning a whole descriptor gives the impression that the loader/format
+    // can control all of it.  But in reality, only the version is under the format's control at the point
+    // when method function is called
     fn descriptor(&self) -> Result<ModuleDescriptor, String>;
 
     /// A function to load the module my making MeTTa API calls.  This function will be called by
@@ -194,7 +216,7 @@ impl ModuleBom {
 
                 //Check all module formats, to try and load the module at the path
                 for fmt in context.metta.environment().fs_mod_formats() {
-                    if let Some(loader) = fmt.try_path(&path) {
+                    if let Some(loader) = fmt.try_path(&path, name) {
                         match loader.descriptor() {
                             Ok(mut descriptor) => {
                                 //Construct a uid based on a stable-hash of the path, because a module
@@ -210,14 +232,13 @@ impl ModuleBom {
                         };
                     }
                 }
-
-                //
             }
 
             //TODO, if git URI is specified in the bom entry, clone the repo to a location in the environment
             // dir with a unique path (based on a random uuid), and resolve it within that directory's catalog
 
-            //TODO, If a version range is specified in the bom entry, then use that version range
+            //TODO, If a version range is specified in the bom entry, then use that version range to specify
+            // modules discovered in the catalogs
 
         } else {
             //If the Bom doesn't have an entry, it's an error if the Bom is flagged as "strict"
@@ -239,6 +260,9 @@ impl ModuleBom {
             if results.len() > 0 {
                 log::info!("Found module: \"{name}\" inside {catalog:?}");
                 let descriptor = results.into_iter().next().unwrap();
+                if descriptor.name != name {
+                    panic!("Fatal Error: Catalog {catalog:?} returned module descriptor with incompatible name");
+                }
                 return Ok(Some((catalog.get_loader(&descriptor)?, descriptor)))
             }
         }
@@ -249,29 +273,35 @@ impl ModuleBom {
 
 /// A loader for a MeTTa module that lives within a single `.metta` file
 #[derive(Debug)]
-pub(crate) struct SingleFileModule(pub(crate) PathBuf);
+pub(crate) struct SingleFileModule {
+    name: String,
+    path: PathBuf,
+}
+
+impl SingleFileModule {
+    fn new(name: &str, path: &Path) -> Self {
+        Self {name: name.to_string(), path: path.into() }
+    }
+}
 
 impl ModuleLoader for SingleFileModule {
     fn descriptor(&self) -> Result<ModuleDescriptor, String> {
 
-        //TODO: Try and read the module name and version here
+        //TODO: Try and read the module version here
         //In a single-file module, the discriptor information will be embedded within the MeTTa code
         // Therefore, we need to parse the whole text of the module looking for a `_module-bom` atom,
         // that we can then convert into a ModuleBom structure
 
-        //If there is no internal name in the module, parse it from the module's path
-        let name = self.0.file_stem().unwrap().to_str().unwrap();
-
-        Ok(ModuleDescriptor::new(name.to_string()))
+        Ok(ModuleDescriptor::new(self.name.clone()))
     }
     fn loader(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
-        let working_dir = self.0.parent().unwrap();
+        let working_dir = self.path.parent().unwrap();
         context.init_self_module(descriptor, space, Some(working_dir.into()));
 
-        let program_text = std::fs::read_to_string(&self.0)
-            .map_err(|err| format!("Could not read file, path: {}, error: {}", self.0.display(), err))?;
+        let program_text = std::fs::read_to_string(&self.path)
+            .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))?;
 
         let parser = OwnedSExprParser::new(program_text);
         context.push_parser(parser);
@@ -282,27 +312,33 @@ impl ModuleLoader for SingleFileModule {
 
 /// A loader for a MeTTa module implemented as a directory
 #[derive(Debug)]
-pub(crate) struct DirModule(pub(crate) PathBuf);
+pub(crate) struct DirModule {
+    name: String,
+    path: PathBuf,
+}
+
+impl DirModule {
+    fn new(name: &str, path: &Path) -> Self {
+        Self {name: name.to_string(), path: path.into() }
+    }
+}
 
 impl ModuleLoader for DirModule {
     fn descriptor(&self) -> Result<ModuleDescriptor, String> {
 
-        //TODO: Try and read the module name and version here
+        //TODO: Try and read the module version here
         //If there is a `bom.metta` file, descriptor information from that file will take precedence.
         // Otherwise, try and parse a `_module-bom` atom from the `module.metta` file
 
-        //If we still have not found an internal name, use the file-system name
-        let name = self.0.file_stem().unwrap().to_str().unwrap();
-
-        Ok(ModuleDescriptor::new(name.to_string()))
+        Ok(ModuleDescriptor::new(self.name.clone()))
     }
     fn loader(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
-        let working_dir = self.0.parent().unwrap();
+        let working_dir = self.path.parent().unwrap();
         context.init_self_module(descriptor, space, Some(working_dir.into()));
 
-        let module_metta_path = self.0.join("module.metta");
+        let module_metta_path = self.path.join("module.metta");
         let program_text = std::fs::read_to_string(&module_metta_path)
             .map_err(|err| format!("Failed to read metta file in directory module, path: {}, error: {}", module_metta_path.display(), err))?;
 
@@ -324,7 +360,7 @@ pub trait FsModuleFormat: std::fmt::Debug + Send + Sync {
     fn paths_for_name(&self, parent_dir: &Path, mod_name: &str) -> Vec<PathBuf>;
 
     /// Checks a specific path, and returns the [ModuleLoader] if a supported module resides at the path
-    fn try_path(&self, path: &Path) -> Option<Box<dyn ModuleLoader>>;
+    fn try_path(&self, path: &Path, mod_name: &str) -> Option<Box<dyn ModuleLoader>>;
 }
 
 /// An object to identify and load a single-file module (naked .metta files)
@@ -337,9 +373,9 @@ impl FsModuleFormat for SingleFileModuleFmt {
         let path = push_extension(path, ".metta");
         vec![path]
     }
-    fn try_path(&self, path: &Path) -> Option<Box<dyn ModuleLoader>> {
+    fn try_path(&self, path: &Path, mod_name: &str) -> Option<Box<dyn ModuleLoader>> {
         if path.is_file() {
-            Some(Box::new(SingleFileModule(path.into())))
+            Some(Box::new(SingleFileModule::new(mod_name, path)))
         } else {
             None
         }
@@ -355,9 +391,9 @@ impl FsModuleFormat for DirModuleFmt {
         let path = parent_dir.join(mod_name);
         vec![path]
     }
-    fn try_path(&self, path: &Path) -> Option<Box<dyn ModuleLoader>> {
+    fn try_path(&self, path: &Path, mod_name: &str) -> Option<Box<dyn ModuleLoader>> {
         if path.is_dir() {
-            Some(Box::new(DirModule(path.into())))
+            Some(Box::new(DirModule::new(mod_name, path)))
         } else {
             None
         }
@@ -366,7 +402,7 @@ impl FsModuleFormat for DirModuleFmt {
 
 /// Implements ModuleCatalog to load MeTTa modules from a file-system directory trying a number of
 /// [FsModuleFormat] formats in succession
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct DirCatalog {
     path: PathBuf,
     fmts: Arc<Vec<Box<dyn FsModuleFormat>>>,
@@ -391,8 +427,11 @@ impl ModuleCatalog for DirCatalog {
         //
         //For us, I think we want a less formal approach akin to Python's, where we are allowed to drop a
         // module into a directory, and import it with a naked `import` statement (i.e. no bom entry)
-        // but for that to work, we need to stipulate that the file name without any extensions matches
-        // the module name.
+        // but for that to work, we need to stipulate that it's possible to infer a file name from a
+        // module name.
+        //
+        //NOTE: This is not a limitation across all catalogs, just the `DirCatalog`  If a catalog is able
+        // to maintain its own index of module names, it can store the modules any way it wants to.
         //
 
         let mut found_modules = vec![];
@@ -445,7 +484,7 @@ fn visit_modules_in_dir_using_mod_formats(fmts: &[Box<dyn FsModuleFormat>], dir_
 
     for fmt in fmts {
         for path in fmt.paths_for_name(dir_path, mod_name) {
-            if let Some(loader) = fmt.try_path(&path) {
+            if let Some(loader) = fmt.try_path(&path, mod_name) {
                 match loader.descriptor() {
                     Ok(resolved_descriptor) => {
                         if f(path, loader, resolved_descriptor) {
