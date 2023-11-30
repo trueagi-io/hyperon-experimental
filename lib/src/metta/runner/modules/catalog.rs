@@ -306,7 +306,7 @@ impl ModuleLoader for SingleFileModule {
             .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))?;
 
         let parser = OwnedSExprParser::new(program_text);
-        context.push_parser(parser);
+        context.push_parser(Box::new(parser));
 
         Ok(())
     }
@@ -345,7 +345,7 @@ impl ModuleLoader for DirModule {
             .map_err(|err| format!("Failed to read metta file in directory module, path: {}, error: {}", module_metta_path.display(), err))?;
 
         let parser = OwnedSExprParser::new(program_text);
-        context.push_parser(parser);
+        context.push_parser(Box::new(parser));
 
         Ok(())
     }

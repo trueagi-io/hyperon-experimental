@@ -1266,7 +1266,7 @@ pub(crate) fn init_rust_stdlib(context: &mut RunContext, descriptor: ModuleDescr
     register_rust_stdlib_tokens(&mut *context.module().tokenizer().borrow_mut());
 
     let parser = SExprParser::new(METTA_CODE);
-    context.push_parser(parser);
+    context.push_parser(Box::new(parser));
 
     Ok(())
 }

@@ -558,8 +558,8 @@ impl<'input> RunContext<'_, '_, 'input> {
     }
 
     /// Pushes the parser as a source of operations to subsequently execute
-    pub fn push_parser(&mut self, parser: impl Parser + 'input) {
-        self.i_wrapper.input_src.push_parser(Box::new(parser));
+    pub fn push_parser(&mut self, parser: Box<dyn Parser + 'input>) {
+        self.i_wrapper.input_src.push_parser(parser);
     }
 
     /// Pushes the atoms as a source of operations to subsequently execute

@@ -1076,6 +1076,19 @@ impl run_context_t {
     }
 }
 
+/// @brief Appends the parser to the Run Context's queue of input to run
+/// @ingroup interpreter_group
+/// @param[in]  context  A pointer to the `run_context_t` to access the runner API
+/// @param[in]  parser  An S-Expression Parser containing the MeTTa source code to execute
+///
+#[no_mangle]
+pub extern "C" fn run_context_push_parser(context: *mut run_context_t, parser: sexpr_parser_t) {
+    let context = unsafe{ &mut *context }.borrow_mut();
+    let parser = parser.into_boxed_dyn();
+
+    context.push_parser(parser)
+}
+
 /// @brief Represents the state of an in-flight MeTTa execution run
 /// @ingroup interpreter_group
 /// @note A `runner_state_t` is initially created by `runner_state_new_with_parser()`.  Each call to `metta_run_step()`, in
@@ -1722,11 +1735,5 @@ pub extern "C" fn run_context_init_self_module(context: *mut run_context_t,
 
     context.init_self_module(descriptor.into_inner(), dyn_space, path);
 }
-
-//LP-TODO-NEXT: I need to implement `run_context_push_parser` in the C API,
-// 
-// but the loader function needs to return before a parser has fully evaluated, and yet we may not want
-// to copy the whole file buffer into memory.  Therefore I want to implement a file-backed Parser
-//
 
 //LP-TODO-NEXT: Add custom format loading tests for Rust

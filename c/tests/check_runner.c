@@ -20,6 +20,29 @@ void copy_atom_vec(const atom_vec_t* atoms, void* context) {
     **dst_ptr = atom_vec_clone(atoms);
 }
 
+// A Convenience function to execute some MeTTa code, and check the resulting atom matches the
+// expected text when rendered into a string
+bool run_metta_and_compare_result(metta_t* runner, const char* metta_src, const char* expected_result) {
+
+    char atom_str_buf[256];
+    bool result = false;
+    sexpr_parser_t parser = sexpr_parser_new(metta_src);
+    atom_vec_t* results = NULL;
+    metta_run(runner, parser, &copy_atom_vec, &results);
+    if (results != NULL) {
+        if (atom_vec_len(results) > 0) {
+            atom_ref_t result_atom = atom_vec_get(results, 0);
+            size_t len = atom_to_str(&result_atom, atom_str_buf, 256);
+
+            result = strcmp(atom_str_buf, expected_result) == 0;
+        }
+        atom_vec_free(*results);
+        free(results);
+    }
+
+    return result;
+}
+
 START_TEST (test_incremental_runner)
 {
     metta_t runner = new_test_metta();
@@ -100,8 +123,8 @@ size_t path_for_name(const void *payload, const char *parent_dir, const char *mo
 bool try_path(const void *payload, const char *path, const char *mod_name) {
 
     //In a real implementation, we would actually check the file-system object (file, dir, etc.) to
-    // validate it was a valid module in a format this code can use.  But this is a test, so we will
-    // assume it is valid if the filename is "ctest-mod.ctestmod", and otherwise it isn't valid
+    // validate it was a valid module in a format this code can understand.  But this is a test, so we
+    // will assume it is valid if the filename is "ctest-mod.ctestmod", and otherwise it isn't valid
     const char* test_str = "ctest-mod.ctestmod";
     size_t test_str_len = strlen(test_str);
     size_t path_len = strlen(path);
@@ -122,9 +145,8 @@ void loader(const void *payload, const char *path, struct run_context_t *context
     space_t space = space_new_grounding_space();
     run_context_init_self_module(context, descriptor, space, NULL);
 
-    //LP-TODO-NEXT push some MeTTa code, to add a test-atom inside the new module
-    // sexpr_parser_t parser = sexpr_parser_new("test-atom");
-    //run_context_push_parser
+    sexpr_parser_t parser = sexpr_parser_new("test-atom");
+    run_context_push_parser(context, parser);
 }
 
 // Module Format API Declaration for test format
@@ -137,8 +159,6 @@ static mod_loader_api_t const TEST_FMT_API= {
 
 START_TEST (test_custom_module_format)
 {
-    char atom_str_buf[256];
-
     env_builder_t env_builder = env_builder_start();
     env_builder_set_is_test(&env_builder, true);
     env_builder_push_fs_module_format(&env_builder, &TEST_FMT_API, NULL);
@@ -149,36 +169,13 @@ START_TEST (test_custom_module_format)
     space_free(space);
 
     //Load a module using our custom format, and verify it was loaded sucessfully
-    sexpr_parser_t parser = sexpr_parser_new("!(import! ctest-mod loaded-test)");
-    atom_vec_t* results = NULL;
-    metta_run(&runner, parser, &copy_atom_vec, &results);
-    if (results != NULL) {
-        if (atom_vec_len(results) > 0) {
-            atom_ref_t result_atom = atom_vec_get(results, 0);
-            size_t len = atom_to_str(&result_atom, atom_str_buf, 256);
+    ck_assert(run_metta_and_compare_result(&runner, "!(import! ctest-mod loaded-test)", "()"));
 
-            ck_assert_str_eq(atom_str_buf, "()");
-        }
-        atom_vec_free(*results);
-        free(results);
-    }
-
-    //LP-TODO-NEXT, now try and access the space of the loaded module, and confirm we can match the test-atom
+    //Test that we can match an atom in the module loaded with the custom format
+    ck_assert(run_metta_and_compare_result(&runner, "!(match &loaded-test test-atom found!)", "found!"));
 
     //Try and load a module that our format will reject, and validate we get an error
-    parser = sexpr_parser_new("!(import! bogus-mod loaded-test)");
-    results = NULL;
-    metta_run(&runner, parser, &copy_atom_vec, &results);
-    if (results != NULL) {
-        if (atom_vec_len(results) > 0) {
-            atom_ref_t result_atom = atom_vec_get(results, 0);
-            size_t len = atom_to_str(&result_atom, atom_str_buf, 256);
-
-            ck_assert_str_eq(atom_str_buf, "(Error (import! bogus-mod loaded-test) Failed to resolve module bogus-mod)");
-        }
-        atom_vec_free(*results);
-        free(results);
-    }
+    ck_assert(run_metta_and_compare_result(&runner, "!(import! bogus-mod loaded-test)", "(Error (import! bogus-mod loaded-test) Failed to resolve module bogus-mod)"));
 
     metta_free(runner);
 }
