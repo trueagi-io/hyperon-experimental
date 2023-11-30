@@ -135,12 +135,7 @@ bool try_path(const void *payload, const char *path, const char *mod_name) {
     return strncmp(path+(path_len-test_str_len), test_str, test_str_len) == 0;
 }
 
-module_descriptor_t descriptor(const void *payload, const char *path, const char *mod_name) {
-    ck_assert(strcmp(mod_name, "ctest-mod")==0);
-    return module_descriptor_new("ctest-mod");
-}
-
-void loader(const void *payload, const char *path, struct run_context_t *context, struct module_descriptor_t descriptor) {
+void load(const void *payload, const char *path, struct run_context_t *context, struct module_descriptor_t descriptor) {
 
     space_t space = space_new_grounding_space();
     run_context_init_self_module(context, descriptor, space, NULL);
@@ -153,8 +148,7 @@ void loader(const void *payload, const char *path, struct run_context_t *context
 static mod_loader_api_t const TEST_FMT_API= {
     .path_for_name = &path_for_name,
     .try_path = &try_path,
-    .descriptor = &descriptor,
-    .loader = &loader,
+    .load = &load,
 };
 
 START_TEST (test_custom_module_format)

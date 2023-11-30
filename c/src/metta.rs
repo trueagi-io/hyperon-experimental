@@ -1583,19 +1583,6 @@ pub struct mod_loader_api_t {
     ///
     try_path: extern "C" fn(payload: *const c_void, path: *const c_char, mod_name: *const c_char) -> bool,
 
-    /// @brief Constructs a `module_descriptor_t` for the module at a specified path in the file system
-    /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
-    ///    format was initialized.  This function must not modify the payload
-    /// @param[in]  path  A NULL-terminated string, representing a path in the file system pointing to
-    ///    the module
-    /// @param[in]  mod_name  A NULL-terminated string, representing the name of the module
-    /// @return A newly created `module_descriptor_t` representing the module at the path.  If the module
-    ///    at the path is found to be defective, this function should return an error using
-    ///    `module_descriptor_error()`, because the act of inspecting a module should not cause MeTTa
-    ///    to halt
-    ///
-    descriptor: extern "C" fn(payload: *const c_void, path: *const c_char, mod_name: *const c_char) -> module_descriptor_t,
-
     /// @brief Loads the module into the runner, by making calls into the `run_context_t`
     /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
     ///    format was initialized.  This function must not modify the payload
@@ -1610,7 +1597,7 @@ pub struct mod_loader_api_t {
     ///LP-TODO-NEXT: We probably want to break out the definition of a loader function from the
     /// part that is tied to an fs_module_format, so the same function prototype can be used to
     /// load the stdlib, etc.
-    loader: extern "C" fn(payload: *const c_void, path: *const c_char, context: *mut run_context_t, descriptor: module_descriptor_t),
+    load: extern "C" fn(payload: *const c_void, path: *const c_char, context: *mut run_context_t, descriptor: module_descriptor_t),
 }
 
 #[derive(Clone, Debug)]
@@ -1682,26 +1669,17 @@ impl FsModuleFormat for CModLoader {
 }
 
 impl ModuleLoader for CModLoader {
-    fn descriptor(&self) -> Result<ModuleDescriptor, String> {
-        let api = unsafe{ &*self.api };
+    fn name(&self) -> Result<String, String> {
         let name_and_path = self.name_and_path.as_ref().unwrap();
-        let path_c_string = str_as_cstr(name_and_path.1.to_str().unwrap());
-        let name_c_string = str_as_cstr(&name_and_path.0);
-
-        let descriptor = (api.descriptor)(self.payload, path_c_string.as_ptr(), name_c_string.as_ptr());
-
-        match descriptor.into_rust_enum() {
-            RustModuleDescriptor::Descriptor(desc) => Ok(desc),
-            RustModuleDescriptor::Err(err) => Err(err)
-        }
+        Ok(name_and_path.0.clone())
     }
-    fn loader(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
         let api = unsafe{ &*self.api };
         let name_and_path = self.name_and_path.as_ref().unwrap();
         let path_c_string = str_as_cstr(name_and_path.1.to_str().unwrap());
         let mut c_context = run_context_t::from(context);
 
-        (api.loader)(self.payload, path_c_string.as_ptr(), &mut c_context, descriptor.into());
+        (api.load)(self.payload, path_c_string.as_ptr(), &mut c_context, descriptor.into());
 
         Ok(())
     }
