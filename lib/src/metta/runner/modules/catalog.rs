@@ -140,24 +140,18 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
 /// loading a module through the MeTTa API.
 pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
 
-    /// Returns the [ModuleDescriptor] for the module the `ModuleLoader` is able to load
-    ///
-    /// NOTE: the [ModuleDescriptor] returned by this method may be different from the ModuleDescriptor
-    ///   that gets passed to the loader method, on account of collision avoidance logic between two
-    ///   different instances of a module that report the same version
-    //
-    //LP-TODO-Next I am *Strongly* considering replacing this descriptor accessor with separate name and
-    // version accessors, because returning a whole descriptor gives the impression that the loader/format
-    // can control all of it.  But in reality, only the version is under the format's control at the point
-    // when method function is called
-    fn descriptor(&self) -> Result<ModuleDescriptor, String>;
+    /// Returns the name of the module that the `ModuleLoader` is able to load
+    fn name(&self) -> Result<String, String>;
+
+    // TODO: implement this when I implement module versioning
+    // fn version(&self) -> Result<Option<Version>, String>;
 
     /// A function to load the module my making MeTTa API calls.  This function will be called by
     /// [Metta::get_or_init_module]
     ///
     /// NOTE: the [ModuleDescriptor] received in the `descriptor` argument should be passed unmodified
     ///   to `context.init_self_module()`
-    fn loader(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String>;
+    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String>;
 }
 
 /// The object responsible for locating and selecting dependency modules for each [MettaMod]
@@ -212,19 +206,23 @@ impl ModuleBom {
                     path.clone()
                 } else {
                     context.module().working_dir()
-                        .unwrap_or_else(|| panic!("Error loading {}. Module without a working directory cannot load dependencies by relative path", context.module().descriptor().name))
+                        .unwrap_or_else(|| panic!("Fatal Error loading {}. Module without a working directory cannot load dependencies by relative path", context.module().descriptor().name))
                         .join(path)
                 };
 
                 //Check all module formats, to try and load the module at the path
                 for fmt in context.metta.environment().fs_mod_formats() {
                     if let Some(loader) = fmt.try_path(&path, name) {
-                        match loader.descriptor() {
-                            Ok(mut descriptor) => {
+                        match loader.name() {
+                            Ok(derived_name) => {
+                                if derived_name != name {
+                                    panic!("Fatal Error: module found at {} doesn't match module in bom: {}!", path.display(), name);
+                                }
+
                                 //Construct a uid based on a stable-hash of the path, because a module
                                 // loaded by explicit path shouldn't be imported by any other module unless
                                 // it explicitly imports it from the same path.
-                                descriptor.uid = Some(xxh3_64(path.as_os_str().as_encoded_bytes()));
+                                let descriptor = ModuleDescriptor::new_with_uid(derived_name, xxh3_64(path.as_os_str().as_encoded_bytes()));
 
                                 return Ok(Some((loader, descriptor)))
                             },
@@ -287,16 +285,17 @@ impl SingleFileModule {
 }
 
 impl ModuleLoader for SingleFileModule {
-    fn descriptor(&self) -> Result<ModuleDescriptor, String> {
 
-        //TODO: Try and read the module version here
-        //In a single-file module, the discriptor information will be embedded within the MeTTa code
-        // Therefore, we need to parse the whole text of the module looking for a `_module-bom` atom,
-        // that we can then convert into a ModuleBom structure
-
-        Ok(ModuleDescriptor::new(self.name.clone()))
+    fn name(&self) -> Result<String, String> {
+        Ok(self.name.clone())
     }
-    fn loader(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+
+    //TODO: Add accessor for the module version here
+    //In a single-file module, the discriptor information will be embedded within the MeTTa code
+    // Therefore, we need to parse the whole text of the module looking for a `_module-bom` atom,
+    // that we can then convert into a ModuleBom structure
+
+    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
         let working_dir = self.path.parent().unwrap();
@@ -326,15 +325,16 @@ impl DirModule {
 }
 
 impl ModuleLoader for DirModule {
-    fn descriptor(&self) -> Result<ModuleDescriptor, String> {
 
-        //TODO: Try and read the module version here
-        //If there is a `bom.metta` file, descriptor information from that file will take precedence.
-        // Otherwise, try and parse a `_module-bom` atom from the `module.metta` file
-
-        Ok(ModuleDescriptor::new(self.name.clone()))
+    fn name(&self) -> Result<String, String> {
+        Ok(self.name.clone())
     }
-    fn loader(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+
+    //TODO: Try and read the module version here
+    //If there is a `bom.metta` file, descriptor information from that file will take precedence.
+    // Otherwise, try and parse a `_module-bom` atom from the `module.metta` file
+
+    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
         let working_dir = self.path.parent().unwrap();
@@ -439,12 +439,7 @@ impl ModuleCatalog for DirCatalog {
         let mut found_modules = vec![];
 
         //Inspect the directory using each FsModuleFormat, in order
-        visit_modules_in_dir_using_mod_formats(&self.fmts, &self.path, name, |path, _loader, mut descriptor| {
-
-            //Update the descriptor's uid with a stable-hash based on the path, because we might get
-            // multiple instances purporting to be the same module
-            descriptor.uid = Some(xxh3_64(path.as_os_str().as_encoded_bytes()));
-
+        visit_modules_in_dir_using_mod_formats(&self.fmts, &self.path, name, |_loader, descriptor| {
             found_modules.push(descriptor);
             false
         });
@@ -454,9 +449,7 @@ impl ModuleCatalog for DirCatalog {
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
 
         let mut matching_module = None;
-        visit_modules_in_dir_using_mod_formats(&self.fmts, &self.path, &descriptor.name, |path, loader, mut resolved_descriptor| {
-            //Reconstruct the descriptor using the same logic as above
-            resolved_descriptor.uid = Some(xxh3_64(path.as_os_str().as_encoded_bytes()));
+        visit_modules_in_dir_using_mod_formats(&self.fmts, &self.path, &descriptor.name, |loader, resolved_descriptor| {
             if &resolved_descriptor == descriptor {
                 matching_module = Some(loader);
                 true
@@ -482,15 +475,27 @@ fn push_extension(path: PathBuf, extension: impl AsRef<OsStr>) -> PathBuf {
 
 /// Internal function to try FsModuleFormat formats in order.  If the closure returns `true` this function
 /// will exit, otherwise it will try every path returned by every format
-fn visit_modules_in_dir_using_mod_formats(fmts: &[Box<dyn FsModuleFormat>], dir_path: &Path, mod_name: &str, mut f: impl FnMut(PathBuf, Box<dyn ModuleLoader>, ModuleDescriptor) -> bool) {
+fn visit_modules_in_dir_using_mod_formats(fmts: &[Box<dyn FsModuleFormat>], dir_path: &Path, mod_name: &str, mut f: impl FnMut(Box<dyn ModuleLoader>, ModuleDescriptor) -> bool) {
 
     for fmt in fmts {
         for path in fmt.paths_for_name(dir_path, mod_name) {
             if let Some(loader) = fmt.try_path(&path, mod_name) {
-                match loader.descriptor() {
-                    Ok(resolved_descriptor) => {
-                        if f(path, loader, resolved_descriptor) {
-                            return;
+                match loader.name() {
+                    Ok(resolved_name) => {
+                        if resolved_name == mod_name {
+                            //TODO: Remember to query the loader for the version and use the version as part of
+                            //  the descriptor we are constructing
+
+                            //Construct the descriptor's uid with a stable-hash based on the path, because we might get
+                            // multiple instances purporting to be the same module
+                            let descriptor = ModuleDescriptor::new_with_uid(resolved_name, xxh3_64(path.as_os_str().as_encoded_bytes()));
+
+                            if f(loader, descriptor) {
+                                return;
+                            }
+
+                        } else {
+                            log::warn!("Warning! module at {:?}, doesn't match name: {}!", loader, mod_name);
                         }
                     },
                     Err(err) => {

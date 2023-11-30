@@ -601,7 +601,7 @@ impl<'input> RunContext<'_, '_, 'input> {
 
         // Load the module from the catalog
         self.metta.get_or_init_module(descriptor, |context, descriptor| {
-            loader.loader(context, descriptor)
+            loader.load(context, descriptor)
         })
     }
 
