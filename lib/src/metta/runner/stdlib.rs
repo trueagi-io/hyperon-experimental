@@ -5,7 +5,7 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::interpreter::interpret;
 use crate::metta::runner::Metta;
-use crate::metta::types::get_atom_types;
+use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::assert::vec_eq_no_order;
 use crate::common::ReplacingMapper;
@@ -748,6 +748,33 @@ impl Grounded for GetTypeOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub struct GetMetaTypeOp { }
+
+impl Display for GetMetaTypeOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "get-metatype")
+    }
+}
+
+impl Grounded for GetMetaTypeOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("get-metatype expects single atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+
+        Ok(vec![get_meta_type(&atom)])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct PrintlnOp {}
 
 impl Display for PrintlnOp {
@@ -1152,6 +1179,8 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"change-state!"), move |_| { change_state_op.clone() });
     let get_state_op = Atom::gnd(GetStateOp{});
     tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
+    let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
+    tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
 }
 
 pub fn register_runner_tokens(metta: &Metta) {
