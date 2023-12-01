@@ -4,7 +4,7 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::runner::Metta;
-use crate::metta::types::{get_atom_types, get_meta_type};
+use crate::metta::types::get_atom_types;
 use crate::common::assert::vec_eq_no_order;
 use crate::metta::runner::stdlib;
 
@@ -90,32 +90,6 @@ impl Grounded for CollapseGetTypeOp {
         } else {
             Ok(vec![Atom::expr(types)])
         }
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct GetMetaTypeOp { }
-
-impl Display for GetMetaTypeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-metatype")
-    }
-}
-
-impl Grounded for GetMetaTypeOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
-    }
-
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("get-metatype expects single atom as an argument");
-        let atom = args.get(0).ok_or_else(arg_error)?;
-
-        Ok(vec![get_meta_type(&atom)])
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -417,7 +391,7 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
     let collapse_get_type_op = Atom::gnd(CollapseGetTypeOp{});
     tref.register_token(regex(r"collapse-get-type"), move |_| { collapse_get_type_op.clone() });
-    let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
+    let get_meta_type_op = Atom::gnd(stdlib::GetMetaTypeOp{});
     tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
     let is_equivalent = Atom::gnd(IfEqualOp{});
     tref.register_token(regex(r"if-equal"), move |_| { is_equivalent.clone() });
