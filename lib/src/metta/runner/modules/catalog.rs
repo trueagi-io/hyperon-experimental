@@ -32,15 +32,6 @@
 //! ```
 //!
 
-//QUESTION: Should modules loaded manually (without a catalog) be findable by import statements?
-//  Currently it's a moot point because the only modules loaded manually are the stdlibs, and those are
-//  included by default.  However, an API user might want to forego a catalog just to offer some specific
-//  modules, e.g. repl control commands, debug accessors, etc.
-//LP-TODO-NEXT Decision: I'll add a flag to `get_or_init_module` called `register`.  If it is true, the module will be
-// published by a catalog that is part of the Runner, that is searched before any other catalogs.  If no,
-// then the module will only be found by an attempt to load exactly the same ModuleDescriptor
-//
-
 //LP-TODO-NEXT validate that the search path includes the working dir by default
 //
 

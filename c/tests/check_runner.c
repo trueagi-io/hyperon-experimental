@@ -93,8 +93,6 @@ START_TEST (test_runner_errors)
 }
 END_TEST
 
-void deleteme_metta_init(metta_t* metta, void* context) {} //LP-TODO-NEXT: Delete this when I rework runner-creation API to take ModIds instead of an init function
-
 size_t path_for_name(const void *payload, const char *parent_dir, const char *mod_name, char *dst_buf, uintptr_t buf_size) {
     const char* suffix = ".ctestmod";
     size_t parent_dir_len = strlen(parent_dir);
@@ -135,17 +133,17 @@ bool try_path(const void *payload, const char *path, const char *mod_name) {
     return strncmp(path+(path_len-test_str_len), test_str, test_str_len) == 0;
 }
 
-void load(const void *payload, const char *path, struct run_context_t *context, struct module_descriptor_t descriptor) {
+void load(const void *payload, const char *path, struct run_context_t *run_context, struct module_descriptor_t descriptor) {
 
     space_t space = space_new_grounding_space();
-    run_context_init_self_module(context, descriptor, space, NULL);
+    run_context_init_self_module(run_context, descriptor, space, NULL);
 
     sexpr_parser_t parser = sexpr_parser_new("test-atom");
-    run_context_push_parser(context, parser);
+    run_context_push_parser(run_context, parser);
 }
 
 // Module Format API Declaration for test format
-static mod_loader_api_t const TEST_FMT_API= {
+static mod_file_fmt_api_t const TEST_FMT_API= {
     .path_for_name = &path_for_name,
     .try_path = &try_path,
     .load = &load,
@@ -159,7 +157,7 @@ START_TEST (test_custom_module_format)
 
     //Start by initializing a runner using an environment with our custom module format
     space_t space = space_new_grounding_space();
-    metta_t runner = metta_new_with_space_environment_and_stdlib(&space, env_builder, &deleteme_metta_init, NULL);
+    metta_t runner = metta_new_with_space_environment_and_stdlib(&space, env_builder, NULL, NULL);
     space_free(space);
 
     //Load a module using our custom format, and verify it was loaded sucessfully
@@ -175,12 +173,49 @@ START_TEST (test_custom_module_format)
 }
 END_TEST
 
+void custom_stdlib_loader(run_context_t *run_context, module_descriptor_t descriptor, void* callback_context) {
+
+    //Init our new module
+    space_t space = space_new_grounding_space();
+    run_context_init_self_module(run_context, descriptor, space, NULL);
+
+    //Load the core stdlib (This is optional, and some implementations might not want core stdlib)
+    metta_t runner_handle = run_context_get_metta(run_context);
+    module_id_t mod_id = metta_load_core_stdlib(&runner_handle, "core_stdlib", &descriptor);
+    metta_free(runner_handle);
+
+    //"import * from core_stdlib"
+    run_context_import_dependency(run_context, mod_id);
+
+    //Load a custom atom
+    sexpr_parser_t parser = sexpr_parser_new("test-atom");
+    run_context_push_parser(run_context, parser);
+}
+
+START_TEST (test_custom_stdlib)
+{
+    //Start by initializing a runner using our custom stdlib loader
+    space_t space = space_new_grounding_space();
+    metta_t runner = metta_new_with_space_environment_and_stdlib(&space, env_builder_use_test_env(), &custom_stdlib_loader, NULL);
+    space_free(space);
+
+    //Test that we can match an atom loaded from the custom stdlib function
+    ck_assert(run_metta_and_compare_result(&runner, "!(match &self test-atom found!)", "found!"));
+
+    //Test that an operation using the core stdlib works too
+    ck_assert(run_metta_and_compare_result(&runner, "!(+ 1 (+ 2 (+ 3 4)))", "10"));
+
+    metta_free(runner);
+}
+END_TEST
+
 void init_test(TCase* test_case) {
     tcase_set_timeout(test_case, 300); //300s = 5min.  To test for memory leaks
     tcase_add_checked_fixture(test_case, setup, teardown);
     tcase_add_test(test_case, test_incremental_runner);
     tcase_add_test(test_case, test_runner_errors);
     tcase_add_test(test_case, test_custom_module_format);
+    tcase_add_test(test_case, test_custom_stdlib);
 }
 
 TEST_MAIN(init_test);

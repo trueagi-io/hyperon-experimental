@@ -5,7 +5,7 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::interpreter::interpret;
 use crate::metta::text::SExprParser;
-use crate::metta::runner::{Metta, RunContext, ModuleDescriptor};
+use crate::metta::runner::{Metta, RunContext, ModuleDescriptor, ModuleLoader};
 use crate::metta::types::get_atom_types;
 use crate::common::shared::Shared;
 use crate::common::assert::vec_eq_no_order;
@@ -1257,18 +1257,37 @@ pub static METTA_CODE: &'static str = "
     (= (empty) (let a b never-happens))
 ";
 
-/// Initializes the Rust stdlib module
-pub(crate) fn init_rust_stdlib(context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+/// Loader to Initialize the core stdlib module
+#[derive(Debug)]
+pub struct CoreStdlibLoader(String);
 
-    let space = DynSpace::new(GroundingSpace::new());
-    context.init_self_module(descriptor, space, None);
+impl Default for CoreStdlibLoader {
+    fn default() -> Self {
+        CoreStdlibLoader("stdlib".to_string())
+    }
+}
 
-    register_rust_stdlib_tokens(&mut *context.module().tokenizer().borrow_mut());
+impl CoreStdlibLoader {
+    pub fn new(name: String) -> Self {
+        CoreStdlibLoader(name)
+    }
+}
 
-    let parser = SExprParser::new(METTA_CODE);
-    context.push_parser(Box::new(parser));
+impl ModuleLoader for CoreStdlibLoader {
+    fn name(&self) -> Result<String, String> {
+        Ok(self.0.clone())
+    }
+    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+        let space = DynSpace::new(GroundingSpace::new());
+        context.init_self_module(descriptor, space, None);
 
-    Ok(())
+        register_rust_stdlib_tokens(&mut *context.module().tokenizer().borrow_mut());
+
+        let parser = SExprParser::new(METTA_CODE);
+        context.push_parser(Box::new(parser));
+
+        Ok(())
+    }
 }
 
 #[cfg(all(test, not(feature = "minimal")))]

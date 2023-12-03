@@ -1,6 +1,8 @@
 
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 
 use crate::*;
 use crate::space::DynSpace;
@@ -51,6 +53,12 @@ impl ModuleDescriptor {
     /// Create a new ModuleDescriptor
     pub fn new_with_uid(name: String, uid: u64) -> Self {
         Self { name, uid: Some(uid) }
+    }
+    /// Internal.  Use the Hash trait to get a uid for the whole ModuleDescriptor
+    pub(crate) fn hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        std::hash::Hash::hash(self, &mut hasher);
+        hasher.finish()
     }
 }
 
@@ -253,7 +261,7 @@ impl MettaMod {
     /// Implements the prior import behavior of importing all atoms into a sub-space, loaded into the
     /// &self Space, and merging all tokens
     //TODO: This method is a stop-gap, until we figure out all the details of the import behavior we want
-    pub(crate) fn import_dependency_legacy(&self, metta: &Metta, mod_id: ModId) -> Result<(), String> {
+    pub fn import_dependency_legacy(&self, metta: &Metta, mod_id: ModId) -> Result<(), String> {
         self.import_all_from_dependency(metta, mod_id)?;
         self.import_all_tokens_from_dependency(metta, mod_id)
     }

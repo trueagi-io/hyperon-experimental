@@ -126,29 +126,35 @@ pub struct MettaContents {
 }
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
+//
+//NOTE: I don't love exposing the internals of ModId, but because the C bindings are in a separate crate
+// it was a choice between that and using an unnecessary box
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct ModId(usize);
+pub struct ModId(pub usize);
 
 impl ModId {
+    pub const INVALID: ModId = ModId(usize::MAX);
     pub const TOP_MOD: ModId = ModId(0);
 }
 
 impl Metta {
 
-    /// A 1-line method to create a fully initialized MeTTa interpreter
+    /// A 1-line method to create a fully initialized MeTTa runner
     ///
     /// NOTE: pass `None` for `env_builder` to use the common environment
     pub fn new(env_builder: Option<EnvBuilder>) -> Metta {
-        Self::new_with_stdlib_loader(|_| {}, None, env_builder)
+        Self::new_with_stdlib_loader(None, None, env_builder)
     }
 
-    /// Create and initialize a MeTTa interpreter with a language-specific stdlib
+    /// Create and initialize a MeTTa runner with a custom stdlib, for example a language-specific stdlib
     ///
-    /// NOTE: pass `None` for space to create a new [GroundingSpace]
+    /// If the custom stdlib wishes to use the core stdlib, the custom loader may load the core stdlib
+    /// using [CoreStdlibLoader]
+    ///
+    /// NOTE: pass `None` for `loader` to use the core `stdlib`
+    /// pass `None` for space to create a new [GroundingSpace]
     /// pass `None` for `env_builder` to use the common environment
-    pub fn new_with_stdlib_loader<F>(loader: F, space: Option<DynSpace>, env_builder: Option<EnvBuilder>) -> Metta
-        where F: FnOnce(&Self)
-    {
+    pub fn new_with_stdlib_loader(loader: Option<&dyn ModuleLoader>, space: Option<DynSpace>, env_builder: Option<EnvBuilder>) -> Metta {
         let space = match space {
             Some(space) => space,
             None => DynSpace::new(GroundingSpace::new())
@@ -157,32 +163,13 @@ impl Metta {
         //Create the raw MeTTa runner
         let metta = Metta::new_core(space, env_builder);
 
-        //LP-TODO-NEXT, revisit this below, once all tests are passing
-        // TODO: Reverse the loading order between the Rust stdlib and user-supplied stdlib loader,
-        // because user-supplied stdlibs might need to build on top of the Rust stdlib.
-        // Currently this is problematic because https://github.com/trueagi-io/hyperon-experimental/issues/408,
-        // and the right fix is value-bridging (https://github.com/trueagi-io/hyperon-experimental/issues/351)
-
-        //LP-TODO-NEXT, need to get the Python stdlib loading via hyperonpy
-        //Load the custom stdlib
-        loader(&metta);
-
-        //Load the Rust stdlib into the runner
-        let rust_stdlib_desc = ModuleDescriptor::new("stdlib".to_string());
-        let rust_stdlib_id = metta.get_or_init_module(rust_stdlib_desc, |context, descriptor| {
-            init_rust_stdlib(context, descriptor)
-        }).expect("Could not load stdlib");
-
-        //Add the libs
-        let mut runner_state = RunnerState::new(&metta);
-        runner_state.run_in_context(|context| {
-
-            //Import the Rust stdlib into &self
-            context.module().import_dependency_legacy(&metta, rust_stdlib_id).unwrap();
-
-            Ok(())
-        }).unwrap();
-        drop(runner_state);
+        //Load the stdlib
+        let core_loader;
+        let stdlib_loader = match loader {
+            Some(loader) => loader,
+            None => {core_loader = CoreStdlibLoader::default(); &core_loader}
+        };
+        metta.load_and_import_base_module(stdlib_loader).expect("Failed to load stdlib");
 
         //Run the `init.metta` file
         if let Some(init_meta_file_path) = metta.0.environment.initialization_metta_file_path() {
@@ -225,6 +212,49 @@ impl Metta {
         metta
     }
 
+    /// Loads a module into a Runner, directly from a [ModuleLoader]
+    ///
+    /// `private_to` should be the [ModuleDescriptor] of the parent module, if the module is being loaded
+    /// as an internal private dependency.  If `private_to` is None, then the module will be available for
+    /// any module to find it by name
+    pub fn load_module_direct(&self, loader: &dyn ModuleLoader, private_to: Option<&ModuleDescriptor>) -> Result<ModId, String> {
+
+        let descriptor = match private_to {
+            Some(parent_desc) => ModuleDescriptor::new_with_uid(loader.name()?, parent_desc.hash()),
+            None => ModuleDescriptor::new(loader.name()?)
+        };
+        let mod_id = self.get_or_init_module(descriptor, |context, descriptor| {
+            loader.load(context, descriptor)
+        })?;
+
+        //LP-TODO-NEXT If the `private_to` argument is None, the module should be added to a `public_mods`
+        // catalog that is part of the Runner, which is searched before any other catalogs
+
+        Ok(mod_id)
+    }
+
+    /// Internal function to load a module, and import it into the runner's top module, used for stdlib
+    fn load_and_import_base_module(&self, loader: &dyn ModuleLoader) -> Result<(), String> {
+
+        //So this module never conflicts with a module loaded another way
+        const BASE_MODULE_UID: u64 = 0xBACE;
+
+        //Load the module into the runner
+        let descriptor = ModuleDescriptor::new_with_uid(loader.name()?, BASE_MODULE_UID);
+        let mod_id = self.get_or_init_module(descriptor, |context, descriptor| {
+            loader.load(context, descriptor)
+        })?;
+
+        //Import the lib into &self
+        let mut runner_state = RunnerState::new(self);
+        runner_state.run_in_context(|context| {
+            context.module().import_dependency_legacy(self, mod_id).unwrap();
+            Ok(())
+        })?;
+
+        Ok(())
+    }
+
     /// Returns the ModId of a module, or None if it isn't loaded
     pub fn get_module(&self, descriptor: &ModuleDescriptor) -> Option<ModId> {
         let descriptors = self.0.module_descriptors.lock().unwrap();
@@ -234,7 +264,7 @@ impl Metta {
     /// Returns the ModId of a module, initializing it with the provided function if it isn't already loaded
     ///
     /// The init function will then call `context.init_self_module()` along with any other initialization code
-    pub fn get_or_init_module<F: FnOnce(&mut RunContext, ModuleDescriptor) -> Result<(), String>>(&self, descriptor: ModuleDescriptor, f: F) -> Result<ModId, String> {
+    pub(crate) fn get_or_init_module<F: FnOnce(&mut RunContext, ModuleDescriptor) -> Result<(), String>>(&self, descriptor: ModuleDescriptor, f: F) -> Result<ModId, String> {
 
         //If we already have the module loaded, then return it
         if let Some(mod_id) = self.get_module(&descriptor) {
@@ -547,6 +577,11 @@ impl ModRef<'_> {
 }
 
 impl<'input> RunContext<'_, '_, 'input> {
+    /// Returns access to the Metta runner that is hosting the context 
+    pub fn metta(&self) -> &Metta {
+        &self.metta
+    }
+
     /// Returns access to the context's current module
     pub fn module(&self) -> &MettaMod {
         self.module.try_borrow().unwrap_or_else(|| panic!("No module available"))
