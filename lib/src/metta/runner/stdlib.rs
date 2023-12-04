@@ -1274,7 +1274,11 @@ pub static METTA_CODE: &'static str = "
     (: unify (-> Atom Atom Atom Atom %Undefined%))
     (= (unify $a $a $then $else) $then)
     (= (unify $a $b $then $else)
-      (case (let (quote $a) (quote $b) no-result) ((%void% $else))) )
+      (case (unify-or-empty $a $b) ((%void%  $else))) )
+    (: unify-or-empty (-> Atom Atom Atom))
+    (= (unify-or-empty $a $a) unified)
+    (= (unify-or-empty $a $b) (empty))
+
 
     ; empty removes current result from a non-deterministic result
     (: empty (-> %Undefined%))
@@ -1708,6 +1712,7 @@ mod tests {
             !(unify $a (a b c) (ok $a) nok)
             !(unify (a b c) $a (ok $a) nok)
             !(unify (a b c) (a b d) ok nok)
+            !(unify ($x a) (b $x) ok nok)
         ");
 
         assert_eq_metta_results!(metta.run(parser),
@@ -1716,6 +1721,7 @@ mod tests {
                 vec![expr!("ok" "b" "c")],
                 vec![expr!("ok" ("a" "b" "c"))],
                 vec![expr!("ok" ("a" "b" "c"))],
+                vec![expr!("nok")],
                 vec![expr!("nok")]
             ]));
     }
