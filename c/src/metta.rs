@@ -778,7 +778,7 @@ pub extern "C" fn step_get_result(step: step_result_t,
     }
 }
 
-/// @brief A top-level MeTTa Interpreter
+/// @brief A top-level MeTTa runner
 /// @ingroup interpreter_group
 /// @note A `metta_t` must be freed with `metta_free()`
 /// @see metta_new
@@ -787,7 +787,7 @@ pub extern "C" fn step_get_result(step: step_result_t,
 #[repr(C)]
 pub struct metta_t {
     /// Internal.  Should not be accessed directly
-    metta: *mut RustMettaInterpreter,
+    metta: *mut RustMettaRunner,
     err_string: *mut c_char,
 }
 
@@ -801,12 +801,12 @@ impl metta_t {
     }
 }
 
-struct RustMettaInterpreter(Metta);
+struct RustMettaRunner(Metta);
 
 impl From<Metta> for metta_t {
     fn from(metta: Metta) -> Self {
         Self{
-            metta: Box::into_raw(Box::new(RustMettaInterpreter(metta))),
+            metta: Box::into_raw(Box::new(RustMettaRunner(metta))),
             err_string: core::ptr::null_mut(),
         }
     }
@@ -824,7 +824,7 @@ impl metta_t {
 
 /// @brief Creates a new top-level MeTTa Runner, with only the Rust stdlib loaded
 /// @ingroup interpreter_group
-/// @return A `metta_t` handle to the newly created Interpreter
+/// @return A `metta_t` handle to the newly created runner
 /// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
 ///
 #[no_mangle]
@@ -896,11 +896,11 @@ impl ModuleLoader for CModLoaderWrapper {
     }
 }
 
-/// @brief Creates a new core MeTTa Interpreter, with no loaded stdlib nor initialization
+/// @brief Creates a new core MeTTa runner, with no loaded stdlib nor initialization
 /// @ingroup interpreter_group
-/// @param[in]  space  A pointer to a handle for the Space for use by the Interpreter
+/// @param[in]  space  A pointer to a handle for the Space for use as the space of the top-level module
 /// @param[in]  environment  An `env_builder_t` handle to configure the environment to use
-/// @return A `metta_t` handle to the newly created Interpreter
+/// @return A `metta_t` handle to the newly created runner
 /// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
 /// @note This function does not load any stdlib, nor does it run the `init.metta` file from the environment
 ///
@@ -919,7 +919,7 @@ pub extern "C" fn metta_new_core(space: *mut space_t, env_builder: env_builder_t
 /// @brief Clones a `metta_t` handle
 /// @ingroup interpreter_group
 /// @param[in]  metta  The handle to clone
-/// @return The newly cloned `metta_t` handle, pointing to the same underlying interpreter
+/// @return The newly cloned `metta_t` handle, pointing to the same underlying runner
 /// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
 ///
 #[no_mangle]
@@ -931,8 +931,8 @@ pub extern "C" fn metta_clone_handle(metta: *const metta_t) -> metta_t {
 /// @brief Frees a `metta_t` handle
 /// @ingroup interpreter_group
 /// @param[in]  metta  The handle to free
-/// @note The underlying Interpreter may be deallocated if all handles that refer to it have been freed, otherwise
-///    the Interpreter itself won't be freed
+/// @note The underlying runner may be deallocated if all handles that refer to it have been freed, otherwise
+///    the runner itself won't be freed
 ///
 #[no_mangle]
 pub extern "C" fn metta_free(metta: metta_t) {
@@ -958,8 +958,8 @@ pub extern "C" fn metta_err_str(metta: *const metta_t) -> *const c_char {
 
 /// @brief Compares two `metta_t` handles to test whether the referenced MeTTa runner is the same
 /// @ingroup interpreter_group
-/// @param[in]  a  A pointer to the first Interpreter handle
-/// @param[in]  b  A pointer to the first Interpreter handle
+/// @param[in]  a  A pointer to the first runner handle
+/// @param[in]  b  A pointer to the first runner handle
 /// @return True if the two handles reference the same runner, otherwise False
 ///
 #[no_mangle]
@@ -969,10 +969,10 @@ pub extern "C" fn metta_eq(a: *const metta_t, b: *const metta_t) -> bool {
     *a == *b
 }
 
-/// @brief Provides access to the Space associated with a MeTTa Interpreter
+/// @brief Provides access to the Space of the runner's top-level module
 /// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the Interpreter handle
-/// @return A Space handle, to access the Space associated with the Interpreter
+/// @param[in]  metta  A pointer to the runner handle
+/// @return A Space handle, to access the Space of the runner's top-level module
 /// @note The caller must take ownership responsibility for the returned `space_t` and free it with `space_free()`
 ///
 #[no_mangle]
@@ -981,10 +981,10 @@ pub extern "C" fn metta_space(metta: *mut metta_t) -> space_t {
     metta.space().clone().into()
 }
 
-/// @brief Provides access to the Tokenizer associated with a MeTTa Interpreter
+/// @brief Provides access to the Tokenizer of the runner's top-level module
 /// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the Interpreter handle
-/// @return A Tokenizer handle, to access the Tokenizer associated with the Interpreter
+/// @param[in]  metta  A pointer to the runner handle
+/// @return A Tokenizer handle, to access the Tokenizer of the runner's top-level module
 /// @note The caller must take ownership responsibility for the returned `tokenizer_t` and free it with `tokenizer_free()`
 ///
 #[no_mangle]
@@ -993,9 +993,9 @@ pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> tokenizer_t {
     metta.tokenizer().clone().into()
 }
 
-/// @brief Runs the MeTTa Interpreter until the input text has been parsed and evaluated
+/// @brief Runs the MeTTa runner until the input text has been fully parsed and evaluated
 /// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the Interpreter handle
+/// @param[in]  metta  A pointer to the runner handle
 /// @param[in]  parser  An S-Expression Parser containing the MeTTa text
 /// @param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
 /// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
@@ -1024,9 +1024,9 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: sexpr_parser_t,
     }
 }
 
-/// @brief Runs the MeTTa Interpreter to evaluate an input Atom
+/// @brief Runs the MeTTa runner to evaluate an input Atom
 /// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the Interpreter handle
+/// @param[in]  metta  A pointer to the runner handle
 /// @param[in]  atom  The `atom_t` representing the atom to evaluate
 /// @param[in]  callback  A function that will be called to provide a vector of atoms produced by the evaluation
 /// @param[in]  context  A pointer to a caller-defined structure to facilitate communication with the `callback` function
@@ -1171,6 +1171,7 @@ pub extern "C" fn run_context_push_parser(run_context: *mut run_context_t, parse
 /// @brief Returns a pointer to the `metta_t` runner that a run context is executing within
 /// @ingroup interpreter_group
 /// @param[in]  run_context  A pointer to the `run_context_t` to access the runner API
+/// @return A `metta_t` handle to access the runner
 /// @note  The returned `metta_t` handle is must be freed using `metta_free`
 ///
 //TODO: I would like a way to return a borrowed `*const metta_t` to avoid the Arc clone and subsequent
@@ -1182,10 +1183,36 @@ pub extern "C" fn run_context_get_metta(run_context: *const run_context_t) -> me
     context.metta().clone().into()
 }
 
+/// @brief Provides access to the Space of the currently running module
+/// @ingroup interpreter_group
+/// @param[in]  run_context  A pointer to the `run_context_t` to access the runner API
+/// @return A Space handle, to access the Space of the currently running module
+/// @note The caller must take ownership responsibility for the returned `space_t` and free it with
+///    `space_free()`
+///
+#[no_mangle]
+pub extern "C" fn run_context_get_space(run_context: *const run_context_t) -> space_t {
+    let context = unsafe{ &*run_context }.borrow();
+    context.module().space().clone().into()
+}
+
+/// @brief Provides access to the Tokenizer of the currently running module
+/// @ingroup interpreter_group
+/// @param[in]  run_context  A pointer to the `run_context_t` to access the runner API
+/// @return A Tokenizer handle, to access the Tokenizer of the currently running module
+/// @note The caller must take ownership responsibility for the returned `tokenizer_t` and free it with
+///     `tokenizer_free()`
+///
+#[no_mangle]
+pub extern "C" fn run_context_get_tokenizer(run_context: *const run_context_t) -> tokenizer_t {
+    let context = unsafe{ &*run_context }.borrow();
+    context.module().tokenizer().clone().into()
+}
+
 /// @brief Represents the state of an in-flight MeTTa execution run
 /// @ingroup interpreter_group
 /// @note A `runner_state_t` is initially created by `runner_state_new_with_parser()`.  Each call to `metta_run_step()`, in
-///    a loop, advances the evaluation progress by some amount.  When the interpreter operation has
+///    a loop, advances the evaluation progress by some amount.  When the runner operations have
 ///    fully resolved, `runner_state_is_complete()` will return true.  Ownership of the `runner_state_t`
 ///    must ultimately be released with `runner_state_free()`.
 ///
@@ -1232,7 +1259,7 @@ impl runner_state_t {
 
 /// @brief Creates a runner_state_t, to use for step-wise execution of MeTTa text
 /// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the Interpreter handle in which to perform the run
+/// @param[in]  metta  A pointer to the runner handle in which to perform the run
 /// @param[in]  parser An S-Expression Parser containing the MeTTa text
 /// @return The newly created `runner_state_t`, which can begin evaluating MeTTa code
 /// @warning  Ownership of the provided parser will be taken by this function, so it must not be subsequently accessed
@@ -1249,7 +1276,7 @@ pub extern "C" fn runner_state_new_with_parser(metta: *const metta_t, parser: se
 
 /// @brief Creates a runner_state_t, to use for step-wise execution of a list of atoms
 /// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the Interpreter handle in which to perform the run
+/// @param[in]  metta  A pointer to the runner handle in which to perform the run
 /// @param[in]  atoms A pointer to an `atom_vec_t` containing the atoms to run
 /// @return The newly created `runner_state_t`, which can begin evaluating MeTTa code
 /// @warning  The referenced `atoms` `atom_vec_t` must not be modified nor freed while the
@@ -1288,7 +1315,7 @@ pub extern "C" fn runner_state_err_str(state: *const runner_state_t) -> *const c
     state.err_string
 }
 
-/// @brief Runs one step of the interpreter
+/// @brief Runs one step of the runner
 /// @ingroup interpreter_group
 /// @param[in]  state  A pointer to the in-flight runner state
 /// @note If this function encounters an error, the error may be accessed with `runner_state_err_str()`
@@ -1588,7 +1615,7 @@ impl From<ModuleDescriptor> for module_descriptor_t {
     }
 }
 
-//LP-TODO-NEXT.  The "interpreter" documentation group is bloating and also incorrect.  Should break out a separate "runner" group
+//LP-TODO-NEXT.  The "interpreter" documentation group is bloating.  Should break out a separate "runner" group
 //LP-TODO-NEXT.  The Error pathway of the module_descriptor_t is no longer used.  So I can simplify this type
 //LP-TODO-NEXT.  Add an error pathway to run_context_t, that mirrors the error pathway in metta_t, so calls where a run_context_t is passed can propagate errors back to the caller
 //LP-TODO-Next.  Add an error-status result to the callbacks.  At a conceptual level, this error type fundamentally the same exec_error_t / ExecError
@@ -1827,8 +1854,7 @@ impl ModuleLoader for CFsModFmtLoader {
 /// @param[in]  descriptor  A `module_descriptor_t` for the new module being initialized.  This should
 ///    be the descriptor argument received in the loader function.  This function takes ownership of the
 ///    the `module_descriptor_t` so it should not be freed
-/// @param[in]  space  A `space_t` handle for the new module's space.  This function takes ownership
-///    of the `space_t` handle, and it should not be freed
+/// @param[in]  space  A pointer to a handle for the new module's space
 /// @param[in]  working_dir_path   A C-style string specifying a file system path to use as the module's
 ///    working directory.  Passing `NULL` means the module does not have a working directory
 /// @note this function must be called exactly once within a module loader function
@@ -1836,18 +1862,18 @@ impl ModuleLoader for CFsModFmtLoader {
 #[no_mangle]
 pub extern "C" fn run_context_init_self_module(run_context: *mut run_context_t,
         descriptor: module_descriptor_t,
-        space: space_t,
+        space: *mut space_t,
         working_dir_path: *const c_char) {
 
     let context = unsafe{ &mut *run_context }.borrow_mut();
-    let dyn_space = space.into_inner();
+    let dyn_space = unsafe{ &*space }.borrow();
     let path = if working_dir_path.is_null() {
         None
     } else {
         Some(PathBuf::from(cstr_as_str(working_dir_path)))
     };
 
-    context.init_self_module(descriptor.into_inner(), dyn_space, path);
+    context.init_self_module(descriptor.into_inner(), dyn_space.clone(), path);
 }
 
 /// @brief Resolves a module name in the context of a running module, and loads that module

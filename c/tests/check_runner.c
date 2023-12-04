@@ -136,7 +136,8 @@ bool try_path(const void *payload, const char *path, const char *mod_name) {
 void load(const void *payload, const char *path, struct run_context_t *run_context, struct module_descriptor_t descriptor) {
 
     space_t space = space_new_grounding_space();
-    run_context_init_self_module(run_context, descriptor, space, NULL);
+    run_context_init_self_module(run_context, descriptor, &space, NULL);
+    space_free(space);
 
     sexpr_parser_t parser = sexpr_parser_new("test-atom");
     run_context_push_parser(run_context, parser);
@@ -177,7 +178,8 @@ void custom_stdlib_loader(run_context_t *run_context, module_descriptor_t descri
 
     //Init our new module
     space_t space = space_new_grounding_space();
-    run_context_init_self_module(run_context, descriptor, space, NULL);
+    run_context_init_self_module(run_context, descriptor, &space, NULL);
+    space_free(space);
 
     //Load the core stdlib (This is optional, and some implementations might not want core stdlib)
     metta_t runner_handle = run_context_get_metta(run_context);
@@ -187,7 +189,7 @@ void custom_stdlib_loader(run_context_t *run_context, module_descriptor_t descri
     //"import * from core_stdlib"
     run_context_import_dependency(run_context, mod_id);
 
-    //Load a custom atom
+    //Load a custom atom using the MeTTa syntax
     sexpr_parser_t parser = sexpr_parser_new("test-atom");
     run_context_push_parser(run_context, parser);
 }
