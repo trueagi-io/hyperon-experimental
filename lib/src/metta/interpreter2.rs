@@ -393,8 +393,12 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<I
     if results.is_empty() {
         vec![InterpretedAtom(return_not_reducible(), bindings)]
     } else {
+        log::debug!("interpreter2::query: query: {}", query);
+        log::debug!("interpreter2::query: results.len(): {} bindings.len(): {} results: {} bindings: {}",
+            results.len(), bindings.len(), results, bindings);
         results.into_iter()
             .flat_map(|b| {
+                log::debug!("interpreter2::query: b: {}", b);
                 b.merge_v2(&bindings).into_iter().map(|b| {
                     let atom = apply_bindings_to_atom(&atom_x, &b);
                     InterpretedAtom(atom, b)

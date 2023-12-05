@@ -97,6 +97,10 @@ impl Bindings {
         }
     }
 
+    pub(crate) fn len(&self) -> usize {
+        self.id_by_var.len()
+    }
+
     /// Returns true if bindings doesn't contain any variable.
     pub fn is_empty(&self) -> bool {
         self.id_by_var.is_empty()
