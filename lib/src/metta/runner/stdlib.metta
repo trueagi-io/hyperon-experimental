@@ -119,11 +119,11 @@
 (= (is-function $type)
   (function (chain (eval (get-metatype $type)) $meta
     (eval (switch ($type $meta) (
-      (($_ Expression)
+      (($type Expression)
         (eval (if-decons $type $head $_tail
           (unify $head -> (return True) (return False))
           (return (Error (is-function $type) "is-function non-empty expression as an argument")) )))
-      ($_ (return False))
+      (($type $meta) (return False))
     ))))))
 
 (: filter-atom (-> Expression Variable Atom Expression))
@@ -162,12 +162,12 @@
       (eval (if-equal $type $meta
         (return $atom)
         (eval (switch ($type $meta) (
-          (($_type Variable) (return $atom))
-          (($_type Symbol)
+          (($type Variable) (return $atom))
+          (($type Symbol)
             (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
-          (($_type Grounded)
+          (($type Grounded)
             (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
-          (($_type Expression)
+          (($type Expression)
             (chain (eval (interpret-expression $atom $type $space)) $ret (return $ret)))
         ))))))))))
 

@@ -388,6 +388,7 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, atom: Atom, bi
 fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
     let var_x = VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, atom.clone(), Atom::Variable(var_x.clone())]);
+    let query_vars = atom.iter().filter_type::<&VariableAtom>().collect();
     let results = space.query(&query);
     let atom_x = Atom::Variable(var_x);
     if results.is_empty() {
@@ -397,11 +398,12 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings) -> Vec<I
         log::debug!("interpreter2::query: results.len(): {} bindings.len(): {} results: {} bindings: {}",
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
-            .flat_map(|b| {
+            .flat_map(|mut b| {
+                let atom = apply_bindings_to_atom(&atom_x, &b);
+                b.cleanup(&query_vars);
                 log::debug!("interpreter2::query: b: {}", b);
-                b.merge_v2(&bindings).into_iter().map(|b| {
-                    let atom = apply_bindings_to_atom(&atom_x, &b);
-                    InterpretedAtom(atom, b)
+                b.merge_v2(&bindings).into_iter().map(move |b| {
+                    InterpretedAtom(atom.clone(), b)
                 })
             })
             .collect()

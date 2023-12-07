@@ -393,6 +393,12 @@ impl Bindings {
             false => None
         };
 
+        if self.is_empty() {
+            return b.clone().into()
+        } else if b.is_empty() {
+            return self.into()
+        }
+
         let results = b.id_by_var.iter().fold(smallvec::smallvec![(self, HashMap::new())],
             |results, (var, var_id)| -> smallvec::SmallVec<[(Bindings, HashMap<u32, VariableAtom>); 1]> {
                 let mut all_results = smallvec::smallvec![];
@@ -573,10 +579,21 @@ impl Bindings {
         self
     }
 
+    fn no_value(&self, id: &u32) -> bool {
+        self.value_by_id.get(id) == None &&
+            self.id_by_var.iter().filter(|(_var, vid)| *vid == id).count() == 1
+    }
+
     /// Keep only variables passed in vars
     pub fn cleanup(&mut self, vars: &HashSet<&VariableAtom>) {
         let to_remove: HashSet<VariableAtom> = self.id_by_var.iter()
-            .filter_map(|(var, _id)| if !vars.contains(var) { Some(var.clone()) } else { None })
+            .filter_map(|(var, id)| {
+                if !vars.contains(var) || self.no_value(id) {
+                    Some(var.clone())
+                } else {
+                    None
+                }
+            })
             .collect();
         to_remove.into_iter().for_each(|var| { self.id_by_var.remove(&var); });
     }
@@ -1585,8 +1602,9 @@ mod test {
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
             .add_var_binding_v2(VariableAtom::new("b"), expr!("B" d))?
             .add_var_binding_v2(VariableAtom::new("c"), expr!("c"))?
-            .add_var_binding_v2(VariableAtom::new("d"), expr!("D"))?;
-        bindings.cleanup(&[&VariableAtom::new("b")].into());
+            .add_var_binding_v2(VariableAtom::new("d"), expr!("D"))?
+            .with_var_no_value(&VariableAtom::new("e"));
+        bindings.cleanup(&Into::<HashSet<&VariableAtom>>::into([&VariableAtom::new("b"), &VariableAtom::new("e")]));
         assert_eq!(bindings, bind!{ b: expr!("B" d) });
         Ok(())
     }

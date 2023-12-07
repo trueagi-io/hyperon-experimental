@@ -547,6 +547,8 @@ pub fn register_rust_tokens(metta: &Metta) {
     tref.register_token(regex(r"/"), move |_| { div_op.clone() });
     let mod_op = Atom::gnd(ModOp{});
     tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
+    let eq_op = Atom::gnd(stdlib::EqualOp{});
+    tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
 
     metta.tokenizer().borrow_mut().move_front(&mut rust_tokens);
 }
