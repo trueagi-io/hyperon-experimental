@@ -147,7 +147,7 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
 pub fn interpret_step<'a, T: Space + 'a>(mut state: InterpreterState<'a, T>) -> InterpreterState<'a, T> {
     let interpreted_atom = state.pop().unwrap();
     log::debug!("interpret_step: {:?}", interpreted_atom);
-    for result in interpret_atom(&state.context, interpreted_atom) {
+    for result in interpret_root_atom(&state.context, interpreted_atom) {
         state.push(result);
     }
     state
@@ -201,14 +201,19 @@ fn is_chain_op(atom: &Atom) -> bool {
     is_op(atom, &CHAIN_SYMBOL)
 }
 
-fn interpret_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
+fn interpret_root_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
     let InterpretedAtom(atom, bindings) = interpreted_atom;
-    interpret_atom_root(context, atom, bindings, true)
+    let mut result = interpret_nested_atom(context, atom, bindings);
+    result.iter_mut().for_each(|interpreted| {
+        let InterpretedAtom(atom, bindings) = interpreted;
+        *bindings = bindings.narrow_vars(&atom.iter().filter_type::<&VariableAtom>().collect());
+    });
+    result
 }
 
-fn interpret_atom_root<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, atom: Atom, bindings: Bindings, root: bool) -> Vec<InterpretedAtom> {
+fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
     let expr = atom_as_slice(&atom);
-    let mut result = match expr {
+    let result = match expr {
         Some([op, args @ ..]) if *op == EVAL_SYMBOL => {
             match args {
                 [_atom] => {
@@ -328,12 +333,6 @@ fn interpret_atom_root<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>,
             vec![InterpretedAtom(return_atom(atom), bindings)]
         },
     };
-    if root {
-        result.iter_mut().for_each(|interpreted| {
-            let InterpretedAtom(atom, bindings) = interpreted;
-            *bindings = bindings.narrow_vars(&atom.iter().filter_type::<&VariableAtom>().collect());
-        });
-    }
     result
 }
 
@@ -380,7 +379,7 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, atom: Atom, bi
             }
         },
         _ if is_embedded_op(&atom) =>
-            interpret_atom_root(context, atom, bindings, false),
+            interpret_nested_atom(context, atom, bindings),
         _ => query(&context.space, atom, bindings),
     }
 }
@@ -419,7 +418,7 @@ fn chain<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bin
 
     let is_eval = is_eval_op(&nested);
     if is_function_op(&nested) {
-      let mut result = interpret_atom_root(context, nested, bindings, false);
+      let mut result = interpret_nested_atom(context, nested, bindings);
       if result.len() == 1 {
           let InterpretedAtom(r, b) = result.pop().unwrap();
           if is_function_op(&r) {
@@ -439,7 +438,7 @@ fn chain<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bin
           .collect()
       }
     } else if is_embedded_op(&nested) {
-        let result = interpret_atom_root(context, nested.clone(), bindings, false);
+        let result = interpret_nested_atom(context, nested.clone(), bindings);
         let result = result.into_iter()
             .map(|InterpretedAtom(r, b)| {
                 if is_eval && is_function_op(&r) {
@@ -476,7 +475,7 @@ fn function<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: 
             }
         },
         _ if is_embedded_op(&body) => {
-            let mut result = interpret_atom_root(context, body, bindings, false);
+            let mut result = interpret_nested_atom(context, body, bindings);
             if result.len() == 1 {
                 let InterpretedAtom(r, b) = result.pop().unwrap();
                 vec![InterpretedAtom(Atom::expr([FUNCTION_SYMBOL, r, call]), b)]
@@ -547,7 +546,7 @@ fn check_alternatives<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, 
         let interpreted = atom_into_interpreted_atom(next);
         let InterpretedAtom(atom, bindings) = interpreted;
         if is_embedded_op(&atom) {
-            interpret_atom_root(context, atom, bindings, false).into_iter()
+            interpret_nested_atom(context, atom, bindings).into_iter()
                 .map(interpreted_atom_into_atom)
                 .for_each(|atom| current.push(atom));
         } else {
@@ -903,7 +902,7 @@ mod tests {
     fn call_interpret_atom<'a, T: SpaceRef<'a>>(space: T, atom: &Atom) -> Vec<InterpretedAtom> {
         let mut state = interpret_init(space, atom);
         let interpreted = state.pop().unwrap();
-        interpret_atom(&state.context, interpreted)
+        interpret_root_atom(&state.context, interpreted)
     }
 
     #[derive(PartialEq, Clone, Debug)]
