@@ -75,6 +75,35 @@ enum VarResolutionResult<T> {
     None
 }
 
+/// Abstraction of the variable set. It is used to allow passing both
+/// HashSet<&VariableAtom> and HashSet<VariableAtom> to the
+/// [Bindings::narrow_vars] method.
+pub trait VariableSet {
+    /// Returns true if var is a part of the set.
+    fn contains(&self, var: &VariableAtom) -> bool;
+
+    /// Iterate trough a list of variables in the set.
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=&VariableAtom> + 'a>;
+}
+
+impl VariableSet for HashSet<&VariableAtom> {
+    fn contains(&self, var: &VariableAtom) -> bool {
+        HashSet::contains(self, var)
+    }
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=&VariableAtom> + 'a> {
+        Box::new(HashSet::iter(self).map(|a| *a))
+    }
+}
+
+impl VariableSet for HashSet<VariableAtom> {
+    fn contains(&self, var: &VariableAtom) -> bool {
+        HashSet::contains(self, var)
+    }
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=&VariableAtom> + 'a> {
+        Box::new(HashSet::iter(self))
+    }
+}
+
 /// Represents variable bindings. Keeps two kinds of relations inside:
 /// variables equalities and variable value assignments. For example this
 /// structure is able to precisely represent result of matching atoms like
@@ -453,7 +482,7 @@ impl Bindings {
         }
     }
 
-    fn build_var_mapping<'a>(&'a self, required_names: &HashSet<&VariableAtom>, required_ids: &HashSet<u32>) -> HashMap<&'a VariableAtom, &'a VariableAtom> {
+    fn build_var_mapping<'a>(&'a self, required_names: &dyn VariableSet, required_ids: &HashSet<u32>) -> HashMap<&'a VariableAtom, &'a VariableAtom> {
         let mut id_names: HashSet<VariableAtom> = HashSet::new();
         let mut mapping = HashMap::new();
         for (var, &id) in &self.id_by_var {
@@ -501,9 +530,9 @@ impl Bindings {
     ///
     /// assert_eq!(right, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
     /// ```
-    pub fn narrow_vars(&self, vars: &HashSet<&VariableAtom>) -> Bindings {
+    pub fn narrow_vars(&self, vars: &dyn VariableSet) -> Bindings {
         let mut deps: HashSet<VariableAtom> = HashSet::new();
-        for var in vars {
+        for var in vars.iter() {
             self.find_deps(var, &mut deps);
         }
 
@@ -513,7 +542,7 @@ impl Bindings {
             .map(Option::unwrap).map(|&id| id)
             .collect();
 
-        let mapping = self.build_var_mapping(&vars, &dep_ids);
+        let mapping = self.build_var_mapping(vars, &dep_ids);
 
         let mut bindings = Bindings::new();
         bindings.next_var_id = self.next_var_id;
@@ -585,7 +614,7 @@ impl Bindings {
     }
 
     /// Keep only variables passed in vars
-    pub fn cleanup(&mut self, vars: &HashSet<&VariableAtom>) {
+    pub fn cleanup(&mut self, vars: &dyn VariableSet) {
         let to_remove: HashSet<VariableAtom> = self.id_by_var.iter()
             .filter_map(|(var, id)| {
                 if !vars.contains(var) || self.no_value(id) {

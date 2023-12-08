@@ -10,6 +10,7 @@ use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
 
 use std::fmt::{Display, Debug};
 use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 // Grounding space
 
@@ -268,7 +269,7 @@ impl GroundingSpace {
     fn single_query(&self, query: &Atom) -> BindingsSet {
         log::debug!("single_query: query: {}", query);
         let mut result = BindingsSet::empty();
-        let query_vars = query.iter().filter_type::<&VariableAtom>().collect();
+        let query_vars: HashSet<&VariableAtom> = query.iter().filter_type::<&VariableAtom>().collect();
         for i in self.index.get(&atom_to_trie_key(query)) {
             let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", query, i).as_str());
             let next = make_variables_unique(next.clone());
