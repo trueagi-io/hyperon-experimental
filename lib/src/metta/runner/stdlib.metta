@@ -168,7 +168,7 @@
           (($type Grounded)
             (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
           (($type Expression)
-            (chain (eval (interpret-expression $atom $type $space)) $ret (return $ret)))
+            (chain (function (check-alternatives (eval (interpret-expression $atom $type $space)))) $ret (return $ret)))
         ))))))))))
 
 (= (interpret-expression $atom $type $space)
@@ -187,7 +187,7 @@
     (chain (eval (interpret $op $type $space)) $reduced-op
       (eval (return-on-error $reduced-op
         (eval (if-decons $type $arrow $arg-types
-          (chain (function (check-alternatives (eval (interpret-args $expr $args $arg-types $ret-type $space)))) $reduced-args
+          (chain (eval (interpret-args $expr $args $arg-types $ret-type $space)) $reduced-args
             (eval (return-on-error $reduced-args
               (chain (cons $reduced-op $reduced-args) $r (return $r)))))
           (return (Error $type "Function type expected")) )))))
