@@ -506,12 +506,14 @@ impl Bindings {
     }
 
     fn find_deps(&self, var: &VariableAtom, deps: &mut HashSet<VariableAtom>) {
-        deps.insert(var.clone());
-        self.get_value(var).iter()
-            .for_each(|value| {
-                value.iter().filter_map(|atom| <&VariableAtom>::try_from(atom).ok())
-                    .for_each(|var| { self.find_deps(var, deps); });
-            });
+        if !deps.contains(var) {
+            deps.insert(var.clone());
+            self.get_value(var).iter()
+                .for_each(|value| {
+                    value.iter().filter_map(|atom| <&VariableAtom>::try_from(atom).ok())
+                        .for_each(|var| { self.find_deps(var, deps); });
+                    });
+        }
     }
 
     /// Get narrow bindings which contains only passed set of variables and
@@ -1503,6 +1505,16 @@ mod test {
             &VariableAtom::new("rightE"), &VariableAtom::new("rightF")]));
 
         assert_eq!(narrow, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
+        Ok(())
+    }
+
+    #[test]
+    fn bindings_narrow_vars_infinite_loop() -> Result<(), &'static str> {
+        let bindings = Bindings::new().add_var_binding_v2(VariableAtom::new("x"), expr!("a" x "b"))?;
+
+        let narrow = bindings.narrow_vars(&HashSet::from([&VariableAtom::new("x")]));
+
+        assert_eq!(narrow, bind!{ x: expr!("a" x "b") });
         Ok(())
     }
 
