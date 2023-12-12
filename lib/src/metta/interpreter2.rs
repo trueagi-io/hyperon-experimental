@@ -138,6 +138,75 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
     }
 }
 
+use std::fmt::Write;
+
+fn print_stack(atom: &InterpretedAtom) -> String {
+    let InterpretedAtom(atom, bindings) = atom;
+    let mut levels = Vec::new();
+    print_level(&mut levels, atom, bindings);
+    let mut buffer = String::new();
+    let mut i = levels.len();
+    writeln!(buffer, "=> {:05} {}", i, levels.pop().unwrap()).unwrap();
+    while !levels.is_empty() {
+        i = i - 1;
+        writeln!(buffer, "   {:05} {}", i, levels.pop().unwrap()).unwrap();
+    }
+    buffer
+}
+
+fn print_level(levels: &mut Vec<String>, atom: &Atom, bindings: &Bindings) {
+    levels.push(String::new());
+    let output = levels.last_mut().unwrap();
+    match atom {
+        Atom::Expression(expr) => match expr.children().as_slice() {
+            [op, args @ ..] if *op == FUNCTION_SYMBOL => {
+                match args {
+                    [Atom::Expression(_body)] => {
+                        write!(output, "{}", atom).unwrap();
+                    },
+                    [body @ Atom::Expression(_body), call] => {
+                        write!(output, "{}", call).unwrap();
+                        print_level(levels, body, bindings);
+                    },
+                    _ => panic!(),
+                }
+            },
+            [op, args @ ..] if *op == CHAIN_SYMBOL => {
+                match args {
+                    [nested, Atom::Variable(var), templ] => {
+                        write!(output, "(chain <result> {} {})", var, templ).unwrap();
+                        print_level(levels, nested, bindings);
+                    },
+                    _ => panic!(),
+                }
+            },
+            [op, args @ ..] if *op == CHECK_ALTERNATIVES_SYMBOL => {
+                match args {
+                    [_atom] => {
+                        write!(output, "{}", atom).unwrap();
+                    },
+                    [Atom::Expression(current), Atom::Expression(finished)] => {
+                        let current_len = current.children().len();
+                        if current_len > 0 {
+                            let next = &current.children()[current_len - 1];
+                            let (atom, bindings) = atom_as_interpreted_atom(next);
+                            write!(output, "(check-alternatives {} {})", current, finished).unwrap();
+                            print_level(levels, atom, bindings);
+                        } else {
+                            write!(output, "{}", atom).unwrap();
+                        }
+                    },
+                    _ => panic!(),
+                }
+            },
+            _ => {
+                write!(output, "{}", atom).unwrap();
+            },
+        },
+        _ => write!(output, "{}", atom).unwrap(),
+    }
+}
+
 //TODO: These docs are out of date for the new interpreter
 /// Perform next step of the interpretation plan and return the result. Panics
 /// when [StepResult::Return] or [StepResult::Error] are passed as input.
@@ -147,7 +216,8 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
 /// * `step` - [StepResult::Execute] result from the previous step.
 pub fn interpret_step<'a, T: Space + 'a>(mut state: InterpreterState<'a, T>) -> InterpreterState<'a, T> {
     let interpreted_atom = state.pop().unwrap();
-    log::debug!("interpret_step: {:?}", interpreted_atom);
+    log::debug!("interpret_step: {}", interpreted_atom);
+    log::debug!("stack:\n{}", print_stack(&interpreted_atom));
     for result in interpret_root_atom(&state.context, interpreted_atom) {
         state.push(result);
     }
@@ -292,14 +362,14 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
                 [Atom::Expression(_body)] => {
                     match atom_into_array(atom) {
                         Some([_, body]) =>
-                            function(context, bindings, body, None, vars),
+                            function(context, bindings, body.clone(), body, vars),
                         _ => panic!("Unexpected state"),
                     }
                 },
-                [Atom::Expression(_body), Atom::Expression(_call)] => {
+                [Atom::Expression(_body), _call] => {
                     match atom_into_array(atom) {
                         Some([_, body, call]) =>
-                            function(context, bindings, body, Some(call), vars),
+                            function(context, bindings, body, call, vars),
                         _ => panic!("Unexpected state"),
                     }
                 },
@@ -402,11 +472,19 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings, vars: &V
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
             .flat_map(|mut b| {
-                let atom = apply_bindings_to_atom(&atom_x, &b);
+                let mut res = apply_bindings_to_atom(&atom_x, &b);
+                if is_function_op(&res) {
+                    match res {
+                        Atom::Expression(ref mut expr) => {
+                            expr.children_mut().push(atom.clone());
+                        }
+                        _ => {},
+                    }
+                }
                 b.cleanup(vars);
                 log::debug!("interpreter2::query: b: {}", b);
                 b.merge_v2(&bindings).into_iter().map(move |b| {
-                    InterpretedAtom(atom.clone(), b)
+                    InterpretedAtom(res.clone(), b)
                 })
             })
             .collect()
@@ -446,11 +524,7 @@ fn chain<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bin
         let result = result.into_iter()
             .map(|InterpretedAtom(r, b)| {
                 if is_eval && is_function_op(&r) {
-                    match atom_into_array(r) {
-                        Some([_, body]) =>
-                            InterpretedAtom(Atom::expr([CHAIN_SYMBOL, Atom::expr([FUNCTION_SYMBOL, body, nested.clone()]), Atom::Variable(var.clone()), templ.clone()]), b),
-                        _ => panic!("Unexpected state"),
-                    }
+                    InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b)
                 } else if is_chain_op(&r) {
                     InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b)
                 } else {
@@ -464,11 +538,7 @@ fn chain<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bin
     }
 }
 
-fn function<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bindings, body: Atom, call: Option<Atom>, vars: &Variables) -> Vec<InterpretedAtom> {
-    let call = match call {
-        Some(call) => call,
-        None => Atom::expr([FUNCTION_SYMBOL, body.clone()]),
-    };
+fn function<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bindings, body: Atom, call: Atom, vars: &Variables) -> Vec<InterpretedAtom> {
     match atom_as_slice(&body) {
         Some([op, _result]) if *op == RETURN_SYMBOL => {
             if let Some([_, result]) = atom_into_array(body) {
@@ -515,6 +585,20 @@ fn atom_into_interpreted_atom(atom: Atom) -> InterpretedAtom {
             _ => panic!("Unexpected state: atom is not a pair"),
         },
         _ => panic!("Unexpected state: atom is not an expression"),
+    }
+}
+
+fn atom_as_interpreted_atom(atom: &Atom) -> (&Atom, &Bindings) {
+    match atom_as_slice(atom) {
+        Some([atom, bindings]) => {
+            match bindings.as_gnd::<Bindings>() {
+                Some(bindings) => {
+                    (atom, bindings)
+                },
+                _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
+            }
+        }
+        _ => panic!("Unexpected state: atom is not a pair"),
     }
 }
 
