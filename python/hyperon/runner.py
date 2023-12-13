@@ -305,8 +305,8 @@ class Environment:
             hp.env_builder_disable_config_dir(builder)
         if (is_test):
             hp.env_builder_set_is_test(True)
-        for path in reversed(include_paths):
-            hp.env_builder_add_include_path(builder, path)
+        for path in include_paths:
+            hp.env_builder_push_include_path(builder, path)
         return builder
 
 def _priv_load_py_stdlib(c_run_context, c_descriptor):
