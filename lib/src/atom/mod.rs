@@ -434,6 +434,17 @@ pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matc
     }
 }
 
+/// Returns either single emtpy [matcher::Bindings] instance if the string representing `self` and
+/// `other` render are identical strings, or an empty iterator if not. 
+pub fn match_by_string_equality(this: &str, other: &Atom) -> matcher::MatchResultIter {
+    let other_string = other.to_string();
+    if this == other_string {
+        Box::new(std::iter::once(matcher::Bindings::new()))
+    } else {
+        Box::new(std::iter::empty())
+    }
+}
+
 // TODO: pass args to execute_not_executable(), rename to execute_non_executable()
 /// Returns [ExecError::NoReduce] which means this atom should not be reduced
 /// further. This is a default implementation of `execute()` for the

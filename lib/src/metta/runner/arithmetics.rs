@@ -107,7 +107,9 @@ impl Grounded for Bool {
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
+        //TODO: THis is a stop-gap until we have a more robust value-bridging system in place
+        // https://github.com/trueagi-io/hyperon-experimental/issues/351
+        match_by_string_equality(&self.to_string(), other)
     }
 }
 

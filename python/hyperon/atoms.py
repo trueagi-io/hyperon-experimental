@@ -225,6 +225,9 @@ class ValueObject(GroundedObject):
 
     def __eq__(self, other):
         """Compares the equality of this ValueObject with another based on their content."""
+        # TODO: We need to hook this up the the Value-Bridging mechanism when it's designed and built
+        # https://github.com/trueagi-io/hyperon-experimental/issues/351
+
         # TODO: ?typecheck for the contents
         return isinstance(other, ValueObject) and self.content == other.content
 

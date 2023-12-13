@@ -37,6 +37,9 @@ using CSyntaxNode = CStruct<syntax_node_t>;
 using CStepResult = CStruct<step_result_t>;
 using CRunnerState = CStruct<runner_state_t>;
 using CMetta = CStruct<metta_t>;
+using CRunContext = CPtr<run_context_t>;
+using CModuleDescriptor = CStruct<module_descriptor_t>;
+using ModuleId = CStruct<module_id_t>;
 using EnvBuilder = CStruct<env_builder_t>;
 
 // Returns a string, created by executing a function that writes string data into a buffer
@@ -417,13 +420,21 @@ void syntax_node_copy_to_list_callback(const syntax_node_t* node, void *context)
     }
 };
 
-void run_python_loader_callback(metta_t* metta, void* context) {
+// A C function that wraps a Python function, so that the python code to load the stdlib can be run inside `metta_new_with_space_environment_and_stdlib()`
+void run_python_stdlib_loader(run_context_t* run_context, module_descriptor_t descriptor, void* callback_context) {
     py::object runner_mod = py::module_::import("hyperon.runner");
-    py::object metta_class = runner_mod.attr("MeTTa");
-    py::function load_metta_py_stdlib = metta_class.attr("_priv_load_metta_py_stdlib");
-    metta_t cloned_metta = metta_clone_handle(metta);
-    py::object py_metta = metta_class(CMetta(cloned_metta));
-    load_metta_py_stdlib(py_metta);
+    py::function load_py_stdlib = runner_mod.attr("_priv_load_py_stdlib");
+    CRunContext c_run_context = CRunContext(run_context);
+    CModuleDescriptor c_descriptor = CModuleDescriptor(descriptor);
+    load_py_stdlib(&c_run_context, c_descriptor);
+}
+
+// A C function that dispatches to a Python function, so that the Python module loader code can be run inside `metta_load_module_direct()`
+void run_python_module_loader(run_context_t* run_context, module_descriptor_t descriptor, void* callback_context) {
+    py::function* py_func = (py::function*)callback_context;
+    CRunContext c_run_context = CRunContext(run_context);
+    CModuleDescriptor c_descriptor = CModuleDescriptor(descriptor);
+    (*py_func)(&c_run_context, c_descriptor);
 }
 
 struct CConstr {
@@ -788,9 +799,29 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<CAtoms>(m, "CAtoms")
         ADD_SYMBOL(EMPTY, "Empty");
 
+    py::class_<CRunContext>(m, "CRunContext");
+    m.def("run_context_init_self_module", [](CRunContext& run_context, CModuleDescriptor descriptor, CSpace space, char const* working_dir) {
+        run_context_init_self_module(run_context.ptr, descriptor.obj, space.ptr(), working_dir);
+    }, "Init module in loader");
+    m.def("run_context_get_metta", [](CRunContext& run_context) {
+        return CMetta(run_context_get_metta(run_context.ptr));
+    }, "Returns the MeTTa runner that a RunContext is running within");
+    m.def("run_context_get_space", [](CRunContext& run_context) {
+        return CSpace(run_context_get_space(run_context.ptr));
+    }, "Returns the Space for the currently running module");
+    m.def("run_context_get_tokenizer", [](CRunContext& run_context) {
+        return CTokenizer(run_context_get_tokenizer(run_context.ptr));
+    }, "Returns the Tokenizer for the currently running module");
+    m.def("run_context_import_dependency", [](CRunContext& run_context, ModuleId mod_id) {
+        run_context_import_dependency(run_context.ptr, mod_id.obj);
+    }, "Imports a dependency into a module");
+
+    py::class_<CModuleDescriptor>(m, "CModuleDescriptor");
+    py::class_<ModuleId>(m, "ModuleId");
+
     py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, EnvBuilder env_builder) {
-        return CMetta(metta_new_with_space_environment_and_stdlib(space.ptr(), env_builder.obj, &run_python_loader_callback, NULL));
+        return CMetta(metta_new_with_space_environment_and_stdlib(space.ptr(), env_builder.obj, &run_python_stdlib_loader, NULL));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
     m.def("metta_err_str", [](CMetta& metta) {
@@ -798,12 +829,14 @@ PYBIND11_MODULE(hyperonpy, m) {
         return err_str != NULL ? py::cast(std::string(err_str)) : py::none();
     }, "Returns the error string from the last MeTTa operation or None");
     m.def("metta_eq", [](CMetta& a, CMetta& b) { return metta_eq(a.ptr(), b.ptr()); }, "Compares two MeTTa handles");
-    m.def("metta_search_path_cnt", [](CMetta& metta) { return metta_search_path_cnt(metta.ptr()); }, "Returns the number of module search paths in the runner's environment");
-    m.def("metta_nth_search_path", [](CMetta& metta, size_t idx) {
-        return func_to_string_two_args((write_to_buf_two_arg_func_t)&metta_nth_search_path, metta.ptr(), (void*)idx);
-    }, "Returns the module search path at the specified index, in the runner's environment");
     m.def("metta_space", [](CMetta& metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");
     m.def("metta_tokenizer", [](CMetta& metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
+    m.def("metta_load_core_stdlib", [](CMetta& metta, char const* mod_name, CModuleDescriptor& private_to) {
+        return ModuleId(metta_load_core_stdlib(metta.ptr(), mod_name, private_to.ptr()));
+    }, "Loads the core stdlib into a runner");
+    m.def("metta_load_module_direct", [](CMetta& metta, char const* mod_name, CModuleDescriptor& private_to, py::function* py_func) {
+        return ModuleId(metta_load_module_direct(metta.ptr(), mod_name, private_to.ptr(), &run_python_module_loader, (void*)py_func));
+    }, "Loads a module into a runner using a function");
     m.def("metta_run", [](CMetta& metta, CSExprParser& parser) {
             py::list lists_of_atom;
             sexpr_parser_t cloned_parser = sexpr_parser_clone(&parser.parser);
@@ -815,11 +848,6 @@ PYBIND11_MODULE(hyperonpy, m) {
             metta_evaluate_atom(metta.ptr(), atom_clone(atom.ptr()), copy_atoms, &atoms);
             return atoms;
         }, "Run MeTTa interpreter on an atom");
-    //QUESTION: Should we eliminate the `metta_load_module` function from the native APIs, in favor of
-    // allowing the caller to load modules using the `import` operation in MeTTa code?
-    m.def("metta_load_module", [](CMetta& metta, std::string text) {
-        metta_load_module(metta.ptr(), text.c_str());
-    }, "Load MeTTa module");
 
     py::class_<CRunnerState>(m, "CRunnerState")
         .def("__str__", [](CRunnerState state) {

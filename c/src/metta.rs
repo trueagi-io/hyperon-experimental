@@ -1059,6 +1059,7 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
 /// @param[in]  loader_callback  The `mod_loader_callback_t` for a function to load the module
 /// @param[in]  callback_context  A pointer to a caller-defined structure that will be passed to the
 ///     `loader_callback` function
+/// @return  The `module_id_t` for the loaded module, or `invalid` if there was an error
 /// @note  This function might be useful to provide MeTTa modules that are built-in as part of your
 ///     application
 /// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
@@ -1099,6 +1100,7 @@ pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
 /// @param[in]  name  A C-string specifying a name for the module
 /// @param[in]  private_to  If the module is private, pass a pointer to the `module_descriptor_t` of the
 ///     the parent module.  Passing NULL will make the module available for loading by any other module
+/// @return  The `module_id_t` for the loaded module, or `invalid` if there was an error
 /// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
 ///
 #[no_mangle]
@@ -1666,7 +1668,7 @@ impl module_id_t {
 /// @brief Returns `true` is a module_id_t is valid, otherwise returns `false`
 /// @ingroup module_group
 /// @param[in]  mod_id  A pointer to the `module_id_t` to test for validity
-/// @return `true` is a module_id_t is valid, otherwise returns `false`
+/// @return `true` if the module_id_t is valid, otherwise returns `false`
 ///
 #[no_mangle]
 pub extern "C" fn module_id_is_valid(mod_id: *const module_id_t) -> bool {
