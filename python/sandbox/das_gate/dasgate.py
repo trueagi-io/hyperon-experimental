@@ -19,7 +19,8 @@ class DASpace(AbstractSpace):
 
     def __init__(self, unwrap=True):
         super().__init__()
-        self.das = DistributedAtomSpace('ram_only')
+        # self.das = DistributedAtomSpace('ram_only')
+        self.das = DistributedAtomSpace()
         self.unwrap = unwrap
 
     def _atom2dict(self, atom):
@@ -37,6 +38,8 @@ class DASpace(AbstractSpace):
     def _atom2dict_new(self, atom):
         if isinstance(atom, ExpressionAtom):
             targets = atom.get_children()
+            if isinstance(targets[0], SymbolAtom) and targets[0].get_name() == ',':
+                return [self._atom2dict_new(ch) for ch in targets[1:]]
             return {"atom_type": 'link', "type": "Expression", "targets":
                 [self._atom2dict_new(ch) for ch in targets]}
         else:
@@ -68,18 +71,24 @@ class DASpace(AbstractSpace):
 
     def query(self, query_atom):
         query = self._atom2dict_new(query_atom)
+
         answer = self.das.query(query,
                                 {'return_type': QueryOutputFormat.HANDLE, 'toplevel_only': True})
         new_bindings_set = BindingsSet.empty()
         if not answer:
             return new_bindings_set
+
         for a in answer:
             bindings = Bindings()
-            val = a['handle']
-            if a["type"] == "Expression":
+            if isinstance(a, list):
+                b = a[0]
+            else:
+                b = a
+            val = b['handle']
+            if b["type"] == "Expression":
                 var = 'ex'
             else:
-                var = a['name']
+                var = b['name']
             bindings.add_var_binding(V(var), self._handle2atom(val))
             new_bindings_set.push(bindings)
         return new_bindings_set
