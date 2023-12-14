@@ -123,6 +123,10 @@ class MeTTa:
         """Gets the tokenizer for the runner's top-level module"""
         return Tokenizer._from_ctokenizer(hp.metta_tokenizer(self.cmetta))
 
+    def working_dir(self):
+        """Returns the working dir from the environment associated with the runner"""
+        return hp.metta_working_dir(self.cmetta)
+
     def register_token(self, regexp, constr):
         """Registers a token"""
         self.tokenizer().register_token(regexp, constr)
@@ -304,7 +308,7 @@ class Environment:
         if (disable_config):
             hp.env_builder_disable_config_dir(builder)
         if (is_test):
-            hp.env_builder_set_is_test(True)
+            hp.env_builder_set_is_test(builder, True)
         for path in include_paths:
             hp.env_builder_push_include_path(builder, path)
         return builder

@@ -993,6 +993,26 @@ pub extern "C" fn metta_tokenizer(metta: *mut metta_t) -> tokenizer_t {
     metta.tokenizer().clone().into()
 }
 
+/// @brief Renders the working directory of the runner's environment into a buffer
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the runner handle
+/// @param[out]  buf  A buffer into which the path will be rendered
+/// @param[in]  buf_len  The maximum allocated size of `buf`
+/// @return The length of the path string, minus the string terminator character.  Returns 0 if the
+///    runner's environment has no working directory.
+/// @note  If `return_value > buf_len + 1`, then the text was not fully rendered and this function
+///    should be called again with a larger buffer.
+///
+#[no_mangle]
+pub extern "C" fn metta_working_dir(metta: *const metta_t, buf: *mut c_char, buf_len: usize) -> usize {
+    let metta = unsafe{ &*metta }.borrow();
+    let text = match metta.environment().working_dir() {
+        Some(path) => path.display().to_string(),
+        None => "".to_string()
+    };
+    write_into_buf(&text, buf, buf_len)
+}
+
 /// @brief Runs the MeTTa runner until the input text has been fully parsed and evaluated
 /// @ingroup interpreter_group
 /// @param[in]  metta  A pointer to the runner handle

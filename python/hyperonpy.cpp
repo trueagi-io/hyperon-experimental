@@ -74,22 +74,6 @@ std::string func_to_string_no_arg(write_to_buf_no_arg_func_t func) {
     }
 }
 
-// Similar to func_to_string, but for functions that that take two args
-typedef size_t (*write_to_buf_two_arg_func_t)(void*, void*, char*, size_t);
-std::string func_to_string_two_args(write_to_buf_two_arg_func_t func, void* arg1, void* arg2) {
-    //First try with a 1K stack buffer, because that will work in the vast majority of cases
-    char dst_buf[1024];
-    size_t len = func(arg1, arg2, dst_buf, 1024);
-    if (len < 1024) {
-        return std::string(dst_buf);
-    } else {
-        char* data = new char[len+1];
-        func(arg1, arg2, data, len+1);
-        std::string new_string = std::string(data);
-        return new_string;
-    }
-}
-
 static void copy_atoms(const atom_vec_t* atoms, void* context) {
     py::list* list = static_cast<py::list*>(context);
     for (size_t i = 0; i < atom_vec_len(atoms); ++i) {
@@ -829,8 +813,11 @@ PYBIND11_MODULE(hyperonpy, m) {
         return err_str != NULL ? py::cast(std::string(err_str)) : py::none();
     }, "Returns the error string from the last MeTTa operation or None");
     m.def("metta_eq", [](CMetta& a, CMetta& b) { return metta_eq(a.ptr(), b.ptr()); }, "Compares two MeTTa handles");
-    m.def("metta_space", [](CMetta& metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa interpreter");
-    m.def("metta_tokenizer", [](CMetta& metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa interpreter");
+    m.def("metta_space", [](CMetta& metta) { return CSpace(metta_space(metta.ptr())); }, "Get space of MeTTa runner's top-level module");
+    m.def("metta_tokenizer", [](CMetta& metta) { return CTokenizer(metta_tokenizer(metta.ptr())); }, "Get tokenizer of MeTTa runner's top-level module");
+    m.def("metta_working_dir", [](CMetta& metta) {
+        return func_to_string((write_to_buf_func_t)&metta_working_dir, metta.ptr());
+    }, "Returns the working dir from the runner's environment");
     m.def("metta_load_core_stdlib", [](CMetta& metta, char const* mod_name, CModuleDescriptor& private_to) {
         return ModuleId(metta_load_core_stdlib(metta.ptr(), mod_name, private_to.ptr()));
     }, "Loads the core stdlib into a runner");
