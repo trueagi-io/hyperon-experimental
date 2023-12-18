@@ -84,9 +84,11 @@ impl Grounded for ImportOp {
         // the parent space.
         //
         //For now, in order to not lose functionality, I have kept this behavior although reversed the
-        // order of the module name and the destination arguments.  To summarize, if the destination argument
-        // is the &self Space atom, the behavior is (3) "from module import *", and if the destination argument
-        // is a Symbol atom, the behavior is (1) "import module as foo"
+        // order of the module name and the destination arguments.
+        //
+        // ** TO SUMMARIZE **
+        // If the destination argument is the &self Space atom, the behavior is (3) ie "from module import *",
+        // and if the destination argument is a Symbol atom, the behavior is (1) ie "import module as foo"
         //
         //The Underlying functionality for behavior 2 exists in MettaMod::import_item_from_dependency_as,
         //  but it isn't called yet because I wanted to discuss the way to expose it as a MeTTa op.
@@ -123,7 +125,7 @@ impl Grounded for ImportOp {
             Some(other_atom) => {
                 match &other_atom {
                     Atom::Grounded(_) if Atom::as_gnd::<DynSpace>(other_atom) == Some(context.module().space()) => {
-                        context.module().import_all_from_dependency(&context.metta, mod_id)?;
+                        context.module().import_dependency_legacy(&context.metta, mod_id)?;
                     },
                     _ => {
                         return Err(format!("import! destination argument must be a symbol atom or &self.  Found: {other_atom:?}").into());

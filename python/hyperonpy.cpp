@@ -421,6 +421,55 @@ void run_python_module_loader(run_context_t* run_context, module_descriptor_t de
     (*py_func)(&c_run_context, c_descriptor);
 }
 
+size_t path_for_name_mod_fmt_callback(const void* payload, const char* parent_dir, const char* mod_name, char* dst_buf, uintptr_t buf_size) {
+    py::object* fmt_interface_obj = (py::object*)payload;
+    py::function py_func = fmt_interface_obj->attr("path_for_name");
+
+    py::object result_path_py = py_func(parent_dir, mod_name);
+    std::string result_path_string = py::str(result_path_py);
+
+    if (buf_size >= result_path_string.length()+1) {
+        strncpy(dst_buf, &result_path_string[0], result_path_string.length());
+        dst_buf[result_path_string.length()] = 0;
+        return result_path_string.length()+1;
+    } else {
+        return 0;
+    }
+}
+
+void* try_path_mod_fmt_callback(const void* payload, const char* path, const char* mod_name) {
+    py::object* fmt_interface_obj = (py::object*)payload;
+    py::function py_func = fmt_interface_obj->attr("try_path");
+    py::object context_obj = py_func(path, mod_name);
+    if (context_obj.is_none()) {
+        return NULL;
+    } else {
+        return (void*) new py::object(context_obj);
+    }
+}
+
+void load_mod_fmt_callback(const void* payload, struct run_context_t* run_context, struct module_descriptor_t descriptor, void* callback_context) {
+    py::object* fmt_interface_obj = (py::object*)payload;
+    py::object* callback_context_obj = (py::object*)callback_context;
+    py::function py_func = fmt_interface_obj->attr("_load_called_from_c");
+    CRunContext c_run_context = CRunContext(run_context);
+    CModuleDescriptor c_descriptor = CModuleDescriptor(descriptor);
+    py_func(&c_run_context, c_descriptor, callback_context_obj);
+}
+
+void free_mod_fmt_context(void* callback_context) {
+    py::object* py_context_obj = (py::object*)callback_context;
+    delete py_context_obj;
+}
+
+// Module Format API Declaration for a module implementation in C
+static mod_file_fmt_api_t const C_FMT_API= {
+    .path_for_name = &path_for_name_mod_fmt_callback,
+    .try_path = &try_path_mod_fmt_callback,
+    .load = &load_mod_fmt_callback,
+    .free_callback_context = &free_mod_fmt_context,
+};
+
 struct CConstr {
 
     py::function pyconstr;
@@ -787,6 +836,9 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("run_context_init_self_module", [](CRunContext& run_context, CModuleDescriptor descriptor, CSpace space, char const* working_dir) {
         run_context_init_self_module(run_context.ptr, descriptor.obj, space.ptr(), working_dir);
     }, "Init module in loader");
+    m.def("run_context_load_module", [](CRunContext& run_context, const char* mod_name) {
+        return ModuleId(run_context_load_module(run_context.ptr, mod_name));
+    }, "Load a module by name");
     m.def("run_context_get_metta", [](CRunContext& run_context) {
         return CMetta(run_context_get_metta(run_context.ptr));
     }, "Returns the MeTTa runner that a RunContext is running within");
@@ -801,7 +853,9 @@ PYBIND11_MODULE(hyperonpy, m) {
     }, "Imports a dependency into a module");
 
     py::class_<CModuleDescriptor>(m, "CModuleDescriptor");
-    py::class_<ModuleId>(m, "ModuleId");
+
+    py::class_<ModuleId>(m, "ModuleId")
+        .def("is_valid", [](ModuleId& id) { return module_id_is_valid(id.ptr()); }, "Returns True if a ModuleId is valid");
 
     py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, EnvBuilder env_builder) {
@@ -874,5 +928,10 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the environment");
     m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
     m.def("env_builder_push_include_path", [](EnvBuilder& builder, std::string path) { env_builder_push_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
+    m.def("env_builder_push_fs_module_format", [](EnvBuilder& builder, py::object interface) { 
+        //TODO. We end up leaking this object, but it's a non-issue in practice because environments usually live the life of the program.
+        // To fix this, give the Python MeTTa object built from this EnvBuilder a reference to the `interface` object, rather than allocating it here
+        py::object* py_impl = new py::object(interface);
+        env_builder_push_fs_module_format(builder.ptr(), &C_FMT_API, (void*)py_impl);
+    }, "Adds a new module format to the environment");
 }
-

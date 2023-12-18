@@ -82,6 +82,10 @@ class RunContext:
         """Access the tokenizer for the currently running module"""
         return Tokenizer._from_ctokenizer(hp.run_context_get_tokenizer(self.c_run_context))
 
+    def load_module(self, mod_name):
+        """Resolves a module by name in the context of the running module, and loads it into the runner"""
+        return hp.run_context_load_module(self.c_run_context, mod_name)
+
     def register_token(self, regexp, constr):
         """Registers a token in the currently running module's Tokenizer"""
         self.tokenizer().register_token(regexp, constr)
@@ -92,7 +96,10 @@ class RunContext:
 
     def import_dependency(self, mod_id):
         """Imports a loaded module as a dependency of the running module"""
-        hp.run_context_import_dependency(self.c_run_context, mod_id)
+        if mod_id.is_valid():
+            hp.run_context_import_dependency(self.c_run_context, mod_id)
+        else:
+            raise RuntimeError("Invalid ModuleId")
 
 class MeTTa:
     """This class represents the runner to execute MeTTa programs"""
@@ -106,6 +113,10 @@ class MeTTa:
                 space = GroundingSpaceRef()
             if env_builder is None:
                 env_builder = hp.env_builder_use_default()
+            hp.env_builder_push_fs_module_format(env_builder, _PyFileMeTTaModFmt)
+            #LP-TODO-Next, add an fn_module_fmt arg to the standardized way to init environments, so that the
+            # Python user can define additional formats without tweaking any hyperon files.  To make this
+            # convenient it probably means making a virtual ModuleFormat base class
             self.cmetta = hp.metta_new(space.cspace, env_builder)
 
     def __del__(self):
@@ -151,7 +162,7 @@ class MeTTa:
         """Parse the next single token from the text program"""
         return next(self._parse_all(program))
 
-    def load_core_stdlib(self, mod_name, private_to):
+    def __load_core_stdlib(self, mod_name, private_to):
         """Loads the core stdlib into the runner, with the specified name and scope"""
         return hp.metta_load_core_stdlib(self.cmetta, mod_name, private_to.c_module_descriptor)
 
@@ -161,108 +172,14 @@ class MeTTa:
             run_context = RunContext(c_run_context)
             descriptor = ModuleDescriptor(c_descriptor)
             py_loader_func(run_context, descriptor)
-
         return hp.metta_load_module_direct(self.cmetta, mod_name, private_to.c_module_descriptor, loader_func)
 
     def load_module_direct_from_pymod(self, mod_name, private_to, pymod_name):
         """Loads a module into the runner directly from a Python module, with the specified name and scope"""
         if not isinstance(pymod_name, str):
             pymod_name = repr(pymod_name)
-
-        loader_func = _priv_make_module_loader_func_for_pymod(pymod_name)
-
+        loader_func = _priv_make_module_loader_func_for_pymod(pymod_name, load_py_stdlib=True)
         return self.load_module_direct_from_func(mod_name, private_to, loader_func)
-
-    #LP-TODO-Next Need to call the python file format, so that a .py file dropped into a dir catalog
-    # will be found and loaded.
-    #LP-TODO-Next Test for python module file format
-
-    # #LP-TODO-Next, OLD Code below.  Since the module system has unified the loading behavior and allows
-    # # searching to be under the control of the bom, the question is how much of this we want to keep, and
-    # # how much is totally unnecessary.
-    # #
-    # # Specifically, whether we want to keep the `extend-py!` operation at all.  If a metta module is
-    # # already implemented as a Python module, then `MeTTa.load_module_direct_from_pymod` already provides
-    # # the ability to load it from Python directly.  `extend-py!` *could* carry this functionality forward
-    # # into MeTTa.
-    # #
-    # # On the other hand we could also implement a catalog that can query python modules that implement
-    # # MeTTa modules, and totally eliminate `extend-py!`.
-    # #
-    # def load_py_module(self, py_mod_name):
-    #     """Loads the given python module as a MeTTa module"""
-    #     if not isinstance(py_mod_name, str):
-    #         py_mod_name = repr(py_mod_name)
-    #     try:
-    #         mod = import_module(py_mod_name)
-    #         for n in dir(mod):
-    #             obj = getattr(mod, n)
-    #             if '__name__' in dir(obj) and obj.__name__ == 'metta_register':
-    #                 obj(self)
-    #         return mod
-    #     except:
-    #         return None
-
-    # #LP-TODO-Next, See discussion above, regarding whether we want to keep the `extend-py!` operation 
-    # def load_py_module_from_mod_or_file(self, mod_name):
-    #     """Loads the given python-implemented MeTTa module, first using python's module-namespace logic,
-    #     then by searching for files in the MeTTa environment's search path"""
-
-    #     # First, see if the module is already available to Python
-    #     if not isinstance(mod_name, str):
-    #         mod_name = repr(mod_name)
-    #     mod = MeTTa.load_py_module(self, mod_name)
-    #     if mod is None:
-    #         # If that failed, try and load the module from a file
-    #         file_name = mod_name if ".py" in mod_name else \
-    #                     mod_name.replace('.', os.sep) + ".py"
-
-    #         # Check each search path directory in order, until we find the module we're looking for
-    #         num_search_paths = hp.metta_search_path_cnt(self.cmetta)
-    #         search_path_idx = 0
-    #         found_path = None
-    #         while search_path_idx < num_search_paths:
-    #             search_path = hp.metta_nth_search_path(self.cmetta, search_path_idx)
-    #             test_path = os.path.join(search_path, file_name)
-    #             if os.path.exists(test_path):
-    #                 found_path = test_path
-    #                 break
-    #             search_path_idx += 1
-
-    #         if found_path is not None:
-    #             MeTTa.load_py_module_from_path(self, mod_name, found_path)
-    #         else:
-    #             raise RuntimeError("Failed to load module " + mod_name + "; could not locate file: " + file_name)
-
-    # #LP-TODO-Next, See discussion above, regarding whether we want to keep the `extend-py!` operation 
-    # def load_py_module_from_path(self, mod_name, path):
-    #     """Loads the given python-implemented MeTTa module from a file at the specified path"""
-
-    #     spec = importlib.util.spec_from_file_location(mod_name, path)
-    #     module = importlib.util.module_from_spec(spec)
-    #     mod_name = mod_name.split(os.sep)[-1]
-    #     sys.modules[mod_name] = module
-    #     spec.loader.exec_module(module)
-    #     MeTTa.load_py_module(self, mod_name)
-
-    # #LP-TODO-Next Import *should* put all MeTTa modules on equal footing, so I think this is dead code.
-    # # Just keeping for reference until it's closer to merge-time
-    # def import_file(self, fname):
-    #     """Loads the program file and runs it"""
-    #     path = fname.split(os.sep)
-    #     if len(path) == 1:
-    #         path = ['.'] + path
-    #     f = open(os.sep.join(path), "r")
-    #     program = f.read()
-    #     f.close()
-    #     # changing cwd
-    #     # TODO: Changing the working dir will not be necessary when the stdlib ops can access the correct runner context.  See https://github.com/trueagi-io/hyperon-experimental/issues/410
-    #     prev_cwd = os.getcwd()
-    #     os.chdir(os.sep.join(path[:-1]))
-    #     result = self.run(program)
-    #     # restoring cwd
-    #     os.chdir(prev_cwd)
-    #     return result
 
     def run(self, program, flat=False):
         """Runs the program"""
@@ -313,15 +230,63 @@ class Environment:
             hp.env_builder_push_include_path(builder, path)
         return builder
 
+#LP-TODO-Next QUESTION: Do we really need Python directory modules?  Or is a core directory module enough
+# since it can include python file modules?
+
+class _PyFileMeTTaModFmt:
+    """This private class implements the loader for .py files that implement MeTTa modules"""
+
+    def path_for_name(parent_dir, metta_mod_name):
+        """Construct a file name based on the metta_mod_name"""
+        file_name = metta_mod_name if ".py" in metta_mod_name else \
+                        metta_mod_name.replace('.', os.sep) + ".py"
+        return os.path.join(parent_dir, file_name)
+
+    def try_path(path, metta_mod_name):
+        """Load the file as a Python module if it exists"""
+        if os.path.exists(path):
+
+            #QUESTION: What happens if two modules in different files have the same name?
+            # E.g. two different versions of the same module.  The MeTTa module system can
+            # handle it, but it looks like there might be a collision at the Python level.
+            # Should we try and get around this by making the python-module names unique
+            # by mangling them when we load the python mods in this function?  Can we do
+            # that or will it mess up other stuff Python programmers might be expecting?
+            spec = importlib.util.spec_from_file_location(metta_mod_name, path)
+
+            #QUESTION: Should we try and catch exceptions thrown here?  On the Rust side, my
+            # feeling was that an invalid file in an include path somewhere shouldn't cause
+            # a top-level crash, so I was logging them as a warning, but not a fatal error.
+            # The same thinking probably applies to the Python side too.
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[metta_mod_name] = module
+            spec.loader.exec_module(module)
+
+            #TODO: Extract the version here, when it's time to implement versions
+            return metta_mod_name
+        else:
+            return None
+
+    def _load_called_from_c(c_run_context, c_descriptor, callback_context):
+        """Loads the items from the python module into the runner as a MeTTa module"""
+        run_context = RunContext(c_run_context)
+        descriptor = ModuleDescriptor(c_descriptor)
+
+        # We are using the `callback_context` object to store the python module name, which currently is
+        # identical to the MeTTa module name becuase we don't mangle it, but we may mangle it in the future
+        pymod_name = callback_context;
+
+        loader_func = _priv_make_module_loader_func_for_pymod(pymod_name, load_py_stdlib=True)
+        loader_func(run_context, descriptor)
+
 def _priv_load_py_stdlib(c_run_context, c_descriptor):
     """
     Private function called indirectly to load the Python stdlib during Python runner initialization
     """
-
     run_context = RunContext(c_run_context)
     descriptor = ModuleDescriptor(c_descriptor)
 
-    stdlib_loader = _priv_make_module_loader_func_for_pymod("hyperon.stdlib")
+    stdlib_loader = _priv_make_module_loader_func_for_pymod("hyperon.stdlib", load_core_stdlib=True)
     stdlib_loader(run_context, descriptor)
 
     # #LP-TODO-Next Make a test for loading a metta module from a python module using load_module_direct_from_pymod
@@ -329,14 +294,7 @@ def _priv_load_py_stdlib(c_run_context, c_descriptor):
     # py_stdlib_id = run_context.metta().load_module_direct_from_pymod("stdlib-py", descriptor, "hyperon.stdlib")
     # run_context.import_dependency(py_stdlib_id)
 
-    # #LP-TODO-Next See discussion above about whether we want to keep `extend-py!`
-    # # If we keep it, it belongs in the Python stdlib, and not in runner
-    # self.register_atom('extend-py!',
-    #     OperationAtom('extend-py!',
-    #                     lambda name: self.load_py_module_from_mod_or_file(name) or [],
-    #                     [AtomType.UNDEFINED, AtomType.ATOM], unwrap=False))
-
-def _priv_make_module_loader_func_for_pymod(pymod_name):
+def _priv_make_module_loader_func_for_pymod(pymod_name, load_core_stdlib=False, load_py_stdlib=False):
     """
     Private function to return a loader function to load a module into the runner directly from the specified Python module
     """
@@ -350,10 +308,13 @@ def _priv_make_module_loader_func_for_pymod(pymod_name):
             space = GroundingSpaceRef()
             run_context.init_self_module(descriptor, space, None)
 
-            #Load and import the core stdlib using "import *" behavior
-            #QUESTION: Should the core stdlib be optional for python modules?
-            core_stdlib_id = run_context.metta().load_core_stdlib("stdlib-core", descriptor)
-            run_context.import_dependency(core_stdlib_id)
+            #Load and import the Python or core stdlib using "import *" behavior
+            if load_core_stdlib:
+                core_stdlib_id = run_context.metta().__load_core_stdlib("stdlib-core", descriptor)
+                run_context.import_dependency(core_stdlib_id)
+            if load_py_stdlib:
+                py_stdlib_id = run_context.load_module("stdlib")
+                run_context.import_dependency(py_stdlib_id)
 
             for n in dir(mod):
                 obj = getattr(mod, n)

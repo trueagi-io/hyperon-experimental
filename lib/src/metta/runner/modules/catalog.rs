@@ -42,6 +42,11 @@
 // not yet thought in detail about this.
 //
 
+//LP-TODO-NEXT Factor package-management out from module loading, and make package-management
+// an optional feature for the core (C & python still need to depend on it for now).  But core
+// module loading should not require versioning, catalogs, or boms.  and by extension atom-serde
+//
+
 //QUESTION on shared base dependencies & sat-set solving:
 //The currently implemented design resolves each module's dependencies in a straightforward depth-first
 //  order.  This is possible because the module system allows multiple instances of the same module to
@@ -350,9 +355,16 @@ impl ModuleLoader for DirModule {
 pub trait FsModuleFormat: std::fmt::Debug + Send + Sync {
 
     /// Returns the possible paths inside a parent directory which may point to a module
+    ///
+    /// NOTE: This function is allowed to return paths that may not be valid.  Paths returned
+    /// from this method will be passed to [try_path] to validate them.
     fn paths_for_name(&self, parent_dir: &Path, mod_name: &str) -> Vec<PathBuf>;
 
-    /// Checks a specific path, and returns the [ModuleLoader] if a supported module resides at the path
+    /// Checks a specific path, and returns the [ModuleLoader] if a supported module resides at
+    /// the path
+    ///
+    /// This method should return `None` if the path does not point to a valid module in the
+    /// implemented format.
     fn try_path(&self, path: &Path, mod_name: &str) -> Option<Box<dyn ModuleLoader>>;
 }
 

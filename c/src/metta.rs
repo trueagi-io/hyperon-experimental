@@ -1693,7 +1693,7 @@ impl module_id_t {
 #[no_mangle]
 pub extern "C" fn module_id_is_valid(mod_id: *const module_id_t) -> bool {
     let mod_id = unsafe{ &*mod_id };
-    ModId(mod_id.id) == ModId::INVALID
+    ModId(mod_id.id) != ModId::INVALID
 }
 
 /// @brief Creates a new module_descriptor_t with the specified name
@@ -1755,10 +1755,12 @@ pub struct mod_file_fmt_api_t {
     ///    output buffer
     /// @return the number of bytes written into the `dst_buf` by the function, including a NULL terminator
     ///    character.  If the path does not fit in the `dst_buf`, then this function should return 0
-    /// @note The Rust interface allows for a single module loader to check multiple path variations.  That
-    ///    could be implemented here in the C interface but it would complicate the API functions by
-    ///    requiring multiple buffers to be returned, and currently it's not needed.
+    /// @note The implementation does not need to check the validity of the returned path.  Results from
+    ///    this method will be passed to `try_path` to perform validity checking
     ///
+    //QUESTION: The Rust interface allows for a single module loader to check multiple path variations.
+    //    That could be implemented here in the C interface but it would complicate the API functions
+    //    by requiring multiple buffers to be returned, and currently it's not needed.
     path_for_name: extern "C" fn(payload: *const c_void, parent_dir: *const c_char, mod_name: *const c_char, dst_buf: *mut c_char, buf_size: usize) -> usize,
 
     /// @brief Tests a path in the file system to determine if a valid module resides at the path
@@ -1766,9 +1768,14 @@ pub struct mod_file_fmt_api_t {
     ///    format was initialized.  This function must not modify the payload
     /// @param[in]  path  A NULL-terminated string, representing a path in the file system to test
     /// @param[in]  mod_name  A NULL-terminated string, representing the name of the module
-    /// @return `true` if the `path` contains a valid module in the format, otherwise `false`
+    /// @return any non-NULL value if the `path` contains a valid module in the format, otherwise NULL.
+    ///    If a non-NULL value is returned from this function, it may be passed to the `load` function
+    ///    as the `callback_context` argument.  If a non-NULL value is returned, it will eventually
+    ///    trigger a call to `free_callback_context` so the returned value can be an allocated pointer.
     ///
-    try_path: extern "C" fn(payload: *const c_void, path: *const c_char, mod_name: *const c_char) -> bool,
+    //TODO: This function will also be responsible for returning a module version, through an [out] arg,
+    // when I add versions in the near future
+    try_path: extern "C" fn(payload: *const c_void, path: *const c_char, mod_name: *const c_char) -> *mut c_void,
 
     /// @brief Loads the module into the runner, by making calls into the `run_context_t`
     /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
@@ -1781,20 +1788,27 @@ pub struct mod_file_fmt_api_t {
     ///QUESTION: What should the error reporting pathway look like?
     ///QUESTION: Is it worth trying to unify this function prototype with the `mod_loader_callback_t` type?
     ///   The argument in favor is that they're fundamentally doing the same thing, but the function params
-    ///   are different on account of having a payload and a path instead of a general-purpose callback_context
-    load: extern "C" fn(payload: *const c_void, path: *const c_char, run_context: *mut run_context_t, descriptor: module_descriptor_t),
+    ///   are different on account of having a payload, and removing the `payload` argument complicates the
+    ///   API as it becomes necessary to repackage the payload inside the `callback_context`
+    load: extern "C" fn(payload: *const c_void, run_context: *mut run_context_t, descriptor: module_descriptor_t, callback_context: *mut c_void),
+
+    /// @brief Frees a user-defined structure that may have been allocated in `try_path`.
+    /// @param[in]  callback_context  The value returned from `try_path`, if it was non-NULL
+    ///
+    free_callback_context: Option<extern "C" fn(callback_context: *mut c_void)>,
 }
 
 #[derive(Clone, Debug)]
 struct CFsModFmtLoader {
     api: *const mod_file_fmt_api_t,
     payload: *const c_void,
-    name_and_path: Option<(String, PathBuf)>
+    callback_context: *mut c_void,
+    mod_name: Option<String>,
 }
 
 impl CFsModFmtLoader {
     fn new(api: *const mod_file_fmt_api_t, payload: *const c_void) -> Self {
-        Self {api, payload, name_and_path: None }
+        Self {api, payload, callback_context: core::ptr::null_mut(), mod_name: None }
     }
 }
 
@@ -1843,9 +1857,11 @@ impl FsModuleFormat for CFsModFmtLoader {
         let path_c_string = str_as_cstr(path.to_str().unwrap());
         let mod_name_c_string = str_as_cstr(mod_name);
 
-        if (api.try_path)(self.payload, path_c_string.as_ptr(), mod_name_c_string.as_ptr()) {
+        let result_context = (api.try_path)(self.payload, path_c_string.as_ptr(), mod_name_c_string.as_ptr());
+        if !result_context.is_null() {
             let mut new_loader = self.clone();
-            new_loader.name_and_path = Some((mod_name.to_string(), path.into()));
+            new_loader.mod_name = Some(mod_name.to_string());
+            new_loader.callback_context = result_context;
             Some(Box::new(new_loader))
         } else {
             None
@@ -1855,18 +1871,27 @@ impl FsModuleFormat for CFsModFmtLoader {
 
 impl ModuleLoader for CFsModFmtLoader {
     fn name(&self) -> Result<String, String> {
-        let name_and_path = self.name_and_path.as_ref().unwrap();
-        Ok(name_and_path.0.clone())
+        Ok(self.mod_name.clone().unwrap())
     }
     fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
         let api = unsafe{ &*self.api };
-        let name_and_path = self.name_and_path.as_ref().unwrap();
-        let path_c_string = str_as_cstr(name_and_path.1.to_str().unwrap());
         let mut c_context = run_context_t::from(context);
 
-        (api.load)(self.payload, path_c_string.as_ptr(), &mut c_context, descriptor.into());
+        (api.load)(self.payload, &mut c_context, descriptor.into(), self.callback_context);
 
         Ok(())
+    }
+}
+
+impl Drop for CFsModFmtLoader {
+    fn drop(&mut self) {
+        let api = unsafe{ &*self.api };
+
+        if let Some(free_func) = api.free_callback_context {
+            if !self.callback_context.is_null() {
+                free_func(self.callback_context)
+            }
+        }
     }
 }
 

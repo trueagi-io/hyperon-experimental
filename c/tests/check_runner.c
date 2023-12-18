@@ -118,7 +118,7 @@ size_t path_for_name(const void *payload, const char *parent_dir, const char *mo
     return new_len+1;
 }
 
-bool try_path(const void *payload, const char *path, const char *mod_name) {
+void* try_path(const void *payload, const char *path, const char *mod_name) {
 
     //In a real implementation, we would actually check the file-system object (file, dir, etc.) to
     // validate it was a valid module in a format this code can understand.  But this is a test, so we
@@ -127,13 +127,17 @@ bool try_path(const void *payload, const char *path, const char *mod_name) {
     size_t test_str_len = strlen(test_str);
     size_t path_len = strlen(path);
     if (test_str_len > path_len) {
-        return false;
+        return NULL;
     }
 
-    return strncmp(path+(path_len-test_str_len), test_str, test_str_len) == 0;
+    if (strncmp(path+(path_len-test_str_len), test_str, test_str_len) == 0) {
+        return (void*)true;
+    } else {
+        return NULL;
+    }
 }
 
-void load(const void *payload, const char *path, struct run_context_t *run_context, struct module_descriptor_t descriptor) {
+void load(const void* payload, struct run_context_t *run_context, struct module_descriptor_t descriptor, void* callback_context) {
 
     space_t space = space_new_grounding_space();
     run_context_init_self_module(run_context, descriptor, &space, NULL);
@@ -148,6 +152,7 @@ static mod_file_fmt_api_t const TEST_FMT_API= {
     .path_for_name = &path_for_name,
     .try_path = &try_path,
     .load = &load,
+    .free_callback_context = NULL,
 };
 
 START_TEST (test_custom_module_format)

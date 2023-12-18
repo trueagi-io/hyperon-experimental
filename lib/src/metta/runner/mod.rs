@@ -110,6 +110,8 @@ pub struct MettaContents {
     modules: Mutex<Vec<Rc<MettaMod>>>,
     /// An index, to find a loaded module from a ModuleDescriptor
     module_descriptors: Mutex<HashMap<ModuleDescriptor, ModId>>,
+    /// A table of public mods loaded by name
+    public_mods: Mutex<HashMap<String, ModId>>,
     /// A clone of the top module's Space, so we don't need to do any locking to access it,
     /// to support the metta.space() public function
     top_mod_space: DynSpace,
@@ -169,7 +171,15 @@ impl Metta {
             Some(loader) => loader,
             None => {core_loader = CoreStdlibLoader::default(); &core_loader}
         };
-        metta.load_and_import_base_module(stdlib_loader).expect("Failed to load stdlib");
+        let stdlib_mod_id = metta.load_module_direct(stdlib_loader, None).expect("Failed to load stdlib");
+
+        //Import the stdlib into &self
+        let mut runner_state = RunnerState::new(&metta);
+        runner_state.run_in_context(|context| {
+            context.module().import_dependency_legacy(&metta, stdlib_mod_id).unwrap();
+            Ok(())
+        }).expect("Failed to load stdlib");
+        drop(runner_state);
 
         //Run the `init.metta` file
         if let Some(init_meta_file_path) = metta.0.environment.initialization_metta_file_path() {
@@ -198,6 +208,7 @@ impl Metta {
         let contents = MettaContents{
             modules: Mutex::new(vec![]),
             module_descriptors: Mutex::new(HashMap::new()),
+            public_mods: Mutex::new(HashMap::new()),
             top_mod_space: space.clone(),
             top_mod_tokenizer: top_mod_tokenizer.clone(),
             settings,
@@ -219,6 +230,17 @@ impl Metta {
     /// any module to find it by name
     pub fn load_module_direct(&self, loader: &dyn ModuleLoader, private_to: Option<&ModuleDescriptor>) -> Result<ModId, String> {
 
+        let mod_name = loader.name()?;
+
+        //Make sure we don't already have a conflicting mod, before attempting to load this one
+        if private_to.is_none() {
+            let public_mods = self.0.public_mods.lock().unwrap();
+            if public_mods.get(&mod_name).is_some() {
+                return Err(format!("Attempt to load public module with name that conflicts with existing module: {mod_name}"));
+            }
+        }
+
+        //Make an appropriate ModuleDescriptor, and load the module
         let descriptor = match private_to {
             Some(parent_desc) => ModuleDescriptor::new_with_uid(loader.name()?, parent_desc.hash()),
             None => ModuleDescriptor::new(loader.name()?)
@@ -227,32 +249,14 @@ impl Metta {
             loader.load(context, descriptor)
         })?;
 
-        //LP-TODO-NEXT If the `private_to` argument is None, the module should be added to a `public_mods`
-        // catalog that is part of the Runner, which is searched before any other catalogs
+        //If the `private_to` argument is None, the module should be added to the runner's `public_mods`
+        // table, so it can be imported by name
+        if private_to.is_none() {
+            let mut public_mods = self.0.public_mods.lock().unwrap();
+            public_mods.insert(mod_name, mod_id);
+        }
 
         Ok(mod_id)
-    }
-
-    /// Internal function to load a module, and import it into the runner's top module, used for stdlib
-    fn load_and_import_base_module(&self, loader: &dyn ModuleLoader) -> Result<(), String> {
-
-        //So this module never conflicts with a module loaded another way
-        const BASE_MODULE_UID: u64 = 0xBACE;
-
-        //Load the module into the runner
-        let descriptor = ModuleDescriptor::new_with_uid(loader.name()?, BASE_MODULE_UID);
-        let mod_id = self.get_or_init_module(descriptor, |context, descriptor| {
-            loader.load(context, descriptor)
-        })?;
-
-        //Import the lib into &self
-        let mut runner_state = RunnerState::new(self);
-        runner_state.run_in_context(|context| {
-            context.module().import_dependency_legacy(self, mod_id).unwrap();
-            Ok(())
-        })?;
-
-        Ok(())
     }
 
     /// Returns the ModId of a module, or None if it isn't loaded
@@ -628,13 +632,21 @@ impl<'input> RunContext<'_, '_, 'input> {
     /// and loads it into the runner, if it's not already loaded
     pub fn load_module(&self, name: &str) -> Result<ModId, String> {
 
-        // Resolve the module name into a descriptor in a catalog using the bom
+        // If the module is already loaded into the `public_mods` table, that takes precedence
+        {
+            let public_mods = self.metta.0.public_mods.lock().unwrap();
+            if let Some(mod_id) = public_mods.get(name) {
+                return Ok(*mod_id);
+            }
+        }
+
+        // Resolve the module name into a loader object using the resolution logic in the bom
         let (loader, descriptor) = match self.module().bom().resolve_module(self, name)? {
             Some((loader, descriptor)) => (loader, descriptor),
             None => return Err(format!("Failed to resolve module {name}"))
         };
 
-        // Load the module from the catalog
+        // Load the module from the loader
         self.metta.get_or_init_module(descriptor, |context, descriptor| {
             loader.load(context, descriptor)
         })
