@@ -469,7 +469,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings, vars: &V
         log::debug!("interpreter2::query: results.len(): {} bindings.len(): {} results: {} bindings: {}",
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
-            .flat_map(|mut b| {
+            .flat_map(|b| {
                 let mut res = apply_bindings_to_atom(&atom_x, &b);
                 if is_function_op(&res) {
                     match res {
@@ -479,12 +479,13 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings, vars: &V
                         _ => {},
                     }
                 }
-                b.cleanup(vars);
                 log::debug!("interpreter2::query: b: {}", b);
                 b.merge_v2(&bindings).into_iter().filter_map(move |b| {
                     if b.has_loops() {
                         None
                     } else {
+                        let b = b.narrow_vars(vars);
+                        let res = apply_bindings_to_atom(&res, &b);
                         Some(InterpretedAtom(res.clone(), b))
                     }
                 })
