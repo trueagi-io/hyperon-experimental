@@ -63,6 +63,7 @@ pub struct InterpreterState<'a, T: SpaceRef<'a>> {
     plan: Vec<InterpretedAtom>,
     finished: Vec<Atom>,
     context: InterpreterContext<'a, T>,
+    vars: HashSet<VariableAtom>,
 }
 
 fn atom_as_slice(atom: &Atom) -> Option<&[Atom]> {
@@ -83,6 +84,7 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
             plan: vec![],
             finished: results,
             context: InterpreterContext::new(space),
+            vars: HashSet::new(),
         }
     }
 
@@ -108,6 +110,7 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
         } else {
             let InterpretedAtom(atom, bindings) = atom;
             if atom != EMPTY_SYMBOL {
+                let bindings = bindings.convert_var_equalities_to_bindings(&self.vars);
                 let atom = apply_bindings_to_atom(&atom, &bindings);
                 self.finished.push(atom);
             }
@@ -134,7 +137,8 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
     InterpreterState {
         plan: vec![InterpretedAtom(expr.clone(), Bindings::new())],
         finished: vec![],
-        context
+        context,
+        vars: expr.iter().filter_type::<&VariableAtom>().cloned().collect(),
     }
 }
 
@@ -277,12 +281,7 @@ type Variables = HashSet<VariableAtom>;
 fn interpret_root_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
     let InterpretedAtom(atom, bindings) = interpreted_atom;
     let vars: Variables = atom.iter().filter_type::<&VariableAtom>().cloned().collect();
-    let mut result = interpret_nested_atom(context, atom, bindings, &vars);
-    result.iter_mut().for_each(|interpreted| {
-        let InterpretedAtom(_atom, bindings) = interpreted;
-        *bindings = bindings.narrow_vars(&vars);
-    });
-    result
+    interpret_nested_atom(context, atom, bindings, &vars)
 }
 
 fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, atom: Atom, bindings: Bindings, vars: &Variables) -> Vec<InterpretedAtom> {
@@ -469,7 +468,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings, vars: &V
         log::debug!("interpreter2::query: results.len(): {} bindings.len(): {} results: {} bindings: {}",
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
-            .flat_map(|b| {
+            .flat_map(|mut b| {
                 let mut res = apply_bindings_to_atom(&atom_x, &b);
                 if is_function_op(&res) {
                     match res {
@@ -479,13 +478,12 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings, vars: &V
                         _ => {},
                     }
                 }
+                b.cleanup(vars);
                 log::debug!("interpreter2::query: b: {}", b);
                 b.merge_v2(&bindings).into_iter().filter_map(move |b| {
                     if b.has_loops() {
                         None
                     } else {
-                        let b = b.narrow_vars(vars);
-                        let res = apply_bindings_to_atom(&res, &b);
                         Some(InterpretedAtom(res.clone(), b))
                     }
                 })
