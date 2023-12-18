@@ -310,7 +310,7 @@ def _priv_make_module_loader_func_for_pymod(pymod_name, load_core_stdlib=False, 
 
             #Load and import the Python or core stdlib using "import *" behavior
             if load_core_stdlib:
-                core_stdlib_id = run_context.metta().__load_core_stdlib("stdlib-core", descriptor)
+                core_stdlib_id = run_context.metta()._MeTTa__load_core_stdlib("stdlib-core", descriptor)
                 run_context.import_dependency(core_stdlib_id)
             if load_py_stdlib:
                 py_stdlib_id = run_context.load_module("stdlib")
