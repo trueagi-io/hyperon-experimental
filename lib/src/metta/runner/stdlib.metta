@@ -94,28 +94,6 @@
             (return $atom)
             (return (Error $atom BadType)) )))))))))
 
-(: distribute-result (-> Expression Atom Expression))
-(= (distribute-result $acc $x)
-  (function
-    (unify ($suc $err) $acc
-      (eval (if-error $x
-        (chain (cons $x $err) $e (return ($suc $e)))
-        (chain (cons $x $suc) $s (return ($s $err)))))
-      (return (Error $acc "filter-out-errors: unexpected foldl-atom $acc value ")) )))
-
-(: filter-out-errors (-> Atom Atom Atom))
-(= (filter-out-errors $expr $space)
-  (function
-    (chain (eval (collapse-min $expr $space)) $collapsed
-      (chain (eval (foldl-atom $collapsed (() ()) $acc $x
-        (chain (eval (distribute-result $acc $x)) $res $res) )) $folded
-        (chain
-          (function
-            (unify $folded ($success $errors)
-              (eval (if-equal $success () (return $errors) (return $success)))
-              (return (Error $folded "filter-out-errors: unexpected foldl-atom result")) ))
-          $filtered (chain (eval (superpose-min $filtered)) $ret (return $ret)) )))))
-
 (= (is-function $type)
   (function (chain (eval (get-metatype $type)) $meta
     (eval (switch ($type $meta) (
