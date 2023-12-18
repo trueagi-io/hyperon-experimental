@@ -1158,6 +1158,11 @@ pub struct run_context_t {
     context: *mut RustRunContext,
 }
 
+//LP-TODO-NEXT I need to implement a solution to automatically retire run_context_t so we can throw a
+// predictable error when a stale run_context_t is accessed.  This is particularly important for the Python
+// layer because it's harder to exercise lifecycle discipline in Python and a bug in Python shouldn't lead
+// to invlid memory access
+
 struct RustRunContext(RunContext<'static, 'static, 'static>);
 
 impl From<&mut RunContext<'_, '_, '_>> for run_context_t {

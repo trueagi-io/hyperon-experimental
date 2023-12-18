@@ -23,7 +23,7 @@ def register_results(method, args, kwargs):
         def inner(func):
             def metta_register(run_context):
                 # Get the results of calling the decorated function
-                regs = func(run_context) if pass_metta else func()
+                regs = func(run_context.metta()) if pass_metta else func()
                 # Register the results using the provided method
                 method(run_context, regs)
             return metta_register

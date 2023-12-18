@@ -8,14 +8,14 @@ class ExtendTest(unittest.TestCase):
         '''
         This test verifies that extend-py! along with @register_atoms and @register_tokens works
         '''
-        metta = MeTTa(env_builder=Environment.test_env())
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
         self.assertEqual(
             metta.run('''
-              !(extend-py! extension)
+              !(import! extension &self)
               !(get-by-key &my-dict "A")
               !(get-by-key &my-dict 6)
             '''),
-            [[],
+            [[E()],
              [ValueAtom(5)],
              [ValueAtom('B')]])
         self.assertEqual(
@@ -31,9 +31,9 @@ class ExtendGlobalTest(unittest.TestCase):
         from extension import g_object
         # Sanity check
         self.assertEqual(g_object, None)
-        metta = MeTTa(env_builder=Environment.test_env())
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
         metta.run('''
-          !(extend-py! extension)
+          !(import! extension &self)
           !(set-global! 42)
         ''')
         # Checking that the object is accessible and its value is correct
