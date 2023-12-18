@@ -486,6 +486,8 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"change-state!"), move |_| { change_state_op.clone() });
     let get_state_op = Atom::gnd(stdlib::GetStateOp{});
     tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
+    let nop_op = Atom::gnd(stdlib::NopOp{});
+    tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
 }
 
 pub fn register_runner_tokens(metta: &Metta) {
