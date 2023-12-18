@@ -464,9 +464,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings, vars: &V
     let query = Atom::expr([EQUAL_SYMBOL, atom.clone(), Atom::Variable(var_x.clone())]);
     let results = space.query(&query);
     let atom_x = Atom::Variable(var_x);
-    if results.is_empty() {
-        vec![InterpretedAtom(return_not_reducible(), bindings)]
-    } else {
+    let results: Vec<InterpretedAtom> = {
         log::debug!("interpreter2::query: query: {}", query);
         log::debug!("interpreter2::query: results.len(): {} bindings.len(): {} results: {} bindings: {}",
             results.len(), bindings.len(), results, bindings);
@@ -483,11 +481,20 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings, vars: &V
                 }
                 b.cleanup(vars);
                 log::debug!("interpreter2::query: b: {}", b);
-                b.merge_v2(&bindings).into_iter().map(move |b| {
-                    InterpretedAtom(res.clone(), b)
+                b.merge_v2(&bindings).into_iter().filter_map(move |b| {
+                    if b.has_loops() {
+                        None
+                    } else {
+                        Some(InterpretedAtom(res.clone(), b))
+                    }
                 })
             })
             .collect()
+    };
+    if results.is_empty() {
+        vec![InterpretedAtom(return_not_reducible(), bindings)]
+    } else {
+        results
     }
 }
 
@@ -659,9 +666,13 @@ fn unify(bindings: Bindings, atom: &Atom, pattern: &Atom, then: &Atom, else_: &A
         matches.into_iter()
             .flat_map(|b| {
                 let b = b.narrow_vars(vars);
-                b.merge_v2(&bindings).into_iter().map(move |b| {
-                    let then = apply_bindings_to_atom(then, &b);
-                    InterpretedAtom(then, b)
+                b.merge_v2(&bindings).into_iter().filter_map(move |b| {
+                    if b.has_loops() {
+                        None
+                    } else {
+                        let then = apply_bindings_to_atom(then, &b);
+                        Some(InterpretedAtom(then, b))
+                    }
                 })
             })
         .collect()

@@ -629,14 +629,19 @@ impl Bindings {
         to_remove.into_iter().for_each(|var| { self.id_by_var.remove(&var); });
     }
 
-    fn has_loops(&self) -> bool {
+    pub fn has_loops(&self) -> bool {
         let vars_by_id = self.vars_by_id();
         for (var_id, value) in &self.value_by_id {
             let mut used_vars = HashSet::new();
-            vars_by_id.get(var_id).unwrap().iter().for_each(|var| { used_vars.insert(*var); });
-            match self.resolve_vars_in_atom(value, &used_vars) {
-                VarResolutionResult::Loop => return true,
-                _ => {},
+            let var = vars_by_id.get(var_id);
+            // FIXME: where var is removed but value left?
+            //assert!(var.is_some(), "No variable name for var_id: {}, value: {}, self: {}", var_id, value, self);
+            if var.is_some() {
+                var.unwrap().iter().for_each(|var| { used_vars.insert(*var); });
+                match self.resolve_vars_in_atom(value, &used_vars) {
+                    VarResolutionResult::Loop => return true,
+                    _ => {},
+                }
             }
         }
         false
@@ -1228,13 +1233,20 @@ mod test {
     }
 
     #[test]
-    fn test_bindings_merge() {
+    fn bindings_merge() {
         assert_eq!(bind!{ a: expr!("A") }.merge_v2(
             &bind!{ a: expr!("A"), b: expr!("B") }),
             bind_set![{ a: expr!("A"), b: expr!("B") }]);
         assert_eq!(bind!{ a: expr!("A"), b: expr!("B") }.merge_v2(
             &bind!{ a: expr!("A") }),
             bind_set![{ a: expr!("A"), b: expr!("B") }]);
+    }
+
+    #[test]
+    fn bindings_merge_self_recursion() {
+        assert_eq!(bind!{ a: expr!(b)  }.merge_v2(
+            &bind!{ b: expr!("S" b) }),
+            bind_set![{ a: expr!(b), b: expr!("S" b) }]);
     }
 
     #[test]
@@ -1553,7 +1565,7 @@ mod test {
     }
 
     #[test]
-    fn bindings_add_var_value_splits_bindings() {
+    fn bindings_add_var_binding_splits_bindings() {
         let pair = ReturnPairInX{};
 
         // ({ x -> B, x -> C } (A $x)) ~ ($s $s)
@@ -1566,6 +1578,15 @@ mod test {
         assert_eq!(bindings, bind_set![
             bind!{ s: expr!({ pair }), x: expr!("B") },
             bind!{ s: expr!({ pair }), x: expr!("C") } ]);
+    }
+
+    #[test]
+    fn bindings_add_var_binding_self_recursion() {
+        let a = VariableAtom::new("a");
+        let bindings = Bindings::new();
+        assert_eq!(
+            bindings.add_var_binding_v2(a.clone(), Atom::expr([Atom::sym("S"), Atom::Variable(a)])),
+            Ok(bind!{ a: expr!("S" a) }));
     }
 
     #[test]
@@ -1583,6 +1604,17 @@ mod test {
         assert_eq!(bindings, bind_set![
             bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("B") },
             bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("C") } ]);
+    }
+
+    #[test]
+    fn bindings_add_var_equality_self_recursion() -> Result<(), &'static str> {
+        let a = VariableAtom::new("a");
+        let b = VariableAtom::new("b");
+        let mut bindings = Bindings::new();
+        bindings.add_var_no_value(&a);
+        let bindings = bindings.add_var_binding_v2(b.clone(), Atom::expr([Atom::sym("S"), Atom::Variable(a.clone())]))?;
+        assert_eq!(bindings.add_var_equality(&a, &b), Ok(bind!{ a: expr!(b), b: expr!("S" a) }));
+        Ok(())
     }
 
     #[test]
