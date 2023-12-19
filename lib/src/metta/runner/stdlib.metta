@@ -9,7 +9,8 @@
 (: unify (-> Atom Atom Atom Atom Atom))
 (: cons (-> Atom Atom Atom))
 (: decons (-> Atom Atom))
-(: check-alternatives (-> Atom Atom))
+(: collapse-bind (-> Atom Atom))
+(: superpose-bind (-> Atom Atom))
 
 (: id (-> Atom Atom))
 (= (id $x) $x)
@@ -133,6 +134,26 @@
           (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) )))
     (return $init) ))))
 
+(: divide-errors (-> Expression Expression Expression))
+(= (divide-errors $succ-err $res)
+  (function (unify $succ-err ($suc $err)
+    (unify $res ($a $_b)
+      (eval (if-error $a
+        (chain (cons $res $err) $err' (return ($suc $err')))
+        (chain (cons $res $suc) $suc' (return ($suc' $err))) ))
+      (return $succ-err))
+    (return $succ-err) )))
+
+(= (check-alternatives $atom)
+  (function
+    (chain (collapse-bind $atom) $collapsed
+      (chain (eval (foldl-atom $collapsed (() ()) $succ-err $res
+        (eval (divide-errors $succ-err $res)))) $divided
+        (unify $divided ($success $error)
+          (chain (eval (if-equal $success () $error $success)) $filtered
+            (chain (superpose-bind $filtered) $ret (return $ret)) )
+          (return (Error (check-alternatives $atom) "list of results was not filtered correctly")) )))))
+
 (= (interpret $atom $type $space)
   (function (chain (eval (get-metatype $atom)) $meta
     (eval (if-equal $type Atom
@@ -146,7 +167,7 @@
           (($type Grounded)
             (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
           (($type Expression)
-            (chain (check-alternatives (eval (interpret-expression $atom $type $space))) $ret (return $ret)))
+            (chain (eval (check-alternatives (eval (interpret-expression $atom $type $space)))) $ret (return $ret)))
         ))))))))))
 
 (= (interpret-expression $atom $type $space)

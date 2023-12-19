@@ -190,7 +190,7 @@ fn print_level(levels: &mut Vec<String>, atom: &Atom, bindings: &Bindings) {
                     _ => panic!(),
                 }
             },
-            [op, args @ ..] if *op == CHECK_ALTERNATIVES_SYMBOL => {
+            [op, args @ ..] if *op == COLLAPSE_BIND => {
                 match args {
                     [_atom] => {
                         write!(output, "{}", atom).unwrap();
@@ -200,7 +200,7 @@ fn print_level(levels: &mut Vec<String>, atom: &Atom, bindings: &Bindings) {
                         if current_len > 0 {
                             let next = &current.children()[current_len - 1];
                             let (atom, bindings) = atom_as_interpreted_atom(next);
-                            write!(output, "(check-alternatives {} {})", current, finished).unwrap();
+                            write!(output, "(collapse-bind {} {})", current, finished).unwrap();
                             print_level(levels, atom, bindings);
                         } else {
                             write!(output, "{}", atom).unwrap();
@@ -257,7 +257,8 @@ fn is_embedded_op(atom: &Atom) -> bool {
             || *op == CONS_SYMBOL
             || *op == DECONS_SYMBOL
             || *op == FUNCTION_SYMBOL
-            || *op == CHECK_ALTERNATIVES_SYMBOL,
+            || *op == COLLAPSE_BIND
+            || *op == SUPERPOSE_BIND,
         _ => false,
     }
 }
@@ -376,13 +377,13 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
                 },
             }
         },
-        Some([op, args @ ..]) if *op == CHECK_ALTERNATIVES_SYMBOL => {
+        Some([op, args @ ..]) if *op == COLLAPSE_BIND => {
             match args {
                 [_atom] => {
                     match atom_into_array(atom) {
                         Some([_, atom]) => {
                             let current = vec![interpreted_atom_into_atom(InterpretedAtom(atom, bindings.clone(), Status::InProgress))];
-                            check_alternatives(context, ExpressionAtom::new(current), ExpressionAtom::new(vec![]), vars)
+                            collapse_bind(context, ExpressionAtom::new(current), ExpressionAtom::new(vec![]), vars)
                         },
                         _ => panic!("Unexpected state"),
                     }
@@ -390,12 +391,28 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
                 [Atom::Expression(_current), Atom::Expression(_finished)] => {
                     match atom_into_array(atom) {
                         Some([_, Atom::Expression(current), Atom::Expression(finished)]) =>
-                            check_alternatives(context, current, finished, vars),
+                            collapse_bind(context, current, finished, vars),
                         _ => panic!("Unexpected state"),
                     }
                 },
                 _ => {
-                    let error: String = format!("expected: ({} (: <current> Expression) [(: <finished> Expression)]), found: {}", CHECK_ALTERNATIVES_SYMBOL, atom);
+                    let error: String = format!("expected: ({} (: <current> Expression) [(: <finished> Expression)]), found: {}", COLLAPSE_BIND, atom);
+                    vec![InterpretedAtom(error_atom(atom, error), bindings, Status::Final)]
+                },
+            }
+        },
+        Some([op, args @ ..]) if *op == SUPERPOSE_BIND => {
+            match args {
+                [_atom] => {
+                    match atom_into_array(atom) {
+                        Some([_, Atom::Expression(collapsed)]) => {
+                            superpose_bind(collapsed)
+                        },
+                        _ => panic!("Unexpected state"),
+                    }
+                },
+                _ => {
+                    let error: String = format!("expected: ({} (: <collapsed> Expression)), found: {}", SUPERPOSE_BIND, atom);
                     vec![InterpretedAtom(error_atom(atom, error), bindings, Status::Final)]
                 },
             }
@@ -600,28 +617,15 @@ fn interpreted_atom_into_atom(interpreted: InterpretedAtom) -> Atom {
     Atom::expr([atom, Atom::value(bindings)])
 }
 
-fn check_alternatives<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, current: ExpressionAtom, finished: ExpressionAtom, vars: &Variables) -> Vec<InterpretedAtom> {
+fn collapse_bind<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, current: ExpressionAtom, finished: ExpressionAtom, vars: &Variables) -> Vec<InterpretedAtom> {
     let mut current = current.into_children();
     let mut finished = finished.into_children();
     if current.is_empty() {
-        let mut error = Vec::new();
-        let mut success = Vec::new();
-        finished.into_iter()
+        let result: Vec<Atom> = finished.into_iter()
             .map(atom_into_interpreted_atom)
-            .for_each(|InterpretedAtom(atom, bindings, _status)| {
-                let is_error = atom_is_error(&atom);
-                let interpreted = InterpretedAtom(atom, bindings, Status::Final);
-                if is_error {
-                    error.push(interpreted);
-                } else {
-                    success.push(interpreted);
-                }
-            });
-        if success.is_empty() {
-            error
-        } else {
-            success
-        }
+            .map(|InterpretedAtom(atom, bindings, _status)| Atom::expr([atom, Atom::value(bindings)]))
+            .collect();
+        vec![InterpretedAtom(Atom::expr(result), Bindings::new(), Status::Final)]
     } else {
         let next = current.pop().unwrap();
         let interpreted = atom_into_interpreted_atom(next);
@@ -633,8 +637,17 @@ fn check_alternatives<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, 
         } else {
             finished.push(interpreted_atom_into_atom(InterpretedAtom(atom, bindings, Status::Final)));
         }
-        vec![InterpretedAtom(Atom::expr([CHECK_ALTERNATIVES_SYMBOL, Atom::expr(current), Atom::expr(finished)]), Bindings::new(), Status::InProgress)]
+        vec![InterpretedAtom(Atom::expr([COLLAPSE_BIND, Atom::expr(current), Atom::expr(finished)]), Bindings::new(), Status::InProgress)]
     }
+}
+
+fn superpose_bind(collapsed: ExpressionAtom) -> Vec<InterpretedAtom> {
+    collapsed.into_children().into_iter()
+        .map(atom_into_interpreted_atom)
+        .map(|InterpretedAtom(atom, bindings, _status)| {
+            InterpretedAtom(atom, bindings, Status::Final)
+        })
+        .collect()
 }
 
 fn unify(bindings: Bindings, atom: &Atom, pattern: &Atom, then: &Atom, else_: &Atom, vars: &Variables) -> Vec<InterpretedAtom> {
