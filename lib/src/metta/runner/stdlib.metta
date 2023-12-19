@@ -79,21 +79,27 @@
           (return $then)
           (unify $type1 $type2 (return $then) (return $else)) ))))))))))
 
+(= (first-from-pair $pair)
+  (function
+    (unify $pair ($first $second)
+      (return $first)
+      (return (Error (first-from-pair $pair) "incorrect pair format")))))
+
+(= (match-type-or $folded $next $type)
+  (function
+    (chain (eval (match-types $next $type True False)) $matched
+      (chain (eval (or $folded $matched)) $or (return $or)) )))
+
 (= (type-cast $atom $type $space)
   (function (chain (eval (get-metatype $atom)) $meta
     (eval (if-equal $type $meta
       (return $atom)
-      ; TODO: the proper way to get types is something like
-      ; `(collapse (get-type <atom> <space>))` but it leads to the infinite
-      ; recursion because interpreter called by `collapse` evaluates
-      ; `type-cast` again.
-      (chain (eval (collapse-get-type $atom $space)) $actual-types
-        (chain (eval (foldl-atom $actual-types False
-          $a $b (chain (eval (match-types $b $type True False)) $is-b-comp
-            (chain (eval (or $a $is-b-comp)) $or $or) ))) $is-some-comp
-          (eval (if $is-some-comp
-            (return $atom)
-            (return (Error $atom BadType)) )))))))))
+      (chain (eval (collapse-bind (eval (get-type $atom $space)))) $collapsed
+        (chain (eval (map-atom $collapsed $pair (eval (first-from-pair $pair)))) $actual-types
+            (chain (eval (foldl-atom $actual-types False $a $b (eval (match-type-or $a $b $type)))) $is-some-comp
+              (eval (if $is-some-comp
+                (return $atom)
+                (return (Error $atom BadType)) ))))))))))
 
 (= (is-function $type)
   (function (chain (eval (get-metatype $type)) $meta

@@ -383,7 +383,7 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
                     match atom_into_array(atom) {
                         Some([_, atom]) => {
                             let current = vec![interpreted_atom_into_atom(InterpretedAtom(atom, bindings.clone(), Status::InProgress))];
-                            collapse_bind(context, ExpressionAtom::new(current), ExpressionAtom::new(vec![]), vars)
+                            collapse_bind(context, bindings, ExpressionAtom::new(current), ExpressionAtom::new(vec![]), vars)
                         },
                         _ => panic!("Unexpected state"),
                     }
@@ -391,7 +391,7 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
                 [Atom::Expression(_current), Atom::Expression(_finished)] => {
                     match atom_into_array(atom) {
                         Some([_, Atom::Expression(current), Atom::Expression(finished)]) =>
-                            collapse_bind(context, current, finished, vars),
+                            collapse_bind(context, bindings, current, finished, vars),
                         _ => panic!("Unexpected state"),
                     }
                 },
@@ -617,7 +617,7 @@ fn interpreted_atom_into_atom(interpreted: InterpretedAtom) -> Atom {
     Atom::expr([atom, Atom::value(bindings)])
 }
 
-fn collapse_bind<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, current: ExpressionAtom, finished: ExpressionAtom, vars: &Variables) -> Vec<InterpretedAtom> {
+fn collapse_bind<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bindings, current: ExpressionAtom, finished: ExpressionAtom, vars: &Variables) -> Vec<InterpretedAtom> {
     let mut current = current.into_children();
     let mut finished = finished.into_children();
     if current.is_empty() {
@@ -625,19 +625,19 @@ fn collapse_bind<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, curre
             .map(atom_into_interpreted_atom)
             .map(|InterpretedAtom(atom, bindings, _status)| Atom::expr([atom, Atom::value(bindings)]))
             .collect();
-        vec![InterpretedAtom(Atom::expr(result), Bindings::new(), Status::Final)]
+        vec![InterpretedAtom(Atom::expr(result), bindings, Status::Final)]
     } else {
         let next = current.pop().unwrap();
         let interpreted = atom_into_interpreted_atom(next);
-        let InterpretedAtom(atom, bindings, _status) = interpreted;
+        let InterpretedAtom(atom, local_bindings, _status) = interpreted;
         if is_embedded_op(&atom) {
-            interpret_nested_atom(context, atom, bindings, vars).into_iter()
+            interpret_nested_atom(context, atom, local_bindings, vars).into_iter()
                 .map(interpreted_atom_into_atom)
                 .for_each(|atom| current.push(atom));
         } else {
-            finished.push(interpreted_atom_into_atom(InterpretedAtom(atom, bindings, Status::Final)));
+            finished.push(interpreted_atom_into_atom(InterpretedAtom(atom, local_bindings, Status::Final)));
         }
-        vec![InterpretedAtom(Atom::expr([COLLAPSE_BIND, Atom::expr(current), Atom::expr(finished)]), Bindings::new(), Status::InProgress)]
+        vec![InterpretedAtom(Atom::expr([COLLAPSE_BIND, Atom::expr(current), Atom::expr(finished)]), bindings, Status::InProgress)]
     }
 }
 

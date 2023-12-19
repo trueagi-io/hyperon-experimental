@@ -66,38 +66,6 @@ impl Grounded for GetTypeOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
-pub struct CollapseGetTypeOp {}
-
-impl Display for CollapseGetTypeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "collapse-get-type")
-    }
-}
-
-impl Grounded for CollapseGetTypeOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION])
-    }
-
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("get-type expects single atom as an argument");
-        let atom = args.get(0).ok_or_else(arg_error)?;
-        let space = args.get(1).ok_or_else(arg_error)?;
-        let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
-        let types = get_atom_types(space, atom);
-        if types.is_empty() {
-            Ok(vec![Atom::expr([])])
-        } else {
-            Ok(vec![Atom::expr(types)])
-        }
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
-
-#[derive(Clone, PartialEq, Debug)]
 pub struct IfEqualOp { }
 
 impl Display for IfEqualOp {
@@ -391,8 +359,6 @@ pub fn register_common_tokens(metta: &Metta) {
 
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
-    let collapse_get_type_op = Atom::gnd(CollapseGetTypeOp{});
-    tref.register_token(regex(r"collapse-get-type"), move |_| { collapse_get_type_op.clone() });
     let get_meta_type_op = Atom::gnd(stdlib::GetMetaTypeOp{});
     tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
     let is_equivalent = Atom::gnd(IfEqualOp{});
