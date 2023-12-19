@@ -626,7 +626,9 @@ impl Bindings {
                 }
             })
             .collect();
-        to_remove.into_iter().for_each(|var| { self.id_by_var.remove(&var); });
+        to_remove.into_iter().for_each(|var| {
+            self.id_by_var.remove(&var);
+        });
     }
 
     pub fn has_loops(&self) -> bool {
@@ -634,7 +636,7 @@ impl Bindings {
         for (var_id, value) in &self.value_by_id {
             let mut used_vars = HashSet::new();
             let var = vars_by_id.get(var_id);
-            // FIXME: where var is removed but value left?
+            // TODO: cleanup removes vars but leaves var_ids
             //assert!(var.is_some(), "No variable name for var_id: {}, value: {}, self: {}", var_id, value, self);
             if var.is_some() {
                 var.unwrap().iter().for_each(|var| { used_vars.insert(*var); });
