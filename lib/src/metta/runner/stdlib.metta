@@ -146,7 +146,7 @@
           (($type Grounded)
             (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
           (($type Expression)
-            (chain (function (check-alternatives (eval (interpret-expression $atom $type $space)))) $ret (return $ret)))
+            (chain (check-alternatives (eval (interpret-expression $atom $type $space))) $ret (return $ret)))
         ))))))))))
 
 (= (interpret-expression $atom $type $space)
