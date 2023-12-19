@@ -878,6 +878,10 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("metta_load_module_direct", [](CMetta& metta, char const* mod_name, CModuleDescriptor& private_to, py::function* py_func) {
         return ModuleId(metta_load_module_direct(metta.ptr(), mod_name, private_to.ptr(), &run_python_module_loader, (void*)py_func));
     }, "Loads a module into a runner using a function");
+    m.def("metta_load_module_at_path", [](CMetta& metta, char const* path, nonstd::optional<char const*> mod_name) {
+        char const* name = mod_name.value_or((char const*)NULL);
+        return ModuleId(metta_load_module_at_path(metta.ptr(), path, name));
+    }, "Loads a module into a runner from a file system resource");
     m.def("metta_run", [](CMetta& metta, CSExprParser& parser) {
             py::list lists_of_atom;
             sexpr_parser_t cloned_parser = sexpr_parser_clone(&parser.parser);

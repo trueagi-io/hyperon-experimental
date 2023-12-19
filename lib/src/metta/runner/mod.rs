@@ -66,7 +66,7 @@ pub mod modules;
 use modules::*;
 
 use std::rc::Rc;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -230,28 +230,52 @@ impl Metta {
     /// any module to find it by name
     pub fn load_module_direct(&self, loader: &dyn ModuleLoader, private_to: Option<&ModuleDescriptor>) -> Result<ModId, String> {
 
+        //Make an appropriate ModuleDescriptor, and load the module
+        let descriptor = match private_to {
+            Some(parent_desc) => ModuleDescriptor::new_with_uid(loader.name()?, parent_desc.hash()),
+            None => ModuleDescriptor::new(loader.name()?)
+        };
+        self.load_module_internal(loader, descriptor, private_to.is_none())
+    }
+
+    /// Loads a module into a runner from a resource at the specified path
+    ///
+    /// This method will try each [FsModuleFormat] in order until one can sucessfully load the module
+    ///
+    /// If `mod_name` is [None], the module name will be loaded privately, and won't be accessible for
+    /// import by name, elsewhere within the runner
+    pub fn load_module_at_path<P: AsRef<Path>>(&self, path: P, mod_name: Option<&str>) -> Result<ModId, String> {
+
+        // Resolve the module name into a loader object using the resolution logic in the bom
+        let (loader, descriptor) = match loader_for_module_at_path(self, &path, mod_name, self.environment().working_dir(), mod_name.is_some())? {
+            Some((loader, descriptor)) => (loader, descriptor),
+            None => return Err(format!("Failed to resolve module at path: {}", path.as_ref().display()))
+        };
+
+        // Load the module from the loader
+        self.load_module_internal(&*loader, descriptor, mod_name.is_some())
+    }
+
+    /// Internal function to load a module into the runner
+    //TODO: I think we can infer "public" from the descriptor, but it's not official yet
+    fn load_module_internal(&self, loader: &dyn ModuleLoader, descriptor: ModuleDescriptor, public: bool) -> Result<ModId, String> {
         let mod_name = loader.name()?;
 
         //Make sure we don't already have a conflicting mod, before attempting to load this one
-        if private_to.is_none() {
+        if public {
             let public_mods = self.0.public_mods.lock().unwrap();
             if public_mods.get(&mod_name).is_some() {
                 return Err(format!("Attempt to load public module with name that conflicts with existing module: {mod_name}"));
             }
         }
 
-        //Make an appropriate ModuleDescriptor, and load the module
-        let descriptor = match private_to {
-            Some(parent_desc) => ModuleDescriptor::new_with_uid(loader.name()?, parent_desc.hash()),
-            None => ModuleDescriptor::new(loader.name()?)
-        };
         let mod_id = self.get_or_init_module(descriptor, |context, descriptor| {
             loader.load(context, descriptor)
         })?;
 
         //If the `private_to` argument is None, the module should be added to the runner's `public_mods`
         // table, so it can be imported by name
-        if private_to.is_none() {
+        if public {
             let mut public_mods = self.0.public_mods.lock().unwrap();
             public_mods.insert(mod_name, mod_id);
         }

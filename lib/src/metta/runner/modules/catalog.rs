@@ -196,38 +196,7 @@ impl ModuleBom {
             //If path is explicitly specified in the bom entry, then we must load the module at the
             // specified path, and cannot search anywhere else
             if let Some(path) = &entry.fs_path {
-
-                //If the path is not an absolute path, assume it's relative to the module's working dir
-                let path = if path.is_absolute() {
-                    path.clone()
-                } else {
-                    context.module().working_dir()
-                        .unwrap_or_else(|| panic!("Fatal Error loading {}. Module without a working directory cannot load dependencies by relative path", context.module().descriptor().name))
-                        .join(path)
-                };
-
-                //Check all module formats, to try and load the module at the path
-                for fmt in context.metta.environment().fs_mod_formats() {
-                    if let Some(loader) = fmt.try_path(&path, name) {
-                        match loader.name() {
-                            Ok(derived_name) => {
-                                if derived_name != name {
-                                    panic!("Fatal Error: module found at {} doesn't match module in bom: {}!", path.display(), name);
-                                }
-
-                                //Construct a uid based on a stable-hash of the path, because a module
-                                // loaded by explicit path shouldn't be imported by any other module unless
-                                // it explicitly imports it from the same path.
-                                let descriptor = ModuleDescriptor::new_with_uid(derived_name, xxh3_64(path.as_os_str().as_encoded_bytes()));
-
-                                return Ok(Some((loader, descriptor)))
-                            },
-                            Err(err) => {
-                                panic!("bom specifies invalid module at {}, Error: {}!", path.display(), err);
-                            }
-                        };
-                    }
-                }
+                return loader_for_module_at_path(&context.metta, path, Some(name), context.module().working_dir(), false);
             }
 
             //TODO, if git URI is specified in the bom entry, clone the repo to a location in the environment
@@ -265,6 +234,48 @@ impl ModuleBom {
 
         Ok(None)
     }
+}
+
+/// Internal function to get a loader for a module at a specific file system path, by trying each FsModuleFormat in order
+pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, name: Option<&str>, working_dir: Option<&Path>, public: bool) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
+
+    //If the path is not an absolute path, assume it's relative to the running module's working dir
+    let path = if path.as_ref().is_absolute() {
+        PathBuf::from(path.as_ref())
+    } else {
+        working_dir.unwrap_or_else(|| panic!("Fatal Error loading {}. Module without a working directory cannot load dependencies by relative path", path.as_ref().display()))
+            .join(path)
+    };
+
+    //Check all module formats, to try and load the module at the path
+    for fmt in metta.environment().fs_mod_formats() {
+        if let Some(loader) = fmt.try_path(&path, name) {
+            match loader.name() {
+                Ok(derived_name) => {
+                    if let Some(name) = name {
+                        if derived_name != name {
+                            panic!("Fatal Error: module found at {} doesn't match module in bom: {}!", path.display(), name);
+                        }
+                    }
+
+                    //Construct a uid based on a stable-hash of the path, because a module
+                    // loaded by explicit path shouldn't be imported by any other module unless
+                    // it explicitly imports it from the same path.
+                    let descriptor = match public {
+                        true => ModuleDescriptor::new(derived_name),
+                        false => ModuleDescriptor::new_with_uid(derived_name, xxh3_64(path.as_os_str().as_encoded_bytes())),
+                    };
+
+                    return Ok(Some((loader, descriptor)))
+                },
+                Err(err) => {
+                    panic!("Can't load invalid module at {}, Error: {}!", path.display(), err);
+                }
+            };
+        }
+    }
+
+    Err(format!("No module format able to interpret module at {}", path.display()))
 }
 
 /// A loader for a MeTTa module that lives within a single `.metta` file
@@ -365,7 +376,7 @@ pub trait FsModuleFormat: std::fmt::Debug + Send + Sync {
     ///
     /// This method should return `None` if the path does not point to a valid module in the
     /// implemented format.
-    fn try_path(&self, path: &Path, mod_name: &str) -> Option<Box<dyn ModuleLoader>>;
+    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<Box<dyn ModuleLoader>>;
 }
 
 /// An object to identify and load a single-file module (naked .metta files)
@@ -378,9 +389,15 @@ impl FsModuleFormat for SingleFileModuleFmt {
         let path = push_extension(path, ".metta");
         vec![path]
     }
-    fn try_path(&self, path: &Path, mod_name: &str) -> Option<Box<dyn ModuleLoader>> {
+    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<Box<dyn ModuleLoader>> {
         if path.is_file() {
-            Some(Box::new(SingleFileModule::new(mod_name, path)))
+            match mod_name {
+                Some(mod_name) => Some(Box::new(SingleFileModule::new(mod_name, path))),
+                None => {
+                    let mod_name = path.file_stem().unwrap().to_str().unwrap();
+                    Some(Box::new(SingleFileModule::new(mod_name, path)))
+                }
+            }
         } else {
             None
         }
@@ -396,9 +413,15 @@ impl FsModuleFormat for DirModuleFmt {
         let path = parent_dir.join(mod_name);
         vec![path]
     }
-    fn try_path(&self, path: &Path, mod_name: &str) -> Option<Box<dyn ModuleLoader>> {
+    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<Box<dyn ModuleLoader>> {
         if path.is_dir() {
-            Some(Box::new(DirModule::new(mod_name, path)))
+            match mod_name {
+                Some(mod_name) => Some(Box::new(DirModule::new(mod_name, path))),
+                None => {
+                    let mod_name = path.file_stem().unwrap().to_str().unwrap();
+                    Some(Box::new(DirModule::new(mod_name, path)))
+                }
+            }
         } else {
             None
         }
@@ -482,7 +505,7 @@ fn visit_modules_in_dir_using_mod_formats(fmts: &[Box<dyn FsModuleFormat>], dir_
 
     for fmt in fmts {
         for path in fmt.paths_for_name(dir_path, mod_name) {
-            if let Some(loader) = fmt.try_path(&path, mod_name) {
+            if let Some(loader) = fmt.try_path(&path, Some(mod_name)) {
                 match loader.name() {
                     Ok(resolved_name) => {
                         if resolved_name == mod_name {

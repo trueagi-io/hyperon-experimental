@@ -1075,13 +1075,13 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
 /// @param[in]  metta  A pointer to the handle specifying the runner into which to load the module
 /// @param[in]  name  A C-string specifying a name for the module
 /// @param[in]  private_to  If the module is private, pass a pointer to the `module_descriptor_t` of the
-///     the parent module.  Passing NULL will make the module available for loading by any other module
+///    the parent module.  Passing NULL will make the module available for loading by any other module
 /// @param[in]  loader_callback  The `mod_loader_callback_t` for a function to load the module
 /// @param[in]  callback_context  A pointer to a caller-defined structure that will be passed to the
-///     `loader_callback` function
+///    `loader_callback` function
 /// @return  The `module_id_t` for the loaded module, or `invalid` if there was an error
 /// @note  This function might be useful to provide MeTTa modules that are built-in as part of your
-///     application
+///    application
 /// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
 ///
 #[no_mangle]
@@ -1105,6 +1105,41 @@ pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
     let loader = CModLoaderWrapper{ name: name.to_string(), callback: loader_callback, callback_context };
 
     match rust_metta.load_module_direct(&loader, private_to) {
+        Ok(mod_id) => mod_id.into(),
+        Err(err) => {
+            let err_cstring = std::ffi::CString::new(err).unwrap();
+            metta.err_string = err_cstring.into_raw();
+            ModId::INVALID.into()
+        }
+    }
+}
+
+/// @brief Loads a module into the runner from a module resource at a file system path
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the handle specifying the runner into which to load the module
+/// @param[in]  path  A C-string specifying the path from which to load the module
+/// @param[in]  name  A C-string specifying a name for the module, or NULL if you want the module to
+///    be private and unable to be loaded by name
+/// @return  The `module_id_t` for the loaded module, or `invalid` if there was an error
+/// @note  This function effectively bypasses the catalog, for situations where you wish to load a
+///    specific module from disk
+/// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
+///
+#[no_mangle]
+pub extern "C" fn metta_load_module_at_path(metta: *mut metta_t,
+        path: *const c_char, name: *const c_char) -> module_id_t {
+
+    let metta = unsafe{ &mut *metta };
+    metta.free_err_string();
+    let rust_metta = metta.borrow();
+    let path = PathBuf::from(cstr_as_str(path));
+    let mod_name = if !name.is_null() {
+        Some(cstr_as_str(name))
+    } else {
+        None
+    };
+
+    match rust_metta.load_module_at_path(path, mod_name) {
         Ok(mod_id) => mod_id.into(),
         Err(err) => {
             let err_cstring = std::ffi::CString::new(err).unwrap();
@@ -1857,9 +1892,13 @@ impl FsModuleFormat for CFsModFmtLoader {
             vec![]
         }
     }
-    fn try_path(&self, path: &Path, mod_name: &str) -> Option<Box<dyn ModuleLoader>> {
+    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<Box<dyn ModuleLoader>> {
         let api = unsafe{ &*self.api };
         let path_c_string = str_as_cstr(path.to_str().unwrap());
+        let mod_name = match mod_name {
+            Some(mod_name) => mod_name,
+            None => path.file_stem().unwrap().to_str().unwrap()
+        };
         let mod_name_c_string = str_as_cstr(mod_name);
 
         let result_context = (api.try_path)(self.payload, path_c_string.as_ptr(), mod_name_c_string.as_ptr());

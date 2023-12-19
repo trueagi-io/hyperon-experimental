@@ -172,7 +172,11 @@ class MeTTa:
             run_context = RunContext(c_run_context)
             descriptor = ModuleDescriptor(c_descriptor)
             py_loader_func(run_context, descriptor)
-        return hp.metta_load_module_direct(self.cmetta, mod_name, private_to.c_module_descriptor, loader_func)
+        mod_id = hp.metta_load_module_direct(self.cmetta, mod_name, private_to.c_module_descriptor, loader_func)
+        err_str = hp.metta_err_str(self.cmetta)
+        if (err_str is not None):
+            raise RuntimeError(err_str)
+        return mod_id
 
     def load_module_direct_from_pymod(self, mod_name, private_to, pymod_name):
         """Loads a module into the runner directly from a Python module, with the specified name and scope"""
@@ -181,8 +185,19 @@ class MeTTa:
         loader_func = _priv_make_module_loader_func_for_pymod(pymod_name, load_py_stdlib=True)
         return self.load_module_direct_from_func(mod_name, private_to, loader_func)
 
+    def load_module_at_path(self, path, mod_name=None):
+        """
+        Loads a module into the runner directly from resource at a file system path, trying the formats
+        from the runner's environment in succession
+        """
+        mod_id = hp.metta_load_module_at_path(self.cmetta, path, mod_name)
+        err_str = hp.metta_err_str(self.cmetta)
+        if (err_str is not None):
+            raise RuntimeError(err_str)
+        return mod_id
+
     def run(self, program, flat=False):
-        """Runs the program"""
+        """Runs the MeTTa code from the program string containing S-Expression MeTTa syntax"""
         parser = SExprParser(program)
         results = hp.metta_run(self.cmetta, parser.cparser)
         err_str = hp.metta_err_str(self.cmetta)
@@ -254,16 +269,18 @@ class _PyFileMeTTaModFmt:
             # that or will it mess up other stuff Python programmers might be expecting?
             spec = importlib.util.spec_from_file_location(metta_mod_name, path)
 
-            #QUESTION: Should we try and catch exceptions thrown here?  On the Rust side, my
-            # feeling was that an invalid file in an include path somewhere shouldn't cause
-            # a top-level crash, so I was logging them as a warning, but not a fatal error.
-            # The same thinking probably applies to the Python side too.
-            module = importlib.util.module_from_spec(spec)
-            sys.modules[metta_mod_name] = module
-            spec.loader.exec_module(module)
+            try:
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[metta_mod_name] = module
+                spec.loader.exec_module(module)
 
-            #TODO: Extract the version here, when it's time to implement versions
-            return metta_mod_name
+                #TODO: Extract the version here, when it's time to implement versions
+                return metta_mod_name
+            except:
+                #TODO: Depending on the exception, we might want to log something to help users debug
+                # why their module isn't loading
+                return None
+
         else:
             return None
 
