@@ -94,18 +94,14 @@ class MinecraftTest(unittest.TestCase):
             (= (can-be-made inventory) False)
             (= (can-be-mined inventory) False)
 
-            (: if (-> Bool Atom Atom Atom))
-            (= (if True $then $else) $then)
-            (= (if False $then $else) $else)
-
             (= (make $x) (if (and ($x made-from $comp) ($x made-at $tool))
-                             (, (get $tool) (get $comp) (do-make $x $tool $comp)) nop))
+                             (, (get $tool) (get $comp) (do-make $x $tool $comp)) (empty)))
 
             (= (mine $x) (if (and ($x mined-using $tool) ($x mined-from $source))
-                             (, (get $tool) (find $source) (do-mine $x $source $tool)) nop))
+                             (, (get $tool) (find $source) (do-mine $x $source $tool)) (empty)))
 
-            (= (get $x) (if (and (not (in-inventory $x)) (can-be-mined $x)) (mine $x) nop))
-            (= (get $x) (if (and (not (in-inventory $x)) (can-be-made $x)) (make $x) nop))
+            (= (get $x) (if (and (not (in-inventory $x)) (can-be-mined $x)) (mine $x) (empty)))
+            (= (get $x) (if (and (not (in-inventory $x)) (can-be-made  $x)) (make $x) (empty)))
         ''')
 
         metta.run('!(get diamond)')

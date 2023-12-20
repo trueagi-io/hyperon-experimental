@@ -75,6 +75,43 @@ enum VarResolutionResult<T> {
     None
 }
 
+/// Abstraction of the variable set. It is used to allow passing both
+/// HashSet<&VariableAtom> and HashSet<VariableAtom> to the
+/// [Bindings::narrow_vars] method.
+pub trait VariableSet {
+    type Iter<'a> : Iterator<Item = &'a VariableAtom> where Self: 'a;
+
+    /// Returns true if var is a part of the set.
+    fn contains(&self, var: &VariableAtom) -> bool;
+
+    /// Iterate trough a list of variables in the set.
+    fn iter(&self) -> Self::Iter<'_>;
+}
+
+impl VariableSet for HashSet<&VariableAtom> {
+    type Iter<'a> = std::iter::Map<
+        std::collections::hash_set::Iter<'a, &'a VariableAtom>,
+        fn(&'a &VariableAtom) -> &'a VariableAtom> where Self: 'a;
+
+    fn contains(&self, var: &VariableAtom) -> bool {
+        HashSet::contains(self, var)
+    }
+    fn iter(&self) -> Self::Iter<'_> {
+        HashSet::iter(self).map(|a| *a)
+    }
+}
+
+impl VariableSet for HashSet<VariableAtom> {
+    type Iter<'a> = std::collections::hash_set::Iter<'a, VariableAtom> where Self: 'a;
+
+    fn contains(&self, var: &VariableAtom) -> bool {
+        HashSet::contains(self, var)
+    }
+    fn iter(&self) -> Self::Iter<'_> {
+        HashSet::iter(self)
+    }
+}
+
 /// Represents variable bindings. Keeps two kinds of relations inside:
 /// variables equalities and variable value assignments. For example this
 /// structure is able to precisely represent result of matching atoms like
@@ -95,6 +132,10 @@ impl Bindings {
             id_by_var: HashMap::new(),
             value_by_id: HashMap::new(),
         }
+    }
+
+    pub(crate) fn len(&self) -> usize {
+        self.id_by_var.len()
     }
 
     /// Returns true if bindings doesn't contain any variable.
@@ -389,6 +430,12 @@ impl Bindings {
             false => None
         };
 
+        if self.is_empty() {
+            return b.clone().into()
+        } else if b.is_empty() {
+            return self.into()
+        }
+
         let results = b.id_by_var.iter().fold(smallvec::smallvec![(self, HashMap::new())],
             |results, (var, var_id)| -> smallvec::SmallVec<[(Bindings, HashMap<u32, VariableAtom>); 1]> {
                 let mut all_results = smallvec::smallvec![];
@@ -443,7 +490,7 @@ impl Bindings {
         }
     }
 
-    fn build_var_mapping<'a>(&'a self, required_names: &HashSet<&VariableAtom>, required_ids: &HashSet<u32>) -> HashMap<&'a VariableAtom, &'a VariableAtom> {
+    fn build_var_mapping<'a, T: VariableSet>(&'a self, required_names: &T, required_ids: &HashSet<u32>) -> HashMap<&'a VariableAtom, &'a VariableAtom> {
         let mut id_names: HashSet<VariableAtom> = HashSet::new();
         let mut mapping = HashMap::new();
         for (var, &id) in &self.id_by_var {
@@ -467,12 +514,14 @@ impl Bindings {
     }
 
     fn find_deps(&self, var: &VariableAtom, deps: &mut HashSet<VariableAtom>) {
-        deps.insert(var.clone());
-        self.get_value(var).iter()
-            .for_each(|value| {
-                value.iter().filter_map(|atom| <&VariableAtom>::try_from(atom).ok())
-                    .for_each(|var| { self.find_deps(var, deps); });
-            });
+        if !deps.contains(var) {
+            deps.insert(var.clone());
+            self.get_value(var).iter()
+                .for_each(|value| {
+                    value.iter().filter_map(|atom| <&VariableAtom>::try_from(atom).ok())
+                        .for_each(|var| { self.find_deps(var, deps); });
+                    });
+        }
     }
 
     /// Get narrow bindings which contains only passed set of variables and
@@ -491,9 +540,9 @@ impl Bindings {
     ///
     /// assert_eq!(right, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
     /// ```
-    pub fn narrow_vars(&self, vars: &HashSet<&VariableAtom>) -> Bindings {
+    pub fn narrow_vars<T: VariableSet>(&self, vars: &T) -> Bindings {
         let mut deps: HashSet<VariableAtom> = HashSet::new();
-        for var in vars {
+        for var in vars.iter() {
             self.find_deps(var, &mut deps);
         }
 
@@ -503,7 +552,7 @@ impl Bindings {
             .map(Option::unwrap).map(|&id| id)
             .collect();
 
-        let mapping = self.build_var_mapping(&vars, &dep_ids);
+        let mapping = self.build_var_mapping(vars, &dep_ids);
 
         let mut bindings = Bindings::new();
         bindings.next_var_id = self.next_var_id;
@@ -569,22 +618,40 @@ impl Bindings {
         self
     }
 
-    /// Keep only variables passed in vars
-    pub fn cleanup(&mut self, vars: &HashSet<&VariableAtom>) {
-        let to_remove: HashSet<VariableAtom> = self.id_by_var.iter()
-            .filter_map(|(var, _id)| if !vars.contains(var) { Some(var.clone()) } else { None })
-            .collect();
-        to_remove.into_iter().for_each(|var| { self.id_by_var.remove(&var); });
+    fn no_value(&self, id: &u32) -> bool {
+        self.value_by_id.get(id) == None &&
+            self.id_by_var.iter().filter(|(_var, vid)| *vid == id).count() == 1
     }
 
-    fn has_loops(&self) -> bool {
+    /// Keep only variables passed in vars
+    pub fn cleanup<T: VariableSet>(&mut self, vars: &T) {
+        let to_remove: HashSet<VariableAtom> = self.id_by_var.iter()
+            .filter_map(|(var, id)| {
+                if !vars.contains(var) || self.no_value(id) {
+                    Some(var.clone())
+                } else {
+                    None
+                }
+            })
+            .collect();
+        to_remove.into_iter().for_each(|var| {
+            self.id_by_var.remove(&var);
+        });
+    }
+
+    pub fn has_loops(&self) -> bool {
         let vars_by_id = self.vars_by_id();
         for (var_id, value) in &self.value_by_id {
             let mut used_vars = HashSet::new();
-            vars_by_id.get(var_id).unwrap().iter().for_each(|var| { used_vars.insert(*var); });
-            match self.resolve_vars_in_atom(value, &used_vars) {
-                VarResolutionResult::Loop => return true,
-                _ => {},
+            let var = vars_by_id.get(var_id);
+            // TODO: cleanup removes vars but leaves var_ids
+            //assert!(var.is_some(), "No variable name for var_id: {}, value: {}, self: {}", var_id, value, self);
+            if var.is_some() {
+                var.unwrap().iter().for_each(|var| { used_vars.insert(*var); });
+                match self.resolve_vars_in_atom(value, &used_vars) {
+                    VarResolutionResult::Loop => return true,
+                    _ => {},
+                }
             }
         }
         false
@@ -1176,13 +1243,20 @@ mod test {
     }
 
     #[test]
-    fn test_bindings_merge() {
+    fn bindings_merge() {
         assert_eq!(bind!{ a: expr!("A") }.merge_v2(
             &bind!{ a: expr!("A"), b: expr!("B") }),
             bind_set![{ a: expr!("A"), b: expr!("B") }]);
         assert_eq!(bind!{ a: expr!("A"), b: expr!("B") }.merge_v2(
             &bind!{ a: expr!("A") }),
             bind_set![{ a: expr!("A"), b: expr!("B") }]);
+    }
+
+    #[test]
+    fn bindings_merge_self_recursion() {
+        assert_eq!(bind!{ a: expr!(b)  }.merge_v2(
+            &bind!{ b: expr!("S" b) }),
+            bind_set![{ a: expr!(b), b: expr!("S" b) }]);
     }
 
     #[test]
@@ -1457,6 +1531,16 @@ mod test {
     }
 
     #[test]
+    fn bindings_narrow_vars_infinite_loop() -> Result<(), &'static str> {
+        let bindings = Bindings::new().add_var_binding_v2(VariableAtom::new("x"), expr!("a" x "b"))?;
+
+        let narrow = bindings.narrow_vars(&HashSet::from([&VariableAtom::new("x")]));
+
+        assert_eq!(narrow, bind!{ x: expr!("a" x "b") });
+        Ok(())
+    }
+
+    #[test]
     fn bindings_narrow_vars_keeps_vars_equality() -> Result<(), &'static str> {
         let bindings = Bindings::new()
             .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("y"))?
@@ -1491,7 +1575,7 @@ mod test {
     }
 
     #[test]
-    fn bindings_add_var_value_splits_bindings() {
+    fn bindings_add_var_binding_splits_bindings() {
         let pair = ReturnPairInX{};
 
         // ({ x -> B, x -> C } (A $x)) ~ ($s $s)
@@ -1504,6 +1588,15 @@ mod test {
         assert_eq!(bindings, bind_set![
             bind!{ s: expr!({ pair }), x: expr!("B") },
             bind!{ s: expr!({ pair }), x: expr!("C") } ]);
+    }
+
+    #[test]
+    fn bindings_add_var_binding_self_recursion() {
+        let a = VariableAtom::new("a");
+        let bindings = Bindings::new();
+        assert_eq!(
+            bindings.add_var_binding_v2(a.clone(), Atom::expr([Atom::sym("S"), Atom::Variable(a)])),
+            Ok(bind!{ a: expr!("S" a) }));
     }
 
     #[test]
@@ -1521,6 +1614,17 @@ mod test {
         assert_eq!(bindings, bind_set![
             bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("B") },
             bind!{ s: expr!({ pair }), y: expr!("A" x), x: expr!("C") } ]);
+    }
+
+    #[test]
+    fn bindings_add_var_equality_self_recursion() -> Result<(), &'static str> {
+        let a = VariableAtom::new("a");
+        let b = VariableAtom::new("b");
+        let mut bindings = Bindings::new();
+        bindings.add_var_no_value(&a);
+        let bindings = bindings.add_var_binding_v2(b.clone(), Atom::expr([Atom::sym("S"), Atom::Variable(a.clone())]))?;
+        assert_eq!(bindings.add_var_equality(&a, &b), Ok(bind!{ a: expr!(b), b: expr!("S" a) }));
+        Ok(())
     }
 
     #[test]
@@ -1581,8 +1685,9 @@ mod test {
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
             .add_var_binding_v2(VariableAtom::new("b"), expr!("B" d))?
             .add_var_binding_v2(VariableAtom::new("c"), expr!("c"))?
-            .add_var_binding_v2(VariableAtom::new("d"), expr!("D"))?;
-        bindings.cleanup(&[&VariableAtom::new("b")].into());
+            .add_var_binding_v2(VariableAtom::new("d"), expr!("D"))?
+            .with_var_no_value(&VariableAtom::new("e"));
+        bindings.cleanup(&Into::<HashSet<&VariableAtom>>::into([&VariableAtom::new("b"), &VariableAtom::new("e")]));
         assert_eq!(bindings, bind!{ b: expr!("B" d) });
         Ok(())
     }

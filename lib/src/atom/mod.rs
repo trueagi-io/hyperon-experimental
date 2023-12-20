@@ -160,7 +160,7 @@ impl ExpressionAtom {
     /// Constructs new expression from vector of sub-atoms. Not intended to be
     /// used directly, use [Atom::expr] instead.
     #[doc(hidden)]
-    fn new(children: Vec<Atom>) -> Self {
+    pub(crate) fn new(children: Vec<Atom>) -> Self {
         Self{ children }
     }
 

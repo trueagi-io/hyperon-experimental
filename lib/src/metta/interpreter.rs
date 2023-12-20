@@ -78,6 +78,7 @@ use crate::common::ReplacingMapper;
 use std::ops::Deref;
 use std::rc::Rc;
 use std::fmt::{Debug, Display, Formatter};
+use std::collections::HashSet;
 
 /// Wrapper, So the old interpreter can present the same public interface as the new intperpreter
 pub struct InterpreterState<'a, T: SpaceRef<'a>> {
@@ -248,7 +249,7 @@ impl InterpreterCache {
 
     fn insert(&mut self, key: Atom, mut value: Results) {
         value.iter_mut().for_each(|res| {
-            let vars = key.iter().filter_type::<&VariableAtom>().collect();
+            let vars: HashSet<&VariableAtom> = key.iter().filter_type::<&VariableAtom>().collect();
             res.0 = apply_bindings_to_atom(&res.0, &res.1);
             res.1.cleanup(&vars);
         });
