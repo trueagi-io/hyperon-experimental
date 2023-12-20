@@ -37,7 +37,7 @@ fn test_case_operation() {
         ! (superpose (3 4 5))
         ! (superpose ())
     "));
-    assert_eq!(result, expected);
+    assert_eq_metta_results!(result, expected);
 
     let metta = Metta::new(Some(EnvBuilder::test_env()));
     let result = metta.run(SExprParser::new("

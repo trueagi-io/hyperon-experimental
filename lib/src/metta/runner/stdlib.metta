@@ -9,6 +9,8 @@
 (: unify (-> Atom Atom Atom Atom Atom))
 (: cons (-> Atom Atom Atom))
 (: decons (-> Atom Atom))
+(: collapse-bind (-> Atom Atom))
+(: superpose-bind (-> Atom Atom))
 
 (: id (-> Atom Atom))
 (= (id $x) $x)
@@ -77,31 +79,36 @@
           (return $then)
           (unify $type1 $type2 (return $then) (return $else)) ))))))))))
 
+(= (first-from-pair $pair)
+  (function
+    (unify $pair ($first $second)
+      (return $first)
+      (return (Error (first-from-pair $pair) "incorrect pair format")))))
+
+(= (match-type-or $folded $next $type)
+  (function
+    (chain (eval (match-types $next $type True False)) $matched
+      (chain (eval (or $folded $matched)) $or (return $or)) )))
+
 (= (type-cast $atom $type $space)
   (function (chain (eval (get-metatype $atom)) $meta
     (eval (if-equal $type $meta
       (return $atom)
-      ; TODO: the proper way to get types is something like
-      ; `(collapse (get-type <atom> <space>))` but it leads to the infinite
-      ; recursion because interpreter called by `collapse` evaluates
-      ; `type-cast` again.
-      (chain (eval (collapse-get-type $atom $space)) $actual-types
-        (chain (eval (foldl-atom $actual-types False
-          $a $b (chain (eval (match-types $b $type True False)) $is-b-comp
-            (chain (eval (or $a $is-b-comp)) $or $or) ))) $is-some-comp
-          (eval (if $is-some-comp
-            (return $atom)
-            (return (Error $atom BadType)) )))))))))
-
+      (chain (eval (collapse-bind (eval (get-type $atom $space)))) $collapsed
+        (chain (eval (map-atom $collapsed $pair (eval (first-from-pair $pair)))) $actual-types
+            (chain (eval (foldl-atom $actual-types False $a $b (eval (match-type-or $a $b $type)))) $is-some-comp
+              (eval (if $is-some-comp
+                (return $atom)
+                (return (Error $atom BadType)) ))))))))))
 
 (= (is-function $type)
   (function (chain (eval (get-metatype $type)) $meta
     (eval (switch ($type $meta) (
-      (($_ Expression)
+      (($type Expression)
         (eval (if-decons $type $head $_tail
           (unify $head -> (return True) (return False))
           (return (Error (is-function $type) "is-function non-empty expression as an argument")) )))
-      ($_ (return False))
+      (($type $meta) (return False))
     ))))))
 
 (: filter-atom (-> Expression Variable Atom Expression))
@@ -133,6 +140,26 @@
           (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) )))
     (return $init) ))))
 
+(: divide-errors (-> Expression Expression Expression))
+(= (divide-errors $succ-err $res)
+  (function (unify $succ-err ($suc $err)
+    (unify $res ($a $_b)
+      (eval (if-error $a
+        (chain (cons $res $err) $err' (return ($suc $err')))
+        (chain (cons $res $suc) $suc' (return ($suc' $err))) ))
+      (return $succ-err))
+    (return $succ-err) )))
+
+(= (check-alternatives $atom)
+  (function
+    (chain (collapse-bind $atom) $collapsed
+      (chain (eval (foldl-atom $collapsed (() ()) $succ-err $res
+        (eval (divide-errors $succ-err $res)))) $divided
+        (unify $divided ($success $error)
+          (chain (eval (if-equal $success () $error $success)) $filtered
+            (chain (superpose-bind $filtered) $ret (return $ret)) )
+          (return (Error (check-alternatives $atom) "list of results was not filtered correctly")) )))))
+
 (= (interpret $atom $type $space)
   (function (chain (eval (get-metatype $atom)) $meta
     (eval (if-equal $type Atom
@@ -140,13 +167,13 @@
       (eval (if-equal $type $meta
         (return $atom)
         (eval (switch ($type $meta) (
-          (($_type Variable) (return $atom))
-          (($_type Symbol)
+          (($type Variable) (return $atom))
+          (($type Symbol)
             (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
-          (($_type Grounded)
+          (($type Grounded)
             (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
-          (($_type Expression)
-            (chain (eval (interpret-expression $atom $type $space)) $ret (return $ret)))
+          (($type Expression)
+            (chain (eval (check-alternatives (eval (interpret-expression $atom $type $space)))) $ret (return $ret)))
         ))))))))))
 
 (= (interpret-expression $atom $type $space)
@@ -235,6 +262,10 @@
 (= (and False True) False)
 (= (and True False) False)
 (= (and True True) True)
+
+(: not (-> Bool Bool))
+(= (not True) False)
+(= (not False) True)
 
 (: match (-> Atom Atom Atom %Undefined%))
 (= (match $space $pattern $template)
