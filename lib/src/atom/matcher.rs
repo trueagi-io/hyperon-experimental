@@ -79,28 +79,36 @@ enum VarResolutionResult<T> {
 /// HashSet<&VariableAtom> and HashSet<VariableAtom> to the
 /// [Bindings::narrow_vars] method.
 pub trait VariableSet {
+    type Iter<'a> : Iterator<Item = &'a VariableAtom> where Self: 'a;
+
     /// Returns true if var is a part of the set.
     fn contains(&self, var: &VariableAtom) -> bool;
 
     /// Iterate trough a list of variables in the set.
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=&VariableAtom> + 'a>;
+    fn iter(&self) -> Self::Iter<'_>;
 }
 
 impl VariableSet for HashSet<&VariableAtom> {
+    type Iter<'a> = std::iter::Map<
+        std::collections::hash_set::Iter<'a, &'a VariableAtom>,
+        fn(&'a &VariableAtom) -> &'a VariableAtom> where Self: 'a;
+
     fn contains(&self, var: &VariableAtom) -> bool {
         HashSet::contains(self, var)
     }
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=&VariableAtom> + 'a> {
-        Box::new(HashSet::iter(self).map(|a| *a))
+    fn iter(&self) -> Self::Iter<'_> {
+        HashSet::iter(self).map(|a| *a)
     }
 }
 
 impl VariableSet for HashSet<VariableAtom> {
+    type Iter<'a> = std::collections::hash_set::Iter<'a, VariableAtom> where Self: 'a;
+
     fn contains(&self, var: &VariableAtom) -> bool {
         HashSet::contains(self, var)
     }
-    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item=&VariableAtom> + 'a> {
-        Box::new(HashSet::iter(self))
+    fn iter(&self) -> Self::Iter<'_> {
+        HashSet::iter(self)
     }
 }
 
@@ -482,7 +490,7 @@ impl Bindings {
         }
     }
 
-    fn build_var_mapping<'a>(&'a self, required_names: &dyn VariableSet, required_ids: &HashSet<u32>) -> HashMap<&'a VariableAtom, &'a VariableAtom> {
+    fn build_var_mapping<'a, T: VariableSet>(&'a self, required_names: &T, required_ids: &HashSet<u32>) -> HashMap<&'a VariableAtom, &'a VariableAtom> {
         let mut id_names: HashSet<VariableAtom> = HashSet::new();
         let mut mapping = HashMap::new();
         for (var, &id) in &self.id_by_var {
@@ -532,7 +540,7 @@ impl Bindings {
     ///
     /// assert_eq!(right, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
     /// ```
-    pub fn narrow_vars(&self, vars: &dyn VariableSet) -> Bindings {
+    pub fn narrow_vars<T: VariableSet>(&self, vars: &T) -> Bindings {
         let mut deps: HashSet<VariableAtom> = HashSet::new();
         for var in vars.iter() {
             self.find_deps(var, &mut deps);
@@ -616,7 +624,7 @@ impl Bindings {
     }
 
     /// Keep only variables passed in vars
-    pub fn cleanup(&mut self, vars: &dyn VariableSet) {
+    pub fn cleanup<T: VariableSet>(&mut self, vars: &T) {
         let to_remove: HashSet<VariableAtom> = self.id_by_var.iter()
             .filter_map(|(var, id)| {
                 if !vars.contains(var) || self.no_value(id) {
