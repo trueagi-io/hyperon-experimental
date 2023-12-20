@@ -19,6 +19,7 @@ ExternalProject_Add(
     CMAKE_ARGS
     "-DCMAKE_INSTALL_PREFIX=${HYPERONC_INSTALL_PREFIX}"
     "-DCMAKE_BUILD_TYPE=${BUILD_CONFIGURATION}"
+    "-DCARGO_ARGS=${CARGO_ARGS}"
 )
 
 ExternalProject_Get_Property(hyperonc BINARY_DIR)
