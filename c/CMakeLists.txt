@@ -32,9 +32,11 @@ add_custom_target(show-build-type-vars COMMAND ${CMAKE_COMMAND} -E echo
 set(HYPERONC_STATIC_LIB_FILE ${CMAKE_STATIC_LIBRARY_PREFIX}hyperonc${CMAKE_STATIC_LIBRARY_SUFFIX})
 set(HYPERONC_STATIC_LIB_PATH ${HYPERONC_TARGET_DIR}/${HYPERONC_STATIC_LIB_FILE})
 set(HYPERONC_INCLUDE_DIR ${HYPERONC_TARGET_DIR}/hyperon)
+separate_arguments(CARGO_ARGS_LIST NATIVE_COMMAND ${CARGO_ARGS})
 
 add_custom_target(build-hyperonc ALL
     COMMAND cargo build
+        ${CARGO_ARGS_LIST}
         $<${IS_RELEASE_BUILD}:--release>
         --target-dir ${HYPERONC_TARGET_DIR}
 
@@ -115,5 +117,6 @@ install(DIRECTORY "${HYPERONC_INCLUDE_DIR}"
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/hyperonc-config.cmake"
     DESTINATION "${CONFIG_INSTALL_PATH}")
 
-add_test(NAME rust_c_api COMMAND cargo test --target-dir ${HYPERONC_TARGET_DIR}
+add_test(NAME rust_c_api
+    COMMAND cargo test ${CARGO_ARGS_LIST} --target-dir ${HYPERONC_TARGET_DIR}
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
