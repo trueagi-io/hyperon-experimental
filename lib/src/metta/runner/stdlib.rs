@@ -161,7 +161,7 @@ impl Grounded for MatchOp {
         let space = args.get(0).ok_or_else(arg_error)?;
         let pattern = args.get(1).ok_or_else(arg_error)?;
         let template = args.get(2).ok_or_else(arg_error)?;
-        log::debug!("match_op: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
+        log::debug!("MatchOp::execute: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
         Ok(space.borrow().subst(&pattern, &template))
     }
@@ -427,7 +427,7 @@ impl CaseOp {
         log::debug!("CaseOp::execute: atom: {}, cases: {:?}", atom, cases);
 
         let result = interpret_no_error(self.space.clone(), &atom);
-        log::debug!("case: interpretation result {:?}", result);
+        log::debug!("CaseOp::execute: interpretation result {:?}", result);
 
         match result {
             Ok(result) if result.is_empty() => {
