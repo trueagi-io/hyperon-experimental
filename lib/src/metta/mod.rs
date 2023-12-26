@@ -37,7 +37,9 @@ pub const DECONS_SYMBOL : Atom = sym!("decons");
 pub const CONS_SYMBOL : Atom = sym!("cons");
 pub const FUNCTION_SYMBOL : Atom = sym!("function");
 pub const RETURN_SYMBOL : Atom = sym!("return");
+// FIXME: rename to *_SYMBOL
 pub const COLLAPSE_BIND : Atom = sym!("collapse-bind");
+// FIXME: rename to *_SYMBOL
 pub const SUPERPOSE_BIND : Atom = sym!("superpose-bind");
 
 pub const INTERPRET_SYMBOL : Atom = sym!("interpret");

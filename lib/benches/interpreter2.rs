@@ -1,6 +1,7 @@
 #![feature(test)]
 #[cfg(feature = "minimal")]
 mod interpreter2_bench {
+
 extern crate test;
 
 use test::Bencher;
@@ -18,6 +19,18 @@ fn chain_atom(size: isize) -> Atom {
     atom
 }
 
+
+#[bench]
+fn chain_x10(bencher: &mut Bencher) {
+    let atom = chain_atom(10);
+    let expected = Ok(vec![expr!("A")]);
+    bencher.iter(|| {
+        let space = GroundingSpace::new();
+        let res = interpret(space, &atom);
+        assert_eq!(res, expected);
+    })
+}
+
 #[bench]
 fn chain_x100(bencher: &mut Bencher) {
     let atom = chain_atom(100);
@@ -28,4 +41,16 @@ fn chain_x100(bencher: &mut Bencher) {
         assert_eq!(res, expected);
     })
 }
+
+#[bench]
+fn chain_x1000(bencher: &mut Bencher) {
+    let atom = chain_atom(1000);
+    let expected = Ok(vec![expr!("A")]);
+    bencher.iter(|| {
+        let space = GroundingSpace::new();
+        let res = interpret(space, &atom);
+        assert_eq!(res, expected);
+    })
+}
+
 }

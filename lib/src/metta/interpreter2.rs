@@ -13,21 +13,99 @@ use crate::metta::*;
 use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
 use std::collections::HashSet;
+use std::rc::Rc;
+use std::marker::PhantomData;
+use std::fmt::Write;
+use std::cell::RefCell;
 
-#[derive(Clone, PartialEq, Debug)]
-enum Status {
-    Final,
-    InProgress,
+type ReturnHandler = fn(Rc<RefCell<Stack>>, Atom, Bindings) -> Option<Stack>;
+
+#[derive(Debug, Clone)]
+struct Stack {
+    // Internal mutability is required to implement collapse-bind. All alternatives
+    // reference the same collapse-bind Stack instance. When some alternative
+    // finishes it modifies the collapse-bind state adding the result to the
+    // collapse-bind list of results.
+    // FIXME: Try representing Option via Stack::Bottom
+    prev: Option<Rc<RefCell<Self>>>,
+    atom: Atom,
+    ret: ReturnHandler,
+    // FIXME: Could it be replaced by calling a return handler when setting the flag?
+    finished: bool,
+    vars: Rc<Variables>,
 }
 
-/// Result of atom interpretation plus variable bindings found
-#[derive(Clone, PartialEq)]
-struct InterpretedAtom(Atom, Bindings, Status);
+// FIXME: rename to no_handler
+fn nop_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> Option<Stack> {
+    panic!("Unexpected state");
+}
+
+impl Stack {
+    fn from_prev(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
+        let vars = Self::vars(&prev, &atom);
+        Self{ prev, atom, ret, finished: false, vars }
+    }
+
+    fn finished(prev: Option<Rc<RefCell<Self>>>, atom: Atom) -> Self {
+        // FIXME: here we don't need vars actually
+        let vars = Rc::new(Variables::new());
+        Self{ prev, atom, ret: nop_handler, finished: true, vars }
+    }
+
+    fn len(&self) -> usize {
+        self.fold(0, |len, _stack| len + 1)
+    }
+
+    // FIXME: should it be replaced by Iterator implementation?
+    fn fold<T, F: FnMut(T, &Stack) -> T>(&self, mut val: T, mut app: F) -> T {
+        val = app(val, self);
+        match &self.prev {
+            None => val,
+            Some(prev) => prev.borrow().fold(val, app),
+        }
+    }
+
+    fn vars(prev: &Option<Rc<RefCell<Self>>>, atom: &Atom) -> Rc<Variables> {
+        // TODO: nested atoms are visited twice: first time when outer atom
+        // is visited, next time when internal atom is visited.
+        let mut vars: Variables = atom.iter().filter_type::<&VariableAtom>().cloned().collect();
+        match (prev, vars.is_empty()) {
+            (Some(prev), true) => prev.borrow().vars.clone(),
+            (Some(prev), false) => {
+                vars.extend(prev.borrow().vars.iter().cloned());
+                Rc::new(vars)
+            },
+            (None, _) => Rc::new(vars),
+        }
+    }
+}
+
+impl Display for Stack {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        fn print_level(buffer: &mut String, level: usize, last: bool, stack: &Stack) -> std::fmt::Result {
+            let prefix = if last { "=> " } else { "   " };
+            let ret = if stack.finished { "return " } else { "" };
+            write!(buffer, "{}{:05} {}{}\n", prefix, level, ret, stack.atom)
+        }
+
+        let buffer = &mut String::new();
+        let last_level = self.len();
+        let res = print_level(buffer, last_level, true, self);
+        self.prev.as_ref().map_or(res, |prev| {
+            prev.borrow().fold((res, last_level - 1), |(res, level), top| {
+                (res.and_then(|_| print_level(buffer, level, false, top)), level - 1)
+            }).0
+        }).and_then(|_| write!(f, "{}", buffer))
+    }
+}
+
+#[derive(Debug)]
+struct InterpretedAtom(Stack, Bindings);
 
 impl Display for InterpretedAtom {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         if self.1.is_empty() {
-            write!(f, "{}|{:?}", self.0, self.2)
+            write!(f, "{}", self.0)
         } else {
             // TODO: it is possible to cleanup all bindings for nested
             // expressions which were introduced by matching when all
@@ -36,18 +114,10 @@ impl Display for InterpretedAtom {
             // (make air wet) leads to (start kettle), {$y: kettle}) result
             // but $y is not present in the expression after interpreting
             // (make air wet) and can be removed.
-            write!(f, "{}|{}|{:?}", self.0, self.1, self.2)
+            write!(f, "{}\n{}", self.1, self.0)
         }
     }
 }
-
-impl Debug for InterpretedAtom {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        Display::fmt(self, f)
-    }
-}
-
-use std::marker::PhantomData;
 
 pub trait SpaceRef<'a> : Space + 'a {}
 impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
@@ -74,6 +144,10 @@ pub struct InterpreterState<'a, T: SpaceRef<'a>> {
 
 fn atom_as_slice(atom: &Atom) -> Option<&[Atom]> {
     <&[Atom]>::try_from(atom).ok()
+}
+
+fn atom_as_slice_mut(atom: &mut Atom) -> Option<&mut [Atom]> {
+    <&mut [Atom]>::try_from(atom).ok()
 }
 
 // FIXME: return incorrect length as error_atom() from caller
@@ -111,15 +185,15 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
     }
 
     fn push(&mut self, atom: InterpretedAtom) {
-        if is_embedded_op(&atom.0) {
-            self.plan.push(atom);
-        } else {
-            let InterpretedAtom(atom, bindings, _status) = atom;
-            if atom != EMPTY_SYMBOL {
+        if atom.0.prev.is_none() && atom.0.finished {
+            let InterpretedAtom(stack, bindings) = atom;
+            if stack.atom != EMPTY_SYMBOL {
                 let bindings = bindings.convert_var_equalities_to_bindings(&self.vars);
-                let atom = apply_bindings_to_atom(&atom, &bindings);
+                let atom = apply_bindings_to_atom(&stack.atom, &bindings);
                 self.finished.push(atom);
             }
+        } else {
+            self.plan.push(atom);
         }
     }
 }
@@ -129,7 +203,6 @@ impl<'a, T: SpaceRef<'a>> std::fmt::Display for InterpreterState<'a, T> {
         write!(f, "{:?}\n", self.plan)
     }
 }
-
 
 /// Initialize interpreter and returns the result of the zero step.
 /// It can be error, immediate result or interpretation plan to be executed.
@@ -141,79 +214,10 @@ impl<'a, T: SpaceRef<'a>> std::fmt::Display for InterpreterState<'a, T> {
 pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterState<'a, T> {
     let context = InterpreterContext::new(space);
     InterpreterState {
-        plan: vec![InterpretedAtom(expr.clone(), Bindings::new(), Status::InProgress)],
+        plan: vec![InterpretedAtom(atom_to_stack(expr.clone(), None), Bindings::new())],
         finished: vec![],
         context,
         vars: expr.iter().filter_type::<&VariableAtom>().cloned().collect(),
-    }
-}
-
-use std::fmt::Write;
-
-fn print_stack(atom: &InterpretedAtom) -> String {
-    let InterpretedAtom(atom, bindings, _status) = atom;
-    let mut levels = Vec::new();
-    print_level(&mut levels, atom, bindings);
-    let mut buffer = String::new();
-    let mut i = levels.len();
-    writeln!(buffer, "=> {:05} {}", i, levels.pop().unwrap()).unwrap();
-    while !levels.is_empty() {
-        i = i - 1;
-        writeln!(buffer, "   {:05} {}", i, levels.pop().unwrap()).unwrap();
-    }
-    buffer
-}
-
-fn print_level(levels: &mut Vec<String>, atom: &Atom, bindings: &Bindings) {
-    levels.push(String::new());
-    let output = levels.last_mut().unwrap();
-    match atom {
-        Atom::Expression(expr) => match expr.children().as_slice() {
-            [op, args @ ..] if *op == FUNCTION_SYMBOL => {
-                match args {
-                    [Atom::Expression(_body)] => {
-                        write!(output, "{}", atom).unwrap();
-                    },
-                    [body @ Atom::Expression(_body), call] => {
-                        write!(output, "{}", call).unwrap();
-                        print_level(levels, body, bindings);
-                    },
-                    _ => panic!(),
-                }
-            },
-            [op, args @ ..] if *op == CHAIN_SYMBOL => {
-                match args {
-                    [nested, Atom::Variable(var), templ] => {
-                        write!(output, "(chain <result> {} {})", var, templ).unwrap();
-                        print_level(levels, nested, bindings);
-                    },
-                    _ => panic!(),
-                }
-            },
-            [op, args @ ..] if *op == COLLAPSE_BIND => {
-                match args {
-                    [_atom] => {
-                        write!(output, "{}", atom).unwrap();
-                    },
-                    [Atom::Expression(current), Atom::Expression(finished)] => {
-                        let current_len = current.children().len();
-                        if current_len > 0 {
-                            let next = &current.children()[current_len - 1];
-                            let (atom, bindings) = atom_as_interpreted_atom(next);
-                            write!(output, "(collapse-bind {} {})", current, finished).unwrap();
-                            print_level(levels, atom, bindings);
-                        } else {
-                            write!(output, "{}", atom).unwrap();
-                        }
-                    },
-                    _ => panic!(),
-                }
-            },
-            _ => {
-                write!(output, "{}", atom).unwrap();
-            },
-        },
-        _ => write!(output, "{}", atom).unwrap(),
     }
 }
 
@@ -226,8 +230,7 @@ fn print_level(levels: &mut Vec<String>, atom: &Atom, bindings: &Bindings) {
 /// * `step` - [StepResult::Execute] result from the previous step.
 pub fn interpret_step<'a, T: Space + 'a>(mut state: InterpreterState<'a, T>) -> InterpreterState<'a, T> {
     let interpreted_atom = state.pop().unwrap();
-    log::debug!("interpret_step: {}", interpreted_atom);
-    log::debug!("stack:\n{}", print_stack(&interpreted_atom));
+    log::debug!("interpret_step:\n{}", interpreted_atom);
     for result in interpret_root_atom(&state.context, interpreted_atom) {
         state.push(result);
     }
@@ -278,150 +281,57 @@ fn is_function_op(atom: &Atom) -> bool {
 type Variables = HashSet<VariableAtom>;
 
 fn interpret_root_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
-    let InterpretedAtom(atom, bindings, _status) = interpreted_atom;
-    let vars: Variables = atom.iter().filter_type::<&VariableAtom>().cloned().collect();
-    interpret_nested_atom(context, atom, bindings, &vars)
+    let InterpretedAtom(stack, bindings) = interpreted_atom;
+    interpret_nested_atom(context, stack, bindings)
 }
 
-fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, atom: Atom, bindings: Bindings, vars: &Variables) -> Vec<InterpretedAtom> {
-    let expr = atom_as_slice(&atom);
-    let result = match expr {
-        Some([op, args @ ..]) if *op == EVAL_SYMBOL => {
-            match args {
-                [_atom] => {
-                    // atom is matched twice to not reconstruct atom in case of
-                    // error (see error branch below), don't think it is a best
-                    // way, but don't see a better solution
-                    match atom_into_array(atom) {
-                        Some([_, atom]) => eval(context, atom, bindings, vars),
-                        _ => panic!("Unexpected state"),
-                    }
-                },
-                _ => {
-                    let error: String = format!("expected: ({} <atom>), found: {}", EVAL_SYMBOL, atom);
-                    vec![InterpretedAtom(error_atom(atom, error), bindings, Status::Final)]
-                },
-            }
-        },
-        Some([op, args @ ..]) if *op == CHAIN_SYMBOL => {
-            match args {
-                [_nested, Atom::Variable(_var), _templ] => {
-                    match atom_into_array(atom) {
-                        Some([_, nested, Atom::Variable(var), templ]) =>
-                            chain(context, bindings, nested, var, templ, vars),
-                        _ => panic!("Unexpected state"),
-                    }
-                },
-                _ => {
-                    let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_SYMBOL, atom);
-                    vec![InterpretedAtom(error_atom(atom, error), bindings, Status::Final)]
-                },
-            }
-        },
-        Some([op, args @ ..]) if *op == UNIFY_SYMBOL => {
-            match args {
-                [atom, pattern, then, else_] => unify(bindings, atom, pattern, then, else_, vars),
-                _ => {
-                    let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", UNIFY_SYMBOL, atom);
-                    vec![InterpretedAtom(error_atom(atom, error), bindings, Status::Final)]
-                },
-            }
-        },
-        Some([op, args @ ..]) if *op == DECONS_SYMBOL => {
-            match args {
-                [Atom::Expression(tail)] if tail.children().len() > 0 => {
-                    match atom_into_array(atom) {
-                        Some([_, Atom::Expression(expr)]) => decons(bindings, expr),
-                        _ => panic!("Unexpected state"),
-                    }
-                },
-                _ => {
-                    let error: String = format!("expected: ({} (: <expr> Expression)), found: {}", DECONS_SYMBOL, atom);
-                    vec![InterpretedAtom(error_atom(atom, error), bindings, Status::Final)]
-                },
-            }
-        },
-        Some([op, args @ ..]) if *op == CONS_SYMBOL => {
-            match args {
-                [_head, Atom::Expression(_tail)] => {
-                    match atom_into_array(atom) {
-                        Some([_, head, Atom::Expression(tail)]) => cons(bindings, head, tail),
-                        _ => panic!("Unexpected state"),
-                    }
-                },
-                _ => {
-                    let error: String = format!("expected: ({} <head> (: <tail> Expression)), found: {}", CONS_SYMBOL, atom);
-                    vec![InterpretedAtom(error_atom(atom, error), bindings, Status::Final)]
-                },
-            }
-        },
-        Some([op, args @ ..]) if *op == FUNCTION_SYMBOL => {
-            match args {
-                [Atom::Expression(_body)] => {
-                    match atom_into_array(atom) {
-                        Some([_, body]) =>
-                            function(context, bindings, body.clone(), body, vars),
-                        _ => panic!("Unexpected state"),
-                    }
-                },
-                [Atom::Expression(_body), _call] => {
-                    match atom_into_array(atom) {
-                        Some([_, body, call]) =>
-                            function(context, bindings, body, call, vars),
-                        _ => panic!("Unexpected state"),
-                    }
-                },
-                _ => {
-                    let error: String = format!("expected: ({} (: <body> Expression)), found: {}", FUNCTION_SYMBOL, atom);
-                    vec![InterpretedAtom(error_atom(atom, error), bindings, Status::Final)]
-                },
-            }
-        },
-        Some([op, args @ ..]) if *op == COLLAPSE_BIND => {
-            match args {
-                [_atom] => {
-                    match atom_into_array(atom) {
-                        Some([_, atom]) => {
-                            let current = vec![interpreted_atom_into_atom(InterpretedAtom(atom, bindings.clone(), Status::InProgress))];
-                            collapse_bind(context, bindings, ExpressionAtom::new(current), ExpressionAtom::new(vec![]), vars)
-                        },
-                        _ => panic!("Unexpected state"),
-                    }
-                },
-                [Atom::Expression(_current), Atom::Expression(_finished)] => {
-                    match atom_into_array(atom) {
-                        Some([_, Atom::Expression(current), Atom::Expression(finished)]) =>
-                            collapse_bind(context, bindings, current, finished, vars),
-                        _ => panic!("Unexpected state"),
-                    }
-                },
-                _ => {
-                    let error: String = format!("expected: ({} (: <current> Expression) [(: <finished> Expression)]), found: {}", COLLAPSE_BIND, atom);
-                    vec![InterpretedAtom(error_atom(atom, error), bindings, Status::Final)]
-                },
-            }
-        },
-        Some([op, args @ ..]) if *op == SUPERPOSE_BIND => {
-            match args {
-                [_atom] => {
-                    match atom_into_array(atom) {
-                        Some([_, Atom::Expression(collapsed)]) => {
-                            superpose_bind(collapsed)
-                        },
-                        _ => panic!("Unexpected state"),
-                    }
-                },
-                _ => {
-                    let error: String = format!("expected: ({} (: <collapsed> Expression)), found: {}", SUPERPOSE_BIND, atom);
-                    vec![InterpretedAtom(error_atom(atom, error), bindings, Status::Final)]
-                },
-            }
-        },
-        _ => {
-            vec![InterpretedAtom(return_atom(atom), bindings, Status::Final)]
-        },
-    };
-    result
+fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, mut stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    if stack.finished {
+        let Stack{ prev, atom, ret: _, finished: _, vars: _ } = stack;
+        let prev = match prev {
+            Some(prev) => prev,
+            None => panic!("Unexpected state"),
+        };
+        let ret = prev.borrow().ret;
+        // FIXME: two copies of bindings here
+        ret(prev, atom, bindings.clone())
+            .map_or(vec![], |stack| vec![InterpretedAtom(stack, bindings)])
+    } else {
+        let expr = atom_as_slice(&stack.atom);
+        let result = match expr {
+            Some([op, ..]) if *op == EVAL_SYMBOL => {
+                eval(context, stack, bindings)
+            },
+            Some([op, ..]) if *op == CHAIN_SYMBOL => {
+                chain(stack, bindings)
+            },
+            Some([op, ..]) if *op == FUNCTION_SYMBOL => {
+                // FIXME: incorrect error
+                let error = format!("function doesn't have return statement, last atom: {}", stack.atom);
+                finished_result(error_atom(stack.atom, error), bindings, stack.prev)
+            },
+            Some([op, ..]) if *op == COLLAPSE_BIND => {
+                collapse_bind(stack, bindings)
+            },
+            Some([op, ..]) if *op == UNIFY_SYMBOL => {
+                unify(stack, bindings)
+            },
+            Some([op, ..]) if *op == DECONS_SYMBOL => {
+                decons(stack, bindings)
+            },
+            Some([op, ..]) if *op == CONS_SYMBOL => {
+                cons(stack, bindings)
+            },
+            Some([op, ..]) if *op == SUPERPOSE_BIND => {
+                superpose_bind(stack, bindings)
+            },
+            _ => {
+                stack.finished = true;
+                vec![InterpretedAtom(stack, bindings)]
+            },
+        };
+        result
+    }
 }
 
 fn return_not_reducible() -> Atom {
@@ -432,14 +342,26 @@ fn error_atom(atom: Atom, err: String) -> Atom {
     Atom::expr([Atom::sym("Error"), atom, Atom::sym(err)])
 }
 
-fn return_atom(atom: Atom) -> Atom {
-    atom
+fn finished_result(atom: Atom, bindings: Bindings, prev: Option<Rc<RefCell<Stack>>>) -> Vec<InterpretedAtom> {
+    vec![InterpretedAtom(Stack::finished(prev, atom), bindings)]
 }
 
-fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, atom: Atom, bindings: Bindings, vars: &Variables) -> Vec<InterpretedAtom> {
-    match atom_as_slice(&atom) {
+fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: eval, ret: _, finished: _, vars} = stack;
+    // FIXME: excessive clone
+    let query_atom = match atom_into_array(eval.clone()) {
+        Some([_op, query]) => query,
+        _ => {
+            let error = format!("expected: ({} <atom>), found: {}", EVAL_SYMBOL, eval);
+            return finished_result(error_atom(eval, error), bindings, prev);
+        }
+    };
+    log::debug!("eval: query_atom: {}", query_atom);
+    match atom_as_slice(&query_atom) {
         Some([Atom::Grounded(op), args @ ..]) => {
-            match op.execute(args) {
+            let exec_res = op.execute(args);
+            log::debug!("eval: execution results: {:?}", exec_res);
+            match exec_res {
                 Ok(results) => {
                     if results.is_empty() {
                         // TODO: This is an open question how to interpret empty results
@@ -455,28 +377,32 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, atom: Atom, bi
                     } else {
                         results.into_iter()
                             .map(|atom| {
-                                let status = if is_function_op(&atom) { Status::InProgress } else { Status::Final };
-                                InterpretedAtom(atom, bindings.clone(), status)
+                                let stack = if is_function_op(&atom) {
+                                    let call = Stack::from_prev(prev.clone(), query_atom.clone(), call_ret);
+                                    atom_to_stack(atom, Some(Rc::new(RefCell::new(call))))
+                                } else {
+                                    Stack::finished(prev.clone(), atom)
+                                };
+                                InterpretedAtom(stack, bindings.clone())
                             })
                             .collect()
                     }
                 },
                 Err(ExecError::Runtime(err)) =>
-                    vec![InterpretedAtom(error_atom(atom, err), bindings, Status::Final)],
+                    finished_result(error_atom(query_atom, err), bindings, prev),
                 Err(ExecError::NoReduce) =>
                     // TODO: we could remove ExecError::NoReduce and explicitly
                     // return NOT_REDUCIBLE_SYMBOL from the grounded function instead.
-                    vec![InterpretedAtom(return_not_reducible(), bindings, Status::Final)],
+                    finished_result(return_not_reducible(), bindings, prev),
             }
         },
-        _ if is_embedded_op(&atom) => {
-            interpret_nested_atom(context, atom, bindings, vars)
-        },
-        _ => query(&context.space, atom, bindings, vars),
+        _ if is_embedded_op(&query_atom) =>
+            vec![InterpretedAtom(atom_to_stack(query_atom, prev), bindings)],
+        _ => query(&context.space, prev, query_atom, bindings, &vars),
     }
 }
 
-fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings, vars: &Variables) -> Vec<InterpretedAtom> {
+fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings, vars: &Variables) -> Vec<InterpretedAtom> {
     let var_x = VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, atom.clone(), Atom::Variable(var_x.clone())]);
     let results = space.query(&query);
@@ -487,170 +413,175 @@ fn query<'a, T: SpaceRef<'a>>(space: T, atom: Atom, bindings: Bindings, vars: &V
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
             .flat_map(|mut b| {
-                let mut res = apply_bindings_to_atom(&atom_x, &b);
-                let status = if is_function_op(&res) { Status::InProgress } else { Status::Final };
-                if is_function_op(&res) {
-                    match res {
-                        Atom::Expression(ref mut expr) => {
-                            expr.children_mut().push(atom.clone());
-                        }
-                        _ => {},
-                    }
-                }
+                let res = apply_bindings_to_atom(&atom_x, &b);
+                let stack = if is_function_op(&res) {
+                    let call = Stack::from_prev(prev.clone(), atom.clone(), call_ret);
+                    atom_to_stack(res, Some(Rc::new(RefCell::new(call))))
+                } else {
+                    Stack::finished(prev.clone(), res)
+                };
                 b.cleanup(vars);
                 log::debug!("interpreter2::query: b: {}", b);
                 b.merge_v2(&bindings).into_iter().filter_map(move |b| {
                     if b.has_loops() {
                         None
                     } else {
-                        Some(InterpretedAtom(res.clone(), b, status.clone()))
+                        Some(InterpretedAtom(stack.clone(), b))
                     }
                 })
             })
             .collect()
     };
     if results.is_empty() {
-        vec![InterpretedAtom(return_not_reducible(), bindings, Status::Final)]
+        finished_result(return_not_reducible(), bindings, prev)
     } else {
         results
     }
 }
 
-fn chain<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bindings, nested: Atom, var: VariableAtom, templ: Atom, vars: &Variables) -> Vec<InterpretedAtom> {
-    fn apply(bindings: Bindings, nested: Atom, var: VariableAtom, templ: &Atom) -> InterpretedAtom {
-        let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
-        let result = apply_bindings_to_atom(templ, &b);
-        InterpretedAtom(result, bindings, Status::InProgress)
-    }
-
-    if is_embedded_op(&nested) {
-      let mut result = interpret_nested_atom(context, nested, bindings, vars);
-      if result.len() == 1 {
-          let InterpretedAtom(r, b, s) = result.pop().unwrap();
-          if s == Status::InProgress {
-              vec![InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var), templ]), b, Status::InProgress)]
-          } else {
-              vec![apply(b, r, var.clone(), &templ)]
-          }
-      } else {
-          result.into_iter()
-              .map(|InterpretedAtom(r, b, s)| {
-                  if s == Status::InProgress {
-                      InterpretedAtom(Atom::expr([CHAIN_SYMBOL, r, Atom::Variable(var.clone()), templ.clone()]), b, Status::InProgress)
-                  } else {
-                      apply(b, r, var.clone(), &templ)
-                  }
-              })
-          .collect()
-      }
-    } else {
-        vec![apply(bindings, nested, var, &templ)]
-    }
-}
-
-fn function<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bindings, body: Atom, call: Atom, vars: &Variables) -> Vec<InterpretedAtom> {
-    match atom_as_slice(&body) {
-        Some([op, _result]) if *op == RETURN_SYMBOL => {
-            if let Some([_, result]) = atom_into_array(body) {
-                // FIXME: check return arguments size
-                vec![InterpretedAtom(result, bindings, Status::Final)]
-            } else {
-                panic!("Unexpected state");
-            }
+fn atom_to_stack(atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
+    let expr = atom_as_slice(&atom);
+    let result = match expr {
+        Some([op, ..]) if *op == CHAIN_SYMBOL => {
+            chain_to_stack(atom, prev)
         },
-        _ if is_embedded_op(&body) => {
-            let mut result = interpret_nested_atom(context, body, bindings, vars);
-            if result.len() == 1 {
-                let InterpretedAtom(r, b, _s) = result.pop().unwrap();
-                vec![InterpretedAtom(Atom::expr([FUNCTION_SYMBOL, r, call]), b, Status::InProgress)]
-            } else {
-                result.into_iter()
-                    .map(|InterpretedAtom(r, b, _s)| {
-                        InterpretedAtom(Atom::expr([FUNCTION_SYMBOL, r, call.clone()]), b, Status::InProgress)
-                    })
-                .collect()
-            }
+        Some([op, ..]) if *op == FUNCTION_SYMBOL => {
+            function_to_stack(atom, prev)
+        },
+        Some([op, ..]) if *op == COLLAPSE_BIND => {
+            collapse_bind_to_stack(atom, prev)
         },
         _ => {
-            let error = format!("function doesn't have return statement, last atom: {}", body);
-            vec![InterpretedAtom(error_atom(call, error), bindings, Status::Final)]
+            Stack::from_prev(prev, atom, nop_handler)
+        },
+    };
+    result
+}
+
+fn chain_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
+    let mut nested = Atom::sym("%Nested%");
+    let nested_arg = match atom_as_slice_mut(&mut atom) {
+        Some([_op, nested, Atom::Variable(_var), _templ]) => nested,
+        _ => {
+            let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_SYMBOL, atom);
+            return Stack::from_prev(prev, error_atom(atom, error), nop_handler);
+        },
+    };
+    std::mem::swap(nested_arg, &mut nested);
+    let cur = Stack::from_prev(prev, atom, chain_ret);
+    atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
+}
+
+fn chain_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Option<Stack> {
+    let mut stack = (*stack.borrow()).clone();
+    let nested = atom;
+    let Stack{ prev: _, atom: chain, ret: _, finished: _, vars: _} = &mut stack;
+    let arg = match atom_as_slice_mut(chain) {
+        Some([_op, nested, Atom::Variable(_var), _templ]) => nested,
+        _ => panic!("Unexpected state"),
+    };
+    *arg = nested;
+    Some(stack)
+}
+
+fn chain(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: chain, ret: _, finished: _, vars: _} = stack;
+    let (nested, var, templ) = match atom_into_array(chain) {
+        Some([_op, nested, Atom::Variable(var), templ]) => (nested, var, templ),
+        _ => panic!("Unexpected state"),
+    };
+    let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
+    let result = apply_bindings_to_atom(&templ, &b);
+    vec![InterpretedAtom(atom_to_stack(result, prev), bindings)]
+}
+
+fn function_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
+    let mut nested = Atom::sym("%Nested%");
+    let nested_arg = match atom_as_slice_mut(&mut atom) {
+        Some([_op, nested @ Atom::Expression(_)]) => nested,
+        _ => {
+            let error: String = format!("expected: ({} (: <body> Expression)), found: {}", FUNCTION_SYMBOL, atom);
+            return Stack::from_prev(prev, error_atom(atom, error), nop_handler);
+        },
+    };
+    std::mem::swap(nested_arg, &mut nested);
+    let cur = Stack::from_prev(prev, atom, function_ret);
+    atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
+}
+
+fn call_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Option<Stack> {
+    let mut stack = (*stack.borrow()).clone();
+    stack.atom = atom;
+    stack.finished = true;
+    Some(stack)
+}
+
+fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Option<Stack> {
+    // FIXME: excessive clone
+    match atom_into_array(atom.clone()) {
+        Some([op, result]) if op == RETURN_SYMBOL => {
+            let mut stack = (*stack.borrow()).clone();
+            stack.atom = result;
+            stack.finished = true;
+            Some(stack)
+        },
+        _ => {
+            Some(atom_to_stack(atom, Some(stack)))
         },
     }
 }
 
-fn atom_into_interpreted_atom(atom: Atom) -> InterpretedAtom {
-    match atom {
-        Atom::Expression(_) => match atom_into_array(atom) {
-            Some([atom, bindings]) => {
-                match bindings.as_gnd::<Bindings>() {
-                    Some(bindings) => {
-                        // TODO: cloning is ineffective, but it is not possible
-                        // to convert grounded atom into internal value at the
-                        // moment
-                        InterpretedAtom(atom, bindings.clone(), Status::InProgress)
-                    },
-                    _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
-                }
-            }
-            _ => panic!("Unexpected state: atom is not a pair"),
+fn collapse_bind_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
+    let mut nested = Atom::expr([]);
+    let nested_arg = match atom_as_slice_mut(&mut atom) {
+        Some([_op, nested @ Atom::Expression(_)]) => nested,
+        _ => {
+            let error: String = format!("expected: ({} (: <current> Expression)), found: {}", COLLAPSE_BIND, atom);
+            return Stack::from_prev(prev, error_atom(atom, error), nop_handler);
         },
-        _ => panic!("Unexpected state: atom is not an expression"),
-    }
+    };
+    std::mem::swap(nested_arg, &mut nested);
+    let cur = Stack::from_prev(prev, atom, collapse_bind_ret);
+    atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
-fn atom_as_interpreted_atom(atom: &Atom) -> (&Atom, &Bindings) {
-    match atom_as_slice(atom) {
-        Some([atom, bindings]) => {
-            match bindings.as_gnd::<Bindings>() {
-                Some(bindings) => {
-                    (atom, bindings)
-                },
-                _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
-            }
-        }
-        _ => panic!("Unexpected state: atom is not a pair"),
+fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<Stack> {
+    let nested = atom;
+    {
+        let stack = &mut *stack.borrow_mut();
+        let Stack{ prev: _, atom: collapse, ret: _, finished: _, vars: _ } = stack;
+        let finished = match atom_as_slice_mut(collapse) {
+            Some([_op, Atom::Expression(finished)]) => finished,
+            _ => panic!("Unexpected state"),
+        };
+        finished.children_mut().push(atom_bindings_into_atom(nested, bindings));
     }
+    Rc::into_inner(stack).map(RefCell::into_inner)
 }
 
-fn interpreted_atom_into_atom(interpreted: InterpretedAtom) -> Atom {
-    let InterpretedAtom(atom, bindings, _status) = interpreted;
+fn atom_bindings_into_atom(atom: Atom, bindings: Bindings) -> Atom {
     Atom::expr([atom, Atom::value(bindings)])
 }
 
-fn collapse_bind<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, bindings: Bindings, current: ExpressionAtom, finished: ExpressionAtom, vars: &Variables) -> Vec<InterpretedAtom> {
-    let mut current = current.into_children();
-    let mut finished = finished.into_children();
-    if current.is_empty() {
-        let result: Vec<Atom> = finished.into_iter()
-            .map(atom_into_interpreted_atom)
-            .map(|InterpretedAtom(atom, bindings, _status)| Atom::expr([atom, Atom::value(bindings)]))
-            .collect();
-        vec![InterpretedAtom(Atom::expr(result), bindings, Status::Final)]
-    } else {
-        let next = current.pop().unwrap();
-        let interpreted = atom_into_interpreted_atom(next);
-        let InterpretedAtom(atom, local_bindings, _status) = interpreted;
-        if is_embedded_op(&atom) {
-            interpret_nested_atom(context, atom, local_bindings, vars).into_iter()
-                .map(interpreted_atom_into_atom)
-                .for_each(|atom| current.push(atom));
-        } else {
-            finished.push(interpreted_atom_into_atom(InterpretedAtom(atom, local_bindings, Status::Final)));
-        }
-        vec![InterpretedAtom(Atom::expr([COLLAPSE_BIND, Atom::expr(current), Atom::expr(finished)]), bindings, Status::InProgress)]
-    }
+fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: collapse, ret: _, finished: _, vars: _ } = stack;
+    let result = match atom_into_array(collapse) {
+        Some([_op, finished @ Atom::Expression(_)]) => finished,
+        _ => panic!("Unexpected state"),
+    };
+    vec![InterpretedAtom(atom_to_stack(result, prev), bindings)]
 }
 
-fn superpose_bind(collapsed: ExpressionAtom) -> Vec<InterpretedAtom> {
-    collapsed.into_children().into_iter()
-        .map(atom_into_interpreted_atom)
-        .map(|InterpretedAtom(atom, bindings, _status)| {
-            InterpretedAtom(atom, bindings, Status::Final)
-        })
-        .collect()
-}
+fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: unify, ret: _, finished: _, vars } = stack;
+    let (atom, pattern, then, else_) = match atom_as_slice(&unify) {
+        Some([_op, atom, pattern, then, else_]) => (atom, pattern, then, else_),
+        _ => {
+            let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", UNIFY_SYMBOL, unify);
+            return finished_result(error_atom(unify, error), bindings, prev);
+        },
+    };
 
-fn unify(bindings: Bindings, atom: &Atom, pattern: &Atom, then: &Atom, else_: &Atom, vars: &Variables) -> Vec<InterpretedAtom> {
     // TODO: Should unify() be symmetrical or not. While it is symmetrical then
     // if variable is matched by variable then both variables have the same
     // priority. Thus interpreter can use any of them further. This sometimes
@@ -658,19 +589,20 @@ fn unify(bindings: Bindings, atom: &Atom, pattern: &Atom, then: &Atom, else_: &A
     // from car's argument is replaced.
     let matches: Vec<Bindings> = match_atoms(atom, pattern).collect();
     if matches.is_empty() {
-        let bindings = bindings.narrow_vars(vars);
+        let bindings = bindings.narrow_vars(&*vars);
         let result = apply_bindings_to_atom(else_, &bindings);
-        vec![InterpretedAtom(result, bindings, Status::Final)]
+        finished_result(result, bindings, prev)
     } else {
         matches.into_iter()
-            .flat_map(|b| {
-                let b = b.narrow_vars(vars);
+            .flat_map(move |b| {
+                let b = b.narrow_vars(&*vars);
+                let prev = prev.clone();
                 b.merge_v2(&bindings).into_iter().filter_map(move |b| {
                     if b.has_loops() {
                         None
                     } else {
                         let then = apply_bindings_to_atom(then, &b);
-                        Some(InterpretedAtom(then, b, Status::Final))
+                        Some(InterpretedAtom(Stack::finished(prev.clone(), then), b))
                     }
                 })
             })
@@ -678,30 +610,75 @@ fn unify(bindings: Bindings, atom: &Atom, pattern: &Atom, then: &Atom, else_: &A
     }
 }
 
-fn decons(bindings: Bindings, expr: ExpressionAtom) -> Vec<InterpretedAtom> {
-    let result = match expr.children().len() {
-        0 => InterpretedAtom(Atom::expr([]), bindings, Status::Final),
+fn decons(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: decons, ret: _, finished: _, vars: _ } = stack;
+    // FIXME: excessive clone
+    let expr = match atom_into_array(decons.clone()) {
+        Some([_op, Atom::Expression(expr)]) if expr.children().len() > 0 =>  expr,
         _ => {
-            let mut children = expr.into_children();
-            let head = children.remove(0);
-            let tail = children;
-            InterpretedAtom(Atom::expr([head, Atom::expr(tail)]), bindings, Status::Final)
+            let error: String = format!("expected: ({} (: <expr> Expression)), found: {}", DECONS_SYMBOL, decons);
+            return finished_result(error_atom(decons, error), bindings, prev);
         },
     };
-    vec![result]
+    let mut children = expr.into_children();
+    let head = children.remove(0);
+    let tail = children;
+    finished_result(Atom::expr([head, Atom::expr(tail)]), bindings, prev)
 }
 
-fn cons(bindings: Bindings, head: Atom, tail: ExpressionAtom) -> Vec<InterpretedAtom> {
+fn cons(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: cons, ret: _, finished: _, vars: _ } = stack;
+    // FIXME: excessive clone
+    let (head, tail) = match atom_into_array(cons.clone()) {
+        Some([_op, head, Atom::Expression(tail)]) => (head, tail),
+        _ => {
+            let error: String = format!("expected: ({} <head> (: <tail> Expression)), found: {}", CONS_SYMBOL, cons);
+            return finished_result(error_atom(cons, error), bindings, prev);
+        },
+    };
     let mut children = vec![head];
     children.extend(tail.into_children());
-    vec![InterpretedAtom(Atom::expr(children), bindings, Status::Final)]
+    finished_result(Atom::expr(children), bindings, prev)
+}
+
+fn atom_into_atom_bindings(atom: Atom) -> (Atom, Bindings) {
+    match atom_into_array(atom) {
+        Some([atom, bindings]) => match bindings.as_gnd::<Bindings>() {
+            Some(bindings) => {
+                // TODO: cloning is ineffective, but it is not possible
+                // to convert grounded atom into internal value at the
+                // moment
+                (atom, bindings.clone())
+            },
+            _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
+        },
+        None => panic!("(Atom Bindings) pair is expected"),
+    }
+}
+
+fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: superpose, ret: _, finished: _, vars: _ } = stack;
+    // FIXME: excessive clone
+    let collapsed = match atom_into_array(superpose.clone()) {
+        Some([_op, Atom::Expression(collapsed)]) => collapsed,
+        _ => {
+            let error: String = format!("expected: ({} (: <collapsed> Expression)), found: {}", SUPERPOSE_BIND, superpose);
+            return finished_result(error_atom(superpose, error), bindings, prev);
+        },
+    };
+    collapsed.into_children().into_iter()
+        .map(atom_into_atom_bindings)
+        .map(|(atom, bindings)| {
+            InterpretedAtom(Stack::finished(prev.clone(), atom), bindings)
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::common::test_utils::{metta_atom, metta_space};
-
+/*
     #[test]
     fn interpret_atom_evaluate_incorrect_args() {
         assert_eq!(call_interpret_atom(&space(""), &metta_atom("(eval)")),
@@ -931,7 +908,7 @@ mod tests {
         let result = call_interpret_atom(&space(""), &metta_atom("(cons a (b c))"));
         assert_eq!(result, vec![atom("(a b c)", bind!{}, Status::Final)]);
     }
-
+*/
     #[test]
     fn metta_turing_machine() {
         let space = space("
@@ -989,22 +966,24 @@ mod tests {
         let result = interpret(space, &metta_atom("(eval (tm busy-beaver A (() 0 ())))"));
         assert_eq!(result, Ok(vec![metta_atom("((1 1) 1 (1 1 1))")]));
     }
-
+/*
 
     fn atom(text: &str, bindings: Bindings, status: Status) -> InterpretedAtom {
         InterpretedAtom(metta_atom(text), bindings, status)
     }
+*/
 
     fn space(text: &str) -> GroundingSpace {
         metta_space(text)
     }
 
+/*
     fn call_interpret_atom<'a, T: SpaceRef<'a>>(space: T, atom: &Atom) -> Vec<InterpretedAtom> {
         let mut state = interpret_init(space, atom);
         let interpreted = state.pop().unwrap();
         interpret_root_atom(&state.context, interpreted)
     }
-
+*/
     #[derive(PartialEq, Clone, Debug)]
     struct ThrowError();
 
@@ -1087,5 +1066,36 @@ mod tests {
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             write!(f, "return-nothing")
         }
+    }
+
+    #[test]
+    fn interpret_minimal_metta_smoketest() {
+        let _ = env_logger::builder().is_test(true).try_init();
+        let space = space("
+            (= (foo $a B) $a)
+            (= (fu $x) (function (chain (eval (foo $x B)) $r (return $r))))
+            (= (color) red)
+            (= (color) green)
+            (= (color) blue)
+        ");
+        let result = interpret(&space, &metta_atom("(chain (chain A $x $x) $y $y)"));
+        assert_eq!(result, Ok(vec![metta_atom("A")]));
+        let result = interpret(&space, &metta_atom("(chain (chain (eval (foo A $b)) $x (bar $x)) $y (baz $y))"));
+        assert_eq!(result, Ok(vec![metta_atom("(baz (bar A))")]));
+        let result = interpret(&space, &metta_atom("(chain (chain (eval (fu A)) $x (bar $x)) $y (baz $y))"));
+        assert_eq!(result, Ok(vec![metta_atom("(baz (bar A))")]));
+        let result = interpret(&space, &metta_atom("(unify (A $b) ($a B) ($a $b) Empty)"));
+        assert_eq!(result, Ok(vec![metta_atom("(A B)")]));
+        let result = interpret(&space, &metta_atom("(decons (a b c))"));
+        assert_eq!(result, Ok(vec![metta_atom("(a (b c))")]));
+        let result = interpret(&space, &metta_atom("(cons a (b c))"));
+        assert_eq!(result, Ok(vec![metta_atom("(a b c)")]));
+        let result = interpret(&space, &metta_atom("(chain (collapse-bind (eval (color))) $collapsed (superpose-bind $collapsed))")).unwrap();
+        assert_eq_no_order!(result, vec![metta_atom("red"), metta_atom("green"), metta_atom("blue")]);
+        let result = interpret(&space, &metta_atom("((P $a B) $a)"));
+        assert_eq!(result, Ok(vec![metta_atom("((P $a B) $a)")]));
+        let result = interpret(&space, &metta_atom("(collapse-bind (eval (color)))"));
+        assert!(result.is_ok());
+        assert_eq!(result, Ok(vec![metta_atom("red"), metta_atom("green"), metta_atom("blue")]));
     }
 }

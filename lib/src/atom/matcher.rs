@@ -134,6 +134,7 @@ impl Bindings {
         }
     }
 
+    #[allow(dead_code)] //TODO: MINIMAL only silence the warning until interpreter2 replaces interpreter
     pub(crate) fn len(&self) -> usize {
         self.id_by_var.len()
     }
