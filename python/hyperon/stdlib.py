@@ -1,6 +1,8 @@
 from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError
 from .base import Tokenizer, SExprParser
 from .ext import register_atoms, register_tokens
+from .regex_objects import RegexMatchableAtom
+
 
 class Char:
     """Emulate Char type as in a traditional FPL"""
@@ -136,4 +138,9 @@ def call_atom():
 
     return {
         r"call:[^\s]+": newCallAtom
+    }
+@register_tokens
+def regex_atom():
+    return {
+        r'regex:.*': lambda token: RegexMatchableAtom(token)
     }
