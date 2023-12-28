@@ -52,8 +52,7 @@ struct Stack {
     vars: Rc<Variables>,
 }
 
-// FIXME: rename to no_handler
-fn nop_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> Option<Stack> {
+fn no_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> Option<Stack> {
     panic!("Unexpected state");
 }
 
@@ -66,7 +65,7 @@ impl Stack {
     fn finished(prev: Option<Rc<RefCell<Self>>>, atom: Atom) -> Self {
         // FIXME: here we don't need vars actually
         let vars = Rc::new(Variables::new());
-        Self{ prev, atom, ret: nop_handler, finished: true, vars }
+        Self{ prev, atom, ret: no_handler, finished: true, vars }
     }
 
     fn len(&self) -> usize {
@@ -468,7 +467,7 @@ fn atom_to_stack(atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
             collapse_bind_to_stack(atom, prev)
         },
         _ => {
-            Stack::from_prev(prev, atom, nop_handler)
+            Stack::from_prev(prev, atom, no_handler)
         },
     };
     result
@@ -480,7 +479,7 @@ fn chain_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         Some([_op, nested, Atom::Variable(_var), _templ]) => nested,
         _ => {
             let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_SYMBOL, atom);
-            return Stack::from_prev(prev, error_atom(atom, error), nop_handler);
+            return Stack::from_prev(prev, error_atom(atom, error), no_handler);
         },
     };
     std::mem::swap(nested_arg, &mut nested);
@@ -519,7 +518,7 @@ fn function_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack 
         Some([_op, nested @ Atom::Expression(_)]) => nested,
         _ => {
             let error: String = format!("expected: ({} (: <body> Expression)), found: {}", FUNCTION_SYMBOL, atom);
-            return Stack::from_prev(prev, error_atom(atom, error), nop_handler);
+            return Stack::from_prev(prev, error_atom(atom, error), no_handler);
         },
     };
     std::mem::swap(nested_arg, &mut nested);
@@ -554,7 +553,7 @@ fn collapse_bind_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> S
         Some([_op, nested @ Atom::Expression(_)]) => nested,
         _ => {
             let error: String = format!("expected: ({} (: <current> Expression)), found: {}", COLLAPSE_BIND, atom);
-            return Stack::from_prev(prev, error_atom(atom, error), nop_handler);
+            return Stack::from_prev(prev, error_atom(atom, error), no_handler);
         },
     };
     std::mem::swap(nested_arg, &mut nested);
