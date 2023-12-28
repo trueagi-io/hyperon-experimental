@@ -384,8 +384,7 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
 // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
-pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, metta: &Metta) {
-    let space = metta.space();
+pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
 
     let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
     tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
@@ -412,7 +411,7 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     // pointer and somehow use the same type to represent weak and strong
     // pointers to the atomspace. (2) resolve &self in GroundingSpace::query
     // method without adding it into container.
-    let self_atom = Atom::gnd(metta.space().clone());
+    let self_atom = Atom::gnd(space.clone());
     tref.register_token(regex(r"&self"), move |_| { self_atom.clone() });
 }
 
