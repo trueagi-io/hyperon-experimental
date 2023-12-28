@@ -18,6 +18,23 @@ use std::marker::PhantomData;
 use std::fmt::Write;
 use std::cell::RefCell;
 
+macro_rules! match_atom {
+    ($atom:tt ~ $pattern:tt => $succ:tt , _ => $error:tt) => {
+        match_atom!{ $atom ~ $pattern if true => $succ , _ => $error }
+    };
+    ($atom:tt ~ $pattern:tt if $cond:expr => $succ:tt , _ => $error:tt) => {
+        match atom_as_slice(&$atom) {
+            #[allow(unused_variables)]
+            Some($pattern) if $cond => {
+                match atom_into_array($atom) {
+                    Some($pattern) => $succ,
+                    _ => panic!("Unexpected state"),
+                }
+            }
+            _ => $error,
+        }
+    };
+}
 type ReturnHandler = fn(Rc<RefCell<Stack>>, Atom, Bindings) -> Option<Stack>;
 
 #[derive(Debug, Clone)]
@@ -348,9 +365,8 @@ fn finished_result(atom: Atom, bindings: Bindings, prev: Option<Rc<RefCell<Stack
 
 fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: eval, ret: _, finished: _, vars} = stack;
-    // FIXME: excessive clone
-    let query_atom = match atom_into_array(eval.clone()) {
-        Some([_op, query]) => query,
+    let query_atom = match_atom!{
+        eval ~ [_op, query] => query,
         _ => {
             let error = format!("expected: ({} <atom>), found: {}", EVAL_SYMBOL, eval);
             return finished_result(error_atom(eval, error), bindings, prev);
@@ -486,9 +502,11 @@ fn chain_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Opti
 
 fn chain(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: chain, ret: _, finished: _, vars: _} = stack;
-    let (nested, var, templ) = match atom_into_array(chain) {
-        Some([_op, nested, Atom::Variable(var), templ]) => (nested, var, templ),
-        _ => panic!("Unexpected state"),
+    let (nested, var, templ) = match_atom!{
+        chain ~ [_op, nested, Atom::Variable(var), templ] => (nested, var, templ),
+        _ => {
+            panic!("Unexpected state")
+        }
     };
     let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
     let result = apply_bindings_to_atom(&templ, &b);
@@ -517,9 +535,8 @@ fn call_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Optio
 }
 
 fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Option<Stack> {
-    // FIXME: excessive clone
-    match atom_into_array(atom.clone()) {
-        Some([op, result]) if op == RETURN_SYMBOL => {
+    match_atom!{
+        atom ~ [op, result] if *op == RETURN_SYMBOL => {
             let mut stack = (*stack.borrow()).clone();
             stack.atom = result;
             stack.finished = true;
@@ -527,7 +544,7 @@ fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> O
         },
         _ => {
             Some(atom_to_stack(atom, Some(stack)))
-        },
+        }
     }
 }
 
@@ -565,9 +582,11 @@ fn atom_bindings_into_atom(atom: Atom, bindings: Bindings) -> Atom {
 
 fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: collapse, ret: _, finished: _, vars: _ } = stack;
-    let result = match atom_into_array(collapse) {
-        Some([_op, finished @ Atom::Expression(_)]) => finished,
-        _ => panic!("Unexpected state"),
+    let result = match_atom!{
+        collapse ~ [_op, finished @ Atom::Expression(_)] => finished,
+        _ => {
+            panic!("Unexpected state")
+        }
     };
     vec![InterpretedAtom(atom_to_stack(result, prev), bindings)]
 }
@@ -612,13 +631,12 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
 
 fn decons(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: decons, ret: _, finished: _, vars: _ } = stack;
-    // FIXME: excessive clone
-    let expr = match atom_into_array(decons.clone()) {
-        Some([_op, Atom::Expression(expr)]) if expr.children().len() > 0 =>  expr,
+    let expr = match_atom!{
+        decons ~ [_op, Atom::Expression(expr)] if expr.children().len() > 0 => expr,
         _ => {
             let error: String = format!("expected: ({} (: <expr> Expression)), found: {}", DECONS_SYMBOL, decons);
             return finished_result(error_atom(decons, error), bindings, prev);
-        },
+        }
     };
     let mut children = expr.into_children();
     let head = children.remove(0);
@@ -628,43 +646,45 @@ fn decons(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
 
 fn cons(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: cons, ret: _, finished: _, vars: _ } = stack;
-    // FIXME: excessive clone
-    let (head, tail) = match atom_into_array(cons.clone()) {
-        Some([_op, head, Atom::Expression(tail)]) => (head, tail),
+    let (head, tail) = match_atom!{
+        cons ~ [_op, head, Atom::Expression(tail)] => (head, tail),
         _ => {
             let error: String = format!("expected: ({} <head> (: <tail> Expression)), found: {}", CONS_SYMBOL, cons);
             return finished_result(error_atom(cons, error), bindings, prev);
-        },
+        }
     };
     let mut children = vec![head];
     children.extend(tail.into_children());
     finished_result(Atom::expr(children), bindings, prev)
 }
 
-fn atom_into_atom_bindings(atom: Atom) -> (Atom, Bindings) {
-    match atom_into_array(atom) {
-        Some([atom, bindings]) => match bindings.as_gnd::<Bindings>() {
-            Some(bindings) => {
-                // TODO: cloning is ineffective, but it is not possible
-                // to convert grounded atom into internal value at the
-                // moment
-                (atom, bindings.clone())
-            },
-            _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
+fn atom_into_atom_bindings(pair: Atom) -> (Atom, Bindings) {
+    match_atom!{
+        pair ~ [atom, bindings] => {
+            match bindings.as_gnd::<Bindings>() {
+                Some(bindings) => {
+                    // TODO: cloning is ineffective, but it is not possible
+                    // to convert grounded atom into internal value at the
+                    // moment
+                    (atom, bindings.clone())
+                },
+                _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
+            }
         },
-        None => panic!("(Atom Bindings) pair is expected"),
+        _ => {
+            panic!("(Atom Bindings) pair is expected, {} was received", pair)
+        }
     }
 }
 
 fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: superpose, ret: _, finished: _, vars: _ } = stack;
-    // FIXME: excessive clone
-    let collapsed = match atom_into_array(superpose.clone()) {
-        Some([_op, Atom::Expression(collapsed)]) => collapsed,
+    let collapsed = match_atom!{
+        superpose ~ [_op, Atom::Expression(collapsed)] => collapsed,
         _ => {
             let error: String = format!("expected: ({} (: <collapsed> Expression)), found: {}", SUPERPOSE_BIND, superpose);
             return finished_result(error_atom(superpose, error), bindings, prev);
-        },
+        }
     };
     collapsed.into_children().into_iter()
         .map(atom_into_atom_bindings)
