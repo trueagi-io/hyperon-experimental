@@ -90,8 +90,6 @@ class RegexMatchableObject(MatchableObject):
                 return [{"matched_pattern": S(pattern)}]
         return []
 
-def RegexMatchableAtom(value, type_name=None, atom_id=None):
-    return G(RegexMatchableObject(value, atom_id), AtomType.UNDEFINED)
 
 
 
@@ -132,7 +130,7 @@ def type_tokens():
         "\"[^\"]*\"": lambda token: ValueAtom(str(token[1:-1]), 'String'),
         "\'[^\']\'": lambda token: ValueAtom(Char(token[1]), 'Char'),
         r"True|False": lambda token: ValueAtom(token == 'True', 'Bool'),
-        r'regex:"[^\"]*"': lambda token: RegexMatchableAtom(token)
+        r'regex:"[^"]*"': lambda token: G(RegexMatchableObject(token),  AtomType.UNDEFINED)
     }
 
 @register_tokens
