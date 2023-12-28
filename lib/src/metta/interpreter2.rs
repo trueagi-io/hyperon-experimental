@@ -276,8 +276,8 @@ fn is_embedded_op(atom: &Atom) -> bool {
             || *op == CONS_SYMBOL
             || *op == DECONS_SYMBOL
             || *op == FUNCTION_SYMBOL
-            || *op == COLLAPSE_BIND
-            || *op == SUPERPOSE_BIND,
+            || *op == COLLAPSE_BIND_SYMBOL
+            || *op == SUPERPOSE_BIND_SYMBOL,
         _ => false,
     }
 }
@@ -326,7 +326,7 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
                 let error = format!("function doesn't have return statement, last atom: {}", stack.atom);
                 finished_result(error_atom(stack.atom, error), bindings, stack.prev)
             },
-            Some([op, ..]) if *op == COLLAPSE_BIND => {
+            Some([op, ..]) if *op == COLLAPSE_BIND_SYMBOL => {
                 collapse_bind(stack, bindings)
             },
             Some([op, ..]) if *op == UNIFY_SYMBOL => {
@@ -338,7 +338,7 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
             Some([op, ..]) if *op == CONS_SYMBOL => {
                 cons(stack, bindings)
             },
-            Some([op, ..]) if *op == SUPERPOSE_BIND => {
+            Some([op, ..]) if *op == SUPERPOSE_BIND_SYMBOL => {
                 superpose_bind(stack, bindings)
             },
             _ => {
@@ -463,7 +463,7 @@ fn atom_to_stack(atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         Some([op, ..]) if *op == FUNCTION_SYMBOL => {
             function_to_stack(atom, prev)
         },
-        Some([op, ..]) if *op == COLLAPSE_BIND => {
+        Some([op, ..]) if *op == COLLAPSE_BIND_SYMBOL => {
             collapse_bind_to_stack(atom, prev)
         },
         _ => {
@@ -552,7 +552,7 @@ fn collapse_bind_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> S
     let nested_arg = match atom_as_slice_mut(&mut atom) {
         Some([_op, nested @ Atom::Expression(_)]) => nested,
         _ => {
-            let error: String = format!("expected: ({} (: <current> Expression)), found: {}", COLLAPSE_BIND, atom);
+            let error: String = format!("expected: ({} (: <current> Expression)), found: {}", COLLAPSE_BIND_SYMBOL, atom);
             return Stack::from_prev(prev, error_atom(atom, error), no_handler);
         },
     };
@@ -681,7 +681,7 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let collapsed = match_atom!{
         superpose ~ [_op, Atom::Expression(collapsed)] => collapsed,
         _ => {
-            let error: String = format!("expected: ({} (: <collapsed> Expression)), found: {}", SUPERPOSE_BIND, superpose);
+            let error: String = format!("expected: ({} (: <collapsed> Expression)), found: {}", SUPERPOSE_BIND_SYMBOL, superpose);
             return finished_result(error_atom(superpose, error), bindings, prev);
         }
     };
