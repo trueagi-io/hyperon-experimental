@@ -311,8 +311,10 @@ impl Metta {
         while !runner_state.is_complete() {
             runner_state.run_step()?;
         }
-        let module = runner_state.into_module();
-        Ok(self.add_module(module))
+        match runner_state.into_module() {
+            Ok(module) => Ok(self.add_module(module)),
+            Err(err_atom) => Err(atom_error_message(&err_atom).to_owned())
+        }
     }
 
     /// Internal function to add a loaded module to the runner
@@ -545,9 +547,18 @@ impl<'m, 'input> RunnerState<'m, 'input> {
     }
 
     /// Internal method to return the MettaMod for a RunnerState that just initialized the module
-    pub(crate) fn into_module(self) -> MettaMod {
+    pub(crate) fn into_module(self) -> Result<MettaMod, Atom> {
+
+        for result_vec in self.i_wrapper.results {
+            for result in result_vec {
+                if atom_is_error(&result) {
+                    return Err(result)
+                }
+            }
+        }
+
         match self.module {
-            StateMod::Initializing(module) => module,
+            StateMod::Initializing(module) => Ok(module),
             _ => panic!("Fatal Error: Module loader function exited without calling RunContext::init_self_module")
         }
     }

@@ -112,7 +112,7 @@ class MeTTa:
             if space is None:
                 space = GroundingSpaceRef()
             if env_builder is None:
-                env_builder = hp.env_builder_use_default()
+                env_builder = hp.env_builder_start()
             hp.env_builder_push_fs_module_format(env_builder, _PyFileMeTTaModFmt)
             #LP-TODO-Next, add an fn_module_fmt arg to the standardized way to init environments, so that the
             # Python user can define additional formats without tweaking any hyperon files.  To make this

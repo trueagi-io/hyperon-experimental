@@ -98,7 +98,7 @@ impl MettaMod {
         };
 
         // Load the base tokens for the module's new Tokenizer
-        register_runner_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), metta);
+        register_runner_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), &new_mod.space, metta);
         register_common_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), metta);
 
         new_mod
