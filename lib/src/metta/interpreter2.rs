@@ -57,14 +57,20 @@ fn no_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> O
 }
 
 impl Stack {
-    fn from_prev(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
+    fn from_prev_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
+        // TODO: vars are introduced in specific locations of the atom thus
+        // in theory it is possible to optimize vars search for eval, unify and chain
         let vars = Self::vars(&prev, &atom);
         Self{ prev, atom, ret, finished: false, vars }
     }
 
+    fn from_prev_no_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
+        let vars = Self::vars_copy(&prev);
+        Self{ prev, atom, ret, finished: false, vars }
+    }
+
     fn finished(prev: Option<Rc<RefCell<Self>>>, atom: Atom) -> Self {
-        // FIXME: here we don't need vars actually
-        let vars = Rc::new(Variables::new());
+        let vars = Self::vars_copy(&prev);
         Self{ prev, atom, ret: no_handler, finished: true, vars }
     }
 
@@ -78,6 +84,13 @@ impl Stack {
         match &self.prev {
             None => val,
             Some(prev) => prev.borrow().fold(val, app),
+        }
+    }
+
+    fn vars_copy(prev: &Option<Rc<RefCell<Self>>>) -> Rc<Variables> {
+        match prev {
+            Some(prev) => prev.borrow().vars.clone(),
+            None => Rc::new(Variables::new()),
         }
     }
 
@@ -393,7 +406,7 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, 
                         results.into_iter()
                             .map(|atom| {
                                 let stack = if is_function_op(&atom) {
-                                    let call = Stack::from_prev(prev.clone(), query_atom.clone(), call_ret);
+                                    let call = Stack::from_prev_no_vars(prev.clone(), query_atom.clone(), call_ret);
                                     atom_to_stack(atom, Some(Rc::new(RefCell::new(call))))
                                 } else {
                                     Stack::finished(prev.clone(), atom)
@@ -430,7 +443,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
             .flat_map(|mut b| {
                 let res = apply_bindings_to_atom(&atom_x, &b);
                 let stack = if is_function_op(&res) {
-                    let call = Stack::from_prev(prev.clone(), atom.clone(), call_ret);
+                    let call = Stack::from_prev_no_vars(prev.clone(), atom.clone(), call_ret);
                     atom_to_stack(res, Some(Rc::new(RefCell::new(call))))
                 } else {
                     Stack::finished(prev.clone(), res)
@@ -466,8 +479,12 @@ fn atom_to_stack(atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         Some([op, ..]) if *op == COLLAPSE_BIND_SYMBOL => {
             collapse_bind_to_stack(atom, prev)
         },
+        Some([op, ..]) if *op == EVAL_SYMBOL
+                       || *op == UNIFY_SYMBOL => {
+            Stack::from_prev_vars(prev, atom, no_handler)
+        },
         _ => {
-            Stack::from_prev(prev, atom, no_handler)
+            Stack::from_prev_no_vars(prev, atom, no_handler)
         },
     };
     result
@@ -479,11 +496,11 @@ fn chain_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         Some([_op, nested, Atom::Variable(_var), _templ]) => nested,
         _ => {
             let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_SYMBOL, atom);
-            return Stack::from_prev(prev, error_atom(atom, error), no_handler);
+            return Stack::finished(prev, error_atom(atom, error));
         },
     };
     std::mem::swap(nested_arg, &mut nested);
-    let cur = Stack::from_prev(prev, atom, chain_ret);
+    let cur = Stack::from_prev_vars(prev, atom, chain_ret);
     atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
@@ -518,11 +535,11 @@ fn function_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack 
         Some([_op, nested @ Atom::Expression(_)]) => nested,
         _ => {
             let error: String = format!("expected: ({} (: <body> Expression)), found: {}", FUNCTION_SYMBOL, atom);
-            return Stack::from_prev(prev, error_atom(atom, error), no_handler);
+            return Stack::finished(prev, error_atom(atom, error));
         },
     };
     std::mem::swap(nested_arg, &mut nested);
-    let cur = Stack::from_prev(prev, atom, function_ret);
+    let cur = Stack::from_prev_no_vars(prev, atom, function_ret);
     atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
@@ -553,11 +570,11 @@ fn collapse_bind_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> S
         Some([_op, nested @ Atom::Expression(_)]) => nested,
         _ => {
             let error: String = format!("expected: ({} (: <current> Expression)), found: {}", COLLAPSE_BIND_SYMBOL, atom);
-            return Stack::from_prev(prev, error_atom(atom, error), no_handler);
+            return Stack::finished(prev, error_atom(atom, error));
         },
     };
     std::mem::swap(nested_arg, &mut nested);
-    let cur = Stack::from_prev(prev, atom, collapse_bind_ret);
+    let cur = Stack::from_prev_no_vars(prev, atom, collapse_bind_ret);
     atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
