@@ -137,7 +137,7 @@ void* try_path(const void *payload, const char *path, const char *mod_name) {
     }
 }
 
-void load(const void* payload, struct run_context_t *run_context, struct module_descriptor_t descriptor, void* callback_context) {
+void load(const void* payload, run_context_t* run_context, const module_descriptor_t* descriptor, void* callback_context) {
 
     space_t space = space_new_grounding_space();
     run_context_init_self_module(run_context, descriptor, &space, NULL);
@@ -179,7 +179,7 @@ START_TEST (test_custom_module_format)
 }
 END_TEST
 
-void custom_stdlib_loader(run_context_t *run_context, module_descriptor_t descriptor, void* callback_context) {
+void custom_stdlib_loader(run_context_t *run_context, const module_descriptor_t* descriptor, void* callback_context) {
 
     //Init our new module
     space_t space = space_new_grounding_space();
@@ -188,7 +188,7 @@ void custom_stdlib_loader(run_context_t *run_context, module_descriptor_t descri
 
     //Load the core stdlib (This is optional, and some implementations might not want core stdlib)
     metta_t runner_handle = run_context_get_metta(run_context);
-    module_id_t mod_id = metta_load_core_stdlib(&runner_handle, "core_stdlib", &descriptor);
+    module_id_t mod_id = metta_load_core_stdlib(&runner_handle, "core_stdlib", descriptor);
     metta_free(runner_handle);
 
     //"import * from core_stdlib"

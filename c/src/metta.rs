@@ -875,7 +875,7 @@ struct CModLoaderWrapper {
     name: String,
     //NOTE: This function type matches the internals of mod_loader_callback_t.  This is necessary because
     //  CBindGen has some unfortunate inconsistencies around how Rust types are included in the C header
-    callback: extern "C" fn(run_context: *mut run_context_t, descriptor: module_descriptor_t, callback_context: *mut c_void),
+    callback: extern "C" fn(run_context: *mut run_context_t, descriptor: *const module_descriptor_t, callback_context: *mut c_void),
     callback_context: *mut c_void,
 }
 
@@ -890,7 +890,7 @@ impl ModuleLoader for CModLoaderWrapper {
     fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
         let mut c_context = run_context_t::from(context);
 
-        (self.callback)(&mut c_context, descriptor.into(), self.callback_context);
+        (self.callback)(&mut c_context, &descriptor.into(), self.callback_context);
 
         Ok(())
     }
@@ -1095,7 +1095,7 @@ pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
     metta.free_err_string();
     let rust_metta = metta.borrow();
     let name = cstr_as_str(name);
-    let private_to = if !private_to.is_null() {
+    let private_to = if private_to.is_null() {
         None
     } else {
         let parent_descriptor = unsafe { &*private_to }.borrow();
@@ -1167,7 +1167,7 @@ pub extern "C" fn metta_load_core_stdlib(metta: *mut metta_t,
     metta.free_err_string();
     let rust_metta = metta.borrow();
     let name = cstr_as_str(name);
-    let private_to = if !private_to.is_null() {
+    let private_to = if private_to.is_null() {
         None
     } else {
         let parent_descriptor = unsafe { &*private_to }.borrow();
@@ -1182,6 +1182,21 @@ pub extern "C" fn metta_load_core_stdlib(metta: *mut metta_t,
             ModId::INVALID.into()
         }
     }
+}
+
+/// @brief Returns the Space for a loaded module
+/// @ingroup interpreter_group
+/// @param[in]  metta  A pointer to the handle specifying the runner into which to load the module
+/// @param[in]  mod_id  The `module_id_t` of the loaded module to access
+/// @return  The `space_t` for the module's Space
+/// @note The returned `space_t` must be freed with `space_free`
+///
+#[no_mangle]
+pub extern "C" fn metta_get_module_space(metta: *const metta_t, mod_id: module_id_t) -> space_t {
+    let metta = unsafe{ &*metta }.borrow();
+    let mod_id = mod_id.into_inner();
+
+    metta.module_space(mod_id).into()
 }
 
 /// @brief An interface object providing access to the MeTTa run interface
@@ -1666,6 +1681,7 @@ pub struct module_descriptor_t {
     descriptor: *mut RustModuleDescriptor,
 }
 
+#[derive(Clone)]
 enum RustModuleDescriptor {
     Descriptor(ModuleDescriptor),
     Err(String)
@@ -1686,14 +1702,14 @@ impl module_descriptor_t {
     fn new_err(err: String) -> Self {
         Self{ descriptor: Box::into_raw(Box::new(RustModuleDescriptor::Err(err))) }
     }
+    fn new_from_enum(rust_enum: RustModuleDescriptor) -> Self {
+        Self{ descriptor: Box::into_raw(Box::new(rust_enum)) }
+    }
     fn into_rust_enum(self) -> RustModuleDescriptor {
         unsafe{ *Box::from_raw(self.descriptor) }
     }
-    fn into_inner(self) -> ModuleDescriptor {
-        match self.into_rust_enum() {
-            RustModuleDescriptor::Descriptor(desc) => desc,
-            RustModuleDescriptor::Err(_err) => panic!("Fatal error.  Attempt to access Error module_descriptor_t")
-        }
+    fn borrow_rust_enum(&self) -> &RustModuleDescriptor {
+        unsafe{ &*self.descriptor }
     }
     fn borrow(&self) -> &ModuleDescriptor {
         match unsafe{ &*self.descriptor } {
@@ -1757,6 +1773,18 @@ pub extern "C" fn module_descriptor_error(err_str: *const c_char) -> module_desc
     module_descriptor_t::new_err(cstr_as_str(err_str).to_string()).into()
 }
 
+/// @brief Creates a new module_descriptor_t that is a clone of the argument passed
+/// @ingroup module_group
+/// @param[in]  descriptor  The `module_descriptor_t` to clone
+/// @return The new `module_descriptor_t`
+/// @note The returned `module_descriptor_t` must be freed with `module_descriptor_free()`
+///
+#[no_mangle]
+pub extern "C" fn module_descriptor_clone(descriptor: *const module_descriptor_t) -> module_descriptor_t {
+    let rust_enum = unsafe{ &*descriptor }.borrow_rust_enum();
+    module_descriptor_t::new_from_enum(rust_enum.clone())
+}
+
 /// @brief Frees a module_descriptor_t
 /// @ingroup module_group
 /// @param[in]  descriptor  The `module_descriptor_t` to free
@@ -1773,7 +1801,7 @@ pub extern "C" fn module_descriptor_free(descriptor: module_descriptor_t) {
 /// @param[in]  descriptor  The `module_descriptor_t` to pass to `run_context_init_self_module`
 /// @param[in]  callback_context  The state pointer initially passed to the upstream function
 ///
-pub type mod_loader_callback_t = Option<extern "C" fn(run_context: *mut run_context_t, descriptor: module_descriptor_t, callback_context: *mut c_void)>;
+pub type mod_loader_callback_t = Option<extern "C" fn(run_context: *mut run_context_t, descriptor: *const module_descriptor_t, callback_context: *mut c_void)>;
 
 /// @struct mod_file_fmt_api_t
 /// @brief A table of functions to load MeTTa modules from an arbitrary format
@@ -1830,7 +1858,7 @@ pub struct mod_file_fmt_api_t {
     ///   The argument in favor is that they're fundamentally doing the same thing, but the function params
     ///   are different on account of having a payload, and removing the `payload` argument complicates the
     ///   API as it becomes necessary to repackage the payload inside the `callback_context`
-    load: extern "C" fn(payload: *const c_void, run_context: *mut run_context_t, descriptor: module_descriptor_t, callback_context: *mut c_void),
+    load: extern "C" fn(payload: *const c_void, run_context: *mut run_context_t, descriptor: *const module_descriptor_t, callback_context: *mut c_void),
 
     /// @brief Frees a user-defined structure that may have been allocated in `try_path`.
     /// @param[in]  callback_context  The value returned from `try_path`, if it was non-NULL
@@ -1921,7 +1949,7 @@ impl ModuleLoader for CFsModFmtLoader {
         let api = unsafe{ &*self.api };
         let mut c_context = run_context_t::from(context);
 
-        (api.load)(self.payload, &mut c_context, descriptor.into(), self.callback_context);
+        (api.load)(self.payload, &mut c_context, &descriptor.into(), self.callback_context);
 
         Ok(())
     }
@@ -1952,11 +1980,12 @@ impl Drop for CFsModFmtLoader {
 ///
 #[no_mangle]
 pub extern "C" fn run_context_init_self_module(run_context: *mut run_context_t,
-        descriptor: module_descriptor_t,
+        descriptor: *const module_descriptor_t,
         space: *mut space_t,
         working_dir_path: *const c_char) {
 
     let context = unsafe{ &mut *run_context }.borrow_mut();
+    let descriptor = unsafe{ &*descriptor }.borrow();
     let dyn_space = unsafe{ &*space }.borrow();
     let path = if working_dir_path.is_null() {
         None
@@ -1964,7 +1993,7 @@ pub extern "C" fn run_context_init_self_module(run_context: *mut run_context_t,
         Some(PathBuf::from(cstr_as_str(working_dir_path)))
     };
 
-    context.init_self_module(descriptor.into_inner(), dyn_space.clone(), path);
+    context.init_self_module(descriptor.clone(), dyn_space.clone(), path);
 }
 
 /// @brief Resolves a module name in the context of a running module, and loads that module

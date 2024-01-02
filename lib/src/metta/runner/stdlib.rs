@@ -1263,6 +1263,10 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     target.move_front(&mut rust_tokens);
 }
 
+#[cfg(feature = "minimal")]
+use crate::metta::runner::METTA_CODE;
+
+#[cfg(not(feature = "minimal"))]
 pub static METTA_CODE: &'static str = "
     ; `$then`, `$else` should be of `Atom` type to avoid evaluation
     ; and infinite cycle in inference

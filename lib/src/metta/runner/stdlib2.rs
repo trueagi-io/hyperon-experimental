@@ -2,8 +2,8 @@ use crate::*;
 use crate::matcher::MatchResultIter;
 use crate::space::*;
 use crate::metta::*;
-use crate::metta::text::{Tokenizer, SExprParser};
-use crate::metta::runner::{Metta, RunContext, ModuleDescriptor, ModuleLoader};
+use crate::metta::text::Tokenizer;
+use crate::metta::runner::Metta;
 use crate::metta::types::get_atom_types;
 use crate::common::assert::vec_eq_no_order;
 use crate::common::shared::Shared;
@@ -442,39 +442,6 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
 }
 
 pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
-
-/// Loader to Initialize the core stdlib module
-#[derive(Debug)]
-pub struct CoreStdlibLoader(String);
-
-impl Default for CoreStdlibLoader {
-    fn default() -> Self {
-        CoreStdlibLoader("stdlib".to_string())
-    }
-}
-
-impl CoreStdlibLoader {
-    pub fn new(name: String) -> Self {
-        CoreStdlibLoader(name)
-    }
-}
-
-impl ModuleLoader for CoreStdlibLoader {
-    fn name(&self) -> Result<String, String> {
-        Ok(self.0.clone())
-    }
-    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
-        let space = DynSpace::new(GroundingSpace::new());
-        context.init_self_module(descriptor, space, None);
-
-        register_rust_stdlib_tokens(&mut *context.module().tokenizer().borrow_mut());
-
-        let parser = SExprParser::new(METTA_CODE);
-        context.push_parser(Box::new(parser));
-
-        Ok(())
-    }
-}
 
 #[cfg(test)]
 mod tests {

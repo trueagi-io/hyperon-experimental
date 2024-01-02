@@ -21,6 +21,12 @@ struct CPtr {
 };
 
 template <typename T>
+struct CConstPtr {
+    CConstPtr(const T* ptr) : ptr(ptr) {}
+    const T* ptr;
+};
+
+template <typename T>
 struct CStruct {
     CStruct(T obj) : obj(obj) {}
     T obj;
@@ -38,7 +44,7 @@ using CStepResult = CStruct<step_result_t>;
 using CRunnerState = CStruct<runner_state_t>;
 using CMetta = CStruct<metta_t>;
 using CRunContext = CPtr<run_context_t>;
-using CModuleDescriptor = CStruct<module_descriptor_t>;
+using CModuleDescriptor = CConstPtr<module_descriptor_t>;
 using ModuleId = CStruct<module_id_t>;
 using EnvBuilder = CStruct<env_builder_t>;
 
@@ -405,7 +411,7 @@ void syntax_node_copy_to_list_callback(const syntax_node_t* node, void *context)
 };
 
 // A C function that wraps a Python function, so that the python code to load the stdlib can be run inside `metta_new_with_space_environment_and_stdlib()`
-void run_python_stdlib_loader(run_context_t* run_context, module_descriptor_t descriptor, void* callback_context) {
+void run_python_stdlib_loader(run_context_t* run_context, const module_descriptor_t* descriptor, void* callback_context) {
     py::object runner_mod = py::module_::import("hyperon.runner");
     py::function load_py_stdlib = runner_mod.attr("_priv_load_py_stdlib");
     CRunContext c_run_context = CRunContext(run_context);
@@ -414,7 +420,7 @@ void run_python_stdlib_loader(run_context_t* run_context, module_descriptor_t de
 }
 
 // A C function that dispatches to a Python function, so that the Python module loader code can be run inside `metta_load_module_direct()`
-void run_python_module_loader(run_context_t* run_context, module_descriptor_t descriptor, void* callback_context) {
+void run_python_module_loader(run_context_t* run_context, const module_descriptor_t* descriptor, void* callback_context) {
     py::function* py_func = (py::function*)callback_context;
     CRunContext c_run_context = CRunContext(run_context);
     CModuleDescriptor c_descriptor = CModuleDescriptor(descriptor);
@@ -448,7 +454,7 @@ void* try_path_mod_fmt_callback(const void* payload, const char* path, const cha
     }
 }
 
-void load_mod_fmt_callback(const void* payload, struct run_context_t* run_context, struct module_descriptor_t descriptor, void* callback_context) {
+void load_mod_fmt_callback(const void* payload, run_context_t* run_context, const module_descriptor_t* descriptor, void* callback_context) {
     py::object* fmt_interface_obj = (py::object*)payload;
     py::object* callback_context_obj = (py::object*)callback_context;
     py::function py_func = fmt_interface_obj->attr("_load_called_from_c");
@@ -834,7 +840,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CRunContext>(m, "CRunContext");
     m.def("run_context_init_self_module", [](CRunContext& run_context, CModuleDescriptor descriptor, CSpace space, char const* working_dir) {
-        run_context_init_self_module(run_context.ptr, descriptor.obj, space.ptr(), working_dir);
+        run_context_init_self_module(run_context.ptr, descriptor.ptr, space.ptr(), working_dir);
     }, "Init module in loader");
     m.def("run_context_load_module", [](CRunContext& run_context, const char* mod_name) {
         return ModuleId(run_context_load_module(run_context.ptr, mod_name));
@@ -873,10 +879,10 @@ PYBIND11_MODULE(hyperonpy, m) {
         return func_to_string((write_to_buf_func_t)&metta_working_dir, metta.ptr());
     }, "Returns the working dir from the runner's environment");
     m.def("metta_load_core_stdlib", [](CMetta& metta, char const* mod_name, CModuleDescriptor& private_to) {
-        return ModuleId(metta_load_core_stdlib(metta.ptr(), mod_name, private_to.ptr()));
+        return ModuleId(metta_load_core_stdlib(metta.ptr(), mod_name, private_to.ptr));
     }, "Loads the core stdlib into a runner");
     m.def("metta_load_module_direct", [](CMetta& metta, char const* mod_name, CModuleDescriptor& private_to, py::function* py_func) {
-        return ModuleId(metta_load_module_direct(metta.ptr(), mod_name, private_to.ptr(), &run_python_module_loader, (void*)py_func));
+        return ModuleId(metta_load_module_direct(metta.ptr(), mod_name, private_to.ptr, &run_python_module_loader, (void*)py_func));
     }, "Loads a module into a runner using a function");
     m.def("metta_load_module_at_path", [](CMetta& metta, char const* path, nonstd::optional<char const*> mod_name) {
         char const* name = mod_name.value_or((char const*)NULL);

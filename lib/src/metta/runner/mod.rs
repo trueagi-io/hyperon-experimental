@@ -76,8 +76,6 @@ pub use environment::{Environment, EnvBuilder};
 pub mod stdlib;
 #[cfg(not(feature = "minimal"))]
 use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
-#[cfg(not(feature = "minimal"))]
-use stdlib::*;
 
 #[cfg(feature = "minimal")]
 pub mod stdlib2;
@@ -85,6 +83,8 @@ pub mod stdlib2;
 use super::interpreter2::{interpret, interpret_init, interpret_step, InterpreterState};
 #[cfg(feature = "minimal")]
 use stdlib2::*;
+
+use stdlib::CoreStdlibLoader;
 
 pub mod arithmetics;
 
@@ -337,6 +337,12 @@ impl Metta {
     /// Returns a reference to the Space associated with the runner's top module
     pub fn space(&self) -> &DynSpace {
         &self.0.top_mod_space
+    }
+
+    /// Returns the [DynSpace] handle associated with any loaded module's Space
+    pub fn module_space(&self, mod_id: ModId) -> DynSpace {
+        let modules = self.0.modules.lock().unwrap();
+        modules.get(mod_id.0).unwrap().space().clone()
     }
 
     /// Returns a reference to the Tokenizer associated with the runner's top module
