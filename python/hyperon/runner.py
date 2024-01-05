@@ -162,10 +162,6 @@ class MeTTa:
         """Parse the next single token from the text program"""
         return next(self._parse_all(program))
 
-    def __load_core_stdlib(self, mod_name, private_to):
-        """Loads the core stdlib into the runner, with the specified name and scope"""
-        return hp.metta_load_core_stdlib(self.cmetta, mod_name, private_to.c_module_descriptor)
-
     def load_module_direct_from_func(self, mod_name, private_to, py_loader_func):
         """Loads a module into the runner using a loader function, with the specified name and scope"""
         def loader_func(c_run_context, c_descriptor):
@@ -303,7 +299,7 @@ def _priv_load_py_stdlib(c_run_context, c_descriptor):
     run_context = RunContext(c_run_context)
     descriptor = ModuleDescriptor(c_descriptor)
 
-    stdlib_loader = _priv_make_module_loader_func_for_pymod("hyperon.stdlib", load_core_stdlib=True)
+    stdlib_loader = _priv_make_module_loader_func_for_pymod("hyperon.stdlib", load_corelib=True)
     stdlib_loader(run_context, descriptor)
 
     # #LP-TODO-Next Make a test for loading a metta module from a python module using load_module_direct_from_pymod
@@ -311,7 +307,7 @@ def _priv_load_py_stdlib(c_run_context, c_descriptor):
     # py_stdlib_id = run_context.metta().load_module_direct_from_pymod("stdlib-py", descriptor, "hyperon.stdlib")
     # run_context.import_dependency(py_stdlib_id)
 
-def _priv_make_module_loader_func_for_pymod(pymod_name, load_core_stdlib=False, load_py_stdlib=False):
+def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False, load_py_stdlib=False):
     """
     Private function to return a loader function to load a module into the runner directly from the specified Python module
     """
@@ -325,10 +321,10 @@ def _priv_make_module_loader_func_for_pymod(pymod_name, load_core_stdlib=False, 
             space = GroundingSpaceRef()
             run_context.init_self_module(descriptor, space, None)
 
-            #Load and import the Python or core stdlib using "import *" behavior
-            if load_core_stdlib:
-                core_stdlib_id = run_context.metta()._MeTTa__load_core_stdlib("stdlib-core", descriptor)
-                run_context.import_dependency(core_stdlib_id)
+            #Load and import the Python stdlib or corelib using "import *" behavior
+            if load_corelib:
+                corelib_id = run_context.load_module("corelib")
+                run_context.import_dependency(corelib_id)
             if load_py_stdlib:
                 py_stdlib_id = run_context.load_module("stdlib")
                 run_context.import_dependency(py_stdlib_id)

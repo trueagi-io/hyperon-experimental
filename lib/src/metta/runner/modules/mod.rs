@@ -87,8 +87,7 @@ impl Clone for MettaMod {
 impl MettaMod {
 
     /// Internal method to initialize an empty MettaMod
-    // TODO: may be able to remove the metta argument when the dust settles
-    pub(crate) fn new_with_tokenizer(metta: &Metta, descriptor: ModuleDescriptor, space: DynSpace, tokenizer: Shared<Tokenizer>, working_dir: Option<PathBuf>) -> Self {
+    pub(crate) fn new_with_tokenizer(metta: &Metta, descriptor: ModuleDescriptor, space: DynSpace, tokenizer: Shared<Tokenizer>, working_dir: Option<PathBuf>, no_stdlib: bool) -> Self {
         let new_mod = Self {
             descriptor,
             space,
@@ -100,6 +99,13 @@ impl MettaMod {
         // Load the base tokens for the module's new Tokenizer
         register_runner_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), &new_mod.space, metta);
         register_common_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), metta);
+
+        //Load the stdlib unless this module is no_std
+        if !no_stdlib {
+            if let Some(stdlib_mod_id) = metta.0.stdlib_mod.get() {
+                new_mod.import_dependency_legacy(&metta, *stdlib_mod_id).unwrap();
+            }
+        }
 
         new_mod
     }

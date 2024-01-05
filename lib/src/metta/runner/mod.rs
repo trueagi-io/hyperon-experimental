@@ -68,7 +68,7 @@ use modules::*;
 use std::rc::Rc;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 
 mod environment;
 pub use environment::{Environment, EnvBuilder};
@@ -84,7 +84,7 @@ use super::interpreter2::{interpret, interpret_init, interpret_step, Interpreter
 #[cfg(feature = "minimal")]
 use stdlib2::*;
 
-use stdlib::CoreStdlibLoader;
+use stdlib::CoreLibLoader;
 
 pub mod arithmetics;
 
@@ -117,6 +117,8 @@ pub struct MettaContents {
     top_mod_space: DynSpace,
     /// A clone of the top module's Tokenizer
     top_mod_tokenizer: Shared<Tokenizer>,
+    /// The ModId of the extended stdlib to import into some modules loaded into the runner
+    stdlib_mod: OnceLock<ModId>,
     /// The runner's pragmas, affecting runner-wide behavior
     settings: Shared<HashMap<String, Atom>>,
     /// The runner's Environment
@@ -135,8 +137,11 @@ pub struct MettaContents {
 pub struct ModId(pub usize);
 
 impl ModId {
+    /// An invalid ModId that doesn't point to any loaded module
     pub const INVALID: ModId = ModId(usize::MAX);
-    pub const TOP_MOD: ModId = ModId(0);
+
+    /// An reserved ModId for the runner's top module
+    pub const TOP: ModId = ModId(0);
 }
 
 impl Metta {
@@ -150,10 +155,9 @@ impl Metta {
 
     /// Create and initialize a MeTTa runner with a custom stdlib, for example a language-specific stdlib
     ///
-    /// If the custom stdlib wishes to use the core stdlib, the custom loader may load the core stdlib
-    /// using [CoreStdlibLoader]
+    /// NOTE: The custom stdlib loader may import the corelib if desired, but it won't be imported automatically.
     ///
-    /// NOTE: pass `None` for `loader` to use the core `stdlib`
+    /// NOTE: Is `None` is passed as the `loader` parameter, `stdlib` will be an alias to `corelib`
     /// pass `None` for space to create a new [GroundingSpace]
     /// pass `None` for `env_builder` to use the common environment
     pub fn new_with_stdlib_loader(loader: Option<&dyn ModuleLoader>, space: Option<DynSpace>, env_builder: Option<EnvBuilder>) -> Metta {
@@ -165,20 +169,24 @@ impl Metta {
         //Create the raw MeTTa runner
         let metta = Metta::new_core(space, env_builder);
 
-        //Load the stdlib
-        let core_loader;
-        let stdlib_loader = match loader {
-            Some(loader) => loader,
-            None => {core_loader = CoreStdlibLoader::default(); &core_loader}
-        };
-        let stdlib_mod_id = metta.load_module_direct(stdlib_loader, None).expect("Failed to load stdlib");
+        //Load the "corelib" module into the runner
+        let corelib_mod_id = metta.load_module_direct(&CoreLibLoader::default(), None).expect("Failed to load corelib");
 
-        //Import the stdlib into &self
+        //Load the stdlib if we have one, and otherwise make an alias to corelib
+        let stdlib_mod_id = match loader {
+            Some(loader) => metta.load_module_direct(loader, None).expect("Failed to load stdlib"),
+            None => metta.load_module_alias("stdlib".to_string(), corelib_mod_id).expect("Failed to create stdlib alias for corelib")
+        };
+
+        //Set the runner's stdlib mod_id
+        metta.0.stdlib_mod.set(stdlib_mod_id).unwrap();
+
+        //Import the stdlib into the top module
         let mut runner_state = RunnerState::new(&metta);
         runner_state.run_in_context(|context| {
             context.module().import_dependency_legacy(&metta, stdlib_mod_id).unwrap();
             Ok(())
-        }).expect("Failed to load stdlib");
+        }).expect("Failed to import stdlib");
         drop(runner_state);
 
         //Run the `init.metta` file
@@ -193,10 +201,10 @@ impl Metta {
         metta
     }
 
-    /// Returns a new core MeTTa interpreter without any stdlib or initialization
+    /// Returns a new core MeTTa interpreter without any loaded corelib, stdlib, or initialization
     ///
     /// NOTE: If `env_builder` is `None`, the common environment will be used
-    /// NOTE: This function does not load any stdlib atoms, nor run the [Environment]'s 'init.metta'
+    /// NOTE: This function does not load any modules, nor run the [Environment]'s 'init.metta'
     pub fn new_core(space: DynSpace, env_builder: Option<EnvBuilder>) -> Self {
         let settings = Shared::new(HashMap::new());
         let environment = match env_builder {
@@ -211,14 +219,15 @@ impl Metta {
             public_mods: Mutex::new(HashMap::new()),
             top_mod_space: space.clone(),
             top_mod_tokenizer: top_mod_tokenizer.clone(),
+            stdlib_mod: OnceLock::new(),
             settings,
             environment,
             context: std::sync::Arc::new(std::sync::Mutex::new(vec![])),
         };
         let metta = Self(Rc::new(contents));
 
-        let top_mod = MettaMod::new_with_tokenizer(&metta, ModuleDescriptor::top(), space, top_mod_tokenizer, top_mod_working_dir);
-        assert_eq!(metta.add_module(top_mod), ModId::TOP_MOD);
+        let top_mod = MettaMod::new_with_tokenizer(&metta, ModuleDescriptor::top(), space, top_mod_tokenizer, top_mod_working_dir, false);
+        assert_eq!(metta.add_module(top_mod), ModId::TOP);
 
         metta
     }
@@ -244,6 +253,7 @@ impl Metta {
     ///
     /// If `mod_name` is [None], the module name will be loaded privately, and won't be accessible for
     /// import by name, elsewhere within the runner
+    //LP-TODO-NEXT: I think we should use the "private_to" convention for consistency with other loading functions
     pub fn load_module_at_path<P: AsRef<Path>>(&self, path: P, mod_name: Option<&str>) -> Result<ModId, String> {
 
         // Resolve the module name into a loader object using the resolution logic in the bom
@@ -280,6 +290,16 @@ impl Metta {
             public_mods.insert(mod_name, mod_id);
         }
 
+        Ok(mod_id)
+    }
+
+    /// Makes a public alias for a loaded module inside the runner
+    pub fn load_module_alias(&self, mod_name: String, mod_id: ModId) -> Result<ModId, String> {
+        let mut public_mods = self.0.public_mods.lock().unwrap();
+        if public_mods.get(&mod_name).is_some() {
+            return Err(format!("Attempt to create public module alias with name that conflicts with existing module: {mod_name}"));
+        }
+        public_mods.insert(mod_name, mod_id);
         Ok(mod_id)
     }
 
@@ -461,7 +481,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
 
     /// Returns a new RunnerState to execute code in the context of a MeTTa runner's top module
     pub fn new(metta: &'m Metta) -> Self {
-        Self::new_with_module(metta, ModId::TOP_MOD)
+        Self::new_with_module(metta, ModId::TOP)
     }
 
     /// Returns a new RunnerState to execute code in the context of any loaded module
@@ -664,7 +684,7 @@ impl<'input> RunContext<'_, '_, 'input> {
                     panic!("Module already initialized");
                 }
                 let tokenizer = Shared::new(Tokenizer::new());
-                **state_mod_ref = StateMod::Initializing(MettaMod::new_with_tokenizer(self.metta, descriptor, space, tokenizer, working_dir));
+                **state_mod_ref = StateMod::Initializing(MettaMod::new_with_tokenizer(self.metta, descriptor, space, tokenizer, working_dir, false));
             }
         }
     }

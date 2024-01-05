@@ -42,11 +42,19 @@ impl Tokenizer {
         self.register_token(regex, constr)
     }
 
+    /// Moves all tokenizer entries from `from` into `self`, leaving `from` empty
+    ///
+    /// NOTE: Tokens are tried in reverse order, so `move_front` actually adds entries that will be tried
+    /// **last** in the priority order
     pub fn move_front(&mut self, from: &mut Tokenizer) {
         from.move_back(self);
         self.move_back(from);
     }
 
+    /// Moves all tokenizer entries from `from` into `self`, leaving `from` empty
+    ///
+    /// NOTE: Tokens are tried in reverse order, so `move_back` actually adds entries that will be tried
+    /// **first** in the priority order
     pub fn move_back(&mut self, from: &mut Tokenizer) {
         self.tokens.append(&mut from.tokens);
     }

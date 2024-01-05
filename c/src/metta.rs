@@ -5,7 +5,6 @@ use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::{Metta, RunContext, ModId, RunnerState, Environment, EnvBuilder};
 use hyperon::metta::runner::modules::{FsModuleFormat, ModuleLoader, ModuleDescriptor};
-use hyperon::metta::runner::stdlib::CoreStdlibLoader;
 use hyperon::rust_type_atom;
 
 use crate::util::*;
@@ -1140,41 +1139,6 @@ pub extern "C" fn metta_load_module_at_path(metta: *mut metta_t,
     };
 
     match rust_metta.load_module_at_path(path, mod_name) {
-        Ok(mod_id) => mod_id.into(),
-        Err(err) => {
-            let err_cstring = std::ffi::CString::new(err).unwrap();
-            metta.err_string = err_cstring.into_raw();
-            ModId::INVALID.into()
-        }
-    }
-}
-
-/// @brief Loads a version of the core stdlib directly into the runner
-/// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the handle specifying the runner into which to load the module
-/// @param[in]  name  A C-string specifying a name for the module
-/// @param[in]  private_to  If the module is private, pass a pointer to the `module_descriptor_t` of the
-///     the parent module.  Passing NULL will make the module available for loading by any other module
-/// @return  The `module_id_t` for the loaded module, or `invalid` if there was an error
-/// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
-///
-#[no_mangle]
-pub extern "C" fn metta_load_core_stdlib(metta: *mut metta_t,
-        name: *const c_char,
-        private_to: *const module_descriptor_t) -> module_id_t {
-
-    let metta = unsafe{ &mut *metta };
-    metta.free_err_string();
-    let rust_metta = metta.borrow();
-    let name = cstr_as_str(name);
-    let private_to = if private_to.is_null() {
-        None
-    } else {
-        let parent_descriptor = unsafe { &*private_to }.borrow();
-        Some(parent_descriptor)
-    };
-
-    match rust_metta.load_module_direct(&CoreStdlibLoader::new(name.to_string()), private_to) {
         Ok(mod_id) => mod_id.into(),
         Err(err) => {
             let err_cstring = std::ffi::CString::new(err).unwrap();

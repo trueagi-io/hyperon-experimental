@@ -1295,23 +1295,20 @@ pub static METTA_CODE: &'static str = "
     (= (empty) (let a b never-happens))
 ";
 
-/// Loader to Initialize the core stdlib module
+/// Loader to Initialize the corelib module
+///
+/// NOTE: the corelib will be loaded automatically if the runner is initialized with one of the high-level
+/// init functions such as [Metta::new] and [Metta::new_with_stdlib_loader]
 #[derive(Debug)]
-pub struct CoreStdlibLoader(String);
+pub(crate) struct CoreLibLoader(String);
 
-impl Default for CoreStdlibLoader {
+impl Default for CoreLibLoader {
     fn default() -> Self {
-        CoreStdlibLoader("stdlib".to_string())
+        CoreLibLoader("corelib".to_string())
     }
 }
 
-impl CoreStdlibLoader {
-    pub fn new(name: String) -> Self {
-        CoreStdlibLoader(name)
-    }
-}
-
-impl ModuleLoader for CoreStdlibLoader {
+impl ModuleLoader for CoreLibLoader {
     fn name(&self) -> Result<String, String> {
         Ok(self.0.clone())
     }

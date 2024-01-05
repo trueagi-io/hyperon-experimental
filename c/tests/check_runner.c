@@ -186,13 +186,9 @@ void custom_stdlib_loader(run_context_t *run_context, const module_descriptor_t*
     run_context_init_self_module(run_context, descriptor, &space, NULL);
     space_free(space);
 
-    //Load the core stdlib (This is optional, and some implementations might not want core stdlib)
-    metta_t runner_handle = run_context_get_metta(run_context);
-    module_id_t mod_id = metta_load_core_stdlib(&runner_handle, "core_stdlib", descriptor);
-    metta_free(runner_handle);
-
-    //"import * from core_stdlib"
-    run_context_import_dependency(run_context, mod_id);
+    //"import * from corelib" (This is optional, and some implementations might not want it)
+    module_id_t corelib_mod_id = run_context_load_module(run_context, "corelib");
+    run_context_import_dependency(run_context, corelib_mod_id);
 
     //Load a custom atom using the MeTTa syntax
     sexpr_parser_t parser = sexpr_parser_new("test-atom");

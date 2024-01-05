@@ -878,9 +878,6 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("metta_working_dir", [](CMetta& metta) {
         return func_to_string((write_to_buf_func_t)&metta_working_dir, metta.ptr());
     }, "Returns the working dir from the runner's environment");
-    m.def("metta_load_core_stdlib", [](CMetta& metta, char const* mod_name, CModuleDescriptor& private_to) {
-        return ModuleId(metta_load_core_stdlib(metta.ptr(), mod_name, private_to.ptr));
-    }, "Loads the core stdlib into a runner");
     m.def("metta_load_module_direct", [](CMetta& metta, char const* mod_name, CModuleDescriptor& private_to, py::function* py_func) {
         return ModuleId(metta_load_module_direct(metta.ptr(), mod_name, private_to.ptr, &run_python_module_loader, (void*)py_func));
     }, "Loads a module into a runner using a function");
