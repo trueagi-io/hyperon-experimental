@@ -212,13 +212,21 @@ impl ModuleBom {
             }
         }
 
-        //QUESTION: Do we want to search the module's Working Dir before searching the environment's catalogs?
-        // This would allow a module to import another module inside its directory or as a peer of itself
-        // for single-file modules, without including an explicit bom entry.  On the other hand, we might want
-        // to require module authors to include a bom entry to be explicit about their dependencies
+        //Search the module's Working Dir before searching the environment's catalogs
+        // This allows a module to import another module inside its directory or as a peer of itself for
+        // single-file modules, without including an explicit bom entry.  On the other hand, If we want
+        // to require module authors to include a bom entry to be explicit about their dependencies, we
+        // can remove this
+        let working_dir_catalog;
+        let local_catalogs = if let Some(mod_working_dir) = context.module().working_dir() {
+            working_dir_catalog = DirCatalog::new(PathBuf::from(mod_working_dir), context.metta().environment().fs_mod_formats.clone());
+            vec![&working_dir_catalog as &dyn ModuleCatalog]
+        } else {
+            vec![]
+        };
 
         //Search the catalogs in the runner's Environment
-        for catalog in context.metta.environment().catalogs() {
+        for catalog in local_catalogs.into_iter().chain(context.metta.environment().catalogs()) {
             log::trace!("Looking for module: \"{name}\" inside {catalog:?}");
             //TODO: use lookup_newest_within_version_range, as soon as I add module versioning
             let results = catalog.lookup(name);

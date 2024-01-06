@@ -111,6 +111,8 @@ pub struct MettaContents {
     /// An index, to find a loaded module from a ModuleDescriptor
     module_descriptors: Mutex<HashMap<ModuleDescriptor, ModId>>,
     /// A table of public mods loaded by name
+    //LP-TODO-NEXT: Think about whether the "public" module namespace should be hierarchical instead of flat
+    // This will have implications related to version resolution.  See: "QUESTION on shared base dependencies"
     public_mods: Mutex<HashMap<String, ModId>>,
     /// A clone of the top module's Space, so we don't need to do any locking to access it,
     /// to support the metta.space() public function

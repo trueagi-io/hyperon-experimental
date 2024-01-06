@@ -19,7 +19,7 @@ pub struct Environment {
     working_dir: Option<PathBuf>,
     is_test: bool,
     catalogs: Vec<Box<dyn ModuleCatalog>>,
-    fs_mod_formats: Arc<Vec<Box<dyn FsModuleFormat>>>,
+    pub(crate) fs_mod_formats: Arc<Vec<Box<dyn FsModuleFormat>>>,
 }
 
 const DEFAULT_INIT_METTA: &[u8] = include_bytes!("init.default.metta");

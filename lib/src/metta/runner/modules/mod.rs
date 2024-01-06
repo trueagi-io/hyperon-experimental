@@ -125,10 +125,16 @@ impl MettaMod {
             Ok((dep_space, name))
         })?;
 
+        //If the space name doesn't begin with '&' then add it
+        let new_space_token = if name.starts_with('&') {
+            name
+        } else {
+            format!("&{name}")
+        };
+
         // Add a new atom to the &self space, so we can access the dependent module
-        let new_token = format!("&{name}");
         let dep_space_atom = Atom::gnd(dep_space);
-        self.tokenizer.borrow_mut().register_token_with_regex_str(&new_token, move |_| { dep_space_atom.clone() });
+        self.tokenizer.borrow_mut().register_token_with_regex_str(&new_space_token, move |_| { dep_space_atom.clone() });
 
         Ok(())
     }
