@@ -128,7 +128,7 @@ impl Grounded for ImportOp {
                         context.module().import_dependency_legacy(&context.metta, mod_id)?;
                     },
                     _ => {
-                        return Err(format!("import! destination argument must be a symbol atom or &self.  Found: {other_atom:?}").into());
+                        return Err(format!("import! destination argument must be a symbol atom naming a new space, or &self.  Found: {other_atom:?}").into());
                     }
                 }
             }

@@ -54,6 +54,10 @@ impl ModuleDescriptor {
     pub fn new_with_uid(name: String, uid: u64) -> Self {
         Self { name, uid: Some(uid) }
     }
+    /// Returns the name of the module represented by the ModuleDescriptor
+    pub fn name(&self) -> &str {
+        &self.name
+    }
     /// Internal.  Use the Hash trait to get a uid for the whole ModuleDescriptor
     pub(crate) fn hash(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
@@ -249,7 +253,7 @@ impl MettaMod {
             Ok(dep_space)
         })?;
 
-        // Add a new atom to the &self space, so we can access the dependent module
+        // Add a new Grounded Space atom to the &self space, so we can access the dependent module
         let dep_space_atom = Atom::gnd(dep_space);
         self.add_atom(dep_space_atom, false).map_err(|a| a.to_string())?;
 

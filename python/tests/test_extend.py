@@ -6,7 +6,7 @@ class ExtendTest(unittest.TestCase):
 
     def test_extend(self):
         '''
-        This test verifies that extend-py! along with @register_atoms and @register_tokens works
+        This test verifies that importing from a python-implemnted module along with @register_atoms and @register_tokens works
         '''
         metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
         self.assertEqual(

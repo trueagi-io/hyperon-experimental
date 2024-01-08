@@ -20,7 +20,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Importing the module into new space
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-!(import! &m f1_moduleA.metta)
+!(import! f1_moduleA &m)
 
 ; It's first atom is a space
 !(assertEqual
@@ -49,7 +49,7 @@
 ; Importing the same space into `&self` should break nothing
 ; TODO? If stdlib space would be in `&m`, which should check that it is not
 ; there anymore since in should be removed after importing it to `&self`
-!(import! &self f1_moduleA.metta)
+!(import! f1_moduleA &self)
 
 ; Now indirectly imported `g` works and `f` fully works
 !(assertEqual (g 2) 102)
@@ -84,7 +84,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Let's import one more module into `&self` with a diamond dependence
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-!(import! &self f1_moduleB.metta)
+!(import! f1_moduleB &self)
 ; `g` from moduleC imported via two paths as well as `f`, which uses `g`,
 ; are not duplicated and produce deterministic results
 !(assertEqual (g 2) 102)
@@ -99,7 +99,7 @@
 ; Let's import f1_moduleB.metta once more using a different path.
 ; Such import should be ignored and thus f, g and dup should remain
 ; unchanged.
-!(import! &self ../scripts/f1_moduleB.metta)
+!(import! ../scripts/f1_moduleB &self)
 !(assertEqual (g 2) 102)
 !(assertEqual (f 2) 103)
 !(assertEqualToResult

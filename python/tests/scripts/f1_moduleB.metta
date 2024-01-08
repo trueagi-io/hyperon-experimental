@@ -2,6 +2,6 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Example file used by f1_imports.metta
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-!(import! &self f1_moduleC.metta)
+!(import! f1_moduleC &self)
 
 (= (dup $x) (if (== $x 0) (g $x) (+ $x 10)))
