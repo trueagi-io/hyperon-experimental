@@ -946,46 +946,34 @@ mod tests {
     #[test]
     fn metta_turing_machine() {
         let space = space("
-            (= (if-embedded-op $atom $then $else)
-              (chain (decons $atom) $list
-                (unify $list (cons $_) $then
-                  (unify $list (decons $_) $then
-                    (unify $list (chain $_) $then
-                      (unify $list (eval $_) $then
-                        (unify $list (unify $_) $then
-                          $else )))))))
-
-            (= (chain-loop $atom $var $templ)
-              (chain $atom $x
-                (eval (if-embedded-op $x
-                  (eval (chain-loop $x $var $templ))
-                  (chain $x $var $templ) ))))
-
             (= (tm $rule $state $tape)
+              (function (eval (tm-body $rule $state $tape))) )
+
+            (= (tm-body $rule $state $tape)
               (unify $state HALT
-                $tape
+                (return $tape)
                 (chain (eval (read $tape)) $char
                   (chain (eval ($rule $state $char)) $res
                     (unify $res ($next-state $next-char $dir)
-                      (eval (chain-loop (eval (move $tape $next-char $dir)) $next-tape
-                        (eval (tm $rule $next-state $next-tape)) ))
-                      (Error (tm $rule $state $tape) \"Incorrect state\") )))))
+                      (chain (eval (move $tape $next-char $dir)) $next-tape
+                        (eval (tm-body $rule $next-state $next-tape)) )
+                      (return (Error (tm-body $rule $state $tape) \"Incorrect state\")) )))))
 
             (= (read ($head $hole $tail)) $hole)
 
             (= (move ($head $hole $tail) $char N) ($head $char $tail))
-            (= (move ($head $hole $tail) $char L)
+            (= (move ($head $hole $tail) $char L) (function
               (chain (cons $char $head) $next-head
                 (chain (decons $tail) $list
                   (unify $list ($next-hole $next-tail)
-                    ($next-head $next-hole $next-tail)
-                    ($next-head 0 ()) ))))
-            (= (move ($head $hole $tail) $char R)
+                    (return ($next-head $next-hole $next-tail))
+                    (return ($next-head 0 ())) )))))
+            (= (move ($head $hole $tail) $char R) (function
               (chain (cons $char $tail) $next-tail
                 (chain (decons $head) $list
                   (unify $list ($next-hole $next-head)
-                    ($next-head $next-hole $next-tail)
-                    (() 0 $next-tail) ))))
+                    (return ($next-head $next-hole $next-tail))
+                    (return (() 0 $next-tail)) )))))
 
             (= (busy-beaver A 0) (B 1 R))
             (= (busy-beaver A 1) (C 1 L))
@@ -1104,7 +1092,6 @@ mod tests {
 
     #[test]
     fn interpret_minimal_metta_smoketest() {
-        let _ = env_logger::builder().is_test(true).try_init();
         let space = space("
             (= (foo $a B) $a)
             (= (fu $x) (function (chain (eval (foo $x B)) $r (return $r))))
@@ -1128,9 +1115,12 @@ mod tests {
         assert_eq_no_order!(result, vec![metta_atom("red"), metta_atom("green"), metta_atom("blue")]);
         let result = interpret(&space, &metta_atom("((P $a B) $a)"));
         assert_eq!(result, Ok(vec![metta_atom("((P $a B) $a)")]));
-        let result = interpret(&space, &metta_atom("(collapse-bind (eval (color)))"));
-        assert!(result.is_ok());
-        // FIXME: check correctly
-        assert_eq!(result, Ok(vec![metta_atom("red"), metta_atom("green"), metta_atom("blue")]));
+        let result = interpret(&space, &metta_atom("(collapse-bind (eval (color)))")).unwrap();
+        assert_eq!(result.len(), 1);
+        assert_eq_no_order!(atom_as_slice(&result[0]).unwrap(), [
+            atom_bindings_into_atom(expr!("red"), bind!{}),
+            atom_bindings_into_atom(expr!("green"), bind!{}),
+            atom_bindings_into_atom(expr!("blue"), bind!{})
+        ]);
     }
 }
