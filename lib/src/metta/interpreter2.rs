@@ -2,7 +2,7 @@
 //!
 //! # Algorithm
 //!
-//! FIXME: explain an algorithm
+//! TODO: explain an algorithm
 
 use crate::*;
 use crate::atom::matcher::*;
@@ -43,11 +43,11 @@ struct Stack {
     // reference the same collapse-bind Stack instance. When some alternative
     // finishes it modifies the collapse-bind state adding the result to the
     // collapse-bind list of results.
-    // FIXME: Try representing Option via Stack::Bottom
+    // TODO: Try representing Option via Stack::Bottom
     prev: Option<Rc<RefCell<Self>>>,
     atom: Atom,
     ret: ReturnHandler,
-    // FIXME: Could it be replaced by calling a return handler when setting the flag?
+    // TODO: Could it be replaced by calling a return handler when setting the flag?
     finished: bool,
     vars: Rc<Variables>,
 }
@@ -78,7 +78,7 @@ impl Stack {
         self.fold(0, |len, _stack| len + 1)
     }
 
-    // FIXME: should it be replaced by Iterator implementation?
+    // TODO: should it be replaced by Iterator implementation?
     fn fold<T, F: FnMut(T, &Stack) -> T>(&self, mut val: T, mut app: F) -> T {
         val = app(val, self);
         match &self.prev {
@@ -179,7 +179,6 @@ fn atom_as_slice_mut(atom: &mut Atom) -> Option<&mut [Atom]> {
     <&mut [Atom]>::try_from(atom).ok()
 }
 
-// FIXME: return incorrect length as error_atom() from caller
 fn atom_into_array<const N: usize>(atom: Atom) -> Option<[Atom; N]> {
     <[Atom; N]>::try_from(atom).ok()
 }
@@ -187,7 +186,7 @@ fn atom_into_array<const N: usize>(atom: Atom) -> Option<[Atom; N]> {
 impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
 
     /// INTERNAL USE ONLY. Create an InterpreterState that is ready to yield results
-    #[allow(dead_code)] //TODO: only silence the warning until interpreter2 replaces interpreter
+    #[allow(dead_code)] //TODO: MINIMAL only silence the warning until interpreter2 replaces interpreter
     pub(crate) fn new_finished(space: T, results: Vec<Atom>) -> Self {
         Self {
             plan: vec![],
@@ -322,7 +321,8 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
             None => panic!("Unexpected state"),
         };
         let ret = prev.borrow().ret;
-        // FIXME: two copies of bindings here
+        // TODO: two copies of bindings here; we could try to include bindings
+        // into Stack and eliminate copying
         ret(prev, atom, bindings.clone())
             .map_or(vec![], |stack| vec![InterpretedAtom(stack, bindings)])
     } else {
@@ -335,9 +335,7 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
                 chain(stack, bindings)
             },
             Some([op, ..]) if *op == FUNCTION_SYMBOL => {
-                // FIXME: incorrect error
-                let error = format!("function doesn't have return statement, last atom: {}", stack.atom);
-                finished_result(error_atom(stack.atom, error), bindings, stack.prev)
+                panic!("Unexpected state")
             },
             Some([op, ..]) if *op == COLLAPSE_BIND_SYMBOL => {
                 collapse_bind(stack, bindings)
@@ -1132,6 +1130,7 @@ mod tests {
         assert_eq!(result, Ok(vec![metta_atom("((P $a B) $a)")]));
         let result = interpret(&space, &metta_atom("(collapse-bind (eval (color)))"));
         assert!(result.is_ok());
+        // FIXME: check correctly
         assert_eq!(result, Ok(vec![metta_atom("red"), metta_atom("green"), metta_atom("blue")]));
     }
 }
