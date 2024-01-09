@@ -1,3 +1,4 @@
+import numbers
 from hyperon.atoms import *
 from hyperon.ext import register_atoms
 import torch
@@ -69,6 +70,7 @@ class PatternOperation(OperationObject):
                 return [G(PatternValue([self, args]))]
         return super().execute(*args, res_typ=res_typ)
 
+
 def _tensor_atom_type(npobj):
     return E(S('Tensor'), E(*[ValueAtom(s, 'Number') for s in npobj.shape]))
 
@@ -88,9 +90,37 @@ def create_tensor_from_data(*args):
         if all(arg.shape == args[0].shape for arg in args):
             t = torch.stack(args)
         else:
-            raise ValueError("Chunks of data should have the same shape to stack tensor.")
+            raise ValueError("Chunks of data should have the same shape to stack a tensor.")
     else:
         t = torch.tensor(args)
+    return t
+
+
+def tm_add(*args):
+    nargs = len(args)
+    if nargs > 2:
+        if isinstance(args[2], numbers.Number):
+            t = torch.add(args[0], args[1], alpha=args[2])
+        else:
+            raise ValueError(f"The third parameter for the torch.add() should be a scalar value, but got {type(args[2])} instead")
+
+    else:
+        t = torch.add(*args)
+
+    return t
+
+
+def tm_sub(*args):
+    nargs = len(args)
+    if nargs > 2:
+        if isinstance(args[2], numbers.Number):
+            t = torch.add(args[0], args[1], alpha=args[2])
+        else:
+            raise ValueError(f"The third parameter for the torch.sub() should be a scalar value, but got {type(args[2])} instead")
+
+    else:
+        t = torch.sub(*args)
+
     return t
 
 
@@ -100,14 +130,26 @@ def torchme_atoms():
     tmTensorAtom = G(PatternOperation('torch.tensor', wrapnpop(create_tensor_from_data), unwrap=False, rec=True))
     tmZerosTensorAtom = G(PatternOperation('torch.zeros', wrapnpop(lambda *args: torch.zeros(args)), unwrap=False, rec=True))
     tmOnesTensorAtom = G(PatternOperation('torch.ones', wrapnpop(lambda *args: torch.ones(args)), unwrap=False, rec=True))
-    #tmManualSeedAtom = G(PatternOperation('torch.manual_seed', wrapnpop(lambda x: torch.manual_seed(x)), unwrap=False, rec=False))
+    tmManualSeedAtom = G(OperationObject('torch.manual_seed', lambda x: torch.manual_seed(x), unwrap=True))
     tmRandomTensorAtom = G(PatternOperation('torch.rand', wrapnpop(lambda *args: torch.rand(args)), unwrap=False, rec=True))
+    tmAddAtom = G(PatternOperation('torch.add', wrapnpop(tm_add), unwrap=False, rec=True))
+    tmAbsAtom = G(PatternOperation('torch.abs', wrapnpop(torch.abs), unwrap=False))
+    tmSubAtom = G(PatternOperation('torch.sub', wrapnpop(tm_sub), unwrap=False, rec=True))
+    tmMulAtom = G(PatternOperation('torch.mul', wrapnpop(torch.mul), unwrap=False, rec=True))
+    tmDivAtom = G(PatternOperation('torch.div', wrapnpop(torch.div), unwrap=False, rec=True))
+    tmMatMulAtom = G(PatternOperation('torch.matmul', wrapnpop(torch.matmul), unwrap=False, rec=True))
     return {
         r"torch\.empty": tmEmptyTensorAtom,
         r"torch\.tensor": tmTensorAtom,
         r"torch\.zeros": tmZerosTensorAtom,
         r"torch\.ones": tmOnesTensorAtom,
-        #r"torch\.manual_seed": tmManualSeedAtom,
-        r"torch\.rand": tmRandomTensorAtom
+        r"torch\.manual_seed": tmManualSeedAtom,
+        r"torch\.rand": tmRandomTensorAtom,
+        r"torch\.add": tmAddAtom,
+        r"torch\.abs": tmAbsAtom,
+        r"torch\.sub": tmSubAtom,
+        r"torch\.mul": tmMulAtom,
+        r"torch\.div": tmDivAtom,
+        r"torch\.matmul": tmMatMulAtom
     }
 
