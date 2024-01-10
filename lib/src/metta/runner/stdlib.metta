@@ -294,3 +294,6 @@
 ; arguments  and returns unit
 (= (nop) ())
 (= (nop $x) ())
+
+; TODO: MINIMAL added for compatibility, remove after migration
+(= (empty) Empty)
