@@ -113,6 +113,22 @@ evaluation and returns result of the substitution. When evaluation of the
 `<atom>` brings more than a single result `chain` returns one instance of the
 `<template>` expression for each result.
 
+## function/return
+
+`function` operation has the signature `(function <atom>)`. It evaluates the
+`<atom>` until it becomes `(return <atom>)`. Then `(function (return <atom>))`
+expression returns the `<atom>`.
+
+These operations are introduced for two reasons. First it should be possible to
+evaluate an atom until some result and prevent further result evaluation. This
+aspect is discussed in [eval or return](#eval-or-return) section.
+
+Second without having an abstraction of a function call it is difficult to
+debug the evaluation process. `function/return` allows representing nested
+function calls as a stack and provide controls to put the breakpoints on parts
+of this stack. Nevertheless using `chain` instead of `function` to implement
+the evaluation loop also allows representing stack in a natural form.
+
 ## unify
 
 `unify` operation allows conditioning on the results of the evaluation.
@@ -159,18 +175,23 @@ return filtered items to the plan using `superpose-bind`.
 
 Examples of the programs written using minimal MeTTa interpreter:
 
-Switch implementation:
+Recursive switch implementation:
 
 ```metta
 (= (switch $atom $cases)
-  (chain (decons $cases) $list
-    (chain (eval (switch-internal $atom $list)) $res
-      (unify $res NotReducible Empty $res) )))
+  (function
+    (chain (decons $cases) $list
+      (chain (eval (switch-internal $atom $list)) $res
+        (unify $res NotReducible (return Empty) (return $res)) ))))
+
 (= (switch-internal $atom (($pattern $template) $tail))
-  (unify $atom $pattern $template (eval (switch $atom $tail))))
+  (function
+    (unify $atom $pattern
+      (return $template)
+      (chain (eval (switch $atom $tail)) $ret (return $ret)) )))
 ```
 
-Reduce in loop until result is calculated:
+Evaluate atom in a loop until result is calculated:
 
 ```metta
 (= (subst $atom $var $templ)
@@ -189,8 +210,7 @@ Reduce in loop until result is calculated:
         (eval (reduce $res $var $templ)) )))))
 ```
 
-[Link](https://github.com/trueagi-io/hyperon-experimental/blob/27861e63af1417df4780d9314eaf2e8a3b5cde06/lib/src/metta/runner/stdlib2.rs#L234-L302)
-to the full code of the interpreter in MeTTa (not finished yet).
+[Link](../lib/src/metta/runner/stdlib2.rs) to the full code of the interpreter in MeTTa.
 
 # Properties
 
@@ -198,34 +218,37 @@ to the full code of the interpreter in MeTTa (not finished yet).
 
 The following program implements a Turing machine using the minimal MeTTa
 instruction set (the full code of the example can be found
-[here](https://github.com/trueagi-io/hyperon-experimental/blob/27861e63af1417df4780d9314eaf2e8a3b5cde06/lib/src/metta/interpreter2.rs#L628-L669)):
+[here](../lib/src/metta/interpreter2.rs#L952-L995)):
 
 ```metta
-           (= (tm $rule $state $tape)
-              (unify $state HALT
-                $tape
-                (chain (eval (read $tape)) $char
-                  (chain (eval ($rule $state $char)) $res
-                    (unify $res ($next-state $next-char $dir)
-                      (chain (eval (move $tape $next-char $dir)) $next-tape
-                        (eval (tm $rule $next-state $next-tape)) )
-                      (Error (tm $rule $state $tape) \"Incorrect state\") )))))
+(= (tm $rule $state $tape)
+  (function (eval (tm-body $rule $state $tape))) )
 
-            (= (read ($head $hole $tail)) $hole)
+(= (tm-body $rule $state $tape)
+  (unify $state HALT
+    (return $tape)
+    (chain (eval (read $tape)) $char
+      (chain (eval ($rule $state $char)) $res
+        (unify $res ($next-state $next-char $dir)
+          (chain (eval (move $tape $next-char $dir)) $next-tape
+            (eval (tm-body $rule $next-state $next-tape)) )
+          (return (Error (tm-body $rule $state $tape) \"Incorrect state\")) )))))
 
-            (= (move ($head $hole $tail) $char N) ($head $char $tail))
-            (= (move ($head $hole $tail) $char L)
-              (chain (cons $char $head) $next-head
-                (chain (decons $tail) $list
-                  (unify $list ($next-hole $next-tail)
-                    ($next-head $next-hole $next-tail)
-                    ($next-head 0 ()) ))))
-            (= (move ($head $hole $tail) $char R)
-              (chain (cons $char $tail) $next-tail
-                (chain (decons $head) $list
-                  (unify $list ($next-hole $next-head)
-                    ($next-head $next-hole $next-tail)
-                    (() 0 $next-tail) ))))
+(= (read ($head $hole $tail)) $hole)
+
+(= (move ($head $hole $tail) $char N) ($head $char $tail))
+(= (move ($head $hole $tail) $char L) (function
+  (chain (cons $char $head) $next-head
+    (chain (decons $tail) $list
+      (unify $list ($next-hole $next-tail)
+        (return ($next-head $next-hole $next-tail))
+        (return ($next-head 0 ())) )))))
+(= (move ($head $hole $tail) $char R) (function
+  (chain (cons $char $tail) $next-tail
+    (chain (decons $head) $list
+      (unify $list ($next-hole $next-head)
+        (return ($next-head $next-hole $next-tail))
+        (return (() 0 $next-tail)) )))))
 ```
 
 ## Comparison with MeTTa Operational Semantics
@@ -234,9 +257,17 @@ One difference from MOPS [1] is that the minimal instruction set allows
 relatively easy write deterministic programs and non-determinism is injected
 only via matching and evaluation. `Query` and `Chain` from MOPS are very
 similar to `eval`. `Transform` is very similar to `unify`. `chain` has no
-analogue in MOPS, it is used to make deterministic computations.
-`cons`/`decons` to some extent are analogues of `AtomAdd`/`AtomRemove` in a
-sense that they can be used to change the state.
+analogue in MOPS. `cons`/`decons` to some extent are analogues of
+`AtomAdd`/`AtomRemove` in a sense that they can be used to change the state.
+
+## Partial and complete functions
+
+Each instruction in a minimal instruction set is a total function.
+Nevertheless `Empty` allows defining partial functions in MeTTa. For example
+partial `if` can be defined as follows:
+```metta
+(= (if $condition $then) (unify $condition True $then Empty))
+```
 
 ## eval or return
 
@@ -245,77 +276,73 @@ to give a programmer some way to designate whether the atom should be evaluated
 or not. `eval` marks atoms which should be evaluated. As an alternative to this
 solution we could mark atoms which should not be evaluated.
 
-For example we could use a special instruction `(return <atom>)` which
-basically does nothing. When `return` is on the top level of the interpretation
-plan then the interpreter puts `<atom>` into the list of the final results. Other
-atoms on the top of the plan are evaluated. `chain` should be changed to have
-the same semantics: evaluate any atom except `(return ...)` and insert the `(return
-...)` into the template.
+Another related issue is that we need ability to make complex evaluations
+before making a substitution inside `chain`. For example `(chain (eval (foo a))
+$x $x)` should be able to make and fully evaluate the call of the `foo`
+function before inserting the result into the template. We need to define the
+criteria which specifies when the nested operation is finished and what is the
+result. Also we need to be able represent evaluation loop inside the code.
 
-The version of the `reduce` written using `return` will look like the following:
+First version of the minimal interpreter continued the evaluation of the first
+argument of the `chain` until it becomes a non-minimal MeTTa instruction. But
+this approach is too verbose. If it is needed to chain some minimal MeTTa
+instruction without evaluation then such instruction should be wrapped into a
+non-minimal MeTTa expression and unwrapped after the substitution is made.
+
 ```metta
-(= (reduce $atom $var $templ)
-  (chain $atom $res
-    (unify $res (return (Error $a $m))
-      (return (Error $a $m))
-      (unify $res (return Empty)
-        (subst $atom $var $templ)
-        (unify $res (return $val)
-          (subst $val $var $templ)
-          (reduce $res $var $templ) )))))
+  (chain (quote (eval (foo))) $x
+    (unify $x (quote $y)
+      $y
+      (Error $x "quote expression expected") ))
 ```
 
-This version has one more interesting property: a programmer can use `(return
-<atom>)` to designate that the process of reducing should be finished. Otherwise
-the reduction stops only when an atom cannot be evaluated further. Thus the
-`return` idea can also be used in the MeTTa interpreter to control an execution
-and improve performance.
+To allow `chain` relying on the returned result of the first argument the
+`function/return` operations are introduced. When user needs to run a complex
+evaluation inside chain he may wrap it into the `function` operation.
+`function` evaluates its argument in a loop until `(return <atom>)` is
+returned. Then it returns the `<atom>` as a result. If one need to make a
+substitution it is possible using:
 
-We could also implement `chain` which removes `return` and inserts `<atom>`
-into the template. It can make program even more compact:
 ```metta
-(= (reduce $atom $var $templ)
-  (chain $atom $res
-    (unify $res (Error $a $m)
-      (Error $a $m)
-      (unify $res Empty
-        (subst $atom $var $templ)
-        (reduce $res $var $templ) ))))
+  (chain (function (return <atom>)) <var> <templ>)
 ```
 
-But in such a case there is a risk of getting `(chain (return <atom>) $x $x)`
-which continues evaluation of the `<atom>` further while it is not expected.
+One more option is to make `chain` (and other atoms which can have nested
+evaluation loops) recognize `return`. In such case the evaluation loop is
+executed by the `chain` itself and `function` instruction is not needed.
+Substitution gets the simpler form:
 
-The final convention can be chosen from a usability perspective. Although it
-may seem that eliminating `eval` is the most convenient solution, it is not
-obvious. `eval` is a kind of `call` in assembly language and writing it
-explicitly makes the author think about whether the atom can be called.
-
-## Partial and complete functions
-
-Each instruction in a minimal instruction set is a complete function.
-Nevertheless `Empty` allows defining partial functions in MeTTa. For example
-partial `if` can be defined as follows:
 ```metta
-(= (if $condition $then) (unify $condition True $then Empty))
+  (chain (return <atom>) <var> <templ>)
 ```
+
+The downside of this approach is that loop represented by the outer operation
+`chain` and end of the loop represented by `return` are written in different
+contexts. Thus programmer should keep in mind that when some function is used
+from `chain` and it is not just a equality substitution then `return` should be
+used on each exit path while nothing in code of function points to this. Using
+`function` operation allows dividing functions on two classes:
+- functions which evaluate result in a loop and have to use `return`;
+- functions which just replace the calling expression by their bodies.
 
 # Future work
 
 ## Explicit atomspace variable bindings
 
 Current implementation implicitly keeps and applies variable bindings during
-the process of the interpretation. It can be easily made explicit but the value
-of explicit bindings is not obvious see [discussion in issue
+the process of the interpretation. Explicit bindings are used to implement
+`collapse-bind` where they are absolutely necessary. Bindings can be easily
+made explicit everywhere but the value of explicit bindings is not obvious see
+[discussion in issue
 #290](https://github.com/trueagi-io/hyperon-experimental/issues/290#issuecomment-1541314289).
 
-Making atomspace out of implicit context could make import semantics more
+Making atomspace part of the explicit context could make import semantics more
 straightforward. In the current implementation of the minimal instruction set
-it was needed to explicitly pass the atomspace to the interpreter because
-otherwise grounded `get-type` function didn't work properly.It also could allow
-defining `eval` via `unify` which minimizes the number of instructions and
-allows defining `eval` in a MeTTa program itself. Which in turn allows defining
-different versions of `eval` to program different kinds of chaining.
+it is needed to explicitly pass the atomspace to the interpreter because
+otherwise grounded `get-type` function didn't work properly. It also could
+allow defining `eval` via `unify` which minimizes the number of instructions
+and allows defining `eval` in a MeTTa program itself. Which in turn allows
+defining different versions of `eval` to program different kinds of chaining.
 Nevertheless defining `eval` through `unify` requires rework of the grounded
 functions interface to allow calling them by executing `unify` instructions.
 Which is an interesting direction to follow.
@@ -323,16 +350,7 @@ Which is an interesting direction to follow.
 ## Scope of variables
 
 Scope of the variable inside instructions is not described in this
-specification. It is a clear gap and one of the todo items.
-
-## Collapse
-
-The described language allows transforming the atom into a non-deterministic
-result using `eval`, but there is no reversed instruction. As a consequence one
-cannot implement `collapse` using the instruction set above. In order to add
-such possibility the additional instruction is needed. It could mark a set of
-results as joined and when their evaluation is finished would assemble them
-into an expression.
+specification. It is a clear gap and one of the TODO items.
 
 ## Special matching syntax
 
