@@ -138,11 +138,11 @@ matches `<atom>` with a `<pattern>`. If match is successful then it returns
 variable bindings. If matching is not successful then it returns the `<else>`
 branch with the original variable bindings.
 
-## cons/decons
+## cons-atom/decons-atom
 
-`cons` and `decons` allows constructing and deconstructing the expression atom
-from/to pair of the head and tail. `(decons <expr>)` expects non-empty
-expression as an argument and returns a pair `(<head> <tail>)`. `(cons <head>
+`cons-atom` and `decons-atom` allows constructing and deconstructing the expression atom
+from/to pair of the head and tail. `(decons-atom <expr>)` expects non-empty
+expression as an argument and returns a pair `(<head> <tail>)`. `(cons-atom <head>
 <tail>)` returns an expression where the first sub-atom is `<head>` and others
 are copied from `<tail>`.
 
@@ -180,7 +180,7 @@ Recursive switch implementation:
 ```metta
 (= (switch $atom $cases)
   (function
-    (chain (decons $cases) $list
+    (chain (decons-atom $cases) $list
       (chain (eval (switch-internal $atom $list)) $res
         (unify $res NotReducible (return Empty) (return $res)) ))))
 
@@ -238,14 +238,14 @@ instruction set (the full code of the example can be found
 
 (= (move ($head $hole $tail) $char N) ($head $char $tail))
 (= (move ($head $hole $tail) $char L) (function
-  (chain (cons $char $head) $next-head
-    (chain (decons $tail) $list
+  (chain (cons-atom $char $head) $next-head
+    (chain (decons-atom $tail) $list
       (unify $list ($next-hole $next-tail)
         (return ($next-head $next-hole $next-tail))
         (return ($next-head 0 ())) )))))
 (= (move ($head $hole $tail) $char R) (function
-  (chain (cons $char $tail) $next-tail
-    (chain (decons $head) $list
+  (chain (cons-atom $char $tail) $next-tail
+    (chain (decons-atom $head) $list
       (unify $list ($next-hole $next-head)
         (return ($next-head $next-hole $next-tail))
         (return (() 0 $next-tail)) )))))
@@ -257,7 +257,7 @@ One difference from MOPS [1] is that the minimal instruction set allows
 relatively easy write deterministic programs and non-determinism is injected
 only via matching and evaluation. `Query` and `Chain` from MOPS are very
 similar to `eval`. `Transform` is very similar to `unify`. `chain` has no
-analogue in MOPS. `cons`/`decons` to some extent are analogues of
+analogue in MOPS. `cons-atom`/`decons-atom` to some extent are analogues of
 `AtomAdd`/`AtomRemove` in a sense that they can be used to change the state.
 
 ## Partial and complete functions
@@ -374,7 +374,7 @@ equality. For instance `(unify <atom> (:= Empty) then else)` should match
 
 We could have a specific syntax which would allow matching part of the
 expressions. For example such syntax could be used to match head and tail of
-the expression without using `cons`/`decons`. Another example is matching part
+the expression without using `cons-atom`/`decons-atom`. Another example is matching part
 of the expression with some gap, i.e. `(A ... D ...)` could match `(A B C D E)`
 atom.
 
