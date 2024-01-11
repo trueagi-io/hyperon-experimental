@@ -421,16 +421,15 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, 
             match exec_res {
                 Ok(results) => {
                     if results.is_empty() {
-                        // TODO: This is an open question how to interpret empty results
-                        // which are returned by grounded function. There is no
-                        // case to return empty result for now. If alternative
-                        // should be removed from the plan then Empty is a proper result.
-                        // If grounded atom returns no value then unit should be returned.
-                        // NotReducible or Exec::NoReduce can be returned to
-                        // let a caller know that function is not defined on a
-                        // passed input data. Thus we can interpreter empty result
-                        // by any way we like.
-                        vec![]
+                        // There is no valid reason to return empty result from
+                        // the grounded function. If alternative should be removed
+                        // from the plan then EMPTY_SYMBOL is a proper result.
+                        // If grounded atom returns no value then UNIT_ATOM()
+                        // should be returned. NotReducible or Exec::NoReduce
+                        // can be returned to let a caller know that function
+                        // is not defined on a passed input data. Thus we can
+                        // interpreter empty result by any way we like.
+                        finished_result(EMPTY_SYMBOL, bindings, prev)
                     } else {
                         results.into_iter()
                             .map(|atom| {
