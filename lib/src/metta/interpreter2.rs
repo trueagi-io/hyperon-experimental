@@ -49,7 +49,7 @@ struct Stack {
     ret: ReturnHandler,
     // TODO: Could it be replaced by calling a return handler when setting the flag?
     finished: bool,
-    vars: Rc<Variables>,
+    vars: Variables,
 }
 
 fn no_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> Option<Stack> {
@@ -87,24 +87,21 @@ impl Stack {
         }
     }
 
-    fn vars_copy(prev: &Option<Rc<RefCell<Self>>>) -> Rc<Variables> {
+    fn vars_copy(prev: &Option<Rc<RefCell<Self>>>) -> Variables {
         match prev {
             Some(prev) => prev.borrow().vars.clone(),
-            None => Rc::new(Variables::new()),
+            None => Variables::new(),
         }
     }
 
-    fn vars(prev: &Option<Rc<RefCell<Self>>>, atom: &Atom) -> Rc<Variables> {
+    fn vars(prev: &Option<Rc<RefCell<Self>>>, atom: &Atom) -> Variables {
         // TODO: nested atoms are visited twice: first time when outer atom
         // is visited, next time when internal atom is visited.
-        let mut vars: Variables = atom.iter().filter_type::<&VariableAtom>().cloned().collect();
+        let vars: Variables = atom.iter().filter_type::<&VariableAtom>().cloned().collect();
         match (prev, vars.is_empty()) {
             (Some(prev), true) => prev.borrow().vars.clone(),
-            (Some(prev), false) => {
-                vars.extend(prev.borrow().vars.iter().cloned());
-                Rc::new(vars)
-            },
-            (None, _) => Rc::new(vars),
+            (Some(prev), false) => prev.borrow().vars.clone().union(vars),
+            (None, _) => vars,
         }
     }
 }
@@ -306,7 +303,37 @@ fn is_function_op(atom: &Atom) -> bool {
     is_op(atom, &FUNCTION_SYMBOL)
 }
 
-type Variables = HashSet<VariableAtom>;
+#[derive(Debug, Clone)]
+struct Variables(im::HashSet<VariableAtom>);
+
+impl Variables {
+    fn new() -> Self {
+        Self(im::HashSet::new())
+    }
+    fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+    fn union(self, other: Self) -> Self {
+        Variables(self.0.union(other.0))
+    }
+}
+
+impl FromIterator<VariableAtom> for Variables {
+    fn from_iter<I: IntoIterator<Item=VariableAtom>>(iter: I) -> Self {
+        Self(im::HashSet::from_iter(iter))
+    }
+}
+
+impl VariableSet for Variables {
+    type Iter<'a> = im::hashset::Iter<'a, atom::VariableAtom> where Self: 'a;
+
+    fn contains(&self, var: &VariableAtom) -> bool {
+        self.0.contains(var)
+    }
+    fn iter(&self) -> Self::Iter<'_> {
+        self.0.iter()
+    }
+}
 
 fn interpret_root_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
     let InterpretedAtom(stack, bindings) = interpreted_atom;
@@ -625,13 +652,13 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     // from car's argument is replaced.
     let matches: Vec<Bindings> = match_atoms(atom, pattern).collect();
     if matches.is_empty() {
-        let bindings = bindings.narrow_vars(&*vars);
+        let bindings = bindings.narrow_vars(&vars);
         let result = apply_bindings_to_atom(else_, &bindings);
         finished_result(result, bindings, prev)
     } else {
         matches.into_iter()
             .flat_map(move |b| {
-                let b = b.narrow_vars(&*vars);
+                let b = b.narrow_vars(&vars);
                 let prev = prev.clone();
                 b.merge_v2(&bindings).into_iter().filter_map(move |b| {
                     if b.has_loops() {
