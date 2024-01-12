@@ -131,8 +131,8 @@
           (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) )))
     (return $init) ))))
 
-(: divide-errors (-> Expression Expression Expression))
-(= (divide-errors $succ-err $res)
+(: separate-errors (-> Expression Expression Expression))
+(= (separate-errors $succ-err $res)
   (function (unify $succ-err ($suc $err)
     (unify $res ($a $_b)
       (eval (if-error $a
@@ -145,8 +145,8 @@
   (function
     (chain (collapse-bind $atom) $collapsed
       (chain (eval (foldl-atom $collapsed (() ()) $succ-err $res
-        (eval (divide-errors $succ-err $res)))) $divided
-        (unify $divided ($success $error)
+        (eval (separate-errors $succ-err $res)))) $separated
+        (unify $separated ($success $error)
           (chain (eval (if-equal $success () $error $success)) $filtered
             (chain (superpose-bind $filtered) $ret (return $ret)) )
           (return (Error (check-alternatives $atom) "list of results was not filtered correctly")) )))))
