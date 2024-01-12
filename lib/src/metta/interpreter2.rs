@@ -57,14 +57,14 @@ fn no_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> O
 }
 
 impl Stack {
-    fn from_prev_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
+    fn from_prev_add_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
         // TODO: vars are introduced in specific locations of the atom thus
         // in theory it is possible to optimize vars search for eval, unify and chain
         let vars = Self::vars(&prev, &atom);
         Self{ prev, atom, ret, finished: false, vars }
     }
 
-    fn from_prev_no_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
+    fn from_prev_keep_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
         let vars = Self::vars_copy(&prev);
         Self{ prev, atom, ret, finished: false, vars }
     }
@@ -434,7 +434,7 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, 
                         results.into_iter()
                             .map(|atom| {
                                 let stack = if is_function_op(&atom) {
-                                    let call = Stack::from_prev_no_vars(prev.clone(), query_atom.clone(), call_ret);
+                                    let call = Stack::from_prev_keep_vars(prev.clone(), query_atom.clone(), call_ret);
                                     atom_to_stack(atom, Some(Rc::new(RefCell::new(call))))
                                 } else {
                                     Stack::finished(prev.clone(), atom)
@@ -471,7 +471,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
             .flat_map(|mut b| {
                 let res = apply_bindings_to_atom(&atom_x, &b);
                 let stack = if is_function_op(&res) {
-                    let call = Stack::from_prev_no_vars(prev.clone(), atom.clone(), call_ret);
+                    let call = Stack::from_prev_keep_vars(prev.clone(), atom.clone(), call_ret);
                     atom_to_stack(res, Some(Rc::new(RefCell::new(call))))
                 } else {
                     Stack::finished(prev.clone(), res)
@@ -509,10 +509,10 @@ fn atom_to_stack(atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         },
         Some([op, ..]) if *op == EVAL_SYMBOL
                        || *op == UNIFY_SYMBOL => {
-            Stack::from_prev_vars(prev, atom, no_handler)
+            Stack::from_prev_add_vars(prev, atom, no_handler)
         },
         _ => {
-            Stack::from_prev_no_vars(prev, atom, no_handler)
+            Stack::from_prev_keep_vars(prev, atom, no_handler)
         },
     };
     result
@@ -528,7 +528,7 @@ fn chain_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         },
     };
     std::mem::swap(nested_arg, &mut nested);
-    let cur = Stack::from_prev_vars(prev, atom, chain_ret);
+    let cur = Stack::from_prev_add_vars(prev, atom, chain_ret);
     atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
@@ -567,7 +567,7 @@ fn function_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack 
         },
     };
     std::mem::swap(nested_arg, &mut nested);
-    let cur = Stack::from_prev_no_vars(prev, atom, function_ret);
+    let cur = Stack::from_prev_keep_vars(prev, atom, function_ret);
     atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
@@ -602,7 +602,7 @@ fn collapse_bind_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> S
         },
     };
     std::mem::swap(nested_arg, &mut nested);
-    let cur = Stack::from_prev_no_vars(prev, atom, collapse_bind_ret);
+    let cur = Stack::from_prev_keep_vars(prev, atom, collapse_bind_ret);
     atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
