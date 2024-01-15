@@ -1,7 +1,9 @@
+import importlib
 import numbers
+
+import torch
 from hyperon.atoms import *
 from hyperon.ext import register_atoms
-import torch
 
 
 class TensorValue(MatchableObject):
@@ -124,6 +126,59 @@ def tm_sub(*args):
     return t
 
 
+def import_module(*args):
+    torch_module_name = args[0].get_name()
+    pymodule_name = args[1].get_name()
+    pymodule = importlib.import_module(pymodule_name)
+    module_class = getattr(pymodule, torch_module_name)
+
+    if len(args) > 2:
+        a = []
+        for arg in args[2:]:
+            if isinstance(arg, GroundedAtom):
+                if isinstance(arg.get_object(), GroundedObject):
+                    a.append(arg.get_object().content)
+                else:
+                    a.append(arg.get_object().value)
+            elif isinstance(arg, SymbolAtom):
+                if arg.get_name() == 'None':
+                    a.append(None)
+                else:
+                    a.append(arg.get_name())
+
+        module_instance = module_class(*a)
+    else:
+        module_instance = module_class()
+
+    return [G(GroundedObject(module_instance))]
+
+
+def to_device(*args):
+    torch_object = None
+    device = None
+    if isinstance(args[0], GroundedAtom):
+        if isinstance(args[0].get_object(), GroundedObject):
+            torch_object = args[0].get_object().content
+        else:
+            torch_object = args[0].get_object().value
+
+    if isinstance(args[1], SymbolAtom):
+        device = args[1].get_name()
+
+    torch_object.to(device=device)
+
+    return [G(GroundedObject(torch_object))]
+
+
+def run_trainer(*args):
+    trainer = args[0]
+    nepochs = args[1]
+    for t in range(nepochs):
+        print(f"Epoch {t + 1}\n-------------------------------")
+        trainer.train()
+        trainer.test()
+    return
+
 @register_atoms
 def torchme_atoms():
     tmEmptyTensorAtom = G(PatternOperation('torch.empty', wrapnpop(lambda *args: torch.empty(args)), unwrap=False, rec=True))
@@ -138,6 +193,18 @@ def torchme_atoms():
     tmMulAtom = G(PatternOperation('torch.mul', wrapnpop(torch.mul), unwrap=False, rec=True))
     tmDivAtom = G(PatternOperation('torch.div', wrapnpop(torch.div), unwrap=False, rec=True))
     tmMatMulAtom = G(PatternOperation('torch.matmul', wrapnpop(torch.matmul), unwrap=False, rec=True))
+    tmMeanAtom = G(PatternOperation('torch.mean', wrapnpop(torch.mean), unwrap=False))
+
+
+    tmImportModelAtom = G(OperationObject('torch.import_module', import_module, unwrap=False))
+
+    tmReqGradStatusAtom = G(OperationObject('torch.requires_grad_status', lambda x: x.requires_grad, unwrap=True))
+    tmReqGradAtom = G(OperationObject('torch.requires_grad', lambda x, b: x.requires_grad_(b), unwrap=True))
+    tmBackwardAtom = G(OperationObject('torch.backward', lambda x: x.backward(), unwrap=True))
+    tmToDeviceAtom = G(OperationObject('torch.to_device', to_device, unwrap=False))
+    tmGetModelParamsAtom = G(OperationObject('torch.get_model_params', lambda x: x.parameters(), unwrap=True))
+    tmRunTrainerAtom = G(OperationObject('torch.run_trainer', run_trainer, unwrap=True))
+
     return {
         r"torch\.empty": tmEmptyTensorAtom,
         r"torch\.tensor": tmTensorAtom,
@@ -150,6 +217,16 @@ def torchme_atoms():
         r"torch\.sub": tmSubAtom,
         r"torch\.mul": tmMulAtom,
         r"torch\.div": tmDivAtom,
-        r"torch\.matmul": tmMatMulAtom
+        r"torch\.matmul": tmMatMulAtom,
+        r"torch\.mean": tmMeanAtom,
+
+
+        r"torch\.import_module": tmImportModelAtom,
+        r"torch\.requires_grad_status": tmReqGradStatusAtom,
+        r"torch\.requires_grad": tmReqGradAtom,
+        r"torch\.backward": tmBackwardAtom,
+        r"torch\.to_device": tmToDeviceAtom,
+        r"torch\.get_model_params": tmGetModelParamsAtom,
+        r"torch\.run_trainer": tmRunTrainerAtom
     }
 
