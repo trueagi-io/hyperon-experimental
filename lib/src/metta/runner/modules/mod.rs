@@ -5,7 +5,7 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 
 use crate::*;
-use crate::space::DynSpace;
+use crate::space::{Space, DynSpace};
 use crate::metta::*;
 use crate::metta::runner::{Metta, ModId, RunnerState};
 use crate::metta::types::validate_atom;
@@ -107,7 +107,7 @@ impl MettaMod {
         //Load the stdlib unless this module is no_std
         if !no_stdlib {
             if let Some(stdlib_mod_id) = metta.0.stdlib_mod.get() {
-                new_mod.import_dependency_legacy(&metta, *stdlib_mod_id).unwrap();
+                new_mod.import_all_from_dependency(&metta, *stdlib_mod_id).unwrap();
             }
         }
 
@@ -217,16 +217,17 @@ impl MettaMod {
     /// Effectively adds all atom in a dependency module to the &self module, by adding the dependency
     /// module's space as an atom inside the &self module
     ///
-    //QUESTION: What do we do about tokenizer entries?  Currently they are not imported at all, but this
-    // is certainly a problem
+    /// WARNING: Module import behavior is still WIP, specifically around "import *" behavior, and this
+    /// function may result in duplicated transitive imports.
     //
-    //QUESTION: Do we want to keep the behavior of the interpreter to flatten Space atoms contained within
-    // a space?  This might be undesirable. 
+    //QUESTION: What do we do about tokenizer entries?  Currently they end up glomming together but this
+    // is highly undesireable for several reasons.  At best it leads to tokenizer entries that are
+    // unreachable because they're superseded by other entries, and at worst this can introduce some
+    // difficult to diagnose behavior
     //
-    //QUESTION: Depending on the answers to the above question(s) How do we prevent duplication of
-    // transitive imports?  For example, consider: ModA imports ModOne and ModTwo.  ModOne imports ModB. 
-    // ModTwo also imports ModB. How do we make sure ModA doesn't end up with duplicate definitions for
-    // everything in ModB?
+    //QUESTION: How do we prevent duplication of transitive imports?  For example, consider: ModA imports
+    // ModOne and ModTwo.  ModOne imports ModB.  ModTwo also imports ModB.
+    // How do we make sure ModA doesn't end up with duplicate definitions for ModB?
     //
     //This is usually solved in other languages using some combination of strategies.
     // 1.) Keep loaded modules contained within their own name-spaces. And allow aliasing between a parent's
@@ -257,7 +258,8 @@ impl MettaMod {
         let dep_space_atom = Atom::gnd(dep_space);
         self.add_atom(dep_space_atom, false).map_err(|a| a.to_string())?;
 
-        Ok(())
+        // Finally, Import the tokens from the dependency
+        self.import_all_tokens_from_dependency(metta, mod_id)
     }
 
     /// Merges all Tokenizer entries in a dependency module into &self
@@ -274,11 +276,78 @@ impl MettaMod {
         Ok(())
     }
 
-    /// Implements the prior import behavior of importing all atoms into a sub-space, loaded into the
-    /// &self Space, and merging all tokens
-    //TODO: This method is a stop-gap, until we figure out all the details of the import behavior we want
+    /// Implements an approximation of the prior import behavior of importing all atoms into a sub-space,
+    /// loaded into the &self Space, and merging all tokens
+    ///
+    /// TODO: This method is a stop-gap, until we figure out all the details of the import behavior we
+    /// want.  Ultimately we should unify this function with `import_all_from_dependency`
     pub fn import_dependency_legacy(&self, metta: &Metta, mod_id: ModId) -> Result<(), String> {
-        self.import_all_from_dependency(metta, mod_id)?;
+
+        // Get the space associated with the dependent module
+        let mut runner_state = RunnerState::new_with_module(metta, mod_id);
+        let mut dep_space = runner_state.run_in_context(|context| {
+            let dep_space = context.module().space().clone();
+            Ok(dep_space)
+        })?;
+
+        // Do a deep clone of the dependent module's space, but separate out sub-spaces so we can flatten
+        //  them into the destination
+        // HACK.  This is a terrible design.  It is a stop-gap to get around problems caused by transitive
+        // imports described above, but it has a bunch of downsides, To name a few examples:
+        //  - It means we must copy every atom for every import
+        //  - It only works with GroundingSpaces
+        //  - It only fixes a subset of the problems because a two-level transitive dependency effectively
+        //      becomes a new space with a new address and thus we still have some duplication
+        //      Although that could be fixed by checking for duplication by module rather than relying
+        //      on the space pointer
+        let mut new_dep_space = None;
+        let mut sub_spaces: Vec<Atom> = vec![];
+        if let Some(any_space) = dep_space.borrow().as_any() {
+            if let Some(dep_g_space) = any_space.downcast_ref::<GroundingSpace>() {
+                let mut new_space = GroundingSpace::new();
+                for atom in dep_g_space.atom_iter().unwrap() {
+                    if let Some(_sub_space) = atom.as_gnd::<DynSpace>() {
+                        sub_spaces.push(atom.clone());
+                    } else {
+                        new_space.add(atom.clone());
+                    }
+                }
+                new_dep_space = Some(new_space);
+            }
+        }
+        if sub_spaces.len() > 0 {
+            if let Some(new_dep_space) = new_dep_space {
+                dep_space = DynSpace::new(new_dep_space);
+            }
+        }
+
+        // Add a new Grounded Space atom to the &self space, so we can access the dependent module
+        let dep_space_atom = Atom::gnd(dep_space);
+        self.add_atom(dep_space_atom, false).map_err(|a| a.to_string())?;
+
+        // Add the sub_space dependencies into &self, but only if they don't already exist
+        for sub_space_atom in sub_spaces {
+
+            let mut dup = false;
+            if let Some(self_space_iter) = self.space.borrow().atom_iter() {
+                let sub_space = sub_space_atom.as_gnd::<DynSpace>().map(|dyn_space| dyn_space.borrow()).unwrap();
+
+                for self_atom in self_space_iter {
+                    if let Some(self_space) = self_atom.as_gnd::<DynSpace>().map(|dyn_space| dyn_space.borrow()) {
+                        if std::ptr::eq(&*sub_space, &*self_space) {
+                            dup = true;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if !dup {
+                self.add_atom(sub_space_atom, false).map_err(|a| a.to_string())?;
+            }
+        }
+
+        //Finally, import the dependency's tokens directly, until we figure out a better way to handle this
         self.import_all_tokens_from_dependency(metta, mod_id)
     }
 

@@ -183,10 +183,10 @@ impl Metta {
         //Set the runner's stdlib mod_id
         metta.0.stdlib_mod.set(stdlib_mod_id).unwrap();
 
-        //Import the stdlib into the top module
+        //Import the stdlib into the top module, now that it is loaded
         let mut runner_state = RunnerState::new(&metta);
         runner_state.run_in_context(|context| {
-            context.module().import_dependency_legacy(&metta, stdlib_mod_id).unwrap();
+            context.module().import_all_from_dependency(&metta, stdlib_mod_id).unwrap();
             Ok(())
         }).expect("Failed to import stdlib");
         drop(runner_state);
