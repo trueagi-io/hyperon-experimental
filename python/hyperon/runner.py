@@ -178,7 +178,7 @@ class MeTTa:
         """Loads a module into the runner directly from a Python module, with the specified name and scope"""
         if not isinstance(pymod_name, str):
             pymod_name = repr(pymod_name)
-        loader_func = _priv_make_module_loader_func_for_pymod(pymod_name, load_py_stdlib=True)
+        loader_func = _priv_make_module_loader_func_for_pymod(pymod_name)
         return self.load_module_direct_from_func(mod_name, private_to, loader_func)
 
     def load_module_at_path(self, path, mod_name=None):
@@ -289,7 +289,7 @@ class _PyFileMeTTaModFmt:
         # identical to the MeTTa module name becuase we don't mangle it, but we may mangle it in the future
         pymod_name = callback_context;
 
-        loader_func = _priv_make_module_loader_func_for_pymod(pymod_name, load_py_stdlib=True)
+        loader_func = _priv_make_module_loader_func_for_pymod(pymod_name)
         loader_func(run_context, descriptor)
 
 def _priv_load_py_stdlib(c_run_context, c_descriptor):
@@ -307,7 +307,7 @@ def _priv_load_py_stdlib(c_run_context, c_descriptor):
     # py_stdlib_id = run_context.metta().load_module_direct_from_pymod("stdlib-py", descriptor, "hyperon.stdlib")
     # run_context.import_dependency(py_stdlib_id)
 
-def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False, load_py_stdlib=False):
+def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False):
     """
     Private function to return a loader function to load a module into the runner directly from the specified Python module
     """
@@ -321,13 +321,10 @@ def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False, load
             space = GroundingSpaceRef()
             run_context.init_self_module(descriptor, space, None)
 
-            #Load and import the Python stdlib or corelib using "import *" behavior
+            #Load and import the corelib using "import *" behavior, if that flag was specified
             if load_corelib:
                 corelib_id = run_context.load_module("corelib")
                 run_context.import_dependency(corelib_id)
-            if load_py_stdlib:
-                py_stdlib_id = run_context.load_module("stdlib")
-                run_context.import_dependency(py_stdlib_id)
 
             for n in dir(mod):
                 obj = getattr(mod, n)

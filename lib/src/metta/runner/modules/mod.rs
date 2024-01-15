@@ -250,6 +250,7 @@ impl MettaMod {
         // Get the space associated with the dependent module
         let mut runner_state = RunnerState::new_with_module(metta, mod_id);
         let dep_space = runner_state.run_in_context(|context| {
+            log::info!("import_all_from_dependency: importing from {} (modid={mod_id:?}) into {}", context.module().descriptor().name(), self.descriptor.name());
             let dep_space = context.module().space().clone();
             Ok(dep_space)
         })?;
@@ -286,9 +287,15 @@ impl MettaMod {
         // Get the space associated with the dependent module
         let mut runner_state = RunnerState::new_with_module(metta, mod_id);
         let mut dep_space = runner_state.run_in_context(|context| {
+            log::info!("import_dependency_legacy: importing from {} (modid={mod_id:?}) into {}", context.module().descriptor().name(), self.descriptor.name());
             let dep_space = context.module().space().clone();
             Ok(dep_space)
         })?;
+
+        //If the dependency's space has already been imported then exit
+        if self.self_space_contains_subspace(&*dep_space.borrow()) {
+            return Ok(())
+        }
 
         // Do a deep clone of the dependent module's space, but separate out sub-spaces so we can flatten
         //  them into the destination
@@ -327,28 +334,27 @@ impl MettaMod {
 
         // Add the sub_space dependencies into &self, but only if they don't already exist
         for sub_space_atom in sub_spaces {
-
-            let mut dup = false;
-            if let Some(self_space_iter) = self.space.borrow().atom_iter() {
-                let sub_space = sub_space_atom.as_gnd::<DynSpace>().map(|dyn_space| dyn_space.borrow()).unwrap();
-
-                for self_atom in self_space_iter {
-                    if let Some(self_space) = self_atom.as_gnd::<DynSpace>().map(|dyn_space| dyn_space.borrow()) {
-                        if std::ptr::eq(&*sub_space, &*self_space) {
-                            dup = true;
-                            break;
-                        }
-                    }
-                }
-            }
-
-            if !dup {
+            if !self.self_space_contains_subspace(&*sub_space_atom.as_gnd::<DynSpace>().map(|dyn_space| dyn_space.borrow()).unwrap()) {
                 self.add_atom(sub_space_atom, false).map_err(|a| a.to_string())?;
             }
         }
 
         //Finally, import the dependency's tokens directly, until we figure out a better way to handle this
         self.import_all_tokens_from_dependency(metta, mod_id)
+    }
+
+    /// Internal function, scans all the Sub-Space atoms in a module's &self, looking for a specific other space
+    fn self_space_contains_subspace(&self, sub_space: &dyn crate::space::SpaceMut) -> bool {
+        if let Some(self_space_iter) = self.space.borrow().atom_iter() {
+            for self_atom in self_space_iter {
+                if let Some(self_space) = self_atom.as_gnd::<DynSpace>().map(|dyn_space| dyn_space.borrow()) {
+                    if std::ptr::eq(sub_space, &*self_space) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 
     pub fn descriptor(&self) -> &ModuleDescriptor {
