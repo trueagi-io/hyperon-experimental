@@ -11,6 +11,7 @@ log = "0.4.0"
 env_logger = "0.8.4"
 directories = "5.0.1" # For Environment to find platform-specific config location
 smallvec = "1.10.0"
+im = "15.1.0"
 xxhash-rust = {version="0.8.7", features=["xxh3"]}
 
 [lib]

@@ -134,6 +134,7 @@ impl Bindings {
         }
     }
 
+    #[allow(dead_code)] //TODO: MINIMAL only silence the warning until interpreter2 replaces interpreter
     pub(crate) fn len(&self) -> usize {
         self.id_by_var.len()
     }
@@ -542,8 +543,10 @@ impl Bindings {
     /// ```
     pub fn narrow_vars<T: VariableSet>(&self, vars: &T) -> Bindings {
         let mut deps: HashSet<VariableAtom> = HashSet::new();
-        for var in vars.iter() {
-            self.find_deps(var, &mut deps);
+        for var in self.id_by_var.keys() {
+            if vars.contains(var) {
+                self.find_deps(var, &mut deps);
+            }
         }
 
         let dep_ids: HashSet<u32> = deps.iter()

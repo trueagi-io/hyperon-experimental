@@ -849,6 +849,16 @@ impl<'a> TryFrom<&'a Atom> for &'a [Atom] {
     }
 }
 
+impl<'a> TryFrom<&'a mut Atom> for &'a mut [Atom] {
+    type Error = &'static str;
+    fn try_from(atom: &mut Atom) -> Result<&mut [Atom], &'static str> {
+        match atom {
+            Atom::Expression(expr) => Ok(expr.children_mut().as_mut_slice()),
+            _ => Err("Atom is not an ExpressionAtom")
+        }
+    }
+}
+
 impl TryFrom<Atom> for SymbolAtom {
     type Error = &'static str;
     fn try_from(atom: Atom) -> Result<Self, &'static str> {
