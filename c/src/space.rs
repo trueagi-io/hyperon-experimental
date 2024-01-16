@@ -781,6 +781,9 @@ impl Space for CSpace {
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        Some(self)
+    }
 }
 
 impl std::fmt::Display for CSpace {
@@ -801,6 +804,7 @@ impl Space for DefaultSpace<'_> {
     fn common(&self) -> FlexRef<SpaceCommon> { self.0.common() }
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
     fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self.0) }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> { None }
 }
 impl std::fmt::Display for DefaultSpace<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
