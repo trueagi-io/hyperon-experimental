@@ -9,6 +9,8 @@
 (: unify (-> Atom Atom Atom Atom Atom))
 (: cons (-> Atom Atom Atom))
 (: decons (-> Atom Atom))
+(: collapse-bind (-> Atom Atom))
+(: superpose-bind (-> Atom Atom))
 
 (: id (-> Atom Atom))
 (= (id $x) $x)
@@ -17,37 +19,28 @@
 (= (apply $atom $var $templ)
   (function (chain (eval (id $atom)) $var (return $templ))) )
 
-(: if-non-empty-expression (-> Atom Atom Atom Atom))
-(= (if-non-empty-expression $atom $then $else)
-  (function (chain (eval (get-metatype $atom)) $type
-    (eval (if-equal $type Expression
-      (eval (if-equal $atom () (return $else) (return $then)))
-      (return $else) )))))
-
-(: if-decons (-> Atom Variable Variable Atom Atom Atom))
-(= (if-decons $atom $head $tail $then $else)
-  (function (eval (if-non-empty-expression $atom
+(: if-decons-expr (-> Expression Variable Variable Atom Atom Atom))
+(= (if-decons-expr $atom $head $tail $then $else)
+  (function (eval (if-equal $atom ()
+    (return $else)
     (chain (decons $atom) $list
-      (unify $list ($head $tail) (return $then) (return $else)) )
-    (return $else) ))))
-
-(: if-empty (-> Atom Atom Atom Atom))
-(= (if-empty $atom $then $else)
-  (function (eval (if-equal $atom Empty (return $then) (return $else)))) )
-
-(: if-not-reducible (-> Atom Atom Atom Atom))
-(= (if-not-reducible $atom $then $else)
-  (function (eval (if-equal $atom NotReducible (return $then) (return $else)))) )
+      (unify $list ($head $tail) (return $then) (return $else)) )))))
 
 (: if-error (-> Atom Atom Atom Atom))
 (= (if-error $atom $then $else)
-  (function (eval (if-decons $atom $head $_
-    (eval (if-equal $head Error (return $then) (return $else)))
-    (return $else) ))))
+  (function (chain (eval (get-metatype $atom)) $meta
+    (eval (if-equal $meta Expression
+      (eval (if-equal $atom ()
+        (return $else)
+        (chain (decons $atom) $list
+          (unify $list ($head $tail)
+            (eval (if-equal $head Error (return $then) (return $else)))
+            (return $else) ))))
+      (return $else) )))))
 
 (: return-on-error (-> Atom Atom Atom))
 (= (return-on-error $atom $then)
-  (function (eval (if-empty $atom (return (return Empty))
+  (function (eval (if-equal $atom Empty (return (return Empty))
     (eval (if-error $atom (return (return $atom))
       (return $then) ))))))
 
@@ -55,7 +48,7 @@
 (= (switch $atom $cases)
   (function (chain (decons $cases) $list
     (chain (eval (switch-internal $atom $list)) $res
-      (chain (eval (if-not-reducible $res Empty $res)) $x (return $x)) ))))
+      (chain (eval (if-equal $res NotReducible Empty $res)) $x (return $x)) ))))
 
 (= (switch-internal $atom (($pattern $template) $tail))
   (function (unify $atom $pattern
@@ -77,36 +70,41 @@
           (return $then)
           (unify $type1 $type2 (return $then) (return $else)) ))))))))))
 
+(= (first-from-pair $pair)
+  (function
+    (unify $pair ($first $second)
+      (return $first)
+      (return (Error (first-from-pair $pair) "incorrect pair format")))))
+
+(= (match-type-or $folded $next $type)
+  (function
+    (chain (eval (match-types $next $type True False)) $matched
+      (chain (eval (or $folded $matched)) $or (return $or)) )))
+
 (= (type-cast $atom $type $space)
   (function (chain (eval (get-metatype $atom)) $meta
     (eval (if-equal $type $meta
       (return $atom)
-      ; TODO: the proper way to get types is something like
-      ; `(collapse (get-type <atom> <space>))` but it leads to the infinite
-      ; recursion because interpreter called by `collapse` evaluates
-      ; `type-cast` again.
-      (chain (eval (collapse-get-type $atom $space)) $actual-types
-        (chain (eval (foldl-atom $actual-types False
-          $a $b (chain (eval (match-types $b $type True False)) $is-b-comp
-            (chain (eval (or $a $is-b-comp)) $or $or) ))) $is-some-comp
-          (eval (if $is-some-comp
-            (return $atom)
-            (return (Error $atom BadType)) )))))))))
-
+      (chain (eval (collapse-bind (eval (get-type $atom $space)))) $collapsed
+        (chain (eval (map-atom $collapsed $pair (eval (first-from-pair $pair)))) $actual-types
+            (chain (eval (foldl-atom $actual-types False $a $b (eval (match-type-or $a $b $type)))) $is-some-comp
+              (eval (if $is-some-comp
+                (return $atom)
+                (return (Error $atom BadType)) ))))))))))
 
 (= (is-function $type)
   (function (chain (eval (get-metatype $type)) $meta
     (eval (switch ($type $meta) (
-      (($_ Expression)
-        (eval (if-decons $type $head $_tail
+      (($type Expression)
+        (eval (if-decons-expr $type $head $_tail
           (unify $head -> (return True) (return False))
           (return (Error (is-function $type) "is-function non-empty expression as an argument")) )))
-      ($_ (return False))
+      (($type $meta) (return False))
     ))))))
 
 (: filter-atom (-> Expression Variable Atom Expression))
 (= (filter-atom $list $var $filter)
-  (function (eval (if-decons $list $head $tail
+  (function (eval (if-decons-expr $list $head $tail
     (chain (eval (filter-atom $tail $var $filter)) $tail-filtered
       (chain (eval (apply $head $var $filter)) $filter-expr
         (chain $filter-expr $is-filtered
@@ -117,7 +115,7 @@
 
 (: map-atom (-> Expression Variable Atom Expression))
 (= (map-atom $list $var $map)
-  (function (eval (if-decons $list $head $tail
+  (function (eval (if-decons-expr $list $head $tail
     (chain (eval (map-atom $tail $var $map)) $tail-mapped
       (chain (eval (apply $head $var $map)) $map-expr
         (chain $map-expr $head-mapped
@@ -126,12 +124,32 @@
 
 (: foldl-atom (-> Expression Atom Variable Variable Atom Atom))
 (= (foldl-atom $list $init $a $b $op)
-  (function (eval (if-decons $list $head $tail
+  (function (eval (if-decons-expr $list $head $tail
     (chain (eval (apply $init $a $op)) $op-init
       (chain (eval (apply $head $b $op-init)) $op-head
         (chain $op-head $head-folded
           (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) )))
     (return $init) ))))
+
+(: divide-errors (-> Expression Expression Expression))
+(= (divide-errors $succ-err $res)
+  (function (unify $succ-err ($suc $err)
+    (unify $res ($a $_b)
+      (eval (if-error $a
+        (chain (cons $res $err) $err' (return ($suc $err')))
+        (chain (cons $res $suc) $suc' (return ($suc' $err))) ))
+      (return $succ-err))
+    (return $succ-err) )))
+
+(= (check-alternatives $atom)
+  (function
+    (chain (collapse-bind $atom) $collapsed
+      (chain (eval (foldl-atom $collapsed (() ()) $succ-err $res
+        (eval (divide-errors $succ-err $res)))) $divided
+        (unify $divided ($success $error)
+          (chain (eval (if-equal $success () $error $success)) $filtered
+            (chain (superpose-bind $filtered) $ret (return $ret)) )
+          (return (Error (check-alternatives $atom) "list of results was not filtered correctly")) )))))
 
 (= (interpret $atom $type $space)
   (function (chain (eval (get-metatype $atom)) $meta
@@ -140,17 +158,17 @@
       (eval (if-equal $type $meta
         (return $atom)
         (eval (switch ($type $meta) (
-          (($_type Variable) (return $atom))
-          (($_type Symbol)
+          (($type Variable) (return $atom))
+          (($type Symbol)
             (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
-          (($_type Grounded)
+          (($type Grounded)
             (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
-          (($_type Expression)
-            (chain (eval (interpret-expression $atom $type $space)) $ret (return $ret)))
+          (($type Expression)
+            (chain (eval (check-alternatives (eval (interpret-expression $atom $type $space)))) $ret (return $ret)))
         ))))))))))
 
 (= (interpret-expression $atom $type $space)
-  (function (eval (if-decons $atom $op $args
+  (function (eval (if-decons-expr $atom $op $args
     (chain (eval (get-type $op $space)) $op-type
       (chain (eval (is-function $op-type)) $is-func
         (unify $is-func True
@@ -161,10 +179,10 @@
     (chain (eval (type-cast $atom $type $space)) $ret (return $ret)) ))))
 
 (= (interpret-func $expr $type $ret-type $space)
-  (function (eval (if-decons $expr $op $args
+  (function (eval (if-decons-expr $expr $op $args
     (chain (eval (interpret $op $type $space)) $reduced-op
       (eval (return-on-error $reduced-op
-        (eval (if-decons $type $arrow $arg-types
+        (eval (if-decons-expr $type $arrow $arg-types
           (chain (eval (interpret-args $expr $args $arg-types $ret-type $space)) $reduced-args
             (eval (return-on-error $reduced-args
               (chain (cons $reduced-op $reduced-args) $r (return $r)))))
@@ -173,13 +191,13 @@
 
 (= (interpret-args $atom $args $arg-types $ret-type $space)
   (function (unify $args ()
-    (eval (if-decons $arg-types $actual-ret-type $_tail
+    (eval (if-decons-expr $arg-types $actual-ret-type $_tail
       (eval (match-types $actual-ret-type $ret-type
         (return ())
         (return (Error $atom BadType)) ))
       (return (Error (interpret-args $atom $args $arg-types $ret-type $space) "interpret-args expects a non-empty value for $arg-types argument")) ))
-    (eval (if-decons $args $head $tail
-      (eval (if-decons $arg-types $head-type $tail-types
+    (eval (if-decons-expr $args $head $tail
+      (eval (if-decons-expr $arg-types $head-type $tail-types
         (chain (eval (interpret $head $head-type $space)) $reduced-head
           ; check that head was changed otherwise Error or Empty in the head
           ; can be just an argument which is passed by intention
@@ -198,19 +216,19 @@
 (= (interpret-tuple $atom $space)
   (function (unify $atom ()
     (return $atom)
-    (eval (if-decons $atom $head $tail
+    (eval (if-decons-expr $atom $head $tail
       (chain (eval (interpret $head %Undefined% $space)) $rhead
-        (eval (if-empty $rhead (return Empty)
+        (eval (if-equal $rhead Empty (return Empty)
           (chain (eval (interpret-tuple $tail $space)) $rtail
-            (eval (if-empty $rtail (return Empty)
+            (eval (if-equal $rtail Empty (return Empty)
               (chain (cons $rhead $rtail) $ret (return $ret)) ))))))
       (return (Error (interpret-tuple $atom $space) "Non-empty expression atom is expected as an argument")) )))))
 
 (= (metta-call $atom $type $space)
   (function (eval (if-error $atom (return $atom)
     (chain (eval $atom) $result
-      (eval (if-not-reducible $result (return $atom)
-        (eval (if-empty $result (return Empty)
+      (eval (if-equal $result NotReducible (return $atom)
+        (eval (if-equal $result Empty (return Empty)
           (eval (if-error $result (return $result)
             (chain (eval (interpret $result $type $space)) $ret (return $ret)) )))))))))))
 
@@ -236,6 +254,10 @@
 (= (and True False) False)
 (= (and True True) True)
 
+(: not (-> Bool Bool))
+(= (not True) False)
+(= (not False) True)
+
 (: match (-> Atom Atom Atom %Undefined%))
 (= (match $space $pattern $template)
   (unify $pattern $space $template Empty))
@@ -246,19 +268,19 @@
 
 (: let* (-> Expression Atom Atom))
 (= (let* $pairs $template)
-  (eval (if-decons $pairs ($pattern $atom) $tail
+  (eval (if-decons-expr $pairs ($pattern $atom) $tail
     (let $pattern $atom (let* $tail $template))
     $template )))
 
 (: car-atom (-> Expression Atom))
 (= (car-atom $atom)
-  (eval (if-decons $atom $head $_
+  (eval (if-decons-expr $atom $head $_
     $head
     (Error (car-atom $atom) "car-atom expects a non-empty expression as an argument") )))
 
 (: cdr-atom (-> Expression Expression))
 (= (cdr-atom $atom)
-  (eval (if-decons $atom $_ $tail
+  (eval (if-decons-expr $atom $_ $tail
     $tail
     (Error (cdr-atom $atom) "cdr-atom expects a non-empty expression as an argument") )))
 
@@ -272,3 +294,6 @@
 ; arguments  and returns unit
 (= (nop) ())
 (= (nop $x) ())
+
+; TODO: MINIMAL added for compatibility, remove after migration
+(= (empty) Empty)

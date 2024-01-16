@@ -30,6 +30,18 @@ class StdlibTest(HyperonTestCase):
         self.assertEqualMettaRunnerResults(metta.run("!(+ 1.0e3 2.0e3)"), [[ValueAtom(3e3)]])
         self.assertEqualMettaRunnerResults(metta.run("!(+ 5e-3 -2e-3)"), [[ValueAtom(3e-3)]])
 
+    def test_regex(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+        metta.run('''(= (intent regex:"^Hello[[\.|!]]?$") (Intent Hello))
+                    (= (intent regex:"Good~morning.*[[\\.|!]]?") (Intent Hello))
+                    (= (intent $x) (empty))''')
+        self.assertEqual(metta.run('!(intent "hello")', True), [E(S("Intent"), S("Hello"))])
+
+        self.assertEqual(metta.run('!(intent "Good morning my friend!")', True),
+                                           [E(S("Intent"), S("Hello"))])
+
+        self.assertEqual(metta.run('!(intent "Hi")', True), [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,7 +5,7 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::interpreter::interpret;
 use crate::metta::runner::Metta;
-use crate::metta::types::get_atom_types;
+use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::assert::vec_eq_no_order;
 use crate::common::ReplacingMapper;
@@ -88,7 +88,7 @@ impl Grounded for ImportOp {
         }
         let module_space = match module_path {
             Some(path) => {
-                log::debug!("import! load file, full path: {}", path.display());
+                log::debug!("ImportOp::execute: import! load file, full path: {}", path.display());
                 self.metta.load_module_space(path)?
             }
             None => return Err(format!("Failed to load module {file:?}; could not locate file").into())
@@ -153,7 +153,7 @@ impl Grounded for MatchOp {
         let space = args.get(0).ok_or_else(arg_error)?;
         let pattern = args.get(1).ok_or_else(arg_error)?;
         let template = args.get(2).ok_or_else(arg_error)?;
-        log::debug!("match_op: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
+        log::debug!("MatchOp::execute: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
         Ok(space.borrow().subst(&pattern, &template))
     }
@@ -419,7 +419,7 @@ impl CaseOp {
         log::debug!("CaseOp::execute: atom: {}, cases: {:?}", atom, cases);
 
         let result = interpret_no_error(self.space.clone(), &atom);
-        log::debug!("case: interpretation result {:?}", result);
+        log::debug!("CaseOp::execute: interpretation result {:?}", result);
 
         match result {
             Ok(result) if result.is_empty() => {
@@ -746,6 +746,33 @@ impl Grounded for GetTypeOp {
         match_by_equality(self, other)
     }
 }
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct GetMetaTypeOp { }
+
+impl Display for GetMetaTypeOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "get-metatype")
+    }
+}
+
+impl Grounded for GetMetaTypeOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("get-metatype expects single atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+
+        Ok(vec![get_meta_type(&atom)])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct PrintlnOp {}
@@ -1152,6 +1179,8 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"change-state!"), move |_| { change_state_op.clone() });
     let get_state_op = Atom::gnd(GetStateOp{});
     tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
+    let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
+    tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
 }
 
 pub fn register_runner_tokens(metta: &Metta) {
@@ -1245,7 +1274,11 @@ pub static METTA_CODE: &'static str = "
     (: unify (-> Atom Atom Atom Atom %Undefined%))
     (= (unify $a $a $then $else) $then)
     (= (unify $a $b $then $else)
-      (case (let (quote $a) (quote $b) no-result) ((%void% $else))) )
+      (case (unify-or-empty $a $b) ((%void%  $else))) )
+    (: unify-or-empty (-> Atom Atom Atom))
+    (= (unify-or-empty $a $a) unified)
+    (= (unify-or-empty $a $b) (empty))
+
 
     ; empty removes current result from a non-deterministic result
     (: empty (-> %Undefined%))
@@ -1679,6 +1712,7 @@ mod tests {
             !(unify $a (a b c) (ok $a) nok)
             !(unify (a b c) $a (ok $a) nok)
             !(unify (a b c) (a b d) ok nok)
+            !(unify ($x a) (b $x) ok nok)
         ");
 
         assert_eq_metta_results!(metta.run(parser),
@@ -1687,6 +1721,7 @@ mod tests {
                 vec![expr!("ok" "b" "c")],
                 vec![expr!("ok" ("a" "b" "c"))],
                 vec![expr!("ok" ("a" "b" "c"))],
+                vec![expr!("nok")],
                 vec![expr!("nok")]
             ]));
     }

@@ -160,7 +160,7 @@ impl ExpressionAtom {
     /// Constructs new expression from vector of sub-atoms. Not intended to be
     /// used directly, use [Atom::expr] instead.
     #[doc(hidden)]
-    fn new(children: Vec<Atom>) -> Self {
+    pub(crate) fn new(children: Vec<Atom>) -> Self {
         Self{ children }
     }
 
@@ -833,6 +833,16 @@ impl<'a> TryFrom<&'a Atom> for &'a [Atom] {
     fn try_from(atom: &Atom) -> Result<&[Atom], &'static str> {
         match atom {
             Atom::Expression(expr) => Ok(expr.children().as_slice()),
+            _ => Err("Atom is not an ExpressionAtom")
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a mut Atom> for &'a mut [Atom] {
+    type Error = &'static str;
+    fn try_from(atom: &mut Atom) -> Result<&mut [Atom], &'static str> {
+        match atom {
+            Atom::Expression(expr) => Ok(expr.children_mut().as_mut_slice()),
             _ => Err("Atom is not an ExpressionAtom")
         }
     }
