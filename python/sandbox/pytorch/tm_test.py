@@ -75,3 +75,11 @@ class Trainer():
         test_loss /= num_batches
         correct /= size
         print(f"Test: \n Accuracy: {(100 * correct):>0.1f}%, Avg loss: {test_loss:>8f} \n")
+
+
+class Foo():
+    def __init__(self, param1=None, param2=None, param3=None):
+        self.param1 = param1
+        self.param2 = param2
+        self.param3 = param3
+

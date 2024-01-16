@@ -9,9 +9,9 @@ from hyperon.ext import register_atoms
 class TensorValue(MatchableObject):
 
     def __eq__(self, other):
-        return isinstance(other, TensorValue) and\
-               (self.content.shape == other.content.shape) and\
-               (self.content == other.content).all()
+        return isinstance(other, TensorValue) and \
+            (self.content.shape == other.content.shape) and \
+            (self.content == other.content).all()
 
     def match_(self, other):
         sh = self.content.shape
@@ -61,14 +61,14 @@ class PatternOperation(OperationObject):
     def execute(self, *args, res_typ=AtomType.UNDEFINED):
         if self.rec:
             args = args[0].get_children()
-            args = [self.execute(arg)[0]\
-                if isinstance(arg, ExpressionAtom) else arg for arg in args]
+            args = [self.execute(arg)[0] \
+                        if isinstance(arg, ExpressionAtom) else arg for arg in args]
         # If there is a variable or PatternValue in arguments, create PatternValue
         # instead of executing the operation
         for arg in args:
-            if isinstance(arg, GroundedAtom) and\
-               isinstance(arg.get_object(), PatternValue) or\
-               isinstance(arg, VariableAtom):
+            if isinstance(arg, GroundedAtom) and \
+                    isinstance(arg.get_object(), PatternValue) or \
+                    isinstance(arg, VariableAtom):
                 return [G(PatternValue([self, args]))]
         return super().execute(*args, res_typ=res_typ)
 
@@ -83,6 +83,7 @@ def wrapnpop(func):
         res = func(*a)
         typ = _tensor_atom_type(res)
         return [G(TensorValue(res), typ)]
+
     return wrapper
 
 
@@ -104,7 +105,8 @@ def tm_add(*args):
         if isinstance(args[2], numbers.Number):
             t = torch.add(args[0], args[1], alpha=args[2])
         else:
-            raise ValueError(f"The third parameter for the torch.add() should be a scalar value, but got {type(args[2])} instead")
+            raise ValueError(
+                f"The third parameter for the torch.add() should be a scalar value, but got {type(args[2])} instead")
 
     else:
         t = torch.add(*args)
@@ -118,7 +120,8 @@ def tm_sub(*args):
         if isinstance(args[2], numbers.Number):
             t = torch.add(args[0], args[1], alpha=args[2])
         else:
-            raise ValueError(f"The third parameter for the torch.sub() should be a scalar value, but got {type(args[2])} instead")
+            raise ValueError(
+                f"The third parameter for the torch.sub() should be a scalar value, but got {type(args[2])} instead")
 
     else:
         t = torch.sub(*args)
@@ -126,7 +129,7 @@ def tm_sub(*args):
     return t
 
 
-def import_module(*args):
+def instantiate_module(*args):
     torch_module_name = args[0].get_name()
     pymodule_name = args[1].get_name()
     pymodule = importlib.import_module(pymodule_name)
@@ -134,10 +137,15 @@ def import_module(*args):
 
     if len(args) > 2:
         a = []
+        kw = []
         for arg in args[2:]:
             if isinstance(arg, GroundedAtom):
                 if isinstance(arg.get_object(), GroundedObject):
-                    a.append(arg.get_object().content)
+                    obj_cont = arg.get_object().content
+                    if isinstance(obj_cont, Kwargs):
+                        kw = obj_cont.content
+                    else:
+                        a.append(arg.get_object().content)
                 else:
                     a.append(arg.get_object().value)
             elif isinstance(arg, SymbolAtom):
@@ -145,8 +153,10 @@ def import_module(*args):
                     a.append(None)
                 else:
                     a.append(arg.get_name())
-
-        module_instance = module_class(*a)
+        if len(kw) > 0:
+            module_instance = module_class(**kw)
+        else:
+            module_instance = module_class(*a)
     else:
         module_instance = module_class()
 
@@ -179,8 +189,51 @@ def run_trainer(*args):
         trainer.test()
     return
 
+
+class Kwargs(MatchableObject):
+    def __init__(self, content=None, id=None):
+        super().__init__(content, id)
+        if content is None:
+            self.content = {}
+
+    def match_(self, other):
+        new_bindings_set = BindingsSet.empty()
+        p = other.get_children()
+        if isinstance(p[0], SymbolAtom):
+            key = p[0].get_name()
+            var = p[1]
+            if key in self.content:
+                val = ValueAtom(self.content[key])
+                bindings = Bindings()
+                bindings.add_var_binding(var, val)
+                new_bindings_set.push(bindings)
+
+        return new_bindings_set
+
+
+def pairs_to_kwargs(pairs):
+    kwargs = Kwargs()
+    pairs_children = pairs.get_children()
+    for pair in pairs_children:
+        p = pair.iterate()
+
+        if isinstance(p[0], SymbolAtom):
+            key = p[0].get_name()
+            if isinstance(p[1], GroundedAtom):
+                kwargs.content[key] = p[1].get_object().value
+            elif isinstance(p[1], SymbolAtom):
+                v = p[1].get_name()
+                if v == 'None':
+                    kwargs.content[key] = None
+                else:
+                    kwargs.content[key] = v
+
+    return [G(GroundedObject(kwargs))]
+
+
 @register_atoms
 def torchme_atoms():
+    tmKwargsAtom = G(PatternOperation('kwargs', pairs_to_kwargs))
     tmEmptyTensorAtom = G(PatternOperation('torch.empty', wrapnpop(lambda *args: torch.empty(args)), unwrap=False, rec=True))
     tmTensorAtom = G(PatternOperation('torch.tensor', wrapnpop(create_tensor_from_data), unwrap=False, rec=True))
     tmZerosTensorAtom = G(PatternOperation('torch.zeros', wrapnpop(lambda *args: torch.zeros(args)), unwrap=False, rec=True))
@@ -195,8 +248,7 @@ def torchme_atoms():
     tmMatMulAtom = G(PatternOperation('torch.matmul', wrapnpop(torch.matmul), unwrap=False, rec=True))
     tmMeanAtom = G(PatternOperation('torch.mean', wrapnpop(torch.mean), unwrap=False))
 
-
-    tmImportModelAtom = G(OperationObject('torch.import_module', import_module, unwrap=False))
+    tmImportModelAtom = G(OperationObject('torch.instantiate_module', instantiate_module, unwrap=False))
 
     tmReqGradStatusAtom = G(OperationObject('torch.requires_grad_status', lambda x: x.requires_grad, unwrap=True))
     tmReqGradAtom = G(OperationObject('torch.requires_grad', lambda x, b: x.requires_grad_(b), unwrap=True))
@@ -220,8 +272,9 @@ def torchme_atoms():
         r"torch\.matmul": tmMatMulAtom,
         r"torch\.mean": tmMeanAtom,
 
+        r"kwargs": tmKwargsAtom,
 
-        r"torch\.import_module": tmImportModelAtom,
+        r"torch\.instantiate_module": tmImportModelAtom,
         r"torch\.requires_grad_status": tmReqGradStatusAtom,
         r"torch\.requires_grad": tmReqGradAtom,
         r"torch\.backward": tmBackwardAtom,
@@ -229,4 +282,3 @@ def torchme_atoms():
         r"torch\.get_model_params": tmGetModelParamsAtom,
         r"torch\.run_trainer": tmRunTrainerAtom
     }
-
