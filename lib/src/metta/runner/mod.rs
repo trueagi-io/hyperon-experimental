@@ -163,10 +163,6 @@ impl Metta {
     /// pass `None` for space to create a new [GroundingSpace]
     /// pass `None` for `env_builder` to use the common environment
     pub fn new_with_stdlib_loader(loader: Option<&dyn ModuleLoader>, space: Option<DynSpace>, env_builder: Option<EnvBuilder>) -> Metta {
-        let space = match space {
-            Some(space) => space,
-            None => DynSpace::new(GroundingSpace::new())
-        };
 
         //Create the raw MeTTa runner
         let metta = Metta::new_core(space, env_builder);
@@ -205,9 +201,14 @@ impl Metta {
 
     /// Returns a new core MeTTa interpreter without any loaded corelib, stdlib, or initialization
     ///
+    /// NOTE: If `space` is `None`, a [GroundingSpace] will be created
     /// NOTE: If `env_builder` is `None`, the common environment will be used
     /// NOTE: This function does not load any modules, nor run the [Environment]'s 'init.metta'
-    pub fn new_core(space: DynSpace, env_builder: Option<EnvBuilder>) -> Self {
+    pub fn new_core(space: Option<DynSpace>, env_builder: Option<EnvBuilder>) -> Self {
+        let space = match space {
+            Some(space) => space,
+            None => DynSpace::new(GroundingSpace::new())
+        };
         let settings = Shared::new(HashMap::new());
         let environment = match env_builder {
             Some(env_builder) => Arc::new(env_builder.build()),
@@ -929,7 +930,7 @@ mod tests {
             (foo b)
         ";
 
-        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Some(EnvBuilder::test_env()));
+        let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -943,7 +944,7 @@ mod tests {
             !(foo b)
         ";
 
-        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Some(EnvBuilder::test_env()));
+        let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
@@ -998,7 +999,7 @@ mod tests {
             !(foo a)
         ";
 
-        let metta = Metta::new_core(DynSpace::new(GroundingSpace::new()), Some(EnvBuilder::test_env()));
+        let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
         metta.set_setting("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));

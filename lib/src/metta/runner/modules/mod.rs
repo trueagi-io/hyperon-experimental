@@ -92,6 +92,16 @@ impl MettaMod {
 
     /// Internal method to initialize an empty MettaMod
     pub(crate) fn new_with_tokenizer(metta: &Metta, descriptor: ModuleDescriptor, space: DynSpace, tokenizer: Shared<Tokenizer>, working_dir: Option<PathBuf>, no_stdlib: bool) -> Self {
+
+        //Give the space a name based on the module, if it doesn't already have one
+        if let Some(any_space) = space.borrow_mut().as_any_mut() {
+            if let Some(g_space) = any_space.downcast_mut::<GroundingSpace>() {
+                if g_space.name().is_none() {
+                    g_space.set_name(descriptor.name().to_string());
+                }
+            }
+        }
+
         let new_mod = Self {
             descriptor,
             space,
@@ -102,7 +112,7 @@ impl MettaMod {
 
         // Load the base tokens for the module's new Tokenizer
         register_runner_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), &new_mod.space, metta);
-        register_common_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), metta);
+        register_common_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), &new_mod.space, metta);
 
         //Load the stdlib unless this module is no_std
         if !no_stdlib {

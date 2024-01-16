@@ -905,13 +905,17 @@ impl ModuleLoader for CModLoaderWrapper {
 ///
 #[no_mangle]
 pub extern "C" fn metta_new_core(space: *mut space_t, env_builder: env_builder_t) -> metta_t {
-    let dyn_space = unsafe{ &*space }.borrow();
+    let dyn_space = if space.is_null() {
+        None
+    } else {
+        Some(unsafe{ &*space }.borrow().clone())
+    };
     let env_builder = if env_builder.is_default() {
         None
     } else {
         Some(env_builder.into_inner())
     };
-    let metta = Metta::new_core(dyn_space.clone(), env_builder);
+    let metta = Metta::new_core(dyn_space, env_builder);
     metta.into()
 }
 
