@@ -63,11 +63,29 @@ class DASpace(AbstractSpace):
             else:
                 return Node("Symbol", repr(atom))
 
+    def _build_link_handle(self, link_type, target_handles):
+        if link_type == 'Expression':
+            target_handles.sort()
+        return f'<{link_type}: {target_handles}>'
+
+    def _get_link_targets(self, handle):
+        all_links = self.das.get_links('Expression')
+        for link in all_links:
+            if self._build_link_handle(link[0], link[1:]) == handle:
+                return link[1:]
+        return None
+
     def _handle2atom(self, h):
         try:
             return S(self.das.get_node_name(h))
         except Exception as e:
-            return E(*[self._handle2atom(ch) for ch in self.das.get_link_targets(h)])
+            return E(*[self._handle2atom(ch) for ch in self.das.backend.get_link_targets(h)])
+
+    def _handle2atom2(self, h):
+        try:
+            return S(self.das.get_node_name(h))
+        except Exception as e:
+            return E(*[self._handle2atom2(ch) for ch in self._get_link_targets(h)])
 
     def query(self, query_atom):
         query = self._atom2dict_new(query_atom)
