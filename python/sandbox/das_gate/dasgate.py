@@ -77,13 +77,13 @@ class DASpace(AbstractSpace):
 
     def _handle2atom(self, h):
         try:
-            return S(self.das.get_node_name(h))
+            return S(self.das.backend.get_node_name(h))
         except Exception as e:
             return E(*[self._handle2atom(ch) for ch in self.das.backend.get_link_targets(h)])
 
     def _handle2atom2(self, h):
         try:
-            return S(self.das.get_node_name(h))
+            return S(self.das.backend.get_node_name(h))
         except Exception as e:
             return E(*[self._handle2atom2(ch) for ch in self._get_link_targets(h)])
 
@@ -95,7 +95,6 @@ class DASpace(AbstractSpace):
         new_bindings_set = BindingsSet.empty()
         if not answer:
             return new_bindings_set
-
         for a in answer:
             bindings = Bindings()
             if isinstance(a, list):
