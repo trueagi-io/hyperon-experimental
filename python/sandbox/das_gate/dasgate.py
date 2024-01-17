@@ -17,10 +17,13 @@ from hyperon_das.pattern_matcher import (
 
 class DASpace(AbstractSpace):
 
-    def __init__(self, unwrap=True):
+    def __init__(self, remote=False, host='localhost', port='22', unwrap=True):
         super().__init__()
         # self.das = DistributedAtomSpace('ram_only')
-        self.das = DistributedAtomSpace()
+        if remote:
+            self.das = DistributedAtomSpace(query_engine='remote', host=host, port=port)
+        else:
+            self.das = DistributedAtomSpace()
         self.unwrap = unwrap
 
     def _atom2dict(self, atom):
@@ -140,6 +143,15 @@ class DASpace(AbstractSpace):
     #    return self.das.count_atoms()
     #def atoms_iter(self):
     #    return iter(self.atoms_list)
+
+def create_new_space(host='104.238.183.115', port='8081'):
+    return [G(SpaceRef(DASpace(remote=True, host=host, port=port)))]
+
+@register_atoms(pass_metta=True)
+def my_glob_atoms(metta):
+    return {
+        r"new-remote-das": OperationAtom("new-remote-das", create_new_space, unwrap=False),
+        }
 
 @register_atoms(pass_metta=True)
 def das_atoms(metta):

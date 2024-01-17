@@ -1,6 +1,7 @@
 !(extend-py! dasgate)
 
-!(bind! &das (new-das))
+;!(bind! &das (new-das))
+!(bind! &das (new-remote-das '104.238.183.115' '8081'))
 
 !(add-atom &das (Test (Test 2)))
 !(add-atom &das (Best (Test 2)))
