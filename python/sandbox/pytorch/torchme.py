@@ -4,6 +4,10 @@ import numbers
 import torch
 from hyperon.atoms import *
 from hyperon.ext import register_atoms
+import os
+import json
+
+TORCH_FUNC_SIGNATURES_PATH = '../sandbox/pytorch/torch_func_signatures.json'
 
 
 class TensorValue(MatchableObject):
@@ -118,7 +122,7 @@ def tm_sub(*args):
     nargs = len(args)
     if nargs > 2:
         if isinstance(args[2], numbers.Number):
-            t = torch.add(args[0], args[1], alpha=args[2])
+            t = torch.sub(args[0], args[1], alpha=args[2])
         else:
             raise ValueError(
                 f"The third parameter for the torch.sub() should be a scalar value, but got {type(args[2])} instead")
@@ -127,6 +131,8 @@ def tm_sub(*args):
         t = torch.sub(*args)
 
     return t
+
+
 
 
 def instantiate_module(*args):
@@ -231,8 +237,17 @@ def pairs_to_kwargs(pairs):
     return [G(GroundedObject(kwargs))]
 
 
+
+
 @register_atoms
 def torchme_atoms():
+
+    if not os.path.isfile(TORCH_FUNC_SIGNATURES_PATH):
+        raise FileNotFoundError(f'{TORCH_FUNC_SIGNATURES_PATH} does not exist')
+
+    with open(TORCH_FUNC_SIGNATURES_PATH, 'r') as file:
+        torch_func_signatures = json.load(file)
+
     tmKwargsAtom = G(PatternOperation('kwargs', pairs_to_kwargs))
     tmEmptyTensorAtom = G(PatternOperation('torch.empty', wrapnpop(lambda *args: torch.empty(args)), unwrap=False, rec=True))
     tmTensorAtom = G(PatternOperation('torch.tensor', wrapnpop(create_tensor_from_data), unwrap=False, rec=True))

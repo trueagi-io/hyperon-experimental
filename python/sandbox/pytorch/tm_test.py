@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 
+
 class FooModel(torch.nn.Module):
 
     def __init__(self):
@@ -12,6 +13,7 @@ class FooModel(torch.nn.Module):
         x = self.linear(x)
         x = self.softmax(x)
         return x
+
 
 # Test model for MNIST
 class NeuralNetwork(nn.Module):
