@@ -135,7 +135,7 @@ pub struct MettaContents {
 //
 //NOTE: I don't love exposing the internals of ModId, but because the C bindings are in a separate crate
 // it was a choice between that and using an unnecessary box
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ModId(pub usize);
 
 impl ModId {

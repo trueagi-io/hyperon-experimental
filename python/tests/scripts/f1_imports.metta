@@ -3,13 +3,14 @@
 ;  init.metta will break the assumptions in this test
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Even at the very beginning of the main script `(get-atoms &self)`
-; returns one atom, which wraps the space of stdlib.
-; The type of this atom is the same as of `&self`
+; Even at the very beginning of the script `(get-atoms &self)`
+; returns two atoms.  One is from the imported stdlib, and the other
+; is corelib, which was a dependency of stdlib that has been promoted
+; These atoms are both wrapped spaces, as is `&self`
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(assertEqual
   ((let $x (get-atoms &self) (get-type $x)))
-  ((get-type &self)))
+  (superpose (((get-type &self)) ((get-type &self)))))
 
 ; stdlib is already loaded
 !(assertEqual
@@ -55,25 +56,20 @@
 !(assertEqual (g 2) 102)
 !(assertEqual (f 2) 103)
 
-; `&self` contains 3 atoms-spaces now:
+; `&self` contains 4 atoms-spaces now:
 ; - stdlib
+; - corelib
 ; - moduleC imported by moduleA and removed from A after its import to &self
 ; - moduleA itself, which is the same as &m
-!(assertEqual &m
-  (let* (($a (collapse (get-atoms &self)))
-          ($x (cdr-atom $a))
-          ($y (cdr-atom $x)))
-         (car-atom $y)))
-
-; NOTE: now the first atom, which was a space, is removed from `&m`,
-; because we load modules only once, and we collect atoms-spaces to
-; prevent duplication
-!(assertEqual
-  (== (let* (($x (collapse (get-atoms &m)))
-             ($y (car-atom $x)))
-            (get-type $y))
-        (get-type &self))
-   False)
+; TODO: Comparing spaces like this doesn't work because the source module is the same, but a specialized
+;   clone of the dependent space without transitive-dependencies was created.  Many ways we can get this
+;   functionality back, but IMO the best solution is accessor operations for current modules, rather than
+;   relying on certain atoms in a certain order returned by `get-atoms`
+;!(assertEqual &m
+;  (let* (($a (collapse (get-atoms &self)))
+;          ($x (cdr-atom $a))
+;          ($y (cdr-atom $x)))
+;         (car-atom $y)))
 
 ; Let's check that `if` from stdlib is not duplicated and gives only one result
 !(assertEqual

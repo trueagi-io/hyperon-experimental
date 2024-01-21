@@ -125,7 +125,7 @@ impl Grounded for ImportOp {
             Some(other_atom) => {
                 match &other_atom {
                     Atom::Grounded(_) if Atom::as_gnd::<DynSpace>(other_atom) == Some(context.module().space()) => {
-                        context.module().import_dependency_legacy(&context.metta, mod_id)?;
+                        context.module().import_all_from_dependency(&context.metta, mod_id)?;
                     },
                     _ => {
                         return Err(format!("import! destination argument must be a symbol atom naming a new space, or &self.  Found: {other_atom:?}").into());

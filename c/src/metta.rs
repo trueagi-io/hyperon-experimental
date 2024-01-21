@@ -1995,7 +1995,7 @@ pub extern "C" fn run_context_load_module(run_context: *mut run_context_t, name:
 pub extern "C" fn run_context_import_dependency(run_context: *mut run_context_t, mod_id: module_id_t) {
     let context = unsafe{ &mut *run_context }.borrow_mut();
 
-    context.module().import_dependency_legacy(context.metta(), mod_id.into_inner()).unwrap();
+    context.module().import_all_from_dependency(context.metta(), mod_id.into_inner()).unwrap();
 }
 
 //LP-TODO-NEXT: Add custom format loading, and custom stdlib tests for Rust
