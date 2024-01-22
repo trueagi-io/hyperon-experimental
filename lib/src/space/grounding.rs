@@ -83,6 +83,7 @@ pub struct GroundingSpace {
     content: Vec<Atom>,
     free: BTreeSet<usize>,
     common: SpaceCommon,
+    name: Option<String>,
 }
 
 impl GroundingSpace {
@@ -94,6 +95,7 @@ impl GroundingSpace {
             content: Vec::new(),
             free: BTreeSet::new(),
             common: SpaceCommon::default(),
+            name: None,
         }
     }
 
@@ -108,6 +110,7 @@ impl GroundingSpace {
             content: atoms,
             free: BTreeSet::new(),
             common: SpaceCommon::default(),
+            name: None,
         }
     }
 
@@ -288,6 +291,16 @@ impl GroundingSpace {
     pub fn iter(&self) -> SpaceIter {
         SpaceIter::new(GroundingSpaceIter::new(self))
     }
+
+    /// Sets the name property for the `GroundingSpace` which can be useful for debugging
+    pub fn set_name(&mut self, name: String) {
+        self.name = Some(name);
+    }
+
+    /// Returns the name property for the `GroundingSpace`, if one has been set
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_ref().map(|s| s.as_str())
+    }
 }
 
 impl Space for GroundingSpace {
@@ -304,6 +317,9 @@ impl Space for GroundingSpace {
         Some(self.iter())
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
 }
@@ -331,13 +347,19 @@ impl PartialEq for GroundingSpace {
 
 impl Debug for GroundingSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GroundingSpace-{self:p}")
+        match &self.name {
+            Some(name) => write!(f, "GroundingSpace-{name} ({self:p})"),
+            None => write!(f, "GroundingSpace-{self:p}")
+        }
     }
 }
 
 impl Display for GroundingSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GroundingSpace-{self:p}")
+        match &self.name {
+            Some(name) => write!(f, "GroundingSpace-{name}"),
+            None => write!(f, "GroundingSpace-{self:p}")
+        }
     }
 }
 
