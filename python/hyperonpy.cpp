@@ -859,5 +859,20 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the environment");
     m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
     m.def("env_builder_add_include_path", [](EnvBuilder& builder, std::string path) { env_builder_add_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
+
+    m.def("gnd_to_int", [](CAtom atom) -> py::int_ {
+            long long n;
+            if (grounded_number_to_longlong(atom.ptr(), &n))
+                return py::cast(n);
+            else
+                return py::none();
+            }, "Convert MeTTa stdlib number to Python int");
+    m.def("gnd_to_float", [](CAtom atom) -> py::float_ {
+            double d;
+            if (grounded_number_to_double(atom.ptr(), &d))
+                return py::cast(d);
+            else
+                return py::none();
+            }, "Convert MeTTa stdlib number to Python float");
 }
 

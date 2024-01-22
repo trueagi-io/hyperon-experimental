@@ -5,6 +5,8 @@ use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
 use hyperon::rust_type_atom;
+use hyperon::atom::*;
+use hyperon::metta::runner::arithmetics::*;
 
 use crate::util::*;
 use crate::atom::*;
@@ -1393,3 +1395,36 @@ pub extern "C" fn env_builder_add_include_path(builder: *mut env_builder_t, path
     *builder_arg_ref = builder.into();
 }
 
+#[no_mangle]
+pub extern "C" fn grounded_number_to_longlong(n: *const atom_t, res: *mut c_longlong) -> bool {
+    let atom = unsafe { (*n).borrow() };
+    match atom {
+        Atom::Grounded(gnd) => {
+            match gnd.as_any_ref().downcast_ref::<Number>() {
+                Some(Number::Integer(number)) => {
+                    unsafe { *res = *number };
+                    true
+                }
+                _ => false,
+            }
+        },
+        _ => false,
+    }
+}
+
+#[no_mangle]
+pub extern "C" fn grounded_number_to_double(n: *const atom_t, res: *mut c_double) -> bool {
+    let atom = unsafe { (*n).borrow() };
+    match atom {
+        Atom::Grounded(gnd) => {
+            match gnd.as_any_ref().downcast_ref::<Number>() {
+                Some(Number::Float(number)) => {
+                    unsafe { *res = *number };
+                    true
+                },
+                _ => false,
+            }
+        },
+        _ => false,
+    }
+}
