@@ -1,6 +1,7 @@
 import unittest
 
 from hyperon import *
+import hyperonpy as hp
 
 class GroundedTypeTest(unittest.TestCase):
 
@@ -140,3 +141,18 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertNotEqual(metta.parse_single("untop").get_grounded_type(),
                 metta.parse_single("untyped").get_grounded_type())
 
+    def test_number_conversion(self):
+        num = Atom._from_catom(hp.number_to_gnd(123))
+        self.assertEqual(type(num), GroundedAtom)
+        self.assertEqual(hp.gnd_to_int(num.catom), 123)
+
+        num = Atom._from_catom(hp.number_to_gnd(123.456))
+        self.assertEqual(type(num), GroundedAtom)
+        self.assertTrue(abs(hp.gnd_to_float(num.catom) - 123.456) < 0.0001)
+
+        sym = S("sym")
+        self.assertEqual(hp.gnd_to_int(S("sym").catom), None)
+        self.assertEqual(hp.gnd_to_float(sym.catom), None)
+
+if __name__ == "__main__":
+    unittest.main()
