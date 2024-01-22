@@ -190,6 +190,11 @@ impl ModuleBom {
     /// load that module
     pub fn resolve_module<'c>(&self, context: &'c RunContext, name: &str) -> Result<Option<(Box<dyn ModuleLoader + 'c>, ModuleDescriptor)>, String> {
 
+        //Make sure the name is a legal module name
+        if !module_name_is_legal(name) {
+            return Err(format!("Illegal module name: {name}"));
+        }
+
         //See if we have a bom entry for the module
         if let Some(entry) = self.deps.get(name) {
 
@@ -225,7 +230,7 @@ impl ModuleBom {
             vec![]
         };
 
-        //Search the catalogs in the runner's Environment
+        //Search the catalogs, starting with the working dir, and continuing to the runner's Environment
         for catalog in local_catalogs.into_iter().chain(context.metta.environment().catalogs()) {
             log::trace!("Looking for module: \"{name}\" inside {catalog:?}");
             //TODO: use lookup_newest_within_version_range, as soon as I add module versioning
@@ -242,6 +247,23 @@ impl ModuleBom {
 
         Ok(None)
     }
+}
+
+/// Returns `true` if a str is a legal name for a module
+///
+/// A module name must be an ascii string, containing only alpha-numeric characters plus `_` and `-`.
+fn module_name_is_legal(name: &str) -> bool {
+    for the_char in name.chars() {
+        if !the_char.is_ascii() {
+            return false;
+        }
+        if !the_char.is_ascii_alphanumeric() &&
+            the_char != '-' &&
+            the_char != '_' {
+            return false;
+        }
+    }
+    return true;
 }
 
 /// Internal function to get a loader for a module at a specific file system path, by trying each FsModuleFormat in order
