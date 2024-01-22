@@ -72,7 +72,7 @@ pub mod metta_interface_mod {
     }
 
     impl MettaShim {
-        const PY_CODE: &str = include_str!("py_shim.py");
+        const PY_CODE: &'static str = include_str!("py_shim.py");
 
         pub fn new(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Self {
 
@@ -106,18 +106,6 @@ pub mod metta_interface_mod {
                 Err(err) => Err(format!("{err}")),
                 Ok((py_mod, py_metta)) => Ok(Self { py_mod, py_metta, result: vec![] }),
             }
-        }
-
-        pub fn load_metta_module(&mut self, module_name: &str) {
-            Python::with_gil(|py| -> PyResult<()> {
-                let name = PyString::new(py, module_name);
-                let py_metta = self.py_metta.as_ref(py);
-                let args = PyTuple::new(py, &[py_metta, name]);
-                let module: &PyModule = self.py_mod.as_ref(py);
-                let func = module.getattr("load_metta_module")?;
-                func.call1(args)?;
-                Ok(())
-            }).unwrap();
         }
 
         pub fn exec(&mut self, line: &str) {
@@ -369,19 +357,6 @@ pub mod metta_interface_mod {
             new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(ImportPyErr) });
 
             Ok(new_shim)
-        }
-
-//LP-TODO-NEXT, I don't think we actually want a "load_metta_module" function.  I think what we actually want is
-// something that runs the file inline.  But I need to think through which files are run first.
-//In fact, it's totally possible (likely) that we ought to get rid of the idea that one invocation
-// of the repl runs multiple top-level files without the files explicitly importing each other.
-//
-//Or if we want to keep the functionality, perhaps the concept of a "primary" MeTTa script needs to go.  But
-// if the files are supposed to interact, then they should import each other.  And if they aren't then there
-// is no reason the user couldn't just spawn multiple instances of the repl to run them.
-        pub fn load_metta_module(&mut self, module: PathBuf) {
-            //LP-TODO-NEXT, put this back when it's working again
-            //self.metta.load_module(module).unwrap();
         }
 
         pub fn parse_and_unroll_syntax_tree(&self, line: &str) -> Vec<(SyntaxNodeType, std::ops::Range<usize>)> {
