@@ -75,7 +75,7 @@ pub struct MettaMod {
     space: DynSpace,
     tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
-    bom: ModuleBom,
+    pkg_info: PkgInfo,
 }
 
 impl MettaMod {
@@ -98,7 +98,7 @@ impl MettaMod {
             tokenizer,
             imported_deps: Mutex::new(HashMap::new()),
             working_dir,
-            bom: ModuleBom::default(),
+            pkg_info: PkgInfo::default(),
         };
 
         // Load the base tokens for the module's new Tokenizer
@@ -349,8 +349,8 @@ impl MettaMod {
         &self.descriptor
     }
 
-    pub fn bom(&self) -> &ModuleBom {
-        &self.bom
+    pub fn pkg_info(&self) -> &PkgInfo {
+        &self.pkg_info
     }
 
     pub fn space(&self) -> &DynSpace {

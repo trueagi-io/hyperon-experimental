@@ -5,9 +5,9 @@
 //!
 //! ```ignore
 //!       ┌────────────────────┐           ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽                    ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽
-//!      ╱                    ╱       ⎽⎼⎻⎺  bom in &self ⎺⎻⎼⎽ Yes      ⎽⎼⎻⎺ bom entry has ⎺⎻⎼⎽ No
-//!     ╱  (import! module)  ╱─────►<      has entry for      >─────►<     fs_path attrib?     >───┐
-//!    ╱                    ╱         ⎺⎻⎼⎽   module?     ⎽⎼⎻⎺          ⎺⎻⎼⎽               ⎽⎼⎻⎺     │
+//!      ╱                    ╱       ⎽⎼⎻⎺  pkg-info in  ⎺⎻⎼⎽ Yes      ⎽⎼⎻⎺pkg-info entry ⎺⎻⎼⎽ No
+//!     ╱  (import! module)  ╱─────►<   &self has entry for   >─────►<   has fs_path attrib?   >───┐
+//!    ╱                    ╱         ⎺⎻⎼⎽    module?    ⎽⎼⎻⎺          ⎺⎻⎼⎽               ⎽⎼⎻⎺     │
 //!   └────────────────────┘               ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺                    ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺          │
 //!                                              │ No                             │ Yes            │
 //!  ┌─────────────────────────┐     ┌───────────▼─────────────┐      /───────────▼─────────────\  │
@@ -25,8 +25,8 @@
 //!  \─────────────────────────/   │             │                    └───────────▲─────────────┘  │
 //!                                │             │ No                             │ Yes            │
 //!                                │Yes    ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽                    ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽          │
-//!                                │  ⎽⎼⎻⎺ bom entry has ⎺⎻⎼⎽       No ⎽⎼⎻⎺ bom entry has ⎺⎻⎼⎽     │
-//!                                └<     version attrib?     >◄─────<       git attrib?       >───┘
+//!                                │  ⎽⎼⎻⎺pkg-info entry ⎺⎻⎼⎽       No ⎽⎼⎻⎺pkg-info entry ⎺⎻⎼⎽     │
+//!                                └<   has version attrib?   >◄─────<     has git attrib?     >───┘
 //!                                   ⎺⎻⎼⎽               ⎽⎼⎻⎺          ⎺⎻⎼⎽               ⎽⎼⎻⎺
 //!                                        ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺                    ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺
 //! ```
@@ -44,14 +44,14 @@
 
 //LP-TODO-NEXT Factor package-management out from module loading, and make package-management
 // an optional feature for the core (C & python still need to depend on it for now).  But core
-// module loading should not require versioning, catalogs, or boms.  and by extension atom-serde
+// module loading should not require versioning, catalogs, or PkgInfo.  and by extension atom-serde
 //
 
 //QUESTION on shared base dependencies & sat-set solving:
 //The currently implemented design resolves each module's dependencies in a straightforward depth-first
 //  order.  This is possible because the module system allows multiple instances of the same module to
-//  be loaded simultaneously.  So each module can pick its best dependencies based on its bom and the
-//  available catalogs.
+//  be loaded simultaneously.  So each module can pick its best dependencies based on its pkg-info and
+//  the available catalogs.
 //However, consider the following situation:
 //  ModA depends on ModI for some interface types (for example a special String type)
 //  ModB depends on ModI for the same interface types, but ModA and ModB don't know about each other
@@ -71,8 +71,8 @@
 //   all other modules that use them in common.  ie. solve for the sat set.  Optionally, with this approach,
 //   the module could also opt to re-export a private dependency as part of itself, making the interface
 //   between ModA and ModB in the example deliberately incompatible. 
-// 3.) We could require private dependencies to be explicitly specified as private in the bom.  With the
-//  default behavior being a single module for each module name.  This might be a reasonable compromise
+// 3.) We could require private dependencies to be explicitly specified as private in the pkg-info.  With
+//  the default behavior being a single module for each module name.  This might be a reasonable compromise
 //  between 1 & 2, however we would likely need some form of linting, so that a user doesn't shoot
 //  themselves in the foot by exporting an interface that includes items from a private dependency
 //
@@ -154,8 +154,8 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
 ///
 /// This structure is analegous to the `[dependencies]` section of a `Cargo.toml` file for a given module
 #[derive(Clone, Debug, Default)]
-//TODO: Use serde to deserialize a ModuleBom from an expression atom
-pub struct ModuleBom {
+//TODO: Use serde to deserialize a PkgInfo from an expression atom
+pub struct PkgInfo {
 
     /// The public name of the module.  Should be composed of alpha-numeric characters with '-' and '_'
     /// characters allowed.  Must not contain any other punctuation. 
@@ -163,29 +163,29 @@ pub struct ModuleBom {
 
     //TODO: version field, to indicate the version of this module
 
-    /// If `strict == true` then a dependency must be declared in the `ModuleBom`, otherwise a permissive
+    /// If `strict == true` then a dependency must be declared in the `PkgInfo`, otherwise a permissive
     /// version requirement will be assumed for any modules that are not explicitly declared
     pub strict: bool,
 
     /// Entries mapping module names to requirements for the module
-    pub deps: HashMap<String, BomEntry>,
+    pub deps: HashMap<String, DepEntry>,
 }
 
-/// A single entry in a bom, specifying the properties of a module that will satisfy a dependency
+/// A single entry in a [PkgInfo]'s dependencies, specifying the properties of a module that will satisfy a dependency
 #[derive(Clone, Debug, Default)]
-pub struct BomEntry {
+pub struct DepEntry {
     /// Indicates that the dependency module should be loaded from a specific FS path
-    /// 
-    /// If the fs_path is specified, the other bom attributes will be ignored.
+    ///
+    /// If the fs_path is specified, the other pkg_info attributes will be ignored.
     //QUESTION: We need a MeTTa "style guide" for these field names, since they are effective going
-    // to be part of the API, because a ModuleBom will be deserialized from atoms
+    // to be part of the API, because a PkgInfo will be deserialized from atoms
     pub fs_path: Option<PathBuf>
 
     //TODO: field for fetching from a specific git repo
     //TODO: field to indicate acceptable version range for dependency
 }
 
-impl ModuleBom {
+impl PkgInfo {
     /// Resolves which module to load from which available location or catalog, and returns the [ModuleLoader] to
     /// load that module
     pub fn resolve_module<'c>(&self, context: &'c RunContext, name: &str) -> Result<Option<(Box<dyn ModuleLoader + 'c>, ModuleDescriptor)>, String> {
@@ -195,23 +195,23 @@ impl ModuleBom {
             return Err(format!("Illegal module name: {name}"));
         }
 
-        //See if we have a bom entry for the module
+        //See if we have a pkg_info dep entry for the module
         if let Some(entry) = self.deps.get(name) {
 
-            //If path is explicitly specified in the bom entry, then we must load the module at the
+            //If path is explicitly specified in the dep entry, then we must load the module at the
             // specified path, and cannot search anywhere else
             if let Some(path) = &entry.fs_path {
                 return loader_for_module_at_path(&context.metta, path, Some(name), context.module().working_dir(), false);
             }
 
-            //TODO, if git URI is specified in the bom entry, clone the repo to a location in the environment
+            //TODO, if git URI is specified in the dep entry, clone the repo to a location in the environment
             // dir with a unique path (based on a random uuid), and resolve it within that directory's catalog
 
-            //TODO, If a version range is specified in the bom entry, then use that version range to specify
+            //TODO, If a version range is specified in the dep entry, then use that version range to specify
             // modules discovered in the catalogs
 
         } else {
-            //If the Bom doesn't have an entry, it's an error if the Bom is flagged as "strict"
+            //If the PkgInfo doesn't have an entry for the module, it's an error if the PkgInfo is flagged as "strict"
             if self.strict {
                 return Ok(None);
             }
@@ -219,9 +219,9 @@ impl ModuleBom {
 
         //Search the module's Working Dir before searching the environment's catalogs
         // This allows a module to import another module inside its directory or as a peer of itself for
-        // single-file modules, without including an explicit bom entry.  On the other hand, If we want
-        // to require module authors to include a bom entry to be explicit about their dependencies, we
-        // can remove this
+        // single-file modules, without including an explicit PkgInfo dep entry.  On the other hand, If we
+        // want to require module authors to include a dep entry to be explicit about their dependencies, we
+        // can remove this catalog
         let working_dir_catalog;
         let local_catalogs = if let Some(mod_working_dir) = context.module().working_dir() {
             working_dir_catalog = DirCatalog::new(PathBuf::from(mod_working_dir), context.metta().environment().fs_mod_formats.clone());
@@ -284,7 +284,7 @@ pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, 
                 Ok(derived_name) => {
                     if let Some(name) = name {
                         if derived_name != name {
-                            panic!("Fatal Error: module found at {} doesn't match module in bom: {}!", path.display(), name);
+                            panic!("Fatal Error: module found at {} doesn't match module in pkg-info dependency: {}!", path.display(), name);
                         }
                     }
 
@@ -329,8 +329,8 @@ impl ModuleLoader for SingleFileModule {
 
     //TODO: Add accessor for the module version here
     //In a single-file module, the discriptor information will be embedded within the MeTTa code
-    // Therefore, we need to parse the whole text of the module looking for a `_module-bom` atom,
-    // that we can then convert into a ModuleBom structure
+    // Therefore, we need to parse the whole text of the module looking for a `_pkg-info` atom,
+    // that we can then convert into a PkgInfo structure
 
     fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
 
@@ -367,9 +367,9 @@ impl ModuleLoader for DirModule {
         Ok(self.name.clone())
     }
 
-    //TODO: Try and read the module version here
-    //If there is a `bom.metta` file, descriptor information from that file will take precedence.
-    // Otherwise, try and parse a `_module-bom` atom from the `module.metta` file
+    //LP-TODO-Next: Try and read the module version here
+    //If there is a `pkg-info.metta` file, information from that file will take precedence.
+    // Otherwise, try and parse a `_pkg-info` atom from the `module.metta` file
 
     fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
 
@@ -391,7 +391,7 @@ impl ModuleLoader for DirModule {
 /// Implemented on a type to test if a given file-system path points to a MeTTa module, and to construct
 /// possible paths within a parent directory for a module of a certain name
 ///
-/// Objects implementing this trait work with in conjunction with [DirCatalog] and [ModuleBom] to facilitate
+/// Objects implementing this trait work with in conjunction with [DirCatalog] and [PkgInfo] to facilitate
 /// loading modules from include directories, specific paths, and remote `git` repositories.
 pub trait FsModuleFormat: std::fmt::Debug + Send + Sync {
 
@@ -484,7 +484,7 @@ impl ModuleCatalog for DirCatalog {
         // needs to be an index of all available modules in that directory.
         //
         //For us, I think we want a less formal approach akin to Python's, where we are allowed to drop a
-        // module into a directory, and import it with a naked `import` statement (i.e. no bom entry)
+        // module into a directory, and import it with a naked `import` statement (i.e. no pkg-info entry)
         // but for that to work, we need to stipulate that it's possible to infer a file name from a
         // module name.
         //

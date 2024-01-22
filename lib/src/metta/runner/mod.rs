@@ -10,7 +10,7 @@
 //!
 //! ## [Metta]
 //! [Metta] is the runner object.  It is owned by the caller and hosts all state associated with MeTTa execution,
-//! including loaded [MettaMod] modules.  A [Metta] has one top-level module, (known as the runner's `&self`) and
+//! including loaded [MettaMod] modules.  A [Metta] runner has one top-level module, (named "top") and
 //! all other modules are loaded as dependents (or transitive dependents) of the top-level module. [Metta] is a
 //! long-lived object, and it may be sufficient to create one [Metta] runner that lasts for the duration of the
 //! host program.
@@ -29,10 +29,10 @@
 //! the implementation.
 //!
 //! ## [MettaMod]
-//! A [MettaMod] represents a loaded module.  A module is fundamentally a [Space] of atoms, although it also
-//! contains an associated [Tokenizer] to help with the conversion from text to [Atom]s and a set of sub-modules
-//! upon which it depends.  Modules can be implemented in pure MeTTa as well as through extensions in other host
-//! languages, namely Rust, C, and Python.
+//! A [MettaMod] contains a loaded module.  A module is fundamentally a [Space] of atoms, although it also
+//! contains an associated [Tokenizer] to help with the conversion from text to [Atom]s and sometimes a
+//! resources directory.  Modules are loaded via loader functions, and they can originate from code
+//! in pure MeTTa as well as through extensions in other host languages, namely Rust, C, and Python.
 //!
 //! ## [RunContext]
 //! A [RunContext] objects encapsulates the interface accessible to code running inside a [RunnerState].  It
@@ -52,7 +52,9 @@
 //!  │   └─┬──────────────────────────────────────────────────┘ │      │
 //!  │     └────────────────────────────────────────────────────┘      │
 //!  └─────────────────────────────────────────────────────────────────┘
-//! 
+//!
+
+//LP-TODO-NEXT: This description above is correct, but it's not complete.  Update with latest design.
 
 use crate::*;
 use crate::common::shared::Shared;
@@ -259,7 +261,7 @@ impl Metta {
     //LP-TODO-NEXT: I think we should use the "private_to" convention for consistency with other loading functions
     pub fn load_module_at_path<P: AsRef<Path>>(&self, path: P, mod_name: Option<&str>) -> Result<ModId, String> {
 
-        // Resolve the module name into a loader object using the resolution logic in the bom
+        // Resolve the module name into a loader object using the resolution logic in the pkgInfo
         let (loader, descriptor) = match loader_for_module_at_path(self, &path, mod_name, self.environment().working_dir(), mod_name.is_some())? {
             Some((loader, descriptor)) => (loader, descriptor),
             None => return Err(format!("Failed to resolve module at path: {}", path.as_ref().display()))
@@ -692,7 +694,7 @@ impl<'input> RunContext<'_, '_, 'input> {
         }
     }
 
-    /// Resolves a dependency module from a name, according to the [ModuleBom] of the current module,
+    /// Resolves a dependency module from a name, according to the [PkgInfo] of the current module,
     /// and loads it into the runner, if it's not already loaded
     pub fn load_module(&self, name: &str) -> Result<ModId, String> {
 
@@ -704,8 +706,8 @@ impl<'input> RunContext<'_, '_, 'input> {
             }
         }
 
-        // Resolve the module name into a loader object using the resolution logic in the bom
-        let (loader, descriptor) = match self.module().bom().resolve_module(self, name)? {
+        // Resolve the module name into a loader object using the resolution logic in the pkg_info
+        let (loader, descriptor) = match self.module().pkg_info().resolve_module(self, name)? {
             Some((loader, descriptor)) => (loader, descriptor),
             None => return Err(format!("Failed to resolve module {name}"))
         };
