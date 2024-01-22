@@ -1428,3 +1428,13 @@ pub extern "C" fn grounded_number_to_double(n: *const atom_t, res: *mut c_double
         _ => false,
     }
 }
+
+#[no_mangle]
+pub extern "C" fn longlong_to_grounded_number(n: c_longlong) -> atom_t {
+    Atom::gnd(Number::Integer(n)).into()
+}
+
+#[no_mangle]
+pub extern "C" fn double_to_grounded_number(d: c_double) -> atom_t {
+    Atom::gnd(Number::Float(d)).into()
+}

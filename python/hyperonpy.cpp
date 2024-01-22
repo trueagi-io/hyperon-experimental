@@ -874,5 +874,14 @@ PYBIND11_MODULE(hyperonpy, m) {
             else
                 return py::none();
             }, "Convert MeTTa stdlib number to Python float");
+    m.def("number_to_gnd", [](py::object n) {
+                if (py::isinstance<py::int_>(n)) {
+                    return CAtom(longlong_to_grounded_number(n.cast<long long>()));
+                }
+                if (py::isinstance<py::float_>(n)) {
+                    return CAtom(double_to_grounded_number(n.cast<double>()));
+                }
+                throw std::runtime_error("int of float number is expected as an argument");
+            }, "Convert Python number to MeTTa stdlib number");
 }
 
