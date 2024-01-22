@@ -7,7 +7,11 @@ from hyperon.ext import register_atoms
 import os
 import json
 
-TORCH_FUNC_SIGNATURES_PATH = '../sandbox/pytorch/torch_func_signatures.json'
+# Modify this file path according to its location in your environment
+TORCH_FUNC_SIGNATURES_PATH = 'torch_func_signatures.json'
+
+if not os.path.isfile(TORCH_FUNC_SIGNATURES_PATH):
+    raise FileNotFoundError(f'{TORCH_FUNC_SIGNATURES_PATH} does not exist')
 
 
 class TensorValue(MatchableObject):
@@ -133,8 +137,6 @@ def tm_sub(*args):
     return t
 
 
-
-
 def instantiate_module(*args):
     torch_module_name = args[0].get_name()
     pymodule_name = args[1].get_name()
@@ -236,64 +238,117 @@ def pairs_to_kwargs(pairs):
 
     return [G(GroundedObject(kwargs))]
 
+#TODO: a function could have several signatures with different number of positional arguments
+def torch_function_decorator(func_name, ret_type, args_doc, kwargs_doc):
+    def torch_function_wrapper(*_args, **kwargs):
+        args = [arg.get_object().value for arg in _args]
+        if len(args_doc) == 1 and len(args) > 1:
+                args = [args]
+        kwargs_list = args_doc + kwargs_doc
+        nargs_doc = len(kwargs_list)
+        func = getattr(torch, func_name)
+        # if ret_type != 'Tensor':
+        #     print(ret_type)
+        kwargs_to_feed = {}
+        if len(args) == 0:
+            kwargs_to_feed = kwargs
+        else:
+            for i, val in enumerate(args):
+                kwargs_to_feed[args_doc[i]] = val
+            if len(kwargs) > 0:
+                kwargs_to_feed.update(kwargs)
+
+        if func_name == 'tensor':
+            # Check if the argument list (or tuple) contains tensors with same shape
+            if all(isinstance(arg, torch.Tensor) for arg in args):
+                if len(args) == 1:
+                    res = args[0].clone().detach()
+                elif all(arg.shape == args[0].shape for arg in args):
+                    res = torch.stack(args)
+                else:
+                    raise ValueError("Chunks of data should have the same shape to stack a tensor.")
+            else:
+                res = torch.tensor(args, **kwargs)
+
+        else:
+            res = func(**kwargs_to_feed)
+
+        if ret_type in ['Tensor', 'LongTensor']:
+            typ = _tensor_atom_type(res)
+            return [G(TensorValue(res), typ)]
+        elif ret_type in ['bool', '(bool)', 'int']:
+            return [ValueAtom(res)]
+        elif ret_type == '(Tensor min, Tensor max)' or ret_type == '(Tensor mantissa, Tensor exponent)' or '(Tensor, Tensor)':
+            return []
+        elif ret_type == '(Tensor, Tensor, Tensor)':
+            return []
+        elif ret_type == '(Tensor, Tensor[])':
+            return []
+        elif ret_type == '(Tensor, LongTensor)':
+            return []
+        elif ret_type == 'List of Tensors':
+            return []
+        elif ret_type == 'seq':
+            return []
+        elif ret_type == 'LongTensor or tuple of LongTensors':
+            return []
+        elif ret_type == 'dtype':
+            return []
+
+    return torch_function_wrapper, False, True
 
 
+def foo_requires_grad_status(*args):
+    s = args[0].requires_grad
+    return s
 
 @register_atoms
 def torchme_atoms():
-
-    if not os.path.isfile(TORCH_FUNC_SIGNATURES_PATH):
-        raise FileNotFoundError(f'{TORCH_FUNC_SIGNATURES_PATH} does not exist')
-
     with open(TORCH_FUNC_SIGNATURES_PATH, 'r') as file:
         torch_func_signatures = json.load(file)
+    atoms_to_reg = {}
+    for tfs in torch_func_signatures:
+        func_name = tfs['func_name']
+        ret_type = tfs['ret_type']
+        args = []
+        kwargs = []
+        for key, value in tfs['signature'].items():
+            if value['type'] in ['Arguments', 'Args']:
+                args.append(key)
+            elif value['type'] in ['Keyword args', 'Keyword arguments']:
+                kwargs.append(key)
+
+        wrapped_func, unwrap, rec = torch_function_decorator(func_name, ret_type, args, kwargs)
+        atoms_to_reg[f'torch.{func_name}'] = G(PatternOperation(f'torch.{func_name}',
+                                                                wrapped_func,
+                                                                unwrap=unwrap,
+                                                                rec=rec))
 
     tmKwargsAtom = G(PatternOperation('kwargs', pairs_to_kwargs))
-    tmEmptyTensorAtom = G(PatternOperation('torch.empty', wrapnpop(lambda *args: torch.empty(args)), unwrap=False, rec=True))
-    tmTensorAtom = G(PatternOperation('torch.tensor', wrapnpop(create_tensor_from_data), unwrap=False, rec=True))
-    tmZerosTensorAtom = G(PatternOperation('torch.zeros', wrapnpop(lambda *args: torch.zeros(args)), unwrap=False, rec=True))
-    tmOnesTensorAtom = G(PatternOperation('torch.ones', wrapnpop(lambda *args: torch.ones(args)), unwrap=False, rec=True))
+    atoms_to_reg.update({'kwargs': tmKwargsAtom})
     tmManualSeedAtom = G(OperationObject('torch.manual_seed', lambda x: torch.manual_seed(x), unwrap=True))
-    tmRandomTensorAtom = G(PatternOperation('torch.rand', wrapnpop(lambda *args: torch.rand(args)), unwrap=False, rec=True))
-    tmAddAtom = G(PatternOperation('torch.add', wrapnpop(tm_add), unwrap=False, rec=True))
-    tmAbsAtom = G(PatternOperation('torch.abs', wrapnpop(torch.abs), unwrap=False))
-    tmSubAtom = G(PatternOperation('torch.sub', wrapnpop(tm_sub), unwrap=False, rec=True))
-    tmMulAtom = G(PatternOperation('torch.mul', wrapnpop(torch.mul), unwrap=False, rec=True))
-    tmDivAtom = G(PatternOperation('torch.div', wrapnpop(torch.div), unwrap=False, rec=True))
-    tmMatMulAtom = G(PatternOperation('torch.matmul', wrapnpop(torch.matmul), unwrap=False, rec=True))
-    tmMeanAtom = G(PatternOperation('torch.mean', wrapnpop(torch.mean), unwrap=False))
+    atoms_to_reg.update({'torch.manual_seed': tmManualSeedAtom})
 
-    tmImportModelAtom = G(OperationObject('torch.instantiate_module', instantiate_module, unwrap=False))
+    tmInstantiateModuleAtom = G(OperationObject('torch.instantiate_module', instantiate_module, unwrap=False))
+    atoms_to_reg.update({'torch.instantiate_module': tmInstantiateModuleAtom})
 
-    tmReqGradStatusAtom = G(OperationObject('torch.requires_grad_status', lambda x: x.requires_grad, unwrap=True))
+    # tmReqGradStatusAtom = G(OperationObject('torch.requires_grad_status', lambda x: x.requires_grad, unwrap=True))
+    tmReqGradStatusAtom = G(OperationObject('torch.requires_grad_status', foo_requires_grad_status, unwrap=True))
+    atoms_to_reg.update({'torch.requires_grad_status': tmReqGradStatusAtom})
+
+
     tmReqGradAtom = G(OperationObject('torch.requires_grad', lambda x, b: x.requires_grad_(b), unwrap=True))
+    atoms_to_reg.update({'torch.requires_grad': tmReqGradAtom})
     tmBackwardAtom = G(OperationObject('torch.backward', lambda x: x.backward(), unwrap=True))
+    atoms_to_reg.update({'torch.backward': tmBackwardAtom})
     tmToDeviceAtom = G(OperationObject('torch.to_device', to_device, unwrap=False))
+    atoms_to_reg.update({'torch.to_device':tmToDeviceAtom})
     tmGetModelParamsAtom = G(OperationObject('torch.get_model_params', lambda x: x.parameters(), unwrap=True))
+    atoms_to_reg.update({'torch.get_model_params':tmGetModelParamsAtom})
     tmRunTrainerAtom = G(OperationObject('torch.run_trainer', run_trainer, unwrap=True))
+    atoms_to_reg.update({'torch.run_trainer':tmRunTrainerAtom})
 
-    return {
-        r"torch\.empty": tmEmptyTensorAtom,
-        r"torch\.tensor": tmTensorAtom,
-        r"torch\.zeros": tmZerosTensorAtom,
-        r"torch\.ones": tmOnesTensorAtom,
-        r"torch\.manual_seed": tmManualSeedAtom,
-        r"torch\.rand": tmRandomTensorAtom,
-        r"torch\.add": tmAddAtom,
-        r"torch\.abs": tmAbsAtom,
-        r"torch\.sub": tmSubAtom,
-        r"torch\.mul": tmMulAtom,
-        r"torch\.div": tmDivAtom,
-        r"torch\.matmul": tmMatMulAtom,
-        r"torch\.mean": tmMeanAtom,
+    tmTensor_Atom = G(PatternOperation('torch.tensor_', wrapnpop(create_tensor_from_data), unwrap=False, rec=True))
+    atoms_to_reg.update({'torch.tensor_': tmTensor_Atom})
 
-        r"kwargs": tmKwargsAtom,
-
-        r"torch\.instantiate_module": tmImportModelAtom,
-        r"torch\.requires_grad_status": tmReqGradStatusAtom,
-        r"torch\.requires_grad": tmReqGradAtom,
-        r"torch\.backward": tmBackwardAtom,
-        r"torch\.to_device": tmToDeviceAtom,
-        r"torch\.get_model_params": tmGetModelParamsAtom,
-        r"torch\.run_trainer": tmRunTrainerAtom
-    }
+    return atoms_to_reg

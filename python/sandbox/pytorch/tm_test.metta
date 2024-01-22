@@ -5,40 +5,43 @@
 ;-------------------------------------
 ; bind a bunch of tensor objects to tokens for convenience
 !(bind! &x (torch.tensor (3 2 3)))
-!(bind! &m (torch.tensor ((6 1) (7 2) (8 3))))
-!(bind! &a (torch.tensor ((1 1 1) (0 0 0))))
-!(bind! &b (torch.tensor ((-1 -1 -1) (1 1 1))))
+;!(bind! &m (torch.tensor ((6 1) (7 2) (8 3))))
+!(&x)
+!(torch.zeros_like (&x))
+;!(bind! &a (torch.tensor ((1 1 1) (0 0 0))))
+;!(bind! &b (torch.tensor ((-1 -1 -1) (1 1 1))))
 
 ; torch.tensor(t) is equivalent to t.clone().detach()
-!(torch.tensor (&x))
+;!(torch.tensor (&m))
 
-!(torch.empty (1 2 3))
-;!(torch.tensor (1 2 3))
-;!(torch.tensor ((6 1) (7 2) (8 3)))
+;!(torch.empty (1 2 3))
 ;!(torch.zeros (2 3))
 
-!(torch.manual_seed 1730)
+;!(torch.manual_seed 1730)
 !(bind! &q (torch.rand (3 4)))
 !(bind! &w (torch.rand (4 5)))
+
+!(torch.mean (&w))
+!(torch.mean (&w 1 True))
 
 ;-------------------------------------
 ; Arithmetic and linear algebra operations
 ;-------------------------------------
-!(torch.add ((torch.zeros (2 2)) 5))
-!(torch.mul ((torch.ones (2 2)) -3))
-!(torch.matmul (&q &w))
+;!(torch.add ((torch.zeros (2 2)) 5))
+;!(torch.mul ((torch.ones (2 2)) -3))
+;!(torch.matmul (&q &w))
 
 ;-------------------------------------
 ; autograd handling
 ;-------------------------------------
-!(torch.requires_grad_status &q)
+;!(torch.requires_grad_status &q)
 !(torch.requires_grad_status &w)
 
 !(torch.requires_grad &q True)
 !(torch.requires_grad &w True)
 
-!(torch.requires_grad_status &q)
-!(torch.requires_grad_status &w)
+;!(torch.requires_grad_status &q)
+;!(torch.requires_grad_status &w)
 
 !(bind! &tm (torch.matmul (&q &w)))
 !(torch.requires_grad_status &tm)
