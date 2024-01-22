@@ -152,7 +152,6 @@ class DASpace(AbstractSpace):
 
 
 
-# def create_new_space(host='104.238.183.115', port='8081'):
 def create_new_space(host, port):
     return [G(SpaceRef(DASpace(remote=True, host=host.__repr__(), port=port.__repr__())))]
 
