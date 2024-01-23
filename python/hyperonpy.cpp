@@ -941,4 +941,28 @@ PYBIND11_MODULE(hyperonpy, m) {
         py::object* py_impl = new py::object(interface);
         env_builder_push_fs_module_format(builder.ptr(), &C_FMT_API, (void*)py_impl);
     }, "Adds a new module format to the environment");
+
+    m.def("gnd_to_int", [](CAtom atom) -> py::object {
+            long long n;
+            if (grounded_number_to_longlong(atom.ptr(), &n)) {
+                return py::int_(n);
+            } else
+                return py::none();
+            }, "Convert MeTTa stdlib number to Python int");
+    m.def("gnd_to_float", [](CAtom atom) -> py::object {
+            double d;
+            if (grounded_number_to_double(atom.ptr(), &d))
+                return py::float_(d);
+            else
+                return py::none();
+            }, "Convert MeTTa stdlib number to Python float");
+    m.def("number_to_gnd", [](py::object n) {
+                if (py::isinstance<py::int_>(n)) {
+                    return CAtom(longlong_to_grounded_number(n.cast<long long>()));
+                }
+                if (py::isinstance<py::float_>(n)) {
+                    return CAtom(double_to_grounded_number(n.cast<double>()));
+                }
+                throw std::runtime_error("int of float number is expected as an argument");
+            }, "Convert Python number to MeTTa stdlib number");
 }

@@ -15,7 +15,6 @@ class Atom:
 
     def __del__(self):
         """Frees an Atom and all associated resources."""
-        #import sys; sys.stderr.write("Atom._del_(" + str(self) + ")\n"); sys.stderr.flush()
         hp.atom_free(self.catom)
 
     def __eq__(self, other):
