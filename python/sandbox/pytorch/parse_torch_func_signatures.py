@@ -5,7 +5,7 @@ import site
 import json
 
 # Modify this file path according to your environment
-TORCH_FUNC_SIGNATURES_PATH = 'python/sandbox/pytorch/torch_func_signatures.json'
+TORCH_FUNC_SIGNATURES_SAVE_PATH = 'python/sandbox/pytorch/torch_func_signatures.json'
 
 
 def parse_pyi_file(file_path):
@@ -76,10 +76,11 @@ def parse():
         d = func.__doc__
         if d is not None:
             s, ret_type = extract_signature(d)
-            signatures.append({'func_name': f, 'ret_type': ret_type, 'signature': s})
+            if len(s) > 0:
+                signatures.append({'func_name': f, 'ret_type': ret_type, 'signature': s})
 
     json_data = json.dumps(signatures)
-    with open(TORCH_FUNC_SIGNATURES_PATH, 'w') as fp:
+    with open(TORCH_FUNC_SIGNATURES_SAVE_PATH, 'w') as fp:
         fp.write(json_data)
 
     print(f'Number of parsed signatures: {len(signatures)}')

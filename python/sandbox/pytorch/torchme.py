@@ -6,8 +6,17 @@ from hyperon.atoms import *
 from hyperon.ext import register_atoms
 import os
 import json
+from pydoc import locate
+import re
 
-# Modify this file path according to its location in your environment
+'''
+Most of the functions defined in the torch module for working with tensors are implemented in C. 
+Unfortunately, the standard inspect module doesn't allow to get signatures of built-in functions.
+Thus, to automatically obtain function signatures, we need to parse the function documentation
+using the 'parse_torch_func_signatures.py' script.
+Parsed signatures are saved in the .json file.
+Modify the file path according to its location in your environment
+'''
 TORCH_FUNC_SIGNATURES_PATH = 'torch_func_signatures.json'
 
 if not os.path.isfile(TORCH_FUNC_SIGNATURES_PATH):
@@ -68,8 +77,9 @@ class PatternOperation(OperationObject):
 
     def execute(self, *args, res_typ=AtomType.UNDEFINED):
         if self.rec:
-            args = args[0].get_children()
-            args = [self.execute(arg)[0] \
+            if not isinstance(args[0], GroundedAtom):
+                args = args[0].get_children()
+                args = [self.execute(arg)[0] \
                         if isinstance(arg, ExpressionAtom) else arg for arg in args]
         # If there is a variable or PatternValue in arguments, create PatternValue
         # instead of executing the operation
@@ -83,58 +93,6 @@ class PatternOperation(OperationObject):
 
 def _tensor_atom_type(npobj):
     return E(S('Tensor'), E(*[ValueAtom(s, 'Number') for s in npobj.shape]))
-
-
-def wrapnpop(func):
-    def wrapper(*args):
-        a = [arg.get_object().value for arg in args]
-        res = func(*a)
-        typ = _tensor_atom_type(res)
-        return [G(TensorValue(res), typ)]
-
-    return wrapper
-
-
-def create_tensor_from_data(*args):
-    # Check if the argument list (or tuple) contains tensors with same shape
-    if all(isinstance(arg, torch.Tensor) for arg in args):
-        if all(arg.shape == args[0].shape for arg in args):
-            t = torch.stack(args)
-        else:
-            raise ValueError("Chunks of data should have the same shape to stack a tensor.")
-    else:
-        t = torch.tensor(args)
-    return t
-
-
-def tm_add(*args):
-    nargs = len(args)
-    if nargs > 2:
-        if isinstance(args[2], numbers.Number):
-            t = torch.add(args[0], args[1], alpha=args[2])
-        else:
-            raise ValueError(
-                f"The third parameter for the torch.add() should be a scalar value, but got {type(args[2])} instead")
-
-    else:
-        t = torch.add(*args)
-
-    return t
-
-
-def tm_sub(*args):
-    nargs = len(args)
-    if nargs > 2:
-        if isinstance(args[2], numbers.Number):
-            t = torch.sub(args[0], args[1], alpha=args[2])
-        else:
-            raise ValueError(
-                f"The third parameter for the torch.sub() should be a scalar value, but got {type(args[2])} instead")
-
-    else:
-        t = torch.sub(*args)
-
-    return t
 
 
 def instantiate_module(*args):
@@ -204,6 +162,9 @@ class Kwargs(MatchableObject):
         if content is None:
             self.content = {}
 
+    def __len__(self):
+        return len(self.content)
+
     def match_(self, other):
         new_bindings_set = BindingsSet.empty()
         p = other.get_children()
@@ -238,25 +199,60 @@ def pairs_to_kwargs(pairs):
 
     return [G(GroundedObject(kwargs))]
 
-#TODO: a function could have several signatures with different number of positional arguments
-def torch_function_decorator(func_name, ret_type, args_doc, kwargs_doc):
-    def torch_function_wrapper(*_args, **kwargs):
-        args = [arg.get_object().value for arg in _args]
-        if len(args_doc) == 1 and len(args) > 1:
-                args = [args]
-        kwargs_list = args_doc + kwargs_doc
-        nargs_doc = len(kwargs_list)
-        func = getattr(torch, func_name)
-        # if ret_type != 'Tensor':
-        #     print(ret_type)
-        kwargs_to_feed = {}
-        if len(args) == 0:
-            kwargs_to_feed = kwargs
+
+def is_complex(s):
+    complex_pattern = "([-]?\d+(\.\d+)?[+-]\d+(\.\d+)?[jJ])|(\d+(\.\d+)?[jJ])"
+    pattern = re.compile(complex_pattern)
+    try:
+        if re.match(pattern, s):
+            return True
         else:
+            return False
+    except ValueError:
+        return False
+
+def is_float(s):
+    try:
+        float(s)
+        return '.' in s
+    except ValueError:
+        return False
+
+def torch_function_decorator(func_name, ret_type, args_doc, kwargs_doc):
+    def torch_function_wrapper(*_args):
+        kwargs_to_feed = {}
+        func = getattr(torch, func_name)
+        if len(_args) == 1 and isinstance(_args[0], GroundedAtom):
+            arg = _args[0].get_object().content
+            if isinstance(arg, Kwargs):
+                kwargs_to_feed = arg.content
+            else:
+                kwargs_to_feed[args_doc[0]] = arg
+        else:
+            args=[]
+            for arg in _args:
+                if isinstance(arg, SymbolAtom):
+                    a = arg.get_name()
+                    if is_complex(a):
+                        a = complex(a)
+                    elif is_float(a):
+                        a = float(a)
+                    args.append(a)
+                else:
+                    args.append(arg.get_object().value)
+            # args = [arg.get_object().value for arg in _args]
+
+            if len(args_doc) == 1 and len(args) > 1:
+                args = [args]
+            kwargs_list = args_doc + kwargs_doc
+            nargs_doc = len(kwargs_list)
+
             for i, val in enumerate(args):
                 kwargs_to_feed[args_doc[i]] = val
-            if len(kwargs) > 0:
-                kwargs_to_feed.update(kwargs)
+
+        if 'dtype' in kwargs_to_feed:
+            if isinstance(kwargs_to_feed['dtype'], str) and 'torch.' in kwargs_to_feed['dtype']:
+                kwargs_to_feed['dtype'] = locate(f"{kwargs_to_feed['dtype']}")
 
         if func_name == 'tensor':
             # Check if the argument list (or tuple) contains tensors with same shape
@@ -268,23 +264,24 @@ def torch_function_decorator(func_name, ret_type, args_doc, kwargs_doc):
                 else:
                     raise ValueError("Chunks of data should have the same shape to stack a tensor.")
             else:
-                res = torch.tensor(args, **kwargs)
+                res = torch.tensor(args)
 
         else:
             res = func(**kwargs_to_feed)
 
-        if ret_type in ['Tensor', 'LongTensor']:
+        if isinstance(res, tuple):
+            result = []
+            for r in res:
+                if isinstance(r, torch.Tensor):
+                    typ = _tensor_atom_type(r)
+                    result.append(G(TensorValue(r), typ))
+            return result
+        elif ret_type in ['Tensor', 'LongTensor']:
             typ = _tensor_atom_type(res)
             return [G(TensorValue(res), typ)]
         elif ret_type in ['bool', '(bool)', 'int']:
             return [ValueAtom(res)]
-        elif ret_type == '(Tensor min, Tensor max)' or ret_type == '(Tensor mantissa, Tensor exponent)' or '(Tensor, Tensor)':
-            return []
-        elif ret_type == '(Tensor, Tensor, Tensor)':
-            return []
         elif ret_type == '(Tensor, Tensor[])':
-            return []
-        elif ret_type == '(Tensor, LongTensor)':
             return []
         elif ret_type == 'List of Tensors':
             return []
@@ -297,10 +294,6 @@ def torch_function_decorator(func_name, ret_type, args_doc, kwargs_doc):
 
     return torch_function_wrapper, False, True
 
-
-def foo_requires_grad_status(*args):
-    s = args[0].requires_grad
-    return s
 
 @register_atoms
 def torchme_atoms():
@@ -332,10 +325,8 @@ def torchme_atoms():
     tmInstantiateModuleAtom = G(OperationObject('torch.instantiate_module', instantiate_module, unwrap=False))
     atoms_to_reg.update({'torch.instantiate_module': tmInstantiateModuleAtom})
 
-    # tmReqGradStatusAtom = G(OperationObject('torch.requires_grad_status', lambda x: x.requires_grad, unwrap=True))
-    tmReqGradStatusAtom = G(OperationObject('torch.requires_grad_status', foo_requires_grad_status, unwrap=True))
+    tmReqGradStatusAtom = G(OperationObject('torch.requires_grad_status', lambda x: x.requires_grad, unwrap=True))
     atoms_to_reg.update({'torch.requires_grad_status': tmReqGradStatusAtom})
-
 
     tmReqGradAtom = G(OperationObject('torch.requires_grad', lambda x, b: x.requires_grad_(b), unwrap=True))
     atoms_to_reg.update({'torch.requires_grad': tmReqGradAtom})
@@ -347,8 +338,5 @@ def torchme_atoms():
     atoms_to_reg.update({'torch.get_model_params':tmGetModelParamsAtom})
     tmRunTrainerAtom = G(OperationObject('torch.run_trainer', run_trainer, unwrap=True))
     atoms_to_reg.update({'torch.run_trainer':tmRunTrainerAtom})
-
-    tmTensor_Atom = G(PatternOperation('torch.tensor_', wrapnpop(create_tensor_from_data), unwrap=False, rec=True))
-    atoms_to_reg.update({'torch.tensor_': tmTensor_Atom})
 
     return atoms_to_reg

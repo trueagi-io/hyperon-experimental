@@ -3,10 +3,15 @@
 ;-------------------------------------
 ; Tensor creation
 ;-------------------------------------
+!(torch.tensor (3. 2. 3.))
+!(bind! &th (torch.tensor ((0. 1.) (1. 0.) (2. 0.) (2. 2.))))
+!(torch.histogramdd ((&th) (3 3)) )
+
 ; bind a bunch of tensor objects to tokens for convenience
 !(bind! &x (torch.tensor (3 2 3)))
 ;!(bind! &m (torch.tensor ((6 1) (7 2) (8 3))))
-!(&x)
+;!(torch.arange (0 100))
+!(torch.conj (torch.tensor (-1+1j -2+2j 3-3j)))
 !(torch.zeros_like (&x))
 ;!(bind! &a (torch.tensor ((1 1 1) (0 0 0))))
 ;!(bind! &b (torch.tensor ((-1 -1 -1) (1 1 1))))
@@ -16,14 +21,23 @@
 
 ;!(torch.empty (1 2 3))
 ;!(torch.zeros (2 3))
+!(torch.linspace (50 75 20))
+
 
 ;!(torch.manual_seed 1730)
 !(bind! &q (torch.rand (3 4)))
 !(bind! &w (torch.rand (4 5)))
 
+!(torch.std_mean (torch.rand (3 3)))
+
+!(torch.topk (&q 3))
+
+!(bind! &th (torch.tensor ((0. 1.) (1. 0.) (2. 0.) (2. 2.))))
+!(torch.histogramdd (&th (3 3)) )
+
 !(torch.mean (&w))
 !(torch.mean (&w 1 True))
-
+!(torch.aminmax (&q))
 ;-------------------------------------
 ; Arithmetic and linear algebra operations
 ;-------------------------------------
@@ -34,7 +48,7 @@
 ;-------------------------------------
 ; autograd handling
 ;-------------------------------------
-;!(torch.requires_grad_status &q)
+!(torch.requires_grad_status &q)
 !(torch.requires_grad_status &w)
 
 !(torch.requires_grad &q True)
@@ -46,7 +60,7 @@
 !(bind! &tm (torch.matmul (&q &w)))
 !(torch.requires_grad_status &tm)
 
-!(bind! &mtm (torch.mean &tm))
+!(bind! &mtm (torch.mean (&tm)))
 !(torch.requires_grad_status &mtm)
 !(torch.backward &mtm)
 
@@ -61,8 +75,14 @@
 
 ;-------------------------------------
 ; kwargs handling
+; !!! NOTE for the current implementation:
+; if you want to pass kwargs you should pass positional args also as kwargs
+; In the example below 'start' and 'end' are positional arguments
 ;-------------------------------------
-!(kwargs ((a "a value") (b "b value")))
+!(bind! &kwargs_arange (kwargs ((start 0) (end 100) (dtype torch.float) (requires_grad True))) )
+!(torch.arange &kwargs_arange)
+!(torch.frexp (torch.arange &kwargs_arange))
+
 !(bind! &kwargs_foo (kwargs ((param1 1) (param2 None) (param3 foo))) )
 !(torch.instantiate_module Foo tm_test &kwargs_foo)
 
