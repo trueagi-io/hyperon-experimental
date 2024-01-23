@@ -621,16 +621,11 @@ impl Bindings {
         self
     }
 
-    fn no_value(&self, id: &u32) -> bool {
-        self.value_by_id.get(id) == None &&
-            self.id_by_var.iter().filter(|(_var, vid)| *vid == id).count() == 1
-    }
-
     /// Keep only variables passed in vars
-    pub fn cleanup<T: VariableSet>(&mut self, vars: &T) {
-        let to_remove: HashSet<VariableAtom> = self.id_by_var.iter()
-            .filter_map(|(var, id)| {
-                if !vars.contains(var) || self.no_value(id) {
+    pub fn retain<F>(&mut self, f: F) where F: Fn(&VariableAtom) -> bool {
+        let to_remove: Vec<VariableAtom> = self.id_by_var.keys()
+            .filter_map(|var| {
+                if !f(var) {
                     Some(var.clone())
                 } else {
                     None
@@ -1683,15 +1678,23 @@ mod test {
     }
 
     #[test]
-    fn bindings_cleanup() -> Result<(), &'static str> {
+    fn bindings_retain() -> Result<(), &'static str> {
+        let mut bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?;
+        bindings.retain(|v| *v == VariableAtom::new("a") || *v == VariableAtom::new("b"));
+        assert_eq!(bindings, bind!{ a: expr!(b) });
+
         let mut bindings = Bindings::new()
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
             .add_var_binding_v2(VariableAtom::new("b"), expr!("B" d))?
             .add_var_binding_v2(VariableAtom::new("c"), expr!("c"))?
             .add_var_binding_v2(VariableAtom::new("d"), expr!("D"))?
             .with_var_no_value(&VariableAtom::new("e"));
-        bindings.cleanup(&Into::<HashSet<&VariableAtom>>::into([&VariableAtom::new("b"), &VariableAtom::new("e")]));
-        assert_eq!(bindings, bind!{ b: expr!("B" d) });
+        bindings.retain(|v| *v == VariableAtom::new("b") || *v == VariableAtom::new("e"));
+        let expected = Bindings::new()
+            .add_var_binding_v2(VariableAtom::new("b"), expr!("B" d))?
+            .with_var_no_value(&VariableAtom::new("e"));
+        assert_eq!(bindings, expected);
         Ok(())
     }
 

@@ -251,7 +251,7 @@ impl InterpreterCache {
         value.iter_mut().for_each(|res| {
             let vars: HashSet<&VariableAtom> = key.iter().filter_type::<&VariableAtom>().collect();
             res.0 = apply_bindings_to_atom(&res.0, &res.1);
-            res.1.cleanup(&vars);
+            res.1.retain(|v| vars.contains(v));
         });
         self.0.insert(key, value)
     }
