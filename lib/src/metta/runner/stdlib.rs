@@ -1253,6 +1253,11 @@ pub fn register_rust_tokens(metta: &Metta) {
     tref.register_token(regex(r"or"), move |_| { or_op.clone() });
     let not_op = Atom::gnd(NotOp{});
     tref.register_token(regex(r"not"), move |_| { not_op.clone() });
+    // NOTE: xor and flip are absent in Python intentionally for conversion testing
+    let xor_op = Atom::gnd(XorOp{});
+    tref.register_token(regex(r"xor"), move |_| { xor_op.clone() });
+    let flip_op = Atom::gnd(FlipOp{});
+    tref.register_token(regex(r"flip"), move |_| { flip_op.clone() });
 
     metta.tokenizer().borrow_mut().move_front(&mut rust_tokens);
 }

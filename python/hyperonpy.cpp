@@ -541,6 +541,9 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("atom_get_object", [](CAtom& atom) {
             return static_cast<GroundedObject const*>(atom_get_object(atom.ptr()))->pyobj;
         }, "Get object of the grounded atom");
+    m.def("atom_is_cgrounded", [](CAtom& atom) {
+            return py::bool_(atom_is_cgrounded(atom.ptr()));
+        }, "Check if atom is CGrounded");
     m.def("atom_get_grounded_type", [](CAtom& atom) {
             return CAtom(atom_get_grounded_type(atom.ptr()));
         }, "Get object of the grounded atom");
@@ -867,6 +870,14 @@ PYBIND11_MODULE(hyperonpy, m) {
             } else
                 return py::none();
             }, "Convert MeTTa stdlib number to Python int");
+    m.def("gnd_to_bool", [](CAtom atom) -> py::object {
+            // NOTE: we convert Rust bool to C++ int, which is converted to bool
+            int n;
+            if (grounded_bool_to_int(atom.ptr(), &n)) {
+                return py::bool_(n);
+            } else
+                return py::none();
+            }, "Convert MeTTa-Rust bool to Python bool");
     m.def("gnd_to_float", [](CAtom atom) -> py::object {
             double d;
             if (grounded_number_to_double(atom.ptr(), &d))
