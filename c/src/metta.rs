@@ -1420,7 +1420,7 @@ pub extern "C" fn grounded_bool_to_bool(n: *const atom_ref_t, res: *mut bool) ->
         Atom::Grounded(gnd) => {
             match gnd.as_any_ref().downcast_ref::<Bool>() {
                 Some(Bool(b)) => {
-                    unsafe { *res = if *b { 1 } else { 0 } };
+                    unsafe { *res = *b };
                     true
                 }
                 _ => false,
