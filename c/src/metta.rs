@@ -1411,7 +1411,12 @@ pub extern "C" fn grounded_number_to_longlong(n: *const atom_t, res: *mut c_long
         _ => false,
     }
 }
-
+/// @brief Access the value of a grounded bool atom
+/// @ingroup metta_language_group
+/// @param[in]  n  A pointer to an `atom_t` or an `atom_ref_t` to access
+/// @param[out]  res  A pointer to the variable into which to write the result
+/// @return  True if the atom was a grounded bool atom, and the result was successfully written
+///
 #[no_mangle]
 pub extern "C" fn grounded_bool_to_bool(n: *const atom_ref_t, res: *mut bool) -> bool {
     // NOTE: there is no c_bool, so we have to choose particular int type
