@@ -874,9 +874,6 @@ PYBIND11_MODULE(hyperonpy, m) {
             bool b;
             if (grounded_bool_to_bool(atom.ptr(), &b)) {
                 return py::bool_(b);
-            int n;
-            if (grounded_bool_to_int(atom.ptr(), &n)) {
-                return py::bool_(n);
             } else
                 return py::none();
             }, "Convert MeTTa-Rust bool to Python bool");
