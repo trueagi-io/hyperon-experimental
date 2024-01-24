@@ -871,7 +871,9 @@ PYBIND11_MODULE(hyperonpy, m) {
                 return py::none();
             }, "Convert MeTTa stdlib number to Python int");
     m.def("gnd_to_bool", [](CAtom atom) -> py::object {
-            // NOTE: we convert Rust bool to C++ int, which is converted to bool
+            bool b;
+            if (grounded_bool_to_bool(atom.ptr(), &b)) {
+                return py::bool_(b);
             int n;
             if (grounded_bool_to_int(atom.ptr(), &n)) {
                 return py::bool_(n);
