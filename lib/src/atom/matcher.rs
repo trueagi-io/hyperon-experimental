@@ -718,7 +718,7 @@ impl Bindings {
 
     /// Rename variables inside bindings using `rename`.
     pub fn rename_vars<F>(self, mut rename: F) -> Self where F: FnMut(VariableAtom) -> VariableAtom {
-        self.into_iter()
+        self.into_vec_of_pairs().into_iter()
             .map(|(mut v, mut a)| {
                 v = rename(v);
                 a.iter_mut().filter_type::<&mut VariableAtom>()
@@ -819,17 +819,44 @@ impl From<&[(VariableAtom, Atom)]> for Bindings {
     }
 }
 
-// FIXME: two iterators into_iter() and iter() return different results:
-// iter() resolves values, into_iter() doesn't
-impl IntoIterator for Bindings {
-    type Item = (VariableAtom, Atom);
-    type IntoIter = std::vec::IntoIter<Self::Item>;
+/// Iterator over `(&VariableAtom, Atom)` pairs in [Bindings].
+/// Each pair contains reference to a [VariableAtom] and instance of [Atom]
+/// which contains resolved value of the variable. See [Bindings::resolve].
+pub struct BindingsIter<'a> {
+    bindings: &'a Bindings,
+    delegate: std::collections::hash_map::Iter<'a, VariableAtom, usize>,
+}
 
-    /// Converts [Bindings] into an iterator of pairs `(VariableAtom, Atom)`.
-    fn into_iter(self) -> Self::IntoIter {
-        self.into_vec_of_pairs().into_iter()
+impl<'a> BindingsIter<'a> {
+
+    fn next(&mut self) -> Option<(&'a VariableAtom, Atom)> {
+        self.delegate.next().and_then(|(var, _id)| {
+            match self.bindings.resolve(var) {
+                Some(atom) => Some((var, atom)),
+                None => None,
+            }
+        })
+    }
+
+}
+
+impl<'a> Iterator for BindingsIter<'a> {
+    type Item = (&'a VariableAtom, Atom);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next()
     }
 }
+
+impl<'a> IntoIterator for &'a Bindings {
+    type Item = (&'a VariableAtom, Atom);
+    type IntoIter = BindingsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 
 /// Represents a set of [Bindings] instances resulting from an operation where multiple matches are possible.
 #[derive(Clone, Debug)]
@@ -988,45 +1015,6 @@ impl BindingsSet {
         new_set
     }
 }
-
-/// Iterator over `(&VariableAtom, Atom)` pairs in [Bindings].
-/// Each pair contains reference to a [VariableAtom] and instance of [Atom]
-/// which contains resolved value of the variable. See [Bindings::resolve].
-pub struct BindingsIter<'a> {
-    bindings: &'a Bindings,
-    delegate: std::collections::hash_map::Iter<'a, VariableAtom, usize>,
-}
-
-impl<'a> BindingsIter<'a> {
-
-    fn next(&mut self) -> Option<(&'a VariableAtom, Atom)> {
-        self.delegate.next().and_then(|(var, _id)| {
-            match self.bindings.resolve(var) {
-                Some(atom) => Some((var, atom)),
-                None => None,
-            }
-        })
-    }
-
-}
-
-impl<'a> Iterator for BindingsIter<'a> {
-    type Item = (&'a VariableAtom, Atom);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next()
-    }
-}
-
-impl<'a> IntoIterator for &'a Bindings {
-    type Item = (&'a VariableAtom, Atom);
-    type IntoIter = BindingsIter<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
 
 /// Iterator over atom matching results. Each result is an instance of [Bindings].
 //TODO: A situation where a MatchResultIter returns an unbounded (infinite) number of results
@@ -1733,7 +1721,7 @@ mod test {
             .add_var_binding_v2(VariableAtom::new("a"), Atom::expr([Atom::sym("A"), Atom::var("x")]))?
             .add_var_binding_v2(VariableAtom::new("b"), Atom::expr([Atom::sym("B"), Atom::var("x")]))?;
 
-        let entries: Vec<(VariableAtom, Atom)> = bindings.into_iter().collect();
+        let entries: Vec<(VariableAtom, Atom)> = bindings.into_vec_of_pairs();
 
         assert_eq_no_order!(entries, vec![
             (VariableAtom::new("x"), Atom::var("y")),
