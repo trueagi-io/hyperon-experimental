@@ -1413,7 +1413,7 @@ pub extern "C" fn grounded_number_to_longlong(n: *const atom_t, res: *mut c_long
 }
 
 #[no_mangle]
-pub extern "C" fn grounded_bool_to_int(n: *const atom_t, res: *mut c_int) -> bool {
+pub extern "C" fn grounded_bool_to_bool(n: *const atom_ref_t, res: *mut bool) -> bool {
     // NOTE: there is no c_bool, so we have to choose particular int type
     let atom = unsafe { (*n).borrow() };
     match atom {
