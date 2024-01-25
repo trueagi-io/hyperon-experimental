@@ -119,7 +119,8 @@ impl<'a, T: SpaceRef<'a>> Debug for InterpreterState<'a, T> {
 }
 
 /// Result of atom interpretation plus variable bindings found
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct InterpretedAtom(Atom, Bindings);
 
 impl InterpretedAtom {
@@ -251,7 +252,7 @@ impl InterpreterCache {
         value.iter_mut().for_each(|res| {
             let vars: HashSet<&VariableAtom> = key.iter().filter_type::<&VariableAtom>().collect();
             res.0 = apply_bindings_to_atom(&res.0, &res.1);
-            res.1.cleanup(&vars);
+            res.1.retain(|v| vars.contains(v));
         });
         self.0.insert(key, value)
     }
