@@ -454,34 +454,34 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, 
         },
         _ if is_embedded_op(&query_atom) =>
             vec![InterpretedAtom(atom_to_stack(query_atom, prev), bindings)],
-        _ => query(&context.space, prev, query_atom, bindings, &vars),
+        _ => query(&context.space, prev, query_atom, bindings, vars),
     }
 }
 
-fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings, vars: &Variables) -> Vec<InterpretedAtom> {
-    let var_x = VariableAtom::new("X").make_unique();
+fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings, _vars: Variables) -> Vec<InterpretedAtom> {
+    let var_x = &VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, atom.clone(), Atom::Variable(var_x.clone())]);
     let results = space.query(&query);
-    let atom_x = Atom::Variable(var_x);
+    let atom_x = Atom::Variable(var_x.clone());
     let results: Vec<InterpretedAtom> = {
         log::debug!("interpreter2::query: query: {}", query);
         log::debug!("interpreter2::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
-            .flat_map(|mut b| {
+            .flat_map(|b| {
                 let res = apply_bindings_to_atom(&atom_x, &b);
                 let stack = if is_function_op(&res) {
-                    let call = Stack::from_prev_keep_vars(prev.clone(), atom.clone(), call_ret);
+                    let call = Stack::from_prev_add_vars(prev.clone(), atom.clone(), call_ret);
                     atom_to_stack(res, Some(Rc::new(RefCell::new(call))))
                 } else {
-                    Stack::finished(prev.clone(), res)
+                    Stack::finished_add_vars(prev.clone(), res)
                 };
-                b.retain(|v| vars.contains(v));
                 log::debug!("interpreter2::query: b: {}", b);
-                b.merge_v2(&bindings).into_iter().filter_map(move |b| {
+                b.merge_v2(&bindings).into_iter().filter_map(move |mut b| {
                     if b.has_loops() {
                         None
                     } else {
+                        b.retain(|v| stack.vars.contains(v));
                         Some(InterpretedAtom(stack.clone(), b))
                     }
                 })
