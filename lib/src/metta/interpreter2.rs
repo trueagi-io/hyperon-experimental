@@ -35,7 +35,7 @@ macro_rules! match_atom {
         }
     };
 }
-type ReturnHandler = fn(Rc<RefCell<Stack>>, Atom, Bindings) -> Option<Stack>;
+type ReturnHandler = fn(Rc<RefCell<Stack>>, Atom, Bindings) -> Option<(Stack, Bindings)>;
 
 #[derive(Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
@@ -53,7 +53,7 @@ struct Stack {
     vars: Variables,
 }
 
-fn no_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> Option<Stack> {
+fn no_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> Option<(Stack, Bindings)> {
     panic!("Unexpected state");
 }
 
@@ -355,10 +355,8 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
             None => panic!("Unexpected state"),
         };
         let ret = prev.borrow().ret;
-        // TODO: two copies of bindings here; we could try to include bindings
-        // into Stack and eliminate copying
-        ret(prev, atom, bindings.clone())
-            .map_or(vec![], |stack| vec![InterpretedAtom(stack, bindings)])
+        ret(prev, atom, bindings)
+            .map_or(vec![], |(stack, bindings)| vec![InterpretedAtom(stack, bindings)])
     } else {
         let expr = atom_as_slice(&stack.atom);
         let result = match expr {
@@ -507,9 +505,6 @@ fn atom_to_stack(atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         Some([op, ..]) if *op == FUNCTION_SYMBOL => {
             function_to_stack(atom, prev)
         },
-        Some([op, ..]) if *op == COLLAPSE_BIND_SYMBOL => {
-            collapse_bind_to_stack(atom, prev)
-        },
         Some([op, ..]) if *op == EVAL_SYMBOL
                        || *op == UNIFY_SYMBOL => {
             Stack::from_prev_add_vars(prev, atom, no_handler)
@@ -535,7 +530,7 @@ fn chain_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
     atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
-fn chain_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Option<Stack> {
+fn chain_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     let mut stack = (*stack.borrow()).clone();
     let nested = atom;
     let Stack{ prev: _, atom: chain, ret: _, finished: _, vars: _} = &mut stack;
@@ -544,7 +539,7 @@ fn chain_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Opti
         _ => panic!("Unexpected state"),
     };
     *arg = nested;
-    Some(stack)
+    Some((stack, bindings))
 }
 
 fn chain(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
@@ -574,68 +569,72 @@ fn function_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack 
     atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
-fn call_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Option<Stack> {
+fn call_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     let mut stack = (*stack.borrow()).clone();
     stack.atom = atom;
     stack.finished = true;
-    Some(stack)
+    Some((stack, bindings))
 }
 
-fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Option<Stack> {
+fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     match_atom!{
         atom ~ [op, result] if *op == RETURN_SYMBOL => {
             let mut stack = (*stack.borrow()).clone();
             stack.atom = result;
             stack.finished = true;
-            Some(stack)
+            Some((stack, bindings))
         },
         _ => {
-            Some(atom_to_stack(atom, Some(stack)))
+            Some((atom_to_stack(atom, Some(stack)), bindings))
         }
     }
 }
 
-fn collapse_bind_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
+fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: mut collapse, ret: _, finished: _, vars: _ } = stack;
+
     let mut nested = Atom::expr([]);
-    let nested_arg = match atom_as_slice_mut(&mut atom) {
-        Some([_op, nested @ Atom::Expression(_)]) => nested,
-        _ => {
-            let error: String = format!("expected: ({} (: <current> Expression)), found: {}", COLLAPSE_BIND_SYMBOL, atom);
-            return Stack::finished(prev, error_atom(atom, error));
+    match &mut collapse {
+        Atom::Expression(expr) => {
+            std::mem::swap(&mut nested, &mut expr.children_mut()[1]);
+            expr.children_mut().push(Atom::value(bindings.clone()))
         },
-    };
-    std::mem::swap(nested_arg, &mut nested);
-    let cur = Stack::from_prev_keep_vars(prev, atom, collapse_bind_ret);
-    atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
+        _ => panic!("Unexpected state"),
+    }
+
+    let prev = Stack::from_prev_keep_vars(prev, collapse, collapse_bind_ret);
+    let cur = atom_to_stack(nested, Some(Rc::new(RefCell::new(prev))));
+    vec![InterpretedAtom(cur, bindings)]
 }
 
-fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<Stack> {
+fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     let nested = atom;
     {
-        let stack = &mut *stack.borrow_mut();
-        let Stack{ prev: _, atom: collapse, ret: _, finished: _, vars: _ } = stack;
+        let stack_ref = &mut *stack.borrow_mut();
+        let Stack{ prev: _, atom: collapse, ret: _, finished: _, vars: _ } = stack_ref;
         let finished = match atom_as_slice_mut(collapse) {
-            Some([_op, Atom::Expression(finished)]) => finished,
+            Some([_op, Atom::Expression(finished), _bindings]) => finished,
             _ => panic!("Unexpected state"),
         };
         finished.children_mut().push(atom_bindings_into_atom(nested, bindings));
     }
-    Rc::into_inner(stack).map(RefCell::into_inner)
+
+    match Rc::into_inner(stack).map(RefCell::into_inner) {
+        Some(stack) => {
+            let Stack{ prev, atom: collapse, ret: _, finished: _, vars: _ } = stack;
+            let (result, bindings) = match atom_into_array(collapse) {
+                Some([_op, result, bindings]) => (result, atom_into_bindings(bindings)),
+                None => panic!("Unexpected state"),
+            };
+            // FIXME: need a way to return binding from .ret
+            Some((Stack::finished(prev, result), bindings))
+        },
+        None => None,
+    }
 }
 
 fn atom_bindings_into_atom(atom: Atom, bindings: Bindings) -> Atom {
     Atom::expr([atom, Atom::value(bindings)])
-}
-
-fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: collapse, ret: _, finished: _, vars: _ } = stack;
-    let result = match_atom!{
-        collapse ~ [_op, finished @ Atom::Expression(_)] => finished,
-        _ => {
-            panic!("Unexpected state")
-        }
-    };
-    vec![InterpretedAtom(atom_to_stack(result, prev), bindings)]
 }
 
 fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
@@ -707,20 +706,22 @@ fn cons_atom(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
 
 fn atom_into_atom_bindings(pair: Atom) -> (Atom, Bindings) {
     match_atom!{
-        pair ~ [atom, bindings] => {
-            match bindings.as_gnd::<Bindings>() {
-                Some(bindings) => {
-                    // TODO: cloning is ineffective, but it is not possible
-                    // to convert grounded atom into internal value at the
-                    // moment
-                    (atom, bindings.clone())
-                },
-                _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
-            }
-        },
+        pair ~ [atom, bindings] => (atom, atom_into_bindings(bindings)),
         _ => {
             panic!("(Atom Bindings) pair is expected, {} was received", pair)
         }
+    }
+}
+
+fn atom_into_bindings(bindings: Atom) -> Bindings {
+    match bindings.as_gnd::<Bindings>() {
+        Some(bindings) => {
+            // TODO: cloning is ineffective, but it is not possible
+            // to convert grounded atom into internal value at the
+            // moment
+            bindings.clone()
+        },
+        _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
     }
 }
 
