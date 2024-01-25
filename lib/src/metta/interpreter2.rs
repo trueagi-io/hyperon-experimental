@@ -38,6 +38,7 @@ macro_rules! match_atom {
 type ReturnHandler = fn(Rc<RefCell<Stack>>, Atom, Bindings) -> Option<Stack>;
 
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 struct Stack {
     // Internal mutability is required to implement collapse-bind. All alternatives
     // reference the same collapse-bind Stack instance. When some alternative
@@ -126,6 +127,7 @@ impl Display for Stack {
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 struct InterpretedAtom(Stack, Bindings);
 
 impl Display for InterpretedAtom {
@@ -304,6 +306,7 @@ fn is_function_op(atom: &Atom) -> bool {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 struct Variables(im::HashSet<VariableAtom>);
 
 impl Variables {
@@ -732,8 +735,12 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     };
     collapsed.into_children().into_iter()
         .map(atom_into_atom_bindings)
-        .map(|(atom, bindings)| {
-            InterpretedAtom(Stack::finished(prev.clone(), atom), bindings)
+        .flat_map(|(atom, b)| {
+            let prev = &prev;
+            b.merge_v2(&bindings).into_iter()
+                .map(move |b| {
+                    InterpretedAtom(Stack::finished(prev.clone(), atom.clone()), b)
+                })
         })
         .collect()
 }
@@ -974,6 +981,19 @@ mod tests {
         assert_eq!(result, vec![metta_atom("(a b c)")]);
     }
 
+
+    #[test]
+    fn test_superpose_bind() {
+        let vars = Variables::new();
+        let atom = Atom::expr([Atom::sym("superpose-bind"),
+            Atom::expr([atom_bindings_into_atom(expr!("some-atom"), bind!{ a: expr!("A") })])]);
+        let stack = Stack{ prev: None, atom, ret: no_handler, finished: false, vars: vars.clone() };
+        let result = superpose_bind(stack, bind!{ b: expr!("B") });
+        assert_eq!(result, vec![InterpretedAtom(
+                Stack{ prev: None, atom: expr!("some-atom"), ret: no_handler, finished: true, vars },
+                bind!{ a: expr!("A"), b: expr!("B") }
+        )]);
+    }
 
     #[test]
     fn metta_turing_machine() {
