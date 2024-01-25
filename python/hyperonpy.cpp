@@ -863,33 +863,33 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
     m.def("env_builder_add_include_path", [](EnvBuilder& builder, std::string path) { env_builder_add_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
 
-    m.def("gnd_to_int", [](CAtom atom) -> py::object {
+    m.def("gnd_get_int", [](CAtom atom) -> py::object {
             long long n;
-            if (grounded_number_to_longlong(atom.ptr(), &n)) {
+            if (grounded_number_get_longlong(atom.ptr(), &n)) {
                 return py::int_(n);
             } else
                 return py::none();
             }, "Convert MeTTa stdlib number to Python int");
-    m.def("gnd_to_bool", [](CAtom atom) -> py::object {
+    m.def("gnd_get_bool", [](CAtom atom) -> py::object {
             bool b;
-            if (grounded_bool_to_bool(atom.ptr(), &b)) {
+            if (grounded_bool_get_bool(atom.ptr(), &b)) {
                 return py::bool_(b);
             } else
                 return py::none();
             }, "Convert MeTTa-Rust bool to Python bool");
-    m.def("gnd_to_float", [](CAtom atom) -> py::object {
+    m.def("gnd_get_float", [](CAtom atom) -> py::object {
             double d;
-            if (grounded_number_to_double(atom.ptr(), &d))
+            if (grounded_number_get_double(atom.ptr(), &d))
                 return py::float_(d);
             else
                 return py::none();
             }, "Convert MeTTa stdlib number to Python float");
-    m.def("number_to_gnd", [](py::object n) {
+    m.def("number_into_gnd", [](py::object n) {
                 if (py::isinstance<py::int_>(n)) {
-                    return CAtom(longlong_to_grounded_number(n.cast<long long>()));
+                    return CAtom(longlong_into_grounded_number(n.cast<long long>()));
                 }
                 if (py::isinstance<py::float_>(n)) {
-                    return CAtom(double_to_grounded_number(n.cast<double>()));
+                    return CAtom(double_into_grounded_number(n.cast<double>()));
                 }
                 throw std::runtime_error("int of float number is expected as an argument");
             }, "Convert Python number to MeTTa stdlib number");

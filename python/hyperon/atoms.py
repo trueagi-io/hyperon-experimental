@@ -150,7 +150,7 @@ class GroundedAtom(Atom):
         # NOTE: Rust and Python may have the same grounded type names, but we already
         # distiguished them above
         elif typ == S('Bool'):
-            return ValueObject(hp.gnd_to_bool(self.catom))
+            return ValueObject(hp.gnd_get_bool(self.catom))
         raise TypeError("Cannot get_object of unsupported non-C {self.catom}")
 
     def get_grounded_type(self):
