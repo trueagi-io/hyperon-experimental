@@ -150,9 +150,8 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertEqual(type(num), GroundedAtom)
         self.assertTrue(abs(hp.gnd_to_float(num.catom) - 123.456) < 0.0001)
 
-        sym = S("sym")
         self.assertEqual(hp.gnd_to_int(S("sym").catom), None)
-        self.assertEqual(hp.gnd_to_float(sym.catom), None)
+        self.assertEqual(hp.gnd_to_float(S("sym").catom), None)
 
 if __name__ == "__main__":
     unittest.main()
