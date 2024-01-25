@@ -20,8 +20,12 @@ impl<T> HoleyVec<T> {
         self.first_hole
     }
 
-    pub fn capacity(&self) -> usize {
+    pub fn index_upper_bound(&self) -> usize {
         self.vec.len()
+    }
+
+    pub fn capacity(&self) -> usize {
+        self.vec.capacity()
     }
 
     pub fn is_hole(&self, index: usize) -> bool {

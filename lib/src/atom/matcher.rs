@@ -552,7 +552,7 @@ impl Bindings {
         }
 
         let mut bindings = Bindings::new();
-        let mut prev_to_new = vec![usize::MAX; self.bindings.capacity()];
+        let mut prev_to_new = vec![usize::MAX; self.bindings.index_upper_bound()];
         let mut copy_var = |var| {
             match self.get_binding(var) {
                 None => {},
@@ -590,7 +590,7 @@ impl Bindings {
             true => Some(self.clone()),
             false => None
         };
-        let mut renamed = bitset::BitSet::with_capacity(self.bindings.capacity());
+        let mut renamed = bitset::BitSet::with_capacity(self.bindings.index_upper_bound());
         for var in preferred_vars {
             match self.binding_by_var.get(&var) {
                 Some(&binding_id) => {
@@ -635,7 +635,7 @@ impl Bindings {
 
     pub fn has_loops(&self) -> bool {
         for binding in &self.bindings {
-            let mut used_bindings = bitset::BitSet::with_capacity(self.bindings.capacity());
+            let mut used_bindings = bitset::BitSet::with_capacity(self.bindings.index_upper_bound());
             used_bindings.set(binding.id, true);
             if self.binding_has_loops(&binding, &mut used_bindings) {
                 return true;
@@ -733,7 +733,7 @@ impl Bindings {
 impl Display for Bindings {
 
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut vars_by_binding_id = vec![HashSet::new(); self.bindings.capacity()];
+        let mut vars_by_binding_id = vec![HashSet::new(); self.bindings.index_upper_bound()];
         for (var, &binding_id) in &self.binding_by_var {
             if *var != self.bindings[binding_id].var {
                 vars_by_binding_id[binding_id].insert(var);
