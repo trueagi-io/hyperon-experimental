@@ -1,6 +1,4 @@
 import importlib
-import numbers
-
 import torch
 from hyperon.atoms import *
 from hyperon.ext import register_atoms
@@ -69,6 +67,24 @@ class PatternValue(MatchableObject):
         return []
 
 
+def check_for_numbers_tuple(expression):
+    pattern = r'^\((-?[0-9]+\.?[0-9]*\s)*-?[0-9]+\.?[0-9]*\)$'
+    return bool(re.match(pattern, expression))
+
+
+def check_list_structure(args):
+    if not args:
+        return False
+
+    if not isinstance(args[0], GroundedAtom):
+        return False
+
+    for a in args[1:]:
+        if not isinstance(a, ExpressionAtom):
+            return False
+    return True
+
+
 class PatternOperation(OperationObject):
 
     def __init__(self, name, op, unwrap=False, rec=False):
@@ -79,8 +95,18 @@ class PatternOperation(OperationObject):
         if self.rec:
             if not isinstance(args[0], GroundedAtom):
                 args = args[0].get_children()
-                args = [self.execute(arg)[0] \
-                        if isinstance(arg, ExpressionAtom) else arg for arg in args]
+                args_to_feed = []
+                if check_list_structure(args):
+                    args_to_feed.append(args[0])
+                    for a in args[1:]:
+                        if check_for_numbers_tuple(a.__repr__()):
+                            a = a.get_children()
+                            if all(isinstance(c, GroundedAtom) for c in a):
+                                args_to_feed.append(a)
+                        return super().execute(*args_to_feed, res_typ=res_typ)
+                else:
+                    args = [self.execute(arg)[0] \
+                                if isinstance(arg, ExpressionAtom) else arg for arg in args]
         # If there is a variable or PatternValue in arguments, create PatternValue
         # instead of executing the operation
         for arg in args:
@@ -211,12 +237,51 @@ def is_complex(s):
     except ValueError:
         return False
 
-def is_float(s):
+
+def is_string_int(s):
+    try:
+        int(s)
+        return True
+    except ValueError:
+        return False
+
+
+def is_string_float(s):
     try:
         float(s)
         return '.' in s
     except ValueError:
         return False
+
+
+def create_tensor(kwargs):
+    if 'data' in kwargs:
+        arg = kwargs['data']
+        if isinstance(arg, torch.Tensor):
+            return arg.clone().detach()
+
+        if all(isinstance(a, torch.Tensor) for a in arg):
+            if len(arg) == 1:
+                return arg[0].clone().detach()
+            if all(a.shape == arg[0].shape for a in arg):
+                return torch.stack(arg)
+            raise ValueError("Chunks of data should have the same shape to stack a tensor.")
+        else:
+            return torch.tensor(**kwargs)
+
+    return torch.tensor([])
+
+
+def get_output_grounded_atom(res):
+    return G(TensorValue(res), _tensor_atom_type(res)) if isinstance(res, torch.Tensor) else ValueAtom(res)
+
+
+def parse_res(res):
+    if isinstance(res, torch.Tensor) or not isinstance(res, tuple):
+        return get_output_grounded_atom(res)
+    else:
+        return [get_output_grounded_atom(r) for r in res]
+
 
 def torch_function_decorator(func_name, ret_type, args_doc, kwargs_doc):
     def torch_function_wrapper(*_args):
@@ -229,68 +294,67 @@ def torch_function_decorator(func_name, ret_type, args_doc, kwargs_doc):
             else:
                 kwargs_to_feed[args_doc[0]] = arg
         else:
-            args=[]
+            args = []
             for arg in _args:
                 if isinstance(arg, SymbolAtom):
                     a = arg.get_name()
                     if is_complex(a):
                         a = complex(a)
-                    elif is_float(a):
+                    elif is_string_float(a):
                         a = float(a)
                     args.append(a)
+                elif isinstance(arg, list):
+                    a_list = [a.get_object().value for a in arg]
+                    args.append(a_list)
                 else:
                     args.append(arg.get_object().value)
-            # args = [arg.get_object().value for arg in _args]
 
             if len(args_doc) == 1 and len(args) > 1:
                 args = [args]
-            kwargs_list = args_doc + kwargs_doc
-            nargs_doc = len(kwargs_list)
 
             for i, val in enumerate(args):
                 kwargs_to_feed[args_doc[i]] = val
+
+        if func_name == "result_type":
+            types = (torch.Tensor, int, float, bool, complex)
+            tensor1, tensor2 = kwargs_to_feed["tensor1"], kwargs_to_feed["tensor2"]
+            type_tensor1, type_tensor2 = [isinstance(t, types) for t in [tensor1, tensor2]]
+
+            if type_tensor1 and type_tensor2:
+                name = "other"
+                if isinstance(tensor1, torch.Tensor):
+                    kwargs_to_feed["tensor"] = tensor1
+                else:
+                    kwargs_to_feed["scalar"] = tensor1
+                    name = "scalar"
+                kwargs_to_feed[name] = tensor2
+            else:
+                kwargs_to_feed["scalar1"] = tensor1
+                kwargs_to_feed["scalar2"] = tensor2
+
+            kwargs_to_feed.pop("tensor1")
+            kwargs_to_feed.pop("tensor2")
+
+        if 'indices_or_sections' in kwargs_to_feed:
+            if isinstance(kwargs_to_feed['indices_or_sections'], int):
+                kwargs_to_feed['sections'] = kwargs_to_feed['indices_or_sections']
+            else:
+                kwargs_to_feed['indices'] = kwargs_to_feed['indices_or_sections']
+            kwargs_to_feed.pop('indices_or_sections')
 
         if 'dtype' in kwargs_to_feed:
             if isinstance(kwargs_to_feed['dtype'], str) and 'torch.' in kwargs_to_feed['dtype']:
                 kwargs_to_feed['dtype'] = locate(f"{kwargs_to_feed['dtype']}")
 
         if func_name == 'tensor':
-            # Check if the argument list (or tuple) contains tensors with same shape
-            if all(isinstance(arg, torch.Tensor) for arg in args):
-                if len(args) == 1:
-                    res = args[0].clone().detach()
-                elif all(arg.shape == args[0].shape for arg in args):
-                    res = torch.stack(args)
-                else:
-                    raise ValueError("Chunks of data should have the same shape to stack a tensor.")
-            else:
-                res = torch.tensor(args)
-
+            res = create_tensor(kwargs_to_feed)
         else:
             res = func(**kwargs_to_feed)
 
         if isinstance(res, tuple):
-            result = []
-            for r in res:
-                if isinstance(r, torch.Tensor):
-                    typ = _tensor_atom_type(r)
-                    result.append(G(TensorValue(r), typ))
-            return result
-        elif ret_type in ['Tensor', 'LongTensor']:
-            typ = _tensor_atom_type(res)
-            return [G(TensorValue(res), typ)]
-        elif ret_type in ['bool', '(bool)', 'int']:
-            return [ValueAtom(res)]
-        elif ret_type == '(Tensor, Tensor[])':
-            return []
-        elif ret_type == 'List of Tensors':
-            return []
-        elif ret_type == 'seq':
-            return []
-        elif ret_type == 'LongTensor or tuple of LongTensors':
-            return []
-        elif ret_type == 'dtype':
-            return []
+            return parse_res(res)
+        elif ret_type in ['Tensor', 'LongTensor', 'bool', '(bool)', 'int', 'seq', 'dtype']:
+            return [get_output_grounded_atom(res)]
 
     return torch_function_wrapper, False, True
 
@@ -333,10 +397,10 @@ def torchme_atoms():
     tmBackwardAtom = G(OperationObject('torch.backward', lambda x: x.backward(), unwrap=True))
     atoms_to_reg.update({'torch.backward': tmBackwardAtom})
     tmToDeviceAtom = G(OperationObject('torch.to_device', to_device, unwrap=False))
-    atoms_to_reg.update({'torch.to_device':tmToDeviceAtom})
+    atoms_to_reg.update({'torch.to_device': tmToDeviceAtom})
     tmGetModelParamsAtom = G(OperationObject('torch.get_model_params', lambda x: x.parameters(), unwrap=True))
-    atoms_to_reg.update({'torch.get_model_params':tmGetModelParamsAtom})
+    atoms_to_reg.update({'torch.get_model_params': tmGetModelParamsAtom})
     tmRunTrainerAtom = G(OperationObject('torch.run_trainer', run_trainer, unwrap=True))
-    atoms_to_reg.update({'torch.run_trainer':tmRunTrainerAtom})
+    atoms_to_reg.update({'torch.run_trainer': tmRunTrainerAtom})
 
     return atoms_to_reg

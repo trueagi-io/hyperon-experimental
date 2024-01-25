@@ -21,7 +21,8 @@ def parse_pyi_file(file_path):
 
 def extract_signature(doc_string):
     # Regular expression pattern for Args and Keyword args
-    pattern = r"(Arguments|Args|Keyword args|Keyword arguments):(.*?)(?=(Arguments|Args|Keyword args|Keyword arguments):|$)"
+    # Stop matching when meet 'Returns:' or 'Example:'
+    pattern = r"(Arguments|Args|Keyword args|Keyword arguments):(.*?)(?=(Arguments|Args|Keyword args|Keyword arguments):|Returns:|Example::|$)"
     ret_type = None
     try:
         matches = re.findall(pattern, doc_string, re.DOTALL)
@@ -41,7 +42,10 @@ def extract_signature(doc_string):
             if not sig.strip():
                 continue
             try:
-                arg_name, arg_description = re.split(r"\s?\([A-Za-z_:,`\. ]+\):| - ", sig.strip())
+                i = sig.rfind('Default:')
+                if i > 0:
+                    sig=sig[:i]
+                arg_name, arg_description = re.split(r"\s?\([A-Za-z_:,`\. ]+\):| - |: ", sig.strip())
                 arg_name = arg_name.split(" ")[0] # for cases like 'other (Tensor or Number)'
                 arg_info[arg_name] = {"description": arg_description.strip(), "type": keyword}
             except ValueError as e:
