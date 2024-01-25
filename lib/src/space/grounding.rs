@@ -657,7 +657,12 @@ mod test {
         space.add(expr!("A" "Sam"));
 
         let result = space.query(&expr!("," ("implies" ("B" x) z) ("implies" ("A" x) y) ("A" x)));
-        assert_eq!(result, bind_set![{x: sym!("Sam"), y: expr!("B" x), z: expr!("C" x)}]);
+        //assert_eq!(result, bind_set![{x: sym!("Sam"), y: expr!("B" x), z: expr!("C" x)}]);
+        assert_eq!(result.len(), 1);
+        let result = result.into_iter().next().unwrap();
+        assert_eq!(result.resolve(&VariableAtom::new("x")), Some(sym!("Sam")));
+        assert_eq!(result.resolve(&VariableAtom::new("y")), Some(expr!("B" "Sam")));
+        assert_eq!(result.resolve(&VariableAtom::new("z")), Some(expr!("C" "Sam")));
     }
 
     #[test]

@@ -1288,10 +1288,12 @@ pub static METTA_CODE: &'static str = "
 #[cfg(all(test, not(feature = "minimal")))]
 mod tests {
     use super::*;
+    use crate::atom::matcher::atoms_are_equivalent;
     use crate::metta::text::*;
     use crate::metta::runner::{Metta, EnvBuilder};
     use crate::metta::types::validate_atom;
     use crate::common::test_utils::*;
+
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1300,16 +1302,22 @@ mod tests {
 
     #[test]
     fn match_op() {
-        let space = DynSpace::new(metta_space("
-            (A B)
-            !(match &self (A B) (B A))
-        "));
-
+        let space = DynSpace::new(metta_space("(A B)"));
         let match_op = MatchOp{};
-
         assert_eq!(match_op.execute(&mut vec![expr!({space}), expr!("A" "B"), expr!("B" "A")]),
             Ok(vec![expr!("B" "A")]));
     }
+
+    #[test]
+    fn match_op_issue_530() {
+        let space = DynSpace::new(metta_space("(A $a $a)"));
+        let match_op = MatchOp{};
+        let result = match_op.execute(&mut vec![expr!({space}), expr!("A" x y), expr!("A" x y)]).unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(atoms_are_equivalent(&result[0], &expr!("A" x x)),
+            "atoms are not equivalent: expected: {}, actual: {}", expr!("A" x x), result[0]);
+    }
+
 
     #[test]
     fn new_space_op() {

@@ -6,6 +6,7 @@ pub mod shared;
 pub mod assert;
 pub mod reformove;
 pub mod multitrie;
+pub mod holeyvec;
 
 mod flex_ref;
 pub use flex_ref::FlexRef;
