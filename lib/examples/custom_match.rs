@@ -60,7 +60,7 @@ fn main() {
     let mut dict = TestDict::new();
     dict.put(expr!("x"), expr!({2} {5}));
     dict.put(expr!("y"), expr!({5}));
-    let dict = expr!({dict}); 
+    let dict = expr!({dict});
 
     let mut query = TestDict::new();
     query.put(expr!(b), expr!(y));
@@ -69,5 +69,6 @@ fn main() {
 
     let result: Vec<Bindings> = match_atoms(&dict, &query).collect();
     assert_eq!(result, vec![bind!{y: expr!({5}), b: expr!("y"), a: expr!("x")}]);
+    println!("Querying dict: {}, using query: {}, returned result: {:?}", dict, query, result);
 }
 

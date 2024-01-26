@@ -151,7 +151,9 @@ class MeTTa:
                 search_path_idx += 1
 
             if found_path is not None:
-                MeTTa.load_py_module_from_path(self, mod_name, found_path)
+                module = MeTTa.load_py_module_from_path(self, mod_name, found_path)
+                if module is None:
+                    raise RuntimeError("Failed to load module " + mod_name + "; error while loading file: " + file_name)
             else:
                 raise RuntimeError("Failed to load module " + mod_name + "; could not locate file: " + file_name)
 
@@ -163,7 +165,7 @@ class MeTTa:
         mod_name = mod_name.split(os.sep)[-1]
         sys.modules[mod_name] = module
         spec.loader.exec_module(module)
-        MeTTa.load_py_module(self, mod_name)
+        return MeTTa.load_py_module(self, mod_name)
 
     def import_file(self, fname):
         """Loads the program file and runs it"""

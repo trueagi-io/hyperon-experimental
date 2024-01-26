@@ -4,6 +4,7 @@ from hyperon.ext import register_atoms
 
 from hyperon_das import DistributedAtomSpace
 from hyperon_das.utils import QueryOutputFormat
+import time
 
 from hyperon_das.pattern_matcher import (
     Link,
@@ -17,10 +18,13 @@ from hyperon_das.pattern_matcher import (
 
 class DASpace(AbstractSpace):
 
-    def __init__(self, unwrap=True):
+    def __init__(self, remote=False, host='localhost', port='22', unwrap=True):
         super().__init__()
         # self.das = DistributedAtomSpace('ram_only')
-        self.das = DistributedAtomSpace()
+        if remote:
+            self.das = DistributedAtomSpace(query_engine='remote', host=host, port=port)
+        else:
+            self.das = DistributedAtomSpace()
         self.unwrap = unwrap
 
     def _atom2dict(self, atom):
@@ -90,8 +94,13 @@ class DASpace(AbstractSpace):
     def query(self, query_atom):
         query = self._atom2dict_new(query_atom)
 
+        query_params = {
+            "toplevel_only": False,
+            "return_type": QueryOutputFormat.ATOM_INFO,
+            'query_scope': 'local_only'
+        }
         answer = self.das.query(query,
-                                {'return_type': QueryOutputFormat.HANDLE, 'toplevel_only': True})
+                                query_params)
         new_bindings_set = BindingsSet.empty()
         if not answer:
             return new_bindings_set
@@ -140,6 +149,17 @@ class DASpace(AbstractSpace):
     #    return self.das.count_atoms()
     #def atoms_iter(self):
     #    return iter(self.atoms_list)
+
+
+
+def create_new_space(host, port):
+    return [G(SpaceRef(DASpace(remote=True, host=host.__repr__(), port=port.__repr__())))]
+
+@register_atoms(pass_metta=True)
+def my_glob_atoms(metta):
+    return {
+        r"new-remote-das": OperationAtom("new-remote-das", create_new_space, unwrap=False),
+        }
 
 @register_atoms(pass_metta=True)
 def das_atoms(metta):

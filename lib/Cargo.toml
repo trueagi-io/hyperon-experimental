@@ -13,6 +13,7 @@ directories = "5.0.1" # For Environment to find platform-specific config locatio
 smallvec = "1.10.0"
 im = "15.1.0"
 rand = "0.8.5"
+bitset = "0.1.2"
 
 [lib]
 name = "hyperon"
