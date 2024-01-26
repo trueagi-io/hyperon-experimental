@@ -1395,8 +1395,13 @@ pub extern "C" fn env_builder_add_include_path(builder: *mut env_builder_t, path
     *builder_arg_ref = builder.into();
 }
 
+/// @brief Access the value of a grounded i64 atom
+/// @ingroup metta_language_group
+/// @param[in]  n  A pointer to an `atom_t` or an `atom_ref_t` to access
+/// @param[out]  res  A pointer to the variable into which to write the result
+/// @return  True if the atom was a grounded i64 atom, and the result was successfully written
 #[no_mangle]
-pub extern "C" fn grounded_number_to_longlong(n: *const atom_t, res: *mut c_longlong) -> bool {
+pub extern "C" fn grounded_number_get_longlong(n: *const atom_ref_t, res: *mut c_longlong) -> bool {
     let atom = unsafe { (*n).borrow() };
     match atom {
         Atom::Grounded(gnd) => {
@@ -1412,8 +1417,36 @@ pub extern "C" fn grounded_number_to_longlong(n: *const atom_t, res: *mut c_long
     }
 }
 
+/// @brief Access the value of a grounded bool atom
+/// @ingroup metta_language_group
+/// @param[in]  n  A pointer to an `atom_t` or an `atom_ref_t` to access
+/// @param[out]  res  A pointer to the variable into which to write the result
+/// @return  True if the atom was a grounded bool atom, and the result was successfully written
 #[no_mangle]
-pub extern "C" fn grounded_number_to_double(n: *const atom_t, res: *mut c_double) -> bool {
+pub extern "C" fn grounded_bool_get_bool(n: *const atom_ref_t, res: *mut bool) -> bool {
+    // NOTE: there is no c_bool, so we have to choose particular int type
+    let atom = unsafe { (*n).borrow() };
+    match atom {
+        Atom::Grounded(gnd) => {
+            match gnd.as_any_ref().downcast_ref::<Bool>() {
+                Some(Bool(b)) => {
+                    unsafe { *res = *b };
+                    true
+                }
+                _ => false,
+            }
+        },
+        _ => false,
+    }
+}
+
+/// @brief Access the value of a grounded f64 atom
+/// @ingroup metta_language_group
+/// @param[in]  n  A pointer to an `atom_t` or an `atom_ref_t` to access
+/// @param[out]  res  A pointer to the variable into which to write the result
+/// @return  True if the atom was a grounded f64 atom, and the result was successfully written
+#[no_mangle]
+pub extern "C" fn grounded_number_get_double(n: *const atom_ref_t, res: *mut c_double) -> bool {
     let atom = unsafe { (*n).borrow() };
     match atom {
         Atom::Grounded(gnd) => {
@@ -1430,11 +1463,11 @@ pub extern "C" fn grounded_number_to_double(n: *const atom_t, res: *mut c_double
 }
 
 #[no_mangle]
-pub extern "C" fn longlong_to_grounded_number(n: c_longlong) -> atom_t {
+pub extern "C" fn longlong_into_grounded_number(n: c_longlong) -> atom_t {
     Atom::gnd(Number::Integer(n)).into()
 }
 
 #[no_mangle]
-pub extern "C" fn double_to_grounded_number(d: c_double) -> atom_t {
+pub extern "C" fn double_into_grounded_number(d: c_double) -> atom_t {
     Atom::gnd(Number::Float(d)).into()
 }
