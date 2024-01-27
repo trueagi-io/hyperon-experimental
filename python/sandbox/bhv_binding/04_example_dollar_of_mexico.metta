@@ -1,10 +1,5 @@
 !(extend-py! bhv_binding)
 
-name, capital_city, money = BHV.nrand(3)
-united_states, washington_dc, dollar = BHV.nrand(3)
-mexico, mexico_city, peso = BHV.nrand(3)
-
-
 !(bind! &name (bhv-new))
 !(bind! &capital_city (bhv-new))
 !(bind! &money (bhv-new))
