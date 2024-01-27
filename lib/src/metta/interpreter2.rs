@@ -465,7 +465,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
     let atom_x = Atom::Variable(var_x);
     let results: Vec<InterpretedAtom> = {
         log::debug!("interpreter2::query: query: {}", query);
-        log::debug!("interpreter2::query: results.len(): {} bindings.len(): {} results: {} bindings: {}",
+        log::debug!("interpreter2::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
             .flat_map(|mut b| {
@@ -476,7 +476,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
                 } else {
                     Stack::finished(prev.clone(), res)
                 };
-                b.cleanup(vars);
+                b.retain(|v| vars.contains(v));
                 log::debug!("interpreter2::query: b: {}", b);
                 b.merge_v2(&bindings).into_iter().filter_map(move |b| {
                     if b.has_loops() {

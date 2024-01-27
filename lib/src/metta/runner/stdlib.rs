@@ -1259,6 +1259,11 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     tref.register_token(regex(r"or"), move |_| { or_op.clone() });
     let not_op = Atom::gnd(NotOp{});
     tref.register_token(regex(r"not"), move |_| { not_op.clone() });
+    // NOTE: xor and flip are absent in Python intentionally for conversion testing
+    let xor_op = Atom::gnd(XorOp{});
+    tref.register_token(regex(r"xor"), move |_| { xor_op.clone() });
+    let flip_op = Atom::gnd(FlipOp{});
+    tref.register_token(regex(r"flip"), move |_| { flip_op.clone() });
 
     target.move_front(&mut rust_tokens);
 }
@@ -1328,10 +1333,12 @@ impl ModuleLoader for CoreLibLoader {
 #[cfg(all(test, not(feature = "minimal")))]
 mod tests {
     use super::*;
+    use crate::atom::matcher::atoms_are_equivalent;
     use crate::metta::text::*;
     use crate::metta::runner::{Metta, EnvBuilder};
     use crate::metta::types::validate_atom;
     use crate::common::test_utils::*;
+
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1340,16 +1347,22 @@ mod tests {
 
     #[test]
     fn match_op() {
-        let space = DynSpace::new(metta_space("
-            (A B)
-            !(match &self (A B) (B A))
-        "));
-
+        let space = DynSpace::new(metta_space("(A B)"));
         let match_op = MatchOp{};
-
         assert_eq!(match_op.execute(&mut vec![expr!({space}), expr!("A" "B"), expr!("B" "A")]),
             Ok(vec![expr!("B" "A")]));
     }
+
+    #[test]
+    fn match_op_issue_530() {
+        let space = DynSpace::new(metta_space("(A $a $a)"));
+        let match_op = MatchOp{};
+        let result = match_op.execute(&mut vec![expr!({space}), expr!("A" x y), expr!("A" x y)]).unwrap();
+        assert_eq!(result.len(), 1);
+        assert!(atoms_are_equivalent(&result[0], &expr!("A" x x)),
+            "atoms are not equivalent: expected: {}, actual: {}", expr!("A" x x), result[0]);
+    }
+
 
     #[test]
     fn new_space_op() {

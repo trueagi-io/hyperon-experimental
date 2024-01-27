@@ -195,6 +195,34 @@ macro_rules! def_binary_bool_op {
 def_binary_bool_op!(AndOp, and, &&);
 def_binary_bool_op!(OrOp, or, ||);
 
+// NOTE: xor and flip are absent in Python intentionally for conversion testing
+def_binary_bool_op!(XorOp, xor, ^);
+
+use rand;
+#[derive(Clone, PartialEq, Debug)]
+pub struct FlipOp{}
+
+impl Display for FlipOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "flip")
+    }
+}
+
+impl Grounded for FlipOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_BOOL])
+    }
+
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        Ok(vec![Atom::gnd(Bool(rand::random()))])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct NotOp{}
 
