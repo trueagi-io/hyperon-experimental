@@ -1,0 +1,39 @@
+!(extend-py! bhv_binding)
+
+name, capital_city, money = BHV.nrand(3)
+united_states, washington_dc, dollar = BHV.nrand(3)
+mexico, mexico_city, peso = BHV.nrand(3)
+
+
+!(bind! &name (bhv-new))
+!(bind! &capital_city (bhv-new))
+!(bind! &money (bhv-new))
+!(bind! &united_states (bhv-new))
+!(bind! &washington_dc (bhv-new))
+!(bind! &dollar (bhv-new))
+!(bind! &mexico (bhv-new))
+!(bind! &mexico_city (bhv-new))
+!(bind! &peso (bhv-new))
+
+USA = BHV.majority([name ^ united_states, capital_city ^ washington_dc, money ^ dollar])
+MEX = BHV.majority([name ^ mexico, capital_city ^ mexico_city, money ^ peso])
+
+(= (USA) (bhv-majority (bhv-bind &name &united_states) (bhv-bind &capital_city &washington_dc) (bhv-bind &money &dollar) ))
+(= (MEX) (bhv-majority (bhv-bind &name &mexico) (bhv-bind &capital_city &mexico_city) (bhv-bind &money &peso) ))
+
+(= (Pair)  (bhv-bind (USA) (MEX)))
+
+; should return True here
+!(bhv-is-related (bhv-bind (USA) &money) &dollar)
+
+
+(= (dollar_of_mexico) (bhv-bind &dollar (Pair)))
+
+; should return True here. "Dollar of mexico" is peso
+!(bhv-is-related (dollar_of_mexico) &peso)
+
+
+
+
+
+
