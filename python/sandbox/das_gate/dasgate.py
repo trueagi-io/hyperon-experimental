@@ -3,7 +3,8 @@ from hyperon.ext import register_atoms
 
 
 from hyperon_das import DistributedAtomSpace
-from hyperon_das.utils import QueryOutputFormat
+# from hyperon_das.utils import QueryOutputFormat
+from hyperon_das.constants import QueryOutputFormat
 import time
 
 from hyperon_das.pattern_matcher import (
