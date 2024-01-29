@@ -8,10 +8,10 @@
 !(bind! &k3 (bhv-new))
 
 
-(= (dict) (bhv-majority (bhv-bind &v1 &k1) (bhv-bind &v2 &k2) (bhv-bind &v3 &k3) ))
-(= (v1_retrived) (bhv-bind &k1 (dict)))
+!(bind! dict (bhv-majority (bhv-bind &v1 &k1) (bhv-bind &v2 &k2) (bhv-bind &v3 &k3) ))
+!(bind! v1_retrived (bhv-bind &k1 dict))
 
-!(bhv-std-apart-relative (v1_retrived) &v1)
-!(bhv-is-related (v1_retrived) &v1)
+!(bhv-std-apart-relative v1_retrived &v1)
+!(bhv-is-related v1_retrived &v1)
 
 

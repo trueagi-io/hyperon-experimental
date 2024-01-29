@@ -11,19 +11,19 @@
 !(bind! &peso (bhv-new))
 
 
-(= (USA) (bhv-majority (bhv-bind &name &united_states) (bhv-bind &capital_city &washington_dc) (bhv-bind &money &dollar) ))
-(= (MEX) (bhv-majority (bhv-bind &name &mexico) (bhv-bind &capital_city &mexico_city) (bhv-bind &money &peso) ))
+!(bind! USA (bhv-majority (bhv-bind &name &united_states) (bhv-bind &capital_city &washington_dc) (bhv-bind &money &dollar) ))
+!(bind! MEX (bhv-majority (bhv-bind &name &mexico) (bhv-bind &capital_city &mexico_city) (bhv-bind &money &peso) ))
 
-(= (Pair)  (bhv-bind (USA) (MEX)))
+!(bind! Pair (bhv-bind USA MEX))
 
 ; should return True here
-!(bhv-is-related (bhv-bind (USA) &money) &dollar)
+!(bhv-is-related (bhv-bind USA &money) &dollar)
 
 
-(= (dollar_of_mexico) (bhv-bind &dollar (Pair)))
+!(bind! dollar_of_mexico (bhv-bind &dollar Pair))
 
 ; should return True here. "Dollar of mexico" is peso
-!(bhv-is-related (dollar_of_mexico) &peso)
+!(bhv-is-related dollar_of_mexico &peso)
 
 
 

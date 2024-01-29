@@ -4,9 +4,9 @@
 !(bind! &b (bhv-new))
 !(bind! &c (bhv-new))
 
-(= (abc) (bhv-majority &a &b &c ))
+!(bind! &abc (bhv-majority &a &b &c ))
 
-!(bhv-std-apart-relative &a (abc))
-!(bhv-is-related &a (abc))
+!(bhv-std-apart-relative &a &abc)
+!(bhv-is-related &a &abc)
 
 
