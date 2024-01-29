@@ -695,6 +695,11 @@ impl Bindings {
         BindingsIter { bindings: self, delegate: self.binding_by_var.iter() }
     }
 
+    /// An iterator visiting all variables in arbitrary order.
+    pub fn vars(&self) -> impl Iterator<Item=&VariableAtom> {
+        self.binding_by_var.keys()
+    }
+
     fn into_vec_of_pairs(mut self) -> Vec<(VariableAtom, Atom)> {
         let mut result = Vec::new();
 

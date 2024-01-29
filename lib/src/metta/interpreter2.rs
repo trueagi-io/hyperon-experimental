@@ -75,6 +75,15 @@ impl Stack {
         Self{ prev, atom, ret: no_handler, finished: true, vars }
     }
 
+    fn finished_add_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom) -> Self {
+        let vars = Self::vars(&prev, &atom);
+        Self{ prev, atom, ret: no_handler, finished: true, vars }
+    }
+
+    fn finished_with_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, vars: Variables) -> Self {
+        Self{ prev, atom, ret: no_handler, finished: true, vars }
+    }
+
     fn len(&self) -> usize {
         self.fold(0, |len, _stack| len + 1)
     }
@@ -122,7 +131,8 @@ impl Display for Stack {
             prev.borrow().fold((res, last_level - 1), |(res, level), top| {
                 (res.and_then(|_| print_level(buffer, level, false, top)), level - 1)
             }).0
-        }).and_then(|_| write!(f, "{}", buffer))
+        })
+        .and_then(|_| write!(f, "{}", buffer))
     }
 }
 
@@ -335,6 +345,17 @@ impl VariableSet for Variables {
     }
     fn iter(&self) -> Self::Iter<'_> {
         self.0.iter()
+    }
+}
+
+impl Display for Variables {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[")
+            .and_then(|_| self.iter().take(1).fold(Ok(()),
+                |res, atom| res.and_then(|_| write!(f, "{}", atom))))
+            .and_then(|_| self.iter().skip(1).fold(Ok(()),
+                |res, atom| res.and_then(|_| write!(f, " {}", atom))))
+            .and_then(|_| write!(f, "]"))
     }
 }
 
@@ -621,13 +642,16 @@ fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) 
 
     match Rc::into_inner(stack).map(RefCell::into_inner) {
         Some(stack) => {
-            let Stack{ prev, atom: collapse, ret: _, finished: _, vars: _ } = stack;
+            let Stack{ prev, atom: collapse, ret: _, finished: _, mut vars } = stack;
             let (result, bindings) = match atom_into_array(collapse) {
                 Some([_op, result, bindings]) => (result, atom_into_bindings(bindings)),
                 None => panic!("Unexpected state"),
             };
-            // FIXME: need a way to return binding from .ret
-            Some((Stack::finished(prev, result), bindings))
+            for r in <&ExpressionAtom>::try_from(&result).unwrap().children() {
+                let (_, bindings) = atom_get_atom_bindings(r);
+                vars = vars.union(bindings.vars().cloned().collect());
+            }
+            Some((Stack::finished_with_vars(prev, result, vars), bindings))
         },
         None => None,
     }
@@ -635,6 +659,22 @@ fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) 
 
 fn atom_bindings_into_atom(atom: Atom, bindings: Bindings) -> Atom {
     Atom::expr([atom, Atom::value(bindings)])
+}
+
+fn atom_get_atom_bindings(pair: &Atom) -> (&Atom, &Bindings) {
+    match atom_as_slice(pair) {
+        Some([atom, bindings]) => (atom, atom_get_bindings(bindings)),
+        _ => {
+            panic!("(Atom Bindings) pair is expected, {} was received", pair)
+        }
+    }
+}
+
+fn atom_get_bindings(bindings: &Atom) -> &Bindings {
+    match bindings.as_gnd::<Bindings>() {
+        Some(bindings) => bindings,
+        _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
+    }
 }
 
 fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
@@ -739,8 +779,14 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         .flat_map(|(atom, b)| {
             let prev = &prev;
             b.merge_v2(&bindings).into_iter()
-                .map(move |b| {
-                    InterpretedAtom(Stack::finished(prev.clone(), atom.clone()), b)
+                .filter_map(move |b| {
+                    if b.has_loops() {
+                        None
+                    } else {
+                        let stack = Stack::finished_add_vars(prev.clone(), atom.clone());
+                        let b = b.narrow_vars(&stack.vars);
+                        Some(InterpretedAtom(stack, b))
+                    }
                 })
         })
         .collect()
@@ -985,13 +1031,16 @@ mod tests {
 
     #[test]
     fn test_superpose_bind() {
-        let vars = Variables::new();
+        let vars: Variables = [ "a", "b", "c" ].into_iter().map(VariableAtom::new).collect();
         let atom = Atom::expr([Atom::sym("superpose-bind"),
-            Atom::expr([atom_bindings_into_atom(expr!("some-atom"), bind!{ a: expr!("A") })])]);
+            Atom::expr([atom_bindings_into_atom(expr!("foo" a b), bind!{ a: expr!("A"), c: expr!("C") })])]);
         let stack = Stack{ prev: None, atom, ret: no_handler, finished: false, vars: vars.clone() };
-        let result = superpose_bind(stack, bind!{ b: expr!("B") });
+
+        let result = superpose_bind(stack, bind!{ b: expr!("B"), d: expr!("D") });
+
+        let expected_vars: Variables = [ "a", "b" ].into_iter().map(VariableAtom::new).collect();
         assert_eq!(result, vec![InterpretedAtom(
-                Stack{ prev: None, atom: expr!("some-atom"), ret: no_handler, finished: true, vars },
+                Stack{ prev: None, atom: expr!("foo" a b), ret: no_handler, finished: true, vars: expected_vars },
                 bind!{ a: expr!("A"), b: expr!("B") }
         )]);
     }
