@@ -15,7 +15,6 @@ class Atom:
 
     def __del__(self):
         """Frees an Atom and all associated resources."""
-        #import sys; sys.stderr.write("Atom._del_(" + str(self) + ")\n"); sys.stderr.flush()
         hp.atom_free(self.catom)
 
     def __eq__(self, other):
@@ -139,12 +138,20 @@ class GroundedAtom(Atom):
         super().__init__(catom)
 
     def get_object(self):
-        """Returns the GroundedAtom object, or the Space wrapped inside a GroundedAtom"""
-        from .base import SpaceRef
-        if self.get_grounded_type() == AtomType.GROUNDED_SPACE:
-            return SpaceRef._from_cspace(hp.atom_get_space(self.catom))
-        else:
+        """Returns the GroundedAtom object, or the Space wrapped inside a GroundedAtom,
+           or convert supported Rust grounded objects into corresponding ValueObjects
+        """
+        if hp.atom_is_cgrounded(self.catom):
             return hp.atom_get_object(self.catom)
+        typ = self.get_grounded_type()
+        if typ == AtomType.GROUNDED_SPACE:
+            from .base import SpaceRef
+            return SpaceRef._from_cspace(hp.atom_get_space(self.catom))
+        # NOTE: Rust and Python may have the same grounded type names, but we already
+        # distiguished them above
+        elif typ == S('Bool'):
+            return ValueObject(hp.gnd_get_bool(self.catom))
+        raise TypeError("Cannot get_object of unsupported non-C {self.catom}")
 
     def get_grounded_type(self):
         """Retrieve the grounded type of the GroundedAtom."""

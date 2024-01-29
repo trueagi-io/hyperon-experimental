@@ -282,8 +282,8 @@ fn is_embedded_op(atom: &Atom) -> bool {
         Some([op, ..]) => *op == EVAL_SYMBOL
             || *op == CHAIN_SYMBOL
             || *op == UNIFY_SYMBOL
-            || *op == CONS_SYMBOL
-            || *op == DECONS_SYMBOL
+            || *op == CONS_ATOM_SYMBOL
+            || *op == DECONS_ATOM_SYMBOL
             || *op == FUNCTION_SYMBOL
             || *op == COLLAPSE_BIND_SYMBOL
             || *op == SUPERPOSE_BIND_SYMBOL,
@@ -374,11 +374,11 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
             Some([op, ..]) if *op == UNIFY_SYMBOL => {
                 unify(stack, bindings)
             },
-            Some([op, ..]) if *op == DECONS_SYMBOL => {
-                decons(stack, bindings)
+            Some([op, ..]) if *op == DECONS_ATOM_SYMBOL => {
+                decons_atom(stack, bindings)
             },
-            Some([op, ..]) if *op == CONS_SYMBOL => {
-                cons(stack, bindings)
+            Some([op, ..]) if *op == CONS_ATOM_SYMBOL => {
+                cons_atom(stack, bindings)
             },
             Some([op, ..]) if *op == SUPERPOSE_BIND_SYMBOL => {
                 superpose_bind(stack, bindings)
@@ -465,7 +465,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
     let atom_x = Atom::Variable(var_x);
     let results: Vec<InterpretedAtom> = {
         log::debug!("interpreter2::query: query: {}", query);
-        log::debug!("interpreter2::query: results.len(): {} bindings.len(): {} results: {} bindings: {}",
+        log::debug!("interpreter2::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
             .flat_map(|mut b| {
@@ -476,7 +476,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
                 } else {
                     Stack::finished(prev.clone(), res)
                 };
-                b.cleanup(vars);
+                b.retain(|v| vars.contains(v));
                 log::debug!("interpreter2::query: b: {}", b);
                 b.merge_v2(&bindings).into_iter().filter_map(move |b| {
                     if b.has_loops() {
@@ -673,12 +673,12 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     }
 }
 
-fn decons(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+fn decons_atom(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: decons, ret: _, finished: _, vars: _ } = stack;
     let expr = match_atom!{
         decons ~ [_op, Atom::Expression(expr)] if expr.children().len() > 0 => expr,
         _ => {
-            let error: String = format!("expected: ({} (: <expr> Expression)), found: {}", DECONS_SYMBOL, decons);
+            let error: String = format!("expected: ({} (: <expr> Expression)), found: {}", DECONS_ATOM_SYMBOL, decons);
             return finished_result(error_atom(decons, error), bindings, prev);
         }
     };
@@ -688,12 +688,12 @@ fn decons(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     finished_result(Atom::expr([head, Atom::expr(tail)]), bindings, prev)
 }
 
-fn cons(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+fn cons_atom(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: cons, ret: _, finished: _, vars: _ } = stack;
     let (head, tail) = match_atom!{
         cons ~ [_op, head, Atom::Expression(tail)] => (head, tail),
         _ => {
-            let error: String = format!("expected: ({} <head> (: <tail> Expression)), found: {}", CONS_SYMBOL, cons);
+            let error: String = format!("expected: ({} <head> (: <tail> Expression)), found: {}", CONS_ATOM_SYMBOL, cons);
             return finished_result(error_atom(cons, error), bindings, prev);
         }
     };
@@ -918,59 +918,59 @@ mod tests {
 
 
     #[test]
-    fn interpret_atom_decons_incorrect_args() {
-        assert_eq!(call_interpret(&space(""), &metta_atom("(decons a)")),
-            vec![expr!("Error" ("decons" "a") "expected: (decons (: <expr> Expression)), found: (decons a)")]);
-        assert_eq!(call_interpret(&space(""), &metta_atom("(decons (a) (b))")),
-            vec![expr!("Error" ("decons" ("a") ("b")) "expected: (decons (: <expr> Expression)), found: (decons (a) (b))")]);
-        assert_eq!(call_interpret(&space(""), &metta_atom("(decons)")),
-            vec![expr!("Error" ("decons") "expected: (decons (: <expr> Expression)), found: (decons)")]);
+    fn interpret_atom_decons_atom_incorrect_args() {
+        assert_eq!(call_interpret(&space(""), &metta_atom("(decons-atom a)")),
+            vec![expr!("Error" ("decons-atom" "a") "expected: (decons-atom (: <expr> Expression)), found: (decons-atom a)")]);
+        assert_eq!(call_interpret(&space(""), &metta_atom("(decons-atom (a) (b))")),
+            vec![expr!("Error" ("decons-atom" ("a") ("b")) "expected: (decons-atom (: <expr> Expression)), found: (decons-atom (a) (b))")]);
+        assert_eq!(call_interpret(&space(""), &metta_atom("(decons-atom)")),
+            vec![expr!("Error" ("decons-atom") "expected: (decons-atom (: <expr> Expression)), found: (decons-atom)")]);
     }
 
     #[test]
-    fn interpret_atom_decons_empty() {
-        let result = call_interpret(&space(""), &metta_atom("(decons ())"));
-        assert_eq!(result, vec![expr!("Error" ("decons" ()) "expected: (decons (: <expr> Expression)), found: (decons ())")]);
+    fn interpret_atom_decons_atom_empty() {
+        let result = call_interpret(&space(""), &metta_atom("(decons-atom ())"));
+        assert_eq!(result, vec![expr!("Error" ("decons-atom" ()) "expected: (decons-atom (: <expr> Expression)), found: (decons-atom ())")]);
     }
 
     #[test]
-    fn interpret_atom_decons_single() {
-        let result = call_interpret(&space(""), &metta_atom("(decons (a))"));
+    fn interpret_atom_decons_atom_single() {
+        let result = call_interpret(&space(""), &metta_atom("(decons-atom (a))"));
         assert_eq!(result, vec![metta_atom("(a ())")]);
     }
 
     #[test]
-    fn interpret_atom_decons_list() {
-        let result = call_interpret(&space(""), &metta_atom("(decons (a b c))"));
+    fn interpret_atom_decons_atom_list() {
+        let result = call_interpret(&space(""), &metta_atom("(decons-atom (a b c))"));
         assert_eq!(result, vec![metta_atom("(a (b c))")]);
     }
 
 
     #[test]
-    fn interpret_atom_cons_incorrect_args() {
-        assert_eq!(call_interpret(&space(""), &metta_atom("(cons a (e) o)")),
-            vec![expr!("Error" ("cons" "a" ("e") "o") "expected: (cons <head> (: <tail> Expression)), found: (cons a (e) o)")]);
-        assert_eq!(call_interpret(&space(""), &metta_atom("(cons a e)")),
-            vec![expr!("Error" ("cons" "a" "e") "expected: (cons <head> (: <tail> Expression)), found: (cons a e)")]);
-        assert_eq!(call_interpret(&space(""), &metta_atom("(cons a)")),
-            vec![expr!("Error" ("cons" "a") "expected: (cons <head> (: <tail> Expression)), found: (cons a)")]);
+    fn interpret_atom_cons_atom_incorrect_args() {
+        assert_eq!(call_interpret(&space(""), &metta_atom("(cons-atom a (e) o)")),
+            vec![expr!("Error" ("cons-atom" "a" ("e") "o") "expected: (cons-atom <head> (: <tail> Expression)), found: (cons-atom a (e) o)")]);
+        assert_eq!(call_interpret(&space(""), &metta_atom("(cons-atom a e)")),
+            vec![expr!("Error" ("cons-atom" "a" "e") "expected: (cons-atom <head> (: <tail> Expression)), found: (cons-atom a e)")]);
+        assert_eq!(call_interpret(&space(""), &metta_atom("(cons-atom a)")),
+            vec![expr!("Error" ("cons-atom" "a") "expected: (cons-atom <head> (: <tail> Expression)), found: (cons-atom a)")]);
     }
 
     #[test]
-    fn interpret_atom_cons_empty() {
-        let result = call_interpret(&space(""), &metta_atom("(cons a ())"));
+    fn interpret_atom_cons_atom_empty() {
+        let result = call_interpret(&space(""), &metta_atom("(cons-atom a ())"));
         assert_eq!(result, vec![metta_atom("(a)")]);
     }
 
     #[test]
-    fn interpret_atom_cons_single() {
-        let result = call_interpret(&space(""), &metta_atom("(cons a (b))"));
+    fn interpret_atom_cons_atom_single() {
+        let result = call_interpret(&space(""), &metta_atom("(cons-atom a (b))"));
         assert_eq!(result, vec![metta_atom("(a b)")]);
     }
 
     #[test]
-    fn interpret_atom_cons_list() {
-        let result = call_interpret(&space(""), &metta_atom("(cons a (b c))"));
+    fn interpret_atom_cons_atom_list() {
+        let result = call_interpret(&space(""), &metta_atom("(cons-atom a (b c))"));
         assert_eq!(result, vec![metta_atom("(a b c)")]);
     }
 
@@ -995,14 +995,14 @@ mod tests {
 
             (= (move ($head $hole $tail) $char N) ($head $char $tail))
             (= (move ($head $hole $tail) $char L) (function
-              (chain (cons $char $head) $next-head
-                (chain (decons $tail) $list
+              (chain (cons-atom $char $head) $next-head
+                (chain (decons-atom $tail) $list
                   (unify $list ($next-hole $next-tail)
                     (return ($next-head $next-hole $next-tail))
                     (return ($next-head 0 ())) )))))
             (= (move ($head $hole $tail) $char R) (function
-              (chain (cons $char $tail) $next-tail
-                (chain (decons $head) $list
+              (chain (cons-atom $char $tail) $next-tail
+                (chain (decons-atom $head) $list
                   (unify $list ($next-hole $next-head)
                     (return ($next-head $next-hole $next-tail))
                     (return (() 0 $next-tail)) )))))
@@ -1038,9 +1038,9 @@ mod tests {
         assert_eq!(result, Ok(vec![metta_atom("(baz (bar A))")]));
         let result = interpret(&space, &metta_atom("(unify (A $b) ($a B) ($a $b) Empty)"));
         assert_eq!(result, Ok(vec![metta_atom("(A B)")]));
-        let result = interpret(&space, &metta_atom("(decons (a b c))"));
+        let result = interpret(&space, &metta_atom("(decons-atom (a b c))"));
         assert_eq!(result, Ok(vec![metta_atom("(a (b c))")]));
-        let result = interpret(&space, &metta_atom("(cons a (b c))"));
+        let result = interpret(&space, &metta_atom("(cons-atom a (b c))"));
         assert_eq!(result, Ok(vec![metta_atom("(a b c)")]));
         let result = interpret(&space, &metta_atom("(chain (collapse-bind (eval (color))) $collapsed (superpose-bind $collapsed))")).unwrap();
         assert_eq_no_order!(result, vec![metta_atom("red"), metta_atom("green"), metta_atom("blue")]);
