@@ -1,11 +1,13 @@
-import importlib
-import torch
-from hyperon.atoms import *
-from hyperon.ext import register_atoms
-import os
 import json
-from pydoc import locate
+import os
 import re
+from pydoc import locate
+
+import torch
+from hyperon.ext import register_tokens
+from hyperon.atoms import *
+from kwargsme import *
+from parsing_exceptions import *
 
 '''
 Most of the functions defined in the torch module for working with tensors are implemented in C. 
@@ -16,6 +18,11 @@ Parsed signatures are saved in the .json file.
 Modify the file path according to its location in your environment
 '''
 TORCH_FUNC_SIGNATURES_PATH = 'torch_func_signatures.json'
+
+torch_dtype = ['torch.float', 'torch.float16', 'torch.uint8', 'torch.float32', 'torch.float64', 'torch.double', 'torch.half',
+               'torch.complex64', 'torch.cfloat', 'torch.cdouble', 'torch.complex128', 'torch.bfloat16', 'torch.int8',
+               'torch.int16', 'torch.short', 'torch.int32', 'torch.int', 'torch.int64', 'torch.long', 'torch.bool']
+
 
 if not os.path.isfile(TORCH_FUNC_SIGNATURES_PATH):
     raise FileNotFoundError(f'{TORCH_FUNC_SIGNATURES_PATH} does not exist')
@@ -121,111 +128,6 @@ def _tensor_atom_type(npobj):
     return E(S('Tensor'), E(*[ValueAtom(s, 'Number') for s in npobj.shape]))
 
 
-def instantiate_module(*args):
-    torch_module_name = args[0].get_name()
-    pymodule_name = args[1].get_name()
-    pymodule = importlib.import_module(pymodule_name)
-    module_class = getattr(pymodule, torch_module_name)
-
-    if len(args) > 2:
-        a = []
-        kw = []
-        for arg in args[2:]:
-            if isinstance(arg, GroundedAtom):
-                if isinstance(arg.get_object(), GroundedObject):
-                    obj_cont = arg.get_object().content
-                    if isinstance(obj_cont, Kwargs):
-                        kw = obj_cont.content
-                    else:
-                        a.append(arg.get_object().content)
-                else:
-                    a.append(arg.get_object().value)
-            elif isinstance(arg, SymbolAtom):
-                if arg.get_name() == 'None':
-                    a.append(None)
-                else:
-                    a.append(arg.get_name())
-        if len(kw) > 0:
-            module_instance = module_class(**kw)
-        else:
-            module_instance = module_class(*a)
-    else:
-        module_instance = module_class()
-
-    return [G(GroundedObject(module_instance))]
-
-
-def to_device(*args):
-    torch_object = None
-    device = None
-    if isinstance(args[0], GroundedAtom):
-        if isinstance(args[0].get_object(), GroundedObject):
-            torch_object = args[0].get_object().content
-        else:
-            torch_object = args[0].get_object().value
-
-    if isinstance(args[1], SymbolAtom):
-        device = args[1].get_name()
-
-    torch_object.to(device=device)
-
-    return [G(GroundedObject(torch_object))]
-
-
-def run_trainer(*args):
-    trainer = args[0]
-    nepochs = args[1]
-    for t in range(nepochs):
-        print(f"Epoch {t + 1}\n-------------------------------")
-        trainer.train()
-        trainer.test()
-    return
-
-
-class Kwargs(MatchableObject):
-    def __init__(self, content=None, id=None):
-        super().__init__(content, id)
-        if content is None:
-            self.content = {}
-
-    def __len__(self):
-        return len(self.content)
-
-    def match_(self, other):
-        new_bindings_set = BindingsSet.empty()
-        p = other.get_children()
-        if isinstance(p[0], SymbolAtom):
-            key = p[0].get_name()
-            var = p[1]
-            if key in self.content:
-                val = ValueAtom(self.content[key])
-                bindings = Bindings()
-                bindings.add_var_binding(var, val)
-                new_bindings_set.push(bindings)
-
-        return new_bindings_set
-
-
-def pairs_to_kwargs(pairs):
-    kwargs = Kwargs()
-    pairs_children = pairs.get_children()
-    for pair in pairs_children:
-        p = pair.iterate()
-
-        if isinstance(p[0], SymbolAtom):
-            key = p[0].get_name()
-            if isinstance(p[1], GroundedAtom):
-                kwargs.content[key] = p[1].get_object().value
-            elif isinstance(p[1], SymbolAtom):
-                v = p[1].get_name()
-                if v == 'None':
-                    kwargs.content[key] = None
-                else:
-                    kwargs.content[key] = v
-
-    return [G(GroundedObject(kwargs))]
-
-
 def is_complex(s):
     complex_pattern = "([-]?\d+(\.\d+)?[+-]\d+(\.\d+)?[jJ])|(\d+(\.\d+)?[jJ])"
     pattern = re.compile(complex_pattern)
@@ -283,10 +185,21 @@ def parse_res(res):
         return [get_output_grounded_atom(r) for r in res]
 
 
-def torch_function_decorator(func_name, ret_type, args_doc, kwargs_doc):
+def torch_function_decorator(func_name, ret_type, args_doc, module_name):
     def torch_function_wrapper(*_args):
         kwargs_to_feed = {}
-        func = getattr(torch, func_name)
+        if module_name == 'torch':
+            func = getattr(torch, func_name)
+        elif module_name == 'Tensor':
+            if isinstance(_args[0], torch.Tensor):
+                func = getattr(_args[0], func_name)
+                if len(_args) > 1:
+                    _args = _args[1:]
+                else:
+                    _args=[]
+        else:
+            return G([])
+
         if len(_args) == 1 and isinstance(_args[0], GroundedAtom):
             arg = _args[0].get_object().content
             if isinstance(arg, Kwargs):
@@ -306,8 +219,10 @@ def torch_function_decorator(func_name, ret_type, args_doc, kwargs_doc):
                 elif isinstance(arg, list):
                     a_list = [a.get_object().value for a in arg]
                     args.append(a_list)
-                else:
+                elif isinstance(arg, GroundedAtom):
                     args.append(arg.get_object().value)
+                else:
+                    args.append(arg)
 
             if len(args_doc) == 1 and len(args) > 1:
                 args = [args]
@@ -353,54 +268,55 @@ def torch_function_decorator(func_name, ret_type, args_doc, kwargs_doc):
 
         if isinstance(res, tuple):
             return parse_res(res)
-        elif ret_type in ['Tensor', 'LongTensor', 'bool', '(bool)', 'int', 'seq', 'dtype']:
+        elif ret_type in ['Tensor', 'LongTensor', 'bool', '(bool)', 'int', 'tuple or int', 'seq', 'dtype', 'Size', 'torch.Size or int', None]:
             return [get_output_grounded_atom(res)]
 
-    return torch_function_wrapper, False, True
+    return torch_function_wrapper
 
 
-@register_atoms
-def torchme_atoms():
+@register_tokens
+def call_torchme_atoms():
+
     with open(TORCH_FUNC_SIGNATURES_PATH, 'r') as file:
         torch_func_signatures = json.load(file)
-    atoms_to_reg = {}
-    for tfs in torch_func_signatures:
-        func_name = tfs['func_name']
+
+    def new_torch_atom(token):
+        # Here are some exceptions to automatic parsing results
+        if token in torch_dtype:
+            return S(token)
+        if token in parsing_exceptions:
+            return G(OperationObject(token, parsing_exceptions[token][0], parsing_exceptions[token][1]))
+
+        func_name = token[6:]
+        tfs = [t for t in torch_func_signatures if t.get('func_name') == func_name]
+        if not tfs:
+            raise ValueError(f"Can't find signature for function torch.{func_name}")
+        tfs = tfs[0]
         ret_type = tfs['ret_type']
         args = []
-        kwargs = []
+        # kwargs = []
         for key, value in tfs['signature'].items():
             if value['type'] in ['Arguments', 'Args']:
                 args.append(key)
-            elif value['type'] in ['Keyword args', 'Keyword arguments']:
-                kwargs.append(key)
+            # elif value['type'] in ['Keyword args', 'Keyword arguments']:
+            #     kwargs.append(key)
 
-        wrapped_func, unwrap, rec = torch_function_decorator(func_name, ret_type, args, kwargs)
-        atoms_to_reg[f'torch.{func_name}'] = G(PatternOperation(f'torch.{func_name}',
-                                                                wrapped_func,
-                                                                unwrap=unwrap,
-                                                                rec=rec))
+        wrapped_func = torch_function_decorator(func_name, ret_type, args, tfs['module'])
 
-    tmKwargsAtom = G(PatternOperation('kwargs', pairs_to_kwargs))
-    atoms_to_reg.update({'kwargs': tmKwargsAtom})
-    tmManualSeedAtom = G(OperationObject('torch.manual_seed', lambda x: torch.manual_seed(x), unwrap=True))
-    atoms_to_reg.update({'torch.manual_seed': tmManualSeedAtom})
+        if tfs['module'] == 'Tensor':
+            return G(OperationObject(f'torch:{func_name}',
+                                     wrapped_func,
+                                     unwrap=True))
+        elif tfs['module'] == 'torch':
+            return G(PatternOperation(f'torch:{func_name}',
+                                      wrapped_func,
+                                      unwrap=False,
+                                      rec=True))
+        else:
+            return G([])
 
-    tmInstantiateModuleAtom = G(OperationObject('torch.instantiate_module', instantiate_module, unwrap=False))
-    atoms_to_reg.update({'torch.instantiate_module': tmInstantiateModuleAtom})
+    return {
+        r'torch\:[^\s^\.]+': new_torch_atom,
+        r"kwargs": lambda _: G(PatternOperation('kwargs', pairs_to_kwargs))
+    }
 
-    tmReqGradStatusAtom = G(OperationObject('torch.requires_grad_status', lambda x: x.requires_grad, unwrap=True))
-    atoms_to_reg.update({'torch.requires_grad_status': tmReqGradStatusAtom})
-
-    tmReqGradAtom = G(OperationObject('torch.requires_grad', lambda x, b: x.requires_grad_(b), unwrap=True))
-    atoms_to_reg.update({'torch.requires_grad': tmReqGradAtom})
-    tmBackwardAtom = G(OperationObject('torch.backward', lambda x: x.backward(), unwrap=True))
-    atoms_to_reg.update({'torch.backward': tmBackwardAtom})
-    tmToDeviceAtom = G(OperationObject('torch.to_device', to_device, unwrap=False))
-    atoms_to_reg.update({'torch.to_device': tmToDeviceAtom})
-    tmGetModelParamsAtom = G(OperationObject('torch.get_model_params', lambda x: x.parameters(), unwrap=True))
-    atoms_to_reg.update({'torch.get_model_params': tmGetModelParamsAtom})
-    tmRunTrainerAtom = G(OperationObject('torch.run_trainer', run_trainer, unwrap=True))
-    atoms_to_reg.update({'torch.run_trainer': tmRunTrainerAtom})
-
-    return atoms_to_reg

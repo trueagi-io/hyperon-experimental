@@ -24,6 +24,7 @@ def extract_signature(doc_string):
     # Stop matching when meet 'Returns:' or 'Example:'
     pattern = r"(Arguments|Args|Keyword args|Keyword arguments):(.*?)(?=(Arguments|Args|Keyword args|Keyword arguments):|Returns:|Example::|$)"
     ret_type = None
+    matches=[]
     try:
         matches = re.findall(pattern, doc_string, re.DOTALL)
         m = re.search('-> (.+?)\n\n', doc_string)
@@ -55,33 +56,18 @@ def extract_signature(doc_string):
 
 
 def parse():
-    site_packages_path = site.getsitepackages()[0]
-    file_path = os.path.join(site_packages_path, 'torch/_C/_VariableFunctions.pyi')
-
-    if not os.path.isfile(file_path):
-        raise FileNotFoundError(f'{file_path} does not exist')
-
-    all_functions = parse_pyi_file(file_path)
-
-    # Filter out names that don't start with "_" or "__", and don't end with "_" or "__"
-    filtered_functions = []
-    for f in all_functions:
-        if not (f.startswith('_') or f.endswith('_')):
-            filtered_functions.append(f)
-
     signatures = []
-    for f in filtered_functions:
-        try:
-            func = getattr(torch, f)
-        except AttributeError as e:
-            print(f"AttributeError: {e}")
-            continue
+    modules = [torch, torch.Tensor]
 
-        d = func.__doc__
-        if d is not None:
-            s, ret_type = extract_signature(d)
-            if len(s) > 0:
-                signatures.append({'func_name': f, 'ret_type': ret_type, 'signature': s})
+    for m in modules:
+        for i in dir(m):
+            attr = getattr(m, i)
+            if hasattr(attr, '__name__') and hasattr(attr, '__doc__'):
+                if attr.__doc__ is not None:
+                # if (not (attr.__name__.startswith('_') or attr.__name__.endswith('_'))) and attr.__doc__ is not None:
+                    s, ret_type = extract_signature(attr.__doc__)
+                    if len(s) > 0:
+                        signatures.append({'func_name': attr.__name__, 'ret_type': ret_type, 'signature': s, 'module': m.__name__})
 
     json_data = json.dumps(signatures)
     with open(TORCH_FUNC_SIGNATURES_SAVE_PATH, 'w') as fp:
