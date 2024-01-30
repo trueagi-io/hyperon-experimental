@@ -32,9 +32,6 @@
 //! ```
 //!
 
-//LP-TODO-NEXT validate that the search path includes the working dir by default
-//
-
 //LP-TODO-NEXT make a test to make sure circular imports are caught and don't lead to infinite recursion
 //QUESTION: Should circular imports between modules be allowed?  The current implementation (and possibly
 // the MeTTa language itself) disallow circular imports because there is no concept of forward declaration.

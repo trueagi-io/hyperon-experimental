@@ -215,7 +215,7 @@ impl MettaMod {
         Ok(())
     }
 
-    /// Effectively adds all atom in a dependency module to the &self module, by adding the dependency
+    /// Effectively adds all atoms in a dependency module to the &self module, by adding the dependency
     /// module's space as an atom inside the &self module
     ///
     /// WARNING: Module import behavior is still WIP, specifically around "import *" behavior, and
