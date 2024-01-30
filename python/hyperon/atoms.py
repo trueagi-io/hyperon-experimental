@@ -116,10 +116,12 @@ class AtomType:
     EXPRESSION = Atom._from_catom(hp.CAtomType.EXPRESSION)
     GROUNDED = Atom._from_catom(hp.CAtomType.GROUNDED)
     GROUNDED_SPACE = Atom._from_catom(hp.CAtomType.GROUNDED_SPACE)
+    UNIT = Atom._from_catom(hp.CAtomType.UNIT)
 
 class Atoms:
 
     EMPTY = Atom._from_catom(hp.CAtoms.EMPTY)
+    UNIT = Atom._from_catom(hp.CAtoms.UNIT)
 
 class GroundedAtom(Atom):
     """
@@ -324,7 +326,7 @@ class OperationObject(GroundedObject):
             args = [arg.get_object().content for arg in args]
             result = self.op(*args)
             if result is None:
-                return [E()]
+                return [Atoms.UNIT]
             return [G(ValueObject(result), res_typ)]
         else:
             result = self.op(*args)
