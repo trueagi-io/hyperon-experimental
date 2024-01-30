@@ -322,7 +322,10 @@ class OperationObject(GroundedObject):
                     # raise RuntimeError("Grounded operation " + self.name + " with unwrap=True expects only grounded arguments")
                     raise NoReduceError()
             args = [arg.get_object().content for arg in args]
-            return [G(ValueObject(self.op(*args)), res_typ)]
+            result = self.op(*args)
+            if result is None:
+                return [E()]
+            return [G(ValueObject(result), res_typ)]
         else:
             result = self.op(*args)
             if not isinstance(result, list):

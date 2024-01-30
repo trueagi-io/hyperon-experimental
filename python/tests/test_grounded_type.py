@@ -22,11 +22,8 @@ class GroundedTypeTest(unittest.TestCase):
         metta.register_atom("untyped", ValueAtom(None))
         metta.register_atom("untop", OperationAtom("untop", lambda: None))
         self.assertEqual(
-            metta.run("!(untop)")[0][0].get_grounded_type(),
-            metta.parse_single("untyped").get_grounded_type())
-        self.assertNotEqual(
-            metta.run("!(untop)")[0][0].get_grounded_type(),
-            metta.run("!(+ 1 1)")[0][0].get_grounded_type())
+            metta.run("!(untop)")[0][0],
+            metta.parse_single("()"))
         self.assertNotEqual(
             metta.run("!(> 1 1)")[0][0].get_grounded_type(),
             metta.run("!(+ 1 1)")[0][0].get_grounded_type())
