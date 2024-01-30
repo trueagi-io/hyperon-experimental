@@ -134,9 +134,15 @@ class MeTTa:
             mod_name = repr(mod_name)
         mod = MeTTa.load_py_module(self, mod_name)
         if mod is None:
+            # NOTE: this is a hot fix, which could be done via env_builder as well, but
+            # this is a more direct loading of Python modules than via module_from_spec
+            mod = MeTTa.load_py_module(self, "hyperon.exts." + mod_name)
+        if mod is None:
             # If that failed, try and load the module from a file
+            # mod_name should either be a path to py file (with / delimiters)
+            # or a module path (with . delimiters)
             file_name = mod_name if ".py" in mod_name else \
-                        mod_name.replace('.', os.sep) + ".py"
+                        mod_name.replace('.', os.sep) + os.sep + "__init__.py"
 
             # Check each search path directory in order, until we find the module we're looking for
             num_search_paths = hp.metta_search_path_cnt(self.cmetta)
