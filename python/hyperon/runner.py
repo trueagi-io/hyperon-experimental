@@ -61,7 +61,10 @@ class MeTTa:
             if space is None:
                 space = GroundingSpaceRef()
             if env_builder is None:
-                env_builder = hp.env_builder_use_default()
+                env_builder = hp.env_builder_start()
+            builtin_mods_path = os.path.join(os.path.dirname(__file__), 'metta_mods/')
+            hp.env_builder_add_include_path(env_builder, builtin_mods_path)
+            hp.env_builder_add_include_path(env_builder, os.path.join(builtin_mods_path, 'das_gate/')) #TODO: This is temporary until module system is merged
             self.cmetta = hp.metta_new(space.cspace, env_builder)
 
     def __del__(self):
