@@ -3,7 +3,9 @@ from hyperon.ext import register_atoms
 
 
 from hyperon_das import DistributedAtomSpace
-from hyperon_das.utils import QueryOutputFormat
+# from hyperon_das.utils import QueryOutputFormat
+from hyperon_das.constants import QueryOutputFormat
+import time
 
 from hyperon_das.pattern_matcher import (
     Link,
@@ -17,9 +19,13 @@ from hyperon_das.pattern_matcher import (
 
 class DASpace(AbstractSpace):
 
-    def __init__(self, unwrap=True):
+    def __init__(self, remote=False, host='localhost', port='22', unwrap=True):
         super().__init__()
-        self.das = DistributedAtomSpace('ram_only')
+        # self.das = DistributedAtomSpace('ram_only')
+        if remote:
+            self.das = DistributedAtomSpace(query_engine='remote', host=host, port=port)
+        else:
+            self.das = DistributedAtomSpace()
         self.unwrap = unwrap
 
     def _atom2dict(self, atom):
@@ -34,6 +40,21 @@ class DASpace(AbstractSpace):
                 "name": repr(atom)
             }
 
+    def _atom2dict_new(self, atom):
+        if isinstance(atom, ExpressionAtom):
+            targets = atom.get_children()
+            if isinstance(targets[0], SymbolAtom) and targets[0].get_name() == ',':
+                return [self._atom2dict_new(ch) for ch in targets[1:]]
+            return {"atom_type": 'link', "type": "Expression", "targets":
+                [self._atom2dict_new(ch) for ch in targets]}
+        else:
+            if isinstance(atom, VariableAtom):
+                return {"atom_type": "variable", "name": repr(atom)}
+            elif isinstance(atom, SymbolAtom):
+                return {"atom_type": "node", "type": "Symbol", "name": repr(atom)}
+            elif isinstance(atom, GroundedAtom):
+                return {"atom_type": "node", "type": "Symbol", "name": repr(atom)}
+
     def _atom2query(self, atom):
         if isinstance(atom, ExpressionAtom):
             targets = atom.get_children()
@@ -47,15 +68,61 @@ class DASpace(AbstractSpace):
             else:
                 return Node("Symbol", repr(atom))
 
+    def _build_link_handle(self, link_type, target_handles):
+        if link_type == 'Expression':
+            target_handles.sort()
+        return f'<{link_type}: {target_handles}>'
+
+    def _get_link_targets(self, handle):
+        all_links = self.das.get_links('Expression')
+        for link in all_links:
+            if self._build_link_handle(link[0], link[1:]) == handle:
+                return link[1:]
+        return None
+
     def _handle2atom(self, h):
         try:
-            return S(self.das.get_node_name(h))
+            return S(self.das.backend.get_node_name(h))
         except Exception as e:
-            return E(*[self._handle2atom(ch) for ch in self.das.get_link_targets(h)])
+            return E(*[self._handle2atom(ch) for ch in self.das.backend.get_link_targets(h)])
+
+    def _handle2atom2(self, h):
+        try:
+            return S(self.das.backend.get_node_name(h))
+        except Exception as e:
+            return E(*[self._handle2atom2(ch) for ch in self._get_link_targets(h)])
 
     def query(self, query_atom):
-        query = self._atom2query(query_atom)
+        query = self._atom2dict_new(query_atom)
+
+        query_params = {
+            "toplevel_only": False,
+            "return_type": QueryOutputFormat.ATOM_INFO,
+            'query_scope': 'local_only'
+        }
         answer = self.das.query(query,
+                                query_params)
+        new_bindings_set = BindingsSet.empty()
+        if not answer:
+            return new_bindings_set
+        for a in answer:
+            bindings = Bindings()
+            if isinstance(a, list):
+                b = a[0]
+            else:
+                b = a
+            val = b['handle']
+            if b["type"] == "Expression":
+                var = 'ex'
+            else:
+                var = b['name']
+            bindings.add_var_binding(V(var), self._handle2atom(val))
+            new_bindings_set.push(bindings)
+        return new_bindings_set
+
+    def query_old(self, query_atom):
+        query = self._atom2query(query_atom)
+        answer = self.das.pattern_matcher_query(query,
             {'return_type': QueryOutputFormat.HANDLE, 'toplevel_only': True})
         new_bindings_set = BindingsSet.empty()
         if answer is None:
@@ -83,6 +150,17 @@ class DASpace(AbstractSpace):
     #    return self.das.count_atoms()
     #def atoms_iter(self):
     #    return iter(self.atoms_list)
+
+
+
+def create_new_space(host, port):
+    return [G(SpaceRef(DASpace(remote=True, host=host.__repr__(), port=port.__repr__())))]
+
+@register_atoms(pass_metta=True)
+def my_glob_atoms(metta):
+    return {
+        r"new-remote-das": OperationAtom("new-remote-das", create_new_space, unwrap=False),
+        }
 
 @register_atoms(pass_metta=True)
 def das_atoms(metta):

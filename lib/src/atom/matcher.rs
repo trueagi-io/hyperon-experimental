@@ -64,10 +64,10 @@ macro_rules! bind_set {
 
 use std::collections::{HashMap, HashSet};
 use core::iter::FromIterator;
-use std::cmp::max;
 
 use super::*;
 use crate::common::reformove::RefOrMove;
+use crate::common::holeyvec::HoleyVec;
 
 enum VarResolutionResult<T> {
     Some(T),
@@ -78,7 +78,7 @@ enum VarResolutionResult<T> {
 /// Abstraction of the variable set. It is used to allow passing both
 /// HashSet<&VariableAtom> and HashSet<VariableAtom> to the
 /// [Bindings::narrow_vars] method.
-pub trait VariableSet {
+pub trait VariableSet : Debug {
     type Iter<'a> : Iterator<Item = &'a VariableAtom> where Self: 'a;
 
     /// Returns true if var is a part of the set.
@@ -112,6 +112,26 @@ impl VariableSet for HashSet<VariableAtom> {
     }
 }
 
+#[derive(Clone, Debug)]
+struct Binding {
+    id: usize,
+    count: usize,
+    var: VariableAtom,
+    atom: Option<Atom>,
+}
+
+impl Binding {
+    fn no_vars(&self) -> bool {
+        self.count == 0
+    }
+    fn dec_count(&mut self) {
+        self.count = self.count - 1;
+    }
+    fn inc_count(&mut self) {
+        self.count = self.count + 1;
+    }
+}
+
 /// Represents variable bindings. Keeps two kinds of relations inside:
 /// variables equalities and variable value assignments. For example this
 /// structure is able to precisely represent result of matching atoms like
@@ -119,32 +139,86 @@ impl VariableSet for HashSet<VariableAtom> {
 /// [Bindings] contains variables from both sides of the match.
 #[derive(Clone)]
 pub struct Bindings {
-    next_var_id: u32,
-    id_by_var: HashMap<VariableAtom, u32>,
-    value_by_id: HashMap<u32, Atom>,
+    binding_by_var: HashMap<VariableAtom, usize>,
+    bindings: HoleyVec<Binding>,
 }
 
 impl Bindings {
+
     /// Constructs new empty instance of [Bindings].
     pub fn new() -> Self {
         Self {
-            next_var_id: 0,
-            id_by_var: HashMap::new(),
-            value_by_id: HashMap::new(),
+            binding_by_var: HashMap::new(),
+            bindings: HoleyVec::new(),
         }
     }
 
+    fn new_binding(&mut self, var: VariableAtom, atom: Option<Atom>) -> usize {
+        let id = self.bindings.next_index();
+        self.bindings.push(Binding{ id, count: 1, var: var.clone(), atom });
+        self.binding_by_var.insert(var, id);
+        id
+    }
+
+    fn get_binding(&self, var: &VariableAtom) -> Option<&Binding> {
+        self.binding_by_var.get(var).map_or(None, |&binding|
+            self.bindings.get(binding))
+    }
+
+    fn add_var_to_binding(&mut self, binding_id: usize, var: VariableAtom) {
+        let binding = &mut self.bindings[binding_id];
+        binding.inc_count();
+        self.binding_by_var.insert(var, binding_id);
+    }
+
+    fn remove_var_from_binding(&mut self, var: &VariableAtom) -> Option<Atom> {
+        let binding_id = self.binding_by_var.remove(var);
+        match binding_id {
+            Some(binding_id) => {
+                let binding = &mut self.bindings[binding_id];
+                binding.dec_count();
+                if binding.no_vars() {
+                    self.bindings.remove(binding_id).atom
+                } else {
+                    if binding.var == *var {
+                        self.rename_binding(binding_id, var);
+                    }
+                    None
+                }
+            },
+            None => None,
+        }
+    }
+
+    fn rename_binding(&mut self, binding_id: usize, old_var: &VariableAtom) {
+        let binding = &mut self.bindings[binding_id];
+        let var = self.binding_by_var.iter()
+            .filter(|(v, i)| **i == binding.id && *v != old_var)
+            .map(|(v, _i)| v)
+            .next()
+            .expect("Unexpected state");
+        binding.var = var.clone();
+    }
+
+    fn move_binding_to_binding(&mut self, from_binding_id: usize, to_binding_id: usize) {
+        let to_binding = &mut self.bindings[to_binding_id];
+        self.binding_by_var.iter_mut().for_each(|(_var, id)| {
+            if *id == from_binding_id {
+                *id = to_binding_id;
+                to_binding.inc_count();
+            }
+        });
+        self.bindings.remove(from_binding_id);
+    }
+
+    #[allow(dead_code)] //TODO: MINIMAL only silence the warning until interpreter2 replaces interpreter
     pub(crate) fn len(&self) -> usize {
-        self.id_by_var.len()
+        self.binding_by_var.len()
     }
 
     /// Returns true if bindings doesn't contain any variable.
     pub fn is_empty(&self) -> bool {
-        self.id_by_var.is_empty()
-    }
-
-    fn get_value(&self, var: &VariableAtom) -> Option<&Atom> {
-        self.id_by_var.get(var).and_then(|id| self.value_by_id.get(id))
+        self.binding_by_var.is_empty()
     }
 
     /// Returns value of the variable with all sub-variables resolved using the
@@ -167,69 +241,41 @@ impl Bindings {
     pub fn resolve(&self, var: &VariableAtom) -> Option<Atom> {
         let mut used_vars = HashSet::new();
         used_vars.insert(var);
-        match self.resolve_internal(var, &used_vars) {
+        match self.resolve_internal(var, used_vars) {
             VarResolutionResult::Some(atom) => Some(atom),
             VarResolutionResult::Loop => None,
             VarResolutionResult::None => None,
         }
     }
 
-    fn var_by_id<F>(&self, var_id: u32, condition: F) -> Option<&VariableAtom>
-        where F: Fn(&VariableAtom) -> bool
-    {
-        self.id_by_var.iter()
-            .filter(|(var, &id)| id == var_id && condition(var))
-            .map(|(var, _)| var).next()
+    fn resolve_internal<'a, 'b: 'a>(&'b self, var: &'a VariableAtom, used_vars: HashSet<&'a VariableAtom>) -> VarResolutionResult<Atom> {
+        self.get_binding(&var).map_or(VarResolutionResult::None, |binding| {
+            match &binding.atom {
+                Some(atom) =>
+                    self.resolve_vars_in_atom(atom.clone(), used_vars),
+                None =>
+                    VarResolutionResult::Some(Atom::Variable(binding.var.clone())),
+            }
+        })
     }
 
-    fn resolve_internal(&self, var: &VariableAtom, used_vars: &HashSet<&VariableAtom>) -> VarResolutionResult<Atom> {
-        let resolve_value_by_id = |&var_id|
-            match self.value_by_id.get(&var_id) {
-                Some(value) => self.resolve_vars_in_atom(value, used_vars),
-                None => {
-                    let replacing_var = self.var_by_id(var_id, |alt| *alt != *var);
-                    match  replacing_var {
-                        Some(var) => VarResolutionResult::Some(Atom::Variable(var.clone())),
-                        None => VarResolutionResult::Some(Atom::Variable(var.clone())),
+    fn resolve_vars_in_atom<'a>(&'a self, mut atom: Atom, used_vars: HashSet<&'a VariableAtom>) -> VarResolutionResult<Atom> {
+        for i in atom.iter_mut() {
+            match i {
+                Atom::Variable(var) if used_vars.contains(var) => return VarResolutionResult::Loop,
+                Atom::Variable(var) => {
+                    let mut used_vars = used_vars.clone();
+                    used_vars.insert(var);
+                    match self.resolve_internal(var, used_vars) {
+                        VarResolutionResult::Some(atom) => { *i = atom },
+                        VarResolutionResult::Loop => return VarResolutionResult::Loop,
+                        VarResolutionResult::None => {},
                     }
                 },
-            };
-        self.id_by_var.get(var).map_or(VarResolutionResult::None, resolve_value_by_id)
-    }
-
-    fn resolve_vars_in_atom(&self, atom: &Atom, used_vars: &HashSet<&VariableAtom>) -> VarResolutionResult<Atom> {
-        match atom {
-            Atom::Variable(var) if used_vars.contains(var) => VarResolutionResult::Loop,
-            Atom::Variable(var) => {
-                let mut used_vars = used_vars.clone();
-                used_vars.insert(var);
-                match self.resolve_internal(var, &used_vars) {
-                    VarResolutionResult::Some(atom) => VarResolutionResult::Some(atom),
-                    VarResolutionResult::Loop => VarResolutionResult::Loop,
-                    VarResolutionResult::None => VarResolutionResult::Some(atom.clone()),
-                }
+                _ => {},
             }
-            Atom::Expression(expr) => {
-                let children = expr.children().iter()
-                    .fold(VarResolutionResult::Some(Vec::new()), |vec, child| {
-                        match (vec, self.resolve_vars_in_atom(child, used_vars)) {
-                            (VarResolutionResult::Some(mut vec), VarResolutionResult::Some(child)) => {
-                                vec.push(child);
-                                VarResolutionResult::Some(vec)
-                            },
-                            (VarResolutionResult::Loop, _) => VarResolutionResult::Loop,
-                            (_, VarResolutionResult::Loop) => VarResolutionResult::Loop,
-                            _ => VarResolutionResult::None,
-                        }
-                    });
-                match children {
-                    VarResolutionResult::Some(vec) => VarResolutionResult::Some(Atom::expr(vec)),
-                    VarResolutionResult::Loop => VarResolutionResult::Loop,
-                    VarResolutionResult::None => VarResolutionResult::None,
-                }
-            }
-            _ => VarResolutionResult::Some(atom.clone()),
         }
+        VarResolutionResult::Some(atom)
     }
 
     /// Asserts equality between two [VariableAtom]s.  If the existing bindings for `a` and `b` are
@@ -246,28 +292,29 @@ impl Bindings {
     }
 
     fn add_var_equality_internal(mut self, a: &VariableAtom, b: &VariableAtom) -> BindingsSet {
-        match (self.id_by_var.get(a), self.id_by_var.get(b)) {
-            (Some(&a_var_id), Some(&b_var_id))  =>
-                if a_var_id != b_var_id {
-                    self.merge_var_ids(a_var_id, b_var_id)
-                } else {
+        let result = match (self.binding_by_var.get(a), self.binding_by_var.get(b)) {
+            (Some(&a_binding_id), Some(&b_binding_id))  =>
+                if a_binding_id == b_binding_id {
                     BindingsSet::from(self)
+                } else {
+                    self.merge_bindings(a_binding_id, b_binding_id)
                 }
-            (Some(&var_id), None) => {
-                self.id_by_var.insert(b.clone(), var_id);
+            (Some(&binding_id), None) => {
+                self.add_var_to_binding(binding_id, b.clone());
                 BindingsSet::from(self)
             },
-            (None, Some(&var_id)) => {
-                self.id_by_var.insert(a.clone(), var_id);
+            (None, Some(&binding_id)) => {
+                self.add_var_to_binding(binding_id, a.clone());
                 BindingsSet::from(self)
             },
             (None, None) => {
-                let var_id = self.get_next_var_id();
-                self.id_by_var.insert(a.clone(), var_id);
-                self.id_by_var.insert(b.clone(), var_id);
+                let binding_id = self.new_binding(a.clone(), None);
+                self.add_var_to_binding(binding_id, b.clone());
                 BindingsSet::from(self)
             },
-        }
+        };
+        log::trace!("Bindings::add_var_equality: {} = {}, result: {:?}", a, b, result);
+        result
     }
 
     fn match_values(&self, current: &Atom, value: &Atom) -> BindingsSet {
@@ -277,33 +324,22 @@ impl Bindings {
     }
 
     /// Internal function used by the [Bindings::add_var_equality] implementation
-    fn merge_var_ids(mut self, a_var_id: u32, b_var_id: u32) -> BindingsSet {
-        fn replace_id(id_by_var: &mut HashMap<VariableAtom, u32>, to_replace: u32, replace_by: u32) {
-            id_by_var.iter_mut().for_each(|(_var, id)| {
-                if *id == to_replace {
-                    *id = replace_by;
-                }
-            });
-        }
-        match (self.value_by_id.get(&a_var_id), self.value_by_id.get(&b_var_id)) {
-            (Some(a_val), Some(b_val)) => {
-                self.match_values(a_val, b_val)
+    fn merge_bindings(mut self, a_binding_id: usize, b_binding_id: usize) -> BindingsSet {
+        let a_binding = &self.bindings[a_binding_id];
+        let b_binding = &self.bindings[b_binding_id];
+        match (&a_binding.atom, &b_binding.atom) {
+            (Some(a_atom), Some(b_atom)) => {
+                self.match_values(&a_atom, &b_atom)
             },
-            (Some(_), None) => {
-                replace_id(&mut self.id_by_var, b_var_id, a_var_id);
+            (None, Some(_)) => {
+                self.move_binding_to_binding(a_binding_id, b_binding_id);
                 BindingsSet::from(self)
             }
             _ => {
-                replace_id(&mut self.id_by_var, a_var_id, b_var_id);
+                self.move_binding_to_binding(b_binding_id, a_binding_id);
                 BindingsSet::from(self)
             },
         }
-    }
-
-    fn get_next_var_id(&mut self) -> u32 {
-        let next_var_id = self.next_var_id;
-        self.next_var_id = self.next_var_id + 1;
-        next_var_id
     }
 
     /// Tries to insert `value` as a binding for the `var`. If `self` already
@@ -353,10 +389,15 @@ impl Bindings {
     fn add_var_binding_internal<T1, T2>(mut self, var: T1, value: T2) -> BindingsSet
         where T1: RefOrMove<VariableAtom>, T2: RefOrMove<Atom>
     {
-        match self.id_by_var.get(var.as_ref()) {
-            Some(var_id) =>
-                match self.value_by_id.get(var_id) {
-                    Some(current) => {
+        let trace_parameters = match log::log_enabled!(log::Level::Trace) {
+            true => Some(format!("{} <- {}", var.as_ref(), value.as_ref())),
+            false => None,
+        };
+        let result = match self.binding_by_var.get(var.as_ref()) {
+            Some(&binding_id) => {
+                let binding = &self.bindings[binding_id];
+                match binding.atom {
+                    Some(ref current) => {
                         if current == value.as_ref() {
                             BindingsSet::from(self)
                         } else {
@@ -364,17 +405,21 @@ impl Bindings {
                         }
                     },
                     None => {
-                        self.value_by_id.insert(*var_id, value.as_value());
+                        let binding = &mut self.bindings[binding_id];
+                        binding.atom = Some(value.as_value());
                         BindingsSet::from(self)
                     },
-                },
+                }
+            },
             None => {
-                let var_id = self.get_next_var_id();
-                self.id_by_var.insert(var.as_value(), var_id);
-                self.value_by_id.insert(var_id, value.as_value());
+                self.new_binding(var.as_value(), Some(value.as_value()));
                 BindingsSet::from(self)
             },
+        };
+        if let Some(trace_parameters) = trace_parameters {
+            log::trace!("Bindings::add_var_bindings: {}, result: {:?}", trace_parameters, result);
         }
+        result
     }
 
     /// Tries to insert `value` as a binding for the `var`. If `self` already
@@ -398,9 +443,8 @@ impl Bindings {
     }
 
     fn add_var_no_value(&mut self, var: &VariableAtom) {
-        if !self.id_by_var.contains_key(var) {
-            let var_id = self.get_next_var_id();
-            self.id_by_var.insert(var.clone(), var_id);
+        if !self.binding_by_var.contains_key(var) {
+            self.new_binding(var.clone(), None);
         }
     }
 
@@ -423,42 +467,45 @@ impl Bindings {
     /// ```
     ///
     /// TODO: Rename to `merge` when clients have adopted new API
-    pub fn merge_v2(self, b: &Bindings) -> BindingsSet {
-        log::trace!("Bindings::merge: a: {}, b: {}", self, b);
+    pub fn merge_v2(self, other: &Bindings) -> BindingsSet {
+        log::trace!("Bindings::merge: {} ^ {}", self, other);
         let trace_self = match log::log_enabled!(log::Level::Trace) {
             true => Some(self.clone()),
             false => None
         };
 
         if self.is_empty() {
-            return b.clone().into()
-        } else if b.is_empty() {
+            return other.clone().into()
+        } else if other.is_empty() {
             return self.into()
         }
 
-        let results = b.id_by_var.iter().fold(smallvec::smallvec![(self, HashMap::new())],
-            |results, (var, var_id)| -> smallvec::SmallVec<[(Bindings, HashMap<u32, VariableAtom>); 1]> {
+        let results = other.binding_by_var.iter().fold(smallvec::smallvec![(self, HashMap::new())],
+            |results, (var, binding_id)| -> smallvec::SmallVec<[(Bindings, HashMap<usize, &VariableAtom>); 1]> {
                 let mut all_results = smallvec::smallvec![];
 
-                for (result, mut b_vars_merged) in results {
-                    let new_results = if let Some(first_var) = b_vars_merged.get(&var_id) {
-                        result.add_var_equality_internal(first_var, var)
+                for (result, mut other_vars_merged) in results {
+                    log::trace!("next_var: var: {}, binding_id: {}", var, binding_id);
+                    let new_results = if let Some(first_binding) = other_vars_merged.get(binding_id) {
+                        result.add_var_equality_internal(first_binding, var)
                     } else {
-                        b_vars_merged.insert(*var_id, var.clone());
-                        if let Some(value) = b.value_by_id.get(var_id) {
-                            result.add_var_binding_internal(var, value)
+                        let binding = other.get_binding(var).expect("Unexpected state");
+                        other_vars_merged.insert(binding.id, var);
+                        if let Some(atom) = &binding.atom {
+                            result.add_var_binding_internal(var, atom)
                         } else {
                             BindingsSet::from(result.with_var_no_value(var))
                         }
                     };
-                    all_results.extend(new_results.into_iter().map(|new_binding| (new_binding, b_vars_merged.clone())));
+                    all_results.extend(new_results.into_iter().map(|new_binding| (new_binding, other_vars_merged.clone())));
+                    log::trace!("all_results: {:?}", all_results);
                 }
                 all_results
             });
 
         let results = results.into_iter().map(|(result, _)| result).collect();
         if let Some(self_copy) = trace_self {
-            log::trace!("Bindings::merge: {} ^ {} -> {:?}", self_copy, b, results);
+            log::trace!("Bindings::merge: {} ^ {} -> {:?}", self_copy, other, results);
         }
         results
     }
@@ -468,59 +515,16 @@ impl Bindings {
         a.clone().merge_v2(b).into_iter().next()
     }
 
-    fn vars_by_id(&self) -> HashMap<&u32, Vec<&VariableAtom>> {
-        let mut var_by_id = HashMap::new();
-        for (var, id) in &self.id_by_var {
-            var_by_id.entry(id).or_insert(vec![]).push(var);
-        }
-        var_by_id
-    }
-
-    fn remove(&mut self, var: &VariableAtom) -> Option<Atom> {
-        match self.id_by_var.remove(var) {
-            None => None,
-            Some(var_id) => {
-                let no_other_var = self.var_by_id(var_id, |_| true) == None;
-                if no_other_var {
-                    self.value_by_id.remove(&var_id)
-                } else {
-                    None
-                }
-            }
-        }
-    }
-
-    fn build_var_mapping<'a, T: VariableSet>(&'a self, required_names: &T, required_ids: &HashSet<u32>) -> HashMap<&'a VariableAtom, &'a VariableAtom> {
-        let mut id_names: HashSet<VariableAtom> = HashSet::new();
-        let mut mapping = HashMap::new();
-        for (var, &id) in &self.id_by_var {
-            match (required_names.contains(var), required_ids.contains(&id)) {
-                (true, _) => { mapping.insert(var, var); },
-                (false, false) => {},
-                (false, true) => {
-                    let mapped = self.var_by_id(id,
-                        |alt| required_names.contains(alt) || id_names.contains(alt));
-                    match mapped {
-                        Some(mapped) => { mapping.insert(var, mapped); },
-                        None => {
-                            id_names.insert(var.clone());
-                            mapping.insert(var, var);
-                        },
-                    }
-                },
-            }
-        }
-        mapping
-    }
-
-    fn find_deps(&self, var: &VariableAtom, deps: &mut HashSet<VariableAtom>) {
+    fn find_deps<'a>(&'a self, var: &'a VariableAtom, deps: &mut HashSet<&'a VariableAtom>) {
         if !deps.contains(var) {
-            deps.insert(var.clone());
-            self.get_value(var).iter()
-                .for_each(|value| {
-                    value.iter().filter_map(|atom| <&VariableAtom>::try_from(atom).ok())
+            deps.insert(var);
+            match self.get_binding(var).and_then(|b| b.atom.as_ref()) {
+                Some(atom) => {
+                    atom.iter().filter_type::<&VariableAtom>()
                         .for_each(|var| { self.find_deps(var, deps); });
-                    });
+                },
+                _ => {},
+            }
         }
     }
 
@@ -541,35 +545,37 @@ impl Bindings {
     /// assert_eq!(right, bind!{ rightB: expr!("A"), rightF: expr!("F"), rightE: expr!(rightE) });
     /// ```
     pub fn narrow_vars<T: VariableSet>(&self, vars: &T) -> Bindings {
-        let mut deps: HashSet<VariableAtom> = HashSet::new();
+        // TODO: can we use binding deps instead of var deps?
+        let mut deps = HashSet::new();
         for var in vars.iter() {
             self.find_deps(var, &mut deps);
         }
 
-        let dep_ids: HashSet<u32> = deps.iter()
-            .map(|var| self.id_by_var.get(var))
-            .filter(Option::is_some)
-            .map(Option::unwrap).map(|&id| id)
-            .collect();
-
-        let mapping = self.build_var_mapping(vars, &dep_ids);
-
         let mut bindings = Bindings::new();
-        bindings.next_var_id = self.next_var_id;
-        for (var, &id) in &self.id_by_var {
-            if deps.contains(var) {
-                bindings.id_by_var.insert((*mapping.get(var).unwrap()).clone(), id);
+        let mut prev_to_new = vec![usize::MAX; self.bindings.index_upper_bound()];
+        let mut copy_var = |var| {
+            match self.get_binding(var) {
+                None => {},
+                Some(prev @ binding) => {
+                    let new_id = prev_to_new[binding.id];
+                    if new_id != usize::MAX {
+                        bindings.add_var_to_binding(new_id, (*var).clone());
+                    } else {
+                        let new_id = bindings.new_binding(var.clone(), binding.atom.clone());
+                        prev_to_new[prev.id] = new_id;
+                    }
+                },
             }
+        };
+
+        for var in vars.iter() {
+            copy_var(var);
         }
-        for (&id, value) in &self.value_by_id {
-            if dep_ids.contains(&id) {
-                let mut mapped_value = value.clone();
-                mapped_value.iter_mut().filter_map(|atom| <&mut VariableAtom>::try_from(atom).ok())
-                    .for_each(|var| { mapping.get(var).map(|mapped| *var = (*mapped).clone()); });
-                bindings.value_by_id.insert(id, mapped_value);
-            }
+        for var in deps.iter().filter(|v| !vars.contains(v)) {
+            copy_var(var);
         }
-        log::trace!("Bindings::narrow_vars: {} -> {}", self, bindings);
+
+        log::trace!("Bindings::narrow_vars: vars: {:?}, {} -> {}", vars, self, bindings);
         bindings
     }
 
@@ -584,33 +590,26 @@ impl Bindings {
             true => Some(self.clone()),
             false => None
         };
-        let mut value_vars: HashMap<u32, &VariableAtom> = HashMap::new();
-        let mut renamed_vars: HashMap<VariableAtom, VariableAtom> = HashMap::new();
-        for (var, var_id) in &self.id_by_var {
-            if let Some(&top_level_var) = value_vars.get(var_id) {
-                if top_level_var != var {
-                    renamed_vars.insert(var.clone(), top_level_var.clone());
-                }
-            } else {
-                if preferred_vars.contains(var) {
-                    value_vars.insert(*var_id, var);
-                } else {
-                    let new_var = self.var_by_id(*var_id, |v| preferred_vars.contains(v));
-                    match new_var {
-                        Some(new_var) => {
-                            value_vars.insert(*var_id, new_var);
-                            renamed_vars.insert(var.clone(), new_var.clone());
-                        },
-                        None => {
-                            value_vars.insert(*var_id, var);
-                        },
+        let mut renamed = bitset::BitSet::with_capacity(self.bindings.index_upper_bound());
+        for var in preferred_vars {
+            match self.binding_by_var.get(&var) {
+                Some(&binding_id) => {
+                    if !renamed.test(binding_id) {
+                        self.bindings[binding_id].var = var.clone();
+                        renamed.set(binding_id, true);
                     }
-                }
+                },
+                None => {},
             }
         }
-        for (old_var, new_var) in renamed_vars {
-            self.remove(&old_var);
-            self.add_var_binding(old_var, Atom::Variable(new_var));
+        for (var, binding_id) in &mut self.binding_by_var {
+            let binding = &self.bindings[*binding_id];
+            if binding.var != *var {
+                let var_atom = Atom::Variable(binding.var.clone());
+                let new_binding_id = self.bindings.next_index();
+                self.bindings.push(Binding{ id: new_binding_id, count: 1, var: var.clone(), atom: Some(var_atom) });
+                *binding_id = new_binding_id;
+            }
         }
         if let Some(self_copy) = trace_self {
             log::trace!("Bindings::convert_var_equalities_to_bindings: preferred_vars: {:?}, {} -> {}", preferred_vars, self_copy, self);
@@ -618,43 +617,55 @@ impl Bindings {
         self
     }
 
-    fn no_value(&self, id: &u32) -> bool {
-        self.value_by_id.get(id) == None &&
-            self.id_by_var.iter().filter(|(_var, vid)| *vid == id).count() == 1
-    }
-
     /// Keep only variables passed in vars
-    pub fn cleanup<T: VariableSet>(&mut self, vars: &T) {
-        let to_remove: HashSet<VariableAtom> = self.id_by_var.iter()
-            .filter_map(|(var, id)| {
-                if !vars.contains(var) || self.no_value(id) {
+    pub fn retain<F>(&mut self, f: F) where F: Fn(&VariableAtom) -> bool {
+        let to_remove: Vec<VariableAtom> = self.binding_by_var.keys()
+            .filter_map(|var| {
+                if !f(var) {
                     Some(var.clone())
                 } else {
                     None
                 }
-            })
-            .collect();
-        to_remove.into_iter().for_each(|var| {
-            self.id_by_var.remove(&var);
-        });
+            }).collect();
+
+        for var in &to_remove {
+            self.remove_var_from_binding(var);
+        }
     }
 
     pub fn has_loops(&self) -> bool {
-        let vars_by_id = self.vars_by_id();
-        for (var_id, value) in &self.value_by_id {
-            let mut used_vars = HashSet::new();
-            let var = vars_by_id.get(var_id);
-            // TODO: cleanup removes vars but leaves var_ids
-            //assert!(var.is_some(), "No variable name for var_id: {}, value: {}, self: {}", var_id, value, self);
-            if var.is_some() {
-                var.unwrap().iter().for_each(|var| { used_vars.insert(*var); });
-                match self.resolve_vars_in_atom(value, &used_vars) {
-                    VarResolutionResult::Loop => return true,
-                    _ => {},
-                }
+        for binding in &self.bindings {
+            let mut used_bindings = bitset::BitSet::with_capacity(self.bindings.index_upper_bound());
+            used_bindings.set(binding.id, true);
+            if self.binding_has_loops(&binding, &mut used_bindings) {
+                return true;
             }
         }
         false
+    }
+
+    fn binding_has_loops(&self, binding: &Binding, used_bindings: &mut bitset::BitSet) -> bool {
+        match &binding.atom {
+            None => false,
+            Some(atom) => {
+                for var in atom.iter().filter_type::<&VariableAtom>() {
+                    match self.get_binding(var) {
+                        Some(binding) => {
+                            if used_bindings.test(binding.id) {
+                                return true;
+                            }
+                            used_bindings.set(binding.id, true);
+                            if self.binding_has_loops(binding, used_bindings) {
+                                return true;
+                            }
+                            used_bindings.set(binding.id, false);
+                        },
+                        None => {},
+                    }
+                }
+                false
+            },
+        }
     }
 
     /// Returns iterator of `(&VariableAtom, Atom)` pairs to represent [Bindings] in C API.
@@ -674,31 +685,31 @@ impl Bindings {
     ///     (&VariableAtom::new("leftA"), expr!("A")),
     ///     (&VariableAtom::new("rightB"), expr!("A")),
     ///     (&VariableAtom::new("leftC"), expr!("C")),
-    ///     (&VariableAtom::new("leftD"), expr!(rightE)),
+    ///     (&VariableAtom::new("leftD"), expr!(leftD)),
     ///     (&VariableAtom::new("rightE"), expr!(leftD)),
     ///     (&VariableAtom::new("rightF"), expr!("F")),
     /// ]);
     /// ```
     pub fn iter(&self) -> BindingsIter {
-        BindingsIter { bindings: self, delegate: self.id_by_var.iter() }
+        BindingsIter { bindings: self, delegate: self.binding_by_var.iter() }
     }
 
     fn into_vec_of_pairs(mut self) -> Vec<(VariableAtom, Atom)> {
         let mut result = Vec::new();
-        let mut core_vars: HashMap<u32, Atom> = HashMap::new();
 
-        for (var, id) in self.id_by_var {
-            match self.value_by_id.remove(&id) {
-                Some(value) => {
-                    core_vars.insert(id, Atom::Variable(var.clone()));
-                    result.push((var, value));
+        for binding in &mut self.bindings {
+            match &binding.atom {
+                Some(atom) => {
+                    result.push((binding.var.clone(), atom.clone()));
+                    binding.atom = None;
                 },
-                None => {
-                    match core_vars.get(&id) {
-                        Some(core_var) => { result.push((var, core_var.clone())); }
-                        None => { core_vars.insert(id, Atom::Variable(var)); }
-                    }
-                },
+                None => {},
+            }
+        }
+        for (var, binding_id) in self.binding_by_var {
+            let binding = &self.bindings[binding_id];
+            if binding.var != var {
+                result.push((var, Atom::Variable(binding.var.clone())));
             }
         }
 
@@ -707,7 +718,7 @@ impl Bindings {
 
     /// Rename variables inside bindings using `rename`.
     pub fn rename_vars<F>(self, mut rename: F) -> Self where F: FnMut(VariableAtom) -> VariableAtom {
-        self.into_iter()
+        self.into_vec_of_pairs().into_iter()
             .map(|(mut v, mut a)| {
                 v = rename(v);
                 a.iter_mut().filter_type::<&mut VariableAtom>()
@@ -722,18 +733,27 @@ impl Bindings {
 impl Display for Bindings {
 
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let vars_by_id = self.vars_by_id();
-        write!(f, "{{ ")?;
-        for (i, (id, vars)) in vars_by_id.iter().enumerate() {
-            let prefix = if i == 0 { "" } else { ", " };
-            write!(f, "{}", prefix)?;
-            for (i, var) in vars.iter().enumerate() {
-                let prefix = if i == 0 { "" } else { " = " };
-                write!(f, "{}{}", prefix, var)?;
+        let mut vars_by_binding_id = vec![HashSet::new(); self.bindings.index_upper_bound()];
+        for (var, &binding_id) in &self.binding_by_var {
+            if *var != self.bindings[binding_id].var {
+                vars_by_binding_id[binding_id].insert(var);
             }
-            match self.value_by_id.get(id) {
-                Some(value) => write!(f, " <- {}", value)?,
-                None => {},
+        }
+
+        write!(f, "{{ ")?;
+        let mut first = true;
+        for (binding_id, vars) in vars_by_binding_id.iter().enumerate() {
+            if let Some(binding) = self.bindings.get(binding_id) {
+                let prefix = if first { first = false; "" } else { ", " };
+                write!(f, "{}", prefix)?;
+                write!(f, "{}", binding.var)?;
+                for var in vars {
+                    write!(f, " = {}", var)?;
+                }
+                match &binding.atom {
+                    Some(atom) => write!(f, " <- {}", atom)?,
+                    None => {},
+                }
             }
         }
         write!(f, " }}")
@@ -751,31 +771,30 @@ impl Debug for Bindings {
 
 impl PartialEq for Bindings {
 
+    /// This implementation is for testing only. It doesn't take into account
+    /// names of the renamed variables (see [Binding::var]).
     fn eq(&self, other: &Self) -> bool {
-        fn to_usize(n: u32) -> usize {
-            usize::try_from(n).unwrap()
-        }
-
-        let max_var_id = max(self.next_var_id, other.next_var_id);
-        let mut other_to_self: Vec<u32> = vec![u32::MAX; to_usize(max_var_id)];
-        for (name, self_var) in &self.id_by_var {
-            match other.id_by_var.get(name) {
+        for (var, self_binding_id) in &self.binding_by_var {
+            match other.binding_by_var.get(var) {
                 None => return false, // no such name in other
-                Some(other_var) => other_to_self[to_usize(*other_var)] = *self_var,
+                Some(other_binding_id) => {
+                    let self_binding = &self.bindings[*self_binding_id];
+                    let other_binding = &other.bindings[*other_binding_id];
+
+                    if  self_binding.atom != other_binding.atom {
+                        return false; // values are not equal
+                    }
+                }
             }
         }
-        for (name, _) in &other.id_by_var {
-            match self.id_by_var.get(name) {
+
+        for (var, _) in &other.binding_by_var {
+            match self.binding_by_var.get(var) {
                 None => return false, // no such name in self
                 Some(_) => {},
             }
         }
-        for other_var in 0..other.next_var_id {
-            let self_var = other_to_self[to_usize(other_var)];
-            if self.value_by_id.get(&self_var) != other.value_by_id.get(&other_var) {
-                return false; // values are not equal
-            }
-        }
+
         true
     }
 
@@ -800,15 +819,44 @@ impl From<&[(VariableAtom, Atom)]> for Bindings {
     }
 }
 
-impl IntoIterator for Bindings {
-    type Item = (VariableAtom, Atom);
-    type IntoIter = std::vec::IntoIter<Self::Item>;
+/// Iterator over `(&VariableAtom, Atom)` pairs in [Bindings].
+/// Each pair contains reference to a [VariableAtom] and instance of [Atom]
+/// which contains resolved value of the variable. See [Bindings::resolve].
+pub struct BindingsIter<'a> {
+    bindings: &'a Bindings,
+    delegate: std::collections::hash_map::Iter<'a, VariableAtom, usize>,
+}
 
-    /// Converts [Bindings] into an iterator of pairs `(VariableAtom, Atom)`.
-    fn into_iter(self) -> Self::IntoIter {
-        self.into_vec_of_pairs().into_iter()
+impl<'a> BindingsIter<'a> {
+
+    fn next(&mut self) -> Option<(&'a VariableAtom, Atom)> {
+        self.delegate.next().and_then(|(var, _id)| {
+            match self.bindings.resolve(var) {
+                Some(atom) => Some((var, atom)),
+                None => None,
+            }
+        })
+    }
+
+}
+
+impl<'a> Iterator for BindingsIter<'a> {
+    type Item = (&'a VariableAtom, Atom);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.next()
     }
 }
+
+impl<'a> IntoIterator for &'a Bindings {
+    type Item = (&'a VariableAtom, Atom);
+    type IntoIter = BindingsIter<'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.iter()
+    }
+}
+
 
 /// Represents a set of [Bindings] instances resulting from an operation where multiple matches are possible.
 #[derive(Clone, Debug)]
@@ -967,45 +1015,6 @@ impl BindingsSet {
         new_set
     }
 }
-
-/// Iterator over `(&VariableAtom, Atom)` pairs in [Bindings].
-/// Each pair contains reference to a [VariableAtom] and instance of [Atom]
-/// which contains resolved value of the variable. See [Bindings::resolve].
-pub struct BindingsIter<'a> {
-    bindings: &'a Bindings,
-    delegate: std::collections::hash_map::Iter<'a, VariableAtom, u32>,
-}
-
-impl<'a> BindingsIter<'a> {
-
-    fn next(&mut self) -> Option<(&'a VariableAtom, Atom)> {
-        self.delegate.next().and_then(|(var, _id)| {
-            match self.bindings.resolve(var) {
-                Some(atom) => Some((var, atom)),
-                None => None,
-            }
-        })
-    }
-
-}
-
-impl<'a> Iterator for BindingsIter<'a> {
-    type Item = (&'a VariableAtom, Atom);
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.next()
-    }
-}
-
-impl<'a> IntoIterator for &'a Bindings {
-    type Item = (&'a VariableAtom, Atom);
-    type IntoIter = BindingsIter<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
 
 /// Iterator over atom matching results. Each result is an instance of [Bindings].
 //TODO: A situation where a MatchResultIter returns an unbounded (infinite) number of results
@@ -1279,7 +1288,7 @@ mod test {
         assert_match(
             expr!( a  a a),
             expr!("v" x y),
-            vec![bind!{x: expr!(a), y: expr!(a), a: sym!("v")}]);
+            vec![bind!{a: sym!("v"), x: expr!(a), y: expr!(a)}]);
     }
 
     #[test]
@@ -1303,7 +1312,7 @@ mod test {
         assert_match(
             expr!(a "v" a),
             expr!(x  x  y),
-            vec![bind!{x: expr!("v"), x: expr!(a), y: expr!(a)}]);
+            vec![bind!{a: expr!(x), x: expr!("v"), y: expr!(a)}]);
     }
 
     #[test]
@@ -1311,7 +1320,7 @@ mod test {
         assert_match(
             expr!(a a),
             expr!(x y),
-            vec![bind!{x: expr!(a), y: expr!(a)}]);
+            vec![bind!{a: expr!(x), a: expr!(y)}]);
     }
 
     #[test]
@@ -1327,8 +1336,8 @@ mod test {
         let last_id = VariableAtom::new("x").make_unique().id;
         let x_uniq = Atom::Variable(VariableAtom::new_id("x", last_id + 1));
         assert_match(
-            make_variables_unique(expr!(("A" x) ("B" x))),
-                                  expr!(("A" x)    z   ),
+                                      expr!(("A" x)    z   ),
+                make_variables_unique(expr!(("A" x) ("B" x))),
             vec![bind!{x: x_uniq.clone(), z: Atom::expr([sym!("B"), x_uniq])}]);
     }
 
@@ -1345,7 +1354,7 @@ mod test {
         assert_match(
             expr!((a) ("v") a),
             expr!( x    x   y),
-            vec![bind!{x: expr!((a)), y: expr!("v"), y: expr!(a)}]);
+            vec![bind!{x: expr!((a)), a: expr!(y), y: expr!("v")}]);
     }
 
     #[test]
@@ -1502,7 +1511,7 @@ mod test {
         let bindings = Bindings::new()
             .add_var_equality(&VariableAtom::new("x"), &VariableAtom::new("y"))?;
 
-        assert_eq!(bindings.resolve(&VariableAtom::new("x")), Some(expr!(y)));
+        assert_eq!(bindings.resolve(&VariableAtom::new("x")), Some(expr!(x)));
         Ok(())
     }
 
@@ -1555,20 +1564,22 @@ mod test {
 
     #[test]
     fn bindings_convert_var_equalities_to_bindings() -> Result<(), &'static str> {
+        let a = VariableAtom::new("a");
+        let b = VariableAtom::new("b");
         let bindings = Bindings::new()
-            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
-            .add_var_binding_v2(VariableAtom::new("a"), expr!("A"))?;
+            .add_var_equality(&a, &b)?
+            .add_var_binding_v2(a.clone(), expr!("A"))?;
 
-        let result = bindings.clone().convert_var_equalities_to_bindings(&[VariableAtom::new("a")].into());
+        let result = bindings.clone().convert_var_equalities_to_bindings(&[a.clone()].into());
         let expected = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("a"), expr!("A"))?
-            .add_var_binding_v2(&VariableAtom::new("b"), expr!(a))?;
+            .add_var_binding_v2(a.clone(), expr!("A"))?
+            .add_var_binding_v2(&b, expr!(a))?;
         assert_eq!(result, expected);
 
-        let result = bindings.clone().convert_var_equalities_to_bindings(&[VariableAtom::new("b")].into());
+        let result = bindings.clone().convert_var_equalities_to_bindings(&[b.clone()].into());
         let expected = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("b"), expr!("A"))?
-            .add_var_binding_v2(&VariableAtom::new("a"), expr!(b))?;
+            .add_var_binding_v2(b.clone(), expr!("A"))?
+            .add_var_binding_v2(&a, expr!(b))?;
         assert_eq!(result, expected);
 
         Ok(())
@@ -1623,7 +1634,8 @@ mod test {
         let mut bindings = Bindings::new();
         bindings.add_var_no_value(&a);
         let bindings = bindings.add_var_binding_v2(b.clone(), Atom::expr([Atom::sym("S"), Atom::Variable(a.clone())]))?;
-        assert_eq!(bindings.add_var_equality(&a, &b), Ok(bind!{ a: expr!(b), b: expr!("S" a) }));
+        let bindings = bindings.add_var_equality(&a, &b);
+        assert_eq!(bindings, Ok(bind!{ b: expr!("S" a),  a: expr!(b) }));
         Ok(())
     }
 
@@ -1680,15 +1692,23 @@ mod test {
     }
 
     #[test]
-    fn bindings_cleanup() -> Result<(), &'static str> {
+    fn bindings_retain() -> Result<(), &'static str> {
+        let mut bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?;
+        bindings.retain(|v| *v == VariableAtom::new("a") || *v == VariableAtom::new("b"));
+        assert_eq!(bindings, bind!{ a: expr!(b) });
+
         let mut bindings = Bindings::new()
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
             .add_var_binding_v2(VariableAtom::new("b"), expr!("B" d))?
             .add_var_binding_v2(VariableAtom::new("c"), expr!("c"))?
             .add_var_binding_v2(VariableAtom::new("d"), expr!("D"))?
             .with_var_no_value(&VariableAtom::new("e"));
-        bindings.cleanup(&Into::<HashSet<&VariableAtom>>::into([&VariableAtom::new("b"), &VariableAtom::new("e")]));
-        assert_eq!(bindings, bind!{ b: expr!("B" d) });
+        bindings.retain(|v| *v == VariableAtom::new("b") || *v == VariableAtom::new("e"));
+        let expected = Bindings::new()
+            .add_var_binding_v2(VariableAtom::new("b"), expr!("B" d))?
+            .with_var_no_value(&VariableAtom::new("e"));
+        assert_eq!(bindings, expected);
         Ok(())
     }
 
@@ -1701,7 +1721,7 @@ mod test {
             .add_var_binding_v2(VariableAtom::new("a"), Atom::expr([Atom::sym("A"), Atom::var("x")]))?
             .add_var_binding_v2(VariableAtom::new("b"), Atom::expr([Atom::sym("B"), Atom::var("x")]))?;
 
-        let entries: Vec<(VariableAtom, Atom)> = bindings.into_iter().collect();
+        let entries: Vec<(VariableAtom, Atom)> = bindings.into_vec_of_pairs();
 
         assert_eq_no_order!(entries, vec![
             (VariableAtom::new("x"), Atom::var("y")),

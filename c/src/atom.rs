@@ -435,6 +435,23 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_ref_t) -> *mut gnd_t 
     }
 }
 
+/// @brief Check if the atom refers to CGrounded object
+/// @ingroup atom_group
+/// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to access
+/// @return True if the atom_get_object can be used on this atom without panic
+///
+#[no_mangle]
+pub unsafe extern "C" fn atom_is_cgrounded(atom: *const atom_ref_t) -> bool {
+    if let Atom::Grounded(ref g) = (&*atom).borrow() {
+        match (*g).as_any_ref().downcast_ref::<CGrounded>() {
+            Some(_g) => true,
+            None => false,
+        }
+    } else {
+        false
+    }
+}
+
 /// @brief Access the space wrapped inside a Grounded atom
 /// @ingroup atom_group
 /// @see atom_gnd_for_space

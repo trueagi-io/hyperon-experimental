@@ -1,14 +1,15 @@
 #![feature(test)]
 #[cfg(feature = "minimal")]
 mod interpreter2_bench {
+
 extern crate test;
 
 use test::Bencher;
 
 use hyperon::*;
 use hyperon::space::grounding::*;
-use hyperon::metta::interpreter2::*;
 use hyperon::metta::*;
+use hyperon::metta::interpreter2::*;
 
 fn chain_atom(size: isize) -> Atom {
     let mut atom = Atom::expr([CHAIN_SYMBOL, Atom::sym("A"), Atom::var("x"), Atom::var("x")]);
@@ -18,14 +19,38 @@ fn chain_atom(size: isize) -> Atom {
     atom
 }
 
+
 #[bench]
-fn chain_x100(bencher: &mut Bencher) {
-    let atom = chain_atom(100);
+fn chain_x10(bencher: &mut Bencher) {
+    let space = GroundingSpace::new();
+    let atom = chain_atom(10);
     let expected = Ok(vec![expr!("A")]);
-    bencher.iter(|| {
-        let space = GroundingSpace::new();
-        let res = interpret(space, &atom);
+    bencher.iter(move || {
+        let res = interpret(&space, &atom);
         assert_eq!(res, expected);
     })
 }
+
+#[bench]
+fn chain_x100(bencher: &mut Bencher) {
+    let space = GroundingSpace::new();
+    let atom = chain_atom(100);
+    let expected = Ok(vec![expr!("A")]);
+    bencher.iter(move || {
+        let res = interpret(&space, &atom);
+        assert_eq!(res, expected);
+    })
+}
+
+#[bench]
+fn chain_x1000(bencher: &mut Bencher) {
+    let space = GroundingSpace::new();
+    let atom = chain_atom(1000);
+    let expected = Ok(vec![expr!("A")]);
+    bencher.iter(move || {
+        let res = interpret(&space, &atom);
+        assert_eq!(res, expected);
+    })
+}
+
 }
