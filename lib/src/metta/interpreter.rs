@@ -219,11 +219,32 @@ pub fn interpret<T: Space>(space: T, expr: &Atom) -> Result<Vec<Atom>, String> {
     }
 }
 
+#[derive(Debug)]
+struct NoInterpreterCache();
+impl NoInterpreterCache {
+    fn new() -> Self {
+        Self()
+    }
+
+    fn get(&self, _key: &Atom) -> Option<Results> {
+        None
+    }
+
+    fn insert(&mut self, _key: Atom, mut _value: Results) {
+    }
+}
+
+impl SpaceObserver for NoInterpreterCache {
+    fn notify(&mut self, _event: &SpaceEvent) {
+    }
+}
+
 // TODO: ListMap is not effective but we cannot use HashMap here without
 // requiring hash functions for the grounded atoms.
 #[derive(Debug)]
 struct InterpreterCache(ListMap<Atom, Results>);
 
+#[allow(dead_code)] // Cache is turned off
 impl InterpreterCache {
     fn new() -> Self {
         Self(ListMap::new())
@@ -276,7 +297,7 @@ impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
 
 struct InterpreterContext<'a, T: SpaceRef<'a>> {
     space: T,
-    cache: SpaceObserverRef<InterpreterCache>,
+    cache: SpaceObserverRef<NoInterpreterCache>,
     phantom: PhantomData<&'a T>,
 }
 
@@ -284,7 +305,7 @@ struct InterpreterContextRef<'a, T: SpaceRef<'a>>(Rc<InterpreterContext<'a, T>>)
 
 impl<'a, T: SpaceRef<'a>> InterpreterContextRef<'a, T> {
     fn new(space: T) -> Self {
-        let cache = space.common().register_observer(InterpreterCache::new());
+        let cache = space.common().register_observer(NoInterpreterCache::new());
 
         Self(Rc::new(InterpreterContext{ space, cache, phantom: PhantomData }))
     }
