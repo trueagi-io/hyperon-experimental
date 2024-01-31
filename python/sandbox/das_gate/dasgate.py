@@ -3,7 +3,6 @@ from hyperon.ext import register_atoms
 
 
 from hyperon_das import DistributedAtomSpace
-# from hyperon_das.utils import QueryOutputFormat
 from hyperon_das.constants import QueryOutputFormat
 import time
 
@@ -55,6 +54,17 @@ class DASpace(AbstractSpace):
             elif isinstance(atom, GroundedAtom):
                 return {"atom_type": "node", "type": "Symbol", "name": repr(atom)}
 
+    def _get_all_vars(self, atom):
+        stack = [atom]
+        while stack:
+            node = stack.pop()
+            if isinstance(node, VariableAtom):
+                yield {"atom_type": "variable", "name": repr(node)}
+            if isinstance(node, ExpressionAtom):
+                targets = node.get_children()
+                for ch in targets:
+                    stack.append(ch)
+
     def _atom2query(self, atom):
         if isinstance(atom, ExpressionAtom):
             targets = atom.get_children()
@@ -92,8 +102,15 @@ class DASpace(AbstractSpace):
         except Exception as e:
             return E(*[self._handle2atom2(ch) for ch in self._get_link_targets(h)])
 
+    def _handle2atom3(self, h):
+        if h['type']=='Symbol':
+            return S(h['name'])
+        elif h['type']=='Expression':
+            return E(*[self._handle2atom3(ch) for ch in h['targets']])
+
     def query(self, query_atom):
         query = self._atom2dict_new(query_atom)
+        vars = [x for x in self._get_all_vars(query_atom)]
 
         query_params = {
             "toplevel_only": False,
@@ -111,12 +128,8 @@ class DASpace(AbstractSpace):
                 b = a[0]
             else:
                 b = a
-            val = b['handle']
-            if b["type"] == "Expression":
-                var = 'ex'
-            else:
-                var = b['name']
-            bindings.add_var_binding(V(var), self._handle2atom(val))
+            var = vars[0]['name'][1:]
+            bindings.add_var_binding(V(var), self._handle2atom3(b))
             new_bindings_set.push(bindings)
         return new_bindings_set
 
