@@ -557,14 +557,31 @@ pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, 
 ///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> atom_t { rust_type_atom::<DynSpace>().into() }
 
+/// @brief Creates an atom used to indicate that an atom's type is a unit type.
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
+#[no_mangle] pub extern "C" fn ATOM_TYPE_UNIT() -> atom_t { hyperon::metta::UNIT_TYPE().into() }
+
 /// @brief Creates a Symbol atom for the special MeTTa symbol used to indicate empty results
 /// returned by function.
 /// @ingroup metta_language_group
-/// @return  The `atom_t` representing the Void atom
+/// @return  The `atom_t` representing the Empty atom
 /// @note The returned `atom_t` must be freed with `atom_free()`
 ///
-#[no_mangle] pub extern "C" fn EMPTY_SYMBOL() -> atom_t {
+#[no_mangle] pub extern "C" fn EMPTY_ATOM() -> atom_t {
     hyperon::metta::EMPTY_SYMBOL.into()
+}
+
+/// @brief Creates an atom used to return from functions which are not
+/// supposed to return results (print for example).
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the Unit atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
+#[no_mangle] pub extern "C" fn UNIT_ATOM() -> atom_t {
+    hyperon::metta::UNIT_ATOM().into()
 }
 
 /// @brief Checks whether Atom `atom` has Type `typ` in context of `space`
