@@ -126,6 +126,7 @@ pub extern "C" fn tokenizer_register_token(tokenizer: *mut tokenizer_t,
     let regex = Regex::new(cstr_as_str(regex)).unwrap();
     let c_token = CToken{ context, api };
     tokenizer.register_token(regex, move |token| {
+        let c_token = &c_token; //Be explicit we're capturing c_token, and not the pointers it contains
         let constr = unsafe{ (&*c_token.api).construct_atom };
         let atom = constr(str_as_cstr(token).as_ptr(), c_token.context);
         atom.into_inner()
