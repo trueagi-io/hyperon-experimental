@@ -1,14 +1,13 @@
 [package]
 name = "hyperonc"
-version = "0.1.6"
-authors = ["Vitaly Bogdanov <vsbogd@gmail.com>"]
-edition = "2018"
+version.workspace = true
+edition.workspace = true
 
 [dependencies]
-hyperon = { path = "../lib/" }
-regex = "1.5.4"
-log = "0.4.0"
-env_logger = "0.8.4"
+hyperon = { workspace = true }
+regex = { workspace = true }
+log = { workspace = true }
+env_logger = { workspace = true }
 
 [lib]
 name = "hyperonc"
