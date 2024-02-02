@@ -70,12 +70,10 @@ python3 -m pip install pip==23.1.2
 
 # Build and run
 
-## Hyperon library
+## Rust library and REPL
 
-Build and test the library:
+Build and test the Rust binaries:
 ```
-cd ./lib
-cargo build
 cargo test
 ```
 
@@ -90,6 +88,12 @@ Run examples:
 cargo run --example sorted_list
 ```
 
+Run REPL:
+```
+cargo run --bin metta
+```
+You can also find executable at `./target/debug/metta`.
+
 To enable logging during running tests or examples export `RUST_LOG`
 environment variable:
 ```
@@ -103,10 +107,9 @@ cargo +nightly bench
 
 Generate docs:
 ```
-cd ./lib
 cargo doc --no-deps
 ```
-Docs can be found at `./lib/target/doc/hyperon/index.html`.
+Docs can be found at `./target/doc/hyperon/index.html`.
 
 ## C and Python API
 
