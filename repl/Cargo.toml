@@ -1,7 +1,7 @@
 [package]
 name = "metta-repl"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
 description = "A shell to execute MeTTa"
 
 [dependencies]
@@ -11,7 +11,7 @@ clap = { version = "4.4.0", features = ["derive"] }
 signal-hook = "0.3.17"
 pyo3 = { version = "0.19.2", features = ["auto-initialize"], optional = true }
 pep440_rs = { version = "0.3.11", optional = true }
-hyperon = { path = "../lib/", optional = true } #TODO: We can only link Hyperon directly or through Python, but not both at the same time.  The right fix is to allow HyperonPy to be built within Hyperon, See https://github.com/trueagi-io/hyperon-experimental/issues/283
+hyperon = { workspace = true, optional = true } #TODO: We can only link Hyperon directly or through Python, but not both at the same time.  The right fix is to allow HyperonPy to be built within Hyperon, See https://github.com/trueagi-io/hyperon-experimental/issues/283
 
 [[bin]]
 name = "metta"
