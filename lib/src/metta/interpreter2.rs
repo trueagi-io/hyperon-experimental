@@ -35,9 +35,10 @@ macro_rules! match_atom {
         }
     };
 }
-type ReturnHandler = fn(Rc<RefCell<Stack>>, Atom, Bindings) -> Option<Stack>;
+type ReturnHandler = fn(Rc<RefCell<Stack>>, Atom, Bindings) -> Option<(Stack, Bindings)>;
 
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 struct Stack {
     // Internal mutability is required to implement collapse-bind. All alternatives
     // reference the same collapse-bind Stack instance. When some alternative
@@ -52,25 +53,34 @@ struct Stack {
     vars: Variables,
 }
 
-fn no_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> Option<Stack> {
+fn no_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> Option<(Stack, Bindings)> {
     panic!("Unexpected state");
 }
 
 impl Stack {
-    fn from_prev_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
+    fn from_prev_add_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
         // TODO: vars are introduced in specific locations of the atom thus
         // in theory it is possible to optimize vars search for eval, unify and chain
         let vars = Self::vars(&prev, &atom);
         Self{ prev, atom, ret, finished: false, vars }
     }
 
-    fn from_prev_no_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
+    fn from_prev_keep_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
         let vars = Self::vars_copy(&prev);
         Self{ prev, atom, ret, finished: false, vars }
     }
 
     fn finished(prev: Option<Rc<RefCell<Self>>>, atom: Atom) -> Self {
         let vars = Self::vars_copy(&prev);
+        Self{ prev, atom, ret: no_handler, finished: true, vars }
+    }
+
+    fn finished_add_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom) -> Self {
+        let vars = Self::vars(&prev, &atom);
+        Self{ prev, atom, ret: no_handler, finished: true, vars }
+    }
+
+    fn finished_with_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, vars: Variables) -> Self {
         Self{ prev, atom, ret: no_handler, finished: true, vars }
     }
 
@@ -121,11 +131,13 @@ impl Display for Stack {
             prev.borrow().fold((res, last_level - 1), |(res, level), top| {
                 (res.and_then(|_| print_level(buffer, level, false, top)), level - 1)
             }).0
-        }).and_then(|_| write!(f, "{}", buffer))
+        })
+        .and_then(|_| write!(f, "{}", buffer))
     }
 }
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
 struct InterpretedAtom(Stack, Bindings);
 
 impl Display for InterpretedAtom {
@@ -304,6 +316,7 @@ fn is_function_op(atom: &Atom) -> bool {
 }
 
 #[derive(Debug, Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 struct Variables(im::HashSet<VariableAtom>);
 
 impl Variables {
@@ -335,6 +348,17 @@ impl VariableSet for Variables {
     }
 }
 
+impl Display for Variables {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "[")
+            .and_then(|_| self.iter().take(1).fold(Ok(()),
+                |res, atom| res.and_then(|_| write!(f, "{}", atom))))
+            .and_then(|_| self.iter().skip(1).fold(Ok(()),
+                |res, atom| res.and_then(|_| write!(f, " {}", atom))))
+            .and_then(|_| write!(f, "]"))
+    }
+}
+
 fn interpret_root_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
     let InterpretedAtom(stack, bindings) = interpreted_atom;
     interpret_nested_atom(context, stack, bindings)
@@ -352,10 +376,8 @@ fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T
             None => panic!("Unexpected state"),
         };
         let ret = prev.borrow().ret;
-        // TODO: two copies of bindings here; we could try to include bindings
-        // into Stack and eliminate copying
-        ret(prev, atom, bindings.clone())
-            .map_or(vec![], |stack| vec![InterpretedAtom(stack, bindings)])
+        ret(prev, atom, bindings)
+            .map_or(vec![], |(stack, bindings)| vec![InterpretedAtom(stack, bindings)])
     } else {
         let expr = atom_as_slice(&stack.atom);
         let result = match expr {
@@ -434,7 +456,7 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, 
                         results.into_iter()
                             .map(|atom| {
                                 let stack = if is_function_op(&atom) {
-                                    let call = Stack::from_prev_no_vars(prev.clone(), query_atom.clone(), call_ret);
+                                    let call = Stack::from_prev_keep_vars(prev.clone(), query_atom.clone(), call_ret);
                                     atom_to_stack(atom, Some(Rc::new(RefCell::new(call))))
                                 } else {
                                     Stack::finished(prev.clone(), atom)
@@ -454,34 +476,34 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, 
         },
         _ if is_embedded_op(&query_atom) =>
             vec![InterpretedAtom(atom_to_stack(query_atom, prev), bindings)],
-        _ => query(&context.space, prev, query_atom, bindings, &vars),
+        _ => query(&context.space, prev, query_atom, bindings, vars),
     }
 }
 
-fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings, vars: &Variables) -> Vec<InterpretedAtom> {
-    let var_x = VariableAtom::new("X").make_unique();
+fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings, _vars: Variables) -> Vec<InterpretedAtom> {
+    let var_x = &VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, atom.clone(), Atom::Variable(var_x.clone())]);
     let results = space.query(&query);
-    let atom_x = Atom::Variable(var_x);
+    let atom_x = Atom::Variable(var_x.clone());
     let results: Vec<InterpretedAtom> = {
         log::debug!("interpreter2::query: query: {}", query);
         log::debug!("interpreter2::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
-            .flat_map(|mut b| {
+            .flat_map(|b| {
                 let res = apply_bindings_to_atom(&atom_x, &b);
                 let stack = if is_function_op(&res) {
-                    let call = Stack::from_prev_no_vars(prev.clone(), atom.clone(), call_ret);
+                    let call = Stack::from_prev_add_vars(prev.clone(), atom.clone(), call_ret);
                     atom_to_stack(res, Some(Rc::new(RefCell::new(call))))
                 } else {
-                    Stack::finished(prev.clone(), res)
+                    Stack::finished_add_vars(prev.clone(), res)
                 };
-                b.retain(|v| vars.contains(v));
                 log::debug!("interpreter2::query: b: {}", b);
-                b.merge_v2(&bindings).into_iter().filter_map(move |b| {
+                b.merge_v2(&bindings).into_iter().filter_map(move |mut b| {
                     if b.has_loops() {
                         None
                     } else {
+                        b.retain(|v| stack.vars.contains(v));
                         Some(InterpretedAtom(stack.clone(), b))
                     }
                 })
@@ -504,15 +526,12 @@ fn atom_to_stack(atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         Some([op, ..]) if *op == FUNCTION_SYMBOL => {
             function_to_stack(atom, prev)
         },
-        Some([op, ..]) if *op == COLLAPSE_BIND_SYMBOL => {
-            collapse_bind_to_stack(atom, prev)
-        },
         Some([op, ..]) if *op == EVAL_SYMBOL
                        || *op == UNIFY_SYMBOL => {
-            Stack::from_prev_vars(prev, atom, no_handler)
+            Stack::from_prev_add_vars(prev, atom, no_handler)
         },
         _ => {
-            Stack::from_prev_no_vars(prev, atom, no_handler)
+            Stack::from_prev_keep_vars(prev, atom, no_handler)
         },
     };
     result
@@ -528,11 +547,11 @@ fn chain_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         },
     };
     std::mem::swap(nested_arg, &mut nested);
-    let cur = Stack::from_prev_vars(prev, atom, chain_ret);
+    let cur = Stack::from_prev_add_vars(prev, atom, chain_ret);
     atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
-fn chain_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Option<Stack> {
+fn chain_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     let mut stack = (*stack.borrow()).clone();
     let nested = atom;
     let Stack{ prev: _, atom: chain, ret: _, finished: _, vars: _} = &mut stack;
@@ -541,7 +560,7 @@ fn chain_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Opti
         _ => panic!("Unexpected state"),
     };
     *arg = nested;
-    Some(stack)
+    Some((stack, bindings))
 }
 
 fn chain(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
@@ -567,72 +586,95 @@ fn function_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack 
         },
     };
     std::mem::swap(nested_arg, &mut nested);
-    let cur = Stack::from_prev_no_vars(prev, atom, function_ret);
+    let cur = Stack::from_prev_keep_vars(prev, atom, function_ret);
     atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
-fn call_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Option<Stack> {
+fn call_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     let mut stack = (*stack.borrow()).clone();
     stack.atom = atom;
     stack.finished = true;
-    Some(stack)
+    Some((stack, bindings))
 }
 
-fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, _bindings: Bindings) -> Option<Stack> {
+fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     match_atom!{
         atom ~ [op, result] if *op == RETURN_SYMBOL => {
             let mut stack = (*stack.borrow()).clone();
             stack.atom = result;
             stack.finished = true;
-            Some(stack)
+            Some((stack, bindings))
         },
         _ => {
-            Some(atom_to_stack(atom, Some(stack)))
+            Some((atom_to_stack(atom, Some(stack)), bindings))
         }
     }
 }
 
-fn collapse_bind_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
+fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: mut collapse, ret: _, finished: _, vars: _ } = stack;
+
     let mut nested = Atom::expr([]);
-    let nested_arg = match atom_as_slice_mut(&mut atom) {
-        Some([_op, nested @ Atom::Expression(_)]) => nested,
-        _ => {
-            let error: String = format!("expected: ({} (: <current> Expression)), found: {}", COLLAPSE_BIND_SYMBOL, atom);
-            return Stack::finished(prev, error_atom(atom, error));
+    match &mut collapse {
+        Atom::Expression(expr) => {
+            std::mem::swap(&mut nested, &mut expr.children_mut()[1]);
+            expr.children_mut().push(Atom::value(bindings.clone()))
         },
-    };
-    std::mem::swap(nested_arg, &mut nested);
-    let cur = Stack::from_prev_no_vars(prev, atom, collapse_bind_ret);
-    atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
+        _ => panic!("Unexpected state"),
+    }
+
+    let prev = Stack::from_prev_keep_vars(prev, collapse, collapse_bind_ret);
+    let cur = atom_to_stack(nested, Some(Rc::new(RefCell::new(prev))));
+    vec![InterpretedAtom(cur, bindings)]
 }
 
-fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<Stack> {
+fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     let nested = atom;
     {
-        let stack = &mut *stack.borrow_mut();
-        let Stack{ prev: _, atom: collapse, ret: _, finished: _, vars: _ } = stack;
+        let stack_ref = &mut *stack.borrow_mut();
+        let Stack{ prev: _, atom: collapse, ret: _, finished: _, vars: _ } = stack_ref;
         let finished = match atom_as_slice_mut(collapse) {
-            Some([_op, Atom::Expression(finished)]) => finished,
+            Some([_op, Atom::Expression(finished), _bindings]) => finished,
             _ => panic!("Unexpected state"),
         };
         finished.children_mut().push(atom_bindings_into_atom(nested, bindings));
     }
-    Rc::into_inner(stack).map(RefCell::into_inner)
+
+    match Rc::into_inner(stack).map(RefCell::into_inner) {
+        Some(stack) => {
+            let Stack{ prev, atom: collapse, ret: _, finished: _, mut vars } = stack;
+            let (result, bindings) = match atom_into_array(collapse) {
+                Some([_op, result, bindings]) => (result, atom_into_bindings(bindings)),
+                None => panic!("Unexpected state"),
+            };
+            for r in <&ExpressionAtom>::try_from(&result).unwrap().children() {
+                let (_, bindings) = atom_get_atom_bindings(r);
+                vars = vars.union(bindings.vars().cloned().collect());
+            }
+            Some((Stack::finished_with_vars(prev, result, vars), bindings))
+        },
+        None => None,
+    }
 }
 
 fn atom_bindings_into_atom(atom: Atom, bindings: Bindings) -> Atom {
     Atom::expr([atom, Atom::value(bindings)])
 }
 
-fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: collapse, ret: _, finished: _, vars: _ } = stack;
-    let result = match_atom!{
-        collapse ~ [_op, finished @ Atom::Expression(_)] => finished,
+fn atom_get_atom_bindings(pair: &Atom) -> (&Atom, &Bindings) {
+    match atom_as_slice(pair) {
+        Some([atom, bindings]) => (atom, atom_get_bindings(bindings)),
         _ => {
-            panic!("Unexpected state")
+            panic!("(Atom Bindings) pair is expected, {} was received", pair)
         }
-    };
-    vec![InterpretedAtom(atom_to_stack(result, prev), bindings)]
+    }
+}
+
+fn atom_get_bindings(bindings: &Atom) -> &Bindings {
+    match bindings.as_gnd::<Bindings>() {
+        Some(bindings) => bindings,
+        _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
+    }
 }
 
 fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
@@ -704,20 +746,22 @@ fn cons_atom(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
 
 fn atom_into_atom_bindings(pair: Atom) -> (Atom, Bindings) {
     match_atom!{
-        pair ~ [atom, bindings] => {
-            match bindings.as_gnd::<Bindings>() {
-                Some(bindings) => {
-                    // TODO: cloning is ineffective, but it is not possible
-                    // to convert grounded atom into internal value at the
-                    // moment
-                    (atom, bindings.clone())
-                },
-                _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
-            }
-        },
+        pair ~ [atom, bindings] => (atom, atom_into_bindings(bindings)),
         _ => {
             panic!("(Atom Bindings) pair is expected, {} was received", pair)
         }
+    }
+}
+
+fn atom_into_bindings(bindings: Atom) -> Bindings {
+    match bindings.as_gnd::<Bindings>() {
+        Some(bindings) => {
+            // TODO: cloning is ineffective, but it is not possible
+            // to convert grounded atom into internal value at the
+            // moment
+            bindings.clone()
+        },
+        _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
     }
 }
 
@@ -732,8 +776,18 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     };
     collapsed.into_children().into_iter()
         .map(atom_into_atom_bindings)
-        .map(|(atom, bindings)| {
-            InterpretedAtom(Stack::finished(prev.clone(), atom), bindings)
+        .flat_map(|(atom, b)| {
+            let prev = &prev;
+            b.merge_v2(&bindings).into_iter()
+                .filter_map(move |b| {
+                    if b.has_loops() {
+                        None
+                    } else {
+                        let stack = Stack::finished_add_vars(prev.clone(), atom.clone());
+                        let b = b.narrow_vars(&stack.vars);
+                        Some(InterpretedAtom(stack, b))
+                    }
+                })
         })
         .collect()
 }
@@ -974,6 +1028,22 @@ mod tests {
         assert_eq!(result, vec![metta_atom("(a b c)")]);
     }
 
+
+    #[test]
+    fn test_superpose_bind() {
+        let vars: Variables = [ "a", "b", "c" ].into_iter().map(VariableAtom::new).collect();
+        let atom = Atom::expr([Atom::sym("superpose-bind"),
+            Atom::expr([atom_bindings_into_atom(expr!("foo" a b), bind!{ a: expr!("A"), c: expr!("C") })])]);
+        let stack = Stack{ prev: None, atom, ret: no_handler, finished: false, vars: vars.clone() };
+
+        let result = superpose_bind(stack, bind!{ b: expr!("B"), d: expr!("D") });
+
+        let expected_vars: Variables = [ "a", "b" ].into_iter().map(VariableAtom::new).collect();
+        assert_eq!(result, vec![InterpretedAtom(
+                Stack{ prev: None, atom: expr!("foo" a b), ret: no_handler, finished: true, vars: expected_vars },
+                bind!{ a: expr!("A"), b: expr!("B") }
+        )]);
+    }
 
     #[test]
     fn metta_turing_machine() {
