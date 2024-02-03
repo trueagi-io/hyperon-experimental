@@ -1,4 +1,4 @@
-!(extend-py! dasgate)
+!(extend-py! das_gate)
 
 !(bind! &das (new-das))
 ;!(bind! &das (new-remote-das (Error "Put your IP here" ()) 8081))

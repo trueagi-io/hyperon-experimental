@@ -114,9 +114,12 @@ class MeTTa:
             if env_builder is None:
                 env_builder = hp.env_builder_start()
             hp.env_builder_push_fs_module_format(env_builder, _PyFileMeTTaModFmt)
-            #LP-TODO-Next, add an fn_module_fmt arg to the standardized way to init environments, so that the
-            # Python user can define additional formats without tweaking any hyperon files.  To make this
-            # convenient it probably means making a virtual ModuleFormat base class
+            #LP-TODO-Next, add an fs_module_fmt arg to the standardized way to init environments, so that
+            # the Python user can define additional formats without tweaking any hyperon files.  To make
+            # this convenient it probably means making a virtual ModuleFormat base class
+
+            builtin_mods_path = os.path.join(os.path.dirname(__file__), 'exts')
+            hp.env_builder_push_include_path(env_builder, builtin_mods_path)
             self.cmetta = hp.metta_new(space.cspace, env_builder)
 
     def __del__(self):
@@ -243,41 +246,47 @@ class Environment:
 
 #LP-TODO-Next QUESTION: Do we really need Python directory modules?  Or is a core directory module enough
 # since it can include python file modules?
+#Answer: We need to consider the "__init__.py" files within a python module, so that warrants special logic,
+# however, we can likely use the same format to load pymods that are implemented as either directories or
+# stand-alone files
 
 class _PyFileMeTTaModFmt:
-    """This private class implements the loader for .py files that implement MeTTa modules"""
+    """This private class implements the loader for Python modules that implement MeTTa modules. 
+    This logic covers both "*.py" files and directories that contain an "__init__.py"."""
 
     def path_for_name(parent_dir, metta_mod_name):
-        """Construct a file name based on the metta_mod_name"""
-        file_name = metta_mod_name if ".py" in metta_mod_name else \
-                        metta_mod_name.replace('.', os.sep) + ".py"
-        return os.path.join(parent_dir, file_name)
+        """Construct a file path name based on the metta_mod_name"""
+        return os.path.join(parent_dir, metta_mod_name)
 
     def try_path(path, metta_mod_name):
         """Load the file as a Python module if it exists"""
-        if os.path.exists(path):
 
-            #QUESTION: What happens if two modules in different files have the same name?
-            # E.g. two different versions of the same module.  The MeTTa module system can
-            # handle it, but it looks like there might be a collision at the Python level.
-            # Should we try and get around this by making the python-module names unique
-            # by mangling them when we load the python mods in this function?  Can we do
-            # that or will it mess up other stuff Python programmers might be expecting?
-            spec = importlib.util.spec_from_file_location(metta_mod_name, path)
-
-            try:
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[metta_mod_name] = module
-                spec.loader.exec_module(module)
-
-                #TODO: Extract the version here, when it's time to implement versions
-                return metta_mod_name
-            except:
-                #TODO: Depending on the exception, we might want to log something to help users debug
-                # why their module isn't loading
-                return None
-
+        #See if we have a ".py" file first, then check for a directory-based python mod
+        if os.path.exists(path + ".py"):
+            path = path + ".py"
+        elif os.path.exists(path + os.sep + "__init__.py"):
+            path = path + os.sep
         else:
+            return None
+
+        #QUESTION: What happens if two modules in different files have the same name?
+        # E.g. two different versions of the same module.  The MeTTa module system can
+        # handle it, but it looks like there might be a collision at the Python level.
+        # Should we try and get around this by making the python-module names unique
+        # by mangling them when we load the python mods in this function?  Can we do
+        # that or will it mess up other stuff Python programmers might be expecting?
+        spec = importlib.util.spec_from_file_location(metta_mod_name, path)
+
+        try:
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[metta_mod_name] = module
+            spec.loader.exec_module(module)
+
+            #TODO: Extract the version here, when it's time to implement versions
+            return metta_mod_name
+        except:
+            #TODO: Depending on the exception, we might want to log something to help users debug
+            # why their module isn't loading
             return None
 
     def _load_called_from_c(c_run_context, c_descriptor, callback_context):
@@ -303,9 +312,17 @@ def _priv_load_py_stdlib(c_run_context, c_descriptor):
     stdlib_loader(run_context, descriptor)
 
     # #LP-TODO-Next Make a test for loading a metta module from a python module using load_module_direct_from_pymod
+
     # #LP-TODO-Next Also make a test for a module that loads another module
     # py_stdlib_id = run_context.metta().load_module_direct_from_pymod("stdlib-py", descriptor, "hyperon.stdlib")
     # run_context.import_dependency(py_stdlib_id)
+
+    # #LP-TODO-Next Also make a test for a python module implemented as a directory containing an __init__.py file
+
+    # #LP-TODO-Next Implement a Catalog that uses the Python module-space, so that any module loaded via `pip`
+    # can be found by MeTTa.  NOTE: We may want to explicitly give priority hyperon "exts" by first checking if Python
+    # has a module at `"hyperon.exts." + mod_name` before just checking `mod_name`, but it's unclear that will
+    # matter since we'll also search the `exts` directory with the include_path / fs_module_format logic
 
 def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False):
     """

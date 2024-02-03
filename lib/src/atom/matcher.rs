@@ -181,7 +181,7 @@ impl Bindings {
                     self.bindings.remove(binding_id).atom
                 } else {
                     if binding.var == *var {
-                        self.rename_binding(binding_id, var);
+                        let _ = self.rename_binding(binding_id);
                     }
                     None
                 }
@@ -190,14 +190,15 @@ impl Bindings {
         }
     }
 
-    fn rename_binding(&mut self, binding_id: usize, old_var: &VariableAtom) {
+    fn rename_binding(&mut self, binding_id: usize) -> Result<(), ()> {
         let binding = &mut self.bindings[binding_id];
         let var = self.binding_by_var.iter()
-            .filter(|(v, i)| **i == binding.id && *v != old_var)
+            .filter(|(v, i)| **i == binding.id && **v != binding.var)
             .map(|(v, _i)| v)
             .next()
-            .expect("Unexpected state");
+            .ok_or(())?;
         binding.var = var.clone();
+        Ok(())
     }
 
     fn move_binding_to_binding(&mut self, from_binding_id: usize, to_binding_id: usize) {
@@ -692,6 +693,11 @@ impl Bindings {
     /// ```
     pub fn iter(&self) -> BindingsIter {
         BindingsIter { bindings: self, delegate: self.binding_by_var.iter() }
+    }
+
+    /// An iterator visiting all variables in arbitrary order.
+    pub fn vars(&self) -> impl Iterator<Item=&VariableAtom> {
+        self.binding_by_var.keys()
     }
 
     fn into_vec_of_pairs(mut self) -> Vec<(VariableAtom, Atom)> {
@@ -1709,6 +1715,35 @@ mod test {
             .add_var_binding_v2(VariableAtom::new("b"), expr!("B" d))?
             .with_var_no_value(&VariableAtom::new("e"));
         assert_eq!(bindings, expected);
+        Ok(())
+    }
+
+    #[test]
+    fn bindings_retain_all() -> Result<(), &'static str> {
+        let mut bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?;
+        bindings.retain(|_| false);
+        assert!(bindings.is_empty());
+        Ok(())
+    }
+
+    #[test]
+    fn bindings_rename_binding() -> Result<(), &'static str> {
+        let a = &VariableAtom::new("a");
+        let b = &VariableAtom::new("b");
+        let mut bindings = Bindings::new().add_var_equality(a, b)?;
+        let binding_id = bindings.get_binding(a).unwrap().id;
+        assert_eq!(bindings.resolve(a), Some(Atom::Variable(a.clone())));
+        assert_eq!(bindings.resolve(b), Some(Atom::Variable(a.clone())));
+
+        assert_eq!(bindings.rename_binding(binding_id), Ok(()));
+        assert_eq!(bindings.resolve(a), Some(Atom::Variable(b.clone())));
+        assert_eq!(bindings.resolve(b), Some(Atom::Variable(b.clone())));
+
+        let mut bindings = Bindings::new().with_var_no_value(a);
+        let binding_id = bindings.get_binding(a).unwrap().id;
+        assert_eq!(bindings.rename_binding(binding_id), Err(()));
+        assert_eq!(bindings.resolve(a), Some(Atom::Variable(a.clone())));
         Ok(())
     }
 
