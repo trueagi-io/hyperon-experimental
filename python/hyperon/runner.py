@@ -256,18 +256,18 @@ class _PyFileMeTTaModFmt:
 
     def path_for_name(parent_dir, metta_mod_name):
         """Construct a file path name based on the metta_mod_name"""
-        return os.path.join(parent_dir, metta_mod_name)
+        return os.path.join(parent_dir, metta_mod_name + ".py")
 
     def try_path(path, metta_mod_name):
         """Load the file as a Python module if it exists"""
 
-        #See if we have a ".py" file first, then check for a directory-based python mod
-        if os.path.exists(path + ".py"):
-            path = path + ".py"
-        elif os.path.exists(path + os.sep + "__init__.py"):
-            path = path + os.sep
-        else:
-            return None
+        #See if we have a ".py" file first, and if not, check for a directory-based python mod
+        if not os.path.exists(path):
+            dir_path = os.path.join(os.path.splitext(path)[0], "__init__.py")
+            if os.path.exists(dir_path):
+                path = dir_path
+            else:
+                return None
 
         #QUESTION: What happens if two modules in different files have the same name?
         # E.g. two different versions of the same module.  The MeTTa module system can
@@ -316,8 +316,6 @@ def _priv_load_py_stdlib(c_run_context, c_descriptor):
     # #LP-TODO-Next Also make a test for a module that loads another module
     # py_stdlib_id = run_context.metta().load_module_direct_from_pymod("stdlib-py", descriptor, "hyperon.stdlib")
     # run_context.import_dependency(py_stdlib_id)
-
-    # #LP-TODO-Next Also make a test for a python module implemented as a directory containing an __init__.py file
 
     # #LP-TODO-Next Implement a Catalog that uses the Python module-space, so that any module loaded via `pip`
     # can be found by MeTTa.  NOTE: We may want to explicitly give priority hyperon "exts" by first checking if Python

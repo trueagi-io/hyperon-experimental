@@ -442,16 +442,18 @@ impl FsModuleFormat for DirModuleFmt {
     }
     fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<Box<dyn ModuleLoader>> {
         if path.is_dir() {
-            match mod_name {
-                Some(mod_name) => Some(Box::new(DirModule::new(mod_name, path))),
-                None => {
-                    let mod_name = path.file_stem().unwrap().to_str().unwrap();
-                    Some(Box::new(DirModule::new(mod_name, path)))
-                }
+            let mod_matta_path = path.join("module.metta");
+            if mod_matta_path.exists() {
+                return match mod_name {
+                    Some(mod_name) => Some(Box::new(DirModule::new(mod_name, path))),
+                    None => {
+                        let mod_name = path.file_stem().unwrap().to_str().unwrap();
+                        Some(Box::new(DirModule::new(mod_name, path)))
+                    }
+                };
             }
-        } else {
-            None
         }
+        None
     }
 }
 
