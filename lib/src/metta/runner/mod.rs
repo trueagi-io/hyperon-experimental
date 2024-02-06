@@ -93,7 +93,7 @@ impl Metta {
     {
         let space = match space {
             Some(space) => space,
-            None => DynSpace::new(GroundingSpace::new())
+            None => DynSpace::new(GroundingSpace::builder().set_name("runner".into()).build())
         };
 
         //Create the raw MeTTa runner
@@ -149,7 +149,7 @@ impl Metta {
 
     /// Returns a new MeTTa interpreter intended for use loading MeTTa modules during import
     fn new_loading_runner(metta: &Metta, path: &Path) -> Self {
-        let space = DynSpace::new(GroundingSpace::new());
+        let space = DynSpace::new(GroundingSpace::builder().set_name(format!("{path:?}")).build());
         let tokenizer = metta.tokenizer().clone_inner();
         let environment = metta.0.environment.clone();
         let settings = metta.0.settings.clone();

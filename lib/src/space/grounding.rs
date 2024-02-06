@@ -75,6 +75,31 @@ fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
     TrieKey::from(tokens)
 }
 
+/// Builder of the [GroundingSpace] instance.
+#[derive(Default)]
+pub struct Builder {
+    name: Option<String>,
+}
+
+impl Builder {
+    /// Sets the name property for the `GroundingSpace` which can be useful for debugging
+    pub fn set_name(mut self, name: String) -> Builder {
+        self.name = Some(name);
+        self
+    }
+
+    /// Return new GroundingSpace initialized
+    pub fn build(self) -> GroundingSpace {
+        GroundingSpace {
+            index: MultiTrie::new(),
+            content: Vec::new(),
+            free: BTreeSet::new(),
+            common: SpaceCommon::default(),
+            name: self.name,
+        }
+    }
+}
+
 /// In-memory space which can contain grounded atoms.
 // TODO: Clone is required by C API
 #[derive(Clone)]
@@ -90,13 +115,12 @@ impl GroundingSpace {
 
     /// Constructs new empty space.
     pub fn new() -> Self {
-        Self {
-            index: MultiTrie::new(),
-            content: Vec::new(),
-            free: BTreeSet::new(),
-            common: SpaceCommon::default(),
-            name: None,
-        }
+        Self::builder().build()
+    }
+
+    /// Returns builder of the space initialized with default values
+    pub fn builder() -> Builder {
+        Builder::default()
     }
 
     /// Constructs space from vector of atoms.
@@ -290,11 +314,6 @@ impl GroundingSpace {
     /// Returns the iterator over content of the space.
     pub fn iter(&self) -> SpaceIter {
         SpaceIter::new(GroundingSpaceIter::new(self))
-    }
-
-    /// Sets the name property for the `GroundingSpace` which can be useful for debugging
-    pub fn set_name(&mut self, name: String) {
-        self.name = Some(name);
     }
 
     /// Returns the name property for the `GroundingSpace`, if one has been set
