@@ -773,7 +773,8 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_TYPE(VARIABLE, "Variable")
         ADD_TYPE(EXPRESSION, "Expression")
         ADD_TYPE(GROUNDED, "Grounded")
-        ADD_TYPE(GROUNDED_SPACE, "Space");
+        ADD_TYPE(GROUNDED_SPACE, "Space")
+        ADD_TYPE(UNIT, "Unit");
     m.def("check_type", [](CSpace space, CAtom& atom, CAtom& type) {
             return check_type(space.ptr(), atom.ptr(), type.ptr());
         }, "Check if atom is an instance of the passed type");
@@ -786,10 +787,11 @@ PYBIND11_MODULE(hyperonpy, m) {
             return atoms;
         }, "Get types of the given atom");
 
-#define ADD_SYMBOL(t, d) .def_property_readonly_static(#t, [](py::object) { return CAtom(t ## _SYMBOL()); }, d " atom type")
+#define ADD_ATOM(t, d) .def_property_readonly_static(#t, [](py::object) { return CAtom(t ## _ATOM()); }, d " atom type")
 
     py::class_<CAtoms>(m, "CAtoms")
-        ADD_SYMBOL(EMPTY, "Empty");
+        ADD_ATOM(EMPTY, "Empty")
+        ADD_ATOM(UNIT, "Unit");
 
     py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, EnvBuilder env_builder) {
