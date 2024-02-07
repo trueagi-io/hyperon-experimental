@@ -23,25 +23,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(import! f1_moduleA &m)
 
-; QUESTION: The below test fails under minimal, however it is not clear minimal is wrong
-; The deeper question is whether a space's atom order is part of the contract, and my
-; feeling is that it should not be.
-;
-; Under the old (Rust) interpreter, `!(get-atoms &m)` returns:
-;
-; [GroundingSpace-stdlib, GroundingSpace-corelib, GroundingSpace-f1_moduleC, (= (dup $x) (g $x)), (: f (-> Number Number)), (= (f $x) (if (< $x 0) (- 0 $x) (g (+ 1 $x))))]
-;
-; and under the minimal interpreter, it returns:
-;
-; [(= (f $head#90251) (if (< $head#90251 0) (- 0 $head#90251) (g (+ 1 $head#90251)))), (: f (-> Number Number)), (= (dup $head#93661) (g $head#93661)), GroundingSpace-f1_moduleC, GroundingSpace-corelib, GroundingSpace-stdlib]
-;
-;
-; stdlib is the first atom is a space
-;!(assertEqual
-;  (let* (($x (collapse (get-atoms &m)))
-;         ($y (car-atom $x)))
-;        (get-type $y))
-;  (get-type &self))
+; Check whether passed expression contains atom for which condition is True
+(: contains (-> Expression (-> Atom Bool) Bool))
+(= (contains $list $condition)
+  (if (== $list ()) False
+    (let $head (car-atom $list)
+      (if ($condition $head) True
+        (let $tail (cdr-atom $list) (contains $tail $condition)) ))))
+
+; Check whether atom is space comparing its type with type of the &self atom
+(: is-space (-> Atom Bool))
+(= (is-space $atom)
+   (let* (($type (get-type $atom)) ($space (get-type &self))) (== $type $space)))
+
+; It's first atom is a space
+!(assertEqual
+  (let $x (collapse (get-atoms &m)) (contains $x is-space))
+  True)
 
 ; FIXME? Now, it is moduleC space.
 ;        Should it be `stdlib` atom for a separately imported space
@@ -69,20 +67,35 @@
 !(assertEqual (g 2) 102)
 !(assertEqual (f 2) 103)
 
-; `&self` contains 4 atoms-spaces now:
+; `&self` contains 4 grounded sub-spaces now:
 ; - stdlib
 ; - corelib
-; - moduleC imported by moduleA and removed from A after its import to &self
 ; - moduleA itself, which is the same as &m
+; - moduleC imported by moduleA and removed from A after its import to &self
+
+; Check whether atom is &m
+(: is-m (-> Atom Bool))
+(= (is-m $atom) (== $atom &m))
+
+; Assert that the &self space contains the same space as &m, which we imported from moduleA
 ; TODO: Comparing spaces like this doesn't work because the source module is the same, but a specialized
-;   clone of the dependent space without transitive-dependencies was created.  Many ways we can get this
-;   functionality back, but IMO the best solution is accessor operations for current modules, rather than
-;   relying on certain atoms in a certain order returned by `get-atoms`
-;!(assertEqual &m
-;  (let* (($a (collapse (get-atoms &self)))
-;          ($x (cdr-atom $a))
-;          ($y (cdr-atom $x)))
-;         (car-atom $y)))
+;   clone of the dependent space without transitive-dependencies was created during the import process.
+;   Ideally, we can rework importing so that a special space copy isn't created, and then comparing
+;   spaces will work again.  But, In my opinion comparing spaces is not a good way to check to see if a
+;   module has been loaded.  I believe a better solution is accessor operations for loaded & imported modules
+;
+;!(assertEqual
+;  (let $a (collapse (get-atoms &self)) (contains $a is-m))
+;  True)
+
+; Check that the &self space contains the corelib child space
+; Note: corelib doesn't import any modules into itself, so no space copy is needed
+!(import! corelib &corelib)
+(: is-corelib (-> Atom Bool))
+(= (is-corelib $atom) (== $atom &corelib))
+!(assertEqual
+  (let $a (collapse (get-atoms &self)) (contains $a is-corelib))
+  True)
 
 ; Let's check that `if` from stdlib is not duplicated and gives only one result
 !(assertEqual
