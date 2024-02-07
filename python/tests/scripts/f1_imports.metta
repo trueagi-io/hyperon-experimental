@@ -37,7 +37,7 @@
 
 ; It's first atom is a space
 !(assertEqual
-  (let $xx (collapse (get-atoms &m)) (contains $xx is-space))
+  (let $x (collapse (get-atoms &m)) (contains $x is-space))
   True)
 
 ; FIXME? Now, it is moduleC space.
@@ -82,7 +82,7 @@
 ; because we load modules only once, and we collect atoms-spaces to
 ; prevent duplication
 !(assertEqual
-  (let $xx (collapse (get-atoms &m)) (contains $xx is-space))
+  (let $x (collapse (get-atoms &m)) (contains $x is-space))
   False)
 
 ; Let's check that `if` from stdlib is not duplicated and gives only one result
