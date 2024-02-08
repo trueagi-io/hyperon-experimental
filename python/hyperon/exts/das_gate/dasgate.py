@@ -110,27 +110,19 @@ class DASpace(AbstractSpace):
 
     def query(self, query_atom):
         query = self._atom2dict_new(query_atom)
-        vars = [x for x in self._get_all_vars(query_atom)]
-
-        query_params = {
-            "toplevel_only": False,
-            "return_type": QueryOutputFormat.ATOM_INFO,
-            'query_scope': 'local_only'
-        }
-        answer = self.das.query(query,
-                                query_params)
+        answer = [query_answer for query_answer in self.das.query(query)]
         new_bindings_set = BindingsSet.empty()
+
         if not answer:
             return new_bindings_set
+
         for a in answer:
             bindings = Bindings()
-            if isinstance(a, list):
-                b = a[0]
-            else:
-                b = a
-            var = vars[0]['name'][1:]
-            bindings.add_var_binding(V(var), self._handle2atom3(b))
+            for var, val in a.assignment.mapping.items():
+                # remove '$', because it is automatically added
+                bindings.add_var_binding(V(var[1:]), self._handle2atom(val))
             new_bindings_set.push(bindings)
+
         return new_bindings_set
 
     def query_old(self, query_atom):
