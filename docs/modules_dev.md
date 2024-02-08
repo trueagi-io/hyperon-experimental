@@ -78,23 +78,67 @@ More information on the individual module file formats is available in the MeTTa
 
 ## The PkgInfo Structure
 
-QUESTION: PkgInfo probably belongs in user-facing docs
+Each module has an associated [PkgInfo] structure, which provides the module author a place to specify meta-data about the module and express requirements for the module's dependencies.  Additionally a [PkgInfo] can provide explicit loading instructions such as file system paths or github URIs for dependent modules.  The [PkgInfo] structure is the same concept as the Cargo.toml file used in Cargo/Rust.
 
-LP-TODO-WRITEUP
+The [PkgInfo] should be initialized inside the module's loader function.  If it is not initialized then default values will be used.
 
-- _pkg-info: Expresses mapping between module name and a verion requirement, as well as providing specific load instructions, such as a bespoke file system paths, git repos or remote URIs
-    Duplicate entries for a given module in _pkg-info are an error.
-    Duplicate _pkg-info entries in one module is also an error.
+The fields of the [PkgInfo] struct are documented in the Rust MeTTa documentation [here](TODO link to 
+docs on https://docs.rs when Rust crate is published).
 
+TODO: PkgInfo documentation also belongs in user-facing docs.  In that section, cover how to specify the pkginfo as a MeTTa structure and/or in a `_pkg-info.metta` or `_pkg-info.json` file as opposed to as a Rust struct.
 
 ## Module Name Resolution
-LP-TODO-WRITEUP.  Flowchart from Ascii Art
 
+When MeTTa code executes the `!(import! some_module)` operation, the module name needs to be mapped to a loaded or loadable module.  This process occurs according to the logic described by the flowchart below.
 
-If an imported module is in _pkg-info, that entry takes precedence.  Otherwise a universal version will be acceptable and default search behavior will be used
+![Name Resolution Behavior](./assets/module_name_resolution.svg "Name Resolution Behavior")
 
+1. First the module name is checked against the modules which are already loaded within the context of the running module.  This ensures the same instance of a shared dependency will be loaded everywhere.
 
+2. If a loaded module is not available, the [PkgInfo] will be checked for a corresponding entry.  If an entry specifies a specific location in the file system or a remote repository, then the module will be loaded from that location.  Additionally, the [PkgInfo] may specify version requirements for use by the catalog in locating and selecting an accaptable module.
 
-# Implementing a [ModuleLoader]
+3. Finally, the Catalogs from the Environment will be queried in priority order. (See the Catalogs section below)
 
-LP-TODO-WRITEUP
+By default, the built-in search paths / catalogs are:
+
+1. The module's own `resource` directory, if it has one
+2. The `hyperon/exts/` directory, if the Hyperon Python module is running
+3. The MeTTa config `modules` directory, at an OS-specific location.
+
+Depending on the host OS, the config directory locations will be:
+* Linux: ~/.config/metta/
+* Windows: ~\AppData\Roaming\TrueAGI\metta\config\
+* Mac: ~/Library/Application Support/io.TrueAGI.metta/
+
+In the future we may create a centralized module catalog along the lines of `PyPI` or `crates.io`.
+
+## Catalogs
+
+An object that implements the [ModuleCatalog] trait exposes an interface to locate modules based on name and version constraints, and create [ModuleLoader] objects to retrieve and load those modules.
+
+One built-in [ModuleCatalog] object type is the [DirCatalog].  As described in the "Module File Formats" section, a [DirCatalog] uses a collection of [FsModuleFormat] objects to export a catalog of modules contained within its associated directory.
+
+Additional catalogs may be implemented for other module repository formats or protocols - for example a central package service similar to `PyPI` or `crates.io`, as mentioned earlier.
+
+## Implementing a [ModuleLoader]
+
+All modules are ultimately loaded programmatically through the MeTTa API, and it's the role of a [ModuleLoader] to make the necessary API calls.
+
+The [ModuleLoader::load] method ultimately sets up the module.  Each module has its own [Space] so the space needs to be created first.  Then the module must be initialized using the [RunContext::init_self_module] method.
+
+After `init_self_module` has run, it is now legal to access the module data stricture using [RunContext::module] or [RunContext::module_mut], as well as enqueuing MeTTa code or additional operations to run.
+
+An example `load` method implementation is here:
+```rust
+fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+
+    let space = DynSpace::new(GroundingSpace::new());
+    let resource_dir = std::path::PathBuf::from("/tmp/test_module_resources")
+    context.init_self_module(descriptor, space, Some(resource_dir.into()));
+
+    let parser = OwnedSExprParser::new(METTA_PROGRAM_TEXT);
+    context.push_parser(Box::new(parser));
+
+    Ok(())
+}
+```

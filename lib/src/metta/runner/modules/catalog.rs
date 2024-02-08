@@ -104,6 +104,9 @@ use xxhash_rust::xxh3::xxh3_64;
 //UPDATE: I started by writing a balanced view of the pros and cons, but ultimately I found the arguments
 // in favor to be weak, and potentially anti-features.  So I think it should be illegal to return a
 // ModuleDescriptor where the name field doesn't match the `lookup` name.
+//
+//UPDATE2: Aliases from multiple names in the runner's namespace to a single module are now allowed, but
+// but a module's name from its ModuleDescriptor will always point back to that module.
 pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
     ///
@@ -149,7 +152,7 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
 
 /// The object responsible for locating and selecting dependency modules for each [MettaMod]
 ///
-/// This structure is analegous to the `[dependencies]` section of a `Cargo.toml` file for a given module
+/// This structure is conceptually analogous to the a `Cargo.toml` file for a given module.
 #[derive(Clone, Debug, Default)]
 //TODO: Use serde to deserialize a PkgInfo from an expression atom
 pub struct PkgInfo {
@@ -164,7 +167,9 @@ pub struct PkgInfo {
     /// version requirement will be assumed for any modules that are not explicitly declared
     pub strict: bool,
 
-    /// Entries mapping module names to requirements for the module
+    /// Entries mapping module names to requirements for each dependency sub-module
+    ///
+    /// A Duplicate entry for a given sub-module in the deps list is an error.
     pub deps: HashMap<String, DepEntry>,
 }
 
