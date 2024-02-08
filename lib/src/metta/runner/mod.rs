@@ -147,6 +147,11 @@ impl Metta {
         metta
     }
 
+    // Loads stdlib into a separate space and returns it
+    fn stdlib_space(&self) -> DynSpace {
+        self.load_module_space(PathBuf::from("stdlib")).unwrap()
+    }
+
     /// Returns a new MeTTa interpreter intended for use loading MeTTa modules during import
     fn new_loading_runner(metta: &Metta, path: &Path) -> Self {
         let space = DynSpace::new(GroundingSpace::new());
@@ -182,16 +187,31 @@ impl Metta {
 
                 // Load the module to the new space
                 let runner = Metta::new_loading_runner(self, &path);
+                let mut loading_stdlib = false;
                 let program = match path.to_str() {
-                    Some("stdlib") => METTA_CODE.to_string(),
+                    Some("stdlib") => {
+                        loading_stdlib = true;
+                        METTA_CODE.to_string()
+                    },
                     _ => std::fs::read_to_string(&path).map_err(
                         |err| format!("Could not read file, path: {}, error: {}", path.display(), err))?,
+                };
+
+                let stdlib_space = if !loading_stdlib {
+                    let stdlib_space = Atom::gnd(runner.stdlib_space());
+                    runner.space().borrow_mut().add(stdlib_space.clone());
+                    Some(stdlib_space)
+                } else {
+                    None
                 };
                 // Make the imported module be immediately available to itself
                 // to mitigate circular imports
                 self.0.modules.borrow_mut().insert(path.clone(), runner.space().clone());
                 runner.run(SExprParser::new(program.as_str()))
                     .map_err(|err| format!("Cannot import module, path: {}, error: {}", path.display(), err))?;
+                if let Some(stdlib_space) = stdlib_space {
+                    runner.space().borrow_mut().remove(&stdlib_space);
+                }
 
                 Ok(runner.space().clone())
             }

@@ -72,7 +72,7 @@ pub mod metta_interface_mod {
     }
 
     impl MettaShim {
-        const PY_CODE: &str = include_str!("py_shim.py");
+        const PY_CODE: &'static str = include_str!("py_shim.py");
 
         pub fn new(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Self {
 
@@ -413,7 +413,7 @@ pub mod metta_interface_mod {
 
         pub fn exec(&mut self, line: &str) {
             let parser = SExprParser::new(line);
-            let mut runner_state = RunnerState::new_with_parser(&self.metta, parser);
+            let mut runner_state = RunnerState::new_with_parser(&self.metta, Box::new(parser));
 
             exec_state_prepare();
 

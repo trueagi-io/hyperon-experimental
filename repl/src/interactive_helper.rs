@@ -210,7 +210,7 @@ impl ReplHelper {
 }
 
 impl StyleSettings {
-    const ERR_STR: &str = "Fatal Error: Invalid REPL config";
+    const ERR_STR: &'static str = "Fatal Error: Invalid REPL config";
     pub fn new(metta_shim: &mut MettaShim) -> Self {
         Self {
             bracket_styles: metta_shim.get_config_expr_vec(CFG_BRACKET_STYLES).expect(Self::ERR_STR),

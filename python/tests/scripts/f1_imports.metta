@@ -22,12 +22,23 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 !(import! &m f1_moduleA.metta)
 
+; Check whether passed expression contains atom for which condition is True
+(: contains (-> Expression (-> Atom Bool) Bool))
+(= (contains $list $condition)
+  (if (== $list ()) False
+    (let $head (car-atom $list)
+      (if ($condition $head) True
+        (let $tail (cdr-atom $list) (contains $tail $condition)) ))))
+
+; Check whether atom is space comparing its type with type of the &self atom
+(: is-space (-> Atom Bool))
+(= (is-space $atom)
+   (let* (($type (get-type $atom)) ($space (get-type &self))) (== $type $space)))
+
 ; It's first atom is a space
 !(assertEqual
-  (let* (($x (collapse (get-atoms &m)))
-         ($y (car-atom $x)))
-        (get-type $y))
-  (get-type &self))
+  (let $x (collapse (get-atoms &m)) (contains $x is-space))
+  True)
 
 ; FIXME? Now, it is moduleC space.
 ;        Should it be `stdlib` atom for a separately imported space
@@ -55,25 +66,24 @@
 !(assertEqual (g 2) 102)
 !(assertEqual (f 2) 103)
 
+; Check whether atom is &m
+(: is-m (-> Atom Bool))
+(= (is-m $atom) (== $atom &m))
+
 ; `&self` contains 3 atoms-spaces now:
 ; - stdlib
 ; - moduleC imported by moduleA and removed from A after its import to &self
 ; - moduleA itself, which is the same as &m
-!(assertEqual &m
-  (let* (($a (collapse (get-atoms &self)))
-          ($x (cdr-atom $a))
-          ($y (cdr-atom $x)))
-         (car-atom $y)))
+!(assertEqual
+  (let $a (collapse (get-atoms &self)) (contains $a is-m))
+  True)
 
 ; NOTE: now the first atom, which was a space, is removed from `&m`,
 ; because we load modules only once, and we collect atoms-spaces to
 ; prevent duplication
 !(assertEqual
-  (== (let* (($x (collapse (get-atoms &m)))
-             ($y (car-atom $x)))
-            (get-type $y))
-        (get-type &self))
-   False)
+  (let $x (collapse (get-atoms &m)) (contains $x is-space))
+  False)
 
 ; Let's check that `if` from stdlib is not duplicated and gives only one result
 !(assertEqual

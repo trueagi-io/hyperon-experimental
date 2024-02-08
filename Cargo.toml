@@ -1,0 +1,17 @@
+[workspace]
+members = [
+    "lib",
+    "c",
+    "repl",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.6"
+edition = "2021"
+
+[workspace.dependencies]
+hyperon = { path = "./lib", version = "0.1.6" }
+regex = "1.5.4"
+log = "0.4.0"
+env_logger = "0.8.4"
