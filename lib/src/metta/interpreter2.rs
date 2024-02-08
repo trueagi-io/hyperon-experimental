@@ -499,7 +499,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
         // TODO: This is a hotfix. Better way of doing this is adding
         // a function which modifies minimal MeTTa interpreter code
         // in order to skip such evaluations in metta-call function.
-        return finished_result(atom, bindings, prev);
+        return finished_result(return_not_reducible(), bindings, prev)
     }
     let var_x = &VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, atom.clone(), Atom::Variable(var_x.clone())]);
@@ -916,7 +916,7 @@ mod tests {
         #[cfg(feature = "variable_operation")]
         assert_eq!(result, vec![metta_atom("A")]);
         #[cfg(not(feature = "variable_operation"))]
-        assert_eq!(result, vec![expr!(a "A" b)]);
+        assert_eq!(result, vec![NOT_REDUCIBLE_SYMBOL]);
     }
 
 
