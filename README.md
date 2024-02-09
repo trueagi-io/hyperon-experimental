@@ -41,7 +41,7 @@ to run.  If the docker image doesn't work, please raise an
 
 ### Prerequisites
 
-* Install latest stable Rust (1.63 or later), see [Rust installation
+* Install the latest stable Rust, see [Rust installation
 page](https://www.rust-lang.org/tools/install). Make sure your
 `PATH` variable includes `$HOME/.cargo/bin` directory after installing
 Rust (see the Notes at the installation page).
@@ -81,7 +81,8 @@ The experimental features can be enabled by editing
 [Cargo.toml](./lib/Cargo.toml) file before compilation or by using `--features`
 [command line option](https://doc.rust-lang.org/cargo/reference/features.html#command-line-feature-options).
 See comments in the `[features]` section of the file for the features
-descriptions.
+descriptions. For example to turn on minimal MeTTa interpreter one can replace
+`default = []` in [Cargo.toml](./lib/Cargo.toml) by `default = ["minimal"]`.
 
 Run examples:
 ```

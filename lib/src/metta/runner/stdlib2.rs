@@ -505,6 +505,15 @@ mod tests {
     }
 
     #[test]
+    fn metta_cdr_atom() {
+        assert_eq!(run_program(&format!("!(cdr-atom (a b c))")), Ok(vec![vec![expr!("b" "c")]]));
+        assert_eq!(run_program(&format!("!(cdr-atom ($a $b $c))")), Ok(vec![vec![expr!(b c)]]));
+        assert_eq!(run_program(&format!("!(cdr-atom ())")), Ok(vec![vec![expr!("Error" ("cdr-atom" ()) "\"cdr-atom expects a non-empty expression as an argument\"")]]));
+        assert_eq!(run_program(&format!("!(cdr-atom a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" "a") "\"cdr-atom expects a non-empty expression as an argument\"")]]));
+        assert_eq!(run_program(&format!("!(cdr-atom $a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" a) "\"cdr-atom expects a non-empty expression as an argument\"")]]));
+    }
+
+    #[test]
     fn metta_switch() {
         let result = run_program("!(eval (switch (A $b) ( (($a B) ($b $a)) ((B C) (C B)) )))");
         assert_eq!(result, Ok(vec![vec![expr!("B" "A")]]));
