@@ -480,7 +480,27 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, 
     }
 }
 
+#[cfg(not(feature = "variable_operation"))]
+fn is_variable_op(atom: &Atom) -> bool {
+    match atom {
+        Atom::Expression(expr) => {
+            match expr.children().get(0) {
+                Some(Atom::Variable(_)) => true,
+                _ => false,
+            }
+        },
+        _ => false,
+    }
+}
+
 fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings, _vars: Variables) -> Vec<InterpretedAtom> {
+    #[cfg(not(feature = "variable_operation"))]
+    if is_variable_op(&atom) {
+        // TODO: This is a hotfix. Better way of doing this is adding
+        // a function which modifies minimal MeTTa interpreter code
+        // in order to skip such evaluations in metta-call function.
+        return finished_result(return_not_reducible(), bindings, prev)
+    }
     let var_x = &VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, atom.clone(), Atom::Variable(var_x.clone())]);
     let results = space.query(&query);
@@ -887,6 +907,16 @@ mod tests {
     fn interpret_atom_evaluate_grounded_expression_error() {
         let result = call_interpret(&space(""), &expr!("eval" ({ThrowError()} {"Test error"})));
         assert_eq!(result, vec![expr!("Error" ({ThrowError()} {"Test error"}) "Test error")]);
+    }
+
+    #[test]
+    fn interpret_atom_evaluate_variable_operation() {
+        let space = space("(= (foo $a B) $a)");
+        let result = call_interpret(&space, &metta_atom("(eval ($a A $b))"));
+        #[cfg(feature = "variable_operation")]
+        assert_eq!(result, vec![metta_atom("A")]);
+        #[cfg(not(feature = "variable_operation"))]
+        assert_eq!(result, vec![NOT_REDUCIBLE_SYMBOL]);
     }
 
 

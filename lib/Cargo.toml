@@ -25,5 +25,4 @@ default = []
 # See https://doc.rust-lang.org/cargo/reference/features.html#the-features-section
 minimal = [] # enables minimal MeTTa interpreter
 variable_operation = [] # enables evaluation of the expressions which have
-                        # a variable on the first position, doesn't affect
-                        # minimal MeTTa functionality
+                        # a variable on the first position
