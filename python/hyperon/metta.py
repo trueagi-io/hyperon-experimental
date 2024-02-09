@@ -28,8 +28,9 @@ def main():
     if args.version:
         print(hyperon.__version__)
     elif args.file:
+        with open(args.file) as f: program = f.read()
         metta = hyperon.MeTTa()
-        for result in metta.import_file(args.file):
+        for result in metta.run(program):
             print(result)
     else:
         parser.print_usage()
