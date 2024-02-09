@@ -122,11 +122,26 @@ My feeling is yes, assuming we settle on a hierarchical module namespace (Propos
 
 ## Remaining implementation work
 
+LP-TODO, search code for remaining TODO comments and collect them here so I can prioritize remaining work
 
+### ModuleDescriptor should be part of pkg_management features
 
-LP-TODO, search code for TODO comments and collect them here so I can prioritize remaining work
+However, we still need a way to globally (within a runner) disambiguate a module.  Currently that's done with a ModuleDescriptor.  My proposal is to implement the hierarchical module name-space.  It's pretty clear that's the direction we want to go, as several open-issues are pointing that way.
+
+Then the loaded module table will use full module path instead of ModuleDescriptor, and ModuleDescriptor will be only for modules in a catalog that are not yet loaded.
+
+### Try stripping but not lifting private transitive imports in `import_all`
+
+In response to the "Private Sub-Modules shouldn't be lifted" section, in a discussino with Vitaly I realized perhaps all of the necessary interfaces to transitive sub-modules might be acomplished within the sub-module's space.  So therefore we may be able to get away with stripping but not lifting the private dependencies.
 
 ### Catalog for All Python modules
 
 Need to implement a ModuleCatalog that publishes all Python modules as MeTTa modules.  This will achieve parity with the current implementation and re-enable the practice of using `pip` to install MeTTa modules.  Additionally, we may want to support hierarchical module path imports, so that the MeTTa import operation is able to traverse the python module hierarchy to load and import nested Python modules.
 
+### "atom-serde", serde format to encode any structured data into atoms
+
+This relates to package management because we want to represent a PkgInfo structure as atoms within MeTTa code.  One reusable appraoch to this is to make a serde format that targets atoms.  This can then be leveraged for many API structures such as the parse tree, etc.
+
+There is a discussion on the topic here: https://github.com/trueagi-io/hyperon-experimental/issues/455
+
+Nil's work here https://github.com/trueagi-io/protobuf-metta and more generally this thread https://chat.singularitynet.io/chat/pl/u8u9jzrnmp85d8ounmpbmjukyc has raised the idea that we pursue a format that relies on a structure definition that uses the MeTTa type-system, rather than trying to create a self-describing format.

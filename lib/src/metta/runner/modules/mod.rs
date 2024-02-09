@@ -5,10 +5,9 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::sync::Mutex;
 
-use crate::*;
 use crate::space::{Space, DynSpace};
 use crate::metta::*;
-use crate::metta::runner::{Metta, ModId, RunnerState};
+use crate::metta::runner::*;
 use crate::metta::types::validate_atom;
 use crate::metta::text::{SExprParser, Tokenizer};
 use crate::common::shared::Shared;
@@ -25,8 +24,10 @@ use super::interpreter2::interpret;
 #[cfg(feature = "minimal")]
 use super::stdlib2::*;
 
-mod catalog;
-pub use catalog::*;
+#[cfg(feature = "pkg_mgmt")]
+pub mod catalog;
+#[cfg(feature = "pkg_mgmt")]
+use catalog::*;
 
 /// A data structure that uniquely identifies an exact version of a module with a particular provenance
 ///
@@ -75,6 +76,7 @@ pub struct MettaMod {
     space: DynSpace,
     tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
+    #[cfg(feature = "pkg_mgmt")]
     pkg_info: PkgInfo,
 }
 
@@ -98,6 +100,7 @@ impl MettaMod {
             tokenizer,
             imported_deps: Mutex::new(HashMap::new()),
             working_dir,
+            #[cfg(feature = "pkg_mgmt")]
             pkg_info: PkgInfo::default(),
         };
 
@@ -349,6 +352,7 @@ impl MettaMod {
         &self.descriptor
     }
 
+    #[cfg(feature = "pkg_mgmt")]
     pub fn pkg_info(&self) -> &PkgInfo {
         &self.pkg_info
     }
@@ -376,3 +380,22 @@ impl MettaMod {
 
 }
 
+/// Implemented to supply a loader functions for MeTTa modules
+///
+/// A ModuleLoader is responsible for loading a MeTTa module through the API.  Implementations of
+/// ModuleLoader can be used to define a module format or to supply programmatically defined modules
+pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
+
+    /// Returns the name of the module that the `ModuleLoader` is able to load
+    fn name(&self) -> Result<String, String>;
+
+    // TODO: implement this when I implement module versioning
+    // fn version(&self) -> Result<Option<Version>, String>;
+
+    /// A function to load the module my making MeTTa API calls.  This function will be called by
+    /// [Metta::get_or_init_module]
+    ///
+    /// NOTE: the [ModuleDescriptor] received in the `descriptor` argument should be passed unmodified
+    ///   to `context.init_self_module()`
+    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String>;
+}

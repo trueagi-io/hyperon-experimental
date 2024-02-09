@@ -66,9 +66,10 @@ use super::types::validate_atom;
 
 pub mod modules;
 use modules::*;
+use modules::catalog::loader_for_module_at_path;
 
 use std::rc::Rc;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -258,8 +259,11 @@ impl Metta {
     ///
     /// If `mod_name` is [None], the module name will be loaded privately, and won't be accessible for
     /// import by name, elsewhere within the runner
+    ///
+    /// Requires the `pkg_mgmt` feature
     //LP-TODO-NEXT: I think we should use the "private_to" convention for consistency with other loading functions
-    pub fn load_module_at_path<P: AsRef<Path>>(&self, path: P, mod_name: Option<&str>) -> Result<ModId, String> {
+    #[cfg(feature = "pkg_mgmt")]
+    pub fn load_module_at_path<P: AsRef<std::path::Path>>(&self, path: P, mod_name: Option<&str>) -> Result<ModId, String> {
 
         // Resolve the module name into a loader object using the resolution logic in the pkgInfo
         let (loader, descriptor) = match loader_for_module_at_path(self, &path, mod_name, self.environment().working_dir(), mod_name.is_some())? {
@@ -707,15 +711,18 @@ impl<'input> RunContext<'_, '_, 'input> {
         }
 
         // Resolve the module name into a loader object using the resolution logic in the pkg_info
-        let (loader, descriptor) = match self.module().pkg_info().resolve_module(self, name)? {
-            Some((loader, descriptor)) => (loader, descriptor),
-            None => return Err(format!("Failed to resolve module {name}"))
-        };
+        #[cfg(feature = "pkg_mgmt")]
+        match self.module().pkg_info().resolve_module(self, name)? {
+            Some((loader, descriptor)) => {
+                // Load the module from the loader
+                return self.metta.get_or_init_module(descriptor, |context, descriptor| {
+                    loader.load(context, descriptor)
+                })
+            },
+            None => {}
+        }
 
-        // Load the module from the loader
-        self.metta.get_or_init_module(descriptor, |context, descriptor| {
-            loader.load(context, descriptor)
-        })
+        Err(format!("Failed to resolve module {name}"))
     }
 
     /// Private method to advance the context forward one step

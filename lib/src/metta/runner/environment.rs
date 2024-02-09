@@ -4,7 +4,8 @@ use std::io::Write;
 use std::fs;
 use std::sync::Arc;
 
-use crate::metta::runner::modules::{ModuleCatalog, DirCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt};
+#[cfg(feature = "pkg_mgmt")]
+use crate::metta::runner::modules::catalog::{ModuleCatalog, DirCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt};
 
 use directories::ProjectDirs;
 
@@ -18,7 +19,9 @@ pub struct Environment {
     init_metta_path: Option<PathBuf>,
     working_dir: Option<PathBuf>,
     is_test: bool,
+    #[cfg(feature = "pkg_mgmt")]
     catalogs: Vec<Box<dyn ModuleCatalog>>,
+    #[cfg(feature = "pkg_mgmt")]
     pub(crate) fs_mod_formats: Arc<Vec<Box<dyn FsModuleFormat>>>,
 }
 
@@ -57,11 +60,13 @@ impl Environment {
     }
 
     /// Returns the [ModuleCatalog]s from the Environment, in search priority order
+    #[cfg(feature = "pkg_mgmt")]
     pub fn catalogs<'a>(&'a self) -> impl Iterator<Item=&dyn ModuleCatalog> + 'a {
         self.catalogs.iter().map(|catalog| &**catalog as &dyn ModuleCatalog)
     }
 
     /// Returns the [FsModuleFormat]s from the Environment, in priority order
+    #[cfg(feature = "pkg_mgmt")]
     pub fn fs_mod_formats<'a>(&'a self) -> impl Iterator<Item=&dyn FsModuleFormat> + 'a {
         self.fs_mod_formats.iter().map(|fmt| &**fmt as &dyn FsModuleFormat)
     }
@@ -73,7 +78,9 @@ impl Environment {
             init_metta_path: None,
             working_dir: None,
             is_test: false,
+            #[cfg(feature = "pkg_mgmt")]
             catalogs: vec![],
+            #[cfg(feature = "pkg_mgmt")]
             fs_mod_formats: Arc::new(vec![]),
         }
     }
@@ -86,11 +93,14 @@ pub struct EnvBuilder {
     env: Environment,
     no_cfg_dir: bool,
     create_cfg_dir: bool,
+    #[cfg(feature = "pkg_mgmt")]
     proto_catalogs: Vec<ProtoCatalog>,
+    #[cfg(feature = "pkg_mgmt")]
     fs_mod_formats: Vec<Box<dyn FsModuleFormat>>
 }
 
 /// Private type representing something that will become an entry in the "Environment::catalogs" Vec
+#[cfg(feature = "pkg_mgmt")]
 enum ProtoCatalog {
     Path(PathBuf),
     Other(Box<dyn ModuleCatalog>),
@@ -114,7 +124,9 @@ impl EnvBuilder {
             env: Environment::new(),
             no_cfg_dir: false,
             create_cfg_dir: false,
+            #[cfg(feature = "pkg_mgmt")]
             proto_catalogs: vec![],
+            #[cfg(feature = "pkg_mgmt")]
             fs_mod_formats: vec![],
         }
     }
@@ -180,6 +192,7 @@ impl EnvBuilder {
     /// NOTE: include paths are a type of [ModuleCatalog], and the first catalog added will have the highest
     /// search priority, with subsequently added catalogs being search in order.  The `working_dir` will
     /// always be searched before any other catalogs.
+    #[cfg(feature = "pkg_mgmt")]
     pub fn push_include_path<P: AsRef<Path>>(mut self, path: P) -> Self {
         self.proto_catalogs.push(ProtoCatalog::Path(path.as_ref().into()));
         self
@@ -189,6 +202,7 @@ impl EnvBuilder {
     ///
     /// NOTE: The first catalog added will have the highest search priority, with subsequently added catalogs
     /// being search in order.  The `working_dir` will always be searched before any other catalogs.
+    #[cfg(feature = "pkg_mgmt")]
     pub fn push_module_catalog<C: ModuleCatalog + 'static>(mut self, catalog: C) -> Self {
         self.proto_catalogs.push(ProtoCatalog::Other(Box::new(catalog)));
         self
@@ -201,6 +215,7 @@ impl EnvBuilder {
     ///
     /// NOTE: The first format added will have the highest search priority, with subsequently added formats
     /// being tried in order.  Built-in formats [SingleFileModuleFmt] and [DirModuleFmt] will be tried last.
+    #[cfg(feature = "pkg_mgmt")]
     pub fn push_fs_module_format<F: FsModuleFormat + 'static>(mut self, fmt: F) -> Self {
         self.fs_mod_formats.push(Box::new(fmt));
         self
@@ -221,15 +236,18 @@ impl EnvBuilder {
     /// Returns a newly created Environment from the builder configuration
     ///
     /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [common_env] method.
-    pub(crate) fn build(mut self) -> Environment {
+    pub(crate) fn build(self) -> Environment {
         let mut env = self.env;
+        let mut proto_catalogs = self.proto_catalogs;
+        let mut fs_mod_formats = self.fs_mod_formats;
 
         //Init the logger.  This will have no effect if the logger has already been initialized
         let _ = env_logger::builder().is_test(env.is_test).try_init();
 
         //If we have a working_dir, make sure it gets searched first by building catalogs for it
+        #[cfg(feature = "pkg_mgmt")]
         if let Some(working_dir) = &env.working_dir {
-            self.proto_catalogs.insert(0, ProtoCatalog::Path(working_dir.into()));
+            proto_catalogs.insert(0, ProtoCatalog::Path(working_dir.into()));
         }
 
         //Construct the platform-specific config dir location, if an explicit location wasn't provided
@@ -248,14 +266,16 @@ impl EnvBuilder {
 
         if let Some(config_dir) = &env.config_dir {
 
+            #[cfg(feature = "pkg_mgmt")]
             let modules_dir = config_dir.join("modules");
             let init_metta_path = config_dir.join("init.metta");
 
-            //Create the default config dir, if that part of our directive
+            //Create the default config dir and its contents, if that part of our directive
             if self.create_cfg_dir && !config_dir.exists() {
 
-                //Create the modules dir inside the config dir
-                // This will create the cfg_dir iteslf in the process
+                std::fs::create_dir_all(&config_dir).unwrap();
+
+                #[cfg(feature = "pkg_mgmt")]
                 std::fs::create_dir_all(&modules_dir).unwrap();
 
                 //Create the default init.metta file
@@ -275,8 +295,9 @@ impl EnvBuilder {
             //Push the "modules" dir, as the last place to search after the other paths that were specified
             //TODO: the config.metta file should be able to append / modify the catalogs, and can choose not to
             // include the "modules" dir in the future.
+            #[cfg(feature = "pkg_mgmt")]
             if modules_dir.exists() {
-                self.proto_catalogs.push(ProtoCatalog::Path(modules_dir));
+                proto_catalogs.push(ProtoCatalog::Path(modules_dir));
             }
 
             if init_metta_path.exists() {
@@ -284,34 +305,25 @@ impl EnvBuilder {
             }
         }
 
-        // //LP-TODO-NEXT, remove this, since I think we don't need it anymore.  But first confirm
-        // // all tests are passing, including Python sandbox examples
-        // //TODO: This line below is a stop-gap to match old behavior
-        // //As discussed with Vitaly, searching the current working dir can be a potential security hole
-        // // However, that is mitigated by "." being the last directory searched.
-        // // Anyway, the issue is that the Metta::import_file method in runner.py relies on using the
-        // // same runner but being able to change the search path by changing the working dir.
-        // // A better fix is to fork a "child runner" with access to the same space and tokenizer,
-        // // but an updated search path.  This is really hard to implement currently given the ImportOp
-        // // actually owns a reference to the runner it's associated with.  However this must be fixed soon.
-        // env.extra_include_paths.push(".".into());
+        #[cfg(feature = "pkg_mgmt")]
+        {
+            //Append the built-in [FSModuleFormat]s, [SingleFileModuleFmt] and [DirModuleFmt]
+            fs_mod_formats.push(Box::new(SingleFileModuleFmt));
+            fs_mod_formats.push(Box::new(DirModuleFmt));    
 
-        //Append the built-in [FSModuleFormat]s, [SingleFileModuleFmt] and [DirModuleFmt]
-        self.fs_mod_formats.push(Box::new(SingleFileModuleFmt));
-        self.fs_mod_formats.push(Box::new(DirModuleFmt));
+            //Wrap the fs_mod_formats in an Arc, so it can be shared with the instances of DirCatalog
+            env.fs_mod_formats = Arc::new(fs_mod_formats);
 
-        //Wrap the fs_mod_formats in an Arc, so it can be shared with the instances of DirCatalog
-        env.fs_mod_formats = Arc::new(self.fs_mod_formats);
-
-        //Convert each proto_catalog into a real ModuleCatalog
-        for proto in self.proto_catalogs.into_iter() {
-            match proto {
-                ProtoCatalog::Path(path) => {
-                    //Make a DirCatalog for the directory
-                    env.catalogs.push(Box::new(DirCatalog::new(path, env.fs_mod_formats.clone())));
-                }
-                ProtoCatalog::Other(catalog) => {
-                    env.catalogs.push(catalog);
+            //Convert each proto_catalog into a real ModuleCatalog
+            for proto in proto_catalogs.into_iter() {
+                match proto {
+                    ProtoCatalog::Path(path) => {
+                        //Make a DirCatalog for the directory
+                        env.catalogs.push(Box::new(DirCatalog::new(path, env.fs_mod_formats.clone())));
+                    }
+                    ProtoCatalog::Other(catalog) => {
+                        env.catalogs.push(catalog);
+                    }
                 }
             }
         }

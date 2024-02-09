@@ -39,11 +39,6 @@
 // not yet thought in detail about this.
 //
 
-//LP-TODO-NEXT Factor package-management out from module loading, and make package-management
-// an optional feature for the core (C & python still need to depend on it for now).  But core
-// module loading should not require versioning, catalogs, or PkgInfo.  and by extension atom-serde
-//
-
 //QUESTION on shared base dependencies & sat-set solving:
 //The currently implemented design resolves each module's dependencies in a straightforward depth-first
 //  order.  This is possible because the module system allows multiple instances of the same module to
@@ -128,26 +123,6 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
 
     /// Returns a [ModuleLoader] for the specified module from the `ModuleCatalog`
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String>;
-}
-
-/// Implemented to supply a loader functions for MeTTa modules
-///
-/// In essence, a ModuleLoader is the mechanism to define a MeTTa module format, as it is responsible for
-/// loading a module through the MeTTa API.
-pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
-
-    /// Returns the name of the module that the `ModuleLoader` is able to load
-    fn name(&self) -> Result<String, String>;
-
-    // TODO: implement this when I implement module versioning
-    // fn version(&self) -> Result<Option<Version>, String>;
-
-    /// A function to load the module my making MeTTa API calls.  This function will be called by
-    /// [Metta::get_or_init_module]
-    ///
-    /// NOTE: the [ModuleDescriptor] received in the `descriptor` argument should be passed unmodified
-    ///   to `context.init_self_module()`
-    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String>;
 }
 
 /// The object responsible for locating and selecting dependency modules for each [MettaMod]
