@@ -1,12 +1,12 @@
 [build-system]
-requires = ["setuptools==65.6.3", "conan==1.60.2", "cmake==3.26.4", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools==65.6.3", "conan==1.62", "cmake==3.26.4", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "hyperon"
 description = "Hyperon API in Python"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.7,<3.12"
 keywords = ["metta", "hyperon", "opencog"]
 license = {text = "MIT License"}
 classifiers = [
