@@ -720,10 +720,12 @@ impl<'input> RunContext<'_, '_, 'input> {
         match self.module().pkg_info().resolve_module(self, mod_name)? {
             Some((loader, descriptor)) => {
                 let mod_id = self.metta.get_or_init_module_with_descriptor(mod_name, descriptor, |context| loader.load(context))?;
-                Ok(mod_id)
+                return Ok(mod_id);
             },
-            None => Err(format!("Failed to resolve module {mod_name}"))
+            None => {}
         }
+
+        Err(format!("Failed to resolve module {mod_name}"))
     }
 
     /// Private method to advance the context forward one step

@@ -70,6 +70,8 @@
 //
 // I think my personal preference is for #2.
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::Hasher;
 use std::ffi::{OsStr, OsString};
 
 use crate::metta::text::OwnedSExprParser;
