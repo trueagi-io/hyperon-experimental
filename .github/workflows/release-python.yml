@@ -39,7 +39,6 @@ jobs:
         env:
           CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{env.COMMIT_HEAD}}"
           CIBW_SKIP: "*musllinux*"
-          CIBW_PROJECT_REQUIRES_PYTHON: ">=3.7,<3.12"
         with:
           package-dir: ./python
 
