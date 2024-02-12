@@ -843,11 +843,11 @@ mod tests {
     }
 
     #[test]
-    fn test_variable_defined_via_variabe() {
+    fn test_variable_defined_via_variable() {
         let program = "
             (= (myif T $y) $y)
-            (= (not F) T)
-            (= (a $z) (not (b $z)))
+            (= (mynot F) T)
+            (= (a $z) (mynot (b $z)))
             (= (b d) F)
 
             !(eval (interpret (myif (a $x) $x) %Undefined% &self))
