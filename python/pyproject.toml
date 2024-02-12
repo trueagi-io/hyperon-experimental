@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "hyperon"
 description = "Hyperon API in Python"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.7,<3.12"
 keywords = ["metta", "hyperon", "opencog"]
 license = {text = "MIT License"}
 classifiers = [
