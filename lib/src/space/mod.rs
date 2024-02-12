@@ -351,7 +351,7 @@ impl Space for DynSpace {
 
 impl PartialEq for DynSpace {
     fn eq(&self, other: &Self) -> bool {
-        RefCell::as_ptr(&self.0) == RefCell::as_ptr(&other.0)
+        std::ptr::addr_eq(RefCell::as_ptr(&self.0), RefCell::as_ptr(&other.0))
     }
 }
 
