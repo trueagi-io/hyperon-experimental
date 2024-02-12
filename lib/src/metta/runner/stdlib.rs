@@ -5,7 +5,7 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::interpreter::interpret;
 use crate::metta::text::SExprParser;
-use crate::metta::runner::{Metta, RunContext, ModuleDescriptor, ModuleLoader};
+use crate::metta::runner::{Metta, RunContext, ModuleLoader};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::assert::vec_eq_no_order;
@@ -1319,9 +1319,9 @@ impl ModuleLoader for CoreLibLoader {
     fn name(&self) -> Result<String, String> {
         Ok(self.0.clone())
     }
-    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+    fn load(&self, context: &mut RunContext) -> Result<(), String> {
         let space = DynSpace::new(GroundingSpace::new());
-        context.init_self_module(descriptor, space, None);
+        context.init_self_module(space, None);
 
         register_rust_stdlib_tokens(&mut *context.module().tokenizer().borrow_mut());
 

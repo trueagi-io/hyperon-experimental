@@ -29,49 +29,16 @@ pub mod catalog;
 #[cfg(feature = "pkg_mgmt")]
 use catalog::*;
 
-/// A data structure that uniquely identifies an exact version of a module with a particular provenance
-///
-/// If two modules have the same ModuleDescriptor, they are considered to be the same module
-///
-/// NOTE: It is possible for a module to have both a version and a uid.  This means two copies of the
-/// same module may be loaded into the same runner independently.  Module version uniqueness is enforced
-/// by the catalog(s)
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub struct ModuleDescriptor {
-    name: String,
-    uid: Option<u64>,
-    //TODO: version
-}
+/// The name of the top module in a runner
+pub const TOP_MOD_NAME: &'static str = "top";
 
-impl ModuleDescriptor {
-    /// Internal method to create a ModuleDescriptor for a runner's "top" module
-    pub(crate) fn top() -> Self {
-        Self::new("top".to_string())
-    }
-    /// Create a new ModuleDescriptor
-    pub fn new(name: String) -> Self {
-        Self { name, uid: None }
-    }
-    /// Create a new ModuleDescriptor
-    pub fn new_with_uid(name: String, uid: u64) -> Self {
-        Self { name, uid: Some(uid) }
-    }
-    /// Returns the name of the module represented by the ModuleDescriptor
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-    /// Internal.  Use the Hash trait to get a uid for the whole ModuleDescriptor
-    pub(crate) fn hash(&self) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        std::hash::Hash::hash(self, &mut hasher);
-        hasher.finish()
-    }
-}
+/// The name to refer to the current module in the module name hierarchy
+pub const SELF_MOD_NAME: &'static str = "self";
 
 /// Contains state associated with a loaded MeTTa module
 #[derive(Debug)]
 pub struct MettaMod {
-    descriptor: ModuleDescriptor,
+    mod_path: String,
     working_dir: Option<PathBuf>,
     space: DynSpace,
     tokenizer: Shared<Tokenizer>,
@@ -83,19 +50,19 @@ pub struct MettaMod {
 impl MettaMod {
 
     /// Internal method to initialize an empty MettaMod
-    pub(crate) fn new_with_tokenizer(metta: &Metta, descriptor: ModuleDescriptor, space: DynSpace, tokenizer: Shared<Tokenizer>, working_dir: Option<PathBuf>, no_stdlib: bool) -> Self {
+    pub(crate) fn new_with_tokenizer(metta: &Metta, mod_path: String, space: DynSpace, tokenizer: Shared<Tokenizer>, working_dir: Option<PathBuf>, no_stdlib: bool) -> Self {
 
         //Give the space a name based on the module, if it doesn't already have one
         if let Some(any_space) = space.borrow_mut().as_any_mut() {
             if let Some(g_space) = any_space.downcast_mut::<GroundingSpace>() {
                 if g_space.name().is_none() {
-                    g_space.set_name(descriptor.name().to_string());
+                    g_space.set_name(mod_path.clone());
                 }
             }
         }
 
         let new_mod = Self {
-            descriptor,
+            mod_path,
             space,
             tokenizer,
             imported_deps: Mutex::new(HashMap::new()),
@@ -128,7 +95,7 @@ impl MettaMod {
             let dep_space = context.module().space().clone();
             let name = match name {
                 Some(name) => name,
-                None => context.module().descriptor().name.clone()
+                None => context.module().name().to_string()
             };
             Ok((dep_space, name))
         })?;
@@ -173,7 +140,7 @@ impl MettaMod {
         let (dep_space, dep_tokenizer, src_mod_name) = runner_state.run_in_context(|context| {
             let dep_space = context.module().space().clone();
             let dep_tokenizer = context.module().tokenizer().clone();
-            let src_mod_name = context.module().descriptor().name.clone();
+            let src_mod_name = context.module().path().to_string();
             Ok((dep_space, dep_tokenizer, src_mod_name))
         })?;
 
@@ -263,7 +230,7 @@ impl MettaMod {
         // Get the space associated with the dependent module
         let mut runner_state = RunnerState::new_with_module(metta, mod_id);
         let (dep_space, transitive_deps) = runner_state.run_in_context(|context| {
-            log::info!("import_all_from_dependency: importing from {} (modid={mod_id:?}) into {}", context.module().descriptor().name(), self.descriptor.name());
+            log::info!("import_all_from_dependency: importing from {} (modid={mod_id:?}) into {}", context.module().path(), self.path());
             Ok(context.module().stripped_space())
         })?;
 
@@ -329,7 +296,7 @@ impl MettaMod {
                     // Do a deep-clone of the dep-space atom-by-atom, because `space.remove()` doesn't recognize
                     // two GroundedAtoms wrapping DynSpaces as being the same, even if the underlying space is
                     let mut new_space = GroundingSpace::new();
-                    new_space.set_name(self.descriptor().name().to_string());
+                    new_space.set_name(self.path().to_string());
                     for atom in dep_g_space.atom_iter().unwrap() {
                         if let Some(sub_space) = atom.as_gnd::<DynSpace>() {
                             if !deps_table.values().any(|space| space == sub_space) {
@@ -348,8 +315,14 @@ impl MettaMod {
         }
     }
 
-    pub fn descriptor(&self) -> &ModuleDescriptor {
-        &self.descriptor
+    /// Returns the full path of a loaded module.  For example: "top.parent_mod.this_mod"
+    pub fn path(&self) -> &str {
+        &self.mod_path
+    }
+
+    /// Returns the name of the loaded module.
+    pub fn name(&self) -> &str {
+        mod_name_from_path(&self.mod_path)
     }
 
     #[cfg(feature = "pkg_mgmt")]
@@ -394,8 +367,180 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
 
     /// A function to load the module my making MeTTa API calls.  This function will be called by
     /// [Metta::get_or_init_module]
-    ///
-    /// NOTE: the [ModuleDescriptor] received in the `descriptor` argument should be passed unmodified
-    ///   to `context.init_self_module()`
-    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String>;
+    fn load(&self, context: &mut RunContext) -> Result<(), String>;
 }
+
+/// Private struct, A node in a tree to locate loaded mods by name
+///
+/// # Name Resolution Behavior
+/// `top` is a reserved module name for the module at the top of the runner
+/// `top.some_mod` and `some_mod` are equivalent.  In other words, `top` is optional in a path
+/// `self` is an alias for the current module
+/// `self.some_mod` is a private sub-module of the current module
+///
+#[derive(Debug)]
+pub(crate) struct ModNameNode {
+    mod_id: ModId,
+    children: HashMap<String, ModNameNode>
+}
+
+//LP-TODO-NEXT.  Momentarily commented this function out to squish the unused warning.  This is part of
+// the implementatino of relative module paths
+// /// Returns `Some(path)`, with `path` being the relative portion following `self.`, if the name
+// /// begins with "self.". Returns "" if the name exactly equals "self".  Otherwise returns None
+// pub(crate) fn mod_name_relative_path(name: &str) -> Option<&str> {
+//     if name.starts_with(SELF_MOD_NAME) {
+//         if name.len() == SELF_MOD_NAME.len() {
+//             Some("")
+//         } else {
+//             if name.as_bytes()[SELF_MOD_NAME.len()] == b'.' {
+//                 Some(&name[(SELF_MOD_NAME.len()+1)..])
+//             } else {
+//                 None
+//             }
+//         }
+//     } else {
+//         None
+//     }
+// }
+
+/// Returns the part of a module name path after the last '.', or the entire path if it does not
+/// contain a '.' char.  May panic if the path is invalid
+pub(crate) fn mod_name_from_path(path: &str) -> &str {
+    let mut start_idx = 0;
+    for (idx, the_char) in path.char_indices() {
+        if the_char == '.' {
+            start_idx = idx+1;
+        }
+    }
+    &path[start_idx..]
+}
+
+impl ModNameNode {
+
+    /// Returns the node corresponding to the runner's "top" mod
+    pub fn top() -> Self {
+        Self::new(ModId::TOP)
+    }
+
+    /// Private constructor
+    fn new(mod_id: ModId) -> Self {
+        Self {
+            mod_id,
+            children: HashMap::new(),
+        }
+    }
+
+    /// Adds a single new node to the tree.  Does NOT recursively add multiple nodes
+    ///
+    /// Reuturns `true` if the node was sucessfully added, otherwise `false`.  If an entry
+    /// already exists at that name, the existing entry will be replaced
+    pub fn add(&mut self, name: &str, mod_id: ModId) -> bool {
+        if let Some((parent_node, mod_name)) = self.parse_parent_mut(name) {
+            if mod_name == TOP_MOD_NAME || mod_name == SELF_MOD_NAME || mod_name.len() == 0 {
+                return false; //Illegal names for a module
+            }
+            parent_node.children.insert(mod_name.to_string(), Self::new(mod_id));
+            true
+        } else {
+            false
+        }
+    }
+
+    /// Returns the [ModId] of a module name/path, or None if it can't be resolved
+    pub fn resolve(&self, name: &str) -> Option<ModId> {
+        self.name_to_node(name).map(|node| node.mod_id)
+    }
+
+    /// Resolves a module name/path within &self
+    pub fn name_to_node(&self, name: &str) -> Option<&Self> {
+        if let Some((parent_node, mod_name)) = self.parse_parent(name) {
+            if mod_name == TOP_MOD_NAME || name.len() == 0 {
+                Some(self)
+            } else {
+                parent_node.children.get(mod_name)
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Returns the node corresponding to any part of the node before the last '.', and
+    /// the remaining substring
+    pub fn parse_parent<'a, 'b>(&'a self, name: &'b str) -> Option<(&'a Self, &'b str)> {
+        Self::parse_parent_generic(self, |node, name| node.children.get(name), name)
+    }
+
+    /// Same behavior as [parse_parent], but takes and returns a mutable reference
+    pub fn parse_parent_mut<'a, 'b>(&'a mut self, name: &'b str) -> Option<(&'a mut Self, &'b str)> {
+        Self::parse_parent_generic(self, |node, name| node.children.get_mut(name), name)
+    }
+
+    /// Internal generic `parse_parent` that can expand to mutable and const versions
+    fn parse_parent_generic<'a, SelfT, GetF: Fn(SelfT, &str) -> Option<SelfT>>(gen_self: SelfT, get_f: GetF, name: &'a str) -> Option<(SelfT, &'a str)> {
+        if name.len() == 0 {
+            return Some((gen_self, &name))
+        }
+        let mut cur_node = gen_self;
+        let mut sym_start = 0;
+        for (idx, the_char) in name.char_indices() {
+            match the_char {
+                '.' => {
+                    let sym = &name[sym_start..idx];
+                    if sym == TOP_MOD_NAME && sym_start == 0 {
+                        sym_start = idx+1;
+                        continue;
+                    }
+                    match get_f(cur_node, sym) {
+                        Some(new_node) => {
+                            cur_node = new_node;
+                            sym_start = idx+1;
+                        },
+                        None => return None
+                    }
+                },
+                _ => {},
+            }
+        }
+        if sym_start < name.len() {
+            Some((cur_node, &name[sym_start..]))
+        } else {
+            None
+        }
+    }
+}
+
+#[test]
+fn name_parse_test() {
+    let mut top = ModNameNode::top();
+
+    assert_eq!(true, top.add("top.sub1", ModId(1)));
+    assert_eq!(true, top.add("sub2", ModId(2)));
+    assert_eq!(true, top.add("sub2.suba", ModId(3)));
+    assert_eq!(true, top.add("sub2.suba.subA", ModId(4)));
+    assert_eq!(true, top.add("top.sub1.subb", ModId(5)));
+
+    assert_eq!(false, top.add("", ModId(6)));
+    assert_eq!(false, top.add("top", ModId(6)));
+    assert_eq!(false, top.add("sub2..suba.subB", ModId(7)));
+    assert_eq!(false, top.add("sub2.suba.subB.", ModId(7)));
+
+    assert_eq!(top.name_to_node("top").unwrap().mod_id, top.mod_id);
+    assert_eq!(top.name_to_node("").unwrap().mod_id, top.mod_id);
+    assert!(top.name_to_node("top.").is_none());
+    assert!(top.name_to_node(".").is_none());
+
+    assert_eq!(top.name_to_node("sub1").unwrap().mod_id, ModId(1));
+    assert_eq!(top.name_to_node("top.sub2.suba.subA").unwrap().mod_id, ModId(4));
+    assert!(top.name_to_node("sub2.suba.subA.").is_none());
+    assert!(top.name_to_node("sub1.suba").is_none());
+
+}
+
+
+//LP-TODO-NEXT, when a catalog resolves a module in a relative location (specifically parent module resource dir),
+// it should load that module into a relative module path, unless another path was explicitly specified in
+// the API call.  Make a test, to make sure this works.
+
+//LP-TODO-NEXT, make a runner unit test that can load modules by path.  Try both global (from top) and local (from current mod) loads
+//

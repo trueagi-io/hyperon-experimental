@@ -309,11 +309,11 @@ impl ModuleLoader for SingleFileModule {
     // Therefore, we need to parse the whole text of the module looking for a `_pkg-info` atom,
     // that we can then convert into a PkgInfo structure
 
-    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+    fn load(&self, context: &mut RunContext) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
         let working_dir = self.path.parent().unwrap();
-        context.init_self_module(descriptor, space, Some(working_dir.into()));
+        context.init_self_module(space, Some(working_dir.into()));
 
         let program_text = std::fs::read_to_string(&self.path)
             .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))?;
@@ -348,11 +348,11 @@ impl ModuleLoader for DirModule {
     //If there is a `pkg-info.metta` file, information from that file will take precedence.
     // Otherwise, try and parse a `_pkg-info` atom from the `module.metta` file
 
-    fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result<(), String> {
+    fn load(&self, context: &mut RunContext) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
         let working_dir = self.path.parent().unwrap();
-        context.init_self_module(descriptor, space, Some(working_dir.into()));
+        context.init_self_module(space, Some(working_dir.into()));
 
         let module_metta_path = self.path.join("module.metta");
         let program_text = std::fs::read_to_string(&module_metta_path)
@@ -539,5 +539,39 @@ fn visit_modules_in_dir_using_mod_formats(fmts: &[Box<dyn FsModuleFormat>], dir_
                 };
             }
         }
+    }
+}
+
+/// A data structure that uniquely identifies an exact version of a module with a particular provenance
+///
+/// If two modules have the same ModuleDescriptor, they are considered to be the same module
+///
+/// NOTE: It is possible for a module to have both a version and a uid.  Module version uniqueness is
+/// enforced by the catalog(s), and two catalogs may disagree
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub struct ModuleDescriptor {
+    name: String,
+    uid: Option<u64>,
+    //TODO: version
+}
+
+impl ModuleDescriptor {
+    /// Create a new ModuleDescriptor
+    pub fn new(name: String) -> Self {
+        Self { name, uid: None }
+    }
+    /// Create a new ModuleDescriptor
+    pub fn new_with_uid(name: String, uid: u64) -> Self {
+        Self { name, uid: Some(uid) }
+    }
+    /// Returns the name of the module represented by the ModuleDescriptor
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+    /// Internal.  Use the Hash trait to get a uid for the whole ModuleDescriptor
+    pub fn hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        std::hash::Hash::hash(self, &mut hasher);
+        hasher.finish()
     }
 }

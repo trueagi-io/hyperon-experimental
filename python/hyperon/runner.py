@@ -65,9 +65,9 @@ class RunContext:
         """Wraps the underlying RunContext object from the core"""
         self.c_run_context = c_run_context
 
-    def init_self_module(self, descriptor, space, working_dir):
+    def init_self_module(self, space, working_dir):
         """Must be called exactly once from within a module loader to initialize the module being loaded"""
-        hp.run_context_init_self_module(self.c_run_context, descriptor.c_module_descriptor, space.cspace, working_dir)
+        hp.run_context_init_self_module(self.c_run_context, space.cspace, working_dir)
         #LP-TODO-NEXT Handle errors that happen inside hp.run_context_init_self_module
 
     def metta(self):
@@ -289,27 +289,25 @@ class _PyFileMeTTaModFmt:
             # why their module isn't loading
             return None
 
-    def _load_called_from_c(c_run_context, c_descriptor, callback_context):
+    def _load_called_from_c(c_run_context, callback_context):
         """Loads the items from the python module into the runner as a MeTTa module"""
         run_context = RunContext(c_run_context)
-        descriptor = ModuleDescriptor(c_descriptor)
 
         # We are using the `callback_context` object to store the python module name, which currently is
         # identical to the MeTTa module name becuase we don't mangle it, but we may mangle it in the future
         pymod_name = callback_context;
 
         loader_func = _priv_make_module_loader_func_for_pymod(pymod_name)
-        loader_func(run_context, descriptor)
+        loader_func(run_context)
 
-def _priv_load_py_stdlib(c_run_context, c_descriptor):
+def _priv_load_py_stdlib(c_run_context):
     """
     Private function called indirectly to load the Python stdlib during Python runner initialization
     """
     run_context = RunContext(c_run_context)
-    descriptor = ModuleDescriptor(c_descriptor)
 
     stdlib_loader = _priv_make_module_loader_func_for_pymod("hyperon.stdlib", load_corelib=True)
-    stdlib_loader(run_context, descriptor)
+    stdlib_loader(run_context)
 
     # #LP-TODO-Next Make a test for loading a metta module from a python module using load_module_direct_from_pymod
 
@@ -327,14 +325,14 @@ def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False):
     Private function to return a loader function to load a module into the runner directly from the specified Python module
     """
 
-    def loader_func(run_context, descriptor):
+    def loader_func(run_context):
         try:
             mod = import_module(pymod_name)
 
             # LP-TODO-Next, I should create an entry point that allows the python module to initialize the
             #  space before the rest of the init code runs
             space = GroundingSpaceRef()
-            run_context.init_self_module(descriptor, space, None)
+            run_context.init_self_module(space, None)
 
             #Load and import the corelib using "import *" behavior, if that flag was specified
             if load_corelib:

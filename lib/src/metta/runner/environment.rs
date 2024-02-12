@@ -238,7 +238,9 @@ impl EnvBuilder {
     /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [common_env] method.
     pub(crate) fn build(self) -> Environment {
         let mut env = self.env;
+        #[cfg(feature = "pkg_mgmt")]
         let mut proto_catalogs = self.proto_catalogs;
+        #[cfg(feature = "pkg_mgmt")]
         let mut fs_mod_formats = self.fs_mod_formats;
 
         //Init the logger.  This will have no effect if the logger has already been initialized

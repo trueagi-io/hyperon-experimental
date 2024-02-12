@@ -137,10 +137,10 @@ void* try_path(const void *payload, const char *path, const char *mod_name) {
     }
 }
 
-void load(const void* payload, run_context_t* run_context, const module_descriptor_t* descriptor, void* callback_context) {
+void load(const void* payload, run_context_t* run_context, void* callback_context) {
 
     space_t space = space_new_grounding_space();
-    run_context_init_self_module(run_context, descriptor, &space, NULL);
+    run_context_init_self_module(run_context, &space, NULL);
     space_free(space);
 
     sexpr_parser_t parser = sexpr_parser_new("test-atom");
@@ -179,11 +179,11 @@ START_TEST (test_custom_module_format)
 }
 END_TEST
 
-void custom_stdlib_loader(run_context_t *run_context, const module_descriptor_t* descriptor, void* callback_context) {
+void custom_stdlib_loader(run_context_t *run_context, void* callback_context) {
 
     //Init our new module
     space_t space = space_new_grounding_space();
-    run_context_init_self_module(run_context, descriptor, &space, NULL);
+    run_context_init_self_module(run_context, &space, NULL);
     space_free(space);
 
     //"import * from corelib" (This is optional, and some implementations might not want it)
