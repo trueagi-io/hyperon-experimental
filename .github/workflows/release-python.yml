@@ -27,6 +27,11 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v3
 
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.8"
+
       - run: |
           echo "REF_NAME=${{github.ref_name}}" | tee -a $GITHUB_ENV
           echo "EVENT_NAME=${{github.event_name}}" | tee -a $GITHUB_ENV
