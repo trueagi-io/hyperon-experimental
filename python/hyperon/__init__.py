@@ -12,7 +12,7 @@ def _version(dist_name):
             from importlib_metadata import PackageNotFoundError, version  # pragma: no cover
         return version(dist_name)
     except:
-        return "0.1.6+localbuild"
+        return "0.1.7+localbuild"
 
 __version__ = _version(__name__)
 
