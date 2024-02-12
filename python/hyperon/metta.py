@@ -1,6 +1,7 @@
 """
 This is the MeTTa entrypoint
 """
+import os
 import sys
 import argparse
 import hyperon
@@ -28,8 +29,9 @@ def main():
     if args.version:
         print(hyperon.__version__)
     elif args.file:
+        parent_dir = os.path.dirname(args.file)
         with open(args.file) as f: program = f.read()
-        metta = hyperon.MeTTa()
+        metta = hyperon.MeTTa(env_builder=hyperon.Environment.custom_env(working_dir=parent_dir))
         for result in metta.run(program):
             print(result)
     else:
