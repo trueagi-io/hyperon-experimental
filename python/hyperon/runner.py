@@ -284,9 +284,8 @@ class _PyFileMeTTaModFmt:
 
             #TODO: Extract the version here, when it's time to implement versions
             return metta_mod_name
-        except:
-            #TODO: Depending on the exception, we might want to log something to help users debug
-            # why their module isn't loading
+        except Exception as e:
+            hp.log_error("Python error loading MeTTa module '" + metta_mod_name + "'. " + repr(e))
             return None
 
     def _load_called_from_c(c_run_context, callback_context):
@@ -295,7 +294,7 @@ class _PyFileMeTTaModFmt:
 
         # We are using the `callback_context` object to store the python module name, which currently is
         # identical to the MeTTa module name becuase we don't mangle it, but we may mangle it in the future
-        pymod_name = callback_context;
+        pymod_name = callback_context
 
         loader_func = _priv_make_module_loader_func_for_pymod(pymod_name)
         loader_func(run_context)

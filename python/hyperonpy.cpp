@@ -944,6 +944,10 @@ PYBIND11_MODULE(hyperonpy, m) {
         env_builder_push_fs_module_format(builder.ptr(), &C_FMT_API, (void*)py_impl);
     }, "Adds a new module format to the environment");
 
+    m.def("log_error", [](std::string msg) { log_error(msg.c_str()); }, "Logs an error through the MeTTa logger");
+    m.def("log_warn", [](std::string msg) { log_warn(msg.c_str()); }, "Logs a warning through the MeTTa logger");
+    m.def("log_info", [](std::string msg) { log_info(msg.c_str()); }, "Logs an info message through the MeTTa logger");
+
     m.def("gnd_get_int", [](CAtom atom) -> py::object {
             long long n;
             if (grounded_number_get_longlong(atom.ptr(), &n)) {

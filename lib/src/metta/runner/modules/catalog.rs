@@ -202,12 +202,13 @@ impl PkgInfo {
         // want to require module authors to include a dep entry to be explicit about their dependencies, we
         // can remove this catalog
         let working_dir_catalog;
-        let local_catalogs = if let Some(mod_working_dir) = context.module().working_dir() {
-            working_dir_catalog = DirCatalog::new(PathBuf::from(mod_working_dir), context.metta().environment().fs_mod_formats.clone());
-            vec![&working_dir_catalog as &dyn ModuleCatalog]
-        } else {
-            vec![]
-        };
+        let mut local_catalogs = vec![];
+        if let Some(mod_working_dir) = context.module().working_dir() {
+            if context.metta.environment().working_dir() != Some(mod_working_dir) {
+                working_dir_catalog = DirCatalog::new(PathBuf::from(mod_working_dir), context.metta().environment().fs_mod_formats.clone());
+                local_catalogs.push(&working_dir_catalog as &dyn ModuleCatalog);
+            }
+        }
 
         //Search the catalogs, starting with the working dir, and continuing to the runner's Environment
         for catalog in local_catalogs.into_iter().chain(context.metta.environment().catalogs()) {
