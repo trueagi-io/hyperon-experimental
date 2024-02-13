@@ -1,4 +1,4 @@
-!(extend-py! bhv_binding)
+!(import! bhv_binding &self)
 
 !(bind! &v1 (bhv-new))
 !(bind! &v2 (bhv-new))

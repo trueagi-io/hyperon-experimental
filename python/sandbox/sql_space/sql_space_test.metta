@@ -1,4 +1,5 @@
-!(extend-py! sql_space)
+!(import! sql_space &self)
+
 ; database can be installed with use of   https://github.com/metabrainz/musicbrainz-docker#publish-ports-of-all-services
 ; the description https://musicbrainz.org/doc/MusicBrainz_Database
 !(bind! &sql_space (new-sql-space musicbrainz_db localhost musicbrainz musicbrainz 5432))

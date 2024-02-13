@@ -1,4 +1,4 @@
-!(extend-py! neurospace)
+!(import! neurospace &self)
 
 !(let $space (new-neural-space)
   (add-atom &self (= (my-nspace) $space)))

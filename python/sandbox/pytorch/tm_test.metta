@@ -1,4 +1,4 @@
-!(extend-py! torchme)
+!(import! torchme &self)
 
 ;-------------------------------------
 ; Tensor creation

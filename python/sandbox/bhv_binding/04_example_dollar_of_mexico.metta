@@ -1,4 +1,4 @@
-!(extend-py! bhv_binding)
+!(import! bhv_binding &self)
 
 !(bind! &name (bhv-new))
 !(bind! &capital_city (bhv-new))
