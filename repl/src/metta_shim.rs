@@ -308,9 +308,6 @@ pub mod metta_interface_mod {
 #[cfg(feature = "no_python")]
 pub mod metta_interface_mod {
     use std::path::{PathBuf, Path};
-    use std::fmt::Display;
-    use hyperon::atom::{Grounded, ExecError, match_by_equality};
-    use hyperon::matcher::MatchResultIter;
     use hyperon::metta::*;
     use hyperon::metta::text::SExprParser;
     use hyperon::ExpressionAtom;
@@ -354,7 +351,6 @@ pub mod metta_interface_mod {
                 metta: Metta::new(None),
                 result: vec![],
             };
-            new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(ImportPyErr) });
 
             Ok(new_shim)
         }
@@ -459,28 +455,6 @@ pub mod metta_interface_mod {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct ImportPyErr;
-
-    impl Display for ImportPyErr {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "extend-py!")
-        }
-    }
-
-    impl Grounded for ImportPyErr {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED])
-        }
-
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            Err(ExecError::from("extend-py! not available in metta repl without Python support"))
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
-    }
 }
 
 /// A utility function to return the part of a string in between starting and ending quotes
