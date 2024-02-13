@@ -1123,7 +1123,7 @@ impl Display for EqualOp {
 
 impl Grounded for EqualOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_BOOL])
+        Atom::expr([ARROW_SYMBOL, expr!(t), expr!(t), ATOM_TYPE_BOOL])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
