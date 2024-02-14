@@ -76,7 +76,7 @@ impl Environment {
         Self {
             config_dir: None,
             init_metta_path: None,
-            working_dir: None,
+            working_dir: std::env::current_dir().ok(),
             is_test: false,
             #[cfg(feature = "pkg_mgmt")]
             catalogs: vec![],
@@ -110,6 +110,9 @@ impl EnvBuilder {
 
     /// Returns a new EnvBuilder, to set the parameters for the MeTTa Environment
     ///
+    /// NOTE: Unless otherwise specified, the default working directory will be the current process
+    /// working dir (`cwd`)
+    ///
     /// NOTE: Unless otherwise specified by calling either [set_no_config_dir] or [set_config_dir], the
     ///   [Environment] will be configured using files in the OS-Specific configuration file locations.
     ///
@@ -136,7 +139,7 @@ impl EnvBuilder {
     /// The `test_env` Environment will not load or create any files.  Additionally
     /// this method will initialize the logger for the test environment
     pub fn test_env() -> Self {
-        EnvBuilder::new().set_is_test(true).set_no_config_dir()
+        EnvBuilder::new().set_working_dir(None).set_is_test(true).set_no_config_dir()
     }
 
     /// Sets (or unsets) the working_dir for the environment

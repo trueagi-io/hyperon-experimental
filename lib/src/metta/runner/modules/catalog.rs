@@ -253,7 +253,7 @@ pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, 
     let path = if path.as_ref().is_absolute() {
         PathBuf::from(path.as_ref())
     } else {
-        working_dir.unwrap_or_else(|| panic!("Fatal Error loading {}. Module without a working directory cannot load dependencies by relative path", path.as_ref().display()))
+        working_dir.ok_or_else(|| format!("Error loading {}.  Working directory required to load modules by relative path", path.as_ref().display()))?
             .join(path)
     };
 
