@@ -217,7 +217,7 @@ impl Metta {
             Some(env_builder) => Arc::new(env_builder.build()),
             None => Environment::common_env_arc()
         };
-        let top_mod_working_dir = environment.working_dir().map(|path| path.into());
+        let top_mod_resource_dir = environment.working_dir().map(|path| path.into());
         let top_mod_tokenizer = Shared::new(Tokenizer::new());
         let contents = MettaContents{
             modules: Mutex::new(vec![]),
@@ -233,7 +233,7 @@ impl Metta {
         };
         let metta = Self(Rc::new(contents));
 
-        let top_mod = MettaMod::new_with_tokenizer(&metta, TOP_MOD_NAME.to_string(), space, top_mod_tokenizer, top_mod_working_dir, false);
+        let top_mod = MettaMod::new_with_tokenizer(&metta, TOP_MOD_NAME.to_string(), space, top_mod_tokenizer, top_mod_resource_dir, false);
         assert_eq!(metta.add_module(top_mod), ModId::TOP);
 
         metta
@@ -687,7 +687,7 @@ impl<'input> RunContext<'_, '_, 'input> {
     ///
     /// Prior to calling this function, any attempt to access the active module in the RunContext will
     /// lead to a panic.
-    pub fn init_self_module(&mut self, space: DynSpace, working_dir: Option<PathBuf>) {
+    pub fn init_self_module(&mut self, space: DynSpace, resource_dir: Option<PathBuf>) {
         match &mut self.module {
             ModRef::Borrowed(_) => panic!("Module already initialized"),
             ModRef::Local(ref mut state_mod_ref) => {
@@ -696,7 +696,7 @@ impl<'input> RunContext<'_, '_, 'input> {
                     _ => panic!("Module already initialized"),
                 };
                 let tokenizer = Shared::new(Tokenizer::new());
-                **state_mod_ref = StateMod::Initializing(MettaMod::new_with_tokenizer(self.metta, mod_name, space, tokenizer, working_dir, false));
+                **state_mod_ref = StateMod::Initializing(MettaMod::new_with_tokenizer(self.metta, mod_name, space, tokenizer, resource_dir, false));
             }
         }
     }

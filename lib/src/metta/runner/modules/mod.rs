@@ -40,7 +40,7 @@ pub const MOD_NAME_SEPARATOR: char = ':';
 #[derive(Debug)]
 pub struct MettaMod {
     mod_path: String,
-    working_dir: Option<PathBuf>,
+    resource_dir: Option<PathBuf>,
     space: DynSpace,
     tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
@@ -51,7 +51,7 @@ pub struct MettaMod {
 impl MettaMod {
 
     /// Internal method to initialize an empty MettaMod
-    pub(crate) fn new_with_tokenizer(metta: &Metta, mod_path: String, space: DynSpace, tokenizer: Shared<Tokenizer>, working_dir: Option<PathBuf>, no_stdlib: bool) -> Self {
+    pub(crate) fn new_with_tokenizer(metta: &Metta, mod_path: String, space: DynSpace, tokenizer: Shared<Tokenizer>, resource_dir: Option<PathBuf>, no_stdlib: bool) -> Self {
 
         //Give the space a name based on the module, if it doesn't already have one
         if let Some(any_space) = space.borrow_mut().as_any_mut() {
@@ -67,7 +67,7 @@ impl MettaMod {
             space,
             tokenizer,
             imported_deps: Mutex::new(HashMap::new()),
-            working_dir,
+            resource_dir,
             #[cfg(feature = "pkg_mgmt")]
             pkg_info: PkgInfo::default(),
         };
@@ -339,8 +339,8 @@ impl MettaMod {
         &self.tokenizer
     }
 
-    pub fn working_dir(&self) -> Option<&Path> {
-        self.working_dir.as_ref().map(|p| p.as_ref())
+    pub fn resource_dir(&self) -> Option<&Path> {
+        self.resource_dir.as_deref()
     }
 
     /// A convenience to add an an atom to a module's Space, if it passes type-checking

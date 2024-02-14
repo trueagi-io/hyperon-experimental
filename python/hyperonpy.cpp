@@ -841,8 +841,8 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_ATOM(UNIT, "Unit");
 
     py::class_<CRunContext>(m, "CRunContext");
-    m.def("run_context_init_self_module", [](CRunContext& run_context, CSpace space, char const* working_dir) {
-        run_context_init_self_module(run_context.ptr, space.ptr(), working_dir);
+    m.def("run_context_init_self_module", [](CRunContext& run_context, CSpace space, char const* resource_dir) {
+        run_context_init_self_module(run_context.ptr, space.ptr(), resource_dir);
     }, "Init module in loader");
     m.def("run_context_load_module", [](CRunContext& run_context, const char* mod_name) {
         return ModuleId(run_context_load_module(run_context.ptr, mod_name));

@@ -180,7 +180,7 @@ impl PkgInfo {
             //If path is explicitly specified in the dep entry, then we must load the module at the
             // specified path, and cannot search anywhere else
             if let Some(path) = &entry.fs_path {
-                return loader_for_module_at_path(&context.metta, path, Some(name), context.module().working_dir(), false);
+                return loader_for_module_at_path(&context.metta, path, Some(name), context.module().resource_dir(), false);
             }
 
             //TODO, if git URI is specified in the dep entry, clone the repo to a location in the environment
@@ -196,21 +196,21 @@ impl PkgInfo {
             }
         }
 
-        //Search the module's Working Dir before searching the environment's catalogs
+        //Search the module's resource dir before searching the environment's catalogs
         // This allows a module to import another module inside its directory or as a peer of itself for
         // single-file modules, without including an explicit PkgInfo dep entry.  On the other hand, If we
         // want to require module authors to include a dep entry to be explicit about their dependencies, we
         // can remove this catalog
-        let working_dir_catalog;
+        let resource_dir_catalog;
         let mut local_catalogs = vec![];
-        if let Some(mod_working_dir) = context.module().working_dir() {
-            if context.metta.environment().working_dir() != Some(mod_working_dir) {
-                working_dir_catalog = DirCatalog::new(PathBuf::from(mod_working_dir), context.metta().environment().fs_mod_formats.clone());
-                local_catalogs.push(&working_dir_catalog as &dyn ModuleCatalog);
+        if let Some(mod_resource_dir) = context.module().resource_dir() {
+            if context.metta.environment().working_dir() != Some(mod_resource_dir) {
+                resource_dir_catalog = DirCatalog::new(PathBuf::from(mod_resource_dir), context.metta().environment().fs_mod_formats.clone());
+                local_catalogs.push(&resource_dir_catalog as &dyn ModuleCatalog);
             }
         }
 
-        //Search the catalogs, starting with the working dir, and continuing to the runner's Environment
+        //Search the catalogs, starting with the resource dir, and continuing to the runner's Environment
         for catalog in local_catalogs.into_iter().chain(context.metta.environment().catalogs()) {
             log::trace!("Looking for module: \"{name}\" inside {catalog:?}");
             //TODO: use lookup_newest_within_version_range, as soon as I add module versioning
@@ -230,13 +230,13 @@ impl PkgInfo {
 }
 
 /// Internal function to get a loader for a module at a specific file system path, by trying each FsModuleFormat in order
-pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, name: Option<&str>, working_dir: Option<&Path>, public: bool) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
+pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, name: Option<&str>, search_dir: Option<&Path>, public: bool) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
 
-    //If the path is not an absolute path, assume it's relative to the running module's working dir
+    //If the path is not an absolute path, assume it's relative to the running search_dir
     let path = if path.as_ref().is_absolute() {
         PathBuf::from(path.as_ref())
     } else {
-        working_dir.ok_or_else(|| format!("Error loading {}.  Working directory required to load modules by relative path", path.as_ref().display()))?
+        search_dir.ok_or_else(|| format!("Error loading {}.  Working directory or module resource dir required to load modules by relative path", path.as_ref().display()))?
             .join(path)
     };
 
@@ -298,8 +298,8 @@ impl ModuleLoader for SingleFileModule {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
-        let working_dir = self.path.parent().unwrap();
-        context.init_self_module(space, Some(working_dir.into()));
+        let resource_dir = self.path.parent().unwrap();
+        context.init_self_module(space, Some(resource_dir.into()));
 
         let program_text = std::fs::read_to_string(&self.path)
             .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))?;
@@ -337,8 +337,8 @@ impl ModuleLoader for DirModule {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
-        let working_dir = self.path.parent().unwrap();
-        context.init_self_module(space, Some(working_dir.into()));
+        let resource_dir = self.path.parent().unwrap();
+        context.init_self_module(space, Some(resource_dir.into()));
 
         let module_metta_path = self.path.join("module.metta");
         let program_text = std::fs::read_to_string(&module_metta_path)

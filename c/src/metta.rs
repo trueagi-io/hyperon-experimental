@@ -1558,7 +1558,7 @@ pub extern "C" fn env_builder_set_working_dir(builder: *mut env_builder_t, path:
 /// will be created, and its contents populated with default values, if one does not already exist
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
-/// @param[in]  path  A C-style string specifying a path to a working directory, to search for modules to load
+/// @param[in]  path  A C-style string specifying a path to the config directory
 ///
 #[no_mangle]
 pub extern "C" fn env_builder_set_config_dir(builder: *mut env_builder_t, path: *const c_char) {
@@ -1612,7 +1612,7 @@ pub extern "C" fn env_builder_set_is_test(builder: *mut env_builder_t, is_test: 
 /// @brief Adds a directory to search for module imports
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
-/// @param[in]  path  A C-style string specifying a path to a working directory, to search for modules to load
+/// @param[in]  path  A C-style string specifying a path to a directory, to search for modules to load
 /// @note The paths will be searched in the order they are added to the `env_builder_t``
 ///
 #[no_mangle]
@@ -1949,24 +1949,25 @@ impl Drop for CFsModFmtLoader {
 /// @ingroup module_group
 /// @param[in]  run_context  A pointer to the `run_context_t` to access the runner API
 /// @param[in]  space  A pointer to a handle for the new module's space
-/// @param[in]  working_dir_path   A C-style string specifying a file system path to use as the module's
-///    working directory.  Passing `NULL` means the module does not have a working directory
+/// @param[in]  resource_dir_path   A C-style string specifying a file system path to use as
+///    the module's resource directory.  Passing `NULL` means the module does not have a
+///    resource directory
 /// @note this function must be called exactly once within a module loader function
 ///
 #[no_mangle]
 pub extern "C" fn run_context_init_self_module(run_context: *mut run_context_t,
         space: *mut space_t,
-        working_dir_path: *const c_char) {
+        resource_dir_path: *const c_char) {
 
     let context = unsafe{ &mut *run_context }.borrow_mut();
     let dyn_space = unsafe{ &*space }.borrow();
-    let path = if working_dir_path.is_null() {
+    let path = if resource_dir_path.is_null() {
         None
     } else {
-        Some(PathBuf::from(cstr_as_str(working_dir_path)))
+        Some(PathBuf::from(cstr_as_str(resource_dir_path)))
     };
 
-    context.init_self_module( dyn_space.clone(), path);
+    context.init_self_module(dyn_space.clone(), path);
 }
 
 /// @brief Resolves a module name in the context of a running module, and loads that module

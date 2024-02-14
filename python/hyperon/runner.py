@@ -65,9 +65,9 @@ class RunContext:
         """Wraps the underlying RunContext object from the core"""
         self.c_run_context = c_run_context
 
-    def init_self_module(self, space, working_dir):
+    def init_self_module(self, space, resource_dir):
         """Must be called exactly once from within a module loader to initialize the module being loaded"""
-        hp.run_context_init_self_module(self.c_run_context, space.cspace, working_dir)
+        hp.run_context_init_self_module(self.c_run_context, space.cspace, resource_dir)
         #LP-TODO-NEXT Handle errors that happen inside hp.run_context_init_self_module
 
     def metta(self):
