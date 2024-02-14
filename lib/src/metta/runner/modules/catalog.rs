@@ -229,23 +229,6 @@ impl PkgInfo {
     }
 }
 
-/// Returns `true` if a str is a legal name for a module
-///
-/// A module name must be an ascii string, containing only alpha-numeric characters plus `_` and `-`.
-fn module_name_is_legal(name: &str) -> bool {
-    for the_char in name.chars() {
-        if !the_char.is_ascii() {
-            return false;
-        }
-        if !the_char.is_ascii_alphanumeric() &&
-            the_char != '-' &&
-            the_char != '_' {
-            return false;
-        }
-    }
-    return true;
-}
-
 /// Internal function to get a loader for a module at a specific file system path, by trying each FsModuleFormat in order
 pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, name: Option<&str>, working_dir: Option<&Path>, public: bool) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
 

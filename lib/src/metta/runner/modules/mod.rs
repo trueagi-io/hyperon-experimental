@@ -33,6 +33,9 @@ pub const TOP_MOD_NAME: &'static str = "top";
 /// The name to refer to the current module in the module name hierarchy
 pub const SELF_MOD_NAME: &'static str = "self";
 
+/// The separator between parent and child module names in a module name path
+pub const MOD_NAME_SEPARATOR: char = ':';
+
 /// Contains state associated with a loaded MeTTa module
 #[derive(Debug)]
 pub struct MettaMod {
@@ -384,14 +387,14 @@ pub(crate) struct ModNameNode {
 
 //LP-TODO-NEXT.  Momentarily commented this function out to squish the unused warning.  This is part of
 // the implementatino of relative module paths
-// /// Returns `Some(path)`, with `path` being the relative portion following `self.`, if the name
-// /// begins with "self.". Returns "" if the name exactly equals "self".  Otherwise returns None
+// /// Returns `Some(path)`, with `path` being the relative portion following `self:`, if the name
+// /// begins with "self:". Returns "" if the name exactly equals "self".  Otherwise returns None
 // pub(crate) fn mod_name_relative_path(name: &str) -> Option<&str> {
 //     if name.starts_with(SELF_MOD_NAME) {
 //         if name.len() == SELF_MOD_NAME.len() {
 //             Some("")
 //         } else {
-//             if name.as_bytes()[SELF_MOD_NAME.len()] == b'.' {
+//             if name.as_bytes()[SELF_MOD_NAME.len()] == MOD_NAME_SEPARATOR as u8 {
 //                 Some(&name[(SELF_MOD_NAME.len()+1)..])
 //             } else {
 //                 None
@@ -402,12 +405,12 @@ pub(crate) struct ModNameNode {
 //     }
 // }
 
-/// Returns the part of a module name path after the last '.', or the entire path if it does not
-/// contain a '.' char.  May panic if the path is invalid
+/// Returns the part of a module name path after the last separator, or the entire path if it does not
+/// contain a separator.  May panic if the path is invalid
 pub(crate) fn mod_name_from_path(path: &str) -> &str {
     let mut start_idx = 0;
     for (idx, the_char) in path.char_indices() {
-        if the_char == '.' {
+        if the_char == MOD_NAME_SEPARATOR {
             start_idx = idx+1;
         }
     }
@@ -483,7 +486,7 @@ impl ModNameNode {
         let mut sym_start = 0;
         for (idx, the_char) in name.char_indices() {
             match the_char {
-                '.' => {
+                MOD_NAME_SEPARATOR => {
                     let sym = &name[sym_start..idx];
                     if sym == TOP_MOD_NAME && sym_start == 0 {
                         sym_start = idx+1;
@@ -506,6 +509,23 @@ impl ModNameNode {
             None
         }
     }
+}
+
+/// Returns `true` if a str is a legal name for a module
+///
+/// A module name must be an ascii string, containing only alpha-numeric characters plus `_` and `-`.
+pub(crate) fn module_name_is_legal(name: &str) -> bool {
+    for the_char in name.chars() {
+        if !the_char.is_ascii() {
+            return false;
+        }
+        if !the_char.is_ascii_alphanumeric() &&
+            the_char != '-' &&
+            the_char != '_' {
+            return false;
+        }
+    }
+    return true;
 }
 
 #[test]
