@@ -532,26 +532,26 @@ pub(crate) fn module_name_is_legal(name: &str) -> bool {
 fn name_parse_test() {
     let mut top = ModNameNode::top();
 
-    assert_eq!(true, top.add("top.sub1", ModId(1)));
+    assert_eq!(true, top.add("top:sub1", ModId(1)));
     assert_eq!(true, top.add("sub2", ModId(2)));
-    assert_eq!(true, top.add("sub2.suba", ModId(3)));
-    assert_eq!(true, top.add("sub2.suba.subA", ModId(4)));
-    assert_eq!(true, top.add("top.sub1.subb", ModId(5)));
+    assert_eq!(true, top.add("sub2:suba", ModId(3)));
+    assert_eq!(true, top.add("sub2:suba:subA", ModId(4)));
+    assert_eq!(true, top.add("top:sub1:subb", ModId(5)));
 
     assert_eq!(false, top.add("", ModId(6)));
     assert_eq!(false, top.add("top", ModId(6)));
-    assert_eq!(false, top.add("sub2..suba.subB", ModId(7)));
-    assert_eq!(false, top.add("sub2.suba.subB.", ModId(7)));
+    assert_eq!(false, top.add("sub2::suba:subB", ModId(7)));
+    assert_eq!(false, top.add("sub2:suba:subB:", ModId(7)));
 
     assert_eq!(top.name_to_node("top").unwrap().mod_id, top.mod_id);
     assert_eq!(top.name_to_node("").unwrap().mod_id, top.mod_id);
-    assert!(top.name_to_node("top.").is_none());
-    assert!(top.name_to_node(".").is_none());
+    assert!(top.name_to_node("top:").is_none());
+    assert!(top.name_to_node(":").is_none());
 
     assert_eq!(top.name_to_node("sub1").unwrap().mod_id, ModId(1));
-    assert_eq!(top.name_to_node("top.sub2.suba.subA").unwrap().mod_id, ModId(4));
-    assert!(top.name_to_node("sub2.suba.subA.").is_none());
-    assert!(top.name_to_node("sub1.suba").is_none());
+    assert_eq!(top.name_to_node("top:sub2:suba:subA").unwrap().mod_id, ModId(4));
+    assert!(top.name_to_node("sub2:suba:subA:").is_none());
+    assert!(top.name_to_node("sub1:suba").is_none());
 
 }
 
