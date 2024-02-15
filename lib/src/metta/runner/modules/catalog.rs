@@ -104,11 +104,16 @@ use xxhash_rust::xxh3::xxh3_64;
 //
 //UPDATE2: Aliases from multiple names in the runner's namespace to a single module are now allowed, but
 // but a module's name from its ModuleDescriptor will always point back to that module.
+//UPDATE3: I think this is ultimately resolved by removing the name method from a module loader.  Then:
+// 1.) The name a module gets in the namespace depends on the name it was loaded with
+// 2.) The module loader can no longer conflict with that, and the module descriptor is irrelevant once
+//   the module is loaded
+// Therefore, it's up to the catalog to make sure relevant modules are provided, but if the catalog
+// has a good reason to alias a module, it will now be able to do it.  I will implement this shortly,
+// which will involve deleting this comment altogether.  So this update is part of the "historical record"
+//
 pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
-    ///
-    /// It is illegal for a ModuleCatalog to return a [ModuleDescriptor] from `lookup` where the name
-    /// field does not match the query name
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor>;
 
     //TODO: Add this function when I add module versioning
@@ -378,9 +383,9 @@ pub struct SingleFileModuleFmt;
 
 impl FsModuleFormat for SingleFileModuleFmt {
     fn paths_for_name(&self, parent_dir: &Path, mod_name: &str) -> Vec<PathBuf> {
-        let path = parent_dir.join(mod_name);
-        let path = push_extension(path, ".metta");
-        vec![path]
+        let base_path = parent_dir.join(mod_name);
+        let extended_path = push_extension(&base_path, ".metta");
+        vec![base_path, extended_path]
     }
     fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<Box<dyn ModuleLoader>> {
         if path.is_file() {
@@ -488,7 +493,7 @@ impl ModuleCatalog for DirCatalog {
 
 /// Internal Utility Function.  Blindly appends an extension onto a path, even if the path already
 /// has an extension
-fn push_extension(path: PathBuf, extension: impl AsRef<OsStr>) -> PathBuf {
+fn push_extension(path: &Path, extension: impl AsRef<OsStr>) -> PathBuf {
     let mut os_string: OsString = path.into();
     os_string.push(extension.as_ref());
     os_string.into()

@@ -513,7 +513,7 @@ impl ModNameNode {
 
 /// Returns `true` if a str is a legal name for a module
 ///
-/// A module name must be an ascii string, containing only alpha-numeric characters plus `_` and `-`.
+/// A module name must be an ascii string, containing only alpha-numeric characters plus [`_`, '.', `-`]
 pub(crate) fn module_name_is_legal(name: &str) -> bool {
     for the_char in name.chars() {
         if !the_char.is_ascii() {
@@ -521,7 +521,8 @@ pub(crate) fn module_name_is_legal(name: &str) -> bool {
         }
         if !the_char.is_ascii_alphanumeric() &&
             the_char != '-' &&
-            the_char != '_' {
+            the_char != '_' &&
+            the_char != '.' {
             return false;
         }
     }

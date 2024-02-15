@@ -244,19 +244,14 @@ class Environment:
             hp.env_builder_push_include_path(builder, path)
         return builder
 
-#LP-TODO-Next QUESTION: Do we really need Python directory modules?  Or is a core directory module enough
-# since it can include python file modules?
-#Answer: We need to consider the "__init__.py" files within a python module, so that warrants special logic,
-# however, we can likely use the same format to load pymods that are implemented as either directories or
-# stand-alone files
-
 class _PyFileMeTTaModFmt:
     """This private class implements the loader for Python modules that implement MeTTa modules. 
     This logic covers both "*.py" files and directories that contain an "__init__.py"."""
 
     def path_for_name(parent_dir, metta_mod_name):
         """Construct a file path name based on the metta_mod_name"""
-        return os.path.join(parent_dir, metta_mod_name + ".py")
+        file_name = metta_mod_name if metta_mod_name.endswith(".py") else metta_mod_name + ".py"
+        return os.path.join(parent_dir, file_name)
 
     def try_path(path, metta_mod_name):
         """Load the file as a Python module if it exists"""
