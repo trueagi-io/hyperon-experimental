@@ -466,8 +466,8 @@ impl ModNameNode {
         }
     }
 
-    /// Returns the node corresponding to any part of the node before the last '.', and
-    /// the remaining substring
+    /// Returns the node corresponding to any part of the node before the last separator character,
+    /// and the remaining substring
     pub fn parse_parent<'a, 'b>(&'a self, name: &'b str) -> Option<(&'a Self, &'b str)> {
         Self::parse_parent_generic(self, |node, name| node.children.get(name), name)
     }
@@ -556,10 +556,78 @@ fn name_parse_test() {
 
 }
 
+#[derive(Debug)]
+struct OuterLoader;
+
+impl ModuleLoader for OuterLoader {
+    fn name(&self) -> Result<String, String> {
+        Ok("outer".to_string())
+    }
+    fn load(&self, context: &mut RunContext) -> Result<(), String> {
+        let space = DynSpace::new(GroundingSpace::new());
+        context.init_self_module(space, None);
+
+        let parser = SExprParser::new("outer-module-test-atom");
+        context.push_parser(Box::new(parser));
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct InnerLoader;
+
+impl ModuleLoader for InnerLoader {
+    fn name(&self) -> Result<String, String> {
+        Ok("inner".to_string())
+    }
+    fn load(&self, context: &mut RunContext) -> Result<(), String> {
+        let space = DynSpace::new(GroundingSpace::new());
+        context.init_self_module(space, None);
+
+        let parser = SExprParser::new("inner-module-test-atom");
+        context.push_parser(Box::new(parser));
+
+        Ok(())
+    }
+}
+
+#[test]
+fn hierarchical_module_import_test() {
+    let runner = Metta::new(Some(EnvBuilder::test_env()));
+
+    //Make sure we get a reasonable error, if we try to load a sub-module to a module that doesn't exist
+    let result = runner.load_module_direct(&InnerLoader, "outer:inner");
+    assert!(result.is_err());
+
+    //Make sure we can load sub-modules sucessfully
+    let _outer_mod_id = runner.load_module_direct(&OuterLoader, "outer").unwrap();
+    let _inner_mod_id = runner.load_module_direct(&InnerLoader, "outer:inner").unwrap();
+
+    //Make sure we load the outer module sucessfully and can match the outer module's atom, but not
+    // the inner module's
+    let result = runner.run(SExprParser::new("!(import! outer &self)"));
+    assert_eq!(result, Ok(vec![vec![expr!()]]));
+    let result = runner.run(SExprParser::new("!(match &self outer-module-test-atom found!)"));
+    assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
+    let result = runner.run(SExprParser::new("!(match &self inner-module-test-atom found!)"));
+    assert_eq!(result, Ok(vec![vec![]]));
+
+    //Now import the inner module by relative module namespace, and check to make sure we can match
+    // its atom
+    let result = runner.run(SExprParser::new("!(import! outer:inner &self)"));
+    assert_eq!(result, Ok(vec![vec![expr!()]]));
+    let result = runner.run(SExprParser::new("!(match &self inner-module-test-atom found!)"));
+    assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
+}
+
+//LP-TODO-NEXT, make a unit test for relative imports using the module hierarchical namespace.
+//
+
+//LP-TODO-NEXT, make a unit test for recursive loading of parents modules based on hierarchical name import
+//
 
 //LP-TODO-NEXT, when a catalog resolves a module in a relative location (specifically parent module resource dir),
 // it should load that module into a relative module path, unless another path was explicitly specified in
 // the API call.  Make a test, to make sure this works.
 
-//LP-TODO-NEXT, make a runner unit test that can load modules by path.  Try both global (from top) and local (from current mod) loads
-//

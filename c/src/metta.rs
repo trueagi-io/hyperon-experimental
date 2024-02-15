@@ -1,3 +1,5 @@
+#![allow(non_camel_case_types)]
+
 use hyperon::common::shared::Shared;
 use hyperon::space::DynSpace;
 use hyperon::metta::text::*;
