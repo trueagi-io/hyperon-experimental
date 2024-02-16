@@ -182,6 +182,17 @@ def _priv_call_match_on_grounded_atom(gnd, catom):
     """
     return gnd.match_(Atom._from_catom(catom))
 
+def _priv_compare_value_atom(gnd, catom):
+    """
+    Private glue for Hyperonpy implementation.
+    Tests for equality between a grounded value atom and another atom
+    """
+    if hp.atom_get_type(catom) == AtomKind.GROUNDED:
+        atom = GroundedAtom(catom)
+        return gnd == atom.get_object()
+    else:
+        return False
+
 def atoms_are_equivalent(first, second):
     """Check if two atoms are equivalent"""
     return hp.atoms_are_equivalent(first.catom, second.catom)

@@ -445,6 +445,25 @@ pub fn match_by_string_equality(this: &str, other: &Atom) -> matcher::MatchResul
     }
 }
 
+/// A more thorough version of [match_by_equality], which will attempt the match in reverse order
+/// if the `other` atom doesn't wrap the same type as `this`
+pub fn match_by_bidirectional_equality<T>(this: &T, other: &Atom) -> matcher::MatchResultIter
+    where T: 'static + PartialEq + Clone + Grounded + Debug
+{
+    if let Some(other_obj) = other.as_gnd::<T>() {
+        match this == other_obj {
+            true => Box::new(std::iter::once(matcher::Bindings::new())),
+            false => Box::new(std::iter::empty()),
+        }
+    } else {
+        let temp_atom = Atom::gnd(this.clone());
+        match other {
+            Atom::Grounded(gnd) => gnd.match_(&temp_atom),
+            _ => Box::new(std::iter::empty()),
+        }
+    }
+}
+
 // TODO: pass args to execute_not_executable(), rename to execute_non_executable()
 /// Returns [ExecError::NoReduce] which means this atom should not be reduced
 /// further. This is a default implementation of `execute()` for the

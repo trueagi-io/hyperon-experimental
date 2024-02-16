@@ -2036,7 +2036,6 @@ pub extern "C" fn grounded_number_get_longlong(n: *const atom_ref_t, res: *mut c
 /// @return  True if the atom was a grounded bool atom, and the result was successfully written
 #[no_mangle]
 pub extern "C" fn grounded_bool_get_bool(n: *const atom_ref_t, res: *mut bool) -> bool {
-    // NOTE: there is no c_bool, so we have to choose particular int type
     let atom = unsafe { (*n).borrow() };
     match atom {
         Atom::Grounded(gnd) => {

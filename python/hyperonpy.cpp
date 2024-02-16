@@ -120,11 +120,12 @@ extern "C" {
     size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
     void py_free(struct gnd_t* _gnd);
 }
+extern "C" bindings_set_t py_match_value(const struct gnd_t *_gnd, const atom_ref_t *_atom);
 
 const gnd_api_t PY_EXECUTABLE_MATCHABLE_API = { &py_execute, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
 const gnd_api_t PY_EXECUTABLE_API = { &py_execute, nullptr, &py_eq, &py_clone, &py_display, &py_free };
 const gnd_api_t PY_MATCHABLE_API = { nullptr, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
-const gnd_api_t PY_VALUE_API = { nullptr, nullptr, &py_eq, &py_clone, &py_display, &py_free };
+const gnd_api_t PY_VALUE_API = { nullptr, &py_match_value , &py_eq, &py_clone, &py_display, &py_free };
 
 struct GroundedObject : gnd_t {
     GroundedObject(py::object pyobj, atom_t typ) : pyobj(pyobj) {
@@ -178,6 +179,22 @@ exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _arg
             snprintf(message, lenghtof(message), "Exception caught:\n%s", e.what());
             return exec_error_runtime(message);
         }
+    }
+}
+
+//Callback function for use by grounded atoms wrapping python values
+bindings_set_t py_match_value(const struct gnd_t *_gnd, const atom_ref_t *_atom) {
+    py::object hyperon = py::module_::import("hyperon.atoms");
+    py::function compare_value_atom_fn = hyperon.attr("_priv_compare_value_atom");
+
+    py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
+    CAtom catom = atom_clone(_atom);
+    py::bool_ result = compare_value_atom_fn(pyobj, catom);
+
+    if (result) {
+        return bindings_set_single();
+    } else {
+        return bindings_set_empty();
     }
 }
 
