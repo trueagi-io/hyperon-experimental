@@ -114,11 +114,13 @@ For either Proposal B or C, we probably want to add some form of linting / check
 
 #### Is importing by hierarchical module path allowed?
 
-In other words, should we support the following MeTTa code?  `!(import! mod_a.mod_b.mod_c &self)`?
+In other words, should we support the following MeTTa code?  `!(import! &self mod_a:mod_b:mod_c)`?
 
 Assuming each of `mod_a`, `mod_b`, and `mod_c` can be resolved within their appropriate parent context, and each is a valid module that exports the needed sub-module, should we support this?
 
 My feeling is yes, assuming we settle on a hierarchical module namespace (Proposal B in the *Module Namespace Scope* section) and we resolve issues with sub-module visibility / exports, then I don't see any drawbacks to supporting this.
+
+LP-TODO-UPDATE: This is mostly implemented.  Need to update documentation to reflect new code behaviors
 
 ## Remaining implementation work
 

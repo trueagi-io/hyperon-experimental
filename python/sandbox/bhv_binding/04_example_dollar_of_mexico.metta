@@ -1,4 +1,4 @@
-!(import! bhv_binding &self)
+!(import! &self bhv_binding)
 
 !(bind! &name (bhv-new))
 !(bind! &capital_city (bhv-new))

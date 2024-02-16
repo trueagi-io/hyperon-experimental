@@ -1,4 +1,4 @@
-!(import! torchme &self)
+!(import! &self torchme)
 
 ;-------------------------------------
 ; Tensor creation

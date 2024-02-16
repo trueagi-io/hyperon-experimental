@@ -25,7 +25,7 @@ fn unit_result() -> Result<Vec<Atom>, ExecError> {
 
 #[derive(Clone, Debug)]
 pub struct ImportOp {
-    //TODO-HACK: This is a terrible horrible ugly hack that should not be merged
+    //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
     context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<&'static mut RunContext<'static, 'static, 'static>>>>>,
 }
 
@@ -47,8 +47,9 @@ impl Display for ImportOp {
 
 impl Grounded for ImportOp {
     fn type_(&self) -> Atom {
-        //QUESTION: How do we express that we can accept a variable number of arguments?
-        // Ideally the "import as" / "import into" part would be optional
+        //TODO: Ideally the "import as" / "import into" part would be optional
+        //A deeper discussion on arg semantics as it relates to import! is here:
+        // https://github.com/trueagi-io/hyperon-experimental/pull/580#discussion_r1491332304
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
 
@@ -68,8 +69,7 @@ impl Grounded for ImportOp {
         // Otherwise it would perform behavior 1, by adding a token, but not adding the child space atom to
         // the parent space.
         //
-        //For now, in order to not lose functionality, I have kept this behavior although reversed the
-        // order of the module name and the destination arguments.
+        //For now, in order to not lose functionality, I have kept this behavior.
         //
         // ** TO SUMMARIZE **
         // If the destination argument is the &self Space atom, the behavior is (3) ie "from module import *",
@@ -82,9 +82,9 @@ impl Grounded for ImportOp {
         //  MettaMod::import_all_from_dependency
         //
 
-        let arg_error = || ExecError::from("import! expects a module name argument, and an optional destination");
-        let mod_name_atom = args.get(0).ok_or_else(arg_error)?;
-        let dest_arg = args.get(1);
+        let arg_error = || ExecError::from("import! expects a destination &space and a module name argument");
+        let dest_arg = args.get(0).ok_or_else(arg_error)?;
+        let mod_name_atom = args.get(1).ok_or_else(arg_error)?;
 
         // TODO: replace Symbol by grounded String?
         let mod_name = match mod_name_atom {
@@ -99,15 +99,10 @@ impl Grounded for ImportOp {
 
         // Import the module, as per the behavior described above
         match dest_arg {
-            Some(Atom::Symbol(dest_sym)) => {
+            Atom::Symbol(dest_sym) => {
                 context.module().import_dependency_as(&context.metta, mod_id, Some(dest_sym.name().to_string()))?;
             }
-            None => {
-                //TODO: Currently this pattern is unreachable on account of arity-checking in the MeTTa
-                // interpreter, but I have the code path in here for when it is possible
-                context.module().import_dependency_as(&context.metta, mod_id, None)?;
-            },
-            Some(other_atom) => {
+            other_atom => {
                 match &other_atom {
                     Atom::Grounded(_) if Atom::as_gnd::<DynSpace>(other_atom) == Some(context.module().space()) => {
                         context.module().import_all_from_dependency(&context.metta, mod_id)?;
@@ -117,6 +112,11 @@ impl Grounded for ImportOp {
                     }
                 }
             }
+            // None => {
+            //     //TODO: Currently this pattern is unreachable on account of arity-checking in the MeTTa
+            //     // interpreter, but I have the code path in here for when it is possible
+            //     context.module().import_dependency_as(&context.metta, mod_id, None)?;
+            // },
         }
 
         unit_result()

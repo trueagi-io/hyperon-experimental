@@ -132,7 +132,7 @@ impl MettaMod {
     // unfriendly.  Does it make sense to require Tokenizers entries to be associated with atoms, for
     // example "Type Atoms"?  For example, we could have an "Number" type that is tied to all the
     // Tokenizer regex patters used to parse different types of numbers?  Then a user could
-    // "!(import! Number from Arithmetic)" or whatever, and get all the Tokenizer patters that parse
+    // "!(import! Number from Arithmetic)" or whatever, and get all the Tokenizer patterns that parse
     // numbers?
     //
     // More discussion on the topic of tokenizer entry names is here https://github.com/trueagi-io/hyperon-experimental/issues/510
@@ -578,7 +578,7 @@ fn hierarchical_module_import_test() {
 
     //Make sure we load the outer module sucessfully and can match the outer module's atom, but not
     // the inner module's
-    let result = runner.run(SExprParser::new("!(import! outer &self)"));
+    let result = runner.run(SExprParser::new("!(import! &self outer)"));
     assert_eq!(result, Ok(vec![vec![expr!()]]));
     let result = runner.run(SExprParser::new("!(match &self outer-module-test-atom found!)"));
     assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
@@ -587,7 +587,7 @@ fn hierarchical_module_import_test() {
 
     //Now import the inner module by relative module namespace, and check to make sure we can match
     // its atom
-    let result = runner.run(SExprParser::new("!(import! outer:inner &self)"));
+    let result = runner.run(SExprParser::new("!(import! &self outer:inner)"));
     assert_eq!(result, Ok(vec![vec![expr!()]]));
     let result = runner.run(SExprParser::new("!(match &self inner-module-test-atom found!)"));
     assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
@@ -596,7 +596,7 @@ fn hierarchical_module_import_test() {
 //LP-TODO-NEXT, make a unit test for relative imports using the module hierarchical namespace.
 //
 // First, make relative loading and resolution work, then use relative loading in the "RecursiveOuterLoader"
-// to load a sub-module,  So the test would be to run "!(import! outer:inner &self)", and have it
+// to load a sub-module,  So the test would be to run "!(import! &self outer:inner)", and have it
 // do the right thing.
 //
 

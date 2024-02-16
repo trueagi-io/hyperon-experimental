@@ -27,7 +27,7 @@ Each module has a name which is provided by [ModuleLoader::name] method when the
 
 For example, the MeTTa code:
 ```
-!(import! some_module &self)
+!(import! &self some_module)
 ```
 will cause the name `some_module` to be resolved into a specific module instance; if that module is not yet loaded then it will be, and finally the module will be imported, in totality, into the currently executing module (context).
 
@@ -89,7 +89,7 @@ TODO: PkgInfo documentation also belongs in user-facing docs.  In that section, 
 
 ## Module Name Resolution
 
-When MeTTa code executes the `!(import! some_module)` operation, the module name needs to be mapped to a loaded or loadable module.  This process occurs according to the logic described by the flowchart below.
+When MeTTa code executes the `!(import! &space some_module)` operation, the module name needs to be mapped to a loaded or loadable module.  This process occurs according to the logic described by the flowchart below.
 
 ![Name Resolution Behavior](./assets/module_name_resolution.svg "Name Resolution Behavior")
 

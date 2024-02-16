@@ -6,7 +6,7 @@
 //! ```ignore
 //!       ┌────────────────────┐           ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽                    ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽
 //!      ╱                    ╱       ⎽⎼⎻⎺  pkg-info in  ⎺⎻⎼⎽ Yes      ⎽⎼⎻⎺pkg-info entry ⎺⎻⎼⎽ No
-//!     ╱  (import! module)  ╱─────►<   &self has entry for   >─────►<   has fs_path attrib?   >───┐
+//!     ╱      (import!)     ╱─────►<   &self has entry for   >─────►<   has fs_path attrib?   >───┐
 //!    ╱                    ╱         ⎺⎻⎼⎽    module?    ⎽⎼⎻⎺          ⎺⎻⎼⎽               ⎽⎼⎻⎺     │
 //!   └────────────────────┘               ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺                    ⎺⎻⎼⎽ ⎽⎽⎽ ⎽⎼⎻⎺          │
 //!                                              │ No                             │ Yes            │

@@ -13,7 +13,7 @@ class ModulesTest(unittest.TestCase):
 
         #Make sure the `import!` operation finds the pyfile_test_mod.py file, recognizes it as a
         # MeTTa module using the PythonFileModuleFormat, and loads the MeTTa module it sucessfully
-        result = runner.run("!(import! pyfile_test_mod &self)")
+        result = runner.run("!(import! &self pyfile_test_mod)")
 
         #Validate that we didn't get an error loading nor importing the module
         self.assertFalse(atom_is_error(result[0][0]))

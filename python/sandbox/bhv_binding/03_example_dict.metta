@@ -1,4 +1,4 @@
-!(import! bhv_binding &self)
+!(import! &self bhv_binding)
 
 !(bind! &v1 (bhv-new))
 !(bind! &v2 (bhv-new))

@@ -21,7 +21,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Importing the module into new space
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-!(import! f1_moduleA &m)
+!(import! &m f1_moduleA)
 
 ; Check whether passed expression contains atom for which condition is True
 (: contains (-> Expression (-> Atom Bool) Bool))
@@ -61,7 +61,7 @@
 ; Importing the same space into `&self` should break nothing
 ; TODO? If stdlib space would be in `&m`, which should check that it is not
 ; there anymore since in should be removed after importing it to `&self`
-!(import! f1_moduleA &self)
+!(import! &self f1_moduleA)
 
 ; Now indirectly imported `g` works and `f` fully works
 !(assertEqual (g 2) 102)
@@ -90,7 +90,7 @@
 
 ; Check that the &self space contains the corelib child space
 ; Note: corelib doesn't import any modules into itself, so no space copy is needed
-!(import! corelib &corelib)
+!(import! &corelib corelib)
 (: is-corelib (-> Atom Bool))
 (= (is-corelib $atom) (== $atom &corelib))
 !(assertEqual
@@ -106,7 +106,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Let's import one more module into `&self` with a diamond dependence
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-!(import! f1_moduleB &self)
+!(import! &self f1_moduleB)
 ; `g` from moduleC imported via two paths as well as `f`, which uses `g`,
 ; are not duplicated and produce deterministic results
 !(assertEqual (g 2) 102)
@@ -120,7 +120,7 @@
 
 ; Let's import f1_moduleB once more. Such import should be ignored and
 ; thus f, g and dup should remain unchanged.
-!(import! f1_moduleB &self)
+!(import! &self f1_moduleB)
 !(assertEqual (g 2) 102)
 !(assertEqual (f 2) 103)
 !(assertEqualToResult

@@ -1,4 +1,4 @@
-!(import! sql_space &self)
+!(import! &self sql_space)
 
 ; database can be installed with use of   https://github.com/metabrainz/musicbrainz-docker#publish-ports-of-all-services
 ; the description https://musicbrainz.org/doc/MusicBrainz_Database

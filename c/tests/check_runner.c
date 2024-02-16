@@ -167,13 +167,13 @@ START_TEST (test_custom_module_format)
     space_free(space);
 
     //Load a module using our custom format, and verify it was loaded sucessfully
-    ck_assert(run_metta_and_compare_result(&runner, "!(import! ctest-mod loaded-test)", "()"));
+    ck_assert(run_metta_and_compare_result(&runner, "!(import! &loaded-test ctest-mod)", "()"));
 
     //Test that we can match an atom in the module loaded with the custom format
     ck_assert(run_metta_and_compare_result(&runner, "!(match &loaded-test test-atom found!)", "found!"));
 
     //Try and load a module that our format will reject, and validate we get an error
-    ck_assert(run_metta_and_compare_result(&runner, "!(import! bogus-mod loaded-test)", "(Error (import! bogus-mod loaded-test) Failed to resolve module bogus-mod)"));
+    ck_assert(run_metta_and_compare_result(&runner, "!(import! &new-space bogus-mod)", "(Error (import! &new-space bogus-mod) Failed to resolve module bogus-mod)"));
 
     metta_free(runner);
 }

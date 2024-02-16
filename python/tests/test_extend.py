@@ -11,7 +11,7 @@ class ExtendTest(unittest.TestCase):
         metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
         self.assertEqual(
             metta.run('''
-              !(import! extension &self)
+              !(import! &self extension)
               !(get-by-key &my-dict "A")
               !(get-by-key &my-dict 6)
             '''),
@@ -30,7 +30,7 @@ class ExtendTestDirMod(unittest.TestCase):
         metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
         self.assertEqual(
             metta.run('''
-              !(import! ext_dir &self)
+              !(import! &self ext_dir)
               !(get-by-key &my-dict "A")
               !(get-by-key &my-dict 6)
             '''),
@@ -52,7 +52,7 @@ class ExtendGlobalTest(unittest.TestCase):
         self.assertEqual(g_object, None)
         metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
         metta.run('''
-          !(import! extension &self)
+          !(import! &self extension)
           !(set-global! 42)
         ''')
         # Checking that the object is accessible and its value is correct
@@ -72,7 +72,7 @@ class ExtendErrorTest(unittest.TestCase):
         '''
         metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
         try:
-          metta.run("!(import! error_pyext &self)")
+          metta.run("!(import! &self error_pyext)")
         except Exception as err:
             pass
         else:
