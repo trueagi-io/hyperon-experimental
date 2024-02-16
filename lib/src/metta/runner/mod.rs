@@ -566,7 +566,8 @@ impl<'m, 'input> RunnerState<'m, 'input> {
             module,
         };
 
-        //TODO-HACK: This is a terrible horrible ugly hack that should not be merged
+        //TODO-HACK: This is a terrible horrible ugly hack that should be cleaned up ASAP.  It will cause
+        // UB when we have multiple runner threads that execute concurrently.
         //Push the RunContext so the MeTTa Ops can access it.  The context ought to be passed as an argument
         // to the execute functions, in the absence of the hack
         self.metta.0.context.lock().unwrap().push(Arc::new( unsafe{ std::mem::transmute(&mut context) } ));
@@ -575,7 +576,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
         // Call our function
         let result = f(&mut context);
 
-        //TODO-HACK: This is a terrible horrible ugly hack that should not be merged
+        //TODO-HACK: This is a terrible horrible ugly hack that should be cleaned up ASAP.
         //pop the context in the runner
         self.metta.0.context.lock().unwrap().pop();
         //END HORRIBLE HACK

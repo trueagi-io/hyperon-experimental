@@ -145,3 +145,8 @@ This relates to package management because we want to represent a PkgInfo struct
 There is a discussion on the topic here: https://github.com/trueagi-io/hyperon-experimental/issues/455
 
 Nil's work here https://github.com/trueagi-io/protobuf-metta and more generally this thread https://chat.singularitynet.io/chat/pl/u8u9jzrnmp85d8ounmpbmjukyc has raised the idea that we pursue a format that relies on a structure definition that uses the MeTTa type-system, rather than trying to create a self-describing format.
+
+### Circular-import testing & guard-rails
+
+I need to make sure the right things happen when circular loading / imports are attempted.  More dicussion here: https://github.com/trueagi-io/hyperon-experimental/pull/580#discussion_r1491178245
+

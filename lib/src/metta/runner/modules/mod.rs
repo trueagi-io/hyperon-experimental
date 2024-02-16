@@ -134,6 +134,8 @@ impl MettaMod {
     // Tokenizer regex patters used to parse different types of numbers?  Then a user could
     // "!(import! Number from Arithmetic)" or whatever, and get all the Tokenizer patters that parse
     // numbers?
+    //
+    // More discussion on the topic of tokenizer entry names is here https://github.com/trueagi-io/hyperon-experimental/issues/510
     pub fn import_item_from_dependency_as(&self, metta: &Metta, from_name: &str, mod_id: ModId, name: Option<&str>) -> Result<(), String> {
 
         // Get the space and tokenizer associated with the dependent module
@@ -190,37 +192,7 @@ impl MettaMod {
     /// module's space as an atom inside the &self module
     ///
     /// WARNING: Module import behavior is still WIP, specifically around "import *" behavior, and
-    /// especiallu around transitive imports
-    //
-    //QUESTION: What do we do about tokenizer entries?  Currently they end up glomming together but this
-    // is highly undesireable for several reasons.  At best it leads to tokenizer entries that are
-    // unreachable because they're superseded by other entries, and at worst this can introduce some
-    // difficult to diagnose behavior
-    //
-    //QUESTION: How should we prevent duplication of transitive imports?  For example, consider: ModA
-    // imports ModOne and ModTwo.  ModOne imports ModB.  ModTwo also imports ModB.
-    // How do we make sure ModA doesn't end up with duplicate definitions for ModB?
-    //
-    //The solution implemented here is to elevate any transient dependencies up, and import them directly
-    // into the upper module, but this has a lot of drawbacks described in the [stripped_space] method
-    // comments, such as requiring a deep-copy of the dependency module's atoms.
-    //
-    //This is usually solved in other languages using some combination of strategies.
-    // 1.) Keep loaded modules contained within their own name-spaces. And allow aliasing between a parent's
-    //  space and a child module's space.  This is not really sufficient for us because we also want to
-    //  import Tokenizer entries and their associated functionality, such as the ability to parse integers
-    // 2.) Allow a conditional "import-unique" brute-force import which is tantamount to inlining the dependency
-    //  at the point of the import statement.  e.g. `#include` in C., but with the "ifdef" guards to make sure
-    //  the same header isn't inlined multiple times.  We may want to offer this functionality, but I assume
-    //  we'll want to offer this in addition to a more hygenic module system structure, given that most languages
-    //  (Python, JavaScript, even Perl!) that started off with brute-force imports have retrofitted more
-    //  sophisticated dependency management as they have matured
-    // 3.) Force a module to be explicit about what can be exported from the module.  e.g. the `pub` visibility
-    //  qualifiers in Rust, etc.
-    //
-    //Personally, I feel like 3. (being explicit about exported items) is the cleanest solution and provides
-    //  the most flexibility into the future (such as the ability to unload modules, etc.)
-    //
+    /// especially around transitive imports
     pub fn import_all_from_dependency(&self, metta: &Metta, mod_id: ModId) -> Result<(), String> {
 
         // See if the dependency has already been imported
@@ -623,8 +595,15 @@ fn hierarchical_module_import_test() {
 
 //LP-TODO-NEXT, make a unit test for relative imports using the module hierarchical namespace.
 //
+// First, make relative loading and resolution work, then use relative loading in the "RecursiveOuterLoader"
+// to load a sub-module,  So the test would be to run "!(import! outer:inner &self)", and have it
+// do the right thing.
+//
 
 //LP-TODO-NEXT, make a unit test for recursive loading of parents modules based on hierarchical name import
+//
+// Next make sure the catalogs are able to do the recursive loading from the file system,
+// using their working dirs.  Maybe make this second test a C API test to get better coverage
 //
 
 //LP-TODO-NEXT, when a catalog resolves a module in a relative location (specifically parent module resource dir),
