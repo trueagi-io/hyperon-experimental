@@ -88,30 +88,6 @@ use xxhash_rust::xxh3::xxh3_64;
 ///
 /// `ModuleCatalog` types are closely connected with [ModuleLoader] types because the `ModuleCatalog` must
 /// recognize the module in whatever media it exists, and supply the `ModuleLoader` to load that module
-//
-//QUESTION: Should it be legal for a catalog to alias a module?  In other words, can a catalog's `lookup`
-// method return a ModuleDescriptor where the name field of the ModuleDescriptor doesn't match the query
-// name passed to `lookup()`?
-//
-// * Arguments *Against* it being legal:
-//  If it is allowed, we have destroyed the direct mapping between loaded modules and the names they
-//  have in the import! operation.  In other words, if we start with a ModuleDescriptor, and import!
-//  its name field, there is no guarantee we will get the same module at all.
-//
-//UPDATE: I started by writing a balanced view of the pros and cons, but ultimately I found the arguments
-// in favor to be weak, and potentially anti-features.  So I think it should be illegal to return a
-// ModuleDescriptor where the name field doesn't match the `lookup` name.
-//
-//UPDATE2: Aliases from multiple names in the runner's namespace to a single module are now allowed, but
-// but a module's name from its ModuleDescriptor will always point back to that module.
-//UPDATE3: I think this is ultimately resolved by removing the name method from a module loader.  Then:
-// 1.) The name a module gets in the namespace depends on the name it was loaded with
-// 2.) The module loader can no longer conflict with that, and the module descriptor is irrelevant once
-//   the module is loaded
-// Therefore, it's up to the catalog to make sure relevant modules are provided, but if the catalog
-// has a good reason to alias a module, it will now be able to do it.  I will implement this shortly,
-// which will involve deleting this comment altogether.  So this update is part of the "historical record"
-//
 pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor>;
@@ -185,7 +161,7 @@ impl PkgInfo {
             //If path is explicitly specified in the dep entry, then we must load the module at the
             // specified path, and cannot search anywhere else
             if let Some(path) = &entry.fs_path {
-                return loader_for_module_at_path(&context.metta, path, Some(name), context.module().resource_dir(), false);
+                return loader_for_module_at_path(&context.metta, path, Some(name), context.module().resource_dir());
             }
 
             //TODO, if git URI is specified in the dep entry, clone the repo to a location in the environment
@@ -235,7 +211,7 @@ impl PkgInfo {
 }
 
 /// Internal function to get a loader for a module at a specific file system path, by trying each FsModuleFormat in order
-pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, name: Option<&str>, search_dir: Option<&Path>, public: bool) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
+pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, name: Option<&str>, search_dir: Option<&Path>) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
 
     //If the path is not an absolute path, assume it's relative to the running search_dir
     let path = if path.as_ref().is_absolute() {
@@ -247,29 +223,8 @@ pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, 
 
     //Check all module formats, to try and load the module at the path
     for fmt in metta.environment().fs_mod_formats() {
-        if let Some(loader) = fmt.try_path(&path, name) {
-            match loader.name() {
-                Ok(derived_name) => {
-                    if let Some(name) = name {
-                        if derived_name != name {
-                            panic!("Fatal Error: module found at {} doesn't match module in pkg-info dependency: {}!", path.display(), name);
-                        }
-                    }
-
-                    //Construct a uid based on a stable-hash of the path, because a module
-                    // loaded by explicit path shouldn't be imported by any other module unless
-                    // it explicitly imports it from the same path.
-                    let descriptor = match public {
-                        true => ModuleDescriptor::new(derived_name),
-                        false => ModuleDescriptor::new_with_uid(derived_name, xxh3_64(path.as_os_str().as_encoded_bytes())),
-                    };
-
-                    return Ok(Some((loader, descriptor)))
-                },
-                Err(err) => {
-                    panic!("Can't load invalid module at {}, Error: {}!", path.display(), err);
-                }
-            };
+        if let Some((loader, descriptor)) = fmt.try_path(&path, name) {
+            return Ok(Some((loader, descriptor)))
         }
     }
 
@@ -279,27 +234,16 @@ pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, 
 /// A loader for a MeTTa module that lives within a single `.metta` file
 #[derive(Debug)]
 pub(crate) struct SingleFileModule {
-    name: String,
     path: PathBuf,
 }
 
 impl SingleFileModule {
-    fn new(name: &str, path: &Path) -> Self {
-        Self {name: name.to_string(), path: path.into() }
+    fn new(path: &Path) -> Self {
+        Self {path: path.into() }
     }
 }
 
 impl ModuleLoader for SingleFileModule {
-
-    fn name(&self) -> Result<String, String> {
-        Ok(self.name.clone())
-    }
-
-    //TODO: Add accessor for the module version here
-    //In a single-file module, the discriptor information will be embedded within the MeTTa code
-    // Therefore, we need to parse the whole text of the module looking for a `_pkg-info` atom,
-    // that we can then convert into a PkgInfo structure
-
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
@@ -319,26 +263,16 @@ impl ModuleLoader for SingleFileModule {
 /// A loader for a MeTTa module implemented as a directory
 #[derive(Debug)]
 pub(crate) struct DirModule {
-    name: String,
     path: PathBuf,
 }
 
 impl DirModule {
-    fn new(name: &str, path: &Path) -> Self {
-        Self {name: name.to_string(), path: path.into() }
+    fn new(path: &Path) -> Self {
+        Self {path: path.into() }
     }
 }
 
 impl ModuleLoader for DirModule {
-
-    fn name(&self) -> Result<String, String> {
-        Ok(self.name.clone())
-    }
-
-    //LP-TODO-Next: Try and read the module version here
-    //If there is a `pkg-info.metta` file, information from that file will take precedence.
-    // Otherwise, try and parse a `_pkg-info` atom from the `module.metta` file
-
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
@@ -369,13 +303,19 @@ pub trait FsModuleFormat: std::fmt::Debug + Send + Sync {
     /// from this method will be passed to [try_path] to validate them.
     fn paths_for_name(&self, parent_dir: &Path, mod_name: &str) -> Vec<PathBuf>;
 
-    /// Checks a specific path, and returns the [ModuleLoader] if a supported module resides at
-    /// the path
+    /// Checks a specific path, and returns a [ModuleLoader] and a [ModuleDescriptor] if a
+    /// supported module resides at the path
     ///
     /// This method should return `None` if the path does not point to a valid module in the
     /// implemented format.
-    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<Box<dyn ModuleLoader>>;
+    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>;
 }
+
+/// Arbitrary number unlikely to be chosen by another FsModuleFormat
+const SINGLE_FILE_MOD_FMT_ID: u64 = u64::MAX - 5000;
+
+/// Arbitrary number unlikely to be chosen by another FsModuleFormat
+const DIR_MOD_FMT_ID: u64 = u64::MAX - 5001;
 
 /// An object to identify and load a single-file module (naked .metta files)
 #[derive(Debug)]
@@ -387,15 +327,21 @@ impl FsModuleFormat for SingleFileModuleFmt {
         let extended_path = push_extension(&base_path, ".metta");
         vec![base_path, extended_path]
     }
-    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<Box<dyn ModuleLoader>> {
+    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<(Box<dyn ModuleLoader>, ModuleDescriptor)> {
         if path.is_file() {
-            match mod_name {
-                Some(mod_name) => Some(Box::new(SingleFileModule::new(mod_name, path))),
-                None => {
-                    let mod_name = path.file_stem().unwrap().to_str().unwrap();
-                    Some(Box::new(SingleFileModule::new(mod_name, path)))
-                }
-            }
+            let mod_name = match mod_name {
+                Some(mod_name) => mod_name,
+                None => path.file_stem().unwrap().to_str().unwrap(),
+            };
+
+            //TODO: Add accessor for the module version here
+            //In a single-file module, the discriptor information will be embedded within the MeTTa code
+            // Therefore, we need to parse the whole text of the module looking for a `_pkg-info` atom,
+            // that we can then convert into a PkgInfo structure
+
+            let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), path, SINGLE_FILE_MOD_FMT_ID);
+            let loader = Box::new(SingleFileModule::new(path));
+            Some((loader, descriptor))
         } else {
             None
         }
@@ -411,17 +357,22 @@ impl FsModuleFormat for DirModuleFmt {
         let path = parent_dir.join(mod_name);
         vec![path]
     }
-    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<Box<dyn ModuleLoader>> {
+    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<(Box<dyn ModuleLoader>, ModuleDescriptor)> {
         if path.is_dir() {
             let mod_matta_path = path.join("module.metta");
             if mod_matta_path.exists() {
-                return match mod_name {
-                    Some(mod_name) => Some(Box::new(DirModule::new(mod_name, path))),
-                    None => {
-                        let mod_name = path.file_stem().unwrap().to_str().unwrap();
-                        Some(Box::new(DirModule::new(mod_name, path)))
-                    }
+                let mod_name = match mod_name {
+                    Some(mod_name) => mod_name,
+                    None => path.file_stem().unwrap().to_str().unwrap(),
                 };
+
+                //LP-TODO-Next: Try and read the module version here
+                //If there is a `pkg-info.metta` file, information from that file will take precedence.
+                // Otherwise, try and parse a `_pkg-info` atom from the `module.metta` file
+
+                let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), path, DIR_MOD_FMT_ID);
+                let loader = Box::new(DirModule::new(path));
+                return Some((loader, descriptor));
             }
         }
         None
@@ -505,29 +456,10 @@ fn visit_modules_in_dir_using_mod_formats(fmts: &[Box<dyn FsModuleFormat>], dir_
 
     for fmt in fmts {
         for path in fmt.paths_for_name(dir_path, mod_name) {
-            if let Some(loader) = fmt.try_path(&path, Some(mod_name)) {
-                match loader.name() {
-                    Ok(resolved_name) => {
-                        if resolved_name == mod_name {
-                            //TODO: Remember to query the loader for the version and use the version as part of
-                            //  the descriptor we are constructing
-
-                            //Construct the descriptor's uid with a stable-hash based on the path, because we might get
-                            // multiple instances purporting to be the same module
-                            let descriptor = ModuleDescriptor::new_with_uid(resolved_name, xxh3_64(path.as_os_str().as_encoded_bytes()));
-
-                            if f(loader, descriptor) {
-                                return;
-                            }
-
-                        } else {
-                            log::warn!("Warning! module at {:?}, doesn't match name: {}!", loader, mod_name);
-                        }
-                    },
-                    Err(err) => {
-                        log::warn!("Warning! invalid module at {:?}, Error: {}!", loader, err);
-                    }
-                };
+            if let Some((loader, descriptor)) = fmt.try_path(&path, Some(mod_name)) {
+                if f(loader, descriptor) {
+                    return;
+                }
             }
         }
     }
@@ -554,6 +486,17 @@ impl ModuleDescriptor {
     /// Create a new ModuleDescriptor
     pub fn new_with_uid(name: String, uid: u64) -> Self {
         Self { name, uid: Some(uid) }
+    }
+    /// Create a new ModuleDescriptor using a file system path and another unique id
+    ///
+    /// The descriptor's uid is based on a stable-hash of the path, because a module loaded by
+    /// path shouldn't be substituted for any other module unless it's from the same path.
+    ///
+    /// The purpose of the `fmt_id` is to ensure two different formats or catalogs don't generate
+    /// the same ModuleDescriptor, but you can pass 0 if it doesn't matter
+    pub fn new_with_path_and_fmt_id(name: String, path: &Path, fmt_id: u64) -> Self {
+        let uid = xxh3_64(path.as_os_str().as_encoded_bytes()) ^ fmt_id;
+        ModuleDescriptor::new_with_uid(name, uid)
     }
     /// Returns the name of the module represented by the ModuleDescriptor
     pub fn name(&self) -> &str {

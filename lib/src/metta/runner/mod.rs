@@ -263,7 +263,7 @@ impl Metta {
     pub fn load_module_at_path<P: AsRef<std::path::Path>>(&self, path: P, mod_name: Option<&str>) -> Result<ModId, String> {
 
         // Resolve the module name into a loader object using the resolution logic in the pkgInfo
-        let (loader, descriptor) = match loader_for_module_at_path(self, &path, mod_name, self.environment().working_dir(), mod_name.is_some())? {
+        let (loader, descriptor) = match loader_for_module_at_path(self, &path, mod_name, self.environment().working_dir())? {
             Some((loader, descriptor)) => (loader, descriptor),
             None => return Err(format!("Failed to resolve module at path: {}", path.as_ref().display()))
         };

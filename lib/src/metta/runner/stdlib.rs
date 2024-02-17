@@ -1330,9 +1330,6 @@ impl Default for CoreLibLoader {
 }
 
 impl ModuleLoader for CoreLibLoader {
-    fn name(&self) -> Result<String, String> {
-        Ok(self.0.clone())
-    }
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
         let space = DynSpace::new(GroundingSpace::new());
         context.init_self_module(space, None);

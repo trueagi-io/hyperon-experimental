@@ -314,7 +314,7 @@ impl EnvBuilder {
         {
             //Append the built-in [FSModuleFormat]s, [SingleFileModuleFmt] and [DirModuleFmt]
             fs_mod_formats.push(Box::new(SingleFileModuleFmt));
-            fs_mod_formats.push(Box::new(DirModuleFmt));    
+            fs_mod_formats.push(Box::new(DirModuleFmt));
 
             //Wrap the fs_mod_formats in an Arc, so it can be shared with the instances of DirCatalog
             env.fs_mod_formats = Arc::new(fs_mod_formats);

@@ -113,7 +113,7 @@ class MeTTa:
                 space = GroundingSpaceRef()
             if env_builder is None:
                 env_builder = hp.env_builder_start()
-            hp.env_builder_push_fs_module_format(env_builder, _PyFileMeTTaModFmt)
+            hp.env_builder_push_fs_module_format(env_builder, _PyFileMeTTaModFmt, 5000) #5000 is an arbitrary number unlikely to conflict with the arbitrary number chosen by other formats
             #LP-TODO-Next, add an fs_module_fmt arg to the standardized way to init environments, so that
             # the Python user can define additional formats without tweaking any hyperon files.  To make
             # this convenient it probably means making a virtual ModuleFormat base class

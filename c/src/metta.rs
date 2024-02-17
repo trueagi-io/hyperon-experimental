@@ -881,7 +881,7 @@ pub extern "C" fn metta_new_with_space_environment_and_stdlib(space: *mut space_
     let loader_wrapper;
     let loader = match loader_callback {
         Some(callback) => {
-            loader_wrapper = CModLoaderWrapper{ name: "stdlib".to_string(), callback, callback_context };
+            loader_wrapper = CModLoaderWrapper{ callback, callback_context };
             Some(&loader_wrapper as &dyn ModuleLoader)
         },
         None => None
@@ -894,7 +894,6 @@ pub extern "C" fn metta_new_with_space_environment_and_stdlib(space: *mut space_
 /// Internal wrapper to turn a mod_loader_callback_t into an trait object that implements [ModuleLoader]
 #[derive(Debug)]
 struct CModLoaderWrapper {
-    name: String,
     //NOTE: This function type matches the internals of mod_loader_callback_t.  This is necessary because
     //  CBindGen has some unfortunate inconsistencies around how Rust types are included in the C header
     callback: extern "C" fn(run_context: *mut run_context_t, callback_context: *mut c_void),
@@ -906,9 +905,6 @@ unsafe impl Send for CModLoaderWrapper {}
 unsafe impl Sync for CModLoaderWrapper {}
 
 impl ModuleLoader for CModLoaderWrapper {
-    fn name(&self) -> Result<String, String> {
-        Ok(self.name.clone())
-    }
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
         let mut c_context = run_context_t::from(context);
 
@@ -1119,7 +1115,7 @@ pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
     let rust_metta = metta.borrow();
     let name = cstr_as_str(name);
     let loader_callback = loader_callback.unwrap();
-    let loader = CModLoaderWrapper{ name: name.to_string(), callback: loader_callback, callback_context };
+    let loader = CModLoaderWrapper{ callback: loader_callback, callback_context };
 
     match rust_metta.load_module_direct(&loader, name) {
         Ok(mod_id) => mod_id.into(),
@@ -1635,15 +1631,17 @@ pub extern "C" fn env_builder_push_include_path(builder: *mut env_builder_t, pat
 /// @param[in]  api  A pointer to the `mod_file_fmt_api_t` table of functions to define the behavior of the
 ///    module format
 /// @param[in]  payload  A pointer to a user-defined structure to store information related to this format
+/// @param[in]  fmt_id  An arbitrary number to ensure modules identified by one format are not mistaken
+///    for another
 /// @warning The data referenced by both the `api` and the `payload` pointers must remain valid for the
 ///    entire life of the environment.  In the case of the common_env, that is the entire life of the program
 /// @note Formats will be tried in the order they are added to the `env_builder_t``
 ///
 #[no_mangle]
-pub extern "C" fn env_builder_push_fs_module_format(builder: *mut env_builder_t, api: *const mod_file_fmt_api_t, payload: *const c_void) {
+pub extern "C" fn env_builder_push_fs_module_format(builder: *mut env_builder_t, api: *const mod_file_fmt_api_t, payload: *const c_void, fmt_id: u64) {
     let builder_arg_ref = unsafe{ &mut *builder };
     let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
-    let c_loader = CFsModFmtLoader::new(api, payload);
+    let c_loader = CFsModFmtLoader::new(api, payload, fmt_id);
     let builder = builder.push_fs_module_format(c_loader);
     *builder_arg_ref = builder.into();
 }
@@ -1851,12 +1849,12 @@ struct CFsModFmtLoader {
     api: *const mod_file_fmt_api_t,
     payload: *const c_void,
     callback_context: *mut c_void,
-    mod_name: Option<String>,
+    fmt_id: u64,
 }
 
 impl CFsModFmtLoader {
-    fn new(api: *const mod_file_fmt_api_t, payload: *const c_void) -> Self {
-        Self {api, payload, callback_context: core::ptr::null_mut(), mod_name: None }
+    fn new(api: *const mod_file_fmt_api_t, payload: *const c_void, fmt_id: u64) -> Self {
+        Self {api, payload, callback_context: core::ptr::null_mut(), fmt_id }
     }
 }
 
@@ -1900,7 +1898,7 @@ impl FsModuleFormat for CFsModFmtLoader {
             vec![]
         }
     }
-    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<Box<dyn ModuleLoader>> {
+    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<(Box<dyn ModuleLoader>, ModuleDescriptor)> {
         let api = unsafe{ &*self.api };
         let path_c_string = str_as_cstr(path.to_str().unwrap());
         let mod_name = match mod_name {
@@ -1911,10 +1909,11 @@ impl FsModuleFormat for CFsModFmtLoader {
 
         let result_context = (api.try_path)(self.payload, path_c_string.as_ptr(), mod_name_c_string.as_ptr());
         if !result_context.is_null() {
+            let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), path, self.fmt_id);
+
             let mut new_loader = self.clone();
-            new_loader.mod_name = Some(mod_name.to_string());
             new_loader.callback_context = result_context;
-            Some(Box::new(new_loader))
+            Some((Box::new(new_loader), descriptor))
         } else {
             None
         }
@@ -1922,9 +1921,6 @@ impl FsModuleFormat for CFsModFmtLoader {
 }
 
 impl ModuleLoader for CFsModFmtLoader {
-    fn name(&self) -> Result<String, String> {
-        Ok(self.mod_name.clone().unwrap())
-    }
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
         let api = unsafe{ &*self.api };
         let mut c_context = run_context_t::from(context);

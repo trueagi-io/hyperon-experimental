@@ -159,7 +159,7 @@ START_TEST (test_custom_module_format)
 {
     env_builder_t env_builder = env_builder_start();
     env_builder_set_is_test(&env_builder, true);
-    env_builder_push_fs_module_format(&env_builder, &TEST_FMT_API, NULL);
+    env_builder_push_fs_module_format(&env_builder, &TEST_FMT_API, NULL, 0);
 
     //Start by initializing a runner using an environment with our custom module format
     space_t space = space_new_grounding_space();

@@ -954,11 +954,11 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the environment");
     m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
     m.def("env_builder_push_include_path", [](EnvBuilder& builder, std::string path) { env_builder_push_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
-    m.def("env_builder_push_fs_module_format", [](EnvBuilder& builder, py::object interface) { 
+    m.def("env_builder_push_fs_module_format", [](EnvBuilder& builder, py::object interface, uint64_t fmt_id) { 
         //TODO. We end up leaking this object, but it's a non-issue in practice because environments usually live the life of the program.
         // To fix this, give the Python MeTTa object built from this EnvBuilder a reference to the `interface` object, rather than allocating it here
         py::object* py_impl = new py::object(interface);
-        env_builder_push_fs_module_format(builder.ptr(), &C_FMT_API, (void*)py_impl);
+        env_builder_push_fs_module_format(builder.ptr(), &C_FMT_API, (void*)py_impl, fmt_id);
     }, "Adds a new module format to the environment");
 
     m.def("log_error", [](std::string msg) { log_error(msg.c_str()); }, "Logs an error through the MeTTa logger");

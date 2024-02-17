@@ -331,13 +331,6 @@ impl MettaMod {
 /// A ModuleLoader is responsible for loading a MeTTa module through the API.  Implementations of
 /// ModuleLoader can be used to define a module format or to supply programmatically defined modules
 pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
-
-    /// Returns the name of the module that the `ModuleLoader` is able to load
-    fn name(&self) -> Result<String, String>;
-
-    // TODO: implement this when I implement module versioning
-    // fn version(&self) -> Result<Option<Version>, String>;
-
     /// A function to load the module my making MeTTa API calls.  This function will be called by
     /// [Metta::get_or_init_module]
     fn load(&self, context: &mut RunContext) -> Result<(), String>;
@@ -532,9 +525,6 @@ fn name_parse_test() {
 struct OuterLoader;
 
 impl ModuleLoader for OuterLoader {
-    fn name(&self) -> Result<String, String> {
-        Ok("outer".to_string())
-    }
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
         let space = DynSpace::new(GroundingSpace::new());
         context.init_self_module(space, None);
@@ -550,9 +540,6 @@ impl ModuleLoader for OuterLoader {
 struct InnerLoader;
 
 impl ModuleLoader for InnerLoader {
-    fn name(&self) -> Result<String, String> {
-        Ok("inner".to_string())
-    }
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
         let space = DynSpace::new(GroundingSpace::new());
         context.init_self_module(space, None);
