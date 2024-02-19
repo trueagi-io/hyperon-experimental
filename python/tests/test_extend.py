@@ -40,6 +40,23 @@ class ExtendTestDirMod(unittest.TestCase):
         self.assertEqual(
               metta.run('! &runner')[0][0].get_object().value, metta)
 
+    def test_extend_subdir_pymod(self):
+        '''
+        This test verifies that importing from a python module subdirectory also works
+        '''
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        self.assertEqual(
+            metta.run('''
+              !(import! &self ext_sub.ext_dir)
+              !(get-by-key &my-dict "A")
+              !(get-by-key &my-dict 6)
+            '''),
+            [[E()],
+             [ValueAtom(5)],
+             [ValueAtom('B')]])
+        self.assertEqual(
+              metta.run('! &runner')[0][0].get_object().value, metta)
+
 class ExtendGlobalTest(unittest.TestCase):
 
     def test_extend_global(self):
