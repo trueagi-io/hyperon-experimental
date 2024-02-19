@@ -91,6 +91,7 @@ impl Grounded for ImportOp {
             Atom::Symbol(mod_name) => mod_name.name(),
             _ => return Err("import! expects a module name as the first argument".into())
         };
+        let mod_name = strip_quotes(mod_name);
 
         // Load the module into the runner, or get the ModId if it's already loaded
         //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
@@ -125,6 +126,24 @@ impl Grounded for ImportOp {
     fn match_(&self, other: &Atom) -> MatchResultIter {
         match_by_equality(self, other)
     }
+}
+
+/// A utility function to return the part of a string in between starting and ending quotes
+// TODO: Roll this into a stdlib grounded string module, maybe as a test case for
+//   https://github.com/trueagi-io/hyperon-experimental/issues/351
+fn strip_quotes(src: &str) -> &str {
+    if let Some(first) = src.chars().next() {
+        if first == '"' {
+            if let Some(last) = src.chars().last() {
+                if last == '"' {
+                    if src.len() > 1 {
+                        return &src[1..src.len()-1]
+                    }
+                }
+            }
+        }
+    }
+    src
 }
 
 #[derive(Clone, PartialEq, Debug)]
