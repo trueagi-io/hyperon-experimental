@@ -134,6 +134,13 @@ This Interface includes the types and functions to instantiate a MeTTa interpret
 
 This interface allows configuration of shared properties for MeTTa interpreters
 
+[//]: # (Module Interface)
+
+@defgroup module_group Module Interface
+@brief Interfaces for module loading, defining module formats, and package management
+
+This interface includes structures and functions to define module formats and loader functions, as well as the API for accessing the MeTTa package manager
+
 [//]: # (Misc. Interfaces)
 
 @defgroup misc_group Misc Interfaces

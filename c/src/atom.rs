@@ -1,3 +1,5 @@
+#![allow(non_camel_case_types)]
+
 use hyperon::*;
 use hyperon::space::DynSpace;
 

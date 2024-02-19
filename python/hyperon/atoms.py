@@ -182,6 +182,17 @@ def _priv_call_match_on_grounded_atom(gnd, catom):
     """
     return gnd.match_(Atom._from_catom(catom))
 
+def _priv_compare_value_atom(gnd, catom):
+    """
+    Private glue for Hyperonpy implementation.
+    Tests for equality between a grounded value atom and another atom
+    """
+    if hp.atom_get_type(catom) == AtomKind.GROUNDED:
+        atom = GroundedAtom(catom)
+        return gnd == atom.get_object()
+    else:
+        return False
+
 def atoms_are_equivalent(first, second):
     """Check if two atoms are equivalent"""
     return hp.atoms_are_equivalent(first.catom, second.catom)
@@ -234,6 +245,9 @@ class ValueObject(GroundedObject):
 
     def __eq__(self, other):
         """Compares the equality of this ValueObject with another based on their content."""
+        # TODO: We need to hook this up the the Value-Bridging mechanism when it's designed and built
+        # https://github.com/trueagi-io/hyperon-experimental/issues/351
+
         # TODO: ?typecheck for the contents
         return isinstance(other, ValueObject) and self.content == other.content
 

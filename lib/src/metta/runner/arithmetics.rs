@@ -107,7 +107,7 @@ impl Grounded for Bool {
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
+        match_by_bidirectional_equality(self, other)
     }
 }
 

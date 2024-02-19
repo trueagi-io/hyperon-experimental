@@ -3,6 +3,7 @@ use std::io::{Cursor, Write};
 use std::ffi::CString;
 use std::os::raw::c_char;
 use std::ffi::CStr;
+use log::{error, warn, info};
 
 pub fn cstr_as_str<'a>(s: *const c_char) -> &'a str {
     unsafe{ CStr::from_ptr(s) }.to_str().expect("Incorrect UTF-8 sequence")
@@ -70,3 +71,34 @@ pub(crate) fn write_debug_into_buf<T: std::fmt::Debug>(obj: T, buf: *mut c_char,
     }
     write_into_buf(DisplayDebug(obj), buf, buf_len)
 }
+
+/// @brief Logs an error through the MeTTa library's logger.  Does not halt execution.
+/// @ingroup misc_group
+/// @param[in]  msg  A C-style string containing the message to log
+///
+#[no_mangle]
+pub extern "C" fn log_error(msg: *const c_char) {
+    let msg = cstr_as_str(msg);
+    error!("{msg}")
+}
+
+/// @brief Logs a warning through the MeTTa library's logger
+/// @ingroup misc_group
+/// @param[in]  msg  A C-style string containing the message to log
+///
+#[no_mangle]
+pub extern "C" fn log_warn(msg: *const c_char) {
+    let msg = cstr_as_str(msg);
+    warn!("{msg}")
+}
+
+/// @brief Logs an informative message through the MeTTa library's logger
+/// @ingroup misc_group
+/// @param[in]  msg  A C-style string containing the message to log
+///
+#[no_mangle]
+pub extern "C" fn log_info(msg: *const c_char) {
+    let msg = cstr_as_str(msg);
+    info!("{msg}")
+}
+

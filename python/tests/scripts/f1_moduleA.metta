@@ -2,7 +2,7 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Example file used by f1_imports.metta
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-!(import! &self f1_moduleC.metta)
+!(import! &self f1_moduleC)
 
 ; FIXME? stdlib space is not available at importing time -
 ; only tokens / grounded operations work, while symbolic functions

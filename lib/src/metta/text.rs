@@ -34,7 +34,7 @@ impl Tokenizer {
     }
 
     pub fn register_token<C: 'static + Fn(&str) -> Atom>(&mut self, regex: Regex, constr: C) {
-        self.tokens.push(TokenDescr{ regex, constr: Rc::new(constr) })
+        self.register_token_with_func_ptr(regex, Rc::new(constr))
     }
 
     pub fn register_token_with_regex_str<C: 'static + Fn(&str) -> Atom>(&mut self, regex: &str, constr: C) {
@@ -42,11 +42,19 @@ impl Tokenizer {
         self.register_token(regex, constr)
     }
 
+    /// Moves all tokenizer entries from `from` into `self`, leaving `from` empty
+    ///
+    /// NOTE: Tokens are tried in reverse order, so `move_front` actually adds entries that will be tried
+    /// **last** in the priority order
     pub fn move_front(&mut self, from: &mut Tokenizer) {
         from.move_back(self);
         self.move_back(from);
     }
 
+    /// Moves all tokenizer entries from `from` into `self`, leaving `from` empty
+    ///
+    /// NOTE: Tokens are tried in reverse order, so `move_back` actually adds entries that will be tried
+    /// **first** in the priority order
     pub fn move_back(&mut self, from: &mut Tokenizer) {
         self.tokens.append(&mut from.tokens);
     }
@@ -58,6 +66,19 @@ impl Tokenizer {
                 None => false,
             }
         }).map(|descr| &*(descr.constr))
+    }
+
+    /// Registers the regex-function pair, for a function that's already wrapped in an RC pointer
+    pub(crate) fn register_token_with_func_ptr(&mut self, regex: Regex, constr: Rc<AtomConstr>) {
+        self.tokens.push(TokenDescr{ regex, constr: constr })
+    }
+
+    /// Returns the constructor function associated with an exact regex string, or None if the Tokenizer
+    /// does not contain the specified regex
+    pub(crate) fn find_exact(&self, regex_str: &str) -> Option<Rc<AtomConstr>> {
+        self.tokens.iter().rfind(|descr| {
+            descr.regex.as_str() == regex_str
+        }).map(|descr| descr.constr.clone())
     }
 
 }
@@ -226,6 +247,12 @@ pub trait Parser {
 impl Parser for SExprParser<'_> {
     fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
         self.parse(tokenizer)
+    }
+}
+
+impl Parser for &mut (dyn Parser + '_) {
+    fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
+        (**self).next_atom(tokenizer)
     }
 }
 
@@ -462,6 +489,43 @@ impl<'a> SExprParser<'a> {
 
 }
 
+/// An version of [SExprParser] that owns its input text buffer so it has a `'static` lifetime
+#[derive(Clone)]
+pub struct OwnedSExprParser {
+    text: String,
+    last_pos: usize,
+}
+
+impl OwnedSExprParser {
+    pub fn new(text: String) -> Self {
+        Self{text, last_pos: 0}
+    }
+}
+
+impl Parser for OwnedSExprParser {
+    fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
+        if self.last_pos >= self.text.len() {
+            return Ok(None);
+        }
+        let slice = &self.text[self.last_pos..self.text.len()];
+        let mut parser = SExprParser::new(slice);
+        let result = parser.parse(tokenizer);
+        self.last_pos = self.last_pos + parser.cur_idx();
+        result
+    }
+}
+
+impl Parser for &[Atom] {
+    fn next_atom(&mut self, _tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
+        if let Some((atom, rest)) = self.split_first() {
+            *self = rest;
+            Ok(Some(atom.clone()))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -607,4 +671,17 @@ mod tests {
         tokenizer.register_token(Regex::new(r"A").unwrap(), |_| Atom::sym("B"));
         assert_eq!(tokenizer.find_token("A").unwrap()("A"), Atom::sym("B"));
     }
+
+    #[test]
+    fn test_owned_sexprparser() {
+        let tokenizer = Tokenizer::new();
+        let mut parser = OwnedSExprParser::new(r#"One (two 3) "four""#.to_string());
+        let mut results: Vec<Atom> = vec![];
+        while let Ok(Some(atom)) = parser.next_atom(&tokenizer) {
+            results.push(atom);
+        }
+        let expected = vec![sym!("One"), expr!("two" "3"), sym!(r#""four""#)];
+        assert_eq!(results, expected);
+    }
+
 }

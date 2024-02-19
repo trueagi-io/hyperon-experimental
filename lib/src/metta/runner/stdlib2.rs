@@ -6,6 +6,7 @@ use crate::metta::text::Tokenizer;
 use crate::metta::runner::Metta;
 use crate::metta::types::get_atom_types;
 use crate::common::assert::vec_eq_no_order;
+use crate::common::shared::Shared;
 use crate::metta::runner::stdlib;
 
 use std::fmt::Display;
@@ -352,10 +353,9 @@ fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
 }
 
-pub fn register_common_tokens(metta: &Metta) {
-    let tokenizer = metta.tokenizer();
-    let mut tref = tokenizer.borrow_mut();
-    let space = metta.space();
+//TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
+// to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
+pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, _metta: &Metta) {
 
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
@@ -381,11 +381,9 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
 }
 
-pub fn register_runner_tokens(metta: &Metta) {
-    let space = metta.space();
-    let tokenizer = metta.tokenizer();
-
-    let mut tref = tokenizer.borrow_mut();
+//TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
+// to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
+pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
 
     let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
     tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
@@ -414,11 +412,11 @@ pub fn register_runner_tokens(metta: &Metta) {
     // pointer and somehow use the same type to represent weak and strong
     // pointers to the atomspace. (2) resolve &self in GroundingSpace::query
     // method without adding it into container.
-    let self_atom = Atom::gnd(metta.space().clone());
+    let self_atom = Atom::gnd(space.clone());
     tref.register_token(regex(r"&self"), move |_| { self_atom.clone() });
 }
 
-pub fn register_rust_tokens(metta: &Metta) {
+pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     let mut rust_tokens = Tokenizer::new();
     let tref = &mut rust_tokens;
 
@@ -441,7 +439,7 @@ pub fn register_rust_tokens(metta: &Metta) {
     let eq_op = Atom::gnd(stdlib::EqualOp{});
     tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
 
-    metta.tokenizer().borrow_mut().move_front(&mut rust_tokens);
+    target.move_front(&mut rust_tokens);
 }
 
 pub static METTA_CODE: &'static str = include_str!("stdlib.metta");

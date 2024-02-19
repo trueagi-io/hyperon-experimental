@@ -6,16 +6,35 @@ class ExtendTest(unittest.TestCase):
 
     def test_extend(self):
         '''
-        This test verifies that extend-py! along with @register_atoms and @register_tokens works
+        This test verifies that importing from a python-implemnted module along with @register_atoms and @register_tokens works
         '''
-        metta = MeTTa(env_builder=Environment.test_env())
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
         self.assertEqual(
             metta.run('''
-              !(extend-py! extension)
+              !(import! &self extension)
               !(get-by-key &my-dict "A")
               !(get-by-key &my-dict 6)
             '''),
-            [[],
+            [[E()],
+             [ValueAtom(5)],
+             [ValueAtom('B')]])
+        self.assertEqual(
+              metta.run('! &runner')[0][0].get_object().value, metta)
+
+class ExtendTestDirMod(unittest.TestCase):
+
+    def test_extend_dir_pymod(self):
+        '''
+        This test verifies that importing from a python module directory also works
+        '''
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        self.assertEqual(
+            metta.run('''
+              !(import! &self ext_dir)
+              !(get-by-key &my-dict "A")
+              !(get-by-key &my-dict 6)
+            '''),
+            [[E()],
              [ValueAtom(5)],
              [ValueAtom('B')]])
         self.assertEqual(
@@ -31,9 +50,9 @@ class ExtendGlobalTest(unittest.TestCase):
         from extension import g_object
         # Sanity check
         self.assertEqual(g_object, None)
-        metta = MeTTa(env_builder=Environment.test_env())
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
         metta.run('''
-          !(extend-py! extension)
+          !(import! &self extension)
           !(set-global! 42)
         ''')
         # Checking that the object is accessible and its value is correct
@@ -45,6 +64,19 @@ class ExtendGlobalTest(unittest.TestCase):
         from extension import g_object
         self.assertEqual(g_object, 42)
 
+class ExtendErrorTest(unittest.TestCase):
+
+    def test_error_pyext(self):
+        '''
+        This test verifies that an error from a Python extension is properly propagated
+        '''
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        try:
+          metta.run("!(import! &self error_pyext)")
+        except Exception as err:
+            pass
+        else:
+            raise Exception('error_pyext.py should raise an error when loading, so no-err is an error')
 
 if __name__ == "__main__":
     unittest.main()
