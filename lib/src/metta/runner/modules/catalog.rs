@@ -276,7 +276,7 @@ impl ModuleLoader for DirModule {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
-        let resource_dir = self.path.parent().unwrap();
+        let resource_dir = &self.path;
         context.init_self_module(space, Some(resource_dir.into()));
 
         let module_metta_path = self.path.join("module.metta");
