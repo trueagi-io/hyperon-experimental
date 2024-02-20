@@ -1015,7 +1015,10 @@ PYBIND11_MODULE(hyperonpy, m) {
             char c = f.get();
             bool isspace = std::isspace(c);
             if(isspace or c == '(' or c == ')') {
-                // if(c == ')' and depth == 0) --> exception
+                if(c == ')' and depth == 0) {
+                    // ignore for now --> exception
+                    continue;
+                }
                 if(str.size() > 0) {
                     atom_t atom;
                     if(str[0] >= '0' and str[0] <= '9' or str[0] == '-') {
@@ -1053,15 +1056,14 @@ PYBIND11_MODULE(hyperonpy, m) {
                     depth++;
                 } else { //if(c == ')') {
                     atom_t expr = atom_expr(children.data(), children.size());
-                    children.clear();
+                    children = std::move(stack.back());
+                    stack.pop_back();
                     depth--;
                     if(depth == 0) {
                         space_add(space.ptr(), expr);
-                        continue;
+                    } else {
+                        children.push_back(expr);
                     }
-                    children = stack.back();
-                    stack.pop_back();
-                    children.push_back(expr);
                 }
             } else {
                 str += c;
