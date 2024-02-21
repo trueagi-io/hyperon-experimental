@@ -1,10 +1,10 @@
 import re
 
 from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError, AtomType, MatchableObject, \
-    G, S
+    G, S, Atoms
 from .base import Tokenizer, SExprParser
 from .ext import register_atoms, register_tokens
-
+import hyperonpy as hp
 
 class Char:
     """Emulate Char type as in a traditional FPL"""
@@ -174,4 +174,18 @@ def call_atom():
 
     return {
         r"call:[^\s]+": newCallAtom
+    }
+
+@register_atoms
+def load_ascii():
+    def load_ascii_atom(space, name):
+        space_obj = space.get_object()
+        hp.load_ascii(name.get_name(), space_obj.cspace)
+        #['Space', 'Symbol', 'Unit'], 
+        return [Atoms.UNIT]
+
+    loadAtom = OperationAtom('load-ascii', load_ascii_atom,
+                             unwrap=False)
+    return {
+        r"load-ascii": loadAtom
     }
