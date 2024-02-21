@@ -379,6 +379,8 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
     let nop_op = Atom::gnd(stdlib::NopOp{});
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
+    let match_op = Atom::gnd(stdlib::MatchOp{});
+    tref.register_token(regex(r"match"), move |_| { match_op.clone() });
 }
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
@@ -531,7 +533,7 @@ mod tests {
         assert_eq!(result, Ok(vec![vec![expr!("ok")]]));
         let result = run_program("!(case (unify (B C) (C B) ok nok) ( (ok ok) (nok nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
-        let result = run_program("!(case (match (B C) (C B) ok) ( (ok ok) (%void% nok) ))");
+        let result = run_program("!(case (unify (B C) (C B) ok Empty) ( (ok ok) (%void% nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
     }
 
