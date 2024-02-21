@@ -4,7 +4,6 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-mopa = "0.2.2"
 regex = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
