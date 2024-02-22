@@ -1011,10 +1011,16 @@ PYBIND11_MODULE(hyperonpy, m) {
         std::vector<atom_t> children;
         std::string str = "";
         int depth = 0;
+        bool isescape = false;
         while(f) {
             char c = f.get();
             bool isspace = std::isspace(c);
-            if(isspace or c == '(' or c == ')') {
+            if(isescape) {
+                str += c;
+                isescape = false;
+                continue;
+            }
+            if((isspace or c == '(' or c == ')')) {
                 if(c == ')' and depth == 0) {
                     // ignore for now --> exception
                     continue;
@@ -1066,7 +1072,11 @@ PYBIND11_MODULE(hyperonpy, m) {
                     }
                 }
             } else {
-                str += c;
+                if(c == '\\') {
+                    isescape = true;
+                } else {
+                    str += c;
+                }
             }
         }
         return true;
