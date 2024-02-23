@@ -182,6 +182,13 @@ def _priv_call_match_on_grounded_atom(gnd, catom):
     """
     return gnd.match_(Atom._from_catom(catom))
 
+def _priv_call_serialize_on_grounded_atom(gnd, serializer):
+    """
+    Private glue for Hyperonpy implementation.
+    Serializes grounded atoms
+    """
+    return gnd.serialize(serializer)
+
 def _priv_compare_value_atom(gnd, catom):
     """
     Private glue for Hyperonpy implementation.
@@ -250,6 +257,16 @@ class ValueObject(GroundedObject):
 
         # TODO: ?typecheck for the contents
         return isinstance(other, ValueObject) and self.content == other.content
+
+    def serialize(self, serializer):
+        if isinstance(self.content, bool):
+            return serializer.serialize_bool(self.content)
+        elif isinstance(self.content, int):
+            return serializer.serialize_int(self.content)
+        elif isinstance(self.content, float):
+            return serializer.serialize_float(self.content)
+        else:
+            return hp.SerdeResult.NOT_SUPPORTED
 
 class NoReduceError(Exception):
     """Custom exception; raised when a reduction operation cannot be performed."""

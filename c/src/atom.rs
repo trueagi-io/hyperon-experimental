@@ -2,6 +2,7 @@
 
 use hyperon::*;
 use hyperon::space::DynSpace;
+use hyperon::atom::serde;
 
 use crate::util::*;
 use crate::space::*;
@@ -506,6 +507,8 @@ pub struct gnd_api_t {
     ///
     match_: Option<extern "C" fn(gnd: *const gnd_t, other: *const atom_ref_t) -> bindings_set_t>,
 
+    serialize: Option<extern "C" fn(gnd: *const gnd_t, serializer: *mut serde_serializer_t) -> serde_result_t>,
+
     /// @brief Tests whether two atoms instantiated from the same interface are equal
     /// @param[in]  gnd  A pointer to the Grounded Atom object
     /// @param[in]  other  A pointer to the other grounded atom's object
@@ -613,17 +616,22 @@ impl Grounded for CGrounded {
             None => match_by_equality(self, other)
         }
     }
+
+    fn serialize(&self, serializer: &mut dyn serde::Serializer) -> serde::Result {
+        match self.api().serialize {
+            Some(func) => {
+                let mut c_serializer = serde_rust_serializer_t::new(serializer);
+                let result = func(self.get_ptr(), &mut c_serializer.c_api);
+                serde_into_rust_result(result)
+            },
+            None => Err(serde::Error::NotSupported),
+        }
+    }
 }
 
 impl PartialEq for CGrounded {
     fn eq(&self, other: &CGrounded) -> bool {
-        let self_api_ptr = unsafe{ (&*self.get_ptr()).api };
-        let other_api_ptr = unsafe{ (&*other.get_ptr()).api };
-        if self_api_ptr == other_api_ptr {
-            (self.api().eq)(self.get_ptr(), other.get_ptr())
-        } else {
-            false
-        }
+        (self.api().eq)(self.get_ptr(), other.get_ptr())
     }
 }
 
@@ -1400,4 +1408,68 @@ pub extern "C" fn bindings_set_merge_into(_self: *mut bindings_set_t, other: *co
 
     let mut result_set = owned_self.merge(other);
     core::mem::swap(_self, &mut result_set);
+}
+
+
+#[repr(C)]
+pub struct serde_serializer_t {
+    serialize_bool: Option<extern "C" fn(serializer: *mut c_void, v: bool) -> serde_result_t>,
+    serialize_longlong: Option<extern "C" fn(serializer: *mut c_void, v: c_longlong) -> serde_result_t>,
+    serialize_double: Option<extern "C" fn(serializer: *mut c_void, v: c_double) -> serde_result_t>,
+}
+
+#[repr(C)]
+pub enum serde_result_t {
+    OK,
+    NOT_SUPPORTED,
+}
+
+fn serde_into_rust_result(result: serde_result_t) -> serde::Result {
+    match result {
+        serde_result_t::OK => Ok(()),
+        serde_result_t::NOT_SUPPORTED => Err(serde::Error::NotSupported),
+    }
+}
+
+fn serde_into_c_result(result: serde::Result) -> serde_result_t {
+    match result {
+        Ok(()) => serde_result_t::OK,
+        Err(serde::Error::NotSupported) => serde_result_t::NOT_SUPPORTED,
+    }
+}
+
+#[repr(C)]
+struct serde_rust_serializer_t<'a> {
+    c_api: serde_serializer_t,
+    serializer: *mut (dyn serde::Serializer + 'a),
+}
+
+impl<'a> serde_rust_serializer_t<'a> {
+    fn new(serializer: &'a mut dyn serde::Serializer) -> serde_rust_serializer_t<'a> {
+        let c_api = serde_serializer_t{
+            serialize_bool: Some(serde_rust_serializer_t::serialize_bool),
+            serialize_longlong: Some(serde_rust_serializer_t::serialize_longlong),
+            serialize_double: Some(serde_rust_serializer_t::serialize_double),
+        };
+        Self{ c_api, serializer }
+    }
+
+    #[no_mangle]
+    pub extern "C" fn serialize_bool(this: *mut c_void, v: bool) -> serde_result_t {
+        serde_into_c_result(Self::to_self(this).serialize_bool(v))
+    }
+
+    #[no_mangle]
+    pub extern "C" fn serialize_longlong(this: *mut c_void, v: c_longlong) -> serde_result_t {
+        serde_into_c_result(Self::to_self(this).serialize_i64(v))
+    }
+
+    #[no_mangle]
+    pub extern "C" fn serialize_double(this: *mut c_void, v: c_double) -> serde_result_t {
+        serde_into_c_result(Self::to_self(this).serialize_f64(v))
+    }
+
+    fn to_self<'b>(this: *mut c_void) -> &'b mut dyn serde::Serializer {
+        unsafe{ &mut *(*(this as *mut serde_rust_serializer_t)).serializer }
+    }
 }

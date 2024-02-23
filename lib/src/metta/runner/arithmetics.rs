@@ -1,6 +1,7 @@
 use crate::*;
 use crate::metta::*;
 use crate::matcher::MatchResultIter;
+use crate::atom::serde;
 
 use std::fmt::Display;
 
@@ -73,6 +74,13 @@ impl Grounded for Number {
     fn match_(&self, other: &Atom) -> MatchResultIter {
         match_by_equality(self, other)
     }
+
+    fn serialize(&self, serializer: &mut dyn serde::Serializer) -> serde::Result {
+        match self {
+            &Self::Integer(n) => serializer.serialize_i64(n),
+            &Self::Float(n) => serializer.serialize_f64(n),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -108,6 +116,10 @@ impl Grounded for Bool {
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
         match_by_bidirectional_equality(self, other)
+    }
+
+    fn serialize(&self, serializer: &mut dyn serde::Serializer) -> serde::Result {
+        serializer.serialize_bool(self.0)
     }
 }
 

@@ -115,6 +115,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 extern "C" {
     exec_error_t py_execute(const struct gnd_t* _gnd, const struct atom_vec_t* args, struct atom_vec_t* ret);
     bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom);
+    serde_result_t py_serialize(const struct gnd_t *_gnd, struct serde_serializer_t* serializer);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
     size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
@@ -122,25 +123,32 @@ extern "C" {
 }
 extern "C" bindings_set_t py_match_value(const struct gnd_t *_gnd, const atom_ref_t *_atom);
 
-const gnd_api_t PY_EXECUTABLE_MATCHABLE_API = { &py_execute, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
-const gnd_api_t PY_EXECUTABLE_API = { &py_execute, nullptr, &py_eq, &py_clone, &py_display, &py_free };
-const gnd_api_t PY_MATCHABLE_API = { nullptr, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
-const gnd_api_t PY_VALUE_API = { nullptr, &py_match_value , &py_eq, &py_clone, &py_display, &py_free };
-
 struct GroundedObject : gnd_t {
     GroundedObject(py::object pyobj, atom_t typ) : pyobj(pyobj) {
-        if (py::hasattr(pyobj, "execute") && py::hasattr(pyobj, "match_")) {
-            this->api = &PY_EXECUTABLE_MATCHABLE_API;
-        } else if (py::hasattr(pyobj, "execute")) {
-            this->api = &PY_EXECUTABLE_API;
-        } else if (py::hasattr(pyobj, "match_")) {
-            this->api = &PY_MATCHABLE_API;
-        } else {
-            this->api = &PY_VALUE_API;
+        // TODO: here static API instance is replaced by allocated one. This
+        // increases the memory usage and slows down the code. There are two
+        // ways to fix it: (1) add 2^3 static instances of gnd_api_t and
+        // choosing between them using 3 nested conditions; (2) make pointers
+        // in gnd_api_t non-optional and check whether method is present
+        // dynamically in Python. In case (2) default implementation should be
+        // chosen in Python.
+        gnd_api_t* api = new gnd_api_t{  nullptr, nullptr, nullptr, &py_eq, &py_clone, &py_display, &py_free };
+        if (py::hasattr(pyobj, "execute")) {
+            api->execute = &py_execute;
         }
+        if (py::hasattr(pyobj, "match_")) {
+            api->match_ = &py_match_;
+        } else {
+            api->match_ = &py_match_value;
+        }
+        if (py::hasattr(pyobj, "serialize")) {
+            api->serialize = &py_serialize;
+        }
+        this->api = api;
         this->typ = typ;
     }
     virtual ~GroundedObject() {
+        delete this->api;
         atom_free(this->typ);
     }
     py::object pyobj;
@@ -153,7 +161,7 @@ py::object inc_ref(py::object obj) {
 
 exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _args, struct atom_vec_t* ret) {
     py::object hyperon = py::module_::import("hyperon.atoms");
-    py::function call_execute_on_grounded_atom = hyperon.attr("_priv_call_execute_on_grounded_atom");
+    py::function _priv_call_execute_on_grounded_atom = hyperon.attr("_priv_call_execute_on_grounded_atom");
     py::handle NoReduceError = hyperon.attr("NoReduceError");
     py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
     CAtom pytyp = static_cast<GroundedObject const*>(_cgnd)->typ;
@@ -163,7 +171,7 @@ exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _arg
             atom_ref_t arg_atom_ref = atom_vec_get(_args, i);
             args.append(CAtom(atom_clone(&arg_atom_ref)));
         }
-        py::list result = call_execute_on_grounded_atom(pyobj, pytyp, args);
+        py::list result = _priv_call_execute_on_grounded_atom(pyobj, pytyp, args);
         for (py::handle atom:  result) {
             if (!py::hasattr(atom, "catom")) {
                 return exec_error_runtime("Grounded operation which is defined using unwrap=False should return atom instead of Python type");
@@ -200,11 +208,11 @@ bindings_set_t py_match_value(const struct gnd_t *_gnd, const atom_ref_t *_atom)
 
 bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom) {
     py::object hyperon = py::module_::import("hyperon.atoms");
-    py::function call_match_on_grounded_atom = hyperon.attr("_priv_call_match_on_grounded_atom");
+    py::function _priv_call_match_on_grounded_atom = hyperon.attr("_priv_call_match_on_grounded_atom");
 
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
     CAtom catom = atom_clone(_atom);
-    py::list results = call_match_on_grounded_atom(pyobj, catom);
+    py::list results = _priv_call_match_on_grounded_atom(pyobj, catom);
 
     struct bindings_set_t result_set = bindings_set_empty();
     for (py::handle result: results) {
@@ -221,6 +229,33 @@ bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom) {
     }
 
     return result_set;
+}
+
+struct PythonSerializer {
+    PythonSerializer(struct serde_serializer_t* serializer) : serializer(serializer) { }
+    virtual ~PythonSerializer() { }
+
+    serde_result_t serialize_bool(py::bool_ v) {
+        return this->serializer->serialize_bool(this->serializer, v);
+    }
+    serde_result_t serialize_int(py::int_ v) {
+        return this->serializer->serialize_longlong(this->serializer, v);
+    }
+    serde_result_t serialize_float(py::float_ v) {
+        return this->serializer->serialize_double(this->serializer, v);
+    }
+
+    struct serde_serializer_t* serializer;
+};
+
+serde_result_t py_serialize(const struct gnd_t *_gnd, struct serde_serializer_t* serializer) {
+    py::object hyperon = py::module_::import("hyperon.atoms");
+    py::function _priv_call_serialize_on_grounded_atom = hyperon.attr("_priv_call_serialize_on_grounded_atom");
+
+    py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
+    PythonSerializer py_serializer(serializer);
+    py::object result = _priv_call_serialize_on_grounded_atom(pyobj, py_serializer);
+    return result.cast<serde_result_t>();
 }
 
 bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b) {
@@ -554,7 +589,15 @@ PYBIND11_MODULE(hyperonpy, m) {
         .value("GROUNDED", atom_type_t::GROUNDED)
         .export_values();
 
+    py::enum_<serde_result_t>(m, "SerdeResult")
+        .value("OK", serde_result_t::OK)
+        .value("NOT_SUPPORTED", serde_result_t::NOT_SUPPORTED);
+
     py::class_<CAtom>(m, "CAtom");
+    py::class_<PythonSerializer>(m, "PythonSerializer")
+        .def("serialize_bool", &PythonSerializer::serialize_bool, "Serialize bool value")
+        .def("serialize_int", &PythonSerializer::serialize_int, "Serialize int value")
+        .def("serialize_float", &PythonSerializer::serialize_float, "Serialize float value");
 
     m.def("atom_sym", [](char const* name) { return CAtom(atom_sym(name)); }, "Create symbol atom");
     m.def("atom_var", [](char const* name) { return CAtom(atom_var(name)); }, "Create variable atom");
@@ -954,7 +997,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the environment");
     m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
     m.def("env_builder_push_include_path", [](EnvBuilder& builder, std::string path) { env_builder_push_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
-    m.def("env_builder_push_fs_module_format", [](EnvBuilder& builder, py::object interface, uint64_t fmt_id) { 
+    m.def("env_builder_push_fs_module_format", [](EnvBuilder& builder, py::object interface, uint64_t fmt_id) {
         //TODO. We end up leaking this object, but it's a non-issue in practice because environments usually live the life of the program.
         // To fix this, give the Python MeTTa object built from this EnvBuilder a reference to the `interface` object, rather than allocating it here
         py::object* py_impl = new py::object(interface);

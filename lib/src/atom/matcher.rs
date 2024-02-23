@@ -1078,9 +1078,7 @@ pub fn match_atoms<'a>(left: &'a Atom, right: &'a Atom) -> MatchResultIter {
 }
 
 fn match_atoms_recursively(left: &Atom, right: &Atom) -> BindingsSet {
-    log::trace!("match_atoms_recursively: {} ~ {}", left, right);
-
-    match (left, right) {
+    let res = match (left, right) {
         (Atom::Symbol(a), Atom::Symbol(b)) if a == b => BindingsSet::single(),
         (Atom::Variable(dv), Atom::Variable(pv)) => BindingsSet::single().add_var_equality(dv, pv),
         (Atom::Variable(v), b) => BindingsSet::single().add_var_binding(v, b),
@@ -1104,7 +1102,9 @@ fn match_atoms_recursively(left: &Atom, right: &Atom) -> BindingsSet {
             b.match_(left).collect()
         },
         _ => BindingsSet::empty(),
-    }
+    };
+    log::trace!("match_atoms_recursively: {} ~ {} => {}", left, right, res);
+    res
 }
 
 //TODO: This function is redundant, as the functionality is subsumed by BindingsSet::merge
