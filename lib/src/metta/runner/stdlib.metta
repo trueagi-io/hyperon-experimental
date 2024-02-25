@@ -258,10 +258,6 @@
 (= (not True) False)
 (= (not False) True)
 
-(: match (-> Atom Atom Atom %Undefined%))
-(= (match $space $pattern $template)
-  (unify $pattern $space $template Empty))
-
 (: let (-> Atom %Undefined% Atom Atom))
 (= (let $pattern $atom $template)
   (unify $atom $pattern $template Empty))

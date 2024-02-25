@@ -335,7 +335,7 @@ impl From<&str> for ExecError {
 /// A trait to erase an actual type of the grounded atom. Not intended to be
 /// implemented by users. Use [Atom::value] or implement [Grounded] and use
 /// [Atom::gnd] instead.
-pub trait GroundedAtom : mopa::Any + Debug + Display {
+pub trait GroundedAtom : Any + Debug + Display {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
     fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
     fn as_any_ref(&self) -> &dyn Any;
@@ -348,8 +348,6 @@ pub trait GroundedAtom : mopa::Any + Debug + Display {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError>;
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
 }
-
-mopafy!(GroundedAtom);
 
 /// Trait allows implementing grounded atom with custom behaviour.
 /// [rust_type_atom], [match_by_equality] and [execute_not_executable]
@@ -435,7 +433,7 @@ pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matc
 }
 
 /// Returns either single emtpy [matcher::Bindings] instance if the string representing `self` and
-/// `other` render are identical strings, or an empty iterator if not. 
+/// `other` render are identical strings, or an empty iterator if not.
 pub fn match_by_string_equality(this: &str, other: &Atom) -> matcher::MatchResultIter {
     let other_string = other.to_string();
     if this == other_string {
@@ -485,8 +483,8 @@ struct AutoGroundedAtom<T: AutoGroundedType>(T);
 
 impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
-        match other.downcast_ref::<Self>() {
-            Some(other) => self == other,
+        match other.as_any_ref().downcast_ref::<T>() {
+            Some(other) => self.0 == *other,
             _ => false,
         }
     }
@@ -535,8 +533,8 @@ struct CustomGroundedAtom<T: CustomGroundedType>(T);
 
 impl<T: CustomGroundedType> GroundedAtom for CustomGroundedAtom<T> {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
-        match other.downcast_ref::<Self>() {
-            Some(other) => self == other,
+        match other.as_any_ref().downcast_ref::<T>() {
+            Some(other) => self.0 == *other,
             _ => false,
         }
     }
