@@ -148,20 +148,22 @@ pub struct DepEntry {
 impl PkgInfo {
     /// Resolves which module to load from which available location or catalog, and returns the [ModuleLoader] to
     /// load that module
-    pub fn resolve_module<'c>(&self, context: &'c RunContext, name: &str) -> Result<Option<(Box<dyn ModuleLoader + 'c>, ModuleDescriptor)>, String> {
+    pub fn resolve_module<'c>(&self, context: &'c RunContext, name_path: &str) -> Result<Option<(Box<dyn ModuleLoader + 'c>, ModuleDescriptor)>, String> {
+        let mod_name = mod_name_from_path(name_path);
+        let normalized_mod_path = context.normalize_module_name(name_path)?;
 
         //Make sure the name is a legal module name
-        if !module_name_is_legal(name) {
-            return Err(format!("Illegal module name: {name}"));
+        if !module_name_is_legal(mod_name) {
+            return Err(format!("Illegal module name: {mod_name}"));
         }
 
         //See if we have a pkg_info dep entry for the module
-        if let Some(entry) = self.deps.get(name) {
+        if let Some(entry) = self.deps.get(mod_name) {
 
             //If path is explicitly specified in the dep entry, then we must load the module at the
             // specified path, and cannot search anywhere else
             if let Some(path) = &entry.fs_path {
-                return loader_for_module_at_path(&context.metta, path, Some(name), context.module().resource_dir());
+                return loader_for_module_at_path(&context.metta, path, Some(mod_name), context.module().resource_dir());
             }
 
             //TODO, if git URI is specified in the dep entry, clone the repo to a location in the environment
@@ -193,15 +195,13 @@ impl PkgInfo {
 
         //Search the catalogs, starting with the resource dir, and continuing to the runner's Environment
         for catalog in local_catalogs.into_iter().chain(context.metta.environment().catalogs()) {
-            log::trace!("Looking for module: \"{name}\" inside {catalog:?}");
+            log::trace!("Looking for module: \"{mod_name}\" inside {catalog:?}");
             //TODO: use lookup_newest_within_version_range, as soon as I add module versioning
-            let results = catalog.lookup(name);
+            let results = catalog.lookup(mod_name);
             if results.len() > 0 {
-                log::info!("Found module: \"{name}\" inside {catalog:?}");
+                log::info!("Found module: \"{mod_name}\" inside {catalog:?}");
                 let descriptor = results.into_iter().next().unwrap();
-                if descriptor.name != name {
-                    panic!("Fatal Error: Catalog {catalog:?} returned module descriptor with incompatible name");
-                }
+                log::info!("Preparing to load module: \'{}\' as \'{}\'", descriptor.name, normalized_mod_path);
                 return Ok(Some((catalog.get_loader(&descriptor)?, descriptor)))
             }
         }
@@ -219,6 +219,12 @@ pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, 
     } else {
         search_dir.ok_or_else(|| format!("Error loading {}.  Working directory or module resource dir required to load modules by relative path", path.as_ref().display()))?
             .join(path)
+    };
+
+    //If a mod name was supplied, we want to make sure it's not a full name path
+    let name = match name {
+        Some(name) => Some(mod_name_from_path(name)),
+        None => None
     };
 
     //Check all module formats, to try and load the module at the path

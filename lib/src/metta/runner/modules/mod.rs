@@ -27,14 +27,9 @@ pub mod catalog;
 #[cfg(feature = "pkg_mgmt")]
 use catalog::*;
 
-/// The name of the top module in a runner
-pub const TOP_MOD_NAME: &'static str = "top";
-
-/// The name to refer to the current module in the module name hierarchy
-pub const SELF_MOD_NAME: &'static str = "self";
-
-/// The separator between parent and child module names in a module name path
-pub const MOD_NAME_SEPARATOR: char = ':';
+mod mod_names;
+pub(crate) use mod_names::{ModNameNode, mod_name_from_path, mod_name_relative_path, module_name_is_legal};
+pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
 
 /// Contains state associated with a loaded MeTTa module
 #[derive(Debug)]
@@ -44,6 +39,7 @@ pub struct MettaMod {
     space: DynSpace,
     tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
+    sub_module_names: Option<ModNameNode>,
     #[cfg(feature = "pkg_mgmt")]
     pkg_info: PkgInfo,
 }
@@ -68,6 +64,7 @@ impl MettaMod {
             tokenizer,
             imported_deps: Mutex::new(HashMap::new()),
             resource_dir,
+            sub_module_names: Some(ModNameNode::new(ModId::INVALID)),
             #[cfg(feature = "pkg_mgmt")]
             pkg_info: PkgInfo::default(),
         };
@@ -84,6 +81,58 @@ impl MettaMod {
         }
 
         new_mod
+    }
+
+    /// Locates and retrieves a loaded module, or a sub-module relative to &self
+    pub(crate) fn get_module_by_name(&self, runner: &Metta, mod_name: &str) -> Result<ModId, String> {
+        let mod_name = self.normalize_module_name(mod_name)?;
+        let mod_id = match &self.sub_module_names {
+            Some(subtree) => {
+                let module_names = runner.0.module_names.lock().unwrap();
+                module_names.resolve_layered(&[(&self.mod_path, subtree)], &mod_name).ok_or_else(|| format!("Unable to locate module: {mod_name}"))
+            },
+            None => runner.get_module_by_name(&mod_name)
+        }?;
+        if mod_id == ModId::INVALID {
+            Err(format!("Attempt to resolve module that is not yet loaded: {mod_name}"))
+        } else {
+            Ok(mod_id)
+        }
+    }
+
+    /// Adds a sub-module to this module's subtree if a relative path was specified.  Otherwise adds
+    /// the sub-module to the runner's main tree
+    pub(crate) fn add_module_to_name_tree(&mut self, runner: &Metta, mod_name: &str, mod_id: ModId) -> Result<(), String> {
+        let mod_name = self.normalize_module_name(mod_name)?;
+        match &mut self.sub_module_names {
+            Some(subtree) => {
+                let mut module_names = runner.0.module_names.lock().unwrap();
+                module_names.add_to_layered(&mut[(&mut self.mod_path, subtree)], &mod_name, mod_id)
+            },
+            None => runner.add_module_to_name_tree(&mod_name, mod_id)
+        }
+    }
+
+    /// Join a relative module path as a sub-module to `&self`
+    pub(crate) fn concat_relative_module_path(&self, relative_path: &str) -> String {
+        if relative_path.len() > 0 {
+            format!("{}:{}", self.path(), relative_path)
+        } else {
+            self.path().to_string()
+        }
+    }
+
+    /// Normalize a module name into a canonical name-path form, and expanding a relative module-path
+    pub(crate) fn normalize_module_name(&self, mod_name: &str) -> Result<String, String> {
+        match mod_name_relative_path(mod_name) {
+            Some(remainder) => Ok(self.concat_relative_module_path(remainder)),
+            None => ModNameNode::normalize_name_path(mod_name),
+        }
+    }
+
+    // Internal method as part of the loading process, for loading a MettaMod into a runner
+    pub(crate) fn take_sub_module_names(&mut self) -> Option<ModNameNode> {
+        core::mem::take(&mut self.sub_module_names)
     }
 
     /// Adds a loaded module as a dependency of the `&self` [MettaMod], and adds a [Tokenizer] entry to access
@@ -336,190 +385,9 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     fn load(&self, context: &mut RunContext) -> Result<(), String>;
 }
 
-/// Private struct, A node in a tree to locate loaded mods by name
-///
-/// # Name Resolution Behavior
-/// `top` is a reserved module name for the module at the top of the runner
-/// `top.some_mod` and `some_mod` are equivalent.  In other words, `top` is optional in a path
-/// `self` is an alias for the current module
-/// `self.some_mod` is a private sub-module of the current module
-///
-#[derive(Debug)]
-pub(crate) struct ModNameNode {
-    mod_id: ModId,
-    children: HashMap<String, ModNameNode>
-}
-
-//LP-TODO-NEXT.  Momentarily commented this function out to squish the unused warning.  This is part of
-// the implementatino of relative module paths
-// /// Returns `Some(path)`, with `path` being the relative portion following `self:`, if the name
-// /// begins with "self:". Returns "" if the name exactly equals "self".  Otherwise returns None
-// pub(crate) fn mod_name_relative_path(name: &str) -> Option<&str> {
-//     if name.starts_with(SELF_MOD_NAME) {
-//         if name.len() == SELF_MOD_NAME.len() {
-//             Some("")
-//         } else {
-//             if name.as_bytes()[SELF_MOD_NAME.len()] == MOD_NAME_SEPARATOR as u8 {
-//                 Some(&name[(SELF_MOD_NAME.len()+1)..])
-//             } else {
-//                 None
-//             }
-//         }
-//     } else {
-//         None
-//     }
-// }
-
-/// Returns the part of a module name path after the last separator, or the entire path if it does not
-/// contain a separator.  May panic if the path is invalid
-pub(crate) fn mod_name_from_path(path: &str) -> &str {
-    let mut start_idx = 0;
-    for (idx, the_char) in path.char_indices() {
-        if the_char == MOD_NAME_SEPARATOR {
-            start_idx = idx+1;
-        }
-    }
-    &path[start_idx..]
-}
-
-impl ModNameNode {
-
-    /// Returns the node corresponding to the runner's "top" mod
-    pub fn top() -> Self {
-        Self::new(ModId::TOP)
-    }
-
-    /// Private constructor
-    fn new(mod_id: ModId) -> Self {
-        Self {
-            mod_id,
-            children: HashMap::new(),
-        }
-    }
-
-    /// Adds a single new node to the tree.  Does NOT recursively add multiple nodes
-    ///
-    /// Reuturns `true` if the node was sucessfully added, otherwise `false`.  If an entry
-    /// already exists at that name, the existing entry will be replaced
-    pub fn add(&mut self, name: &str, mod_id: ModId) -> bool {
-        if let Some((parent_node, mod_name)) = self.parse_parent_mut(name) {
-            if mod_name == TOP_MOD_NAME || mod_name == SELF_MOD_NAME || mod_name.len() == 0 {
-                return false; //Illegal names for a module
-            }
-            parent_node.children.insert(mod_name.to_string(), Self::new(mod_id));
-            true
-        } else {
-            false
-        }
-    }
-
-    /// Returns the [ModId] of a module name/path, or None if it can't be resolved
-    pub fn resolve(&self, name: &str) -> Option<ModId> {
-        self.name_to_node(name).map(|node| node.mod_id)
-    }
-
-    /// Resolves a module name/path within &self
-    pub fn name_to_node(&self, name: &str) -> Option<&Self> {
-        if let Some((parent_node, mod_name)) = self.parse_parent(name) {
-            if mod_name == TOP_MOD_NAME || name.len() == 0 {
-                Some(self)
-            } else {
-                parent_node.children.get(mod_name)
-            }
-        } else {
-            None
-        }
-    }
-
-    /// Returns the node corresponding to any part of the node before the last separator character,
-    /// and the remaining substring
-    pub fn parse_parent<'a, 'b>(&'a self, name: &'b str) -> Option<(&'a Self, &'b str)> {
-        Self::parse_parent_generic(self, |node, name| node.children.get(name), name)
-    }
-
-    /// Same behavior as [parse_parent], but takes and returns a mutable reference
-    pub fn parse_parent_mut<'a, 'b>(&'a mut self, name: &'b str) -> Option<(&'a mut Self, &'b str)> {
-        Self::parse_parent_generic(self, |node, name| node.children.get_mut(name), name)
-    }
-
-    /// Internal generic `parse_parent` that can expand to mutable and const versions
-    fn parse_parent_generic<'a, SelfT, GetF: Fn(SelfT, &str) -> Option<SelfT>>(gen_self: SelfT, get_f: GetF, name: &'a str) -> Option<(SelfT, &'a str)> {
-        if name.len() == 0 {
-            return Some((gen_self, &name))
-        }
-        let mut cur_node = gen_self;
-        let mut sym_start = 0;
-        for (idx, the_char) in name.char_indices() {
-            match the_char {
-                MOD_NAME_SEPARATOR => {
-                    let sym = &name[sym_start..idx];
-                    if sym == TOP_MOD_NAME && sym_start == 0 {
-                        sym_start = idx+1;
-                        continue;
-                    }
-                    match get_f(cur_node, sym) {
-                        Some(new_node) => {
-                            cur_node = new_node;
-                            sym_start = idx+1;
-                        },
-                        None => return None
-                    }
-                },
-                _ => {},
-            }
-        }
-        if sym_start < name.len() {
-            Some((cur_node, &name[sym_start..]))
-        } else {
-            None
-        }
-    }
-}
-
-/// Returns `true` if a str is a legal name for a module
-///
-/// A module name must be an ascii string, containing only alpha-numeric characters plus [`_`, '.', `-`]
-pub(crate) fn module_name_is_legal(name: &str) -> bool {
-    for the_char in name.chars() {
-        if !the_char.is_ascii() {
-            return false;
-        }
-        if !the_char.is_ascii_alphanumeric() &&
-            the_char != '-' &&
-            the_char != '_' &&
-            the_char != '.' {
-            return false;
-        }
-    }
-    return true;
-}
-
-#[test]
-fn name_parse_test() {
-    let mut top = ModNameNode::top();
-
-    assert_eq!(true, top.add("top:sub1", ModId(1)));
-    assert_eq!(true, top.add("sub2", ModId(2)));
-    assert_eq!(true, top.add("sub2:suba", ModId(3)));
-    assert_eq!(true, top.add("sub2:suba:subA", ModId(4)));
-    assert_eq!(true, top.add("top:sub1:subb", ModId(5)));
-
-    assert_eq!(false, top.add("", ModId(6)));
-    assert_eq!(false, top.add("top", ModId(6)));
-    assert_eq!(false, top.add("sub2::suba:subB", ModId(7)));
-    assert_eq!(false, top.add("sub2:suba:subB:", ModId(7)));
-
-    assert_eq!(top.name_to_node("top").unwrap().mod_id, top.mod_id);
-    assert_eq!(top.name_to_node("").unwrap().mod_id, top.mod_id);
-    assert!(top.name_to_node("top:").is_none());
-    assert!(top.name_to_node(":").is_none());
-
-    assert_eq!(top.name_to_node("sub1").unwrap().mod_id, ModId(1));
-    assert_eq!(top.name_to_node("top:sub2:suba:subA").unwrap().mod_id, ModId(4));
-    assert!(top.name_to_node("sub2:suba:subA:").is_none());
-    assert!(top.name_to_node("sub1:suba").is_none());
-
-}
+//-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-
+// TESTS
+//-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-
 
 #[derive(Debug)]
 struct OuterLoader;
@@ -551,6 +419,8 @@ impl ModuleLoader for InnerLoader {
     }
 }
 
+/// This tests loading a module as a sub-module of another loaded module using a hierarchical
+/// namespace path
 #[test]
 fn hierarchical_module_import_test() {
     let runner = Metta::new(Some(EnvBuilder::test_env()));
@@ -580,11 +450,60 @@ fn hierarchical_module_import_test() {
     assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
 }
 
-//LP-TODO-NEXT, make a unit test for relative imports using the module hierarchical namespace.
+#[derive(Debug)]
+struct RelativeOuterLoader;
+
+impl ModuleLoader for RelativeOuterLoader {
+    fn load(&self, context: &mut RunContext) -> Result<(), String> {
+        let space = DynSpace::new(GroundingSpace::new());
+        context.init_self_module(space, None);
+
+        let _inner_mod_id = context.load_module_direct(&InnerLoader, "self:inner").unwrap();
+
+        let parser = SExprParser::new("outer-module-test-atom");
+        context.push_parser(Box::new(parser));
+
+        //Test to see if I can resolve the module we just loaded,
+        // but make sure we can't resolve "self" yet, since the loading isn't finished
+        assert!(context.get_module_by_name("self:inner").is_ok());
+        assert!(context.get_module_by_name("self").is_err());
+
+        Ok(())
+    }
+}
+
+/// This tests loading a sub-module from another module's runner, using a relative namespace path
+#[test]
+fn relative_submodule_import_test() {
+    // let runner = Metta::new(Some(EnvBuilder::test_env()));
+
+    // LP-TODO-NEXT: This test curently fails for reasons explained in the comment inside Metta::merge_sub_module_names.
+
+    // //Load the "outer" module, which will load the inner module as part of its loader
+    // let _outer_mod_id = runner.load_module_direct(&RelativeOuterLoader, "outer").unwrap();
+
+    // //runner.display_loaded_modules();
+
+    // //Make sure we didn't accidentally load "inner" at the top level
+    // assert!(runner.get_module_by_name("inner").is_err());
+
+    // //Confirm we didn't end up with a module called "self"
+    // assert!(runner.get_module_by_name("self:inner").is_err());
+    // assert!(runner.get_module_by_name("self").is_err());
+
+    // //Now make sure we can actually resolve the loaded sub-module
+    // runner.get_module_by_name("outer:inner").unwrap();
+
+    // //LP-TODO-NEXT, test that I can add a second inner from the runner, by adding "top:outer:inner2",
+    // // and then that I can import it directly into "outer" from within the runner's context using the "self:inner2" mod path
+
+}
+
+//LP-TODO-NEXT,  Make a test for an inner-loader that throws an error, blocking the outer-loader from loading sucessfully,
+// and make sure neither module is loaded into the named index
 //
-// First, make relative loading and resolution work, then use relative loading in the "RecursiveOuterLoader"
-// to load a sub-module,  So the test would be to run "!(import! &self outer:inner)", and have it
-// do the right thing.
+//Also test the case where the inner loader is sucessul, but then the outer loader throws an error.  Also make sure neither
+// module is loaded into the namespace
 //
 
 //LP-TODO-NEXT, make a unit test for recursive loading of parents modules based on hierarchical name import
@@ -593,7 +512,6 @@ fn hierarchical_module_import_test() {
 // using their working dirs.  Maybe make this second test a C API test to get better coverage
 //
 
-//LP-TODO-NEXT, when a catalog resolves a module in a relative location (specifically parent module resource dir),
-// it should load that module into a relative module path, unless another path was explicitly specified in
-// the API call.  Make a test, to make sure this works.
+//LP-TODO-NEXT, Add a test for loading a module from a DirCatalog by passing a name with an extension (ie. `my_mod.metta`) to `resolve`,
+// and make sure the loaded module that comes back doesn't have the extension
 
