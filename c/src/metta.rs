@@ -8,7 +8,6 @@ use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::{Metta, RunContext, ModId, RunnerState, Environment, EnvBuilder};
 use hyperon::metta::runner::modules::ModuleLoader;
 use hyperon::metta::runner::modules::catalog::{FsModuleFormat, ModuleDescriptor};
-use hyperon::rust_type_atom;
 use hyperon::atom::*;
 use hyperon::metta::runner::arithmetics::*;
 
@@ -1203,10 +1202,10 @@ impl From<&mut RunContext<'_, '_, '_>> for run_context_t {
 
 impl run_context_t {
     fn borrow(&self) -> &RunContext<'static, 'static, 'static> {
-        unsafe{ &*self.context.cast::<RunContext<'static, 'static, 'static>>() }
+        &unsafe{ &*self.context.cast::<RustRunContext>() }.0
     }
     fn borrow_mut(&mut self) -> &mut RunContext<'static, 'static, 'static> {
-        unsafe{ &mut *self.context.cast::<RunContext<'static, 'static, 'static>>() }
+        &mut unsafe{ &mut *self.context.cast::<RustRunContext>() }.0
     }
 }
 
@@ -1662,6 +1661,7 @@ pub struct module_descriptor_t {
 }
 
 #[derive(Clone)]
+#[allow(dead_code)] //LP-TODO-NEXT.  Currently we don't do much with module_descriptor_t, but that will change when I make C bindings for the catalog API
 enum RustModuleDescriptor {
     Descriptor(ModuleDescriptor),
     Err(String)

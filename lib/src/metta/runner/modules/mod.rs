@@ -1,19 +1,12 @@
 
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
-use std::sync::Mutex;
 
-use crate::space::{Space, DynSpace};
 use crate::metta::*;
 use crate::metta::runner::*;
-use crate::metta::types::validate_atom;
-use crate::metta::text::{SExprParser, Tokenizer};
-use crate::common::shared::Shared;
 
 use regex::Regex;
 
-#[cfg(not(feature = "minimal"))]
-use super::interpreter::interpret;
 #[cfg(not(feature = "minimal"))]
 use super::stdlib::*;
 

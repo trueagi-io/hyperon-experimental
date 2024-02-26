@@ -63,7 +63,6 @@ macro_rules! bind_set {
 }
 
 use std::collections::{HashMap, HashSet};
-use core::iter::FromIterator;
 
 use super::*;
 use crate::common::reformove::RefOrMove;
