@@ -807,7 +807,7 @@ impl Atom {
         }
     }
 
-    pub fn into_primitive(&self) -> serde::AsPrimitive {
+    pub fn as_primitive(&self) -> serde::AsPrimitive {
         serde::AsPrimitive::from_atom(self)
     }
 }
