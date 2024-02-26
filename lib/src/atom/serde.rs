@@ -11,9 +11,9 @@
 // to the MeTTa type even if same runtime is used for saving and loading. Thus
 // using native types allows eliminate the double conversion.
 pub trait Serializer {
-    fn serialize_bool(&mut self, v: bool) -> Result;
-    fn serialize_i64(&mut self, v: i64) -> Result;
-    fn serialize_f64(&mut self, v: f64) -> Result;
+    fn serialize_bool(&mut self, _v: bool) -> Result { Err(Error::NotSupported) }
+    fn serialize_i64(&mut self, _v: i64) -> Result { Err(Error::NotSupported) }
+    fn serialize_f64(&mut self, _v: f64) -> Result { Err(Error::NotSupported) }
 }
 
 pub enum Error {
@@ -21,3 +21,36 @@ pub enum Error {
 }
 
 pub type Result = std::result::Result<(), Error>;
+
+#[derive(Default)]
+pub(crate) struct BoolSerializer {
+    value: Option<bool>,
+}
+
+impl Serializer for BoolSerializer {
+    fn serialize_bool(&mut self, v: bool) -> Result {
+        self.value = Some(v);
+        Ok(())
+    }
+}
+
+use std::convert::TryInto;
+
+pub struct AsPrimitive<'a> {
+    atom: &'a super::Atom
+}
+
+impl<'a> AsPrimitive<'a> {
+    pub fn from_atom(atom: &'a super::Atom) -> Self {
+        Self{ atom }
+    }
+
+    pub fn as_bool(self) -> Option<bool> {
+        TryInto::<&dyn super::GroundedAtom>::try_into(self.atom).ok()
+            .map(|gnd| {
+                let mut serializer = BoolSerializer::default();
+                let _ = gnd.serialize(&mut serializer);
+                serializer.value
+            }).flatten()
+    }
+}

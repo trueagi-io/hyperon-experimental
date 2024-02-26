@@ -806,6 +806,10 @@ impl Atom {
             _ => None,
         }
     }
+
+    pub fn into_primitive(&self) -> serde::AsPrimitive {
+        serde::AsPrimitive::from_atom(self)
+    }
 }
 
 impl PartialEq for Atom {
@@ -923,6 +927,16 @@ impl<'a> TryFrom<&'a Atom> for &'a SymbolAtom {
         match atom {
             Atom::Symbol(sym) => Ok(&sym),
             _ => Err("Atom is not a SymbolAtom")
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a Atom> for &'a dyn GroundedAtom {
+    type Error = &'static str;
+    fn try_from(atom: &'a Atom) -> Result<Self, &'static str> {
+        match atom {
+            Atom::Grounded(gnd) => Ok(gnd.as_ref()),
+            _ => Err("Atom is not a GroundedAtom")
         }
     }
 }

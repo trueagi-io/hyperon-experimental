@@ -189,8 +189,8 @@ macro_rules! def_binary_bool_op {
 
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($disp), " expects two boolean arguments"));
-                let &Bool(a) = args.get(0).ok_or_else(arg_error)?.as_gnd::<Bool>().ok_or_else(arg_error)?;
-                let &Bool(b) = args.get(1).ok_or_else(arg_error)?.as_gnd::<Bool>().ok_or_else(arg_error)?;
+                let a = args.get(0).ok_or_else(arg_error)?.into_primitive().as_bool().ok_or_else(arg_error)?;
+                let b = args.get(1).ok_or_else(arg_error)?.into_primitive().as_bool().ok_or_else(arg_error)?;
 
                 Ok(vec![Atom::gnd(Bool(a $op b))])
             }
