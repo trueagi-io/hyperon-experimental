@@ -196,7 +196,6 @@ def_binary_bool_op!(OrOp, or, ||);
 // NOTE: xor and flip are absent in Python intentionally for conversion testing
 def_binary_bool_op!(XorOp, xor, ^);
 
-use rand;
 #[derive(Clone, PartialEq, Debug)]
 pub struct FlipOp{}
 
