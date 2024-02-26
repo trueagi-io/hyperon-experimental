@@ -349,6 +349,16 @@ pub trait GroundedAtom : Any + Debug + Display {
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
 }
 
+impl dyn GroundedAtom {
+    pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
+        self.as_any_ref().downcast_ref()
+    }
+
+    pub fn downcast_mut<T: Any>(&mut self) -> Option<&mut T> {
+        self.as_any_mut().downcast_mut()
+    }
+}
+
 /// Trait allows implementing grounded atom with custom behaviour.
 /// [rust_type_atom], [match_by_equality] and [execute_not_executable]
 /// functions can be used to implement default behavior if requried.
@@ -483,7 +493,7 @@ struct AutoGroundedAtom<T: AutoGroundedType>(T);
 
 impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
-        match other.as_any_ref().downcast_ref::<T>() {
+        match other.downcast_ref::<T>() {
             Some(other) => self.0 == *other,
             _ => false,
         }
@@ -533,7 +543,7 @@ struct CustomGroundedAtom<T: CustomGroundedType>(T);
 
 impl<T: CustomGroundedType> GroundedAtom for CustomGroundedAtom<T> {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
-        match other.as_any_ref().downcast_ref::<T>() {
+        match other.downcast_ref::<T>() {
             Some(other) => self.0 == *other,
             _ => false,
         }
@@ -749,7 +759,7 @@ impl Atom {
     /// ```
     pub fn as_gnd<T: 'static>(&self) -> Option<&T> {
         match self {
-            Atom::Grounded(gnd) => gnd.as_any_ref().downcast_ref::<T>(),
+            Atom::Grounded(gnd) => gnd.downcast_ref::<T>(),
             _ => None,
         }
     }
@@ -771,7 +781,7 @@ impl Atom {
     /// ```
     pub fn as_gnd_mut<T: 'static>(&mut self) -> Option<&mut T> {
         match self {
-            Atom::Grounded(gnd) => gnd.as_any_mut().downcast_mut::<T>(),
+            Atom::Grounded(gnd) => gnd.downcast_mut::<T>(),
             _ => None,
         }
     }
