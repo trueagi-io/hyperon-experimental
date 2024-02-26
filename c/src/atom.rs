@@ -429,7 +429,7 @@ pub extern "C" fn atom_get_grounded_type(atom: *const atom_ref_t) -> atom_t {
 #[no_mangle]
 pub unsafe extern "C" fn atom_get_object(atom: *const atom_ref_t) -> *mut gnd_t {
     if let Atom::Grounded(ref g) = (&*atom).borrow() {
-        match (*g).as_any_ref().downcast_ref::<CGrounded>() {
+        match (*g).downcast_ref::<CGrounded>() {
             Some(g) => g.get_mut_ptr(),
             None => panic!("Returning non C grounded objects is not implemented yet!"),
         }
@@ -446,7 +446,7 @@ pub unsafe extern "C" fn atom_get_object(atom: *const atom_ref_t) -> *mut gnd_t 
 #[no_mangle]
 pub unsafe extern "C" fn atom_is_cgrounded(atom: *const atom_ref_t) -> bool {
     if let Atom::Grounded(ref g) = (&*atom).borrow() {
-        match (*g).as_any_ref().downcast_ref::<CGrounded>() {
+        match (*g).downcast_ref::<CGrounded>() {
             Some(_g) => true,
             None => false,
         }
