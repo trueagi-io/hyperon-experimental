@@ -8,7 +8,6 @@ use crate::metta::runner::{Metta, RunContext, ModuleLoader};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 
-use std::convert::TryFrom;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::Display;
@@ -688,7 +687,6 @@ mod non_minimal_only_stdlib {
     use crate::metta::interpreter::interpret;
     use crate::common::assert::vec_eq_no_order;
     use crate::common::ReplacingMapper;
-    use std::iter::FromIterator;
 
     // TODO: move it into hyperon::atom module?
     pub(crate) fn atom_as_expr(atom: &Atom) -> Option<&ExpressionAtom> {
@@ -1342,11 +1340,11 @@ use crate::metta::runner::METTA_CODE;
 /// NOTE: the corelib will be loaded automatically if the runner is initialized with one of the high-level
 /// init functions such as [Metta::new] and [Metta::new_with_stdlib_loader]
 #[derive(Debug)]
-pub(crate) struct CoreLibLoader(String);
+pub(crate) struct CoreLibLoader;
 
 impl Default for CoreLibLoader {
     fn default() -> Self {
-        CoreLibLoader("corelib".to_string())
+        CoreLibLoader
     }
 }
 
@@ -1369,7 +1367,7 @@ mod tests {
     use super::*;
     use crate::atom::matcher::atoms_are_equivalent;
     use crate::metta::text::*;
-    use crate::metta::runner::{Metta, EnvBuilder};
+    use crate::metta::runner::EnvBuilder;
     use crate::metta::types::validate_atom;
     use crate::common::test_utils::*;
 
