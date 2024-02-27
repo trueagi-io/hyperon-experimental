@@ -18,8 +18,6 @@
 //! When atom has no type assigned by user it has type `%Undefined%`. The value
 //! of `%Undefined%` type can be matched with any type required.
 
-use std::convert::TryInto;
-
 use super::*;
 use crate::atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom};
 use crate::space::Space;
