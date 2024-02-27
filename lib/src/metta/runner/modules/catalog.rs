@@ -266,6 +266,11 @@ impl ModuleLoader for SingleFileModule {
 }
 
 /// A loader for a MeTTa module implemented as a directory
+///
+/// A `DirModule` can contain MeTTa code in a `module.metta` file, but any directory may
+/// be explicitly loaded as a module, making the directory contents available as resources.
+///
+/// See the "Anatomy of a Directory Module" section in the LP-TODO Finish writeup of user-level guide
 #[derive(Debug)]
 pub(crate) struct DirModule {
     path: PathBuf,
@@ -284,12 +289,12 @@ impl ModuleLoader for DirModule {
         let resource_dir = &self.path;
         context.init_self_module(space, Some(resource_dir.into()));
 
+        // A module.metta file is optional
         let module_metta_path = self.path.join("module.metta");
-        let program_text = std::fs::read_to_string(&module_metta_path)
-            .map_err(|err| format!("Failed to read metta file in directory module, path: {}, error: {}", module_metta_path.display(), err))?;
-
-        let parser = OwnedSExprParser::new(program_text);
-        context.push_parser(Box::new(parser));
+        if let Ok(program_text) = std::fs::read_to_string(&module_metta_path) {
+            let parser = OwnedSExprParser::new(program_text);
+            context.push_parser(Box::new(parser));
+        }
 
         Ok(())
     }
@@ -364,21 +369,18 @@ impl FsModuleFormat for DirModuleFmt {
     }
     fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<(Box<dyn ModuleLoader>, ModuleDescriptor)> {
         if path.is_dir() {
-            let mod_matta_path = path.join("module.metta");
-            if mod_matta_path.exists() {
-                let mod_name = match mod_name {
-                    Some(mod_name) => mod_name,
-                    None => path.file_stem().unwrap().to_str().unwrap(),
-                };
+            let mod_name = match mod_name {
+                Some(mod_name) => mod_name,
+                None => path.file_stem().unwrap().to_str().unwrap(),
+            };
 
-                //LP-TODO-Next: Try and read the module version here
-                //If there is a `pkg-info.metta` file, information from that file will take precedence.
-                // Otherwise, try and parse a `_pkg-info` atom from the `module.metta` file
+            //LP-TODO-Next: Try and read the module version here
+            //If there is a `pkg-info.metta` file, information from that file will take precedence.
+            // Otherwise, try and parse a `_pkg-info` atom from the `module.metta` file
 
-                let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), path, DIR_MOD_FMT_ID);
-                let loader = Box::new(DirModule::new(path));
-                return Some((loader, descriptor));
-            }
+            let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), path, DIR_MOD_FMT_ID);
+            let loader = Box::new(DirModule::new(path));
+            return Some((loader, descriptor));
         }
         None
     }

@@ -247,13 +247,9 @@ impl Metta {
     /// [RunContext::load_module_direct] if you are loading a sub-module from within a running module.
     pub fn load_module_direct(&self, loader: &dyn ModuleLoader, mod_name: &str) -> Result<ModId, String> {
         let mut state = RunnerState::new_with_module(self, ModId::TOP);
-        let mut mod_id = None;
-        state.i_wrapper.input_src.push_func(|context| {
-            mod_id = Some(context.load_module_direct(loader, mod_name)?);
-            Ok(())
-        });
-        state.run_to_completion()?;
-        mod_id.ok_or_else(|| format!("Module loading failed: {mod_name}"))
+        state.run_in_context(|context| {
+            context.load_module_direct(loader, mod_name)
+        })
     }
 
     /// Loads a module into a runner from a resource at the specified path
@@ -268,13 +264,9 @@ impl Metta {
     #[cfg(feature = "pkg_mgmt")]
     pub fn load_module_at_path<P: AsRef<std::path::Path>>(&self, path: P, mod_name: Option<&str>) -> Result<ModId, String> {
         let mut state = RunnerState::new_with_module(self, ModId::TOP);
-        let mut mod_id = None;
-        state.i_wrapper.input_src.push_func(|context| {
-            mod_id = Some(context.load_module_at_path(&path, mod_name)?);
-            Ok(())
-        });
-        state.run_to_completion()?;
-        mod_id.ok_or_else(|| format!("Module loading from path failed: {}", path.as_ref().display()))
+        state.run_in_context(|context| {
+            context.load_module_at_path(&path, mod_name)
+        })
     }
 
     /// Locates and retrieves a loaded module based on its name, relative to the top of the runner
@@ -308,12 +300,9 @@ impl Metta {
     /// [RunContext::load_module_alias] if you are creating an alias from within a running module.
     pub fn load_module_alias(&self, mod_name: &str, mod_id: ModId) -> Result<ModId, String> {
         let mut state = RunnerState::new_with_module(self, ModId::TOP);
-        state.i_wrapper.input_src.push_func(|context| {
-            context.load_module_alias(mod_name, mod_id)?;
-            Ok(())
-        });
-        state.run_to_completion()?;
-        Ok(mod_id)
+        state.run_in_context(|context| {
+            context.load_module_alias(mod_name, mod_id)
+        })
     }
 
     /// Writes a textual description of the loaded modules to stdout
@@ -829,8 +818,11 @@ impl<'input> RunContext<'_, '_, 'input> {
     #[cfg(feature = "pkg_mgmt")]
     fn load_module_recursive(&mut self, mod_name: &str) -> Result<ModId, String> {
 
+        //Normalize the path in the context of this running module
+        let normalized_mod_path = self.normalize_module_name(mod_name)?;
+
         //Make sure the parent module is loaded, and descend recursively until we find a loaded parent
-        let mod_name_components = ModNameNode::decompose_name_path(mod_name)?;
+        let mod_name_components = ModNameNode::decompose_name_path(&normalized_mod_path)?;
         let parent_mod_id = if mod_name_components.len() > 1 {
             let parent_name = ModNameNode::compose_name_path(&mod_name_components[..mod_name_components.len()-1])?;
             if let Ok(parent_mod_id) = self.get_module_by_name(&parent_name) {
@@ -842,26 +834,18 @@ impl<'input> RunContext<'_, '_, 'input> {
             ModId::TOP
         };
 
-        //Normalize the path in the context of this running module
-        let normalized_mod_path = self.normalize_module_name(mod_name)?;
-
         //Perform the loading in the context of the parent module
         let mut state = RunnerState::new_with_module(&self.metta, parent_mod_id);
-        let mut mod_id = None;
-        state.i_wrapper.input_src.push_func(|context| {
-            let new_mod_id = match context.module().pkg_info().resolve_module(self, &normalized_mod_path)? {
+        state.run_in_context(|context| {
+            let new_mod_id = match context.module().pkg_info().resolve_module(context, &normalized_mod_path)? {
                 Some((loader, descriptor)) => {
-                    let mod_id = self.metta.get_or_init_module_with_descriptor(&normalized_mod_path, descriptor, |context| loader.load(context))?;
-                    mod_id
+                    self.metta.get_or_init_module_with_descriptor(&normalized_mod_path, descriptor, |context| loader.load(context))?
                 },
                 None => {return Err(format!("Failed to resolve module {mod_name}"))}
             };
             self.add_module_to_name_tree(&normalized_mod_path, new_mod_id)?;
-            mod_id = Some(new_mod_id);
-            Ok(())
-        });
-        state.run_to_completion()?;
-        mod_id.ok_or_else(|| panic!())
+            Ok(new_mod_id)
+        })
     }
 
     /// Private method to advance the context forward one step

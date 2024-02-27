@@ -1,1 +1,1 @@
-!(import! &self ext_nested)
+!(import! &self self:ext_nested)
