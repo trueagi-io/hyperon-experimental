@@ -34,3 +34,4 @@ RUN make check
 
 WORKDIR ${HOME}/hyperon-experimental
 RUN python3 -m pip install -e ./python[dev]
+RUN cargo install --path ./repl
