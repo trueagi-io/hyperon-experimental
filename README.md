@@ -21,11 +21,19 @@ If you find troubles with the installation, see the [Troubleshooting](#troublesh
 
 ## Docker
 
-A docker image can be used as a ready to run environment.
+A docker image can be used as a ready to run stable and predictable development
+environment. Please keep in mind that resulting image contains temporary build
+files and takes a lot of a disk space. It is not recommended to distribute it
+as an image for running MeTTa because of its size.
 
-Build docker image running:
+Build Docker image from a local copy of the repo running:
 ```
-docker build -t trueagi/hyperon https://raw.githubusercontent.com/trueagi-io/hyperon-experimental/main/Dockerfile
+docker build -t trueagi/hyperon .
+```
+
+Or build it without cloning the repo running:
+```
+docker build -t trueagi/hyperon http://github.com/trueagi-io/hyperon-experimental.git#main
 ```
 
 Run the image:
@@ -33,8 +41,7 @@ Run the image:
 docker run --rm -ti trueagi/hyperon
 ```
 
-Resulting container contains the latest code from the repo compiled and ready
-to run.  If the docker image doesn't work, please raise an
+If the docker image doesn't work, please raise an
 [issue](https://github.com/trueagi-io/hyperon-experimental/issues).
 
 ## Manual installation
