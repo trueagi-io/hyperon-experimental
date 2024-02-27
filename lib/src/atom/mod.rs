@@ -806,10 +806,6 @@ impl Atom {
             _ => None,
         }
     }
-
-    pub fn as_primitive(&self) -> serde::AsPrimitive {
-        serde::AsPrimitive::from_atom(self)
-    }
 }
 
 impl PartialEq for Atom {

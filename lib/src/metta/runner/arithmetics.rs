@@ -189,8 +189,8 @@ macro_rules! def_binary_bool_op {
 
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($disp), " expects two boolean arguments"));
-                let a = args.get(0).ok_or_else(arg_error)?.as_primitive().as_bool().ok_or_else(arg_error)?;
-                let b = args.get(1).ok_or_else(arg_error)?.as_primitive().as_bool().ok_or_else(arg_error)?;
+                let Bool(a) = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_bool().ok_or_else(arg_error)?;
+                let Bool(b) = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_bool().ok_or_else(arg_error)?;
 
                 Ok(vec![Atom::gnd(Bool(a $op b))])
             }
@@ -256,6 +256,43 @@ impl Grounded for NotOp {
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
         match_by_equality(self, other)
+    }
+}
+
+use crate::serde::Serializer;
+
+#[derive(Default)]
+struct BoolSerializer {
+    value: Option<Bool>,
+}
+
+impl Serializer for BoolSerializer {
+    fn serialize_bool(&mut self, v: bool) -> serde::Result {
+        self.value = Some(Bool(v));
+        Ok(())
+    }
+}
+
+struct AsPrimitive<'a> {
+    atom: &'a super::Atom
+}
+
+impl<'a> AsPrimitive<'a> {
+    fn from_atom(atom: &'a super::Atom) -> Self {
+        Self{ atom }
+    }
+
+    fn as_gnd(&self) -> Option<&dyn super::GroundedAtom> {
+        std::convert::TryInto::<&dyn super::GroundedAtom>::try_into(self.atom).ok()
+    }
+
+    pub fn as_bool(self) -> Option<Bool> {
+       self.as_gnd()
+           .map(|gnd| {
+               let mut serializer = BoolSerializer::default();
+               let _ = gnd.serialize(&mut serializer);
+               serializer.value
+           }).flatten()
     }
 }
 
