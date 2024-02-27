@@ -141,14 +141,14 @@ macro_rules! def_binary_number_op {
 
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($op), " expects two number arguments"));
-                let a = args.get(0).ok_or_else(arg_error)?.as_gnd::<Number>().ok_or_else(arg_error)?;
-                let b = args.get(1).ok_or_else(arg_error)?.as_gnd::<Number>().ok_or_else(arg_error)?;
+                let a = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
+                let b = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
 
                 let res = match (a, b) {
-                    (&Number::Integer(a), &Number::Integer(b)) => $cast(a $op b),
-                    (&Number::Integer(a), &Number::Float(b)) => $cast((a as f64) $op b),
-                    (&Number::Float(a), &Number::Integer(b)) => $cast(a $op (b as f64)),
-                    (&Number::Float(a), &Number::Float(b)) => $cast(a $op b),
+                    (Number::Integer(a), Number::Integer(b)) => $cast(a $op b),
+                    (Number::Integer(a), Number::Float(b)) => $cast((a as f64) $op b),
+                    (Number::Float(a), Number::Integer(b)) => $cast(a $op (b as f64)),
+                    (Number::Float(a), Number::Float(b)) => $cast(a $op b),
                 };
 
                 Ok(vec![Atom::gnd(res)])
@@ -273,12 +273,28 @@ impl Serializer for BoolSerializer {
     }
 }
 
+#[derive(Default)]
+struct NumberSerializer {
+    value: Option<Number>,
+}
+
+impl Serializer for NumberSerializer {
+    fn serialize_i64(&mut self, v: i64) -> serde::Result {
+        self.value = Some(Number::Integer(v));
+        Ok(())
+    }
+    fn serialize_f64(&mut self, v: f64) -> serde::Result {
+        self.value = Some(Number::Float(v));
+        Ok(())
+    }
+}
+
 struct AsPrimitive<'a> {
     atom: &'a super::Atom
 }
 
 impl<'a> AsPrimitive<'a> {
-    fn from_atom(atom: &'a super::Atom) -> Self {
+    pub fn from_atom(atom: &'a super::Atom) -> Self {
         Self{ atom }
     }
 
@@ -286,13 +302,43 @@ impl<'a> AsPrimitive<'a> {
         std::convert::TryInto::<&dyn super::GroundedAtom>::try_into(self.atom).ok()
     }
 
-    pub fn as_bool(self) -> Option<Bool> {
+    fn as_type<T, S: ConvertingSerializer<T>>(&self, mut serializer: S) -> Option<T> {
        self.as_gnd()
            .map(|gnd| {
-               let mut serializer = BoolSerializer::default();
-               let _ = gnd.serialize(&mut serializer);
-               serializer.value
+               let _ = gnd.serialize(serializer.as_mut());
+               serializer.into_type()
            }).flatten()
+    }
+
+    pub fn as_bool(self) -> Option<Bool> {
+       self.as_type(BoolSerializer::default())
+    }
+
+    pub fn as_number(self) -> Option<Number> {
+       self.as_type(NumberSerializer::default())
+    }
+}
+
+trait ConvertingSerializer<T>: Serializer {
+    fn as_mut(&mut self) -> &mut dyn Serializer;
+    fn into_type(self) -> Option<T>;
+}
+
+impl ConvertingSerializer<Bool> for BoolSerializer {
+    fn as_mut(&mut self) -> &mut dyn Serializer {
+        self
+    }
+    fn into_type(self) -> Option<Bool> {
+        self.value
+    }
+}
+
+impl ConvertingSerializer<Number> for NumberSerializer {
+    fn as_mut(&mut self) -> &mut dyn Serializer {
+        self
+    }
+    fn into_type(self) -> Option<Number> {
+        self.value
     }
 }
 
