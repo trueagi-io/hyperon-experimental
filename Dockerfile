@@ -22,7 +22,7 @@ RUN python3 -m pip install conan==1.62 pip==23.1.2
 ENV PATH="${PATH}:/home/user/.local/bin"
 RUN conan profile new --detect default
 
-RUN git clone https://github.com/trueagi-io/hyperon-experimental.git
+ADD --chown=user:users . ${HOME}/hyperon-experimental
 WORKDIR ${HOME}/hyperon-experimental
 RUN mkdir build
 
