@@ -24,14 +24,11 @@ RUN conan profile new --detect default
 
 ADD --chown=user:users . ${HOME}/hyperon-experimental
 WORKDIR ${HOME}/hyperon-experimental
-RUN mkdir build
-
-WORKDIR ${HOME}/hyperon-experimental/lib
-RUN cargo build
 RUN cargo test
 
+RUN mkdir build
 WORKDIR ${HOME}/hyperon-experimental/build
-RUN cmake ..
+RUN cmake -DCMAKE_BUILD_TYPE=Release ..
 RUN make
 RUN make check
 
