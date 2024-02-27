@@ -498,13 +498,3 @@ fn relative_submodule_import_test() {
 //Also test the case where the inner loader is sucessul, but then the outer loader throws an error.  Also make sure neither
 // module is loaded into the namespace
 //
-
-//LP-TODO-NEXT, make a unit test for recursive loading of parents modules based on hierarchical name import
-//
-// Next make sure the catalogs are able to do the recursive loading from the file system,
-// using their working dirs.  Maybe make this second test a C API test to get better coverage
-//
-
-//LP-TODO-NEXT, Add a test for loading a module from a DirCatalog by passing a name with an extension (ie. `my_mod.metta`) to `resolve`,
-// and make sure the loaded module that comes back doesn't have the extension
-

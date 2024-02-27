@@ -65,7 +65,7 @@ use super::text::{Tokenizer, Parser, SExprParser};
 use super::types::validate_atom;
 
 pub mod modules;
-use modules::{MettaMod, ModNameNode, ModuleLoader, TOP_MOD_NAME, mod_name_relative_path};
+use modules::{MettaMod, ModNameNode, ModuleLoader, TOP_MOD_NAME};
 #[cfg(feature = "pkg_mgmt")]
 use modules::catalog::{ModuleDescriptor, loader_for_module_at_path};
 
@@ -822,20 +822,46 @@ impl<'input> RunContext<'_, '_, 'input> {
 
         // Resolve the module name into a loader object using the resolution logic in the pkg_info
         #[cfg(feature = "pkg_mgmt")]
-        'err: {
-            let (mod_name_path, mod_id) = match self.module().pkg_info().resolve_module(self, mod_name)? {
-                Some((loader, descriptor)) => {
-                    let mod_name = self.normalize_module_name(mod_name)?;
-                    let mod_id = self.metta.get_or_init_module_with_descriptor(&mod_name, descriptor, |context| loader.load(context))?;
-                    (mod_name, mod_id)
-                },
-                None => {break 'err;}
-            };
-            self.add_module_to_name_tree(&mod_name_path, mod_id)?;
-            return Ok(mod_id);
+        self.load_module_recursive(mod_name)
+    }
+
+    /// Internal function used for recursive loading of parent modules by [Self::load_module]
+    #[cfg(feature = "pkg_mgmt")]
+    fn load_module_recursive(&mut self, mod_name: &str) -> Result<ModId, String> {
+
+        //Make sure the parent module is loaded, and descend recursively until we find a loaded parent
+        let mod_name_components = ModNameNode::decompose_name_path(mod_name)?;
+        let parent_mod_id = if mod_name_components.len() > 1 {
+            let parent_name = ModNameNode::compose_name_path(&mod_name_components[..mod_name_components.len()-1])?;
+            if let Ok(parent_mod_id) = self.get_module_by_name(&parent_name) {
+                parent_mod_id
+            } else {
+                self.load_module_recursive(&parent_name)?
+            }
+        } else {
+            ModId::TOP
         };
 
-        Err(format!("Failed to resolve module {mod_name}"))
+        //Normalize the path in the context of this running module
+        let normalized_mod_path = self.normalize_module_name(mod_name)?;
+
+        //Perform the loading in the context of the parent module
+        let mut state = RunnerState::new_with_module(&self.metta, parent_mod_id);
+        let mut mod_id = None;
+        state.i_wrapper.input_src.push_func(|context| {
+            let new_mod_id = match context.module().pkg_info().resolve_module(self, &normalized_mod_path)? {
+                Some((loader, descriptor)) => {
+                    let mod_id = self.metta.get_or_init_module_with_descriptor(&normalized_mod_path, descriptor, |context| loader.load(context))?;
+                    mod_id
+                },
+                None => {return Err(format!("Failed to resolve module {mod_name}"))}
+            };
+            self.add_module_to_name_tree(&normalized_mod_path, new_mod_id)?;
+            mod_id = Some(new_mod_id);
+            Ok(())
+        });
+        state.run_to_completion()?;
+        mod_id.ok_or_else(|| panic!())
     }
 
     /// Private method to advance the context forward one step

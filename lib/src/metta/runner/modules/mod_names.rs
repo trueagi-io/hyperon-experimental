@@ -230,7 +230,7 @@ impl ModNameNode {
             |_, _| {}).map(|(node, _subtree_idx, remaining)| (node, remaining))
     }
 
-    /// Parses a module name path into a canonical representation, irrespective of the actual tree
+    /// Parses a module name path into a canonical representation
     pub fn normalize_name_path(name: &str) -> Result<String, String> {
         let mut new_name = TOP_MOD_NAME.to_string();
         let (_, _, last) = Self::parse_parent_generic(Self::top(), name, &OverlayMap::none(),
@@ -243,6 +243,28 @@ impl ModNameNode {
         Ok(new_name)
     }
 
+    /// Decomposes name path components into individual module names.  Reverse of [Self::compose_name_path]
+    pub fn decompose_name_path(name: &str) -> Result<Vec<&str>, String> {
+        let mut components: Vec<&str> = vec![];
+        let (_, _, last) = Self::parse_parent_generic(Self::top(), name, &OverlayMap::none(),
+            |node, _| Some(node),
+            |_, component| {components.push(component)})?;
+        if last.len() > 0 {
+            components.push(last);
+        }
+        Ok(components)
+    }
+
+    /// Composes a name path from a slice of individual module names.  Reverse of [Self::decompose_name_path]
+    pub fn compose_name_path(components: &[&str]) -> Result<String, String> {
+        let mut new_name = TOP_MOD_NAME.to_string();
+        for component in components {
+            new_name.push_str(":");
+            new_name.push_str(component);
+        }
+        Ok(new_name)
+    } 
+
     /// Internal generic `parse_parent` that can expand to mutable and const versions.
     /// Return valus is (parent_node, subtree_idx, remaining_name_path)
     /// If subtree_idx is None, the path was parsed to the end.  If it is Some, then the overlay_map
@@ -251,7 +273,7 @@ impl ModNameNode {
         where
         SelfT: core::borrow::Borrow<Self>,
         GetF: Fn(SelfT, &str) -> Option<SelfT>,
-        PushParentF: FnMut(&mut SelfT, &str),
+        PushParentF: FnMut(&mut SelfT, &'a str),
     {
         if name.len() == 0 {
             return Ok((gen_self, None, &name))

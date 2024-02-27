@@ -150,7 +150,6 @@ impl PkgInfo {
     /// load that module
     pub fn resolve_module<'c>(&self, context: &'c RunContext, name_path: &str) -> Result<Option<(Box<dyn ModuleLoader + 'c>, ModuleDescriptor)>, String> {
         let mod_name = mod_name_from_path(name_path);
-        let normalized_mod_path = context.normalize_module_name(name_path)?;
 
         //Make sure the name is a legal module name
         if !module_name_is_legal(mod_name) {
@@ -201,7 +200,7 @@ impl PkgInfo {
             if results.len() > 0 {
                 log::info!("Found module: \"{mod_name}\" inside {catalog:?}");
                 let descriptor = results.into_iter().next().unwrap();
-                log::info!("Preparing to load module: \'{}\' as \'{}\'", descriptor.name, normalized_mod_path);
+                log::info!("Preparing to load module: \'{}\' as \'{}\'", descriptor.name, name_path);
                 return Ok(Some((catalog.get_loader(&descriptor)?, descriptor)))
             }
         }
@@ -515,3 +514,59 @@ impl ModuleDescriptor {
         hasher.finish()
     }
 }
+
+/// Bogus test catalog that returns a fake module in response to any query with a single capital letter
+/// used by `recursive_submodule_import_test`
+#[derive(Debug)]
+struct TestCatalog;
+
+impl ModuleCatalog for TestCatalog {
+    fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
+        if name.len() == 1 && name.chars().last().unwrap().is_uppercase() {
+            vec![ModuleDescriptor::new(name.to_string())]
+        } else {
+            vec![]
+        }
+    }
+    fn get_loader(&self, _descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
+        Ok(Box::new(TestCatalog))
+    }
+}
+
+impl ModuleLoader for TestCatalog {
+    fn load(&self, context: &mut RunContext) -> Result<(), String> {
+        let space = DynSpace::new(GroundingSpace::new());
+        context.init_self_module(space, None);
+        Ok(())
+    }
+}
+
+/// This tests the core recursive sub-module loading code
+#[test]
+fn recursive_submodule_import_test() {
+
+    //Make a new runner with the TestCatalog
+    let runner = Metta::new(Some(EnvBuilder::test_env().push_module_catalog(TestCatalog)));
+
+    //Now try loading an inner-module, and make sure it can recursively load all the needed parents
+    let result = runner.run(SExprParser::new("!(import! &self A:B:C)"));
+    assert_eq!(result, Ok(vec![vec![expr!()]]));
+
+    //Test that each parent sub-module is indeed loaded
+    assert!(runner.get_module_by_name("A").is_ok());
+    assert!(runner.get_module_by_name("A:B").is_ok());
+    assert!(runner.get_module_by_name("A:B:C").is_ok());
+
+    //Test that we fail to load a module with an invalid parent, even if the module itself resolves
+    let _result = runner.run(SExprParser::new("!(import! &self a:B)"));
+    assert!(runner.get_module_by_name("a:B").is_err());
+}
+
+//
+//LP-TODO-NEXT, Next make sure the catalogs are able to do the recursive loading from the file system,
+// using their working dirs.  Maybe make this second test a C API test to get better coverage
+//
+
+//LP-TODO-NEXT, Add a test for loading a module from a DirCatalog by passing a name with an extension (ie. `my_mod.metta`) to `resolve`,
+// and make sure the loaded module that comes back doesn't have the extension
+
