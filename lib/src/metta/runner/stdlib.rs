@@ -1881,4 +1881,11 @@ mod tests {
         let val = SealedOp{}.execute(&mut vec![expr!(x y), expr!("="(y z))]);
         assert!(crate::atom::matcher::atoms_are_equivalent(&val.unwrap()[0], &expr!("="(y z))));
     }
+
+    #[test]
+    fn use_sealed_to_make_scoped_variable() {
+        assert_eq!(run_program("!(let $x (input $x) (output $x))"), Ok(vec![vec![expr!("output" ("input" x))]]));
+        assert_eq!(run_program("!(let ($sv $st) (sealed ($x) ($x (output $x)))
+               (let $sv (input $x) $st))"), Ok(vec![vec![expr!("output" ("input" x))]]));
+    }
 }
