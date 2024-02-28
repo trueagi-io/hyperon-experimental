@@ -804,10 +804,15 @@ impl<'input> RunContext<'_, '_, 'input> {
     /// and loads it into the runner, if it's not already loaded
     pub fn load_module(&mut self, mod_name: &str) -> Result<ModId, String> {
 
+        // LP-TODO-NOW!, We should assume mod_name is relative by default, not absolute
+
         // See if we already have the module loaded
         if let Ok(mod_id) = self.get_module_by_name(mod_name) {
             return Ok(mod_id);
         }
+
+        #[cfg(not(feature = "pkg_mgmt"))]
+        return Err(format!("Failed to resolve module {mod_name}"));
 
         // Resolve the module name into a loader object using the resolution logic in the pkg_info
         #[cfg(feature = "pkg_mgmt")]
