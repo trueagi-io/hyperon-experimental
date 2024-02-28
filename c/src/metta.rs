@@ -1883,7 +1883,7 @@ impl FsModuleFormat for CFsModFmtLoader {
         let parent_dir_c_string = str_as_cstr(parent_dir.to_str().unwrap());
         let mod_name_c_string = str_as_cstr(mod_name);
         const BUF_SIZE: usize = 512;
-        let mut buffer = [0i8; BUF_SIZE];
+        let mut buffer = [0 as c_char; BUF_SIZE];
 
         let bytes_written = (api.path_for_name)(
             self.payload,
