@@ -125,8 +125,8 @@ def text_ops():
 def type_tokens():
     return {
         r"[-+]?\d+" : lambda token: ValueAtom(int(token), 'Number'),
-        r"[-+]?\d+(\.\d+)": lambda token: ValueAtom(float(token), 'Number'),
-        r"[-+]?\d+(\.\d+)?e[-+]?\d+": lambda token: ValueAtom(float(token), 'Number'),
+        r"[-+]?\d+\.\d+": lambda token: ValueAtom(float(token), 'Number'),
+        r"[-+]?\d+(\.\d+)?[eE][-+]?\d+": lambda token: ValueAtom(float(token), 'Number'),
         "\"[^\"]*\"": lambda token: ValueAtom(str(token[1:-1]), 'String'),
         "\'[^\']\'": lambda token: ValueAtom(Char(token[1]), 'Char'),
         r"True|False": lambda token: ValueAtom(token == 'True', 'Bool'),
@@ -181,7 +181,7 @@ def load_ascii():
     def load_ascii_atom(space, name):
         space_obj = space.get_object()
         hp.load_ascii(name.get_name(), space_obj.cspace)
-        #['Space', 'Symbol', 'Unit'], 
+        #['Space', 'Symbol', 'Unit'],
         return [Atoms.UNIT]
 
     loadAtom = OperationAtom('load-ascii', load_ascii_atom,
