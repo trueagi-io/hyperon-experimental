@@ -33,7 +33,10 @@ docker build -t trueagi/hyperon .
 
 Or build it without cloning the repo running:
 ```
-docker build -t trueagi/hyperon http://github.com/trueagi-io/hyperon-experimental.git#main
+docker build \
+    --build-arg BUILDKIT_CONTEXT_KEEP_GIT_DIR=1 \
+    -t trueagi/hyperon \
+    http://github.com/trueagi-io/hyperon-experimental.git#main
 ```
 
 Run the image:
