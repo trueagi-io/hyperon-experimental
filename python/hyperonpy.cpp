@@ -1,6 +1,9 @@
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <nonstd/optional.hpp>
+#include <fstream>
+#include <iostream>
+#include <sstream>
 
 #include <hyperon/hyperon.h>
 
@@ -1038,4 +1041,87 @@ PYBIND11_MODULE(hyperonpy, m) {
                 }
                 throw std::runtime_error("int of float number is expected as an argument");
             }, "Convert Python number to MeTTa stdlib number");
+    m.def("load_ascii", [](std::string name, CSpace space) {
+        py::object hyperon = py::module_::import("hyperon.atoms");
+        py::function ValueObject = hyperon.attr("ValueObject");
+        std::ifstream f;
+        f.open(name);
+        if(!f.is_open()) {
+            throw std::runtime_error("load_ascii: file not found");
+        }
+        int count = 0;
+        std::vector<std::vector<atom_t>> stack;
+        std::vector<atom_t> children;
+        std::string str = "";
+        int depth = 0;
+        bool isescape = false;
+        while(f) {
+            char c = f.get();
+            bool isspace = std::isspace(c);
+            if(isescape) {
+                str += c;
+                isescape = false;
+                continue;
+            }
+            if((isspace or c == '(' or c == ')')) {
+                if(c == ')' and depth == 0) {
+                    // ignore for now --> exception
+                    continue;
+                }
+                if(str.size() > 0) {
+                    atom_t atom;
+                    if(str[0] >= '0' and str[0] <= '9' or str[0] == '-') {
+                        try {
+                            long double ld = std::stold(str);
+                            long long ll = std::stoll(str);
+                            py::object obj;
+                            // separate assignments are needed to get different types
+                            if(ll == ld) {
+                                obj = ValueObject(ll);
+                            } else {
+                                obj = ValueObject(ld);
+                            }
+                            atom = atom_gnd(new GroundedObject(obj,
+                                            atom_sym("Number")));
+                        }
+                        catch(...) {
+                            atom = atom_sym(str.c_str());
+                        }
+                    } else {
+                        atom = atom_sym(str.c_str());
+                    }
+                    str.clear();
+                    if(depth == 0) {
+                        space_add(space.ptr(), atom);
+                        continue;
+                    }
+                    children.push_back(atom);
+                }
+                if(isspace) {
+                    continue;
+                }
+                if(c == '(') {
+                    stack.push_back(std::move(children));
+                    depth++;
+                } else { //if(c == ')') {
+                    atom_t expr = atom_expr(children.data(), children.size());
+                    children = std::move(stack.back());
+                    stack.pop_back();
+                    depth--;
+                    if(depth == 0) {
+                        space_add(space.ptr(), expr);
+                    } else {
+                        children.push_back(expr);
+                    }
+                }
+            } else {
+                if(c == '\\') {
+                    isescape = true;
+                } else {
+                    str += c;
+                }
+            }
+        }
+        return true;
+    }, "Load metta space ignoring tokenization and execution");
 }

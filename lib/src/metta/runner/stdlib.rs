@@ -8,7 +8,6 @@ use crate::metta::runner::{Metta, RunContext, ModuleLoader};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 
-use std::convert::TryFrom;
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::Display;
@@ -650,6 +649,36 @@ impl Grounded for EqualOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct MatchOp {}
+
+impl Display for MatchOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "match")
+    }
+}
+
+impl Grounded for MatchOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("match expects three arguments: space, pattern and template");
+        let space = args.get(0).ok_or_else(arg_error)?;
+        let pattern = args.get(1).ok_or_else(arg_error)?;
+        let template = args.get(2).ok_or_else(arg_error)?;
+        log::debug!("MatchOp::execute: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
+        let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
+        Ok(space.borrow().subst(&pattern, &template))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+
 /// The internal `non_minimal_only_stdlib` module contains code that is never used by the minimal stdlib
 #[cfg(not(feature = "minimal"))]
 mod non_minimal_only_stdlib {
@@ -657,7 +686,6 @@ mod non_minimal_only_stdlib {
     use crate::metta::interpreter::interpret;
     use crate::common::assert::vec_eq_no_order;
     use crate::common::ReplacingMapper;
-    use std::iter::FromIterator;
 
     // TODO: move it into hyperon::atom module?
     pub(crate) fn atom_as_expr(atom: &Atom) -> Option<&ExpressionAtom> {
@@ -675,35 +703,6 @@ mod non_minimal_only_stdlib {
         match result {
             Ok(result) => Ok(result),
             Err(_) => Ok(vec![]),
-        }
-    }
-
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct MatchOp {}
-
-    impl Display for MatchOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "match")
-        }
-    }
-
-    impl Grounded for MatchOp {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
-        }
-
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = || ExecError::from("match expects three arguments: space, pattern and template");
-            let space = args.get(0).ok_or_else(arg_error)?;
-            let pattern = args.get(1).ok_or_else(arg_error)?;
-            let template = args.get(2).ok_or_else(arg_error)?;
-            log::debug!("MatchOp::execute: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
-            let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
-            Ok(space.borrow().subst(&pattern, &template))
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
@@ -1340,11 +1339,11 @@ use crate::metta::runner::METTA_CODE;
 /// NOTE: the corelib will be loaded automatically if the runner is initialized with one of the high-level
 /// init functions such as [Metta::new] and [Metta::new_with_stdlib_loader]
 #[derive(Debug)]
-pub(crate) struct CoreLibLoader(String);
+pub(crate) struct CoreLibLoader;
 
 impl Default for CoreLibLoader {
     fn default() -> Self {
-        CoreLibLoader("corelib".to_string())
+        CoreLibLoader
     }
 }
 
@@ -1367,7 +1366,7 @@ mod tests {
     use super::*;
     use crate::atom::matcher::atoms_are_equivalent;
     use crate::metta::text::*;
-    use crate::metta::runner::{Metta, EnvBuilder};
+    use crate::metta::runner::EnvBuilder;
     use crate::metta::types::validate_atom;
     use crate::common::test_utils::*;
 

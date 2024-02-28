@@ -9,9 +9,7 @@ use crate::space::*;
 
 use std::os::raw::*;
 use std::fmt::Display;
-use std::convert::TryInto;
 use std::collections::HashSet;
-use std::iter::FromIterator;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon::matcher::{Bindings, BindingsSet};
