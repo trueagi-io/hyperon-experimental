@@ -25,7 +25,7 @@ fn unit_result() -> Result<Vec<Atom>, ExecError> {
 #[derive(Clone, Debug)]
 pub struct ImportOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<&'static mut RunContext<'static, 'static, 'static>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
 impl PartialEq for ImportOp {
@@ -94,7 +94,8 @@ impl Grounded for ImportOp {
 
         // Load the module into the runner, or get the ModId if it's already loaded
         //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
-        let context = self.context.lock().unwrap().last().unwrap().clone();
+        let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
+        let mut context = ctx_ref.lock().unwrap();
         let mod_id = context.load_module(mod_name)?;
 
         // Import the module, as per the behavior described above

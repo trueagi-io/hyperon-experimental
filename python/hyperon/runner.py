@@ -278,7 +278,11 @@ class _PyFileMeTTaModFmt:
             spec.loader.exec_module(module)
 
             #TODO: Extract the version here, when it's time to implement versions
-            return metta_mod_name
+
+            return {
+                'pymod_name': metta_mod_name,
+                'path': path
+            }
         except Exception as e:
             hp.log_error("Python error loading MeTTa module '" + metta_mod_name + "'. " + repr(e))
             return None
@@ -289,9 +293,12 @@ class _PyFileMeTTaModFmt:
 
         # We are using the `callback_context` object to store the python module name, which currently is
         # identical to the MeTTa module name becuase we don't mangle it, but we may mangle it in the future
-        pymod_name = callback_context
+        pymod_name = callback_context['pymod_name']
+        path = callback_context['path']
 
-        loader_func = _priv_make_module_loader_func_for_pymod(pymod_name)
+        resource_dir = os.path.dirname(path)
+
+        loader_func = _priv_make_module_loader_func_for_pymod(pymod_name, resource_dir=resource_dir)
         loader_func(run_context)
 
 def _priv_load_py_stdlib(c_run_context):
@@ -314,7 +321,7 @@ def _priv_load_py_stdlib(c_run_context):
     # has a module at `"hyperon.exts." + mod_name` before just checking `mod_name`, but it's unclear that will
     # matter since we'll also search the `exts` directory with the include_path / fs_module_format logic
 
-def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False):
+def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False, resource_dir=None):
     """
     Private function to return a loader function to load a module into the runner directly from the specified Python module
     """
@@ -326,7 +333,7 @@ def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False):
             # LP-TODO-Next, I should create an entry point that allows the python module to initialize the
             #  space before the rest of the init code runs
             space = GroundingSpaceRef()
-            run_context.init_self_module(space, None)
+            run_context.init_self_module(space, resource_dir)
 
             #Load and import the corelib using "import *" behavior, if that flag was specified
             if load_corelib:

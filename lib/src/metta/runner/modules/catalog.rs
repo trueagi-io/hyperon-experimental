@@ -148,20 +148,21 @@ pub struct DepEntry {
 impl PkgInfo {
     /// Resolves which module to load from which available location or catalog, and returns the [ModuleLoader] to
     /// load that module
-    pub fn resolve_module<'c>(&self, context: &'c RunContext, name: &str) -> Result<Option<(Box<dyn ModuleLoader + 'c>, ModuleDescriptor)>, String> {
+    pub fn resolve_module<'c>(&self, context: &'c RunContext, name_path: &str) -> Result<Option<(Box<dyn ModuleLoader + 'c>, ModuleDescriptor)>, String> {
+        let mod_name = mod_name_from_path(name_path);
 
         //Make sure the name is a legal module name
-        if !module_name_is_legal(name) {
-            return Err(format!("Illegal module name: {name}"));
+        if !module_name_is_legal(mod_name) {
+            return Err(format!("Illegal module name: {mod_name}"));
         }
 
         //See if we have a pkg_info dep entry for the module
-        if let Some(entry) = self.deps.get(name) {
+        if let Some(entry) = self.deps.get(mod_name) {
 
             //If path is explicitly specified in the dep entry, then we must load the module at the
             // specified path, and cannot search anywhere else
             if let Some(path) = &entry.fs_path {
-                return loader_for_module_at_path(&context.metta, path, Some(name), context.module().resource_dir());
+                return loader_for_module_at_path(&context.metta, path, Some(mod_name), context.module().resource_dir());
             }
 
             //TODO, if git URI is specified in the dep entry, clone the repo to a location in the environment
@@ -193,15 +194,13 @@ impl PkgInfo {
 
         //Search the catalogs, starting with the resource dir, and continuing to the runner's Environment
         for catalog in local_catalogs.into_iter().chain(context.metta.environment().catalogs()) {
-            log::trace!("Looking for module: \"{name}\" inside {catalog:?}");
+            log::trace!("Looking for module: \"{mod_name}\" inside {catalog:?}");
             //TODO: use lookup_newest_within_version_range, as soon as I add module versioning
-            let results = catalog.lookup(name);
+            let results = catalog.lookup(mod_name);
             if results.len() > 0 {
-                log::info!("Found module: \"{name}\" inside {catalog:?}");
+                log::info!("Found module: \"{mod_name}\" inside {catalog:?}");
                 let descriptor = results.into_iter().next().unwrap();
-                if descriptor.name != name {
-                    panic!("Fatal Error: Catalog {catalog:?} returned module descriptor with incompatible name");
-                }
+                log::info!("Preparing to load module: \'{}\' as \'{}\'", descriptor.name, name_path);
                 return Ok(Some((catalog.get_loader(&descriptor)?, descriptor)))
             }
         }
@@ -219,6 +218,12 @@ pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, 
     } else {
         search_dir.ok_or_else(|| format!("Error loading {}.  Working directory or module resource dir required to load modules by relative path", path.as_ref().display()))?
             .join(path)
+    };
+
+    //If a mod name was supplied, we want to make sure it's not a full name path
+    let name = match name {
+        Some(name) => Some(mod_name_from_path(name)),
+        None => None
     };
 
     //Check all module formats, to try and load the module at the path
@@ -261,6 +266,11 @@ impl ModuleLoader for SingleFileModule {
 }
 
 /// A loader for a MeTTa module implemented as a directory
+///
+/// A `DirModule` can contain MeTTa code in a `module.metta` file, but any directory may
+/// be explicitly loaded as a module, making the directory contents available as resources.
+///
+/// See the "Anatomy of a Directory Module" section in the LP-TODO Finish writeup of user-level guide
 #[derive(Debug)]
 pub(crate) struct DirModule {
     path: PathBuf,
@@ -276,15 +286,15 @@ impl ModuleLoader for DirModule {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
 
         let space = DynSpace::new(GroundingSpace::new());
-        let resource_dir = self.path.parent().unwrap();
+        let resource_dir = &self.path;
         context.init_self_module(space, Some(resource_dir.into()));
 
+        // A module.metta file is optional
         let module_metta_path = self.path.join("module.metta");
-        let program_text = std::fs::read_to_string(&module_metta_path)
-            .map_err(|err| format!("Failed to read metta file in directory module, path: {}, error: {}", module_metta_path.display(), err))?;
-
-        let parser = OwnedSExprParser::new(program_text);
-        context.push_parser(Box::new(parser));
+        if let Ok(program_text) = std::fs::read_to_string(&module_metta_path) {
+            let parser = OwnedSExprParser::new(program_text);
+            context.push_parser(Box::new(parser));
+        }
 
         Ok(())
     }
@@ -359,21 +369,18 @@ impl FsModuleFormat for DirModuleFmt {
     }
     fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<(Box<dyn ModuleLoader>, ModuleDescriptor)> {
         if path.is_dir() {
-            let mod_matta_path = path.join("module.metta");
-            if mod_matta_path.exists() {
-                let mod_name = match mod_name {
-                    Some(mod_name) => mod_name,
-                    None => path.file_stem().unwrap().to_str().unwrap(),
-                };
+            let mod_name = match mod_name {
+                Some(mod_name) => mod_name,
+                None => path.file_stem().unwrap().to_str().unwrap(),
+            };
 
-                //LP-TODO-Next: Try and read the module version here
-                //If there is a `pkg-info.metta` file, information from that file will take precedence.
-                // Otherwise, try and parse a `_pkg-info` atom from the `module.metta` file
+            //LP-TODO-Next: Try and read the module version here
+            //If there is a `pkg-info.metta` file, information from that file will take precedence.
+            // Otherwise, try and parse a `_pkg-info` atom from the `module.metta` file
 
-                let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), path, DIR_MOD_FMT_ID);
-                let loader = Box::new(DirModule::new(path));
-                return Some((loader, descriptor));
-            }
+            let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), path, DIR_MOD_FMT_ID);
+            let loader = Box::new(DirModule::new(path));
+            return Some((loader, descriptor));
         }
         None
     }
@@ -509,3 +516,59 @@ impl ModuleDescriptor {
         hasher.finish()
     }
 }
+
+/// Bogus test catalog that returns a fake module in response to any query with a single capital letter
+/// used by `recursive_submodule_import_test`
+#[derive(Debug)]
+struct TestCatalog;
+
+impl ModuleCatalog for TestCatalog {
+    fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
+        if name.len() == 1 && name.chars().last().unwrap().is_uppercase() {
+            vec![ModuleDescriptor::new(name.to_string())]
+        } else {
+            vec![]
+        }
+    }
+    fn get_loader(&self, _descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
+        Ok(Box::new(TestCatalog))
+    }
+}
+
+impl ModuleLoader for TestCatalog {
+    fn load(&self, context: &mut RunContext) -> Result<(), String> {
+        let space = DynSpace::new(GroundingSpace::new());
+        context.init_self_module(space, None);
+        Ok(())
+    }
+}
+
+/// This tests the core recursive sub-module loading code
+#[test]
+fn recursive_submodule_import_test() {
+
+    //Make a new runner with the TestCatalog
+    let runner = Metta::new(Some(EnvBuilder::test_env().push_module_catalog(TestCatalog)));
+
+    //Now try loading an inner-module, and make sure it can recursively load all the needed parents
+    let result = runner.run(SExprParser::new("!(import! &self A:B:C)"));
+    assert_eq!(result, Ok(vec![vec![expr!()]]));
+
+    //Test that each parent sub-module is indeed loaded
+    assert!(runner.get_module_by_name("A").is_ok());
+    assert!(runner.get_module_by_name("A:B").is_ok());
+    assert!(runner.get_module_by_name("A:B:C").is_ok());
+
+    //Test that we fail to load a module with an invalid parent, even if the module itself resolves
+    let _result = runner.run(SExprParser::new("!(import! &self a:B)"));
+    assert!(runner.get_module_by_name("a:B").is_err());
+}
+
+//
+//LP-TODO-NEXT, Next make sure the catalogs are able to do the recursive loading from the file system,
+// using their working dirs.  Maybe make this second test a C API test to get better coverage
+//
+
+//LP-TODO-NEXT, Add a test for loading a module from a DirCatalog by passing a name with an extension (ie. `my_mod.metta`) to `resolve`,
+// and make sure the loaded module that comes back doesn't have the extension
+

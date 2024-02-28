@@ -112,15 +112,7 @@ The question here is which behavior we want for the module namespace:
 
 For either Proposal B or C, we probably want to add some form of linting / checking, so users don't accidentally shoot themselves in the foot by exporting items that depend on private (Implementation) sub-modules.  In other words, public interfaces must not include non-public objects.
 
-#### Is importing by hierarchical module path allowed?
-
-In other words, should we support the following MeTTa code?  `!(import! &self mod_a:mod_b:mod_c)`?
-
-Assuming each of `mod_a`, `mod_b`, and `mod_c` can be resolved within their appropriate parent context, and each is a valid module that exports the needed sub-module, should we support this?
-
-My feeling is yes, assuming we settle on a hierarchical module namespace (Proposal B in the *Module Namespace Scope* section) and we resolve issues with sub-module visibility / exports, then I don't see any drawbacks to supporting this.
-
-LP-TODO-UPDATE: This is mostly implemented.  Need to update documentation to reflect new code behaviors
+UPDATE: A version of B is now implemented in the code, with the caveat that nothing is private (visibility constructs don't exist for MeTTa modules at all) but sub-modules can be contained within the namespace of their respective parents.
 
 ## Remaining implementation work
 
