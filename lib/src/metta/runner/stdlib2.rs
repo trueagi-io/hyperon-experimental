@@ -407,6 +407,8 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
     let println_op = Atom::gnd(stdlib::PrintlnOp{});
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
+    let sealed_op = Atom::gnd(stdlib::SealedOp{});
+    tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
     // TODO: adding &self introduces self referencing and thus prevents space

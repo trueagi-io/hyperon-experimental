@@ -14,8 +14,6 @@ use std::cell::RefCell;
 use std::fmt::Display;
 use std::collections::HashMap;
 use regex::Regex;
-use std::collections::HashSet;
-use uuid::Uuid;
 
 use super::arithmetics::*;
 
@@ -645,7 +643,16 @@ impl Grounded for SealedOp {
         let mut term_to_seal = args.get(1).ok_or_else(arg_error)?.clone();
         let mut var_list = args.get(0).ok_or_else(arg_error)?.clone();
 
-        let _ = replace_vars(&mut var_list, &mut term_to_seal);
+        let mut local_var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
+
+        var_list.iter_mut().filter_type::<&mut VariableAtom>()
+            .for_each(|var| local_var_mapper.replace(var));
+
+        term_to_seal.iter_mut().filter_type::<&mut VariableAtom>()
+            .for_each(|var| match local_var_mapper.mapping().get(var) {
+                Some(v) => *var = v.clone(),
+                None => {},
+            });
 
         let result = vec![term_to_seal.clone()];
         log::debug!("sealed::execute: var_list: {}, term_to_seal: {}, result: {:?}", var_list, term_to_seal, result);
@@ -656,37 +663,6 @@ impl Grounded for SealedOp {
     fn match_(&self, other: &Atom) -> MatchResultIter {
         match_by_equality(self, other)
     }
-}
-
-fn replace_vars(var_list: &mut Atom, template: &mut Atom) -> HashSet<VariableAtom> {
-    let mut external_vars = HashSet::new();
-    collect_vars(&var_list, &mut external_vars);
-    seal_vars(var_list, template, &external_vars);
-    external_vars
-}
-
-fn seal_vars(var_list: &mut Atom, term: &mut Atom, external_vars: &HashSet<VariableAtom>) {
-    let mut var_to_uuid = HashMap::new();
-
-    var_list.iter_mut().filter_type::<&mut VariableAtom>()
-        .filter(|var| external_vars.contains(var))
-        .for_each(|var| {
-            let var_name = var.name();
-            let _ = var_to_uuid.entry(var_name.to_string())
-                .or_insert_with(Uuid::new_v4)
-                .to_string();
-        });
-
-    term.iter_mut().filter_type::<&mut VariableAtom>()
-        .for_each(|var| {
-            if let Some(uuid) = var_to_uuid.get(&var.name().to_string()) {
-                *var = VariableAtom::new(uuid.to_string());
-            }
-        });
-}
-
-fn collect_vars(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
-    atom.iter().filter_type::<&VariableAtom>().cloned().for_each(|var| { vars.insert(var); });
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -858,6 +834,8 @@ mod non_minimal_only_stdlib {
             match_by_equality(self, other)
         }
     }
+
+    use std::collections::HashSet;
 
     #[derive(Clone, PartialEq, Debug)]
     pub struct CaseOp {
@@ -1169,6 +1147,10 @@ mod non_minimal_only_stdlib {
         collect_vars(&template, &mut external_vars);
         make_conflicting_vars_unique(pattern, template, &external_vars);
         external_vars
+    }
+
+    fn collect_vars(atom: &Atom, vars: &mut HashSet<VariableAtom>) {
+        atom.iter().filter_type::<&VariableAtom>().cloned().for_each(|var| { vars.insert(var); });
     }
 
     fn make_conflicting_vars_unique(pattern: &mut Atom, template: &mut Atom, external_vars: &HashSet<VariableAtom>) {

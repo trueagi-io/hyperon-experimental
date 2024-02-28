@@ -121,6 +121,10 @@ impl<T: Clone + std::hash::Hash + Eq + ?Sized, F: Fn(T) -> T> ReplacingMapper<T,
         }
     }
 
+    pub fn mapping(&self) -> &HashMap<T, T> {
+        &self.mapping
+    }
+
     pub fn mapping_mut(&mut self) -> &mut HashMap<T, T> {
         &mut self.mapping
     }
