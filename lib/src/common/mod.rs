@@ -100,37 +100,37 @@ impl<T> Display for GndRefCell<T> {
 }
 
 #[derive(Clone)]
-pub struct ReplacingMapper<T: Clone + std::hash::Hash + Eq + ?Sized, F: Fn(T) -> T> {
+pub struct CachingMapper<K: Clone + std::hash::Hash + Eq + ?Sized, V: Clone, F: Fn(K) -> V> {
     mapper: F,
-    mapping: HashMap<T, T>,
+    mapping: HashMap<K, V>,
 }
 
-impl<T: Clone + std::hash::Hash + Eq + ?Sized, F: Fn(T) -> T> ReplacingMapper<T, F> {
+impl<K: Clone + std::hash::Hash + Eq + ?Sized, V: Clone, F: Fn(K) -> V> CachingMapper<K, V, F> {
     pub fn new(mapper: F) -> Self {
         Self{ mapper, mapping: HashMap::new() }
     }
 
-    pub fn replace(&mut self, val: &mut T) {
-        match self.mapping.get(&val) {
-            Some(mapped) => *val = mapped.clone(),
+    pub fn replace(&mut self, key: K) -> V {
+        match self.mapping.get(&key) {
+            Some(mapped) => mapped.clone(),
             None => {
-                let mut key = (self.mapper)(val.clone());
-                std::mem::swap(&mut key, val);
-                self.mapping.insert(key, val.clone());
+                let new_val = (self.mapper)(key.clone());
+                self.mapping.insert(key, new_val.clone());
+                new_val
             }
         }
     }
 
-    pub fn mapping(&self) -> &HashMap<T, T> {
+    pub fn mapping(&self) -> &HashMap<K, V> {
         &self.mapping
     }
 
-    pub fn mapping_mut(&mut self) -> &mut HashMap<T, T> {
+    pub fn mapping_mut(&mut self) -> &mut HashMap<K, V> {
         &mut self.mapping
     }
 
-    pub fn as_fn_mut<'a>(&'a mut self) -> impl 'a + FnMut(T) -> T {
-        move |mut t| { self.replace(&mut t); t }
+    pub fn as_fn_mut<'a>(&'a mut self) -> impl 'a + FnMut(K) -> V {
+        move |k| { self.replace(k) }
     }
 }
 

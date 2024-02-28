@@ -7,7 +7,7 @@ use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
-use crate::common::ReplacingMapper;
+use crate::common::CachingMapper;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -641,12 +641,12 @@ impl Grounded for SealedOp {
         let arg_error = || ExecError::from("sealed expects two arguments: var_list and expression");
 
         let mut term_to_seal = args.get(1).ok_or_else(arg_error)?.clone();
-        let mut var_list = args.get(0).ok_or_else(arg_error)?.clone();
+        let var_list = args.get(0).ok_or_else(arg_error)?.clone();
 
-        let mut local_var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
+        let mut local_var_mapper = CachingMapper::new(|var: &VariableAtom| var.clone().make_unique());
 
-        var_list.iter_mut().filter_type::<&mut VariableAtom>()
-            .for_each(|var| local_var_mapper.replace(var));
+        var_list.iter().filter_type::<&VariableAtom>()
+            .for_each(|var| { let _ = local_var_mapper.replace(var); });
 
         term_to_seal.iter_mut().filter_type::<&mut VariableAtom>()
             .for_each(|var| match local_var_mapper.mapping().get(var) {
@@ -1154,11 +1154,11 @@ mod non_minimal_only_stdlib {
     }
 
     fn make_conflicting_vars_unique(pattern: &mut Atom, template: &mut Atom, external_vars: &HashSet<VariableAtom>) {
-        let mut local_var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
+        let mut local_var_mapper = CachingMapper::new(VariableAtom::make_unique);
 
         pattern.iter_mut().filter_type::<&mut VariableAtom>()
             .filter(|var| external_vars.contains(var))
-            .for_each(|var| local_var_mapper.replace(var));
+            .for_each(|var| *var = local_var_mapper.replace(var.clone()));
 
         template.iter_mut().filter_type::<&mut VariableAtom>()
             .for_each(|var| match local_var_mapper.mapping_mut().get(var) {
