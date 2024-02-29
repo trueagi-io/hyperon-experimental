@@ -21,21 +21,39 @@ Modules are loaded into a [Metta] runner using one of the module loading methods
 
 Fundamentally, all modules are loaded via a loader object that implements the [ModuleLoader] trait.  Irrespective of the module's original format or host language, a loader object's [ModuleLoader::load] function ultimately loads the module into the runner.
 
-### Module Names
+### Module Names & Name Paths
 
-Each module has a name which is provided by [ModuleLoader::name] method when the module is loaded.  This name serves a secondary role to [ModId] when importing a module via the Import APIs, but MeTTa users will use this name both to load and to import a module.
+Each loaded module must have a name.  A legal module name is an ascii string, containing only alpha-numeric characters plus `_` and `-`.
 
-For example, the MeTTa code:
+If module loading is initiated through the MeTTa `import!` operation or the corresponding [RunContext::load_module] API call, then the module name will be used to identify the module to load, following the logic in the [Module Name Resolution](#module-name-resolution) section.
+
+Direct module-loading API calls such as [Metta::load_module_direct], [Metta::load_module_at_path], or [Metta::load_module_alias] all take an explicit module name or name path.
+
+Upon loading, the module is subsequently placed into the module name path hierarchy, where `top` is always the name for the top-module in the runner and the `':'` character acts as the separator.  An example module name path looks like `top:mod1:sub_a`, and an example hierarchy is illustrated below.
+
+```
+top = 0
+ ├─corelib = 1
+ ├─stdlib = 2
+ ├─mod1 = 3
+ │  └─sub_a = 4
+ └─mod2 = 5
+    └─sub_b = 6
+```
+
+In addition, the `self` token may be used at the beginning of a module name path to refer to the currently running module context.  In the context of the top module, `top` and `self` should have an identical meaning.
+
+Step-by-step, the MeTTa code:
 ```
 !(import! &self some_module)
 ```
 will cause the name `some_module` to be resolved into a specific module instance; if that module is not yet loaded then it will be, and finally the module will be imported, in totality, into the currently executing module (context).
 
-A legal module name must be an ascii string, containing only alpha-numeric characters plus `_` and `-`.
+![Import Op! Behavior](./assets/importop_behavior.svg "Import Op! Behavior")
 
-A module name is not guaranteed to be globally unique, but it is unique within the scope of a client context.  In other words, names will never conflict between two sub-modules importable from within the same parent module.
+**NOTE**: The same loaded module (with the same ModId) may appear multiple times in the hierarchy, sometimes with different names.  This could be the effect of an "import as" operation or making a module alias.
 
-TODO: The precise behavior of the module namespace is still under discussion.  Read more in the section: "Sub-Module Version Resolution Discussion" of the `modules_internal_discussion.md` file.
+**NOTE**: The same module name may occur in multiple places in the hierarchy, and there is no guaranteed a name will always refer to the same module.  However, within a given node of the module name hierarchy, a module name will always be unique.
 
 ## Importing a Module
 
