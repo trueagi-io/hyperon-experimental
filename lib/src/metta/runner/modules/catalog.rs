@@ -341,7 +341,7 @@ impl FsModuleFormat for SingleFileModuleFmt {
         if path.is_file() {
             let mod_name = match mod_name {
                 Some(mod_name) => mod_name,
-                None => path.file_stem().unwrap().to_str().unwrap(),
+                None => path.file_stem().unwrap().to_str().unwrap(), //LP-TODO-NEXT: Unify the code to extract the mod-name from the file name between here and DirModuleFmt::try_path
             };
 
             //TODO: Add accessor for the module version here
@@ -373,6 +373,8 @@ impl FsModuleFormat for DirModuleFmt {
             let mod_name = match mod_name {
                 Some(mod_name) => mod_name,
                 None => {
+                    //LP-TODO-Next: I need to gracefully create a legal module name from the file name
+                    // if the file name happens to contain characters that are illegal in a module name
                     full_path = path.canonicalize().unwrap();
                     full_path.file_stem().unwrap().to_str().unwrap()
                 },
