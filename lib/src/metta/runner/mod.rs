@@ -73,6 +73,7 @@ use std::rc::Rc;
 use std::path::PathBuf;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
+use std::io::Write;
 
 mod environment;
 pub use environment::{Environment, EnvBuilder};
@@ -131,7 +132,7 @@ pub struct MettaContents {
     //TODO-HACK: This is a terrible horrible ugly hack that should not be merged.  Delete this field
     // The real context is an interface to the state in a run, and should not live across runs
     // This hack will fail badly if we end up running code from two different modules in parallel
-    context: Arc<Mutex<Vec<Arc<&'static mut RunContext<'static, 'static, 'static>>>>>,
+    context: Arc<Mutex<Vec<Arc<Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
@@ -234,7 +235,7 @@ impl Metta {
         let metta = Self(Rc::new(contents));
 
         let top_mod = MettaMod::new_with_tokenizer(&metta, TOP_MOD_NAME.to_string(), space, top_mod_tokenizer, top_mod_resource_dir, false);
-        assert_eq!(metta.add_module(top_mod), ModId::TOP);
+        assert_eq!(metta.add_module(top_mod).unwrap(), ModId::TOP);
 
         metta
     }
@@ -242,40 +243,30 @@ impl Metta {
     /// Loads a module into a Runner, directly from a [ModuleLoader]
     ///
     /// NOTE: `mod_name` may be a module name path if this module is being loaded as a sub-module of
-    /// another loaded module
+    /// another loaded module.  Relative paths may not be used with this API, however.  Use
+    /// [RunContext::load_module_direct] if you are loading a sub-module from within a running module.
     pub fn load_module_direct(&self, loader: &dyn ModuleLoader, mod_name: &str) -> Result<ModId, String> {
-
-        //Make sure we don't have a conflicting mod, before attempting to load this one
-        if self.get_module_by_name(&mod_name).is_ok() {
-            return Err(format!("Attempt to load public module with name that conflicts with existing module: {mod_name}"));
-        }
-
-        let mod_id = self.init_module(mod_name, |context| loader.load(context))?;
-        Ok(mod_id)
+        let mut state = RunnerState::new_with_module(self, ModId::TOP);
+        state.run_in_context(|context| {
+            context.load_module_direct(loader, mod_name)
+        })
     }
 
     /// Loads a module into a runner from a resource at the specified path
     ///
     /// This method will try each [FsModuleFormat] in order until one can sucessfully load the module
     ///
+    /// NOTE: `mod_name` may be a module name path if the module is being loaded as a sub-module of
+    /// another loaded module.  Relative paths may not be used with this API, however.  Use
+    /// [RunContext::load_module_at_path] if you are loading a sub-module from within a running module.
+    ///
     /// Requires the `pkg_mgmt` feature
     #[cfg(feature = "pkg_mgmt")]
     pub fn load_module_at_path<P: AsRef<std::path::Path>>(&self, path: P, mod_name: Option<&str>) -> Result<ModId, String> {
-
-        // Resolve the module name into a loader object using the resolution logic in the pkgInfo
-        let (loader, descriptor) = match loader_for_module_at_path(self, &path, mod_name, self.environment().working_dir())? {
-            Some((loader, descriptor)) => (loader, descriptor),
-            None => return Err(format!("Failed to resolve module at path: {}", path.as_ref().display()))
-        };
-
-        let mod_name = match mod_name {
-            Some(mod_name) => mod_name.to_string(),
-            None => descriptor.name().to_string()
-        };
-
-        // Load the module from the loader
-        let mod_id = self.get_or_init_module_with_descriptor(&mod_name, descriptor, |context| loader.load(context))?;
-        Ok(mod_id)
+        let mut state = RunnerState::new_with_module(self, ModId::TOP);
+        state.run_in_context(|context| {
+            context.load_module_at_path(&path, mod_name)
+        })
     }
 
     /// Locates and retrieves a loaded module based on its name, relative to the top of the runner
@@ -284,23 +275,41 @@ impl Metta {
         module_names.resolve(mod_name).ok_or_else(|| format!("Unable to locate module: {mod_name}"))
     }
 
-    /// Adds a ModId to the named module tree with the specified name
+    /// Adds a ModId to the named module tree with the specified name, relative to the top of the runer
     fn add_module_to_name_tree(&self, mod_name: &str, mod_id: ModId) -> Result<(), String>  {
         let mut module_names = self.0.module_names.lock().unwrap();
-        match module_names.add(mod_name, mod_id) {
-            true => Ok(()),
-            false => Err(format!("Error occurred processing module name or path: {mod_name}"))
-        }
+        module_names.add(mod_name, mod_id)
     }
 
-    /// Makes a public alias for a loaded module inside the runner
-    pub fn load_module_alias(&self, mod_name: &str, mod_id: ModId) -> Result<ModId, String> {
+    //LP-QUESTION: I am not sure if this should be deleted as unnecessary, or exposed as part of the public API.
+    // On the one hand, [RunContext::normalize_name_path] handles relative paths, and this function doesn't.
+    // On the other hand, you don't always have a RunContext available.
+    // /// Internal function to normalize a module name into a canonical name-path form
+    // fn normalize_module_name(&self, mod_name: &str) -> Result<String, String> {
+    //     let mod_name = match mod_name_relative_path(mod_name) {
+    //         Some(_) => {return Err(format!("Relative module-path not allowed when loading modules through runner API: {mod_name}"))},
+    //         None => mod_name,
+    //     };
+    //     ModNameNode::normalize_name_path(mod_name)
+    // }
 
-        if self.get_module_by_name(mod_name).is_ok() {
-            return Err(format!("Attempt to create module alias with name that conflicts with existing module: {mod_name}"));
-        }
-        self.add_module_to_name_tree(mod_name, mod_id)?;
-        Ok(mod_id)
+    /// Makes a public alias for a loaded module inside the runner
+    ///
+    /// NOTE: `mod_name` may be a module name path if this alias is being loaded as a sub-module of
+    /// another loaded module.  Relative paths may not be used with this API, however.  Use
+    /// [RunContext::load_module_alias] if you are creating an alias from within a running module.
+    pub fn load_module_alias(&self, mod_name: &str, mod_id: ModId) -> Result<ModId, String> {
+        let mut state = RunnerState::new_with_module(self, ModId::TOP);
+        state.run_in_context(|context| {
+            context.load_module_alias(mod_name, mod_id)
+        })
+    }
+
+    /// Writes a textual description of the loaded modules to stdout
+    pub fn display_loaded_modules(&self) {
+        write!(std::io::stdout(), "{} = ", TOP_MOD_NAME).unwrap();
+        let module_names = self.0.module_names.lock().unwrap();
+        module_names.write_subtree(&mut std::io::stdout(), "", &|mod_id, f| write!(f, "{}", mod_id.0)).unwrap();
     }
 
     #[cfg(feature = "pkg_mgmt")]
@@ -313,7 +322,7 @@ impl Metta {
     #[cfg(feature = "pkg_mgmt")]
     /// Checks the runner's descriptors to see if a given module has already been loaded, and returns
     /// that if it has.  Otherwise loads the module
-    pub(crate) fn get_or_init_module_with_descriptor<F: FnOnce(&mut RunContext) -> Result<(), String>>(&self, mod_name: &str, descriptor: ModuleDescriptor, f: F) -> Result<ModId, String> {
+    fn get_or_init_module_with_descriptor<F: FnOnce(&mut RunContext) -> Result<(), String>>(&self, mod_name: &str, descriptor: ModuleDescriptor, f: F) -> Result<ModId, String> {
         match self.get_module_with_descriptor(&descriptor) {
             Some(mod_id) => return Ok(mod_id),
             None => {
@@ -328,7 +337,7 @@ impl Metta {
     /// Returns the ModId of a module, initializing it with the provided function if it isn't already loaded
     ///
     /// The init function will then call `context.init_self_module()` along with any other initialization code
-    pub(crate) fn init_module<F: FnOnce(&mut RunContext) -> Result<(), String>>(&self, mod_name: &str, f: F) -> Result<ModId, String> {
+    fn init_module<F: FnOnce(&mut RunContext) -> Result<(), String>>(&self, mod_name: &str, f: F) -> Result<ModId, String> {
 
         //Create a new RunnerState in order to initialize the new module, and push the init function
         // to run within the new RunnerState.  The init function will then call `context.init_self_module()`
@@ -344,20 +353,32 @@ impl Metta {
         }
 
         //Add the newly initialized module to the Runner
-        let mod_id = match runner_state.into_module() {
-            Ok(module) => self.add_module(module),
-            Err(err_atom) => return Err(atom_error_message(&err_atom).to_owned())
-        };
-        self.add_module_to_name_tree(mod_name, mod_id)?;
-        Ok(mod_id)
+        match runner_state.into_module() {
+            Ok(mut module) => {
+                if let Some(sub_module_names) = module.take_sub_module_names() {
+                    self.merge_sub_module_names(module.path(), sub_module_names)?;
+                }
+                self.add_module(module)
+            },
+            Err(err_atom) => Err(atom_error_message(&err_atom).to_owned())
+        }
     }
 
     /// Internal function to add a loaded module to the runner, assigning it a ModId
-    pub(crate) fn add_module(&self, module: MettaMod) -> ModId {
+    fn add_module(&self, module: MettaMod) -> Result<ModId, String> {
         let mut vec_ref = self.0.modules.lock().unwrap();
         let new_id = ModId(vec_ref.len());
         vec_ref.push(Rc::new(module));
-        new_id
+        Ok(new_id)
+    }
+
+    fn merge_sub_module_names(&self, root_name: &str, subtree: ModNameNode) -> Result<(), String> {
+        //LP-TODO-NEXT: This call only takes a single level of hierarchy into account,
+        // but modules are loaded from the inside-out, meaning the parent won't be available when
+        // the children are loaded for hierarchical loading.  This fix requires changing the way
+        // modules are stored when they are in the process of being loaded.
+        let mut module_names = self.0.module_names.lock().unwrap();
+        module_names.merge_subtree_into(root_name, subtree)
     }
 
     /// Returns a reference to the Environment used by the runner
@@ -570,7 +591,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
         // UB when we have multiple runner threads that execute concurrently.
         //Push the RunContext so the MeTTa Ops can access it.  The context ought to be passed as an argument
         // to the execute functions, in the absence of the hack
-        self.metta.0.context.lock().unwrap().push(Arc::new( unsafe{ std::mem::transmute(&mut context) } ));
+        self.metta.0.context.lock().unwrap().push(Arc::new(Mutex::new( unsafe{ std::mem::transmute(&mut context) } )));
         //END HORRIBLE HACK
 
         // Call our function
@@ -595,10 +616,12 @@ impl<'m, 'input> RunnerState<'m, 'input> {
             }
         }
 
-        match self.module {
-            StateMod::Initializing(module) => Ok(module),
+        let module = match self.module {
+            StateMod::Initializing(module) => module,
             _ => panic!("Fatal Error: Module loader function exited without calling RunContext::init_self_module")
-        }
+        };
+
+        Ok(module)
     }
 }
 
@@ -684,6 +707,81 @@ impl<'input> RunContext<'_, '_, 'input> {
         self.i_wrapper.input_src.push_func(f);
     }
 
+    /// Locates and retrieves a loaded module based on its name
+    pub fn get_module_by_name(&self, mod_name: &str) -> Result<ModId, String> {
+        self.module().get_module_by_name(&self.metta, mod_name)
+    }
+
+    /// Adds a ModId to the named module tree with the specified name
+    pub fn add_module_to_name_tree(&mut self, mod_name: &str, mod_id: ModId) -> Result<(), String>  {
+        match self.module.try_borrow_mut() {
+            Some(module) => module.add_module_to_name_tree(&self.metta, mod_name, mod_id),
+            None => self.metta.add_module_to_name_tree(mod_name, mod_id)
+        }
+    }
+
+    /// Normalize a module name into a canonical name-path form, and expanding a relative module-path
+    pub fn normalize_module_name(&self, mod_name: &str) -> Result<String, String> {
+        self.module().normalize_module_name(mod_name)
+    }
+
+    /// Initiates the loading of a module from a runner thread.  Useful for loading sub-modules 
+    pub fn load_module_direct(&mut self, loader: &dyn ModuleLoader, mod_name: &str) -> Result<ModId, String> {
+
+        //Make sure we don't have a conflicting mod, before attempting to load this one
+        if self.get_module_by_name(mod_name).is_ok() {
+            return Err(format!("Attempt to load module with name that conflicts with existing module: {mod_name}"));
+        }
+
+        let absolute_mod_name = self.normalize_module_name(mod_name)?;
+        let mod_id = self.metta.init_module(&absolute_mod_name, |context| loader.load(context))?;
+
+        self.add_module_to_name_tree(&mod_name, mod_id)?;
+        Ok(mod_id)
+    }
+
+    /// A version of [Metta::load_module_at_path] Useful for loading sub-modules 
+    #[cfg(feature = "pkg_mgmt")]
+    pub fn load_module_at_path<P: AsRef<std::path::Path>>(&mut self, path: P, mod_name: Option<&str>) -> Result<ModId, String> {
+
+        let absolute_mod_name = match mod_name {
+            Some(mod_name) => {
+                if self.get_module_by_name(mod_name).is_ok() {
+                    return Err(format!("Attempt to load module with name that conflicts with existing module: {mod_name}"));
+                }
+                Some(self.normalize_module_name(mod_name)?)
+            },
+            None => None
+        };
+
+        // Get the loader and descriptor by trying the module formats
+        let (loader, descriptor) = match loader_for_module_at_path(&self.metta, &path, absolute_mod_name.as_deref(), self.module().resource_dir())? {
+            Some((loader, descriptor)) => (loader, descriptor),
+            None => return Err(format!("Failed to resolve module at path: {}", path.as_ref().display()))
+        };
+
+        let mod_name = match absolute_mod_name {
+            Some(mod_name) => mod_name,
+            None => descriptor.name().to_string()
+        };
+
+        // Load the module from the loader
+        let mod_id = self.metta.get_or_init_module_with_descriptor(&mod_name, descriptor, |context| loader.load(context))?;
+        self.add_module_to_name_tree(&mod_name, mod_id)?;
+        Ok(mod_id)
+    }
+
+    /// A version of [Metta::load_module_alias] Useful for defining sub-module aliases
+    pub fn load_module_alias(&mut self, mod_name: &str, mod_id: ModId) -> Result<ModId, String> {
+
+        if self.get_module_by_name(&mod_name).is_ok() {
+            return Err(format!("Attempt to create module alias with name that conflicts with existing module: {mod_name}"));
+        }
+        let mod_name = self.normalize_module_name(mod_name)?;
+        self.add_module_to_name_tree(&mod_name, mod_id)?;
+        Ok(mod_id)
+    }
+
     /// Initializes the context's module.  Used in the implementation of a module loader function
     ///
     /// Prior to calling this function, any attempt to access the active module in the RunContext will
@@ -704,29 +802,55 @@ impl<'input> RunContext<'_, '_, 'input> {
 
     /// Resolves a dependency module from a name, according to the [PkgInfo] of the current module,
     /// and loads it into the runner, if it's not already loaded
-    pub fn load_module(&self, mod_name: &str) -> Result<ModId, String> {
+    pub fn load_module(&mut self, mod_name: &str) -> Result<ModId, String> {
 
-        //LP-TODO-NEXT, I need to parse the relative token here (or call the function here anyway)
-        //If the module name is relative, then we want to get this module's path from the MettaMod,
-        // resolve it to a ModNameNode, and resolve the remaining path relative to that node.
-        // I think it makes sense to do all that in a MeTTaMod method.
+        // LP-TODO-NOW!, We should assume mod_name is relative by default, not absolute
 
         // See if we already have the module loaded
-        if let Ok(mod_id) = self.metta.get_module_by_name(mod_name) {
+        if let Ok(mod_id) = self.get_module_by_name(mod_name) {
             return Ok(mod_id);
         }
 
+        #[cfg(not(feature = "pkg_mgmt"))]
+        return Err(format!("Failed to resolve module {mod_name}"));
+
         // Resolve the module name into a loader object using the resolution logic in the pkg_info
         #[cfg(feature = "pkg_mgmt")]
-        match self.module().pkg_info().resolve_module(self, mod_name)? {
-            Some((loader, descriptor)) => {
-                let mod_id = self.metta.get_or_init_module_with_descriptor(mod_name, descriptor, |context| loader.load(context))?;
-                return Ok(mod_id);
-            },
-            None => {}
-        }
+        self.load_module_recursive(mod_name)
+    }
 
-        Err(format!("Failed to resolve module {mod_name}"))
+    /// Internal function used for recursive loading of parent modules by [Self::load_module]
+    #[cfg(feature = "pkg_mgmt")]
+    fn load_module_recursive(&mut self, mod_name: &str) -> Result<ModId, String> {
+
+        //Normalize the path in the context of this running module
+        let normalized_mod_path = self.normalize_module_name(mod_name)?;
+
+        //Make sure the parent module is loaded, and descend recursively until we find a loaded parent
+        let mod_name_components = ModNameNode::decompose_name_path(&normalized_mod_path)?;
+        let parent_mod_id = if mod_name_components.len() > 1 {
+            let parent_name = ModNameNode::compose_name_path(&mod_name_components[..mod_name_components.len()-1])?;
+            if let Ok(parent_mod_id) = self.get_module_by_name(&parent_name) {
+                parent_mod_id
+            } else {
+                self.load_module_recursive(&parent_name)?
+            }
+        } else {
+            ModId::TOP
+        };
+
+        //Perform the loading in the context of the parent module
+        let mut state = RunnerState::new_with_module(&self.metta, parent_mod_id);
+        state.run_in_context(|context| {
+            let new_mod_id = match context.module().pkg_info().resolve_module(context, &normalized_mod_path)? {
+                Some((loader, descriptor)) => {
+                    self.metta.get_or_init_module_with_descriptor(&normalized_mod_path, descriptor, |context| loader.load(context))?
+                },
+                None => {return Err(format!("Failed to resolve module {mod_name}"))}
+            };
+            self.add_module_to_name_tree(&normalized_mod_path, new_mod_id)?;
+            Ok(new_mod_id)
+        })
     }
 
     /// Private method to advance the context forward one step

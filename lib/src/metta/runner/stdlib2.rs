@@ -422,9 +422,11 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     let mut rust_tokens = Tokenizer::new();
     let tref = &mut rust_tokens;
 
-    tref.register_token(regex(r"\d+"),
+    tref.register_token(regex(r"[\-\+]?\d+"),
         |token| { Atom::gnd(Number::from_int_str(token)) });
-    tref.register_token(regex(r"\d+(.\d+)([eE][\-\+]?\d+)?"),
+    tref.register_token(regex(r"[\-\+]?\d+.\d+"),
+        |token| { Atom::gnd(Number::from_float_str(token)) });
+    tref.register_token(regex(r"[\-\+]?\d+(.\d+)?[eE][\-\+]?\d+"),
         |token| { Atom::gnd(Number::from_float_str(token)) });
     tref.register_token(regex(r"True|False"),
         |token| { Atom::gnd(Bool::from_str(token)) });
