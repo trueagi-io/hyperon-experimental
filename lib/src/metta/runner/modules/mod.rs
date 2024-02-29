@@ -21,7 +21,7 @@ pub mod catalog;
 use catalog::*;
 
 mod mod_names;
-pub(crate) use mod_names::{ModNameNode, mod_name_from_path, mod_name_relative_path, module_name_is_legal};
+pub(crate) use mod_names::{ModNameNode, mod_name_from_path, mod_name_relative_path, module_name_is_legal, ModNameNodeDisplayWrapper};
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
 
 /// Contains state associated with a loaded MeTTa module
