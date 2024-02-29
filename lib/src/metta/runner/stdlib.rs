@@ -146,6 +146,60 @@ fn strip_quotes(src: &str) -> &str {
     src
 }
 
+/// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
+#[derive(Clone, Debug)]
+pub struct LoadModuleOp {
+    metta: Metta
+}
+
+impl PartialEq for LoadModuleOp {
+    fn eq(&self, _other: &Self) -> bool { true }
+}
+
+impl LoadModuleOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{ metta }
+    }
+}
+
+impl Display for LoadModuleOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "load-module!")
+    }
+}
+
+impl Grounded for LoadModuleOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = "load-module! expects a file system path; use quotes if needed";
+        let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+
+        // TODO: replace Symbol by grounded String?
+        let path = match path_arg_atom {
+            Atom::Symbol(path_arg) => path_arg.name(),
+            _ => return Err(arg_error.into())
+        };
+        let path = strip_quotes(path);
+        let path = std::path::PathBuf::from(path);
+
+        // Load the module from the path
+        // QUESTION: Do we want to expose the ability to give the module a different name and/ or
+        // load it into a different part of the namespace hierarchy?  For now I was just thinking
+        // it is better to keep the args simple.  IMO this is a place for optional var-args when we
+        // decide on the best way to handle them language-wide.
+        self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
+
+        unit_result()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 /// This operation prints the modules loaded from the top of the runner
 ///
 /// NOTE: This is a temporary stop-gap to help MeTTa users inspect which modules they have loaded and
@@ -1257,6 +1311,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
         let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
         tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
+        let load_module_op = Atom::gnd(LoadModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"load-module!"), move |_| { load_module_op.clone() });
         let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
         tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
     }
