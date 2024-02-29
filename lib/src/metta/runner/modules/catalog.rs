@@ -369,9 +369,13 @@ impl FsModuleFormat for DirModuleFmt {
     }
     fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<(Box<dyn ModuleLoader>, ModuleDescriptor)> {
         if path.is_dir() {
+            let full_path;
             let mod_name = match mod_name {
                 Some(mod_name) => mod_name,
-                None => path.file_stem().unwrap().to_str().unwrap(),
+                None => {
+                    full_path = path.canonicalize().unwrap();
+                    full_path.file_stem().unwrap().to_str().unwrap()
+                },
             };
 
             //LP-TODO-Next: Try and read the module version here
