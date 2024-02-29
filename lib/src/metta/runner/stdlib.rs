@@ -146,6 +146,47 @@ fn strip_quotes(src: &str) -> &str {
     src
 }
 
+/// This operation prints the modules loaded from the top of the runner
+///
+/// NOTE: This is a temporary stop-gap to help MeTTa users inspect which modules they have loaded and
+/// debug module import issues.  Ultimately it probably makes sense to make this information accessible
+/// as a special kind of Space, so that it would be possible to work with it programmatically.
+#[derive(Clone, Debug)]
+pub struct PrintModsOp {
+    metta: Metta
+}
+
+impl PartialEq for PrintModsOp {
+    fn eq(&self, _other: &Self) -> bool { true }
+}
+
+impl PrintModsOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{ metta }
+    }
+}
+
+impl Display for PrintModsOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "print-mods!")
+    }
+}
+
+impl Grounded for PrintModsOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
+    }
+
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        self.metta.display_loaded_modules();
+        unit_result()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct BindOp {
     tokenizer: Shared<Tokenizer>,
@@ -1178,7 +1219,7 @@ mod non_minimal_only_stdlib {
     //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
     // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
     #[cfg(not(feature = "minimal"))]
-    pub fn register_common_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, _space: &DynSpace, _metta: &Metta) {
+    pub fn register_common_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, _space: &DynSpace, metta: &Metta) {
 
         let match_op = Atom::gnd(MatchOp{});
         tref.register_token(regex(r"match"), move |_| { match_op.clone() });
@@ -1216,6 +1257,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
         let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
         tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
+        let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
+        tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
     }
 
     //TODO: The metta argument is a temporary hack on account of the way the operation atoms store references
