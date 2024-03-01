@@ -148,27 +148,27 @@ fn strip_quotes(src: &str) -> &str {
 
 /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
 #[derive(Clone, Debug)]
-pub struct LoadModuleOp {
+pub struct RegisterModuleOp {
     metta: Metta
 }
 
-impl PartialEq for LoadModuleOp {
+impl PartialEq for RegisterModuleOp {
     fn eq(&self, _other: &Self) -> bool { true }
 }
 
-impl LoadModuleOp {
+impl RegisterModuleOp {
     pub fn new(metta: Metta) -> Self {
         Self{ metta }
     }
 }
 
-impl Display for LoadModuleOp {
+impl Display for RegisterModuleOp {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "load-module!")
+        write!(f, "register-module!")
     }
 }
 
-impl Grounded for LoadModuleOp {
+impl Grounded for RegisterModuleOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
@@ -1311,8 +1311,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
         let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
         tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
-        let load_module_op = Atom::gnd(LoadModuleOp::new(metta.clone()));
-        tref.register_token(regex(r"load-module!"), move |_| { load_module_op.clone() });
+        let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
         let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
         tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
     }
