@@ -344,9 +344,16 @@ pub trait GroundedAtom : Any + Debug + Display {
     // TODO: type_() should return Vec<Atom> because of type non-determinism
     // TODO: type_() could return Vec<&Atom> as anyway each atom should be replaced
     // by its alpha equivalent with unique variables
-    fn type_(&self) -> Atom;
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError>;
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
+    fn type_(&self) -> Atom {
+        self.as_grounded().type_()
+    }
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        self.as_grounded().execute(args)
+    }
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        self.as_grounded().match_(other)
+    }
+    fn as_grounded(&self) -> &dyn Grounded;
 }
 
 impl dyn GroundedAtom {
@@ -491,6 +498,20 @@ impl<T> AutoGroundedType for T where T: 'static + PartialEq + Clone + Debug {}
 #[derive(PartialEq, Clone, Debug)]
 struct AutoGroundedAtom<T: AutoGroundedType>(T);
 
+impl<T: AutoGroundedType> Grounded for AutoGroundedAtom<T> {
+    fn type_(&self) -> Atom {
+        rust_type_atom::<T>()
+    }
+
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        execute_not_executable(self)
+    }
+
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        match_by_equality(&self.0, other)
+    }
+}
+
 impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
         match other.downcast_ref::<T>() {
@@ -511,16 +532,8 @@ impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
         &mut self.0
     }
 
-    fn type_(&self) -> Atom {
-        rust_type_atom::<T>()
-    }
-
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
-
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        match_by_equality(&self.0, other)
+    fn as_grounded(&self) -> &dyn Grounded {
+        self        
     }
 }
 
@@ -561,16 +574,8 @@ impl<T: CustomGroundedType> GroundedAtom for CustomGroundedAtom<T> {
         &mut self.0
     }
 
-    fn type_(&self) -> Atom {
-        Grounded::type_(&self.0)
-    }
-
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        Grounded::execute(&self.0, args)
-    }
-
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        Grounded::match_(&self.0, other)
+    fn as_grounded(&self) -> &dyn Grounded {
+        &self.0
     }
 }
 
