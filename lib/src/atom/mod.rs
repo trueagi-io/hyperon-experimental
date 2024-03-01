@@ -911,6 +911,16 @@ impl<'a> TryFrom<&'a Atom> for &'a SymbolAtom {
     }
 }
 
+impl<'a> TryFrom<&'a Atom> for &'a dyn GroundedAtom {
+    type Error = &'static str;
+    fn try_from(atom: &'a Atom) -> Result<Self, &'static str> {
+        match atom {
+            Atom::Grounded(gnd) => Ok(gnd.as_ref()),
+            _ => Err("Atom is not a GroundedAtom")
+        }
+    }
+}
+
 impl Eq for Atom {}
 
 impl Display for Atom {
