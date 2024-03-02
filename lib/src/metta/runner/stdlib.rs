@@ -174,7 +174,7 @@ impl Grounded for RegisterModuleOp {
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = "load-module! expects a file system path; use quotes if needed";
+        let arg_error = "register-module! expects a file system path; use quotes if needed";
         let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
 
         // TODO: replace Symbol by grounded String?
