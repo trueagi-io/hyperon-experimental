@@ -355,7 +355,7 @@ fn regex(regex: &str) -> Regex {
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
 // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
-pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, _metta: &Metta) {
+pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
 
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
@@ -381,6 +381,10 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
     let match_op = Atom::gnd(stdlib::MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
+    let register_module_op = Atom::gnd(stdlib::RegisterModuleOp::new(metta.clone()));
+    tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
+    let print_mods_op = Atom::gnd(stdlib::PrintModsOp::new(metta.clone()));
+    tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
 }
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
