@@ -99,9 +99,9 @@ Run examples:
 cargo run --example sorted_list
 ```
 
-Run REPL:
+Run Rust REPL:
 ```
-cargo run --bin metta
+cargo run --features no_python --bin metta
 ```
 You can also find executable at `./target/debug/metta`.
 
@@ -156,6 +156,12 @@ One can run MeTTa script from command line:
 ```
 metta ./tests/scripts/<name>.metta
 ```
+
+Run REPL:
+```
+cargo run --bin metta
+```
+You can also find executable at `./target/debug/metta`.
 
 ### Logger
 
