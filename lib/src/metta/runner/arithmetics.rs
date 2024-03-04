@@ -299,11 +299,16 @@ impl<'a> AsPrimitive<'a> {
         std::convert::TryInto::<&dyn super::GroundedAtom>::try_into(self.atom).ok()
     }
 
-    fn as_type<T, S: ConvertingSerializer<T>>(&self, mut serializer: S) -> Option<T> {
+    fn as_type<T: 'static + Clone, S: ConvertingSerializer<T>>(&self, mut serializer: S) -> Option<T> {
        self.as_gnd()
            .map(|gnd| {
-               let _ = gnd.serialize(serializer.as_mut());
-               serializer.into_type()
+               gnd.as_any_ref()
+                   .downcast_ref::<T>()
+                   .cloned()
+                   .or_else(|| {
+                       let _ = gnd.serialize(serializer.as_mut());
+                       serializer.into_type()
+                   })
            }).flatten()
     }
 
