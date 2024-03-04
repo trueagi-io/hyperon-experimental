@@ -1,6 +1,7 @@
 //! Implements logic for working with module names, including a low-allocation layered tree structure 
 
 use crate::metta::runner::*;
+use crate::common::owned_or_borrowed::OwnedOrBorrowed;
 
 /// The name of the top module in a runner
 pub const TOP_MOD_NAME: &'static str = "top";
@@ -395,56 +396,82 @@ impl ModNameNode {
         };
         subtree_root.parse_parent_mut(local_name_path)
     }
-
 }
 
-impl std::fmt::Display for ModNameNode {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        //NOTE: This is painful.  It really seems like stdlib should have one of this adapter built-in.
-        struct StreamAdapter<'a>(&'a mut dyn std::fmt::Write);
-        impl<'a> std::io::Write for StreamAdapter<'a> {
-            fn write(&mut self, buf: &[u8]) -> Result<usize, std::io::Error> {
-                let s = std::str::from_utf8(buf).map_err(|_| std::io::Error::from(std::io::ErrorKind::Other))?;
-                self.0.write_str(s).map_err(|_| std::io::Error::from(std::io::ErrorKind::Other))?;
-                Ok(buf.len())
-            }
-            fn flush(&mut self) -> Result<(), std::io::Error> {
-                Ok(())
-            }
-        }
-
-        write!(f, "{} = ", SELF_MOD_NAME)?;
-        let mut stream = StreamAdapter(f);
-        self.write_subtree(&mut stream, "", &|mod_id, f| write!(f, "{}", mod_id.0)).map_err(|_| std::fmt::Error)
-    }
+/// A wrapper that allows for parameterized Display of a ModNameNode
+pub(crate) struct ModNameNodeDisplayWrapper<'a, F> {
+    node_name: Option<&'a str>,
+    node: &'a ModNameNode,
+    indent: &'a str,
+    mod_id_renderer: OwnedOrBorrowed<'a, F>,
 }
 
-impl ModNameNode {
+impl<'a, F> ModNameNodeDisplayWrapper<'a, F>
+    where F: Fn(ModId, &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+{
     const TEE: &'static str = " ├─";
     const CORNER: &'static str = " └─";
     const PIPE: &'static str = " │ ";
     const SPACE: &'static str = "   ";
 
-    /// Private method to help in the implementation of Display trait for ModNameNode
-    pub(crate) fn write_subtree<W: std::io::Write, F: Fn(ModId, &mut W) -> std::io::Result<()>>(&self, formatter: &mut W, indent: &str, mod_id_renderer: &F) -> std::io::Result<()> {
-        mod_id_renderer(self.mod_id, formatter)?;
-        writeln!(formatter)?;
-        if let Some(children) = &self.children {
-            let mut iter = children.iter().peekable();
-            while let Some((child_name, child_node)) = iter.next() {
-                write!(formatter, "{indent}")?;
-                let child_indent = if iter.peek().is_some() {
-                    write!(formatter, "{}", Self::TEE)?;
-                    format!("{indent}{}", Self::PIPE)
-                } else {
-                    write!(formatter, "{}", Self::CORNER)?;
-                    format!("{indent}{}", Self::SPACE)
-                };
-                write!(formatter, "{child_name} = ")?;
-                child_node.write_subtree(formatter, &child_indent, mod_id_renderer)?;
+    /// Make a new ModNameNodeDisplayWrapper, to display a name tree
+    pub fn new(root_name: &'a str, node: &'a ModNameNode, mod_id_renderer: F) -> Self {
+        Self {
+            node_name: Some(root_name),
+            node,
+            indent: "",
+            mod_id_renderer: OwnedOrBorrowed::from(mod_id_renderer),
+        }
+    }
+
+    /// Internal function to make a ModNameNodeDisplayWrapper to display a subtree within a larger tree
+    fn new_subtree(child_node: &'a ModNameNode, child_indent: &'a str, mod_id_renderer: &'a F) -> Self {
+        Self {
+            node_name: None,
+            node: child_node,
+            indent: child_indent,
+            mod_id_renderer: OwnedOrBorrowed::from(mod_id_renderer),
+        }
+    }
+}
+
+impl<F> std::fmt::Display for ModNameNodeDisplayWrapper<'_, F> 
+    where F: Fn(ModId, &mut std::fmt::Formatter<'_>) -> std::fmt::Result
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self.node_name {
+            Some(node_name) => {
+                let subtree = ModNameNodeDisplayWrapper::new_subtree(self.node, self.indent, self.mod_id_renderer.as_ref());
+                write!(f, "{node_name} = {subtree}")
+            },
+            None => {
+                (self.mod_id_renderer.as_ref())(self.node.mod_id, f)?;
+                writeln!(f)?;
+                if let Some(children) = &self.node.children {
+                    let mut iter = children.iter().peekable();
+                    while let Some((child_name, child_node)) = iter.next() {
+                        write!(f, "{}", self.indent)?;
+                        let child_indent = if iter.peek().is_some() {
+                            write!(f, "{}", Self::TEE)?;
+                            format!("{}{}", self.indent, Self::PIPE)
+                        } else {
+                            write!(f, "{}", Self::CORNER)?;
+                            format!("{}{}", self.indent, Self::SPACE)
+                        };
+                        let subtree = ModNameNodeDisplayWrapper::new_subtree(child_node, &child_indent, self.mod_id_renderer.as_ref());
+                        write!(f, "{child_name} = {subtree}")?;
+                    }
+                }
+                Ok(())
             }
         }
-        Ok(())
+    }
+}
+
+impl std::fmt::Display for ModNameNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let wrapper = ModNameNodeDisplayWrapper::new(SELF_MOD_NAME, self, |mod_id: ModId, f: &mut std::fmt::Formatter| write!(f, "{}", mod_id.0));
+        write!(f, "{wrapper}")
     }
 }
 

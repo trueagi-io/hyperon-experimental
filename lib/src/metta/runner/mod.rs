@@ -65,7 +65,7 @@ use super::text::{Tokenizer, Parser, SExprParser};
 use super::types::validate_atom;
 
 pub mod modules;
-use modules::{MettaMod, ModNameNode, ModuleLoader, TOP_MOD_NAME};
+use modules::{MettaMod, ModNameNode, ModuleLoader, TOP_MOD_NAME, ModNameNodeDisplayWrapper};
 #[cfg(feature = "pkg_mgmt")]
 use modules::catalog::{ModuleDescriptor, loader_for_module_at_path};
 
@@ -73,7 +73,6 @@ use std::rc::Rc;
 use std::path::PathBuf;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
-use std::io::Write;
 
 mod environment;
 pub use environment::{Environment, EnvBuilder};
@@ -307,9 +306,9 @@ impl Metta {
 
     /// Writes a textual description of the loaded modules to stdout
     pub fn display_loaded_modules(&self) {
-        write!(std::io::stdout(), "{} = ", TOP_MOD_NAME).unwrap();
         let module_names = self.0.module_names.lock().unwrap();
-        module_names.write_subtree(&mut std::io::stdout(), "", &|mod_id, f| write!(f, "{}", mod_id.0)).unwrap();
+        let wrapper = ModNameNodeDisplayWrapper::new(TOP_MOD_NAME, &*module_names, |mod_id: ModId, f: &mut std::fmt::Formatter| write!(f, "{}", mod_id.0));
+        println!("{wrapper}");
     }
 
     #[cfg(feature = "pkg_mgmt")]
