@@ -2013,7 +2013,7 @@ pub extern "C" fn grounded_number_get_longlong(n: *const atom_ref_t, res: *mut c
     let atom = unsafe { (*n).borrow() };
     match atom {
         Atom::Grounded(gnd) => {
-            match gnd.as_any_ref().downcast_ref::<Number>() {
+            match gnd.downcast_ref::<Number>() {
                 Some(Number::Integer(number)) => {
                     unsafe { *res = *number };
                     true
@@ -2035,7 +2035,7 @@ pub extern "C" fn grounded_bool_get_bool(n: *const atom_ref_t, res: *mut bool) -
     let atom = unsafe { (*n).borrow() };
     match atom {
         Atom::Grounded(gnd) => {
-            match gnd.as_any_ref().downcast_ref::<Bool>() {
+            match gnd.downcast_ref::<Bool>() {
                 Some(Bool(b)) => {
                     unsafe { *res = *b };
                     true
@@ -2057,7 +2057,7 @@ pub extern "C" fn grounded_number_get_double(n: *const atom_ref_t, res: *mut c_d
     let atom = unsafe { (*n).borrow() };
     match atom {
         Atom::Grounded(gnd) => {
-            match gnd.as_any_ref().downcast_ref::<Number>() {
+            match gnd.downcast_ref::<Number>() {
                 Some(Number::Float(number)) => {
                     unsafe { *res = *number };
                     true
