@@ -354,12 +354,14 @@ pub trait GroundedAtom : Any + Debug + Display {
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
         self.as_grounded().match_(other)
     }
-    fn as_grounded(&self) -> &dyn Grounded;
     // A mutable reference is used here instead of a type parameter because
     // the type parameter makes impossible using GroundedAtom reference in the
     // Atom::Grounded. On the other hand the only advantage of using the type
     // parameter is a possibility to have a serializer specific result.
-    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result;
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+        self.as_grounded().serialize(serializer)
+    }
+    fn as_grounded(&self) -> &dyn Grounded;
 }
 
 impl dyn GroundedAtom {
@@ -547,10 +549,6 @@ impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
     fn as_grounded(&self) -> &dyn Grounded {
         self
     }
-
-    fn serialize(&self, _serializer: &mut dyn serial::Serializer) -> serial::Result {
-        Err(serial::Error::NotSupported)
-    }
 }
 
 impl<T: AutoGroundedType> Display for AutoGroundedAtom<T> {
@@ -592,10 +590,6 @@ impl<T: CustomGroundedType> GroundedAtom for CustomGroundedAtom<T> {
 
     fn as_grounded(&self) -> &dyn Grounded {
         &self.0
-    }
-
-    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
-        Grounded::serialize(&self.0, serializer)
     }
 }
 
