@@ -266,7 +266,7 @@ class ValueObject(GroundedObject):
         elif isinstance(self.content, float):
             return serializer.serialize_float(self.content)
         else:
-            return hp.SerdeResult.NOT_SUPPORTED
+            return hp.SerialResult.NOT_SUPPORTED
 
 class NoReduceError(Exception):
     """Custom exception; raised when a reduction operation cannot be performed."""

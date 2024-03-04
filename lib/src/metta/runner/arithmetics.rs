@@ -1,7 +1,7 @@
 use crate::*;
 use crate::metta::*;
 use crate::matcher::MatchResultIter;
-use crate::atom::serde;
+use crate::atom::serial;
 
 use std::fmt::Display;
 
@@ -75,7 +75,7 @@ impl Grounded for Number {
         match_by_equality(self, other)
     }
 
-    fn serialize(&self, serializer: &mut dyn serde::Serializer) -> serde::Result {
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
         match self {
             &Self::Integer(n) => serializer.serialize_i64(n),
             &Self::Float(n) => serializer.serialize_f64(n),
@@ -118,7 +118,7 @@ impl Grounded for Bool {
         match_by_bidirectional_equality(self, other)
     }
 
-    fn serialize(&self, serializer: &mut dyn serde::Serializer) -> serde::Result {
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
         serializer.serialize_bool(self.0)
     }
 }
@@ -258,15 +258,13 @@ impl Grounded for NotOp {
     }
 }
 
-use crate::serde::Serializer;
-
 #[derive(Default)]
 struct BoolSerializer {
     value: Option<Bool>,
 }
 
-impl Serializer for BoolSerializer {
-    fn serialize_bool(&mut self, v: bool) -> serde::Result {
+impl serial::Serializer for BoolSerializer {
+    fn serialize_bool(&mut self, v: bool) -> serial::Result {
         self.value = Some(Bool(v));
         Ok(())
     }
@@ -277,12 +275,12 @@ struct NumberSerializer {
     value: Option<Number>,
 }
 
-impl Serializer for NumberSerializer {
-    fn serialize_i64(&mut self, v: i64) -> serde::Result {
+impl serial::Serializer for NumberSerializer {
+    fn serialize_i64(&mut self, v: i64) -> serial::Result {
         self.value = Some(Number::Integer(v));
         Ok(())
     }
-    fn serialize_f64(&mut self, v: f64) -> serde::Result {
+    fn serialize_f64(&mut self, v: f64) -> serial::Result {
         self.value = Some(Number::Float(v));
         Ok(())
     }
@@ -318,13 +316,13 @@ impl<'a> AsPrimitive<'a> {
     }
 }
 
-trait ConvertingSerializer<T>: Serializer {
-    fn as_mut(&mut self) -> &mut dyn Serializer;
+trait ConvertingSerializer<T>: serial::Serializer {
+    fn as_mut(&mut self) -> &mut dyn serial::Serializer;
     fn into_type(self) -> Option<T>;
 }
 
 impl ConvertingSerializer<Bool> for BoolSerializer {
-    fn as_mut(&mut self) -> &mut dyn Serializer {
+    fn as_mut(&mut self) -> &mut dyn serial::Serializer {
         self
     }
     fn into_type(self) -> Option<Bool> {
@@ -333,7 +331,7 @@ impl ConvertingSerializer<Bool> for BoolSerializer {
 }
 
 impl ConvertingSerializer<Number> for NumberSerializer {
-    fn as_mut(&mut self) -> &mut dyn Serializer {
+    fn as_mut(&mut self) -> &mut dyn serial::Serializer {
         self
     }
     fn into_type(self) -> Option<Number> {

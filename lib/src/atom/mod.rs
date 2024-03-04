@@ -110,10 +110,9 @@ macro_rules! sym {
 pub mod matcher;
 pub mod subexpr;
 mod iter;
-pub mod serde;
+pub mod serial;
 
 pub use iter::*;
-use serde::Serializer;
 
 use std::any::Any;
 use std::fmt::{Display, Debug};
@@ -360,7 +359,7 @@ pub trait GroundedAtom : Any + Debug + Display {
     // the type parameter makes impossible using GroundedAtom reference in the
     // Atom::Grounded. On the other hand the only advantage of using the type
     // parameter is a possibility to have a serializer specific result.
-    fn serialize(&self, serializer: &mut dyn Serializer) -> serde::Result;
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result;
 }
 
 impl dyn GroundedAtom {
@@ -438,8 +437,8 @@ pub trait Grounded : Display {
     /// See [matcher] for detailed explanation.
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
 
-    fn serialize(&self, _serializer: &mut dyn Serializer) -> serde::Result {
-        Err(serde::Error::NotSupported)
+    fn serialize(&self, _serializer: &mut dyn serial::Serializer) -> serial::Result {
+        Err(serial::Error::NotSupported)
     }
 }
 
@@ -549,8 +548,8 @@ impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
         self
     }
 
-    fn serialize(&self, _serializer: &mut dyn Serializer) -> serde::Result {
-        Err(serde::Error::NotSupported)
+    fn serialize(&self, _serializer: &mut dyn serial::Serializer) -> serial::Result {
+        Err(serial::Error::NotSupported)
     }
 }
 
@@ -595,7 +594,7 @@ impl<T: CustomGroundedType> GroundedAtom for CustomGroundedAtom<T> {
         &self.0
     }
 
-    fn serialize(&self, serializer: &mut dyn Serializer) -> serde::Result {
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
         Grounded::serialize(&self.0, serializer)
     }
 }
