@@ -16,28 +16,42 @@ pub enum Number {
 
 impl PartialEq<Self> for Number {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
+        let (a, b) = Number::promote(self.clone(), other.clone());
+        match (a, b) {
             (Number::Integer(a), Number::Integer(b)) => a == b,
-            (Number::Integer(a), Number::Float(b)) => (*a as f64) == *b,
-            (Number::Float(a), Number::Integer(b)) => *a == (*b as f64),
             (Number::Float(a), Number::Float(b)) => a == b,
+            _ => panic!("Unexpected state!"),
         }
     }
 }
 
-trait IntoNumber {
-    fn into_num(self) -> Number;
-}
-
-impl IntoNumber for i64 {
-    fn into_num(self) -> Number {
+impl Into<Number> for i64 {
+    fn into(self) -> Number {
         Number::Integer(self)
     }
 }
 
-impl IntoNumber for f64 {
-    fn into_num(self) -> Number {
+impl Into<Number> for f64 {
+    fn into(self) -> Number {
         Number::Float(self)
+    }
+}
+
+impl Into<i64> for Number {
+    fn into(self) -> i64 {
+        match self {
+            Number::Integer(n) => n,
+            Number::Float(n) => n as i64,
+        }
+    }
+}
+
+impl Into<f64> for Number {
+    fn into(self) -> f64 {
+        match self {
+            Number::Integer(n) => n as f64,
+            Number::Float(n) => n,
+        }
     }
 }
 
@@ -50,6 +64,42 @@ impl Number {
     pub fn from_float_str(num: &str) -> Self {
         let n = num.parse::<f64>().expect("Could not parse float");
         Self::Float(n)
+    }
+
+    pub fn promote(a: Number, b: Number) -> (Number, Number) {
+        let res_type = &NumberType::widest_type(a.get_type(), b.get_type());
+        (a.cast(res_type), b.cast(res_type))
+    }
+
+    fn get_type(&self) -> NumberType {
+        match self {
+            Number::Integer(_) => NumberType::Integer,
+            Number::Float(_) => NumberType::Float,
+        }
+    }
+
+    fn cast(self, t: &NumberType) -> Number {
+        match t {
+            NumberType::Integer => Number::Integer(self.into()),
+            NumberType::Float => Number::Float(self.into()),
+        }
+    }
+}
+
+#[derive(PartialEq)]
+enum NumberType {
+    Integer,
+    Float,
+}
+
+impl NumberType {
+    fn widest_type(a: NumberType, b: NumberType) -> NumberType {
+        // wanted using std::cmp::max but looks like this approach is much much simpler
+        if a == NumberType::Float || b == NumberType::Float {
+            NumberType::Float
+        } else {
+            NumberType::Integer
+        }
     }
 }
 
@@ -96,6 +146,12 @@ impl Bool {
     }
 }
 
+impl Into<Bool> for bool {
+    fn into(self) -> Bool {
+        Bool(self)
+    }
+}
+
 impl Display for Bool {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.0 {
@@ -124,7 +180,7 @@ impl Grounded for Bool {
 }
 
 macro_rules! def_binary_number_op {
-    ($name:ident, $op:tt, $r:ident, $cast:expr) => {
+    ($name:ident, $op:tt, $r:ident, $ret_type:ident) => {
         #[derive(Clone, PartialEq, Debug)]
         pub struct $name{}
 
@@ -144,11 +200,11 @@ macro_rules! def_binary_number_op {
                 let a = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
                 let b = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
 
-                let res = match (a, b) {
-                    (Number::Integer(a), Number::Integer(b)) => $cast(a $op b),
-                    (Number::Integer(a), Number::Float(b)) => $cast((a as f64) $op b),
-                    (Number::Float(a), Number::Integer(b)) => $cast(a $op (b as f64)),
-                    (Number::Float(a), Number::Float(b)) => $cast(a $op b),
+                let (a, b) = Number::promote(a, b);
+                let res: $ret_type = match (a, b) {
+                    (Number::Integer(a), Number::Integer(b)) => (a $op b).into(),
+                    (Number::Float(a), Number::Float(b)) => (a $op b).into(),
+                    _ => panic!("Unexpected state"),
                 };
 
                 Ok(vec![Atom::gnd(res)])
@@ -161,11 +217,11 @@ macro_rules! def_binary_number_op {
     }
 }
 
-def_binary_number_op!(SumOp, +, ATOM_TYPE_NUMBER, IntoNumber::into_num);
-def_binary_number_op!(SubOp, -, ATOM_TYPE_NUMBER, IntoNumber::into_num);
-def_binary_number_op!(MulOp, *, ATOM_TYPE_NUMBER, IntoNumber::into_num);
-def_binary_number_op!(DivOp, /, ATOM_TYPE_NUMBER, IntoNumber::into_num);
-def_binary_number_op!(ModOp, %, ATOM_TYPE_NUMBER, IntoNumber::into_num);
+def_binary_number_op!(SumOp, +, ATOM_TYPE_NUMBER, Number);
+def_binary_number_op!(SubOp, -, ATOM_TYPE_NUMBER, Number);
+def_binary_number_op!(MulOp, *, ATOM_TYPE_NUMBER, Number);
+def_binary_number_op!(DivOp, /, ATOM_TYPE_NUMBER, Number);
+def_binary_number_op!(ModOp, %, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(LessOp, <, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(GreaterOp, >, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(LessEqOp, <=, ATOM_TYPE_BOOL, Bool);
