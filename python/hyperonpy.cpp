@@ -118,7 +118,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 extern "C" {
     exec_error_t py_execute(const struct gnd_t* _gnd, const struct atom_vec_t* args, struct atom_vec_t* ret);
     bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom);
-    serial_result_t py_serialize(const struct gnd_t *_gnd, struct serial_serializer_t* serializer);
+    serial_result_t py_serialize(const struct gnd_t *_gnd, struct serializer_api_t const* api, struct serializer_target_t* target);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
     size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
@@ -235,28 +235,29 @@ bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom) {
 }
 
 struct PythonSerializer {
-    PythonSerializer(struct serial_serializer_t* serializer) : serializer(serializer) { }
+    PythonSerializer(struct serializer_api_t const* api, struct serializer_target_t* target) { api = api; target = target; }
     virtual ~PythonSerializer() { }
 
     serial_result_t serialize_bool(py::bool_ v) {
-        return this->serializer->serialize_bool(this->serializer, v);
+        return this->api->serialize_bool(this->target, v);
     }
     serial_result_t serialize_int(py::int_ v) {
-        return this->serializer->serialize_longlong(this->serializer, v);
+        return this->api->serialize_longlong(this->target, v);
     }
     serial_result_t serialize_float(py::float_ v) {
-        return this->serializer->serialize_double(this->serializer, v);
+        return this->api->serialize_double(this->target, v);
     }
 
-    struct serial_serializer_t* serializer;
+    struct serializer_api_t* api;
+    struct serializer_target_t* target;
 };
 
-serial_result_t py_serialize(const struct gnd_t *_gnd, struct serial_serializer_t* serializer) {
+serial_result_t py_serialize(const struct gnd_t *_gnd, struct serializer_api_t const* api, struct serializer_target_t* target) {
     py::object hyperon = py::module_::import("hyperon.atoms");
     py::function _priv_call_serialize_on_grounded_atom = hyperon.attr("_priv_call_serialize_on_grounded_atom");
 
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
-    PythonSerializer py_serializer(serializer);
+    PythonSerializer py_serializer(api, target);
     py::object result = _priv_call_serialize_on_grounded_atom(pyobj, py_serializer);
     return result.cast<serial_result_t>();
 }

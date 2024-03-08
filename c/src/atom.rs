@@ -505,7 +505,13 @@ pub struct gnd_api_t {
     ///
     match_: Option<extern "C" fn(gnd: *const gnd_t, other: *const atom_ref_t) -> bindings_set_t>,
 
-    serialize: Option<extern "C" fn(gnd: *const gnd_t, serializer: *mut serial_serializer_t) -> serial_result_t>,
+    /// @brief An optional function to encode the atom in terms of primitive types
+    /// @param[in]  gnd  A pointer to the Grounded Atom object
+    /// @param[in]  api  A table of functions the `serialize` implementation may call to encode the atom value
+    /// @param[in]  target A `serializer_target_t` object to pass to functions in the `api`, to receive the encoded value(s)
+    /// @return  A `serial_result_t` indicating whether the `serialize` operation was successful
+    ///
+    serialize: Option<extern "C" fn(gnd: *const gnd_t, api: *const serializer_api_t, target: *mut serializer_target_t) -> serial_result_t>,
 
     /// @brief Tests whether two atoms instantiated from the same interface are equal
     /// @param[in]  gnd  A pointer to the Grounded Atom object
@@ -618,9 +624,7 @@ impl Grounded for CGrounded {
     fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
         match self.api().serialize {
             Some(func) => {
-                let mut c_serializer = serial_rust_serializer_t::new(serializer);
-                let result = func(self.get_ptr(), &mut c_serializer.c_api);
-                serial_into_rust_result(result)
+                func(self.get_ptr(), &SERIALIZE_C_API, &mut serializer.into()).into()
             },
             None => Err(serial::Error::NotSupported),
         }
@@ -1408,66 +1412,88 @@ pub extern "C" fn bindings_set_merge_into(_self: *mut bindings_set_t, other: *co
     core::mem::swap(_self, &mut result_set);
 }
 
-
+/// @struct serializer_api_t
+/// @brief A table of functions to receive values encoded as specific primitive types
+/// @ingroup serializer_group
+///
+// TODO: Serializer needs comprehensive documentation, but perhaps we should wait until architecture
+// is fully fleshed out to avoid needing to redo work
 #[repr(C)]
-pub struct serial_serializer_t {
-    serialize_bool: Option<extern "C" fn(serializer: *mut c_void, v: bool) -> serial_result_t>,
-    serialize_longlong: Option<extern "C" fn(serializer: *mut c_void, v: c_longlong) -> serial_result_t>,
-    serialize_double: Option<extern "C" fn(serializer: *mut c_void, v: c_double) -> serial_result_t>,
+pub struct serializer_api_t {
+    serialize_bool: Option<extern "C" fn(target: *mut serializer_target_t, v: bool) -> serial_result_t>,
+    serialize_longlong: Option<extern "C" fn(target: *mut serializer_target_t, v: c_longlong) -> serial_result_t>,
+    serialize_double: Option<extern "C" fn(target: *mut serializer_target_t, v: c_double) -> serial_result_t>,
 }
 
+/// @struct serializer_target_t
+/// @brief An object capable of receiving values during a `serialize` operation
+/// @ingroup serializer_group
+/// @see gnd_api_t
+///
+#[repr(C)]
+pub struct serializer_target_t<'a>(&'a mut dyn serial::Serializer);
+
+impl serializer_target_t<'_> {
+    fn borrow_mut(&mut self) -> &mut dyn serial::Serializer {
+        self.0
+    }
+}
+
+impl<'a> From<&'a mut dyn serial::Serializer> for serializer_target_t<'a> {
+    fn from(src: &'a mut dyn serial::Serializer) -> Self {
+        Self(src)
+    }
+}
+
+/// @struct serial_result_t
+/// @brief The result of a `serialize` operation
+/// @ingroup serializer_group
+/// @see gnd_api_t
+///
 #[repr(C)]
 pub enum serial_result_t {
     OK,
     NOT_SUPPORTED,
 }
 
-fn serial_into_rust_result(result: serial_result_t) -> serial::Result {
-    match result {
-        serial_result_t::OK => Ok(()),
-        serial_result_t::NOT_SUPPORTED => Err(serial::Error::NotSupported),
+impl From<serial::Result> for serial_result_t {
+    fn from(result: serial::Result) -> Self {
+        match result {
+            Ok(()) => serial_result_t::OK,
+            Err(serial::Error::NotSupported) => serial_result_t::NOT_SUPPORTED,
+        }
     }
 }
 
-fn serial_into_c_result(result: serial::Result) -> serial_result_t {
-    match result {
-        Ok(()) => serial_result_t::OK,
-        Err(serial::Error::NotSupported) => serial_result_t::NOT_SUPPORTED,
+impl From<serial_result_t> for serial::Result {
+    fn from(result: serial_result_t) -> Self {
+        match result {
+            serial_result_t::OK => Ok(()),
+            serial_result_t::NOT_SUPPORTED => Err(serial::Error::NotSupported),
+        }
     }
 }
 
-#[repr(C)]
-struct serial_rust_serializer_t<'a> {
-    c_api: serial_serializer_t,
-    serializer: *mut (dyn serial::Serializer + 'a),
+const SERIALIZE_C_API: serializer_api_t = serializer_api_t {
+    serialize_bool: Some(serialize_bool),
+    serialize_longlong: Some(serialize_longlong),
+    serialize_double: Some(serialize_double),
+};
+
+#[no_mangle]
+extern "C" fn serialize_bool(target: *mut serializer_target_t, v: bool) -> serial_result_t {
+    let target = unsafe{ &mut*target }.borrow_mut();
+    target.serialize_bool(v).into()
 }
 
-impl<'a> serial_rust_serializer_t<'a> {
-    fn new(serializer: &'a mut dyn serial::Serializer) -> serial_rust_serializer_t<'a> {
-        let c_api = serial_serializer_t{
-            serialize_bool: Some(serial_rust_serializer_t::serialize_bool),
-            serialize_longlong: Some(serial_rust_serializer_t::serialize_longlong),
-            serialize_double: Some(serial_rust_serializer_t::serialize_double),
-        };
-        Self{ c_api, serializer }
-    }
+#[no_mangle]
+extern "C" fn serialize_longlong(target: *mut serializer_target_t, v: c_longlong) -> serial_result_t {
+    let target = unsafe{ &mut*target }.borrow_mut();
+    target.serialize_i64(v).into()
+}
 
-    #[no_mangle]
-    pub extern "C" fn serialize_bool(this: *mut c_void, v: bool) -> serial_result_t {
-        serial_into_c_result(Self::to_self(this).serialize_bool(v))
-    }
-
-    #[no_mangle]
-    pub extern "C" fn serialize_longlong(this: *mut c_void, v: c_longlong) -> serial_result_t {
-        serial_into_c_result(Self::to_self(this).serialize_i64(v))
-    }
-
-    #[no_mangle]
-    pub extern "C" fn serialize_double(this: *mut c_void, v: c_double) -> serial_result_t {
-        serial_into_c_result(Self::to_self(this).serialize_f64(v))
-    }
-
-    fn to_self<'b>(this: *mut c_void) -> &'b mut dyn serial::Serializer {
-        unsafe{ &mut *(*(this as *mut serial_rust_serializer_t)).serializer }
-    }
+#[no_mangle]
+extern "C" fn serialize_double(target: *mut serializer_target_t, v: c_double) -> serial_result_t {
+    let target = unsafe{ &mut*target }.borrow_mut();
+    target.serialize_f64(v).into()
 }
