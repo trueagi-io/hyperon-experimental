@@ -654,15 +654,6 @@ PYBIND11_MODULE(hyperonpy, m) {
         .value("NOT_SUPPORTED", serial_result_t::NOT_SUPPORTED, "Serialization of the type is not supported by serializer");
 
     py::class_<CAtom>(m, "CAtom");
-    py::class_<Serializer, PySerializer>(m, "Serializer", "An abstract class to implement a custom serializer")
-        .def(py::init<>(), "Constructor")
-        .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
-        .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
-        .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
-    py::class_<PythonToCSerializer>(m, "PythonToCSerializer", "Python serializer which is backed by C serializer")
-        .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
-        .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
-        .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
 
     m.def("atom_sym", [](char const* name) { return CAtom(atom_sym(name)); }, "Create symbol atom");
     m.def("atom_var", [](char const* name) { return CAtom(atom_var(name)); }, "Create variable atom");
@@ -1073,10 +1064,20 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("log_warn", [](std::string msg) { log_warn(msg.c_str()); }, "Logs a warning through the MeTTa logger");
     m.def("log_info", [](std::string msg) { log_info(msg.c_str()); }, "Logs an info message through the MeTTa logger");
 
+    py::class_<Serializer, PySerializer>(m, "Serializer", "An abstract class to implement a custom serializer")
+        .def(py::init<>(), "Constructor")
+        .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
+        .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
+        .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
+    py::class_<PythonToCSerializer>(m, "PythonToCSerializer", "Python serializer which is backed by C serializer")
+        .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
+        .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
+        .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
     m.def("atom_gnd_serialize", [](CAtom atom, Serializer& _serializer) -> serial_result_t {
                 CToPythonSerializer serializer(_serializer);
                 return atom_gnd_serialize(atom.ptr(), &PY_C_TO_PYTHON_SERIALIZER, &serializer);
             }, "Serializes a grounded atom using the given serializer");
+
     m.def("load_ascii", [](std::string name, CSpace space) {
         py::object hyperon = py::module_::import("hyperon.atoms");
         py::function ValueObject = hyperon.attr("ValueObject");
