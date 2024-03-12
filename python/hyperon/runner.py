@@ -257,6 +257,7 @@ class _PyFileMeTTaModFmt:
         """Load the file as a Python module if it exists"""
 
         #See if we have a ".py" file first, and if not, check for a directory-based python mod
+        path = path if path.endswith(".py") else os.path.splitext(path)[0] + ".py"
         if not os.path.exists(path):
             dir_path = os.path.join(os.path.splitext(path)[0], "__init__.py")
             if os.path.exists(dir_path):
