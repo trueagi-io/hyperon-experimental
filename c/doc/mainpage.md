@@ -83,6 +83,15 @@ These functions are used to create, access, modify, and free atom vectors.
 
 Providing the functions in `gnd_api_t` allows custom atom behaviors to be implemented using C.
 
+[//]: # (Serialization Interface)
+
+@defgroup serializer_group Serialization Interface
+@brief Interface to define behavior moving atoms between host languages and encoding atoms to stable representations
+
+The serialization interface provides a mechanism to move and compare equivalent implementations of grounded atoms.  For example, a Python `int` and a Rust `i64` have some overlap in meaning.  This interface provides the functionality to allows one to be transformed into the other.
+
+In addition this interface lays the groundwork to support stable encodings needed to save grounded atoms to disk or send them over a network
+
 [//]: # (Space Client Interface)
 
 @defgroup space_client_group Space Client Interface

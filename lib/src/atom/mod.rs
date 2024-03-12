@@ -110,6 +110,7 @@ macro_rules! sym {
 pub mod matcher;
 pub mod subexpr;
 mod iter;
+pub mod serial;
 
 pub use iter::*;
 
@@ -353,6 +354,13 @@ pub trait GroundedAtom : Any + Debug + Display {
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
         self.as_grounded().match_(other)
     }
+    // A mutable reference is used here instead of a type parameter because
+    // the type parameter makes impossible using GroundedAtom reference in the
+    // Atom::Grounded. On the other hand the only advantage of using the type
+    // parameter is a possibility to have a serializer specific result.
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+        self.as_grounded().serialize(serializer)
+    }
     fn as_grounded(&self) -> &dyn Grounded;
 }
 
@@ -430,6 +438,13 @@ pub trait Grounded : Display {
     /// [matcher::Bindings] for the variables of the `other` atom.
     /// See [matcher] for detailed explanation.
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
+
+    /// Implements serialization logic of the grounded atom. The logic is
+    /// implemented in terms of the Rust native types.
+    /// See [serial] for details.
+    fn serialize(&self, _serializer: &mut dyn serial::Serializer) -> serial::Result {
+        Err(serial::Error::NotSupported)
+    }
 }
 
 /// Returns the name of the Rust type wrapped into [Atom::Symbol]. This is a
@@ -442,7 +457,8 @@ pub fn rust_type_atom<T>() -> Atom {
 /// Returns either single emtpy [matcher::Bindings] instance if `self` and
 /// `other` are equal or empty iterator if not. This is a default
 /// implementation of `match_()` for the grounded types wrapped automatically.
-pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matcher::MatchResultIter {
+pub fn match_by_equality<T: 'static + PartialEq + Debug>(this: &T, other: &Atom) -> matcher::MatchResultIter {
+    log::trace!("match_by_equality: this: {:?}, other: {}", this, other);
     match other.as_gnd::<T>() {
         Some(other) if *this == *other => Box::new(std::iter::once(matcher::Bindings::new())),
         _ => Box::new(std::iter::empty()),
@@ -465,6 +481,7 @@ pub fn match_by_string_equality(this: &str, other: &Atom) -> matcher::MatchResul
 pub fn match_by_bidirectional_equality<T>(this: &T, other: &Atom) -> matcher::MatchResultIter
     where T: 'static + PartialEq + Clone + Grounded + Debug
 {
+    log::trace!("match_by_bidirectional_equality: this: {:?}, other: {}", this, other);
     if let Some(other_obj) = other.as_gnd::<T>() {
         match this == other_obj {
             true => Box::new(std::iter::once(matcher::Bindings::new())),
@@ -533,7 +550,7 @@ impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
     }
 
     fn as_grounded(&self) -> &dyn Grounded {
-        self        
+        self
     }
 }
 
