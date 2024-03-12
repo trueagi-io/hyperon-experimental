@@ -439,6 +439,9 @@ pub trait Grounded : Display {
     /// See [matcher] for detailed explanation.
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
 
+    /// Implements serialization logic of the grounded atom. The logic is
+    /// implemented in terms of the Rust native types.
+    /// See [serial] for details.
     fn serialize(&self, _serializer: &mut dyn serial::Serializer) -> serial::Result {
         Err(serial::Error::NotSupported)
     }

@@ -649,13 +649,13 @@ PYBIND11_MODULE(hyperonpy, m) {
         .value("GROUNDED", atom_type_t::GROUNDED)
         .export_values();
 
-    py::enum_<serial_result_t>(m, "SerialResult")
-        .value("OK", serial_result_t::OK)
-        .value("NOT_SUPPORTED", serial_result_t::NOT_SUPPORTED);
+    py::enum_<serial_result_t>(m, "SerialResult", "Serializer error code")
+        .value("OK", serial_result_t::OK, "Serialization is successfully finished")
+        .value("NOT_SUPPORTED", serial_result_t::NOT_SUPPORTED, "Serialization of the type is not supported by serializer");
 
     py::class_<CAtom>(m, "CAtom");
-    py::class_<Serializer, PySerializer>(m, "Serializer")
-        .def(py::init<>(), "Construct new serializer implemented in Python")
+    py::class_<Serializer, PySerializer>(m, "Serializer", "An abstract class to implement a custom serializer")
+        .def(py::init<>(), "Constructor")
         .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
         .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
         .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
@@ -1076,7 +1076,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("atom_gnd_serialize", [](CAtom atom, Serializer& _serializer) -> serial_result_t {
                 PythonSerializerAdapter serializer(_serializer);
                 return atom_gnd_serialize(atom.ptr(), &PY_SERIALIZER_API, &serializer);
-            }, "Serialize grounded atom");
+            }, "Serializes a grounded atom using the given serializer");
     m.def("load_ascii", [](std::string name, CSpace space) {
         py::object hyperon = py::module_::import("hyperon.atoms");
         py::function ValueObject = hyperon.attr("ValueObject");

@@ -157,6 +157,11 @@ class GroundedAtom(Atom):
         return Atom._from_catom(hp.atom_get_grounded_type(self.catom))
 
 def _priv_gnd_get_object(atom):
+    """
+    Tries to convert grounded object into a one of the standard Python values.
+    This implementation is used to automatically convert values from other
+    runtimes to Python.
+    """
     typ = atom.get_grounded_type()
     # TODO: GroundedSpace is a special case right now, but it could be
     # implemented using serializer as well
@@ -274,6 +279,10 @@ class ValueObject(GroundedObject):
         return isinstance(other, ValueObject) and self.content == other.content
 
     def serialize(self, serializer):
+        """
+        Serialize standard Python values. This implementation is used to
+        pass Python values into the foreign runtime.
+        """
         if isinstance(self.content, bool):
             return serializer.serialize_bool(self.content)
         elif isinstance(self.content, int):

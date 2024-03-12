@@ -968,10 +968,17 @@ pub extern "C" fn atom_match_atom(a: *const atom_ref_t, b: *const atom_ref_t) ->
     result_set.into()
 }
 
+/// @brief Serializes a grounded atom using the given serializer
+/// @ingroup serializer_group
+/// @param[in]  atom A pointer to an `atom_t` or an `atom_ref_t` to serialize
+/// @param[in]  api  A table of functions the `serialize` implementation may call to encode the atom value
+/// @param[in]  context A caller-defined object to pass to functions in the `api`, to receive the encoded value(s)
+/// @return  A `serial_result_t` indicating whether the `serialize` operation was successful
+///
 #[no_mangle]
 pub extern "C" fn atom_gnd_serialize(atom: *const atom_ref_t, api: *const serializer_api_t, context: *mut c_void) -> serial_result_t {
     let atom = unsafe { (*atom).borrow() };
-    let mut serializer = CSerializer::new(api, context);
+    let mut serializer = CSerializerAdapter::new(api, context);
     match atom {
         Atom::Grounded(gnd) => gnd.serialize(&mut serializer).into(),
         _ => serial_result_t::NOT_SUPPORTED,

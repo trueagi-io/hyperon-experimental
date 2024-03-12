@@ -12,8 +12,23 @@ type serial_serialize_func_t<T> = extern "C" fn(context: *mut c_void, value: T) 
 // is fully fleshed out to avoid needing to redo work
 #[repr(C)]
 pub struct serializer_api_t {
+    /// @brief Serialize C `bool` value
+    /// @param[in]  context A caller-defined object to pass to functions in the `api`, to receive the encoded value(s)
+    /// @param[in]  v A value to serialize
+    /// @return  A `serial_result_t` indicating whether the `serialize` operation was successful
+    ///
     serialize_bool: Option<extern "C" fn(context: *mut c_void, v: bool) -> serial_result_t>,
+    /// @brief Serialize C `long long` value
+    /// @param[in]  context A caller-defined object to pass to functions in the `api`, to receive the encoded value(s)
+    /// @param[in]  v A value to serialize
+    /// @return  A `serial_result_t` indicating whether the `serialize` operation was successful
+    ///
     serialize_longlong: Option<extern "C" fn(context: *mut c_void, v: c_longlong) -> serial_result_t>,
+    /// @brief Serialize C `double` value
+    /// @param[in]  context A caller-defined object to pass to functions in the `api`, to receive the encoded value(s)
+    /// @param[in]  v A value to serialize
+    /// @return  A `serial_result_t` indicating whether the `serialize` operation was successful
+    ///
     serialize_double: Option<extern "C" fn(context: *mut c_void, v: c_double) -> serial_result_t>,
 }
 
@@ -23,7 +38,7 @@ pub struct serializer_api_t {
 /// @see gnd_api_t
 ///
 #[repr(C)]
-pub struct rust_serializer_adapter_t<'a>(&'a mut dyn serial::Serializer);
+pub(crate) struct rust_serializer_adapter_t<'a>(&'a mut dyn serial::Serializer);
 
 impl rust_serializer_adapter_t<'_> {
     fn borrow_mut(&mut self) -> &mut dyn serial::Serializer {
@@ -38,13 +53,17 @@ impl<'a> From<&'a mut dyn serial::Serializer> for rust_serializer_adapter_t<'a> 
 }
 
 /// @struct serial_result_t
-/// @brief The result of a `serialize` operation
+/// @brief The result of a `serialize` operation reported by serializer
 /// @ingroup serializer_group
 /// @see gnd_api_t
 ///
 #[repr(C)]
 pub enum serial_result_t {
+    /// @brief Successful serialization
+    ///
     OK,
+    /// @brief Serialization of the value is not supported by serializer
+    ///
     NOT_SUPPORTED,
 }
 
@@ -91,12 +110,17 @@ extern "C" fn serialize_double_rust_adapter(context: *mut c_void, v: c_double) -
 }
 
 
-pub(crate) struct CSerializer {
+/// @struct CSerializerAdapter
+/// @brief Adapt a serializer implemented in C to Rust API
+/// @ingroup serializer_group
+/// @see gnd_api_t
+///
+pub(crate) struct CSerializerAdapter {
     api: *const serializer_api_t,
     context: *mut c_void,
 }
 
-impl serial::Serializer for CSerializer {
+impl serial::Serializer for CSerializerAdapter {
     fn serialize_bool(&mut self, v: bool) -> serial::Result {
         self.call_serialize(self.api().serialize_bool, v)
     }
@@ -108,7 +132,7 @@ impl serial::Serializer for CSerializer {
     }
 }
 
-impl CSerializer {
+impl CSerializerAdapter {
     pub fn new(api: *const serializer_api_t, context: *mut c_void) -> Self {
         Self{ api, context }
     }
