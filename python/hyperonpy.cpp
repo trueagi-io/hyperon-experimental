@@ -118,6 +118,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 extern "C" {
     exec_error_t py_execute(const struct gnd_t* _gnd, const struct atom_vec_t* args, struct atom_vec_t* ret);
     bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom);
+    serial_result_t py_serialize(const struct gnd_t *_gnd, struct serializer_api_t const* api, void* context);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
     size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
@@ -125,25 +126,32 @@ extern "C" {
 }
 extern "C" bindings_set_t py_match_value(const struct gnd_t *_gnd, const atom_ref_t *_atom);
 
-const gnd_api_t PY_EXECUTABLE_MATCHABLE_API = { &py_execute, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
-const gnd_api_t PY_EXECUTABLE_API = { &py_execute, nullptr, &py_eq, &py_clone, &py_display, &py_free };
-const gnd_api_t PY_MATCHABLE_API = { nullptr, &py_match_, &py_eq, &py_clone, &py_display, &py_free };
-const gnd_api_t PY_VALUE_API = { nullptr, &py_match_value , &py_eq, &py_clone, &py_display, &py_free };
-
 struct GroundedObject : gnd_t {
     GroundedObject(py::object pyobj, atom_t typ) : pyobj(pyobj) {
-        if (py::hasattr(pyobj, "execute") && py::hasattr(pyobj, "match_")) {
-            this->api = &PY_EXECUTABLE_MATCHABLE_API;
-        } else if (py::hasattr(pyobj, "execute")) {
-            this->api = &PY_EXECUTABLE_API;
-        } else if (py::hasattr(pyobj, "match_")) {
-            this->api = &PY_MATCHABLE_API;
-        } else {
-            this->api = &PY_VALUE_API;
+        // TODO: here static API instance is replaced by allocated one. This
+        // increases the memory usage and slows down the code. There are two
+        // ways to fix it: (1) add 2^3 static instances of gnd_api_t and
+        // choosing between them using 3 nested conditions; (2) make pointers
+        // in gnd_api_t non-optional and check whether method is present
+        // dynamically in Python. In case (2) default implementation should be
+        // chosen in Python.
+        gnd_api_t* api = new gnd_api_t{  nullptr, nullptr, nullptr, &py_eq, &py_clone, &py_display, &py_free };
+        if (py::hasattr(pyobj, "execute")) {
+            api->execute = &py_execute;
         }
+        if (py::hasattr(pyobj, "match_")) {
+            api->match_ = &py_match_;
+        } else {
+            api->match_ = &py_match_value;
+        }
+        if (py::hasattr(pyobj, "serialize")) {
+            api->serialize = &py_serialize;
+        }
+        this->api = api;
         this->typ = typ;
     }
     virtual ~GroundedObject() {
+        delete this->api;
         atom_free(this->typ);
     }
     py::object pyobj;
@@ -156,7 +164,7 @@ py::object inc_ref(py::object obj) {
 
 exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _args, struct atom_vec_t* ret) {
     py::object hyperon = py::module_::import("hyperon.atoms");
-    py::function call_execute_on_grounded_atom = hyperon.attr("_priv_call_execute_on_grounded_atom");
+    py::function _priv_call_execute_on_grounded_atom = hyperon.attr("_priv_call_execute_on_grounded_atom");
     py::handle NoReduceError = hyperon.attr("NoReduceError");
     py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
     CAtom pytyp = static_cast<GroundedObject const*>(_cgnd)->typ;
@@ -166,7 +174,7 @@ exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _arg
             atom_ref_t arg_atom_ref = atom_vec_get(_args, i);
             args.append(CAtom(atom_clone(&arg_atom_ref)));
         }
-        py::list result = call_execute_on_grounded_atom(pyobj, pytyp, args);
+        py::list result = _priv_call_execute_on_grounded_atom(pyobj, pytyp, args);
         for (py::handle atom:  result) {
             if (!py::hasattr(atom, "catom")) {
                 return exec_error_runtime("Grounded operation which is defined using unwrap=False should return atom instead of Python type");
@@ -203,11 +211,11 @@ bindings_set_t py_match_value(const struct gnd_t *_gnd, const atom_ref_t *_atom)
 
 bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom) {
     py::object hyperon = py::module_::import("hyperon.atoms");
-    py::function call_match_on_grounded_atom = hyperon.attr("_priv_call_match_on_grounded_atom");
+    py::function _priv_call_match_on_grounded_atom = hyperon.attr("_priv_call_match_on_grounded_atom");
 
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
     CAtom catom = atom_clone(_atom);
-    py::list results = call_match_on_grounded_atom(pyobj, catom);
+    py::list results = _priv_call_match_on_grounded_atom(pyobj, catom);
 
     struct bindings_set_t result_set = bindings_set_empty();
     for (py::handle result: results) {
@@ -225,6 +233,90 @@ bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom) {
 
     return result_set;
 }
+
+struct Serializer {
+    Serializer() {}
+    virtual ~Serializer() {}
+    virtual serial_result_t serialize_bool(bool v) {
+        return serial_result_t::NOT_SUPPORTED;
+    }
+    virtual serial_result_t serialize_int(py::int_ v) {
+        return serial_result_t::NOT_SUPPORTED;
+    }
+    virtual serial_result_t serialize_float(py::float_ v) {
+        return serial_result_t::NOT_SUPPORTED;
+    }
+};
+
+struct PySerializer : public Serializer {
+    using Serializer::Serializer;
+
+    serial_result_t serialize_bool(bool v) override {
+        PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_bool, v);
+    }
+
+    serial_result_t serialize_int(py::int_ v) override {
+        PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_longlong, v);
+    }
+
+    serial_result_t serialize_float(py::float_ v) override {
+        PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_double, v);
+    }
+};
+
+struct PythonToCSerializer : public Serializer {
+    PythonToCSerializer(struct serializer_api_t const* api, void* context) : Serializer(), api(api), context(context) { }
+    virtual ~PythonToCSerializer() { }
+
+    serial_result_t serialize_bool(bool v) override {
+        return this->api->serialize_bool(this->context, v);
+    }
+    serial_result_t serialize_int(py::int_ v) override {
+        return this->api->serialize_longlong(this->context, v);
+    }
+    serial_result_t serialize_float(py::float_ v) override {
+        return this->api->serialize_double(this->context, v);
+    }
+
+    struct serializer_api_t const* api;
+    void* context;
+};
+
+serial_result_t py_serialize(const struct gnd_t *_gnd, struct serializer_api_t const* api, void* context) {
+    py::object hyperon = py::module_::import("hyperon.atoms");
+    py::function _priv_call_serialize_on_grounded_atom = hyperon.attr("_priv_call_serialize_on_grounded_atom");
+
+    py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
+    PythonToCSerializer py_serializer(api, context);
+    py::object result = _priv_call_serialize_on_grounded_atom(pyobj, py_serializer);
+    return result.cast<serial_result_t>();
+}
+
+struct CToPythonSerializer {
+    CToPythonSerializer(Serializer& _serializer) : serializer(_serializer) {}
+    virtual ~CToPythonSerializer() {}
+
+    static CToPythonSerializer* to_this(void* serializer) {
+        return static_cast<CToPythonSerializer*>(serializer);
+    }
+    static serial_result_t serialize_bool(void* serializer, bool v) {
+        return to_this(serializer)->serializer.serialize_bool(v);
+    }
+    static serial_result_t serialize_longlong(void* serializer, long long v) {
+        return to_this(serializer)->serializer.serialize_int(v);
+    }
+    static serial_result_t serialize_double(void* serializer, double v) {
+        return to_this(serializer)->serializer.serialize_float(v);
+    }
+
+    Serializer& serializer;
+};
+
+const serializer_api_t PY_C_TO_PYTHON_SERIALIZER = {
+    &CToPythonSerializer::serialize_bool,
+    &CToPythonSerializer::serialize_longlong,
+    &CToPythonSerializer::serialize_double
+};
 
 bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b) {
     py::object a = static_cast<GroundedObject const*>(_a)->pyobj;
@@ -556,6 +648,10 @@ PYBIND11_MODULE(hyperonpy, m) {
         .value("EXPR", atom_type_t::EXPR)
         .value("GROUNDED", atom_type_t::GROUNDED)
         .export_values();
+
+    py::enum_<serial_result_t>(m, "SerialResult", "Serializer error code")
+        .value("OK", serial_result_t::OK, "Serialization is successfully finished")
+        .value("NOT_SUPPORTED", serial_result_t::NOT_SUPPORTED, "Serialization of the type is not supported by serializer");
 
     py::class_<CAtom>(m, "CAtom");
 
@@ -957,7 +1053,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the environment");
     m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
     m.def("env_builder_push_include_path", [](EnvBuilder& builder, std::string path) { env_builder_push_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
-    m.def("env_builder_push_fs_module_format", [](EnvBuilder& builder, py::object interface, uint64_t fmt_id) { 
+    m.def("env_builder_push_fs_module_format", [](EnvBuilder& builder, py::object interface, uint64_t fmt_id) {
         //TODO. We end up leaking this object, but it's a non-issue in practice because environments usually live the life of the program.
         // To fix this, give the Python MeTTa object built from this EnvBuilder a reference to the `interface` object, rather than allocating it here
         py::object* py_impl = new py::object(interface);
@@ -968,36 +1064,20 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("log_warn", [](std::string msg) { log_warn(msg.c_str()); }, "Logs a warning through the MeTTa logger");
     m.def("log_info", [](std::string msg) { log_info(msg.c_str()); }, "Logs an info message through the MeTTa logger");
 
-    m.def("gnd_get_int", [](CAtom atom) -> py::object {
-            long long n;
-            if (grounded_number_get_longlong(atom.ptr(), &n)) {
-                return py::int_(n);
-            } else
-                return py::none();
-            }, "Convert MeTTa stdlib number to Python int");
-    m.def("gnd_get_bool", [](CAtom atom) -> py::object {
-            bool b;
-            if (grounded_bool_get_bool(atom.ptr(), &b)) {
-                return py::bool_(b);
-            } else
-                return py::none();
-            }, "Convert MeTTa-Rust bool to Python bool");
-    m.def("gnd_get_float", [](CAtom atom) -> py::object {
-            double d;
-            if (grounded_number_get_double(atom.ptr(), &d))
-                return py::float_(d);
-            else
-                return py::none();
-            }, "Convert MeTTa stdlib number to Python float");
-    m.def("number_into_gnd", [](py::object n) {
-                if (py::isinstance<py::int_>(n)) {
-                    return CAtom(longlong_into_grounded_number(n.cast<long long>()));
-                }
-                if (py::isinstance<py::float_>(n)) {
-                    return CAtom(double_into_grounded_number(n.cast<double>()));
-                }
-                throw std::runtime_error("int of float number is expected as an argument");
-            }, "Convert Python number to MeTTa stdlib number");
+    py::class_<Serializer, PySerializer>(m, "Serializer", "An abstract class to implement a custom serializer")
+        .def(py::init<>(), "Constructor")
+        .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
+        .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
+        .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
+    py::class_<PythonToCSerializer>(m, "PythonToCSerializer", "Python serializer which is backed by C serializer")
+        .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
+        .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
+        .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
+    m.def("atom_gnd_serialize", [](CAtom atom, Serializer& _serializer) -> serial_result_t {
+                CToPythonSerializer serializer(_serializer);
+                return atom_gnd_serialize(atom.ptr(), &PY_C_TO_PYTHON_SERIALIZER, &serializer);
+            }, "Serializes a grounded atom using the given serializer");
+
     m.def("load_ascii", [](std::string name, CSpace space) {
         py::object hyperon = py::module_::import("hyperon.atoms");
         py::function ValueObject = hyperon.attr("ValueObject");
