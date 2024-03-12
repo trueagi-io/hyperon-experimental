@@ -268,6 +268,10 @@
     (let $pattern $atom (let* $tail $template))
     $template )))
 
+(: merge-space (-> Atom %Undefined% Atom))
+(= (merge-space $dst $space)
+  (let $x $space (add-atom $dst $x)))
+
 (: car-atom (-> Expression Atom))
 (= (car-atom $atom)
   (eval (if-decons-expr $atom $head $_
