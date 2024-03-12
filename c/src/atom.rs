@@ -625,8 +625,8 @@ impl Grounded for CGrounded {
     fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
         match self.api().serialize {
             Some(func) => {
-                let mut adapter: rust_serializer_adapter_t = serializer.into();
-                func(self.get_ptr(), &SERIALIZE_C_API, &mut adapter as *mut _ as *mut c_void).into()
+                let mut adapter: c_to_rust_serializer_t = serializer.into();
+                func(self.get_ptr(), &C_TO_RUST_SERIALIZER_API, &mut adapter as *mut _ as *mut c_void).into()
             },
             None => Err(serial::Error::NotSupported),
         }
@@ -978,7 +978,7 @@ pub extern "C" fn atom_match_atom(a: *const atom_ref_t, b: *const atom_ref_t) ->
 #[no_mangle]
 pub extern "C" fn atom_gnd_serialize(atom: *const atom_ref_t, api: *const serializer_api_t, context: *mut c_void) -> serial_result_t {
     let atom = unsafe { (*atom).borrow() };
-    let mut serializer = CSerializerAdapter::new(api, context);
+    let mut serializer = RustToCSerializer::new(api, context);
     match atom {
         Atom::Grounded(gnd) => gnd.serialize(&mut serializer).into(),
         _ => serial_result_t::NOT_SUPPORTED,

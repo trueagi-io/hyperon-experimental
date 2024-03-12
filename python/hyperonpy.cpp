@@ -264,9 +264,9 @@ struct PySerializer : public Serializer {
     }
 };
 
-struct CSerializerAdapter : public Serializer {
-    CSerializerAdapter(struct serializer_api_t const* api, void* context) : Serializer(), api(api), context(context) { }
-    virtual ~CSerializerAdapter() { }
+struct PythonToCSerializer : public Serializer {
+    PythonToCSerializer(struct serializer_api_t const* api, void* context) : Serializer(), api(api), context(context) { }
+    virtual ~PythonToCSerializer() { }
 
     serial_result_t serialize_bool(bool v) override {
         return this->api->serialize_bool(this->context, v);
@@ -287,17 +287,17 @@ serial_result_t py_serialize(const struct gnd_t *_gnd, struct serializer_api_t c
     py::function _priv_call_serialize_on_grounded_atom = hyperon.attr("_priv_call_serialize_on_grounded_atom");
 
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
-    CSerializerAdapter py_serializer(api, context);
+    PythonToCSerializer py_serializer(api, context);
     py::object result = _priv_call_serialize_on_grounded_atom(pyobj, py_serializer);
     return result.cast<serial_result_t>();
 }
 
-struct PythonSerializerAdapter {
-    PythonSerializerAdapter(Serializer& _serializer) : serializer(_serializer) {}
-    virtual ~PythonSerializerAdapter() {}
+struct CToPythonSerializer {
+    CToPythonSerializer(Serializer& _serializer) : serializer(_serializer) {}
+    virtual ~CToPythonSerializer() {}
 
-    static PythonSerializerAdapter* to_this(void* serializer) {
-        return static_cast<PythonSerializerAdapter*>(serializer);
+    static CToPythonSerializer* to_this(void* serializer) {
+        return static_cast<CToPythonSerializer*>(serializer);
     }
     static serial_result_t serialize_bool(void* serializer, bool v) {
         return to_this(serializer)->serializer.serialize_bool(v);
@@ -312,10 +312,10 @@ struct PythonSerializerAdapter {
     Serializer& serializer;
 };
 
-const serializer_api_t PY_SERIALIZER_API = {
-    &PythonSerializerAdapter::serialize_bool,
-    &PythonSerializerAdapter::serialize_longlong,
-    &PythonSerializerAdapter::serialize_double
+const serializer_api_t PY_C_TO_PYTHON_SERIALIZER = {
+    &CToPythonSerializer::serialize_bool,
+    &CToPythonSerializer::serialize_longlong,
+    &CToPythonSerializer::serialize_double
 };
 
 bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b) {
@@ -659,7 +659,7 @@ PYBIND11_MODULE(hyperonpy, m) {
         .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
         .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
         .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
-    py::class_<CSerializerAdapter>(m, "CSerializer", "Python serializer which is backed by C serializer")
+    py::class_<PythonToCSerializer>(m, "PythonToCSerializer", "Python serializer which is backed by C serializer")
         .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
         .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
         .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
@@ -1074,8 +1074,8 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("log_info", [](std::string msg) { log_info(msg.c_str()); }, "Logs an info message through the MeTTa logger");
 
     m.def("atom_gnd_serialize", [](CAtom atom, Serializer& _serializer) -> serial_result_t {
-                PythonSerializerAdapter serializer(_serializer);
-                return atom_gnd_serialize(atom.ptr(), &PY_SERIALIZER_API, &serializer);
+                CToPythonSerializer serializer(_serializer);
+                return atom_gnd_serialize(atom.ptr(), &PY_C_TO_PYTHON_SERIALIZER, &serializer);
             }, "Serializes a grounded atom using the given serializer");
     m.def("load_ascii", [](std::string name, CSpace space) {
         py::object hyperon = py::module_::import("hyperon.atoms");

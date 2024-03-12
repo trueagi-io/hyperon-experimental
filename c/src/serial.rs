@@ -32,21 +32,21 @@ pub struct serializer_api_t {
     serialize_double: Option<extern "C" fn(context: *mut c_void, v: c_double) -> serial_result_t>,
 }
 
-/// @struct rust_serializer_adapter_t
+/// @struct c_to_rust_serializer_t
 /// @brief Adapt a serializer implemented in Rust to C API
 /// @ingroup serializer_group
 /// @see gnd_api_t
 ///
 #[repr(C)]
-pub(crate) struct rust_serializer_adapter_t<'a>(&'a mut dyn serial::Serializer);
+pub(crate) struct c_to_rust_serializer_t<'a>(&'a mut dyn serial::Serializer);
 
-impl rust_serializer_adapter_t<'_> {
+impl c_to_rust_serializer_t<'_> {
     fn borrow_mut(&mut self) -> &mut dyn serial::Serializer {
         self.0
     }
 }
 
-impl<'a> From<&'a mut dyn serial::Serializer> for rust_serializer_adapter_t<'a> {
+impl<'a> From<&'a mut dyn serial::Serializer> for c_to_rust_serializer_t<'a> {
     fn from(src: &'a mut dyn serial::Serializer) -> Self {
         Self(src)
     }
@@ -85,7 +85,7 @@ impl From<serial_result_t> for serial::Result {
     }
 }
 
-pub(crate) const SERIALIZE_C_API: serializer_api_t = serializer_api_t {
+pub(crate) const C_TO_RUST_SERIALIZER_API: serializer_api_t = serializer_api_t {
     serialize_bool: Some(serialize_bool_rust_adapter),
     serialize_longlong: Some(serialize_longlong_rust_adapter),
     serialize_double: Some(serialize_double_rust_adapter),
@@ -93,34 +93,34 @@ pub(crate) const SERIALIZE_C_API: serializer_api_t = serializer_api_t {
 
 #[no_mangle]
 extern "C" fn serialize_bool_rust_adapter(context: *mut c_void, v: bool) -> serial_result_t {
-    let target = unsafe{ &mut*(context as *mut rust_serializer_adapter_t) }.borrow_mut();
+    let target = unsafe{ &mut*(context as *mut c_to_rust_serializer_t) }.borrow_mut();
     target.serialize_bool(v).into()
 }
 
 #[no_mangle]
 extern "C" fn serialize_longlong_rust_adapter(context: *mut c_void, v: c_longlong) -> serial_result_t {
-    let target = unsafe{ &mut*(context as *mut rust_serializer_adapter_t)}.borrow_mut();
+    let target = unsafe{ &mut*(context as *mut c_to_rust_serializer_t)}.borrow_mut();
     target.serialize_i64(v).into()
 }
 
 #[no_mangle]
 extern "C" fn serialize_double_rust_adapter(context: *mut c_void, v: c_double) -> serial_result_t {
-    let target = unsafe{ &mut*(context as *mut rust_serializer_adapter_t)}.borrow_mut();
+    let target = unsafe{ &mut*(context as *mut c_to_rust_serializer_t)}.borrow_mut();
     target.serialize_f64(v).into()
 }
 
 
-/// @struct CSerializerAdapter
+/// @struct RustToCSerializer
 /// @brief Adapt a serializer implemented in C to Rust API
 /// @ingroup serializer_group
 /// @see gnd_api_t
 ///
-pub(crate) struct CSerializerAdapter {
+pub(crate) struct RustToCSerializer {
     api: *const serializer_api_t,
     context: *mut c_void,
 }
 
-impl serial::Serializer for CSerializerAdapter {
+impl serial::Serializer for RustToCSerializer {
     fn serialize_bool(&mut self, v: bool) -> serial::Result {
         self.call_serialize(self.api().serialize_bool, v)
     }
@@ -132,7 +132,7 @@ impl serial::Serializer for CSerializerAdapter {
     }
 }
 
-impl CSerializerAdapter {
+impl RustToCSerializer {
     pub fn new(api: *const serializer_api_t, context: *mut c_void) -> Self {
         Self{ api, context }
     }
