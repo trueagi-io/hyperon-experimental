@@ -3,8 +3,9 @@ The Python wrapper for Hyperon Atom Rust types
 """
 
 import hyperonpy as hp
-from hyperonpy import AtomKind
+from hyperonpy import AtomKind, SerialResult, Serializer
 from typing import Union
+from hyperon.conversion import ConvertingSerializer
 
 class Atom:
     """Represents an Atom of any type"""
@@ -143,21 +144,35 @@ class GroundedAtom(Atom):
         """Returns the GroundedAtom object, or the Space wrapped inside a GroundedAtom,
            or convert supported Rust grounded objects into corresponding ValueObjects
         """
+        # TODO: Here code assumes CGrounded object is always Python object.
+        # This is not true in general case. To make code universal we need to
+        # keep kind of the original runtime in CGrounded structure.
         if hp.atom_is_cgrounded(self.catom):
             return hp.atom_get_object(self.catom)
-        typ = self.get_grounded_type()
-        if typ == AtomType.GROUNDED_SPACE:
-            from .base import SpaceRef
-            return SpaceRef._from_cspace(hp.atom_get_space(self.catom))
-        # NOTE: Rust and Python may have the same grounded type names, but we already
-        # distiguished them above
-        elif typ == S('Bool'):
-            return ValueObject(hp.gnd_get_bool(self.catom))
-        raise TypeError("Cannot get_object of unsupported non-C {self.catom}")
+        else:
+            return _gnd_get_object(self)
 
     def get_grounded_type(self):
         """Retrieve the grounded type of the GroundedAtom."""
         return Atom._from_catom(hp.atom_get_grounded_type(self.catom))
+
+def _gnd_get_object(atom):
+    typ = atom.get_grounded_type()
+    # TODO: GroundedSpace is a special case right now, but it could be
+    # implemented using serializer as well
+    if typ == AtomType.GROUNDED_SPACE:
+        from .base import SpaceRef
+        return SpaceRef._from_cspace(hp.atom_get_space(atom.catom))
+    elif typ == S('Bool') or typ == S('Number'):
+        converter = ConvertingSerializer()
+        hp.atom_gnd_serialize(atom.catom, converter)
+        if converter.value is None:
+            raise RuntimeError(f"Could not convert atom {atom}")
+        else:
+            return ValueObject(converter.value)
+    else:
+        raise TypeError(f"Cannot get_object of unsupported non-C {atom}")
+
 
 def G(object, type=AtomType.UNDEFINED):
     """A convenient method to construct a GroundedAtom"""
@@ -266,7 +281,7 @@ class ValueObject(GroundedObject):
         elif isinstance(self.content, float):
             return serializer.serialize_float(self.content)
         else:
-            return hp.SerialResult.NOT_SUPPORTED
+            return SerialResult.NOT_SUPPORTED
 
 class NoReduceError(Exception):
     """Custom exception; raised when a reduction operation cannot be performed."""

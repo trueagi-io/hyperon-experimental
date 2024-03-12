@@ -118,7 +118,7 @@ py::object get_attr_or_fail(py::handle const& pyobj, char const* attr) {
 extern "C" {
     exec_error_t py_execute(const struct gnd_t* _gnd, const struct atom_vec_t* args, struct atom_vec_t* ret);
     bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom);
-    serial_result_t py_serialize(const struct gnd_t *_gnd, struct serializer_api_t const* api, struct serializer_target_t* target);
+    serial_result_t py_serialize(const struct gnd_t *_gnd, struct serializer_api_t const* api, void* context);
     bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b);
     struct gnd_t *py_clone(const struct gnd_t* _gnd);
     size_t py_display(const struct gnd_t* _gnd, char* buffer, size_t size);
@@ -234,33 +234,89 @@ bindings_set_t py_match_(const struct gnd_t *_gnd, const atom_ref_t *_atom) {
     return result_set;
 }
 
-struct PythonSerializer {
-    PythonSerializer(struct serializer_api_t const* api, struct serializer_target_t* target) { api = api; target = target; }
-    virtual ~PythonSerializer() { }
-
-    serial_result_t serialize_bool(py::bool_ v) {
-        return this->api->serialize_bool(this->target, v);
+struct Serializer {
+    Serializer() {}
+    virtual ~Serializer() {}
+    virtual serial_result_t serialize_bool(bool v) {
+        return serial_result_t::NOT_SUPPORTED;
     }
-    serial_result_t serialize_int(py::int_ v) {
-        return this->api->serialize_longlong(this->target, v);
+    virtual serial_result_t serialize_int(py::int_ v) {
+        return serial_result_t::NOT_SUPPORTED;
     }
-    serial_result_t serialize_float(py::float_ v) {
-        return this->api->serialize_double(this->target, v);
+    virtual serial_result_t serialize_float(py::float_ v) {
+        return serial_result_t::NOT_SUPPORTED;
     }
-
-    struct serializer_api_t* api;
-    struct serializer_target_t* target;
 };
 
-serial_result_t py_serialize(const struct gnd_t *_gnd, struct serializer_api_t const* api, struct serializer_target_t* target) {
+struct PySerializer : public Serializer {
+    using Serializer::Serializer;
+
+    serial_result_t serialize_bool(bool v) override {
+        PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_bool, v);
+    }
+
+    serial_result_t serialize_int(py::int_ v) override {
+        PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_longlong, v);
+    }
+
+    serial_result_t serialize_float(py::float_ v) override {
+        PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_double, v);
+    }
+};
+
+struct CSerializerAdapter : public Serializer {
+    CSerializerAdapter(struct serializer_api_t const* api, void* context) : Serializer(), api(api), context(context) { }
+    virtual ~CSerializerAdapter() { }
+
+    serial_result_t serialize_bool(bool v) override {
+        return this->api->serialize_bool(this->context, v);
+    }
+    serial_result_t serialize_int(py::int_ v) override {
+        return this->api->serialize_longlong(this->context, v);
+    }
+    serial_result_t serialize_float(py::float_ v) override {
+        return this->api->serialize_double(this->context, v);
+    }
+
+    struct serializer_api_t const* api;
+    void* context;
+};
+
+serial_result_t py_serialize(const struct gnd_t *_gnd, struct serializer_api_t const* api, void* context) {
     py::object hyperon = py::module_::import("hyperon.atoms");
     py::function _priv_call_serialize_on_grounded_atom = hyperon.attr("_priv_call_serialize_on_grounded_atom");
 
     py::object pyobj = static_cast<GroundedObject const *>(_gnd)->pyobj;
-    PythonSerializer py_serializer(api, target);
+    CSerializerAdapter py_serializer(api, context);
     py::object result = _priv_call_serialize_on_grounded_atom(pyobj, py_serializer);
     return result.cast<serial_result_t>();
 }
+
+struct PythonSerializerAdapter {
+    PythonSerializerAdapter(Serializer& _serializer) : serializer(_serializer) {}
+    virtual ~PythonSerializerAdapter() {}
+
+    static PythonSerializerAdapter* to_this(void* serializer) {
+        return static_cast<PythonSerializerAdapter*>(serializer);
+    }
+    static serial_result_t serialize_bool(void* serializer, bool v) {
+        return to_this(serializer)->serializer.serialize_bool(v);
+    }
+    static serial_result_t serialize_longlong(void* serializer, long long v) {
+        return to_this(serializer)->serializer.serialize_int(v);
+    }
+    static serial_result_t serialize_double(void* serializer, double v) {
+        return to_this(serializer)->serializer.serialize_float(v);
+    }
+
+    Serializer& serializer;
+};
+
+const serializer_api_t PY_SERIALIZER_API = {
+    &PythonSerializerAdapter::serialize_bool,
+    &PythonSerializerAdapter::serialize_longlong,
+    &PythonSerializerAdapter::serialize_double
+};
 
 bool py_eq(const struct gnd_t* _a, const struct gnd_t* _b) {
     py::object a = static_cast<GroundedObject const*>(_a)->pyobj;
@@ -598,10 +654,15 @@ PYBIND11_MODULE(hyperonpy, m) {
         .value("NOT_SUPPORTED", serial_result_t::NOT_SUPPORTED);
 
     py::class_<CAtom>(m, "CAtom");
-    py::class_<PythonSerializer>(m, "PythonSerializer")
-        .def("serialize_bool", &PythonSerializer::serialize_bool, "Serialize bool value")
-        .def("serialize_int", &PythonSerializer::serialize_int, "Serialize int value")
-        .def("serialize_float", &PythonSerializer::serialize_float, "Serialize float value");
+    py::class_<Serializer, PySerializer>(m, "Serializer")
+        .def(py::init<>(), "Construct new serializer implemented in Python")
+        .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
+        .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
+        .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
+    py::class_<CSerializerAdapter>(m, "CSerializer", "Python serializer which is backed by C serializer")
+        .def("serialize_bool", &Serializer::serialize_bool, "Serialize bool value")
+        .def("serialize_int", &Serializer::serialize_int, "Serialize int value")
+        .def("serialize_float", &Serializer::serialize_float, "Serialize float value");
 
     m.def("atom_sym", [](char const* name) { return CAtom(atom_sym(name)); }, "Create symbol atom");
     m.def("atom_var", [](char const* name) { return CAtom(atom_var(name)); }, "Create variable atom");
@@ -1012,6 +1073,11 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("log_warn", [](std::string msg) { log_warn(msg.c_str()); }, "Logs a warning through the MeTTa logger");
     m.def("log_info", [](std::string msg) { log_info(msg.c_str()); }, "Logs an info message through the MeTTa logger");
 
+    m.def("atom_gnd_serialize", [](CAtom atom, Serializer& _serializer) -> serial_result_t {
+                PythonSerializerAdapter serializer(_serializer);
+                return atom_gnd_serialize(atom.ptr(), &PY_SERIALIZER_API, &serializer);
+            }, "Serialize grounded atom");
+    // FIXME: remove functions below and corresponding functions from atoms.rs
     m.def("gnd_get_int", [](CAtom atom) -> py::object {
             long long n;
             if (grounded_number_get_longlong(atom.ptr(), &n)) {
