@@ -150,13 +150,13 @@ class GroundedAtom(Atom):
         if hp.atom_is_cgrounded(self.catom):
             return hp.atom_get_object(self.catom)
         else:
-            return _gnd_get_object(self)
+            return _priv_gnd_get_object(self)
 
     def get_grounded_type(self):
         """Retrieve the grounded type of the GroundedAtom."""
         return Atom._from_catom(hp.atom_get_grounded_type(self.catom))
 
-def _gnd_get_object(atom):
+def _priv_gnd_get_object(atom):
     typ = atom.get_grounded_type()
     # TODO: GroundedSpace is a special case right now, but it could be
     # implemented using serializer as well

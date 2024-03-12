@@ -1077,37 +1077,6 @@ PYBIND11_MODULE(hyperonpy, m) {
                 PythonSerializerAdapter serializer(_serializer);
                 return atom_gnd_serialize(atom.ptr(), &PY_SERIALIZER_API, &serializer);
             }, "Serialize grounded atom");
-    // FIXME: remove functions below and corresponding functions from atoms.rs
-    m.def("gnd_get_int", [](CAtom atom) -> py::object {
-            long long n;
-            if (grounded_number_get_longlong(atom.ptr(), &n)) {
-                return py::int_(n);
-            } else
-                return py::none();
-            }, "Convert MeTTa stdlib number to Python int");
-    m.def("gnd_get_bool", [](CAtom atom) -> py::object {
-            bool b;
-            if (grounded_bool_get_bool(atom.ptr(), &b)) {
-                return py::bool_(b);
-            } else
-                return py::none();
-            }, "Convert MeTTa-Rust bool to Python bool");
-    m.def("gnd_get_float", [](CAtom atom) -> py::object {
-            double d;
-            if (grounded_number_get_double(atom.ptr(), &d))
-                return py::float_(d);
-            else
-                return py::none();
-            }, "Convert MeTTa stdlib number to Python float");
-    m.def("number_into_gnd", [](py::object n) {
-                if (py::isinstance<py::int_>(n)) {
-                    return CAtom(longlong_into_grounded_number(n.cast<long long>()));
-                }
-                if (py::isinstance<py::float_>(n)) {
-                    return CAtom(double_into_grounded_number(n.cast<double>()));
-                }
-                throw std::runtime_error("int of float number is expected as an argument");
-            }, "Convert Python number to MeTTa stdlib number");
     m.def("load_ascii", [](std::string name, CSpace space) {
         py::object hyperon = py::module_::import("hyperon.atoms");
         py::function ValueObject = hyperon.attr("ValueObject");
