@@ -268,6 +268,9 @@
     (let $pattern $atom (let* $tail $template))
     $template )))
 
+(: add-reduct (-> Grounded %Undefined% (->)))
+(= (add-reduct $dst $atom)  (add-atom $dst $atom))
+
 (: car-atom (-> Expression Atom))
 (= (car-atom $atom)
   (eval (if-decons-expr $atom $head $_
