@@ -1466,7 +1466,7 @@ mod non_minimal_only_stdlib {
         (= (if False $then $else) $else)
         (: Error (-> Atom Atom ErrorType))
 
-        (= (merge-space $dst $space)  (let $x $space (add-atom $dst $x)))
+        (= (merge-space $dst $space)  (add-atom $dst $space))
 
         ; quote prevents atom from being reduced
         (: quote (-> Atom Atom))
