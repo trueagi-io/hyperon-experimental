@@ -17,7 +17,7 @@ class StdlibTest(HyperonTestCase):
 
         # Check that (stringToChars "ABC") == ('A' 'B' 'C')
         self.assertEqualMettaRunnerResults(metta.run("!(stringToChars \"ABC\")"),
-                                           [[ValueAtom(E(ValueAtom(Char("A")), ValueAtom(Char("B")), ValueAtom(Char("C"))))]])
+                                           [[E(ValueAtom(Char("A")), ValueAtom(Char("B")), ValueAtom(Char("C")))]])
 
         # Check that (charsToString ('A' 'B' 'C')) == "ABC"
         self.assertEqualMettaRunnerResults(metta.run("!(charsToString ('A' 'B' 'C'))"),

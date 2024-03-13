@@ -110,7 +110,7 @@ def text_ops():
                              ['Atom', 'String'], unwrap=False)
     parseAtom = OperationAtom('parse', lambda s: [ValueAtom(SExprParser(str(s)[1:-1]).parse(Tokenizer()))],
                               ['String', 'Atom'], unwrap=False)
-    stringToCharsAtom = OperationAtom('stringToChars', lambda s: [ValueAtom(E(*[ValueAtom(Char(c)) for c in str(s)[1:-1]]))],
+    stringToCharsAtom = OperationAtom('stringToChars', lambda s: [E(*[ValueAtom(Char(c)) for c in str(s)[1:-1]])],
                                       ['String', 'Atom'], unwrap=False)
     charsToStringAtom = OperationAtom('charsToString', lambda a: [ValueAtom("".join([str(c)[1:-1] for c in a.get_children()]))],
                                       ['Atom', 'String'], unwrap=False)
