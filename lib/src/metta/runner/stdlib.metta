@@ -268,9 +268,8 @@
     (let $pattern $atom (let* $tail $template))
     $template )))
 
-(: merge-space (-> Atom %Undefined% Atom))
-(= (merge-space $dst $space)
-  (let $x $space (add-atom $dst $x)))
+(: add-reduct (-> Grounded %Undefined% ()))
+(= (add-reduct $dst $atom)  (add-atom $dst $atom))
 
 (: car-atom (-> Expression Atom))
 (= (car-atom $atom)
