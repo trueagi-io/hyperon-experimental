@@ -1466,6 +1466,8 @@ mod non_minimal_only_stdlib {
         (= (if False $then $else) $else)
         (: Error (-> Atom Atom ErrorType))
 
+        (: add-reduct (-> Grounded %Undefined% (->)))
+        (= (add-reduct $dst $atom)  (add-atom $dst $atom))
 
         ; quote prevents atom from being reduced
         (: quote (-> Atom Atom))
