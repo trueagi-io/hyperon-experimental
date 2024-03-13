@@ -268,7 +268,7 @@
     (let $pattern $atom (let* $tail $template))
     $template )))
 
-(: add-reduct (-> Grounded %Undefined% ()))
+(: add-reduct (-> Grounded %Undefined% (->)))
 (= (add-reduct $dst $atom)  (add-atom $dst $atom))
 
 (: car-atom (-> Expression Atom))
