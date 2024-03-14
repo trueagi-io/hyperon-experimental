@@ -146,6 +146,159 @@ fn strip_quotes(src: &str) -> &str {
     src
 }
 
+/// mod-space! returns the space of a specified module, loading the module if it's not loaded already
+//NOTE: The "impure" '!' denoted in the op atom name is due to the side effect of loading the module.  If
+// we want a side-effect-free version, it could be implemented by calling `RunContext::get_module_by_name`
+// instead of `RunContext::load_module`, but then the user would need to use `register-module!`, `import!`,
+// or some other mechanism to make sure the module is loaded in advance.
+#[derive(Clone, Debug)]
+pub struct ModSpaceOp {
+    //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+}
+
+impl PartialEq for ModSpaceOp {
+    fn eq(&self, _other: &Self) -> bool { true }
+}
+
+impl ModSpaceOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{ context: metta.0.context.clone() }
+    }
+}
+
+impl Display for ModSpaceOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "mod-space!")
+    }
+}
+
+impl Grounded for ModSpaceOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = "mod-space! expects a module name argument";
+        let mod_name_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+
+        // TODO: replace Symbol by grounded String?
+        let mod_name = match mod_name_atom {
+            Atom::Symbol(mod_name) => mod_name.name(),
+            _ => {return Err(ExecError::from(arg_error))}
+        };
+        let mod_name = strip_quotes(mod_name);
+
+        // Load the module into the runner, or get the ModId if it's already loaded
+        //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
+        let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
+        let mut context = ctx_ref.lock().unwrap();
+        let mod_id = context.load_module(mod_name)?;
+
+        let space = Atom::gnd(context.metta().module_space(mod_id));
+        Ok(vec![space])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+/// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
+#[derive(Clone, Debug)]
+pub struct RegisterModuleOp {
+    metta: Metta
+}
+
+impl PartialEq for RegisterModuleOp {
+    fn eq(&self, _other: &Self) -> bool { true }
+}
+
+impl RegisterModuleOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{ metta }
+    }
+}
+
+impl Display for RegisterModuleOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "register-module!")
+    }
+}
+
+impl Grounded for RegisterModuleOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = "register-module! expects a file system path; use quotes if needed";
+        let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+
+        // TODO: replace Symbol by grounded String?
+        let path = match path_arg_atom {
+            Atom::Symbol(path_arg) => path_arg.name(),
+            _ => return Err(arg_error.into())
+        };
+        let path = strip_quotes(path);
+        let path = std::path::PathBuf::from(path);
+
+        // Load the module from the path
+        // QUESTION: Do we want to expose the ability to give the module a different name and/ or
+        // load it into a different part of the namespace hierarchy?  For now I was just thinking
+        // it is better to keep the args simple.  IMO this is a place for optional var-args when we
+        // decide on the best way to handle them language-wide.
+        self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
+
+        unit_result()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+/// This operation prints the modules loaded from the top of the runner
+///
+/// NOTE: This is a temporary stop-gap to help MeTTa users inspect which modules they have loaded and
+/// debug module import issues.  Ultimately it probably makes sense to make this information accessible
+/// as a special kind of Space, so that it would be possible to work with it programmatically.
+#[derive(Clone, Debug)]
+pub struct PrintModsOp {
+    metta: Metta
+}
+
+impl PartialEq for PrintModsOp {
+    fn eq(&self, _other: &Self) -> bool { true }
+}
+
+impl PrintModsOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{ metta }
+    }
+}
+
+impl Display for PrintModsOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "print-mods!")
+    }
+}
+
+impl Grounded for PrintModsOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
+    }
+
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        self.metta.display_loaded_modules();
+        unit_result()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct BindOp {
     tokenizer: Shared<Tokenizer>,
@@ -1178,7 +1331,7 @@ mod non_minimal_only_stdlib {
     //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
     // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
     #[cfg(not(feature = "minimal"))]
-    pub fn register_common_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, _space: &DynSpace, _metta: &Metta) {
+    pub fn register_common_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, _space: &DynSpace, metta: &Metta) {
 
         let match_op = Atom::gnd(MatchOp{});
         tref.register_token(regex(r"match"), move |_| { match_op.clone() });
@@ -1216,6 +1369,12 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
         let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
         tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
+        let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
+        let mod_space_op = Atom::gnd(ModSpaceOp::new(metta.clone()));
+        tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
+        let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
+        tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
     }
 
     //TODO: The metta argument is a temporary hack on account of the way the operation atoms store references
@@ -1307,6 +1466,8 @@ mod non_minimal_only_stdlib {
         (= (if False $then $else) $else)
         (: Error (-> Atom Atom ErrorType))
 
+        (: add-reduct (-> Grounded %Undefined% (->)))
+        (= (add-reduct $dst $atom)  (add-atom $dst $atom))
 
         ; quote prevents atom from being reduced
         (: quote (-> Atom Atom))
@@ -1362,6 +1523,21 @@ impl ModuleLoader for CoreLibLoader {
 
         Ok(())
     }
+}
+
+
+#[test]
+fn mod_space_op() {
+    let program = r#"
+        !(bind! &new_space (new-space))
+        !(add-atom &new_space (mod-space! stdlib))
+        !(get-atoms &new_space)
+    "#;
+    let runner = Metta::new(Some(runner::environment::EnvBuilder::test_env()));
+    let result = runner.run(SExprParser::new(program)).unwrap();
+
+    let stdlib_space = runner.module_space(runner.get_module_by_name("stdlib").unwrap());
+    assert_eq!(result[2], vec![Atom::gnd(stdlib_space)]);
 }
 
 #[cfg(all(test, not(feature = "minimal")))]

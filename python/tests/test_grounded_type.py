@@ -138,17 +138,5 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertNotEqual(metta.parse_single("untop").get_grounded_type(),
                 metta.parse_single("untyped").get_grounded_type())
 
-    def test_number_conversion(self):
-        num = Atom._from_catom(hp.number_into_gnd(123))
-        self.assertEqual(type(num), GroundedAtom)
-        self.assertEqual(hp.gnd_get_int(num.catom), 123)
-
-        num = Atom._from_catom(hp.number_into_gnd(123.456))
-        self.assertEqual(type(num), GroundedAtom)
-        self.assertTrue(abs(hp.gnd_get_float(num.catom) - 123.456) < 0.0001)
-
-        self.assertEqual(hp.gnd_get_int(S("sym").catom), None)
-        self.assertEqual(hp.gnd_get_float(S("sym").catom), None)
-
 if __name__ == "__main__":
     unittest.main()

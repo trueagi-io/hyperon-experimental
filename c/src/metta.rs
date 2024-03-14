@@ -9,7 +9,6 @@ use hyperon::metta::runner::{Metta, RunContext, ModId, RunnerState, Environment,
 use hyperon::metta::runner::modules::ModuleLoader;
 use hyperon::metta::runner::modules::catalog::{FsModuleFormat, ModuleDescriptor};
 use hyperon::atom::*;
-use hyperon::metta::runner::arithmetics::*;
 
 use crate::util::*;
 use crate::atom::*;
@@ -2000,81 +1999,4 @@ pub extern "C" fn run_context_import_dependency(run_context: *mut run_context_t,
     let context = unsafe{ &mut *run_context }.borrow_mut();
 
     context.module().import_all_from_dependency(context.metta(), mod_id.into_inner()).unwrap();
-}
-
-//LP-TODO-NEXT: Add custom format loading, and custom stdlib tests for Rust
-/// @brief Access the value of a grounded i64 atom
-/// @ingroup metta_language_group
-/// @param[in]  n  A pointer to an `atom_t` or an `atom_ref_t` to access
-/// @param[out]  res  A pointer to the variable into which to write the result
-/// @return  True if the atom was a grounded i64 atom, and the result was successfully written
-#[no_mangle]
-pub extern "C" fn grounded_number_get_longlong(n: *const atom_ref_t, res: *mut c_longlong) -> bool {
-    let atom = unsafe { (*n).borrow() };
-    match atom {
-        Atom::Grounded(gnd) => {
-            match gnd.as_any_ref().downcast_ref::<Number>() {
-                Some(Number::Integer(number)) => {
-                    unsafe { *res = *number };
-                    true
-                }
-                _ => false,
-            }
-        },
-        _ => false,
-    }
-}
-
-/// @brief Access the value of a grounded bool atom
-/// @ingroup metta_language_group
-/// @param[in]  n  A pointer to an `atom_t` or an `atom_ref_t` to access
-/// @param[out]  res  A pointer to the variable into which to write the result
-/// @return  True if the atom was a grounded bool atom, and the result was successfully written
-#[no_mangle]
-pub extern "C" fn grounded_bool_get_bool(n: *const atom_ref_t, res: *mut bool) -> bool {
-    let atom = unsafe { (*n).borrow() };
-    match atom {
-        Atom::Grounded(gnd) => {
-            match gnd.as_any_ref().downcast_ref::<Bool>() {
-                Some(Bool(b)) => {
-                    unsafe { *res = *b };
-                    true
-                }
-                _ => false,
-            }
-        },
-        _ => false,
-    }
-}
-
-/// @brief Access the value of a grounded f64 atom
-/// @ingroup metta_language_group
-/// @param[in]  n  A pointer to an `atom_t` or an `atom_ref_t` to access
-/// @param[out]  res  A pointer to the variable into which to write the result
-/// @return  True if the atom was a grounded f64 atom, and the result was successfully written
-#[no_mangle]
-pub extern "C" fn grounded_number_get_double(n: *const atom_ref_t, res: *mut c_double) -> bool {
-    let atom = unsafe { (*n).borrow() };
-    match atom {
-        Atom::Grounded(gnd) => {
-            match gnd.as_any_ref().downcast_ref::<Number>() {
-                Some(Number::Float(number)) => {
-                    unsafe { *res = *number };
-                    true
-                },
-                _ => false,
-            }
-        },
-        _ => false,
-    }
-}
-
-#[no_mangle]
-pub extern "C" fn longlong_into_grounded_number(n: c_longlong) -> atom_t {
-    Atom::gnd(Number::Integer(n)).into()
-}
-
-#[no_mangle]
-pub extern "C" fn double_into_grounded_number(d: c_double) -> atom_t {
-    Atom::gnd(Number::Float(d)).into()
 }
