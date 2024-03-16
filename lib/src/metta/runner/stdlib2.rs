@@ -946,4 +946,22 @@ mod tests {
         assert_eq!(metta.run(SExprParser::new(program2)),
             Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
     }
+
+    #[test]
+    fn test_pragma_interpreter_bare_minimal() {
+        let program = "
+            (= (bar) baz)
+            (= (foo) (bar))
+            !(eval (foo))
+            !(pragma! interpreter bare-minimal)
+            !(eval (foo))
+        ";
+
+        assert_eq_metta_results!(run_program(program),
+            Ok(vec![
+                vec![expr!("baz")],
+                vec![UNIT_ATOM()],
+                vec![expr!(("bar"))],
+            ]));
+    }
 }
