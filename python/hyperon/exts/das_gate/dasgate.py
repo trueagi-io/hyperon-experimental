@@ -109,6 +109,13 @@ class DASpace(AbstractSpace):
         elif h['type']=='Expression':
             return E(*[self._handle2atom3(ch) for ch in h['targets']])
 
+    def _handle2atom4(self, h):
+        h = self.das.get_atom(h)
+        if h['type']=='Symbol':
+            return S(h['name'])
+        elif h['type']=='Expression':
+            return E(*[self._handle2atom3(ch) for ch in h['targets']])
+
     def query(self, query_atom):
         query = self._atom2dict_new(query_atom)
         query_params = {
@@ -132,7 +139,7 @@ class DASpace(AbstractSpace):
                 mapping = dict(ast.literal_eval(a[0]))
                 for var, val in mapping.items():
                     # remove '$', because it is automatically added
-                    bindings.add_var_binding(V(var[1:]), self._handle2atom(val))
+                    bindings.add_var_binding(V(var[1:]), self._handle2atom4(val))
             new_bindings_set.push(bindings)
 
         return new_bindings_set
