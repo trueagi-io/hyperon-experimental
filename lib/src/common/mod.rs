@@ -7,6 +7,7 @@ pub mod assert;
 pub mod reformove;
 pub mod multitrie;
 pub mod holeyvec;
+pub mod owned_or_borrowed;
 
 mod flex_ref;
 pub use flex_ref::FlexRef;

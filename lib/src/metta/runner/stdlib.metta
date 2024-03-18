@@ -258,10 +258,6 @@
 (= (not True) False)
 (= (not False) True)
 
-(: match (-> Atom Atom Atom %Undefined%))
-(= (match $space $pattern $template)
-  (unify $pattern $space $template Empty))
-
 (: let (-> Atom %Undefined% Atom Atom))
 (= (let $pattern $atom $template)
   (unify $atom $pattern $template Empty))
@@ -271,6 +267,9 @@
   (eval (if-decons-expr $pairs ($pattern $atom) $tail
     (let $pattern $atom (let* $tail $template))
     $template )))
+
+(: add-reduct (-> Grounded %Undefined% (->)))
+(= (add-reduct $dst $atom)  (add-atom $dst $atom))
 
 (: car-atom (-> Expression Atom))
 (= (car-atom $atom)

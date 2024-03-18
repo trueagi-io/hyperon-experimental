@@ -6,6 +6,7 @@ use crate::metta::text::Tokenizer;
 use crate::metta::runner::Metta;
 use crate::metta::types::get_atom_types;
 use crate::common::assert::vec_eq_no_order;
+use crate::common::shared::Shared;
 use crate::metta::runner::stdlib;
 
 use std::fmt::Display;
@@ -352,10 +353,9 @@ fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
 }
 
-pub fn register_common_tokens(metta: &Metta) {
-    let tokenizer = metta.tokenizer();
-    let mut tref = tokenizer.borrow_mut();
-    let space = metta.space();
+//TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
+// to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
+pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
 
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
@@ -379,13 +379,19 @@ pub fn register_common_tokens(metta: &Metta) {
     tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
     let nop_op = Atom::gnd(stdlib::NopOp{});
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
+    let match_op = Atom::gnd(stdlib::MatchOp{});
+    tref.register_token(regex(r"match"), move |_| { match_op.clone() });
+    let register_module_op = Atom::gnd(stdlib::RegisterModuleOp::new(metta.clone()));
+    tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
+    let mod_space_op = Atom::gnd(stdlib::ModSpaceOp::new(metta.clone()));
+    tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
+    let print_mods_op = Atom::gnd(stdlib::PrintModsOp::new(metta.clone()));
+    tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
 }
 
-pub fn register_runner_tokens(metta: &Metta) {
-    let space = metta.space();
-    let tokenizer = metta.tokenizer();
-
-    let mut tref = tokenizer.borrow_mut();
+//TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
+// to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
+pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
 
     let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
     tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
@@ -414,17 +420,19 @@ pub fn register_runner_tokens(metta: &Metta) {
     // pointer and somehow use the same type to represent weak and strong
     // pointers to the atomspace. (2) resolve &self in GroundingSpace::query
     // method without adding it into container.
-    let self_atom = Atom::gnd(metta.space().clone());
+    let self_atom = Atom::gnd(space.clone());
     tref.register_token(regex(r"&self"), move |_| { self_atom.clone() });
 }
 
-pub fn register_rust_tokens(metta: &Metta) {
+pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     let mut rust_tokens = Tokenizer::new();
     let tref = &mut rust_tokens;
 
-    tref.register_token(regex(r"\d+"),
+    tref.register_token(regex(r"[\-\+]?\d+"),
         |token| { Atom::gnd(Number::from_int_str(token)) });
-    tref.register_token(regex(r"\d+(.\d+)([eE][\-\+]?\d+)?"),
+    tref.register_token(regex(r"[\-\+]?\d+.\d+"),
+        |token| { Atom::gnd(Number::from_float_str(token)) });
+    tref.register_token(regex(r"[\-\+]?\d+(.\d+)?[eE][\-\+]?\d+"),
         |token| { Atom::gnd(Number::from_float_str(token)) });
     tref.register_token(regex(r"True|False"),
         |token| { Atom::gnd(Bool::from_str(token)) });
@@ -438,10 +446,18 @@ pub fn register_rust_tokens(metta: &Metta) {
     tref.register_token(regex(r"/"), move |_| { div_op.clone() });
     let mod_op = Atom::gnd(ModOp{});
     tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
+    let lt_op = Atom::gnd(LessOp{});
+    tref.register_token(regex(r"<"), move |_| { lt_op.clone() });
+    let gt_op = Atom::gnd(GreaterOp{});
+    tref.register_token(regex(r">"), move |_| { gt_op.clone() });
+    let le_op = Atom::gnd(LessEqOp{});
+    tref.register_token(regex(r"<="), move |_| { le_op.clone() });
+    let ge_op = Atom::gnd(GreaterEqOp{});
+    tref.register_token(regex(r">="), move |_| { ge_op.clone() });
     let eq_op = Atom::gnd(stdlib::EqualOp{});
     tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
 
-    metta.tokenizer().borrow_mut().move_front(&mut rust_tokens);
+    target.move_front(&mut rust_tokens);
 }
 
 pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
@@ -507,6 +523,15 @@ mod tests {
     }
 
     #[test]
+    fn metta_cdr_atom() {
+        assert_eq!(run_program(&format!("!(cdr-atom (a b c))")), Ok(vec![vec![expr!("b" "c")]]));
+        assert_eq!(run_program(&format!("!(cdr-atom ($a $b $c))")), Ok(vec![vec![expr!(b c)]]));
+        assert_eq!(run_program(&format!("!(cdr-atom ())")), Ok(vec![vec![expr!("Error" ("cdr-atom" ()) "\"cdr-atom expects a non-empty expression as an argument\"")]]));
+        assert_eq!(run_program(&format!("!(cdr-atom a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" "a") "\"cdr-atom expects a non-empty expression as an argument\"")]]));
+        assert_eq!(run_program(&format!("!(cdr-atom $a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" a) "\"cdr-atom expects a non-empty expression as an argument\"")]]));
+    }
+
+    #[test]
     fn metta_switch() {
         let result = run_program("!(eval (switch (A $b) ( (($a B) ($b $a)) ((B C) (C B)) )))");
         assert_eq!(result, Ok(vec![vec![expr!("B" "A")]]));
@@ -524,7 +549,7 @@ mod tests {
         assert_eq!(result, Ok(vec![vec![expr!("ok")]]));
         let result = run_program("!(case (unify (B C) (C B) ok nok) ( (ok ok) (nok nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
-        let result = run_program("!(case (match (B C) (C B) ok) ( (ok ok) (%void% nok) ))");
+        let result = run_program("!(case (unify (B C) (C B) ok Empty) ( (ok ok) (%void% nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
     }
 
@@ -834,11 +859,11 @@ mod tests {
     }
 
     #[test]
-    fn test_variable_defined_via_variabe() {
+    fn test_variable_defined_via_variable() {
         let program = "
             (= (myif T $y) $y)
-            (= (not F) T)
-            (= (a $z) (not (b $z)))
+            (= (mynot F) T)
+            (= (a $z) (mynot (b $z)))
             (= (b d) F)
 
             !(eval (interpret (myif (a $x) $x) %Undefined% &self))
@@ -920,5 +945,23 @@ mod tests {
 
         assert_eq!(metta.run(SExprParser::new(program2)),
             Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
+    }
+
+    #[test]
+    fn test_pragma_interpreter_bare_minimal() {
+        let program = "
+            (= (bar) baz)
+            (= (foo) (bar))
+            !(eval (foo))
+            !(pragma! interpreter bare-minimal)
+            !(eval (foo))
+        ";
+
+        assert_eq_metta_results!(run_program(program),
+            Ok(vec![
+                vec![expr!("baz")],
+                vec![UNIT_ATOM()],
+                vec![expr!(("bar"))],
+            ]));
     }
 }

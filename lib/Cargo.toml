@@ -4,13 +4,13 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-mopa = "0.2.2"
 regex = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
 directories = "5.0.1" # For Environment to find platform-specific config location
 smallvec = "1.10.0"
 im = "15.1.0"
+xxhash-rust = {version="0.8.7", features=["xxh3"], optional=true}
 rand = "0.8.5"
 bitset = "0.1.2"
 
@@ -20,10 +20,10 @@ path = "src/lib.rs"
 crate-type = ["lib"]
 
 [features]
-default = []
+default = ["pkg_mgmt"]
 # Add one of the features below into default list to enable.
 # See https://doc.rust-lang.org/cargo/reference/features.html#the-features-section
 minimal = [] # enables minimal MeTTa interpreter
 variable_operation = [] # enables evaluation of the expressions which have
-                        # a variable on the first position, doesn't affect
-                        # minimal MeTTa functionality
+                        # a variable on the first position
+pkg_mgmt = ["xxhash-rust"]

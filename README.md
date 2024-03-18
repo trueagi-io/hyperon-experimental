@@ -21,11 +21,22 @@ If you find troubles with the installation, see the [Troubleshooting](#troublesh
 
 ## Docker
 
-A docker image can be used as a ready to run environment.
+A docker image can be used as a ready to run stable and predictable development
+environment. Please keep in mind that resulting image contains temporary build
+files and takes a lot of a disk space. It is not recommended to distribute it
+as an image for running MeTTa because of its size.
 
-Build docker image running:
+Build Docker image from a local copy of the repo running:
 ```
-docker build -t trueagi/hyperon https://raw.githubusercontent.com/trueagi-io/hyperon-experimental/main/Dockerfile
+docker build -t trueagi/hyperon .
+```
+
+Or build it without cloning the repo running:
+```
+docker build \
+    --build-arg BUILDKIT_CONTEXT_KEEP_GIT_DIR=1 \
+    -t trueagi/hyperon \
+    http://github.com/trueagi-io/hyperon-experimental.git#main
 ```
 
 Run the image:
@@ -33,8 +44,7 @@ Run the image:
 docker run --rm -ti trueagi/hyperon
 ```
 
-Resulting container contains the latest code from the repo compiled and ready
-to run.  If the docker image doesn't work, please raise an
+If the docker image doesn't work, please raise an
 [issue](https://github.com/trueagi-io/hyperon-experimental/issues).
 
 ## Manual installation
@@ -59,7 +69,7 @@ cargo install --force cbindgen
 
 * Install Conan and make default Conan profile:
 ```
-python3 -m pip install conan==1.60.2
+python3 -m pip install conan==1.62
 conan profile new --detect default
 ```
 
@@ -81,17 +91,17 @@ The experimental features can be enabled by editing
 [Cargo.toml](./lib/Cargo.toml) file before compilation or by using `--features`
 [command line option](https://doc.rust-lang.org/cargo/reference/features.html#command-line-feature-options).
 See comments in the `[features]` section of the file for the features
-descriptions. For example to turn on minimal MeTTa interpreter one can replace
-`default = []` in [Cargo.toml](./lib/Cargo.toml) by `default = ["minimal"]`.
+descriptions. For example to turn on minimal MeTTa interpreter one can add
+"minimal" to default in [Cargo.toml](./lib/Cargo.toml)
 
 Run examples:
 ```
 cargo run --example sorted_list
 ```
 
-Run REPL:
+Run Rust REPL:
 ```
-cargo run --bin metta
+cargo run --features no_python --bin metta
 ```
 You can also find executable at `./target/debug/metta`.
 
@@ -146,6 +156,12 @@ One can run MeTTa script from command line:
 ```
 metta ./tests/scripts/<name>.metta
 ```
+
+Run REPL:
+```
+cargo run --bin metta
+```
+You can also find executable at `./target/debug/metta`.
 
 ### Logger
 

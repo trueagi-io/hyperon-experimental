@@ -25,7 +25,7 @@ on:
         type: string
 
 jobs:
-  build:
+  ci-manual:
     strategy:
       fail-fast: ${{ inputs.fail-fast }}
       matrix:

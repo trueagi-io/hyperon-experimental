@@ -7,5 +7,5 @@
 ; should work as well
 !(and (flip) True)
 
-; Should not work atm because of no backward conversion of Python Bool to Rust
+; Works as well after https://github.com/trueagi-io/hyperon-experimental/pull/597
 !(xor True (flip))
