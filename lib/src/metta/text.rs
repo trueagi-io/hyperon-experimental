@@ -458,16 +458,6 @@ impl<'a> SExprParser<'a> {
                                                     }
                                                 }
                                             }
-                                            //QUESTION: the below code works fine and uncommenting it will re-enable single-digit codes.
-                                            // However, I realize why some languages disable single-digit codes because of the ambiguity it creates.
-                                            // For example, is "\xFF" an illegal code (codes are limited to 0x7F so we can't create invalid utf-8)
-                                            // of does it mean "\xf", followed by the ordinary 'f'?
-                                            //
-                                            // // Otherwise treat it as a single-digit code
-                                            // if code.is_none() {
-                                            //     let digits_buf = &[digit1_byte];
-                                            //     code = Some(u8::from_str_radix(core::str::from_utf8(digits_buf).unwrap(), 16).unwrap());
-                                            // }
                                         }
                                     }
                                 }
