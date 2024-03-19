@@ -433,6 +433,8 @@ impl<'a> SExprParser<'a> {
                 return string_node;
             }
             if c == '\\' {
+                let escape_err = |cur_idx| { SyntaxNode::incomplete_with_message(SyntaxNodeType::StringToken, char_idx..cur_idx, vec![], "Invalid escape sequence".to_string()) };
+
                 match self.it.next() {
                     Some((_idx, c)) => {
                         let val = match c {
@@ -463,11 +465,11 @@ impl<'a> SExprParser<'a> {
                                 }
                                 match code {
                                     Some(code) => code.into(),
-                                    None => { return SyntaxNode::incomplete_with_message(SyntaxNodeType::StringToken, char_idx..self.cur_idx(), vec![], "Invalid escape sequence".to_string()); }
+                                    None => { return escape_err(self.cur_idx()); }
                                 }
                             },
                             _ => {
-                                return SyntaxNode::incomplete_with_message(SyntaxNodeType::StringToken, char_idx..self.cur_idx(), vec![], "Invalid escape sequence".to_string());
+                                return escape_err(self.cur_idx());
                             }
                         };
                         token.push(val);
