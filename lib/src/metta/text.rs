@@ -593,9 +593,6 @@ mod tests {
         assert_eq!(vec![expr!("\"test\"quote\"")], parse_atoms(r#""test\"quote""#));
         // Two-digit hex code
         assert_eq!(vec![expr!("\"test\x7Fmax\"")], parse_atoms(r#""test\x7fmax""#));
-        // // Single-digit hex code (Disabled because usage is ambiguous)
-        //TODO: Delete this sub-test if we decide we don't want single-digit hex codes
-        // assert_eq!(vec![expr!("\"test\x0f fifteen\"")], parse_atoms(r#""test\xF fifteen""#));
         // Parse failure, code out of range
         assert!(parse_atoms(r#""test\xFF""#).len() == 0);
     }
