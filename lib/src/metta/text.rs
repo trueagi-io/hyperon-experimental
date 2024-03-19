@@ -426,24 +426,62 @@ impl<'a> SExprParser<'a> {
             let leftover_text_node = SyntaxNode::incomplete_with_message(SyntaxNodeType::LeftoverText, start_idx..self.cur_idx(), vec![], "Double quote expected".to_string());
             return leftover_text_node;
         }
-        while let Some((_idx, c)) = self.it.next() {
+        while let Some((char_idx, c)) = self.it.next() {
             if c == '"' {
                 token.push('"');
                 let string_node = SyntaxNode::new_token_node(SyntaxNodeType::StringToken, start_idx..self.cur_idx(), token);
                 return string_node;
             }
-            let c = if c == '\\' {
+            if c == '\\' {
+                let escape_err = |cur_idx| { SyntaxNode::incomplete_with_message(SyntaxNodeType::StringToken, char_idx..cur_idx, vec![], "Invalid escape sequence".to_string()) };
+
                 match self.it.next() {
-                    Some((_idx, c)) => c,
+                    Some((_idx, c)) => {
+                        let val = match c {
+                            '\'' | '\"' | '\\' => c, //single quote, double quote, & backslash
+                            'n' => '\n', // newline
+                            'r' => '\r', // carriage return
+                            't' => '\t', // tab
+                            'x' => { // hex sequence
+                                let mut code: Option<u8> = None;
+                                if let Some((_, digit1)) = self.it.next() {
+                                    if digit1.is_digit(16) {
+                                        if let Ok(digit1_byte) = TryInto::<u8>::try_into(digit1) {
+                                            // Try to extract a valid 2-digit code
+                                            if let Some((_, digit2)) = self.it.peek() {
+                                                if digit2.is_digit(16) {
+                                                    if let Ok(digit2_byte) = TryInto::<u8>::try_into(*digit2) {
+                                                        self.it.next().unwrap();
+                                                        let digits_buf = &[digit1_byte, digit2_byte];
+                                                        let code_val = u8::from_str_radix(core::str::from_utf8(digits_buf).unwrap(), 16).unwrap();
+                                                        if code_val <= 0x7F { //Cap it at 0x7F so we don't generate invalid UTF-8
+                                                            code = Some(code_val);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                match code {
+                                    Some(code) => code.into(),
+                                    None => { return escape_err(self.cur_idx()); }
+                                }
+                            },
+                            _ => {
+                                return escape_err(self.cur_idx());
+                            }
+                        };
+                        token.push(val);
+                    },
                     None => {
                         let leftover_text_node = SyntaxNode::incomplete_with_message(SyntaxNodeType::StringToken, start_idx..self.cur_idx(), vec![], "Escaping sequence is not finished".to_string());
                         return leftover_text_node;
                     },
                 }
             } else {
-                c
-            };
-            token.push(c);
+                token.push(c);
+            }
         }
         let unclosed_string_node = SyntaxNode::incomplete_with_message(SyntaxNodeType::StringToken, start_idx..self.cur_idx(), vec![], "Unclosed String Literal".to_string());
         unclosed_string_node
@@ -543,6 +581,22 @@ mod tests {
     #[test]
     fn test_text_quoted_string() {
         assert_eq!(vec![expr!("\"te st\"")], parse_atoms("\"te st\""));
+    }
+
+    #[test]
+    fn test_text_escape_chars() {
+        // Tab
+        assert_eq!(vec![expr!("\"test\ttab\"")], parse_atoms(r#""test\ttab""#));
+        // Newline
+        assert_eq!(vec![expr!("\"test\nnewline\"")], parse_atoms(r#""test\nnewline""#));
+        // ANSI Sequence
+        assert_eq!(vec![expr!("\"\x1b[1;32m> \x1b[0m\"")], parse_atoms(r#""\x1b[1;32m> \x1b[0m""#));
+        // Escaping a quote
+        assert_eq!(vec![expr!("\"test\"quote\"")], parse_atoms(r#""test\"quote""#));
+        // Two-digit hex code
+        assert_eq!(vec![expr!("\"test\x7Fmax\"")], parse_atoms(r#""test\x7fmax""#));
+        // Parse failure, code out of range
+        assert!(parse_atoms(r#""test\xFF""#).len() == 0);
     }
 
     #[test]
