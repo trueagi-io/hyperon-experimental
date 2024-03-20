@@ -25,7 +25,7 @@ impl std::fmt::Debug for TokenDescr {
     }
 }
 
-type AtomConstr = dyn Fn(&str) -> Atom;
+type AtomConstr = dyn Fn(&str) -> Result<Atom, String>;
 
 impl Tokenizer {
 
@@ -34,6 +34,10 @@ impl Tokenizer {
     }
 
     pub fn register_token<C: 'static + Fn(&str) -> Atom>(&mut self, regex: Regex, constr: C) {
+        self.register_token_with_func_ptr(regex, Rc::new(move |the_str| Ok(constr(the_str))))
+    }
+
+    pub fn register_fallible_token<C: 'static + Fn(&str) -> Result<Atom, String>>(&mut self, regex: Regex, constr: C) {
         self.register_token_with_func_ptr(regex, Rc::new(constr))
     }
 
@@ -190,7 +194,7 @@ impl SyntaxNode {
                 let token_text = self.parsed_text.as_ref().unwrap();
                 let constr = tokenizer.find_token(token_text);
                 if let Some(constr) = constr {
-                    let new_atom = constr(token_text);
+                    let new_atom = constr(token_text).unwrap(); //TODO, If the Tokenizer's atom constructor throws an error, then gracefully alert the user
                     Ok(Some(new_atom))
                 } else {
                     let new_atom = Atom::sym(token_text);
@@ -443,29 +447,9 @@ impl<'a> SExprParser<'a> {
                             'r' => '\r', // carriage return
                             't' => '\t', // tab
                             'x' => { // hex sequence
-                                let mut code: Option<u8> = None;
-                                if let Some((_, digit1)) = self.it.next() {
-                                    if digit1.is_digit(16) {
-                                        if let Ok(digit1_byte) = TryInto::<u8>::try_into(digit1) {
-                                            // Try to extract a valid 2-digit code
-                                            if let Some((_, digit2)) = self.it.peek() {
-                                                if digit2.is_digit(16) {
-                                                    if let Ok(digit2_byte) = TryInto::<u8>::try_into(*digit2) {
-                                                        self.it.next().unwrap();
-                                                        let digits_buf = &[digit1_byte, digit2_byte];
-                                                        let code_val = u8::from_str_radix(core::str::from_utf8(digits_buf).unwrap(), 16).unwrap();
-                                                        if code_val <= 0x7F { //Cap it at 0x7F so we don't generate invalid UTF-8
-                                                            code = Some(code_val);
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                match code {
-                                    Some(code) => code.into(),
-                                    None => { return escape_err(self.cur_idx()); }
+                                match self.parse_2_digit_radix_value(16) {
+                                    Some(code_val) => code_val.into(),
+                                    None => {return escape_err(self.cur_idx()); }
                                 }
                             },
                             _ => {
@@ -485,6 +469,20 @@ impl<'a> SExprParser<'a> {
         }
         let unclosed_string_node = SyntaxNode::incomplete_with_message(SyntaxNodeType::StringToken, start_idx..self.cur_idx(), vec![], "Unclosed String Literal".to_string());
         unclosed_string_node
+    }
+
+    /// Parses a 2-digit value from the parser at the current location
+    fn parse_2_digit_radix_value(&mut self, radix: u32) -> Option<u8> {
+        self.it.next()
+        .and_then(|(_, digit1)| digit1.is_digit(radix).then(|| digit1))
+        .and_then(|digit1| TryInto::<u8>::try_into(digit1).ok())
+        .and_then(|byte1| self.it.next().map(|(_, digit2)| (byte1, digit2)))
+        .and_then(|(byte1, digit2)| digit2.is_digit(radix).then(|| (byte1, digit2)))
+        .and_then(|(byte1, digit2)| TryInto::<u8>::try_into(digit2).ok().map(|byte2| (byte1, byte2)))
+        .and_then(|(byte1, byte2)| {
+            let digits_buf = &[byte1, byte2];
+            u8::from_str_radix(core::str::from_utf8(digits_buf).unwrap(), radix).ok()
+        }).and_then(|code_val| (code_val <= 0x7F).then(|| code_val))
     }
 
     fn parse_word(&mut self) -> SyntaxNode {
@@ -721,9 +719,9 @@ mod tests {
     fn override_token_definition() {
         let mut tokenizer = Tokenizer::new();
         tokenizer.register_token(Regex::new(r"A").unwrap(), |_| Atom::sym("A"));
-        assert_eq!(tokenizer.find_token("A").unwrap()("A"), Atom::sym("A"));
+        assert_eq!(tokenizer.find_token("A").unwrap()("A").unwrap(), Atom::sym("A"));
         tokenizer.register_token(Regex::new(r"A").unwrap(), |_| Atom::sym("B"));
-        assert_eq!(tokenizer.find_token("A").unwrap()("A"), Atom::sym("B"));
+        assert_eq!(tokenizer.find_token("A").unwrap()("A").unwrap(), Atom::sym("B"));
     }
 
     #[test]
