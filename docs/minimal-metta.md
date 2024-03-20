@@ -210,7 +210,7 @@ Evaluate atom in a loop until result is calculated:
         (eval (reduce $res $var $templ)) )))))
 ```
 
-[Link](../lib/src/metta/runner/stdlib2.rs) to the full code of the interpreter in MeTTa.
+[Link](../lib/src/metta/runner/stdlib_minimal.rs) to the full code of the interpreter in MeTTa.
 
 # Properties
 

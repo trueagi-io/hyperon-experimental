@@ -112,7 +112,7 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
 
 fn interpret(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
     let expr = Atom::expr([EVAL_SYMBOL, Atom::expr([INTERPRET_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())])]);
-    crate::metta::interpreter2::interpret(space, &expr)
+    crate::metta::interpreter_minimal::interpret(space, &expr)
 }
 
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
@@ -460,7 +460,7 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     target.move_front(&mut rust_tokens);
 }
 
-pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
+pub static METTA_CODE: &'static str = include_str!("stdlib_minimal.metta");
 
 #[cfg(test)]
 mod tests {
