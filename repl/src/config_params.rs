@@ -63,7 +63,8 @@ pub fn builtin_init_metta_code() -> String {
     format!(r#"
         ; !(bind! {CFG_HISTORY_MAX_LEN} (new-state 500)) ; TODO, enable this when value-bridging is implemented
         !(bind! {CFG_PROMPT} (new-state "> "))
-        ; !(bind! {CFG_STYLED_PROMPT} (new-state (concat "\x1b[1;32m" (get-state {CFG_PROMPT}) "\x1b[0m"))) ;TODO, two things before this works.  Escape parsing in string literals, and string stdlib type with concat operation
+        ; !(bind! {CFG_STYLED_PROMPT} (new-state (concat "\x1b[1;32m" (get-state {CFG_PROMPT}) "\x1b[0m"))) ;TODO, Need string stdlib type with concat operation
+        !(bind! {CFG_STYLED_PROMPT} (new-state "\x1b[1;32m> \x1b[0m")) 
         !(bind! {CFG_BRACKET_STYLES} (new-state ("94" "93" "95" "96")))
         !(bind! {CFG_COMMENT_STYLE} (new-state "32"))
         !(bind! {CFG_VARIABLE_STYLE} (new-state "33"))
