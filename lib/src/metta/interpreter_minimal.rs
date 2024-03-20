@@ -195,7 +195,7 @@ fn atom_into_array<const N: usize>(atom: Atom) -> Option<[Atom; N]> {
 impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
 
     /// INTERNAL USE ONLY. Create an InterpreterState that is ready to yield results
-    #[allow(dead_code)] //TODO: MINIMAL only silence the warning until interpreter2 replaces interpreter
+    #[allow(dead_code)] //TODO: MINIMAL only silence the warning until interpreter_minimal replaces interpreter
     pub(crate) fn new_finished(space: T, results: Vec<Atom>) -> Self {
         Self {
             plan: vec![],
@@ -506,8 +506,8 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
     let results = space.query(&query);
     let atom_x = Atom::Variable(var_x.clone());
     let results: Vec<InterpretedAtom> = {
-        log::debug!("interpreter2::query: query: {}", query);
-        log::debug!("interpreter2::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
+        log::debug!("interpreter_minimal::query: query: {}", query);
+        log::debug!("interpreter_minimal::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
             .flat_map(|b| {
@@ -518,7 +518,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
                 } else {
                     Stack::finished_add_vars(prev.clone(), res)
                 };
-                log::debug!("interpreter2::query: b: {}", b);
+                log::debug!("interpreter_minimal::query: b: {}", b);
                 b.merge_v2(&bindings).into_iter().filter_map(move |mut b| {
                     if b.has_loops() {
                         None
