@@ -1493,7 +1493,7 @@ mod non_minimal_only_stdlib {
 pub use non_minimal_only_stdlib::*;
 
 #[cfg(feature = "minimal")]
-use super::stdlib2::*;
+use super::stdlib_minimal::*;
 
 #[cfg(feature = "minimal")]
 use crate::metta::runner::METTA_CODE;

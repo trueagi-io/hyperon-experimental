@@ -11,9 +11,9 @@ use regex::Regex;
 use super::stdlib::*;
 
 #[cfg(feature = "minimal")]
-use super::interpreter2::interpret;
+use super::interpreter_minimal::interpret;
 #[cfg(feature = "minimal")]
-use super::stdlib2::*;
+use super::stdlib_minimal::*;
 
 #[cfg(feature = "pkg_mgmt")]
 pub mod catalog;
