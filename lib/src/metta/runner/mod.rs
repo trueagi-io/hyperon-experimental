@@ -944,6 +944,7 @@ impl<'input> RunContext<'_, '_, 'input> {
 
 }
 
+#[cfg(feature = "minimal")]
 fn is_bare_minimal_interpreter(metta: &Metta) -> bool {
     metta.get_setting_string("interpreter") == Some("bare-minimal".into())
 }
