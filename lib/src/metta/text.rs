@@ -194,7 +194,8 @@ impl SyntaxNode {
                 let token_text = self.parsed_text.as_ref().unwrap();
                 let constr = tokenizer.find_token(token_text);
                 if let Some(constr) = constr {
-                    let new_atom = constr(token_text).unwrap(); //TODO, If the Tokenizer's atom constructor throws an error, then gracefully alert the user
+                    let new_atom = constr(token_text)
+                        .map_err(|e| format!("byte range = ({:?}) | {e}", self.src_range))?;
                     Ok(Some(new_atom))
                 } else {
                     let new_atom = Atom::sym(token_text);
@@ -661,6 +662,20 @@ mod tests {
         let mut parser = SExprParser::new("(a)))");
         let _ = parser.parse(&Tokenizer::new());
         assert_eq!(Err(String::from("Unexpected right bracket")), parser.parse(&Tokenizer::new()));
+    }
+
+    #[test]
+    fn test_error_from_tokenizer() {
+        //NOTE: This test relies on an intentional bug in the regex, so that it will accept an invalid
+        // float.  However it could be hit in legitimate cases, such as an integer that overflows the
+        // type's capacity before we implement bigint, or any type where the representation's actual
+        // contours can't be captured by a regex.
+        let mut tokenizer = Tokenizer::new();
+        tokenizer.register_fallible_token(Regex::new(r"[\-\+]?\d+.\d+").unwrap(),
+            |token| Ok(Atom::gnd(metta::runner::arithmetics::Number::from_float_str(token)?))
+        );
+        let mut parser = SExprParser::new("12345678901234567:8901234567890");
+        assert!(parser.parse(&tokenizer).is_err());
     }
 
     #[test]
