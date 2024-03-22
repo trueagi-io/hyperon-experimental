@@ -112,7 +112,7 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
 
 fn interpret(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
     let expr = Atom::expr([EVAL_SYMBOL, Atom::expr([INTERPRET_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())])]);
-    crate::metta::interpreter2::interpret(space, &expr)
+    crate::metta::interpreter_minimal::interpret(space, &expr)
 }
 
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
@@ -383,6 +383,8 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
     let register_module_op = Atom::gnd(stdlib::RegisterModuleOp::new(metta.clone()));
     tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
+    let mod_space_op = Atom::gnd(stdlib::ModSpaceOp::new(metta.clone()));
+    tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
     let print_mods_op = Atom::gnd(stdlib::PrintModsOp::new(metta.clone()));
     tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
 }
@@ -428,12 +430,12 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     let mut rust_tokens = Tokenizer::new();
     let tref = &mut rust_tokens;
 
-    tref.register_token(regex(r"[\-\+]?\d+"),
-        |token| { Atom::gnd(Number::from_int_str(token)) });
-    tref.register_token(regex(r"[\-\+]?\d+.\d+"),
-        |token| { Atom::gnd(Number::from_float_str(token)) });
-    tref.register_token(regex(r"[\-\+]?\d+(.\d+)?[eE][\-\+]?\d+"),
-        |token| { Atom::gnd(Number::from_float_str(token)) });
+    tref.register_fallible_token(regex(r"[\-\+]?\d+"),
+        |token| { Ok(Atom::gnd(Number::from_int_str(token)?)) });
+    tref.register_fallible_token(regex(r"[\-\+]?\d+\.\d+"),
+        |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
+    tref.register_fallible_token(regex(r"[\-\+]?\d+(\.\d+)?[eE][\-\+]?\d+"),
+        |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
     tref.register_token(regex(r"True|False"),
         |token| { Atom::gnd(Bool::from_str(token)) });
     let sum_op = Atom::gnd(SumOp{});
@@ -460,7 +462,7 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     target.move_front(&mut rust_tokens);
 }
 
-pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
+pub static METTA_CODE: &'static str = include_str!("stdlib_minimal.metta");
 
 #[cfg(test)]
 mod tests {
@@ -952,5 +954,23 @@ mod tests {
         assert_eq!(run_program("!(let $x (input $x) (output $x))"), Ok(vec![vec![]]));
         assert_eq!(run_program("!(let ($sv $st) (sealed ($x) ($x (output $x)))
                (let $sv (input $x) $st))"), Ok(vec![vec![expr!("output" ("input" x))]]));
+    }
+
+    #[test]
+    fn test_pragma_interpreter_bare_minimal() {
+        let program = "
+            (= (bar) baz)
+            (= (foo) (bar))
+            !(eval (foo))
+            !(pragma! interpreter bare-minimal)
+            !(eval (foo))
+        ";
+
+        assert_eq_metta_results!(run_program(program),
+            Ok(vec![
+                vec![expr!("baz")],
+                vec![UNIT_ATOM()],
+                vec![expr!(("bar"))],
+            ]));
     }
 }

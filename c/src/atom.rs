@@ -2,9 +2,11 @@
 
 use hyperon::*;
 use hyperon::space::DynSpace;
+use hyperon::atom::serial;
 
 use crate::util::*;
 use crate::space::*;
+use crate::serial::*;
 
 use std::os::raw::*;
 use std::fmt::Display;
@@ -504,6 +506,14 @@ pub struct gnd_api_t {
     ///
     match_: Option<extern "C" fn(gnd: *const gnd_t, other: *const atom_ref_t) -> bindings_set_t>,
 
+    /// @brief An optional function to encode the atom in terms of primitive types
+    /// @param[in]  gnd  A pointer to the Grounded Atom object
+    /// @param[in]  api  A table of functions the `serialize` implementation may call to encode the atom value
+    /// @param[in]  context A caller-defined object to pass to functions in the `api`, to receive the encoded value(s)
+    /// @return  A `serial_result_t` indicating whether the `serialize` operation was successful
+    ///
+    serialize: Option<extern "C" fn(gnd: *const gnd_t, api: *const serializer_api_t, context: *mut c_void) -> serial_result_t>,
+
     /// @brief Tests whether two atoms instantiated from the same interface are equal
     /// @param[in]  gnd  A pointer to the Grounded Atom object
     /// @param[in]  other  A pointer to the other grounded atom's object
@@ -611,17 +621,21 @@ impl Grounded for CGrounded {
             None => match_by_equality(self, other)
         }
     }
+
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+        match self.api().serialize {
+            Some(func) => {
+                let mut adapter: c_to_rust_serializer_t = serializer.into();
+                func(self.get_ptr(), &C_TO_RUST_SERIALIZER_API, &mut adapter as *mut _ as *mut c_void).into()
+            },
+            None => Err(serial::Error::NotSupported),
+        }
+    }
 }
 
 impl PartialEq for CGrounded {
     fn eq(&self, other: &CGrounded) -> bool {
-        let self_api_ptr = unsafe{ (&*self.get_ptr()).api };
-        let other_api_ptr = unsafe{ (&*other.get_ptr()).api };
-        if self_api_ptr == other_api_ptr {
-            (self.api().eq)(self.get_ptr(), other.get_ptr())
-        } else {
-            false
-        }
+        (self.api().eq)(self.get_ptr(), other.get_ptr())
     }
 }
 
@@ -952,6 +966,23 @@ pub extern "C" fn atom_match_atom(a: *const atom_ref_t, b: *const atom_ref_t) ->
     let b = unsafe{ (&*b).borrow() };
     let result_set: BindingsSet = crate::atom::matcher::match_atoms(a, b).collect();
     result_set.into()
+}
+
+/// @brief Serializes a grounded atom using the given serializer
+/// @ingroup serializer_group
+/// @param[in]  atom A pointer to an `atom_t` or an `atom_ref_t` to serialize
+/// @param[in]  api  A table of functions the `serialize` implementation may call to encode the atom value
+/// @param[in]  context A caller-defined object to pass to functions in the `api`, to receive the encoded value(s)
+/// @return  A `serial_result_t` indicating whether the `serialize` operation was successful
+///
+#[no_mangle]
+pub extern "C" fn atom_gnd_serialize(atom: *const atom_ref_t, api: *const serializer_api_t, context: *mut c_void) -> serial_result_t {
+    let atom = unsafe { (*atom).borrow() };
+    let mut serializer = RustToCSerializer::new(api, context);
+    match atom {
+        Atom::Grounded(gnd) => gnd.serialize(&mut serializer).into(),
+        _ => serial_result_t::NOT_SUPPORTED,
+    }
 }
 
 /// @brief Represents a single Bindings frame, which is a group of mutually-compatible variable <-> atom associations, providing a scope in which variable have definde values

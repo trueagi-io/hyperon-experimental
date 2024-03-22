@@ -2,7 +2,7 @@
 ; !(change-state! &ReplHistoryMaxLen 500) ; TODO: enable this when I have value bridging implemented.
 
 !(change-state! &ReplPrompt "> ")
-; !(change-state! &ReplStyledPrompt "\x1b[1;32m> \x1b[0m") ; TODO: currently the MeTTa string parser doesn't resolve escape chars, although perhaps it should
+!(change-state! &ReplStyledPrompt "\x1b[1;32m> \x1b[0m") ;
 
 ; TODO: somebody with better design sense should tweak these, and also provide dark-mode setings
 ; ANSI escape codes to configure the syntax highlighter

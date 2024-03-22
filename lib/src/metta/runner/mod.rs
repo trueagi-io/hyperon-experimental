@@ -82,11 +82,11 @@ pub mod stdlib;
 use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
 
 #[cfg(feature = "minimal")]
-pub mod stdlib2;
+pub mod stdlib_minimal;
 #[cfg(feature = "minimal")]
-use super::interpreter2::{interpret, interpret_init, interpret_step, InterpreterState};
+use super::interpreter_minimal::{interpret, interpret_init, interpret_step, InterpreterState};
 #[cfg(feature = "minimal")]
-use stdlib2::*;
+use stdlib_minimal::*;
 
 use stdlib::CoreLibLoader;
 
@@ -432,7 +432,11 @@ impl Metta {
     // to the minimal MeTTa
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
         #[cfg(feature = "minimal")]
-        let atom = wrap_atom_by_metta_interpreter(self.0.top_mod_space.clone(), atom);
+        let atom = if is_bare_minimal_interpreter(self) {
+            atom
+        } else {
+            wrap_atom_by_metta_interpreter(self.0.top_mod_space.clone(), atom)
+        };
         if self.type_check_is_enabled() && !validate_atom(self.0.top_mod_space.borrow().as_space(), &atom) {
             Ok(vec![Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL])])
         } else {
@@ -915,7 +919,11 @@ impl<'input> RunContext<'_, '_, 'input> {
                                 self.i_wrapper.interpreter_state = Some(InterpreterState::new_finished(self.module().space().clone(), vec![type_err_exp]));
                             } else {
                                 #[cfg(feature = "minimal")]
-                                let atom = wrap_atom_by_metta_interpreter(self.module().space().clone(), atom);
+                                let atom = if is_bare_minimal_interpreter(self.metta) {
+                                    atom
+                                } else {
+                                    wrap_atom_by_metta_interpreter(self.module().space().clone(), atom)
+                                };
                                 self.i_wrapper.interpreter_state = Some(interpret_init(self.module().space().clone(), &atom));
                             }
                         },
@@ -934,6 +942,11 @@ impl<'input> RunContext<'_, '_, 'input> {
         }
     }
 
+}
+
+#[cfg(feature = "minimal")]
+fn is_bare_minimal_interpreter(metta: &Metta) -> bool {
+    metta.get_setting_string("interpreter") == Some("bare-minimal".into())
 }
 
 // *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*

@@ -5,6 +5,7 @@ from hyperon.ext import register_atoms
 from hyperon_das import DistributedAtomSpace
 from hyperon_das.constants import QueryOutputFormat
 import time
+import ast
 
 from hyperon_das.pattern_matcher import (
     Link,
@@ -23,7 +24,9 @@ class DASpace(AbstractSpace):
         # self.das = DistributedAtomSpace('ram_only')
         if remote:
             self.das = DistributedAtomSpace(query_engine='remote', host=host, port=port)
+            self.remote = True
         else:
+            self.remote = False
             self.das = DistributedAtomSpace()
         self.unwrap = unwrap
 
@@ -108,22 +111,57 @@ class DASpace(AbstractSpace):
         elif h['type']=='Expression':
             return E(*[self._handle2atom3(ch) for ch in h['targets']])
 
-    def query(self, query_atom):
-        query = self._atom2dict_new(query_atom)
-        answer = [query_answer for query_answer in self.das.query(query)]
-        new_bindings_set = BindingsSet.empty()
+    def _handle2atom4(self, h):
+        h = self.das.get_atom(h)
+        if h['type']=='Symbol':
+            return S(h['name'])
+        elif h['type']=='Expression':
+            return E(*[self._handle2atom3(ch) for ch in h['targets']])
 
-        if not answer:
-            return new_bindings_set
+    def _query_temp_helper(self, answer, new_bindings_set):
+        for a in answer:
+            bindings = Bindings()
+            if a[0] is None:
+                bindings.add_var_binding("res", self._handle2atom3(a[1]))
+            else:
+                mapping = dict(ast.literal_eval(a[0]))
+                for var, val in mapping.items():
+                    # remove '$', because it is automatically added
+                    bindings.add_var_binding(V(var[1:]), self._handle2atom4(val))
+            new_bindings_set.push(bindings)
+        return new_bindings_set
 
+    def _query_actual_helper(self, answer, new_bindings_set):
         for a in answer:
             bindings = Bindings()
             for var, val in a.assignment.mapping.items():
                 # remove '$', because it is automatically added
                 bindings.add_var_binding(V(var[1:]), self._handle2atom(val))
             new_bindings_set.push(bindings)
-
         return new_bindings_set
+
+
+    def query(self, query_atom):
+        query = self._atom2dict_new(query_atom)
+        query_params = {
+            "toplevel_only": False,
+            # "return_type": QueryOutputFormat.ATOM_INFO,
+            # 'query_scope': 'local_only',
+            "no_iterator": False,
+            }
+
+        answer = [query_answer for query_answer in self.das.query(query, query_params)]
+        new_bindings_set = BindingsSet.empty()
+
+        if not answer:
+            return new_bindings_set
+
+        if self.remote:
+            return self._query_temp_helper(answer, new_bindings_set)
+        else:
+            return self._query_actual_helper(answer, new_bindings_set)
+
+        # return new_bindings_set
 
     def query_old(self, query_atom):
         query = self._atom2query(query_atom)
