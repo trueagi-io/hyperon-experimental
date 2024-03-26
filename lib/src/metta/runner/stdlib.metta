@@ -128,6 +128,42 @@
           (if (== $first ->) True False) ))
       ($_ False) ))))
 
+(: help! (-> Atom (->)))
+(= (help! $atom)
+  (case (get-doc $atom) (
+    ((doc-formal (item $item) (kind function) (type $type) (description $descr)
+                 (parameters $params)
+                 (return (type $ret-type) (description $ret-desc)))
+      (let () (println! (format-args "Function {}: {} {}" ($item $type $descr)))
+      (let () (println! (format-args "Parameters:" ()))
+      (let () (for-each-in-atom $params help-param!)
+      (let () (println! (format-args "Return: (type {}) {}" ($ret-type $ret-desc)))
+      () )))))
+    ((doc-formal (item $item) (kind function) (type $type) (description $descr))
+      (let () (println! (format-args "Function {} (type {}) {}" ($item $type $descr)))
+      () ))
+    ((doc-formal (item $item) (kind atom) (type $type) (description $descr))
+      (let () (println! (format-args "Atom {}: {} {}" ($item $type $descr)))
+      () ))
+    ($other (Error $other "Cannot match doc-formal structure") ))))
+
+(: help-param! (-> Atom (->)))
+(= (help-param! $param)
+  (let (parameter (type $type) (description $desc)) $param
+    (println! (format-args "  {} {}" ($type $desc))) ))
+
+(: for-each-in-atom (-> Expression Atom (->)))
+(= (for-each-in-atom $expr $func)
+  (if (noreduce-eq $expr ())
+    ()
+    (let $head (car-atom $expr)
+      (let $tail (cdr-atom $expr)
+      (let $_ ($func $head)
+      (for-each-in-atom $tail $func) )))))
+
+(: noreduce-eq (-> Atom Atom Bool))
+(= (noreduce-eq $a $b) (== (quote $a) (quote $b)))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Grounded function's documentation
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
