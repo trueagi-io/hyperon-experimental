@@ -566,7 +566,7 @@ impl Grounded for PrintlnOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("println! expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
-        println!("{}", atom);
+        println!("{}", atom_to_string(atom));
         unit_result()
     }
 
@@ -593,14 +593,29 @@ impl Grounded for FormatArgsOp {
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("format-args expects format string as a first argument and expression as a second argument");
-        let format = args.get(0).ok_or_else(arg_error)?.to_string();
+        let format = atom_to_string(args.get(0).ok_or_else(arg_error)?);
         let args = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?;
-        let res = format.format(args.children());
-        Ok(vec![Atom::value(res)])
+        let args: Vec<String> = args.children().iter()
+            .map(|atom| atom_to_string(atom))
+            .collect();
+        let res = format.format(args.as_slice());
+        Ok(vec![Atom::gnd(Str::from_string(res))])
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
         match_by_equality(self, other)
+    }
+}
+
+fn atom_to_string(atom: &Atom) -> String {
+    match atom {
+        Atom::Grounded(gnd) if gnd.type_() == ATOM_TYPE_STRING => {
+            let mut s = gnd.to_string();
+            s.remove(0);
+            s.pop();
+            s
+        },
+        _ => atom.to_string(),
     }
 }
 
