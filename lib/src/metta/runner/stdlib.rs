@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use regex::Regex;
 
 use super::arithmetics::*;
+use super::string::*;
 
 pub const VOID_SYMBOL : Atom = sym!("%void%");
 
@@ -1455,6 +1456,8 @@ mod non_minimal_only_stdlib {
             |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
         tref.register_token(regex(r"True|False"),
             |token| { Atom::gnd(Bool::from_str(token)) });
+        tref.register_token(regex(r#""[^"]+""#),
+            |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
         let sum_op = Atom::gnd(SumOp{});
         tref.register_token(regex(r"\+"), move |_| { sum_op.clone() });
         let sub_op = Atom::gnd(SubOp{});

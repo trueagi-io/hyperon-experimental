@@ -56,7 +56,6 @@
 
 (: doc (-> Atom DocDescription DocInformal))
 (: doc (-> Atom DocDescription DocParameters DocReturnInformal DocInformal))
-; TODO: First argument is String but we don't have such type yet
 (: description (-> String DocDescription))
 (: parameter (-> String DocParameterInformal))
 (: return (-> String DocReturnInformal))
