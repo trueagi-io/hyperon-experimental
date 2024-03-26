@@ -1,0 +1,11 @@
+!(get-doc if)
+!(get-doc TypeError)
+!(get-doc add-atom)
+!(get-doc no-such-function)
+!(get-doc (if True OK NOK))
+
+!(help! if)
+!(help! TypeError)
+!(help! add-atom)
+!(help! no-such-function)
+!(help! (if True OK NOK))
