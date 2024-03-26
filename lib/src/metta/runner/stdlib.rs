@@ -574,6 +574,36 @@ impl Grounded for PrintlnOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct FormatArgsOp {}
+
+impl Display for FormatArgsOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "format-args")
+    }
+}
+
+use dyn_fmt::AsStrFormatExt;
+
+impl Grounded for FormatArgsOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("format-args expects format string as a first argument and expression as a second argument");
+        let format = args.get(0).ok_or_else(arg_error)?.to_string();
+        let args = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?;
+        let res = format.format(args.children());
+        Ok(vec![Atom::value(res)])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+
 /// Implement trace! built-in.
 ///
 /// It is equivalent to Idris or Haskell Trace, that is, it prints a
@@ -1353,6 +1383,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
         let println_op = Atom::gnd(PrintlnOp{});
         tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
+        let format_args_op = Atom::gnd(FormatArgsOp{});
+        tref.register_token(regex(r"format-args"), move |_| { format_args_op.clone() });
         let trace_op = Atom::gnd(TraceOp{});
         tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
         let nop_op = Atom::gnd(NopOp{});
