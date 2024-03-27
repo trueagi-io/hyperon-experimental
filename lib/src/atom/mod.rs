@@ -119,7 +119,6 @@ use std::fmt::{Display, Debug};
 use std::convert::TryFrom;
 
 use crate::common::collections::ImmutableString;
-use crate::common::ReplacingMapper;
 
 // Symbol atom
 
@@ -271,8 +270,8 @@ impl Display for VariableAtom {
 
 /// Returns `atom` with all variables replaced by unique instances.
 pub fn make_variables_unique(mut atom: Atom) -> Atom {
-    let mut mapper = ReplacingMapper::new(VariableAtom::make_unique);
-    atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| mapper.replace(var));
+    let mut mapper = crate::common::CachingMapper::new(VariableAtom::make_unique);
+    atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
     atom
 }
 

@@ -112,7 +112,7 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
 
 fn interpret(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
     let expr = Atom::expr([EVAL_SYMBOL, Atom::expr([INTERPRET_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())])]);
-    crate::metta::interpreter2::interpret(space, &expr)
+    crate::metta::interpreter_minimal::interpret(space, &expr)
 }
 
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
@@ -413,6 +413,8 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
     let println_op = Atom::gnd(stdlib::PrintlnOp{});
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
+    let sealed_op = Atom::gnd(stdlib::SealedOp{});
+    tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
     // TODO: adding &self introduces self referencing and thus prevents space
@@ -428,12 +430,12 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     let mut rust_tokens = Tokenizer::new();
     let tref = &mut rust_tokens;
 
-    tref.register_token(regex(r"[\-\+]?\d+"),
-        |token| { Atom::gnd(Number::from_int_str(token)) });
-    tref.register_token(regex(r"[\-\+]?\d+.\d+"),
-        |token| { Atom::gnd(Number::from_float_str(token)) });
-    tref.register_token(regex(r"[\-\+]?\d+(.\d+)?[eE][\-\+]?\d+"),
-        |token| { Atom::gnd(Number::from_float_str(token)) });
+    tref.register_fallible_token(regex(r"[\-\+]?\d+"),
+        |token| { Ok(Atom::gnd(Number::from_int_str(token)?)) });
+    tref.register_fallible_token(regex(r"[\-\+]?\d+\.\d+"),
+        |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
+    tref.register_fallible_token(regex(r"[\-\+]?\d+(\.\d+)?[eE][\-\+]?\d+"),
+        |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
     tref.register_token(regex(r"True|False"),
         |token| { Atom::gnd(Bool::from_str(token)) });
     let sum_op = Atom::gnd(SumOp{});
@@ -460,7 +462,7 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     target.move_front(&mut rust_tokens);
 }
 
-pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
+pub static METTA_CODE: &'static str = include_str!("stdlib_minimal.metta");
 
 #[cfg(test)]
 mod tests {
@@ -945,6 +947,13 @@ mod tests {
 
         assert_eq!(metta.run(SExprParser::new(program2)),
             Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
+    }
+
+    #[test]
+    fn use_sealed_to_make_scoped_variable() {
+        assert_eq!(run_program("!(let $x (input $x) (output $x))"), Ok(vec![vec![]]));
+        assert_eq!(run_program("!(let ($sv $st) (sealed ($x) ($x (output $x)))
+               (let $sv (input $x) $st))"), Ok(vec![vec![expr!("output" ("input" x))]]));
     }
 
     #[test]

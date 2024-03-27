@@ -82,11 +82,11 @@ pub mod stdlib;
 use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
 
 #[cfg(feature = "minimal")]
-pub mod stdlib2;
+pub mod stdlib_minimal;
 #[cfg(feature = "minimal")]
-use super::interpreter2::{interpret, interpret_init, interpret_step, InterpreterState};
+use super::interpreter_minimal::{interpret, interpret_init, interpret_step, InterpreterState};
 #[cfg(feature = "minimal")]
-use stdlib2::*;
+use stdlib_minimal::*;
 
 use stdlib::CoreLibLoader;
 
@@ -944,6 +944,7 @@ impl<'input> RunContext<'_, '_, 'input> {
 
 }
 
+#[cfg(feature = "minimal")]
 fn is_bare_minimal_interpreter(metta: &Metta) -> bool {
     metta.get_setting_string("interpreter") == Some("bare-minimal".into())
 }
