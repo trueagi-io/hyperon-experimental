@@ -16,6 +16,7 @@ use std::collections::HashMap;
 use regex::Regex;
 
 use super::arithmetics::*;
+use super::string::*;
 
 pub const VOID_SYMBOL : Atom = sym!("%void%");
 
@@ -566,7 +567,7 @@ impl Grounded for PrintlnOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("println! expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
-        println!("{}", atom);
+        println!("{}", atom_to_string(atom));
         unit_result()
     }
 
@@ -574,6 +575,51 @@ impl Grounded for PrintlnOp {
         match_by_equality(self, other)
     }
 }
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct FormatArgsOp {}
+
+impl Display for FormatArgsOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "format-args")
+    }
+}
+
+use dyn_fmt::AsStrFormatExt;
+
+impl Grounded for FormatArgsOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("format-args expects format string as a first argument and expression as a second argument");
+        let format = atom_to_string(args.get(0).ok_or_else(arg_error)?);
+        let args = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?;
+        let args: Vec<String> = args.children().iter()
+            .map(|atom| atom_to_string(atom))
+            .collect();
+        let res = format.format(args.as_slice());
+        Ok(vec![Atom::gnd(Str::from_string(res))])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+fn atom_to_string(atom: &Atom) -> String {
+    match atom {
+        Atom::Grounded(gnd) if gnd.type_() == ATOM_TYPE_STRING => {
+            let mut s = gnd.to_string();
+            s.remove(0);
+            s.pop();
+            s
+        },
+        _ => atom.to_string(),
+    }
+}
+
 
 /// Implement trace! built-in.
 ///
@@ -1395,6 +1441,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
         let println_op = Atom::gnd(PrintlnOp{});
         tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
+        let format_args_op = Atom::gnd(FormatArgsOp{});
+        tref.register_token(regex(r"format-args"), move |_| { format_args_op.clone() });
         let trace_op = Atom::gnd(TraceOp{});
         tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
         let nop_op = Atom::gnd(NopOp{});
@@ -1467,6 +1515,8 @@ mod non_minimal_only_stdlib {
             |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
         tref.register_token(regex(r"True|False"),
             |token| { Atom::gnd(Bool::from_str(token)) });
+        tref.register_token(regex(r#""[^"]+""#),
+            |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
         let sum_op = Atom::gnd(SumOp{});
         tref.register_token(regex(r"\+"), move |_| { sum_op.clone() });
         let sub_op = Atom::gnd(SubOp{});
@@ -1502,35 +1552,7 @@ mod non_minimal_only_stdlib {
         target.move_front(&mut rust_tokens);
     }
 
-    pub static METTA_CODE: &'static str = "
-        ; `$then`, `$else` should be of `Atom` type to avoid evaluation
-        ; and infinite cycle in inference
-        (: if (-> Bool Atom Atom $t))
-        (= (if True $then $else) $then)
-        (= (if False $then $else) $else)
-        (: Error (-> Atom Atom ErrorType))
-
-        (: add-reduct (-> Grounded %Undefined% (->)))
-        (= (add-reduct $dst $atom)  (add-atom $dst $atom))
-
-        ; quote prevents atom from being reduced
-        (: quote (-> Atom Atom))
-
-        ; unify matches two atoms and returns $then if they are matched
-        ; and $else otherwise.
-        (: unify (-> Atom Atom Atom Atom %Undefined%))
-        (= (unify $a $a $then $else) $then)
-        (= (unify $a $b $then $else)
-        (case (unify-or-empty $a $b) ((%void%  $else))) )
-        (: unify-or-empty (-> Atom Atom Atom))
-        (= (unify-or-empty $a $a) unified)
-        (= (unify-or-empty $a $b) (empty))
-
-
-        ; empty removes current result from a non-deterministic result
-        (: empty (-> %Undefined%))
-        (= (empty) (let a b never-happens))
-    ";
+    pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
 }
 
 #[cfg(not(feature = "minimal"))]

@@ -91,6 +91,7 @@ use stdlib_minimal::*;
 use stdlib::CoreLibLoader;
 
 pub mod arithmetics;
+pub mod string;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 
