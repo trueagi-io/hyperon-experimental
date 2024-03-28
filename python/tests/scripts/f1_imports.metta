@@ -1,6 +1,6 @@
-; NOTE: This test won't work outside the test environment because it relies on
-;  specific atoms in a specific order in the space, and loading the default environment's
-;  init.metta will break the assumptions in this test
+; NOTE: This test won't work under no_python mode because it relies on
+;  specific atoms in the space.  When running in Python, corelib and stdlib
+;  are separate modules, but in no_python mode there is no Python stdlib
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Even at the very beginning of the script `(get-atoms &self)`
