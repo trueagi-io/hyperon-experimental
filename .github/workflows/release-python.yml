@@ -71,7 +71,7 @@ jobs:
     environment:
       name: test
     runs-on: ubuntu-latest
-    needs: [build_wheels]
+    needs: [build-wheels]
     if: github.event.action == 'published'
     steps:
     - uses: actions/download-artifact@v3
@@ -90,7 +90,7 @@ jobs:
     environment:
       name: production
     runs-on: ubuntu-latest
-    needs: [build_wheels]
+    needs: [build-wheels]
     if: github.event.action == 'published'
     steps:
     - uses: actions/download-artifact@v3
