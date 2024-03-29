@@ -4,12 +4,13 @@
 use crate::*;
 use super::*;
 use crate::atom::*;
-use crate::atom::matcher::{BindingsSet, MatchResultIter, match_atoms};
+use crate::atom::matcher::{MatchResultIter, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
 
-use std::fmt::{Display, Debug};
+use std::fmt::Debug;
 use std::collections::BTreeSet;
+use std::collections::HashSet;
 
 // Grounding space
 
@@ -82,6 +83,7 @@ pub struct GroundingSpace {
     content: Vec<Atom>,
     free: BTreeSet<usize>,
     common: SpaceCommon,
+    name: Option<String>,
 }
 
 impl GroundingSpace {
@@ -93,6 +95,7 @@ impl GroundingSpace {
             content: Vec::new(),
             free: BTreeSet::new(),
             common: SpaceCommon::default(),
+            name: None,
         }
     }
 
@@ -107,6 +110,7 @@ impl GroundingSpace {
             content: atoms,
             free: BTreeSet::new(),
             common: SpaceCommon::default(),
+            name: None,
         }
     }
 
@@ -268,7 +272,7 @@ impl GroundingSpace {
     fn single_query(&self, query: &Atom) -> BindingsSet {
         log::debug!("single_query: query: {}", query);
         let mut result = BindingsSet::empty();
-        let query_vars = query.iter().filter_type::<&VariableAtom>().collect();
+        let query_vars: HashSet<&VariableAtom> = query.iter().filter_type::<&VariableAtom>().collect();
         for i in self.index.get(&atom_to_trie_key(query)) {
             let next = self.content.get(*i).expect(format!("Index contains absent atom: key: {:?}, position: {}", query, i).as_str());
             let next = make_variables_unique(next.clone());
@@ -287,6 +291,16 @@ impl GroundingSpace {
     pub fn iter(&self) -> SpaceIter {
         SpaceIter::new(GroundingSpaceIter::new(self))
     }
+
+    /// Sets the name property for the `GroundingSpace` which can be useful for debugging
+    pub fn set_name(&mut self, name: String) {
+        self.name = Some(name);
+    }
+
+    /// Returns the name property for the `GroundingSpace`, if one has been set
+    pub fn name(&self) -> Option<&str> {
+        self.name.as_ref().map(|s| s.as_str())
+    }
 }
 
 impl Space for GroundingSpace {
@@ -303,6 +317,9 @@ impl Space for GroundingSpace {
         Some(self.iter())
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
+        Some(self)
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         Some(self)
     }
 }
@@ -330,13 +347,19 @@ impl PartialEq for GroundingSpace {
 
 impl Debug for GroundingSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GroundingSpace-{self:p}")
+        match &self.name {
+            Some(name) => write!(f, "GroundingSpace-{name} ({self:p})"),
+            None => write!(f, "GroundingSpace-{self:p}")
+        }
     }
 }
 
 impl Display for GroundingSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "GroundingSpace-{self:p}")
+        match &self.name {
+            Some(name) => write!(f, "GroundingSpace-{name}"),
+            None => write!(f, "GroundingSpace-{self:p}")
+        }
     }
 }
 
@@ -634,7 +657,12 @@ mod test {
         space.add(expr!("A" "Sam"));
 
         let result = space.query(&expr!("," ("implies" ("B" x) z) ("implies" ("A" x) y) ("A" x)));
-        assert_eq!(result, bind_set![{x: sym!("Sam"), y: expr!("B" x), z: expr!("C" x)}]);
+        //assert_eq!(result, bind_set![{x: sym!("Sam"), y: expr!("B" x), z: expr!("C" x)}]);
+        assert_eq!(result.len(), 1);
+        let result = result.into_iter().next().unwrap();
+        assert_eq!(result.resolve(&VariableAtom::new("x")), Some(sym!("Sam")));
+        assert_eq!(result.resolve(&VariableAtom::new("y")), Some(expr!("B" "Sam")));
+        assert_eq!(result.resolve(&VariableAtom::new("z")), Some(expr!("C" "Sam")));
     }
 
     #[test]

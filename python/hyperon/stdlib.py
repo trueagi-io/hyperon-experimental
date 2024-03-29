@@ -1,6 +1,10 @@
-from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError
+import re
+
+from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError, AtomType, MatchableObject, \
+    G, S, Atoms
 from .base import Tokenizer, SExprParser
 from .ext import register_atoms, register_tokens
+import hyperonpy as hp
 
 class Char:
     """Emulate Char type as in a traditional FPL"""
@@ -57,6 +61,38 @@ def bool_ops():
         r"not": notAtom
     }
 
+def get_string_value(value) -> str:
+    if not isinstance(value, str):
+        value = repr(value)
+    if len(value) > 2 and ("\"" == value[0]) and ("\"" == value[-1]):
+        return value[1:-1]
+    return value
+
+class RegexMatchableObject(MatchableObject):
+    ''' To match atoms with regular expressions'''
+
+    def __init__(self, content, id=None):
+        super().__init__(content, id)
+
+        self.content = self.content.replace("[[", "(").replace("]]", ")").replace("~", " ")
+
+    def match_text(self, text, regexpr):
+        return re.search(pattern=regexpr, string=text.strip(), flags=re.IGNORECASE)
+
+    def match_(self, atom):
+        pattern = self.content
+        text = get_string_value(atom)
+        text = ' '.join([x.strip() for x in text.split()])
+        if pattern.startswith("regex:"):
+            pattern = get_string_value(pattern[6:])
+            matched = self.match_text(text, pattern)
+            if matched is not None:
+                return [{"matched_pattern": S(pattern)}]
+        return []
+
+
+
+
 @register_atoms
 def text_ops():
     """Add text operators
@@ -69,11 +105,12 @@ def text_ops():
     see test_stdlib.py for examples.
 
     """
+
     reprAtom = OperationAtom('repr', lambda a: [ValueAtom(repr(a))],
                              ['Atom', 'String'], unwrap=False)
     parseAtom = OperationAtom('parse', lambda s: [ValueAtom(SExprParser(str(s)[1:-1]).parse(Tokenizer()))],
                               ['String', 'Atom'], unwrap=False)
-    stringToCharsAtom = OperationAtom('stringToChars', lambda s: [ValueAtom(E(*[ValueAtom(Char(c)) for c in str(s)[1:-1]]))],
+    stringToCharsAtom = OperationAtom('stringToChars', lambda s: [E(*[ValueAtom(Char(c)) for c in str(s)[1:-1]])],
                                       ['String', 'Atom'], unwrap=False)
     charsToStringAtom = OperationAtom('charsToString', lambda a: [ValueAtom("".join([str(c)[1:-1] for c in a.get_children()]))],
                                       ['Atom', 'String'], unwrap=False)
@@ -88,11 +125,12 @@ def text_ops():
 def type_tokens():
     return {
         r"[-+]?\d+" : lambda token: ValueAtom(int(token), 'Number'),
-        r"[-+]?\d+(\.\d+)": lambda token: ValueAtom(float(token), 'Number'),
-        r"[-+]?\d+(\.\d+)?e[-+]?\d+": lambda token: ValueAtom(float(token), 'Number'),
+        r"[-+]?\d+\.\d+": lambda token: ValueAtom(float(token), 'Number'),
+        r"[-+]?\d+(\.\d+)?[eE][-+]?\d+": lambda token: ValueAtom(float(token), 'Number'),
         "\"[^\"]*\"": lambda token: ValueAtom(str(token[1:-1]), 'String'),
         "\'[^\']\'": lambda token: ValueAtom(Char(token[1]), 'Char'),
-        r"True|False": lambda token: ValueAtom(token == 'True', 'Bool')
+        r"True|False": lambda token: ValueAtom(token == 'True', 'Bool'),
+        r'regex:"[^"]*"': lambda token: G(RegexMatchableObject(token),  AtomType.UNDEFINED)
     }
 
 @register_tokens
@@ -136,4 +174,18 @@ def call_atom():
 
     return {
         r"call:[^\s]+": newCallAtom
+    }
+
+@register_atoms
+def load_ascii():
+    def load_ascii_atom(space, name):
+        space_obj = space.get_object()
+        hp.load_ascii(name.get_name(), space_obj.cspace)
+        #['Space', 'Symbol', 'Unit'],
+        return [Atoms.UNIT]
+
+    loadAtom = OperationAtom('load-ascii', load_ascii_atom,
+                             unwrap=False)
+    return {
+        r"load-ascii": loadAtom
     }

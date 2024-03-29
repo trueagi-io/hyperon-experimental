@@ -2,8 +2,7 @@
 from hyperon import *
 
 def init_metta(working_dir, include_paths):
-    Environment.init_common_env(working_dir = working_dir, create_config = True, include_paths = include_paths)
-    return MeTTa()
+    return MeTTa(env_builder=Environment.custom_env(working_dir = working_dir, create_config = True, include_paths = include_paths))
 
 def load_metta_module(metta, mod_path):
     metta.import_file(mod_path)

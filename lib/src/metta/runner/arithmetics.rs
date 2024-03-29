@@ -1,6 +1,7 @@
 use crate::*;
 use crate::metta::*;
 use crate::matcher::MatchResultIter;
+use crate::atom::serial;
 
 use std::fmt::Display;
 
@@ -15,40 +16,90 @@ pub enum Number {
 
 impl PartialEq<Self> for Number {
     fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
+        let (a, b) = Number::promote(self.clone(), other.clone());
+        match (a, b) {
             (Number::Integer(a), Number::Integer(b)) => a == b,
-            (Number::Integer(a), Number::Float(b)) => (*a as f64) == *b,
-            (Number::Float(a), Number::Integer(b)) => *a == (*b as f64),
             (Number::Float(a), Number::Float(b)) => a == b,
+            _ => panic!("Unexpected state!"),
         }
     }
 }
 
-trait IntoNumber {
-    fn into_num(self) -> Number;
-}
-
-impl IntoNumber for i64 {
-    fn into_num(self) -> Number {
+impl Into<Number> for i64 {
+    fn into(self) -> Number {
         Number::Integer(self)
     }
 }
 
-impl IntoNumber for f64 {
-    fn into_num(self) -> Number {
+impl Into<Number> for f64 {
+    fn into(self) -> Number {
         Number::Float(self)
     }
 }
 
+impl Into<i64> for Number {
+    fn into(self) -> i64 {
+        match self {
+            Number::Integer(n) => n,
+            Number::Float(n) => n as i64,
+        }
+    }
+}
+
+impl Into<f64> for Number {
+    fn into(self) -> f64 {
+        match self {
+            Number::Integer(n) => n as f64,
+            Number::Float(n) => n,
+        }
+    }
+}
+
 impl Number {
-    pub fn from_int_str(num: &str) -> Self {
-        let n = num.parse::<i64>().expect("Could not parse integer");
-        Self::Integer(n)
+    pub fn from_int_str(num: &str) -> Result<Self, String> {
+        let n = num.parse::<i64>().map_err(|e| format!("Could not parse integer: '{num}', {e}"))?;
+        Ok(Self::Integer(n))
     }
 
-    pub fn from_float_str(num: &str) -> Self {
-        let n = num.parse::<f64>().expect("Could not parse float");
-        Self::Float(n)
+    pub fn from_float_str(num: &str) -> Result<Self, String> {
+        let n = num.parse::<f64>().map_err(|e| format!("Could not parse float: '{num}', {e}"))?;
+        Ok(Self::Float(n))
+    }
+
+    pub fn promote(a: Number, b: Number) -> (Number, Number) {
+        let res_type = &NumberType::widest_type(a.get_type(), b.get_type());
+        (a.cast(res_type), b.cast(res_type))
+    }
+
+    fn get_type(&self) -> NumberType {
+        match self {
+            Number::Integer(_) => NumberType::Integer,
+            Number::Float(_) => NumberType::Float,
+        }
+    }
+
+    fn cast(self, t: &NumberType) -> Number {
+        match t {
+            NumberType::Integer => Number::Integer(self.into()),
+            NumberType::Float => Number::Float(self.into()),
+        }
+    }
+}
+
+#[derive(PartialEq)]
+enum NumberType {
+    Integer,
+    Float,
+}
+
+impl NumberType {
+    fn widest_type(a: NumberType, b: NumberType) -> NumberType {
+        // wanted using std::cmp::max but looks like this approach is much much simpler
+        if a == NumberType::Float || b == NumberType::Float {
+            NumberType::Float
+        } else {
+            NumberType::Integer
+        }
     }
 }
 
@@ -73,6 +124,13 @@ impl Grounded for Number {
     fn match_(&self, other: &Atom) -> MatchResultIter {
         match_by_equality(self, other)
     }
+
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+        match self {
+            &Self::Integer(n) => serializer.serialize_i64(n),
+            &Self::Float(n) => serializer.serialize_f64(n),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -85,6 +143,12 @@ impl Bool {
             "False" => Self(false),
             _ => panic!("Could not parse Bool value: {}", b),
         }
+    }
+}
+
+impl Into<Bool> for bool {
+    fn into(self) -> Bool {
+        Bool(self)
     }
 }
 
@@ -107,12 +171,16 @@ impl Grounded for Bool {
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
+        match_by_bidirectional_equality(self, other)
+    }
+
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+        serializer.serialize_bool(self.0)
     }
 }
 
 macro_rules! def_binary_number_op {
-    ($name:ident, $op:tt, $r:ident, $cast:expr) => {
+    ($name:ident, $op:tt, $r:ident, $ret_type:ident) => {
         #[derive(Clone, PartialEq, Debug)]
         pub struct $name{}
 
@@ -129,14 +197,14 @@ macro_rules! def_binary_number_op {
 
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($op), " expects two number arguments"));
-                let a = args.get(0).ok_or_else(arg_error)?.as_gnd::<Number>().ok_or_else(arg_error)?;
-                let b = args.get(1).ok_or_else(arg_error)?.as_gnd::<Number>().ok_or_else(arg_error)?;
+                let a = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
+                let b = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
 
-                let res = match (a, b) {
-                    (&Number::Integer(a), &Number::Integer(b)) => $cast(a $op b),
-                    (&Number::Integer(a), &Number::Float(b)) => $cast((a as f64) $op b),
-                    (&Number::Float(a), &Number::Integer(b)) => $cast(a $op (b as f64)),
-                    (&Number::Float(a), &Number::Float(b)) => $cast(a $op b),
+                let (a, b) = Number::promote(a, b);
+                let res: $ret_type = match (a, b) {
+                    (Number::Integer(a), Number::Integer(b)) => (a $op b).into(),
+                    (Number::Float(a), Number::Float(b)) => (a $op b).into(),
+                    _ => panic!("Unexpected state"),
                 };
 
                 Ok(vec![Atom::gnd(res)])
@@ -149,11 +217,11 @@ macro_rules! def_binary_number_op {
     }
 }
 
-def_binary_number_op!(SumOp, +, ATOM_TYPE_NUMBER, IntoNumber::into_num);
-def_binary_number_op!(SubOp, -, ATOM_TYPE_NUMBER, IntoNumber::into_num);
-def_binary_number_op!(MulOp, *, ATOM_TYPE_NUMBER, IntoNumber::into_num);
-def_binary_number_op!(DivOp, /, ATOM_TYPE_NUMBER, IntoNumber::into_num);
-def_binary_number_op!(ModOp, %, ATOM_TYPE_NUMBER, IntoNumber::into_num);
+def_binary_number_op!(SumOp, +, ATOM_TYPE_NUMBER, Number);
+def_binary_number_op!(SubOp, -, ATOM_TYPE_NUMBER, Number);
+def_binary_number_op!(MulOp, *, ATOM_TYPE_NUMBER, Number);
+def_binary_number_op!(DivOp, /, ATOM_TYPE_NUMBER, Number);
+def_binary_number_op!(ModOp, %, ATOM_TYPE_NUMBER, Number);
 def_binary_number_op!(LessOp, <, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(GreaterOp, >, ATOM_TYPE_BOOL, Bool);
 def_binary_number_op!(LessEqOp, <=, ATOM_TYPE_BOOL, Bool);
@@ -177,8 +245,8 @@ macro_rules! def_binary_bool_op {
 
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($disp), " expects two boolean arguments"));
-                let &Bool(a) = args.get(0).ok_or_else(arg_error)?.as_gnd::<Bool>().ok_or_else(arg_error)?;
-                let &Bool(b) = args.get(1).ok_or_else(arg_error)?.as_gnd::<Bool>().ok_or_else(arg_error)?;
+                let Bool(a) = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_bool().ok_or_else(arg_error)?;
+                let Bool(b) = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_bool().ok_or_else(arg_error)?;
 
                 Ok(vec![Atom::gnd(Bool(a $op b))])
             }
@@ -192,6 +260,33 @@ macro_rules! def_binary_bool_op {
 
 def_binary_bool_op!(AndOp, and, &&);
 def_binary_bool_op!(OrOp, or, ||);
+
+// NOTE: xor and flip are absent in Python intentionally for conversion testing
+def_binary_bool_op!(XorOp, xor, ^);
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct FlipOp{}
+
+impl Display for FlipOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "flip")
+    }
+}
+
+impl Grounded for FlipOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_BOOL])
+    }
+
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        Ok(vec![Atom::gnd(Bool(rand::random()))])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct NotOp{}
@@ -219,16 +314,102 @@ impl Grounded for NotOp {
     }
 }
 
+#[derive(Default)]
+struct BoolSerializer {
+    value: Option<Bool>,
+}
+
+impl serial::Serializer for BoolSerializer {
+    fn serialize_bool(&mut self, v: bool) -> serial::Result {
+        self.value = Some(Bool(v));
+        Ok(())
+    }
+}
+
+#[derive(Default)]
+struct NumberSerializer {
+    value: Option<Number>,
+}
+
+impl serial::Serializer for NumberSerializer {
+    fn serialize_i64(&mut self, v: i64) -> serial::Result {
+        self.value = Some(Number::Integer(v));
+        Ok(())
+    }
+    fn serialize_f64(&mut self, v: f64) -> serial::Result {
+        self.value = Some(Number::Float(v));
+        Ok(())
+    }
+}
+
+struct AsPrimitive<'a> {
+    atom: &'a super::Atom
+}
+
+impl<'a> AsPrimitive<'a> {
+    pub fn from_atom(atom: &'a super::Atom) -> Self {
+        Self{ atom }
+    }
+
+    fn as_gnd(&self) -> Option<&dyn super::GroundedAtom> {
+        std::convert::TryInto::<&dyn super::GroundedAtom>::try_into(self.atom).ok()
+    }
+
+    fn as_type<T: 'static + Clone, S: ConvertingSerializer<T>>(&self, mut serializer: S) -> Option<T> {
+       self.as_gnd()
+           .map(|gnd| {
+               gnd.as_any_ref()
+                   .downcast_ref::<T>()
+                   .cloned()
+                   .or_else(|| {
+                       let _ = gnd.serialize(serializer.as_mut());
+                       serializer.into_type()
+                   })
+           }).flatten()
+    }
+
+    pub fn as_bool(self) -> Option<Bool> {
+       self.as_type(BoolSerializer::default())
+    }
+
+    pub fn as_number(self) -> Option<Number> {
+       self.as_type(NumberSerializer::default())
+    }
+}
+
+trait ConvertingSerializer<T>: serial::Serializer {
+    fn as_mut(&mut self) -> &mut dyn serial::Serializer;
+    fn into_type(self) -> Option<T>;
+}
+
+impl ConvertingSerializer<Bool> for BoolSerializer {
+    fn as_mut(&mut self) -> &mut dyn serial::Serializer {
+        self
+    }
+    fn into_type(self) -> Option<Bool> {
+        self.value
+    }
+}
+
+impl ConvertingSerializer<Number> for NumberSerializer {
+    fn as_mut(&mut self) -> &mut dyn serial::Serializer {
+        self
+    }
+    fn into_type(self) -> Option<Number> {
+        self.value
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
     fn number() {
-        assert_eq!(Number::from_int_str("12345"), Number::Integer(12345i64));
-        assert_eq!(Number::from_float_str("123.45"), Number::Float(123.45f64));
-        assert_eq!(Number::from_float_str("12345e-02"), Number::Float(123.45f64));
-        assert_eq!(Number::from_float_str("1.2345e+2"), Number::Float(123.45f64));
+        assert_eq!(Number::from_int_str("12345").unwrap(), Number::Integer(12345i64));
+        assert_eq!(Number::from_float_str("123.45").unwrap(), Number::Float(123.45f64));
+        assert_eq!(Number::from_float_str("12345e-02").unwrap(), Number::Float(123.45f64));
+        assert_eq!(Number::from_float_str("1.2345e+2").unwrap(), Number::Float(123.45f64));
         assert_eq!(format!("{}", Number::Integer(12345i64)), "12345");
         assert_eq!(format!("{}", Number::Float(123.45f64)), "123.45");
     }

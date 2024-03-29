@@ -25,8 +25,8 @@ static SIGINT_RECEIVED_COUNT: Mutex<usize> = Mutex::new(0);
 #[derive(Parser)]
 #[command(version, about)]
 struct CliArgs {
-    /// .metta files to execute.  `metta` will run in interactive mode if no files are supplied
-    files: Vec<PathBuf>,
+    /// .metta file to execute.  `metta` will run in interactive mode if no file is supplied
+    file: Option<PathBuf>,
 
     /// Additional include directory paths
     #[arg(short, long)]
@@ -36,16 +36,9 @@ struct CliArgs {
 fn main() -> Result<()> {
     let cli_args = CliArgs::parse();
 
-    //The repl will treat all file args except the last one as imports
-    let (primary_metta_file, other_metta_files) = if let Some((first_path, other_paths)) = cli_args.files.split_last() {
-        (Some(first_path), other_paths)
-    } else {
-        (None, &[] as &[PathBuf])
-    };
-
     //If we have a metta_file, then the working dir is the parent of that file
     //If we are running in interactive mode, it's the working dir at the time the repl is invoked
-    let metta_working_dir: PathBuf = match primary_metta_file {
+    let metta_working_dir: PathBuf = match &cli_args.file {
         Some(metta_file) => {
             metta_file.parent().unwrap().into()
         },
@@ -83,13 +76,7 @@ fn main() -> Result<()> {
     });
 
     //If we have .metta files to run, then run them
-    if let Some(metta_file) = primary_metta_file {
-
-        //All non-primary .metta files run without printing output
-        //TODO: Currently the interrupt handler does not break these
-        for import_file in other_metta_files {
-            metta.load_metta_module(import_file.clone());
-        }
+    if let Some(metta_file) = &cli_args.file {
 
         //Only print the output from the primary .metta file
         let metta_code = std::fs::read_to_string(metta_file)?;
@@ -113,7 +100,8 @@ fn start_interactive_mode(repl_params: ReplParams, mut metta: MettaShim) -> rust
 
     //Run the repl init file
     if let Some(repl_config_metta_path) = &repl_params.repl_config_metta_path {
-        metta.load_metta_module(repl_config_metta_path.clone());
+        let init_metta_code = std::fs::read_to_string(repl_config_metta_path)?;
+        metta.exec(&init_metta_code);
     }
 
     let max_len = metta.get_config_int(CFG_HISTORY_MAX_LEN).unwrap_or_else(|| 500);

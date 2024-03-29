@@ -209,6 +209,9 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
 
     /// Returns an &dyn [Any] for spaces where this is possible
     fn as_any(&self) -> Option<&dyn std::any::Any>;
+
+    /// Returns an &mut dyn [Any] for spaces where this is possible
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any>;
 }
 
 /// Mutable space trait.
@@ -341,11 +344,14 @@ impl Space for DynSpace {
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
     }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
+        None
+    }
 }
 
 impl PartialEq for DynSpace {
     fn eq(&self, other: &Self) -> bool {
-        RefCell::as_ptr(&self.0) == RefCell::as_ptr(&other.0)
+        std::ptr::addr_eq(RefCell::as_ptr(&self.0), RefCell::as_ptr(&other.0))
     }
 }
 
@@ -380,6 +386,9 @@ impl<T: Space> Space for &T {
         T::atom_iter(*self)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
+        None
+    }
+    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         None
     }
 }

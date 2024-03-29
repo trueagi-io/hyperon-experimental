@@ -72,7 +72,7 @@ pub mod metta_interface_mod {
     }
 
     impl MettaShim {
-        const PY_CODE: &str = include_str!("py_shim.py");
+        const PY_CODE: &'static str = include_str!("py_shim.py");
 
         pub fn new(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Self {
 
@@ -106,18 +106,6 @@ pub mod metta_interface_mod {
                 Err(err) => Err(format!("{err}")),
                 Ok((py_mod, py_metta)) => Ok(Self { py_mod, py_metta, result: vec![] }),
             }
-        }
-
-        pub fn load_metta_module(&mut self, module: PathBuf) {
-            Python::with_gil(|py| -> PyResult<()> {
-                let path = PyString::new(py, &module.into_os_string().into_string().unwrap());
-                let py_metta = self.py_metta.as_ref(py);
-                let args = PyTuple::new(py, &[py_metta, path]);
-                let module: &PyModule = self.py_mod.as_ref(py);
-                let func = module.getattr("load_metta_module")?;
-                func.call1(args)?;
-                Ok(())
-            }).unwrap();
         }
 
         pub fn exec(&mut self, line: &str) {
@@ -320,9 +308,6 @@ pub mod metta_interface_mod {
 #[cfg(feature = "no_python")]
 pub mod metta_interface_mod {
     use std::path::{PathBuf, Path};
-    use std::fmt::Display;
-    use hyperon::atom::{Grounded, ExecError, match_by_equality};
-    use hyperon::matcher::MatchResultIter;
     use hyperon::metta::*;
     use hyperon::metta::text::SExprParser;
     use hyperon::ExpressionAtom;
@@ -353,23 +338,21 @@ pub mod metta_interface_mod {
         }
 
         pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
-            EnvBuilder::new()
+            let mut builder = EnvBuilder::new()
                 .set_working_dir(Some(&working_dir))
-                .create_config_dir()
-                .add_include_paths(include_paths)
-                .init_common_env();
+                .create_config_dir();
+
+            for path in include_paths.into_iter().rev() {
+                builder = builder.push_include_path(path);
+            }
+            builder.init_common_env();
 
             let new_shim = MettaShim {
                 metta: Metta::new(None),
                 result: vec![],
             };
-            new_shim.metta.tokenizer().borrow_mut().register_token_with_regex_str("extend-py!", move |_| { Atom::gnd(ImportPyErr) });
 
             Ok(new_shim)
-        }
-
-        pub fn load_metta_module(&mut self, module: PathBuf) {
-            self.metta.load_module(module).unwrap();
         }
 
         pub fn parse_and_unroll_syntax_tree(&self, line: &str) -> Vec<(SyntaxNodeType, std::ops::Range<usize>)> {
@@ -413,7 +396,7 @@ pub mod metta_interface_mod {
 
         pub fn exec(&mut self, line: &str) {
             let parser = SExprParser::new(line);
-            let mut runner_state = RunnerState::new_with_parser(&self.metta, parser);
+            let mut runner_state = RunnerState::new_with_parser(&self.metta, Box::new(parser));
 
             exec_state_prepare();
 
@@ -472,28 +455,6 @@ pub mod metta_interface_mod {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct ImportPyErr;
-
-    impl Display for ImportPyErr {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "extend-py!")
-        }
-    }
-
-    impl Grounded for ImportPyErr {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED])
-        }
-
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            Err(ExecError::from("extend-py! not available in metta repl without Python support"))
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
-    }
 }
 
 /// A utility function to return the part of a string in between starting and ending quotes

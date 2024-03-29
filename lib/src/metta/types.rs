@@ -18,8 +18,6 @@
 //! When atom has no type assigned by user it has type `%Undefined%`. The value
 //! of `%Undefined%` type can be matched with any type required.
 
-use std::convert::TryInto;
-
 use super::*;
 use crate::atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom};
 use crate::space::Space;
@@ -40,7 +38,8 @@ fn query_super_types(space: &dyn Space, sub_type: &Atom) -> Vec<Atom> {
     // TODO: query should check that sub type is a type and not another typed symbol
     let var_x = VariableAtom::new("X").make_unique();
     let mut super_types = space.query(&isa_query(&sub_type, &Atom::Variable(var_x.clone())));
-    super_types.drain(0..).map(|mut bindings| { bindings.resolve_and_remove(&var_x).unwrap() }).collect()
+    let atom_x = Atom::Variable(var_x);
+    super_types.drain(0..).map(|bindings| { apply_bindings_to_atom(&atom_x, &bindings) }).collect()
 }
 
 fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
@@ -107,7 +106,15 @@ pub fn is_func(typ: &Atom) -> bool {
 fn query_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     let var_x = VariableAtom::new("X").make_unique();
     let mut types = query_has_type(space, atom, &Atom::Variable(var_x.clone()));
-    let mut types = types.drain(0..).filter_map(|mut bindings| { bindings.resolve_and_remove(&var_x) }).collect();
+    let atom_x = Atom::Variable(var_x);
+    let mut types = types.drain(0..).filter_map(|bindings| {
+        let atom = apply_bindings_to_atom(&atom_x, &bindings);
+        if atom_x == atom {
+            None
+        } else {
+            Some(atom)
+        }
+    }).collect();
     add_super_types(space, &mut types, 0);
     types
 }

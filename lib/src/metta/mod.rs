@@ -3,7 +3,7 @@
 pub mod text;
 pub mod interpreter;
 #[cfg(feature = "minimal")]
-pub mod interpreter2;
+pub mod interpreter_minimal;
 pub mod types;
 pub mod runner;
 
@@ -33,10 +33,12 @@ pub const EMPTY_SYMBOL : Atom = sym!("Empty");
 pub const EVAL_SYMBOL : Atom = sym!("eval");
 pub const CHAIN_SYMBOL : Atom = sym!("chain");
 pub const UNIFY_SYMBOL : Atom = sym!("unify");
-pub const DECONS_SYMBOL : Atom = sym!("decons");
-pub const CONS_SYMBOL : Atom = sym!("cons");
+pub const DECONS_ATOM_SYMBOL : Atom = sym!("decons-atom");
+pub const CONS_ATOM_SYMBOL : Atom = sym!("cons-atom");
 pub const FUNCTION_SYMBOL : Atom = sym!("function");
 pub const RETURN_SYMBOL : Atom = sym!("return");
+pub const COLLAPSE_BIND_SYMBOL : Atom = sym!("collapse-bind");
+pub const SUPERPOSE_BIND_SYMBOL : Atom = sym!("superpose-bind");
 
 pub const INTERPRET_SYMBOL : Atom = sym!("interpret");
 

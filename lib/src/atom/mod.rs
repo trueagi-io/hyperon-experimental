@@ -110,6 +110,7 @@ macro_rules! sym {
 pub mod matcher;
 pub mod subexpr;
 mod iter;
+pub mod serial;
 
 pub use iter::*;
 
@@ -118,7 +119,6 @@ use std::fmt::{Display, Debug};
 use std::convert::TryFrom;
 
 use crate::common::collections::ImmutableString;
-use crate::common::ReplacingMapper;
 
 // Symbol atom
 
@@ -160,7 +160,7 @@ impl ExpressionAtom {
     /// Constructs new expression from vector of sub-atoms. Not intended to be
     /// used directly, use [Atom::expr] instead.
     #[doc(hidden)]
-    fn new(children: Vec<Atom>) -> Self {
+    pub(crate) fn new(children: Vec<Atom>) -> Self {
         Self{ children }
     }
 
@@ -270,8 +270,8 @@ impl Display for VariableAtom {
 
 /// Returns `atom` with all variables replaced by unique instances.
 pub fn make_variables_unique(mut atom: Atom) -> Atom {
-    let mut mapper = ReplacingMapper::new(VariableAtom::make_unique);
-    atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| mapper.replace(var));
+    let mut mapper = crate::common::CachingMapper::new(VariableAtom::make_unique);
+    atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
     atom
 }
 
@@ -335,7 +335,7 @@ impl From<&str> for ExecError {
 /// A trait to erase an actual type of the grounded atom. Not intended to be
 /// implemented by users. Use [Atom::value] or implement [Grounded] and use
 /// [Atom::gnd] instead.
-pub trait GroundedAtom : mopa::Any + Debug + Display {
+pub trait GroundedAtom : Any + Debug + Display {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool;
     fn clone_gnd(&self) -> Box<dyn GroundedAtom>;
     fn as_any_ref(&self) -> &dyn Any;
@@ -344,12 +344,34 @@ pub trait GroundedAtom : mopa::Any + Debug + Display {
     // TODO: type_() should return Vec<Atom> because of type non-determinism
     // TODO: type_() could return Vec<&Atom> as anyway each atom should be replaced
     // by its alpha equivalent with unique variables
-    fn type_(&self) -> Atom;
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError>;
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
+    fn type_(&self) -> Atom {
+        self.as_grounded().type_()
+    }
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        self.as_grounded().execute(args)
+    }
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        self.as_grounded().match_(other)
+    }
+    // A mutable reference is used here instead of a type parameter because
+    // the type parameter makes impossible using GroundedAtom reference in the
+    // Atom::Grounded. On the other hand the only advantage of using the type
+    // parameter is a possibility to have a serializer specific result.
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+        self.as_grounded().serialize(serializer)
+    }
+    fn as_grounded(&self) -> &dyn Grounded;
 }
 
-mopafy!(GroundedAtom);
+impl dyn GroundedAtom {
+    pub fn downcast_ref<T: Any>(&self) -> Option<&T> {
+        self.as_any_ref().downcast_ref()
+    }
+
+    pub fn downcast_mut<T: Any>(&mut self) -> Option<&mut T> {
+        self.as_any_mut().downcast_mut()
+    }
+}
 
 /// Trait allows implementing grounded atom with custom behaviour.
 /// [rust_type_atom], [match_by_equality] and [execute_not_executable]
@@ -415,6 +437,13 @@ pub trait Grounded : Display {
     /// [matcher::Bindings] for the variables of the `other` atom.
     /// See [matcher] for detailed explanation.
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter;
+
+    /// Implements serialization logic of the grounded atom. The logic is
+    /// implemented in terms of the Rust native types.
+    /// See [serial] for details.
+    fn serialize(&self, _serializer: &mut dyn serial::Serializer) -> serial::Result {
+        Err(serial::Error::NotSupported)
+    }
 }
 
 /// Returns the name of the Rust type wrapped into [Atom::Symbol]. This is a
@@ -427,10 +456,42 @@ pub fn rust_type_atom<T>() -> Atom {
 /// Returns either single emtpy [matcher::Bindings] instance if `self` and
 /// `other` are equal or empty iterator if not. This is a default
 /// implementation of `match_()` for the grounded types wrapped automatically.
-pub fn match_by_equality<T: 'static + PartialEq>(this: &T, other: &Atom) -> matcher::MatchResultIter {
+pub fn match_by_equality<T: 'static + PartialEq + Debug>(this: &T, other: &Atom) -> matcher::MatchResultIter {
+    log::trace!("match_by_equality: this: {:?}, other: {}", this, other);
     match other.as_gnd::<T>() {
         Some(other) if *this == *other => Box::new(std::iter::once(matcher::Bindings::new())),
         _ => Box::new(std::iter::empty()),
+    }
+}
+
+/// Returns either single emtpy [matcher::Bindings] instance if the string representing `self` and
+/// `other` render are identical strings, or an empty iterator if not.
+pub fn match_by_string_equality(this: &str, other: &Atom) -> matcher::MatchResultIter {
+    let other_string = other.to_string();
+    if this == other_string {
+        Box::new(std::iter::once(matcher::Bindings::new()))
+    } else {
+        Box::new(std::iter::empty())
+    }
+}
+
+/// A more thorough version of [match_by_equality], which will attempt the match in reverse order
+/// if the `other` atom doesn't wrap the same type as `this`
+pub fn match_by_bidirectional_equality<T>(this: &T, other: &Atom) -> matcher::MatchResultIter
+    where T: 'static + PartialEq + Clone + Grounded + Debug
+{
+    log::trace!("match_by_bidirectional_equality: this: {:?}, other: {}", this, other);
+    if let Some(other_obj) = other.as_gnd::<T>() {
+        match this == other_obj {
+            true => Box::new(std::iter::once(matcher::Bindings::new())),
+            false => Box::new(std::iter::empty()),
+        }
+    } else {
+        let temp_atom = Atom::gnd(this.clone());
+        match other {
+            Atom::Grounded(gnd) => gnd.match_(&temp_atom),
+            _ => Box::new(std::iter::empty()),
+        }
     }
 }
 
@@ -453,10 +514,24 @@ impl<T> AutoGroundedType for T where T: 'static + PartialEq + Clone + Debug {}
 #[derive(PartialEq, Clone, Debug)]
 struct AutoGroundedAtom<T: AutoGroundedType>(T);
 
+impl<T: AutoGroundedType> Grounded for AutoGroundedAtom<T> {
+    fn type_(&self) -> Atom {
+        rust_type_atom::<T>()
+    }
+
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        execute_not_executable(self)
+    }
+
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        match_by_equality(&self.0, other)
+    }
+}
+
 impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
-        match other.downcast_ref::<Self>() {
-            Some(other) => self == other,
+        match other.downcast_ref::<T>() {
+            Some(other) => self.0 == *other,
             _ => false,
         }
     }
@@ -473,16 +548,8 @@ impl<T: AutoGroundedType> GroundedAtom for AutoGroundedAtom<T> {
         &mut self.0
     }
 
-    fn type_(&self) -> Atom {
-        rust_type_atom::<T>()
-    }
-
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
-
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        match_by_equality(&self.0, other)
+    fn as_grounded(&self) -> &dyn Grounded {
+        self
     }
 }
 
@@ -505,8 +572,8 @@ struct CustomGroundedAtom<T: CustomGroundedType>(T);
 
 impl<T: CustomGroundedType> GroundedAtom for CustomGroundedAtom<T> {
     fn eq_gnd(&self, other: &dyn GroundedAtom) -> bool {
-        match other.downcast_ref::<Self>() {
-            Some(other) => self == other,
+        match other.downcast_ref::<T>() {
+            Some(other) => self.0 == *other,
             _ => false,
         }
     }
@@ -523,16 +590,8 @@ impl<T: CustomGroundedType> GroundedAtom for CustomGroundedAtom<T> {
         &mut self.0
     }
 
-    fn type_(&self) -> Atom {
-        Grounded::type_(&self.0)
-    }
-
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        Grounded::execute(&self.0, args)
-    }
-
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        Grounded::match_(&self.0, other)
+    fn as_grounded(&self) -> &dyn Grounded {
+        &self.0
     }
 }
 
@@ -721,7 +780,7 @@ impl Atom {
     /// ```
     pub fn as_gnd<T: 'static>(&self) -> Option<&T> {
         match self {
-            Atom::Grounded(gnd) => gnd.as_any_ref().downcast_ref::<T>(),
+            Atom::Grounded(gnd) => gnd.downcast_ref::<T>(),
             _ => None,
         }
     }
@@ -743,7 +802,7 @@ impl Atom {
     /// ```
     pub fn as_gnd_mut<T: 'static>(&mut self) -> Option<&mut T> {
         match self {
-            Atom::Grounded(gnd) => gnd.as_any_mut().downcast_mut::<T>(),
+            Atom::Grounded(gnd) => gnd.downcast_mut::<T>(),
             _ => None,
         }
     }
@@ -838,6 +897,16 @@ impl<'a> TryFrom<&'a Atom> for &'a [Atom] {
     }
 }
 
+impl<'a> TryFrom<&'a mut Atom> for &'a mut [Atom] {
+    type Error = &'static str;
+    fn try_from(atom: &mut Atom) -> Result<&mut [Atom], &'static str> {
+        match atom {
+            Atom::Expression(expr) => Ok(expr.children_mut().as_mut_slice()),
+            _ => Err("Atom is not an ExpressionAtom")
+        }
+    }
+}
+
 impl TryFrom<Atom> for SymbolAtom {
     type Error = &'static str;
     fn try_from(atom: Atom) -> Result<Self, &'static str> {
@@ -854,6 +923,16 @@ impl<'a> TryFrom<&'a Atom> for &'a SymbolAtom {
         match atom {
             Atom::Symbol(sym) => Ok(&sym),
             _ => Err("Atom is not a SymbolAtom")
+        }
+    }
+}
+
+impl<'a> TryFrom<&'a Atom> for &'a dyn GroundedAtom {
+    type Error = &'static str;
+    fn try_from(atom: &'a Atom) -> Result<Self, &'static str> {
+        match atom {
+            Atom::Grounded(gnd) => Ok(gnd.as_ref()),
+            _ => Err("Atom is not a GroundedAtom")
         }
     }
 }

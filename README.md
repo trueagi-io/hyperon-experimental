@@ -14,18 +14,29 @@ Please look at the [Python unit tests](./python/tests) to understand how one can
 More complex usage scenarios are located at [MeTTa examples repo](https://github.com/trueagi-io/metta-examples).
 A lot of different materials can be found on [OpenCog wiki server](https://wiki.opencog.org/w/Hyperon).
 
-If you want to contribute the project please see the [contribution guide](./CONTRIBUTING.md) first.
+If you want to contribute the project please see the [contribution guide](./docs/CONTRIBUTING.md) first.
 If you find troubles with the installation, see the [Troubleshooting](#troubleshooting) section below.
 
 # Prepare environment
 
 ## Docker
 
-A docker image can be used as a ready to run environment.
+A docker image can be used as a ready to run stable and predictable development
+environment. Please keep in mind that resulting image contains temporary build
+files and takes a lot of a disk space. It is not recommended to distribute it
+as an image for running MeTTa because of its size.
 
-Build docker image running:
+Build Docker image from a local copy of the repo running:
 ```
-docker build -t trueagi/hyperon https://raw.githubusercontent.com/trueagi-io/hyperon-experimental/main/Dockerfile
+docker build -t trueagi/hyperon .
+```
+
+Or build it without cloning the repo running:
+```
+docker build \
+    --build-arg BUILDKIT_CONTEXT_KEEP_GIT_DIR=1 \
+    -t trueagi/hyperon \
+    http://github.com/trueagi-io/hyperon-experimental.git#main
 ```
 
 Run the image:
@@ -33,15 +44,14 @@ Run the image:
 docker run --rm -ti trueagi/hyperon
 ```
 
-Resulting container contains the latest code from the repo compiled and ready
-to run.  If the docker image doesn't work, please raise an
+If the docker image doesn't work, please raise an
 [issue](https://github.com/trueagi-io/hyperon-experimental/issues).
 
 ## Manual installation
 
 ### Prerequisites
 
-* Install latest stable Rust (1.63 or later), see [Rust installation
+* Install the latest stable Rust, see [Rust installation
 page](https://www.rust-lang.org/tools/install). Make sure your
 `PATH` variable includes `$HOME/.cargo/bin` directory after installing
 Rust (see the Notes at the installation page).
@@ -59,7 +69,7 @@ cargo install --force cbindgen
 
 * Install Conan and make default Conan profile:
 ```
-python3 -m pip install conan==1.60.2
+python3 -m pip install conan==1.62
 conan profile new --detect default
 ```
 
@@ -70,19 +80,30 @@ python3 -m pip install pip==23.1.2
 
 # Build and run
 
-## Hyperon library
+## Rust library and REPL
 
-Build and test the library:
+Build and test the Rust binaries:
 ```
-cd ./lib
-cargo build
 cargo test
 ```
+
+The experimental features can be enabled by editing
+[Cargo.toml](./lib/Cargo.toml) file before compilation or by using `--features`
+[command line option](https://doc.rust-lang.org/cargo/reference/features.html#command-line-feature-options).
+See comments in the `[features]` section of the file for the features
+descriptions. For example to turn on minimal MeTTa interpreter one can add
+"minimal" to default in [Cargo.toml](./lib/Cargo.toml)
 
 Run examples:
 ```
 cargo run --example sorted_list
 ```
+
+Run Rust REPL:
+```
+cargo run --features no_python --bin metta
+```
+You can also find executable at `./target/debug/metta`.
 
 To enable logging during running tests or examples export `RUST_LOG`
 environment variable:
@@ -97,10 +118,9 @@ cargo +nightly bench
 
 Generate docs:
 ```
-cd ./lib
 cargo doc --no-deps
 ```
-Docs can be found at `./lib/target/doc/hyperon/index.html`.
+Docs can be found at `./target/doc/hyperon/index.html`.
 
 ## C and Python API
 
@@ -136,6 +156,12 @@ One can run MeTTa script from command line:
 ```
 metta ./tests/scripts/<name>.metta
 ```
+
+Run REPL:
+```
+cargo run --bin metta
+```
+You can also find executable at `./target/debug/metta`.
 
 ### Logger
 

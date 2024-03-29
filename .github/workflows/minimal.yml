@@ -1,0 +1,101 @@
+# This workflow is intended to run tests on minimal MeTTa interpreter.
+# It is indicative and temporary, it doesn't prevent any changes from merging.
+
+# This workflow uses actions that are not certified by GitHub.  They are
+# provided by a third-party and are governed by separate terms of service,
+# privacy policy, and support documentation.
+
+name: minimal
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  minimal:
+    runs-on: ubuntu-20.04
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v3
+
+      - name: Install Rust stable
+        uses: actions-rs/toolchain@v1.0.6
+        with:
+            toolchain: stable
+            override: true
+
+      - name: Build Rust library
+        working-directory: ./lib
+        run: |
+          cargo check --features minimal
+          cargo build --features minimal
+
+      - name: Test Rust library
+        working-directory: ./lib
+        run: |
+          RUST_LOG=hyperon=debug cargo test --features minimal
+
+      - name: Install cbindgen
+        uses: actions-rs/cargo@v1.0.1
+        with:
+          command: install
+          args: cbindgen
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.7
+
+      - name: Install CMake
+        uses: jwlawson/actions-setup-cmake@v1.14.1
+        with:
+          cmake-version: 3.16.x
+
+      - name: Install Conan
+        uses: turtlebrowser/get-conan@v1.2
+        with:
+          version: 1.60.2
+
+      - name: Setup Conan profile
+        run: |
+          conan profile new --detect default
+
+      - name: Print environment
+        run: |
+          echo "rustc --version"
+          rustc --version
+          echo "cbindgen --version"
+          cbindgen --version
+          echo "python --version"
+          python --version
+          echo "conan --version"
+          conan --version
+          echo "conan profile show default"
+          conan profile show default
+          echo "gcc --version"
+          gcc --version
+          echo "cmake --version"
+          cmake --version
+          echo "make --version"
+          make --version
+
+      - name: Setup C API build
+        run: |
+          mkdir -p build
+          cd build
+          # specify C compiler as conan could not find it automatically
+          # see https://github.com/conan-io/conan/issues/4322
+          cmake -DCARGO_ARGS="--features hyperon/minimal" -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=`which python` -DCMAKE_C_COMPILER=gcc ..
+
+      - name: Build C API
+        working-directory: ./build
+        run: make
+
+      - name: Test C API
+        working-directory: ./build
+        run: make check

@@ -73,11 +73,11 @@ use crate::common::collections::ListMap;
 use crate::metta::*;
 use crate::metta::types::{is_func, get_arg_types, get_type_bindings,
     get_atom_types, match_reducted_types};
-use crate::common::ReplacingMapper;
 
 use std::ops::Deref;
 use std::rc::Rc;
 use std::fmt::{Debug, Display, Formatter};
+use std::collections::HashSet;
 
 /// Wrapper, So the old interpreter can present the same public interface as the new intperpreter
 pub struct InterpreterState<'a, T: SpaceRef<'a>> {
@@ -118,7 +118,8 @@ impl<'a, T: SpaceRef<'a>> Debug for InterpreterState<'a, T> {
 }
 
 /// Result of atom interpretation plus variable bindings found
-#[derive(Clone, PartialEq)]
+#[derive(Clone)]
+#[cfg_attr(test, derive(PartialEq))]
 pub struct InterpretedAtom(Atom, Bindings);
 
 impl InterpretedAtom {
@@ -228,7 +229,7 @@ impl InterpreterCache {
     }
 
     fn get(&self, key: &Atom) -> Option<Results> {
-        let mut var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
+        let mut var_mapper = crate::common::CachingMapper::new(VariableAtom::make_unique);
         key.iter().filter_type::<&VariableAtom>()
             .for_each(|v| { var_mapper.mapping_mut().insert(v.clone(), v.clone()); });
 
@@ -238,7 +239,7 @@ impl InterpreterCache {
             for res in results {
                 let mut atom = res.atom().clone();
                 atom.iter_mut().filter_type::<&mut VariableAtom>()
-                    .for_each(|var| var_mapper.replace(var));
+                    .for_each(|var| *var = var_mapper.replace(var.clone()));
                 let bindings = res.bindings().clone().rename_vars(var_mapper.as_fn_mut());
                 result.push(InterpretedAtom(atom, bindings));
             }
@@ -248,9 +249,9 @@ impl InterpreterCache {
 
     fn insert(&mut self, key: Atom, mut value: Results) {
         value.iter_mut().for_each(|res| {
-            let vars = key.iter().filter_type::<&VariableAtom>().collect();
+            let vars: HashSet<&VariableAtom> = key.iter().filter_type::<&VariableAtom>().collect();
             res.0 = apply_bindings_to_atom(&res.0, &res.1);
-            res.1.cleanup(&vars);
+            res.1.retain(|v| vars.contains(v));
         });
         self.0.insert(key, value)
     }
@@ -624,9 +625,8 @@ fn match_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input: I
     let mut query_bindings = context.space.query(&query);
     let results: Vec<InterpretedAtom> = query_bindings
         .drain(0..)
-        .map(|mut query_binding| {
-            let result = query_binding.resolve_and_remove(&var_x).unwrap();
-            let result = apply_bindings_to_atom(&result, &query_binding);
+        .map(|query_binding| {
+            let result = apply_bindings_to_atom(&Atom::Variable(var_x.clone()), &query_binding);
             // TODO: sometimes we apply bindings twice: first time here,
             // second time when inserting matched argument into nesting
             // expression.  It should be enough doing it only once.

@@ -90,29 +90,34 @@ class MeTTaTest(HyperonTestCase):
         for result in results:
             self.assertEqual(result, [E()])
 
+
     def test_scripts(self):
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/a1_symbols.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/a2_opencoggy.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/a3_twoside.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b0_chaining_prelim.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b1_equal_chain.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b2_backchain.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b3_direct.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b4_nondeterm.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/b5_types_prelim.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/c1_grounded_basic.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/c2_spaces.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/c3_pln_stv.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/d1_gadt.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/d2_higherfunc.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/d3_deptypes.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/d4_type_prop.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/d5_auto_types.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/e1_kb_write.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/e2_states.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/e3_match_states.metta"))
-        self.process_exceptions(MeTTa(env_builder=Environment.test_env()).import_file(f"{pwd}/scripts/f1_imports.metta"))
 
 
-if __name__ == '__main__':
-    unittest.main()
+        #LP-TODO-Next:  I'd like to remove the working directory for this runner, and instead try
+        # to import child modules relative to their parents using `self:` paths.  See comments around
+        # `relative_submodule_import_test`
+        # metta = MeTTa(env_builder=Environment.test_env())
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=f"{pwd}/scripts", disable_config=True, is_test=True))
+
+        metta.load_module_at_path(f"{pwd}/scripts/a1_symbols.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/a2_opencoggy.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/a3_twoside.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/b0_chaining_prelim.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/b1_equal_chain.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/b2_backchain.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/b3_direct.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/b4_nondeterm.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/b5_types_prelim.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/c1_grounded_basic.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/c2_spaces.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/c3_pln_stv.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/d1_gadt.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/d2_higherfunc.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/d3_deptypes.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/d4_type_prop.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/d5_auto_types.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/e1_kb_write.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/e2_states.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/e3_match_states.metta")
+        metta.load_module_at_path(f"{pwd}/scripts/f1_imports.metta")
