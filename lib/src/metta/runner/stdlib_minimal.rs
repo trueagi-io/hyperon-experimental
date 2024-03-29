@@ -403,6 +403,8 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
     let case_op = Atom::gnd(CaseOp::new(space.clone()));
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
+    let capture_op = Atom::gnd(stdlib::CaptureOp::new(space.clone()));
+    tref.register_token(regex(r"capture"), move |_| { capture_op.clone() });
     let pragma_op = Atom::gnd(stdlib::PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
     let import_op = Atom::gnd(stdlib::ImportOp::new(metta.clone()));

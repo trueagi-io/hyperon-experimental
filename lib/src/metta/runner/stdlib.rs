@@ -992,6 +992,39 @@ mod non_minimal_only_stdlib {
     use std::collections::HashSet;
 
     #[derive(Clone, PartialEq, Debug)]
+    pub struct CaptureOp {
+        space: DynSpace,
+    }
+
+    impl CaptureOp {
+        pub fn new(space: DynSpace) -> Self {
+            Self{ space }
+        }
+    }
+
+    impl Display for CaptureOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "capture")
+        }
+    }
+
+    impl Grounded for CaptureOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        }
+
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = || ExecError::from("capture expects one argument");
+            let atom = args.get(0).ok_or_else(arg_error)?;
+            interpret_no_error(self.space.clone(), &atom).map_err(|e| ExecError::from(e))
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    #[derive(Clone, PartialEq, Debug)]
     pub struct CaseOp {
         space: DynSpace,
     }
@@ -1426,6 +1459,8 @@ mod non_minimal_only_stdlib {
     #[cfg(not(feature = "minimal"))]
     pub fn register_runner_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
 
+        let capture_op = Atom::gnd(CaptureOp::new(space.clone()));
+        tref.register_token(regex(r"capture"), move |_| { capture_op.clone() });
         let case_op = Atom::gnd(CaseOp::new(space.clone()));
         tref.register_token(regex(r"case"), move |_| { case_op.clone() });
         let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
