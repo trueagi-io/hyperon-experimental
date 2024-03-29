@@ -374,7 +374,8 @@ impl MettaMod {
 /// ModuleLoader can be used to define a module format or to supply programmatically defined modules
 pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     /// A function to load the module my making MeTTa API calls.  This function will be called by
-    /// [Metta::get_or_init_module]
+    /// as a downstream consequence of [Metta::load_module_at_path], [Metta::load_module_direct],
+    /// [RunContext::load_module], or any other method that leads to the loading of modules
     fn load(&self, context: &mut RunContext) -> Result<(), String>;
 }
 
