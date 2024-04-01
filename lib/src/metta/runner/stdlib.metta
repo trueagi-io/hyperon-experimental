@@ -87,12 +87,13 @@
 
 (: get-doc-function (-> Atom Atom))
 (= (get-doc-function $name)
+  (let $top-space (mod-space! top)
   (let $type (get-type $name)
-    (let $param-types (cdr-atom $type)
-      (unify &self (doc $name $desc (params $params) $ret)
-        (let ($params' $ret') (get-doc-params $params $ret $param-types)
-          (doc-formal (item $name) (kind function) (type $type) $desc (params $params') $ret'))
-        (doc-formal (item $name) (kind function) (type $type) (desc "No documentation")) ))))
+  (let $param-types (cdr-atom $type)
+    (unify $top-space (doc $name $desc (params $params) $ret)
+      (let ($params' $ret') (get-doc-params $params $ret $param-types)
+        (doc-formal (item $name) (kind function) (type $type) $desc (params $params') $ret'))
+      (doc-formal (item $name) (kind function) (type $type) (desc "No documentation")) )))))
 
 (: get-doc-params (-> Expression Atom Expression (Expression Atom)))
 (= (get-doc-params $params $ret $types)
@@ -109,10 +110,11 @@
 
 (: get-doc-atom (-> Atom Atom))
 (= (get-doc-atom $atom)
+  (let $top-space (mod-space! top)
   (let $type (get-type $atom)
-    (unify &self (doc $atom $desc)
+    (unify $top-space (doc $atom $desc)
       (doc-formal (item $atom) (kind atom) (type $type) $desc)
-      (doc-formal (item $atom) (kind atom) (type $type) (desc "No documentation")) )))
+      (doc-formal (item $atom) (kind atom) (type $type) (desc "No documentation")) ))))
 
 ; TODO: Type is used here, but there is no definition for the -> type
 ; constructor for instance, thus in practice it matches because -> has
