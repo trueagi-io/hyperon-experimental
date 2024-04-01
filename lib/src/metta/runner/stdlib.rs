@@ -524,6 +524,35 @@ impl Grounded for GetTypeOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub struct GetTypeSpaceOp {}
+
+impl Display for GetTypeSpaceOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "get-type-space")
+    }
+}
+
+impl Grounded for GetTypeSpaceOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("get-type-space expects two arguments: space and atom");
+        let space = args.get(0).ok_or_else(arg_error)?;
+        let space = Atom::as_gnd::<DynSpace>(space).ok_or("get-type-space expects a space as the first argument")?;
+        let atom = args.get(1).ok_or_else(arg_error)?;
+        log::debug!("GetTypeSpaceOp::execute: space: {}, atom: {}", space, atom);
+
+        Ok(get_atom_types(space, atom))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct GetMetaTypeOp { }
 
 impl Display for GetMetaTypeOp {
@@ -1486,6 +1515,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
         let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
         tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
+        let get_type_space_op = Atom::gnd(GetTypeSpaceOp{});
+        tref.register_token(regex(r"get-type-space"), move |_| { get_type_space_op.clone() });
         let import_op = Atom::gnd(ImportOp::new(metta.clone()));
         tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
         let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
