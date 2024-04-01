@@ -8,6 +8,9 @@ pub const ATOM_TYPE_STRING : Atom = sym!("String");
 pub struct Str(ImmutableString);
 
 impl Str {
+    pub fn from_str(s: &'static str) -> Self {
+        Str(ImmutableString::Literal(s))
+    }
     pub fn from_string(s: String) -> Self {
         Str(ImmutableString::Allocated(s))
     }

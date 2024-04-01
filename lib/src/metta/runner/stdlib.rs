@@ -2118,4 +2118,102 @@ mod tests {
         assert_eq!(run_program("!(let ($sv $st) (sealed ($x) ($x (output $x)))
                (let $sv (input $x) $st))"), Ok(vec![vec![expr!("output" ("input" x))]]));
     }
+
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct SomeGndAtom { }
+
+    impl Display for SomeGndAtom {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "some-gnd-atom")
+        }
+    }
+
+    impl Grounded for SomeGndAtom {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, sym!("Arg1Type"), sym!("Arg2Type"), sym!("ReturnType")])
+        }
+
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            execute_not_executable(self)
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    #[test]
+    fn test_get_doc() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        metta.tokenizer().borrow_mut()
+            .register_token(regex::Regex::new(r"some-gnd-atom").unwrap(), |_| Atom::gnd(SomeGndAtom{}));
+        let parser = SExprParser::new(r#"
+            (: Arg1Type Type)
+            (: Arg2Type Type)
+            (: ReturnType Type)
+            (: some-func (-> Arg1Type Arg2Type ReturnType))
+            (doc some-func
+              (desc "Test function")
+              (params (
+                (param "First argument")
+                (param "Second argument")
+              ))
+              (return "Return value")
+            )
+
+            (: SomeAtom SomeType)
+            (doc SomeAtom (desc "Test symbol atom having specific type"))
+
+            (doc some-gnd-atom
+              (desc "Test function")
+              (params (
+                (param "First argument")
+                (param "Second argument")
+              ))
+              (return "Return value")
+            )
+
+            !(get-doc some-func)
+            !(get-doc SomeAtom)
+            !(get-doc some-gnd-atom)
+            !(get-doc NoSuchAtom)
+            !(get-doc (some-func arg1 arg2))
+        "#);
+
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![
+            vec![expr!("doc-formal"
+                ("item" "some-func")
+                ("kind" "function")
+                ("type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
+                ("desc" {Str::from_str("Test function")})
+                ("params" (
+                    ("param" ("type" "Arg1Type") ("desc" {Str::from_str("First argument")}))
+                    ("param" ("type" "Arg2Type") ("desc" {Str::from_str("Second argument")})) ))
+                ("return" ("type" "ReturnType") ("desc" {Str::from_str("Return value")})) )],
+            vec![expr!("doc-formal"
+                ("item" "SomeAtom")
+                ("kind" "atom")
+                ("type" "SomeType")
+                ("desc" {Str::from_str("Test symbol atom having specific type")}) )],
+            vec![expr!("doc-formal"
+                ("item" {SomeGndAtom{}})
+                ("kind" "function")
+                ("type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
+                ("desc" {Str::from_str("Test function")})
+                ("params" (
+                    ("param" ("type" "Arg1Type") ("desc" {Str::from_str("First argument")}))
+                    ("param" ("type" "Arg2Type") ("desc" {Str::from_str("Second argument")})) ))
+                ("return" ("type" "ReturnType") ("desc" {Str::from_str("Return value")})) )],
+            vec![expr!("doc-formal"
+                ("item" "NoSuchAtom")
+                ("kind" "atom")
+                ("type" "%Undefined%")
+                ("desc" {Str::from_str("No documentation")}) )],
+            vec![expr!("doc-formal"
+                ("item" ("some-func" "arg1" "arg2"))
+                ("kind" "atom")
+                ("type" "ReturnType")
+                ("desc" {Str::from_str("No documentation")}) )]
+        ]));
+    }
 }
