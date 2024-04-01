@@ -7,6 +7,7 @@ use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
+use crate::common::CachingMapper;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -823,6 +824,48 @@ impl Grounded for ChangeStateOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub struct SealedOp {}
+
+impl Display for SealedOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "sealed")
+    }
+}
+
+impl Grounded for SealedOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("sealed expects two arguments: var_list and expression");
+
+        let mut term_to_seal = args.get(1).ok_or_else(arg_error)?.clone();
+        let var_list = args.get(0).ok_or_else(arg_error)?.clone();
+
+        let mut local_var_mapper = CachingMapper::new(|var: &VariableAtom| var.clone().make_unique());
+
+        var_list.iter().filter_type::<&VariableAtom>()
+            .for_each(|var| { let _ = local_var_mapper.replace(var); });
+
+        term_to_seal.iter_mut().filter_type::<&mut VariableAtom>()
+            .for_each(|var| match local_var_mapper.mapping().get(var) {
+                Some(v) => *var = v.clone(),
+                None => {},
+            });
+
+        let result = vec![term_to_seal.clone()];
+        log::debug!("sealed::execute: var_list: {}, term_to_seal: {}, result: {:?}", var_list, term_to_seal, result);
+
+        Ok(result)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct EqualOp {}
 
 impl Display for EqualOp {
@@ -885,7 +928,6 @@ mod non_minimal_only_stdlib {
     use super::*;
     use crate::metta::interpreter::interpret;
     use crate::common::assert::vec_eq_no_order;
-    use crate::common::ReplacingMapper;
 
     // TODO: move it into hyperon::atom module?
     pub(crate) fn atom_as_expr(atom: &Atom) -> Option<&ExpressionAtom> {
@@ -992,6 +1034,8 @@ mod non_minimal_only_stdlib {
             match_by_equality(self, other)
         }
     }
+
+    use std::collections::HashSet;
 
     #[derive(Clone, PartialEq, Debug)]
     pub struct CaseOp {
@@ -1271,8 +1315,6 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    use std::collections::HashSet;
-
     impl Grounded for LetOp {
         fn type_(&self) -> Atom {
             // TODO: Undefined for the argument is necessary to make argument reductable.
@@ -1312,11 +1354,11 @@ mod non_minimal_only_stdlib {
     }
 
     fn make_conflicting_vars_unique(pattern: &mut Atom, template: &mut Atom, external_vars: &HashSet<VariableAtom>) {
-        let mut local_var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
+        let mut local_var_mapper = CachingMapper::new(VariableAtom::make_unique);
 
         pattern.iter_mut().filter_type::<&mut VariableAtom>()
             .filter(|var| external_vars.contains(var))
-            .for_each(|var| local_var_mapper.replace(var));
+            .for_each(|var| *var = local_var_mapper.replace(var.clone()));
 
         template.iter_mut().filter_type::<&mut VariableAtom>()
             .for_each(|var| match local_var_mapper.mapping_mut().get(var) {
@@ -1423,6 +1465,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
         let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
         tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
+        let sealed_op = Atom::gnd(SealedOp{});
+        tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
     }
 
     //TODO: The metta argument is a temporary hack on account of the way the operation atoms store references
@@ -2020,5 +2064,27 @@ mod tests {
 
         assert_eq_metta_results!(metta.run(parser),
             Ok(vec![vec![]]));
+    }
+
+    #[test]
+    fn sealed_op_runner() {
+        let nested = run_program("!(sealed ($x) (sealed ($a $b) (=($a $x $c) ($b))))");
+        let simple_replace = run_program("!(sealed ($x $y) (=($y $z)))");
+
+        assert!(crate::atom::matcher::atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("="(a b c) (z))));
+        assert!(crate::atom::matcher::atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("="(y z))));
+    }
+
+    #[test]
+    fn sealed_op_execute() {
+        let val = SealedOp{}.execute(&mut vec![expr!(x y), expr!("="(y z))]);
+        assert!(crate::atom::matcher::atoms_are_equivalent(&val.unwrap()[0], &expr!("="(y z))));
+    }
+
+    #[test]
+    fn use_sealed_to_make_scoped_variable() {
+        assert_eq!(run_program("!(let $x (input $x) (output $x))"), Ok(vec![vec![expr!("output" ("input" x))]]));
+        assert_eq!(run_program("!(let ($sv $st) (sealed ($x) ($x (output $x)))
+               (let $sv (input $x) $st))"), Ok(vec![vec![expr!("output" ("input" x))]]));
     }
 }

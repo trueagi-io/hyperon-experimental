@@ -233,6 +233,9 @@ impl ModNameNode {
 
     /// Parses a module name path into a canonical representation
     pub fn normalize_name_path(name: &str) -> Result<String, String> {
+        if name == TOP_MOD_NAME {
+            return Ok(TOP_MOD_NAME.to_string());
+        }
         let mut new_name = TOP_MOD_NAME.to_string();
         let (_, _, last) = Self::parse_parent_generic(Self::top(), name, &OverlayMap::none(),
             |node, _| Some(node),

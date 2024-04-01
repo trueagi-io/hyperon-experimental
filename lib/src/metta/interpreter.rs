@@ -73,7 +73,6 @@ use crate::common::collections::ListMap;
 use crate::metta::*;
 use crate::metta::types::{is_func, get_arg_types, get_type_bindings,
     get_atom_types, match_reducted_types};
-use crate::common::ReplacingMapper;
 
 use std::ops::Deref;
 use std::rc::Rc;
@@ -230,7 +229,7 @@ impl InterpreterCache {
     }
 
     fn get(&self, key: &Atom) -> Option<Results> {
-        let mut var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
+        let mut var_mapper = crate::common::CachingMapper::new(VariableAtom::make_unique);
         key.iter().filter_type::<&VariableAtom>()
             .for_each(|v| { var_mapper.mapping_mut().insert(v.clone(), v.clone()); });
 
@@ -240,7 +239,7 @@ impl InterpreterCache {
             for res in results {
                 let mut atom = res.atom().clone();
                 atom.iter_mut().filter_type::<&mut VariableAtom>()
-                    .for_each(|var| var_mapper.replace(var));
+                    .for_each(|var| *var = var_mapper.replace(var.clone()));
                 let bindings = res.bindings().clone().rename_vars(var_mapper.as_fn_mut());
                 result.push(InterpretedAtom(atom, bindings));
             }
