@@ -148,7 +148,7 @@ pub struct DepEntry {
 impl PkgInfo {
     /// Resolves which module to load from which available location or catalog, and returns the [ModuleLoader] to
     /// load that module
-    pub fn resolve_module<'c>(&self, context: &'c RunContext, name_path: &str) -> Result<Option<(Box<dyn ModuleLoader + 'c>, ModuleDescriptor)>, String> {
+    pub fn resolve_module(&self, context: &RunContext, name_path: &str) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
         let mod_name = mod_name_from_path(name_path);
 
         //Make sure the name is a legal module name
@@ -246,6 +246,10 @@ impl SingleFileModule {
     fn new(path: &Path) -> Self {
         Self {path: path.into() }
     }
+    fn read_contents(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.path)
+            .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))
+    }
 }
 
 impl ModuleLoader for SingleFileModule {
@@ -255,13 +259,19 @@ impl ModuleLoader for SingleFileModule {
         let resource_dir = self.path.parent().unwrap();
         context.init_self_module(space, Some(resource_dir.into()));
 
-        let program_text = std::fs::read_to_string(&self.path)
-            .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))?;
+        let program_text = String::from_utf8(self.read_contents()?)
+            .map_err(|e| e.to_string())?;
 
         let parser = OwnedSExprParser::new(program_text);
         context.push_parser(Box::new(parser));
 
         Ok(())
+    }
+    fn get_resource(&self, res_key: &str) -> Result<Vec<u8>, String> {
+        match res_key {
+            "module.metta" => self.read_contents(),
+            _ => Err("unrecognized resoruce key".to_string())
+        }
     }
 }
 
@@ -280,6 +290,10 @@ impl DirModule {
     fn new(path: &Path) -> Self {
         Self {path: path.into() }
     }
+    fn read_module_metta(&self) -> Option<Vec<u8>> {
+        let module_metta_path = self.path.join("module.metta");
+        std::fs::read(&module_metta_path).ok()
+    }
 }
 
 impl ModuleLoader for DirModule {
@@ -289,14 +303,22 @@ impl ModuleLoader for DirModule {
         let resource_dir = &self.path;
         context.init_self_module(space, Some(resource_dir.into()));
 
-        // A module.metta file is optional
-        let module_metta_path = self.path.join("module.metta");
-        if let Ok(program_text) = std::fs::read_to_string(&module_metta_path) {
+        // A module.metta file is optional.  Without one a dir module behaves as just
+        // a container for other resources and sub-modules.
+        if let Some(program_buf) = self.read_module_metta() {
+            let program_text = String::from_utf8(program_buf)
+                .map_err(|e| e.to_string())?;
             let parser = OwnedSExprParser::new(program_text);
             context.push_parser(Box::new(parser));
         }
 
         Ok(())
+    }
+    fn get_resource(&self, res_key: &str) -> Result<Vec<u8>, String> {
+        match res_key {
+            "module.metta" => self.read_module_metta().ok_or_else(|| format!("no module.metta file found in {} dir module", self.path.display())),
+            _ => Err("unrecognized resoruce key".to_string())
+        }
     }
 }
 

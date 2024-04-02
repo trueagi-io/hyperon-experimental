@@ -165,13 +165,13 @@ impl Metta {
     /// NOTE: Is `None` is passed as the `loader` parameter, `stdlib` will be an alias to `corelib`
     /// pass `None` for space to create a new [GroundingSpace]
     /// pass `None` for `env_builder` to use the common environment
-    pub fn new_with_stdlib_loader(loader: Option<&dyn ModuleLoader>, space: Option<DynSpace>, env_builder: Option<EnvBuilder>) -> Metta {
+    pub fn new_with_stdlib_loader(loader: Option<Box<dyn ModuleLoader>>, space: Option<DynSpace>, env_builder: Option<EnvBuilder>) -> Metta {
 
         //Create the raw MeTTa runner
         let metta = Metta::new_core(space, env_builder);
 
         //Load the "corelib" module into the runner
-        let corelib_mod_id = metta.load_module_direct(&CoreLibLoader::default(), "corelib").expect("Failed to load corelib");
+        let corelib_mod_id = metta.load_module_direct(Box::new(CoreLibLoader), "corelib").expect("Failed to load corelib");
 
         //Load the stdlib if we have one, and otherwise make an alias to corelib
         let stdlib_mod_id = match loader {
@@ -244,7 +244,7 @@ impl Metta {
     /// NOTE: `mod_name` may be a module name path if this module is being loaded as a sub-module of
     /// another loaded module.  Relative paths may not be used with this API, however.  Use
     /// [RunContext::load_module_direct] if you are loading a sub-module from within a running module.
-    pub fn load_module_direct(&self, loader: &dyn ModuleLoader, mod_name: &str) -> Result<ModId, String> {
+    pub fn load_module_direct(&self, loader: Box<dyn ModuleLoader>, mod_name: &str) -> Result<ModId, String> {
         let mut state = RunnerState::new_with_module(self, ModId::TOP);
         state.run_in_context(|context| {
             context.load_module_direct(loader, mod_name)
@@ -321,11 +321,11 @@ impl Metta {
     #[cfg(feature = "pkg_mgmt")]
     /// Checks the runner's descriptors to see if a given module has already been loaded, and returns
     /// that if it has.  Otherwise loads the module
-    fn get_or_init_module_with_descriptor<F: FnOnce(&mut RunContext) -> Result<(), String>>(&self, mod_name: &str, descriptor: ModuleDescriptor, f: F) -> Result<ModId, String> {
+    fn get_or_init_module_with_descriptor(&self, mod_name: &str, descriptor: ModuleDescriptor, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
         match self.get_module_with_descriptor(&descriptor) {
             Some(mod_id) => return Ok(mod_id),
             None => {
-                let new_id = self.init_module(mod_name, f)?;
+                let new_id = self.init_module(mod_name, loader)?;
                 let mut descriptors = self.0.module_descriptors.lock().unwrap();
                 descriptors.insert(descriptor, new_id);
                 Ok(new_id)
@@ -336,13 +336,13 @@ impl Metta {
     /// Returns the ModId of a module, initializing it with the provided function if it isn't already loaded
     ///
     /// The init function will then call `context.init_self_module()` along with any other initialization code
-    fn init_module<F: FnOnce(&mut RunContext) -> Result<(), String>>(&self, mod_name: &str, f: F) -> Result<ModId, String> {
+    fn init_module(&self, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
 
         //Create a new RunnerState in order to initialize the new module, and push the init function
         // to run within the new RunnerState.  The init function will then call `context.init_self_module()`
         let mut runner_state = RunnerState::new_internal(&self, Some(mod_name.to_string()));
         runner_state.run_in_context(|context| {
-            context.push_func(|context| f(context));
+            context.push_func(|context| loader.load(context));
             Ok(())
         })?;
 
@@ -357,6 +357,7 @@ impl Metta {
                 if let Some(sub_module_names) = module.take_sub_module_names() {
                     self.merge_sub_module_names(module.path(), sub_module_names)?;
                 }
+                module.set_loader(loader);
                 self.add_module(module)
             },
             Err(err_atom) => Err(atom_error_message(&err_atom).to_owned())
@@ -394,6 +395,12 @@ impl Metta {
     pub fn module_space(&self, mod_id: ModId) -> DynSpace {
         let modules = self.0.modules.lock().unwrap();
         modules.get(mod_id.0).unwrap().space().clone()
+    }
+
+    /// Returns a buffer containing the specified resource, if it is available from a loaded module
+    pub fn get_module_resource(&self, mod_id: ModId, res_key: &str) -> Result<Vec<u8>, String> {
+        let modules = self.0.modules.lock().unwrap();
+        modules.get(mod_id.0).unwrap().get_resource(res_key).clone()
     }
 
     /// Returns a reference to the Tokenizer associated with the runner's top module
@@ -729,7 +736,7 @@ impl<'input> RunContext<'_, '_, 'input> {
     }
 
     /// Initiates the loading of a module from a runner thread.  Useful for loading sub-modules 
-    pub fn load_module_direct(&mut self, loader: &dyn ModuleLoader, mod_name: &str) -> Result<ModId, String> {
+    pub fn load_module_direct(&mut self, loader: Box<dyn ModuleLoader>, mod_name: &str) -> Result<ModId, String> {
 
         //Make sure we don't have a conflicting mod, before attempting to load this one
         if self.get_module_by_name(mod_name).is_ok() {
@@ -737,8 +744,7 @@ impl<'input> RunContext<'_, '_, 'input> {
         }
 
         let absolute_mod_name = self.normalize_module_name(mod_name)?;
-        let mod_id = self.metta.init_module(&absolute_mod_name, |context| loader.load(context))?;
-
+        let mod_id = self.metta.init_module(&absolute_mod_name, loader)?;
         self.add_module_to_name_tree(&mod_name, mod_id)?;
         Ok(mod_id)
     }
@@ -769,7 +775,7 @@ impl<'input> RunContext<'_, '_, 'input> {
         };
 
         // Load the module from the loader
-        let mod_id = self.metta.get_or_init_module_with_descriptor(&mod_name, descriptor, |context| loader.load(context))?;
+        let mod_id = self.metta.get_or_init_module_with_descriptor(&mod_name, descriptor, loader)?;
         self.add_module_to_name_tree(&mod_name, mod_id)?;
         Ok(mod_id)
     }
@@ -819,12 +825,15 @@ impl<'input> RunContext<'_, '_, 'input> {
 
         // Resolve the module name into a loader object using the resolution logic in the pkg_info
         #[cfg(feature = "pkg_mgmt")]
-        self.load_module_recursive(mod_name)
+        self.load_module_recursive(mod_name, true)
     }
 
     /// Internal function used for recursive loading of parent modules by [Self::load_module]
+    /// Calling with `load_target == false` will ensure a module's parents are loaded without
+    /// loading the module itself, and the module's parent's [ModId] will be returned.  Passing
+    /// `load_target == true` will load the module and return its [ModId]
     #[cfg(feature = "pkg_mgmt")]
-    fn load_module_recursive(&mut self, mod_name: &str) -> Result<ModId, String> {
+    fn load_module_recursive(&mut self, mod_name: &str, load_target: bool) -> Result<ModId, String> {
 
         //Normalize the path in the context of this running module
         let normalized_mod_path = self.normalize_module_name(mod_name)?;
@@ -836,24 +845,62 @@ impl<'input> RunContext<'_, '_, 'input> {
             if let Ok(parent_mod_id) = self.get_module_by_name(&parent_name) {
                 parent_mod_id
             } else {
-                self.load_module_recursive(&parent_name)?
+                self.load_module_recursive(&parent_name, true)?
             }
         } else {
             ModId::TOP
         };
+
+        //Stop here if we are not supposed to load the target
+        if !load_target {
+            return Ok(parent_mod_id);
+        }
 
         //Perform the loading in the context of the parent module
         let mut state = RunnerState::new_with_module(&self.metta, parent_mod_id);
         state.run_in_context(|context| {
             let new_mod_id = match context.module().pkg_info().resolve_module(context, &normalized_mod_path)? {
                 Some((loader, descriptor)) => {
-                    self.metta.get_or_init_module_with_descriptor(&normalized_mod_path, descriptor, |context| loader.load(context))?
+                    self.metta.get_or_init_module_with_descriptor(&normalized_mod_path, descriptor, loader)?
                 },
                 None => {return Err(format!("Failed to resolve module {mod_name}"))}
             };
             self.add_module_to_name_tree(&normalized_mod_path, new_mod_id)?;
             Ok(new_mod_id)
         })
+    }
+
+    /// Resolves a dependency module from a name, according to the [PkgInfo] of the current module,
+    /// and loads the specified resource from the module, without loading the module itself
+    ///
+    /// NOTE: Although this method won't load the module itself, it will load parent modules if necessary
+    pub fn load_resource_from_module(&mut self, mod_name: &str, res_key: &str) -> Result<Vec<u8>, String> {
+
+        // LP-TODO-NOW!, We should assume mod_name is relative by default, not absolute
+
+        // Resolve the module name and see if the module is already loaded into the runner
+        if let Ok(mod_id) = self.get_module_by_name(mod_name) {
+            self.metta().get_module_resource(mod_id, res_key)
+        } else {
+            #[cfg(not(feature = "pkg_mgmt"))]
+            return Err(format!("Failed to resolve module {mod_name}"));
+
+            // Ensure the module's parents are loaded if a module path was provided
+            #[cfg(feature = "pkg_mgmt")]
+            {
+                let parent_mod_id = self.load_module_recursive(mod_name, false)?;
+                let normalized_mod_path = self.normalize_module_name(mod_name)?;
+                let mut state = RunnerState::new_with_module(&self.metta, parent_mod_id);
+                state.run_in_context(|context| {
+                    match context.module().pkg_info().resolve_module(context, &normalized_mod_path)? {
+                        Some((loader, _descriptor)) => {
+                            loader.get_resource(res_key)
+                        },
+                        None => {return Err(format!("Failed to resolve module {mod_name}"))}
+                    }
+                })
+            }
+        }
     }
 
     /// Private method to advance the context forward one step

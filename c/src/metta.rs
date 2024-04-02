@@ -876,11 +876,9 @@ pub extern "C" fn metta_new_with_space_environment_and_stdlib(space: *mut space_
     } else {
         Some(env_builder.into_inner())
     };
-    let loader_wrapper;
     let loader = match loader_callback {
         Some(callback) => {
-            loader_wrapper = CModLoaderWrapper{ callback, callback_context };
-            Some(&loader_wrapper as &dyn ModuleLoader)
+            Some(Box::new(CModLoaderWrapper{ callback, callback_context }) as Box<dyn ModuleLoader>)
         },
         None => None
     };
@@ -1113,9 +1111,9 @@ pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
     let rust_metta = metta.borrow();
     let name = cstr_as_str(name);
     let loader_callback = loader_callback.unwrap();
-    let loader = CModLoaderWrapper{ callback: loader_callback, callback_context };
+    let loader = Box::new(CModLoaderWrapper{ callback: loader_callback, callback_context });
 
-    match rust_metta.load_module_direct(&loader, name) {
+    match rust_metta.load_module_direct(loader, name) {
         Ok(mod_id) => mod_id.into(),
         Err(err) => {
             let err_cstring = std::ffi::CString::new(err).unwrap();
@@ -1927,6 +1925,9 @@ impl ModuleLoader for CFsModFmtLoader {
         (api.load)(self.payload, &mut c_context, self.callback_context);
 
         Ok(())
+    }
+    fn get_resource(&self, _res_key: &str) -> Result<Vec<u8>, String> {
+        Err("resource not found".to_string())
     }
 }
 

@@ -1,8 +1,9 @@
 import unittest
+from test_common import *
 
 from hyperon import *
 
-class ModulesTest(unittest.TestCase):
+class ModulesTest(HyperonTestCase):
 
     def test_python_file_mod_format(self):
         """
@@ -21,3 +22,13 @@ class ModulesTest(unittest.TestCase):
         #Validate that we can access an atom from the module, and it's the atom we expect
         result = runner.parse_all("pi_test")
         self.assertEqual(result[0].get_object().content, 3.14159)
+
+    def test_include(self):
+        metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
+        metta.run("!(include test_include)")
+
+        result = metta.run("!(match &self ($x isprime) $x)")
+        self.assertEqualMettaRunnerResults(result, [[S("five"), S("seven")]])
+
+        result = metta.run("!(match &self ($x notprime) $x)")
+        self.assertEqual(result[0], [S("six")])
