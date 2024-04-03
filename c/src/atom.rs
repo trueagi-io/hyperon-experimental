@@ -209,6 +209,13 @@ pub unsafe extern "C" fn atom_sym(name: *const c_char) -> atom_t {
 ///
 #[no_mangle]
 pub unsafe extern "C" fn atom_expr(children: *mut atom_t, size: usize) -> atom_t {
+    if children == core::ptr::null_mut() {
+        if size == 0 {
+            return Atom::expr(vec![]).into()
+        } else {
+            panic!();
+        }
+    }
     let c_arr = std::slice::from_raw_parts_mut(children, size);
     let children: Vec<Atom> = c_arr.into_iter().map(|atom| {
         core::mem::replace(atom, atom_t::null()).into_inner()
@@ -871,6 +878,13 @@ pub extern "C" fn atom_vec_clone(vec: *const atom_vec_t) -> atom_vec_t {
 ///
 #[no_mangle]
 pub unsafe extern "C" fn atom_vec_from_array(atoms: *mut atom_t, size: usize) -> atom_vec_t {
+    if atoms == core::ptr::null_mut() {
+        if size == 0 {
+            return vec![].into()
+        } else {
+            panic!();
+        }
+    }
     let c_arr = std::slice::from_raw_parts_mut(atoms, size);
     let atoms: Vec<Atom> = c_arr.into_iter().map(|atom| {
         core::mem::replace(atom, atom_t::null()).into_inner()
