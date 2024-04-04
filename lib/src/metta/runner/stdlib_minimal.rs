@@ -14,6 +14,7 @@ use regex::Regex;
 use std::convert::TryInto;
 
 use super::arithmetics::*;
+use super::string::*;
 
 pub const VOID_SYMBOL : Atom = sym!("%void%");
 
@@ -359,6 +360,8 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
 
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
+    let get_type_space_op = Atom::gnd(stdlib::GetTypeSpaceOp{});
+    tref.register_token(regex(r"get-type-space"), move |_| { get_type_space_op.clone() });
     let get_meta_type_op = Atom::gnd(stdlib::GetMetaTypeOp{});
     tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
     let is_equivalent = Atom::gnd(IfEqualOp{});
@@ -413,6 +416,8 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
     let println_op = Atom::gnd(stdlib::PrintlnOp{});
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
+    let format_args_op = Atom::gnd(stdlib::FormatArgsOp{});
+    tref.register_token(regex(r"format-args"), move |_| { format_args_op.clone() });
     let sealed_op = Atom::gnd(stdlib::SealedOp{});
     tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
     // &self should be updated
@@ -438,6 +443,8 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
         |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
     tref.register_token(regex(r"True|False"),
         |token| { Atom::gnd(Bool::from_str(token)) });
+    tref.register_token(regex(r#""[^"]+""#),
+        |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
     let sum_op = Atom::gnd(SumOp{});
     tref.register_token(regex(r"\+"), move |_| { sum_op.clone() });
     let sub_op = Atom::gnd(SubOp{});
@@ -519,18 +526,18 @@ mod tests {
         assert!(result.is_ok_and(|res| res.len() == 1 && res[0].len() == 1 &&
             atoms_are_equivalent(&res[0][0], &expr!(a))));
         let result = run_program("!(eval (car-atom ()))");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car-atom" ()) "\"car-atom expects a non-empty expression as an argument\"")]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car-atom" ()) {Str::from_str("car-atom expects a non-empty expression as an argument")})]]));
         let result = run_program("!(eval (car-atom A))");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car-atom" "A") "\"car-atom expects a non-empty expression as an argument\"")]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("car-atom" "A") {Str::from_str("car-atom expects a non-empty expression as an argument")})]]));
     }
 
     #[test]
     fn metta_cdr_atom() {
         assert_eq!(run_program(&format!("!(cdr-atom (a b c))")), Ok(vec![vec![expr!("b" "c")]]));
         assert_eq!(run_program(&format!("!(cdr-atom ($a $b $c))")), Ok(vec![vec![expr!(b c)]]));
-        assert_eq!(run_program(&format!("!(cdr-atom ())")), Ok(vec![vec![expr!("Error" ("cdr-atom" ()) "\"cdr-atom expects a non-empty expression as an argument\"")]]));
-        assert_eq!(run_program(&format!("!(cdr-atom a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" "a") "\"cdr-atom expects a non-empty expression as an argument\"")]]));
-        assert_eq!(run_program(&format!("!(cdr-atom $a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" a) "\"cdr-atom expects a non-empty expression as an argument\"")]]));
+        assert_eq!(run_program(&format!("!(cdr-atom ())")), Ok(vec![vec![expr!("Error" ("cdr-atom" ()) {Str::from_str("cdr-atom expects a non-empty expression as an argument")})]]));
+        assert_eq!(run_program(&format!("!(cdr-atom a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" "a") {Str::from_str("cdr-atom expects a non-empty expression as an argument")})]]));
+        assert_eq!(run_program(&format!("!(cdr-atom $a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" a) {Str::from_str("cdr-atom expects a non-empty expression as an argument")})]]));
     }
 
     #[test]
