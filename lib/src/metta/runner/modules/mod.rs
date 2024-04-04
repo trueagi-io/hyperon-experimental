@@ -1,4 +1,5 @@
 
+use std::borrow::Borrow;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 
@@ -21,7 +22,7 @@ pub mod catalog;
 use catalog::*;
 
 mod mod_names;
-pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, mod_name_relative_path, mod_name_remove_prefix, module_name_is_legal, ModNameNodeDisplayWrapper};
+pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, ModNameNodeDisplayWrapper};
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
@@ -360,14 +361,39 @@ pub(crate) struct ModuleInitFrame {
     /// The new module will get this name
     new_mod_name: Option<String>,
     /// The module, if we have initialized it
-    the_mod: Option<MettaMod>,
+    pub the_mod: Option<MettaMod>,
     /// Names of the sub-modules, relative to the self mod
-    sub_module_names: ModNameNode,
+    pub sub_module_names: ModNameNode,
     /// Any child modules in the process of loading
-    sub_modules: Vec<Self>,
+    pub sub_modules: Vec<Self>,
 }
 
 impl ModuleInitFrame {
+
+    /// Returns ModuleInitFrame after initializing a module with the provided loader
+    ///
+    /// The init function will then call `context.init_self_module()` along with any other initialization code
+    pub fn init_module(runner: &Metta, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<Self, String> {
+
+        //Create a new RunnerState in order to initialize the new module, and push the init function
+        // to run within the new RunnerState.  The init function will then call `context.init_self_module()`
+        let mut runner_state = RunnerState::new_internal(runner, Some(mod_name));
+        runner_state.run_in_context(|context| {
+            context.push_func(|context| loader.load(context));
+            Ok(())
+        })?;
+
+        //Finish the execution
+        while !runner_state.is_complete() {
+            runner_state.run_step()?;
+        }
+
+        //Set the loader on the module, so its resource can be accessed later
+        let mut frame = runner_state.into_init_frame()?;
+        frame.try_borrow_mod_mut().unwrap().set_loader(loader);
+        Ok(frame)
+    }
+
     /// Creates a new ModuleInitFrame with a new module name.  Make sure this is normalized
     pub fn new_with_name(new_mod_name: String) -> Self {
         Self {
@@ -394,7 +420,7 @@ impl ModuleInitFrame {
             }
         }
     }
-    pub fn init_module(&mut self, metta: &Metta, space: DynSpace, resource_dir: Option<PathBuf>) {
+    pub fn init_self_module(&mut self, metta: &Metta, space: DynSpace, resource_dir: Option<PathBuf>) {
         if self.the_mod.is_some() {
             panic!("Module already initialized")
         }
@@ -416,6 +442,27 @@ impl ModuleInitFrame {
             Ok(mod_id)
         }
     }
+
+    //TODO-NOW, this is important... come back here
+    // pub fn merge_child_frame(&mut self, child_frame: Self) -> Result<(), String> {
+
+    //     let new_mod_name = module.path().to_owned();
+    //     let new_mod_id = self.add_module(module)?;
+    //     self.add_module_to_name_tree(runner, &new_mod_name, new_mod_id)?;
+    //     Ok(new_mod_id)
+
+    // }
+
+    //TODO-NOW this is important, come back here
+    // /// Internal method to add a MettaMod to the ModuleInitFrame, assigning it a temporary ModId
+    // fn add_module(&mut self, module: MettaMod) -> Result<ModId, String> {
+    //     let new_idx = self.sub_modules
+    //     let new_id = ModId(vec_ref.len());
+    //     vec_ref.push(Rc::new(module));
+    //     Ok(new_id)
+    // }
+
+
 
     /// Adds a sub-module to this module's subtree if a relative path was specified.  Otherwise adds
     /// the sub-module to the runner's main tree
@@ -446,13 +493,14 @@ impl ModuleInitFrame {
     //     Some(self.sub_module_names.clone())
     // }
 
-    pub fn into_module(self) -> Result<(MettaMod, ModNameNode), String> {
-        assert!(self.sub_modules.len() == 0);
-        match self.the_mod {
-            Some(the_mod) => Ok((the_mod, self.sub_module_names)),
-            None => Err("Fatal Error: Module loader function exited without calling RunContext::init_self_module".to_string())
-        }
-    }
+    //TODO-NOW, delete this function
+    // pub fn into_module(self) -> Result<(MettaMod, ModNameNode), String> {
+    //     assert!(self.sub_modules.len() == 0);
+    //     match self.the_mod {
+    //         Some(the_mod) => Ok((the_mod, self.sub_module_names)),
+    //         None => Err("Fatal Error: Module loader function exited without calling RunContext::init_self_module".to_string())
+    //     }
+    // }
 }
 
 /// Implemented to supply a loader functions for MeTTa modules
@@ -574,7 +622,7 @@ impl ModuleLoader for RelativeOuterLoader {
 fn relative_submodule_import_test() {
     let runner = Metta::new(Some(EnvBuilder::test_env()));
 
-    // LP-TODO-NEXT: This test curently fails for reasons explained in the comment inside Metta::merge_sub_module_names.
+    // LP-TODO-NOW: This test curently fails for reasons explained in the comment inside Metta::merge_sub_module_names.
 
     //Load the "outer" module, which will load the inner module as part of its loader
     let _outer_mod_id = runner.load_module_direct(Box::new(RelativeOuterLoader), "outer").unwrap();

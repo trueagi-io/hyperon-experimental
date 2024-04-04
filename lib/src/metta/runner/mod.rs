@@ -321,33 +321,28 @@ impl Metta {
         }
     }
 
-    /// Returns the ModId of a module, initializing it with the provided function if it isn't already loaded
+    /// Internal method, Returns the ModId of a module initialized it with the provided loader
     ///
     /// The init function will then call `context.init_self_module()` along with any other initialization code
     fn init_module(&self, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
 
-        //Create a new RunnerState in order to initialize the new module, and push the init function
-        // to run within the new RunnerState.  The init function will then call `context.init_self_module()`
-        let mut runner_state = RunnerState::new_internal(&self, Some(mod_name));
-        runner_state.run_in_context(|context| {
-            context.push_func(|context| loader.load(context));
-            Ok(())
-        })?;
+        //TODO-NOW, I think this function needs to become part of the RunContext...
 
-        //Finish the execution
-        while !runner_state.is_complete() {
-            runner_state.run_step()?;
-        }
+        let init_frame = ModuleInitFrame::init_module(self, mod_name, loader)?;
+        self.merge_init_frame(init_frame)
+    }
 
-        //Add the newly initialized module to the Runner
-        match runner_state.into_module() {
-            Ok((mut module, sub_module_names)) => {
-                self.merge_sub_module_names(module.path(), sub_module_names)?;
-                module.set_loader(loader);
-                self.add_module(module)
-            },
-            Err(err) => Err(err)
-        }
+    /// Merges the module in ModuleInitFrame into the runner, along with all sub-modules, and
+    /// returns the new ModId for the frame's top-level module
+    fn merge_init_frame(&self, init_frame: ModuleInitFrame) -> Result<ModId, String> {
+        let module = init_frame.the_mod
+            .ok_or_else(|| "Fatal Error: Module loader function exited without calling RunContext::init_self_module".to_string())?;
+
+        //TODO-NOW, gotta add the child mods from the frame and remap the child mod indices
+
+        let mut module_names = self.0.module_names.lock().unwrap();
+        module_names.merge_subtree_into(module.path(), init_frame.sub_module_names)?;
+        self.add_module(module)
     }
 
     /// Internal function to add a loaded module to the runner, assigning it a ModId
@@ -356,15 +351,6 @@ impl Metta {
         let new_id = ModId(vec_ref.len());
         vec_ref.push(Rc::new(module));
         Ok(new_id)
-    }
-
-    fn merge_sub_module_names(&self, root_name: &str, subtree: ModNameNode) -> Result<(), String> {
-        //LP-TODO-NEXT: This call only takes a single level of hierarchy into account,
-        // but modules are loaded from the inside-out, meaning the parent won't be available when
-        // the children are loaded for hierarchical loading.  This fix requires changing the way
-        // modules are stored when they are in the process of being loaded.
-        let mut module_names = self.0.module_names.lock().unwrap();
-        module_names.merge_subtree_into(root_name, subtree)
     }
 
     /// Returns a reference to the Environment used by the runner
@@ -611,8 +597,8 @@ impl<'m, 'input> RunnerState<'m, 'input> {
         result
     }
 
-    /// Internal method to return the MettaMod for a RunnerState that just initialized the module
-    pub(crate) fn into_module(self) -> Result<(MettaMod, ModNameNode), String> {
+    /// Internal method to return the ModuleInitFrame for a RunnerState that just initialized a module
+    pub(crate) fn into_init_frame(self) -> Result<ModuleInitFrame, String> {
 
         for result_vec in self.i_wrapper.results {
             for result in result_vec {
@@ -623,7 +609,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
         }
 
         match self.init_frame {
-            Some(init_frame) => init_frame.into_module(),
+            Some(init_frame) => Ok(init_frame),
             None => Err("Fatal Error: Module loader function exited without calling RunContext::init_self_module".to_string())
         }
     }
@@ -798,7 +784,7 @@ impl<'input> RunContext<'_, '_, 'input> {
     pub fn init_self_module(&mut self, space: DynSpace, resource_dir: Option<PathBuf>) {
         match &mut self.module {
             ModRef::Loaded(_) => panic!("Module already initialized"),
-            ModRef::Initializing(ref mut init_frame) => init_frame.init_module(&self.metta, space, resource_dir),
+            ModRef::Initializing(ref mut init_frame) => init_frame.init_self_module(&self.metta, space, resource_dir),
             ModRef::Null => panic!("Internal Error")
         }
     }
