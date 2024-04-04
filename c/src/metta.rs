@@ -5,8 +5,8 @@ use hyperon::space::DynSpace;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
-use hyperon::metta::runner::{Metta, RunContext, ModId, RunnerState, Environment, EnvBuilder};
-use hyperon::metta::runner::modules::ModuleLoader;
+use hyperon::metta::runner::{Metta, RunContext, RunnerState, Environment, EnvBuilder};
+use hyperon::metta::runner::modules::{ModuleLoader, ModId};
 use hyperon::metta::runner::modules::catalog::{FsModuleFormat, ModuleDescriptor};
 use hyperon::atom::*;
 

@@ -338,7 +338,7 @@ def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False, reso
 
             #Load and import the corelib using "import *" behavior, if that flag was specified
             if load_corelib:
-                corelib_id = run_context.load_module("corelib")
+                corelib_id = run_context.load_module("top:corelib")
                 run_context.import_dependency(corelib_id)
 
             for n in dir(mod):

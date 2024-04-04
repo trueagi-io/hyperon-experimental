@@ -21,8 +21,35 @@ pub mod catalog;
 use catalog::*;
 
 mod mod_names;
-pub(crate) use mod_names::{ModNameNode, mod_name_from_path, mod_name_relative_path, module_name_is_legal, ModNameNodeDisplayWrapper};
+pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, mod_name_relative_path, mod_name_remove_prefix, module_name_is_legal, ModNameNodeDisplayWrapper};
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
+
+/// A reference to a [MettaMod] that is loaded into a [Metta] runner
+//
+//NOTE: I don't love exposing the internals of ModId, but because the C bindings are in a separate crate
+// it was a choice between that and using an unnecessary box
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct ModId(pub usize);
+
+impl ModId {
+    /// An invalid ModId that doesn't point to any loaded module
+    pub const INVALID: ModId = ModId(usize::MAX);
+
+    /// An reserved ModId for the runner's top module
+    pub const TOP: ModId = ModId(0);
+
+    //TODO-NOW, may not need these
+    // pub(crate) fn new_relative(idx: usize) -> Self {
+    //     //Set the highest bit to 1 to indicate a relative ID
+    //     Self((!(usize::MAX >> 1)) | idx)
+    // }
+    // pub(crate) fn get_idx_from_relative(self) -> usize {
+    //     self.0 & (usize::MAX >> 1)
+    // }
+    // pub(crate) fn is_relative(self) -> bool {
+    //     self.0 & (!(usize::MAX >> 1)) > 0
+    // }
+}
 
 /// Contains state associated with a loaded MeTTa module
 #[derive(Debug)]
@@ -32,7 +59,6 @@ pub struct MettaMod {
     space: DynSpace,
     tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
-    sub_module_names: Option<ModNameNode>,
     loader: Option<Box<dyn ModuleLoader>>,
     #[cfg(feature = "pkg_mgmt")]
     pkg_info: PkgInfo,
@@ -58,7 +84,6 @@ impl MettaMod {
             tokenizer,
             imported_deps: Mutex::new(HashMap::new()),
             resource_dir,
-            sub_module_names: Some(ModNameNode::new(ModId::INVALID)),
             loader: None,
             #[cfg(feature = "pkg_mgmt")]
             pkg_info: PkgInfo::default(),
@@ -76,59 +101,6 @@ impl MettaMod {
         }
 
         new_mod
-    }
-
-    /// Locates and retrieves a loaded module, or a sub-module relative to &self
-    pub(crate) fn get_module_by_name(&self, runner: &Metta, mod_name: &str) -> Result<ModId, String> {
-        let mod_name = self.normalize_module_name(mod_name)?;
-        let mod_id = match &self.sub_module_names {
-            Some(subtree) => {
-                let module_names = runner.0.module_names.lock().unwrap();
-                module_names.resolve_layered(&[(&self.mod_path, subtree)], &mod_name).ok_or_else(|| format!("Unable to locate module: {mod_name}"))
-            },
-            None => runner.get_module_by_name(&mod_name)
-        }?;
-        if mod_id == ModId::INVALID {
-            Err(format!("Attempt to resolve module that is not yet loaded: {mod_name}"))
-        } else {
-            Ok(mod_id)
-        }
-    }
-
-    /// Adds a sub-module to this module's subtree if a relative path was specified.  Otherwise adds
-    /// the sub-module to the runner's main tree
-    pub(crate) fn add_module_to_name_tree(&mut self, runner: &Metta, mod_name: &str, mod_id: ModId) -> Result<(), String> {
-        let mod_name = self.normalize_module_name(mod_name)?;
-        match &mut self.sub_module_names {
-            Some(subtree) => {
-                let mut module_names = runner.0.module_names.lock().unwrap();
-                module_names.add_to_layered(&mut[(&mut self.mod_path, subtree)], &mod_name, mod_id)
-            },
-            None => runner.add_module_to_name_tree(&mod_name, mod_id)
-        }
-    }
-
-    /// Join a relative module path as a sub-module to `&self`
-    pub(crate) fn concat_relative_module_path(&self, relative_path: &str) -> String {
-        if relative_path.len() > 0 {
-            format!("{}:{}", self.path(), relative_path)
-        } else {
-            self.path().to_string()
-        }
-    }
-
-    /// Normalize a module name into a canonical name-path form, and expanding a relative module-path
-    pub(crate) fn normalize_module_name(&self, mod_name: &str) -> Result<String, String> {
-        match mod_name_relative_path(mod_name) {
-            Some(remainder) => Ok(self.concat_relative_module_path(remainder)),
-            None => ModNameNode::normalize_name_path(mod_name),
-        }
-    }
-
-    /// Internal method as part of the loading process, caller takes ownership of sub-module hierarchiy
-    /// to merge it into the runner's name hierarchy as part of loading a MettaMod into a runner
-    pub(crate) fn take_sub_module_names(&mut self) -> Option<ModNameNode> {
-        core::mem::take(&mut self.sub_module_names)
     }
 
     /// Internal method to store the loader with its module, for resource access later on
@@ -384,6 +356,105 @@ impl MettaMod {
 
 }
 
+pub(crate) struct ModuleInitFrame {
+    /// The new module will get this name
+    new_mod_name: Option<String>,
+    /// The module, if we have initialized it
+    the_mod: Option<MettaMod>,
+    /// Names of the sub-modules, relative to the self mod
+    sub_module_names: ModNameNode,
+    /// Any child modules in the process of loading
+    sub_modules: Vec<Self>,
+}
+
+impl ModuleInitFrame {
+    /// Creates a new ModuleInitFrame with a new module name.  Make sure this is normalized
+    pub fn new_with_name(new_mod_name: String) -> Self {
+        Self {
+            new_mod_name: Some(new_mod_name),
+            the_mod: None,
+            sub_module_names: ModNameNode::new(ModId::INVALID),
+            sub_modules: vec![],
+        }
+    }
+    pub fn try_borrow_mod(&self) -> Option<&MettaMod> {
+        self.the_mod.as_ref()
+    }
+    pub fn try_borrow_mod_mut(&mut self) -> Option<&mut MettaMod> {
+        self.the_mod.as_mut()
+    }
+    pub fn path(&self) -> &str {
+        match &self.the_mod {
+            Some(the_mod) => the_mod.path(),
+            None => {
+                match &self.new_mod_name {
+                    Some(name) => name.as_str(),
+                    None => panic!("Internal Error")
+                }
+            }
+        }
+    }
+    pub fn init_module(&mut self, metta: &Metta, space: DynSpace, resource_dir: Option<PathBuf>) {
+        if self.the_mod.is_some() {
+            panic!("Module already initialized")
+        }
+        let tokenizer = Shared::new(Tokenizer::new());
+        let mod_name = core::mem::take(&mut self.new_mod_name).unwrap();
+        self.the_mod = Some(MettaMod::new_with_tokenizer(metta, mod_name, space, tokenizer, resource_dir, false));
+    }
+    /// Locates and retrieves a loaded module, or a sub-module relative to the module being loaded
+    pub(crate) fn get_module_by_name(&self, runner: &Metta, mod_name: &str) -> Result<ModId, String> {
+        let self_mod_path = self.path();
+        let mod_name = normalize_relative_module_name(self_mod_path, mod_name)?;
+        let mod_id = {
+            let module_names = runner.0.module_names.lock().unwrap();
+            module_names.resolve_layered(&[(self_mod_path, &self.sub_module_names)], &mod_name).ok_or_else(|| format!("Unable to locate module: {mod_name}"))
+        }?;
+        if mod_id == ModId::INVALID {
+            Err(format!("Attempt to resolve module that is not yet loaded: {mod_name}"))
+        } else {
+            Ok(mod_id)
+        }
+    }
+
+    /// Adds a sub-module to this module's subtree if a relative path was specified.  Otherwise adds
+    /// the sub-module to the runner's main tree
+    pub(crate) fn add_module_to_name_tree(&mut self, runner: &Metta, mod_name: &str, mod_id: ModId) -> Result<(), String> {
+        //NOTE: impl of Self::path is duplicated here so we can split borrow. :-(
+        let mut self_mod_path = match &self.the_mod {
+            Some(the_mod) => the_mod.path(),
+            None => {
+                match &self.new_mod_name {
+                    Some(name) => name.as_str(),
+                    None => panic!("Internal Error")
+                }
+            }
+        };
+        let mod_name = normalize_relative_module_name(self_mod_path, mod_name)?;
+        let subtree = &mut self.sub_module_names;
+        let mut module_names = runner.0.module_names.lock().unwrap();
+        module_names.add_to_layered(&mut[(&mut self_mod_path, subtree)], &mod_name, mod_id)
+    }
+
+    //TODO-NOW, delete this function
+    // //we want to iterate the sub-modules and take the module and ModNameNode out together
+    // // as we dismantle the frame to merge it into the runner
+    // /// Internal method as part of the loading process, caller takes ownership of sub-module hierarchiy
+    // /// to merge it into the runner's name hierarchy as part of loading a MettaMod into a runner
+    // pub(crate) fn take_sub_module_names(&mut self) -> Option<ModNameNode> {
+    //     //core::mem::take(&mut self.sub_module_names)
+    //     Some(self.sub_module_names.clone())
+    // }
+
+    pub fn into_module(self) -> Result<(MettaMod, ModNameNode), String> {
+        assert!(self.sub_modules.len() == 0);
+        match self.the_mod {
+            Some(the_mod) => Ok((the_mod, self.sub_module_names)),
+            None => Err("Fatal Error: Module loader function exited without calling RunContext::init_self_module".to_string())
+        }
+    }
+}
+
 /// Implemented to supply a loader functions for MeTTa modules
 ///
 /// A ModuleLoader is responsible for loading a MeTTa module through the API.  Implementations of
@@ -501,27 +572,27 @@ impl ModuleLoader for RelativeOuterLoader {
 /// This tests loading a sub-module from another module's runner, using a relative namespace path
 #[test]
 fn relative_submodule_import_test() {
-    // let runner = Metta::new(Some(EnvBuilder::test_env()));
+    let runner = Metta::new(Some(EnvBuilder::test_env()));
 
     // LP-TODO-NEXT: This test curently fails for reasons explained in the comment inside Metta::merge_sub_module_names.
 
-    // //Load the "outer" module, which will load the inner module as part of its loader
-    // let _outer_mod_id = runner.load_module_direct(&RelativeOuterLoader, "outer").unwrap();
+    //Load the "outer" module, which will load the inner module as part of its loader
+    let _outer_mod_id = runner.load_module_direct(Box::new(RelativeOuterLoader), "outer").unwrap();
 
-    // //runner.display_loaded_modules();
+    // runner.display_loaded_modules();
 
-    // //Make sure we didn't accidentally load "inner" at the top level
-    // assert!(runner.get_module_by_name("inner").is_err());
+    //Make sure we didn't accidentally load "inner" at the top level
+    assert!(runner.get_module_by_name("inner").is_err());
 
-    // //Confirm we didn't end up with a module called "self"
-    // assert!(runner.get_module_by_name("self:inner").is_err());
-    // assert!(runner.get_module_by_name("self").is_err());
+    //Confirm we didn't end up with a module called "self"
+    assert!(runner.get_module_by_name("self:inner").is_err());
+    assert!(runner.get_module_by_name("self").is_err());
 
-    // //Now make sure we can actually resolve the loaded sub-module
-    // runner.get_module_by_name("outer:inner").unwrap();
+    //Now make sure we can actually resolve the loaded sub-module
+    runner.get_module_by_name("outer:inner").unwrap();
 
-    // //LP-TODO-NEXT, test that I can add a second inner from the runner, by adding "top:outer:inner2",
-    // // and then that I can import it directly into "outer" from within the runner's context using the "self:inner2" mod path
+    //LP-TODO-NEXT, test that I can add a second inner from the runner, by adding "top:outer:inner2",
+    // and then that I can import it directly into "outer" from within the runner's context using the "self:inner2" mod path
 
 }
 

@@ -60,6 +60,33 @@ pub(crate) fn mod_name_from_path(path: &str) -> &str {
     &path[start_idx..]
 }
 
+/// Join a relative module path as a sub-module to `&self`
+pub(crate) fn concat_relative_module_path(base_path: &str, relative_path: &str) -> String {
+    if relative_path.len() > 0 {
+        format!("{base_path}:{relative_path}")
+    } else {
+        base_path.to_string()
+    }
+}
+
+/// Normalize a module name into a canonical name-path form, and expanding a relative module-path
+///
+/// On input, module names that don't begin with either `top` nor `self` will be assumed to be
+/// relative to the current module.  On output, the result will be an absolute path beginning
+/// with `top`.
+pub(crate) fn normalize_relative_module_name(base_path: &str, mod_name: &str) -> Result<String, String> {
+    let full_name_path = match mod_name_relative_path(mod_name) {
+        Some(remainder) => concat_relative_module_path(base_path, remainder),
+        None => {
+            match mod_name_remove_prefix(mod_name, TOP_MOD_NAME) {
+                Some(remainder) => format!("{}:{}", TOP_MOD_NAME, remainder),
+                None => concat_relative_module_path(base_path, mod_name),
+            }
+        },
+    };
+    Ok(full_name_path)
+}
+
 /// Internal map to allow subtrees to be overlaid and effectively merged
 #[derive(Debug)]
 struct OverlayMap<'a>(Option<smallvec::SmallVec<[(*const ModNameNode, &'a str, usize); 4]>>);
@@ -231,21 +258,24 @@ impl ModNameNode {
             |_, _| {}).map(|(node, _subtree_idx, remaining)| (node, remaining))
     }
 
-    /// Parses a module name path into a canonical representation
-    pub fn normalize_name_path(name: &str) -> Result<String, String> {
-        if name == TOP_MOD_NAME {
-            return Ok(TOP_MOD_NAME.to_string());
-        }
-        let mut new_name = TOP_MOD_NAME.to_string();
-        let (_, _, last) = Self::parse_parent_generic(Self::top(), name, &OverlayMap::none(),
-            |node, _| Some(node),
-            |_, component| {new_name.push_str(":"); new_name.push_str(component)})?;
-        if last.len() > 0 {
-            new_name.push_str(":");
-            new_name.push_str(last);
-        }
-        Ok(new_name)
-    }
+    // //TODO-NOW This function is probably not needed
+    // /// Parses a module name path into a canonical representation beginning with `top`
+    // ///
+    // /// Does not handle paths beginning with `self`
+    // pub fn normalize_name_path(name: &str) -> Result<String, String> {
+    //     if name == TOP_MOD_NAME {
+    //         return Ok(TOP_MOD_NAME.to_string());
+    //     }
+    //     let mut new_name = TOP_MOD_NAME.to_string();
+    //     let (_, _, last) = Self::parse_parent_generic(Self::top(), name, &OverlayMap::none(),
+    //         |node, _| Some(node),
+    //         |_, component| {new_name.push_str(":"); new_name.push_str(component)})?;
+    //     if last.len() > 0 {
+    //         new_name.push_str(":");
+    //         new_name.push_str(last);
+    //     }
+    //     Ok(new_name)
+    // }
 
     /// Decomposes name path components into individual module names.  Reverse of [Self::compose_name_path]
     pub fn decompose_name_path(name: &str) -> Result<Vec<&str>, String> {
@@ -522,8 +552,9 @@ fn module_name_parse_test() {
     assert!(top.resolve("sub2:suba:subA:").is_none());
     assert!(top.resolve("sub1:suba").is_none());
 
-    assert_eq!(ModNameNode::normalize_name_path("").unwrap(), "top");
-    assert_eq!(ModNameNode::normalize_name_path("sub2:suba:subA").unwrap(), "top:sub2:suba:subA");
+    //TODO-NOW, figure out if we want to keep these tests
+    // assert_eq!(ModNameNode::normalize_name_path("").unwrap(), "top");
+    // assert_eq!(ModNameNode::normalize_name_path("sub2:suba:subA").unwrap(), "top:sub2:suba:subA");
 
 // //NOTE: HashMap internals make the order unpredictable so this is hard to test
 // assert_eq!(format!("\n{top}"), r#"

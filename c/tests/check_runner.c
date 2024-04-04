@@ -187,7 +187,7 @@ void custom_stdlib_loader(run_context_t *run_context, void* callback_context) {
     space_free(space);
 
     //"import * from corelib" (This is optional, and some implementations might not want it)
-    module_id_t corelib_mod_id = run_context_load_module(run_context, "corelib");
+    module_id_t corelib_mod_id = run_context_load_module(run_context, "top:corelib");
     run_context_import_dependency(run_context, corelib_mod_id);
 
     //Load a custom atom using the MeTTa syntax
