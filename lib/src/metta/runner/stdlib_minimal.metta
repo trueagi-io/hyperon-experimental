@@ -191,10 +191,13 @@
 
 (= (interpret-args $atom $args $arg-types $ret-type $space)
   (function (unify $args ()
-    (eval (if-decons-expr $arg-types $actual-ret-type $_tail
-      (eval (match-types $actual-ret-type $ret-type
-        (return ())
-        (return (Error $atom BadType)) ))
+    (eval (if-decons-expr $arg-types $actual-ret-type $type-tail
+      (chain (eval (== () $type-tail)) $correct-type-len
+        (eval (if $correct-type-len
+          (eval (match-types $actual-ret-type $ret-type
+            (return ())
+            (return (Error $atom BadType)) ))
+          (return (Error $atom BadType)) )))
       (return (Error $atom "Too many arguments")) ))
     (eval (if-decons-expr $args $head $tail
       (eval (if-decons-expr $arg-types $head-type $tail-types

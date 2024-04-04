@@ -42,7 +42,7 @@ impl Display for GetTypeOp {
 
 impl Grounded for GetTypeOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -669,6 +669,11 @@ mod tests {
             !(eval (interpret (Cons S (Cons Z Nil)) %Undefined% &self))
         ");
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("Cons" "Z" "Nil") "BadType")]]));
+        let result = run_program("
+            (: foo (-> Atom Atom Atom))
+            !(eval (interpret (foo A) %Undefined% &self))
+        ");
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "A") "BadType")]]));
     }
 
     #[test]
