@@ -213,7 +213,7 @@ pub unsafe extern "C" fn atom_expr(children: *mut atom_t, size: usize) -> atom_t
         if size == 0 {
             return Atom::expr(vec![]).into()
         } else {
-            panic!();
+            panic!("Null pointer is passed to the constructor of the expression with non-zero size");
         }
     }
     let c_arr = std::slice::from_raw_parts_mut(children, size);
