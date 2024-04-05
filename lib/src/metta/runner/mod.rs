@@ -400,7 +400,7 @@ impl Metta {
     /// Returns a buffer containing the specified resource, if it is available from a loaded module
     pub fn get_module_resource(&self, mod_id: ModId, res_key: &str) -> Result<Vec<u8>, String> {
         let modules = self.0.modules.lock().unwrap();
-        modules.get(mod_id.0).unwrap().get_resource(res_key).clone()
+        modules.get(mod_id.0).unwrap().get_resource(res_key)
     }
 
     /// Returns a reference to the Tokenizer associated with the runner's top module
