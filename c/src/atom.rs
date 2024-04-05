@@ -882,7 +882,7 @@ pub unsafe extern "C" fn atom_vec_from_array(atoms: *mut atom_t, size: usize) ->
         if size == 0 {
             return vec![].into()
         } else {
-            panic!();
+            panic!("Null pointer is passed to the constructor of the vector with non-zero size");
         }
     }
     let c_arr = std::slice::from_raw_parts_mut(atoms, size);
