@@ -41,11 +41,6 @@ class PythonCaller:
         args, kwargs = atoms_to_args(*atoms)
         return [ValueAtom(PythonCaller(self.obj(*args, **kwargs)))]
 
-    def call_method(self, method, *atoms):
-        args, kwargs = self.atoms_to_args(*atoms)
-        rez = getattr(self.obj, method)(*args, **kwargs)
-        return [ValueAtom(PythonCaller(rez))]
-
 def _import_and_create_operationatom(metta, import_str, obj):
 
     # we only need these 3 lines to import from the current directory
