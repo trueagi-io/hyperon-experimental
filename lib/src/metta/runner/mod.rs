@@ -268,6 +268,7 @@ impl Metta {
         module_names.add(mod_name, mod_id)
     }
 
+    //TODO-NOW, I Probably delete it
     //LP-QUESTION: I am not sure if this should be deleted as unnecessary, or exposed as part of the public API.
     // On the one hand, [RunContext::normalize_name_path] handles relative paths, and this function doesn't.
     // On the other hand, you don't always have a RunContext available.
@@ -306,30 +307,10 @@ impl Metta {
         descriptors.get(descriptor).cloned()
     }
 
-    #[cfg(feature = "pkg_mgmt")]
-    /// Checks the runner's descriptors to see if a given module has already been loaded, and returns
-    /// that if it has.  Otherwise loads the module
-    fn get_or_init_module_with_descriptor(&self, mod_name: &str, descriptor: ModuleDescriptor, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
-        match self.get_module_with_descriptor(&descriptor) {
-            Some(mod_id) => return Ok(mod_id),
-            None => {
-                let new_id = self.init_module(mod_name, loader)?;
-                let mut descriptors = self.0.module_descriptors.lock().unwrap();
-                descriptors.insert(descriptor, new_id);
-                Ok(new_id)
-            }
-        }
-    }
-
-    /// Internal method, Returns the ModId of a module initialized it with the provided loader
-    ///
-    /// The init function will then call `context.init_self_module()` along with any other initialization code
-    fn init_module(&self, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
-
-        //TODO-NOW, I think this function needs to become part of the RunContext...
-
-        let init_frame = ModuleInitFrame::init_module(self, mod_name, loader)?;
-        self.merge_init_frame(init_frame)
+    /// Internal method to add a ModuleDescriptor, ModId pair to the runner's lookup table
+    fn add_module_descriptor(&self, descriptor: ModuleDescriptor, mod_id: ModId) {
+        let mut descriptors = self.0.module_descriptors.lock().unwrap();
+        descriptors.insert(descriptor, mod_id);
     }
 
     /// Merges the module in ModuleInitFrame into the runner, along with all sub-modules, and
@@ -339,10 +320,15 @@ impl Metta {
             .ok_or_else(|| "Fatal Error: Module loader function exited without calling RunContext::init_self_module".to_string())?;
 
         //TODO-NOW, gotta add the child mods from the frame and remap the child mod indices
+        //TODO-NOW, also gotta merge the child descriptors
 
         let mut module_names = self.0.module_names.lock().unwrap();
         module_names.merge_subtree_into(module.path(), init_frame.sub_module_names)?;
-        self.add_module(module)
+
+        let mod_name = module.path().to_owned();
+        let mod_id = self.add_module(module)?;
+        module_names.add(&mod_name, mod_id)?;
+        Ok(mod_id)
     }
 
     /// Internal function to add a loaded module to the runner, assigning it a ModId
@@ -774,9 +760,7 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
         }
 
         let absolute_mod_name = self.normalize_module_name(mod_name)?;
-        let mod_id = self.metta.init_module(&absolute_mod_name, loader)?;
-        self.add_module_to_name_tree(&mod_name, mod_id)?;
-        Ok(mod_id)
+        self.init_module(&absolute_mod_name, loader)
     }
 
     /// A version of [Metta::load_module_at_path] Useful for loading sub-modules 
@@ -805,9 +789,7 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
         };
 
         // Load the module from the loader
-        let mod_id = self.metta.get_or_init_module_with_descriptor(&mod_name, descriptor, loader)?;
-        self.add_module_to_name_tree(&mod_name, mod_id)?;
-        Ok(mod_id)
+        self.get_or_init_module_with_descriptor(&mod_name, descriptor, loader)
     }
 
     /// A version of [Metta::load_module_alias] Useful for defining sub-module aliases
@@ -882,6 +864,7 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
     fn load_module_internal(&mut self, mod_path: &str, parent_mod_id: ModId) -> Result<ModId, String> {
         let mut state = RunnerState::new_with_module(&self.metta, parent_mod_id);
         state.run_in_context(|context| {
+<<<<<<< Updated upstream
             let new_mod_id = match context.module().pkg_info().resolve_module(context, mod_path)? {
                 Some((loader, descriptor)) => {
                     self.metta.get_or_init_module_with_descriptor(mod_path, descriptor, loader)?
@@ -890,6 +873,14 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
             };
             self.add_module_to_name_tree(&mod_path, new_mod_id)?;
             Ok(new_mod_id)
+=======
+            match context.module().pkg_info().resolve_module(context, &normalized_mod_path)? {
+                Some((loader, descriptor)) => {
+                    self.get_or_init_module_with_descriptor(&normalized_mod_path, descriptor, loader)
+                },
+                None => {return Err(format!("Failed to resolve module {mod_name}"))}
+            }
+>>>>>>> Stashed changes
         })
     }
 
@@ -921,6 +912,36 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
                     }
                 })
             }
+        }
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    /// Checks the runner's descriptors to see if a given module has already been loaded, and returns
+    /// that if it has.  Otherwise loads the module
+    fn get_or_init_module_with_descriptor(&mut self, mod_name: &str, descriptor: ModuleDescriptor, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
+        match self.metta.get_module_with_descriptor(&descriptor) {
+            Some(mod_id) => return Ok(mod_id),
+            None => {
+                let new_id = self.init_module(mod_name, loader)?;
+                match &mut self.module {
+                    ModRef::Loaded(_) => self.metta.add_module_descriptor(descriptor, new_id),
+                    ModRef::Initializing(ref mut init_frame) => init_frame.add_module_descriptor(descriptor, new_id),
+                    ModRef::Null => panic!("Internal Error")
+                }
+                Ok(new_id)
+            }
+        }
+    }
+
+    /// Internal method, Returns the ModId of a module initialized with the provided loader
+    ///
+    /// The init function will then call `context.init_self_module()` along with any other initialization code
+    fn init_module(&mut self, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
+        let loaded_mod_frame = ModuleInitFrame::init_module(&self.metta, mod_name, loader)?;
+        match &mut self.module {
+            ModRef::Loaded(_) => self.metta.merge_init_frame(loaded_mod_frame),
+            ModRef::Initializing(ref mut init_frame) => init_frame.merge_child_frame(loaded_mod_frame),
+            ModRef::Null => panic!("Internal Error")
         }
     }
 

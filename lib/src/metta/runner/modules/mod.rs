@@ -1,5 +1,4 @@
 
-use std::borrow::Borrow;
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
 
@@ -22,7 +21,7 @@ pub mod catalog;
 use catalog::*;
 
 mod mod_names;
-pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, ModNameNodeDisplayWrapper};
+pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, remove_common_prefix, ModNameNodeDisplayWrapper};
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
@@ -39,17 +38,16 @@ impl ModId {
     /// An reserved ModId for the runner's top module
     pub const TOP: ModId = ModId(0);
 
-    //TODO-NOW, may not need these
-    // pub(crate) fn new_relative(idx: usize) -> Self {
-    //     //Set the highest bit to 1 to indicate a relative ID
-    //     Self((!(usize::MAX >> 1)) | idx)
-    // }
-    // pub(crate) fn get_idx_from_relative(self) -> usize {
-    //     self.0 & (usize::MAX >> 1)
-    // }
-    // pub(crate) fn is_relative(self) -> bool {
-    //     self.0 & (!(usize::MAX >> 1)) > 0
-    // }
+    pub(crate) fn new_relative(idx: usize) -> Self {
+        //Set the highest bit to 1 to indicate a relative ID
+        Self((!(usize::MAX >> 1)) | idx)
+    }
+    pub(crate) fn get_idx_from_relative(self) -> usize {
+        self.0 & (usize::MAX >> 1)
+    }
+    pub(crate) fn is_relative(self) -> bool {
+        self.0 & (!(usize::MAX >> 1)) > 0
+    }
 }
 
 /// Contains state associated with a loaded MeTTa module
@@ -364,6 +362,8 @@ pub(crate) struct ModuleInitFrame {
     pub the_mod: Option<MettaMod>,
     /// Names of the sub-modules, relative to the self mod
     pub sub_module_names: ModNameNode,
+    /// Sub-modules, indexed by ModuleDescriptor
+    module_descriptors: HashMap<ModuleDescriptor, ModId>,
     /// Any child modules in the process of loading
     pub sub_modules: Vec<Self>,
 }
@@ -383,6 +383,8 @@ impl ModuleInitFrame {
             Ok(())
         })?;
 
+//GOAT Ugh.  Somehow we need to create the frame in this function and attach it to this frame as a sub-module
+
         //Finish the execution
         while !runner_state.is_complete() {
             runner_state.run_step()?;
@@ -400,6 +402,7 @@ impl ModuleInitFrame {
             new_mod_name: Some(new_mod_name),
             the_mod: None,
             sub_module_names: ModNameNode::new(ModId::INVALID),
+            module_descriptors: HashMap::new(),
             sub_modules: vec![],
         }
     }
@@ -443,26 +446,28 @@ impl ModuleInitFrame {
         }
     }
 
-    //TODO-NOW, this is important... come back here
-    // pub fn merge_child_frame(&mut self, child_frame: Self) -> Result<(), String> {
+    pub fn merge_child_frame(&mut self, child_frame: Self) -> Result<ModId, String> {
+        let module = child_frame.the_mod
+            .ok_or_else(|| "Fatal Error: Module loader function exited without calling RunContext::init_self_module".to_string())?;
 
-    //     let new_mod_name = module.path().to_owned();
-    //     let new_mod_id = self.add_module(module)?;
-    //     self.add_module_to_name_tree(runner, &new_mod_name, new_mod_id)?;
-    //     Ok(new_mod_id)
+        //TODO-NOW, gotta add the child mods from the frame and remap the child mod indices
+        //TODO-NOW, also gotta merge the child descriptors
 
-    // }
+        let adjusted_path = remove_common_prefix(module.path(), self.path()).to_owned();
+        self.sub_module_names.merge_subtree_into(&adjusted_path, child_frame.sub_module_names)?;
 
-    //TODO-NOW this is important, come back here
-    // /// Internal method to add a MettaMod to the ModuleInitFrame, assigning it a temporary ModId
-    // fn add_module(&mut self, module: MettaMod) -> Result<ModId, String> {
-    //     let new_idx = self.sub_modules
-    //     let new_id = ModId(vec_ref.len());
-    //     vec_ref.push(Rc::new(module));
-    //     Ok(new_id)
-    // }
+        let mod_id = self.add_module(module)?;
+        self.sub_module_names.add(&adjusted_path, mod_id)?;
+        Ok(mod_id)
+    }
 
-
+    /// Internal method to add a MettaMod to the ModuleInitFrame, assigning it a temporary ModId
+    fn add_module(&mut self, module: MettaMod) -> Result<ModId, String> {
+        let new_idx = self.sub_modules.len();
+//GOAT, this needs to work...
+        // self.sub_modules.push(Rc::new(module));
+        Ok(ModId::new_relative(new_idx))
+    }
 
     /// Adds a sub-module to this module's subtree if a relative path was specified.  Otherwise adds
     /// the sub-module to the runner's main tree
@@ -481,6 +486,10 @@ impl ModuleInitFrame {
         let subtree = &mut self.sub_module_names;
         let mut module_names = runner.0.module_names.lock().unwrap();
         module_names.add_to_layered(&mut[(&mut self_mod_path, subtree)], &mod_name, mod_id)
+    }
+
+    pub(crate) fn add_module_descriptor(&mut self, descriptor: ModuleDescriptor, mod_id: ModId) {
+        self.module_descriptors.insert(descriptor, mod_id);
     }
 
     //TODO-NOW, delete this function
@@ -630,6 +639,8 @@ fn relative_submodule_import_test() {
     let runner = Metta::new(Some(EnvBuilder::test_env()));
 
     // LP-TODO-NOW: This test curently fails for reasons explained in the comment inside Metta::merge_sub_module_names.
+
+//GOAT, gotta test at least 3 levels
 
     //Load the "outer" module, which will load the inner module as part of its loader
     let _outer_mod_id = runner.load_module_direct(Box::new(RelativeOuterLoader), "outer").unwrap();
