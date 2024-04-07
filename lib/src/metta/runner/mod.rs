@@ -131,7 +131,7 @@ pub struct MettaContents {
     //TODO-HACK: This is a terrible horrible ugly hack that should not be merged.  Delete this field
     // The real context is an interface to the state in a run, and should not live across runs
     // This hack will fail badly if we end up running code from two different modules in parallel
-    context: Arc<Mutex<Vec<Arc<Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: Arc<Mutex<Vec<Arc<Mutex<&'static mut RunContext<'static, 'static, 'static, 'static>>>>>>,
 }
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
@@ -580,7 +580,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
     //TODO: When we eliminate the RunnerState, this method should become a private method of Metta,
     // and an argument of type `Option<ModId>` should be added.  When this function is used to initialize
     // modules, the module type can be returned from this function
-    fn run_in_context<T, F: FnOnce(&mut RunContext<'_, 'm, 'input>) -> Result<T, String>>(&mut self, f: F) -> Result<T, String> {
+    fn run_in_context<T, F: FnOnce(&mut RunContext<'_, '_, 'm, 'input>) -> Result<T, String>>(&mut self, f: F) -> Result<T, String> {
 
         // Construct the RunContext
         let module = match &mut self.module {
@@ -643,22 +643,25 @@ impl<'m, 'input> RunnerState<'m, 'input> {
 // TODO: I think we may be able to remove the `'interpreter`` lifetime after the minimal MeTTa migration
 //  because the lifetime is separated on account of the inability of the compiler to shorten a lifetime
 //  used as a generic parameter on a trait.  In this case, the `Plan` trait.
-pub struct RunContext<'a, 'interpreter, 'input> {
+pub struct RunContext<'a, 'module, 'interpreter, 'input> {
     metta: &'a Metta,
-    module: ModRef<'a>,
+    module: ModRef<'module>,
     i_wrapper: &'a mut InterpreterWrapper<'interpreter, 'input>
 }
 
-impl std::fmt::Debug for RunContext<'_, '_, '_> {
+impl std::fmt::Debug for RunContext<'_, '_, '_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RunContext")
          .finish()
     }
 }
 
+#[derive(Default)]
 enum ModRef<'a> {
     Local(&'a mut StateMod),
-    Borrowed(Rc<MettaMod>)
+    Borrowed(Rc<MettaMod>),
+    #[default]
+    Null,
 }
 
 impl ModRef<'_> {
@@ -670,7 +673,8 @@ impl ModRef<'_> {
                     StateMod::Initializing(module) => Some(module),
                     _ => None
                 }
-            }
+            },
+            ModRef::Null => unreachable!()
         }
     }
     pub fn try_borrow_mut(&mut self) -> Option<&mut MettaMod> {
@@ -681,12 +685,13 @@ impl ModRef<'_> {
                     StateMod::Initializing(module) => Some(module),
                     _ => None
                 }
-            }
+            },
+            ModRef::Null => unreachable!()
         }
     }
 }
 
-impl<'input> RunContext<'_, '_, 'input> {
+impl<'input> RunContext<'_, '_, '_, 'input> {
     /// Returns access to the Metta runner that is hosting the context 
     pub fn metta(&self) -> &Metta {
         &self.metta
@@ -715,6 +720,48 @@ impl<'input> RunContext<'_, '_, 'input> {
     /// Pushes an executable function as an operation to be executed
     pub fn push_func<F: FnOnce(&mut RunContext) -> Result<(), String> + 'input>(&mut self, f: F) {
         self.i_wrapper.input_src.push_func(f);
+    }
+
+    /// Creates a child RunContext within the current context, for immediate inline execution
+    //
+    //Internal Note: There were two implementation options here: 1. for the RunContext / RunnerState
+    // to contain a stack of contexts / interpreter states or 2. to resolve the child context inline.
+    // This function implements option 2.
+    //
+    // If we intended to stay with the RunnerState design where the caller has direct control over
+    // the step-loop, Option 1 would be a superior design because it keeps an outer step correlated
+    // to a unit of inner interpreter-work, regardless of whether that work is happening at a context
+    // or a nested sub-context.  However I want to move toward removing the step-loop from the public
+    // API, so I chose Option 2 for now.  See the comment beginning with:
+    // "Proposed API change to eliminate RunnerState from public API"
+    //
+    pub fn run_inline<F: FnOnce(&mut RunContext) -> Result<(), String>>(&mut self, f: F) -> Result<Vec<Vec<Atom>>, String> {
+        let mut new_interpreter = InterpreterWrapper::default();
+        let mut new_context = RunContext {
+            metta: &self.metta,
+            i_wrapper: &mut new_interpreter,
+            module: core::mem::take(&mut self.module),
+        };
+
+        let mut err = None;
+        match f(&mut new_context) {
+            Ok(_) => {
+                while new_context.i_wrapper.mode != MettaRunnerMode::TERMINATE {
+                    if new_context.step().is_err() {
+                        break;
+                    }
+                }
+            },
+            Err(e) => err = Some(e)
+        }
+
+        //Replace the module we took earlier
+        self.module = new_context.module;
+
+        match err {
+            None => Ok(new_interpreter.results),
+            Some(e) => Err(e)
+        }
     }
 
     /// Locates and retrieves a loaded module based on its name
@@ -805,7 +852,8 @@ impl<'input> RunContext<'_, '_, 'input> {
                 };
                 let tokenizer = Shared::new(Tokenizer::new());
                 **state_mod_ref = StateMod::Initializing(MettaMod::new_with_tokenizer(self.metta, mod_name, space, tokenizer, resource_dir, false));
-            }
+            },
+            ModRef::Null => unreachable!()
         }
     }
 

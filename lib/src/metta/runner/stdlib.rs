@@ -26,7 +26,7 @@ fn unit_result() -> Result<Vec<Atom>, ExecError> {
 #[derive(Clone, Debug)]
 pub struct ImportOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static, 'static>>>>>>,
 }
 
 impl PartialEq for ImportOp {
@@ -150,7 +150,7 @@ fn strip_quotes(src: &str) -> &str {
 #[derive(Clone, Debug)]
 pub struct IncludeOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static, 'static>>>>>>,
 }
 
 impl PartialEq for IncludeOp {
@@ -194,7 +194,11 @@ impl Grounded for IncludeOp {
         let program_text = String::from_utf8(program_buf)
             .map_err(|e| e.to_string())?;
         let parser = crate::metta::text::OwnedSExprParser::new(program_text);
-        context.push_parser(Box::new(parser));
+        //QUESTION: do we want to do anything with the result from the `include` operation?
+        let _eval_result = context.run_inline(|context| {
+            context.push_parser(Box::new(parser));
+            Ok(())
+        })?;
 
         unit_result()
     }
@@ -212,7 +216,7 @@ impl Grounded for IncludeOp {
 #[derive(Clone, Debug)]
 pub struct ModSpaceOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static, 'static>>>>>>,
 }
 
 impl PartialEq for ModSpaceOp {
