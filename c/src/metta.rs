@@ -6,7 +6,7 @@ use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::{Metta, RunContext, ModId, RunnerState, Environment, EnvBuilder};
-use hyperon::metta::runner::modules::ModuleLoader;
+use hyperon::metta::runner::modules::{ModuleLoader, ResourceKey};
 use hyperon::metta::runner::modules::catalog::{FsModuleFormat, ModuleDescriptor};
 use hyperon::atom::*;
 
@@ -1926,7 +1926,8 @@ impl ModuleLoader for CFsModFmtLoader {
 
         Ok(())
     }
-    fn get_resource(&self, _res_key: &str) -> Result<Vec<u8>, String> {
+    fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {
+        //TODO, add C API for providing resources
         Err("resource not found".to_string())
     }
 }

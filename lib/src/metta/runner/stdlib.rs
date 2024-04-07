@@ -4,7 +4,7 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
-use crate::metta::runner::{Metta, RunContext, ModuleLoader};
+use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
@@ -188,7 +188,7 @@ impl Grounded for IncludeOp {
         //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
         let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
         let mut context = ctx_ref.lock().unwrap();
-        let program_buf = context.load_resource_from_module(mod_name, "module.metta")?;
+        let program_buf = context.load_resource_from_module(mod_name, ResourceKey::MainMettaSrc)?;
 
         // Interpret the loaded MeTTa S-Expression text
         let program_text = String::from_utf8(program_buf)

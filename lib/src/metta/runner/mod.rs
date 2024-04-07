@@ -65,7 +65,7 @@ use super::text::{Tokenizer, Parser, SExprParser};
 use super::types::validate_atom;
 
 pub mod modules;
-use modules::{MettaMod, ModNameNode, ModuleLoader, TOP_MOD_NAME, ModNameNodeDisplayWrapper};
+use modules::{MettaMod, ModNameNode, ModuleLoader, ResourceKey, TOP_MOD_NAME, ModNameNodeDisplayWrapper};
 #[cfg(feature = "pkg_mgmt")]
 use modules::catalog::{ModuleDescriptor, loader_for_module_at_path};
 
@@ -398,7 +398,7 @@ impl Metta {
     }
 
     /// Returns a buffer containing the specified resource, if it is available from a loaded module
-    pub fn get_module_resource(&self, mod_id: ModId, res_key: &str) -> Result<Vec<u8>, String> {
+    pub fn get_module_resource(&self, mod_id: ModId, res_key: ResourceKey) -> Result<Vec<u8>, String> {
         let modules = self.0.modules.lock().unwrap();
         modules.get(mod_id.0).unwrap().get_resource(res_key)
     }
@@ -923,7 +923,7 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
     /// and loads the specified resource from the module, without loading the module itself
     ///
     /// NOTE: Although this method won't load the module itself, it will load parent modules if necessary
-    pub fn load_resource_from_module(&mut self, mod_name: &str, res_key: &str) -> Result<Vec<u8>, String> {
+    pub fn load_resource_from_module(&mut self, mod_name: &str, res_key: ResourceKey) -> Result<Vec<u8>, String> {
 
         // LP-TODO-NOW!, We should assume mod_name is relative by default, not absolute
 
