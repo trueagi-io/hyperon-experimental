@@ -873,15 +873,16 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
 
         // Resolve the module name into a loader object using the resolution logic in the pkg_info
         #[cfg(feature = "pkg_mgmt")]
-        self.load_module_recursive(mod_name, true)
+        {
+            let parent_mod_id = self.load_module_parents(mod_name)?;
+            self.load_module_internal(mod_name, parent_mod_id)
+        }
     }
 
     /// Internal function used for recursive loading of parent modules by [Self::load_module]
-    /// Calling with `load_target == false` will ensure a module's parents are loaded without
-    /// loading the module itself, and the module's parent's [ModId] will be returned.  Passing
-    /// `load_target == true` will load the module and return its [ModId]
+    /// Returns the ModId of the loaded parent module
     #[cfg(feature = "pkg_mgmt")]
-    fn load_module_recursive(&mut self, mod_name: &str, load_target: bool) -> Result<ModId, String> {
+    fn load_module_parents(&mut self, mod_name: &str) -> Result<ModId, String> {
 
         //Normalize the path in the context of this running module
         let normalized_mod_path = self.normalize_module_name(mod_name)?;
@@ -893,27 +894,27 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
             if let Ok(parent_mod_id) = self.get_module_by_name(&parent_name) {
                 parent_mod_id
             } else {
-                self.load_module_recursive(&parent_name, true)?
+                let parent_of_parent = self.load_module_parents(&parent_name)?;
+                self.load_module_internal(&parent_name, parent_of_parent)?
             }
         } else {
             ModId::TOP
         };
+        Ok(parent_mod_id)
+    }
 
-        //Stop here if we are not supposed to load the target
-        if !load_target {
-            return Ok(parent_mod_id);
-        }
-
-        //Perform the loading in the context of the parent module
+    /// Internal function to load a module in the context of a parent module, assuming the path is normalized
+    #[cfg(feature = "pkg_mgmt")]
+    fn load_module_internal(&mut self, mod_path: &str, parent_mod_id: ModId) -> Result<ModId, String> {
         let mut state = RunnerState::new_with_module(&self.metta, parent_mod_id);
         state.run_in_context(|context| {
-            let new_mod_id = match context.module().pkg_info().resolve_module(context, &normalized_mod_path)? {
+            let new_mod_id = match context.module().pkg_info().resolve_module(context, mod_path)? {
                 Some((loader, descriptor)) => {
-                    self.metta.get_or_init_module_with_descriptor(&normalized_mod_path, descriptor, loader)?
+                    self.metta.get_or_init_module_with_descriptor(mod_path, descriptor, loader)?
                 },
-                None => {return Err(format!("Failed to resolve module {mod_name}"))}
+                None => {return Err(format!("Failed to resolve module {mod_path}"))}
             };
-            self.add_module_to_name_tree(&normalized_mod_path, new_mod_id)?;
+            self.add_module_to_name_tree(&mod_path, new_mod_id)?;
             Ok(new_mod_id)
         })
     }
@@ -936,7 +937,7 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
             // Ensure the module's parents are loaded if a module path was provided
             #[cfg(feature = "pkg_mgmt")]
             {
-                let parent_mod_id = self.load_module_recursive(mod_name, false)?;
+                let parent_mod_id = self.load_module_parents(mod_name)?;
                 let normalized_mod_path = self.normalize_module_name(mod_name)?;
                 let mut state = RunnerState::new_with_module(&self.metta, parent_mod_id);
                 state.run_in_context(|context| {
