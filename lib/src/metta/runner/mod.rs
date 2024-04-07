@@ -864,23 +864,12 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
     fn load_module_internal(&mut self, mod_path: &str, parent_mod_id: ModId) -> Result<ModId, String> {
         let mut state = RunnerState::new_with_module(&self.metta, parent_mod_id);
         state.run_in_context(|context| {
-<<<<<<< Updated upstream
-            let new_mod_id = match context.module().pkg_info().resolve_module(context, mod_path)? {
+            match context.module().pkg_info().resolve_module(context, mod_path)? {
                 Some((loader, descriptor)) => {
-                    self.metta.get_or_init_module_with_descriptor(mod_path, descriptor, loader)?
+                    self.get_or_init_module_with_descriptor(mod_path, descriptor, loader)
                 },
                 None => {return Err(format!("Failed to resolve module {mod_path}"))}
-            };
-            self.add_module_to_name_tree(&mod_path, new_mod_id)?;
-            Ok(new_mod_id)
-=======
-            match context.module().pkg_info().resolve_module(context, &normalized_mod_path)? {
-                Some((loader, descriptor)) => {
-                    self.get_or_init_module_with_descriptor(&normalized_mod_path, descriptor, loader)
-                },
-                None => {return Err(format!("Failed to resolve module {mod_name}"))}
             }
->>>>>>> Stashed changes
         })
     }
 
