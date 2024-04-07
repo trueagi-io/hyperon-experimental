@@ -25,10 +25,14 @@ class ModulesTest(HyperonTestCase):
 
     def test_include(self):
         metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
-        metta.run("!(include test_include)")
-
-        result = metta.run("!(match &self ($x isprime) $x)")
-        self.assertEqualMettaRunnerResults(result, [[S("five"), S("seven")]])
+        result = metta.run("""
+            (three isprime)
+            !(match &self ($x isprime) $x)
+            !(include test_include)
+            !(match &self ($x isprime) $x)
+        """)
+        self.assertTrue(areEqualNoOrder(result[0], [S("three")]))
+        self.assertTrue(areEqualNoOrder(result[2], [S("three"), S("five"), S("seven")]))
 
         result = metta.run("!(match &self ($x notprime) $x)")
         self.assertEqual(result[0], [S("six")])

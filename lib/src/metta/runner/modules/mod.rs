@@ -338,7 +338,7 @@ impl MettaMod {
         self.resource_dir.as_deref()
     }
 
-    pub fn get_resource(&self, res_key: &str) -> Result<Vec<u8>, String> {
+    pub fn get_resource(&self, res_key: ResourceKey) -> Result<Vec<u8>, String> {
         if let Some(loader) = &self.loader {
             loader.get_resource(res_key)
         } else {
@@ -514,20 +514,27 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     fn load(&self, context: &mut RunContext) -> Result<(), String>;
 
     /// Returns a data blob containing a given named resource belonging to a module
-    ///
-    /// The following values for `res_key` are commonly accepted:
-    /// * `module.metta`: The MeTTa code for the module in S-Expression format, if the module is
-    ///    implemented as MeTTa code.  
-    ///    NOTE: there is no guarantee the code in the `module.metta` resource will work outside
-    ///    the module's context.  This use case must be supported by each module individually.
-    /// * `authors`: A list of people or organizations responsible for the module **TODO**
-    /// * `description`: A short description of the module **TODO**
-    /// * TODO: Losts more we'll want to add...
-    ///
-    /// NOTE: Some resources may not be available from some modules or ModuleLoaders
-    fn get_resource(&self, _res_key: &str) -> Result<Vec<u8>, String> {
+    fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {
         Err("resource not found".to_string())
     }
+}
+
+/// Identifies a resource to retrieve from a [ModuleLoader]
+///
+/// NOTE: Some resources may not be available from some modules or ModuleLoaders
+pub enum ResourceKey<'a> {
+    /// The MeTTa code for the module in S-Expression format, if the module is
+    /// implemented as MeTTa code.
+    ///
+    /// NOTE: there is no guarantee the code in the `module.metta` resource will work outside
+    /// the module's context.  This use case must be supported by each module individually.
+    MainMettaSrc,
+    /// A list of people or organizations responsible for the module **TODO**
+    Authors,
+    /// A short description of the module **TODO**
+    Description,
+    /// A custom identifier, to be interpreted by the [ModuleLoader] implementation
+    Custom(&'a str)
 }
 
 //-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-

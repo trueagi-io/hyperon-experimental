@@ -4,7 +4,7 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
-use crate::metta::runner::{Metta, RunContext, ModuleLoader};
+use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
@@ -26,7 +26,7 @@ fn unit_result() -> Result<Vec<Atom>, ExecError> {
 #[derive(Clone, Debug)]
 pub struct ImportOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static, 'static>>>>>>,
 }
 
 impl PartialEq for ImportOp {
@@ -150,7 +150,7 @@ fn strip_quotes(src: &str) -> &str {
 #[derive(Clone, Debug)]
 pub struct IncludeOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static, 'static>>>>>>,
 }
 
 impl PartialEq for IncludeOp {
@@ -188,13 +188,17 @@ impl Grounded for IncludeOp {
         //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
         let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
         let mut context = ctx_ref.lock().unwrap();
-        let program_buf = context.load_resource_from_module(mod_name, "module.metta")?;
+        let program_buf = context.load_resource_from_module(mod_name, ResourceKey::MainMettaSrc)?;
 
         // Interpret the loaded MeTTa S-Expression text
         let program_text = String::from_utf8(program_buf)
             .map_err(|e| e.to_string())?;
         let parser = crate::metta::text::OwnedSExprParser::new(program_text);
-        context.push_parser(Box::new(parser));
+        //QUESTION: do we want to do anything with the result from the `include` operation?
+        let _eval_result = context.run_inline(|context| {
+            context.push_parser(Box::new(parser));
+            Ok(())
+        })?;
 
         unit_result()
     }
@@ -212,7 +216,7 @@ impl Grounded for IncludeOp {
 #[derive(Clone, Debug)]
 pub struct ModSpaceOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static, 'static>>>>>>,
 }
 
 impl PartialEq for ModSpaceOp {

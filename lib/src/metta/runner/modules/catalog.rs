@@ -267,10 +267,10 @@ impl ModuleLoader for SingleFileModule {
 
         Ok(())
     }
-    fn get_resource(&self, res_key: &str) -> Result<Vec<u8>, String> {
+    fn get_resource(&self, res_key: ResourceKey) -> Result<Vec<u8>, String> {
         match res_key {
-            "module.metta" => self.read_contents(),
-            _ => Err("unrecognized resoruce key".to_string())
+            ResourceKey::MainMettaSrc => self.read_contents(),
+            _ => Err("unsupported resoruce key".to_string())
         }
     }
 }
@@ -314,10 +314,10 @@ impl ModuleLoader for DirModule {
 
         Ok(())
     }
-    fn get_resource(&self, res_key: &str) -> Result<Vec<u8>, String> {
+    fn get_resource(&self, res_key: ResourceKey) -> Result<Vec<u8>, String> {
         match res_key {
-            "module.metta" => self.read_module_metta().ok_or_else(|| format!("no module.metta file found in {} dir module", self.path.display())),
-            _ => Err("unrecognized resoruce key".to_string())
+            ResourceKey::MainMettaSrc => self.read_module_metta().ok_or_else(|| format!("no module.metta file found in {} dir module", self.path.display())),
+            _ => Err("unsupported resoruce key".to_string())
         }
     }
 }
