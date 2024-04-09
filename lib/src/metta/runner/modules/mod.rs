@@ -33,6 +33,7 @@ pub struct MettaMod {
     tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
     sub_module_names: Option<ModNameNode>,
+    loader: Option<Box<dyn ModuleLoader>>,
     #[cfg(feature = "pkg_mgmt")]
     pkg_info: PkgInfo,
 }
@@ -58,6 +59,7 @@ impl MettaMod {
             imported_deps: Mutex::new(HashMap::new()),
             resource_dir,
             sub_module_names: Some(ModNameNode::new(ModId::INVALID)),
+            loader: None,
             #[cfg(feature = "pkg_mgmt")]
             pkg_info: PkgInfo::default(),
         };
@@ -123,9 +125,15 @@ impl MettaMod {
         }
     }
 
-    // Internal method as part of the loading process, for loading a MettaMod into a runner
+    /// Internal method as part of the loading process, caller takes ownership of sub-module hierarchiy
+    /// to merge it into the runner's name hierarchy as part of loading a MettaMod into a runner
     pub(crate) fn take_sub_module_names(&mut self) -> Option<ModNameNode> {
         core::mem::take(&mut self.sub_module_names)
+    }
+
+    /// Internal method to store the loader with its module, for resource access later on
+    pub(crate) fn set_loader(&mut self, loader: Box<dyn ModuleLoader>) {
+        self.loader = Some(loader);
     }
 
     /// Adds a loaded module as a dependency of the `&self` [MettaMod], and adds a [Tokenizer] entry to access
@@ -330,7 +338,7 @@ impl MettaMod {
         }
     }
 
-    /// Returns the full path of a loaded module.  For example: "top.parent_mod.this_mod"
+    /// Returns the full path of a loaded module.  For example: "top:parent_mod:this_mod"
     pub fn path(&self) -> &str {
         &self.mod_path
     }
@@ -357,6 +365,14 @@ impl MettaMod {
         self.resource_dir.as_deref()
     }
 
+    pub fn get_resource(&self, res_key: ResourceKey) -> Result<Vec<u8>, String> {
+        if let Some(loader) = &self.loader {
+            loader.get_resource(res_key)
+        } else {
+            Err(format!("module resource loader not available"))
+        }
+    }
+
     /// A convenience to add an an atom to a module's Space, if it passes type-checking
     pub(crate) fn add_atom(&self, atom: Atom, type_check: bool) -> Result<(), Atom> {
         if type_check && !validate_atom(self.space.borrow().as_space(), &atom) {
@@ -373,10 +389,33 @@ impl MettaMod {
 /// A ModuleLoader is responsible for loading a MeTTa module through the API.  Implementations of
 /// ModuleLoader can be used to define a module format or to supply programmatically defined modules
 pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
-    /// A function to load the module my making MeTTa API calls.  This function will be called by
+    /// A function to load the module my making MeTTa API calls.  This function will be called
     /// as a downstream consequence of [Metta::load_module_at_path], [Metta::load_module_direct],
     /// [RunContext::load_module], or any other method that leads to the loading of modules
     fn load(&self, context: &mut RunContext) -> Result<(), String>;
+
+    /// Returns a data blob containing a given named resource belonging to a module
+    fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {
+        Err("resource not found".to_string())
+    }
+}
+
+/// Identifies a resource to retrieve from a [ModuleLoader]
+///
+/// NOTE: Some resources may not be available from some modules or ModuleLoaders
+pub enum ResourceKey<'a> {
+    /// The MeTTa code for the module in S-Expression format, if the module is
+    /// implemented as MeTTa code.
+    ///
+    /// NOTE: there is no guarantee the code in the `module.metta` resource will work outside
+    /// the module's context.  This use case must be supported by each module individually.
+    MainMettaSrc,
+    /// A list of people or organizations responsible for the module **TODO**
+    Authors,
+    /// A short description of the module **TODO**
+    Description,
+    /// A custom identifier, to be interpreted by the [ModuleLoader] implementation
+    Custom(&'a str)
 }
 
 //-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-
@@ -420,12 +459,12 @@ fn hierarchical_module_import_test() {
     let runner = Metta::new(Some(EnvBuilder::test_env()));
 
     //Make sure we get a reasonable error, if we try to load a sub-module to a module that doesn't exist
-    let result = runner.load_module_direct(&InnerLoader, "outer:inner");
+    let result = runner.load_module_direct(Box::new(InnerLoader), "outer:inner");
     assert!(result.is_err());
 
     //Make sure we can load sub-modules sucessfully
-    let _outer_mod_id = runner.load_module_direct(&OuterLoader, "outer").unwrap();
-    let _inner_mod_id = runner.load_module_direct(&InnerLoader, "outer:inner").unwrap();
+    let _outer_mod_id = runner.load_module_direct(Box::new(OuterLoader), "outer").unwrap();
+    let _inner_mod_id = runner.load_module_direct(Box::new(InnerLoader), "outer:inner").unwrap();
 
     //Make sure we load the outer module sucessfully and can match the outer module's atom, but not
     // the inner module's
@@ -452,7 +491,7 @@ impl ModuleLoader for RelativeOuterLoader {
         let space = DynSpace::new(GroundingSpace::new());
         context.init_self_module(space, None);
 
-        let _inner_mod_id = context.load_module_direct(&InnerLoader, "self:inner").unwrap();
+        let _inner_mod_id = context.load_module_direct(Box::new(InnerLoader), "self:inner").unwrap();
 
         let parser = SExprParser::new("outer-module-test-atom");
         context.push_parser(Box::new(parser));
