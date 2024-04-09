@@ -31,6 +31,16 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; One can call a function with a variable as an argument
+; and retrieve the variable binding but constructing
+; an expression with it
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+!(assertEqual
+  ($x (green $x))
+  (Fritz T))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; We can also use expressions with `=` in `match`
 ; NOTE: `=` is not an ordinary symbol, and declarative reasoning over expressions
 ; with it may work differently from that over purely symbolic expressions
