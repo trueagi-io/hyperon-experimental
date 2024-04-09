@@ -410,6 +410,8 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
     let import_op = Atom::gnd(stdlib::ImportOp::new(metta.clone()));
     tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+    let include_op = Atom::gnd(stdlib::IncludeOp::new(metta.clone()));
+    tref.register_token(regex(r"include"), move |_| { include_op.clone() });
     let bind_op = Atom::gnd(stdlib::BindOp::new(tokenizer.clone()));
     tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
     let trace_op = Atom::gnd(stdlib::TraceOp{});

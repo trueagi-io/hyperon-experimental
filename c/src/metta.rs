@@ -6,7 +6,7 @@ use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::{Metta, RunContext, ModId, RunnerState, Environment, EnvBuilder};
-use hyperon::metta::runner::modules::ModuleLoader;
+use hyperon::metta::runner::modules::{ModuleLoader, ResourceKey};
 use hyperon::metta::runner::modules::catalog::{FsModuleFormat, ModuleDescriptor};
 use hyperon::atom::*;
 
@@ -876,11 +876,9 @@ pub extern "C" fn metta_new_with_space_environment_and_stdlib(space: *mut space_
     } else {
         Some(env_builder.into_inner())
     };
-    let loader_wrapper;
     let loader = match loader_callback {
         Some(callback) => {
-            loader_wrapper = CModLoaderWrapper{ callback, callback_context };
-            Some(&loader_wrapper as &dyn ModuleLoader)
+            Some(Box::new(CModLoaderWrapper{ callback, callback_context }) as Box<dyn ModuleLoader>)
         },
         None => None
     };
@@ -1113,9 +1111,9 @@ pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
     let rust_metta = metta.borrow();
     let name = cstr_as_str(name);
     let loader_callback = loader_callback.unwrap();
-    let loader = CModLoaderWrapper{ callback: loader_callback, callback_context };
+    let loader = Box::new(CModLoaderWrapper{ callback: loader_callback, callback_context });
 
-    match rust_metta.load_module_direct(&loader, name) {
+    match rust_metta.load_module_direct(loader, name) {
         Ok(mod_id) => mod_id.into(),
         Err(err) => {
             let err_cstring = std::ffi::CString::new(err).unwrap();
@@ -1189,21 +1187,21 @@ pub struct run_context_t {
 // layer because it's harder to exercise lifecycle discipline in Python and a bug in Python shouldn't lead
 // to invlid memory access
 
-struct RustRunContext(RunContext<'static, 'static, 'static>);
+struct RustRunContext(RunContext<'static, 'static, 'static, 'static>);
 
-impl From<&mut RunContext<'_, '_, '_>> for run_context_t {
-    fn from(context_ref: &mut RunContext<'_, '_, '_>) -> Self {
+impl From<&mut RunContext<'_, '_, '_, '_>> for run_context_t {
+    fn from(context_ref: &mut RunContext<'_, '_, '_, '_>) -> Self {
         Self {
-            context: (context_ref as *mut RunContext<'_, '_, '_>).cast()
+            context: (context_ref as *mut RunContext<'_, '_, '_, '_>).cast()
         }
     }
 }
 
 impl run_context_t {
-    fn borrow(&self) -> &RunContext<'static, 'static, 'static> {
+    fn borrow(&self) -> &RunContext<'static, 'static, 'static, 'static> {
         &unsafe{ &*self.context.cast::<RustRunContext>() }.0
     }
-    fn borrow_mut(&mut self) -> &mut RunContext<'static, 'static, 'static> {
+    fn borrow_mut(&mut self) -> &mut RunContext<'static, 'static, 'static, 'static> {
         &mut unsafe{ &mut *self.context.cast::<RustRunContext>() }.0
     }
 }
@@ -1927,6 +1925,10 @@ impl ModuleLoader for CFsModFmtLoader {
         (api.load)(self.payload, &mut c_context, self.callback_context);
 
         Ok(())
+    }
+    fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {
+        //TODO, add C API for providing resources
+        Err("resource not found".to_string())
     }
 }
 
