@@ -1065,33 +1065,33 @@ mod tests {
             (: Arg2Type Type)
             (: ReturnType Type)
             (: some-func (-> Arg1Type Arg2Type ReturnType))
-            (doc some-func
-              (desc "Test function")
-              (params (
-                (param "First argument")
-                (param "Second argument")
+            (@doc some-func
+              (@desc "Test function")
+              (@params (
+                (@param "First argument")
+                (@param "Second argument")
               ))
-              (ret "Return value")
+              (@return "Return value")
             )
 
             (: SomeAtom SomeType)
-            (doc SomeAtom (desc "Test symbol atom having specific type"))
+            (@doc SomeAtom (@desc "Test symbol atom having specific type"))
 
-            (doc some-gnd-atom
-              (desc "Test function")
-              (params (
-                (param "First argument")
-                (param "Second argument")
+            (@doc some-gnd-atom
+              (@desc "Test function")
+              (@params (
+                (@param "First argument")
+                (@param "Second argument")
               ))
-              (ret "Return value")
+              (@return "Return value")
             )
-            (doc some-func-no-type
-              (desc "Test function")
-              (params (
-                (param "First argument")
-                (param "Second argument")
+            (@doc some-func-no-type
+              (@desc "Test function")
+              (@params (
+                (@param "First argument")
+                (@param "Second argument")
               ))
-              (ret "Return value")
+              (@return "Return value")
             )
 
             !(get-doc some-func)
@@ -1103,48 +1103,48 @@ mod tests {
         "#);
 
         assert_eq_metta_results!(metta.run(parser), Ok(vec![
-            vec![expr!("doc-formal"
-                ("item" "some-func")
-                ("kind" "function")
-                ("type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
-                ("desc" {Str::from_str("Test function")})
-                ("params" (
-                    ("param" ("type" "Arg1Type") ("desc" {Str::from_str("First argument")}))
-                    ("param" ("type" "Arg2Type") ("desc" {Str::from_str("Second argument")})) ))
-                ("ret" ("type" "ReturnType") ("desc" {Str::from_str("Return value")})) )],
-            vec![expr!("doc-formal"
-                ("item" "SomeAtom")
-                ("kind" "atom")
-                ("type" "SomeType")
-                ("desc" {Str::from_str("Test symbol atom having specific type")}) )],
-            vec![expr!("doc-formal"
-                ("item" {SomeGndAtom{}})
-                ("kind" "function")
-                ("type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
-                ("desc" {Str::from_str("Test function")})
-                ("params" (
-                    ("param" ("type" "Arg1Type") ("desc" {Str::from_str("First argument")}))
-                    ("param" ("type" "Arg2Type") ("desc" {Str::from_str("Second argument")})) ))
-                ("ret" ("type" "ReturnType") ("desc" {Str::from_str("Return value")})) )],
-            vec![expr!("doc-formal"
-                ("item" "NoSuchAtom")
-                ("kind" "atom")
-                ("type" "%Undefined%")
-                ("desc" {Str::from_str("No documentation")}) )],
-            vec![expr!("doc-formal"
-                ("item" ("some-func" "arg1" "arg2"))
-                ("kind" "atom")
-                ("type" "ReturnType")
-                ("desc" {Str::from_str("No documentation")}) )],
-            vec![expr!("doc-formal"
-                ("item" "some-func-no-type")
-                ("kind" "function")
-                ("type" "%Undefined%")
-                ("desc" {Str::from_str("Test function")})
-                ("params" (
-                    ("param" ("type" "%Undefined%") ("desc" {Str::from_str("First argument")}))
-                    ("param" ("type" "%Undefined%") ("desc" {Str::from_str("Second argument")})) ))
-                ("ret" ("type" "%Undefined%") ("desc" {Str::from_str("Return value")})) )],
+            vec![expr!("@doc-formal"
+                ("@item" "some-func")
+                ("@kind" "function")
+                ("@type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
+                ("@desc" {Str::from_str("Test function")})
+                ("@params" (
+                    ("@param" ("@type" "Arg1Type") ("@desc" {Str::from_str("First argument")}))
+                    ("@param" ("@type" "Arg2Type") ("@desc" {Str::from_str("Second argument")})) ))
+                ("@return" ("@type" "ReturnType") ("@desc" {Str::from_str("Return value")})) )],
+            vec![expr!("@doc-formal"
+                ("@item" "SomeAtom")
+                ("@kind" "atom")
+                ("@type" "SomeType")
+                ("@desc" {Str::from_str("Test symbol atom having specific type")}) )],
+            vec![expr!("@doc-formal"
+                ("@item" {SomeGndAtom{}})
+                ("@kind" "function")
+                ("@type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
+                ("@desc" {Str::from_str("Test function")})
+                ("@params" (
+                    ("@param" ("@type" "Arg1Type") ("@desc" {Str::from_str("First argument")}))
+                    ("@param" ("@type" "Arg2Type") ("@desc" {Str::from_str("Second argument")})) ))
+                ("@return" ("@type" "ReturnType") ("@desc" {Str::from_str("Return value")})) )],
+            vec![expr!("@doc-formal"
+                ("@item" "NoSuchAtom")
+                ("@kind" "atom")
+                ("@type" "%Undefined%")
+                ("@desc" {Str::from_str("No documentation")}) )],
+            vec![expr!("@doc-formal"
+                ("@item" ("some-func" "arg1" "arg2"))
+                ("@kind" "atom")
+                ("@type" "ReturnType")
+                ("@desc" {Str::from_str("No documentation")}) )],
+            vec![expr!("@doc-formal"
+                ("@item" "some-func-no-type")
+                ("@kind" "function")
+                ("@type" "%Undefined%")
+                ("@desc" {Str::from_str("Test function")})
+                ("@params" (
+                    ("@param" ("@type" "%Undefined%") ("@desc" {Str::from_str("First argument")}))
+                    ("@param" ("@type" "%Undefined%") ("@desc" {Str::from_str("Second argument")})) ))
+                ("@return" ("@type" "%Undefined%") ("@desc" {Str::from_str("Return value")})) )],
         ]));
     }
 }
