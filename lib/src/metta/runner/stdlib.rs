@@ -2158,7 +2158,7 @@ mod tests {
                 (param "First argument")
                 (param "Second argument")
               ))
-              (return "Return value")
+              (ret "Return value")
             )
 
             (: SomeAtom SomeType)
@@ -2170,7 +2170,7 @@ mod tests {
                 (param "First argument")
                 (param "Second argument")
               ))
-              (return "Return value")
+              (ret "Return value")
             )
 
             !(get-doc some-func)
@@ -2189,7 +2189,7 @@ mod tests {
                 ("params" (
                     ("param" ("type" "Arg1Type") ("desc" {Str::from_str("First argument")}))
                     ("param" ("type" "Arg2Type") ("desc" {Str::from_str("Second argument")})) ))
-                ("return" ("type" "ReturnType") ("desc" {Str::from_str("Return value")})) )],
+                ("ret" ("type" "ReturnType") ("desc" {Str::from_str("Return value")})) )],
             vec![expr!("doc-formal"
                 ("item" "SomeAtom")
                 ("kind" "atom")
@@ -2203,7 +2203,7 @@ mod tests {
                 ("params" (
                     ("param" ("type" "Arg1Type") ("desc" {Str::from_str("First argument")}))
                     ("param" ("type" "Arg2Type") ("desc" {Str::from_str("Second argument")})) ))
-                ("return" ("type" "ReturnType") ("desc" {Str::from_str("Return value")})) )],
+                ("ret" ("type" "ReturnType") ("desc" {Str::from_str("Return value")})) )],
             vec![expr!("doc-formal"
                 ("item" "NoSuchAtom")
                 ("kind" "atom")

@@ -11,7 +11,7 @@
               (param "First argument")
               (param "Second argument")
               ))
-     (return "Return value")
+     (ret "Return value")
      )
 ; Function type is required to document the function
 (: Arg1Type Type)
@@ -29,7 +29,7 @@
                (params (
                         (param (type Arg1Type) (desc "First argument"))
                         (param (type Arg2Type) (desc "Second argument"))))
-               (return (type ReturnType) (desc "Return value"))))
+               (ret (type ReturnType) (desc "Return value"))))
 
 ; Same approach can be used to document single atom of any kind.
 (doc SomeSymbol (desc "Test symbol atom having specific type"))
@@ -48,7 +48,7 @@
 ;              (param "First argument")
 ;              (param "Second argument")
 ;              ))
-;     (return "Return value")
+;     (ret "Return value")
 ;     )
 ;
 ;!(assertEqual
@@ -59,7 +59,7 @@
 ;               (params (
 ;                        (param (type Arg1Type) (desc "First argument"))
 ;                        (param (type Arg2Type) (desc "Second argument"))))
-;               (return (type ReturnType) (desc "Return value"))))
+;               (ret (type ReturnType) (desc "Return value"))))
 
 ; If atom is not documented then `get-doc` returns "No documentation"
 ; description.

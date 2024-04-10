@@ -4,7 +4,7 @@
     (param "Boolean condition")
     (param "Result when condition is True")
     (param "Result when condition is False")))
-  (return "Second or third argument") )
+  (ret "Second or third argument") )
 (: if (-> Bool Atom Atom $t))
 (= (if True $then $else) $then)
 (= (if False $then $else) $else)
@@ -17,7 +17,7 @@
   (params (
     (param "Atom which contains error")
     (param "Error message, can be one of the reserved symbols: BadType, IncorrectNumberOfArguments")))
-  (return "Error atom"))
+  (ret "Error atom"))
 (: Error (-> Atom Atom ErrorType))
 
 (doc add-reduct
@@ -25,7 +25,7 @@
   (params (
     (param "Atomspace to add atom into")
     (param "Atom to add")))
-  (return "Unit atom"))
+  (ret "Unit atom"))
 (: add-reduct (-> Space %Undefined% (->)))
 (= (add-reduct $dst $atom)  (add-atom $dst $atom))
 
@@ -33,7 +33,7 @@
   (desc "Prevents atom from being reduced")
   (params (
     (param "Atom")))
-  (return "Quoted atom"))
+  (ret "Quoted atom"))
 (: quote (-> Atom Atom))
 
 ; unify matches two atoms and returns $then if they are matched
@@ -58,7 +58,7 @@
 (: doc (-> Atom DocDescription DocParameters DocReturnInformal DocInformal))
 (: desc (-> String DocDescription))
 (: param (-> String DocParameterInformal))
-(: return (-> String DocReturnInformal))
+(: ret (-> String DocReturnInformal))
 
 (: doc-formal (-> DocItem DocKindFunction DocType DocDescription DocParameters DocReturn DocFormal))
 (: doc-formal (-> DocItem DocKindAtom DocType DocDescription DocFormal))
@@ -68,7 +68,7 @@
 (: type (-> Type DocType))
 (: params (-> Expression DocParameters))
 (: param (-> DocType DocDescription DocParameter))
-(: return (-> DocType DocDescription DocReturn))
+(: ret (-> DocType DocDescription DocReturn))
 
 
 (: get-doc (-> Atom Atom))
@@ -101,8 +101,8 @@
   (let $head-type (car-atom $types)
   (let $tail-types (cdr-atom $types)
     (if (== () $params)
-      (let (return $ret-desc) $ret
-        (() (return (type $head-type) (desc $ret-desc))) )
+      (let (ret $ret-desc) $ret
+        (() (ret (type $head-type) (desc $ret-desc))) )
       (let (param $param-desc) (car-atom $params)
         (let $tail-params (cdr-atom $params)
         (let ($params' $result-ret) (get-doc-params $tail-params $ret $tail-types)
@@ -135,7 +135,7 @@
   (case (get-doc $atom) (
     ((doc-formal (item $item) (kind function) (type $type) (desc $descr)
                  (params $params)
-                 (return (type $ret-type) (desc $ret-desc)))
+                 (ret (type $ret-type) (desc $ret-desc)))
       (let () (println! (format-args "Function {}: {} {}" ($item $type $descr)))
       (let () (println! (format-args "Parameters:" ()))
       (let () (for-each-in-atom $params help-param!)
@@ -175,4 +175,4 @@
   (params (
     (param "Atomspace to add atom into")
     (param "Atom to add")))
-  (return "Unit atom"))
+  (ret "Unit atom"))
