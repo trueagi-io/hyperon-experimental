@@ -65,7 +65,7 @@ use super::text::{Tokenizer, Parser, SExprParser};
 use super::types::validate_atom;
 
 pub mod modules;
-use modules::{MettaMod, ModId, ModuleInitFrame, ModNameNode, ModuleLoader, ResourceKey, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name};
+use modules::{MettaMod, ModId, ModuleInitFrame, ModNameNode, ModuleLoader, ResourceKey, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name, decompose_name_path, compose_name_path};
 #[cfg(feature = "pkg_mgmt")]
 use modules::catalog::{ModuleDescriptor, loader_for_module_at_path};
 
@@ -170,7 +170,7 @@ impl Metta {
         //Import the stdlib into the top module, now that it is loaded
         let mut runner_state = RunnerState::new(&metta);
         runner_state.run_in_context(|context| {
-            context.module().import_all_from_dependency(&metta, stdlib_mod_id).unwrap();
+            context.import_all_from_dependency(stdlib_mod_id).unwrap();
             Ok(())
         }).expect("Failed to import stdlib");
         drop(runner_state);
@@ -253,6 +253,12 @@ impl Metta {
         })
     }
 
+    /// Internal method to look up a module from a ModId
+    pub(crate) fn get_mod_ptr(&self, mod_id: ModId) -> Rc<MettaMod> {
+        let mod_ref = self.0.modules.lock().unwrap();
+        mod_ref.get(mod_id.0).unwrap().clone()
+    }
+
     /// Locates and retrieves a loaded module based on its name, relative to the top of the runner
     ///
     /// NOTE: this function will not find any modules in the process of being loaded; use
@@ -316,19 +322,29 @@ impl Metta {
     /// Merges the module in ModuleInitFrame into the runner, along with all sub-modules, and
     /// returns the new ModId for the frame's top-level module
     fn merge_init_frame(&self, init_frame: ModuleInitFrame) -> Result<ModId, String> {
-        let module = init_frame.the_mod
-            .ok_or_else(|| "Fatal Error: Module loader function exited without calling RunContext::init_self_module".to_string())?;
-
-        //TODO-NOW, gotta add the child mods from the frame and remap the child mod indices
-        //TODO-NOW, also gotta merge the child descriptors
+        if init_frame.modules.len() < 1 {
+            return Err("Fatal Error: Module loader function exited without calling RunContext::init_self_module".to_string());
+        }
+        let main_mod = init_frame.modules.get(ModuleInitFrame::MAIN_MOD_IDX).unwrap();
 
         let mut module_names = self.0.module_names.lock().unwrap();
-        module_names.merge_subtree_into(module.path(), init_frame.sub_module_names)?;
+        module_names.merge_subtree_into(main_mod.path(), init_frame.sub_module_names)?;
 
-        let mod_name = module.path().to_owned();
-        let mod_id = self.add_module(module)?;
-        module_names.add(&mod_name, mod_id)?;
-        Ok(mod_id)
+        //Merge in all the sub-modules
+        let mut main_mod_id = ModId::INVALID;
+        for module in init_frame.modules {
+            //TODO-NOW, also gotta merge the descriptors, and re-map the ModIds in the descriptor lookup map
+            //TODO-NOW, also need to re-map the module's "deps" ModIds
+
+            let mod_name = module.path().to_owned();
+            let new_mod_id = self.add_module(Rc::into_inner(module).unwrap())?;
+            module_names.update(&mod_name, new_mod_id)?;
+            if main_mod_id == ModId::INVALID {
+                main_mod_id = new_mod_id;
+            }
+        }
+
+        Ok(main_mod_id)
     }
 
     /// Internal function to add a loaded module to the runner, assigning it a ModId
@@ -448,7 +464,7 @@ impl Metta {
 /// A RunnerState encapsulates a single in-flight process, executing code within a [Metta] runner
 pub struct RunnerState<'m, 'i> {
     metta: &'m Metta,
-    mod_id: Option<ModId>,
+    mod_ptr: Option<Rc<MettaMod>>,
     init_frame: Option<ModuleInitFrame>,
     i_wrapper: InterpreterWrapper<'m, 'i>,
 }
@@ -476,7 +492,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
     fn new_internal(metta: &'m Metta, new_mod_name: Option<&str>) -> Self {
         Self {
             metta,
-            mod_id: None,
+            mod_ptr: None,
             init_frame: new_mod_name.map(|new_mod_name| {
                 let new_mod_name = normalize_relative_module_name("top", &new_mod_name).unwrap();
                 ModuleInitFrame::new_with_name(new_mod_name)
@@ -490,10 +506,16 @@ impl<'m, 'input> RunnerState<'m, 'input> {
         Self::new_with_module(metta, ModId::TOP)
     }
 
-    /// Returns a new RunnerState to execute code in the context of any loaded module
+    /// Returns a new RunnerState to execute code in the context a module in the runner
     pub(crate) fn new_with_module(metta: &'m Metta, mod_id: ModId) -> Self {
+        let mod_ref = metta.0.modules.lock().unwrap();
+        Self::new_with_mod_ptr(metta, mod_ref.get(mod_id.0).unwrap().clone())
+    }
+
+    /// Returns a new RunnerState to execute code in the context of any module
+    pub(crate) fn new_with_mod_ptr(metta: &'m Metta, mod_ptr: Rc<MettaMod>) -> Self {
         let mut state = Self::new_internal(metta, None);
-        state.mod_id = Some(mod_id);
+        state.mod_ptr = Some(mod_ptr);
         state
     }
 
@@ -547,10 +569,9 @@ impl<'m, 'input> RunnerState<'m, 'input> {
     fn run_in_context<T, F: FnOnce(&mut RunContext<'_, '_, 'm, 'input>) -> Result<T, String>>(&mut self, f: F) -> Result<T, String> {
 
         // Construct the RunContext
-        let module = match &mut self.mod_id {
-            Some(mod_id) => {
-                let mod_ref = self.metta.0.modules.lock().unwrap();
-                ModRef::Loaded(mod_ref.get(mod_id.0).unwrap().clone())
+        let module = match &mut self.mod_ptr {
+            Some(mod_ptr) => {
+                ModRef::Loaded(mod_ptr)
             },
             None => {
                 match &mut self.init_frame {
@@ -627,21 +648,21 @@ enum ModRef<'a> {
     #[default]
     Null,
     Initializing(&'a mut ModuleInitFrame),
-    Loaded(Rc<MettaMod>),
+    Loaded(&'a mut Rc<MettaMod>),
 }
 
 impl ModRef<'_> {
     fn try_borrow(&self) -> Option<&MettaMod> {
         match self {
             ModRef::Loaded(module) => Some(&*module),
-            ModRef::Initializing(init_frame) => init_frame.try_borrow_mod(),
+            ModRef::Initializing(init_frame) => init_frame.try_borrow_main_mod(),
             ModRef::Null => None,
         }
     }
     pub fn try_borrow_mut(&mut self) -> Option<&mut MettaMod> {
         match self {
             ModRef::Loaded(_) => None,
-            ModRef::Initializing(init_frame) => init_frame.try_borrow_mod_mut(),
+            ModRef::Initializing(init_frame) => init_frame.try_borrow_main_mod_mut(),
             ModRef::Null => None,
         }
     }
@@ -844,9 +865,9 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
         let normalized_mod_path = self.normalize_module_name(mod_name)?;
 
         //Make sure the parent module is loaded, and descend recursively until we find a loaded parent
-        let mod_name_components = ModNameNode::decompose_name_path(&normalized_mod_path)?;
+        let mod_name_components = decompose_name_path(&normalized_mod_path)?;
         let parent_mod_id = if mod_name_components.len() > 1 {
-            let parent_name = ModNameNode::compose_name_path(&mod_name_components[..mod_name_components.len()-1])?;
+            let parent_name = compose_name_path(&mod_name_components[..mod_name_components.len()-1])?;
             if let Ok(parent_mod_id) = self.get_module_by_name(&parent_name) {
                 parent_mod_id
             } else {
@@ -859,10 +880,25 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
         Ok(parent_mod_id)
     }
 
+    /// Internal method to retrieve the mod_ptr to a module that's either loading in the
+    /// InitFrame, or loaded into the runner
+    fn get_mod_ptr(&self, mod_id: ModId) -> Rc<MettaMod> {
+        if mod_id.is_relative() {
+            let mod_idx = mod_id.get_idx_from_relative();
+            match &self.module {
+                ModRef::Initializing(init_frame) => init_frame.modules.get(mod_idx).unwrap().clone(),
+                _ => unreachable!(),
+            }
+        } else {
+            self.metta.get_mod_ptr(mod_id)
+        }
+    }
+
     /// Internal function to load a module in the context of a parent module, assuming the path is normalized
     #[cfg(feature = "pkg_mgmt")]
     fn load_module_internal(&mut self, mod_path: &str, parent_mod_id: ModId) -> Result<ModId, String> {
-        let mut state = RunnerState::new_with_module(&self.metta, parent_mod_id);
+
+        let mut state = RunnerState::new_with_mod_ptr(&self.metta, self.get_mod_ptr(parent_mod_id));
         state.run_in_context(|context| {
             match context.module().pkg_info().resolve_module(context, mod_path)? {
                 Some((loader, descriptor)) => {
@@ -891,7 +927,7 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
             {
                 let parent_mod_id = self.load_module_parents(mod_name)?;
                 let normalized_mod_path = self.normalize_module_name(mod_name)?;
-                let mut state = RunnerState::new_with_module(&self.metta, parent_mod_id);
+                let mut state = RunnerState::new_with_mod_ptr(&self.metta, self.get_mod_ptr(parent_mod_id));
                 state.run_in_context(|context| {
                     match context.module().pkg_info().resolve_module(context, &normalized_mod_path)? {
                         Some((loader, _descriptor)) => {
@@ -932,6 +968,45 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
             ModRef::Initializing(ref mut init_frame) => init_frame.merge_child_frame(loaded_mod_frame),
             ModRef::Null => panic!("Internal Error")
         }
+    }
+
+    /// Adds a loaded module as a dependency of the `&self` [MettaMod], and adds a [Tokenizer] entry to access
+    /// the dependent module's Space.
+    pub fn import_dependency_as(&self, mod_id: ModId, name: Option<String>) -> Result<(), String> {
+        self.module().import_dependency_as(&self.metta, self.get_mod_ptr(mod_id), name)
+    }
+
+    /// Adds a specific atom and/or Tokenizer entry from a dependency module to the &self module
+    ///
+    /// Behavior:
+    /// * If the `from_name` argument exactly matches a [Tokenizer] entry in the source module,
+    ///     then that entry will be imported, and the `name` argument will be ignored. In this case
+    ///     no atom is imported.
+    /// * If an exact [Tokenizer] entry was not found, this method will attempt to resolve `from_name`
+    ///     into an atom, using the [Tokenizer] and [Space] associated with the dependent module, and
+    ///     the resolved atom will be imported into the `&self` [Space]
+    /// * If `name` is provided, then if the resolved atom not a Symbol or if the resolved atom is a
+    ///     symbol that doesn't perfectly match `name`, a new [Tokenizer] entry will be created to
+    ///     access the atom in the &self module
+    ///
+    // QUESTION: This behavior of exactly matching a regex makes importing a Tokenizer pattern pretty
+    // unfriendly.  Does it make sense to require Tokenizers entries to be associated with atoms, for
+    // example "Type Atoms"?  For example, we could have an "Number" type that is tied to all the
+    // Tokenizer regex patters used to parse different types of numbers?  Then a user could
+    // "!(import! Number from Arithmetic)" or whatever, and get all the Tokenizer patterns that parse
+    // numbers?
+    // More discussion on the topic of tokenizer entry names is here https://github.com/trueagi-io/hyperon-experimental/issues/510
+    pub fn import_item_from_dependency_as(&self, from_name: &str, mod_id: ModId, name: Option<&str>) -> Result<(), String> {
+        self.module().import_item_from_dependency_as(&self.metta, from_name, self.get_mod_ptr(mod_id), name)
+    }
+
+    /// Effectively adds all atoms in a dependency module to the &self module, by adding the dependency
+    /// module's space as an atom inside the &self module
+    ///
+    /// WARNING: Module import behavior is still WIP, specifically around "import *" behavior, and
+    /// especially around transitive imports
+    pub fn import_all_from_dependency(&self, mod_id: ModId) -> Result<(), String> {
+        self.module().import_all_from_dependency(&self.metta, mod_id, self.get_mod_ptr(mod_id))
     }
 
     /// Private method to advance the context forward one step

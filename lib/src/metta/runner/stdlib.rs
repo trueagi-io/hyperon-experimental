@@ -102,12 +102,12 @@ impl Grounded for ImportOp {
         // Import the module, as per the behavior described above
         match dest_arg {
             Atom::Symbol(dest_sym) => {
-                context.module().import_dependency_as(&context.metta, mod_id, Some(dest_sym.name().to_string()))?;
+                context.import_dependency_as(mod_id, Some(dest_sym.name().to_string()))?;
             }
             other_atom => {
                 match &other_atom {
                     Atom::Grounded(_) if Atom::as_gnd::<DynSpace>(other_atom) == Some(context.module().space()) => {
-                        context.module().import_all_from_dependency(&context.metta, mod_id)?;
+                        context.import_all_from_dependency(mod_id)?;
                     },
                     _ => {
                         return Err(format!("import! destination argument must be a symbol atom naming a new space, or &self.  Found: {other_atom:?}").into());

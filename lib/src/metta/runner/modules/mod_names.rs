@@ -109,6 +109,28 @@ pub(crate) fn normalize_relative_module_name(base_path: &str, mod_name: &str) ->
     Ok(full_name_path)
 }
 
+/// Decomposes name path components into individual module names.  Reverse of [compose_name_path]
+pub(crate) fn decompose_name_path(name: &str) -> Result<Vec<&str>, String> {
+    let mut components: Vec<&str> = vec![];
+    let (_, _, last) = ModNameNode::parse_parent_generic(ModNameNode::top(), name, &OverlayMap::none(),
+        |node, _| Some(node),
+        |_, component| {components.push(component)})?;
+    if last.len() > 0 {
+        components.push(last);
+    }
+    Ok(components)
+}
+
+/// Composes a name path from a slice of individual module names.  Reverse of [decompose_name_path]
+pub(crate) fn compose_name_path(components: &[&str]) -> Result<String, String> {
+    let mut new_name = TOP_MOD_NAME.to_string();
+    for component in components {
+        new_name.push_str(":");
+        new_name.push_str(component);
+    }
+    Ok(new_name)
+}
+
 /// Internal map to allow subtrees to be overlaid and effectively merged
 #[derive(Debug)]
 struct OverlayMap<'a>(Option<smallvec::SmallVec<[(*const ModNameNode, &'a str, usize); 4]>>);
@@ -153,16 +175,37 @@ impl ModNameNode {
         }
     }
 
+    /// Updates the ModId of an existing node, or creates the node if it doesn't exist
+    /// Does NOT recursively add multiple nodes
+    pub fn update(&mut self, name: &str, mod_id: ModId) -> Result<(), String> {
+        self.update_in_layered(&mut[], name, mod_id)
+    }
+
+    /// Layered version of [Self::update].  See [Self::resolve_layered] for details
+    pub fn update_in_layered(&mut self, subtrees: &mut[(&str, &mut Self)], name: &str, mod_id: ModId) -> Result<(), String> {
+        if name == TOP_MOD_NAME || name.len() == 0 {
+            self.mod_id = mod_id;
+            return Ok(());
+        }
+        let (parent_node, mod_name) = self.parse_parent_layered_mut(subtrees, name)?;
+        if mod_name == TOP_MOD_NAME || mod_name == SELF_MOD_NAME || mod_name.len() == 0 {
+            return Err(format!("illegal module name: {name}"));
+        }
+        match parent_node.get_child_mut(mod_name) {
+            Some(node) => node.mod_id = mod_id,
+            None => parent_node.add_child_node(mod_name.to_string(), Self::new(mod_id))
+        }
+        Ok(())
+    }
+
     /// Adds a single new node to the tree.  Does NOT recursively add multiple nodes
     ///
-    /// Reuturns `true` if the node was sucessfully added, otherwise `false`.  If an entry
-    /// already exists at that name, the existing entry will be replaced
+    /// If an entry already exists at that name, the existing entry will be replaced
     pub fn add(&mut self, name: &str, mod_id: ModId) -> Result<(), String> {
         self.merge_subtree_into(name, Self::new(mod_id))
     }
 
-    /// Adds a single new node to a layered tree.  See [Self::add] and [Self::resolve_layered] for
-    /// details about behavior
+    /// Adds a single new node to a layered tree.  See [Self::resolve_layered] for details
     pub fn add_to_layered(&mut self, subtrees: &mut[(&str, &mut Self)], name: &str, mod_id: ModId) -> Result<(), String> {
         self.merge_subtree_into_layered(subtrees, name, Self::new(mod_id))
     }
@@ -172,7 +215,7 @@ impl ModNameNode {
         self.merge_subtree_into_layered(&mut[], root_name, new_subtree)
     }
 
-    /// Merges `new_subtree` into `&self`, starting at `root_name`
+    /// Layered version of [Self::merge_subtree_into].  See [Self::resolve_layered] for details
     pub fn merge_subtree_into_layered(&mut self, layered_subtrees: &mut[(&str, &mut Self)], root_name: &str, new_subtree: Self) -> Result<(), String> {
         let (parent_node, mod_name) = self.parse_parent_layered_mut(layered_subtrees, root_name)?;
         if mod_name == TOP_MOD_NAME || mod_name == SELF_MOD_NAME || mod_name.len() == 0 {
@@ -298,28 +341,6 @@ impl ModNameNode {
     //     }
     //     Ok(new_name)
     // }
-
-    /// Decomposes name path components into individual module names.  Reverse of [Self::compose_name_path]
-    pub fn decompose_name_path(name: &str) -> Result<Vec<&str>, String> {
-        let mut components: Vec<&str> = vec![];
-        let (_, _, last) = Self::parse_parent_generic(Self::top(), name, &OverlayMap::none(),
-            |node, _| Some(node),
-            |_, component| {components.push(component)})?;
-        if last.len() > 0 {
-            components.push(last);
-        }
-        Ok(components)
-    }
-
-    /// Composes a name path from a slice of individual module names.  Reverse of [Self::decompose_name_path]
-    pub fn compose_name_path(components: &[&str]) -> Result<String, String> {
-        let mut new_name = TOP_MOD_NAME.to_string();
-        for component in components {
-            new_name.push_str(":");
-            new_name.push_str(component);
-        }
-        Ok(new_name)
-    }
 
     /// Internal generic `parse_parent` that can expand to mutable and const versions.
     /// Return valus is (parent_node, subtree_idx, remaining_name_path)
