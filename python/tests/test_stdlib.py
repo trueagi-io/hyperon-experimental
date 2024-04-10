@@ -13,7 +13,7 @@ class StdlibTest(HyperonTestCase):
 
         # Check that (parse "(my atom)") == (my atom)
         self.assertEqualMettaRunnerResults(metta.run("!(parse \"(my atom)\")"),
-                                           [[ValueAtom(E(S("my"), S("atom")))]])
+                                           [[E(S("my"), S("atom"))]])
 
         # Check that (stringToChars "ABC") == ('A' 'B' 'C')
         self.assertEqualMettaRunnerResults(metta.run("!(stringToChars \"ABC\")"),
