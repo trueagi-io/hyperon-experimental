@@ -42,24 +42,26 @@
 
 ; Grounded atoms are also can be documented using `doc` expressions. Type of
 ; the grounded atom is a part of its implementation.
-;(doc some-gnd-atom
-;     (desc "Test function")
-;     (params (
-;              (param "First argument")
-;              (param "Second argument")
-;              ))
-;     (ret "Return value")
-;     )
-;
-;!(assertEqual
-;   (get-doc some-gnd-atom)
-;   (doc-formal (item some-func) (kind function)
-;               (type (-> Arg1Type Arg2Type ReturnType))
-;               (desc "Test function")
-;               (params (
-;                        (param (type Arg1Type) (desc "First argument"))
-;                        (param (type Arg2Type) (desc "Second argument"))))
-;               (ret (type ReturnType) (desc "Return value"))))
+(doc some-gnd-atom
+     (desc "Test function")
+     (params (
+              (param "First argument")
+              (param "Second argument")
+              ))
+     (ret "Return value")
+     )
+
+; As some-gnd-function is not imported really in this example type is not
+; available and doc-formal contains %Undefined% instead.
+!(assertEqual
+   (get-doc some-gnd-atom)
+   (doc-formal (item some-gnd-atom) (kind function)
+               (type %Undefined%)
+               (desc "Test function")
+               (params (
+                        (param (type %Undefined%) (desc "First argument"))
+                        (param (type %Undefined%) (desc "Second argument"))))
+               (ret (type %Undefined%) (desc "Return value"))))
 
 ; If atom is not documented then `get-doc` returns "No documentation"
 ; description.
@@ -91,7 +93,16 @@
 ; Atom SomeSymbol: SomeType Test symbol atom having specific type
 ;
 
-;!(help! some-gnd-atom)
+!(help! some-gnd-atom)
+; Output:
+;
+; Function some-gnd-atom: %Undefined% Test function
+; Parameters:
+;   %Undefined% First argument
+;   %Undefined% Second argument
+; Return: (type %Undefined%) Return value
+;
+
 
 !(help! NoSuchAtom)
 ; Output:

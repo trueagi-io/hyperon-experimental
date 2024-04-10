@@ -1085,12 +1085,21 @@ mod tests {
               ))
               (ret "Return value")
             )
+            (doc some-func-no-type
+              (desc "Test function")
+              (params (
+                (param "First argument")
+                (param "Second argument")
+              ))
+              (ret "Return value")
+            )
 
             !(get-doc some-func)
             !(get-doc SomeAtom)
             !(get-doc some-gnd-atom)
             !(get-doc NoSuchAtom)
             !(get-doc (some-func arg1 arg2))
+            !(get-doc some-func-no-type)
         "#);
 
         assert_eq_metta_results!(metta.run(parser), Ok(vec![
@@ -1126,7 +1135,16 @@ mod tests {
                 ("item" ("some-func" "arg1" "arg2"))
                 ("kind" "atom")
                 ("type" "ReturnType")
-                ("desc" {Str::from_str("No documentation")}) )]
+                ("desc" {Str::from_str("No documentation")}) )],
+            vec![expr!("doc-formal"
+                ("item" "some-func-no-type")
+                ("kind" "function")
+                ("type" "%Undefined%")
+                ("desc" {Str::from_str("Test function")})
+                ("params" (
+                    ("param" ("type" "%Undefined%") ("desc" {Str::from_str("First argument")}))
+                    ("param" ("type" "%Undefined%") ("desc" {Str::from_str("Second argument")})) ))
+                ("ret" ("type" "%Undefined%") ("desc" {Str::from_str("Return value")})) )],
         ]));
     }
 }
