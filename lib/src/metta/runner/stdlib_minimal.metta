@@ -1,8 +1,7 @@
 (doc ErrorType (desc "Type of the atom which contains error"))
 (: ErrorType Type)
 (: Error (-> Atom Atom ErrorType))
-(: ReturnType Type)
-(: return (-> Atom ReturnType))
+(: return (-> $t $t))
 
 (: function (-> Atom Atom))
 (: eval (-> Atom Atom))
@@ -150,6 +149,7 @@
 (= (check-alternatives $atom)
   (function
     (chain (collapse-bind $atom) $collapsed
+      ;(chain (eval (print-alternatives! $atom $collapsed)) $_
       (chain (eval (foldl-atom $collapsed (() ()) $succ-err $res
         (eval (separate-errors $succ-err $res)))) $separated
         (unify $separated ($success $error)

@@ -23,6 +23,48 @@ fn unit_result() -> Result<Vec<Atom>, ExecError> {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub struct PrintAlternativesOp {}
+
+impl Display for PrintAlternativesOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "print-alternatives!")
+    }
+}
+
+impl Grounded for PrintAlternativesOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, UNIT_TYPE()])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("print-alternatives! expects format string as a first argument and expression as a second argument");
+        let atom = atom_to_string(args.get(0).ok_or_else(arg_error)?);
+        let args = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?;
+        let args: Vec<String> = args.children().iter()
+            .map(|atom| atom_to_string(atom))
+            .collect();
+        println!("{} {}:", args.len(), atom);
+        args.iter().for_each(|arg| println!("    {}", arg));
+        Ok(vec![UNIT_ATOM()])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+fn atom_to_string(atom: &Atom) -> String {
+    match atom {
+        Atom::Grounded(gnd) if gnd.type_() == ATOM_TYPE_STRING => {
+            let mut s = gnd.to_string();
+            s.remove(0);
+            s.pop();
+            s
+        },
+        _ => atom.to_string(),
+    }
+}
+#[derive(Clone, PartialEq, Debug)]
 pub struct GetTypeOp {
     // TODO: MINIMAL this is temporary compatibility fix to be removed after
     // migration to the minimal MeTTa
@@ -420,6 +462,8 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
     let format_args_op = Atom::gnd(stdlib::FormatArgsOp{});
     tref.register_token(regex(r"format-args"), move |_| { format_args_op.clone() });
+    let print_alternatives_op = Atom::gnd(PrintAlternativesOp{});
+    tref.register_token(regex(r"print-alternatives!"), move |_| { print_alternatives_op.clone() });
     let sealed_op = Atom::gnd(stdlib::SealedOp{});
     tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
     // &self should be updated
@@ -986,5 +1030,103 @@ mod tests {
                 vec![UNIT_ATOM()],
                 vec![expr!(("bar"))],
             ]));
+    }
+
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct SomeGndAtom { }
+
+    impl Display for SomeGndAtom {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "some-gnd-atom")
+        }
+    }
+
+    impl Grounded for SomeGndAtom {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, sym!("Arg1Type"), sym!("Arg2Type"), sym!("ReturnType")])
+        }
+
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            execute_not_executable(self)
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    #[test]
+    fn test_get_doc() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        metta.tokenizer().borrow_mut()
+            .register_token(regex::Regex::new(r"some-gnd-atom").unwrap(), |_| Atom::gnd(SomeGndAtom{}));
+        let parser = SExprParser::new(r#"
+            (: Arg1Type Type)
+            (: Arg2Type Type)
+            (: ReturnType Type)
+            (: some-func (-> Arg1Type Arg2Type ReturnType))
+            (doc some-func
+              (desc "Test function")
+              (params (
+                (param "First argument")
+                (param "Second argument")
+              ))
+              (ret "Return value")
+            )
+
+            (: SomeAtom SomeType)
+            (doc SomeAtom (desc "Test symbol atom having specific type"))
+
+            (doc some-gnd-atom
+              (desc "Test function")
+              (params (
+                (param "First argument")
+                (param "Second argument")
+              ))
+              (ret "Return value")
+            )
+
+            !(get-doc some-func)
+            !(get-doc SomeAtom)
+            !(get-doc some-gnd-atom)
+            !(get-doc NoSuchAtom)
+            !(get-doc (some-func arg1 arg2))
+        "#);
+
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![
+            vec![expr!("doc-formal"
+                ("item" "some-func")
+                ("kind" "function")
+                ("type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
+                ("desc" {Str::from_str("Test function")})
+                ("params" (
+                    ("param" ("type" "Arg1Type") ("desc" {Str::from_str("First argument")}))
+                    ("param" ("type" "Arg2Type") ("desc" {Str::from_str("Second argument")})) ))
+                ("ret" ("type" "ReturnType") ("desc" {Str::from_str("Return value")})) )],
+            vec![expr!("doc-formal"
+                ("item" "SomeAtom")
+                ("kind" "atom")
+                ("type" "SomeType")
+                ("desc" {Str::from_str("Test symbol atom having specific type")}) )],
+            vec![expr!("doc-formal"
+                ("item" {SomeGndAtom{}})
+                ("kind" "function")
+                ("type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
+                ("desc" {Str::from_str("Test function")})
+                ("params" (
+                    ("param" ("type" "Arg1Type") ("desc" {Str::from_str("First argument")}))
+                    ("param" ("type" "Arg2Type") ("desc" {Str::from_str("Second argument")})) ))
+                ("ret" ("type" "ReturnType") ("desc" {Str::from_str("Return value")})) )],
+            vec![expr!("doc-formal"
+                ("item" "NoSuchAtom")
+                ("kind" "atom")
+                ("type" "%Undefined%")
+                ("desc" {Str::from_str("No documentation")}) )],
+            vec![expr!("doc-formal"
+                ("item" ("some-func" "arg1" "arg2"))
+                ("kind" "atom")
+                ("type" "ReturnType")
+                ("desc" {Str::from_str("No documentation")}) )]
+        ]));
     }
 }
