@@ -93,8 +93,8 @@ class RegexMatchableObject(MatchableObject):
 
 
 
-@register_atoms
-def text_ops():
+@register_atoms(pass_metta=True)
+def text_ops(run_context):
     """Add text operators
 
     repr: convert Atom to string.
@@ -105,10 +105,10 @@ def text_ops():
     see test_stdlib.py for examples.
 
     """
-
+ 
     reprAtom = OperationAtom('repr', lambda a: [ValueAtom(repr(a))],
                              ['Atom', 'String'], unwrap=False)
-    parseAtom = OperationAtom('parse', lambda s: [ValueAtom(SExprParser(str(s)[1:-1]).parse(Tokenizer()))],
+    parseAtom = OperationAtom('parse', lambda s: [ValueAtom(SExprParser(str(s)[1:-1]).parse(run_context.tokenizer()))],
                               ['String', 'Atom'], unwrap=False)
     stringToCharsAtom = OperationAtom('stringToChars', lambda s: [E(*[ValueAtom(Char(c)) for c in str(s)[1:-1]])],
                                       ['String', 'Atom'], unwrap=False)
