@@ -18,6 +18,9 @@ class StdlibTest(HyperonTestCase):
         self.assertEqualMettaRunnerResults(metta.run('!(parse "$X")'),
                                           [[(V("X"))]])
 
+        self.assertEqualMettaRunnerResults(metta.run('!(parse "\\"A\\"")'),
+                                           [[(ValueAtom("A"))]])
+
         self.assertEqualMettaRunnerResults(metta.run('!(parse "(func (Cons $x (Cons $xs $xss))) ")'),
                                            [[E(S("func"), E(S("Cons"), V("x"), E(S("Cons"), V("xs"), V("xss"))))]])
 
