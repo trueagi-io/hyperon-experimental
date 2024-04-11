@@ -4,7 +4,7 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
-use crate::metta::runner::{Metta, RunContext, ModuleLoader};
+use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
@@ -26,7 +26,7 @@ fn unit_result() -> Result<Vec<Atom>, ExecError> {
 #[derive(Clone, Debug)]
 pub struct ImportOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static, 'static>>>>>>,
 }
 
 impl PartialEq for ImportOp {
@@ -147,6 +147,67 @@ fn strip_quotes(src: &str) -> &str {
     src
 }
 
+#[derive(Clone, Debug)]
+pub struct IncludeOp {
+    //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static, 'static>>>>>>,
+}
+
+impl PartialEq for IncludeOp {
+    fn eq(&self, _other: &Self) -> bool { true }
+}
+
+impl IncludeOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{ context: metta.0.context.clone() }
+    }
+}
+
+impl Display for IncludeOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "include")
+    }
+}
+
+impl Grounded for IncludeOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("include expects a module name argument");
+        let mod_name_atom = args.get(0).ok_or_else(arg_error)?;
+
+        // TODO: replace Symbol by grounded String?
+        let mod_name = match mod_name_atom {
+            Atom::Symbol(mod_name) => mod_name.name(),
+            _ => return Err(arg_error())
+        };
+        let mod_name = strip_quotes(mod_name);
+
+        //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
+        let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
+        let mut context = ctx_ref.lock().unwrap();
+        let program_buf = context.load_resource_from_module(mod_name, ResourceKey::MainMettaSrc)?;
+
+        // Interpret the loaded MeTTa S-Expression text
+        let program_text = String::from_utf8(program_buf)
+            .map_err(|e| e.to_string())?;
+        let parser = crate::metta::text::OwnedSExprParser::new(program_text);
+        //QUESTION: do we want to do anything with the result from the `include` operation?
+        let _eval_result = context.run_inline(|context| {
+            context.push_parser(Box::new(parser));
+            Ok(())
+        })?;
+
+        unit_result()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 /// mod-space! returns the space of a specified module, loading the module if it's not loaded already
 //NOTE: The "impure" '!' denoted in the op atom name is due to the side effect of loading the module.  If
 // we want a side-effect-free version, it could be implemented by calling `RunContext::get_module_by_name`
@@ -155,7 +216,7 @@ fn strip_quotes(src: &str) -> &str {
 #[derive(Clone, Debug)]
 pub struct ModSpaceOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static, 'static>>>>>>,
 }
 
 impl PartialEq for ModSpaceOp {
@@ -1440,6 +1501,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
         let import_op = Atom::gnd(ImportOp::new(metta.clone()));
         tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+        let include_op = Atom::gnd(IncludeOp::new(metta.clone()));
+        tref.register_token(regex(r"include"), move |_| { include_op.clone() });
         let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
         tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
 
