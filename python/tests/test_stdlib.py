@@ -13,10 +13,23 @@ class StdlibTest(HyperonTestCase):
 
         # Check that (parse "(my atom)") == (my atom)
         self.assertEqualMettaRunnerResults(metta.run("!(parse \"(my atom)\")"),
-                                           [[ValueAtom(E(S("my"), S("atom")))]])
+                                           [[E(S("my"), S("atom"))]])
+
+        #unstable renaming of variables causes random failures of the test
+        #self.assertEqualMettaRunnerResults(metta.run('!(parse "$X")'),
+        #                                  [[(V("X"))]])
+
+        self.assertEqualMettaRunnerResults(metta.run('!(parse "\\"A\\"")'),
+                                           [[(ValueAtom("A"))]])
+
+        #self.assertEqualMettaRunnerResults(metta.run('!(parse "(func (Cons $x (Cons $xs $xss))) ")'),
+        #                                   [[E(S("func"), E(S("Cons"), V("x"), E(S("Cons"), V("xs"), V("xss"))))]])
+
+        self.assertEqualMettaRunnerResults(metta.run('!(parse "(A 2 \'S\')")'),
+                                   [[E(S("A"), ValueAtom(2), ValueAtom(Char("S")))]])
 
         # Check that (stringToChars "ABC") == ('A' 'B' 'C')
-        self.assertEqualMettaRunnerResults(metta.run("!(stringToChars \"ABC\")"),
+        self.assertEqualMettaRunnerResults(metta.run('!(stringToChars "ABC")'),
                                            [[E(ValueAtom(Char("A")), ValueAtom(Char("B")), ValueAtom(Char("C")))]])
 
         # Check that (charsToString ('A' 'B' 'C')) == "ABC"
