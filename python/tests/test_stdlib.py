@@ -24,8 +24,8 @@ class StdlibTest(HyperonTestCase):
         self.assertEqualMettaRunnerResults(metta.run("!(parse \"(func (Cons $x (Cons $xs $xss))) \")"),
                                            [[E(S("func"), E(S("Cons"), V("x"), E(S("Cons"), V("xs"), V("xss"))))]])
 
-        # self.assertEqualMettaRunnerResults(metta.run("!(parse \"(A 2 'S') \")"),
-        #                            [[E(S("A"), G(2), G('S'))]])
+        self.assertEqualMettaRunnerResults(metta.run("!(parse \"(A 2 'S')\")"),
+                                   [[E(S("A"), ValueAtom(2), ValueAtom(Char("S")))]])
 
         # Check that (stringToChars "ABC") == ('A' 'B' 'C')
         self.assertEqualMettaRunnerResults(metta.run("!(stringToChars \"ABC\")"),
