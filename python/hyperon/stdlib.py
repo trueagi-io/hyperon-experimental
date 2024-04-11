@@ -90,9 +90,6 @@ class RegexMatchableObject(MatchableObject):
                 return [{"matched_pattern": S(pattern)}]
         return []
 
-
-
-
 @register_atoms(pass_metta=True)
 def text_ops(run_context):
     """Add text operators
@@ -132,6 +129,56 @@ def type_tokens():
         r"True|False": lambda token: ValueAtom(token == 'True', 'Bool'),
         r'regex:"[^"]*"': lambda token: G(RegexMatchableObject(token),  AtomType.UNDEFINED)
     }
+
+
+def import_from_module(path, mod=None):
+    ps = path.split(".")
+    obj = mod
+    if obj is None:
+        import importlib
+        # FIXME? Do we need this?
+        #current_directory = os.getcwd()
+        #if current_directory not in sys.path:
+        #    sys.path.append(current_directory)
+        obj = importlib.import_module(ps[0])
+        ps = ps[1:]
+    for p in ps:
+        obj = getattr(obj, p)
+    return obj
+
+def find_py_obj(path, mod=None):
+    try:
+        obj = import_from_module(path, mod)
+    except:
+        # if path is not found, check if the object itself exists
+        # FIXME? This was introduced for something like (py-obj str) to work.
+        # But this works as one-line Python eval. Do we need it here?
+        local_scope = {}
+        try:
+            exec(f"__obj = {path}", {}, local_scope)
+            obj = local_scope['__obj']
+        except:
+            raise RuntimeError(f'Failed to find "{path}"')
+    return obj
+
+def get_py_atom(path, typ=AtomType.UNDEFINED, mod=None):
+    name = str(path.get_object().content if isinstance(path, GroundedAtom) else path)
+    obj = find_py_obj(name, mod if mod is None else mod.get_object().value)
+    if callable(obj):
+        return [OperationAtom(name, obj, typ, unwrap=True)]
+    else:
+        return [ValueAtom(obj, typ)]
+
+def do_py_dot(mod, path, typ=AtomType.UNDEFINED):
+    return get_py_atom(path, typ, mod)
+
+@register_atoms
+def py_obj_atoms():
+    return {
+        r"py-atom": OperationAtom("py-atom", get_py_atom, unwrap=False),
+        r"py-dot": OperationAtom("py-dot", do_py_dot, unwrap=False),
+    }
+
 
 @register_tokens
 def call_atom():
