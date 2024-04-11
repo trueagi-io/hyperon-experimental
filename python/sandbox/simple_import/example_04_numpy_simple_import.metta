@@ -1,5 +1,8 @@
 !(import! &self simple_import)
 
+; with simple "import" it is rather common that we import something
+; twice because of submodules in python
+; So let's import twice to make sure that it does not cause any problems
 !(import numpy)
 !(import numpy)
 !(import numpy.linalg)
