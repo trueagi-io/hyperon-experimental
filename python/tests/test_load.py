@@ -6,6 +6,9 @@ from hyperon import *
 
 class LoadAsciiTest(HyperonTestCase):
 
+    def setUp(self):
+        change_dir_to_parent_of(__file__)
+
     def test_load(self):
         metta = MeTTa()
         test_file = "test_load.metta"

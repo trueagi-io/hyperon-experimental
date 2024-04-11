@@ -1,4 +1,5 @@
 import unittest
+import os
 
 from hyperon import atoms_are_equivalent
 
@@ -36,6 +37,9 @@ def areEqualMettaRunResults(a, b):
         if not areEqualNoOrder(a, b):
             return False
     return True
+
+def change_dir_to_parent_of(file):
+    os.chdir(os.path.dirname(file))
 
 class HyperonTestCase(unittest.TestCase):
 
