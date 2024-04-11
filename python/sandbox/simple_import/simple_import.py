@@ -9,7 +9,7 @@ def groundedatom_to_python_object(a):
         obj = obj.value
     if isinstance(obj, OperationObject):
         obj = obj.content
-    # At this point it is already python object
+    #we need to make __unwrap if needed
     if isinstance(obj, PythonCaller):
         obj = obj.obj
     return obj
@@ -71,7 +71,13 @@ def import_as(metta, lib, a, obj):
     _import_and_create_operationatom(metta, f"import {lib} as {obj}", obj)
     return []
 
-def call_with_dot(*atoms):
+def import_simple(metta, lib):
+    lib = str(lib)
+    obj = lib.split(".")[0]
+    _import_and_create_operationatom(metta, f"import {lib}", obj)
+    return []
+
+def call_dot(*atoms):
     if len(atoms) < 2:
         raise Exception("Syntax error")
     obj = groundedatom_to_python_object(atoms[0])
@@ -81,18 +87,31 @@ def call_with_dot(*atoms):
     rez = getattr(obj, method)(*args, **kwargs)
     return [ValueAtom(PythonCaller(rez))]
 
+def call_dot2(*atoms):
+    if len(atoms) < 3:
+        raise Exception("Syntax error")
+    obj = groundedatom_to_python_object(atoms[0])
+    method1 = str(atoms[1])
+    method2 = str(atoms[2])
+    atoms = atoms[3:]
+    args, kwargs = atoms_to_args(*atoms)
+    rez = getattr(getattr(obj, method1), method2)(*args, **kwargs)
+    return [ValueAtom(PythonCaller(rez))]
+
 def __unwrap(obj):
     return obj.obj
 
 @register_atoms(pass_metta=True)
 def my_atoms(metta):
-    return {'import_from': OperationAtom('import_from', lambda *args: import_from(metta, *args), unwrap = False),
-            'import_as':   OperationAtom('import_as',   lambda *args: import_as  (metta, *args), unwrap = False)}
+    return {'import_from': OperationAtom('import_from', lambda *args: import_from  (metta, *args), unwrap = False),
+            'import_as':   OperationAtom('import_as',   lambda *args: import_as    (metta, *args), unwrap = False),
+            'import':      OperationAtom('import',      lambda *args: import_simple(metta, *args), unwrap = False)}
 
 @register_atoms()
 def my_atoms2():
     return {'__unwrap': OperationAtom('__unwrap', __unwrap),
-            "call_dot": OperationAtom("call_dot", call_with_dot, unwrap = False)}
+            "call_dot": OperationAtom("call_dot",   call_dot, unwrap = False),
+            "call_dot2": OperationAtom("call_dot2", call_dot2, unwrap = False)}
 
 # The functions which are not required for import, but nice for examples
 
