@@ -11,40 +11,36 @@ class ExamplesTest(HyperonTestCase):
         # using & as a prefix is not obligatory, but is naming convention
         metta.register_atom("&obj", ValueAtom(obj))
 
-        target = metta.parse_single('(call:foo &obj)')
+        target = metta.parse_single('((py-dot &obj foo))')
         # interpreting this target in another space still works,
         # because substitution '&obj' -> obj is done by metta
         metta2 = MeTTa(env_builder=Environment.test_env())
         result = interpret(metta2.space(), target)
         self.assertTrue(obj.called)
-        self.assertEqual(result, [])
+        self.assertEqual(result, [Atoms.UNIT])
         # But it will not work if &obj is parsed in another space
-        result = metta2.run('!(call:foo &obj)')[0]
-        self.assertEqual(repr(result), '[(call:foo &obj)]')
+        result = metta2.run('!((py-dot &obj foo))')[0]
+        self.assertEqual(repr(result), '[((py-dot &obj foo))]')
 
-    # TODO: when (change-state ...) inside (, (change-state ...) ...) returns
-    # an empty result (for instance when variable is absent) then Interpreter
-    # stops processing (, ...) because no alternatives are present to continue
-    # interpretation.
-    @unittest.skip("TODO")
+    # TODO: it's a custom implementation of State. We may not need it anymore
     def test_self_modify(self):
         metta = MeTTa(env_builder=Environment.test_env())
         metta.run(
         '''
-            (= (remove-state $var)
+            (= (remove-st $var)
                (match &self (state $var $y)
-                  (call:remove_atom &self (state $var $y))))
-            (= (change-state $var $value)
-               (, (remove-state $var)
-                  (call:add_atom &self (state $var $value))))
-            (= (get-state $var)
+                  (remove-atom &self (state $var $y))))
+            (= (change-st $var $value)
+               (superpose ((remove-st $var)
+                  (add-atom &self (state $var $value)))))
+            (= (get-st $var)
                (match &self (state $var $value) $value))
         ''')
-        metta.run('!(change-state (name id-001) Fritz)')
-        self.assertEqualMettaRunnerResults(metta.run('!(get-state (name id-001))'),
+        metta.run('!(change-st (name id-001) Fritz)')
+        self.assertEqualMettaRunnerResults(metta.run('!(get-st (name id-001))'),
                          [[S('Fritz')]])
-        metta.run('!(change-state (name id-001) Sam)')
-        self.assertEqualMettaRunnerResults(metta.run('!(get-state (name id-001))'),
+        metta.run('!(change-st (name id-001) Sam)')
+        self.assertEqualMettaRunnerResults(metta.run('!(get-st (name id-001))'),
                          [[S('Sam')]])
 
     def test_new_object(self):
@@ -62,20 +58,21 @@ class ExamplesTest(HyperonTestCase):
         # - we create an atom on fly
         # - we change the value stored by the Python object
         # - interpretation of "pglob" will also give us this new value
-        metta.run('!(call:act (Setter pglob 5))')
+        metta.run('!((py-dot (Setter pglob 5) act))')
         self.assertEqual(pglob.get(), 5)
         self.assertEqual(metta.run('! pglob')[0][0].get_object().value.get(), 5)
         # Now check that "ploc" will not change, since
         # it is passed by value - not reference
-        metta.run('!(call:let (Setter ploc 5))')
+        metta.run('!((py-dot (Setter ploc 5) let))')
         self.assertEqual(ploc, 10)
         self.assertEqual(metta.run('! ploc')[0][0].get_object().value, 10)
         # Now we try to change the grounded atom value directly
         # (equivalent to metta.run but keeping target)
-        target = metta.parse_single('(call:latom (SetAtom ploc 5))')
+        target = metta.parse_single('((py-dot (SetAtom ploc 5) latom))')
         interpret(metta.space(), target)
+        t = target.get_children()[0] # unwrap outermost brackets
         # "ploc" value in the "target" is changed
-        self.assertEqual(target.get_children()[1].get_children()[1].get_object().value, 5)
+        self.assertEqual(t.get_children()[1].get_children()[1].get_object().value, 5)
         # But it is still not changed in another target, because
         # "ploc" creates ValueAtom(ploc) on each occurrence
         self.assertEqual(metta.run('! ploc')[0][0].get_object().value, 10)
@@ -84,11 +81,11 @@ class ExamplesTest(HyperonTestCase):
         metta.register_token("ploca", lambda _: ploca)
         # It will be not affected by assigning unwrapped values:
         # we are still copying values while unwrapping
-        metta.run('!(call:let (Setter ploca 5))')
+        metta.run('!((py-dot (Setter ploca 5) let))')
         self.assertEqual(metta.run('! ploca')[0][0].get_object().value, 10)
         self.assertEqual(ploca.get_object().value, 10)
         # However, it will be affected by assigning atom values
-        metta.run('!(call:latom (SetAtom ploca 5))')
+        metta.run('!((py-dot (SetAtom ploca 5) latom))')
         self.assertEqual(metta.run('! ploca')[0][0].get_object().value, 5)
         self.assertEqual(ploca.get_object().value, 5)
 
