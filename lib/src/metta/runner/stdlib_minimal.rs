@@ -1043,7 +1043,7 @@ mod tests {
 
     impl Grounded for SomeGndAtom {
         fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, sym!("Arg1Type"), sym!("Arg2Type"), sym!("ReturnType")])
+            Atom::expr([ARROW_SYMBOL, sym!("Arg1Type"), sym!("Arg2Type"), sym!("RetType")])
         }
 
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -1062,8 +1062,8 @@ mod tests {
         let parser = SExprParser::new(r#"
             (: Arg1Type Type)
             (: Arg2Type Type)
-            (: ReturnType Type)
-            (: some-func (-> Arg1Type Arg2Type ReturnType))
+            (: RetType Type)
+            (: some-func (-> Arg1Type Arg2Type RetType))
             (@doc some-func
               (@desc "Test function")
               (@params (
@@ -1080,12 +1080,12 @@ mod tests {
             vec![expr!("@doc-formal"
                 ("@item" "some-func")
                 ("@kind" "function")
-                ("@type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
+                ("@type" ("->" "Arg1Type" "Arg2Type" "RetType"))
                 ("@desc" {Str::from_str("Test function")})
                 ("@params" (
                     ("@param" ("@type" "Arg1Type") ("@desc" {Str::from_str("First argument")}))
                     ("@param" ("@type" "Arg2Type") ("@desc" {Str::from_str("Second argument")})) ))
-                ("@return" ("@type" "ReturnType") ("@desc" {Str::from_str("Return value")})) )],
+                ("@return" ("@type" "RetType") ("@desc" {Str::from_str("Return value")})) )],
         ]));
     }
 
@@ -1131,12 +1131,12 @@ mod tests {
             vec![expr!("@doc-formal"
                 ("@item" {SomeGndAtom{}})
                 ("@kind" "function")
-                ("@type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
+                ("@type" ("->" "Arg1Type" "Arg2Type" "RetType"))
                 ("@desc" {Str::from_str("Test function")})
                 ("@params" (
                     ("@param" ("@type" "Arg1Type") ("@desc" {Str::from_str("First argument")}))
                     ("@param" ("@type" "Arg2Type") ("@desc" {Str::from_str("Second argument")})) ))
-                ("@return" ("@type" "ReturnType") ("@desc" {Str::from_str("Return value")})) )],
+                ("@return" ("@type" "RetType") ("@desc" {Str::from_str("Return value")})) )],
         ]));
     }
 
@@ -1164,8 +1164,8 @@ mod tests {
         let parser = SExprParser::new(r#"
             (: Arg1Type Type)
             (: Arg2Type Type)
-            (: ReturnType Type)
-            (: some-func (-> Arg1Type Arg2Type ReturnType))
+            (: RetType Type)
+            (: some-func (-> Arg1Type Arg2Type RetType))
             (@doc some-func
               (@desc "Test function")
               (@params (
@@ -1182,7 +1182,7 @@ mod tests {
             vec![expr!("@doc-formal"
                 ("@item" ("some-func" "arg1" "arg2"))
                 ("@kind" "atom")
-                ("@type" "ReturnType")
+                ("@type" "RetType")
                 ("@desc" {Str::from_str("No documentation")}) )],
         ]));
     }
