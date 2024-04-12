@@ -140,13 +140,21 @@ def import_from_module(path, mod=None):
         import importlib
         # FIXME? Do we need this?
         current_directory = os.getcwd()
+        appended = False
         if current_directory not in sys.path:
             sys.path.append(current_directory)
-            obj = importlib.import_module(ps[0])
+            appended = True
+        for i in range(len(ps)):
+            j = len(ps) - i
+            try:
+                obj = importlib.import_module('.'.join(ps[:j]))
+                ps = ps[j:]
+                break
+            except:
+                pass
+        if appended:
             sys.path.remove(current_directory)
-        else:
-            obj = importlib.import_module(ps[0])
-        ps = ps[1:]
+        assert obj is not None
     for p in ps:
         obj = getattr(obj, p)
     return obj
