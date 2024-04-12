@@ -36,6 +36,35 @@ class StdlibTest(HyperonTestCase):
         self.assertEqualMettaRunnerResults(metta.run("!(charsToString ('A' 'B' 'C'))"),
                                            [[ValueAtom("ABC")]])
 
+    def test_py_atoms(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+        # Basic tests
+        # py-atom can give as both a module and a function in the module
+        # py-dot works for the module returned by py-atom
+        metta.run('''
+                  ! (bind! &pow (py-atom math.pow (-> Number Number Number)))
+                  ! (bind! &math (py-atom math))
+        ''')
+        self.assertEqual(metta.run('! (&pow 2 3)'),
+                         metta.run('! ((py-dot &math pow) 2 3)'))
+        self.assertEqual([[ValueAtom(3)]],
+            metta.run('! ((py-dot &math floor) (py-dot &math pi))'))
+        # Additional tests
+        # py-atom can actually execute some Python code
+        # py-dot works for dicts (and other classes) - not only modules
+        self.assertEqual([[ValueAtom('f')]],
+                         metta.run('! ((py-dot (py-atom "{5: \'f\'}") get) 5)'))
+        # py-atom can return some built-in functions without modules
+        self.assertEqual([[ValueAtom('5')]],
+                         metta.run('! ((py-atom str) 5)'))
+        # Check that py-dot accepts a nested path as a second argument
+        self.assertEqual([[ValueAtom("/usr")]],
+            metta.run('''
+                ! ((py-dot (py-atom os) path.commonpath)
+                   (py-atom "['/usr/lib', '/usr/local/lib']"))
+        '''))
+
+
     def test_number_parsing(self):
         metta = MeTTa(env_builder=Environment.test_env())
         self.assertEqualMettaRunnerResults(metta.run("!(+ 1 2)"), [[ValueAtom(3)]])
