@@ -1,5 +1,6 @@
 import re
 import sys
+import os
 
 from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError, AtomType, MatchableObject, \
     G, S, Atoms
@@ -138,10 +139,13 @@ def import_from_module(path, mod=None):
     if obj is None:
         import importlib
         # FIXME? Do we need this?
-        #current_directory = os.getcwd()
-        #if current_directory not in sys.path:
-        #    sys.path.append(current_directory)
-        obj = importlib.import_module(ps[0])
+        current_directory = os.getcwd()
+        if current_directory not in sys.path:
+            sys.path.append(current_directory)
+            obj = importlib.import_module(ps[0])
+            sys.path.remove(current_directory)
+        else:
+            obj = importlib.import_module(ps[0])
         ps = ps[1:]
     for p in ps:
         obj = getattr(obj, p)
