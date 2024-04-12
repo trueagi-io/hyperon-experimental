@@ -1,4 +1,5 @@
 import re
+import sys
 
 from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError, AtomType, MatchableObject, \
     G, S, Atoms
@@ -150,7 +151,9 @@ def find_py_obj(path, mod=None):
     try:
         obj = import_from_module(path, mod)
     except:
-        # if path is not found, check if the object itself exists
+        # If path is not found, check if the object itself exists
+        if hasattr(sys.modules.get('__main__'), path):
+            return getattr(sys.modules['__main__'], path)
         # FIXME? This was introduced for something like (py-obj str) to work.
         # But this works as one-line Python eval. Do we need it here?
         local_scope = {}
