@@ -163,7 +163,11 @@ def find_py_obj(path, mod=None):
 
 def get_py_atom(path, typ=AtomType.UNDEFINED, mod=None):
     name = str(path.get_object().content if isinstance(path, GroundedAtom) else path)
-    obj = find_py_obj(name, mod if mod is None else mod.get_object().value)
+    if mod is not None:
+        if not isinstance(mod, GroundedAtom):
+            raise NoReduceError()
+        mod = mod.get_object().content
+    obj = find_py_obj(name, mod)
     if callable(obj):
         return [OperationAtom(name, obj, typ, unwrap=True)]
     else:
@@ -179,49 +183,6 @@ def py_obj_atoms():
         r"py-dot": OperationAtom("py-dot", do_py_dot, unwrap=False),
     }
 
-
-@register_tokens
-def call_atom():
-    def newCallAtom(token):
-        # NOTE: we could use "call" as a plain symbol (insted of "call:...")
-        #       with the method name as the parameter of call_atom_op
-        #       (but this parameter should be unwrapped)
-        # "call:..." is an interesting example of families of tokens for ops, though
-        return OperationAtom(
-                    token,
-                    lambda obj, *args: call_atom_op(obj, token[5:], *args),
-                    unwrap=False)
-
-    def call_atom_op(atom, method_str, *args):
-        if not isinstance(atom, GroundedAtom):
-            # raise RuntimeError("call:" + method_str + " expects Python grounded atom")
-            raise NoReduceError()
-        obj = atom.get_object().value
-        method = getattr(obj, method_str)
-        result = method(*args)
-        if result is None:
-            return []
-        # Fixme? getting results from call_atom raises some issues but convenient.
-        # Running example is call:... &self (or another imported space)
-        # However if we need to wrap the result into GroundedAtom, we don't know
-        # its type. Also, if the method returns list, we can wrap it as whole or
-        # can interpret it as multiple results.
-        # Here, we don't wrap the list as whole, but wrap its elements even they
-        # are atoms, for get_atoms to work nicely (wrapped list is not printed
-        # nicely, while not wrapping atoms results in their further reduction)
-        # This functionality can be improved/changed based on other more
-        # important examples (e.g. dealing with DNN models) in the future,
-        # while the core functions like &self.get_atoms can be dealt with
-        # separately
-        if not isinstance(result, list):
-            result = [result]
-        result = [ValueAtom(r) for r in result]
-        #result = [r if isinstance(r, Atom) else ValueAtom(r) for r in result]
-        return result
-
-    return {
-        r"call:[^\s]+": newCallAtom
-    }
 
 @register_atoms
 def load_ascii():
