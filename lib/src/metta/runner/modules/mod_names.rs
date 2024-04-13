@@ -48,27 +48,28 @@ pub(crate) fn mod_name_remove_prefix<'a>(name: &'a str, prefix: &str) -> Option<
     }
 }
 
-/// Returns the portion of `name` that does not match the beginning of `other`, starting
-/// at the point where the strings diverge.  For example, is `name == "top:mod_a:hello"`
-/// and `other == "top:mod_a:goodbye"`, then this function would return "hello".
-pub(crate) fn remove_common_prefix<'a>(name: &'a str, other: &str) -> &'a str {
-    let mut start = 0;
-    let mut other_iter = other.chars();
-    for (idx, c_name) in name.char_indices() {
-        if c_name == MOD_NAME_SEPARATOR {
-            start = idx+1;
-        }
-        match other_iter.next() {
-            Some(c_other) => {
-                if c_name != c_other {
-                    return &name[start..]
-                }
-            },
-            None => return &name[start..]
-        }
-    }
-    ""
-}
+//TODO-NEXT: This function is likely unneeded, and can be removed
+// /// Returns the portion of `name` that does not match the beginning of `other`, starting
+// /// at the point where the strings diverge.  For example, is `name == "top:mod_a:hello"`
+// /// and `other == "top:mod_a:goodbye"`, then this function would return "hello".
+// pub(crate) fn remove_common_prefix<'a>(name: &'a str, other: &str) -> &'a str {
+//     let mut start = 0;
+//     let mut other_iter = other.chars();
+//     for (idx, c_name) in name.char_indices() {
+//         if c_name == MOD_NAME_SEPARATOR {
+//             start = idx+1;
+//         }
+//         match other_iter.next() {
+//             Some(c_other) => {
+//                 if c_name != c_other {
+//                     return &name[start..]
+//                 }
+//             },
+//             None => return &name[start..]
+//         }
+//     }
+//     ""
+// }
 
 /// Returns the part of a module name path after the last separator, or the entire path if it does not
 /// contain a separator.  May panic if the mod-name-path is invalid
@@ -594,10 +595,6 @@ fn module_name_parse_test() {
     assert_eq!(top.resolve("top:sub2:suba:subA").unwrap(), ModId(4));
     assert!(top.resolve("sub2:suba:subA:").is_none());
     assert!(top.resolve("sub1:suba").is_none());
-
-    //TODO-NOW, figure out if we want to keep these tests
-    // assert_eq!(ModNameNode::normalize_name_path("").unwrap(), "top");
-    // assert_eq!(ModNameNode::normalize_name_path("sub2:suba:subA").unwrap(), "top:sub2:suba:subA");
 
 // //NOTE: HashMap internals make the order unpredictable so this is hard to test
 // assert_eq!(format!("\n{top}"), r#"

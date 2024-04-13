@@ -1,6 +1,7 @@
 
 use std::path::{Path, PathBuf};
 use std::collections::HashMap;
+use std::cell::RefCell;
 
 use crate::metta::*;
 use crate::metta::runner::*;
@@ -21,7 +22,7 @@ pub mod catalog;
 use catalog::*;
 
 mod mod_names;
-pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, remove_common_prefix, decompose_name_path, compose_name_path, ModNameNodeDisplayWrapper};
+pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, decompose_name_path, compose_name_path, ModNameNodeDisplayWrapper};
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
@@ -45,6 +46,20 @@ impl ModId {
     pub(crate) const fn get_idx_from_relative(self) -> usize {
         self.0 & (usize::MAX >> 1)
     }
+    //TODO-NOW: Actually I might not need this if I don't allow InitFrames to collapse
+    // pub(crate) const fn new_relative(frame_idx: usize, mod_idx: usize) -> Self {
+    //     //Set the highest bit to 1 to indicate a relative ID,
+    //     //The low 16 bits are a mod_idx, and the 15 bits above that are the frame_idx
+    //     assert!(frame_idx < 1<<16);
+    //     assert!(mod_idx < 1<<17);
+    //     Self((!(usize::MAX>>1)) | (frame_idx<<16) | mod_idx)
+    // }
+    // /// Returns (frame_idx, mod_idx)
+    // pub(crate) const fn get_idx_from_relative(self) -> (usize, usize) {
+    //     let frame_idx = (self.0 & 0xFFFF0000) >> 16;
+    //     let mod_idx = self.0 & 0xFFFF;
+    //     (frame_idx, mod_idx)
+    // }
     pub(crate) const fn is_relative(self) -> bool {
         self.0 & (!(usize::MAX >> 1)) > 0
     }
@@ -95,7 +110,7 @@ impl MettaMod {
         //Load the stdlib unless this module is no_std
         if !no_stdlib {
             if let Some(stdlib_mod_id) = metta.0.stdlib_mod.get() {
-                new_mod.import_all_from_dependency(&metta, *stdlib_mod_id, metta.get_mod_ptr(*stdlib_mod_id)).unwrap();
+                new_mod.import_all_from_dependency(*stdlib_mod_id, metta.get_mod_ptr(*stdlib_mod_id)).unwrap();
             }
         }
 
@@ -109,18 +124,14 @@ impl MettaMod {
 
     /// Adds a loaded module as a dependency of the `&self` [MettaMod], and adds a [Tokenizer] entry to access
     /// the dependent module's Space.
-    pub(crate) fn import_dependency_as(&self, metta: &Metta, mod_ptr: Rc<MettaMod>, name: Option<String>) -> Result<(), String> {
+    pub(crate) fn import_dependency_as(&self, mod_ptr: Rc<MettaMod>, name: Option<String>) -> Result<(), String> {
 
         // Get the space and name associated with the dependent module
-        let mut runner_state = RunnerState::new_with_mod_ptr(metta, mod_ptr);
-        let (dep_space, name) = runner_state.run_in_context(|context| {
-            let dep_space = context.module().space().clone();
-            let name = match name {
-                Some(name) => name,
-                None => context.module().name().to_string()
-            };
-            Ok((dep_space, name))
-        })?;
+        let dep_space = mod_ptr.space().clone();
+        let name = match name {
+            Some(name) => name,
+            None => mod_ptr.name().to_string()
+        };
 
         //If the space name doesn't begin with '&' then add it
         let new_space_token = if name.starts_with('&') {
@@ -137,16 +148,12 @@ impl MettaMod {
     }
 
     /// Adds a specific atom and/or Tokenizer entry from a dependency module to the &self module
-    pub(crate) fn import_item_from_dependency_as(&self, metta: &Metta, from_name: &str, mod_ptr: Rc<MettaMod>, name: Option<&str>) -> Result<(), String> {
+    pub(crate) fn import_item_from_dependency_as(&self, from_name: &str, mod_ptr: Rc<MettaMod>, name: Option<&str>) -> Result<(), String> {
 
         // Get the space and tokenizer associated with the dependent module
-        let mut runner_state = RunnerState::new_with_mod_ptr(metta, mod_ptr);
-        let (dep_space, dep_tokenizer, src_mod_name) = runner_state.run_in_context(|context| {
-            let dep_space = context.module().space().clone();
-            let dep_tokenizer = context.module().tokenizer().clone();
-            let src_mod_name = context.module().path().to_string();
-            Ok((dep_space, dep_tokenizer, src_mod_name))
-        })?;
+        let dep_space = mod_ptr.space().clone();
+        let dep_tokenizer = mod_ptr.tokenizer().clone();
+        let src_mod_name = mod_ptr.path().to_string();
 
         //See if there is a match in the dependent module's Tokenizer
         if let Some(found_constructor) = dep_tokenizer.borrow().find_exact(from_name) {
@@ -191,7 +198,7 @@ impl MettaMod {
 
     /// Effectively adds all atoms in a dependency module to the &self module, by adding the dependency
     /// module's space as an atom inside the &self module
-    pub(crate) fn import_all_from_dependency(&self, metta: &Metta, mod_id: ModId, mod_ptr: Rc<MettaMod>) -> Result<(), String> {
+    pub(crate) fn import_all_from_dependency(&self, mod_id: ModId, mod_ptr: Rc<MettaMod>) -> Result<(), String> {
 
         // See if the dependency has already been imported
         if self.contains_imported_dep(&mod_id) {
@@ -199,11 +206,8 @@ impl MettaMod {
         }
 
         // Get the space associated with the dependent module
-        let mut runner_state = RunnerState::new_with_mod_ptr(metta, mod_ptr.clone());
-        let (dep_space, transitive_deps) = runner_state.run_in_context(|context| {
-            log::info!("import_all_from_dependency: importing from {} into {}", context.module().path(), self.path());
-            Ok(context.module().stripped_space())
-        })?;
+        log::info!("import_all_from_dependency: importing from {} into {}", mod_ptr.path(), self.path());
+        let (dep_space, transitive_deps) = mod_ptr.stripped_space();
 
         // Add a new Grounded Space atom to the &self space, so we can access the dependent module
         self.insert_dep(mod_id, dep_space)?;
@@ -216,15 +220,14 @@ impl MettaMod {
         }
 
         // Finally, Import the tokens from the dependency
-        self.import_all_tokens_from_dependency(metta, mod_ptr)
+        self.import_all_tokens_from_dependency(mod_ptr)
     }
 
     /// Merges all Tokenizer entries in a dependency module into &self
-    pub(crate) fn import_all_tokens_from_dependency(&self, metta: &Metta, mod_ptr: Rc<MettaMod>) -> Result<(), String> {
+    pub(crate) fn import_all_tokens_from_dependency(&self, mod_ptr: Rc<MettaMod>) -> Result<(), String> {
 
         // Get the tokenizer associated with the dependent module
-        let mut runner_state = RunnerState::new_with_mod_ptr(metta, mod_ptr);
-        let dep_tokenizer = runner_state.run_in_context(|context| Ok(context.module().tokenizer().clone()))?;
+        let dep_tokenizer = mod_ptr.tokenizer().clone();
 
         //Import all the Tokenizer entries from the dependency
         let mut dep_tok_clone = dep_tokenizer.borrow().clone();
@@ -332,29 +335,132 @@ impl MettaMod {
 
 }
 
-pub(crate) struct ModuleInitFrame {
-    /// The new module will get this name
-    new_mod_name: Option<String>,
-    /// Names of the sub-modules, relative to the self mod
-    pub sub_module_names: ModNameNode,
-    /// Sub-modules, indexed by ModuleDescriptor
-    module_descriptors: HashMap<ModuleDescriptor, ModId>,
-    /// Any child modules in the process of loading
-    pub modules: Vec<Rc<MettaMod>>,
+/// ModuleInitState is a smart-pointer to a vec of [ModuleInitFrame]
+pub(crate) enum ModuleInitState {
+    /// Meaning: The RunnerState holding this pointer is not initializing modules
+    None,
+    /// Meaning: The RunnerState holding this pointer is the "top" of a module init process
+    /// When the init function is finished, all of the InitFrames will be merged into the runner
+    Root(Rc<RefCell<Vec<ModuleInitFrame>>>),
+    /// Meaning: The RunnerState holding this pointer is nested within a module init process
+    /// When the init function is finished, the pointer will be simply dropped
+    Child(Rc<RefCell<Vec<ModuleInitFrame>>>)
 }
 
-impl ModuleInitFrame {
-    pub const MAIN_MOD_IDX: usize = 0;
-    const MAIN_MOD_ID: ModId = ModId::new_relative(Self::MAIN_MOD_IDX);
+impl Clone for ModuleInitState {
+    fn clone(&self) -> Self {
+        match self {
+            Self::None => Self::None,
+            Self::Root(rc) |
+            Self::Child(rc) => Self::Child(rc.clone())
+        }
+    }
+}
 
-    /// Returns ModuleInitFrame after initializing a module with the provided loader
+impl ModuleInitState {
+    pub fn empty() -> Self {
+        Self::None
+    }
+    pub fn new(mod_name: String) -> (Self, ModId) {
+        let init_state = Self::Root(Rc::new(RefCell::new(vec![ModuleInitFrame::new_with_name(mod_name)])));
+        (init_state, ModId::new_relative(0))
+    }
+    pub fn push(&mut self, mod_name: String) -> ModId {
+        match self {
+            Self::None => {
+                let (new_state, new_id) = Self::new(mod_name);
+                *self = new_state;
+                new_id
+            },
+            Self::Root(cell) |
+            Self::Child(cell) => {
+                let mut vec_ref = cell.borrow_mut();
+                let new_idx = vec_ref.len();
+                vec_ref.push(ModuleInitFrame::new_with_name(mod_name));
+                ModId::new_relative(new_idx)
+            }
+        }
+    }
+    pub fn is_root(&self) -> bool {
+        match self {
+            Self::Root(_) => true,
+            _ => false
+        }
+    }
+    pub fn decompose(self) -> Vec<ModuleInitFrame> {
+        match self {
+            Self::Root(cell) => {
+                core::mem::take(&mut*cell.borrow_mut())
+            },
+            _ => unreachable!()
+        }
+    }
+
+    /// Internal method to retrieve the mod_ptr to a module that's either loading in the
+    /// InitFrame, or loaded into the runner
+    pub fn get_mod_ptr(&self, metta: &Metta, mod_id: ModId) -> Result<Rc<MettaMod>, String> {
+        if mod_id.is_relative() {
+            let frame_idx = mod_id.get_idx_from_relative();
+            match &self {
+                Self::Root(cell) |
+                Self::Child(cell) => {
+                    match &cell.borrow().get(frame_idx).unwrap().the_mod {
+                        Some(the_mod) => Ok(the_mod.clone()),
+                        None => Err(format!("Attempt to access module before loader function has finished"))
+                    }
+                },
+                Self::None => unreachable!()
+            }
+        } else {
+            Ok(metta.get_mod_ptr(mod_id))
+        }
+    }
+
+    /// Locates and retrieves a loaded module, or a sub-module relative to the module being loaded
+    pub fn get_module_by_name(&self, runner: &Metta, mod_name: &str) -> Result<ModId, String> {
+        let mod_id = match self {
+            Self::Root(cell) |
+            Self::Child(cell) => {
+                let frames_ref = cell.borrow();
+                let mut subtree_pairs = vec![];
+                for frame in frames_ref.iter() {
+                    subtree_pairs.push((frame.path(), &frame.sub_module_names));
+                }
+                let module_names = runner.0.module_names.lock().unwrap();
+                module_names.resolve_layered(&subtree_pairs[..], mod_name).ok_or_else(|| format!("Unable to locate module: {mod_name}"))
+            },
+            Self::None => runner.get_module_by_name(mod_name)
+        }?;
+
+        if mod_id == ModId::INVALID {
+            Err(format!("Attempt to resolve module that is not yet loaded: {mod_name}"))
+        } else {
+            Ok(mod_id)
+        }
+    }
+
+    /// Runs the provided function in the context of the frame specified by `frame_mod`
+    pub fn in_frame<R, F: FnOnce(&mut ModuleInitFrame)->R>(&self, frame_mod: ModId, func: F) -> R {
+        match self {
+            Self::Root(cell) |
+            Self::Child(cell) => {
+                let mut frames_ref = cell.borrow_mut();
+                let frame_idx = frame_mod.get_idx_from_relative();
+                let frame = frames_ref.get_mut(frame_idx).unwrap();
+                func(frame)
+            },
+            _ => unreachable!()
+        }
+    }
+
+    /// Returns the ModId after initializing a module with the provided loader
     ///
     /// The init function will then call `context.init_self_module()` along with any other initialization code
-    pub fn init_module(runner: &Metta, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<Self, String> {
+    pub fn init_module(&mut self, runner: &Metta, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
 
         //Create a new RunnerState in order to initialize the new module, and push the init function
         // to run within the new RunnerState.  The init function will then call `context.init_self_module()`
-        let mut runner_state = RunnerState::new_internal(runner, Some(mod_name));
+        let mut runner_state = RunnerState::new_for_loading(runner, mod_name, self);
         runner_state.run_in_context(|context| {
             context.push_func(|context| loader.load(context));
             Ok(())
@@ -364,125 +470,69 @@ impl ModuleInitFrame {
         while !runner_state.is_complete() {
             runner_state.run_step()?;
         }
+        let mod_id = runner_state.finalize_loading()?;
 
         //Set the loader on the module, so its resource can be accessed later
-        let mut frame = runner_state.into_init_frame()?;
-        frame.try_borrow_main_mod_mut().unwrap().set_loader(loader);
-        Ok(frame)
+        self.in_frame(mod_id, |frame| Rc::get_mut(frame.the_mod.as_mut().unwrap()).unwrap().set_loader(loader));
+
+        Ok(mod_id)
     }
 
+    pub fn add_module_descriptor(&self, descriptor: ModuleDescriptor, mod_id: ModId) -> Result<(), String> {
+        //TODO-NOW NEED TO IMPLement this, which is likely going to involve creating a descriptors HashMap along-side the Frames Vec
+        Ok(())
+    }
+
+}
+
+pub(crate) struct ModuleInitFrame {
+    /// The new module will get this name
+    pub new_mod_name: Option<String>,
+    /// The new module, after the init has finished
+    pub the_mod: Option<Rc<MettaMod>>,
+    /// Names of the sub-modules, relative to self::path
+    pub sub_module_names: ModNameNode,
+
+    //TODO-NOW, these need to be promoted to be along-side the Frames Vec
+    // /// Sub-modules, indexed by ModuleDescriptor
+    // module_descriptors: HashMap<ModuleDescriptor, ModId>,
+}
+
+impl ModuleInitFrame {
     /// Creates a new ModuleInitFrame with a new module name.  Make sure this is normalized
     pub fn new_with_name(new_mod_name: String) -> Self {
         Self {
             new_mod_name: Some(new_mod_name),
+            the_mod: None,
             sub_module_names: ModNameNode::new(ModId::INVALID),
-            module_descriptors: HashMap::new(),
-            modules: vec![],
         }
-    }
-    pub fn try_borrow_main_mod(&self) -> Option<&MettaMod> {
-        self.modules.get(Self::MAIN_MOD_IDX).map(|m| &**m)
-    }
-    pub fn try_borrow_main_mod_mut(&mut self) -> Option<&mut MettaMod> {
-        self.modules.get_mut(Self::MAIN_MOD_IDX).and_then(|m| Rc::get_mut(m))
     }
     pub fn path(&self) -> &str {
         match &self.new_mod_name {
             Some(name) => name.as_str(),
-            None => self.modules.get(Self::MAIN_MOD_IDX).unwrap().path()
+            None => self.the_mod.as_ref().unwrap().path()
         }
     }
-    pub fn init_self_module(&mut self, metta: &Metta, space: DynSpace, resource_dir: Option<PathBuf>) {
-        if self.modules.len() > 0 {
-            panic!("Module already initialized")
-        }
+    pub fn init_self_module(&mut self, self_mod_id: ModId, metta: &Metta, space: DynSpace, resource_dir: Option<PathBuf>) -> Rc<MettaMod> {
         let tokenizer = Shared::new(Tokenizer::new());
-        let mod_name = core::mem::take(&mut self.new_mod_name).unwrap();
-        self.modules.push(Rc::new(MettaMod::new_with_tokenizer(metta, mod_name, space, tokenizer, resource_dir, false)));
-        self.sub_module_names.update("top", Self::MAIN_MOD_ID).unwrap();
+        let mod_name = self.new_mod_name.clone().unwrap();
+        let new_mod = Rc::new(MettaMod::new_with_tokenizer(metta, mod_name, space, tokenizer, resource_dir, false));
+        self.sub_module_names.update("top", self_mod_id).unwrap();
+        new_mod
     }
-
-    /// Locates and retrieves a loaded module, or a sub-module relative to the module being loaded
-    pub(crate) fn get_module_by_name(&self, runner: &Metta, mod_name: &str) -> Result<ModId, String> {
-        let self_mod_path = self.path();
-        let mod_name = normalize_relative_module_name(self_mod_path, mod_name)?;
-        let mod_id = {
-            let module_names = runner.0.module_names.lock().unwrap();
-            module_names.resolve_layered(&[(self_mod_path, &self.sub_module_names)], &mod_name).ok_or_else(|| format!("Unable to locate module: {mod_name}"))
-        }?;
-        if mod_id == ModId::INVALID {
-            Err(format!("Attempt to resolve module that is not yet loaded: {mod_name}"))
-        } else {
-            Ok(mod_id)
-        }
-    }
-
-    pub fn merge_child_frame(&mut self, mut child_frame: Self) -> Result<ModId, String> {
-        if child_frame.modules.len() == 0 {
-            return Err("Fatal Error: Module loader function exited without calling RunContext::init_self_module".to_string());
-        }
-
-        //TODO-NOW, no reason 0 needs to be special in this method.  We really want to loop over all of them
-        let module = Rc::into_inner(child_frame.modules.remove(0)).unwrap();
-
-        //TODO-NOW, gotta add the child mods from the frame and remap the child mod indices
-        //TODO-NOW, also gotta merge the child descriptors
-        //TODO-NOW, also need to re-map the module's "deps" ModIds
-
-        let adjusted_path = remove_common_prefix(module.path(), self.path()).to_owned();
-        self.sub_module_names.merge_subtree_into(&adjusted_path, child_frame.sub_module_names)?;
-
-        let mod_id = self.add_module(module)?;
-        self.sub_module_names.update(&adjusted_path, mod_id)?;
-        Ok(mod_id)
-    }
-
-    /// Internal method to add a MettaMod to the ModuleInitFrame, assigning it a temporary ModId
-    fn add_module(&mut self, module: MettaMod) -> Result<ModId, String> {
-        if self.modules.len() < 1 {
-            return Err("Self module must be initialized before child modules may be loaded".to_string());
-        }
-        let new_idx = self.modules.len();
-        self.modules.push(Rc::new(module));
-        Ok(ModId::new_relative(new_idx))
-    }
-
     /// Adds a sub-module to this module's subtree if a relative path was specified.  Otherwise adds
     /// the sub-module to the runner's main tree
     pub(crate) fn add_module_to_name_tree(&mut self, runner: &Metta, mod_name: &str, mod_id: ModId) -> Result<(), String> {
         //NOTE: impl of Self::path is duplicated here so we can split borrow. :-(
         let mut self_mod_path = match &self.new_mod_name {
             Some(name) => name.as_str(),
-            None => self.modules.get(Self::MAIN_MOD_IDX).unwrap().path()
+            None => self.the_mod.as_ref().unwrap().path()
         };
         let mod_name = normalize_relative_module_name(self_mod_path, mod_name)?;
         let subtree = &mut self.sub_module_names;
         let mut module_names = runner.0.module_names.lock().unwrap();
         module_names.add_to_layered(&mut[(&mut self_mod_path, subtree)], &mod_name, mod_id)
     }
-
-    pub(crate) fn add_module_descriptor(&mut self, descriptor: ModuleDescriptor, mod_id: ModId) {
-        self.module_descriptors.insert(descriptor, mod_id);
-    }
-
-    //TODO-NOW, delete this function
-    // //we want to iterate the sub-modules and take the module and ModNameNode out together
-    // // as we dismantle the frame to merge it into the runner
-    // /// Internal method as part of the loading process, caller takes ownership of sub-module hierarchiy
-    // /// to merge it into the runner's name hierarchy as part of loading a MettaMod into a runner
-    // pub(crate) fn take_sub_module_names(&mut self) -> Option<ModNameNode> {
-    //     //core::mem::take(&mut self.sub_module_names)
-    //     Some(self.sub_module_names.clone())
-    // }
-
-    //TODO-NOW, delete this function
-    // pub fn into_module(self) -> Result<(MettaMod, ModNameNode), String> {
-    //     assert!(self.sub_modules.len() == 0);
-    //     match self.the_mod {
-    //         Some(the_mod) => Ok((the_mod, self.sub_module_names)),
-    //         None => Err("Fatal Error: Module loader function exited without calling RunContext::init_self_module".to_string())
-    //     }
-    // }
 }
 
 /// Implemented to supply a loader functions for MeTTa modules
