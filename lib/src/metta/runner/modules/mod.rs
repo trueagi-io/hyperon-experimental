@@ -258,6 +258,21 @@ impl MettaMod {
         Ok(())
     }
 
+    /// Private method to iterate a module's imported_deps and replace a reference to one ModId
+    /// with another from a map.
+    pub(crate) fn remap_imported_deps(&self, mapping: &HashMap<ModId, ModId>) {
+        let mut deps = self.imported_deps.lock().unwrap();
+        let mut temp = HashMap::with_capacity(deps.len());
+        core::mem::swap(&mut temp, &mut *deps);
+        for (dep_mod_id, space) in temp.into_iter() {
+            let new_mod_id = match mapping.get(&dep_mod_id) {
+                Some(mapped_id) => *mapped_id,
+                None => dep_mod_id,
+            };
+            deps.insert(new_mod_id, space);
+        }
+    }
+
     /// Private function that returns a deep copy of a module's space, with the module's dependency
     /// sub-spaces stripped out and returned separately
     //

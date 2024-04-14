@@ -355,12 +355,24 @@ impl Metta {
             module_names.merge_subtree_into(&mod_name, subtree)?;
         }
 
-        //TODO-NOW, also gotta merge the descriptors, and re-map the ModIds in the descriptor lookup map
-        //TODO-NOW, also need to re-map the module's "deps" ModIds
+        // Merge the [ModuleDescriptor]s into the runner's table
+        for (descriptor, mod_id) in descriptors.into_iter() {
+            let mod_id = match mod_id_mapping.get(&mod_id) {
+                Some(mapped_id) => *mapped_id,
+                None => mod_id,
+            };
+            self.add_module_descriptor(descriptor, mod_id);
+        }
 
-        // //TODO-NOW, delete this
-        // let wrapper = ModNameNodeDisplayWrapper::new(TOP_MOD_NAME, &*module_names, |mod_id: ModId, f: &mut std::fmt::Formatter| write!(f, "{}", mod_id.0));
-        // println!("{wrapper}");
+        // Finally, re-map the module's "deps" ModIds
+        for added_mod_id in mod_id_mapping.values() {
+            let mod_ptr = self.get_mod_ptr(*added_mod_id);
+            mod_ptr.remap_imported_deps(&mod_id_mapping);
+        }
+
+        //TODO-NOW, delete this
+        let wrapper = ModNameNodeDisplayWrapper::new(TOP_MOD_NAME, &*module_names, |mod_id: ModId, f: &mut std::fmt::Formatter| write!(f, "{}", mod_id.0));
+        println!("{wrapper}");
 
         Ok(main_mod_id)
     }
