@@ -20,7 +20,7 @@ pub const MOD_NAME_SEPARATOR: char = ':';
 /// `self` is an alias for the current module
 /// `self.some_mod` is a private sub-module of the current module
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct ModNameNode {
     mod_id: ModId,
     children: Option<HashMap<String, ModNameNode>>

@@ -32,6 +32,12 @@ pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ModId(pub usize);
 
+impl Default for ModId {
+    fn default() -> Self {
+        ModId::INVALID
+    }
+}
+
 impl ModId {
     /// An invalid ModId that doesn't point to any loaded module
     pub const INVALID: ModId = ModId(usize::MAX);
@@ -341,10 +347,15 @@ pub(crate) enum ModuleInitState {
     None,
     /// Meaning: The RunnerState holding this pointer is the "top" of a module init process
     /// When the init function is finished, all of the InitFrames will be merged into the runner
-    Root(Rc<RefCell<Vec<ModuleInitFrame>>>),
+    Root(Rc<RefCell<ModuleInitStateInsides>>),
     /// Meaning: The RunnerState holding this pointer is nested within a module init process
     /// When the init function is finished, the pointer will be simply dropped
-    Child(Rc<RefCell<Vec<ModuleInitFrame>>>)
+    Child(Rc<RefCell<ModuleInitStateInsides>>)
+}
+
+pub(crate) struct ModuleInitStateInsides {
+    frames: Vec<ModuleInitFrame>,
+    module_descriptors: HashMap<ModuleDescriptor, ModId>,
 }
 
 impl Clone for ModuleInitState {
@@ -362,7 +373,11 @@ impl ModuleInitState {
         Self::None
     }
     pub fn new(mod_name: String) -> (Self, ModId) {
-        let init_state = Self::Root(Rc::new(RefCell::new(vec![ModuleInitFrame::new_with_name(mod_name)])));
+        let new_insides = ModuleInitStateInsides {
+            frames: vec![ModuleInitFrame::new_with_name(mod_name)],
+            module_descriptors: HashMap::new(),
+        };
+        let init_state = Self::Root(Rc::new(RefCell::new(new_insides)));
         (init_state, ModId::new_relative(0))
     }
     pub fn push(&mut self, mod_name: String) -> ModId {
@@ -374,9 +389,9 @@ impl ModuleInitState {
             },
             Self::Root(cell) |
             Self::Child(cell) => {
-                let mut vec_ref = cell.borrow_mut();
-                let new_idx = vec_ref.len();
-                vec_ref.push(ModuleInitFrame::new_with_name(mod_name));
+                let mut insides_ref = cell.borrow_mut();
+                let new_idx = insides_ref.frames.len();
+                insides_ref.frames.push(ModuleInitFrame::new_with_name(mod_name));
                 ModId::new_relative(new_idx)
             }
         }
@@ -387,10 +402,13 @@ impl ModuleInitState {
             _ => false
         }
     }
-    pub fn decompose(self) -> Vec<ModuleInitFrame> {
+    pub fn decompose(self) -> (Vec<ModuleInitFrame>, HashMap<ModuleDescriptor, ModId>) {
         match self {
             Self::Root(cell) => {
-                core::mem::take(&mut*cell.borrow_mut())
+                let mut insides_ref = cell.borrow_mut();
+                let frames = core::mem::take(&mut insides_ref.frames);
+                let descriptors = core::mem::take(&mut insides_ref.module_descriptors);
+                (frames, descriptors)
             },
             _ => unreachable!()
         }
@@ -404,7 +422,8 @@ impl ModuleInitState {
             match &self {
                 Self::Root(cell) |
                 Self::Child(cell) => {
-                    match &cell.borrow().get(frame_idx).unwrap().the_mod {
+                    let insides_ref = cell.borrow();
+                    match &insides_ref.frames.get(frame_idx).unwrap().the_mod {
                         Some(the_mod) => Ok(the_mod.clone()),
                         None => Err(format!("Attempt to access module before loader function has finished"))
                     }
@@ -421,9 +440,9 @@ impl ModuleInitState {
         let mod_id = match self {
             Self::Root(cell) |
             Self::Child(cell) => {
-                let frames_ref = cell.borrow();
+                let insides_ref = cell.borrow();
                 let mut subtree_pairs = vec![];
-                for frame in frames_ref.iter() {
+                for frame in insides_ref.frames.iter() {
                     subtree_pairs.push((frame.path(), &frame.sub_module_names));
                 }
                 let module_names = runner.0.module_names.lock().unwrap();
@@ -439,14 +458,22 @@ impl ModuleInitState {
         }
     }
 
+    pub fn add_module_to_name_tree(&self, runner: &Metta, frame_id: ModId, mod_name: &str, mod_id: ModId) -> Result<(), String> {
+        match self {
+            Self::Root(_) |
+            Self::Child(_) => self.in_frame(frame_id, |frame| frame.add_module_to_name_tree(runner, mod_name, mod_id)),
+            _ => runner.add_module_to_name_tree(mod_name, mod_id)
+        }
+    }
+
     /// Runs the provided function in the context of the frame specified by `frame_mod`
     pub fn in_frame<R, F: FnOnce(&mut ModuleInitFrame)->R>(&self, frame_mod: ModId, func: F) -> R {
         match self {
             Self::Root(cell) |
             Self::Child(cell) => {
-                let mut frames_ref = cell.borrow_mut();
+                let mut insides_ref = cell.borrow_mut();
                 let frame_idx = frame_mod.get_idx_from_relative();
-                let frame = frames_ref.get_mut(frame_idx).unwrap();
+                let frame = insides_ref.frames.get_mut(frame_idx).unwrap();
                 func(frame)
             },
             _ => unreachable!()
@@ -478,9 +505,33 @@ impl ModuleInitState {
         Ok(mod_id)
     }
 
-    pub fn add_module_descriptor(&self, descriptor: ModuleDescriptor, mod_id: ModId) -> Result<(), String> {
-        //TODO-NOW NEED TO IMPLement this, which is likely going to involve creating a descriptors HashMap along-side the Frames Vec
-        Ok(())
+    pub fn get_module_with_descriptor(&self, runner: &Metta, descriptor: &ModuleDescriptor) -> Option<ModId> {
+        match self {
+            Self::Root(cell) |
+            Self::Child(cell) => {
+                let insides_ref = cell.borrow_mut();
+                match insides_ref.module_descriptors.get(descriptor) {
+                    Some(mod_id) => Some(mod_id.clone()),
+                    None => runner.get_module_with_descriptor(descriptor)
+                }
+            },
+            Self::None => {
+                runner.get_module_with_descriptor(descriptor)
+            }
+        }
+    }
+
+    pub fn add_module_descriptor(&self, runner: &Metta, descriptor: ModuleDescriptor, mod_id: ModId) {
+        match self {
+            Self::Root(cell) |
+            Self::Child(cell) => {
+                let mut insides_ref = cell.borrow_mut();
+                insides_ref.module_descriptors.insert(descriptor, mod_id);
+            },
+            Self::None => {
+                runner.add_module_descriptor(descriptor, mod_id);
+            }
+        }
     }
 
 }
@@ -490,12 +541,8 @@ pub(crate) struct ModuleInitFrame {
     pub new_mod_name: Option<String>,
     /// The new module, after the init has finished
     pub the_mod: Option<Rc<MettaMod>>,
-    /// Names of the sub-modules, relative to self::path
+    /// Names of additional sub-modules loaded for this frame, relative to `self::path`
     pub sub_module_names: ModNameNode,
-
-    //TODO-NOW, these need to be promoted to be along-side the Frames Vec
-    // /// Sub-modules, indexed by ModuleDescriptor
-    // module_descriptors: HashMap<ModuleDescriptor, ModId>,
 }
 
 impl ModuleInitFrame {
@@ -532,6 +579,8 @@ impl ModuleInitFrame {
         let subtree = &mut self.sub_module_names;
         let mut module_names = runner.0.module_names.lock().unwrap();
         module_names.add_to_layered(&mut[(&mut self_mod_path, subtree)], &mod_name, mod_id)
+        //TODO-NOW: The add_to_layered above fails for deeply-nested frames because the connective parents aren't there
+        //Not sure what the right solution is here, but a very reasonable solution is to bring back the prefix-chopping
     }
 }
 

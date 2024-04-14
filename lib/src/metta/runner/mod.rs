@@ -270,6 +270,7 @@ impl Metta {
 
     /// Adds a ModId to the named module tree with the specified name, relative to the top of the runer
     fn add_module_to_name_tree(&self, mod_name: &str, mod_id: ModId) -> Result<(), String>  {
+        assert!(!mod_id.is_relative());
         let mut module_names = self.0.module_names.lock().unwrap();
         module_names.add(mod_name, mod_id)
     }
@@ -321,11 +322,11 @@ impl Metta {
 
     /// Merges all modules in a [ModuleInitState] into the runner
     fn merge_init_state(&self, init_state: ModuleInitState) -> Result<ModId, String> {
-        let mut return_mod_id = ModId::INVALID;
+        let mut main_mod_id = ModId::INVALID;
 
         let mut module_names = self.0.module_names.lock().unwrap();
 
-        let frames = init_state.decompose();
+        let (frames, descriptors) = init_state.decompose();
         for (frame_idx, frame) in frames.into_iter().enumerate() {
             let mod_name = frame.new_mod_name.unwrap();
             let module = frame.the_mod.unwrap();
@@ -339,11 +340,10 @@ impl Metta {
             module_names.update(&mod_name, new_mod_id)?;
 
             if frame_idx == 0 {
-                return_mod_id = new_mod_id;
+                main_mod_id = new_mod_id;
             }
         }
-
-        Ok(return_mod_id)
+        Ok(main_mod_id)
     }
 
     /// Internal function to add a loaded module to the runner, assigning it a ModId
@@ -725,11 +725,8 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
     ///
     /// NOTE: If this method is called during module load, and the module load fails, the
     /// added name will not become part of the runner's module namespace
-    pub fn add_module_to_name_tree(&mut self, mod_name: &str, mod_id: ModId) -> Result<(), String>  {
-        match self.mod_id.is_relative() {
-            true => self.init_state.in_frame(self.mod_id, |frame| frame.add_module_to_name_tree(&self.metta, mod_name, mod_id)),
-            false => self.metta.add_module_to_name_tree(mod_name, mod_id)
-        }
+    fn add_module_to_name_tree(&mut self, mod_name: &str, mod_id: ModId) -> Result<(), String>  {
+        self.init_state.add_module_to_name_tree(&self.metta, self.mod_id, mod_name, mod_id)
     }
 
     /// Normalize a module name into a canonical name-path form, and expanding a relative module-path
@@ -896,15 +893,23 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
     }
 
     #[cfg(feature = "pkg_mgmt")]
-    /// Checks the runner's descriptors to see if a given module has already been loaded, and returns
+    /// Checks the loaded [ModuleDescriptor]s to see if a given module has already been loaded, and returns
     /// that if it has.  Otherwise loads the module
+    ///
+    /// ## Explanation of behavior
+    /// * `mod_name` should not speicify an existing loaded module; If it does the caller should not have
+    ///   called this method
+    /// * If `descriptor` matches an existing loaded module, alias in the module name-space will be created,
+    ///   and the module's ModId will be returned, otherwise,
+    /// * The `loader` will be used to initialize a new module, and the new ModId will be returned
     fn get_or_init_module_with_descriptor(&mut self, mod_name: &str, descriptor: ModuleDescriptor, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
-        match self.metta.get_module_with_descriptor(&descriptor) {
-            Some(mod_id) => return Ok(mod_id),
+        match self.init_state.get_module_with_descriptor(&self.metta, &descriptor) {
+            Some(mod_id) => {
+                self.load_module_alias(mod_name, mod_id)
+            },
             None => {
-                //TODO-NOW We also need to check the descriptors for the InitState before jumping into init_module
                 let new_id = self.init_module(mod_name, loader)?;
-                self.init_state.add_module_descriptor(descriptor, new_id)?;
+                self.init_state.add_module_descriptor(&self.metta, descriptor, new_id);
                 Ok(new_id)
             }
         }
