@@ -323,26 +323,40 @@ impl Metta {
     /// Merges all modules in a [ModuleInitState] into the runner
     fn merge_init_state(&self, init_state: ModuleInitState) -> Result<ModId, String> {
         let mut main_mod_id = ModId::INVALID;
-
-        let mut module_names = self.0.module_names.lock().unwrap();
-
         let (frames, descriptors) = init_state.decompose();
+
+        // Unpack each frame and ,erge the modules from the ModuleInitState into the
+        // runner, and build the mapping table for ModIds
+        let mut mod_name_subtrees: Vec<(String, ModNameNode)> = Vec::with_capacity(frames.len());
+        let mut mod_id_mapping = HashMap::with_capacity(frames.len());
         for (frame_idx, frame) in frames.into_iter().enumerate() {
+            let old_mod_id = ModId::new_relative(frame_idx);
             let mod_name = frame.new_mod_name.unwrap();
             let module = frame.the_mod.unwrap();
 
-            module_names.merge_subtree_into(&mod_name, frame.sub_module_names)?;
-
-            //TODO-NOW, also gotta merge the descriptors, and re-map the ModIds in the descriptor lookup map
-            //TODO-NOW, also need to re-map the module's "deps" ModIds
+            mod_name_subtrees.push((mod_name, frame.sub_module_names));
 
             let new_mod_id = self.add_module(Rc::into_inner(module).unwrap())?;
-            module_names.update(&mod_name, new_mod_id)?;
+            mod_id_mapping.insert(old_mod_id, new_mod_id);
 
             if frame_idx == 0 {
                 main_mod_id = new_mod_id;
             }
         }
+
+        // Merge the name trees into the runner
+        let mut module_names = self.0.module_names.lock().unwrap();
+        for (mod_name, mut subtree) in mod_name_subtrees.into_iter() {
+            subtree.visit_mut("", |_name, node: &mut ModNameNode| {
+                if let Some(new_mod_id) = mod_id_mapping.get(&node.mod_id) {
+                    node.mod_id = *new_mod_id;
+                }
+            });
+            module_names.merge_subtree_into(&mod_name, subtree)?;
+        }
+
+        //TODO-NOW, also gotta merge the descriptors, and re-map the ModIds in the descriptor lookup map
+        //TODO-NOW, also need to re-map the module's "deps" ModIds
 
         // //TODO-NOW, delete this
         // let wrapper = ModNameNodeDisplayWrapper::new(TOP_MOD_NAME, &*module_names, |mod_id: ModId, f: &mut std::fmt::Formatter| write!(f, "{}", mod_id.0));

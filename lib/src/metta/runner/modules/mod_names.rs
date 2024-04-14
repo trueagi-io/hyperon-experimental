@@ -22,7 +22,7 @@ pub const MOD_NAME_SEPARATOR: char = ':';
 ///
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ModNameNode {
-    mod_id: ModId,
+    pub mod_id: ModId,
     children: Option<HashMap<String, ModNameNode>>
 }
 
@@ -263,6 +263,20 @@ impl ModNameNode {
             self.children = Some(HashMap::new());
         }
         self.children.as_mut().unwrap().insert(child_name, child_node);
+    }
+
+    /// Walks a tree running the provided function on each node, including the root
+    pub fn visit_mut<F: FnMut(&str, &mut Self)>(&mut self, root_node_name: &str, mut f: F) {
+        self.visit_mut_internal(root_node_name, &mut f);
+    }
+
+    fn visit_mut_internal<F: FnMut(&str, &mut Self)>(&mut self, root_node_name: &str, f: &mut F) {
+        f(root_node_name, self);
+        if let Some(children) = &mut self.children {
+            for (child_name, child_node) in children.iter_mut() {
+                child_node.visit_mut_internal(child_name, f);
+            }
+        }
     }
 
     /// Returns the [ModId] of a module name/path within `&self`, or None if it can't be resolved
