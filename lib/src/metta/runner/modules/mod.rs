@@ -52,20 +52,6 @@ impl ModId {
     pub(crate) const fn get_idx_from_relative(self) -> usize {
         self.0 & (usize::MAX >> 1)
     }
-    //TODO-NOW: Actually I might not need this if I don't allow InitFrames to collapse
-    // pub(crate) const fn new_relative(frame_idx: usize, mod_idx: usize) -> Self {
-    //     //Set the highest bit to 1 to indicate a relative ID,
-    //     //The low 16 bits are a mod_idx, and the 15 bits above that are the frame_idx
-    //     assert!(frame_idx < 1<<16);
-    //     assert!(mod_idx < 1<<17);
-    //     Self((!(usize::MAX>>1)) | (frame_idx<<16) | mod_idx)
-    // }
-    // /// Returns (frame_idx, mod_idx)
-    // pub(crate) const fn get_idx_from_relative(self) -> (usize, usize) {
-    //     let frame_idx = (self.0 & 0xFFFF0000) >> 16;
-    //     let mod_idx = self.0 & 0xFFFF;
-    //     (frame_idx, mod_idx)
-    // }
     pub(crate) const fn is_relative(self) -> bool {
         self.0 & (!(usize::MAX >> 1)) > 0
     }

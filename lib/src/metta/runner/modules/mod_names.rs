@@ -353,25 +353,6 @@ impl ModNameNode {
             |_, _| {}).map(|(node, _subtree_idx, remaining)| (node, remaining))
     }
 
-    // //TODO-NOW This function is probably not needed
-    // /// Parses a module name path into a canonical representation beginning with `top`
-    // ///
-    // /// Does not handle paths beginning with `self`
-    // pub fn normalize_name_path(name: &str) -> Result<String, String> {
-    //     if name == TOP_MOD_NAME {
-    //         return Ok(TOP_MOD_NAME.to_string());
-    //     }
-    //     let mut new_name = TOP_MOD_NAME.to_string();
-    //     let (_, _, last) = Self::parse_parent_generic(Self::top(), name, &OverlayMap::none(),
-    //         |node, _| Some(node),
-    //         |_, component| {new_name.push_str(":"); new_name.push_str(component)})?;
-    //     if last.len() > 0 {
-    //         new_name.push_str(":");
-    //         new_name.push_str(last);
-    //     }
-    //     Ok(new_name)
-    // }
-
     /// Internal generic `parse_parent` that can expand to mutable and const versions.
     /// Return valus is (parent_node, subtree_idx, remaining_name_path)
     /// If subtree_idx is None, the path was parsed to the end.  If it is Some, then the overlay_map

@@ -131,7 +131,7 @@ pub struct MettaContents {
     //TODO-HACK: This is a terrible horrible ugly hack that should not be merged.  Delete this field
     // The real context is an interface to the state in a run, and should not live across runs
     // This hack will fail badly if we end up running code from two different modules in parallel
-    context: Arc<Mutex<Vec<Arc<Mutex<&'static mut RunContext<'static, 'static, 'static, 'static>>>>>>,
+    context: Arc<Mutex<Vec<Arc<Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
 impl Metta {
@@ -275,19 +275,6 @@ impl Metta {
         module_names.add(mod_name, mod_id)
     }
 
-    //TODO-NOW, I Probably delete it
-    //LP-QUESTION: I am not sure if this should be deleted as unnecessary, or exposed as part of the public API.
-    // On the one hand, [RunContext::normalize_name_path] handles relative paths, and this function doesn't.
-    // On the other hand, you don't always have a RunContext available.
-    // /// Internal function to normalize a module name into a canonical name-path form
-    // fn normalize_module_name(&self, mod_name: &str) -> Result<String, String> {
-    //     let mod_name = match mod_name_relative_path(mod_name) {
-    //         Some(_) => {return Err(format!("Relative module-path not allowed when loading modules through runner API: {mod_name}"))},
-    //         None => mod_name,
-    //     };
-    //     ModNameNode::normalize_name_path(mod_name)
-    // }
-
     /// Makes a public alias for a loaded module inside the runner
     ///
     /// NOTE: `mod_name` may be a module name path if this alias is being loaded as a sub-module of
@@ -369,10 +356,6 @@ impl Metta {
             let mod_ptr = self.get_mod_ptr(*added_mod_id);
             mod_ptr.remap_imported_deps(&mod_id_mapping);
         }
-
-        //TODO-NOW, delete this
-        let wrapper = ModNameNodeDisplayWrapper::new(TOP_MOD_NAME, &*module_names, |mod_id: ModId, f: &mut std::fmt::Formatter| write!(f, "{}", mod_id.0));
-        println!("{wrapper}");
 
         Ok(main_mod_id)
     }
@@ -593,7 +576,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
     //TODO: When we eliminate the RunnerState, this method should become a private method of Metta,
     // and an argument of type `Option<ModId>` should be added.  When this function is used to initialize
     // modules, the module type can be returned from this function
-    fn run_in_context<T, F: FnOnce(&mut RunContext<'_, '_, 'm, 'input>) -> Result<T, String>>(&mut self, f: F) -> Result<T, String> {
+    fn run_in_context<T, F: FnOnce(&mut RunContext<'_, 'm, 'input>) -> Result<T, String>>(&mut self, f: F) -> Result<T, String> {
 
         // Construct the RunContext
         let mut context = RunContext {
@@ -649,22 +632,22 @@ impl<'m, 'input> RunnerState<'m, 'input> {
 // TODO: I think we may be able to remove the `'interpreter`` lifetime after the minimal MeTTa migration
 //  because the lifetime is separated on account of the inability of the compiler to shorten a lifetime
 //  used as a generic parameter on a trait.  In this case, the `Plan` trait.
-pub struct RunContext<'a, 'module, 'interpreter, 'input> {
+pub struct RunContext<'a, 'interpreter, 'input> {
     metta: &'a Metta,
     mod_id: ModId,
     mod_ptr: &'a mut Option<Rc<MettaMod>>,
-    init_state: &'module mut ModuleInitState, //TODO-NOW I think we can get rid of one of these lifetimes on the RunContext
+    init_state: &'a mut ModuleInitState,
     i_wrapper: &'a mut InterpreterWrapper<'interpreter, 'input>
 }
 
-impl std::fmt::Debug for RunContext<'_, '_, '_, '_> {
+impl std::fmt::Debug for RunContext<'_, '_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RunContext")
          .finish()
     }
 }
 
-impl<'input> RunContext<'_, '_, '_, 'input> {
+impl<'input> RunContext<'_, '_, 'input> {
     /// Returns access to the Metta runner that is hosting the context 
     pub fn metta(&self) -> &Metta {
         &self.metta
@@ -715,7 +698,7 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
             i_wrapper: &mut new_interpreter,
             mod_id: self.mod_id,
             mod_ptr: self.mod_ptr,
-            init_state: self.init_state, //TODO-NOW I think we can get rid of one of these lifetimes on the RunContext
+            init_state: self.init_state,
         };
 
         let mut err = None;
