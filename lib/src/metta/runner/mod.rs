@@ -343,6 +343,11 @@ impl Metta {
                 main_mod_id = new_mod_id;
             }
         }
+
+        // //TODO-NOW, delete this
+        // let wrapper = ModNameNodeDisplayWrapper::new(TOP_MOD_NAME, &*module_names, |mod_id: ModId, f: &mut std::fmt::Formatter| write!(f, "{}", mod_id.0));
+        // println!("{wrapper}");
+
         Ok(main_mod_id)
     }
 
@@ -726,7 +731,8 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
     /// NOTE: If this method is called during module load, and the module load fails, the
     /// added name will not become part of the runner's module namespace
     fn add_module_to_name_tree(&mut self, mod_name: &str, mod_id: ModId) -> Result<(), String>  {
-        self.init_state.add_module_to_name_tree(&self.metta, self.mod_id, mod_name, mod_id)
+        let normalized_mod_name = normalize_relative_module_name(self.module().path(), mod_name)?;
+        self.init_state.add_module_to_name_tree(&self.metta, self.mod_id, &normalized_mod_name, mod_id)
     }
 
     /// Normalize a module name into a canonical name-path form, and expanding a relative module-path
@@ -783,7 +789,6 @@ impl<'input> RunContext<'_, '_, '_, 'input> {
         if self.get_module_by_name(&mod_name).is_ok() {
             return Err(format!("Attempt to create module alias with name that conflicts with existing module: {mod_name}"));
         }
-        let mod_name = self.normalize_module_name(mod_name)?;
         self.add_module_to_name_tree(&mod_name, mod_id)?;
         Ok(mod_id)
     }

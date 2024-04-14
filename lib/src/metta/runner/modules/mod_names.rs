@@ -92,6 +92,20 @@ pub(crate) fn concat_relative_module_path(base_path: &str, relative_path: &str) 
     }
 }
 
+/// Returns the portion of `mod_path` that is a sub-path on top of `base_path`.  The reverse
+/// of `concat_relative_module_path`
+pub(crate) fn get_module_sub_path<'a>(mod_path: &'a str, base_path: &str) -> Option<&'a str> {
+    if mod_path.starts_with(base_path) {
+        if (&mod_path[base_path.len()..]).starts_with(':') {
+            Some(&mod_path[base_path.len()+1..])
+        } else {
+            None
+        }
+    } else {
+        None
+    }
+}
+
 /// Normalize a module name into a canonical name-path form, and expanding a relative module-path
 ///
 /// On input, module names that don't begin with either `top` nor `self` will be assumed to be
@@ -207,6 +221,7 @@ impl ModNameNode {
     }
 
     /// Adds a single new node to a layered tree.  See [Self::resolve_layered] for details
+    #[allow(dead_code)] //NOTE: This function "feels" like it belongs in a complete API, and might be used in the future.  See discussion on [ModuleInitFrame::add_module_to_name_tree]
     pub fn add_to_layered(&mut self, subtrees: &mut[(&str, &mut Self)], name: &str, mod_id: ModId) -> Result<(), String> {
         self.merge_subtree_into_layered(subtrees, name, Self::new(mod_id))
     }

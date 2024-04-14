@@ -22,7 +22,7 @@ pub mod catalog;
 use catalog::*;
 
 mod mod_names;
-pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, decompose_name_path, compose_name_path, ModNameNodeDisplayWrapper};
+pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, get_module_sub_path, decompose_name_path, compose_name_path, ModNameNodeDisplayWrapper};
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
@@ -461,7 +461,7 @@ impl ModuleInitState {
     pub fn add_module_to_name_tree(&self, runner: &Metta, frame_id: ModId, mod_name: &str, mod_id: ModId) -> Result<(), String> {
         match self {
             Self::Root(_) |
-            Self::Child(_) => self.in_frame(frame_id, |frame| frame.add_module_to_name_tree(runner, mod_name, mod_id)),
+            Self::Child(_) => self.in_frame(frame_id, |frame| frame.add_module_to_name_tree(mod_name, mod_id)),
             _ => runner.add_module_to_name_tree(mod_name, mod_id)
         }
     }
@@ -567,20 +567,30 @@ impl ModuleInitFrame {
         self.sub_module_names.update("top", self_mod_id).unwrap();
         new_mod
     }
-    /// Adds a sub-module to this module's subtree if a relative path was specified.  Otherwise adds
-    /// the sub-module to the runner's main tree
-    pub(crate) fn add_module_to_name_tree(&mut self, runner: &Metta, mod_name: &str, mod_id: ModId) -> Result<(), String> {
-        //NOTE: impl of Self::path is duplicated here so we can split borrow. :-(
-        let mut self_mod_path = match &self.new_mod_name {
-            Some(name) => name.as_str(),
-            None => self.the_mod.as_ref().unwrap().path()
-        };
-        let mod_name = normalize_relative_module_name(self_mod_path, mod_name)?;
-        let subtree = &mut self.sub_module_names;
-        let mut module_names = runner.0.module_names.lock().unwrap();
-        module_names.add_to_layered(&mut[(&mut self_mod_path, subtree)], &mod_name, mod_id)
-        //TODO-NOW: The add_to_layered above fails for deeply-nested frames because the connective parents aren't there
-        //Not sure what the right solution is here, but a very reasonable solution is to bring back the prefix-chopping
+    /// Adds a sub-module to this module's subtree
+    //
+    //DISCUSSION: Should a module loader be able to load modules into its parents?
+    // The argument for No is mainly hygene and isolation.  The argument for Yes is convenience.
+    //
+    // Currently this method implements the No behavior.  This is mostly because I feel that is
+    // correct, but partially because the Yes behavior raises an annoying paradox.
+    // If we wanted to implement the Yes behavior, we would want to assemble a layered tree from
+    // all the InitFrames, and use [ModNameNode::add_to_layered] to add the new node.  However,
+    // the added module now belongs to the node it was placed in.  So if the disjoint sub-module
+    // that added it went on to fail loading, the sub-module wouldn't get cleaned up.  Same goes
+    // for modules imported into the runner directly.  So the question of ownership over the module
+    // name-space gets a lot trickier if modules are allowed to add sub-modules outside themselves
+    pub(crate) fn add_module_to_name_tree(&mut self, mod_name: &str, mod_id: ModId) -> Result<(), String> {
+        let self_mod_path = &self.new_mod_name.as_ref().unwrap();
+        match get_module_sub_path(mod_name, &self_mod_path) {
+            Some(sub_mod_name) => {
+                if sub_mod_name.len() == 0 {
+                    return Err(format!("Attempt to load {mod_name} recursively from within its own loader"));
+                }
+                self.sub_module_names.add(sub_mod_name, mod_id)
+            },
+            None => return Err(format!("Cannot load module {mod_name} from loader of {self_mod_path}.  Module loaders may only load sub-modules"))
+        }
     }
 }
 
