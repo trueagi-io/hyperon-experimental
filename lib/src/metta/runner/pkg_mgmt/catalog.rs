@@ -70,6 +70,7 @@
 //
 // I think my personal preference is for #2.
 
+use std::path::Path;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::ffi::{OsStr, OsString};
@@ -139,9 +140,11 @@ pub struct DepEntry {
     /// If the fs_path is specified, the other pkg_info attributes will be ignored.
     //QUESTION: We need a MeTTa "style guide" for these field names, since they are effective going
     // to be part of the API, because a PkgInfo will be deserialized from atoms
-    pub fs_path: Option<PathBuf>
+    pub fs_path: Option<PathBuf>,
 
-    //TODO: field for fetching from a specific git repo
+    /// Indicates that the dependency module should be fetched from the specified `git` URI
+    pub git_uri: Option<String>,
+
     //TODO: field to indicate acceptable version range for dependency
 }
 

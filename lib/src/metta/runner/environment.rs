@@ -5,7 +5,7 @@ use std::fs;
 use std::sync::Arc;
 
 #[cfg(feature = "pkg_mgmt")]
-use crate::metta::runner::modules::catalog::{ModuleCatalog, DirCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt};
+use crate::metta::runner::pkg_mgmt::{ModuleCatalog, DirCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt};
 
 use directories::ProjectDirs;
 

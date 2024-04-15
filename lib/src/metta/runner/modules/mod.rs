@@ -1,6 +1,5 @@
 
-use std::path::{Path, PathBuf};
-use std::collections::HashMap;
+use std::path::Path;
 
 use crate::metta::*;
 use crate::metta::runner::*;
@@ -14,11 +13,6 @@ use super::stdlib::*;
 use super::interpreter_minimal::interpret;
 #[cfg(feature = "minimal")]
 use super::stdlib_minimal::*;
-
-#[cfg(feature = "pkg_mgmt")]
-pub mod catalog;
-#[cfg(feature = "pkg_mgmt")]
-use catalog::*;
 
 mod mod_names;
 pub(crate) use mod_names::{ModNameNode, mod_name_from_path, mod_name_relative_path, module_name_is_legal, ModNameNodeDisplayWrapper};

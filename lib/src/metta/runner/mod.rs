@@ -66,8 +66,15 @@ use super::types::validate_atom;
 
 pub mod modules;
 use modules::{MettaMod, ModNameNode, ModuleLoader, ResourceKey, TOP_MOD_NAME, ModNameNodeDisplayWrapper};
+
+//GOAT
+// #[cfg(feature = "pkg_mgmt")]
+// use modules::catalog::{ModuleDescriptor, loader_for_module_at_path};
+
 #[cfg(feature = "pkg_mgmt")]
-use modules::catalog::{ModuleDescriptor, loader_for_module_at_path};
+pub mod pkg_mgmt;
+#[cfg(feature = "pkg_mgmt")]
+use pkg_mgmt::*;
 
 use std::rc::Rc;
 use std::path::PathBuf;
