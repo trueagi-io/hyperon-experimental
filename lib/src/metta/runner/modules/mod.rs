@@ -1,6 +1,5 @@
 
-use std::path::{Path, PathBuf};
-use std::collections::HashMap;
+use std::path::Path;
 use std::cell::RefCell;
 
 use crate::metta::*;
@@ -304,6 +303,11 @@ impl MettaMod {
     #[cfg(feature = "pkg_mgmt")]
     pub fn pkg_info(&self) -> &PkgInfo {
         &self.pkg_info
+    }
+
+    #[cfg(feature = "pkg_mgmt")]
+    pub fn pkg_info_mut(&mut self) -> &mut PkgInfo {
+        &mut self.pkg_info
     }
 
     pub fn space(&self) -> &DynSpace {

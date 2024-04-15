@@ -76,8 +76,8 @@ use std::hash::Hasher;
 use std::ffi::{OsStr, OsString};
 
 use crate::metta::text::OwnedSExprParser;
-use crate::metta::runner::*;
 use crate::metta::runner::modules::*;
+use crate::metta::runner::{*, git_cache::*};
 
 use xxhash_rust::xxh3::xxh3_64;
 
@@ -142,8 +142,12 @@ pub struct DepEntry {
     // to be part of the API, because a PkgInfo will be deserialized from atoms
     pub fs_path: Option<PathBuf>,
 
-    /// Indicates that the dependency module should be fetched from the specified `git` URI
-    pub git_uri: Option<String>,
+    /// Indicates that the dependency module should be fetched from the specified `git` URL
+    pub git_url: Option<String>,
+
+    /// A `git`` branch to fetch.  Will be ignored if `git_url` is `None`.  Uses the repo's
+    /// default branch if left unspecified
+    pub git_branch: Option<String>,
 
     //TODO: field to indicate acceptable version range for dependency
 }
@@ -168,8 +172,13 @@ impl PkgInfo {
                 return loader_for_module_at_path(&context.metta, path, Some(mod_name), context.module().resource_dir());
             }
 
-            //TODO, if git URI is specified in the dep entry, clone the repo to a location in the environment
-            // dir with a unique path (based on a random uuid), and resolve it within that directory's catalog
+            //If a git URL is specified in the dep entry, see if we have it in the git-cache and
+            // clone it locally if we don't
+            if let Some(url) = &entry.git_url {
+                let cached_mod = CachedModule::new(context.metta.environment(), None, mod_name, url, url, entry.git_branch.as_ref().map(|s| s.as_str()))?;
+                cached_mod.update(UpdateMode::PullIfMissing)?;
+                return loader_for_module_at_path(&context.metta, cached_mod.local_path(), Some(mod_name), context.module().resource_dir());
+            }
 
             //TODO, If a version range is specified in the dep entry, then use that version range to specify
             // modules discovered in the catalogs
@@ -602,4 +611,49 @@ fn recursive_submodule_import_test() {
 
 //LP-TODO-NEXT, Add a test for loading a module from a DirCatalog by passing a name with an extension (ie. `my_mod.metta`) to `resolve`,
 // and make sure the loaded module that comes back doesn't have the extension
+
+#[derive(Debug)]
+struct TestLoader;
+
+impl ModuleLoader for TestLoader {
+    fn load(&self, context: &mut RunContext) -> Result<(), String> {
+        let space = DynSpace::new(GroundingSpace::new());
+        context.init_self_module(space, None);
+
+        //Set up the module [PkgInfo] so it knows to load a sub-module from git
+        let pkg_info = context.module_mut().unwrap().pkg_info_mut();
+        pkg_info.name = "test-mod".to_string();
+        pkg_info.deps.insert("metta-morph".to_string(), DepEntry{
+            fs_path: None,
+            //TODO: We probably want a smaller test repo
+            git_url: Some("https://github.com/trueagi-io/metta-morph/".to_string()),
+            git_branch: None, //Some("Hyperpose".to_string()),
+        });
+
+        Ok(())
+    }
+}
+
+/// Tests that a module can be fetched from git and loaded, when the git URL is specified in
+/// the module's PkgInfo.  This test requires a network connection
+///
+/// NOTE.  Ignored because we may not want it fetching from the internet when running the
+/// test suite.  Invoke `cargo test git_pkginfo_fetch_test -- --ignored` to run it.
+#[ignore]
+#[test]
+fn git_pkginfo_fetch_test() {
+
+    //Make a new runner, with the working dir in `/tmp/hyperon-test/`
+    let runner = Metta::new(Some(EnvBuilder::test_env().set_working_dir(Some(Path::new("/tmp/hyperon-test/")))));
+    let _mod_id = runner.load_module_direct(Box::new(TestLoader), "test-mod").unwrap();
+
+    let result = runner.run(SExprParser::new("!(import! &self test-mod:metta-morph:mettamorph)"));
+    assert_eq!(result, Ok(vec![vec![expr!()]]));
+
+    //Test that we can use a function imported from the module
+    let result = runner.run(SExprParser::new("!(sequential (A B))"));
+    assert_eq!(result, Ok(vec![vec![sym!("A"), sym!("B")]]));
+
+    runner.display_loaded_modules();
+}
 

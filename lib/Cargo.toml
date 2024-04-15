@@ -28,4 +28,4 @@ default = ["pkg_mgmt"]
 minimal = [] # enables minimal MeTTa interpreter
 variable_operation = [] # enables evaluation of the expressions which have
                         # a variable on the first position
-pkg_mgmt = ["xxhash-rust"]
+pkg_mgmt = ["xxhash-rust", "git2"]
