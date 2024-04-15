@@ -22,7 +22,7 @@ pub mod catalog;
 use catalog::*;
 
 mod mod_names;
-pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, get_module_sub_path, decompose_name_path, compose_name_path, ModNameNodeDisplayWrapper};
+pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, mod_name_remove_prefix, decompose_name_path, compose_name_path, ModNameNodeDisplayWrapper};
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
@@ -583,7 +583,7 @@ impl ModuleInitFrame {
     // name-space gets a lot trickier if modules are allowed to add sub-modules outside themselves
     pub(crate) fn add_module_to_name_tree(&mut self, mod_name: &str, mod_id: ModId) -> Result<(), String> {
         let self_mod_path = &self.new_mod_name.as_ref().unwrap();
-        match get_module_sub_path(mod_name, &self_mod_path) {
+        match mod_name_remove_prefix(mod_name, &self_mod_path) {
             Some(sub_mod_name) => {
                 if sub_mod_name.len() == 0 {
                     return Err(format!("Attempt to load {mod_name} recursively from within its own loader"));

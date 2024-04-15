@@ -32,6 +32,8 @@ pub(crate) fn mod_name_relative_path(name: &str) -> Option<&str> {
     mod_name_remove_prefix(name, SELF_MOD_NAME)
 }
 
+/// Returns the portion of `mod_path` that is a sub-path on top of `base_path`.  The reverse
+/// of `concat_relative_module_path`
 pub(crate) fn mod_name_remove_prefix<'a>(name: &'a str, prefix: &str) -> Option<&'a str> {
     if name.starts_with(prefix) {
         if name.len() == prefix.len() {
@@ -83,6 +85,14 @@ pub(crate) fn mod_name_from_path(path: &str) -> &str {
     &path[start_idx..]
 }
 
+pub(crate) fn chop_trailing_separator(path: &str) -> &str {
+    if path.ends_with(MOD_NAME_SEPARATOR) {
+        &path[0..path.len()-1]
+    } else {
+        path
+    }
+}
+
 /// Join a relative module path as a sub-module to `&self`
 pub(crate) fn concat_relative_module_path(base_path: &str, relative_path: &str) -> String {
     if relative_path.len() > 0 {
@@ -92,31 +102,24 @@ pub(crate) fn concat_relative_module_path(base_path: &str, relative_path: &str) 
     }
 }
 
-/// Returns the portion of `mod_path` that is a sub-path on top of `base_path`.  The reverse
-/// of `concat_relative_module_path`
-pub(crate) fn get_module_sub_path<'a>(mod_path: &'a str, base_path: &str) -> Option<&'a str> {
-    if mod_path.starts_with(base_path) {
-        if (&mod_path[base_path.len()..]).starts_with(':') {
-            Some(&mod_path[base_path.len()+1..])
-        } else {
-            None
-        }
-    } else {
-        None
-    }
-}
-
 /// Normalize a module name into a canonical name-path form, and expanding a relative module-path
 ///
 /// On input, module names that don't begin with either `top` nor `self` will be assumed to be
 /// relative to the current module.  On output, the result will be an absolute path beginning
 /// with `top`.
 pub(crate) fn normalize_relative_module_name(base_path: &str, mod_name: &str) -> Result<String, String> {
+    let mod_name = chop_trailing_separator(mod_name);
     let full_name_path = match mod_name_relative_path(mod_name) {
         Some(remainder) => concat_relative_module_path(base_path, remainder),
         None => {
             match mod_name_remove_prefix(mod_name, TOP_MOD_NAME) {
-                Some(remainder) => format!("{}:{}", TOP_MOD_NAME, remainder),
+                Some(remainder) => {
+                    if remainder.len() > 0 {
+                        format!("{}:{}", TOP_MOD_NAME, remainder)
+                    } else {
+                        TOP_MOD_NAME.to_string()
+                    }
+                },
                 None => concat_relative_module_path(base_path, mod_name),
             }
         },
