@@ -5,9 +5,9 @@ use hyperon::space::DynSpace;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
-use hyperon::metta::runner::{Metta, RunContext, ModId, RunnerState, Environment, EnvBuilder};
-use hyperon::metta::runner::modules::{ModuleLoader, ResourceKey};
-use hyperon::metta::runner::modules::catalog::{FsModuleFormat, ModuleDescriptor};
+use hyperon::metta::runner::{Metta, RunContext, RunnerState, Environment, EnvBuilder};
+use hyperon::metta::runner::modules::{ModuleLoader, ModId, ResourceKey};
+use hyperon::metta::runner::pkg_mgmt::{FsModuleFormat, ModuleDescriptor};
 use hyperon::atom::*;
 
 use crate::util::*;
@@ -1187,21 +1187,21 @@ pub struct run_context_t {
 // layer because it's harder to exercise lifecycle discipline in Python and a bug in Python shouldn't lead
 // to invlid memory access
 
-struct RustRunContext(RunContext<'static, 'static, 'static, 'static>);
+struct RustRunContext(RunContext<'static, 'static, 'static>);
 
-impl From<&mut RunContext<'_, '_, '_, '_>> for run_context_t {
-    fn from(context_ref: &mut RunContext<'_, '_, '_, '_>) -> Self {
+impl From<&mut RunContext<'_, '_, '_>> for run_context_t {
+    fn from(context_ref: &mut RunContext<'_, '_, '_>) -> Self {
         Self {
-            context: (context_ref as *mut RunContext<'_, '_, '_, '_>).cast()
+            context: (context_ref as *mut RunContext<'_, '_, '_>).cast()
         }
     }
 }
 
 impl run_context_t {
-    fn borrow(&self) -> &RunContext<'static, 'static, 'static, 'static> {
+    fn borrow(&self) -> &RunContext<'static, 'static, 'static> {
         &unsafe{ &*self.context.cast::<RustRunContext>() }.0
     }
-    fn borrow_mut(&mut self) -> &mut RunContext<'static, 'static, 'static, 'static> {
+    fn borrow_mut(&mut self) -> &mut RunContext<'static, 'static, 'static> {
         &mut unsafe{ &mut *self.context.cast::<RustRunContext>() }.0
     }
 }
@@ -2000,5 +2000,5 @@ pub extern "C" fn run_context_load_module(run_context: *mut run_context_t, name:
 pub extern "C" fn run_context_import_dependency(run_context: *mut run_context_t, mod_id: module_id_t) {
     let context = unsafe{ &mut *run_context }.borrow_mut();
 
-    context.module().import_all_from_dependency(context.metta(), mod_id.into_inner()).unwrap();
+    context.import_all_from_dependency(mod_id.into_inner()).unwrap();
 }
