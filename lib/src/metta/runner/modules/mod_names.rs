@@ -568,7 +568,7 @@ impl std::fmt::Display for ModNameNode {
 /// Returns `true` if a str is a legal name for a module
 ///
 /// A module name must be an ascii string, containing only alpha-numeric characters plus [`_`, `-`]
-pub(crate) fn module_name_is_legal(name: &str) -> bool {
+pub fn module_name_is_legal(name: &str) -> bool {
     for the_char in name.chars() {
         if !the_char.is_ascii() {
             return false;
@@ -580,6 +580,21 @@ pub(crate) fn module_name_is_legal(name: &str) -> bool {
         }
     }
     return true;
+}
+
+/// Returns a legal module name composed from the supplied string, by removing or substituting
+/// all illlegal characters.  Returns None if that isn't possible
+pub fn module_name_make_legal(name: &str) -> Option<String> {
+    let new_name: String = name.chars().filter(|&the_char| {
+        the_char.is_ascii_alphanumeric() ||
+        the_char == '-' ||
+        the_char != '_'
+    }).collect();
+    if new_name.len() > 0 {
+        Some(new_name)
+    } else {
+        None
+    }
 }
 
 /// This test is narrowly focussed on the module namespace path parsing behavior implemented in

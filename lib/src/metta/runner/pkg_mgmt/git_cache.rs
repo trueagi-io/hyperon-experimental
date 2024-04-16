@@ -12,12 +12,14 @@ use xxhash_rust::xxh3::xxh3_64;
 use git2::{*, build::*};
 
 use crate::metta::runner::environment::Environment;
+use crate::metta::runner::modules::module_name_make_legal;
 
 /// Indicates the desired behavior for updating the locally-cached repo
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UpdateMode {
     PullIfMissing,
     PullLatest,
+    TryPullLatest,
 }
 
 pub struct CachedModule {
@@ -67,9 +69,16 @@ impl CachedModule {
             Ok(repo) => {
 
                 //Do a `git pull` to bring it up to date
-                if mode == UpdateMode::PullLatest {
+                if mode == UpdateMode::PullLatest || mode == UpdateMode::TryPullLatest {
                     let mut remote = repo.find_remote("origin").map_err(|e| format!("Failed find 'origin' in git repo: {}, {}", self.url, e))?;
-                    remote.connect(Direction::Fetch).map_err(|e| format!("Failed to connect to origin repo: {}, {}", self.url, e))?;
+                    match remote.connect(Direction::Fetch) {
+                        Ok(_) => {},
+                        Err(e) => {
+                            if mode == UpdateMode::PullLatest {
+                                return Err(format!("Failed to connect to origin repo: {}, {}", self.url, e))
+                            }
+                        }
+                    }
 
                     let branch = self.get_branch(&remote)?;
                     remote.fetch(&[&branch], None, None).map_err(|e| format!("Failed fetch updates to git repo: {}, {}", self.url, e))?;
@@ -144,4 +153,16 @@ impl CachedModule {
     pub fn local_path(&self) -> &Path {
         &self.local_path
     }
+}
+
+/// Extracts the module name from a `.git` URL
+///
+/// For example, `https://github.com/trueagi-io/hyperon-experimental.git` would be parsed
+/// into "hyperon-experimental".  Returns None if the form of the URL isn't recognized
+pub fn mod_name_from_url(url: &str) -> Option<String> {
+    let without_ending = url.trim_end_matches(".git")
+        .trim_end_matches("/");
+    let without_mod_name = without_ending.trim_end_matches(|c| c != '/');
+    let mod_name = &without_ending[without_mod_name.len()..];
+    module_name_make_legal(mod_name)
 }

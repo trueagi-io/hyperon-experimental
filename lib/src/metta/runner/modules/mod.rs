@@ -16,7 +16,7 @@ use super::interpreter_minimal::interpret;
 use super::stdlib_minimal::*;
 
 mod mod_names;
-pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, mod_name_remove_prefix, decompose_name_path, compose_name_path, ModNameNodeDisplayWrapper};
+pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, module_name_make_legal, mod_name_remove_prefix, decompose_name_path, compose_name_path, ModNameNodeDisplayWrapper};
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner

@@ -5,6 +5,7 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
+use crate::metta::runner::git_cache::{CachedModule, UpdateMode, mod_name_from_url};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
@@ -312,6 +313,65 @@ impl Grounded for RegisterModuleOp {
         // it is better to keep the args simple.  IMO this is a place for optional var-args when we
         // decide on the best way to handle them language-wide.
         self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
+
+        unit_result()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+/// Provides access to module in a remote git repo, from within MeTTa code
+/// Similar to `register-module!`, this op will bypass the catalog search
+#[derive(Clone, Debug)]
+pub struct GitModuleOp {
+    metta: Metta
+}
+
+impl PartialEq for GitModuleOp {
+    fn eq(&self, _other: &Self) -> bool { true }
+}
+
+impl GitModuleOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{ metta }
+    }
+}
+
+impl Display for GitModuleOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "git-module!")
+    }
+}
+
+impl Grounded for GitModuleOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = "git-module! expects a URL; use quotes if needed";
+        let url_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+        // TODO: When we figure out how to address varargs, it will be nice to take an optional branch name
+
+        // TODO: replace Symbol by grounded String?
+        let url = match url_arg_atom {
+            Atom::Symbol(url_arg) => url_arg.name(),
+            _ => return Err(arg_error.into())
+        };
+        let url = strip_quotes(url);
+
+        // TODO: Depending on what we do with `register-module!`, we might want to let the
+        // caller provide an optional mod_name here too, rather than extracting it from the url
+        let mod_name = match mod_name_from_url(url) {
+            Some(mod_name) => mod_name,
+            None => return Err(ExecError::from("git-module! error extracting module name from URL"))
+        };
+
+        let cached_mod = CachedModule::new(self.metta.environment(), None, &mod_name, url, url, None)?;
+        cached_mod.update(UpdateMode::TryPullLatest)?;
+        self.metta.load_module_at_path(cached_mod.local_path(), Some(&mod_name)).map_err(|e| ExecError::from(e))?;
 
         unit_result()
     }
@@ -1584,6 +1644,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
         let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
         tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
+        let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
         let mod_space_op = Atom::gnd(ModSpaceOp::new(metta.clone()));
         tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
         let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
