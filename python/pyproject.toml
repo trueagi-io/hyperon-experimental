@@ -21,6 +21,9 @@ dependencies = [
 ]
 dynamic = ["version"]
 
+[tool.setuptools.dynamic]
+version = {attr = "hyperon.__version__"}
+
 [project.scripts]
 metta = "hyperon.metta:main"
 
