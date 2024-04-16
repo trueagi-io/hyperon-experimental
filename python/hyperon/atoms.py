@@ -349,7 +349,7 @@ class OperationObject(GroundedObject):
         """Returns the identifier name for this operation object."""
         return self.id
 
-    def execute(self, *args, res_typ=AtomType.UNDEFINED):
+    def execute(self, *atoms, res_typ=AtomType.UNDEFINED):
         """
         Executes the operation with the provided arguments.
 
@@ -370,21 +370,38 @@ class OperationObject(GroundedObject):
         """
         # type-check?
         if self.unwrap:
-            for arg in args:
-                if not isinstance(arg, GroundedAtom):
-                    # REM:
+            args = []
+            kwargs = {}
+            for a in atoms:
+                if isinstance(a, ExpressionAtom):
+                    ch = a.get_children()
+                    if len(ch) > 0 and repr(ch[0]) == "Kwargs":
+                        for c in ch[1:]:
+                            try:
+                                kwarg = c.get_children()
+                                assert len(kwarg) == 2
+                            except:
+                                raise RuntimeError(f"Incorrect kwarg format {kwarg}")
+                            try:
+                                kwargs[repr(kwarg[0])] = kwarg[1].get_object().content
+                            except:
+                                raise NoReduceError()
+                        continue
+                try:
+                    args.append(a.get_object().content)
+                except:
+                    # NOTE:
                     # Currently, applying grounded operations to pure atoms is not reduced.
                     # If we want, we can raise an exception, or form an error expression instead,
                     # so a MeTTa program can catch and analyze it.
                     # raise RuntimeError("Grounded operation " + self.name + " with unwrap=True expects only grounded arguments")
                     raise NoReduceError()
-            args = [arg.get_object().content for arg in args]
-            result = self.op(*args)
+            result = self.op(*args, **kwargs)
             if result is None:
                 return [Atoms.UNIT]
             return [G(ValueObject(result), res_typ)]
         else:
-            result = self.op(*args)
+            result = self.op(*atoms)
             if not isinstance(result, list):
                 raise RuntimeError("Grounded operation `" + self.name + "` should return list")
             return result

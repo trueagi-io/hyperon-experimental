@@ -22,6 +22,26 @@ class ExamplesTest(HyperonTestCase):
         result = metta2.run('!((py-dot &obj foo))')[0]
         self.assertEqual(repr(result), '[((py-dot &obj foo))]')
 
+    def test_kwargs(self):
+        def my_func(x = 1, y = 2, z = 4):
+            return x + y + z
+        metta = MeTTa(env_builder=Environment.test_env())
+        metta.register_atom("&f", OperationAtom("&f", my_func))
+        self.assertEqualMettaRunnerResults(
+            metta.run('''
+             ! (&f 2 4 6)
+             ! (&f 0)
+             ! (&f (Kwargs (y 4)))
+             ! (&f 2 (Kwargs (z 1)))
+             ! (&f 0 (Kwargs (z 1) (y 1)))
+            '''),
+            [[ValueAtom(12)],
+             [ValueAtom(6)],
+             [ValueAtom(9)],
+             [ValueAtom(5)],
+             [ValueAtom(2)]]
+            )
+
     # TODO: it's a custom implementation of State. We may not need it anymore
     def test_self_modify(self):
         metta = MeTTa(env_builder=Environment.test_env())

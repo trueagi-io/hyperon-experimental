@@ -1,4 +1,6 @@
 import re
+import sys
+import os
 
 from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError, AtomType, MatchableObject, \
     G, S, Atoms
@@ -137,11 +139,22 @@ def import_from_module(path, mod=None):
     if obj is None:
         import importlib
         # FIXME? Do we need this?
-        #current_directory = os.getcwd()
-        #if current_directory not in sys.path:
-        #    sys.path.append(current_directory)
-        obj = importlib.import_module(ps[0])
-        ps = ps[1:]
+        current_directory = os.getcwd()
+        appended = False
+        if current_directory not in sys.path:
+            sys.path.append(current_directory)
+            appended = True
+        for i in range(len(ps)):
+            j = len(ps) - i
+            try:
+                obj = importlib.import_module('.'.join(ps[:j]))
+                ps = ps[j:]
+                break
+            except:
+                pass
+        if appended:
+            sys.path.remove(current_directory)
+        assert obj is not None
     for p in ps:
         obj = getattr(obj, p)
     return obj
@@ -150,7 +163,9 @@ def find_py_obj(path, mod=None):
     try:
         obj = import_from_module(path, mod)
     except:
-        # if path is not found, check if the object itself exists
+        # If path is not found, check if the object itself exists
+        if hasattr(sys.modules.get('__main__'), path):
+            return getattr(sys.modules['__main__'], path)
         # FIXME? This was introduced for something like (py-obj str) to work.
         # But this works as one-line Python eval. Do we need it here?
         local_scope = {}
