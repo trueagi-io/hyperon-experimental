@@ -317,6 +317,7 @@ fn is_grounded_op(expr: &ExpressionAtom) -> bool {
 fn is_variable_op(expr: &ExpressionAtom) -> bool {
     match expr.children().get(0) {
         Some(Atom::Variable(_)) => true,
+        Some(Atom::Expression(expr)) => is_variable_op(expr),
         _ => false,
     }
 }
@@ -1125,6 +1126,15 @@ mod tests {
         assert_eq_no_order!(actual, vec![expr!("foo result" "arg"), expr!("bar result" "arg")]);
         #[cfg(not(feature = "variable_operation"))]
         assert_eq!(actual, vec![expr!(op "arg")]);
+    }
+
+    #[cfg(not(feature = "variable_operation"))]
+    #[test]
+    fn interpret_match_variable_operation_nested() {
+        let mut space = GroundingSpace::new();
+        space.add(expr!("=" (("baz" x) y) ("baz result" x y)));
+        let actual = interpret(&space, &expr!((op "arg1") "arg2")).unwrap();
+        assert_eq!(actual, vec![expr!((op "arg1") "arg2")]);
     }
 }
 
