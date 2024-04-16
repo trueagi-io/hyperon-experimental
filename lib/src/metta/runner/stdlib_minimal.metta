@@ -1,8 +1,7 @@
 (@doc ErrorType (@desc "Type of the atom which contains error"))
 (: ErrorType Type)
 (: Error (-> Atom Atom ErrorType))
-(: ReturnType Type)
-(: return (-> Atom ReturnType))
+(: return (-> $t $t))
 
 (: function (-> Atom Atom))
 (: eval (-> Atom Atom))
