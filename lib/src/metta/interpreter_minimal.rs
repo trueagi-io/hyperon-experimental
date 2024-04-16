@@ -483,12 +483,16 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, 
 #[cfg(not(feature = "variable_operation"))]
 fn is_variable_op(atom: &Atom) -> bool {
     match atom {
-        Atom::Expression(expr) => {
-            match expr.children().get(0) {
-                Some(Atom::Variable(_)) => true,
-                _ => false,
-            }
-        },
+        Atom::Expression(expr) => is_variable_op_expr(expr),
+        _ => false,
+    }
+}
+
+#[cfg(not(feature = "variable_operation"))]
+fn is_variable_op_expr(expr: &ExpressionAtom) -> bool {
+    match expr.children().get(0) {
+        Some(Atom::Variable(_)) => true,
+        Some(Atom::Expression(expr)) => is_variable_op_expr(expr),
         _ => false,
     }
 }
@@ -915,6 +919,16 @@ mod tests {
         let result = call_interpret(&space, &metta_atom("(eval ($a A $b))"));
         #[cfg(feature = "variable_operation")]
         assert_eq!(result, vec![metta_atom("A")]);
+        #[cfg(not(feature = "variable_operation"))]
+        assert_eq!(result, vec![NOT_REDUCIBLE_SYMBOL]);
+    }
+
+    #[test]
+    fn interpret_atom_evaluate_variable_operation_nested() {
+        let space = space("(= ((baz $a) $b) ($a $b))");
+        let result = call_interpret(&space, &metta_atom("(eval (($a A) B))"));
+        #[cfg(feature = "variable_operation")]
+        assert_eq!(result, vec![metta_atom("(A B)")]);
         #[cfg(not(feature = "variable_operation"))]
         assert_eq!(result, vec![NOT_REDUCIBLE_SYMBOL]);
     }
