@@ -4,8 +4,8 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
-use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
-use crate::metta::runner::git_cache::{CachedModule, UpdateMode, mod_name_from_url};
+use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey, mod_name_from_url};
+use crate::metta::runner::git_cache::{CachedRepo, UpdateMode};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
@@ -369,7 +369,7 @@ impl Grounded for GitModuleOp {
             None => return Err(ExecError::from("git-module! error extracting module name from URL"))
         };
 
-        let cached_mod = CachedModule::new(self.metta.environment(), None, &mod_name, url, url, None)?;
+        let cached_mod = CachedRepo::new(self.metta.environment(), None, &mod_name, url, url, None)?;
         cached_mod.update(UpdateMode::TryPullLatest)?;
         self.metta.load_module_at_path(cached_mod.local_path(), Some(&mod_name)).map_err(|e| ExecError::from(e))?;
 

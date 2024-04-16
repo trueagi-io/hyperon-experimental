@@ -16,6 +16,7 @@ use directories::ProjectDirs;
 #[derive(Debug)]
 pub struct Environment {
     config_dir: Option<PathBuf>,
+    caches_dir: Option<PathBuf>,
     init_metta_path: Option<PathBuf>,
     working_dir: Option<PathBuf>,
     is_test: bool,
@@ -41,12 +42,20 @@ impl Environment {
         COMMON_ENV.get_or_init(|| Arc::new(EnvBuilder::new().build())).clone()
     }
 
-    /// Returns the Path to the config dir, in an OS-specific location
+    /// Returns the [Path] to the config dir, in an OS-specific location
     pub fn config_dir(&self) -> Option<&Path> {
         self.config_dir.as_deref()
     }
 
-    /// Returns the Path to the environment's working_dir
+    /// Returns the [Path] to a directory where the MeTTa runner can put persistent caches
+    ///
+    /// NOTE: Currently the `caches_dir` dir is within `cfg_dir`, but there may be a reason
+    ///  to move it in the future.
+    pub fn caches_dir(&self) -> Option<&Path> {
+        self.caches_dir.as_deref()
+    }
+
+    /// Returns the [Path] to the environment's working_dir
     ///
     /// NOTE: The Environment's working_dir is not the same as the process working directory, and
     /// changing the process's working directory will not affect the environment
@@ -75,6 +84,7 @@ impl Environment {
     fn new() -> Self {
         Self {
             config_dir: None,
+            caches_dir: None,
             init_metta_path: None,
             working_dir: std::env::current_dir().ok(),
             is_test: false,
@@ -260,7 +270,10 @@ impl EnvBuilder {
             if env.config_dir.is_none() {
                 match ProjectDirs::from("io", "TrueAGI",  "metta") {
                     Some(proj_dirs) => {
-                        env.config_dir = Some(proj_dirs.config_dir().into());
+                        let cfg_dir: PathBuf = proj_dirs.config_dir().into();
+                        let caches_dir = cfg_dir.join("caches");
+                        env.config_dir = Some(cfg_dir);
+                        env.caches_dir = Some(caches_dir);
                     },
                     None => {
                         eprint!("Failed to initialize config with OS config directory!");

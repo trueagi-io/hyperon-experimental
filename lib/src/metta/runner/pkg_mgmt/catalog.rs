@@ -175,7 +175,7 @@ impl PkgInfo {
             //If a git URL is specified in the dep entry, see if we have it in the git-cache and
             // clone it locally if we don't
             if let Some(url) = &entry.git_url {
-                let cached_mod = CachedModule::new(context.metta.environment(), None, mod_name, url, url, entry.git_branch.as_ref().map(|s| s.as_str()))?;
+                let cached_mod = CachedRepo::new(context.metta.environment(), None, mod_name, url, url, entry.git_branch.as_ref().map(|s| s.as_str()))?;
                 cached_mod.update(UpdateMode::PullIfMissing)?;
                 return loader_for_module_at_path(&context.metta, cached_mod.local_path(), Some(mod_name), context.module().resource_dir());
             }
@@ -557,6 +557,22 @@ impl ModuleDescriptor {
     }
 }
 
+/// Extracts the module name from a `.git` URL
+///
+/// For example, `https://github.com/trueagi-io/hyperon-experimental.git` would be parsed
+/// into "hyperon-experimental".  Returns None if the form of the URL isn't recognized
+pub fn mod_name_from_url(url: &str) -> Option<String> {
+    let without_ending = url.trim_end_matches("/")
+        .trim_end_matches(".git");
+    let without_mod_name = without_ending.trim_end_matches(|c| c != '/');
+    let mod_name = &without_ending[without_mod_name.len()..];
+    module_name_make_legal(mod_name)
+}
+
+//-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-
+// TESTS
+//-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-
+
 /// Bogus test catalog that returns a fake module in response to any query with a single capital letter
 /// used by `recursive_submodule_import_test`
 #[derive(Debug)]
@@ -643,8 +659,8 @@ impl ModuleLoader for TestLoader {
 #[test]
 fn git_pkginfo_fetch_test() {
 
-    //Make a new runner, with the working dir in `/tmp/hyperon-test/`
-    let runner = Metta::new(Some(EnvBuilder::test_env().set_working_dir(Some(Path::new("/tmp/hyperon-test/")))));
+    //Make a new runner, with the config dir in `/tmp/hyperon-test/`
+    let runner = Metta::new(Some(EnvBuilder::test_env().set_config_dir(Path::new("/tmp/hyperon-test/"))));
     let _mod_id = runner.load_module_direct(Box::new(TestLoader), "test-mod").unwrap();
 
     let result = runner.run(SExprParser::new("!(import! &self test-mod:metta-morph:mettamorph)"));

@@ -1,5 +1,5 @@
 
-//! Manages a local cache of modules cloned from git
+//! Manages a local cache of cloned git repos
 //!
 //! Currently all network activity is synchronous.  At some point it makes sense to move
 //! to async in order to parallelize downloads, etc.  When that time comes I would like
@@ -7,54 +7,65 @@
 //!
 
 use std::path::{Path, PathBuf};
+use std::time::{SystemTime, Duration, UNIX_EPOCH};
+use std::fs::{File, read_to_string};
+use std::io::prelude::*;
 
 use xxhash_rust::xxh3::xxh3_64;
 use git2::{*, build::*};
 
 use crate::metta::runner::environment::Environment;
-use crate::metta::runner::modules::module_name_make_legal;
+
+const TIMESTAMP_FILENAME: &'static str = "_timestamp_";
 
 /// Indicates the desired behavior for updating the locally-cached repo
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UpdateMode {
+    /// Clones the repo if it doesn't exist, otherwise leaves it alone
     PullIfMissing,
+    /// Pulls the latest from the remote repo.  Fails if the remote is unavailable
     PullLatest,
+    /// Attempts to pull from the remote repo.  Continues with the existing repo if
+    /// the remote is unavailable
     TryPullLatest,
+    /// Attempts to pull from the remote repo is the local cache is older than the
+    /// specified number of seconds.  Otherwise continues with the repo on the disk
+    TryPullIfOlderThan(u64)
 }
 
-pub struct CachedModule {
-    _mod_name: String,
+pub struct CachedRepo {
+    _name: String,
     url: String,
     branch: Option<String>,
     local_path: PathBuf,
 }
 
-impl CachedModule {
-    /// Initializes a new CachedModule object
+impl CachedRepo {
+    /// Initializes a new CachedRepo object
     ///
     /// * `cache_name` - A name to describe the cache.  For the default cache for URLs specified
     ///  from the [PkgInfo], the cache is named `git-modules`
-    /// * `mod_name` - The catalog name of the module in the cache
-    /// * `ident_str` - An ascii string that identifies the specific module among other verions
-    ///  of the module.
-    /// * `url` - The URL from which to fetch the module
+    /// * `name` - The name of this repo within in the cache.  Often equal to the catalog name of a module
+    /// * `ident_str` - An ascii string that identifies the specific repo among other verions.
+    ///  For example this could be a version, for a MeTTa module catalog cache.
+    /// * `url` - The remote URL from which to fetch the repo
     /// * `branch` - The branch to use, or default if None
-    pub fn new(env: &Environment, cache_name: Option<&str>, mod_name: &str, ident_str: &str, url: &str, branch: Option<&str>) -> Result<Self, String> {
+    pub fn new(env: &Environment, cache_name: Option<&str>, name: &str, ident_str: &str, url: &str, branch: Option<&str>) -> Result<Self, String> {
         let cache_name = cache_name.unwrap_or("git-modules");
-        let working_dir = env.working_dir().ok_or_else(|| "Unable to clone git repository; no local working directory available".to_string())?;
+        let caches_dir = env.caches_dir().ok_or_else(|| "Unable to clone git repository; no local \"caches\" directory available".to_string())?;
         let branch_str = match &branch {
             Some(s) => s,
             None => ""
         };
 
         let unique_id = xxh3_64(format!("{}{}", ident_str, branch_str).as_bytes());
-        let local_filename = format!("{mod_name}.{unique_id:16x}");
-        let local_path = working_dir.join(cache_name).join(local_filename);
+        let local_filename = format!("{name}.{unique_id:016x}");
+        let local_path = caches_dir.join(cache_name).join(local_filename);
 
         std::fs::create_dir_all(&local_path).map_err(|e| e.to_string())?;
 
         Ok(Self {
-            _mod_name: mod_name.to_string(),
+            _name: name.to_string(),
             url: url.to_string(),
             branch: branch.map(|s| s.to_owned()),
             local_path,
@@ -69,7 +80,7 @@ impl CachedModule {
             Ok(repo) => {
 
                 //Do a `git pull` to bring it up to date
-                if mode == UpdateMode::PullLatest || mode == UpdateMode::TryPullLatest {
+                if mode == UpdateMode::PullLatest || mode == UpdateMode::TryPullLatest || self.check_timestamp(mode) {
                     let mut remote = repo.find_remote("origin").map_err(|e| format!("Failed find 'origin' in git repo: {}, {}", self.url, e))?;
                     match remote.connect(Direction::Fetch) {
                         Ok(_) => {},
@@ -85,6 +96,7 @@ impl CachedModule {
 
                     let fetch_head = repo.find_reference("FETCH_HEAD").map_err(|e| e.to_string())?;
                     self.merge(&repo, &branch, &fetch_head).map_err(|e| format!("Failed to merge remote git repo: {}, {}", self.url, e))?;
+                    self.write_timestamp_file()?;
                 }
                 Ok(())
             },
@@ -99,7 +111,10 @@ impl CachedModule {
                     None => {}
                 }
                 match repo_builder.clone(&self.url, &self.local_path) {
-                    Ok(_repo) => Ok(()),
+                    Ok(_repo) => {
+                        self.write_timestamp_file()?;
+                        Ok(())
+                    },
                     Err(e) => Err(format!("Failed to clone git repo: {}, {}", self.url, e)),
                 }
             },
@@ -130,8 +145,9 @@ impl CachedModule {
             reference.set_target(annotated_commit.id(), "Fast-forward")?;
             repo.checkout_head(None)?;
         } else {
+            panic!("Fatal Error: cached git repository at \"{}\" appears to be corrupt", self.local_path.display());
             //NOTE: the below code appears to work, but it isn't needed at the moment
-            unreachable!();
+            //
             // // Normal merge...
             // let head_commit = repo.head()?.peel_to_commit()?;
             // let incomming_commit = Reference::peel_to_commit(incomming_commit_ref)?;
@@ -149,20 +165,36 @@ impl CachedModule {
         Ok(())
     }
 
+    /// Internal function to write the timestamp file, with the value of "now"
+    fn write_timestamp_file(&self) -> Result<(), String> {
+        let duration_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let file_path = self.local_path.join(TIMESTAMP_FILENAME);
+        let mut file = File::create(&file_path).map_err(|e| format!("Error creating timestamp file at {}, {e}", file_path.display()))?;
+        file.write_all(&format!("{:016x}", duration_since_epoch.as_secs()).into_bytes())
+            .map_err(|e| format!("Error writing file: {}, {e}", file_path.display()))
+    }
+
+    /// Returns `true` if `mode == TryPullIfOlderThan`, and the timestamp file indicates
+    /// that amount of time has elapsed.  Otherwise returns `false`
+    fn check_timestamp(&self, mode: UpdateMode) -> bool {
+        match mode {
+            UpdateMode::TryPullIfOlderThan(secs) => {
+                let file_path = self.local_path.join(TIMESTAMP_FILENAME);
+                match read_to_string(&file_path) {
+                    Ok(file_contents) => {
+                        let val = u64::from_str_radix(&file_contents, 16).unwrap();
+                        let timestamp_time = UNIX_EPOCH.checked_add(Duration::from_secs(val)).unwrap();
+                        timestamp_time.elapsed().unwrap().as_secs() > secs
+                    },
+                    _ => true //No timestamp file means we should pull
+                }
+            },
+            _ => false,
+        }
+    }
+
     /// Returns the file system path for the locally cloned repository
     pub fn local_path(&self) -> &Path {
         &self.local_path
     }
-}
-
-/// Extracts the module name from a `.git` URL
-///
-/// For example, `https://github.com/trueagi-io/hyperon-experimental.git` would be parsed
-/// into "hyperon-experimental".  Returns None if the form of the URL isn't recognized
-pub fn mod_name_from_url(url: &str) -> Option<String> {
-    let without_ending = url.trim_end_matches(".git")
-        .trim_end_matches("/");
-    let without_mod_name = without_ending.trim_end_matches(|c| c != '/');
-    let mod_name = &without_ending[without_mod_name.len()..];
-    module_name_make_legal(mod_name)
 }
