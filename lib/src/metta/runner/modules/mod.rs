@@ -342,7 +342,8 @@ impl MettaMod {
 
 }
 
-/// ModuleInitState is a smart-pointer to a vec of [ModuleInitFrame]
+/// ModuleInitState is a smart-pointer to a state that contains some objects to be merged
+/// into the runner after module initialization has completed sucessfully
 pub(crate) enum ModuleInitState {
     /// Meaning: The RunnerState holding this pointer is not initializing modules
     None,
@@ -357,16 +358,6 @@ pub(crate) enum ModuleInitState {
 pub(crate) struct ModuleInitStateInsides {
     frames: Vec<ModuleInitFrame>,
     module_descriptors: HashMap<ModuleDescriptor, ModId>,
-}
-
-impl Clone for ModuleInitState {
-    fn clone(&self) -> Self {
-        match self {
-            Self::None => Self::None,
-            Self::Root(rc) |
-            Self::Child(rc) => Self::Child(rc.clone())
-        }
-    }
 }
 
 impl ModuleInitState {
@@ -395,6 +386,13 @@ impl ModuleInitState {
                 insides_ref.frames.push(ModuleInitFrame::new_with_name(mod_name));
                 ModId::new_relative(new_idx)
             }
+        }
+    }
+    pub fn new_child(&self) -> Self {
+        match self {
+            Self::None => Self::None,
+            Self::Root(rc) |
+            Self::Child(rc) => Self::Child(rc.clone())
         }
     }
     pub fn is_root(&self) -> bool {
