@@ -61,6 +61,12 @@ set_target_properties(hyperonc-static PROPERTIES
     )
 add_dependencies(hyperonc-static build-hyperonc)
 
+find_library(GIT2_LIBRARY NAMES git2)
+find_library(ICONV_LIBRARY NAMES iconv)
+find_library(Z_LIBRARY NAMES z)
+add_library(hyperonc-static-interface INTERFACE)
+target_link_libraries(hyperonc-static-interface INTERFACE hyperonc-static ${GIT2_LIBRARY} ${ICONV_LIBRARY} ${Z_LIBRARY})
+
 add_subdirectory(tests)
 
 set(BINARY_INSTALL_PATH "lib/hyperonc")
