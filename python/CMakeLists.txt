@@ -55,9 +55,11 @@ include_directories(${hyperonc_INCLUDE_DIRS})
 find_library(GIT2_LIBRARY NAMES git2)
 find_library(ICONV_LIBRARY NAMES iconv)
 find_library(Z_LIBRARY NAMES z)
+find_library(CRYPTO_LIBRARY NAMES crypto)
+find_library(SSL_LIBRARY NAMES ssl)
 
 pybind11_add_module(hyperonpy MODULE ./hyperonpy.cpp)
-target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}" ${GIT2_LIBRARY} ${ICONV_LIBRARY} ${Z_LIBRARY})
+target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}" ${GIT2_LIBRARY} ${ICONV_LIBRARY} ${Z_LIBRARY} ${SSL_LIBRARY} ${CRYPTO_LIBRARY})
 
 set(PYTHONPATH "${CMAKE_CURRENT_SOURCE_DIR}")
 add_subdirectory(tests)
