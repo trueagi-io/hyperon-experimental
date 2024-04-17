@@ -5,7 +5,7 @@ use std::fs;
 use std::sync::Arc;
 
 #[cfg(feature = "pkg_mgmt")]
-use crate::metta::runner::pkg_mgmt::{ModuleCatalog, DirCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt};
+use crate::metta::runner::pkg_mgmt::{ModuleCatalog, DirCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt, git_catalog::*};
 
 use directories::ProjectDirs;
 
@@ -271,9 +271,7 @@ impl EnvBuilder {
                 match ProjectDirs::from("io", "TrueAGI",  "metta") {
                     Some(proj_dirs) => {
                         let cfg_dir: PathBuf = proj_dirs.config_dir().into();
-                        let caches_dir = cfg_dir.join("caches");
                         env.config_dir = Some(cfg_dir);
-                        env.caches_dir = Some(caches_dir);
                     },
                     None => {
                         eprint!("Failed to initialize config with OS config directory!");
@@ -281,6 +279,8 @@ impl EnvBuilder {
                 }
             }
         }
+        // Set the caches dir within the config dir.  We may want to move it elsewhere in the future
+        env.caches_dir = env.config_dir.as_ref().map(|cfg_dir| cfg_dir.join("caches"));
 
         if let Some(config_dir) = &env.config_dir {
 
@@ -310,12 +310,21 @@ impl EnvBuilder {
                 env.config_dir = None;
             }
 
-            //Push the "modules" dir, as the last place to search after the other paths that were specified
+            //Push the "modules" dir, to search after the other paths that were specified
             //TODO: the config.metta file should be able to append / modify the catalogs, and can choose not to
             // include the "modules" dir in the future.
             #[cfg(feature = "pkg_mgmt")]
             if modules_dir.exists() {
                 proto_catalogs.push(ProtoCatalog::Path(modules_dir));
+            }
+
+            //Search the remote git-based catalog
+            #[cfg(feature = "pkg_mgmt")]
+            {
+                //TODO: Catalog should be moved to trueagi, and catalog settings should come from config
+                //let refresh_time = 259200; //3 days = 3 days * 24 hrs * 60 minutes * 60 seconds
+                let refresh_time = 60; //GOAT
+                proto_catalogs.push(ProtoCatalog::Other(Box::new(GitCatalog::new(&env, "luketpeterson-catalog", "https://github.com/luketpeterson/metta-mod-catalog.git", refresh_time).unwrap())));
             }
 
             if init_metta_path.exists() {

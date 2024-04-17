@@ -3,7 +3,7 @@
 //!
 //! ## Behavior of Module Resolution
 //!
-//! ```ignore
+//! ```text
 //!       ┌────────────────────┐           ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽                    ⎽⎼⎻⎺ ⎺⎺⎺ ⎺⎻⎼⎽
 //!      ╱                    ╱       ⎽⎼⎻⎺  pkg-info in  ⎺⎻⎼⎽ Yes      ⎽⎼⎻⎺pkg-info entry ⎺⎻⎼⎽ No
 //!     ╱      (import!)     ╱─────►<   &self has entry for   >─────►<   has fs_path attrib?   >───┐
@@ -534,6 +534,10 @@ impl ModuleDescriptor {
     pub fn new_with_uid(name: String, uid: u64) -> Self {
         Self { name, uid: Some(uid) }
     }
+    pub fn new_with_ident_bytes_and_fmt_id(name: String, ident: &[u8], fmt_id: u64) -> Self {
+        let uid = xxh3_64(ident) ^ fmt_id;
+        ModuleDescriptor::new_with_uid(name, uid)
+    }
     /// Create a new ModuleDescriptor using a file system path and another unique id
     ///
     /// The descriptor's uid is based on a stable-hash of the path, because a module loaded by
@@ -542,8 +546,7 @@ impl ModuleDescriptor {
     /// The purpose of the `fmt_id` is to ensure two different formats or catalogs don't generate
     /// the same ModuleDescriptor, but you can pass 0 if it doesn't matter
     pub fn new_with_path_and_fmt_id(name: String, path: &Path, fmt_id: u64) -> Self {
-        let uid = xxh3_64(path.as_os_str().as_encoded_bytes()) ^ fmt_id;
-        ModuleDescriptor::new_with_uid(name, uid)
+        Self::new_with_ident_bytes_and_fmt_id(name, path.as_os_str().as_encoded_bytes(), fmt_id)
     }
     /// Returns the name of the module represented by the ModuleDescriptor
     pub fn name(&self) -> &str {
@@ -660,7 +663,7 @@ impl ModuleLoader for TestLoader {
 fn git_pkginfo_fetch_test() {
 
     //Make a new runner, with the config dir in `/tmp/hyperon-test/`
-    let runner = Metta::new(Some(EnvBuilder::test_env().set_config_dir(Path::new("/tmp/hyperon-test/"))));
+    let runner = Metta::new(Some(EnvBuilder::new().set_config_dir(Path::new("/tmp/hyperon-test/"))));
     let _mod_id = runner.load_module_direct(Box::new(TestLoader), "test-mod").unwrap();
 
     let result = runner.run(SExprParser::new("!(import! &self test-mod:metta-morph:mettamorph)"));

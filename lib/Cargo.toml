@@ -18,7 +18,9 @@ dyn-fmt = "0.4.0"
 xxhash-rust = {version="0.8.7", features=["xxh3"], optional=true}
 #TODO: vendored-openssl is a lot slower to build, but static linking throws warnings
 #git2 = {version="0.18.3", default-features=false, features=["vendored-openssl"], optional=true}
-git2 = {version="0.18.3", optional=true}
+git2 = { version="0.18.3", optional=true}
+serde = { version="1.0.198", features = ["derive"], optional=true }
+serde_json = { version="1.0.116", optional=true }
 
 [lib]
 name = "hyperon"
@@ -32,4 +34,4 @@ default = ["pkg_mgmt"]
 minimal = [] # enables minimal MeTTa interpreter
 variable_operation = [] # enables evaluation of the expressions which have
                         # a variable on the first position
-pkg_mgmt = ["xxhash-rust", "git2"]
+pkg_mgmt = ["xxhash-rust", "git2", "serde", "serde_json"]

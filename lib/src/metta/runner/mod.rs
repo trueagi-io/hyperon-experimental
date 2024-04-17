@@ -113,7 +113,7 @@ impl PartialEq for Metta {
 }
 
 #[derive(Debug)]
-pub struct MettaContents {
+pub(crate) struct MettaContents {
     /// All the runner's loaded modules
     modules: Mutex<Vec<Rc<MettaMod>>>,
     /// A tree to locate loaded mods by name

@@ -1,5 +1,5 @@
 
-//! Manages a local cache of cloned git repos
+//! Manages local caches of cloned git repos
 //!
 //! Currently all network activity is synchronous.  At some point it makes sense to move
 //! to async in order to parallelize downloads, etc.  When that time comes I would like
@@ -33,8 +33,9 @@ pub enum UpdateMode {
     TryPullIfOlderThan(u64)
 }
 
+#[derive(Debug)]
 pub struct CachedRepo {
-    _name: String,
+    name: String,
     url: String,
     branch: Option<String>,
     local_path: PathBuf,
@@ -53,27 +54,32 @@ impl CachedRepo {
     pub fn new(env: &Environment, cache_name: Option<&str>, name: &str, ident_str: &str, url: &str, branch: Option<&str>) -> Result<Self, String> {
         let cache_name = cache_name.unwrap_or("git-modules");
         let caches_dir = env.caches_dir().ok_or_else(|| "Unable to clone git repository; no local \"caches\" directory available".to_string())?;
-        let branch_str = match &branch {
-            Some(s) => s,
-            None => ""
-        };
 
-        let unique_id = xxh3_64(format!("{}{}", ident_str, branch_str).as_bytes());
-        let local_filename = format!("{name}.{unique_id:016x}");
+        let local_filename = if branch.is_some() || ident_str.len() > 0 {
+            let branch_str = match &branch {
+                Some(s) => s,
+                None => ""
+            };
+            let unique_id = xxh3_64(format!("{}{}", ident_str, branch_str).as_bytes());
+            format!("{name}.{unique_id:016x}")
+        } else {
+            name.to_string()
+        };
         let local_path = caches_dir.join(cache_name).join(local_filename);
 
         std::fs::create_dir_all(&local_path).map_err(|e| e.to_string())?;
 
         Ok(Self {
-            _name: name.to_string(),
+            name: name.to_string(),
             url: url.to_string(),
             branch: branch.map(|s| s.to_owned()),
             local_path,
         })
     }
 
-    /// Updates a local cached repo with a remote repo, using `mode` behavior
-    pub fn update(&self, mode: UpdateMode) -> Result<(), String> {
+    /// Updates a local cached repo with a remote repo, using `mode` behavior.  Returns `true` if the
+    /// repo was updated, and `false` if the repo was left unchanged
+    pub fn update(&self, mode: UpdateMode) -> Result<bool, String> {
         match Repository::open(&self.local_path) {
 
             //We have an existing repo on disk
@@ -87,6 +93,9 @@ impl CachedRepo {
                         Err(e) => {
                             if mode == UpdateMode::PullLatest {
                                 return Err(format!("Failed to connect to origin repo: {}, {}", self.url, e))
+                            } else {
+                                // We couldn't connect, but the UpdateMode allows soft failure
+                                return Ok(false)
                             }
                         }
                     }
@@ -97,12 +106,16 @@ impl CachedRepo {
                     let fetch_head = repo.find_reference("FETCH_HEAD").map_err(|e| e.to_string())?;
                     self.merge(&repo, &branch, &fetch_head).map_err(|e| format!("Failed to merge remote git repo: {}, {}", self.url, e))?;
                     self.write_timestamp_file()?;
+                    Ok(true)
+                } else {
+                    // The UpdateMode is set such that we don't need to check 
+                    Ok(false)
                 }
-                Ok(())
             },
             Err(_) => {
 
                 //We don't have a local repo, so clone it fresh
+                log::info!("cloning remote git repo: {}", self.name);
                 let mut repo_builder = RepoBuilder::new();
                 match &self.branch {
                     Some(branch) => {
@@ -113,7 +126,7 @@ impl CachedRepo {
                 match repo_builder.clone(&self.url, &self.local_path) {
                     Ok(_repo) => {
                         self.write_timestamp_file()?;
-                        Ok(())
+                        Ok(true)
                     },
                     Err(e) => Err(format!("Failed to clone git repo: {}, {}", self.url, e)),
                 }
@@ -140,10 +153,11 @@ impl CachedRepo {
             return Ok(());
         } else if analysis.0.is_fast_forward() {
             // Fast-forwarding...
-            let mut reference = repo.find_reference(branch)?;
-
-            reference.set_target(annotated_commit.id(), "Fast-forward")?;
-            repo.checkout_head(None)?;
+            log::info!("fetching update from remote git repo: {}", self.name);
+            let mut branch_ref = repo.find_reference(branch)?;
+            branch_ref.set_target(annotated_commit.id(), "Fast-forward")?;
+            repo.checkout_tree(&repo.find_object(annotated_commit.id(), Some(ObjectType::Commit))?, Some(CheckoutBuilder::default().force()))?;
+            repo.set_head(branch_ref.name().unwrap())?;
         } else {
             panic!("Fatal Error: cached git repository at \"{}\" appears to be corrupt", self.local_path.display());
             //NOTE: the below code appears to work, but it isn't needed at the moment
