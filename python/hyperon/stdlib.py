@@ -3,7 +3,7 @@ import sys
 import os
 
 from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError, AtomType, MatchableObject, \
-    G, S, Atoms
+    G, S, Atoms, ValueObject, OperationObject
 from .base import Tokenizer, SExprParser
 from .ext import register_atoms, register_tokens
 import hyperonpy as hp
@@ -212,3 +212,52 @@ def load_ascii():
     return {
         r"load-ascii": loadAtom
     }
+
+def groundedatom_to_python_object(a):
+    obj = a.get_object()
+    if isinstance(obj, ValueObject):
+        obj = obj.value
+    if isinstance(obj, OperationObject):
+        obj = obj.content
+    return obj
+
+# convert nested tuples to nested python tuples or lists
+def _py_tuple_list(tuple_list, *atoms):
+    rez = []
+    for a in atoms:
+        if isinstance(a, GroundedAtom):
+            rez.append(groundedatom_to_python_object(a))
+        elif isinstance(a, ExpressionAtom):
+            rez.append(_py_tuple_list(tuple_list, *a.get_children()))
+    return tuple_list(rez)
+
+def py_tuple(*atoms):
+    return [ValueAtom(_py_tuple_list(tuple, *atoms))]
+
+def py_list(*atoms):
+    return [ValueAtom(_py_tuple_list(list, *atoms))]
+
+def tuple_to_keyvalue(a):
+    ac = a.get_children()
+    if len(ac) != 2:
+        raise Exception("Syntax error in tuple_to_keyvalue")
+    return groundedatom_to_python_object(ac[0]), groundedatom_to_python_object(ac[1])
+
+# convert pair of tuples to python dictionary
+def py_dict(*atoms):
+    return [ValueAtom(dict([tuple_to_keyvalue(a) for a in atoms]))]
+
+# chain python objects with |  (syntactic sugar for langchain)
+def py_chain(*atoms):
+    objects = [groundedatom_to_python_object(a) for a in atoms]
+    result = objects[0]
+    for obj in objects[1:]:
+        result = result | obj
+    return [ValueAtom(result)]
+
+@register_atoms()
+def py_funs():
+    return {"py-tuple": OperationAtom("py-tuple",  py_tuple, unwrap = False),
+            "py-list": OperationAtom("py-list",    py_list, unwrap = False),
+            "py-dict":  OperationAtom("py-dict",   py_dict,  unwrap = False),
+            "py-chain":  OperationAtom("py-chain", py_chain, unwrap = False)}
