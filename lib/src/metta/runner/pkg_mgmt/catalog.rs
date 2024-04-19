@@ -169,15 +169,16 @@ impl PkgInfo {
             //If path is explicitly specified in the dep entry, then we must load the module at the
             // specified path, and cannot search anywhere else
             if let Some(path) = &entry.fs_path {
-                return loader_for_module_at_path(&context.metta, path, Some(mod_name), context.module().resource_dir());
+                return loader_for_module_at_path(context.metta.environment().fs_mod_formats(), path, Some(mod_name), context.module().resource_dir());
             }
 
             //If a git URL is specified in the dep entry, see if we have it in the git-cache and
             // clone it locally if we don't
             if let Some(url) = &entry.git_url {
-                let cached_mod = CachedRepo::new(context.metta.environment(), None, mod_name, url, url, entry.git_branch.as_ref().map(|s| s.as_str()))?;
+                let caches_dir = context.metta.environment().caches_dir().ok_or_else(|| "Unable to clone git repository; no local \"caches\" directory available".to_string())?;
+                let cached_mod = CachedRepo::new(caches_dir, None, mod_name, url, url, entry.git_branch.as_ref().map(|s| s.as_str()))?;
                 cached_mod.update(UpdateMode::PullIfMissing)?;
-                return loader_for_module_at_path(&context.metta, cached_mod.local_path(), Some(mod_name), context.module().resource_dir());
+                return loader_for_module_at_path(context.metta.environment().fs_mod_formats(), cached_mod.local_path(), Some(mod_name), context.module().resource_dir());
             }
 
             //TODO, If a version range is specified in the dep entry, then use that version range to specify
@@ -222,7 +223,7 @@ impl PkgInfo {
 }
 
 /// Internal function to get a loader for a module at a specific file system path, by trying each FsModuleFormat in order
-pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, name: Option<&str>, search_dir: Option<&Path>) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
+pub(crate) fn loader_for_module_at_path<'a, P: AsRef<Path>, FmtIter: Iterator<Item=&'a dyn FsModuleFormat>>(fmts: FmtIter, path: P, name: Option<&str>, search_dir: Option<&Path>) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
 
     //If the path is not an absolute path, assume it's relative to the running search_dir
     let path = if path.as_ref().is_absolute() {
@@ -239,7 +240,7 @@ pub(crate) fn loader_for_module_at_path<P: AsRef<Path>>(metta: &Metta, path: P, 
     };
 
     //Check all module formats, to try and load the module at the path
-    for fmt in metta.environment().fs_mod_formats() {
+    for fmt in fmts {
         if let Some((loader, descriptor)) = fmt.try_path(&path, name) {
             return Ok(Some((loader, descriptor)))
         }
@@ -551,6 +552,11 @@ impl ModuleDescriptor {
     /// Returns the name of the module represented by the ModuleDescriptor
     pub fn name(&self) -> &str {
         &self.name
+    }
+    /// Returns `true` if the `ident_bytes` and `fmt_id` match what was used to create the descriptor
+    pub fn ident_bytes_and_fmt_id_matches(&self, ident: &[u8], fmt_id: u64) -> bool {
+        let uid = xxh3_64(ident) ^ fmt_id;
+        self.uid == Some(uid)
     }
     /// Internal.  Use the Hash trait to get a uid for the whole ModuleDescriptor
     pub fn hash(&self) -> u64 {

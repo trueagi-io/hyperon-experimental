@@ -279,8 +279,6 @@ impl EnvBuilder {
                 }
             }
         }
-        // Set the caches dir within the config dir.  We may want to move it elsewhere in the future
-        env.caches_dir = env.config_dir.as_ref().map(|cfg_dir| cfg_dir.join("caches"));
 
         if let Some(config_dir) = &env.config_dir {
 
@@ -310,21 +308,15 @@ impl EnvBuilder {
                 env.config_dir = None;
             }
 
+            // Set the caches dir within the config dir.  We may want to move it elsewhere in the future
+            env.caches_dir = env.config_dir.as_ref().map(|cfg_dir| cfg_dir.join("caches"));
+
             //Push the "modules" dir, to search after the other paths that were specified
             //TODO: the config.metta file should be able to append / modify the catalogs, and can choose not to
             // include the "modules" dir in the future.
             #[cfg(feature = "pkg_mgmt")]
             if modules_dir.exists() {
                 proto_catalogs.push(ProtoCatalog::Path(modules_dir));
-            }
-
-            //Search the remote git-based catalog
-            #[cfg(feature = "pkg_mgmt")]
-            {
-                //TODO: Catalog should be moved to trueagi, and catalog settings should come from config
-                //let refresh_time = 259200; //3 days = 3 days * 24 hrs * 60 minutes * 60 seconds
-                let refresh_time = 60; //GOAT
-                proto_catalogs.push(ProtoCatalog::Other(Box::new(GitCatalog::new(&env, "luketpeterson-catalog", "https://github.com/luketpeterson/metta-mod-catalog.git", refresh_time).unwrap())));
             }
 
             if init_metta_path.exists() {
@@ -352,6 +344,13 @@ impl EnvBuilder {
                         env.catalogs.push(catalog);
                     }
                 }
+            }
+
+            //Search the remote git-based catalog, if we have a caches dir to store the modules
+            if let Some(caches_dir) = &env.caches_dir {
+                //TODO: Catalog should be moved to trueagi github account, and catalog settings should come from config
+                let refresh_time = 259200; //3 days = 3 days * 24 hrs * 60 minutes * 60 seconds
+                env.catalogs.push(Box::new(GitCatalog::new(caches_dir, env.fs_mod_formats.clone(), "luketpeterson-catalog", "https://github.com/luketpeterson/metta-mod-catalog.git", refresh_time).unwrap()));
             }
         }
 

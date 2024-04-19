@@ -14,8 +14,6 @@ use std::io::prelude::*;
 use xxhash_rust::xxh3::xxh3_64;
 use git2::{*, build::*};
 
-use crate::metta::runner::environment::Environment;
-
 const TIMESTAMP_FILENAME: &'static str = "_timestamp_";
 
 /// Indicates the desired behavior for updating the locally-cached repo
@@ -51,9 +49,8 @@ impl CachedRepo {
     ///  For example this could be a version, for a MeTTa module catalog cache.
     /// * `url` - The remote URL from which to fetch the repo
     /// * `branch` - The branch to use, or default if None
-    pub fn new(env: &Environment, cache_name: Option<&str>, name: &str, ident_str: &str, url: &str, branch: Option<&str>) -> Result<Self, String> {
+    pub fn new(caches_dir: &Path, cache_name: Option<&str>, name: &str, ident_str: &str, url: &str, branch: Option<&str>) -> Result<Self, String> {
         let cache_name = cache_name.unwrap_or("git-modules");
-        let caches_dir = env.caches_dir().ok_or_else(|| "Unable to clone git repository; no local \"caches\" directory available".to_string())?;
 
         let local_filename = if branch.is_some() || ident_str.len() > 0 {
             let branch_str = match &branch {
@@ -198,7 +195,10 @@ impl CachedRepo {
                     Ok(file_contents) => {
                         let val = u64::from_str_radix(&file_contents, 16).unwrap();
                         let timestamp_time = UNIX_EPOCH.checked_add(Duration::from_secs(val)).unwrap();
-                        timestamp_time.elapsed().unwrap().as_secs() > secs
+                        match timestamp_time.elapsed() {
+                            Ok(duration_since_timestamp) => duration_since_timestamp.as_secs() > secs,
+                            Err(_e) => false, //NOTE: for some reason the test harness overrides the time API to return time since boot, which wreaks havoc
+                        }
                     },
                     _ => true //No timestamp file means we should pull
                 }

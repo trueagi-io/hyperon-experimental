@@ -782,7 +782,7 @@ impl<'input> RunContext<'_, '_, 'input> {
         };
 
         // Get the loader and descriptor by trying the module formats
-        let (loader, descriptor) = match loader_for_module_at_path(&self.metta, &path, absolute_mod_name.as_deref(), self.module().resource_dir())? {
+        let (loader, descriptor) = match loader_for_module_at_path(self.metta.environment().fs_mod_formats(), &path, absolute_mod_name.as_deref(), self.module().resource_dir())? {
             Some((loader, descriptor)) => (loader, descriptor),
             None => return Err(format!("Failed to resolve module at path: {}", path.as_ref().display()))
         };

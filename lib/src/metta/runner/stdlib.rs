@@ -369,7 +369,8 @@ impl Grounded for GitModuleOp {
             None => return Err(ExecError::from("git-module! error extracting module name from URL"))
         };
 
-        let cached_mod = CachedRepo::new(self.metta.environment(), None, &mod_name, url, url, None)?;
+        let caches_dir = self.metta.environment().caches_dir().ok_or_else(|| "Unable to clone git repository; no local \"caches\" directory available".to_string())?;
+        let cached_mod = CachedRepo::new(caches_dir, None, &mod_name, url, url, None)?;
         cached_mod.update(UpdateMode::TryPullLatest)?;
         self.metta.load_module_at_path(cached_mod.local_path(), Some(&mod_name)).map_err(|e| ExecError::from(e))?;
 
