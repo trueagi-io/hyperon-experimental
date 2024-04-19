@@ -90,7 +90,7 @@
 
 ; Check that the &self space contains the corelib child space
 ; Note: corelib doesn't import any modules into itself, so no space copy is needed
-!(import! &corelib corelib)
+!(import! &corelib top:corelib)
 (: is-corelib (-> Atom Bool))
 (= (is-corelib $atom) (== $atom &corelib))
 !(assertEqual
