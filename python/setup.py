@@ -1,4 +1,5 @@
 import os
+import codecs
 import sys
 import shutil
 import subprocess
@@ -6,6 +7,35 @@ from pathlib import Path
 
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
+import setuptools_scm as scm
+import setuptools_scm.git as scmgit
+
+def get_git_revision_short_hash() -> str:
+    try:
+        sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
+        return f"+{sha}"
+    except Exception:
+        return ''
+
+def read(rel_path):
+    here = os.path.abspath(os.path.dirname(__file__))
+    with codecs.open(os.path.join(here, rel_path), 'r') as fp:
+        return fp.read()
+
+def get_version(rel_path):
+    new_ver = None
+    with open(rel_path) as f:  lines = f.read().splitlines()
+    with open(rel_path, 'w') as f:
+        for line in lines:
+            if line.startswith('__version__'):
+                delim = '"' if '"' in line else "'"
+                new_ver = line.split(delim)[1].split("+")[0] + get_git_revision_short_hash()
+                f.write(line.replace(line.split(delim)[1], new_ver))
+            else:
+                f.write(line)
+    if new_ver is None:
+        raise RuntimeError("Unable to find version string.")
+    return new_ver
 
 def resolve_path(path: str) -> str:
     return os.path.abspath(path)
@@ -36,7 +66,6 @@ class CMakeBuild(build_ext):
         # Must be in this form due to bug in .resolve() only fixed in Python 3.10+
         ext_fullpath = Path.cwd() / self.get_ext_fullpath(ext.name)
         extdir = ext_fullpath.parent.resolve()
-
         debug = int(os.environ.get("DEBUG", 0)) if self.debug is None else self.debug
         cfg = "Debug" if debug else "Release"
 
@@ -71,7 +100,17 @@ class CMakeBuild(build_ext):
             ["cmake", "--build", ".", *build_args], cwd=build_temp, check=True
         )
 
+
+def parse(root, config):
+    ver = scmgit.parse(root, config)
+    if (ver == '0.0') or (ver is None):
+        version = get_version("hyperon/__version__.py")
+        return scm.version.meta(tag=version, config=config, preformatted=True, dirty=True)
+    else:
+        return ver
+
 setup(
     ext_modules=[CMakeExtension("hyperonpy")],
-    cmdclass={"build_ext": CMakeBuild}
+    cmdclass={"build_ext": CMakeBuild},
+    version=scm.get_version(parse=parse)
  )

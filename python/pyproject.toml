@@ -19,10 +19,9 @@ classifiers = [
 dependencies = [
     'importlib-metadata==6.6.0; python_version<"3.8"',
 ]
-dynamic = ["version"]
-
-[tool.setuptools.dynamic]
-version = {attr = "hyperon.__version__"}
+dynamic = [
+    "version",
+]
 
 [project.scripts]
 metta = "hyperon.metta:main"
@@ -47,4 +46,3 @@ test-command = "pytest {project}/python/tests"
 
 [tool.setuptools_scm]
 root = '..'
-
