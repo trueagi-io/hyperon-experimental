@@ -5,7 +5,7 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey, mod_name_from_url};
-use crate::metta::runner::git_cache::{CachedRepo, UpdateMode};
+use crate::metta::runner::{EXPLICIT_GIT_MOD_CACHE_DIR, git_catalog::ModuleGitLocation, git_cache::UpdateMode};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
@@ -369,8 +369,8 @@ impl Grounded for GitModuleOp {
             None => return Err(ExecError::from("git-module! error extracting module name from URL"))
         };
 
-        let caches_dir = self.metta.environment().caches_dir().ok_or_else(|| "Unable to clone git repository; no local \"caches\" directory available".to_string())?;
-        let cached_mod = CachedRepo::new(caches_dir, None, &mod_name, url, url, None)?;
+        let git_mod_location = ModuleGitLocation::new(url.to_string());
+        let cached_mod = git_mod_location.get_cache(self.metta.environment().caches_dir(), EXPLICIT_GIT_MOD_CACHE_DIR, &mod_name, None)?;
         cached_mod.update(UpdateMode::TryPullLatest)?;
         self.metta.load_module_at_path(cached_mod.local_path(), Some(&mod_name)).map_err(|e| ExecError::from(e))?;
 

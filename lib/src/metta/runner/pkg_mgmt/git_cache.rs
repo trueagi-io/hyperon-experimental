@@ -36,7 +36,9 @@ pub struct CachedRepo {
     name: String,
     url: String,
     branch: Option<String>,
+    repo_local_path: PathBuf,
     local_path: PathBuf,
+    _subdir: Option<PathBuf>,
 }
 
 impl CachedRepo {
@@ -49,8 +51,7 @@ impl CachedRepo {
     ///  For example this could be a version, for a MeTTa module catalog cache.
     /// * `url` - The remote URL from which to fetch the repo
     /// * `branch` - The branch to use, or default if None
-    pub fn new(caches_dir: &Path, cache_name: Option<&str>, name: &str, ident_str: &str, url: &str, branch: Option<&str>) -> Result<Self, String> {
-        let cache_name = cache_name.unwrap_or("git-modules");
+    pub fn new(caches_dir: &Path, cache_name: &str, name: &str, ident_str: &str, url: &str, branch: Option<&str>, subdir: Option<&Path>) -> Result<Self, String> {
 
         let local_filename = if branch.is_some() || ident_str.len() > 0 {
             let branch_str = match &branch {
@@ -62,22 +63,30 @@ impl CachedRepo {
         } else {
             name.to_string()
         };
-        let local_path = caches_dir.join(cache_name).join(local_filename);
+        let repo_local_path = caches_dir.join(cache_name).join(local_filename);
+        let local_path = match subdir {
+            Some(subdir) => repo_local_path.join(subdir),
+            None => repo_local_path.clone()
+        };
 
-        std::fs::create_dir_all(&local_path).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&repo_local_path).map_err(|e| e.to_string())?;
 
         Ok(Self {
             name: name.to_string(),
             url: url.to_string(),
             branch: branch.map(|s| s.to_owned()),
             local_path,
+            repo_local_path,
+            _subdir: subdir.map(|s| s.to_owned())
         })
     }
 
     /// Updates a local cached repo with a remote repo, using `mode` behavior.  Returns `true` if the
     /// repo was updated, and `false` if the repo was left unchanged
     pub fn update(&self, mode: UpdateMode) -> Result<bool, String> {
-        match Repository::open(&self.local_path) {
+
+        //TODO: If there is a subdir then we can perform a sparse checkout and avoid cloning unnecessary data
+        match Repository::open(self.repo_local_path()) {
 
             //We have an existing repo on disk
             Ok(repo) => {
@@ -120,7 +129,7 @@ impl CachedRepo {
                     },
                     None => {}
                 }
-                match repo_builder.clone(&self.url, &self.local_path) {
+                match repo_builder.clone(&self.url, self.repo_local_path()) {
                     Ok(_repo) => {
                         self.write_timestamp_file()?;
                         Ok(true)
@@ -156,7 +165,7 @@ impl CachedRepo {
             repo.checkout_tree(&repo.find_object(annotated_commit.id(), Some(ObjectType::Commit))?, Some(CheckoutBuilder::default().force()))?;
             repo.set_head(branch_ref.name().unwrap())?;
         } else {
-            panic!("Fatal Error: cached git repository at \"{}\" appears to be corrupt", self.local_path.display());
+            panic!("Fatal Error: cached git repository at \"{}\" appears to be corrupt", self.repo_local_path().display());
             //NOTE: the below code appears to work, but it isn't needed at the moment
             //
             // // Normal merge...
@@ -179,7 +188,7 @@ impl CachedRepo {
     /// Internal function to write the timestamp file, with the value of "now"
     fn write_timestamp_file(&self) -> Result<(), String> {
         let duration_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
-        let file_path = self.local_path.join(TIMESTAMP_FILENAME);
+        let file_path = self.repo_local_path().join(TIMESTAMP_FILENAME);
         let mut file = File::create(&file_path).map_err(|e| format!("Error creating timestamp file at {}, {e}", file_path.display()))?;
         file.write_all(&format!("{:016x}", duration_since_epoch.as_secs()).into_bytes())
             .map_err(|e| format!("Error writing file: {}, {e}", file_path.display()))
@@ -190,7 +199,7 @@ impl CachedRepo {
     fn check_timestamp(&self, mode: UpdateMode) -> bool {
         match mode {
             UpdateMode::TryPullIfOlderThan(secs) => {
-                let file_path = self.local_path.join(TIMESTAMP_FILENAME);
+                let file_path = self.repo_local_path().join(TIMESTAMP_FILENAME);
                 match read_to_string(&file_path) {
                     Ok(file_contents) => {
                         let val = u64::from_str_radix(&file_contents, 16).unwrap();
@@ -207,8 +216,14 @@ impl CachedRepo {
         }
     }
 
-    /// Returns the file system path for the locally cloned repository
+    /// Returns the file system path for the locally cloned data, respecting `subdir` if there is one
     pub fn local_path(&self) -> &Path {
         &self.local_path
     }
+
+    /// Returns the file system path for the top of the locally cloned repository
+    pub fn repo_local_path(&self) -> &Path {
+        &self.repo_local_path
+    }
+
 }

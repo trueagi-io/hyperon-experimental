@@ -77,9 +77,12 @@ use std::ffi::{OsStr, OsString};
 
 use crate::metta::text::OwnedSExprParser;
 use crate::metta::runner::modules::*;
-use crate::metta::runner::{*, git_cache::*};
+use crate::metta::runner::{*, git_catalog::*};
 
 use xxhash_rust::xxh3::xxh3_64;
+use serde::Deserialize;
+
+pub(crate) const EXPLICIT_GIT_MOD_CACHE_DIR: &'static str = "git-modules";
 
 /// Implemented for types capable of locating MeTTa modules
 ///
@@ -133,21 +136,16 @@ pub struct PkgInfo {
 }
 
 /// A single entry in a [PkgInfo]'s dependencies, specifying the properties of a module that will satisfy a dependency
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct DepEntry {
     /// Indicates that the dependency module should be loaded from a specific FS path
     ///
     /// If the fs_path is specified, the other pkg_info attributes will be ignored.
-    //QUESTION: We need a MeTTa "style guide" for these field names, since they are effective going
-    // to be part of the API, because a PkgInfo will be deserialized from atoms
+    #[serde(default)]
     pub fs_path: Option<PathBuf>,
 
-    /// Indicates that the dependency module should be fetched from the specified `git` URL
-    pub git_url: Option<String>,
-
-    /// A `git`` branch to fetch.  Will be ignored if `git_url` is `None`.  Uses the repo's
-    /// default branch if left unspecified
-    pub git_branch: Option<String>,
+    #[serde(flatten)]
+    git_location: ModuleGitLocation,
 
     //TODO: field to indicate acceptable version range for dependency
 }
@@ -172,13 +170,9 @@ impl PkgInfo {
                 return loader_for_module_at_path(context.metta.environment().fs_mod_formats(), path, Some(mod_name), context.module().resource_dir());
             }
 
-            //If a git URL is specified in the dep entry, see if we have it in the git-cache and
-            // clone it locally if we don't
-            if let Some(url) = &entry.git_url {
-                let caches_dir = context.metta.environment().caches_dir().ok_or_else(|| "Unable to clone git repository; no local \"caches\" directory available".to_string())?;
-                let cached_mod = CachedRepo::new(caches_dir, None, mod_name, url, url, entry.git_branch.as_ref().map(|s| s.as_str()))?;
-                cached_mod.update(UpdateMode::PullIfMissing)?;
-                return loader_for_module_at_path(context.metta.environment().fs_mod_formats(), cached_mod.local_path(), Some(mod_name), context.module().resource_dir());
+            //Get the module if it's specified with git keys
+            if let Some(pair) = entry.git_location.get_loader(context.metta.environment().fs_mod_formats(), context.metta.environment().caches_dir(), EXPLICIT_GIT_MOD_CACHE_DIR, mod_name, None)? {
+                return Ok(Some(pair));
             }
 
             //TODO, If a version range is specified in the dep entry, then use that version range to specify
@@ -650,9 +644,13 @@ impl ModuleLoader for TestLoader {
         pkg_info.name = "test-mod".to_string();
         pkg_info.deps.insert("metta-morph".to_string(), DepEntry{
             fs_path: None,
-            //TODO: We probably want a smaller test repo
-            git_url: Some("https://github.com/trueagi-io/metta-morph/".to_string()),
-            git_branch: None, //Some("Hyperpose".to_string()),
+            git_location: ModuleGitLocation {
+                //TODO: We probably want a smaller test repo
+                git_url: Some("https://github.com/trueagi-io/metta-morph/".to_string()),
+                git_branch: None, //Some("Hyperpose".to_string()),
+                git_subdir: None,
+                git_main_file: Some(PathBuf::from("mettamorph.metta")),
+            }
         });
 
         Ok(())
@@ -672,7 +670,7 @@ fn git_pkginfo_fetch_test() {
     let runner = Metta::new(Some(EnvBuilder::new().set_config_dir(Path::new("/tmp/hyperon-test/"))));
     let _mod_id = runner.load_module_direct(Box::new(TestLoader), "test-mod").unwrap();
 
-    let result = runner.run(SExprParser::new("!(import! &self test-mod:metta-morph:mettamorph)"));
+    let result = runner.run(SExprParser::new("!(import! &self test-mod:metta-morph)"));
     assert_eq!(result, Ok(vec![vec![expr!()]]));
 
     //Test that we can use a function imported from the module

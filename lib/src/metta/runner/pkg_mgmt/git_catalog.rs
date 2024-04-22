@@ -10,6 +10,73 @@ use serde::Deserialize;
 use crate::metta::runner::*;
 use crate::metta::runner::pkg_mgmt::{*, git_cache::*};
 
+//TODO:
+// * Need a function to clean up local repos that have been removed from the catalog file
+// * Need a function to delete a whole catalog cache.  Both of these interfaces should probably
+//    be added to the catalog trait as optional methods.
+
+/// A set of keys describing how to access a module via git.  Deserialized from within a [PkgInfo]
+///  or a catalog file [CatalogFileFormat]
+#[derive(Clone, Debug, Default, Deserialize)]
+pub struct ModuleGitLocation {
+    /// Indicates that the dependency module should be fetched from the specified `git` URL
+    #[serde(default)]
+    pub git_url: Option<String>,
+
+    /// A `git`` branch to fetch.  Will be ignored if `git_url` is `None`.  Uses the repo's
+    /// default branch if left unspecified
+    #[serde(default)]
+    pub git_branch: Option<String>,
+
+    /// A subdirectory within the git repo to use as the module, effectively ignoring the rest
+    /// of the repo contents.  The subdir must be a relative path within the repo.
+    #[serde(default)]
+    pub git_subdir: Option<PathBuf>,
+
+    /// A file within the git repo to use as the module.  The file path must be a relative path
+    /// within the repo or `git_subdir` directory if provided.
+    #[serde(default)]
+    pub git_main_file: Option<PathBuf>,
+}
+
+impl ModuleGitLocation {
+    pub(crate) fn get_loader<'a, FmtIter: Iterator<Item=&'a dyn FsModuleFormat>>(&self, fmts: FmtIter, caches_dir: Option<&Path>, cache_name: &str, mod_name: &str, ident_str: Option<&str>) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
+
+        //If a git URL is specified in the entry, see if we have it in the git-cache and
+        // clone it locally if we don't
+        if self.git_url.is_some() {
+            let cached_repo = self.get_cache(caches_dir, cache_name, mod_name, ident_str)?;
+            cached_repo.update(UpdateMode::PullIfMissing)?;
+
+            let mod_path = match &self.git_main_file {
+                Some(main_file) => cached_repo.local_path().join(main_file),
+                None => cached_repo.local_path().to_owned(),
+            };
+            return loader_for_module_at_path(fmts, &mod_path, Some(mod_name), None);
+        }
+
+        Ok(None)
+    }
+    pub(crate) fn get_cache(&self, caches_dir: Option<&Path>, cache_name: &str, mod_name: &str, ident_str: Option<&str>) -> Result<CachedRepo, String> {
+        let caches_dir = caches_dir.ok_or_else(|| "Unable to clone git repository; no local \"caches\" directory available".to_string())?;
+        let url = self.git_url.as_ref().unwrap();
+        let ident_str = match ident_str {
+            Some(ident_str) => ident_str,
+            None => url,
+        };
+        CachedRepo::new(caches_dir, cache_name, mod_name, ident_str, url, self.git_branch.as_ref().map(|s| s.as_str()), self.git_subdir.as_ref().map(|p| p.as_path()))
+    }
+    /// Returns a new ModuleGitLocation.  This is a convenience; the usual interface involves deserializing this struct
+    pub(crate) fn new(url: String) -> Self {
+        let mut new_self = Self::default();
+        new_self.git_url = Some(url);
+        new_self
+    }
+    pub(crate) fn get_url(&self) -> Option<&str> {
+        self.git_url.as_ref().map(|s| s.as_str())
+    }
+}
+
 /// Struct that matches the catalog.json file fetched from the `catalog.repo`
 #[derive(Deserialize, Debug)]
 struct CatalogFileFormat {
@@ -20,9 +87,8 @@ struct CatalogFileFormat {
 #[derive(Deserialize, Debug)]
 struct CatalogFileMod {
     name: String,
-    remote_url: String,
-    #[serde(default)]
-    branch: Option<String>,
+    #[serde(flatten)]
+    git_location: ModuleGitLocation
 }
 
 #[derive(Debug)]
@@ -39,7 +105,7 @@ impl GitCatalog {
     /// Creates a new GitCatalog with the name and url specified.  `refresh_time` is the time, in
     /// seconds, between refreshes of the catalog file
     pub fn new(caches_dir: &Path, fmts: Arc<Vec<Box<dyn FsModuleFormat>>>, name: &str, url: &str, refresh_time: u64) -> Result<Self, String> {
-        let catalog_repo = CachedRepo::new(caches_dir, Some(&name), "catalog.repo", "", url, None)?;
+        let catalog_repo = CachedRepo::new(caches_dir, &name, "catalog.repo", "", url, None, None)?;
         Ok(Self {
             name: name.to_string(),
             fmts,
@@ -55,8 +121,8 @@ impl GitCatalog {
         let mut results = vec![];
         for cat_mod in catalog.modules.iter() {
             if cat_mod.name == name {
-                //TODO: incorporate the name into the descriptor
-                let descriptor = ModuleDescriptor::new_with_ident_bytes_and_fmt_id(name.to_string(), cat_mod.remote_url.as_bytes(), 0);
+                //TODO: incorporate the name into the descriptor's ident bytes
+                let descriptor = ModuleDescriptor::new_with_ident_bytes_and_fmt_id(name.to_string(), cat_mod.git_location.get_url().unwrap().as_bytes(), 0);
                 results.push(descriptor);
             }
         }
@@ -67,7 +133,7 @@ impl GitCatalog {
         let catalog = cat_lock.as_ref().unwrap();
         for (mod_idx, cat_mod) in catalog.modules.iter().enumerate() {
             //TODO: Also check version here
-            if cat_mod.name == descriptor.name() && descriptor.ident_bytes_and_fmt_id_matches(cat_mod.remote_url.as_bytes(), 0) {
+            if cat_mod.name == descriptor.name() && descriptor.ident_bytes_and_fmt_id_matches(cat_mod.git_location.get_url().unwrap().as_bytes(), 0) {
                 return Some(mod_idx);
             }
         }
@@ -115,11 +181,9 @@ impl ModuleCatalog for GitCatalog {
         let catalog = cat_lock.as_ref().unwrap();
         let module = catalog.modules.get(mod_idx).unwrap();
 
-        let mod_repo = CachedRepo::new(&self.caches_dir, Some(&self.name), descriptor.name(), version_str, &module.remote_url, module.branch.as_ref().map(|s| s.as_str()))?;
-        let _ = mod_repo.update(UpdateMode::PullIfMissing)?;
-        let loader = match loader_for_module_at_path(self.fmts.iter().map(|f| &**f), mod_repo.local_path(), Some(descriptor.name()), None)? {
+        let loader = match module.git_location.get_loader(self.fmts.iter().map(|f| &**f), Some(&self.caches_dir), &self.name, descriptor.name(), Some(&version_str))? {
             Some((loader, _)) => loader,
-            None => unreachable!()
+            None => unreachable!(),
         };
 
         Ok(loader)
