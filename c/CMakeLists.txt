@@ -62,13 +62,25 @@ set_target_properties(hyperonc-static PROPERTIES
 add_dependencies(hyperonc-static build-hyperonc)
 
 #NOTE: All these dependencies are needed to statically link the git2 functionality
-find_library(GIT2_LIBRARY NAMES git2)
+# find_library(GIT2_LIBRARY NAMES git2)
 find_library(ICONV_LIBRARY NAMES iconv)
-find_library(Z_LIBRARY NAMES z)
-find_library(CRYPTO_LIBRARY NAMES crypto)
-find_library(SSL_LIBRARY NAMES ssl)
-add_library(hyperonc-static-interface INTERFACE)
-target_link_libraries(hyperonc-static-interface INTERFACE hyperonc-static ${GIT2_LIBRARY} ${ICONV_LIBRARY} ${Z_LIBRARY} ${SSL_LIBRARY} ${CRYPTO_LIBRARY})
+# find_library(Z_LIBRARY NAMES z)
+# find_library(CRYPTO_LIBRARY NAMES crypto)
+# find_library(SSL_LIBRARY NAMES ssl)
+
+set(PLATFORM_LIBRARIES ${ICONV_LIBRARY} CONAN_PKG::libgit2)
+
+if(APPLE)
+    # macOS specific libraries
+    list(APPEND PLATFORM_LIBRARIES "-framework CoreFoundation" "-framework Security")
+elseif(UNIX AND NOT APPLE)
+    # Linux specific libraries
+    # list(APPEND PLATFORM_LIBRARIES ssl crypto pthread dl)
+elseif(WIN32)
+    # Windows specific libraries
+    list(APPEND PLATFORM_LIBRARIES Ws2_32 Userenv Crypt32)
+endif()
+
 
 add_subdirectory(tests)
 
