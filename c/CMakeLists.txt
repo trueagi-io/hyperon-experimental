@@ -61,24 +61,16 @@ set_target_properties(hyperonc-static PROPERTIES
     )
 add_dependencies(hyperonc-static build-hyperonc)
 
-#NOTE: All these dependencies are needed to statically link the git2 functionality
-# find_library(GIT2_LIBRARY NAMES git2)
-# find_library(ICONV_LIBRARY NAMES iconv)
-# find_library(Z_LIBRARY NAMES z)
-# find_library(CRYPTO_LIBRARY NAMES crypto)
-# find_library(SSL_LIBRARY NAMES ssl)
-
-# set(PLATFORM_LIBRARIES ${ICONV_LIBRARY} CONAN_PKG::libgit2)
-set(PLATFORM_LIBRARIES CONAN_PKG::libgit2)
-
+#NOTE/TODO These are all downstream dependencies needed by libgit2, and specifically the way we
+# statically link libgit2 into the python module.  Therefore I think we can revisit this and clean
+# it up after we update the python module to depend directly on Rust.  https://github.com/trueagi-io/hyperon-experimental/issues/283
+set(PLATFORM_LIBRARIES)
 if(APPLE)
-    # macOS specific libraries
-    list(APPEND PLATFORM_LIBRARIES "-framework CoreFoundation" "-framework Security")
+    find_library(ICONV_LIBRARY NAMES iconv)
+    list(APPEND PLATFORM_LIBRARIES ${ICONV_LIBRARY} "-framework CoreFoundation" "-framework Security")
 elseif(UNIX AND NOT APPLE)
-    # Linux specific libraries
-    # list(APPEND PLATFORM_LIBRARIES ssl crypto pthread dl)
+    # Nothing needed specifically for Linux right now
 elseif(WIN32)
-    # Windows specific libraries
     list(APPEND PLATFORM_LIBRARIES Ws2_32 Userenv Crypt32)
 endif()
 

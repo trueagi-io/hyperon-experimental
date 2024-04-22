@@ -1,13 +1,13 @@
 [requires]
 libcheck/0.15.2
-libgit2/1.5.0
+
+#NOTE: Switching to "vendored-libgit2" because the conan package is almost 2 years old and takes a lot
+# longer to build
+#libgit2/1.5.0
 
 #NOTE: I am using the Rust git2 crate's "vendored-openssl" feature because I couldn't find a version
 # of the conan package with all needed symbols implemented
 #openssl/3.0.12
-
-#NOTE: This package doesn't seem to export anything all
-#libiconv/1.17
 
 [generators]
 cmake
