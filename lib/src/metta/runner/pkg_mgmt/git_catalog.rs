@@ -14,6 +14,9 @@ use crate::metta::runner::pkg_mgmt::{*, git_cache::*};
 // * Need a function to clean up local repos that have been removed from the catalog file
 // * Need a function to delete a whole catalog cache.  Both of these interfaces should probably
 //    be added to the catalog trait as optional methods.
+// * Funtion to trigger explicit updates.  Accessible from metta ops
+//   - Update specific module, update to a specific version, latest, or latest stable
+//   - update all modules, to latest or latest stable
 
 /// A set of keys describing how to access a module via git.  Deserialized from within a [PkgInfo]
 ///  or a catalog file [CatalogFileFormat]
