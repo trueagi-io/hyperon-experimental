@@ -45,6 +45,8 @@ execute_process(
     COMMAND conan install --build -- ${CMAKE_CURRENT_SOURCE_DIR}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
+include(${CMAKE_CURRENT_BINARY_DIR}/conanbuildinfo.cmake)
+conan_basic_setup(TARGETS)
 
 find_package(pybind11 REQUIRED)
 find_package(optional-lite REQUIRED)
@@ -52,8 +54,20 @@ include_directories(${nonstd_INCLUDE_DIRS})
 find_package(hyperonc REQUIRED HINTS ${HYPERONC_INSTALL_PREFIX})
 include_directories(${hyperonc_INCLUDE_DIRS})
 
+get_target_property(openssl_libs CONAN_PKG::openssl INTERFACE_LINK_LIBRARIES)
+
+set(OpenSSL_ROOT_DIR ${CONAN_OPENSSL_ROOT} ${CONAN_LIB_DIRS_OPENSSL})
+set(OPENSSL_CRYPTO_LIBRARY ${CONAN_LIBS_OPENSSL_CRYPTO})
+set(OPENSSL_SSL_LIBRARY ${CONAN_LIBS_OPENSSL_SSL})
+find_package(OpenSSL REQUIRED)
+
+set(FULL_OPENSSL_SSL_LIBRARY "${CONAN_LIB_DIRS_OPENSSL}/libssl.a")
+set(FULL_OPENSSL_CRYPTO_LIBRARY "${CONAN_LIB_DIRS_OPENSSL}/libcrypto.a")
+
+link_directories(${CONAN_LIB_DIRS_OPENSSL})
 pybind11_add_module(hyperonpy MODULE ./hyperonpy.cpp)
-target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}")
+set_target_properties(hyperonpy PROPERTIES LINK_FLAGS "-Wl,-force_load,${FULL_OPENSSL_SSL_LIBRARY} -Wl,-force_load,${FULL_OPENSSL_CRYPTO_LIBRARY}")
+target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}" ssl crypto)
 
 set(PYTHONPATH "${CMAKE_CURRENT_SOURCE_DIR}")
 add_subdirectory(tests)

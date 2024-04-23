@@ -1,7 +1,14 @@
 [requires]
 pybind11/2.10.1
 optional-lite/3.5.0
+openssl/3.2.1
 
 [generators]
+cmake
+CMakeDeps
+CMakeToolchain
 cmake_paths
 cmake_find_package
+
+[layout]
+cmake_layout
