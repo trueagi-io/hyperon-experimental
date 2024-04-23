@@ -281,11 +281,11 @@
 (= (not True) False)
 (= (not False) True)
 
-(: let (-> Atom %Undefined% Atom Atom))
+(: let (-> Atom %Undefined% Atom %Undefined%))
 (= (let $pattern $atom $template)
   (unify $atom $pattern $template Empty))
 
-(: let* (-> Expression Atom Atom))
+(: let* (-> Expression Atom %Undefined%))
 (= (let* $pairs $template)
   (eval (if-decons-expr $pairs ($pattern $atom) $tail
     (let $pattern $atom (let* $tail $template))
