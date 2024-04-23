@@ -517,7 +517,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
     pub(crate) fn new_for_loading(metta: &'m Metta, new_mod_name: &str, init_state: &mut ModuleInitState) -> Self {
         let normalized_name = normalize_relative_module_name("top", &new_mod_name).unwrap();
         let mod_id = init_state.push(normalized_name);
-        Self::new_internal(metta, mod_id, init_state.clone())
+        Self::new_internal(metta, mod_id, init_state.new_child())
     }
 
     /// Creates a new RunnerState to be used in the process of loading a new module
@@ -728,7 +728,7 @@ impl<'input> RunContext<'_, '_, 'input> {
         if mod_id == self.mod_id {
             f(self)
         } else {
-            let mut state = RunnerState::new_with_module_and_init_state(&self.metta, mod_id, self.init_state.clone());
+            let mut state = RunnerState::new_with_module_and_init_state(&self.metta, mod_id, self.init_state.new_child());
             state.run_in_context(f)
         }
     }
