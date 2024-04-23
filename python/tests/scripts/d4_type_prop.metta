@@ -121,7 +121,12 @@
 ; But we can add 'reasoning'
 (= (= $type T)
    (match &self (: $impl (-> $cause $type))
-      (= $cause T)))
+      ; This kind of rule interferes with common types like
+      ; `(: return (-> $t $t))`. Presence of such type in a codebase triggers the
+      ; rule and as result goes into an infinite loop:
+      ; ((Mortal Plato) T) -> (: return (-> $t $t)) -> ((Mortal Plato) T).
+      ; == check is added to prevent the loop.
+      (if (== $cause $type) (empty) (= $cause T))))
 !(assertEqual
   (= (Mortal Plato) T)
   T)
