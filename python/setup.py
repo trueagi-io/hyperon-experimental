@@ -10,29 +10,13 @@ from setuptools.command.build_ext import build_ext
 import setuptools_scm as scm
 import setuptools_scm.git as scmgit
 
-def get_git_revision_short_hash() -> str:
-    try:
-        sha = subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
-        return f"+{sha}"
-    except Exception:
-        return ''
-
-def read(rel_path):
-    here = os.path.abspath(os.path.dirname(__file__))
-    with codecs.open(os.path.join(here, rel_path), 'r') as fp:
-        return fp.read()
-
 def get_version(rel_path):
     new_ver = None
     with open(rel_path) as f:  lines = f.read().splitlines()
-    with open(rel_path, 'w') as f:
-        for line in lines:
-            if line.startswith('__version__'):
-                delim = '"' if '"' in line else "'"
-                new_ver = line.split(delim)[1].split("+")[0] + get_git_revision_short_hash()
-                f.write(line.replace(line.split(delim)[1], new_ver))
-            else:
-                f.write(line)
+    for line in lines:
+        if line.startswith('__version__') and (not "str" in line):
+            delim = '"' if '"' in line else "'"
+            new_ver = line.split(delim)[1].split("+")[0]
     if new_ver is None:
         raise RuntimeError("Unable to find version string.")
     return new_ver
@@ -101,16 +85,13 @@ class CMakeBuild(build_ext):
         )
 
 
-def parse(root, config):
-    ver = scmgit.parse(root, config)
-    if (ver == '0.0') or (ver is None):
-        version = get_version("hyperon/__version__.py")
-        return scm.version.meta(tag=version, config=config, preformatted=True, dirty=True)
-    else:
-        return ver
+def version_scheme(version):
+    return get_version("hyperon/_version.py")
 
 setup(
     ext_modules=[CMakeExtension("hyperonpy")],
     cmdclass={"build_ext": CMakeBuild},
-    version=scm.get_version(parse=parse)
+    use_scm_version={'root': '..',
+                     'version_scheme': version_scheme,
+                     'version_file': 'hyperon/_version.py'},
  )
