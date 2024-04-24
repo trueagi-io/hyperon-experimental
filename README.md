@@ -16,6 +16,7 @@ A lot of different materials can be found on [OpenCog wiki server](https://wiki.
 
 If you want to contribute the project please see the [contribution guide](./docs/CONTRIBUTING.md) first.
 If you find troubles with the installation, see the [Troubleshooting](#troubleshooting) section below.
+For development related instructions see the [development guide](./docs/DEVELOPMENT.md).
 
 # Prepare environment
 
