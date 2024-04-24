@@ -1,5 +1,4 @@
 import os
-import codecs
 import sys
 import shutil
 import subprocess
@@ -7,19 +6,6 @@ from pathlib import Path
 
 from setuptools import Extension, setup
 from setuptools.command.build_ext import build_ext
-import setuptools_scm as scm
-import setuptools_scm.git as scmgit
-
-def get_version(rel_path):
-    new_ver = None
-    with open(rel_path) as f:  lines = f.read().splitlines()
-    for line in lines:
-        if line.startswith('__version__') and (not "str" in line):
-            delim = '"' if '"' in line else "'"
-            new_ver = line.split(delim)[1].split("+")[0]
-    if new_ver is None:
-        raise RuntimeError("Unable to find version string.")
-    return new_ver
 
 def resolve_path(path: str) -> str:
     return os.path.abspath(path)
@@ -85,8 +71,16 @@ class CMakeBuild(build_ext):
         )
 
 
-def version_scheme(version):
-    return get_version("hyperon/_version.py")
+def get_version(rel_path):
+    try:
+        with open(rel_path) as f:  ver = f.read().splitlines()[0].split("'")[1]
+        return ver
+    except Exception:
+        print(f"Error reading file {rel_path}", file=sys.stderr)
+
+
+def version_scheme(*args):
+    return get_version("../VERSION")
 
 setup(
     ext_modules=[CMakeExtension("hyperonpy")],
