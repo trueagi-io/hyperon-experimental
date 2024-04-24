@@ -80,7 +80,7 @@ def get_version(rel_path):
 
 
 def version_scheme(*args):
-    return get_version("../VERSION")
+    return get_version("./VERSION")
 
 setup(
     ext_modules=[CMakeExtension("hyperonpy")],
