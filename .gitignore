@@ -7,3 +7,4 @@ Cargo.lock
 .DS_Store
 .vscode
 .aider*
+./python/hyperon/_version.py
