@@ -46,7 +46,9 @@ git reset --hard FETCH_HEAD
 mkdir -p ${HOME}/hyperonc/c/build
 cd ${HOME}/hyperonc/c/build
 # Rust doesn't support building shared libraries under musllinux environment
-cmake -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release ..
+# cmake -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release ..
+# NOTE: Need to discsuss with Vitaly, because C tests now use shared library
+cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release ..
 make
 make check
 make install
