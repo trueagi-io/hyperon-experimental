@@ -6,11 +6,11 @@
 ;!(match &das ($t MYBPP) ($t MYBPP))
 !(match &das ($t MYBPP) ($t MYBPP))
 ;!(match &das (protein MYBPP) res)
-!(match &das
+;!(match &das
             (,
                 (gene $gene)
                 (gene_type (gene $gene) protein_coding)
             )
             $gene
         )
-!(match &das (, (gene_name (gene $ens) IRX3) (genes_pathways (gene $ens) $p)) $p)
+;!(match &das (, (gene_name (gene $ens) IRX3) (genes_pathways (gene $ens) $p)) $p)
