@@ -1,11 +1,5 @@
 [requires]
 libcheck/0.15.2
-openssl/3.2.1
 
 [generators]
 cmake
-CMakeDeps
-CMakeToolchain
-
-[layout]
-cmake_layout
