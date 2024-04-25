@@ -7,7 +7,6 @@
 use crate::*;
 use crate::atom::matcher::*;
 use crate::space::*;
-use crate::space::grounding::*;
 use crate::metta::*;
 
 use std::fmt::{Debug, Display, Formatter};
@@ -163,7 +162,7 @@ impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
 #[derive(Debug)]
 struct InterpreterContext<'a, T: SpaceRef<'a>> {
     space: T,
-    phantom: PhantomData<&'a GroundingSpace>,
+    phantom: PhantomData<dyn SpaceRef<'a>>,
 }
 
 impl<'a, T: SpaceRef<'a>> InterpreterContext<'a, T> {
