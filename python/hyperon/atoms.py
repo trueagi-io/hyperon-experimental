@@ -28,7 +28,7 @@ class Atom:
         return hp.atom_to_str(self.catom)
 
     def get_metatype(self):
-        """Gets the kind of the current Atom instance"""
+        """Gets the metatype (kind) of the current Atom instance"""
         return hp.atom_get_metatype(self.catom)
 
     def iterate(self):
