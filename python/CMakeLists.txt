@@ -47,6 +47,7 @@ execute_process(
 include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
 
 find_package(OpenSSL REQUIRED)
+find_package(ZLIB REQUIRED)
 
 find_package(pybind11 REQUIRED)
 find_package(optional-lite REQUIRED)
@@ -56,7 +57,7 @@ include_directories(${hyperonc_INCLUDE_DIRS})
 
 pybind11_add_module(hyperonpy MODULE ./hyperonpy.cpp)
 target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}")
-target_link_libraries(hyperonpy PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(hyperonpy PUBLIC OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
 
 set(PYTHONPATH "${CMAKE_CURRENT_SOURCE_DIR}")
 add_subdirectory(tests)
