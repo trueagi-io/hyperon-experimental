@@ -25,7 +25,7 @@ if test "$AUDITWHEEL_POLICY" = "manylinux2014"; then
     yum install -y perl-devel
 fi
 
-yum install -y openssl-devel
+yum install -y openssl openssl-devel
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
 sh /tmp/rustup.sh -y && rm /tmp/rustup.sh
