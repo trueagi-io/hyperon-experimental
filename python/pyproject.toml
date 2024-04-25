@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools==65.6.3", "conan==1.62", "cmake==3.26.4", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools==65.6.3", "conan==1.62", "cmake==3.26.4", "setuptools_scm[toml]==7.1.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -16,10 +16,10 @@ classifiers = [
     "Operating System :: POSIX :: Linux",
     "Operating System :: MacOS :: MacOS X",
 ]
-dependencies = [
-    'importlib-metadata==6.6.0; python_version<"3.8"',
+
+dynamic = [
+    "version",
 ]
-dynamic = ["version"]
 
 [project.scripts]
 metta = "hyperon.metta:main"
@@ -40,8 +40,3 @@ before-all = "sh -c ./python/install-hyperonc.sh"
 skip = "*-musllinux_i686"
 test-requires = ["pytest==7.3.2"]
 test-command = "pytest {project}/python/tests"
-
-
-[tool.setuptools_scm]
-root = '..'
-
