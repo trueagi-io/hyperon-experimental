@@ -20,12 +20,23 @@ done
 echo "hyperonc repository URL $HYPERONC_URL"
 echo "hyperonc revision $HYPERONC_REV"
 
+os_type=$(uname)
+
 # This is to build subunit from Conan on CentOS based manylinux images.
 if test "$AUDITWHEEL_POLICY" = "manylinux2014"; then
-    yum install -y perl-devel
+    yum install -y perl-devel openssl-devel zlib-devel
 fi
 
-yum install -y openssl-devel zlib-devel
+# Install OpenSSL and Zlib on a Mac
+if [ "$os_type" = "Darwin" ]; then
+    # Install Homebrew if it's not already present
+    if ! command -v brew >/dev/null 2>&1; then
+        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    fi
+
+    brew install zlib
+    brew install openssl
+fi
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
 sh /tmp/rustup.sh -y && rm /tmp/rustup.sh
@@ -47,7 +58,8 @@ mkdir -p ${HOME}/hyperonc/c/build
 cd ${HOME}/hyperonc/c/build
 # Rust doesn't support building shared libraries under musllinux environment
 # cmake -DBUILD_SHARED_LIBS=OFF -DCMAKE_BUILD_TYPE=Release ..
-# NOTE: Need to discsuss with Vitaly, because C tests now use shared library
+# QUESTION: Need to discsuss with Vitaly, because C tests now uses shared library, but 
+# the "Build wheels" step succeeds, presumably because only manylinux flavors are included
 cmake -DBUILD_SHARED_LIBS=ON -DCMAKE_BUILD_TYPE=Release ..
 make
 make check
