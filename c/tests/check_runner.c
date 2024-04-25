@@ -35,6 +35,9 @@ bool run_metta_and_compare_result(metta_t* runner, const char* metta_src, const 
             size_t len = atom_to_str(&result_atom, atom_str_buf, 256);
 
             result = strcmp(atom_str_buf, expected_result) == 0;
+            if (!result) {
+                fprintf(stderr, "Expected: \"%s\"\nFound:    \"%s\"\n", expected_result, atom_str_buf);
+            }
         }
         atom_vec_free(*results);
         free(results);
@@ -173,7 +176,7 @@ START_TEST (test_custom_module_format)
     ck_assert(run_metta_and_compare_result(&runner, "!(match &loaded-test test-atom found!)", "found!"));
 
     //Try and load a module that our format will reject, and validate we get an error
-    ck_assert(run_metta_and_compare_result(&runner, "!(import! &new-space bogus-mod)", "(Error (import! &new-space bogus-mod) Failed to resolve module bogus-mod)"));
+    ck_assert(run_metta_and_compare_result(&runner, "!(import! &new-space bogus-mod)", "(Error (import! &new-space bogus-mod) Failed to resolve module top:bogus-mod)"));
 
     metta_free(runner);
 }
@@ -187,7 +190,7 @@ void custom_stdlib_loader(run_context_t *run_context, void* callback_context) {
     space_free(space);
 
     //"import * from corelib" (This is optional, and some implementations might not want it)
-    module_id_t corelib_mod_id = run_context_load_module(run_context, "corelib");
+    module_id_t corelib_mod_id = run_context_load_module(run_context, "top:corelib");
     run_context_import_dependency(run_context, corelib_mod_id);
 
     //Load a custom atom using the MeTTa syntax

@@ -12,7 +12,7 @@ typedef struct _atom_list_item {
 
 void collect_variable_atoms(atom_ref_t atom, void* vec_ptr) {
     atom_vec_t* vec = vec_ptr;
-    if (atom_get_type(&atom) == VARIABLE) {
+    if (atom_get_metatype(&atom) == VARIABLE) {
         atom_vec_push(vec, atom_clone(&atom));
     }
 }
