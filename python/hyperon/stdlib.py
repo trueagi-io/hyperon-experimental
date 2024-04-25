@@ -3,7 +3,7 @@ import sys
 import os
 
 from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError, AtomType, MatchableObject, \
-    G, S, Atoms, ValueObject, OperationObject
+    G, S, Atoms, ValueObject, OperationObject, GroundedObject, SymbolAtom
 from .base import Tokenizer, SExprParser
 from .ext import register_atoms, register_tokens
 import hyperonpy as hp
@@ -213,43 +213,42 @@ def load_ascii():
         r"load-ascii": loadAtom
     }
 
-def groundedatom_to_python_object(a):
-    obj = a.get_object()
-    if isinstance(obj, ValueObject):
-        obj = obj.value
-    if isinstance(obj, OperationObject):
-        obj = obj.content
-    return obj
+def try_unwrap_python_object(a, is_symbol_to_str = False):
+    if isinstance(a, GroundedObject) or isinstance(a, GroundedAtom):
+        return a.get_object().content
+    if is_symbol_to_str and isinstance(a, SymbolAtom):
+        return a.get_name()
+    return a
 
 # convert nested tuples to nested python tuples or lists
-def _py_tuple_list(tuple_list, *atoms):
+def _py_tuple_list(tuple_list, metta_tuple):
     rez = []
-    for a in atoms:
-        if isinstance(a, GroundedAtom):
-            rez.append(groundedatom_to_python_object(a))
-        elif isinstance(a, ExpressionAtom):
-            rez.append(_py_tuple_list(tuple_list, *a.get_children()))
+    for a in metta_tuple.get_children():
+        if isinstance(a, ExpressionAtom):
+            rez.append(_py_tuple_list(tuple_list, a))
+        else:
+            rez.append(try_unwrap_python_object(a))
     return tuple_list(rez)
 
-def py_tuple(*atoms):
-    return [ValueAtom(_py_tuple_list(tuple, *atoms))]
+def py_tuple(metta_tuple):
+    return [ValueAtom(_py_tuple_list(tuple, metta_tuple))]
 
-def py_list(*atoms):
-    return [ValueAtom(_py_tuple_list(list, *atoms))]
+def py_list(metta_tuple):
+    return [ValueAtom(_py_tuple_list(list, metta_tuple))]
 
 def tuple_to_keyvalue(a):
     ac = a.get_children()
     if len(ac) != 2:
         raise Exception("Syntax error in tuple_to_keyvalue")
-    return groundedatom_to_python_object(ac[0]), groundedatom_to_python_object(ac[1])
+    return try_unwrap_python_object(ac[0], is_symbol_to_str = True), try_unwrap_python_object(ac[1])
 
 # convert pair of tuples to python dictionary
-def py_dict(*atoms):
-    return [ValueAtom(dict([tuple_to_keyvalue(a) for a in atoms]))]
+def py_dict(metta_tuple):
+    return [ValueAtom(dict([tuple_to_keyvalue(a) for a in metta_tuple.get_children()]))]
 
 # chain python objects with |  (syntactic sugar for langchain)
-def py_chain(*atoms):
-    objects = [groundedatom_to_python_object(a) for a in atoms]
+def py_chain(metta_tuple):
+    objects = [try_unwrap_python_object(a) for a in metta_tuple.get_children()]
     result = objects[0]
     for obj in objects[1:]:
         result = result | obj
