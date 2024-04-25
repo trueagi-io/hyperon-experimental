@@ -35,14 +35,14 @@ jobs:
       - name: Install Dependency Libs (macOS)
         if: startsWith(matrix.os, 'macos')
         run: |
-          brew install openssl
-          run: brew install zlib
+          brew install zlib
+          brew install openssl@3
 
       - name: Install Dependency Libs (Ubuntu)
         if: startsWith(matrix.os, 'ubuntu')
         run: |
-          sudo apt-get update && sudo apt-get install -y openssl libssl-dev
           sudo apt-get install -y zlib1g-dev
+          sudo apt-get update && sudo apt-get install -y openssl libssl-dev
 
       - run: |
           echo "REF_NAME=${{github.ref_name}}" | tee -a $GITHUB_ENV
