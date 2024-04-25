@@ -383,7 +383,7 @@ class OperationObject(GroundedObject):
                             except:
                                 raise RuntimeError(f"Incorrect kwarg format {kwarg}")
                             try:
-                                kwargs[repr(kwarg[0])] = kwarg[1].get_object().content
+                                kwargs[get_string_value(kwarg[0])] = kwarg[1].get_object().content
                             except:
                                 raise NoReduceError()
                         continue
@@ -705,3 +705,10 @@ class BindingsSet:
         for r in res:
             result.append(Bindings(r))
         return iter(result)
+
+def get_string_value(value) -> str:
+    if not isinstance(value, str):
+        value = repr(value)
+    if len(value) > 2 and ("\"" == value[0]) and ("\"" == value[-1]):
+        return value[1:-1]
+    return value
