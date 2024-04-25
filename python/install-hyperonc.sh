@@ -22,7 +22,7 @@ echo "hyperonc revision $HYPERONC_REV"
 
 # This is to build subunit from Conan on CentOS based manylinux images.
 if test "$AUDITWHEEL_POLICY" = "manylinux2014"; then
-    yum install -y perl-devel openssl-devel
+    yum install -y pkgconfig perl-devel openssl-devel
 fi
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
