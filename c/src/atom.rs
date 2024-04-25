@@ -315,13 +315,13 @@ pub extern "C" fn atoms_are_equivalent(a: *const atom_ref_t, b: *const atom_ref_
     crate::atom::matcher::atoms_are_equivalent(a, b)
 }
 
-/// @brief Returns the type of an atom
+/// @brief Returns the metatype of an atom
 /// @ingroup atom_group
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to inspect
 /// @return An `atom_type_t` indicating the type of `atom`
 ///
 #[no_mangle]
-pub unsafe extern "C" fn atom_get_type(atom: *const atom_ref_t) -> atom_type_t {
+pub unsafe extern "C" fn atom_get_metatype(atom: *const atom_ref_t) -> atom_type_t {
     match (*atom).borrow() {
         Atom::Symbol(_) => atom_type_t::SYMBOL,
         Atom::Variable(_) => atom_type_t::VARIABLE,

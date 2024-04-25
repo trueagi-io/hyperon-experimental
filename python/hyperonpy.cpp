@@ -694,7 +694,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("atom_to_str", [](CAtom& atom) {
             return func_to_string((write_to_buf_func_t)&atom_to_str, atom.ptr());
         }, "Convert atom to human readable string");
-    m.def("atom_get_type", [](CAtom& atom) { return atom_get_type(atom.ptr()); }, "Get type of the atom");
+    m.def("atom_get_metatype", [](CAtom& atom) { return atom_get_metatype(atom.ptr()); }, "Get type of the atom");
     m.def("atom_get_name", [](CAtom& atom) {
             return func_to_string((write_to_buf_func_t)&atom_get_name, atom.ptr());
         }, "Get name of the Symbol or Variable atom");
