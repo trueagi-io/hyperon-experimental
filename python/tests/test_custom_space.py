@@ -15,7 +15,7 @@ class CustomSpace(AbstractSpace):
     def query(self, query_atom):
 
         # Extract only the variables from the query atom
-        query_vars = list(filter(lambda atom: atom.get_type() == AtomKind.VARIABLE, query_atom.iterate()))
+        query_vars = list(filter(lambda atom: atom.get_metatype() == AtomKind.VARIABLE, query_atom.iterate()))
 
         # Match the query atom against every atom in the space
         # BindingsSet() creates a binding set with the only matching result

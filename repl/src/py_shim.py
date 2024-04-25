@@ -29,7 +29,7 @@ def parse_line(metta, line):
             return e.args[0]
 
 def parse_line_to_syntax_tree(line):
-    leaf_node_types = [];
+    leaf_node_types = []
     parser = SExprParser(line)
     while True:
         syntax_node = parser.parse_to_syntax_tree()
