@@ -51,19 +51,18 @@
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; Equality can be typed. If some equality is well-typed,
-; it means that it can be true.
+; Equalities themselves are typed. If some equality is well-typed,
+; it means that it can be true. Equality is of Atom type.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-(: = (-> $t $t Type))
 !(assertEqual
   (get-type (= SocratesIsMortal (HumansAreMortal SocratesIsHuman)))
-  Type)
+  Atom)
 ; This equality is well-typed, because both its arguments are of `Type`.
 ; It doesn't mean they are both inhabited (true propositions), and
 ; it doesn't mean that the equality itself is true (an inhabited type).
 !(assertEqual
   (get-type (= (Mortal Socrates) (Mortal Plato)))
-  Type)
+  Atom)
 ; Wrong proof
 !(assertEqualToResult
   (get-type (= SocratesIsMortal (HumansAreMortal PlatoIsHuman)))
@@ -90,7 +89,11 @@
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Another (MeTTa) way is to have explicit reduction of types to True
 ; (equalities over equalities), although a more practical way would
-; be just to use a dedicated comparison operator
+; be just to use a dedicated comparison operator.
+; Notice that this code works, although T is declared as of Type type,
+; because the type of equality expressions is Atom, which can be
+; matched against any other type. Such permissiveness allows using
+; `=` in custom type systems.
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 (: T Type)
 (= (= $x $x) T)

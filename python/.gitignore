@@ -5,3 +5,4 @@ __pycache__
 /*.so
 /*.dylib
 /wheelhouse
+/hyperon/_version.py
