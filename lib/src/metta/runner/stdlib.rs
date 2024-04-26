@@ -2260,11 +2260,11 @@ mod tests {
 
     #[test]
     fn sealed_op_runner() {
-        let nested = run_program("!(sealed ($x) (sealed ($a $b) (=($a $x $c) ($b))))");
-        let simple_replace = run_program("!(sealed ($x $y) (=($y $z)))");
+        let nested = run_program("!(sealed ($x) (sealed ($a $b) (= ($a $x $c) ($b))))");
+        let simple_replace = run_program("!(sealed ($x $y) (= ($y) ($z)))");
 
         assert!(crate::atom::matcher::atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("="(a b c) (z))));
-        assert!(crate::atom::matcher::atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("="(y z))));
+        assert!(crate::atom::matcher::atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("="(y) (z))));
     }
 
     #[test]

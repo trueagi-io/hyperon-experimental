@@ -36,7 +36,6 @@ class CMakeBuild(build_ext):
         # Must be in this form due to bug in .resolve() only fixed in Python 3.10+
         ext_fullpath = Path.cwd() / self.get_ext_fullpath(ext.name)
         extdir = ext_fullpath.parent.resolve()
-
         debug = int(os.environ.get("DEBUG", 0)) if self.debug is None else self.debug
         cfg = "Debug" if debug else "Release"
 
@@ -71,7 +70,22 @@ class CMakeBuild(build_ext):
             ["cmake", "--build", ".", *build_args], cwd=build_temp, check=True
         )
 
+
+def get_version(rel_path):
+    try:
+        with open(rel_path) as f:  ver = f.read().splitlines()[0].split("'")[1]
+        return ver
+    except Exception:
+        print(f"Error reading file {rel_path}", file=sys.stderr)
+
+
+def version_scheme(*args):
+    return get_version("./VERSION")
+
 setup(
     ext_modules=[CMakeExtension("hyperonpy")],
-    cmdclass={"build_ext": CMakeBuild}
+    cmdclass={"build_ext": CMakeBuild},
+    use_scm_version={'root': '..',
+                     'version_scheme': version_scheme,
+                     'write_to': 'python/hyperon/_version.py'},
  )

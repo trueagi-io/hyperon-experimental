@@ -1,3 +1,12 @@
+(@doc = 
+  (@desc "A symbol used to define reduction rules for expressions.")
+  (@params (
+    (@param "Pattern to be matched against expression to be reduced")
+    (@param "Result of reduction or transformation of the first pattern") )
+  (@return "Not reduced itself unless custom equalities over equalities are added") )
+)
+(: = (-> $t $t Atom))
+
 (@doc if
   (@desc "Replace itself by one of the arguments depending on condition.")
   (@params (

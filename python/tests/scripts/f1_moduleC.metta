@@ -5,5 +5,5 @@
 (: __g (-> Number))
 (= (__g) 100)
 
-(: g (-> Number Numer))
+(: g (-> Number Number))
 (= (g $x) (+ $x (__g)))

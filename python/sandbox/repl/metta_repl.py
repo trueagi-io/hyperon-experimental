@@ -84,7 +84,7 @@ def my_resolver_atoms(metta):
         # TODO? the problem is that we need to return an operation to make this
         # work in parent expressions, thus, it is unclear how to return pure
         # symbols
-        if atom.get_type() == hp.AtomKind.GROUNDED:
+        if atom.get_metatype() == hp.AtomKind.GROUNDED:
             return atom
         # TODO: borrow atom type to op
         return OperationAtom(
