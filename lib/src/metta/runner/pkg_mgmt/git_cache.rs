@@ -7,13 +7,19 @@
 //!
 
 use std::path::{Path, PathBuf};
+#[cfg(feature = "git")]
 use std::time::{SystemTime, Duration, UNIX_EPOCH};
+#[cfg(feature = "git")]
 use std::fs::{File, read_to_string};
+#[cfg(feature = "git")]
 use std::io::prelude::*;
 
 use xxhash_rust::xxh3::xxh3_64;
+
+#[cfg(feature = "git")]
 use git2::{*, build::*};
 
+#[cfg(feature = "git")]
 const TIMESTAMP_FILENAME: &'static str = "_timestamp_";
 
 /// Indicates the desired behavior for updating the locally-cached repo
@@ -22,6 +28,7 @@ pub enum UpdateMode {
     /// Clones the repo if it doesn't exist, otherwise leaves it alone
     PullIfMissing,
     /// Pulls the latest from the remote repo.  Fails if the remote is unavailable
+    #[allow(dead_code)]
     PullLatest,
     /// Attempts to pull from the remote repo.  Continues with the existing repo if
     /// the remote is unavailable
@@ -34,7 +41,9 @@ pub enum UpdateMode {
 #[derive(Debug)]
 pub struct CachedRepo {
     name: String,
+    #[allow(dead_code)]
     url: String,
+    #[allow(dead_code)]
     branch: Option<String>,
     repo_local_path: PathBuf,
     local_path: PathBuf,
@@ -63,13 +72,14 @@ impl CachedRepo {
         } else {
             name.to_string()
         };
-        let repo_local_path = caches_dir.join(cache_name).join(local_filename);
+        let this_cache_dir = caches_dir.join(cache_name);
+        let repo_local_path = this_cache_dir.join(local_filename);
         let local_path = match subdir {
             Some(subdir) => repo_local_path.join(subdir),
             None => repo_local_path.clone()
         };
 
-        std::fs::create_dir_all(&repo_local_path).map_err(|e| e.to_string())?;
+        std::fs::create_dir_all(&this_cache_dir).map_err(|e| e.to_string())?;
 
         Ok(Self {
             name: name.to_string(),
@@ -86,6 +96,7 @@ impl CachedRepo {
     pub fn update(&self, mode: UpdateMode) -> Result<bool, String> {
 
         //TODO: If there is a subdir then we can perform a sparse checkout and avoid cloning unnecessary data
+        #[cfg(feature = "git")]
         match Repository::open(self.repo_local_path()) {
 
             //We have an existing repo on disk
@@ -138,9 +149,33 @@ impl CachedRepo {
                 }
             },
         }
+
+        #[cfg(not(feature = "git"))]
+        self.update_repo_no_git_support(mode)
+    }
+
+    //Internal function to provide appropriate status / errors if we don't have git support enabled
+    #[cfg(not(feature = "git"))]
+    fn update_repo_no_git_support(&self, mode: UpdateMode) -> Result<bool, String> {
+        let err_msg = || format!("Cannot update repo: {}; hyperon built without git support", self.name);
+        match mode {
+            UpdateMode::PullLatest => {
+                return Err(err_msg());
+            }
+            UpdateMode::TryPullLatest => {
+                log::warn!("{}", err_msg());
+            },
+            _ => {}
+        }
+        if self.repo_local_path().exists() {
+            Ok(false)
+        } else {
+            Err(err_msg())
+        }
     }
 
     /// Internal method to get the branch name
+    #[cfg(feature = "git")]
     fn get_branch(&self, remote: &Remote) -> Result<String, String> {
         Ok(match &self.branch {
             Some(b) => b.to_owned(),
@@ -151,6 +186,7 @@ impl CachedRepo {
     }
 
     /// Internal method to perform a merge.  Intended to approximate the `git merge` command-line behavior
+    #[cfg(feature = "git")]
     fn merge(&self, repo: &Repository, branch: &str, incomming_commit_ref: &Reference) -> Result<(), git2::Error> {
         let annotated_commit = repo.reference_to_annotated_commit(incomming_commit_ref)?;
         let analysis = repo.merge_analysis(&[&annotated_commit])?;
@@ -186,6 +222,7 @@ impl CachedRepo {
     }
 
     /// Internal function to write the timestamp file, with the value of "now"
+    #[cfg(feature = "git")]
     fn write_timestamp_file(&self) -> Result<(), String> {
         let duration_since_epoch = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
         let file_path = self.repo_local_path().join(TIMESTAMP_FILENAME);
@@ -196,6 +233,7 @@ impl CachedRepo {
 
     /// Returns `true` if `mode == TryPullIfOlderThan`, and the timestamp file indicates
     /// that amount of time has elapsed.  Otherwise returns `false`
+    #[cfg(feature = "git")]
     fn check_timestamp(&self, mode: UpdateMode) -> bool {
         match mode {
             UpdateMode::TryPullIfOlderThan(secs) => {
