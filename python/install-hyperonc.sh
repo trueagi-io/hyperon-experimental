@@ -12,6 +12,8 @@ while getopts 'u:r:' opt; do
             ;;
         ?|h)
             echo "Usage: $(basename $0) [-u hyperonc_repo_url] [-r hyperonc_revision]"
+            echo "-u hyperonc_repo_url    Git repo URL to get hyperonc source code"
+            echo "-r hyperonc_revision    Revision of hyperonc to get from Git"
             exit 1
             ;;
     esac
