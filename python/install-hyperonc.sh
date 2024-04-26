@@ -27,17 +27,6 @@ if test "$AUDITWHEEL_POLICY" = "manylinux2014"; then
     yum install -y perl-devel openssl-devel zlib-devel
 fi
 
-# Install OpenSSL and Zlib on a Mac
-if [ "$os_type" = "Darwin" ]; then
-    # Install Homebrew if it's not already present
-    if ! command -v brew >/dev/null 2>&1; then
-        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-    fi
-
-    brew install zlib
-    brew install openssl
-fi
-
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
 sh /tmp/rustup.sh -y && rm /tmp/rustup.sh
 export PATH="${PATH}:${HOME}/.cargo/bin"

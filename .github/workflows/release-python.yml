@@ -32,18 +32,6 @@ jobs:
         with:
           python-version: "3.8"
 
-      - name: Install Dependency Libs (macOS)
-        if: startsWith(matrix.os, 'macos')
-        run: |
-          brew install zlib
-          brew install openssl@3
-
-      - name: Install Dependency Libs (Ubuntu)
-        if: startsWith(matrix.os, 'ubuntu')
-        run: |
-          sudo apt-get install -y zlib1g-dev
-          sudo apt-get update && sudo apt-get install -y openssl libssl-dev
-
       - run: |
           echo "REF_NAME=${{github.ref_name}}" | tee -a $GITHUB_ENV
           echo "EVENT_NAME=${{github.event_name}}" | tee -a $GITHUB_ENV

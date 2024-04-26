@@ -55,8 +55,13 @@ include_directories(${nonstd_INCLUDE_DIRS})
 find_package(hyperonc REQUIRED HINTS ${HYPERONC_INSTALL_PREFIX})
 include_directories(${hyperonc_INCLUDE_DIRS})
 
+if(APPLE)
+    # macOS specific libraries
+    set(APPEND PLATFORM_LIBRARIES "-framework CoreFoundation" "-framework Security")
+endif()
+
 pybind11_add_module(hyperonpy MODULE ./hyperonpy.cpp)
-target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}")
+target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}" ${PLATFORM_LIBRARIES})
 target_link_libraries(hyperonpy PUBLIC OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
 
 set(PYTHONPATH "${CMAKE_CURRENT_SOURCE_DIR}")
