@@ -3,7 +3,7 @@ import sys
 import os
 
 from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError, AtomType, MatchableObject, \
-    G, S, Atoms, ValueObject, OperationObject, GroundedObject, SymbolAtom
+    G, S, Atoms, get_string_value, ValueObject, OperationObject, GroundedObject, SymbolAtom
 from .base import Tokenizer, SExprParser
 from .ext import register_atoms, register_tokens
 import hyperonpy as hp
@@ -62,13 +62,6 @@ def bool_ops():
         r"and": andAtom,
         r"not": notAtom
     }
-
-def get_string_value(value) -> str:
-    if not isinstance(value, str):
-        value = repr(value)
-    if len(value) > 2 and ("\"" == value[0]) and ("\"" == value[-1]):
-        return value[1:-1]
-    return value
 
 class RegexMatchableObject(MatchableObject):
     ''' To match atoms with regular expressions'''
