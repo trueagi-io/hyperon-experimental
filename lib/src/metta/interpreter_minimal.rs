@@ -426,7 +426,7 @@ fn finished_result(atom: Atom, bindings: Bindings, prev: Option<Rc<RefCell<Stack
 }
 
 fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: eval, ret: _, finished: _, vars} = stack;
+    let Stack{ prev, atom: eval, ret: _, finished: _, vars: _} = stack;
     let query_atom = match_atom!{
         eval ~ [_op, query] => query,
         _ => {
@@ -475,7 +475,7 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, 
         },
         _ if is_embedded_op(&query_atom) =>
             vec![InterpretedAtom(atom_to_stack(query_atom, prev), bindings)],
-        _ => query(&context.space, prev, query_atom, bindings, vars),
+        _ => query(&context.space, prev, query_atom, bindings),
     }
 }
 
@@ -492,7 +492,7 @@ fn is_variable_op(atom: &Atom) -> bool {
     }
 }
 
-fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings, _vars: Variables) -> Vec<InterpretedAtom> {
+fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
     #[cfg(not(feature = "variable_operation"))]
     if is_variable_op(&atom) {
         // TODO: This is a hotfix. Better way of doing this is adding
