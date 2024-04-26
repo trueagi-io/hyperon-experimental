@@ -38,11 +38,13 @@ class CMakeBuild(build_ext):
         extdir = ext_fullpath.parent.resolve()
         debug = int(os.environ.get("DEBUG", 0)) if self.debug is None else self.debug
         cfg = "Debug" if debug else "Release"
+        local_prefix = os.path.join(os.environ["HOME"], ".local")
 
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}{os.sep}",
             f"-DPython3_EXECUTABLE={sys.executable}",
-            f"-DCMAKE_BUILD_TYPE={cfg}"
+            f"-DCMAKE_BUILD_TYPE={cfg}",
+            f"-DCMAKE_PREFIX_PATH={local_prefix}"
         ]
         build_args = []
         # Adding CMake arguments set as environment variable

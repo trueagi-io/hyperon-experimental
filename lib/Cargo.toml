@@ -18,7 +18,7 @@ dyn-fmt = "0.4.0"
 xxhash-rust = {version="0.8.7", features=["xxh3"], optional=true }
 serde = { version="1.0.198", features = ["derive"], optional=true }
 serde_json = { version="1.0.116", optional=true }
-git2 = { version="0.15.0", features=["vendored-libgit2"], optional=true }
+git2 = { version="0.18.3", features=["vendored-libgit2"], optional=true }
 
 [lib]
 name = "hyperon"
