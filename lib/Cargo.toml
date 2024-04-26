@@ -16,10 +16,9 @@ dyn-fmt = "0.4.0"
 
 # pkg_mgmt deps
 xxhash-rust = {version="0.8.7", features=["xxh3"], optional=true }
-git2 = { version="0.15.0", features=["vendored-libgit2"], optional=true }
-libz-sys = { version="1.1.16", optional=true }
 serde = { version="1.0.198", features = ["derive"], optional=true }
 serde_json = { version="1.0.116", optional=true }
+git2 = { version="0.15.0", features=["vendored-libgit2"], optional=true }
 
 [lib]
 name = "hyperon"
@@ -33,4 +32,5 @@ default = ["pkg_mgmt"]
 minimal = [] # enables minimal MeTTa interpreter
 variable_operation = [] # enables evaluation of the expressions which have
                         # a variable on the first position
-pkg_mgmt = ["xxhash-rust", "git2", "serde", "serde_json", "libz-sys"]
+git = ["git2", "pkg_mgmt"]
+pkg_mgmt = ["xxhash-rust", "serde", "serde_json"]
