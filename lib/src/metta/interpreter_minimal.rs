@@ -68,7 +68,7 @@ impl Stack {
     fn from_prev_add_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
         // TODO: vars are introduced in specific locations of the atom thus
         // in theory it is possible to optimize vars search for eval, unify and chain
-        let vars = Self::vars(&prev, &atom);
+        let vars = Self::add_vars(&prev, &atom);
         Self{ prev, atom, ret, finished: false, vars }
     }
 
@@ -78,17 +78,7 @@ impl Stack {
     }
 
     fn finished(prev: Option<Rc<RefCell<Self>>>, atom: Atom) -> Self {
-        let vars = Self::vars_copy(&prev);
-        Self{ prev, atom, ret: no_handler, finished: true, vars }
-    }
-
-    fn finished_add_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom) -> Self {
-        let vars = Self::vars(&prev, &atom);
-        Self{ prev, atom, ret: no_handler, finished: true, vars }
-    }
-
-    fn finished_with_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, vars: Variables) -> Self {
-        Self{ prev, atom, ret: no_handler, finished: true, vars }
+        Self{ prev, atom, ret: no_handler, finished: true, vars: Variables::new() }
     }
 
     fn len(&self) -> usize {
@@ -111,7 +101,7 @@ impl Stack {
         }
     }
 
-    fn vars(prev: &Option<Rc<RefCell<Self>>>, atom: &Atom) -> Variables {
+    fn add_vars(prev: &Option<Rc<RefCell<Self>>>, atom: &Atom) -> Variables {
         // TODO: nested atoms are visited twice: first time when outer atom
         // is visited, next time when internal atom is visited.
         let vars: Variables = atom.iter().filter_type::<&VariableAtom>().cloned().collect();
@@ -515,18 +505,19 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
         results.into_iter()
             .flat_map(|b| {
                 let res = apply_bindings_to_atom(&atom_x, &b);
+                let vars = Stack::add_vars(&prev, &res);
                 let stack = if is_function_op(&res) {
                     let call = Stack::from_prev_add_vars(prev.clone(), atom.clone(), call_ret);
                     atom_to_stack(res, Some(Rc::new(RefCell::new(call))))
                 } else {
-                    Stack::finished_add_vars(prev.clone(), res)
+                    Stack::finished(prev.clone(), res)
                 };
                 log::debug!("interpreter_minimal::query: b: {}", b);
                 b.merge_v2(&bindings).into_iter().filter_map(move |mut b| {
                     if b.has_loops() {
                         None
                     } else {
-                        b.retain(|v| stack.vars.contains(v));
+                        b.retain(|v| vars.contains(v));
                         Some(InterpretedAtom(stack.clone(), b))
                     }
                 })
@@ -674,7 +665,7 @@ fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) 
                 let (_, bindings) = atom_get_atom_bindings(r);
                 vars = vars.union(bindings.vars().cloned().collect());
             }
-            Some((Stack::finished_with_vars(prev, result, vars), bindings))
+            Some((Stack::finished(prev, result), bindings))
         },
         None => None,
     }
@@ -801,13 +792,14 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         .map(atom_into_atom_bindings)
         .flat_map(|(atom, b)| {
             let prev = &prev;
+            let vars = Stack::add_vars(prev, &atom);
             b.merge_v2(&bindings).into_iter()
                 .filter_map(move |b| {
                     if b.has_loops() {
                         None
                     } else {
-                        let stack = Stack::finished_add_vars(prev.clone(), atom.clone());
-                        let b = b.narrow_vars(&stack.vars);
+                        let stack = Stack::finished(prev.clone(), atom.clone());
+                        let b = b.narrow_vars(&vars);
                         Some(InterpretedAtom(stack, b))
                     }
                 })
@@ -1071,9 +1063,8 @@ mod tests {
 
         let result = superpose_bind(stack, bind!{ b: expr!("B"), d: expr!("D") });
 
-        let expected_vars: Variables = [ "a", "b" ].into_iter().map(VariableAtom::new).collect();
         assert_eq!(result, vec![InterpretedAtom(
-                Stack{ prev: None, atom: expr!("foo" a b), ret: no_handler, finished: true, vars: expected_vars },
+                Stack{ prev: None, atom: expr!("foo" a b), ret: no_handler, finished: true, vars: Variables::new() },
                 bind!{ a: expr!("A"), b: expr!("B") }
         )]);
     }
