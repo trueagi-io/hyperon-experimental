@@ -207,8 +207,9 @@ def load_ascii():
     }
 
 def try_unwrap_python_object(a, is_symbol_to_str = False):
-    if isinstance(a, GroundedObject) or isinstance(a, GroundedAtom):
-        return a.get_object().content
+    if isinstance(a, GroundedAtom):
+        # FIXME? Do we need to unwrap a grounded object if it is not GroundedObject?
+        return a.get_object().content isinstance(a.get_object(), GroundedObject) else a.get_object()
     if is_symbol_to_str and isinstance(a, SymbolAtom):
         return a.get_name()
     return a
