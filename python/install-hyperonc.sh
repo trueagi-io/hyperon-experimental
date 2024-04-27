@@ -48,7 +48,6 @@ git reset --hard FETCH_HEAD
 mkdir -p ${HOME}/hyperonc/c/build
 cd ${HOME}/hyperonc/c/build
 
-# Rust doesn't support building shared libraries under musllinux environment.
 CMAKE_ARGS="$CMAKE_ARGS -DBUILD_SHARED_LIBS=ON"
 # Local prefix is used to support MacOSX Apple Silicon GitHub actions environment.
 CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${HOME}/.local"

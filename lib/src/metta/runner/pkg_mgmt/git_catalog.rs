@@ -11,12 +11,42 @@ use crate::metta::runner::*;
 use crate::metta::runner::pkg_mgmt::{*, git_cache::*};
 
 //TODO:
-// * Need a function to clean up local repos that have been removed from the catalog file
-// * Need a function to delete a whole catalog cache.  Both of these interfaces should probably
-//    be added to the catalog trait as optional methods.
 // * Funtion to trigger explicit updates.  Accessible from metta ops
 //   - Update specific module, update to a specific version, latest, or latest stable
 //   - update all modules, to latest or latest stable
+//   - implemented in a way that also works on the EXPLICIT_GIT_MOD_CACHE (e.g. by cache dir)
+//
+//Current thinking:
+// * Implement the "prepare" method on ModuleLoader
+// * Implement an "all" method on Catalog, and possibly "all_mod_names" which lists sorted mod names
+//
+//Less sure about this but... I think that we want two objects both implementing Catalog, and
+// both sharing the same on-disk backing.  One includes the remote fetching, while the other
+// allows for explicit manipulation.
+//
+// * Implement a "ManagedCatalog" trait with methods:
+//      * origin_catalog ????
+//      * local_catalog (accessor) ????
+//      * clear_all
+//      * remove_by_name(mod_name) ????? (probably not)
+//      * remove_by_desc(descriptor)
+//      * fetch(descriptor)
+//      * upgrade(descriptor) (performs lookup_newest, then if newer is found, removes existing, and fetches)
+//      * upgrade_all()
+
+//QUESTION: I'm really not sure about whether the explicit git cache is a catalog.
+//  The No arguments:
+//      not queryable
+//
+//  The Yes arguments:
+//      packages should be upgradable
+//
+//I think the way to square this circle is to make catalog query functions that work a descriptor uid
+//
+
+
+/// The name of the cache for modules loaded explicitly by git URL
+pub(crate) const EXPLICIT_GIT_MOD_CACHE: &'static str = "git-modules";
 
 /// A set of keys describing how to access a module via git.  Deserialized from within a [PkgInfo]
 ///  or a catalog file [CatalogFileFormat]
@@ -43,12 +73,20 @@ pub struct ModuleGitLocation {
 }
 
 impl ModuleGitLocation {
-    pub(crate) fn get_loader<'a, FmtIter: Iterator<Item=&'a dyn FsModuleFormat>>(&self, fmts: FmtIter, caches_dir: Option<&Path>, cache_name: &str, mod_name: &str, ident_str: Option<&str>) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
+    /// Returns a ModuleLoader & ModuleDescriptor pair for a module hosted at a specific git location.
+    /// Checks the cache to avoid unnecessaryily fetching the module if we have it locally
+    pub(crate) fn get_loader<'a, FmtIter: Iterator<Item=&'a dyn FsModuleFormat>>(&self, fmts: FmtIter, caches_dir: Option<&Path>, cache_name: &str, mod_name: &str, version: Option<&semver::Version>, ident_str: Option<&str>) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
 
         //If a git URL is specified in the entry, see if we have it in the git-cache and
         // clone it locally if we don't
         if self.git_url.is_some() {
-            let cached_repo = self.get_cache(caches_dir, cache_name, mod_name, ident_str)?;
+            let cached_repo = self.get_cache(caches_dir, cache_name, mod_name, version, ident_str)?;
+            //TODO We want "version-locking" behavior from this cache.  ie. don't update once
+            // we pulled a version, but we need a way to cause it to pull the latest.
+            //The tricky part is how the user will specify the modules.  Doing by url sounds tedious.
+            // but doing it by mod_name might update modules in unwanted ways.
+            //At the very least, we need to offer a "update everything" command that can run across
+            // an entire cache
             cached_repo.update(UpdateMode::PullIfMissing)?;
 
             let mod_path = match &self.git_main_file {
@@ -60,14 +98,22 @@ impl ModuleGitLocation {
 
         Ok(None)
     }
-    pub(crate) fn get_cache(&self, caches_dir: Option<&Path>, cache_name: &str, mod_name: &str, ident_str: Option<&str>) -> Result<CachedRepo, String> {
+    pub(crate) fn get_cache(&self, caches_dir: Option<&Path>, cache_name: &str, mod_name: &str, version: Option<&semver::Version>, ident_str: Option<&str>) -> Result<CachedRepo, String> {
         let caches_dir = caches_dir.ok_or_else(|| "Unable to clone git repository; no local \"caches\" directory available".to_string())?;
         let url = self.git_url.as_ref().unwrap();
         let ident_str = match ident_str {
             Some(ident_str) => ident_str,
             None => url,
         };
-        CachedRepo::new(caches_dir, cache_name, mod_name, ident_str, url, self.git_branch.as_ref().map(|s| s.as_str()), self.git_subdir.as_ref().map(|p| p.as_path()))
+        let repo_name_string;
+        let mod_repo_name = match version {
+            Some(version) => {
+                repo_name_string = format!("{mod_name}-{version}");
+                &repo_name_string
+            },
+            None => mod_name
+        };
+        CachedRepo::new(caches_dir, cache_name, mod_repo_name, ident_str, url, self.git_branch.as_ref().map(|s| s.as_str()), self.git_subdir.as_ref().map(|p| p.as_path()))
     }
     /// Returns a new ModuleGitLocation.  This is a convenience; the usual interface involves deserializing this struct
     pub(crate) fn new(url: String) -> Self {
@@ -90,8 +136,9 @@ struct CatalogFileFormat {
 #[derive(Deserialize, Debug)]
 struct CatalogFileMod {
     name: String,
+    version: Option<semver::Version>,
     #[serde(flatten)]
-    git_location: ModuleGitLocation
+    git_location: ModuleGitLocation,
 }
 
 #[derive(Debug)]
@@ -118,25 +165,27 @@ impl GitCatalog {
             catalog: Mutex::new(None),
         })
     }
+    /// Scans the catalog and finds all the modules with a given name
     fn find_mods_with_name(&self, name: &str) -> Vec<ModuleDescriptor> {
         let cat_lock = self.catalog.lock().unwrap();
         let catalog = cat_lock.as_ref().unwrap();
         let mut results = vec![];
         for cat_mod in catalog.modules.iter() {
             if cat_mod.name == name {
-                //TODO: incorporate the name into the descriptor's ident bytes
-                let descriptor = ModuleDescriptor::new_with_ident_bytes_and_fmt_id(name.to_string(), cat_mod.git_location.get_url().unwrap().as_bytes(), 0);
+                let descriptor = ModuleDescriptor::new_with_ident_bytes_and_fmt_id(name.to_string(), cat_mod.version.clone(), cat_mod.git_location.get_url().unwrap().as_bytes(), 0);
                 results.push(descriptor);
             }
         }
         results
     }
+    /// Scans the catalog looking for a single module that matches the provided descriptor
     fn find_mod_idx_with_descriptor(&self, descriptor: &ModuleDescriptor) -> Option<usize> {
         let cat_lock = self.catalog.lock().unwrap();
         let catalog = cat_lock.as_ref().unwrap();
         for (mod_idx, cat_mod) in catalog.modules.iter().enumerate() {
-            //TODO: Also check version here
-            if cat_mod.name == descriptor.name() && descriptor.ident_bytes_and_fmt_id_matches(cat_mod.git_location.get_url().unwrap().as_bytes(), 0) {
+            if cat_mod.name == descriptor.name() &&
+                cat_mod.version.as_ref() == descriptor.version() &&
+                descriptor.ident_bytes_and_fmt_id_matches(cat_mod.git_location.get_url().unwrap().as_bytes(), 0) {
                 return Some(mod_idx);
             }
         }
@@ -178,13 +227,12 @@ impl ModuleCatalog for GitCatalog {
     }
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
         let mod_idx = self.find_mod_idx_with_descriptor(descriptor).unwrap();
-        let version_str = ""; //TODO, get the version from the descriptor
 
         let cat_lock = self.catalog.lock().unwrap();
         let catalog = cat_lock.as_ref().unwrap();
         let module = catalog.modules.get(mod_idx).unwrap();
 
-        let loader = match module.git_location.get_loader(self.fmts.iter().map(|f| &**f), Some(&self.caches_dir), &self.name, descriptor.name(), Some(&version_str))? {
+        let loader = match module.git_location.get_loader(self.fmts.iter().map(|f| &**f), Some(&self.caches_dir), &self.name, descriptor.name(), descriptor.version(), None)? {
             Some((loader, _)) => loader,
             None => unreachable!(),
         };

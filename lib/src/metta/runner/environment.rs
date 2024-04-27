@@ -136,7 +136,7 @@ impl EnvBuilder {
         Self {
             env: Environment::new(),
             no_cfg_dir: false,
-            create_cfg_dir: false,
+            create_cfg_dir: true,
             #[cfg(feature = "pkg_mgmt")]
             proto_catalogs: vec![],
             #[cfg(feature = "pkg_mgmt")]
@@ -158,8 +158,7 @@ impl EnvBuilder {
         self
     }
 
-    /// Sets the `config_dir` that the environment will load.  A directory at the specified path will
-    /// be created its contents populated with default values, if one does not already exist
+    /// Sets the `config_dir` that the environment will load
     pub fn set_config_dir(mut self, config_dir: &Path) -> Self {
         self.env.config_dir = Some(config_dir.into());
         if self.no_cfg_dir {
@@ -168,13 +167,13 @@ impl EnvBuilder {
         self
     }
 
-    /// Configures the environment to create a config directory with default config files, if no directory is found
+    /// Sets whether or not a config directory with default config files will be created, if no directory is found
     ///
-    /// NOTE: If the config directory exists but some config files are missing, default files will not be created.
-    pub fn create_config_dir(mut self) -> Self {
-        self.create_cfg_dir = true;
-        if self.no_cfg_dir {
-            panic!("Fatal Error: create_config_dir is incompatible with set_no_config_dir");
+    /// NOTE: If the config directory exists but some config files are missing, default files will *not* be created.
+    pub fn set_create_config_dir(mut self, should_create: bool) -> Self {
+        self.create_cfg_dir = should_create;
+        if self.no_cfg_dir && should_create {
+            panic!("Fatal Error: set_create_config_dir(true) is incompatible with set_no_config_dir");
         }
         self
     }
@@ -182,9 +181,7 @@ impl EnvBuilder {
     /// Configures the Environment not to load nor create any config files
     pub fn set_no_config_dir(mut self) -> Self {
         self.no_cfg_dir = true;
-        if self.create_cfg_dir {
-            panic!("Fatal Error: set_no_config_dir is incompatible with create_config_dir");
-        }
+        self.create_cfg_dir = false;
         if self.env.config_dir.is_some() {
             panic!("Fatal Error: set_config_dir is incompatible with set_no_config_dir");
         }
