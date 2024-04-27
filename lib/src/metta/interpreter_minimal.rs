@@ -34,6 +34,14 @@ macro_rules! match_atom {
         }
     };
 }
+
+/// Operation return handler, it is triggered when nested operation is finished
+/// and returns its results. First argument gets the reference to the stack
+/// which on the top has the frame of the wrapping operation. Last two
+/// arguments are the result of the nested operation. Handler returns
+/// None when it is not ready to provide new stack (it can happen in case of
+/// collapse-bind operation) or new stack with variable bindings to continue
+/// execution of the program.
 type ReturnHandler = fn(Rc<RefCell<Stack>>, Atom, Bindings) -> Option<(Stack, Bindings)>;
 
 #[derive(Debug, Clone)]
@@ -267,7 +275,8 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
 pub fn interpret_step<'a, T: Space + 'a>(mut state: InterpreterState<'a, T>) -> InterpreterState<'a, T> {
     let interpreted_atom = state.pop().unwrap();
     log::debug!("interpret_step:\n{}", interpreted_atom);
-    for result in interpret_root_atom(&state.context, interpreted_atom) {
+    let InterpretedAtom(stack, bindings) = interpreted_atom;
+    for result in interpret_stack(&state.context, stack, bindings) {
         state.push(result);
     }
     state
@@ -358,12 +367,7 @@ impl Display for Variables {
     }
 }
 
-fn interpret_root_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
-    let InterpretedAtom(stack, bindings) = interpreted_atom;
-    interpret_nested_atom(context, stack, bindings)
-}
-
-fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, mut stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+fn interpret_stack<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, mut stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     if stack.finished {
         // first executed minimal operation returned error
         if stack.prev.is_none() {
