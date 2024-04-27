@@ -545,7 +545,7 @@ impl ModuleCatalog for DirCatalog {
         //Inspect the directory using each FsModuleFormat, in order
         visit_modules_in_dir_using_mod_formats(&self.fmts, &self.path, name, |_loader, descriptor| {
             found_modules.push(descriptor);
-            false
+            true
         });
 
         found_modules
