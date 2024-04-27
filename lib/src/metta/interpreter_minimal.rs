@@ -104,11 +104,10 @@ impl Stack {
     fn add_vars(prev: &Option<Rc<RefCell<Self>>>, atom: &Atom) -> Variables {
         // TODO: nested atoms are visited twice: first time when outer atom
         // is visited, next time when internal atom is visited.
-        let vars: Variables = atom.iter().filter_type::<&VariableAtom>().cloned().collect();
-        match (prev, vars.is_empty()) {
-            (Some(prev), true) => prev.borrow().vars.clone(),
-            (Some(prev), false) => prev.borrow().vars.clone().union(vars),
-            (None, _) => vars,
+        let vars = vars_from_atom(atom);
+        match prev {
+            Some(prev) => prev.borrow().vars.clone().insert_all(vars),
+            None => vars.cloned().collect(),
         }
     }
 }
@@ -321,12 +320,16 @@ impl Variables {
     fn new() -> Self {
         Self(im::HashSet::new())
     }
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
+    fn insert(&mut self, var: VariableAtom) -> Option<VariableAtom> {
+        self.0.insert(var)
     }
-    fn union(self, other: Self) -> Self {
-        Variables(self.0.union(other.0))
+    fn insert_all<'a, I: 'a + Iterator<Item=&'a VariableAtom>>(mut self, it: I) -> Self {
+        it.for_each(|var| { self.insert(var.clone()); });
+        self
     }
+}
+fn vars_from_atom(atom: &Atom) -> impl Iterator<Item=&VariableAtom> {
+    atom.iter().filter_type::<&VariableAtom>()
 }
 
 impl FromIterator<VariableAtom> for Variables {
@@ -654,17 +657,14 @@ fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) 
         finished.children_mut().push(atom_bindings_into_atom(nested, bindings));
     }
 
+    // all alternatives are evaluated
     match Rc::into_inner(stack).map(RefCell::into_inner) {
         Some(stack) => {
-            let Stack{ prev, atom: collapse, ret: _, finished: _, mut vars } = stack;
+            let Stack{ prev, atom: collapse, ret: _, finished: _, vars: _ } = stack;
             let (result, bindings) = match atom_into_array(collapse) {
                 Some([_op, result, bindings]) => (result, atom_into_bindings(bindings)),
                 None => panic!("Unexpected state"),
             };
-            for r in <&ExpressionAtom>::try_from(&result).unwrap().children() {
-                let (_, bindings) = atom_get_atom_bindings(r);
-                vars = vars.union(bindings.vars().cloned().collect());
-            }
             Some((Stack::finished(prev, result), bindings))
         },
         None => None,
@@ -673,22 +673,6 @@ fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) 
 
 fn atom_bindings_into_atom(atom: Atom, bindings: Bindings) -> Atom {
     Atom::expr([atom, Atom::value(bindings)])
-}
-
-fn atom_get_atom_bindings(pair: &Atom) -> (&Atom, &Bindings) {
-    match atom_as_slice(pair) {
-        Some([atom, bindings]) => (atom, atom_get_bindings(bindings)),
-        _ => {
-            panic!("(Atom Bindings) pair is expected, {} was received", pair)
-        }
-    }
-}
-
-fn atom_get_bindings(bindings: &Atom) -> &Bindings {
-    match bindings.as_gnd::<Bindings>() {
-        Some(bindings) => bindings,
-        _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
-    }
 }
 
 fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
