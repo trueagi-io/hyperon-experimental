@@ -250,7 +250,7 @@ def py_chain(metta_tuple):
 
 @register_atoms()
 def py_funs():
-    return {"py-tuple": OperationAtom("py-tuple",  py_tuple, unwrap = False),
-            "py-list": OperationAtom("py-list",    py_list, unwrap = False),
-            "py-dict":  OperationAtom("py-dict",   py_dict,  unwrap = False),
-            "py-chain":  OperationAtom("py-chain", py_chain, unwrap = False)}
+    return {"py-tuple": OperationAtom("py-tuple", py_tuple, unwrap = False),
+            "py-list" : OperationAtom("py-list" , py_list , unwrap = False),
+            "py-dict" : OperationAtom("py-dict" , py_dict , unwrap = False),
+            "py-chain": OperationAtom("py-chain", py_chain, unwrap = False)}
