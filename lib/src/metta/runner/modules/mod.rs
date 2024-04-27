@@ -51,6 +51,8 @@ impl ModId {
     }
 }
 
+pub(crate) static DEFAULT_PKG_INFO: OnceLock<PkgInfo> = OnceLock::new();
+
 /// Contains state associated with a loaded MeTTa module
 #[derive(Debug)]
 pub struct MettaMod {
@@ -60,8 +62,6 @@ pub struct MettaMod {
     tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
     loader: Option<Box<dyn ModuleLoader>>,
-    #[cfg(feature = "pkg_mgmt")]
-    pkg_info: PkgInfo,
 }
 
 impl MettaMod {
@@ -85,8 +85,6 @@ impl MettaMod {
             imported_deps: Mutex::new(HashMap::new()),
             resource_dir,
             loader: None,
-            #[cfg(feature = "pkg_mgmt")]
-            pkg_info: PkgInfo::default(),
         };
 
         // Load the base tokens for the module's new Tokenizer
@@ -302,12 +300,14 @@ impl MettaMod {
 
     #[cfg(feature = "pkg_mgmt")]
     pub fn pkg_info(&self) -> &PkgInfo {
-        &self.pkg_info
-    }
-
-    #[cfg(feature = "pkg_mgmt")]
-    pub fn pkg_info_mut(&mut self) -> &mut PkgInfo {
-        &mut self.pkg_info
+        let default_pkg_info = DEFAULT_PKG_INFO.get_or_init(|| PkgInfo::default());
+        match &self.loader {
+            Some(loader) => match loader.pkg_info() {
+                Some(pkg_info) => pkg_info,
+                _ => default_pkg_info
+            },
+            None => default_pkg_info
+        }
     }
 
     pub fn space(&self) -> &DynSpace {
@@ -602,6 +602,11 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     /// [RunContext::load_module], or any other method that leads to the loading of modules
     fn load(&self, context: &mut RunContext) -> Result<(), String>;
 
+    /// A function to access the [PkgInfo] struct of meta-data associated with a module
+    fn pkg_info(&self) -> Option<&PkgInfo> {
+        None
+    }
+
     /// Returns a data blob containing a given named resource belonging to a module
     fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {
         Err("resource not found".to_string())
@@ -618,6 +623,8 @@ pub enum ResourceKey<'a> {
     /// NOTE: there is no guarantee the code in the `module.metta` resource will work outside
     /// the module's context.  This use case must be supported by each module individually.
     MainMettaSrc,
+    /// A [semver compliant](https://semver.org) version string
+    Version,
     /// A list of people or organizations responsible for the module **TODO**
     Authors,
     /// A short description of the module **TODO**

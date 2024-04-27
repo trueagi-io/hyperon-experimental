@@ -82,8 +82,6 @@ use crate::metta::runner::{*, git_catalog::*};
 use xxhash_rust::xxh3::xxh3_64;
 use serde::Deserialize;
 
-pub(crate) const EXPLICIT_GIT_MOD_CACHE_DIR: &'static str = "git-modules";
-
 /// Implemented for types capable of locating MeTTa modules
 ///
 /// For example, `ModuleCatalog` would be an interface to a module respository, analogous to `PyPI` or
@@ -108,6 +106,9 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     // fn lookup_newest_within_version_range(name: &str, version_range: ) -> Option<ModuleDescriptor>;
     //TODO: provide default implementation
 
+    //TODO-NEXT, add "prepare" function that consumes loader, and returns another one.  This will
+    // allow us to pre-fetch modules
+
     /// Returns a [ModuleLoader] for the specified module from the `ModuleCatalog`
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String>;
 }
@@ -115,23 +116,26 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
 /// The object responsible for locating and selecting dependency modules for each [MettaMod]
 ///
 /// This structure is conceptually analogous to the a `Cargo.toml` file for a given module.
-#[derive(Clone, Debug, Default)]
-//TODO: Use serde to deserialize a PkgInfo from an expression atom
+#[derive(Clone, Debug, Default, Deserialize)]
 pub struct PkgInfo {
 
     /// The public name of the module.  Should be composed of alpha-numeric characters with '-' and '_'
     /// characters allowed.  Must not contain any other punctuation. 
-    pub name: String,
+    pub name: Option<String>,
 
-    //TODO: version field, to indicate the version of this module
+    // The version of this module
+    #[serde(default)]
+    pub version: Option<semver::Version>,
 
     /// If `strict == true` then a dependency must be declared in the `PkgInfo`, otherwise a permissive
     /// version requirement will be assumed for any modules that are not explicitly declared
+    #[serde(default)]
     pub strict: bool,
 
     /// Entries mapping module names to requirements for each dependency sub-module
     ///
     /// A Duplicate entry for a given sub-module in the deps list is an error.
+    #[serde(default)]
     pub deps: HashMap<String, DepEntry>,
 }
 
@@ -147,7 +151,10 @@ pub struct DepEntry {
     #[serde(flatten)]
     git_location: ModuleGitLocation,
 
-    //TODO: field to indicate acceptable version range for dependency
+    /// An acceptable version of version bounds to satisfy the dependency.  None means any version
+    /// acceptable
+    #[serde(default)]
+    pub version_req: Option<semver::VersionReq>
 }
 
 impl PkgInfo {
@@ -171,7 +178,7 @@ impl PkgInfo {
             }
 
             //Get the module if it's specified with git keys
-            if let Some(pair) = entry.git_location.get_loader(context.metta.environment().fs_mod_formats(), context.metta.environment().caches_dir(), EXPLICIT_GIT_MOD_CACHE_DIR, mod_name, None)? {
+            if let Some(pair) = entry.git_location.get_loader(context.metta.environment().fs_mod_formats(), context.metta.environment().caches_dir(), EXPLICIT_GIT_MOD_CACHE, mod_name, None, None)? {
                 return Ok(Some(pair));
             }
 
@@ -214,6 +221,17 @@ impl PkgInfo {
 
         Ok(None)
     }
+    /// Returns the version of the package
+    pub fn version(&self) -> Option<&semver::Version> {
+        self.version.as_ref()
+    }
+    /// Returns the version of the package as a [semver compliant](https://semver.org) string of bytes
+    pub fn version_bytes(&self) -> Result<Vec<u8>, String> {
+        match self.version() {
+            Some(ver) => Ok(format!("{ver}").into_bytes()),
+            None => Err("no version available".to_string())
+        }
+    }
 }
 
 /// Internal function to get a loader for a module at a specific file system path, by trying each FsModuleFormat in order
@@ -247,11 +265,12 @@ pub(crate) fn loader_for_module_at_path<'a, P: AsRef<Path>, FmtIter: Iterator<It
 #[derive(Debug)]
 pub(crate) struct SingleFileModule {
     path: PathBuf,
+    pkg_info: PkgInfo,
 }
 
 impl SingleFileModule {
-    fn new(path: &Path) -> Self {
-        Self {path: path.into() }
+    fn new(path: &Path, pkg_info: PkgInfo) -> Self {
+        Self {path: path.into(), pkg_info }
     }
     fn read_contents(&self) -> Result<Vec<u8>, String> {
         std::fs::read(&self.path)
@@ -277,7 +296,8 @@ impl ModuleLoader for SingleFileModule {
     fn get_resource(&self, res_key: ResourceKey) -> Result<Vec<u8>, String> {
         match res_key {
             ResourceKey::MainMettaSrc => self.read_contents(),
-            _ => Err("unsupported resoruce key".to_string())
+            ResourceKey::Version => self.pkg_info.version_bytes(),
+            _ => Err("unsupported resource key".to_string())
         }
     }
 }
@@ -291,11 +311,12 @@ impl ModuleLoader for SingleFileModule {
 #[derive(Debug)]
 pub(crate) struct DirModule {
     path: PathBuf,
+    pkg_info: PkgInfo,
 }
 
 impl DirModule {
-    fn new(path: &Path) -> Self {
-        Self {path: path.into() }
+    fn new(path: &Path, pkg_info: PkgInfo) -> Self {
+        Self { path: path.into(), pkg_info }
     }
     fn read_module_metta(&self) -> Option<Vec<u8>> {
         let module_metta_path = self.path.join("module.metta");
@@ -324,7 +345,8 @@ impl ModuleLoader for DirModule {
     fn get_resource(&self, res_key: ResourceKey) -> Result<Vec<u8>, String> {
         match res_key {
             ResourceKey::MainMettaSrc => self.read_module_metta().ok_or_else(|| format!("no module.metta file found in {} dir module", self.path.display())),
-            _ => Err("unsupported resoruce key".to_string())
+            ResourceKey::Version => self.pkg_info.version_bytes(),
+            _ => Err("unsupported resource key".to_string())
         }
     }
 }
@@ -373,13 +395,14 @@ impl FsModuleFormat for SingleFileModuleFmt {
                 None => path.file_stem().unwrap().to_str().unwrap(), //LP-TODO-NEXT: Unify the code to extract the mod-name from the file name between here and DirModuleFmt::try_path
             };
 
-            //TODO: Add accessor for the module version here
+            //TODO: parse out the module version here, and pass it to new_with_path_and_fmt_id below
             //In a single-file module, the discriptor information will be embedded within the MeTTa code
             // Therefore, we need to parse the whole text of the module looking for a `_pkg-info` atom,
             // that we can then convert into a PkgInfo structure
+            let pkg_info = PkgInfo::default();
 
-            let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), path, SINGLE_FILE_MOD_FMT_ID);
-            let loader = Box::new(SingleFileModule::new(path));
+            let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), None, path, SINGLE_FILE_MOD_FMT_ID);
+            let loader = Box::new(SingleFileModule::new(path, pkg_info));
             Some((loader, descriptor))
         } else {
             None
@@ -398,23 +421,41 @@ impl FsModuleFormat for DirModuleFmt {
     }
     fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<(Box<dyn ModuleLoader>, ModuleDescriptor)> {
         if path.is_dir() {
+
+            //First see if we can extract a [PkgInfo] from a `pkg-info.json` file
+            let mut pkg_info: Option<PkgInfo> = None;
+            let pkginfo_json_path = path.join("pkg-info.json");
+            if pkginfo_json_path.exists() {
+                let file_contents = std::fs::read_to_string(&pkginfo_json_path).unwrap();
+                pkg_info = Some(serde_json::from_str(&file_contents).unwrap());
+            }
+
+            //TODO: Also check for a `pkg-info.metta` file, as soon as I have implemented Atom-Serde
+            // Also try and parse a `_pkg-info` atom from the `module.metta` file if it's not in a dedicated file
+
+            let pkg_info = pkg_info.unwrap_or_else(|| PkgInfo::default());
+
+            //Get the module name, first use the name provided.  If none, then use the name from the
+            // pkg-info, and if that's also none, construct a module name from the file name
             let full_path;
             let mod_name = match mod_name {
                 Some(mod_name) => mod_name,
                 None => {
-                    //LP-TODO-Next: I need to gracefully create a legal module name from the file name
-                    // if the file name happens to contain characters that are illegal in a module name
-                    full_path = path.canonicalize().unwrap();
-                    full_path.file_stem().unwrap().to_str().unwrap()
+                    match &pkg_info.name {
+                        Some(name) => name,
+                        None => {
+                            //LP-TODO-Next: I need to gracefully create a legal module name from the file name
+                            // if the file name happens to contain characters that are illegal in a module name
+                            full_path = path.canonicalize().unwrap();
+                            full_path.file_stem().unwrap().to_str().unwrap()
+                        }
+                    }
                 },
             };
 
-            //LP-TODO-Next: Try and read the module version here
-            //If there is a `pkg-info.metta` file, information from that file will take precedence.
-            // Otherwise, try and parse a `_pkg-info` atom from the `module.metta` file
-
-            let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), path, DIR_MOD_FMT_ID);
-            let loader = Box::new(DirModule::new(path));
+            let version = pkg_info.version.clone();
+            let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), version, path, DIR_MOD_FMT_ID);
+            let loader = Box::new(DirModule::new(path, pkg_info));
             return Some((loader, descriptor));
         }
         None
@@ -517,21 +558,21 @@ fn visit_modules_in_dir_using_mod_formats(fmts: &[Box<dyn FsModuleFormat>], dir_
 pub struct ModuleDescriptor {
     name: String,
     uid: Option<u64>,
-    //TODO: version
+    version: Option<semver::Version>,
 }
 
 impl ModuleDescriptor {
     /// Create a new ModuleDescriptor
-    pub fn new(name: String) -> Self {
-        Self { name, uid: None }
+    pub fn new(name: String, version: Option<semver::Version>) -> Self {
+        Self { name, uid: None, version }
     }
     /// Create a new ModuleDescriptor
-    pub fn new_with_uid(name: String, uid: u64) -> Self {
-        Self { name, uid: Some(uid) }
+    pub fn new_with_uid(name: String, version: Option<semver::Version>, uid: u64) -> Self {
+        Self { name, uid: Some(uid), version }
     }
-    pub fn new_with_ident_bytes_and_fmt_id(name: String, ident: &[u8], fmt_id: u64) -> Self {
+    pub fn new_with_ident_bytes_and_fmt_id(name: String, version: Option<semver::Version>, ident: &[u8], fmt_id: u64) -> Self {
         let uid = xxh3_64(ident) ^ fmt_id;
-        ModuleDescriptor::new_with_uid(name, uid)
+        ModuleDescriptor::new_with_uid(name, version, uid)
     }
     /// Create a new ModuleDescriptor using a file system path and another unique id
     ///
@@ -540,12 +581,16 @@ impl ModuleDescriptor {
     ///
     /// The purpose of the `fmt_id` is to ensure two different formats or catalogs don't generate
     /// the same ModuleDescriptor, but you can pass 0 if it doesn't matter
-    pub fn new_with_path_and_fmt_id(name: String, path: &Path, fmt_id: u64) -> Self {
-        Self::new_with_ident_bytes_and_fmt_id(name, path.as_os_str().as_encoded_bytes(), fmt_id)
+    pub fn new_with_path_and_fmt_id(name: String, version: Option<semver::Version>, path: &Path, fmt_id: u64) -> Self {
+        Self::new_with_ident_bytes_and_fmt_id(name, version, path.as_os_str().as_encoded_bytes(), fmt_id)
     }
     /// Returns the name of the module represented by the ModuleDescriptor
     pub fn name(&self) -> &str {
         &self.name
+    }
+    /// Returns the version of the module represented by the ModuleDescriptor
+    pub fn version(&self) -> Option<&semver::Version> {
+        self.version.as_ref()
     }
     /// Returns `true` if the `ident_bytes` and `fmt_id` match what was used to create the descriptor
     pub fn ident_bytes_and_fmt_id_matches(&self, ident: &[u8], fmt_id: u64) -> bool {
@@ -576,107 +621,123 @@ pub fn mod_name_from_url(url: &str) -> Option<String> {
 // TESTS
 //-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-
 
-/// Bogus test catalog that returns a fake module in response to any query with a single capital letter
-/// used by `recursive_submodule_import_test`
-#[derive(Debug)]
-struct TestCatalog;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-impl ModuleCatalog for TestCatalog {
-    fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
-        if name.len() == 1 && name.chars().last().unwrap().is_uppercase() {
-            vec![ModuleDescriptor::new(name.to_string())]
-        } else {
-            vec![]
+    /// Bogus test catalog that returns a fake module in response to any query with a single capital letter
+    /// used by `recursive_submodule_import_test`
+    #[derive(Debug)]
+    struct TestCatalog;
+
+    impl ModuleCatalog for TestCatalog {
+        fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
+            if name.len() == 1 && name.chars().last().unwrap().is_uppercase() {
+                vec![ModuleDescriptor::new(name.to_string(), None)]
+            } else {
+                vec![]
+            }
+        }
+        fn get_loader(&self, _descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
+            Ok(Box::new(TestCatalog))
         }
     }
-    fn get_loader(&self, _descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
-        Ok(Box::new(TestCatalog))
+
+    impl ModuleLoader for TestCatalog {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            let space = DynSpace::new(GroundingSpace::new());
+            context.init_self_module(space, None);
+            Ok(())
+        }
+    }
+
+    /// This tests the core recursive sub-module loading code
+    #[test]
+    fn recursive_submodule_import_test() {
+
+        //Make a new runner with the TestCatalog
+        let runner = Metta::new(Some(EnvBuilder::test_env().push_module_catalog(TestCatalog)));
+
+        //Now try loading an inner-module, and make sure it can recursively load all the needed parents
+        let result = runner.run(SExprParser::new("!(import! &self A:B:C)"));
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+
+        //Test that each parent sub-module is indeed loaded
+        assert!(runner.get_module_by_name("A").is_ok());
+        assert!(runner.get_module_by_name("A:B").is_ok());
+        assert!(runner.get_module_by_name("A:B:C").is_ok());
+
+        //Test that we fail to load a module with an invalid parent, even if the module itself resolves
+        let _result = runner.run(SExprParser::new("!(import! &self a:B)"));
+        assert!(runner.get_module_by_name("a:B").is_err());
+    }
+
+    //
+    //LP-TODO-NEXT, Next make sure the catalogs are able to do the recursive loading from the file system,
+    // using their working dirs.  Maybe make this second test a C API test to get better coverage
+    //
+
+    //LP-TODO-NEXT, Add a test for loading a module from a DirCatalog by passing a name with an extension (ie. `my_mod.metta`) to `resolve`,
+    // and make sure the loaded module that comes back doesn't have the extension
+
+    #[derive(Debug)]
+    struct TestLoader {
+        pkg_info: PkgInfo,
+    }
+
+    impl TestLoader {
+        fn new() -> Self {
+            let mut pkg_info = PkgInfo::default();
+
+            //Set up the module [PkgInfo] so it knows to load a sub-module from git
+            pkg_info.name = Some("test-mod".to_string());
+            pkg_info.deps.insert("metta-morph".to_string(), DepEntry{
+                fs_path: None,
+                git_location: ModuleGitLocation {
+                    //TODO: We probably want a smaller test repo
+                    git_url: Some("https://github.com/trueagi-io/metta-morph/".to_string()),
+                    git_branch: None, //Some("Hyperpose".to_string()),
+                    git_subdir: None,
+                    git_main_file: Some(PathBuf::from("mettamorph.metta")),
+                },
+                version_req: None,
+            });
+            Self { pkg_info }
+        }
+    }
+
+    impl ModuleLoader for TestLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            let space = DynSpace::new(GroundingSpace::new());
+            context.init_self_module(space, None);
+
+            Ok(())
+        }
+        fn pkg_info(&self) -> Option<&PkgInfo> {
+            Some(&self.pkg_info)
+        }
+    }
+
+    /// Tests that a module can be fetched from git and loaded, when the git URL is specified in
+    /// the module's PkgInfo.  This test requires a network connection
+    ///
+    /// NOTE.  Ignored because we may not want it fetching from the internet when running the
+    /// test suite.  Invoke `cargo test git_pkginfo_fetch_test -- --ignored` to run it.
+    #[ignore]
+    #[test]
+    fn git_pkginfo_fetch_test() {
+
+        //Make a new runner, with the config dir in `/tmp/hyperon-test/`
+        let runner = Metta::new(Some(EnvBuilder::new().set_config_dir(Path::new("/tmp/hyperon-test/"))));
+        let _mod_id = runner.load_module_direct(Box::new(TestLoader::new()), "test-mod").unwrap();
+
+        let result = runner.run(SExprParser::new("!(import! &self test-mod:metta-morph)"));
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+
+        //Test that we can use a function imported from the module
+        let result = runner.run(SExprParser::new("!(sequential (A B))"));
+        assert_eq!(result, Ok(vec![vec![sym!("A"), sym!("B")]]));
+
+        runner.display_loaded_modules();
     }
 }
-
-impl ModuleLoader for TestCatalog {
-    fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let space = DynSpace::new(GroundingSpace::new());
-        context.init_self_module(space, None);
-        Ok(())
-    }
-}
-
-/// This tests the core recursive sub-module loading code
-#[test]
-fn recursive_submodule_import_test() {
-
-    //Make a new runner with the TestCatalog
-    let runner = Metta::new(Some(EnvBuilder::test_env().push_module_catalog(TestCatalog)));
-
-    //Now try loading an inner-module, and make sure it can recursively load all the needed parents
-    let result = runner.run(SExprParser::new("!(import! &self A:B:C)"));
-    assert_eq!(result, Ok(vec![vec![expr!()]]));
-
-    //Test that each parent sub-module is indeed loaded
-    assert!(runner.get_module_by_name("A").is_ok());
-    assert!(runner.get_module_by_name("A:B").is_ok());
-    assert!(runner.get_module_by_name("A:B:C").is_ok());
-
-    //Test that we fail to load a module with an invalid parent, even if the module itself resolves
-    let _result = runner.run(SExprParser::new("!(import! &self a:B)"));
-    assert!(runner.get_module_by_name("a:B").is_err());
-}
-
-//
-//LP-TODO-NEXT, Next make sure the catalogs are able to do the recursive loading from the file system,
-// using their working dirs.  Maybe make this second test a C API test to get better coverage
-//
-
-//LP-TODO-NEXT, Add a test for loading a module from a DirCatalog by passing a name with an extension (ie. `my_mod.metta`) to `resolve`,
-// and make sure the loaded module that comes back doesn't have the extension
-
-#[derive(Debug)]
-struct TestLoader;
-
-impl ModuleLoader for TestLoader {
-    fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let space = DynSpace::new(GroundingSpace::new());
-        context.init_self_module(space, None);
-
-        //Set up the module [PkgInfo] so it knows to load a sub-module from git
-        let pkg_info = context.module_mut().unwrap().pkg_info_mut();
-        pkg_info.name = "test-mod".to_string();
-        pkg_info.deps.insert("metta-morph".to_string(), DepEntry{
-            fs_path: None,
-            git_location: ModuleGitLocation {
-                //TODO: We probably want a smaller test repo
-                git_url: Some("https://github.com/trueagi-io/metta-morph/".to_string()),
-                git_branch: None, //Some("Hyperpose".to_string()),
-                git_subdir: None,
-                git_main_file: Some(PathBuf::from("mettamorph.metta")),
-            }
-        });
-
-        Ok(())
-    }
-}
-
-/// Tests that a module can be fetched from git and loaded, when the git URL is specified in
-/// the module's PkgInfo.  This test requires a network connection
-///
-/// NOTE.  Ignored because we may not want it fetching from the internet when running the
-/// test suite.  Invoke `cargo test git_pkginfo_fetch_test -- --ignored` to run it.
-#[ignore]
-#[test]
-fn git_pkginfo_fetch_test() {
-
-    //Make a new runner, with the config dir in `/tmp/hyperon-test/`
-    let runner = Metta::new(Some(EnvBuilder::new().set_config_dir(Path::new("/tmp/hyperon-test/"))));
-    let _mod_id = runner.load_module_direct(Box::new(TestLoader), "test-mod").unwrap();
-
-    let result = runner.run(SExprParser::new("!(import! &self test-mod:metta-morph)"));
-    assert_eq!(result, Ok(vec![vec![expr!()]]));
-
-    //Test that we can use a function imported from the module
-    let result = runner.run(SExprParser::new("!(sequential (A B))"));
-    assert_eq!(result, Ok(vec![vec![sym!("A"), sym!("B")]]));
-
-    runner.display_loaded_modules();
-}
-

@@ -95,7 +95,7 @@ impl CachedRepo {
     /// repo was updated, and `false` if the repo was left unchanged
     pub fn update(&self, mode: UpdateMode) -> Result<bool, String> {
 
-        //TODO: If there is a subdir then we can perform a sparse checkout and avoid cloning unnecessary data
+        //TODO-FUTURE: If there is a subdir field on &self then we can perform a sparse checkout and avoid cloning unnecessary data
         #[cfg(feature = "git")]
         match Repository::open(self.repo_local_path()) {
 
