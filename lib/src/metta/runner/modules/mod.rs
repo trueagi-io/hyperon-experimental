@@ -607,6 +607,9 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
         None
     }
 
+    //TODO-NEXT, add "prepare" function that consumes loader, and returns another one.  This will
+    // allow us to pre-fetch modules
+
     /// Returns a data blob containing a given named resource belonging to a module
     fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {
         Err("resource not found".to_string())

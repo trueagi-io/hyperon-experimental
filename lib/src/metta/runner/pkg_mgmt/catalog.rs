@@ -94,20 +94,64 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor>;
 
-    //TODO: Add this function when I add module versioning
-    // /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
-    // /// matching the version requirements
-    // fn lookup_within_version_range(name: &str, version_range: ) -> Vec<ModuleDescriptor>;
-    //TODO: provide default implementation
+    /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
+    /// matching the version requirements
+    ///
+    /// NOTE: Unversioned modules will never match any version_req, so this method should never return
+    /// any un-versioned ModuleDescriptors if `version_req.is_some()`
+    fn lookup_with_version_req(&self, name: &str, version_req: Option<&semver::VersionReq>) -> Vec<ModuleDescriptor> {
+        let all_named_descs = self.lookup(name);
+        match version_req {
+            Some(req) => all_named_descs.into_iter().filter(|desc| {
+                match desc.version() {
+                    Some(ver) => req.matches(ver),
+                    None => false
+                }
+            }).collect(),
+            None => all_named_descs
+        }
+    }
 
-    //TODO: Add this function when I add module versioning
-    // /// Returns the [ModuleDescriptor] for the newest module in the `ModuleCatalog`, that falls within
-    // /// the specified version range, or `None` if no module exists
-    // fn lookup_newest_within_version_range(name: &str, version_range: ) -> Option<ModuleDescriptor>;
-    //TODO: provide default implementation
-
-    //TODO-NEXT, add "prepare" function that consumes loader, and returns another one.  This will
-    // allow us to pre-fetch modules
+    /// Returns the [ModuleDescriptor] for the newest module in the `ModuleCatalog`, that matches the
+    /// specified version requirement, or `None` if no module exists
+    ///
+    /// If `version_req == None`, this method should return the newest module available in the catalog
+    ///
+    /// NOTE: unversioned modules are considered to have the lowest possible version, and thus this method
+    ///   should only return an unversioned module if no matching modules are available
+    /// NOTE: Unversioned modules will never match any version_req, so this method should never return
+    /// any un-versioned ModuleDescriptors if `version_req.is_some()`
+    fn lookup_newest_with_version_req(&self, name: &str, version_req: Option<&semver::VersionReq>) -> Option<ModuleDescriptor> {
+        let mut highest_version: Option<semver::Version> = None;
+        let mut ret_desc = None;
+        for desc in self.lookup_with_version_req(name, version_req).into_iter() {
+            match desc.version().cloned() {
+                Some(ver) => {
+                    match &mut highest_version {
+                        Some(highest_ver) => {
+                            if ver > *highest_ver {
+                                *highest_ver = ver;
+                                ret_desc = Some(desc);
+                            }
+                        },
+                        None => {
+                            ret_desc = Some(desc);
+                            highest_version = Some(ver)
+                        }
+                    }
+                },
+                None => {
+                    if highest_version.is_none() {
+                        if ret_desc.is_some() {
+                            log::warn!("Multiple un-versioned {name} modules in catalog; impossible to select newest");
+                        }
+                        ret_desc = Some(desc)
+                    }
+                }
+            }
+        }
+        ret_desc
+    }
 
     /// Returns a [ModuleLoader] for the specified module from the `ModuleCatalog`
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String>;
@@ -169,6 +213,7 @@ impl PkgInfo {
         }
 
         //See if we have a pkg_info dep entry for the module
+        let mut version_req = None;
         if let Some(entry) = self.deps.get(mod_name) {
 
             //If path is explicitly specified in the dep entry, then we must load the module at the
@@ -182,9 +227,8 @@ impl PkgInfo {
                 return Ok(Some(pair));
             }
 
-            //TODO, If a version range is specified in the dep entry, then use that version range to specify
-            // modules discovered in the catalogs
-
+            //If `version_req` is specified in the dep entry, then use it to constrain the catalog search
+            version_req = entry.version_req.as_ref();
         } else {
             //If the PkgInfo doesn't have an entry for the module, it's an error if the PkgInfo is flagged as "strict"
             if self.strict {
@@ -209,13 +253,13 @@ impl PkgInfo {
         //Search the catalogs, starting with the resource dir, and continuing to the runner's Environment
         for catalog in local_catalogs.into_iter().chain(context.metta.environment().catalogs()) {
             log::trace!("Looking for module: \"{mod_name}\" inside {catalog:?}");
-            //TODO: use lookup_newest_within_version_range, as soon as I add module versioning
-            let results = catalog.lookup(mod_name);
-            if results.len() > 0 {
-                log::info!("Found module: \"{mod_name}\" inside {catalog:?}");
-                let descriptor = results.into_iter().next().unwrap();
-                log::info!("Preparing to load module: \'{}\' as \'{}\'", descriptor.name, name_path);
-                return Ok(Some((catalog.get_loader(&descriptor)?, descriptor)))
+            match catalog.lookup_newest_with_version_req(mod_name, version_req) {
+                Some(descriptor) => {
+                    log::info!("Found module: \"{mod_name}\" inside {catalog:?}");
+                    log::info!("Preparing to load module: \'{}\' as \'{}\'", descriptor.name, name_path);
+                    return Ok(Some((catalog.get_loader(&descriptor)?, descriptor)))
+                },
+                None => {}
             }
         }
 
