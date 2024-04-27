@@ -11,13 +11,39 @@ use crate::metta::runner::*;
 use crate::metta::runner::pkg_mgmt::{*, git_cache::*};
 
 //TODO:
-// * Need a function to clean up local repos that have been removed from the catalog file
-// * Need a function to delete a whole catalog cache.  Both of these interfaces should probably
-//    be added to the catalog trait as optional methods.
 // * Funtion to trigger explicit updates.  Accessible from metta ops
 //   - Update specific module, update to a specific version, latest, or latest stable
 //   - update all modules, to latest or latest stable
 //   - implemented in a way that also works on the EXPLICIT_GIT_MOD_CACHE (e.g. by cache dir)
+//
+//Current thinking:
+// * Implement the "prepare" method on ModuleLoader
+// * Implement an "all" method on Catalog, and possibly "all_mod_names" which lists sorted mod names
+//
+//Less sure about this but... I think that we want two objects both implementing Catalog, and
+// both sharing the same on-disk backing.  One includes the remote fetching, while the other
+// allows for explicit manipulation.
+//
+// * Implement a "ManagedCatalog" trait with methods:
+//      * origin_catalog ????
+//      * local_catalog (accessor) ????
+//      * clear_all
+//      * remove_by_name(mod_name) ????? (probably not)
+//      * remove_by_desc(descriptor)
+//      * fetch(descriptor)
+//      * upgrade(descriptor) (performs lookup_newest, then if newer is found, removes existing, and fetches)
+//      * upgrade_all()
+
+//QUESTION: I'm really not sure about whether the explicit git cache is a catalog.
+//  The No arguments:
+//      not queryable
+//
+//  The Yes arguments:
+//      packages should be upgradable
+//
+//I think the way to square this circle is to make catalog query functions that work a descriptor uid
+//
+
 
 /// The name of the cache for modules loaded explicitly by git URL
 pub(crate) const EXPLICIT_GIT_MOD_CACHE: &'static str = "git-modules";
