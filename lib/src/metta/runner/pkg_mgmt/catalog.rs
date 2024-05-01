@@ -74,6 +74,7 @@ use std::path::Path;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::ffi::{OsStr, OsString};
+use std::collections::HashSet;
 
 use crate::metta::text::OwnedSExprParser;
 use crate::metta::runner::modules::*;
@@ -94,22 +95,19 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor>;
 
+    /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name,
+    ///   and uid match
+    fn lookup_with_uid(&self, name: &str, uid: Option<u64>) -> Vec<ModuleDescriptor> {
+        self.lookup(name).into_iter().filter(|desc| desc.uid == uid).collect()
+    }
+
     /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
     /// matching the version requirements
     ///
     /// NOTE: Unversioned modules will never match any version_req, so this method should never return
     /// any un-versioned ModuleDescriptors if `version_req.is_some()`
     fn lookup_with_version_req(&self, name: &str, version_req: Option<&semver::VersionReq>) -> Vec<ModuleDescriptor> {
-        let all_named_descs = self.lookup(name);
-        match version_req {
-            Some(req) => all_named_descs.into_iter().filter(|desc| {
-                match desc.version() {
-                    Some(ver) => req.matches(ver),
-                    None => false
-                }
-            }).collect(),
-            None => all_named_descs
-        }
+        filter_by_version_req(self.lookup(name).into_iter(), version_req).collect()
     }
 
     /// Returns the [ModuleDescriptor] for the newest module in the `ModuleCatalog`, that matches the
@@ -122,39 +120,100 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     /// NOTE: Unversioned modules will never match any version_req, so this method should never return
     /// any un-versioned ModuleDescriptors if `version_req.is_some()`
     fn lookup_newest_with_version_req(&self, name: &str, version_req: Option<&semver::VersionReq>) -> Option<ModuleDescriptor> {
-        let mut highest_version: Option<semver::Version> = None;
-        let mut ret_desc = None;
-        for desc in self.lookup_with_version_req(name, version_req).into_iter() {
-            match desc.version().cloned() {
-                Some(ver) => {
-                    match &mut highest_version {
-                        Some(highest_ver) => {
-                            if ver > *highest_ver {
-                                *highest_ver = ver;
-                                ret_desc = Some(desc);
-                            }
-                        },
-                        None => {
-                            ret_desc = Some(desc);
-                            highest_version = Some(ver)
-                        }
-                    }
-                },
-                None => {
-                    if highest_version.is_none() {
-                        if ret_desc.is_some() {
-                            log::warn!("Multiple un-versioned {name} modules in catalog; impossible to select newest");
-                        }
-                        ret_desc = Some(desc)
-                    }
-                }
-            }
-        }
-        ret_desc
+        find_newest_module(self.lookup_with_version_req(name, version_req).into_iter())
+    }
+
+    /// Returns the [ModuleDescriptor] for the newest module in the `ModuleCatalog`, that matches the
+    /// specified name, uid, and version requirement, or `None` if no module exists
+    ///
+    /// See [ModuleCatalog::lookup_newest_with_version_req] for more details
+    fn lookup_newest_with_uid_and_version_req(&self, name: &str, uid: Option<u64>, version_req: Option<&semver::VersionReq>) -> Option<ModuleDescriptor> {
+        let result_iter = self.lookup_with_uid(name, uid).into_iter();
+        find_newest_module(filter_by_version_req(result_iter, version_req))
     }
 
     /// Returns a [ModuleLoader] for the specified module from the `ModuleCatalog`
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String>;
+
+    /// Returns an iterator over every module available in the catalog.  May not be supported
+    /// by all catalog implementations
+    fn list<'a>(&'a self) -> Option<Box<dyn Iterator<Item=ModuleDescriptor> + 'a>> {
+        None
+    }
+
+    /// Returns an iterator over every unique module name in the catalog.  May not be supported
+    /// by all catalog implementations
+    fn list_names<'a>(&'a self) -> Option<Box<dyn Iterator<Item=String> + 'a>> {
+        self.list().map(|desc_iter| {
+            let mut names = HashSet::new();
+            for desc in desc_iter {
+                if !names.contains(desc.name()) {
+                    names.insert(desc.name().to_string());
+                }
+            }
+            Box::new(names.into_iter()) as Box<dyn Iterator<Item=String>>
+        })
+    }
+
+    /// Returns an iterator over every unique (module name, uid) pair in the catalog.  May not
+    /// be supported by all catalog implementations
+    fn list_name_uid_pairs<'a>(&'a self) -> Option<Box<dyn Iterator<Item=(String, Option<u64>)> + 'a>> {
+        self.list().map(|desc_iter| {
+            let mut results = HashSet::new();
+            for desc in desc_iter {
+                results.insert((desc.name().to_string(), desc.uid()));
+            }
+            Box::new(results.into_iter()) as Box<dyn Iterator<Item=(String, Option<u64>)>>
+        })
+    }
+}
+
+/// Internal function to filter a set of [ModuleDescriptor]s by a [semver::VersionReq].  See
+/// [ModuleCatalog::lookup_with_version_req] for an explanation of behavior
+fn filter_by_version_req<'a>(mods_iter: impl Iterator<Item=ModuleDescriptor> + 'a, version_req: Option<&'a semver::VersionReq>) -> Box<dyn Iterator<Item=ModuleDescriptor> + 'a> {
+    match version_req {
+        Some(req) => Box::new(mods_iter.filter(|desc| {
+            match desc.version() {
+                Some(ver) => req.matches(ver),
+                None => false
+            }
+        })),
+        None => Box::new(mods_iter)
+    }
+}
+
+/// Internal function to find the newest module in a set.  See [ModuleCatalog::lookup_newest_with_version_req]
+/// for an explanation of behavior
+fn find_newest_module(mods_iter: impl Iterator<Item=ModuleDescriptor>) -> Option<ModuleDescriptor> {
+    let mut highest_version: Option<semver::Version> = None;
+    let mut ret_desc = None;
+    for desc in mods_iter {
+        match desc.version().cloned() {
+            Some(ver) => {
+                match &mut highest_version {
+                    Some(highest_ver) => {
+                        if ver > *highest_ver {
+                            *highest_ver = ver;
+                            ret_desc = Some(desc);
+                        }
+                    },
+                    None => {
+                        ret_desc = Some(desc);
+                        highest_version = Some(ver)
+                    }
+                }
+            },
+            None => {
+                if highest_version.is_none() {
+                    if let Some(ret_desc) = ret_desc {
+                        log::warn!("Multiple un-versioned {} modules in catalog; impossible to select newest", ret_desc.name());
+                    }
+                    ret_desc = Some(desc)
+                }
+            }
+        }
+    }
+    ret_desc
 }
 
 /// The object responsible for locating and selecting dependency modules for each [MettaMod]
@@ -631,6 +690,10 @@ impl ModuleDescriptor {
     /// Returns the name of the module represented by the ModuleDescriptor
     pub fn name(&self) -> &str {
         &self.name
+    }
+    /// Returns the uid associated with the ModuleDescriptor
+    pub fn uid(&self) -> Option<u64> {
+        self.uid
     }
     /// Returns the version of the module represented by the ModuleDescriptor
     pub fn version(&self) -> Option<&semver::Version> {

@@ -10,7 +10,7 @@ use serde::Deserialize;
 use crate::metta::runner::*;
 use crate::metta::runner::pkg_mgmt::{*, git_cache::*};
 
-//TODO:
+//TODO: TODO-NEXT.  This is almost implemented. But keeping these notes until complete
 // * Funtion to trigger explicit updates.  Accessible from metta ops
 //   - Update specific module, update to a specific version, latest, or latest stable
 //   - update all modules, to latest or latest stable
@@ -43,6 +43,10 @@ use crate::metta::runner::pkg_mgmt::{*, git_cache::*};
 //
 //I think the way to square this circle is to make catalog query functions that work a descriptor uid
 //
+
+//UPDATE: Need to implement ManagedCatalog for an object that shares the same back-end with
+// GitCatalog,
+// - also add the `prepare` interface to the module loader
 
 
 /// The name of the cache for modules loaded explicitly by git URL
@@ -240,3 +244,4 @@ impl ModuleCatalog for GitCatalog {
         Ok(loader)
     }
 }
+
