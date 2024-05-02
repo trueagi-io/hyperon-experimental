@@ -228,7 +228,7 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
             let InterpretedAtom(stack, bindings) = atom;
             if stack.atom != EMPTY_SYMBOL {
                 let bindings = bindings.convert_var_equalities_to_bindings(&self.vars);
-                let atom = apply_bindings_to_atom(&stack.atom, &bindings);
+                let atom = apply_bindings_to_atom_move(stack.atom, &bindings);
                 self.finished.push(atom);
             }
         } else {
@@ -513,7 +513,7 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
             .flat_map(|b| {
-                let res = apply_bindings_to_atom(&atom_x, &b);
+                let res = apply_bindings_to_atom_move(atom_x.clone(), &b);
                 let vars = Stack::add_vars_atom(&prev, &res);
                 let stack = if is_function_op(&res) {
                     let call = Stack::from_prev_add_vars(prev.clone(), atom.clone(), call_ret);
@@ -593,8 +593,8 @@ fn chain(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         }
     };
     let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
-    let result = apply_bindings_to_atom(&templ, &b);
-    vec![InterpretedAtom(atom_to_stack(result, prev), bindings)]
+    let templ = apply_bindings_to_atom_move(templ, &b);
+    vec![InterpretedAtom(atom_to_stack(templ, prev), bindings)]
 }
 
 fn function_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
@@ -692,12 +692,12 @@ fn unify_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
 
 fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: unify, ret: _, finished: _, vars: _ } = stack;
-    let (atom, pattern, then, else_) = match atom_as_slice(&unify) {
-        Some([_op, atom, pattern, then, else_]) => (atom, pattern, then, else_),
+    let (atom, pattern, then, else_) = match_atom!{
+        unify ~ [_op, atom, pattern, then, else_] => (atom, pattern, then, else_),
         _ => {
             let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", UNIFY_SYMBOL, unify);
             return finished_result(error_atom(unify, error), bindings, prev);
-        },
+        }
     };
 
     // TODO: Should unify() be symmetrical or not. While it is symmetrical then
@@ -705,13 +705,14 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     // priority. Thus interpreter can use any of them further. This sometimes
     // looks unexpected. For example see `metta_car` unit test where variable
     // from car's argument is replaced.
-    let matches: Vec<Bindings> = match_atoms(atom, pattern).collect();
+    let matches: Vec<Bindings> = match_atoms(&atom, &pattern).collect();
     if matches.is_empty() {
-        let vars = Stack::add_vars_it(&prev, vars_from_atom(else_));
+        let vars = Stack::add_vars_it(&prev, vars_from_atom(&else_));
         let bindings = bindings.narrow_vars(&vars);
-        let result = apply_bindings_to_atom(else_, &bindings);
-        finished_result(result, bindings, prev)
+        let else_ = apply_bindings_to_atom_move(else_, &bindings);
+        finished_result(else_, bindings, prev)
     } else {
+        let then = &then;
         let vars = Stack::add_vars_it(&prev, vars_from_atom(then));
         matches.into_iter()
             .flat_map(move |b| {
@@ -721,7 +722,7 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
                     if b.has_loops() {
                         None
                     } else {
-                        let then = apply_bindings_to_atom(then, &b);
+                        let then = apply_bindings_to_atom_move(then.clone(), &b);
                         Some(InterpretedAtom(Stack::finished(prev.clone(), then), b))
                     }
                 })

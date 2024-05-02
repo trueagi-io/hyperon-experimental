@@ -1116,6 +1116,13 @@ pub fn match_result_product(prev: MatchResultIter, next: MatchResultIter) -> Mat
     Box::new(prev.merge(&next).into_iter())
 }
 
+/// Applies bindings to atom and return it (see [apply_bindings_to_atom_mut]).
+#[inline]
+pub fn apply_bindings_to_atom_move(mut atom: Atom, bindings: &Bindings) -> Atom {
+    apply_bindings_to_atom_mut(&mut atom, bindings);
+    atom
+}
+
 /// Applies bindings to atom. Function replaces all variables in atom by
 /// corresponding bindings.
 ///
@@ -1123,25 +1130,30 @@ pub fn match_result_product(prev: MatchResultIter, next: MatchResultIter) -> Mat
 ///
 /// ```
 /// use hyperon::*;
-/// use hyperon::atom::matcher::apply_bindings_to_atom;
+/// use hyperon::atom::matcher::apply_bindings_to_atom_mut;
 ///
 /// let binds = bind!{ y: expr!("Y") };
-/// let atom = apply_bindings_to_atom(&expr!("+" "X" y), &binds);
+/// let mut atom = expr!("+" "X" y);
+/// apply_bindings_to_atom_mut(&mut atom, &binds);
 ///
 /// assert_eq!(atom, expr!("+" "X" "Y"));
 /// ```
-pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
-    let mut result = atom.clone();
+pub fn apply_bindings_to_atom_mut(atom: &mut Atom, bindings: &Bindings) {
+    let trace_atom = match log::log_enabled!(log::Level::Trace) {
+        true => Some(atom.clone()),
+        false => None,
+    };
     if !bindings.is_empty() {
-        result.iter_mut().for_each(|atom| match atom {
+        atom.iter_mut().for_each(|atom| match atom {
             Atom::Variable(var) => {
                 bindings.resolve(var).map(|value| *atom = value);
             },
             _ => {},
         });
     }
-    log::trace!("apply_bindings_to_atom: {} | {} -> {}", atom, bindings, result);
-    result
+    if let Some(atom_copy) = trace_atom {
+        log::trace!("apply_bindings_to_atom: {} | {} -> {}", atom_copy, bindings, atom);
+    }
 }
 
 /// Applies bindings `from` to the each value from bindings `to`.
