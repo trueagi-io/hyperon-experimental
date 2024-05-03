@@ -35,10 +35,10 @@
     (@param "Atomspace to add atom into")
     (@param "Atom to add")))
   (@return "Unit atom"))
-(: add-reduct (-> Space %Undefined% (->)))
-(= (add-reduct $dst $atom)  (add-atom $dst $atom))
+(: add-reduct (-> hyperon::space::DynSpace %Undefined% (->)))
+(= (add-reduct $dst $atom) (add-atom $dst $atom))
 
-(@doc add-reduct
+(@doc quote
   (@desc "Prevents atom from being reduced")
   (@params (
     (@param "Atom")))
