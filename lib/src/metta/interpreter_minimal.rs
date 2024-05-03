@@ -13,7 +13,6 @@ use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
 use std::collections::HashSet;
 use std::rc::Rc;
-use std::marker::PhantomData;
 use std::fmt::Write;
 use std::cell::RefCell;
 
@@ -159,27 +158,28 @@ impl Display for InterpretedAtom {
     }
 }
 
-pub trait SpaceRef<'a> : Space + 'a {}
-impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
-
 #[derive(Debug)]
-struct InterpreterContext<'a, T: SpaceRef<'a>> {
+struct InterpreterContext<T: Space> {
     space: T,
-    phantom: PhantomData<dyn SpaceRef<'a>>,
 }
 
-impl<'a, T: SpaceRef<'a>> InterpreterContext<'a, T> {
+impl<T: Space> InterpreterContext<T> {
     fn new(space: T) -> Self {
-        Self{ space, phantom: PhantomData }
+        Self{ space }
     }
 }
+
+// TODO: This wrapper is for compatibility with interpreter.rs only
+pub trait SpaceRef<'a> : Space + 'a {}
+impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
 
 #[derive(Debug)]
 pub struct InterpreterState<'a, T: SpaceRef<'a>> {
     plan: Vec<InterpretedAtom>,
     finished: Vec<Atom>,
-    context: InterpreterContext<'a, T>,
+    context: InterpreterContext<T>,
     vars: HashSet<VariableAtom>,
+    phantom: std::marker::PhantomData<dyn SpaceRef<'a>>,
 }
 
 fn atom_as_slice(atom: &Atom) -> Option<&[Atom]> {
@@ -204,6 +204,7 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
             finished: results,
             context: InterpreterContext::new(space),
             vars: HashSet::new(),
+            phantom: std::marker::PhantomData,
         }
     }
 
@@ -257,6 +258,7 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
         finished: vec![],
         context,
         vars: expr.iter().filter_type::<&VariableAtom>().cloned().collect(),
+        phantom: std::marker::PhantomData,
     }
 }
 
@@ -366,7 +368,7 @@ impl Display for Variables {
     }
 }
 
-fn interpret_stack<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, mut stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, mut stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     if stack.finished {
         // first executed minimal operation returned error
         if stack.prev.is_none() {
@@ -428,7 +430,7 @@ fn finished_result(atom: Atom, bindings: Bindings, prev: Option<Rc<RefCell<Stack
     vec![InterpretedAtom(Stack::finished(prev, atom), bindings)]
 }
 
-fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: eval, ret: _, finished: _, vars: _} = stack;
     let query_atom = match_atom!{
         eval ~ [_op, query] => query,
@@ -495,7 +497,7 @@ fn is_variable_op(atom: &Atom) -> bool {
     }
 }
 
-fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
+fn query<'a, T: Space>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
     #[cfg(not(feature = "variable_operation"))]
     if is_variable_op(&atom) {
         // TODO: This is a hotfix. Better way of doing this is adding
@@ -1155,7 +1157,7 @@ mod tests {
         metta_space(text)
     }
 
-    fn call_interpret<'a, T: SpaceRef<'a>>(space: T, atom: &Atom) -> Vec<Atom> {
+    fn call_interpret<'a, T: Space>(space: T, atom: &Atom) -> Vec<Atom> {
         let result = interpret(space, atom);
         assert!(result.is_ok());
         result.unwrap()
