@@ -368,7 +368,7 @@ impl Display for Variables {
     }
 }
 
-fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, mut stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     if stack.finished {
         // first executed minimal operation returned error
         if stack.prev.is_none() {
@@ -410,7 +410,7 @@ fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, mut stack: Sta
                 superpose_bind(stack, bindings)
             },
             _ => {
-                stack.finished = true;
+                let stack = Stack::finished(stack.prev, stack.atom);
                 vec![InterpretedAtom(stack, bindings)]
             },
         };
@@ -614,18 +614,14 @@ fn function_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack 
 }
 
 fn call_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
-    let mut stack = (*stack.borrow()).clone();
-    stack.atom = atom;
-    stack.finished = true;
+    let stack = Stack::finished(stack.borrow().prev.clone(), atom);
     Some((stack, bindings))
 }
 
 fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     match_atom!{
         atom ~ [op, result] if *op == RETURN_SYMBOL => {
-            let mut stack = (*stack.borrow()).clone();
-            stack.atom = result;
-            stack.finished = true;
+            let stack = Stack::finished(stack.borrow().prev.clone(), result);
             Some((stack, bindings))
         },
         _ => {
