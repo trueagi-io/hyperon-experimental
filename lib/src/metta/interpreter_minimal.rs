@@ -7,14 +7,12 @@
 use crate::*;
 use crate::atom::matcher::*;
 use crate::space::*;
-use crate::space::grounding::*;
 use crate::metta::*;
 
 use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
 use std::collections::HashSet;
 use std::rc::Rc;
-use std::marker::PhantomData;
 use std::fmt::Write;
 use std::cell::RefCell;
 
@@ -35,6 +33,14 @@ macro_rules! match_atom {
         }
     };
 }
+
+/// Operation return handler, it is triggered when nested operation is finished
+/// and returns its results. First argument gets the reference to the stack
+/// which on the top has the frame of the wrapping operation. Last two
+/// arguments are the result of the nested operation. Handler returns
+/// None when it is not ready to provide new stack (it can happen in case of
+/// collapse-bind operation) or new stack with variable bindings to continue
+/// execution of the program.
 type ReturnHandler = fn(Rc<RefCell<Stack>>, Atom, Bindings) -> Option<(Stack, Bindings)>;
 
 #[derive(Debug, Clone)]
@@ -58,10 +64,14 @@ fn no_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> O
 }
 
 impl Stack {
+    fn from_prev_with_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, vars: Variables, ret: ReturnHandler) -> Self {
+        Self{ prev, atom, ret, finished: false, vars }
+    }
+
     fn from_prev_add_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
         // TODO: vars are introduced in specific locations of the atom thus
         // in theory it is possible to optimize vars search for eval, unify and chain
-        let vars = Self::vars(&prev, &atom);
+        let vars = Self::add_vars_atom(&prev, &atom);
         Self{ prev, atom, ret, finished: false, vars }
     }
 
@@ -71,17 +81,7 @@ impl Stack {
     }
 
     fn finished(prev: Option<Rc<RefCell<Self>>>, atom: Atom) -> Self {
-        let vars = Self::vars_copy(&prev);
-        Self{ prev, atom, ret: no_handler, finished: true, vars }
-    }
-
-    fn finished_add_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom) -> Self {
-        let vars = Self::vars(&prev, &atom);
-        Self{ prev, atom, ret: no_handler, finished: true, vars }
-    }
-
-    fn finished_with_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, vars: Variables) -> Self {
-        Self{ prev, atom, ret: no_handler, finished: true, vars }
+        Self{ prev, atom, ret: no_handler, finished: true, vars: Variables::new() }
     }
 
     fn len(&self) -> usize {
@@ -104,14 +104,15 @@ impl Stack {
         }
     }
 
-    fn vars(prev: &Option<Rc<RefCell<Self>>>, atom: &Atom) -> Variables {
-        // TODO: nested atoms are visited twice: first time when outer atom
-        // is visited, next time when internal atom is visited.
-        let vars: Variables = atom.iter().filter_type::<&VariableAtom>().cloned().collect();
-        match (prev, vars.is_empty()) {
-            (Some(prev), true) => prev.borrow().vars.clone(),
-            (Some(prev), false) => prev.borrow().vars.clone().union(vars),
-            (None, _) => vars,
+    #[inline]
+    fn add_vars_atom(prev: &Option<Rc<RefCell<Self>>>, atom: &Atom) -> Variables {
+        Self::add_vars_it(prev, vars_from_atom(atom))
+    }
+
+    fn add_vars_it<'a, I: 'a + Iterator<Item=&'a VariableAtom>>(prev: &Option<Rc<RefCell<Self>>>, vars: I) -> Variables {
+        match prev {
+            Some(prev) => prev.borrow().vars.clone().insert_all(vars),
+            None => vars.cloned().collect(),
         }
     }
 }
@@ -157,27 +158,28 @@ impl Display for InterpretedAtom {
     }
 }
 
-pub trait SpaceRef<'a> : Space + 'a {}
-impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
-
 #[derive(Debug)]
-struct InterpreterContext<'a, T: SpaceRef<'a>> {
+struct InterpreterContext<T: Space> {
     space: T,
-    phantom: PhantomData<&'a GroundingSpace>,
 }
 
-impl<'a, T: SpaceRef<'a>> InterpreterContext<'a, T> {
+impl<T: Space> InterpreterContext<T> {
     fn new(space: T) -> Self {
-        Self{ space, phantom: PhantomData }
+        Self{ space }
     }
 }
+
+// TODO: This wrapper is for compatibility with interpreter.rs only
+pub trait SpaceRef<'a> : Space + 'a {}
+impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
 
 #[derive(Debug)]
 pub struct InterpreterState<'a, T: SpaceRef<'a>> {
     plan: Vec<InterpretedAtom>,
     finished: Vec<Atom>,
-    context: InterpreterContext<'a, T>,
+    context: InterpreterContext<T>,
     vars: HashSet<VariableAtom>,
+    phantom: std::marker::PhantomData<dyn SpaceRef<'a>>,
 }
 
 fn atom_as_slice(atom: &Atom) -> Option<&[Atom]> {
@@ -202,6 +204,7 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
             finished: results,
             context: InterpreterContext::new(space),
             vars: HashSet::new(),
+            phantom: std::marker::PhantomData,
         }
     }
 
@@ -226,7 +229,7 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
             let InterpretedAtom(stack, bindings) = atom;
             if stack.atom != EMPTY_SYMBOL {
                 let bindings = bindings.convert_var_equalities_to_bindings(&self.vars);
-                let atom = apply_bindings_to_atom(&stack.atom, &bindings);
+                let atom = apply_bindings_to_atom_move(stack.atom, &bindings);
                 self.finished.push(atom);
             }
         } else {
@@ -255,6 +258,7 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
         finished: vec![],
         context,
         vars: expr.iter().filter_type::<&VariableAtom>().cloned().collect(),
+        phantom: std::marker::PhantomData,
     }
 }
 
@@ -268,7 +272,8 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
 pub fn interpret_step<'a, T: Space + 'a>(mut state: InterpreterState<'a, T>) -> InterpreterState<'a, T> {
     let interpreted_atom = state.pop().unwrap();
     log::debug!("interpret_step:\n{}", interpreted_atom);
-    for result in interpret_root_atom(&state.context, interpreted_atom) {
+    let InterpretedAtom(stack, bindings) = interpreted_atom;
+    for result in interpret_stack(&state.context, stack, bindings) {
         state.push(result);
     }
     state
@@ -323,12 +328,16 @@ impl Variables {
     fn new() -> Self {
         Self(im::HashSet::new())
     }
-    fn is_empty(&self) -> bool {
-        self.0.is_empty()
+    fn insert(&mut self, var: VariableAtom) -> Option<VariableAtom> {
+        self.0.insert(var)
     }
-    fn union(self, other: Self) -> Self {
-        Variables(self.0.union(other.0))
+    fn insert_all<'a, I: 'a + Iterator<Item=&'a VariableAtom>>(mut self, it: I) -> Self {
+        it.for_each(|var| { self.insert(var.clone()); });
+        self
     }
+}
+fn vars_from_atom(atom: &Atom) -> impl Iterator<Item=&VariableAtom> {
+    atom.iter().filter_type::<&VariableAtom>()
 }
 
 impl FromIterator<VariableAtom> for Variables {
@@ -359,12 +368,7 @@ impl Display for Variables {
     }
 }
 
-fn interpret_root_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, interpreted_atom: InterpretedAtom) -> Vec<InterpretedAtom> {
-    let InterpretedAtom(stack, bindings) = interpreted_atom;
-    interpret_nested_atom(context, stack, bindings)
-}
-
-fn interpret_nested_atom<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, mut stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, mut stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     if stack.finished {
         // first executed minimal operation returned error
         if stack.prev.is_none() {
@@ -426,8 +430,8 @@ fn finished_result(atom: Atom, bindings: Bindings, prev: Option<Rc<RefCell<Stack
     vec![InterpretedAtom(Stack::finished(prev, atom), bindings)]
 }
 
-fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: eval, ret: _, finished: _, vars} = stack;
+fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: eval, ret: _, finished: _, vars: _} = stack;
     let query_atom = match_atom!{
         eval ~ [_op, query] => query,
         _ => {
@@ -476,7 +480,7 @@ fn eval<'a, T: SpaceRef<'a>>(context: &InterpreterContext<'a, T>, stack: Stack, 
         },
         _ if is_embedded_op(&query_atom) =>
             vec![InterpretedAtom(atom_to_stack(query_atom, prev), bindings)],
-        _ => query(&context.space, prev, query_atom, bindings, vars),
+        _ => query(&context.space, prev, query_atom, bindings),
     }
 }
 
@@ -493,7 +497,7 @@ fn is_variable_op(atom: &Atom) -> bool {
     }
 }
 
-fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings, _vars: Variables) -> Vec<InterpretedAtom> {
+fn query<'a, T: Space>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings) -> Vec<InterpretedAtom> {
     #[cfg(not(feature = "variable_operation"))]
     if is_variable_op(&atom) {
         // TODO: This is a hotfix. Better way of doing this is adding
@@ -511,19 +515,20 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
             results.len(), bindings.len(), results, bindings);
         results.into_iter()
             .flat_map(|b| {
-                let res = apply_bindings_to_atom(&atom_x, &b);
+                let res = apply_bindings_to_atom_move(atom_x.clone(), &b);
+                let vars = Stack::add_vars_atom(&prev, &res);
                 let stack = if is_function_op(&res) {
                     let call = Stack::from_prev_add_vars(prev.clone(), atom.clone(), call_ret);
                     atom_to_stack(res, Some(Rc::new(RefCell::new(call))))
                 } else {
-                    Stack::finished_add_vars(prev.clone(), res)
+                    Stack::finished(prev.clone(), res)
                 };
                 log::debug!("interpreter_minimal::query: b: {}", b);
                 b.merge_v2(&bindings).into_iter().filter_map(move |mut b| {
                     if b.has_loops() {
                         None
                     } else {
-                        b.retain(|v| stack.vars.contains(v));
+                        b.retain(|v| vars.contains(v));
                         Some(InterpretedAtom(stack.clone(), b))
                     }
                 })
@@ -540,34 +545,32 @@ fn query<'a, T: SpaceRef<'a>>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: 
 fn atom_to_stack(atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
     let expr = atom_as_slice(&atom);
     let result = match expr {
-        Some([op, ..]) if *op == CHAIN_SYMBOL => {
-            chain_to_stack(atom, prev)
-        },
-        Some([op, ..]) if *op == FUNCTION_SYMBOL => {
-            function_to_stack(atom, prev)
-        },
-        Some([op, ..]) if *op == EVAL_SYMBOL
-                       || *op == UNIFY_SYMBOL => {
-            Stack::from_prev_add_vars(prev, atom, no_handler)
-        },
-        _ => {
-            Stack::from_prev_keep_vars(prev, atom, no_handler)
-        },
+        Some([op, ..]) if *op == CHAIN_SYMBOL =>
+            chain_to_stack(atom, prev),
+        Some([op, ..]) if *op == FUNCTION_SYMBOL =>
+            function_to_stack(atom, prev),
+        Some([op, ..]) if *op == EVAL_SYMBOL =>
+            Stack::from_prev_keep_vars(prev, atom, no_handler),
+        Some([op, ..]) if *op == UNIFY_SYMBOL =>
+            unify_to_stack(atom, prev),
+        _ =>
+            Stack::from_prev_keep_vars(prev, atom, no_handler),
     };
     result
 }
 
 fn chain_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
     let mut nested = Atom::sym("%Nested%");
-    let nested_arg = match atom_as_slice_mut(&mut atom) {
-        Some([_op, nested, Atom::Variable(_var), _templ]) => nested,
+    let (nested_arg, templ_arg) = match atom_as_slice_mut(&mut atom) {
+        Some([_op, nested, Atom::Variable(_var), templ]) => (nested, templ),
         _ => {
             let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_SYMBOL, atom);
             return Stack::finished(prev, error_atom(atom, error));
         },
     };
     std::mem::swap(nested_arg, &mut nested);
-    let cur = Stack::from_prev_add_vars(prev, atom, chain_ret);
+    let vars = Stack::add_vars_it(&prev, vars_from_atom(templ_arg));
+    let cur = Stack::from_prev_with_vars(prev, atom, vars, chain_ret);
     atom_to_stack(nested, Some(Rc::new(RefCell::new(cur))))
 }
 
@@ -592,8 +595,8 @@ fn chain(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         }
     };
     let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
-    let result = apply_bindings_to_atom(&templ, &b);
-    vec![InterpretedAtom(atom_to_stack(result, prev), bindings)]
+    let templ = apply_bindings_to_atom_move(templ, &b);
+    vec![InterpretedAtom(atom_to_stack(templ, prev), bindings)]
 }
 
 fn function_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
@@ -660,18 +663,15 @@ fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) 
         finished.children_mut().push(atom_bindings_into_atom(nested, bindings));
     }
 
+    // all alternatives are evaluated
     match Rc::into_inner(stack).map(RefCell::into_inner) {
         Some(stack) => {
-            let Stack{ prev, atom: collapse, ret: _, finished: _, mut vars } = stack;
+            let Stack{ prev, atom: collapse, ret: _, finished: _, vars: _ } = stack;
             let (result, bindings) = match atom_into_array(collapse) {
                 Some([_op, result, bindings]) => (result, atom_into_bindings(bindings)),
                 None => panic!("Unexpected state"),
             };
-            for r in <&ExpressionAtom>::try_from(&result).unwrap().children() {
-                let (_, bindings) = atom_get_atom_bindings(r);
-                vars = vars.union(bindings.vars().cloned().collect());
-            }
-            Some((Stack::finished_with_vars(prev, result, vars), bindings))
+            Some((Stack::finished(prev, result), bindings))
         },
         None => None,
     }
@@ -681,30 +681,25 @@ fn atom_bindings_into_atom(atom: Atom, bindings: Bindings) -> Atom {
     Atom::expr([atom, Atom::value(bindings)])
 }
 
-fn atom_get_atom_bindings(pair: &Atom) -> (&Atom, &Bindings) {
-    match atom_as_slice(pair) {
-        Some([atom, bindings]) => (atom, atom_get_bindings(bindings)),
+fn unify_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
+    let () = match atom_as_slice_mut(&mut atom) {
+        Some([_op, _a, _b, _then, _else]) => (),
         _ => {
-            panic!("(Atom Bindings) pair is expected, {} was received", pair)
-        }
-    }
-}
-
-fn atom_get_bindings(bindings: &Atom) -> &Bindings {
-    match bindings.as_gnd::<Bindings>() {
-        Some(bindings) => bindings,
-        _ => panic!("Unexpected state: second item cannot be converted to Bindings"),
-    }
+            let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", UNIFY_SYMBOL, atom);
+            return Stack::finished(prev, error_atom(atom, error));
+        },
+    };
+    Stack::from_prev_with_vars(prev, atom, Variables::new(), no_handler)
 }
 
 fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: unify, ret: _, finished: _, vars } = stack;
-    let (atom, pattern, then, else_) = match atom_as_slice(&unify) {
-        Some([_op, atom, pattern, then, else_]) => (atom, pattern, then, else_),
+    let Stack{ prev, atom: unify, ret: _, finished: _, vars: _ } = stack;
+    let (atom, pattern, then, else_) = match_atom!{
+        unify ~ [_op, atom, pattern, then, else_] => (atom, pattern, then, else_),
         _ => {
             let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", UNIFY_SYMBOL, unify);
             return finished_result(error_atom(unify, error), bindings, prev);
-        },
+        }
     };
 
     // TODO: Should unify() be symmetrical or not. While it is symmetrical then
@@ -712,12 +707,15 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     // priority. Thus interpreter can use any of them further. This sometimes
     // looks unexpected. For example see `metta_car` unit test where variable
     // from car's argument is replaced.
-    let matches: Vec<Bindings> = match_atoms(atom, pattern).collect();
+    let matches: Vec<Bindings> = match_atoms(&atom, &pattern).collect();
     if matches.is_empty() {
+        let vars = Stack::add_vars_it(&prev, vars_from_atom(&else_));
         let bindings = bindings.narrow_vars(&vars);
-        let result = apply_bindings_to_atom(else_, &bindings);
-        finished_result(result, bindings, prev)
+        let else_ = apply_bindings_to_atom_move(else_, &bindings);
+        finished_result(else_, bindings, prev)
     } else {
+        let then = &then;
+        let vars = Stack::add_vars_it(&prev, vars_from_atom(then));
         matches.into_iter()
             .flat_map(move |b| {
                 let b = b.narrow_vars(&vars);
@@ -726,7 +724,7 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
                     if b.has_loops() {
                         None
                     } else {
-                        let then = apply_bindings_to_atom(then, &b);
+                        let then = apply_bindings_to_atom_move(then.clone(), &b);
                         Some(InterpretedAtom(Stack::finished(prev.clone(), then), b))
                     }
                 })
@@ -798,13 +796,14 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         .map(atom_into_atom_bindings)
         .flat_map(|(atom, b)| {
             let prev = &prev;
+            let vars = Stack::add_vars_atom(prev, &atom);
             b.merge_v2(&bindings).into_iter()
                 .filter_map(move |b| {
                     if b.has_loops() {
                         None
                     } else {
-                        let stack = Stack::finished_add_vars(prev.clone(), atom.clone());
-                        let b = b.narrow_vars(&stack.vars);
+                        let stack = Stack::finished(prev.clone(), atom.clone());
+                        let b = b.narrow_vars(&vars);
                         Some(InterpretedAtom(stack, b))
                     }
                 })
@@ -1068,9 +1067,8 @@ mod tests {
 
         let result = superpose_bind(stack, bind!{ b: expr!("B"), d: expr!("D") });
 
-        let expected_vars: Variables = [ "a", "b" ].into_iter().map(VariableAtom::new).collect();
         assert_eq!(result, vec![InterpretedAtom(
-                Stack{ prev: None, atom: expr!("foo" a b), ret: no_handler, finished: true, vars: expected_vars },
+                Stack{ prev: None, atom: expr!("foo" a b), ret: no_handler, finished: true, vars: Variables::new() },
                 bind!{ a: expr!("A"), b: expr!("B") }
         )]);
     }
@@ -1159,7 +1157,7 @@ mod tests {
         metta_space(text)
     }
 
-    fn call_interpret<'a, T: SpaceRef<'a>>(space: T, atom: &Atom) -> Vec<Atom> {
+    fn call_interpret<'a, T: Space>(space: T, atom: &Atom) -> Vec<Atom> {
         let result = interpret(space, atom);
         assert!(result.is_ok());
         result.unwrap()
