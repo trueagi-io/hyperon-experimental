@@ -1237,7 +1237,7 @@ mod non_minimal_only_stdlib {
             for (pattern, template, external_vars) in cases {
                 let bindings = matcher::match_atoms(atom, &pattern)
                     .map(|b| b.convert_var_equalities_to_bindings(&external_vars));
-                let result: Vec<Atom> = bindings.map(|b| matcher::apply_bindings_to_atom(&template, &b)).collect();
+                let result: Vec<Atom> = bindings.map(|b| matcher::apply_bindings_to_atom_move(template.clone(), &b)).collect();
                 if !result.is_empty() {
                     return result
                 }
@@ -1457,7 +1457,7 @@ mod non_minimal_only_stdlib {
 
             let bindings = matcher::match_atoms(&pattern, &atom)
                 .map(|b| b.convert_var_equalities_to_bindings(&external_vars));
-            let result = bindings.map(|b| { matcher::apply_bindings_to_atom(&template, &b) }).collect();
+            let result = bindings.map(|b| { matcher::apply_bindings_to_atom_move(template.clone(), &b) }).collect();
             log::debug!("LetOp::execute: pattern: {}, atom: {}, template: {}, result: {:?}", pattern, atom, template, result);
             Ok(result)
         }
