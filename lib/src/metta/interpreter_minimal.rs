@@ -419,15 +419,15 @@ fn finished_result(atom: Atom, bindings: Bindings, prev: Option<Rc<RefCell<Stack
 
 fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: eval, ret: _, finished: _, vars } = stack;
-    let query_atom = match_atom!{
-        eval ~ [_op, query] => query,
+    let to_eval = match_atom!{
+        eval ~ [_op, to_eval] => to_eval,
         _ => {
             let error = format!("expected: ({} <atom>), found: {}", EVAL_SYMBOL, eval);
             return finished_result(error_atom(eval, error), bindings, prev);
         }
     };
-    log::debug!("eval: query_atom: {}", query_atom);
-    match atom_as_slice(&query_atom) {
+    log::debug!("eval: to_eval: {}", to_eval);
+    match atom_as_slice(&to_eval) {
         Some([Atom::Grounded(op), args @ ..]) => {
             let exec_res = op.execute(args);
             log::debug!("eval: execution results: {:?}", exec_res);
@@ -444,32 +444,34 @@ fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: B
                         // interpreter empty result by any way we like.
                         finished_result(EMPTY_SYMBOL, bindings, prev)
                     } else {
-                        results.into_iter()
-                            .map(|atom| {
-                                let stack = if is_function_op(&atom) {
-                                    // FIXME: should be identical to the corresponding
-                                    // snippet from query() function
-                                    let call = Stack::from_prev_with_vars(prev.clone(), query_atom.clone(), vars.clone(), call_ret);
-                                    atom_to_stack(atom, Some(Rc::new(RefCell::new(call))))
-                                } else {
-                                    Stack::finished(prev.clone(), atom)
-                                };
-                                InterpretedAtom(stack, bindings.clone())
-                            })
-                            .collect()
+                        results.into_iter().map(|res| {
+                            let stack = eval_result_stack(prev.clone(), &to_eval, res, vars.clone());
+                            InterpretedAtom(stack, bindings.clone())
+                        })
+                        .collect()
                     }
                 },
                 Err(ExecError::Runtime(err)) =>
-                    finished_result(error_atom(query_atom, err), bindings, prev),
+                    finished_result(error_atom(to_eval, err), bindings, prev),
                 Err(ExecError::NoReduce) =>
                     // TODO: we could remove ExecError::NoReduce and explicitly
                     // return NOT_REDUCIBLE_SYMBOL from the grounded function instead.
                     finished_result(return_not_reducible(), bindings, prev),
             }
         },
-        _ if is_embedded_op(&query_atom) =>
-            vec![InterpretedAtom(atom_to_stack(query_atom, prev), bindings)],
-        _ => query(&context.space, prev, query_atom, bindings, vars),
+        _ if is_embedded_op(&to_eval) =>
+            vec![InterpretedAtom(atom_to_stack(to_eval, prev), bindings)],
+        _ => query(&context.space, prev, to_eval, bindings, vars),
+    }
+}
+
+fn eval_result_stack(prev: Option<Rc<RefCell<Stack>>>, call: &Atom, res: Atom, vars: Variables) -> Stack {
+    if is_function_op(&res) {
+        let vars = vars.insert_all(vars_from_atom(call));
+        let call = Stack::from_prev_with_vars(prev, call.clone(), vars, call_ret);
+        atom_to_stack(res, Some(Rc::new(RefCell::new(call))))
+    } else {
+        Stack::finished(prev, res)
     }
 }
 
@@ -486,43 +488,37 @@ fn is_variable_op(atom: &Atom) -> bool {
     }
 }
 
-fn query<'a, T: Space>(space: T, prev: Option<Rc<RefCell<Stack>>>, atom: Atom, bindings: Bindings, vars: Variables) -> Vec<InterpretedAtom> {
+fn query<'a, T: Space>(space: T, prev: Option<Rc<RefCell<Stack>>>, to_eval: Atom, bindings: Bindings, vars: Variables) -> Vec<InterpretedAtom> {
     #[cfg(not(feature = "variable_operation"))]
-    if is_variable_op(&atom) {
+    if is_variable_op(&to_eval) {
         // TODO: This is a hotfix. Better way of doing this is adding
         // a function which modifies minimal MeTTa interpreter code
         // in order to skip such evaluations in metta-call function.
         return finished_result(return_not_reducible(), bindings, prev)
     }
     let var_x = &VariableAtom::new("X").make_unique();
-    let query = Atom::expr([EQUAL_SYMBOL, atom.clone(), Atom::Variable(var_x.clone())]);
+    let query = Atom::expr([EQUAL_SYMBOL, to_eval.clone(), Atom::Variable(var_x.clone())]);
     let results = space.query(&query);
-    let atom_x = Atom::Variable(var_x.clone());
     let results: Vec<InterpretedAtom> = {
         log::debug!("interpreter_minimal::query: query: {}", query);
         log::debug!("interpreter_minimal::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
             results.len(), bindings.len(), results, bindings);
-        results.into_iter()
-            .flat_map(|b| {
-                let res = apply_bindings_to_atom_move(atom_x.clone(), &b);
-                let stack = if is_function_op(&res) {
-                    let vars = vars.clone();
-                    let vars = vars.insert_all(vars_from_atom(&atom));
-                    let call = Stack::from_prev_with_vars(prev.clone(), atom.clone(), vars, call_ret);
-                    atom_to_stack(res, Some(Rc::new(RefCell::new(call))))
+        let result = |res, bindings| {
+            let stack = eval_result_stack(prev.clone(), &to_eval, res, vars.clone());
+            InterpretedAtom(stack, bindings)
+        };
+        results.into_iter().flat_map(|b| {
+            let res = b.resolve(&var_x).unwrap();
+            log::debug!("interpreter_minimal::query: b: {}", b);
+            b.merge_v2(&bindings).into_iter().filter_map(move |b| {
+                if b.has_loops() {
+                    None
                 } else {
-                    Stack::finished(prev.clone(), res)
-                };
-                log::debug!("interpreter_minimal::query: b: {}", b);
-                b.merge_v2(&bindings).into_iter().filter_map(move |b| {
-                    if b.has_loops() {
-                        None
-                    } else {
-                        Some(InterpretedAtom(stack.clone(), b))
-                    }
-                })
+                    Some(result(res.clone(), b))
+                }
             })
-            .collect()
+        })
+        .collect()
     };
     if results.is_empty() {
         finished_result(return_not_reducible(), bindings, prev)
@@ -699,18 +695,19 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     if matches.is_empty() {
         finished_result(else_, bindings, prev)
     } else {
-        let then = &then;
-        matches.into_iter()
-            .flat_map(move |b| {
-                let prev = prev.clone();
-                b.merge_v2(&bindings).into_iter().filter_map(move |b| {
-                    if b.has_loops() {
-                        None
-                    } else {
-                        Some(InterpretedAtom(Stack::finished(prev.clone(), then.clone()), b))
-                    }
-                })
+        let result = |bindings| {
+            let stack = Stack::finished(prev.clone(), then.clone());
+            InterpretedAtom(stack, bindings)
+        };
+        matches.into_iter().flat_map(move |b| {
+            b.merge_v2(&bindings).into_iter().filter_map(move |b| {
+                if b.has_loops() {
+                    None
+                } else {
+                    Some(result(b))
+                }
             })
+        })
         .collect()
     }
 }
@@ -777,16 +774,17 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     collapsed.into_children().into_iter()
         .map(atom_into_atom_bindings)
         .flat_map(|(atom, b)| {
-            let prev = &prev;
-            b.merge_v2(&bindings).into_iter()
-                .filter_map(move |b| {
-                    if b.has_loops() {
-                        None
-                    } else {
-                        let stack = Stack::finished(prev.clone(), atom.clone());
-                        Some(InterpretedAtom(stack, b))
-                    }
-                })
+            let result = |atom, bindings| {
+                let stack = Stack::finished(prev.clone(), atom);
+                InterpretedAtom(stack, bindings)
+            };
+            b.merge_v2(&bindings).into_iter().filter_map(move |b| {
+                if b.has_loops() {
+                    None
+                } else {
+                    Some(result(atom.clone(), b))
+                }
+            })
         })
         .collect()
 }
