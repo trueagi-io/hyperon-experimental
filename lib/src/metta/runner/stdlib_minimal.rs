@@ -408,8 +408,6 @@ impl Grounded for CaseOp {
         log::debug!("CaseOp::execute: atom results: {:?}", results);
         let results = match results {
             Ok(results) if results.is_empty() =>
-                // TODO: MINIMAL in minimal MeTTa we should use Empty in both
-                // places here and in (case ...) calls in code
                 vec![switch(EMPTY_SYMBOL)],
             Ok(results) =>
                 results.into_iter().map(|atom| switch(atom)).collect(),
