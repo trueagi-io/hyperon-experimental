@@ -173,7 +173,7 @@ impl Display for IncludeOp {
 
 impl Grounded for IncludeOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -196,13 +196,16 @@ impl Grounded for IncludeOp {
         let program_text = String::from_utf8(program_buf)
             .map_err(|e| e.to_string())?;
         let parser = crate::metta::text::OwnedSExprParser::new(program_text);
-        //QUESTION: do we want to do anything with the result from the `include` operation?
-        let _eval_result = context.run_inline(|context| {
+        let eval_result = context.run_inline(|context| {
             context.push_parser(Box::new(parser));
             Ok(())
         })?;
 
-        unit_result()
+        //NOTE: Current behavior returns the result of the last sub-eval to match the old
+        // `import!` before before module isolation.  However that means the results prior to
+        // the last are dropped.  I don't know how to fix this or if it's even wrong, but it's
+        // different from the way "eval-type" APIs work when called from host code, e.g. Rust
+        Ok(eval_result.into_iter().last().unwrap_or_else(|| vec![]))
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -239,7 +242,7 @@ impl Display for ModSpaceOp {
 
 impl Grounded for ModSpaceOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, rust_type_atom::<DynSpace>()])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
