@@ -16,8 +16,6 @@ use std::convert::TryInto;
 use super::arithmetics::*;
 use super::string::*;
 
-pub const VOID_SYMBOL : Atom = sym!("%void%");
-
 fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
 }
@@ -410,9 +408,7 @@ impl Grounded for CaseOp {
         log::debug!("CaseOp::execute: atom results: {:?}", results);
         let results = match results {
             Ok(results) if results.is_empty() =>
-                // TODO: MINIMAL in minimal MeTTa we should use Empty in both
-                // places here and in (case ...) calls in code
-                vec![switch(VOID_SYMBOL)],
+                vec![switch(EMPTY_SYMBOL)],
             Ok(results) =>
                 results.into_iter().map(|atom| switch(atom)).collect(),
             Err(err) => vec![Atom::expr([ERROR_SYMBOL, atom.clone(), Atom::sym(err)])],
@@ -633,13 +629,13 @@ mod tests {
 
     #[test]
     fn metta_case_empty() {
-        let result = run_program("!(case Empty ( (ok ok) (%void% nok) ))");
+        let result = run_program("!(case Empty ( (ok ok) (Empty nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
-        let result = run_program("!(case (unify (C B) (C B) ok Empty) ( (ok ok) (%void% nok) ))");
+        let result = run_program("!(case (unify (C B) (C B) ok Empty) ( (ok ok) (Empty nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("ok")]]));
         let result = run_program("!(case (unify (B C) (C B) ok nok) ( (ok ok) (nok nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
-        let result = run_program("!(case (unify (B C) (C B) ok Empty) ( (ok ok) (%void% nok) ))");
+        let result = run_program("!(case (unify (B C) (C B) ok Empty) ( (ok ok) (Empty nok) ))");
         assert_eq!(result, Ok(vec![vec![expr!("nok")]]));
     }
 
