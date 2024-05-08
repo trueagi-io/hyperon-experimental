@@ -444,11 +444,10 @@ fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: B
                         // interpreter empty result by any way we like.
                         finished_result(EMPTY_SYMBOL, bindings, prev)
                     } else {
-                        results.into_iter().map(|res| {
-                            let stack = eval_result_stack(prev.clone(), &to_eval, res, vars.clone());
-                            InterpretedAtom(stack, bindings.clone())
-                        })
-                        .collect()
+                        let call_stack = call_to_stack(to_eval, vars, prev.clone());
+                        results.into_iter()
+                            .map(|res| eval_result(prev.clone(), res, &call_stack, bindings.clone()))
+                            .collect()
                     }
                 },
                 Err(ExecError::Runtime(err)) =>
@@ -465,14 +464,19 @@ fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: B
     }
 }
 
-fn eval_result_stack(prev: Option<Rc<RefCell<Stack>>>, call: &Atom, res: Atom, vars: Variables) -> Stack {
-    if is_function_op(&res) {
-        let vars = vars.insert_all(vars_from_atom(call));
-        let call = Stack::from_prev_with_vars(prev, call.clone(), vars, call_ret);
-        atom_to_stack(res, Some(Rc::new(RefCell::new(call))))
+fn eval_result(prev: Option<Rc<RefCell<Stack>>>, res: Atom, call_stack: &Rc<RefCell<Stack>>, bindings: Bindings) -> InterpretedAtom {
+    let stack = if is_function_op(&res) {
+        atom_to_stack(res, Some(call_stack.clone()))
     } else {
         Stack::finished(prev, res)
-    }
+    };
+    InterpretedAtom(stack, bindings)
+}
+
+fn call_to_stack(call: Atom, vars: Variables, prev: Option<Rc<RefCell<Stack>>>) -> Rc<RefCell<Stack>> {
+    let vars = vars.insert_all(vars_from_atom(&call));
+    let stack = Stack::from_prev_with_vars(prev, call, vars, call_ret);
+    Rc::new(RefCell::new(stack))
 }
 
 #[cfg(not(feature = "variable_operation"))]
@@ -499,31 +503,26 @@ fn query<'a, T: Space>(space: T, prev: Option<Rc<RefCell<Stack>>>, to_eval: Atom
     let var_x = &VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, to_eval.clone(), Atom::Variable(var_x.clone())]);
     let results = space.query(&query);
-    let results: Vec<InterpretedAtom> = {
-        log::debug!("interpreter_minimal::query: query: {}", query);
-        log::debug!("interpreter_minimal::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
-            results.len(), bindings.len(), results, bindings);
-        let result = |res, bindings| {
-            let stack = eval_result_stack(prev.clone(), &to_eval, res, vars.clone());
-            InterpretedAtom(stack, bindings)
-        };
-        results.into_iter().flat_map(|b| {
-            let res = b.resolve(&var_x).unwrap();
-            log::debug!("interpreter_minimal::query: b: {}", b);
-            b.merge_v2(&bindings).into_iter().filter_map(move |b| {
-                if b.has_loops() {
-                    None
-                } else {
-                    Some(result(res.clone(), b))
-                }
-            })
-        })
-        .collect()
-    };
     if results.is_empty() {
         finished_result(return_not_reducible(), bindings, prev)
     } else {
-        results
+        log::debug!("interpreter_minimal::query: query: {}", query);
+        log::debug!("interpreter_minimal::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
+            results.len(), bindings.len(), results, bindings);
+        let call_stack = call_to_stack(to_eval, vars, prev.clone());
+        let result = |res, bindings| eval_result(prev.clone(), res, &call_stack, bindings);
+        results.into_iter().flat_map(|b| {
+            log::debug!("interpreter_minimal::query: b: {}", b);
+            b.merge_v2(&bindings).into_iter()
+        }).filter_map(move |b| {
+            let res = b.resolve(&var_x).unwrap();
+            if b.has_loops() {
+                None
+            } else {
+                Some(result(res, b))
+            }
+        })
+        .collect()
     }
 }
 
