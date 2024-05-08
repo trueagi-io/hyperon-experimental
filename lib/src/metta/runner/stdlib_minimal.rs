@@ -753,11 +753,6 @@ mod tests {
             !(eval (interpret (Cons S (Cons Z Nil)) %Undefined% &self))
         ");
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("Cons" "Z" "Nil") "BadType")]]));
-        let result = run_program("
-            (: foo (-> Atom Atom Atom))
-            !(eval (interpret (foo A) %Undefined% &self))
-        ");
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "A") "BadType")]]));
     }
 
     #[test]
@@ -1036,6 +1031,36 @@ mod tests {
 
         assert_eq!(metta.run(SExprParser::new(program2)),
             Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
+    }
+
+    #[test]
+    fn test_return_incorrect_number_of_args_error() {
+        let program1 = "
+            (: a A)
+            (: b B)
+            (: c C)
+            (: foo (-> A B C))
+            (= (foo $a $b) c)
+
+            !(eval (interpret (foo a b) %Undefined% &self))
+        ";
+
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        metta.tokenizer().borrow_mut().register_token(Regex::new("id_num").unwrap(),
+            |_| Atom::gnd(ID_NUM));
+
+        assert_eq!(metta.run(SExprParser::new(program1)),
+            Ok(vec![vec![expr!("c")]]));
+
+        let program2 = "!(eval (interpret (foo a) %Undefined% &self))";
+
+        assert_eq!(metta.run(SExprParser::new(program2)),
+            Ok(vec![vec![expr!("Error" ("foo" "a") "IncorrectNumberOfArguments")]]));
+
+        let program3 = "!(eval (interpret (foo a b c) %Undefined% &self))";
+
+        assert_eq!(metta.run(SExprParser::new(program3)),
+            Ok(vec![vec![expr!("Error" ("foo" "a" "b" "c") "IncorrectNumberOfArguments")]]));
     }
 
     #[test]

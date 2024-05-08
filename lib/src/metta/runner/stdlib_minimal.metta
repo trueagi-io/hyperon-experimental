@@ -212,8 +212,8 @@
           (eval (match-types $actual-ret-type $ret-type
             (return ())
             (return (Error $atom BadType)) ))
-          (return (Error $atom BadType)) )))
-      (return (Error $atom "Too many arguments")) ))
+          (return (Error $atom IncorrectNumberOfArguments)) )))
+      (return (Error $atom IncorrectNumberOfArguments)) ))
     (eval (if-decons-expr $args $head $tail
       (eval (if-decons-expr $arg-types $head-type $tail-types
         (chain (eval (interpret $head $head-type $space)) $reduced-head
