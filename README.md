@@ -18,7 +18,15 @@ If you want to contribute the project please see the [contribution guide](./docs
 If you find troubles with the installation, see the [Troubleshooting](#troubleshooting) section below.
 For development related instructions see the [development guide](./docs/DEVELOPMENT.md).
 
-# Prepare environment
+# Using the latest release version
+
+It is the most simple way of getting MeTTa interpreter especially if you are a Python developer.
+The following command installs the latest release version from PyPi package repository:
+```
+python3 -m pip install hyperon
+```
+
+# Prepare development environment
 
 ## Docker
 
