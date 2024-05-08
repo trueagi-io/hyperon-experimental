@@ -35,6 +35,15 @@ environment. Please keep in mind that resulting image contains temporary build
 files and takes a lot of a disk space. It is not recommended to distribute it
 as an image for running MeTTa because of its size.
 
+### Ready to use image
+
+Run latest docker image from the Dockerhub:
+```
+docker run -ti trueagi/hyperon:latest
+```
+
+### Build image
+
 Build Docker image from a local copy of the repo running:
 ```
 docker build -t trueagi/hyperon .
