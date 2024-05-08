@@ -44,6 +44,8 @@ docker run -ti trueagi/hyperon:latest
 
 ### Build image
 
+Docker 26.0.0 or greater version is required.
+
 Build Docker image from a local copy of the repo running:
 ```
 docker build -t trueagi/hyperon .
