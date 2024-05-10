@@ -70,17 +70,19 @@
 //
 // I think my personal preference is for #2.
 
+use core::any::Any;
 use std::path::Path;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::ffi::{OsStr, OsString};
+use std::collections::HashSet;
 
 use crate::metta::text::OwnedSExprParser;
 use crate::metta::runner::modules::*;
 use crate::metta::runner::{*, git_catalog::*};
 
 use xxhash_rust::xxh3::xxh3_64;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Implemented for types capable of locating MeTTa modules
 ///
@@ -94,22 +96,19 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor>;
 
+    /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name,
+    ///   and uid match
+    fn lookup_with_uid(&self, name: &str, uid: Option<u64>) -> Vec<ModuleDescriptor> {
+        self.lookup(name).into_iter().filter(|desc| desc.uid == uid).collect()
+    }
+
     /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
     /// matching the version requirements
     ///
     /// NOTE: Unversioned modules will never match any version_req, so this method should never return
     /// any un-versioned ModuleDescriptors if `version_req.is_some()`
     fn lookup_with_version_req(&self, name: &str, version_req: Option<&semver::VersionReq>) -> Vec<ModuleDescriptor> {
-        let all_named_descs = self.lookup(name);
-        match version_req {
-            Some(req) => all_named_descs.into_iter().filter(|desc| {
-                match desc.version() {
-                    Some(ver) => req.matches(ver),
-                    None => false
-                }
-            }).collect(),
-            None => all_named_descs
-        }
+        filter_by_version_req(self.lookup(name).into_iter(), version_req).collect()
     }
 
     /// Returns the [ModuleDescriptor] for the newest module in the `ModuleCatalog`, that matches the
@@ -122,39 +121,112 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     /// NOTE: Unversioned modules will never match any version_req, so this method should never return
     /// any un-versioned ModuleDescriptors if `version_req.is_some()`
     fn lookup_newest_with_version_req(&self, name: &str, version_req: Option<&semver::VersionReq>) -> Option<ModuleDescriptor> {
-        let mut highest_version: Option<semver::Version> = None;
-        let mut ret_desc = None;
-        for desc in self.lookup_with_version_req(name, version_req).into_iter() {
-            match desc.version().cloned() {
-                Some(ver) => {
-                    match &mut highest_version {
-                        Some(highest_ver) => {
-                            if ver > *highest_ver {
-                                *highest_ver = ver;
-                                ret_desc = Some(desc);
-                            }
-                        },
-                        None => {
-                            ret_desc = Some(desc);
-                            highest_version = Some(ver)
-                        }
-                    }
-                },
-                None => {
-                    if highest_version.is_none() {
-                        if ret_desc.is_some() {
-                            log::warn!("Multiple un-versioned {name} modules in catalog; impossible to select newest");
-                        }
-                        ret_desc = Some(desc)
-                    }
-                }
-            }
-        }
-        ret_desc
+        find_newest_module(self.lookup_with_version_req(name, version_req).into_iter())
+    }
+
+    /// Returns the [ModuleDescriptor] for the newest module in the `ModuleCatalog`, that matches the
+    /// specified name, uid, and version requirement, or `None` if no module exists
+    ///
+    /// See [ModuleCatalog::lookup_newest_with_version_req] for more details
+    fn lookup_newest_with_uid_and_version_req(&self, name: &str, uid: Option<u64>, version_req: Option<&semver::VersionReq>) -> Option<ModuleDescriptor> {
+        let result_iter = self.lookup_with_uid(name, uid).into_iter();
+        find_newest_module(filter_by_version_req(result_iter, version_req))
     }
 
     /// Returns a [ModuleLoader] for the specified module from the `ModuleCatalog`
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String>;
+
+    /// Returns an iterator over every module available in the catalog.  May not be supported
+    /// by all catalog implementations
+    fn list<'a>(&'a self) -> Option<Box<dyn Iterator<Item=ModuleDescriptor> + 'a>> {
+        None
+    }
+
+    /// Returns an iterator over every unique module name in the catalog.  May not be supported
+    /// by all catalog implementations
+    fn list_names<'a>(&'a self) -> Option<Box<dyn Iterator<Item=String> + 'a>> {
+        self.list().map(|desc_iter| {
+            let mut names = HashSet::new();
+            for desc in desc_iter {
+                if !names.contains(desc.name()) {
+                    names.insert(desc.name().to_string());
+                }
+            }
+            Box::new(names.into_iter()) as Box<dyn Iterator<Item=String>>
+        })
+    }
+
+    /// Returns an iterator over every unique (module name, uid) pair in the catalog.  May not
+    /// be supported by all catalog implementations
+    fn list_name_uid_pairs<'a>(&'a self) -> Option<Box<dyn Iterator<Item=(String, Option<u64>)> + 'a>> {
+        self.list().map(|desc_iter| {
+            let mut results = HashSet::new();
+            for desc in desc_iter {
+                results.insert((desc.name().to_string(), desc.uid()));
+            }
+            Box::new(results.into_iter()) as Box<dyn Iterator<Item=(String, Option<u64>)>>
+        })
+    }
+
+    /// Returns the catalog as an [Any] in order to get back to the underlying object
+    fn as_any(&self) -> Option<&dyn Any> {
+        None
+    }
+}
+
+impl dyn ModuleCatalog {
+    /// Returns the catalog as as an underlying type, if it's supported by the catalog format
+    pub fn downcast<T: 'static>(&self) -> Option<&T> {
+        self.as_any()?.downcast_ref()
+    }
+}
+
+/// Internal function to filter a set of [ModuleDescriptor]s by a [semver::VersionReq].  See
+/// [ModuleCatalog::lookup_with_version_req] for an explanation of behavior
+fn filter_by_version_req<'a>(mods_iter: impl Iterator<Item=ModuleDescriptor> + 'a, version_req: Option<&'a semver::VersionReq>) -> Box<dyn Iterator<Item=ModuleDescriptor> + 'a> {
+    match version_req {
+        Some(req) => Box::new(mods_iter.filter(|desc| {
+            match desc.version() {
+                Some(ver) => req.matches(ver),
+                None => false
+            }
+        })),
+        None => Box::new(mods_iter)
+    }
+}
+
+/// Internal function to find the newest module in a set.  See [ModuleCatalog::lookup_newest_with_version_req]
+/// for an explanation of behavior
+fn find_newest_module(mods_iter: impl Iterator<Item=ModuleDescriptor>) -> Option<ModuleDescriptor> {
+    let mut highest_version: Option<semver::Version> = None;
+    let mut ret_desc = None;
+    for desc in mods_iter {
+        match desc.version().cloned() {
+            Some(ver) => {
+                match &mut highest_version {
+                    Some(highest_ver) => {
+                        if ver > *highest_ver {
+                            *highest_ver = ver;
+                            ret_desc = Some(desc);
+                        }
+                    },
+                    None => {
+                        ret_desc = Some(desc);
+                        highest_version = Some(ver)
+                    }
+                }
+            },
+            None => {
+                if highest_version.is_none() {
+                    if let Some(ret_desc) = ret_desc {
+                        log::warn!("Multiple un-versioned {} modules in catalog; impossible to select newest", ret_desc.name());
+                    }
+                    ret_desc = Some(desc)
+                }
+            }
+        }
+    }
+    ret_desc
 }
 
 /// The object responsible for locating and selecting dependency modules for each [MettaMod]
@@ -223,7 +295,7 @@ impl PkgInfo {
             }
 
             //Get the module if it's specified with git keys
-            if let Some(pair) = entry.git_location.get_loader(context.metta.environment().fs_mod_formats(), context.metta.environment().caches_dir(), EXPLICIT_GIT_MOD_CACHE, mod_name, None, None)? {
+            if let Some(pair) = entry.git_location.get_loader_in_explicit_catalog(mod_name, false, context.metta.environment())? {
                 return Ok(Some(pair));
             }
 
@@ -598,7 +670,7 @@ fn visit_modules_in_dir_using_mod_formats(fmts: &[Box<dyn FsModuleFormat>], dir_
 ///
 /// NOTE: It is possible for a module to have both a version and a uid.  Module version uniqueness is
 /// enforced by the catalog(s), and two catalogs may disagree
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct ModuleDescriptor {
     name: String,
     uid: Option<u64>,
@@ -607,16 +679,13 @@ pub struct ModuleDescriptor {
 
 impl ModuleDescriptor {
     /// Create a new ModuleDescriptor
-    pub fn new(name: String, version: Option<semver::Version>) -> Self {
-        Self { name, uid: None, version }
+    pub fn new(name: String, version: Option<semver::Version>, uid: Option<u64>) -> Self {
+        Self { name, uid, version }
     }
-    /// Create a new ModuleDescriptor
-    pub fn new_with_uid(name: String, version: Option<semver::Version>, uid: u64) -> Self {
-        Self { name, uid: Some(uid), version }
-    }
+    /// Returns a new ModuleDescriptor by computing a stable hash of the `ident` bytes, and using the `fmt_id`
     pub fn new_with_ident_bytes_and_fmt_id(name: String, version: Option<semver::Version>, ident: &[u8], fmt_id: u64) -> Self {
-        let uid = xxh3_64(ident) ^ fmt_id;
-        ModuleDescriptor::new_with_uid(name, version, uid)
+        let uid = Self::uid_from_ident_bytes_and_fmt_id(ident, fmt_id);
+        ModuleDescriptor::new(name, version, Some(uid))
     }
     /// Create a new ModuleDescriptor using a file system path and another unique id
     ///
@@ -632,20 +701,23 @@ impl ModuleDescriptor {
     pub fn name(&self) -> &str {
         &self.name
     }
+    /// Returns the uid associated with the ModuleDescriptor
+    pub fn uid(&self) -> Option<u64> {
+        self.uid
+    }
     /// Returns the version of the module represented by the ModuleDescriptor
     pub fn version(&self) -> Option<&semver::Version> {
         self.version.as_ref()
-    }
-    /// Returns `true` if the `ident_bytes` and `fmt_id` match what was used to create the descriptor
-    pub fn ident_bytes_and_fmt_id_matches(&self, ident: &[u8], fmt_id: u64) -> bool {
-        let uid = xxh3_64(ident) ^ fmt_id;
-        self.uid == Some(uid)
     }
     /// Internal.  Use the Hash trait to get a uid for the whole ModuleDescriptor
     pub fn hash(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         std::hash::Hash::hash(self, &mut hasher);
         hasher.finish()
+    }
+    /// Returns a uid based on a stable hash of `the ident` bytes, and the fmt_id
+    pub fn uid_from_ident_bytes_and_fmt_id(ident: &[u8], fmt_id: u64) -> u64 {
+        xxh3_64(ident) ^ fmt_id
     }
 }
 
@@ -677,7 +749,7 @@ mod tests {
     impl ModuleCatalog for TestCatalog {
         fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
             if name.len() == 1 && name.chars().last().unwrap().is_uppercase() {
-                vec![ModuleDescriptor::new(name.to_string(), None)]
+                vec![ModuleDescriptor::new(name.to_string(), None, None)]
             } else {
                 vec![]
             }
@@ -735,7 +807,7 @@ mod tests {
 
             //Set up the module [PkgInfo] so it knows to load a sub-module from git
             pkg_info.name = Some("test-mod".to_string());
-            pkg_info.deps.insert("metta-morph".to_string(), DepEntry{
+            pkg_info.deps.insert("metta-morph-test".to_string(), DepEntry{
                 fs_path: None,
                 git_location: ModuleGitLocation {
                     //TODO: We probably want a smaller test repo
@@ -766,7 +838,7 @@ mod tests {
     /// the module's PkgInfo.  This test requires a network connection
     ///
     /// NOTE.  Ignored because we may not want it fetching from the internet when running the
-    /// test suite.  Invoke `cargo test git_pkginfo_fetch_test -- --ignored` to run it.
+    /// test suite.  Invoke `cargo test --features git git_pkginfo_fetch_test -- --ignored --nocapture` to run it.
     #[ignore]
     #[test]
     fn git_pkginfo_fetch_test() {
@@ -775,7 +847,28 @@ mod tests {
         let runner = Metta::new(Some(EnvBuilder::new().set_config_dir(Path::new("/tmp/hyperon-test/"))));
         let _mod_id = runner.load_module_direct(Box::new(TestLoader::new()), "test-mod").unwrap();
 
-        let result = runner.run(SExprParser::new("!(import! &self test-mod:metta-morph)"));
+        let result = runner.run(SExprParser::new("!(import! &self test-mod:metta-morph-test)"));
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+
+        //Test that we can use a function imported from the module
+        let result = runner.run(SExprParser::new("!(sequential (A B))"));
+        assert_eq!(result, Ok(vec![vec![sym!("A"), sym!("B")]]));
+
+        runner.display_loaded_modules();
+    }
+
+    /// Tests that a module can be resolved in a remote cataloc, fetched from git and then
+    /// loaded.  This test requires a network connection
+    ///
+    /// NOTE.  Ignored because we may not want it fetching from the internet when running the
+    /// test suite.  Invoke `cargo test --features git git_remote_catalog_fetch_test -- --ignored --nocapture` to run it.
+    #[ignore]
+    #[test]
+    fn git_remote_catalog_fetch_test() {
+
+        //Make a new runner, with the config dir in `/tmp/hyperon-test/`
+        let runner = Metta::new(Some(EnvBuilder::new().set_config_dir(Path::new("/tmp/hyperon-test/"))));
+        let result = runner.run(SExprParser::new("!(import! &self metta-morph)"));
         assert_eq!(result, Ok(vec![vec![expr!()]]));
 
         //Test that we can use a function imported from the module

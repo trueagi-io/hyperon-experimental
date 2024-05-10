@@ -483,6 +483,12 @@ impl ModuleInitState {
     /// The init function will then call `context.init_self_module()` along with any other initialization code
     pub fn init_module(&mut self, runner: &Metta, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
 
+        //Give the prepare function a chance to run, in case it hasn't yet
+        let loader = match loader.prepare(None, false)? {
+            Some(new_loader) => new_loader,
+            None => loader
+        };
+
         //Create a new RunnerState in order to initialize the new module, and push the init function
         // to run within the new RunnerState.  The init function will then call `context.init_self_module()`
         let mut runner_state = RunnerState::new_for_loading(runner, mod_name, self);
@@ -607,8 +613,29 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
         None
     }
 
-    //TODO-NEXT, add "prepare" function that consumes loader, and returns another one.  This will
-    // allow us to pre-fetch modules
+    //TODO-NOW Delete this: I changed my mind about this interface - I now think the design should commit to an
+    // injective mapping between ModuleDescriptors and directory names
+    //
+    // /// Suggests a name that can be used by the implementation for locally cached module files
+    // ///
+    // /// The returned name should be deterministic, but unique to the module and its version, etc.
+    // /// For example, a git branch or a remote server URL may be encoded into the name.  The name
+    // /// must be composed of only legal file name characters, and must not contain the '/' char.
+    // fn cache_dir_name(&self) -> Option<String> {
+    //     None
+    // }
+
+    /// Prepares a module for loading.  This method is responsible for fetching resources
+    /// from the network, performing build or pre-computation steps, or any other operations
+    /// that only need to be performed once and then may be cached locally
+    ///
+    /// If this method returns `Ok(Some(_))` then the loader will be dropped and the returned
+    /// loader will replace it.
+    ///
+    /// NOTE: This method may become async in the future
+    fn prepare(&self, _local_dir: Option<&Path>, _should_refresh: bool) -> Result<Option<Box<dyn ModuleLoader>>, String> {
+        Ok(None)
+    }
 
     /// Returns a data blob containing a given named resource belonging to a module
     fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {

@@ -920,7 +920,7 @@ impl<'input> RunContext<'_, '_, 'input> {
     /// * If `descriptor` matches an existing loaded module, alias in the module name-space will be created,
     ///   and the module's ModId will be returned, otherwise,
     /// * The `loader` will be used to initialize a new module, and the new ModId will be returned
-    fn get_or_init_module_with_descriptor(&mut self, mod_name: &str, descriptor: ModuleDescriptor, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
+    pub(crate) fn get_or_init_module_with_descriptor(&mut self, mod_name: &str, descriptor: ModuleDescriptor, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
         match self.init_state.get_module_with_descriptor(&self.metta, &descriptor) {
             Some(mod_id) => {
                 self.load_module_alias(mod_name, mod_id)

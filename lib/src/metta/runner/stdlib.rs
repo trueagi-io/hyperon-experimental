@@ -5,7 +5,7 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey, mod_name_from_url};
-use crate::metta::runner::{git_catalog::EXPLICIT_GIT_MOD_CACHE, git_catalog::ModuleGitLocation, git_cache::UpdateMode};
+use crate::metta::runner::git_catalog::ModuleGitLocation;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
@@ -173,7 +173,7 @@ impl Display for IncludeOp {
 
 impl Grounded for IncludeOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -196,13 +196,16 @@ impl Grounded for IncludeOp {
         let program_text = String::from_utf8(program_buf)
             .map_err(|e| e.to_string())?;
         let parser = crate::metta::text::OwnedSExprParser::new(program_text);
-        //QUESTION: do we want to do anything with the result from the `include` operation?
-        let _eval_result = context.run_inline(|context| {
+        let eval_result = context.run_inline(|context| {
             context.push_parser(Box::new(parser));
             Ok(())
         })?;
 
-        unit_result()
+        //NOTE: Current behavior returns the result of the last sub-eval to match the old
+        // `import!` before before module isolation.  However that means the results prior to
+        // the last are dropped.  I don't know how to fix this or if it's even wrong, but it's
+        // different from the way "eval-type" APIs work when called from host code, e.g. Rust
+        Ok(eval_result.into_iter().last().unwrap_or_else(|| vec![]))
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -239,7 +242,7 @@ impl Display for ModSpaceOp {
 
 impl Grounded for ModSpaceOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, rust_type_atom::<DynSpace>()])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -300,6 +303,8 @@ impl Grounded for RegisterModuleOp {
         let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
 
         // TODO: replace Symbol by grounded String?
+        //TODO-NOW, investigate what goes off the rails when I run this with quotes now?  Maybe I'm getting a grounded string arg now...
+        //  in the repl, test `!(register-module! "/tmp/")`
         let path = match path_arg_atom {
             Atom::Symbol(path_arg) => path_arg.name(),
             _ => return Err(arg_error.into())
@@ -326,7 +331,8 @@ impl Grounded for RegisterModuleOp {
 /// Similar to `register-module!`, this op will bypass the catalog search
 #[derive(Clone, Debug)]
 pub struct GitModuleOp {
-    metta: Metta
+    //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
 impl PartialEq for GitModuleOp {
@@ -335,7 +341,7 @@ impl PartialEq for GitModuleOp {
 
 impl GitModuleOp {
     pub fn new(metta: Metta) -> Self {
-        Self{ metta }
+        Self{ context: metta.0.context.clone() }
     }
 }
 
@@ -356,6 +362,8 @@ impl Grounded for GitModuleOp {
         // TODO: When we figure out how to address varargs, it will be nice to take an optional branch name
 
         // TODO: replace Symbol by grounded String?
+        //TODO-NOW, investigate what goes off the rails when I run this with quotes now?  Maybe I'm getting a grounded string arg now...
+        //  in the repl, test `!(register-module! "/tmp/")`
         let url = match url_arg_atom {
             Atom::Symbol(url_arg) => url_arg.name(),
             _ => return Err(arg_error.into())
@@ -369,10 +377,14 @@ impl Grounded for GitModuleOp {
             None => return Err(ExecError::from("git-module! error extracting module name from URL"))
         };
 
+        let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
+        let mut context = ctx_ref.lock().unwrap();
+
         let git_mod_location = ModuleGitLocation::new(url.to_string());
-        let cached_mod = git_mod_location.get_cache(self.metta.environment().caches_dir(), EXPLICIT_GIT_MOD_CACHE, &mod_name, None, None)?;
-        cached_mod.update(UpdateMode::TryPullLatest)?;
-        self.metta.load_module_at_path(cached_mod.local_path(), Some(&mod_name)).map_err(|e| ExecError::from(e))?;
+
+        if let Some((loader, descriptor)) = git_mod_location.get_loader_in_explicit_catalog(&mod_name, true, context.metta.environment()).map_err(|e| ExecError::from(e))? {
+            context.get_or_init_module_with_descriptor(&mod_name, descriptor, loader).map_err(|e| ExecError::from(e))?;
+        }
 
         unit_result()
     }
@@ -1295,7 +1307,7 @@ mod non_minimal_only_stdlib {
             for (pattern, template, external_vars) in cases {
                 let bindings = matcher::match_atoms(atom, &pattern)
                     .map(|b| b.convert_var_equalities_to_bindings(&external_vars));
-                let result: Vec<Atom> = bindings.map(|b| matcher::apply_bindings_to_atom(&template, &b)).collect();
+                let result: Vec<Atom> = bindings.map(|b| matcher::apply_bindings_to_atom_move(template.clone(), &b)).collect();
                 if !result.is_empty() {
                     return result
                 }
@@ -1515,7 +1527,7 @@ mod non_minimal_only_stdlib {
 
             let bindings = matcher::match_atoms(&pattern, &atom)
                 .map(|b| b.convert_var_equalities_to_bindings(&external_vars));
-            let result = bindings.map(|b| { matcher::apply_bindings_to_atom(&template, &b) }).collect();
+            let result = bindings.map(|b| { matcher::apply_bindings_to_atom_move(template.clone(), &b) }).collect();
             log::debug!("LetOp::execute: pattern: {}, atom: {}, template: {}, result: {:?}", pattern, atom, template, result);
             Ok(result)
         }

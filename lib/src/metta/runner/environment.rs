@@ -5,7 +5,7 @@ use std::fs;
 use std::sync::Arc;
 
 #[cfg(feature = "pkg_mgmt")]
-use crate::metta::runner::pkg_mgmt::{ModuleCatalog, DirCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt, git_catalog::*};
+use crate::metta::runner::pkg_mgmt::{ModuleCatalog, DirCatalog, LocalCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt, git_catalog::*};
 
 use directories::ProjectDirs;
 
@@ -24,6 +24,9 @@ pub struct Environment {
     catalogs: Vec<Box<dyn ModuleCatalog>>,
     #[cfg(feature = "pkg_mgmt")]
     pub(crate) fs_mod_formats: Arc<Vec<Box<dyn FsModuleFormat>>>,
+    /// The store for modules loaded from git by explicit URL
+    #[cfg(feature = "pkg_mgmt")]
+    pub(crate) explicit_git_mods: Option<LocalCatalog>,
 }
 
 const DEFAULT_INIT_METTA: &[u8] = include_bytes!("init.default.metta");
@@ -92,6 +95,8 @@ impl Environment {
             catalogs: vec![],
             #[cfg(feature = "pkg_mgmt")]
             fs_mod_formats: Arc::new(vec![]),
+            #[cfg(feature = "pkg_mgmt")]
+            explicit_git_mods: None,
         }
     }
 }
@@ -343,11 +348,24 @@ impl EnvBuilder {
                 }
             }
 
-            //Search the remote git-based catalog, if we have a caches dir to store the modules
+            //If we have a caches dir to cache modules locally then register remote catalogs
             if let Some(caches_dir) = &env.caches_dir {
-                //TODO: Catalog should be moved to trueagi github account, and catalog settings should come from config
+
+                //Setup the explicit_git_mods managed catalog to hold mods fetched by explicit URL
+                let mut explicit_git_mods = LocalCatalog::new(caches_dir, "git-modules").unwrap();
+                let git_mod_catalog = GitCatalog::new_without_source_repo(env.fs_mod_formats.clone(), "git-modules").unwrap();
+                explicit_git_mods.push_upstream_catalog(Box::new(git_mod_catalog));
+                env.explicit_git_mods = Some(explicit_git_mods);
+
+                //Add the remote git-based catalog to the end of the catalog priority search list
+                //TODO-NOW: Catalog should be moved to trueagi github account, and catalog settings should come from config
+                let catalog_name = "luketpeterson-catalog";
+                let catalog_url = "https://github.com/luketpeterson/metta-mod-catalog.git";
                 let refresh_time = 259200; //3 days = 3 days * 24 hrs * 60 minutes * 60 seconds
-                env.catalogs.push(Box::new(GitCatalog::new(caches_dir, env.fs_mod_formats.clone(), "luketpeterson-catalog", "https://github.com/luketpeterson/metta-mod-catalog.git", refresh_time).unwrap()));
+                let mut managed_remote_catalog = LocalCatalog::new(caches_dir, catalog_name).unwrap();
+                let remote_catalog = GitCatalog::new(caches_dir, env.fs_mod_formats.clone(), catalog_name, catalog_url, refresh_time).unwrap();
+                managed_remote_catalog.push_upstream_catalog(Box::new(remote_catalog));
+                env.catalogs.push(Box::new(managed_remote_catalog));
             }
         }
 
