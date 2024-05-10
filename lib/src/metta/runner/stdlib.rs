@@ -5,7 +5,7 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey, mod_name_from_url};
-use crate::metta::runner::{git_catalog::EXPLICIT_GIT_MOD_CACHE, git_catalog::ModuleGitLocation, git_cache::UpdateMode};
+use crate::metta::runner::git_catalog::ModuleGitLocation;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
@@ -303,6 +303,8 @@ impl Grounded for RegisterModuleOp {
         let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
 
         // TODO: replace Symbol by grounded String?
+        //TODO-NOW, investigate what goes off the rails when I run this with quotes now?  Maybe I'm getting a grounded string arg now...
+        //  in the repl, test `!(register-module! "/tmp/")`
         let path = match path_arg_atom {
             Atom::Symbol(path_arg) => path_arg.name(),
             _ => return Err(arg_error.into())
@@ -329,7 +331,8 @@ impl Grounded for RegisterModuleOp {
 /// Similar to `register-module!`, this op will bypass the catalog search
 #[derive(Clone, Debug)]
 pub struct GitModuleOp {
-    metta: Metta
+    //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
 impl PartialEq for GitModuleOp {
@@ -338,7 +341,7 @@ impl PartialEq for GitModuleOp {
 
 impl GitModuleOp {
     pub fn new(metta: Metta) -> Self {
-        Self{ metta }
+        Self{ context: metta.0.context.clone() }
     }
 }
 
@@ -359,6 +362,8 @@ impl Grounded for GitModuleOp {
         // TODO: When we figure out how to address varargs, it will be nice to take an optional branch name
 
         // TODO: replace Symbol by grounded String?
+        //TODO-NOW, investigate what goes off the rails when I run this with quotes now?  Maybe I'm getting a grounded string arg now...
+        //  in the repl, test `!(register-module! "/tmp/")`
         let url = match url_arg_atom {
             Atom::Symbol(url_arg) => url_arg.name(),
             _ => return Err(arg_error.into())
@@ -372,10 +377,14 @@ impl Grounded for GitModuleOp {
             None => return Err(ExecError::from("git-module! error extracting module name from URL"))
         };
 
+        let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
+        let mut context = ctx_ref.lock().unwrap();
+
         let git_mod_location = ModuleGitLocation::new(url.to_string());
-        let cached_mod = git_mod_location.get_cache(self.metta.environment().caches_dir(), EXPLICIT_GIT_MOD_CACHE, &mod_name, None, None)?;
-        cached_mod.update(UpdateMode::TryPullLatest)?;
-        self.metta.load_module_at_path(cached_mod.local_path(), Some(&mod_name)).map_err(|e| ExecError::from(e))?;
+
+        if let Some((loader, descriptor)) = git_mod_location.get_loader_in_explicit_catalog(&mod_name, true, context.metta.environment()).map_err(|e| ExecError::from(e))? {
+            context.get_or_init_module_with_descriptor(&mod_name, descriptor, loader).map_err(|e| ExecError::from(e))?;
+        }
 
         unit_result()
     }

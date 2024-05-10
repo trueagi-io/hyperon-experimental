@@ -14,8 +14,6 @@ use std::fs::{File, read_to_string};
 #[cfg(feature = "git")]
 use std::io::prelude::*;
 
-use xxhash_rust::xxh3::xxh3_64;
-
 #[cfg(feature = "git")]
 use git2::{*, build::*};
 
@@ -28,7 +26,6 @@ pub enum UpdateMode {
     /// Clones the repo if it doesn't exist, otherwise leaves it alone
     PullIfMissing,
     /// Pulls the latest from the remote repo.  Fails if the remote is unavailable
-    #[allow(dead_code)]
     PullLatest,
     /// Attempts to pull from the remote repo.  Continues with the existing repo if
     /// the remote is unavailable
@@ -52,34 +49,15 @@ pub struct CachedRepo {
 
 impl CachedRepo {
     /// Initializes a new CachedRepo object
-    ///
-    /// * `cache_name` - A name to describe the cache.  For the default cache for URLs specified
-    ///  from the [PkgInfo], the cache is named `git-modules`
-    /// * `name` - The name of this repo within in the cache.  Often equal to the catalog name of a module
-    /// * `ident_str` - An ascii string that identifies the specific repo among other verions.
-    ///  For example this could be a version, for a MeTTa module catalog cache.
-    /// * `url` - The remote URL from which to fetch the repo
-    /// * `branch` - The branch to use, or default if None
-    pub fn new(caches_dir: &Path, cache_name: &str, name: &str, ident_str: &str, url: &str, branch: Option<&str>, subdir: Option<&Path>) -> Result<Self, String> {
+    pub fn new(name: &str, repo_local_path: PathBuf, url: &str, branch: Option<&str>, subdir: Option<&Path>) -> Result<Self, String> {
 
-        let local_filename = if branch.is_some() || ident_str.len() > 0 {
-            let branch_str = match &branch {
-                Some(s) => s,
-                None => ""
-            };
-            let unique_id = xxh3_64(format!("{}{}", ident_str, branch_str).as_bytes());
-            format!("{name}.{unique_id:016x}")
-        } else {
-            name.to_string()
-        };
-        let this_cache_dir = caches_dir.join(cache_name);
-        let repo_local_path = this_cache_dir.join(local_filename);
         let local_path = match subdir {
             Some(subdir) => repo_local_path.join(subdir),
             None => repo_local_path.clone()
         };
 
-        std::fs::create_dir_all(&this_cache_dir).map_err(|e| e.to_string())?;
+        let parent_dir = repo_local_path.parent().unwrap();
+        std::fs::create_dir_all(parent_dir).map_err(|e| e.to_string())?;
 
         Ok(Self {
             name: name.to_string(),

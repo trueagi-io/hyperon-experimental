@@ -1740,7 +1740,7 @@ pub extern "C" fn module_id_is_valid(mod_id: *const module_id_t) -> bool {
 #[no_mangle]
 pub extern "C" fn module_descriptor_new(name: *const c_char) -> module_descriptor_t {
     //TODO-NEXT: We should probably take a version string, and parse it into a semver version
-    ModuleDescriptor::new(cstr_as_str(name).to_string(), None).into()
+    ModuleDescriptor::new(cstr_as_str(name).to_string(), None, None).into()
 }
 
 /// @brief Creates a new module_descriptor_t that represents the error attempting to interpret a module
