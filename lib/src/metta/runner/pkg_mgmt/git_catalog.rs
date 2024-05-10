@@ -242,13 +242,9 @@ impl GitCatalog {
         })
     }
     /// Registers a new module in the catalog with a specified remote location, and returns the [ModuleDescriptor] to refer to that module
-    ///
-    /// NOTE: explicitly setting a module may 
     pub(crate) fn register_mod(&self, mod_name: &str, version: Option<&semver::Version>, git_location: &ModuleGitLocation) -> Result<ModuleDescriptor, String> {
+        self.refresh_catalog()?;
         let mut catalog_ref = self.catalog.lock().unwrap();
-        if catalog_ref.is_none() {
-            *catalog_ref = Some(CatalogFileFormat::default());
-        }
         let descriptor = catalog_ref.as_mut().unwrap().add(CatalogFileMod::new(mod_name.to_string(), version.cloned(), git_location.clone()))?;
         Ok(descriptor)
     }
@@ -261,21 +257,19 @@ impl GitCatalog {
     /// Scans the catalog looking for a single module that matches the provided descriptor
     fn find_mod_idx_with_descriptor(&self, descriptor: &ModuleDescriptor) -> Option<usize> {
         let cat_lock = self.catalog.lock().unwrap();
-        let catalog = cat_lock.as_ref().unwrap();
-        catalog.find_mod_idx_with_descriptor(descriptor)
+        match &*cat_lock {
+            Some(catalog) => catalog.find_mod_idx_with_descriptor(descriptor),
+            None => None
+        }
     }
-}
-
-impl ModuleCatalog for GitCatalog {
-    fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
-
+    fn refresh_catalog(&self) -> Result<bool, String> {
         if let Some(catalog_repo) = &self.catalog_repo {
             //Get the catalog from the git cache
             let did_update = match catalog_repo.update(UpdateMode::TryPullIfOlderThan(self.refresh_time)) {
                 Ok(did_update) => did_update,
                 Err(e) => {
                     log::warn!("Warning: error encountered attempting to fetch remote catalog: {}, {e}", self.name);
-                    return vec![];
+                    false
                 }
             };
 
@@ -286,12 +280,30 @@ impl ModuleCatalog for GitCatalog {
                 match read_to_string(&catalog_file_path) {
                     Ok(file_contents) => {
                         *catalog = Some(serde_json::from_str(&file_contents).unwrap());
+                        return Ok(true)
                     },
                     Err(e) => {
-                        log::warn!("Warning: Error reading catalog file. remote catalog appears to be corrupt: {}, {e}", self.name);
-                        return vec![];
+                        return Err(format!("Error reading catalog file. remote catalog unavailable: {}, {e}", self.name))
                     }
                 }
+            }
+        } else {
+            let mut catalog = self.catalog.lock().unwrap();
+            if catalog.is_none() {
+                *catalog = Some(CatalogFileFormat::default());
+            }
+        }
+        Ok(false)
+    }
+}
+
+impl ModuleCatalog for GitCatalog {
+    fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
+        match self.refresh_catalog() {
+            Ok(_) => {},
+            Err(e) => {
+                log::warn!("{e}");
+                return vec![]
             }
         }
 
@@ -299,6 +311,8 @@ impl ModuleCatalog for GitCatalog {
         self.find_mods_with_name(name)
     }
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
+        self.refresh_catalog()?;
+
         let mod_idx = self.find_mod_idx_with_descriptor(descriptor).unwrap();
 
         let cat_lock = self.catalog.lock().unwrap();

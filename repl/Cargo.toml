@@ -22,3 +22,4 @@ default = ["python"]
 no_python = ["hyperon"]
 python = ["pyo3", "pep440_rs"]
 minimal = ["hyperon/minimal", "no_python"] #WARNING: The interpreter belonging to the hyperon python module will be used if hyperon is run through python
+git = ["hyperon/git"]
