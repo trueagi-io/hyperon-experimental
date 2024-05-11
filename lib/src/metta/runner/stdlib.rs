@@ -499,6 +499,53 @@ impl Grounded for CatalogUpdateOp {
     }
 }
 
+/// Clears the contents of all ManagedCatalogs
+#[derive(Clone, Debug)]
+pub struct CatalogClearOp {
+    metta: Metta
+}
+
+impl PartialEq for CatalogClearOp {
+    fn eq(&self, _other: &Self) -> bool { true }
+}
+
+impl CatalogClearOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{ metta }
+    }
+}
+
+impl Display for CatalogClearOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "catalog-clear")
+    }
+}
+
+impl Grounded for CatalogClearOp {
+    fn type_(&self) -> Atom {
+        //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
+        // allow an optional arg to list a specific catalog.  For now we list all of them
+        //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
+        Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
+    }
+
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+
+        if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
+            explicit_git_catalog.clear_all()?;
+        }
+        for cat in self.metta.environment().catalogs().filter_map(|cat| cat.as_managed()) {
+            cat.clear_all()?;
+        }
+
+        unit_result()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 /// This operation prints the modules loaded from the top of the runner
 ///
 /// NOTE: This is a temporary stop-gap to help MeTTa users inspect which modules they have loaded and
@@ -1766,6 +1813,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"catalog-list"), move |_| { catalog_list_op.clone() });
         let catalog_update_op = Atom::gnd(CatalogUpdateOp::new(metta.clone()));
         tref.register_token(regex(r"catalog-update"), move |_| { catalog_update_op.clone() });
+        let catalog_clear_op = Atom::gnd(CatalogClearOp::new(metta.clone()));
+        tref.register_token(regex(r"catalog-clear"), move |_| { catalog_clear_op.clone() });
         let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));
         tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
         let mod_space_op = Atom::gnd(ModSpaceOp::new(metta.clone()));
