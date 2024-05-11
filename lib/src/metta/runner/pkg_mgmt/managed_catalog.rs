@@ -1,5 +1,6 @@
 
 use std::path::{Path, PathBuf};
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use crate::metta::runner::*;
@@ -71,7 +72,7 @@ pub trait ManagedCatalog: ModuleCatalog {
 
 #[derive(Debug)]
 pub struct LocalCatalog {
-    _name: String,
+    name: String,
     upstream_catalogs: Vec<Box<dyn ModuleCatalog>>,
     storage_dir: PathBuf,
     local_toc: Mutex<LocalCatalogTOC>,
@@ -83,7 +84,7 @@ impl LocalCatalog {
         let local_toc = LocalCatalogTOC::build_from_dir(&storage_dir)?;
 
         Ok(Self {
-            _name: name.to_string(),
+            name: name.to_string(),
             upstream_catalogs: vec![],
             storage_dir,
             local_toc: Mutex::new(local_toc),
@@ -103,6 +104,10 @@ impl LocalCatalog {
     fn add_to_toc(&self, descriptor: ModuleDescriptor) -> Result<(), String> {
         let mut local_toc = self.local_toc.lock().unwrap();
         local_toc.add_descriptor(descriptor)
+    }
+    fn list_toc(&self) -> Vec<ModuleDescriptor> {
+        let local_toc = self.local_toc.lock().unwrap();
+        local_toc.all_sorted_descriptors()
     }
     pub(crate) fn get_loader_with_explicit_refresh(&self, descriptor: &ModuleDescriptor, should_refresh: bool) -> Result<Box<dyn ModuleLoader>, String> {
 
@@ -141,6 +146,9 @@ impl LocalCatalog {
 }
 
 impl ModuleCatalog for LocalCatalog {
+    fn display_name(&self) -> String {
+        self.name.clone()
+    }
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
 
         //If we have some matching modules in the local cache then return them
@@ -162,6 +170,9 @@ impl ModuleCatalog for LocalCatalog {
     }
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
         self.get_loader_with_explicit_refresh(descriptor, false)
+    }
+    fn list<'a>(&'a self) -> Option<Box<dyn Iterator<Item=ModuleDescriptor> + 'a>> {
+        Some(Box::new(self.list_toc().into_iter()))
     }
 }
 
@@ -185,7 +196,7 @@ impl ModuleLoader for LocalCatalogLoader {
 /// A Table of Contents (TOC) for a LocalCatalog
 #[derive(Debug)]
 struct LocalCatalogTOC {
-    mods_by_name: HashMap<String, Vec<ModuleDescriptor>>
+    mods_by_name: BTreeMap<String, Vec<ModuleDescriptor>>
 }
 
 impl LocalCatalogTOC {
@@ -200,7 +211,7 @@ impl LocalCatalogTOC {
         }
 
         let mut new_self = Self {
-            mods_by_name: HashMap::new()
+            mods_by_name: BTreeMap::new()
         };
 
         for dir_item_handle in std::fs::read_dir(storage_dir).map_err(|e| e.to_string())? {
@@ -209,8 +220,12 @@ impl LocalCatalogTOC {
             let name_str = file_name.to_str()
                 .ok_or_else(|| format!("Invalid characters found in local cache at path: {}", dir_entry.path().display()))?;
 
-            let descriptor = parse_descriptor_from_dir_name(name_str)?;
-            new_self.add_descriptor(descriptor)?;
+            // Name reserved by GitCatalog.  We may generalize this "reserved" mechanism when
+            // we support additional upstream catalog types
+            if name_str != "catalog.repo" {
+                let descriptor = parse_descriptor_from_dir_name(name_str)?;
+                new_self.add_descriptor(descriptor)?;
+            }
         }
 
         Ok(new_self)
@@ -223,15 +238,19 @@ impl LocalCatalogTOC {
         }
         None
     }
+    /// Returns a Vec containing all ModuleDescriptors in the TOC, sorted by name
+    fn all_sorted_descriptors(&self) -> Vec<ModuleDescriptor> {
+        self.mods_by_name.iter().flat_map(|(_name, desc_vec)| desc_vec).cloned().collect()
+    }
     /// Adds a descriptor to a TOC.  Won't add a duplicate
     fn add_descriptor(&mut self, descriptor: ModuleDescriptor) -> Result<(), String> {
         let desc_vec = self.mods_by_name.entry(descriptor.name().to_owned()).or_insert(vec![]);
         if !desc_vec.contains(&descriptor) {
             desc_vec.push(descriptor);
+            desc_vec.sort_by(|a, b| a.version().cmp(&b.version()));
         }
         Ok(())
     }
-
 }
 
 /// Returns a String that can be used as a directory to cache local files associated

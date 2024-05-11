@@ -246,6 +246,9 @@ impl GitCatalog {
 }
 
 impl ModuleCatalog for GitCatalog {
+    fn display_name(&self) -> String {
+        self.name.clone()
+    }
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
         match self.refresh_catalog() {
             Ok(_) => {},
@@ -306,6 +309,9 @@ impl ModuleLoader for GitModLoader {
 
 
 //TODO-NOW Add some status output when modules are fetched from GIT
-//TODO-NOW implement list methods on the local catalog
 //TODO-NOW implement the managed catalog trait on the local catalog
 //TODO-NOW implement ops to manage the catalog
+//TODO-NOW Implement a MeTTaMod that separates apart the catalog management functions
+//TODO-NOW Implement a builtin-catalog for acccess to std mods
+//TODO-NOW Fix the build without pkg_mgmt feature
+//TODO-NOW Get the repl to immeditately display logs of warn!() or err!()

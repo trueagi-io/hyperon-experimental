@@ -93,6 +93,11 @@ use serde::{Deserialize, Serialize};
 /// `ModuleCatalog` types are closely connected with [ModuleLoader] types because the `ModuleCatalog` must
 /// recognize the module in whatever media it exists, and supply the `ModuleLoader` to load that module
 pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
+    /// The name of the catalog, to be displayed to the user
+    fn display_name(&self) -> String {
+        std::any::type_name::<Self>().to_string()
+    }
+
     /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor>;
 
@@ -594,6 +599,9 @@ impl DirCatalog {
 }
 
 impl ModuleCatalog for DirCatalog {
+    fn display_name(&self) -> String {
+        format!("Dir \"{}\"", self.path.display())
+    }
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
 
         //QUESTION: How should we handle modules with an internal "package-name" that differs from their
@@ -675,6 +683,19 @@ pub struct ModuleDescriptor {
     name: String,
     uid: Option<u64>,
     version: Option<semver::Version>,
+}
+
+impl core::fmt::Display for ModuleDescriptor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(version) = &self.version {
+            write!(f, " @{version}")?;
+        }
+        if let Some(uid) = self.uid {
+            write!(f, " #{uid:016x}")?;
+        }
+        Ok(())
+    }
 }
 
 impl ModuleDescriptor {
