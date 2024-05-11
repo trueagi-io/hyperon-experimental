@@ -1,5 +1,6 @@
 
 use std::path::{Path, PathBuf};
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 
 use crate::metta::runner::*;
@@ -38,6 +39,37 @@ use crate::metta::runner::pkg_mgmt::*;
 //   in isolation might not be the best when considered holistically.  The Requirement API
 //   needs to take that into account.
 //
+
+/// Indicates the desired behavior for updating the locally-cached module
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UpdateMode {
+    /// Fetches the module if it doesn't exist, otherwise leaves it alone
+    FetchIfMissing,
+    /// Attempts to fetch from the remote catalog is the local cached version is older
+    /// than the specified number of seconds.  Otherwise continues with the cached mod
+    TryFetchIfOlderThan(u64),
+    /// Attempts to fetch from the remote catalog.  Continues with the existing module
+    /// if the remote is unavailable
+    TryFetchLatest,
+    /// Fetches the latest from the remote catalog.  Fails if the remote is unavailable
+    FetchLatest,
+}
+
+impl UpdateMode {
+    /// Returns the more aggressive (more likely to fetch) of the two modes
+    pub fn promote_to(self, other: Self) -> Self {
+        match (&self, &other) {
+            (Self::FetchIfMissing, _) => other,
+            (Self::TryFetchIfOlderThan(_), Self::FetchIfMissing) => self,
+            (Self::TryFetchIfOlderThan(t_s), Self::TryFetchIfOlderThan(t_o)) => Self::TryFetchIfOlderThan((*t_s).min(*t_o)),
+            (Self::TryFetchIfOlderThan(_), _) => other,
+            (Self::TryFetchLatest, Self::FetchLatest) => Self::FetchLatest,
+            (Self::TryFetchLatest, _) => Self::TryFetchLatest,
+            _ => Self::FetchLatest
+        }
+    }
+}
+
 pub trait ManagedCatalog: ModuleCatalog {
 
     /// Clears all locally stored modules, resetting the local catalog to an empty state
@@ -47,7 +79,7 @@ pub trait ManagedCatalog: ModuleCatalog {
     /// already exists in the catalog
     ///
     /// NOTE: This method will likely become async in the future
-    fn fetch(&self, descriptor: &ModuleDescriptor) -> Result<(), String>;
+    fn fetch(&self, descriptor: &ModuleDescriptor, update_mode: UpdateMode) -> Result<(), String>;
 
     /// Remove a specific module from the catalog
     fn remove(&self, descriptor: &ModuleDescriptor) -> Result<(), String>;
@@ -57,12 +89,13 @@ pub trait ManagedCatalog: ModuleCatalog {
     ///
     /// NOTE: This API will likely change in the future.  See "NOTE FOR THE FUTURE" in comments
     /// for `ManagedCatalog`
-    fn fetch_newest_for_all(&self) -> Result<(), String> {
+    fn fetch_newest_for_all(&self, update_mode: UpdateMode) -> Result<(), String> {
+        self.sync_toc(update_mode)?;
         let iter = self.list_name_uid_pairs()
             .ok_or_else(|| "managed catalog must support `list` method".to_string())?;
         for (name, uid) in iter {
             if let Some(desc) = self.lookup_newest_with_uid_and_version_req(&name, uid, None) {
-                self.fetch(&desc)?;
+                self.fetch(&desc, update_mode)?;
             }
         }
         Ok(())
@@ -71,7 +104,7 @@ pub trait ManagedCatalog: ModuleCatalog {
 
 #[derive(Debug)]
 pub struct LocalCatalog {
-    _name: String,
+    name: String,
     upstream_catalogs: Vec<Box<dyn ModuleCatalog>>,
     storage_dir: PathBuf,
     local_toc: Mutex<LocalCatalogTOC>,
@@ -83,7 +116,7 @@ impl LocalCatalog {
         let local_toc = LocalCatalogTOC::build_from_dir(&storage_dir)?;
 
         Ok(Self {
-            _name: name.to_string(),
+            name: name.to_string(),
             upstream_catalogs: vec![],
             storage_dir,
             local_toc: Mutex::new(local_toc),
@@ -99,25 +132,16 @@ impl LocalCatalog {
         let local_toc = self.local_toc.lock().unwrap();
         local_toc.lookup_by_name(name)
     }
-    //TODO-NOW, Delete this, unneeded, I think
-    // fn lookup_by_descriptor_in_index(&self, desc: &ModuleDescriptor) -> Result<Option<&str>, String> {
-    //     let local_index = self.local_index.lock().unwrap();
-    //     if let Some(descriptors) = local_index.mods.get(desc.name()) {
-    //         for index_desc in mods {
-    //             if index_desc == desc {
-    //                 return Ok(Some(dir_name));
-    //             }
-    //         }
-    //     }
-    //     Ok(None)
-    // }
-
     /// Adds the [ModuleDescriptor] to the TOC if it doesn't exist.  Won't create duplicates
     fn add_to_toc(&self, descriptor: ModuleDescriptor) -> Result<(), String> {
         let mut local_toc = self.local_toc.lock().unwrap();
         local_toc.add_descriptor(descriptor)
     }
-    pub(crate) fn get_loader_with_explicit_refresh(&self, descriptor: &ModuleDescriptor, should_refresh: bool) -> Result<Box<dyn ModuleLoader>, String> {
+    fn list_toc(&self) -> Vec<ModuleDescriptor> {
+        let local_toc = self.local_toc.lock().unwrap();
+        local_toc.all_sorted_descriptors()
+    }
+    pub(crate) fn get_loader_with_explicit_refresh(&self, descriptor: &ModuleDescriptor, update_mode: UpdateMode) -> Result<Box<dyn ModuleLoader>, String> {
 
         //Figure out which upstream catalog furnished this descriptor by trying each one
         let mut upstream_loader = None;
@@ -136,7 +160,7 @@ impl LocalCatalog {
                 // TODO: It would be nice to have the option here to pull a different but compatible
                 // mod from the upstream catalogs; however we don't have the original requirement info,
                 // so currently we cannot do that.  See the write-up above about the "Requirement API".
-                return Err(format!("Upstream Catalogs can no longer supply module {}", descriptor.name()));
+                return Err(format!("Upstream Catalogs can no longer supply module \"{descriptor}\""));
             }
         };
 
@@ -148,32 +172,15 @@ impl LocalCatalog {
         self.add_to_toc(descriptor.to_owned())?;
 
         //Wrap the upstream loader in a loader object from this catalog
-        let wrapper_loader = LocalCatalogLoader {local_cache_dir, upstream_loader, should_refresh};
+        let wrapper_loader = LocalCatalogLoader {local_cache_dir, upstream_loader, update_mode};
         Ok(Box::new(wrapper_loader))
     }
 }
 
-//TODO-NOW, I think this is also unneeded
-// fn read_index_file(file_path: &Path) -> LocalCatalogTOC {
-//     match read_to_string(&file_path) {
-//         Ok(file_contents) => {
-//             serde_json::from_str(&file_contents).unwrap()
-//         },
-//         Err(_e) => {
-//             LocalCatalogTOC::default()
-//         }
-//     }
-// }
-
-//TODO-NOW, I think this is also unneeded
-// fn write_index_file(file_path: &Path, catalog_file_data: &LocalCatalogFile) -> Result<(), String> {
-//     let file = File::create(file_path).map_err(|e| e.to_string())?;
-//     let mut writer = BufWriter::new(file);
-//     serde_json::to_writer(&mut writer, catalog_file_data).map_err(|e| e.to_string())?;
-//     writer.flush().map_err(|e| e.to_string())
-// }
-
 impl ModuleCatalog for LocalCatalog {
+    fn display_name(&self) -> String {
+        self.name.clone()
+    }
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
 
         //If we have some matching modules in the local cache then return them
@@ -194,7 +201,19 @@ impl ModuleCatalog for LocalCatalog {
         vec![]
     }
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
-        self.get_loader_with_explicit_refresh(descriptor, false)
+        self.get_loader_with_explicit_refresh(descriptor, UpdateMode::FetchIfMissing)
+    }
+    fn list<'a>(&'a self) -> Option<Box<dyn Iterator<Item=ModuleDescriptor> + 'a>> {
+        Some(Box::new(self.list_toc().into_iter()))
+    }
+    fn sync_toc(&self, update_mode: UpdateMode) -> Result<(), String> {
+        for upstream in self.upstream_catalogs.iter() {
+            upstream.sync_toc(update_mode)?;
+        }
+        Ok(())
+    }
+    fn as_managed(&self) -> Option<&dyn ManagedCatalog> {
+        Some(self)
     }
 }
 
@@ -202,23 +221,67 @@ impl ModuleCatalog for LocalCatalog {
 #[derive(Debug)]
 struct LocalCatalogLoader {
     local_cache_dir: PathBuf,
-    should_refresh: bool,
+    update_mode: UpdateMode,
     upstream_loader: Box<dyn ModuleLoader>
 }
 
 impl ModuleLoader for LocalCatalogLoader {
-    fn prepare(&self, _local_dir: Option<&Path>, should_refresh: bool) -> Result<Option<Box<dyn ModuleLoader>>, String> {
-        self.upstream_loader.prepare(Some(&self.local_cache_dir), should_refresh | self.should_refresh)
+    fn prepare(&self, _local_dir: Option<&Path>, update_mode: UpdateMode) -> Result<Option<Box<dyn ModuleLoader>>, String> {
+        let update_mode = self.update_mode.promote_to(update_mode);
+        self.upstream_loader.prepare(Some(&self.local_cache_dir), update_mode)
     }
     fn load(&self, _context: &mut RunContext) -> Result<(), String> {
         unreachable!() //We will substitute the `upstream_loader` during prepare
     }
 }
 
+impl ManagedCatalog for LocalCatalog {
+    fn clear_all(&self) -> Result<(), String> {
+        if self.storage_dir.is_dir() {
+            std::fs::remove_dir_all(&self.storage_dir).map_err(|e| e.to_string())?;
+        }
+        let mut local_toc = self.local_toc.lock().unwrap();
+        *local_toc = LocalCatalogTOC::build_from_dir(&self.storage_dir)?;
+        Ok(())
+    }
+    fn fetch(&self, descriptor: &ModuleDescriptor, update_mode: UpdateMode) -> Result<(), String> {
+        let loader = self.get_loader_with_explicit_refresh(descriptor, update_mode)?;
+        let _ = loader.prepare(None, update_mode)?;
+        Ok(())
+    }
+    fn remove(&self, descriptor: &ModuleDescriptor) -> Result<(), String> {
+        let cache_dir_name = dir_name_from_descriptor(descriptor);
+        let mod_cache_dir = self.storage_dir.join(cache_dir_name);
+        if mod_cache_dir.is_dir() {
+            std::fs::remove_dir_all(mod_cache_dir).map_err(|e| e.to_string())?;
+            let mut local_toc = self.local_toc.lock().unwrap();
+            local_toc.remove_descriptor(descriptor)
+        } else {
+            Err("No such module in catalog".to_string())
+        }
+    }
+    fn fetch_newest_for_all(&self, update_mode: UpdateMode) -> Result<(), String> {
+        self.sync_toc(update_mode)?;
+        let iter = self.list_name_uid_pairs()
+            .ok_or_else(|| "managed catalog must support `list` method".to_string())?;
+        for (name, uid) in iter {
+
+            //Find the newest version of the mod in each upstream catalog
+            let upstream_bests: Vec<ModuleDescriptor> = self.upstream_catalogs.iter().filter_map(|upstream| {
+                upstream.lookup_newest_with_uid_and_version_req(&name, uid, None) 
+            }).collect();
+            if let Some(newest_desc) = find_newest_module(upstream_bests.into_iter()) {
+                self.fetch(&newest_desc, update_mode)?;
+            }
+        }
+        Ok(())
+    }
+}
+
 /// A Table of Contents (TOC) for a LocalCatalog
 #[derive(Debug)]
 struct LocalCatalogTOC {
-    mods_by_name: HashMap<String, Vec<ModuleDescriptor>>
+    mods_by_name: BTreeMap<String, Vec<ModuleDescriptor>>
 }
 
 impl LocalCatalogTOC {
@@ -233,7 +296,7 @@ impl LocalCatalogTOC {
         }
 
         let mut new_self = Self {
-            mods_by_name: HashMap::new()
+            mods_by_name: BTreeMap::new()
         };
 
         for dir_item_handle in std::fs::read_dir(storage_dir).map_err(|e| e.to_string())? {
@@ -242,8 +305,12 @@ impl LocalCatalogTOC {
             let name_str = file_name.to_str()
                 .ok_or_else(|| format!("Invalid characters found in local cache at path: {}", dir_entry.path().display()))?;
 
-            let descriptor = parse_descriptor_from_dir_name(name_str)?;
-            new_self.add_descriptor(descriptor)?;
+            // Name reserved by GitCatalog.  We may generalize this "reserved" mechanism when
+            // we support additional upstream catalog types
+            if name_str != "_catalog.repo" && name_str != "_catalog.json" {
+                let descriptor = parse_descriptor_from_dir_name(name_str)?;
+                new_self.add_descriptor(descriptor)?;
+            }
         }
 
         Ok(new_self)
@@ -256,15 +323,34 @@ impl LocalCatalogTOC {
         }
         None
     }
+    /// Returns a Vec containing all ModuleDescriptors in the TOC, sorted by name
+    fn all_sorted_descriptors(&self) -> Vec<ModuleDescriptor> {
+        self.mods_by_name.iter().flat_map(|(_name, desc_vec)| desc_vec).cloned().collect()
+    }
     /// Adds a descriptor to a TOC.  Won't add a duplicate
     fn add_descriptor(&mut self, descriptor: ModuleDescriptor) -> Result<(), String> {
         let desc_vec = self.mods_by_name.entry(descriptor.name().to_owned()).or_insert(vec![]);
         if !desc_vec.contains(&descriptor) {
             desc_vec.push(descriptor);
+            desc_vec.sort_by(|a, b| a.version().cmp(&b.version()));
         }
         Ok(())
     }
-
+    fn remove_descriptor(&mut self, descriptor: &ModuleDescriptor) -> Result<(), String> {
+        fn ret_err() -> Result<(), String> { Err("No such module in catalog".to_string()) }
+        match self.mods_by_name.get_mut(descriptor.name()) {
+            Some(desc_vec) => {
+                match desc_vec.iter().position(|vec_desc| vec_desc==descriptor) {
+                    Some(idx) => {
+                        desc_vec.remove(idx);
+                        Ok(())
+                    },
+                    None => ret_err()
+                }
+            },
+            None => ret_err()
+        }
+    }
 }
 
 /// Returns a String that can be used as a directory to cache local files associated
@@ -300,31 +386,3 @@ pub(crate) fn parse_descriptor_from_dir_name(dir_name: &str) -> Result<ModuleDes
     };
     Ok(ModuleDescriptor::new(name.to_string(), version, uid))
 }
-
-//TODO-NOW: This below documents my thought process, but it's probably of little value
-// now that the design has been implemented fully
-//
-//DISCUSSION: Who is responsible for managing the on-disk modules for a ManagedCatalog,
-// between the LocalCatalog object and the upstream ModuleCatalogs?
-//
-// The answer to that question comes down to a few sub-questions.
-//
-// Firstly, There are several desiderata.
-// 1. We don't want the managed catalog to be limited to a specific upstream format, e.g git
-// 2. But We want the local catalog to be able to delete (ie manage) modules without risking
-//  corrupting indices and other state kept upstream
-// 3. We don't want unnecessary file moving, and certainly no duplication
-//
-//So...
-// - If we make the LocalCatalog responsible, and create a mechanism for the local catalog
-// to define a directory and instruct the upstream catalog to use that directory, e.g.
-// through the "prepare" method of the loader, that feels cleanest.
-//
-// However, the monkey wrench comes in when we consider a module that is a subdirectory of
-//  a git repo.  We need to hold the repo in the cache, but export the module from the
-//  subdirectory.  Which means the local cache is aware of the quirks of the git format.
-//
-// So it's not enough to say that once the module is "prepared" the upstream catalog can
-//  wash its hands.  The prepare method needs to take a directory as input, which returns
-//  a new loader, with the directory as part of the new loader's internal state.
-//

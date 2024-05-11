@@ -93,6 +93,11 @@ use serde::{Deserialize, Serialize};
 /// `ModuleCatalog` types are closely connected with [ModuleLoader] types because the `ModuleCatalog` must
 /// recognize the module in whatever media it exists, and supply the `ModuleLoader` to load that module
 pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
+    /// The name of the catalog, to be displayed to the user
+    fn display_name(&self) -> String {
+        std::any::type_name::<Self>().to_string()
+    }
+
     /// Returns the [ModuleDescriptor] for every module in the `ModuleCatalog` with the specified name
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor>;
 
@@ -172,6 +177,17 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }
+
+    /// Synchronize the catalog's internal tables, so fresh upstream info is reflected
+    /// locally.  Does not fetch any modules
+    fn sync_toc(&self, _update_mode: UpdateMode) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Returns the catalog as a [ManagedCatalog] if the catalog supports active management
+    fn as_managed(&self) -> Option<&dyn ManagedCatalog> {
+        None
+    }
 }
 
 impl dyn ModuleCatalog {
@@ -197,7 +213,7 @@ fn filter_by_version_req<'a>(mods_iter: impl Iterator<Item=ModuleDescriptor> + '
 
 /// Internal function to find the newest module in a set.  See [ModuleCatalog::lookup_newest_with_version_req]
 /// for an explanation of behavior
-fn find_newest_module(mods_iter: impl Iterator<Item=ModuleDescriptor>) -> Option<ModuleDescriptor> {
+pub(crate) fn find_newest_module(mods_iter: impl Iterator<Item=ModuleDescriptor>) -> Option<ModuleDescriptor> {
     let mut highest_version: Option<semver::Version> = None;
     let mut ret_desc = None;
     for desc in mods_iter {
@@ -295,7 +311,7 @@ impl PkgInfo {
             }
 
             //Get the module if it's specified with git keys
-            if let Some(pair) = entry.git_location.get_loader_in_explicit_catalog(mod_name, false, context.metta.environment())? {
+            if let Some(pair) = entry.git_location.get_loader_in_explicit_catalog(mod_name, UpdateMode::FetchIfMissing, context.metta.environment())? {
                 return Ok(Some(pair));
             }
 
@@ -327,7 +343,7 @@ impl PkgInfo {
             log::trace!("Looking for module: \"{mod_name}\" inside {catalog:?}");
             match catalog.lookup_newest_with_version_req(mod_name, version_req) {
                 Some(descriptor) => {
-                    log::info!("Found module: \"{mod_name}\" inside {catalog:?}");
+                    log::info!("Found module: \"{mod_name}\" inside {:?}", catalog.display_name());
                     log::info!("Preparing to load module: \'{}\' as \'{}\'", descriptor.name, name_path);
                     return Ok(Some((catalog.get_loader(&descriptor)?, descriptor)))
                 },
@@ -594,6 +610,9 @@ impl DirCatalog {
 }
 
 impl ModuleCatalog for DirCatalog {
+    fn display_name(&self) -> String {
+        format!("Dir \"{}\"", self.path.display())
+    }
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
 
         //QUESTION: How should we handle modules with an internal "package-name" that differs from their
@@ -675,6 +694,19 @@ pub struct ModuleDescriptor {
     name: String,
     uid: Option<u64>,
     version: Option<semver::Version>,
+}
+
+impl core::fmt::Display for ModuleDescriptor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(version) = &self.version {
+            write!(f, " @{version}")?;
+        }
+        if let Some(uid) = self.uid {
+            write!(f, " #{uid:016x}")?;
+        }
+        Ok(())
+    }
 }
 
 impl ModuleDescriptor {

@@ -190,7 +190,7 @@ impl MettaMod {
         }
 
         // Get the space associated with the dependent module
-        log::info!("import_all_from_dependency: importing from {} into {}", mod_ptr.path(), self.path());
+        log::debug!("import_all_from_dependency: importing from {} into {}", mod_ptr.path(), self.path());
         let (dep_space, transitive_deps) = mod_ptr.stripped_space();
 
         // Add a new Grounded Space atom to the &self space, so we can access the dependent module
@@ -484,7 +484,7 @@ impl ModuleInitState {
     pub fn init_module(&mut self, runner: &Metta, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
 
         //Give the prepare function a chance to run, in case it hasn't yet
-        let loader = match loader.prepare(None, false)? {
+        let loader = match loader.prepare(None, UpdateMode::FetchIfMissing)? {
             Some(new_loader) => new_loader,
             None => loader
         };
@@ -613,18 +613,6 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
         None
     }
 
-    //TODO-NOW Delete this: I changed my mind about this interface - I now think the design should commit to an
-    // injective mapping between ModuleDescriptors and directory names
-    //
-    // /// Suggests a name that can be used by the implementation for locally cached module files
-    // ///
-    // /// The returned name should be deterministic, but unique to the module and its version, etc.
-    // /// For example, a git branch or a remote server URL may be encoded into the name.  The name
-    // /// must be composed of only legal file name characters, and must not contain the '/' char.
-    // fn cache_dir_name(&self) -> Option<String> {
-    //     None
-    // }
-
     /// Prepares a module for loading.  This method is responsible for fetching resources
     /// from the network, performing build or pre-computation steps, or any other operations
     /// that only need to be performed once and then may be cached locally
@@ -633,7 +621,7 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     /// loader will replace it.
     ///
     /// NOTE: This method may become async in the future
-    fn prepare(&self, _local_dir: Option<&Path>, _should_refresh: bool) -> Result<Option<Box<dyn ModuleLoader>>, String> {
+    fn prepare(&self, _local_dir: Option<&Path>, _update_mode: UpdateMode) -> Result<Option<Box<dyn ModuleLoader>>, String> {
         Ok(None)
     }
 
