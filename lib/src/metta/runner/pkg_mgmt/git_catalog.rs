@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::fs::File;
 use std::io::{BufReader, BufWriter};
 use std::sync::Mutex;
+use std::collections::BTreeMap;
 
 use serde::{Serialize, Deserialize};
 
@@ -107,15 +108,14 @@ impl ModuleGitLocation {
 /// Struct that matches the catalog.json file fetched from the `_catalog.repo`
 #[derive(Serialize, Deserialize, Debug, Default)]
 struct CatalogFileFormat {
-    //TODO-NOW.  Upon reflection, I see no good reason not to use a HashMap here instead of a Vec
-    modules: Vec<CatalogFileMod>
+    modules: BTreeMap<String, Vec<CatalogFileMod>>
 }
 
 impl CatalogFileFormat {
     fn find_mods_with_name(&self, name: &str) -> Vec<ModuleDescriptor> {
         let mut results = vec![];
-        for cat_mod in self.modules.iter() {
-            if cat_mod.name == name {
+        if let Some(cat_mod_vec) = self.modules.get(name) {
+            for cat_mod in cat_mod_vec {
                 let uid = cat_mod.git_location.uid();
                 let descriptor = ModuleDescriptor::new(name.to_string(), cat_mod.version.clone(), Some(uid));
                 results.push(descriptor);
@@ -123,11 +123,15 @@ impl CatalogFileFormat {
         }
         results
     }
-    fn find_mod_idx_with_descriptor(&self, descriptor: &ModuleDescriptor) -> Option<usize> {
-        for (mod_idx, cat_mod) in self.modules.iter().enumerate() {
-            if cat_mod.name == descriptor.name() && cat_mod.version.as_ref() == descriptor.version() {
-                if Some(cat_mod.git_location.uid()) == descriptor.uid() {
-                    return Some(mod_idx);
+    /// Scans the catalog looking for a single module that matches the provided descriptor
+    fn find_mod_with_descriptor(&self, descriptor: &ModuleDescriptor) -> Option<&CatalogFileMod> {
+        if let Some(cat_mod_vec) = self.modules.get(descriptor.name()) {
+            for cat_mod in cat_mod_vec.iter() {
+                if cat_mod.version.as_ref() == descriptor.version() {
+                    //NOTE ModuleDescriptors from GitCatalog always have a uid
+                    if Some(cat_mod.git_location.uid()) == descriptor.uid() {
+                        return Some(cat_mod);
+                    }
                 }
             }
         }
@@ -136,8 +140,9 @@ impl CatalogFileFormat {
     fn add(&mut self, new_mod: CatalogFileMod) -> Result<ModuleDescriptor, String> {
         let uid = new_mod.git_location.uid();
         let descriptor = ModuleDescriptor::new(new_mod.name.clone(), new_mod.version.clone(), Some(uid));
-        if self.find_mod_idx_with_descriptor(&descriptor).is_none() {
-            self.modules.push(new_mod);
+        if self.find_mod_with_descriptor(&descriptor).is_none() {
+            let cat_mod_vec = self.modules.entry(new_mod.name.clone()).or_insert(vec![]);
+            cat_mod_vec.push(new_mod);
         }
         Ok(descriptor)
     }
@@ -147,6 +152,7 @@ impl CatalogFileFormat {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 struct CatalogFileMod {
     name: String,
+    #[serde(default)]
     version: Option<semver::Version>,
     #[serde(flatten)]
     git_location: ModuleGitLocation,
@@ -220,14 +226,6 @@ impl GitCatalog {
         let catalog = cat_lock.as_ref().unwrap();
         catalog.find_mods_with_name(name)
     }
-    /// Scans the catalog looking for a single module that matches the provided descriptor
-    fn find_mod_idx_with_descriptor(&self, descriptor: &ModuleDescriptor) -> Option<usize> {
-        let cat_lock = self.catalog.lock().unwrap();
-        match &*cat_lock {
-            Some(catalog) => catalog.find_mod_idx_with_descriptor(descriptor),
-            None => None
-        }
-    }
     fn refresh_catalog(&self, update_mode: UpdateMode) -> Result<(), String> {
         if let Some(catalog_repo) = &self.catalog_repo {
             //Update the catalog from the git cache
@@ -293,12 +291,10 @@ impl ModuleCatalog for GitCatalog {
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
         self.refresh_catalog(UpdateMode::TryFetchIfOlderThan(self.refresh_time))?;
 
-        let mod_idx = self.find_mod_idx_with_descriptor(descriptor)
-            .ok_or_else(|| format!("Error: module {descriptor} no longer exists in catalog {}", self.display_name()))?;
-
         let cat_lock = self.catalog.lock().unwrap();
         let catalog = cat_lock.as_ref().unwrap();
-        let module = catalog.modules.get(mod_idx).unwrap();
+        let module = catalog.find_mod_with_descriptor(descriptor)
+            .ok_or_else(|| format!("Error: module {descriptor} no longer exists in catalog {}", self.display_name()))?;
 
         Ok(Box::new(GitModLoader{
             module: module.clone(),
@@ -337,9 +333,7 @@ impl ModuleLoader for GitModLoader {
     }
 }
 
-
 //TODO-NOW implement catalog clear op
-//TODO-NOW migrate remote catalog file to a BTreeMap, and test auto-upgrading to new version
 //TODO-NOW Implement a MeTTaMod that separates apart the catalog management functions
 //TODO-NOW Implement a builtin-catalog for acccess to std mods
 //TODO-NOW Fix the build without pkg_mgmt feature

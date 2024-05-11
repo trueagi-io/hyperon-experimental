@@ -260,6 +260,22 @@ impl ManagedCatalog for LocalCatalog {
             Err("No such module in catalog".to_string())
         }
     }
+    fn fetch_newest_for_all(&self, update_mode: UpdateMode) -> Result<(), String> {
+        self.sync_toc(update_mode)?;
+        let iter = self.list_name_uid_pairs()
+            .ok_or_else(|| "managed catalog must support `list` method".to_string())?;
+        for (name, uid) in iter {
+
+            //Find the newest version of the mod in each upstream catalog
+            let upstream_bests: Vec<ModuleDescriptor> = self.upstream_catalogs.iter().filter_map(|upstream| {
+                upstream.lookup_newest_with_uid_and_version_req(&name, uid, None) 
+            }).collect();
+            if let Some(newest_desc) = find_newest_module(upstream_bests.into_iter()) {
+                self.fetch(&newest_desc, update_mode)?;
+            }
+        }
+        Ok(())
+    }
 }
 
 /// A Table of Contents (TOC) for a LocalCatalog

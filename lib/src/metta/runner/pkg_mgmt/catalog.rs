@@ -213,7 +213,7 @@ fn filter_by_version_req<'a>(mods_iter: impl Iterator<Item=ModuleDescriptor> + '
 
 /// Internal function to find the newest module in a set.  See [ModuleCatalog::lookup_newest_with_version_req]
 /// for an explanation of behavior
-fn find_newest_module(mods_iter: impl Iterator<Item=ModuleDescriptor>) -> Option<ModuleDescriptor> {
+pub(crate) fn find_newest_module(mods_iter: impl Iterator<Item=ModuleDescriptor>) -> Option<ModuleDescriptor> {
     let mut highest_version: Option<semver::Version> = None;
     let mut ret_desc = None;
     for desc in mods_iter {
