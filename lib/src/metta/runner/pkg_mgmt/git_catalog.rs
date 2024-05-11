@@ -11,44 +11,6 @@ use serde::Deserialize;
 use crate::metta::runner::*;
 use crate::metta::runner::pkg_mgmt::{*, git_cache::*};
 
-//TODO: TODO-NOW.  This is almost implemented. But keeping these notes until complete
-// * Funtion to trigger explicit updates.  Accessible from metta ops
-//   - Update specific module, update to a specific version, latest, or latest stable
-//   - update all modules, to latest or latest stable
-//   - implemented in a way that also works on the EXPLICIT_GIT_MOD_CACHE (e.g. by cache dir)
-//
-//Current thinking:
-// * Implement the "prepare" method on ModuleLoader
-// * Implement an "all" method on Catalog, and possibly "all_mod_names" which lists sorted mod names
-//
-//Less sure about this but... I think that we want two objects both implementing Catalog, and
-// both sharing the same on-disk backing.  One includes the remote fetching, while the other
-// allows for explicit manipulation.
-//
-// * Implement a "ManagedCatalog" trait with methods:
-//      * origin_catalog ????
-//      * local_catalog (accessor) ????
-//      * clear_all
-//      * remove_by_name(mod_name) ????? (probably not)
-//      * remove_by_desc(descriptor)
-//      * fetch(descriptor)
-//      * upgrade(descriptor) (performs lookup_newest, then if newer is found, removes existing, and fetches)
-//      * upgrade_all()
-
-//QUESTION: I'm really not sure about whether the explicit git cache is a catalog.
-//  The No arguments:
-//      not queryable
-//
-//  The Yes arguments:
-//      packages should be upgradable
-//
-//I think the way to square this circle is to make catalog query functions that work a descriptor uid
-//
-
-//UPDATE: Need to implement ManagedCatalog for an object that shares the same back-end with
-// GitCatalog,
-// - also add the `prepare` interface to the module loader
-
 /// A set of keys describing how to access a module via git.  Deserialized from within a [PkgInfo]
 ///  or a catalog file [CatalogFileFormat]
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -130,20 +92,6 @@ impl ModuleGitLocation {
         );
         ModuleDescriptor::uid_from_ident_bytes_and_fmt_id(unique_string.as_bytes(), 0)
     }
-    //TODO-NOW: Now, delete this.  Unnecessary
-    // pub(crate) fn cache_dir_name(&self, mod_name: &str, version: Option<&semver::Version>) -> String {
-    //     let uid = self.uid();
-
-    //     let repo_name_string;
-    //     let mod_repo_name = match version {
-    //         Some(version) => {
-    //             repo_name_string = format!("{mod_name}-{version}");
-    //             &repo_name_string
-    //         },
-    //         None => mod_name
-    //     };
-    //     format!("{mod_repo_name}.{uid:016x}")
-    // }
     /// Returns a new ModuleGitLocation.  This is a convenience; the usual interface involves deserializing this struct
     pub(crate) fn new(url: String) -> Self {
         let mut new_self = Self::default();
@@ -329,38 +277,6 @@ impl ModuleCatalog for GitCatalog {
     }
 }
 
-//TODO-NOW: I don't think we need this.  We can just use an instance of LocalCatalog
-// /// Provides an interface to access, inspect, and upgrade the modules fetched from git using
-// /// a specific URL
-// #[derive(Debug)]
-// pub struct ExplicitGitCatalog;
-
-// impl ExplicitGitCatalog {
-//     pub(crate) fn get_explicit_loader(env: &Environment, name: String, version: Option<semver::Version>, git_location: ModuleGitLocation) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
-//         let module = CatalogFileMod {
-//             name,
-//             version,
-//             git_location,
-//         };
-//         let descriptor = module.get_descriptor();
-//         let loader = Box::new(GitModLoader{
-//             module: module,
-//             fmts: env.fs_mod_formats.clone(),
-//         });
-//         Ok(Some((loader, descriptor)))
-//     }
-// }
-
-// impl ModuleCatalog for ExplicitGitCatalog {
-//     fn lookup(&self, _name: &str) -> Vec<ModuleDescriptor> {
-//         unreachable!() //Nobody should be searching the ExplicitGitCatalog
-//     }
-//     fn get_loader(&self, _descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
-//         //The ExplicitGitCatalog object exists only for management of the cache.  Use `get_explicit_loader`
-//         unreachable!()
-//     }
-// }
-
 #[derive(Debug)]
 pub struct GitModLoader {
     module: CatalogFileMod,
@@ -368,10 +284,6 @@ pub struct GitModLoader {
 }
 
 impl ModuleLoader for GitModLoader {
-    //TODO-NOW: Delete this
-    // fn cache_dir_name(&self) -> Option<String> {
-    //     Some(self.module.git_location.cache_dir_name(&self.module.name, self.module.version.as_ref()))
-    // }
     fn prepare(&self, local_dir: Option<&Path>, should_refresh: bool) -> Result<Option<Box<dyn ModuleLoader>>, String> {
         let update_mode = match should_refresh {
             true => UpdateMode::TryPullLatest,

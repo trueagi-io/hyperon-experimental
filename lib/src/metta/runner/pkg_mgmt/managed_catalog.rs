@@ -99,19 +99,6 @@ impl LocalCatalog {
         let local_toc = self.local_toc.lock().unwrap();
         local_toc.lookup_by_name(name)
     }
-    //TODO-NOW, Delete this, unneeded, I think
-    // fn lookup_by_descriptor_in_index(&self, desc: &ModuleDescriptor) -> Result<Option<&str>, String> {
-    //     let local_index = self.local_index.lock().unwrap();
-    //     if let Some(descriptors) = local_index.mods.get(desc.name()) {
-    //         for index_desc in mods {
-    //             if index_desc == desc {
-    //                 return Ok(Some(dir_name));
-    //             }
-    //         }
-    //     }
-    //     Ok(None)
-    // }
-
     /// Adds the [ModuleDescriptor] to the TOC if it doesn't exist.  Won't create duplicates
     fn add_to_toc(&self, descriptor: ModuleDescriptor) -> Result<(), String> {
         let mut local_toc = self.local_toc.lock().unwrap();
@@ -152,26 +139,6 @@ impl LocalCatalog {
         Ok(Box::new(wrapper_loader))
     }
 }
-
-//TODO-NOW, I think this is also unneeded
-// fn read_index_file(file_path: &Path) -> LocalCatalogTOC {
-//     match read_to_string(&file_path) {
-//         Ok(file_contents) => {
-//             serde_json::from_str(&file_contents).unwrap()
-//         },
-//         Err(_e) => {
-//             LocalCatalogTOC::default()
-//         }
-//     }
-// }
-
-//TODO-NOW, I think this is also unneeded
-// fn write_index_file(file_path: &Path, catalog_file_data: &LocalCatalogFile) -> Result<(), String> {
-//     let file = File::create(file_path).map_err(|e| e.to_string())?;
-//     let mut writer = BufWriter::new(file);
-//     serde_json::to_writer(&mut writer, catalog_file_data).map_err(|e| e.to_string())?;
-//     writer.flush().map_err(|e| e.to_string())
-// }
 
 impl ModuleCatalog for LocalCatalog {
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
@@ -300,31 +267,3 @@ pub(crate) fn parse_descriptor_from_dir_name(dir_name: &str) -> Result<ModuleDes
     };
     Ok(ModuleDescriptor::new(name.to_string(), version, uid))
 }
-
-//TODO-NOW: This below documents my thought process, but it's probably of little value
-// now that the design has been implemented fully
-//
-//DISCUSSION: Who is responsible for managing the on-disk modules for a ManagedCatalog,
-// between the LocalCatalog object and the upstream ModuleCatalogs?
-//
-// The answer to that question comes down to a few sub-questions.
-//
-// Firstly, There are several desiderata.
-// 1. We don't want the managed catalog to be limited to a specific upstream format, e.g git
-// 2. But We want the local catalog to be able to delete (ie manage) modules without risking
-//  corrupting indices and other state kept upstream
-// 3. We don't want unnecessary file moving, and certainly no duplication
-//
-//So...
-// - If we make the LocalCatalog responsible, and create a mechanism for the local catalog
-// to define a directory and instruct the upstream catalog to use that directory, e.g.
-// through the "prepare" method of the loader, that feels cleanest.
-//
-// However, the monkey wrench comes in when we consider a module that is a subdirectory of
-//  a git repo.  We need to hold the repo in the cache, but export the module from the
-//  subdirectory.  Which means the local cache is aware of the quirks of the git format.
-//
-// So it's not enough to say that once the module is "prepared" the upstream catalog can
-//  wash its hands.  The prepare method needs to take a directory as input, which returns
-//  a new loader, with the directory as part of the new loader's internal state.
-//

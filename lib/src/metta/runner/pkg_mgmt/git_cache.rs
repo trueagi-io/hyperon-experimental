@@ -20,6 +20,12 @@ use git2::{*, build::*};
 #[cfg(feature = "git")]
 const TIMESTAMP_FILENAME: &'static str = "_timestamp_";
 
+//NOTE: When the "git" feature is not enabled, we can still access CachedRepos that have
+// already been pulled locally.  However we cannot update them or pull new ones.  This
+// theoretically allows for one tool to be used to update and pull remote repos while
+// other tools linking hyperon without the "git" feature may then access those repos. That
+// said, having multiple tools that link hyperon is inviting version incompatibilities.
+
 /// Indicates the desired behavior for updating the locally-cached repo
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UpdateMode {

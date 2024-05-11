@@ -613,18 +613,6 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
         None
     }
 
-    //TODO-NOW Delete this: I changed my mind about this interface - I now think the design should commit to an
-    // injective mapping between ModuleDescriptors and directory names
-    //
-    // /// Suggests a name that can be used by the implementation for locally cached module files
-    // ///
-    // /// The returned name should be deterministic, but unique to the module and its version, etc.
-    // /// For example, a git branch or a remote server URL may be encoded into the name.  The name
-    // /// must be composed of only legal file name characters, and must not contain the '/' char.
-    // fn cache_dir_name(&self) -> Option<String> {
-    //     None
-    // }
-
     /// Prepares a module for loading.  This method is responsible for fetching resources
     /// from the network, performing build or pre-computation steps, or any other operations
     /// that only need to be performed once and then may be cached locally
