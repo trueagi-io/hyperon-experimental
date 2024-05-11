@@ -21,8 +21,6 @@ use regex::Regex;
 use super::arithmetics::*;
 use super::string::*;
 
-pub const VOID_SYMBOL : Atom = sym!("%void%");
-
 fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
 }
@@ -1409,7 +1407,7 @@ mod non_minimal_only_stdlib {
                 Ok(result) if result.is_empty() => {
                     cases.into_iter()
                         .find_map(|(pattern, template, _external_vars)| {
-                            if pattern == VOID_SYMBOL {
+                            if pattern == EMPTY_SYMBOL {
                                 Some(template)
                             } else {
                                 None
@@ -2094,10 +2092,10 @@ mod tests {
         let case_op = CaseOp::new(space.clone());
 
         assert_eq!(case_op.execute(&mut vec![expr!(("foo")),
-                expr!(((n "B") n) ("%void%" "D"))]),
+                expr!(((n "B") n) ("Empty" "D"))]),
             Ok(vec![Atom::sym("A")]));
         assert_eq!(case_op.execute(&mut vec![expr!({MatchOp{}} {space} ("B" "C") ("C" "B")),
-                expr!(((n "C") n) ("%void%" "D"))]),
+                expr!(((n "C") n) ("Empty" "D"))]),
             Ok(vec![Atom::sym("D")]));
     }
 

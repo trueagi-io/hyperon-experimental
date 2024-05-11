@@ -18,7 +18,15 @@ If you want to contribute the project please see the [contribution guide](./docs
 If you find troubles with the installation, see the [Troubleshooting](#troubleshooting) section below.
 For development related instructions see the [development guide](./docs/DEVELOPMENT.md).
 
-# Prepare environment
+# Using the latest release version
+
+It is the most simple way of getting MeTTa interpreter especially if you are a Python developer.
+The following command installs the latest release version from PyPi package repository:
+```
+python3 -m pip install hyperon
+```
+
+# Prepare development environment
 
 ## Docker
 
@@ -26,6 +34,17 @@ A docker image can be used as a ready to run stable and predictable development
 environment. Please keep in mind that resulting image contains temporary build
 files and takes a lot of a disk space. It is not recommended to distribute it
 as an image for running MeTTa because of its size.
+
+### Ready to use image
+
+Run latest docker image from the Dockerhub:
+```
+docker run -ti trueagi/hyperon:latest
+```
+
+### Build image
+
+Docker 26.0.0 or greater version is required.
 
 Build Docker image from a local copy of the repo running:
 ```
