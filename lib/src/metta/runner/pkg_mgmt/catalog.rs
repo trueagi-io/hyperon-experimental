@@ -343,7 +343,7 @@ impl PkgInfo {
             log::trace!("Looking for module: \"{mod_name}\" inside {catalog:?}");
             match catalog.lookup_newest_with_version_req(mod_name, version_req) {
                 Some(descriptor) => {
-                    log::info!("Found module: \"{mod_name}\" inside {catalog:?}");
+                    log::info!("Found module: \"{mod_name}\" inside {:?}", catalog.display_name());
                     log::info!("Preparing to load module: \'{}\' as \'{}\'", descriptor.name, name_path);
                     return Ok(Some((catalog.get_loader(&descriptor)?, descriptor)))
                 },

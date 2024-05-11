@@ -190,7 +190,7 @@ impl MettaMod {
         }
 
         // Get the space associated with the dependent module
-        log::info!("import_all_from_dependency: importing from {} into {}", mod_ptr.path(), self.path());
+        log::debug!("import_all_from_dependency: importing from {} into {}", mod_ptr.path(), self.path());
         let (dep_space, transitive_deps) = mod_ptr.stripped_space();
 
         // Add a new Grounded Space atom to the &self space, so we can access the dependent module

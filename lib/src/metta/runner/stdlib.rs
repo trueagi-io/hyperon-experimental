@@ -431,7 +431,7 @@ impl Grounded for CatalogListOp {
             if let Some(cat_iter) = cat.list() {
                 println!("{}:", cat.display_name());
                 for desc in cat_iter {
-                    println!("\t{desc}");
+                    println!("   {desc}");
                 }
             }
         }

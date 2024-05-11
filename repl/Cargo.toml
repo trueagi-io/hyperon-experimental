@@ -5,6 +5,8 @@ edition.workspace = true
 description = "A shell to execute MeTTa"
 
 [dependencies]
+log = { workspace = true }
+env_logger = { workspace = true }
 anyhow = { version = "1.0.75", features = ["std"] }
 rustyline = { version = "13.0.0", features = ["derive"] }
 clap = { version = "4.4.0", features = ["derive"] }

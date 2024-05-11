@@ -194,13 +194,12 @@ impl GitCatalog {
     /// Used for a git-based catalog that isn't synced to a remote source
     pub fn new_without_source_repo(caches_dir: &Path, fmts: Arc<Vec<Box<dyn FsModuleFormat>>>, name: &str) -> Result<Self, String> {
         let catalog_file_path = caches_dir.join(name).join("_catalog.json");
-        let new_self = if !catalog_file_path.exists() {
-            let new_self = Self::new_internal(fmts, name, catalog_file_path, Some(CatalogFileFormat::default()));
-            new_self.write_catalog()?;
-            new_self
+        let new_self = Self::new_internal(fmts, name, catalog_file_path, Some(CatalogFileFormat::default()));
+        if new_self.catalog_file_path.exists() {
+            new_self.parse_catalog()?
         } else {
-            Self::new_internal(fmts, name, catalog_file_path, None)
-        };
+            new_self.write_catalog()?;
+        }
         Ok(new_self)
     }
     /// Registers a new module in the catalog with a specified remote location, and returns the [ModuleDescriptor] to refer to that module
@@ -229,33 +228,23 @@ impl GitCatalog {
             None => None
         }
     }
-    fn refresh_catalog(&self, update_mode: UpdateMode) -> Result<bool, String> {
-        let did_update = if let Some(catalog_repo) = &self.catalog_repo {
-            //Get the catalog from the git cache
-            match catalog_repo.update(update_mode) {
+    fn refresh_catalog(&self, update_mode: UpdateMode) -> Result<(), String> {
+        if let Some(catalog_repo) = &self.catalog_repo {
+            //Update the catalog from the git cache
+            let did_update = match catalog_repo.update(update_mode) {
                 Ok(did_update) => did_update,
                 Err(e) => {
                     log::warn!("Warning: error encountered attempting to fetch remote catalog: {}, {e}", self.name);
                     false
                 }
-            }
-        } else {
-            let mut catalog = self.catalog.lock().unwrap();
-            if catalog.is_none() {
-                *catalog = Some(CatalogFileFormat::default());
-                true
-            } else {
-                false
-            }
-        };
+            };
 
-        //Parse the catalog JSON file if we need to
-        if did_update || self.catalog_is_uninit() {
-            self.parse_catalog()?;
-            Ok(true)
-        } else {
-            Ok(false)
+            //Parse the catalog JSON file if we need to
+            if did_update || self.catalog_is_uninit() {
+                self.parse_catalog()?;
+            }
         }
+        Ok(())
     }
     fn catalog_is_uninit(&self) -> bool {
         let catalog = self.catalog.lock().unwrap();
@@ -349,10 +338,8 @@ impl ModuleLoader for GitModLoader {
 }
 
 
-//TODO-NOW Add some status output when modules are fetched from GIT
 //TODO-NOW implement catalog clear op
 //TODO-NOW migrate remote catalog file to a BTreeMap, and test auto-upgrading to new version
 //TODO-NOW Implement a MeTTaMod that separates apart the catalog management functions
 //TODO-NOW Implement a builtin-catalog for acccess to std mods
 //TODO-NOW Fix the build without pkg_mgmt feature
-//TODO-NOW Get the repl to immeditately display logs of warn!() or err!()

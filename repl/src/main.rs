@@ -36,6 +36,8 @@ struct CliArgs {
 fn main() -> Result<()> {
     let cli_args = CliArgs::parse();
 
+    let _ = env_logger::builder().filter_level(log::LevelFilter::Info).try_init();
+
     //If we have a metta_file, then the working dir is the parent of that file
     //If we are running in interactive mode, it's the working dir at the time the repl is invoked
     let metta_working_dir: PathBuf = match &cli_args.file {
