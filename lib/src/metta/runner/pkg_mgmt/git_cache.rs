@@ -20,26 +20,13 @@ use git2::{*, build::*};
 #[cfg(feature = "git")]
 const TIMESTAMP_FILENAME: &'static str = "_timestamp_";
 
+use crate::metta::runner::pkg_mgmt::managed_catalog::UpdateMode;
+
 //NOTE: When the "git" feature is not enabled, we can still access CachedRepos that have
 // already been pulled locally.  However we cannot update them or pull new ones.  This
 // theoretically allows for one tool to be used to update and pull remote repos while
 // other tools linking hyperon without the "git" feature may then access those repos. That
 // said, having multiple tools that link hyperon is inviting version incompatibilities.
-
-/// Indicates the desired behavior for updating the locally-cached repo
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum UpdateMode {
-    /// Clones the repo if it doesn't exist, otherwise leaves it alone
-    PullIfMissing,
-    /// Pulls the latest from the remote repo.  Fails if the remote is unavailable
-    PullLatest,
-    /// Attempts to pull from the remote repo.  Continues with the existing repo if
-    /// the remote is unavailable
-    TryPullLatest,
-    /// Attempts to pull from the remote repo is the local cache is older than the
-    /// specified number of seconds.  Otherwise continues with the repo on the disk
-    TryPullIfOlderThan(u64)
-}
 
 #[derive(Debug)]
 pub struct CachedRepo {
@@ -87,12 +74,12 @@ impl CachedRepo {
             Ok(repo) => {
 
                 //Do a `git pull` to bring it up to date
-                if mode == UpdateMode::PullLatest || mode == UpdateMode::TryPullLatest || self.check_timestamp(mode) {
+                if mode == UpdateMode::FetchLatest || mode == UpdateMode::TryFetchLatest || self.check_timestamp(mode) {
                     let mut remote = repo.find_remote("origin").map_err(|e| format!("Failed find 'origin' in git repo: {}, {}", self.url, e))?;
                     match remote.connect(Direction::Fetch) {
                         Ok(_) => {},
                         Err(e) => {
-                            if mode == UpdateMode::PullLatest {
+                            if mode == UpdateMode::FetchLatest {
                                 return Err(format!("Failed to connect to origin repo: {}, {}", self.url, e))
                             } else {
                                 // We couldn't connect, but the UpdateMode allows soft failure
@@ -143,10 +130,10 @@ impl CachedRepo {
     fn update_repo_no_git_support(&self, mode: UpdateMode) -> Result<bool, String> {
         let err_msg = || format!("Cannot update repo: {}; hyperon built without git support", self.name);
         match mode {
-            UpdateMode::PullLatest => {
+            UpdateMode::FetchLatest => {
                 return Err(err_msg());
             }
-            UpdateMode::TryPullLatest => {
+            UpdateMode::TryFetchLatest => {
                 log::warn!("{}", err_msg());
             },
             _ => {}
@@ -215,12 +202,12 @@ impl CachedRepo {
             .map_err(|e| format!("Error writing file: {}, {e}", file_path.display()))
     }
 
-    /// Returns `true` if `mode == TryPullIfOlderThan`, and the timestamp file indicates
+    /// Returns `true` if `mode == TryFetchIfOlderThan`, and the timestamp file indicates
     /// that amount of time has elapsed.  Otherwise returns `false`
     #[cfg(feature = "git")]
     fn check_timestamp(&self, mode: UpdateMode) -> bool {
         match mode {
-            UpdateMode::TryPullIfOlderThan(secs) => {
+            UpdateMode::TryFetchIfOlderThan(secs) => {
                 let file_path = self.repo_local_path().join(TIMESTAMP_FILENAME);
                 match read_to_string(&file_path) {
                     Ok(file_contents) => {

@@ -353,7 +353,7 @@ impl EnvBuilder {
 
                 //Setup the explicit_git_mods managed catalog to hold mods fetched by explicit URL
                 let mut explicit_git_mods = LocalCatalog::new(caches_dir, "git-modules").unwrap();
-                let git_mod_catalog = GitCatalog::new_without_source_repo(env.fs_mod_formats.clone(), "git-modules").unwrap();
+                let git_mod_catalog = GitCatalog::new_without_source_repo(caches_dir, env.fs_mod_formats.clone(), "git-modules").unwrap();
                 explicit_git_mods.push_upstream_catalog(Box::new(git_mod_catalog));
                 env.explicit_git_mods = Some(explicit_git_mods);
 

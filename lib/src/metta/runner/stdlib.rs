@@ -6,6 +6,7 @@ use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey, mod_name_from_url};
 use crate::metta::runner::git_catalog::ModuleGitLocation;
+use crate::metta::runner::pkg_mgmt::{UpdateMode, ManagedCatalog};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
@@ -382,7 +383,7 @@ impl Grounded for GitModuleOp {
 
         let git_mod_location = ModuleGitLocation::new(url.to_string());
 
-        if let Some((loader, descriptor)) = git_mod_location.get_loader_in_explicit_catalog(&mod_name, true, context.metta.environment()).map_err(|e| ExecError::from(e))? {
+        if let Some((loader, descriptor)) = git_mod_location.get_loader_in_explicit_catalog(&mod_name, UpdateMode::TryFetchLatest, context.metta.environment()).map_err(|e| ExecError::from(e))? {
             context.get_or_init_module_with_descriptor(&mod_name, descriptor, loader).map_err(|e| ExecError::from(e))?;
         }
 
@@ -440,6 +441,57 @@ impl Grounded for CatalogListOp {
         }
         for cat in self.metta.environment().catalogs() {
             list_catalog(cat);
+        }
+
+        unit_result()
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+/// Update all contents of all ManagedCatalogs to the latest version of all modules
+#[derive(Clone, Debug)]
+pub struct CatalogUpdateOp {
+    metta: Metta
+}
+
+impl PartialEq for CatalogUpdateOp {
+    fn eq(&self, _other: &Self) -> bool { true }
+}
+
+impl CatalogUpdateOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{ metta }
+    }
+}
+
+impl Display for CatalogUpdateOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "catalog-update")
+    }
+}
+
+impl Grounded for CatalogUpdateOp {
+    fn type_(&self) -> Atom {
+        //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
+        // allow an optional arg to list a specific catalog.  For now we list all of them
+        //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
+        Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
+    }
+
+    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+
+        if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
+            explicit_git_catalog.fetch_newest_for_all(UpdateMode::FetchLatest)?;
+        }
+
+        for cat in self.metta.environment().catalogs() {
+            match cat.as_managed() {
+                Some(cat) => cat.fetch_newest_for_all(UpdateMode::FetchLatest)?,
+                None => {}
+            }
         }
 
         unit_result()
@@ -1715,6 +1767,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
         let catalog_list_op = Atom::gnd(CatalogListOp::new(metta.clone()));
         tref.register_token(regex(r"catalog-list"), move |_| { catalog_list_op.clone() });
+        let catalog_update_op = Atom::gnd(CatalogUpdateOp::new(metta.clone()));
+        tref.register_token(regex(r"catalog-update"), move |_| { catalog_update_op.clone() });
         let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));
         tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
         let mod_space_op = Atom::gnd(ModSpaceOp::new(metta.clone()));

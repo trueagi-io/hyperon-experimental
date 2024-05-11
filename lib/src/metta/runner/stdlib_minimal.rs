@@ -463,6 +463,8 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
     let catalog_list_op = Atom::gnd(stdlib::CatalogListOp::new(metta.clone()));
     tref.register_token(regex(r"catalog-list"), move |_| { catalog_list_op.clone() });
+    let catalog_update_op = Atom::gnd(stdlib::CatalogUpdateOp::new(metta.clone()));
+    tref.register_token(regex(r"catalog-update"), move |_| { catalog_update_op.clone() });
     let git_module_op = Atom::gnd(stdlib::GitModuleOp::new(metta.clone()));
     tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
     let mod_space_op = Atom::gnd(stdlib::ModSpaceOp::new(metta.clone()));

@@ -3,17 +3,18 @@
 
 use core::any::Any;
 use std::path::{Path, PathBuf};
-use std::fs::read_to_string;
+use std::fs::File;
+use std::io::{BufReader, BufWriter};
 use std::sync::Mutex;
 
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 
 use crate::metta::runner::*;
 use crate::metta::runner::pkg_mgmt::{*, git_cache::*};
 
 /// A set of keys describing how to access a module via git.  Deserialized from within a [PkgInfo]
 ///  or a catalog file [CatalogFileFormat]
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct ModuleGitLocation {
     /// Indicates that the dependency module should be fetched from the specified `git` URL
     #[serde(default)]
@@ -56,11 +57,11 @@ impl ModuleGitLocation {
         Ok(None)
     }
     /// Gets a loader for a module identified by a ModuleGitLocation, using the [Environment]'s managed `explicit_git_mods` catalog
-    pub(crate) fn get_loader_in_explicit_catalog(&self, mod_name: &str, should_refresh: bool, env: &Environment) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
+    pub(crate) fn get_loader_in_explicit_catalog(&self, mod_name: &str, update_mode: UpdateMode, env: &Environment) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
         if self.get_url().is_some() {
             if let Some(explicit_git_catalog) = env.explicit_git_mods.as_ref() {
                 let descriptor = explicit_git_catalog.upstream_catalogs().first().unwrap().downcast::<GitCatalog>().unwrap().register_mod(mod_name, None, self)?;
-                let loader = explicit_git_catalog.get_loader_with_explicit_refresh(&descriptor, should_refresh)?;
+                let loader = explicit_git_catalog.get_loader_with_explicit_refresh(&descriptor, update_mode)?;
                 Ok(Some((loader, descriptor)))
             } else {
                 Err(format!("Unable to pull module \"{mod_name}\" from git; no local \"caches\" directory available"))
@@ -103,8 +104,8 @@ impl ModuleGitLocation {
     }
 }
 
-/// Struct that matches the catalog.json file fetched from the `catalog.repo`
-#[derive(Deserialize, Debug, Default)]
+/// Struct that matches the catalog.json file fetched from the `_catalog.repo`
+#[derive(Serialize, Deserialize, Debug, Default)]
 struct CatalogFileFormat {
     //TODO-NOW.  Upon reflection, I see no good reason not to use a HashMap here instead of a Vec
     modules: Vec<CatalogFileMod>
@@ -143,7 +144,7 @@ impl CatalogFileFormat {
 }
 
 /// A single module in a catalog.json file
-#[derive(Clone, Deserialize, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct CatalogFileMod {
     name: String,
     version: Option<semver::Version>,
@@ -164,36 +165,54 @@ pub struct GitCatalog {
     fmts: Arc<Vec<Box<dyn FsModuleFormat>>>,
     refresh_time: u64,
     catalog_repo: Option<CachedRepo>,
+    catalog_file_path: PathBuf,
     catalog: Mutex<Option<CatalogFileFormat>>,
 }
 
 impl GitCatalog {
+    fn new_internal(fmts: Arc<Vec<Box<dyn FsModuleFormat>>>, name: &str, catalog_file_path: PathBuf, catalog: Option<CatalogFileFormat>) -> Self {
+        Self {
+            name: name.to_string(),
+            fmts,
+            refresh_time: 0,
+            catalog_repo: None,
+            catalog_file_path,
+            catalog: Mutex::new(catalog),
+        }
+    }
     /// Creates a new GitCatalog with the name and url specified.  `refresh_time` is the time, in
     /// seconds, between refreshes of the catalog file
     pub fn new(caches_dir: &Path, fmts: Arc<Vec<Box<dyn FsModuleFormat>>>, name: &str, url: &str, refresh_time: u64) -> Result<Self, String> {
-        let catalog_repo_dir = caches_dir.join(name).join("catalog.repo");
+        let catalog_repo_dir = caches_dir.join(name).join("_catalog.repo");
         let catalog_repo_name = format!("{name}-catalog.repo");
         let catalog_repo = CachedRepo::new(&catalog_repo_name, catalog_repo_dir, url, None, None)?;
-        let mut new_self = Self::new_without_source_repo(fmts, name)?;
+        let mut new_self = Self::new_internal(fmts, name, catalog_repo.local_path().join("catalog.json"), None);
         new_self.refresh_time = refresh_time;
         new_self.catalog_repo = Some(catalog_repo);
         Ok(new_self)
     }
     /// Used for a git-based catalog that isn't synced to a remote source
-    pub fn new_without_source_repo(fmts: Arc<Vec<Box<dyn FsModuleFormat>>>, name: &str) -> Result<Self, String> {
-        Ok(Self {
-            name: name.to_string(),
-            fmts,
-            refresh_time: 0,
-            catalog_repo: None,
-            catalog: Mutex::new(None),
-        })
+    pub fn new_without_source_repo(caches_dir: &Path, fmts: Arc<Vec<Box<dyn FsModuleFormat>>>, name: &str) -> Result<Self, String> {
+        let catalog_file_path = caches_dir.join(name).join("_catalog.json");
+        let new_self = if !catalog_file_path.exists() {
+            let new_self = Self::new_internal(fmts, name, catalog_file_path, Some(CatalogFileFormat::default()));
+            new_self.write_catalog()?;
+            new_self
+        } else {
+            Self::new_internal(fmts, name, catalog_file_path, None)
+        };
+        Ok(new_self)
     }
     /// Registers a new module in the catalog with a specified remote location, and returns the [ModuleDescriptor] to refer to that module
+    ///
+    /// WARNING: if a catalog is synced to an upstream source, the upstream source will
+    /// eventually overwrite anything you register with this method
     pub(crate) fn register_mod(&self, mod_name: &str, version: Option<&semver::Version>, git_location: &ModuleGitLocation) -> Result<ModuleDescriptor, String> {
-        self.refresh_catalog()?;
-        let mut catalog_ref = self.catalog.lock().unwrap();
-        let descriptor = catalog_ref.as_mut().unwrap().add(CatalogFileMod::new(mod_name.to_string(), version.cloned(), git_location.clone()))?;
+        let descriptor = {
+            let mut catalog_ref = self.catalog.lock().unwrap();
+            catalog_ref.as_mut().unwrap().add(CatalogFileMod::new(mod_name.to_string(), version.cloned(), git_location.clone()))?
+        };
+        self.write_catalog()?;
         Ok(descriptor)
     }
     /// Scans the catalog and finds all the modules with a given name
@@ -210,38 +229,59 @@ impl GitCatalog {
             None => None
         }
     }
-    fn refresh_catalog(&self) -> Result<bool, String> {
-        if let Some(catalog_repo) = &self.catalog_repo {
+    fn refresh_catalog(&self, update_mode: UpdateMode) -> Result<bool, String> {
+        let did_update = if let Some(catalog_repo) = &self.catalog_repo {
             //Get the catalog from the git cache
-            let did_update = match catalog_repo.update(UpdateMode::TryPullIfOlderThan(self.refresh_time)) {
+            match catalog_repo.update(update_mode) {
                 Ok(did_update) => did_update,
                 Err(e) => {
                     log::warn!("Warning: error encountered attempting to fetch remote catalog: {}, {e}", self.name);
                     false
-                }
-            };
-
-            //Parse the catalog JSON file if we need to
-            let mut catalog = self.catalog.lock().unwrap();
-            if did_update || catalog.is_none() {
-                let catalog_file_path = catalog_repo.local_path().join("catalog.json");
-                match read_to_string(&catalog_file_path) {
-                    Ok(file_contents) => {
-                        *catalog = Some(serde_json::from_str(&file_contents).unwrap());
-                        return Ok(true)
-                    },
-                    Err(e) => {
-                        return Err(format!("Error reading catalog file. remote catalog unavailable: {}, {e}", self.name))
-                    }
                 }
             }
         } else {
             let mut catalog = self.catalog.lock().unwrap();
             if catalog.is_none() {
                 *catalog = Some(CatalogFileFormat::default());
+                true
+            } else {
+                false
+            }
+        };
+
+        //Parse the catalog JSON file if we need to
+        if did_update || self.catalog_is_uninit() {
+            self.parse_catalog()?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+    fn catalog_is_uninit(&self) -> bool {
+        let catalog = self.catalog.lock().unwrap();
+        catalog.is_none()
+    }
+    fn parse_catalog(&self) -> Result<(), String> {
+        let mut catalog = self.catalog.lock().unwrap();
+        match File::open(&self.catalog_file_path) {
+            Ok(file) => {
+                let reader = BufReader::new(file);
+                *catalog = Some(serde_json::from_reader(reader).unwrap());
+                Ok(())
+            },
+            Err(e) => {
+                Err(format!("Error reading catalog file. remote catalog unavailable: {}, {e}", self.name))
             }
         }
-        Ok(false)
+    }
+    /// Writes the catalog to a file, overwriting the file that is currently on disk
+    fn write_catalog(&self) -> Result<(), String> {
+        let cat_lock = self.catalog.lock().unwrap();
+        let catalog = cat_lock.as_ref().unwrap();
+        let file = File::create(&self.catalog_file_path).map_err(|e| e.to_string())?;
+        let writer = BufWriter::new(file);
+        serde_json::to_writer(writer, catalog).map_err(|e| e.to_string())?;
+        Ok(())
     }
 }
 
@@ -250,7 +290,7 @@ impl ModuleCatalog for GitCatalog {
         self.name.clone()
     }
     fn lookup(&self, name: &str) -> Vec<ModuleDescriptor> {
-        match self.refresh_catalog() {
+        match self.refresh_catalog(UpdateMode::TryFetchIfOlderThan(self.refresh_time)) {
             Ok(_) => {},
             Err(e) => {
                 log::warn!("{e}");
@@ -262,9 +302,10 @@ impl ModuleCatalog for GitCatalog {
         self.find_mods_with_name(name)
     }
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
-        self.refresh_catalog()?;
+        self.refresh_catalog(UpdateMode::TryFetchIfOlderThan(self.refresh_time))?;
 
-        let mod_idx = self.find_mod_idx_with_descriptor(descriptor).unwrap();
+        let mod_idx = self.find_mod_idx_with_descriptor(descriptor)
+            .ok_or_else(|| format!("Error: module {descriptor} no longer exists in catalog {}", self.display_name()))?;
 
         let cat_lock = self.catalog.lock().unwrap();
         let catalog = cat_lock.as_ref().unwrap();
@@ -274,6 +315,10 @@ impl ModuleCatalog for GitCatalog {
             module: module.clone(),
             fmts: self.fmts.clone(),
         }))
+    }
+    fn sync_toc(&self, update_mode: UpdateMode) -> Result<(), String> {
+        self.refresh_catalog(update_mode)?;
+        Ok(())
     }
     fn as_any(&self) -> Option<&dyn Any> {
         Some(self as &dyn Any)
@@ -287,11 +332,7 @@ pub struct GitModLoader {
 }
 
 impl ModuleLoader for GitModLoader {
-    fn prepare(&self, local_dir: Option<&Path>, should_refresh: bool) -> Result<Option<Box<dyn ModuleLoader>>, String> {
-        let update_mode = match should_refresh {
-            true => UpdateMode::TryPullLatest,
-            false => UpdateMode::PullIfMissing
-        };
+    fn prepare(&self, local_dir: Option<&Path>, update_mode: UpdateMode) -> Result<Option<Box<dyn ModuleLoader>>, String> {
         let local_dir = match local_dir {
             Some(local_dir) => local_dir,
             None => return Err("GitCatalog: Cannot prepare git-based module without local cache directory".to_string())
@@ -309,8 +350,8 @@ impl ModuleLoader for GitModLoader {
 
 
 //TODO-NOW Add some status output when modules are fetched from GIT
-//TODO-NOW implement the managed catalog trait on the local catalog
-//TODO-NOW implement ops to manage the catalog
+//TODO-NOW implement catalog clear op
+//TODO-NOW migrate remote catalog file to a BTreeMap, and test auto-upgrading to new version
 //TODO-NOW Implement a MeTTaMod that separates apart the catalog management functions
 //TODO-NOW Implement a builtin-catalog for acccess to std mods
 //TODO-NOW Fix the build without pkg_mgmt feature

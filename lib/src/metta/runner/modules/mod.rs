@@ -484,7 +484,7 @@ impl ModuleInitState {
     pub fn init_module(&mut self, runner: &Metta, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
 
         //Give the prepare function a chance to run, in case it hasn't yet
-        let loader = match loader.prepare(None, false)? {
+        let loader = match loader.prepare(None, UpdateMode::FetchIfMissing)? {
             Some(new_loader) => new_loader,
             None => loader
         };
@@ -621,7 +621,7 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     /// loader will replace it.
     ///
     /// NOTE: This method may become async in the future
-    fn prepare(&self, _local_dir: Option<&Path>, _should_refresh: bool) -> Result<Option<Box<dyn ModuleLoader>>, String> {
+    fn prepare(&self, _local_dir: Option<&Path>, _update_mode: UpdateMode) -> Result<Option<Box<dyn ModuleLoader>>, String> {
         Ok(None)
     }
 

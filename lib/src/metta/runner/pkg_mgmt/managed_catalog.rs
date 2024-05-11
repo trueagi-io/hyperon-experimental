@@ -39,6 +39,37 @@ use crate::metta::runner::pkg_mgmt::*;
 //   in isolation might not be the best when considered holistically.  The Requirement API
 //   needs to take that into account.
 //
+
+/// Indicates the desired behavior for updating the locally-cached module
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum UpdateMode {
+    /// Fetches the module if it doesn't exist, otherwise leaves it alone
+    FetchIfMissing,
+    /// Attempts to fetch from the remote catalog is the local cached version is older
+    /// than the specified number of seconds.  Otherwise continues with the cached mod
+    TryFetchIfOlderThan(u64),
+    /// Attempts to fetch from the remote catalog.  Continues with the existing module
+    /// if the remote is unavailable
+    TryFetchLatest,
+    /// Fetches the latest from the remote catalog.  Fails if the remote is unavailable
+    FetchLatest,
+}
+
+impl UpdateMode {
+    /// Returns the more aggressive (more likely to fetch) of the two modes
+    pub fn promote_to(self, other: Self) -> Self {
+        match (&self, &other) {
+            (Self::FetchIfMissing, _) => other,
+            (Self::TryFetchIfOlderThan(_), Self::FetchIfMissing) => self,
+            (Self::TryFetchIfOlderThan(t_s), Self::TryFetchIfOlderThan(t_o)) => Self::TryFetchIfOlderThan((*t_s).min(*t_o)),
+            (Self::TryFetchIfOlderThan(_), _) => other,
+            (Self::TryFetchLatest, Self::FetchLatest) => Self::FetchLatest,
+            (Self::TryFetchLatest, _) => Self::TryFetchLatest,
+            _ => Self::FetchLatest
+        }
+    }
+}
+
 pub trait ManagedCatalog: ModuleCatalog {
 
     /// Clears all locally stored modules, resetting the local catalog to an empty state
@@ -48,7 +79,7 @@ pub trait ManagedCatalog: ModuleCatalog {
     /// already exists in the catalog
     ///
     /// NOTE: This method will likely become async in the future
-    fn fetch(&self, descriptor: &ModuleDescriptor) -> Result<(), String>;
+    fn fetch(&self, descriptor: &ModuleDescriptor, update_mode: UpdateMode) -> Result<(), String>;
 
     /// Remove a specific module from the catalog
     fn remove(&self, descriptor: &ModuleDescriptor) -> Result<(), String>;
@@ -58,12 +89,13 @@ pub trait ManagedCatalog: ModuleCatalog {
     ///
     /// NOTE: This API will likely change in the future.  See "NOTE FOR THE FUTURE" in comments
     /// for `ManagedCatalog`
-    fn fetch_newest_for_all(&self) -> Result<(), String> {
+    fn fetch_newest_for_all(&self, update_mode: UpdateMode) -> Result<(), String> {
+        self.sync_toc(update_mode)?;
         let iter = self.list_name_uid_pairs()
             .ok_or_else(|| "managed catalog must support `list` method".to_string())?;
         for (name, uid) in iter {
             if let Some(desc) = self.lookup_newest_with_uid_and_version_req(&name, uid, None) {
-                self.fetch(&desc)?;
+                self.fetch(&desc, update_mode)?;
             }
         }
         Ok(())
@@ -109,7 +141,7 @@ impl LocalCatalog {
         let local_toc = self.local_toc.lock().unwrap();
         local_toc.all_sorted_descriptors()
     }
-    pub(crate) fn get_loader_with_explicit_refresh(&self, descriptor: &ModuleDescriptor, should_refresh: bool) -> Result<Box<dyn ModuleLoader>, String> {
+    pub(crate) fn get_loader_with_explicit_refresh(&self, descriptor: &ModuleDescriptor, update_mode: UpdateMode) -> Result<Box<dyn ModuleLoader>, String> {
 
         //Figure out which upstream catalog furnished this descriptor by trying each one
         let mut upstream_loader = None;
@@ -128,7 +160,7 @@ impl LocalCatalog {
                 // TODO: It would be nice to have the option here to pull a different but compatible
                 // mod from the upstream catalogs; however we don't have the original requirement info,
                 // so currently we cannot do that.  See the write-up above about the "Requirement API".
-                return Err(format!("Upstream Catalogs can no longer supply module {}", descriptor.name()));
+                return Err(format!("Upstream Catalogs can no longer supply module \"{descriptor}\""));
             }
         };
 
@@ -140,7 +172,7 @@ impl LocalCatalog {
         self.add_to_toc(descriptor.to_owned())?;
 
         //Wrap the upstream loader in a loader object from this catalog
-        let wrapper_loader = LocalCatalogLoader {local_cache_dir, upstream_loader, should_refresh};
+        let wrapper_loader = LocalCatalogLoader {local_cache_dir, upstream_loader, update_mode};
         Ok(Box::new(wrapper_loader))
     }
 }
@@ -169,10 +201,19 @@ impl ModuleCatalog for LocalCatalog {
         vec![]
     }
     fn get_loader(&self, descriptor: &ModuleDescriptor) -> Result<Box<dyn ModuleLoader>, String> {
-        self.get_loader_with_explicit_refresh(descriptor, false)
+        self.get_loader_with_explicit_refresh(descriptor, UpdateMode::FetchIfMissing)
     }
     fn list<'a>(&'a self) -> Option<Box<dyn Iterator<Item=ModuleDescriptor> + 'a>> {
         Some(Box::new(self.list_toc().into_iter()))
+    }
+    fn sync_toc(&self, update_mode: UpdateMode) -> Result<(), String> {
+        for upstream in self.upstream_catalogs.iter() {
+            upstream.sync_toc(update_mode)?;
+        }
+        Ok(())
+    }
+    fn as_managed(&self) -> Option<&dyn ManagedCatalog> {
+        Some(self)
     }
 }
 
@@ -180,16 +221,44 @@ impl ModuleCatalog for LocalCatalog {
 #[derive(Debug)]
 struct LocalCatalogLoader {
     local_cache_dir: PathBuf,
-    should_refresh: bool,
+    update_mode: UpdateMode,
     upstream_loader: Box<dyn ModuleLoader>
 }
 
 impl ModuleLoader for LocalCatalogLoader {
-    fn prepare(&self, _local_dir: Option<&Path>, should_refresh: bool) -> Result<Option<Box<dyn ModuleLoader>>, String> {
-        self.upstream_loader.prepare(Some(&self.local_cache_dir), should_refresh | self.should_refresh)
+    fn prepare(&self, _local_dir: Option<&Path>, update_mode: UpdateMode) -> Result<Option<Box<dyn ModuleLoader>>, String> {
+        let update_mode = self.update_mode.promote_to(update_mode);
+        self.upstream_loader.prepare(Some(&self.local_cache_dir), update_mode)
     }
     fn load(&self, _context: &mut RunContext) -> Result<(), String> {
         unreachable!() //We will substitute the `upstream_loader` during prepare
+    }
+}
+
+impl ManagedCatalog for LocalCatalog {
+    fn clear_all(&self) -> Result<(), String> {
+        if self.storage_dir.is_dir() {
+            std::fs::remove_dir_all(&self.storage_dir).map_err(|e| e.to_string())?;
+        }
+        let mut local_toc = self.local_toc.lock().unwrap();
+        *local_toc = LocalCatalogTOC::build_from_dir(&self.storage_dir)?;
+        Ok(())
+    }
+    fn fetch(&self, descriptor: &ModuleDescriptor, update_mode: UpdateMode) -> Result<(), String> {
+        let loader = self.get_loader_with_explicit_refresh(descriptor, update_mode)?;
+        let _ = loader.prepare(None, update_mode)?;
+        Ok(())
+    }
+    fn remove(&self, descriptor: &ModuleDescriptor) -> Result<(), String> {
+        let cache_dir_name = dir_name_from_descriptor(descriptor);
+        let mod_cache_dir = self.storage_dir.join(cache_dir_name);
+        if mod_cache_dir.is_dir() {
+            std::fs::remove_dir_all(mod_cache_dir).map_err(|e| e.to_string())?;
+            let mut local_toc = self.local_toc.lock().unwrap();
+            local_toc.remove_descriptor(descriptor)
+        } else {
+            Err("No such module in catalog".to_string())
+        }
     }
 }
 
@@ -222,7 +291,7 @@ impl LocalCatalogTOC {
 
             // Name reserved by GitCatalog.  We may generalize this "reserved" mechanism when
             // we support additional upstream catalog types
-            if name_str != "catalog.repo" {
+            if name_str != "_catalog.repo" && name_str != "_catalog.json" {
                 let descriptor = parse_descriptor_from_dir_name(name_str)?;
                 new_self.add_descriptor(descriptor)?;
             }
@@ -250,6 +319,21 @@ impl LocalCatalogTOC {
             desc_vec.sort_by(|a, b| a.version().cmp(&b.version()));
         }
         Ok(())
+    }
+    fn remove_descriptor(&mut self, descriptor: &ModuleDescriptor) -> Result<(), String> {
+        fn ret_err() -> Result<(), String> { Err("No such module in catalog".to_string()) }
+        match self.mods_by_name.get_mut(descriptor.name()) {
+            Some(desc_vec) => {
+                match desc_vec.iter().position(|vec_desc| vec_desc==descriptor) {
+                    Some(idx) => {
+                        desc_vec.remove(idx);
+                        Ok(())
+                    },
+                    None => ret_err()
+                }
+            },
+            None => ret_err()
+        }
     }
 }
 

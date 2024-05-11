@@ -177,6 +177,17 @@ pub trait ModuleCatalog: std::fmt::Debug + Send + Sync {
     fn as_any(&self) -> Option<&dyn Any> {
         None
     }
+
+    /// Synchronize the catalog's internal tables, so fresh upstream info is reflected
+    /// locally.  Does not fetch any modules
+    fn sync_toc(&self, _update_mode: UpdateMode) -> Result<(), String> {
+        Ok(())
+    }
+
+    /// Returns the catalog as a [ManagedCatalog] if the catalog supports active management
+    fn as_managed(&self) -> Option<&dyn ManagedCatalog> {
+        None
+    }
 }
 
 impl dyn ModuleCatalog {
@@ -300,7 +311,7 @@ impl PkgInfo {
             }
 
             //Get the module if it's specified with git keys
-            if let Some(pair) = entry.git_location.get_loader_in_explicit_catalog(mod_name, false, context.metta.environment())? {
+            if let Some(pair) = entry.git_location.get_loader_in_explicit_catalog(mod_name, UpdateMode::FetchIfMissing, context.metta.environment())? {
                 return Ok(Some(pair));
             }
 
