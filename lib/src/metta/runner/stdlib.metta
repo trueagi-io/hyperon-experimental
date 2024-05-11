@@ -50,7 +50,7 @@
 (: unify (-> Atom Atom Atom Atom %Undefined%))
 (= (unify $a $a $then $else) $then)
 (= (unify $a $b $then $else)
-  (case (unify-or-empty $a $b) ((%void%  $else))) )
+  (case (unify-or-empty $a $b) ((Empty $else))) )
 (: unify-or-empty (-> Atom Atom Atom))
 (= (unify-or-empty $a $a) unified)
 (= (unify-or-empty $a $b) (empty))
