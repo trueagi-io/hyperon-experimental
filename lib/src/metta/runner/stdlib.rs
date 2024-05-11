@@ -7,6 +7,7 @@ use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey, mod_name_from_url};
 use crate::metta::runner::git_catalog::ModuleGitLocation;
 use crate::metta::runner::pkg_mgmt::{UpdateMode, ManagedCatalog};
+use crate::metta::runner::string::Str;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
@@ -303,12 +304,10 @@ impl Grounded for RegisterModuleOp {
         let arg_error = "register-module! expects a file system path; use quotes if needed";
         let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
 
-        // TODO: replace Symbol by grounded String?
-        //TODO-NOW, investigate what goes off the rails when I run this with quotes now?  Maybe I'm getting a grounded string arg now...
-        //  in the repl, test `!(register-module! "/tmp/")`
         let path = match path_arg_atom {
             Atom::Symbol(path_arg) => path_arg.name(),
-            _ => return Err(arg_error.into())
+            Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
+            _ => return Err(arg_error.into()),
         };
         let path = strip_quotes(path);
         let path = std::path::PathBuf::from(path);
@@ -362,12 +361,10 @@ impl Grounded for GitModuleOp {
         let url_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
         // TODO: When we figure out how to address varargs, it will be nice to take an optional branch name
 
-        // TODO: replace Symbol by grounded String?
-        //TODO-NOW, investigate what goes off the rails when I run this with quotes now?  Maybe I'm getting a grounded string arg now...
-        //  in the repl, test `!(register-module! "/tmp/")`
         let url = match url_arg_atom {
             Atom::Symbol(url_arg) => url_arg.name(),
-            _ => return Err(arg_error.into())
+            Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
+            _ => return Err(arg_error.into()),
         };
         let url = strip_quotes(url);
 

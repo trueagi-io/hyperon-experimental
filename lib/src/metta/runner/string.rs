@@ -14,6 +14,15 @@ impl Str {
     pub fn from_string(s: String) -> Self {
         Str(ImmutableString::Allocated(s))
     }
+    pub fn as_str(&self) -> &str {
+        self.0.as_str()
+    }
+}
+
+impl AsRef<str> for Str {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
 }
 
 impl Grounded for Str {
