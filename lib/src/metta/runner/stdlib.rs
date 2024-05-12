@@ -26,7 +26,7 @@ fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
 }
 
-fn regex(regex: &str) -> Regex {
+pub(crate) fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
 }
 
@@ -968,7 +968,7 @@ impl Grounded for MatchOp {
 
 /// The op atoms that depend on the pkg_mgmt feature
 #[cfg(feature = "pkg_mgmt")]
-mod pkg_mgmt_ops {
+pub(crate) mod pkg_mgmt_ops {
     use super::*;
 
     /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code

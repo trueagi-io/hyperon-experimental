@@ -8,9 +8,9 @@ use crate::metta::types::get_atom_types;
 use crate::common::assert::vec_eq_no_order;
 use crate::common::shared::Shared;
 use crate::metta::runner::stdlib;
+use crate::metta::runner::stdlib::regex;
 
 use std::fmt::Display;
-use regex::Regex;
 use std::convert::TryInto;
 
 use super::arithmetics::*;
@@ -421,10 +421,6 @@ impl Grounded for CaseOp {
     }
 }
 
-fn regex(regex: &str) -> Regex {
-    Regex::new(regex).unwrap()
-}
-
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
 // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
 pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
@@ -455,20 +451,13 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
     let match_op = Atom::gnd(stdlib::MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
-    let register_module_op = Atom::gnd(stdlib::RegisterModuleOp::new(metta.clone()));
-    tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
-    let catalog_list_op = Atom::gnd(stdlib::CatalogListOp::new(metta.clone()));
-    tref.register_token(regex(r"catalog-list"), move |_| { catalog_list_op.clone() });
-    let catalog_update_op = Atom::gnd(stdlib::CatalogUpdateOp::new(metta.clone()));
-    tref.register_token(regex(r"catalog-update"), move |_| { catalog_update_op.clone() });
-    let catalog_clear_op = Atom::gnd(stdlib::CatalogClearOp::new(metta.clone()));
-    tref.register_token(regex(r"catalog-clear"), move |_| { catalog_clear_op.clone() });
-    let git_module_op = Atom::gnd(stdlib::GitModuleOp::new(metta.clone()));
-    tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
     let mod_space_op = Atom::gnd(stdlib::ModSpaceOp::new(metta.clone()));
     tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
     let print_mods_op = Atom::gnd(stdlib::PrintModsOp::new(metta.clone()));
     tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
+
+    #[cfg(feature = "pkg_mgmt")]
+    stdlib::pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
 }
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
