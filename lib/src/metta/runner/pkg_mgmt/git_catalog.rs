@@ -335,4 +335,3 @@ impl ModuleLoader for GitModLoader {
 
 //TODO-NOW Implement a MeTTaMod that separates apart the catalog management functions
 //TODO-NOW Implement a builtin-catalog for acccess to std mods
-//TODO-NOW Fix the build without pkg_mgmt feature
