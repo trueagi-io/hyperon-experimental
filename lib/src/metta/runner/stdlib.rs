@@ -136,24 +136,6 @@ impl Grounded for ImportOp {
     }
 }
 
-/// A utility function to return the part of a string in between starting and ending quotes
-// TODO: Roll this into a stdlib grounded string module, maybe as a test case for
-//   https://github.com/trueagi-io/hyperon-experimental/issues/351
-fn strip_quotes(src: &str) -> &str {
-    if let Some(first) = src.chars().next() {
-        if first == '"' {
-            if let Some(last) = src.chars().last() {
-                if last == '"' {
-                    if src.len() > 1 {
-                        return &src[1..src.len()-1]
-                    }
-                }
-            }
-        }
-    }
-    src
-}
-
 #[derive(Clone, Debug)]
 pub struct IncludeOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
@@ -970,6 +952,11 @@ impl Grounded for MatchOp {
 #[cfg(feature = "pkg_mgmt")]
 pub(crate) mod pkg_mgmt_ops {
     use super::*;
+
+    //QUESTION: Do we want to factor these catalog management ops and specialized loading
+    // ops into a separate module?  The argument for "yes" is that the it avoids polluting
+    // the namespace with ops that are seldom used.  The argument for "no" is that importing
+    // the module to use the ops is another step users must remember.
 
     /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
     #[derive(Clone, Debug)]
