@@ -124,9 +124,6 @@ enum ProtoCatalog {
     Other(Box<dyn ModuleCatalog>),
 }
 
-#[cfg(not(feature = "pkg_mgmt"))]
-type ProtoCatalog = ();
-
 impl EnvBuilder {
 
     /// Returns a new EnvBuilder, to set the parameters for the MeTTa Environment
