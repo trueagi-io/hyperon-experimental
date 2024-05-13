@@ -65,7 +65,9 @@ use super::text::{Tokenizer, Parser, SExprParser};
 use super::types::validate_atom;
 
 pub mod modules;
-use modules::{MettaMod, ModId, ModuleInitState, ModNameNode, ModuleLoader, ResourceKey, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name, decompose_name_path, compose_name_path};
+use modules::{MettaMod, ModId, ModuleInitState, ModNameNode, ModuleLoader, ResourceKey, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name};
+#[cfg(feature = "pkg_mgmt")]
+use modules::{decompose_name_path, compose_name_path};
 
 #[cfg(feature = "pkg_mgmt")]
 pub mod pkg_mgmt;
@@ -305,6 +307,7 @@ impl Metta {
         descriptors.get(descriptor).cloned()
     }
 
+    #[cfg(feature = "pkg_mgmt")]
     /// Internal method to add a ModuleDescriptor, ModId pair to the runner's lookup table
     fn add_module_descriptor(&self, descriptor: ModuleDescriptor, mod_id: ModId) {
         let mut descriptors = self.0.module_descriptors.lock().unwrap();
@@ -314,7 +317,10 @@ impl Metta {
     /// Merges all modules in a [ModuleInitState] into the runner
     fn merge_init_state(&self, init_state: ModuleInitState) -> Result<ModId, String> {
         let mut main_mod_id = ModId::INVALID;
+        #[cfg(feature = "pkg_mgmt")]
         let (frames, descriptors) = init_state.decompose();
+        #[cfg(not(feature = "pkg_mgmt"))]
+        let frames = init_state.decompose();
 
         // Unpack each frame and ,erge the modules from the ModuleInitState into the
         // runner, and build the mapping table for ModIds
@@ -347,6 +353,7 @@ impl Metta {
         }
 
         // Merge the [ModuleDescriptor]s into the runner's table
+        #[cfg(feature = "pkg_mgmt")]
         for (descriptor, mod_id) in descriptors.into_iter() {
             let mod_id = match mod_id_mapping.get(&mod_id) {
                 Some(mapped_id) => *mapped_id,
@@ -724,6 +731,7 @@ impl<'input> RunContext<'_, '_, 'input> {
     }
 
     /// Runs the function in the context of the mod_id
+    #[allow(dead_code)] //Some clients are behind feature gates
     fn in_mod_context<T, F: FnOnce(&mut RunContext) -> Result<T, String>>(&mut self, mod_id: ModId, f: F) -> Result<T, String> {
         if mod_id == self.mod_id {
             f(self)

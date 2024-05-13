@@ -4,13 +4,14 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
-use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey, mod_name_from_url};
-use crate::metta::runner::git_catalog::ModuleGitLocation;
-use crate::metta::runner::pkg_mgmt::{UpdateMode, ManagedCatalog};
+use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
 use crate::metta::runner::string::Str;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
+
+#[cfg(feature = "pkg_mgmt")]
+use crate::metta::runner::{git_catalog::ModuleGitLocation, mod_name_from_url, pkg_mgmt::{UpdateMode, ManagedCatalog}};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -23,6 +24,10 @@ use super::string::*;
 
 fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
+}
+
+pub(crate) fn regex(regex: &str) -> Regex {
+    Regex::new(regex).unwrap()
 }
 
 #[derive(Clone, Debug)]
@@ -129,24 +134,6 @@ impl Grounded for ImportOp {
     fn match_(&self, other: &Atom) -> MatchResultIter {
         match_by_equality(self, other)
     }
-}
-
-/// A utility function to return the part of a string in between starting and ending quotes
-// TODO: Roll this into a stdlib grounded string module, maybe as a test case for
-//   https://github.com/trueagi-io/hyperon-experimental/issues/351
-fn strip_quotes(src: &str) -> &str {
-    if let Some(first) = src.chars().next() {
-        if first == '"' {
-            if let Some(last) = src.chars().last() {
-                if last == '"' {
-                    if src.len() > 1 {
-                        return &src[1..src.len()-1]
-                    }
-                }
-            }
-        }
-    }
-    src
 }
 
 #[derive(Clone, Debug)]
@@ -264,279 +251,6 @@ impl Grounded for ModSpaceOp {
 
         let space = Atom::gnd(context.metta().module_space(mod_id));
         Ok(vec![space])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
-
-/// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
-#[derive(Clone, Debug)]
-pub struct RegisterModuleOp {
-    metta: Metta
-}
-
-impl PartialEq for RegisterModuleOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
-
-impl RegisterModuleOp {
-    pub fn new(metta: Metta) -> Self {
-        Self{ metta }
-    }
-}
-
-impl Display for RegisterModuleOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "register-module!")
-    }
-}
-
-impl Grounded for RegisterModuleOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
-    }
-
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = "register-module! expects a file system path; use quotes if needed";
-        let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
-
-        let path = match path_arg_atom {
-            Atom::Symbol(path_arg) => path_arg.name(),
-            Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
-            _ => return Err(arg_error.into()),
-        };
-        let path = strip_quotes(path);
-        let path = std::path::PathBuf::from(path);
-
-        // Load the module from the path
-        // QUESTION: Do we want to expose the ability to give the module a different name and/ or
-        // load it into a different part of the namespace hierarchy?  For now I was just thinking
-        // it is better to keep the args simple.  IMO this is a place for optional var-args when we
-        // decide on the best way to handle them language-wide.
-        self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
-
-        unit_result()
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
-
-/// Provides access to module in a remote git repo, from within MeTTa code
-/// Similar to `register-module!`, this op will bypass the catalog search
-#[derive(Clone, Debug)]
-pub struct GitModuleOp {
-    //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
-}
-
-impl PartialEq for GitModuleOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
-
-impl GitModuleOp {
-    pub fn new(metta: Metta) -> Self {
-        Self{ context: metta.0.context.clone() }
-    }
-}
-
-impl Display for GitModuleOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "git-module!")
-    }
-}
-
-impl Grounded for GitModuleOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
-    }
-
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = "git-module! expects a URL; use quotes if needed";
-        let url_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
-        // TODO: When we figure out how to address varargs, it will be nice to take an optional branch name
-
-        let url = match url_arg_atom {
-            Atom::Symbol(url_arg) => url_arg.name(),
-            Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
-            _ => return Err(arg_error.into()),
-        };
-        let url = strip_quotes(url);
-
-        // TODO: Depending on what we do with `register-module!`, we might want to let the
-        // caller provide an optional mod_name here too, rather than extracting it from the url
-        let mod_name = match mod_name_from_url(url) {
-            Some(mod_name) => mod_name,
-            None => return Err(ExecError::from("git-module! error extracting module name from URL"))
-        };
-
-        let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
-        let mut context = ctx_ref.lock().unwrap();
-
-        let git_mod_location = ModuleGitLocation::new(url.to_string());
-
-        if let Some((loader, descriptor)) = git_mod_location.get_loader_in_explicit_catalog(&mod_name, UpdateMode::TryFetchLatest, context.metta.environment()).map_err(|e| ExecError::from(e))? {
-            context.get_or_init_module_with_descriptor(&mod_name, descriptor, loader).map_err(|e| ExecError::from(e))?;
-        }
-
-        unit_result()
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
-
-/// Lists contents of all Catalogs that support the "list" method
-#[derive(Clone, Debug)]
-pub struct CatalogListOp {
-    metta: Metta
-}
-
-impl PartialEq for CatalogListOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
-
-impl CatalogListOp {
-    pub fn new(metta: Metta) -> Self {
-        Self{ metta }
-    }
-}
-
-impl Display for CatalogListOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "catalog-list")
-    }
-}
-
-impl Grounded for CatalogListOp {
-    fn type_(&self) -> Atom {
-        //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
-        // allow an optional arg to list a specific catalog.  For now we list all of them
-        //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-        Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
-    }
-
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-
-        fn list_catalog(cat: &dyn crate::metta::runner::ModuleCatalog) {
-            if let Some(cat_iter) = cat.list() {
-                println!("{}:", cat.display_name());
-                for desc in cat_iter {
-                    println!("   {desc}");
-                }
-            }
-        }
-
-        if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-            list_catalog(explicit_git_catalog);
-        }
-        for cat in self.metta.environment().catalogs() {
-            list_catalog(cat);
-        }
-
-        unit_result()
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
-
-/// Update all contents of all ManagedCatalogs to the latest version of all modules
-#[derive(Clone, Debug)]
-pub struct CatalogUpdateOp {
-    metta: Metta
-}
-
-impl PartialEq for CatalogUpdateOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
-
-impl CatalogUpdateOp {
-    pub fn new(metta: Metta) -> Self {
-        Self{ metta }
-    }
-}
-
-impl Display for CatalogUpdateOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "catalog-update")
-    }
-}
-
-impl Grounded for CatalogUpdateOp {
-    fn type_(&self) -> Atom {
-        //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
-        // allow an optional arg to list a specific catalog.  For now we list all of them
-        //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-        Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
-    }
-
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-
-        if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-            explicit_git_catalog.fetch_newest_for_all(UpdateMode::FetchLatest)?;
-        }
-
-        for cat in self.metta.environment().catalogs() {
-            match cat.as_managed() {
-                Some(cat) => cat.fetch_newest_for_all(UpdateMode::FetchLatest)?,
-                None => {}
-            }
-        }
-
-        unit_result()
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
-
-/// Clears the contents of all ManagedCatalogs
-#[derive(Clone, Debug)]
-pub struct CatalogClearOp {
-    metta: Metta
-}
-
-impl PartialEq for CatalogClearOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
-
-impl CatalogClearOp {
-    pub fn new(metta: Metta) -> Self {
-        Self{ metta }
-    }
-}
-
-impl Display for CatalogClearOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "catalog-clear")
-    }
-}
-
-impl Grounded for CatalogClearOp {
-    fn type_(&self) -> Atom {
-        //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
-        // allow an optional arg to list a specific catalog.  For now we list all of them
-        //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-        Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
-    }
-
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-
-        if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-            explicit_git_catalog.clear_all()?;
-        }
-        for cat in self.metta.environment().catalogs().filter_map(|cat| cat.as_managed()) {
-            cat.clear_all()?;
-        }
-
-        unit_result()
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -1234,6 +948,302 @@ impl Grounded for MatchOp {
     }
 }
 
+/// The op atoms that depend on the pkg_mgmt feature
+#[cfg(feature = "pkg_mgmt")]
+pub(crate) mod pkg_mgmt_ops {
+    use super::*;
+
+    //QUESTION: Do we want to factor these catalog management ops and specialized loading
+    // ops into a separate module?  The argument for "yes" is that the it avoids polluting
+    // the namespace with ops that are seldom used.  The argument for "no" is that importing
+    // the module to use the ops is another step users must remember.
+
+    /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
+    #[derive(Clone, Debug)]
+    pub struct RegisterModuleOp {
+        metta: Metta
+    }
+
+    impl PartialEq for RegisterModuleOp {
+        fn eq(&self, _other: &Self) -> bool { true }
+    }
+
+    impl RegisterModuleOp {
+        pub fn new(metta: Metta) -> Self {
+            Self{ metta }
+        }
+    }
+
+    impl Display for RegisterModuleOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "register-module!")
+        }
+    }
+
+    impl Grounded for RegisterModuleOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        }
+
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = "register-module! expects a file system path; use quotes if needed";
+            let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+
+            let path = match path_arg_atom {
+                Atom::Symbol(path_arg) => path_arg.name(),
+                Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
+                _ => return Err(arg_error.into()),
+            };
+            let path = strip_quotes(path);
+            let path = std::path::PathBuf::from(path);
+
+            // Load the module from the path
+            // QUESTION: Do we want to expose the ability to give the module a different name and/ or
+            // load it into a different part of the namespace hierarchy?  For now I was just thinking
+            // it is better to keep the args simple.  IMO this is a place for optional var-args when we
+            // decide on the best way to handle them language-wide.
+            self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
+
+            unit_result()
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    /// Provides access to module in a remote git repo, from within MeTTa code
+    /// Similar to `register-module!`, this op will bypass the catalog search
+    #[derive(Clone, Debug)]
+    pub struct GitModuleOp {
+        //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
+        context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    }
+
+    impl PartialEq for GitModuleOp {
+        fn eq(&self, _other: &Self) -> bool { true }
+    }
+
+    impl GitModuleOp {
+        pub fn new(metta: Metta) -> Self {
+            Self{ context: metta.0.context.clone() }
+        }
+    }
+
+    impl Display for GitModuleOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "git-module!")
+        }
+    }
+
+    impl Grounded for GitModuleOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        }
+
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = "git-module! expects a URL; use quotes if needed";
+            let url_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+            // TODO: When we figure out how to address varargs, it will be nice to take an optional branch name
+
+            let url = match url_arg_atom {
+                Atom::Symbol(url_arg) => url_arg.name(),
+                Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
+                _ => return Err(arg_error.into()),
+            };
+            let url = strip_quotes(url);
+
+            // TODO: Depending on what we do with `register-module!`, we might want to let the
+            // caller provide an optional mod_name here too, rather than extracting it from the url
+            let mod_name = match mod_name_from_url(url) {
+                Some(mod_name) => mod_name,
+                None => return Err(ExecError::from("git-module! error extracting module name from URL"))
+            };
+
+            let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
+            let mut context = ctx_ref.lock().unwrap();
+
+            let git_mod_location = ModuleGitLocation::new(url.to_string());
+
+            if let Some((loader, descriptor)) = git_mod_location.get_loader_in_explicit_catalog(&mod_name, UpdateMode::TryFetchLatest, context.metta.environment()).map_err(|e| ExecError::from(e))? {
+                context.get_or_init_module_with_descriptor(&mod_name, descriptor, loader).map_err(|e| ExecError::from(e))?;
+            }
+
+            unit_result()
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    /// Lists contents of all Catalogs that support the "list" method
+    #[derive(Clone, Debug)]
+    pub struct CatalogListOp {
+        metta: Metta
+    }
+
+    impl PartialEq for CatalogListOp {
+        fn eq(&self, _other: &Self) -> bool { true }
+    }
+
+    impl CatalogListOp {
+        pub fn new(metta: Metta) -> Self {
+            Self{ metta }
+        }
+    }
+
+    impl Display for CatalogListOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "catalog-list")
+        }
+    }
+
+    impl Grounded for CatalogListOp {
+        fn type_(&self) -> Atom {
+            //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
+            // allow an optional arg to list a specific catalog.  For now we list all of them
+            //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
+            Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
+        }
+
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+
+            fn list_catalog(cat: &dyn crate::metta::runner::ModuleCatalog) {
+                if let Some(cat_iter) = cat.list() {
+                    println!("{}:", cat.display_name());
+                    for desc in cat_iter {
+                        println!("   {desc}");
+                    }
+                }
+            }
+
+            if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
+                list_catalog(explicit_git_catalog);
+            }
+            for cat in self.metta.environment().catalogs() {
+                list_catalog(cat);
+            }
+
+            unit_result()
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    /// Update all contents of all ManagedCatalogs to the latest version of all modules
+    #[derive(Clone, Debug)]
+    pub struct CatalogUpdateOp {
+        metta: Metta
+    }
+
+    impl PartialEq for CatalogUpdateOp {
+        fn eq(&self, _other: &Self) -> bool { true }
+    }
+
+    impl CatalogUpdateOp {
+        pub fn new(metta: Metta) -> Self {
+            Self{ metta }
+        }
+    }
+
+    impl Display for CatalogUpdateOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "catalog-update")
+        }
+    }
+
+    impl Grounded for CatalogUpdateOp {
+        fn type_(&self) -> Atom {
+            //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
+            // allow an optional arg to list a specific catalog.  For now we list all of them
+            //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
+            Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
+        }
+
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+
+            if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
+                explicit_git_catalog.fetch_newest_for_all(UpdateMode::FetchLatest)?;
+            }
+
+            for cat in self.metta.environment().catalogs() {
+                match cat.as_managed() {
+                    Some(cat) => cat.fetch_newest_for_all(UpdateMode::FetchLatest)?,
+                    None => {}
+                }
+            }
+
+            unit_result()
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    /// Clears the contents of all ManagedCatalogs
+    #[derive(Clone, Debug)]
+    pub struct CatalogClearOp {
+        metta: Metta
+    }
+
+    impl PartialEq for CatalogClearOp {
+        fn eq(&self, _other: &Self) -> bool { true }
+    }
+
+    impl CatalogClearOp {
+        pub fn new(metta: Metta) -> Self {
+            Self{ metta }
+        }
+    }
+
+    impl Display for CatalogClearOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "catalog-clear")
+        }
+    }
+
+    impl Grounded for CatalogClearOp {
+        fn type_(&self) -> Atom {
+            //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
+            // allow an optional arg to list a specific catalog.  For now we list all of them
+            //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
+            Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
+        }
+
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+
+            if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
+                explicit_git_catalog.clear_all()?;
+            }
+            for cat in self.metta.environment().catalogs().filter_map(|cat| cat.as_managed()) {
+                cat.clear_all()?;
+            }
+
+            unit_result()
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    pub fn register_pkg_mgmt_tokens(tref: &mut Tokenizer, metta: &Metta) {
+        let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
+        let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
+        let catalog_list_op = Atom::gnd(CatalogListOp::new(metta.clone()));
+        tref.register_token(regex(r"catalog-list"), move |_| { catalog_list_op.clone() });
+        let catalog_update_op = Atom::gnd(CatalogUpdateOp::new(metta.clone()));
+        tref.register_token(regex(r"catalog-update"), move |_| { catalog_update_op.clone() });
+        let catalog_clear_op = Atom::gnd(CatalogClearOp::new(metta.clone()));
+        tref.register_token(regex(r"catalog-clear"), move |_| { catalog_clear_op.clone() });
+    }
+}
 
 /// The internal `non_minimal_only_stdlib` module contains code that is never used by the minimal stdlib
 #[cfg(not(feature = "minimal"))]
@@ -1758,10 +1768,6 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    fn regex(regex: &str) -> Regex {
-        Regex::new(regex).unwrap()
-    }
-
     //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
     // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
     #[cfg(not(feature = "minimal"))]
@@ -1805,22 +1811,15 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
         let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
         tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
-        let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
-        tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
-        let catalog_list_op = Atom::gnd(CatalogListOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-list"), move |_| { catalog_list_op.clone() });
-        let catalog_update_op = Atom::gnd(CatalogUpdateOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-update"), move |_| { catalog_update_op.clone() });
-        let catalog_clear_op = Atom::gnd(CatalogClearOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-clear"), move |_| { catalog_clear_op.clone() });
-        let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));
-        tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
         let mod_space_op = Atom::gnd(ModSpaceOp::new(metta.clone()));
         tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
         let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
         tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
         let sealed_op = Atom::gnd(SealedOp{});
         tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
+
+        #[cfg(feature = "pkg_mgmt")]
+        pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
     }
 
     //TODO: The metta argument is a temporary hack on account of the way the operation atoms store references

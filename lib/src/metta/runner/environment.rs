@@ -1,8 +1,10 @@
 
 use std::path::{Path, PathBuf};
-use std::io::Write;
+use std::io::{Read, BufReader, Write};
 use std::fs;
 use std::sync::Arc;
+
+use crate::{sym, ExpressionAtom, SymbolAtom, metta::GroundingSpace};
 
 #[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::pkg_mgmt::{ModuleCatalog, DirCatalog, LocalCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt, git_catalog::*};
@@ -30,6 +32,7 @@ pub struct Environment {
 }
 
 const DEFAULT_INIT_METTA: &[u8] = include_bytes!("init.default.metta");
+const DEFAULT_ENVIRONMENT_METTA: &[u8] = include_bytes!("environment.default.metta");
 
 static COMMON_ENV: std::sync::OnceLock<Arc<Environment>> = std::sync::OnceLock::new();
 
@@ -120,6 +123,9 @@ enum ProtoCatalog {
     Path(PathBuf),
     Other(Box<dyn ModuleCatalog>),
 }
+
+#[cfg(not(feature = "pkg_mgmt"))]
+type ProtoCatalog = ();
 
 impl EnvBuilder {
 
@@ -284,17 +290,12 @@ impl EnvBuilder {
 
         if let Some(config_dir) = &env.config_dir {
 
-            #[cfg(feature = "pkg_mgmt")]
-            let modules_dir = config_dir.join("modules");
             let init_metta_path = config_dir.join("init.metta");
 
             //Create the default config dir and its contents, if that part of our directive
             if self.create_cfg_dir && !config_dir.exists() {
 
                 std::fs::create_dir_all(&config_dir).unwrap();
-
-                #[cfg(feature = "pkg_mgmt")]
-                std::fs::create_dir_all(&modules_dir).unwrap();
 
                 //Create the default init.metta file
                 let mut file = fs::OpenOptions::new()
@@ -313,17 +314,31 @@ impl EnvBuilder {
             // Set the caches dir within the config dir.  We may want to move it elsewhere in the future
             env.caches_dir = env.config_dir.as_ref().map(|cfg_dir| cfg_dir.join("caches"));
 
-            //Push the "modules" dir, to search after the other paths that were specified
-            //TODO: the config.metta file should be able to append / modify the catalogs, and can choose not to
-            // include the "modules" dir in the future.
-            #[cfg(feature = "pkg_mgmt")]
-            if modules_dir.exists() {
-                proto_catalogs.push(ProtoCatalog::Path(modules_dir));
-            }
-
             if init_metta_path.exists() {
                 env.init_metta_path = Some(init_metta_path);
             }
+        }
+
+        if let Some(config_dir) = &env.config_dir {
+            let env_metta_path = config_dir.join("environment.metta");
+
+            //Create the default environment.metta file if it doesn't exist
+            if !env_metta_path.exists() {
+                let mut file = fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .open(&env_metta_path)
+                    .expect(&format!("Error creating default environment config file at {env_metta_path:?}"));
+                file.write_all(&DEFAULT_ENVIRONMENT_METTA).unwrap();
+            }
+
+            #[cfg(feature = "pkg_mgmt")]
+            let env_metta_interp_result = interpret_environment_metta(env_metta_path, &mut env, &mut proto_catalogs);
+            #[cfg(not(feature = "pkg_mgmt"))]
+            let env_metta_interp_result = interpret_environment_metta(env_metta_path, &mut env, &mut Vec::<()>::new());
+            env_metta_interp_result.unwrap_or_else(|e| {
+                log::warn!("Error occurred interpreting environment.metta file: {e}");
+            });
         }
 
         #[cfg(feature = "pkg_mgmt")]
@@ -356,20 +371,123 @@ impl EnvBuilder {
                 let git_mod_catalog = GitCatalog::new_without_source_repo(caches_dir, env.fs_mod_formats.clone(), "git-modules").unwrap();
                 explicit_git_mods.push_upstream_catalog(Box::new(git_mod_catalog));
                 env.explicit_git_mods = Some(explicit_git_mods);
-
-                //Add the remote git-based catalog to the end of the catalog priority search list
-                //TODO-NOW: Catalog should be moved to trueagi github account, and catalog settings should come from config
-                let catalog_name = "luketpeterson-catalog";
-                let catalog_url = "https://github.com/luketpeterson/metta-mod-catalog.git";
-                let refresh_time = 259200; //3 days = 3 days * 24 hrs * 60 minutes * 60 seconds
-                let mut managed_remote_catalog = LocalCatalog::new(caches_dir, catalog_name).unwrap();
-                let remote_catalog = GitCatalog::new(caches_dir, env.fs_mod_formats.clone(), catalog_name, catalog_url, refresh_time).unwrap();
-                managed_remote_catalog.push_upstream_catalog(Box::new(remote_catalog));
-                env.catalogs.push(Box::new(managed_remote_catalog));
             }
         }
 
         env
     }
 
+}
+
+/// Interprets the file at `env_metta_path`, and modifies settings in the Environment
+///
+/// NOTE: I wonder if users will get confused by the fact that the full set of runner
+/// features aren't available in the environment.metta file.  But there is a bootstrapping
+/// problem trying to using a runner here
+fn interpret_environment_metta<P: AsRef<Path>>(env_metta_path: P, env: &mut Environment, proto_catalogs: &mut Vec<ProtoCatalog>) -> Result<(), String> {
+    let file = fs::File::open(env_metta_path).map_err(|e| e.to_string())?;
+    let mut buf_reader = BufReader::new(file);
+    let mut file_contents = String::new();
+    buf_reader.read_to_string(&mut file_contents).map_err(|e| e.to_string())?;
+
+    let space = GroundingSpace::new();
+    let tokenizer = crate::metta::runner::Tokenizer::new();
+    let mut parser = crate::metta::runner::SExprParser::new(&file_contents);
+    while let Some(atom) = parser.parse(&tokenizer)? {
+        let atoms = crate::metta::runner::interpret(&space, &atom)?;
+        let atom = if atoms.len() != 1 {
+            return Err(format!("Error in environment.metta. Atom must evaluate into a single deterministic result.  Found {atoms:?}"));
+        } else {
+            atoms.into_iter().next().unwrap()
+        };
+
+        //TODO-FUTURE: Use atom-serde here to cut down on boilerplate from interpreting these atoms
+        let expr = ExpressionAtom::try_from(atom)?;
+        match expr.children().get(0) {
+            Some(atom_0) if *atom_0 == sym!("#includePath") => {
+                #[cfg(feature = "pkg_mgmt")]
+                proto_catalogs.push(include_path_from_cfg_atom(&expr, env)?);
+                #[cfg(not(feature = "pkg_mgmt"))]
+                log::warn!("#includePath in environment.metta not supported without pkg_mgmt feature");
+            },
+            Some(atom_0) if *atom_0 == sym!("#gitCatalog") => {
+                #[cfg(feature = "pkg_mgmt")]
+                proto_catalogs.push(git_catalog_from_cfg_atom(&expr, env)?);
+                #[cfg(not(feature = "pkg_mgmt"))]
+                log::warn!("#gitCatalog in environment.metta not supported without pkg_mgmt feature");
+            },
+            _ => return Err(format!("Error in environment.metta. Unrecognized setting: {expr:?}"))
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "pkg_mgmt")]
+fn git_catalog_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Result<ProtoCatalog, String> {
+
+    let mut catalog_name = None;
+    let mut catalog_url = None;
+    let mut refresh_time = None;
+
+    let mut atom_iter = atom.children().iter();
+    let _ = atom_iter.next();
+    for atom in atom_iter {
+        let expr = <&ExpressionAtom>::try_from(atom)?;
+        if expr.children().len() < 1 {
+            continue;
+        }
+        let key_atom = expr.children().get(0).unwrap();
+        let val_atom = match expr.children().get(1) {
+            Some(atom) => atom,
+            None => return Err(format!("Error in environment.metta. Key without value: {key_atom}"))
+        };
+
+        match key_atom {
+            _ if *key_atom == sym!("#name") => catalog_name = Some(<&SymbolAtom>::try_from(val_atom)?.name()),
+            _ if *key_atom == sym!("#url") => catalog_url = Some(<&SymbolAtom>::try_from(val_atom)?.name()),
+            _ if *key_atom == sym!("#refreshTime") => refresh_time = Some(<&SymbolAtom>::try_from(val_atom)?.name()),
+            _ => return Err(format!("Error in environment.metta. Unknown key: {key_atom}"))
+        }
+    }
+
+    let caches_dir = env.caches_dir.as_ref().unwrap();
+    let catalog_name = catalog_name.ok_or_else(|| format!("Error in environment.metta. \"name\" property required for #gitCatalog"))?;
+    let catalog_url = catalog_url.ok_or_else(|| format!("Error in environment.metta. \"url\" property required for #gitCatalog"))?;
+    let refresh_time = refresh_time.ok_or_else(|| format!("Error in environment.metta. \"refreshTime\" property required for #gitCatalog"))?
+        .parse::<u64>().map_err(|e| format!("Error in environment.metta.  Error parsing \"refreshTime\": {e}"))?;
+
+    let catalog_name = crate::metta::runner::string::strip_quotes(catalog_name);
+    let catalog_url = crate::metta::runner::string::strip_quotes(catalog_url);
+
+    let mut managed_remote_catalog = LocalCatalog::new(caches_dir, catalog_name).unwrap();
+    let remote_catalog = GitCatalog::new(caches_dir, env.fs_mod_formats.clone(), catalog_name, catalog_url, refresh_time).unwrap();
+    managed_remote_catalog.push_upstream_catalog(Box::new(remote_catalog));
+    Ok(ProtoCatalog::Other(Box::new(managed_remote_catalog)))
+}
+
+#[cfg(feature = "pkg_mgmt")]
+fn include_path_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Result<ProtoCatalog, String> {
+
+    let mut atom_iter = atom.children().iter();
+    let _ = atom_iter.next();
+    let path_atom = match atom_iter.next() {
+        Some(atom) => atom,
+        None => return Err(format!("Error in environment.metta. #includePath missing path value"))
+    };
+    let path = <&SymbolAtom>::try_from(path_atom)?.name();
+    let path = crate::metta::runner::string::strip_quotes(path);
+
+    //TODO-FUTURE: In the future we may want to replace dyn-fmt with strfmt, and do something a
+    // little bit nicer than this
+    let path = match path.strip_prefix("{$cfgdir}/") {
+        Some(rel_path) => env.config_dir().unwrap().join(rel_path),
+        None => PathBuf::from(path)
+    };
+
+    if !path.exists() {
+        log::info!("Creating search directory for modules: \"{}\"", path.display());
+        std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
+    }
+
+    Ok(ProtoCatalog::Path(path))
 }

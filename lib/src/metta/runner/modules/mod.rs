@@ -16,7 +16,10 @@ use super::interpreter_minimal::interpret;
 use super::stdlib_minimal::*;
 
 mod mod_names;
-pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, module_name_make_legal, mod_name_remove_prefix, decompose_name_path, compose_name_path, ModNameNodeDisplayWrapper};
+pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, mod_name_remove_prefix, ModNameNodeDisplayWrapper};
+#[cfg(feature = "pkg_mgmt")]
+pub(crate) use mod_names::{module_name_is_legal, module_name_make_legal, decompose_name_path, compose_name_path};
+
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
@@ -51,6 +54,7 @@ impl ModId {
     }
 }
 
+#[cfg(feature = "pkg_mgmt")]
 pub(crate) static DEFAULT_PKG_INFO: OnceLock<PkgInfo> = OnceLock::new();
 
 /// Contains state associated with a loaded MeTTa module
@@ -356,6 +360,7 @@ pub(crate) enum ModuleInitState {
 
 pub(crate) struct ModuleInitStateInsides {
     frames: Vec<ModuleInitFrame>,
+    #[cfg(feature = "pkg_mgmt")]
     module_descriptors: HashMap<ModuleDescriptor, ModId>,
 }
 
@@ -366,6 +371,7 @@ impl ModuleInitState {
     pub fn new(mod_name: String) -> (Self, ModId) {
         let new_insides = ModuleInitStateInsides {
             frames: vec![ModuleInitFrame::new_with_name(mod_name)],
+            #[cfg(feature = "pkg_mgmt")]
             module_descriptors: HashMap::new(),
         };
         let init_state = Self::Root(Rc::new(RefCell::new(new_insides)));
@@ -400,6 +406,7 @@ impl ModuleInitState {
             _ => false
         }
     }
+    #[cfg(feature = "pkg_mgmt")]
     pub fn decompose(self) -> (Vec<ModuleInitFrame>, HashMap<ModuleDescriptor, ModId>) {
         match self {
             Self::Root(cell) => {
@@ -407,6 +414,17 @@ impl ModuleInitState {
                 let frames = core::mem::take(&mut insides_ref.frames);
                 let descriptors = core::mem::take(&mut insides_ref.module_descriptors);
                 (frames, descriptors)
+            },
+            _ => unreachable!()
+        }
+    }
+    #[cfg(not(feature = "pkg_mgmt"))]
+    pub fn decompose(self) -> Vec<ModuleInitFrame> {
+        match self {
+            Self::Root(cell) => {
+                let mut insides_ref = cell.borrow_mut();
+                let frames = core::mem::take(&mut insides_ref.frames);
+                frames
             },
             _ => unreachable!()
         }
@@ -484,6 +502,7 @@ impl ModuleInitState {
     pub fn init_module(&mut self, runner: &Metta, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
 
         //Give the prepare function a chance to run, in case it hasn't yet
+        #[cfg(feature = "pkg_mgmt")]
         let loader = match loader.prepare(None, UpdateMode::FetchIfMissing)? {
             Some(new_loader) => new_loader,
             None => loader
@@ -509,6 +528,7 @@ impl ModuleInitState {
         Ok(mod_id)
     }
 
+    #[cfg(feature = "pkg_mgmt")]
     pub fn get_module_with_descriptor(&self, runner: &Metta, descriptor: &ModuleDescriptor) -> Option<ModId> {
         match self {
             Self::Root(cell) |
@@ -525,6 +545,7 @@ impl ModuleInitState {
         }
     }
 
+    #[cfg(feature = "pkg_mgmt")]
     pub fn add_module_descriptor(&self, runner: &Metta, descriptor: ModuleDescriptor, mod_id: ModId) {
         match self {
             Self::Root(cell) |
@@ -609,6 +630,9 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     fn load(&self, context: &mut RunContext) -> Result<(), String>;
 
     /// A function to access the [PkgInfo] struct of meta-data associated with a module
+    ///
+    /// NOTE: Requires `pkg_mgmt` feature
+    #[cfg(feature = "pkg_mgmt")]
     fn pkg_info(&self) -> Option<&PkgInfo> {
         None
     }
@@ -621,6 +645,11 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     /// loader will replace it.
     ///
     /// NOTE: This method may become async in the future
+    ///
+    /// FUTURE-QUESTION: Should "Fetch" and "Build" be separated? Currently they are lumped
+    /// together into one interface but it may make sense to split them into separate entry
+    /// points. I will keep them as one until the need arises.
+    #[cfg(feature = "pkg_mgmt")]
     fn prepare(&self, _local_dir: Option<&Path>, _update_mode: UpdateMode) -> Result<Option<Box<dyn ModuleLoader>>, String> {
         Ok(None)
     }
