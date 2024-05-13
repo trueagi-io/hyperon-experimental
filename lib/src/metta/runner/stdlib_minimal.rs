@@ -555,6 +555,7 @@ mod tests {
     use crate::common::test_utils::metta_space;
 
     use std::convert::TryFrom;
+    use regex::Regex;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
