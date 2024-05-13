@@ -319,28 +319,6 @@ impl EnvBuilder {
             }
         }
 
-        if let Some(config_dir) = &env.config_dir {
-            let env_metta_path = config_dir.join("environment.metta");
-
-            //Create the default environment.metta file if it doesn't exist
-            if !env_metta_path.exists() {
-                let mut file = fs::OpenOptions::new()
-                    .create(true)
-                    .write(true)
-                    .open(&env_metta_path)
-                    .expect(&format!("Error creating default environment config file at {env_metta_path:?}"));
-                file.write_all(&DEFAULT_ENVIRONMENT_METTA).unwrap();
-            }
-
-            #[cfg(feature = "pkg_mgmt")]
-            let env_metta_interp_result = interpret_environment_metta(env_metta_path, &mut env, &mut proto_catalogs);
-            #[cfg(not(feature = "pkg_mgmt"))]
-            let env_metta_interp_result = interpret_environment_metta(env_metta_path, &mut env, &mut Vec::<()>::new());
-            env_metta_interp_result.unwrap_or_else(|e| {
-                log::warn!("Error occurred interpreting environment.metta file: {e}");
-            });
-        }
-
         #[cfg(feature = "pkg_mgmt")]
         {
             //Append the built-in [FSModuleFormat]s, [SingleFileModuleFmt] and [DirModuleFmt]
@@ -362,7 +340,28 @@ impl EnvBuilder {
                     }
                 }
             }
+        }
 
+        if let Some(config_dir) = &env.config_dir {
+            let env_metta_path = config_dir.join("environment.metta");
+
+            //Create the default environment.metta file if it doesn't exist
+            if !env_metta_path.exists() {
+                let mut file = fs::OpenOptions::new()
+                    .create(true)
+                    .write(true)
+                    .open(&env_metta_path)
+                    .expect(&format!("Error creating default environment config file at {env_metta_path:?}"));
+                file.write_all(&DEFAULT_ENVIRONMENT_METTA).unwrap();
+            }
+
+            interpret_environment_metta(env_metta_path, &mut env).unwrap_or_else(|e| {
+                log::warn!("Error occurred interpreting environment.metta file: {e}");
+            });
+        }
+
+        #[cfg(feature = "pkg_mgmt")]
+        {
             //If we have a caches dir to cache modules locally then register remote catalogs
             if let Some(caches_dir) = &env.caches_dir {
 
@@ -384,7 +383,7 @@ impl EnvBuilder {
 /// NOTE: I wonder if users will get confused by the fact that the full set of runner
 /// features aren't available in the environment.metta file.  But there is a bootstrapping
 /// problem trying to using a runner here
-fn interpret_environment_metta<P: AsRef<Path>>(env_metta_path: P, env: &mut Environment, proto_catalogs: &mut Vec<ProtoCatalog>) -> Result<(), String> {
+fn interpret_environment_metta<P: AsRef<Path>>(env_metta_path: P, env: &mut Environment) -> Result<(), String> {
     let file = fs::File::open(env_metta_path).map_err(|e| e.to_string())?;
     let mut buf_reader = BufReader::new(file);
     let mut file_contents = String::new();
@@ -406,13 +405,13 @@ fn interpret_environment_metta<P: AsRef<Path>>(env_metta_path: P, env: &mut Envi
         match expr.children().get(0) {
             Some(atom_0) if *atom_0 == sym!("#includePath") => {
                 #[cfg(feature = "pkg_mgmt")]
-                proto_catalogs.push(include_path_from_cfg_atom(&expr, env)?);
+                env.catalogs.push(include_path_from_cfg_atom(&expr, env)?);
                 #[cfg(not(feature = "pkg_mgmt"))]
                 log::warn!("#includePath in environment.metta not supported without pkg_mgmt feature");
             },
             Some(atom_0) if *atom_0 == sym!("#gitCatalog") => {
                 #[cfg(feature = "pkg_mgmt")]
-                proto_catalogs.push(git_catalog_from_cfg_atom(&expr, env)?);
+                env.catalogs.push(git_catalog_from_cfg_atom(&expr, env)?);
                 #[cfg(not(feature = "pkg_mgmt"))]
                 log::warn!("#gitCatalog in environment.metta not supported without pkg_mgmt feature");
             },
@@ -423,7 +422,7 @@ fn interpret_environment_metta<P: AsRef<Path>>(env_metta_path: P, env: &mut Envi
 }
 
 #[cfg(feature = "pkg_mgmt")]
-fn git_catalog_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Result<ProtoCatalog, String> {
+fn git_catalog_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Result<Box<dyn ModuleCatalog>, String> {
 
     let mut catalog_name = None;
     let mut catalog_url = None;
@@ -462,11 +461,11 @@ fn git_catalog_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Result
     let mut managed_remote_catalog = LocalCatalog::new(caches_dir, catalog_name).unwrap();
     let remote_catalog = GitCatalog::new(caches_dir, env.fs_mod_formats.clone(), catalog_name, catalog_url, refresh_time).unwrap();
     managed_remote_catalog.push_upstream_catalog(Box::new(remote_catalog));
-    Ok(ProtoCatalog::Other(Box::new(managed_remote_catalog)))
+    Ok(Box::new(managed_remote_catalog))
 }
 
 #[cfg(feature = "pkg_mgmt")]
-fn include_path_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Result<ProtoCatalog, String> {
+fn include_path_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Result<Box<dyn ModuleCatalog>, String> {
 
     let mut atom_iter = atom.children().iter();
     let _ = atom_iter.next();
@@ -489,5 +488,5 @@ fn include_path_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Resul
         std::fs::create_dir_all(&path).map_err(|e| e.to_string())?;
     }
 
-    Ok(ProtoCatalog::Path(path))
+    Ok(Box::new(DirCatalog::new(path, env.fs_mod_formats.clone())))
 }
