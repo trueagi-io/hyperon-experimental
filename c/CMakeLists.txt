@@ -2,6 +2,8 @@
 cmake_minimum_required(VERSION 3.15)
 project(hyperonc)
 
+option(GIT "Adds git features to hyperon library; requires OpenSSL" ON)
+
 enable_testing()
 option(BUILD_SHARED_LIBS "Build shared library" ON)
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
@@ -34,10 +36,15 @@ set(HYPERONC_STATIC_LIB_PATH ${HYPERONC_TARGET_DIR}/${HYPERONC_STATIC_LIB_FILE})
 set(HYPERONC_INCLUDE_DIR ${HYPERONC_TARGET_DIR}/hyperon)
 separate_arguments(CARGO_ARGS_LIST NATIVE_COMMAND ${CARGO_ARGS})
 
+if(GIT)
+    set(GIT_FEATURE --features hyperon/git)
+endif()
+
 add_custom_target(build-hyperonc ALL
     COMMAND cargo build
         ${CARGO_ARGS_LIST}
         $<${IS_RELEASE_BUILD}:--release>
+        ${GIT_FEATURE}
         --target-dir ${HYPERONC_TARGET_DIR}
 
     COMMAND ${CMAKE_COMMAND} -E copy

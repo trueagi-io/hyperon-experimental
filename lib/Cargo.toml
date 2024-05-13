@@ -27,7 +27,7 @@ path = "src/lib.rs"
 crate-type = ["lib"]
 
 [features]
-default = ["pkg_mgmt", "git"]
+default = ["pkg_mgmt"]
 # Add one of the features below into default list to enable.
 # See https://doc.rust-lang.org/cargo/reference/features.html#the-features-section
 minimal = [] # enables minimal MeTTa interpreter
