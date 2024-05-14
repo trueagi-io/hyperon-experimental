@@ -18,8 +18,6 @@ use regex::Regex;
 use super::arithmetics::*;
 use super::string::*;
 
-pub const VOID_SYMBOL : Atom = sym!("%void%");
-
 fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
 }
@@ -172,7 +170,7 @@ impl Display for IncludeOp {
 
 impl Grounded for IncludeOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -195,13 +193,16 @@ impl Grounded for IncludeOp {
         let program_text = String::from_utf8(program_buf)
             .map_err(|e| e.to_string())?;
         let parser = crate::metta::text::OwnedSExprParser::new(program_text);
-        //QUESTION: do we want to do anything with the result from the `include` operation?
-        let _eval_result = context.run_inline(|context| {
+        let eval_result = context.run_inline(|context| {
             context.push_parser(Box::new(parser));
             Ok(())
         })?;
 
-        unit_result()
+        //NOTE: Current behavior returns the result of the last sub-eval to match the old
+        // `import!` before before module isolation.  However that means the results prior to
+        // the last are dropped.  I don't know how to fix this or if it's even wrong, but it's
+        // different from the way "eval-type" APIs work when called from host code, e.g. Rust
+        Ok(eval_result.into_iter().last().unwrap_or_else(|| vec![]))
     }
 
     fn match_(&self, other: &Atom) -> MatchResultIter {
@@ -238,7 +239,7 @@ impl Display for ModSpaceOp {
 
 impl Grounded for ModSpaceOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, rust_type_atom::<DynSpace>()])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -1184,7 +1185,7 @@ mod non_minimal_only_stdlib {
                 Ok(result) if result.is_empty() => {
                     cases.into_iter()
                         .find_map(|(pattern, template, _external_vars)| {
-                            if pattern == VOID_SYMBOL {
+                            if pattern == EMPTY_SYMBOL {
                                 Some(template)
                             } else {
                                 None
@@ -1234,7 +1235,7 @@ mod non_minimal_only_stdlib {
             for (pattern, template, external_vars) in cases {
                 let bindings = matcher::match_atoms(atom, &pattern)
                     .map(|b| b.convert_var_equalities_to_bindings(&external_vars));
-                let result: Vec<Atom> = bindings.map(|b| matcher::apply_bindings_to_atom(&template, &b)).collect();
+                let result: Vec<Atom> = bindings.map(|b| matcher::apply_bindings_to_atom_move(template.clone(), &b)).collect();
                 if !result.is_empty() {
                     return result
                 }
@@ -1454,7 +1455,7 @@ mod non_minimal_only_stdlib {
 
             let bindings = matcher::match_atoms(&pattern, &atom)
                 .map(|b| b.convert_var_equalities_to_bindings(&external_vars));
-            let result = bindings.map(|b| { matcher::apply_bindings_to_atom(&template, &b) }).collect();
+            let result = bindings.map(|b| { matcher::apply_bindings_to_atom_move(template.clone(), &b) }).collect();
             log::debug!("LetOp::execute: pattern: {}, atom: {}, template: {}, result: {:?}", pattern, atom, template, result);
             Ok(result)
         }
@@ -1861,10 +1862,10 @@ mod tests {
         let case_op = CaseOp::new(space.clone());
 
         assert_eq!(case_op.execute(&mut vec![expr!(("foo")),
-                expr!(((n "B") n) ("%void%" "D"))]),
+                expr!(((n "B") n) ("Empty" "D"))]),
             Ok(vec![Atom::sym("A")]));
         assert_eq!(case_op.execute(&mut vec![expr!({MatchOp{}} {space} ("B" "C") ("C" "B")),
-                expr!(((n "C") n) ("%void%" "D"))]),
+                expr!(((n "C") n) ("Empty" "D"))]),
             Ok(vec![Atom::sym("D")]));
     }
 

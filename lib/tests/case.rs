@@ -49,11 +49,11 @@ fn test_case_operation() {
             (((Rel-P $y) (P $y))
             ((Rel-Q $y) (Q $y))))
 
-        ; %void% can be used to capture empty results
+        ; Empty can be used to capture empty results
         !(case (match &self ($rel B $x) ($rel $x))
             (((Rel-P $y) (P $y))
             ((Rel-Q $y) (Q $y))
-            (%void% no-match)))
+            (Empty no-match)))
 
         ; a functional example
         (= (maybe-inc $x)

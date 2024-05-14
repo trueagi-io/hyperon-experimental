@@ -3,7 +3,7 @@ import sys
 import os
 
 from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError, AtomType, MatchableObject, \
-    G, S, Atoms
+    G, S, Atoms, get_string_value, GroundedObject, SymbolAtom
 from .base import Tokenizer, SExprParser
 from .ext import register_atoms, register_tokens
 import hyperonpy as hp
@@ -62,13 +62,6 @@ def bool_ops():
         r"and": andAtom,
         r"not": notAtom
     }
-
-def get_string_value(value) -> str:
-    if not isinstance(value, str):
-        value = repr(value)
-    if len(value) > 2 and ("\"" == value[0]) and ("\"" == value[-1]):
-        return value[1:-1]
-    return value
 
 class RegexMatchableObject(MatchableObject):
     ''' To match atoms with regular expressions'''
@@ -212,3 +205,52 @@ def load_ascii():
     return {
         r"load-ascii": loadAtom
     }
+
+def try_unwrap_python_object(a, is_symbol_to_str = False):
+    if isinstance(a, GroundedAtom):
+        # FIXME? Do we need to unwrap a grounded object if it is not GroundedObject?
+        return a.get_object().content if isinstance(a.get_object(), GroundedObject) else a.get_object()
+    if is_symbol_to_str and isinstance(a, SymbolAtom):
+        return a.get_name()
+    return a
+
+# convert nested tuples to nested python tuples or lists
+def _py_tuple_list(tuple_list, metta_tuple):
+    rez = []
+    for a in metta_tuple.get_children():
+        if isinstance(a, ExpressionAtom):
+            rez.append(_py_tuple_list(tuple_list, a))
+        else:
+            rez.append(try_unwrap_python_object(a))
+    return tuple_list(rez)
+
+def py_tuple(metta_tuple):
+    return [ValueAtom(_py_tuple_list(tuple, metta_tuple))]
+
+def py_list(metta_tuple):
+    return [ValueAtom(_py_tuple_list(list, metta_tuple))]
+
+def tuple_to_keyvalue(a):
+    ac = a.get_children()
+    if len(ac) != 2:
+        raise Exception("Syntax error in tuple_to_keyvalue")
+    return try_unwrap_python_object(ac[0], is_symbol_to_str = True), try_unwrap_python_object(ac[1])
+
+# convert pair of tuples to python dictionary
+def py_dict(metta_tuple):
+    return [ValueAtom(dict([tuple_to_keyvalue(a) for a in metta_tuple.get_children()]))]
+
+# chain python objects with |  (syntactic sugar for langchain)
+def py_chain(metta_tuple):
+    objects = [try_unwrap_python_object(a) for a in metta_tuple.get_children()]
+    result = objects[0]
+    for obj in objects[1:]:
+        result = result | obj
+    return [ValueAtom(result)]
+
+@register_atoms()
+def py_funs():
+    return {"py-tuple": OperationAtom("py-tuple", py_tuple, unwrap = False),
+            "py-list" : OperationAtom("py-list" , py_list , unwrap = False),
+            "py-dict" : OperationAtom("py-dict" , py_dict , unwrap = False),
+            "py-chain": OperationAtom("py-chain", py_chain, unwrap = False)}

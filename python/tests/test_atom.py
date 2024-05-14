@@ -12,7 +12,7 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(str(S("a")), "a")
 
     def test_symbol_type(self):
-        self.assertEqual(S("a").get_type(), AtomKind.SYMBOL)
+        self.assertEqual(S("a").get_metatype(), AtomKind.SYMBOL)
 
     def test_symbol_get_symbol(self):
         self.assertEqual(S("a").get_name(), "a")
@@ -28,7 +28,7 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(str(V("x")), "$x")
 
     def test_variable_type(self):
-        self.assertEqual(V("x").get_type(), AtomKind.VARIABLE)
+        self.assertEqual(V("x").get_metatype(), AtomKind.VARIABLE)
 
     def test_variable_get_name(self):
         self.assertEqual(V("x").get_name(), "x")
@@ -42,7 +42,7 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(str(ValueAtom("1.0")), '"1.0"')
 
     def test_grounded_type(self):
-        self.assertEqual(ValueAtom(1.0).get_type(), AtomKind.GROUNDED)
+        self.assertEqual(ValueAtom(1.0).get_metatype(), AtomKind.GROUNDED)
 
     def test_grounded_grounded_type(self):
         atom = G(GroundedObject(None), S("Float"))
@@ -74,7 +74,7 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(str(E(x2Atom, ValueAtom(1.0))), "(*2 1.0)")
 
     def test_expr_type(self):
-        self.assertEqual(E(x2Atom, ValueAtom(1.0)).get_type(), AtomKind.EXPR)
+        self.assertEqual(E(x2Atom, ValueAtom(1.0)).get_metatype(), AtomKind.EXPR)
 
     def test_expr_get_children(self):
         self.assertEqual(E(x2Atom, ValueAtom(1.0)).get_children(),
@@ -154,7 +154,7 @@ class GroundedNoCopy:
 
 class MatchableObjectTest(MatchableObject):
     def match_(self, atom):
-        return [{'atom_type': S(atom.get_children()[0].get_type().name)}]
+        return [{'atom_type': S(atom.get_children()[0].get_metatype().name)}]
 
 def MatchableAtomTest(value, type_name=None, atom_id=None):
     return G(MatchableObjectTest(value, atom_id), AtomType.UNDEFINED)

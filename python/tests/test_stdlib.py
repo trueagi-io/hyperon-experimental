@@ -84,6 +84,37 @@ class StdlibTest(HyperonTestCase):
 
         self.assertEqual(metta.run('!(intent "Hi")', True), [])
 
+    def test_py_list_tuple(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+        self.assertEqual(metta.run('!(py-list ())'), [[ValueAtom( [] )]])
+        self.assertEqual(metta.run('!(py-tuple ())'), [[ValueAtom( () )]])
+        self.assertEqual(metta.run('!(py-dict ())'), [[ValueAtom( {} )]])
+        self.assertEqual(metta.run('!(py-tuple (1 (2 (3 "3")) (py-atom list)))'), [[ValueAtom((1,(2,(3, "3")), list))]])
+        self.assertEqual(metta.run('!(py-list (1 2 (4.5 3)))'), [[ValueAtom( [1,2,[4.5,3]] )]])
+        self.assertEqual(metta.run('!(py-list (1 2 (py-tuple (3 4))))'), [[ValueAtom( [1,2, (3,4)] )]])
+
+        self.assertEqual(metta.run('!(py-dict ((a "b") ("b" "c")))'), [[ValueAtom( {"a":"b", "b":"c"} )]])
+
+        self.assertEqual(str(metta.run('!(py-list (a b c))')[0][0].get_object().content[2]), "c")
+
+        # We need py-chain for langchain, but we test with bitwise operation | (1 | 2 | 3 | 4 = 7)
+        self.assertEqual(metta.run('!(py-chain (1 2 3 4))'), [[ValueAtom( 7 )]])
+
+        # test when we except errors (just in case we reset metta after each exception)
+        self.assertRaises(Exception, metta.run('!(py-dict (("a" "b" "c") ("b" "c")))'))
+        metta = MeTTa(env_builder=Environment.test_env())
+
+        self.assertRaises(Exception, metta.run('!(py-dict (("a") ("b" "c")))'))
+        metta = MeTTa(env_builder=Environment.test_env())
+
+        self.assertRaises(Exception, metta.run('!(py-dict ("a" "b") ("b" "c"))'))
+        metta = MeTTa(env_builder=Environment.test_env())
+
+        self.assertRaises(Exception, metta.run('!(py-list 1 2)'))
+        metta = MeTTa(env_builder=Environment.test_env())
+
+        self.assertRaises(Exception, metta.run('!(py-list 1)'))
+        metta = MeTTa(env_builder=Environment.test_env())
 
 if __name__ == "__main__":
     unittest.main()
