@@ -253,7 +253,7 @@ impl GroundingSpace {
                             acc
                         } else {
                             acc.drain(0..).flat_map(|prev| -> BindingsSet {
-                                let query = matcher::apply_bindings_to_atom(&query, &prev);
+                                let query = matcher::apply_bindings_to_atom_move(query.clone(), &prev);
                                 let mut res = self.query(&query);
                                 res.drain(0..)
                                     .flat_map(|next| next.merge_v2(&prev))

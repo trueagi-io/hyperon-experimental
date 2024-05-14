@@ -19,7 +19,7 @@
 //! of `%Undefined%` type can be matched with any type required.
 
 use super::*;
-use crate::atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom};
+use crate::atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom_move};
 use crate::space::Space;
 
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
@@ -39,7 +39,7 @@ fn query_super_types(space: &dyn Space, sub_type: &Atom) -> Vec<Atom> {
     let var_x = VariableAtom::new("X").make_unique();
     let mut super_types = space.query(&isa_query(&sub_type, &Atom::Variable(var_x.clone())));
     let atom_x = Atom::Variable(var_x);
-    super_types.drain(0..).map(|bindings| { apply_bindings_to_atom(&atom_x, &bindings) }).collect()
+    super_types.drain(0..).map(|bindings| { apply_bindings_to_atom_move(atom_x.clone(), &bindings) }).collect()
 }
 
 fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
@@ -108,7 +108,7 @@ fn query_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     let mut types = query_has_type(space, atom, &Atom::Variable(var_x.clone()));
     let atom_x = Atom::Variable(var_x);
     let mut types = types.drain(0..).filter_map(|bindings| {
-        let atom = apply_bindings_to_atom(&atom_x, &bindings);
+        let atom = apply_bindings_to_atom_move(atom_x.clone(), &bindings);
         if atom_x == atom {
             None
         } else {
@@ -286,7 +286,7 @@ fn get_application_types(space: &dyn Space, atom: &Atom, expr: &ExpressionAtom) 
             has_function_types = true;
             let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
             for bindings in check_arg_types(actual_arg_types.as_slice(), meta_arg_types.as_slice(), expected_arg_types, Bindings::new()) {
-                types.push(apply_bindings_to_atom(&ret_typ, &bindings));
+                types.push(apply_bindings_to_atom_move(ret_typ.clone(), &bindings));
             }
         }
         log::trace!("get_application_types: function application {} types {:?}", atom, types);
