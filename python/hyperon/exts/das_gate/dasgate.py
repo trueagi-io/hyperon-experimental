@@ -179,7 +179,8 @@ class DASpace(AbstractSpace):
             return new_bindings_set
 
         if self.remote:
-            return self._query_actual_helper_no_iter(answer, new_bindings_set)
+            return self._query_actual_helper(answer, new_bindings_set)
+            # return self._query_actual_helper_no_iter(answer, new_bindings_set)
             # return self._query_temp_helper(answer, new_bindings_set)
         else:
             #return self._query_actual_helper_no_iter(answer, new_bindings_set)
