@@ -1,8 +1,8 @@
 !(import! &self das_gate)
 
 ;!(bind! &das (new-das))
-;!(bind! &das (new-remote-das (Error "Put your IP here" ()) (Error "Put port number here" ())))
-!(bind! &das (new-remote-das 64.176.184.225 8080))
+!(bind! &das (new-remote-das (Error "Put your IP here" ()) (Error "Put port number here" ())))
+
 
 ;!(match &das ($t MYBPP) ($t MYBPP))
 !(match &das ($t MYBPP) ($t MYBPP))
