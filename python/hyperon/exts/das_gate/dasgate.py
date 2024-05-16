@@ -145,10 +145,6 @@ class DASpace(AbstractSpace):
             else:
                 t_lvl_dolist =a.subgraph['is_toplevel']
 
-            print ('++++++++++++++++')
-            print (t_lvl_dolist)
-            print ('++++++++++++++++')
-
             if t_lvl_dolist:
                 bindings = Bindings()
                 if not a.assignment is None:
@@ -170,10 +166,7 @@ class DASpace(AbstractSpace):
 
     def query(self, query_atom):
         query = self._atom2dict_new(query_atom)
-        print ('==================')
-        print (query)
-        print ('==================')
-        # print(query)
+
         query_params = {
             "toplevel_only": True,
             # "return_type": QueryOutputFormat.ATOM_INFO,
@@ -182,9 +175,6 @@ class DASpace(AbstractSpace):
             }
         answer = [query_answer for query_answer in self.das.query(query, query_params)]
         new_bindings_set = BindingsSet.empty()
-        print ('-------------------')
-        print (answer)
-        print ('-------------------')
 
         if not answer:
             return new_bindings_set
