@@ -19,6 +19,15 @@
 
 ; The simplest match with grounding the variable in the node
 !(match &das ($v1 (Test A)) (This $v1 works))
+
+!(assertEqual
+    (match &das ($v1 (Test A)) (This $v1 works))
+    (superpose ((This Test works) (This Best works))))
+
+;!(assertEqualToResult
+;    (match &das ($v1 (Test A)) (This $v1 works))
+;   ((This Test works) (This Best works)))
+
 ; The simplest match with grounding the variable in the link
 !(match &das (Test $v2) (This $v2 works))
 

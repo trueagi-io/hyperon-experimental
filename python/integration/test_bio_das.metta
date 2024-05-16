@@ -6,6 +6,17 @@
 
 ;!(match &das ($t MYBPP) ($t MYBPP))
 !(match &das ($t MYBPP) ($t MYBPP))
+!(match &das (translation_of (protein "O43264") (transcript "ENST00000200135")) OK)
+
+!(assertEqualToResult
+    (match &das (translation_of (protein "O43264") (transcript "ENST00000200135")) OK)
+    ())
+
+!(match &das (translation_of (protein O43264) (transcript ENST00000200135)) OK)
+
+!(assertEqualToResult
+    (match &das (translation_of (protein O43264) (transcript ENST00000200135)) OK)
+    (OK))
 ;!(match &das (protein MYBPP) res)
 ;!(match &das
 ;            (,
