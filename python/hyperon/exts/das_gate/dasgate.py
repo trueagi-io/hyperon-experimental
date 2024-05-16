@@ -223,7 +223,13 @@ class DASpace(AbstractSpace):
 
 
 def create_new_space(host, port):
-    return [G(SpaceRef(DASpace(remote=True, host=host.__repr__(), port=port.__repr__())))]
+    host = host.__repr__()
+    port = port.__repr__()
+    if host.startswith('"') and host.endswith('"'):
+        host = host[1:-1]
+    if port.startswith('"') and port.endswith('"'):
+        port = port[1:-1]
+    return [G(SpaceRef(DASpace(remote=True, host=host, port=port)))]
 
 @register_atoms(pass_metta=True)
 def my_glob_atoms(metta):
