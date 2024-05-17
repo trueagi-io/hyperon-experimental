@@ -150,7 +150,7 @@ class DASpace(AbstractSpace):
                 if not a.assignment is None:
                     for var, val in a.assignment.mapping.items():
                         # remove '$', because it is automatically added
-                        bindings.add_var_binding(V(var[1:]), self._handle2atom(val))
+                        bindings.add_var_binding(V(var[1:]), self._handle2atom5(val))
                 new_bindings_set.push(bindings)
         return new_bindings_set
 
