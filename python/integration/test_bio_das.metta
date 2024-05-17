@@ -17,6 +17,13 @@
 !(assertEqualToResult
     (match &das (translation_of (protein O43264) (transcript ENST00000200135)) OK)
     (OK))
+
+!(match &das (translation_of (protein $x) (transcript ENST00000200135)) $x)
+
+!(assertEqualToResult
+    (match &das (translation_of (protein $x) (transcript ENST00000200135)) $x)
+    (O43264))
+
 ;!(match &das (protein MYBPP) res)
 ;!(match &das
 ;            (,
