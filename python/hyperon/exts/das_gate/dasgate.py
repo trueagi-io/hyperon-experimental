@@ -147,9 +147,10 @@ class DASpace(AbstractSpace):
 
             if t_lvl_dolist:
                 bindings = Bindings()
-                for var, val in a.assignment.mapping.items():
-                    # remove '$', because it is automatically added
-                    bindings.add_var_binding(V(var[1:]), self._handle2atom(val))
+                if not a.assignment is None:
+                    for var, val in a.assignment.mapping.items():
+                        # remove '$', because it is automatically added
+                        bindings.add_var_binding(V(var[1:]), self._handle2atom(val))
                 new_bindings_set.push(bindings)
         return new_bindings_set
 
@@ -165,7 +166,7 @@ class DASpace(AbstractSpace):
 
     def query(self, query_atom):
         query = self._atom2dict_new(query_atom)
-        # print(query)
+
         query_params = {
             "toplevel_only": True,
             # "return_type": QueryOutputFormat.ATOM_INFO,
@@ -222,7 +223,13 @@ class DASpace(AbstractSpace):
 
 
 def create_new_space(host, port):
-    return [G(SpaceRef(DASpace(remote=True, host=host.__repr__(), port=port.__repr__())))]
+    host = host.__repr__()
+    port = port.__repr__()
+    if host.startswith('"') and host.endswith('"'):
+        host = host[1:-1]
+    if port.startswith('"') and port.endswith('"'):
+        port = port[1:-1]
+    return [G(SpaceRef(DASpace(remote=True, host=host, port=port)))]
 
 @register_atoms(pass_metta=True)
 def my_glob_atoms(metta):
