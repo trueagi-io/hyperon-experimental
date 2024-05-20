@@ -47,13 +47,13 @@
 (: quote (-> Atom Atom))
 
 (@doc unify
-  (@desc "Matches two atoms and returns $then if they are matched and $else otherwise")
+  (@desc "Matches two first arguments and returns third argument if they are matched and forth argument otherwise")
   (@params (
     (@param "First atom to unify with")
     (@param "Second atom to unify with")
     (@param "Result if two atoms unified successfully")
     (@param "Result otherwise")))
-  (@return "Unit atom"))
+  (@return "Third argument when first two atoms are matched of forth one otherwise"))
 (: unify (-> Atom Atom Atom Atom %Undefined%))
 (= (unify $a $a $then $else) $then)
 (= (unify $a $b $then $else)
@@ -63,8 +63,8 @@
 (= (unify-or-empty $a $b) (empty))
 
 (@doc empty
-  (@desc "Removes current result from a non-deterministic result")
-  (@return "Empty [] brackets"))
+  (@desc "Cuts evaluation of the non-deterministic branch and removes it from the result")
+  (@return "Nothing"))
 (: empty (-> %Undefined%))
 (= (empty) (let a b never-happens))
 
@@ -109,12 +109,12 @@
 (@doc @doc-formal
   (@desc "Used for documentation purposes. get-doc returns documentation starting with @doc-formal symbol. @doc-formal contains 6 or 4 parameters depending on the entity being described (functions being described using 6 parameters, atoms - 4 parameters)")
   (@params (
-    (@param "DocItem. Function/Atom name for which documentation is to be displayed. Format (@item name)")
-    (@param "DocKindAtom/DocKindFunction. Contains (@kind function) or (@kind atom) depends on entity which documentation is displayed")
-    (@param "DocType. Contains type notation of function/atom")
-    (@param "DocDescription. Function/atom description")
-    (@param "DocParameters (functions only). Description of function parameters")
-    (@param "DocReturn (functions only). Description of function's return value")))
+    (@param "Function/Atom name for which documentation is to be displayed. Format (@item name)")
+    (@param "Contains (@kind function) or (@kind atom) depends on entity which documentation is displayed")
+    (@param "Contains type notation of function/atom")
+    (@param "Function/atom description")
+    (@param "(Functions only). Description of function parameters")
+    (@param "(Functions only). Description of function's return value")))
   (@return "Expression containing full documentation on function"))
 (: @doc-formal (-> DocItem DocKindFunction DocType DocDescription DocParameters DocReturn DocFormal))
 (: @doc-formal (-> DocItem DocKindAtom DocType DocDescription DocFormal))
@@ -152,7 +152,7 @@
 (: @params (-> Expression DocParameters))
 
 (@doc get-doc
-  (@desc "Returns documentation for the given Atom/Function. It checks if given variable is an expression and evaluates get-doc-atom on the input value or get-doc-single-atom otherwise")
+  (@desc "Returns documentation for the given Atom/Function")
   (@params (
     (@param "Atom/Function name for which documentation is needed")))
   (@return "Documentation for the given atom/function"))
@@ -246,7 +246,7 @@
   (@desc "Function checks if input type is a function type")
   (@params (
     (@param "Type notation")))
-  (@return "True if input type notation is a function type, else - otherwise"))
+  (@return "True if input type notation is a function type, False - otherwise"))
 (: is-function-type (-> Type Bool))
 (= (is-function-type $type)
   (let $type-meta (get-metatype $type)
@@ -257,10 +257,10 @@
       ($_ False) ))))
 
 (@doc help!
-  (@desc "Function returns documentation for input value. It uses println! to output documentation")
+  (@desc "Function prints documentation for the input atom.")
   (@params (
     (@param "Input to get documentation for")))
-  (@return "Unit value"))
+  (@return "Unit atom"))
 (: help! (-> Atom (->)))
 (= (help! $atom)
   (case (get-doc $atom) (
@@ -284,18 +284,18 @@
   (@desc "Function used by function help! to output parameters using println!")
   (@params (
     (@param "Parameters list")))
-  (@return "Unit value"))
+  (@return "Unit atom"))
 (: help-param! (-> Atom (->)))
 (= (help-param! $param)
   (let (@param (@type $type) (@desc $desc)) $param
     (println! (format-args "  {} {}" ($type $desc))) ))
 
 (@doc for-each-in-atom
-  (@desc "Applies $func to each atom in Expression")
+  (@desc "Applies function passed as a second argument to each atom inside first argument")
   (@params (
     (@param "Expression to each atom in which function will be applied")
     (@param "Function to apply")))
-  (@return "Unit value"))
+  (@return "Unit atom"))
 (: for-each-in-atom (-> Expression Atom (->)))
 (= (for-each-in-atom $expr $func)
   (if (noreduce-eq $expr ())
@@ -310,7 +310,7 @@
   (@params (
     (@param "First atom")
     (@param "Second atom")))
-  (@return "True if not reduced atoms are equal, else - otherwise"))
+  (@return "True if not reduced atoms are equal, False - otherwise"))
 (: noreduce-eq (-> Atom Atom Bool))
 (= (noreduce-eq $a $b) (== (quote $a) (quote $b)))
 
