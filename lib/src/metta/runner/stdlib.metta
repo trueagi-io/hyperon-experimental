@@ -97,6 +97,8 @@
   (@return "Parameter description"))
 (: @param (-> String DocParameterInformal))
 
+(: @param (-> DocType DocDescription DocParameter))
+
 (@doc @return
   (@desc "Used for documentation purposes. Description of function return value starts with @return as a part of @doc")
   (@params (
@@ -149,12 +151,7 @@
   (@return "DocParameters containing description of all parameters of function in form of (@params ((@param ...) (@param ...) ...))"))
 (: @params (-> Expression DocParameters))
 
-(@doc @param
-  (@desc "Used for function documentation purposes. Contains description of one of function's parameters")
-  (@params (
-    (@param "Description of parameter"))) ; seeing at type notation of @param it seems that two input should be but i don't get what is first one then
-  (@return "DocParameter containing description of function's parameter in form of (@param description)"))
-(: @param (-> DocType DocDescription DocParameter))
+
 
 (@doc @return
   (@desc "Used for function documentation purposes. Contains description of function's return value")
