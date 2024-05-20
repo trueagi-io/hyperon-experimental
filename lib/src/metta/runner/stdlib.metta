@@ -96,7 +96,6 @@
     (@param "String containing parameter description")))
   (@return "Parameter description"))
 (: @param (-> String DocParameterInformal))
-
 (: @param (-> DocType DocDescription DocParameter))
 
 (@doc @return
@@ -105,6 +104,7 @@
     (@param "String containing return value description")))
   (@return "Return value description"))
 (: @return (-> String DocReturnInformal))
+(: @return (-> DocType DocDescription DocReturn))
 
 (@doc @doc-formal
   (@desc "Used for documentation purposes. get-doc returns documentation starting with @doc-formal symbol. @doc-formal contains 6 or 4 parameters depending on the entity being described (functions being described using 6 parameters, atoms - 4 parameters)")
@@ -153,12 +153,7 @@
 
 
 
-(@doc @return
-  (@desc "Used for function documentation purposes. Contains description of function's return value")
-  (@params (
-    (@param "Description of return value"))) ; seeing at type notation of @return it seems that two input should be but i don't get what is first one then
-  (@return "DocReturn containing description of function's return value in form of (@return description)"))
-(: @return (-> DocType DocDescription DocReturn))
+
 
 (@doc get-doc
   (@desc "Returns documentation for the given Atom/Function. It checks if given variable is an expression and evaluates get-doc-atom on the input value or get-doc-single-atom otherwise")
