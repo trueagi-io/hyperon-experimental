@@ -151,10 +151,6 @@
   (@return "DocParameters containing description of all parameters of function in form of (@params ((@param ...) (@param ...) ...))"))
 (: @params (-> Expression DocParameters))
 
-
-
-
-
 (@doc get-doc
   (@desc "Returns documentation for the given Atom/Function. It checks if given variable is an expression and evaluates get-doc-atom on the input value or get-doc-single-atom otherwise")
   (@params (
