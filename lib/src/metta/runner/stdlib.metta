@@ -90,19 +90,19 @@
   (@return "Function description"))
 (: @desc (-> String DocDescription))
 
-(@doc @param
-  (@desc "Used for documentation purposes. Description of function parameter starts with @param as a part of @params which is a part of @doc")
-  (@params (
-    (@param "String containing parameter description")))
-  (@return "Parameter description"))
+;(@doc @param
+;  (@desc "Used for documentation purposes. Description of function parameter starts with @param as a part of @params which is a part of @doc")
+;  (@params (
+;    (@param "String containing parameter description")))
+;  (@return "Parameter description"))
 (: @param (-> String DocParameterInformal))
 (: @param (-> DocType DocDescription DocParameter))
 
-(@doc @return
-  (@desc "Used for documentation purposes. Description of function return value starts with @return as a part of @doc")
-  (@params (
-    (@param "String containing return value description")))
-  (@return "Return value description"))
+;(@doc @return
+;  (@desc "Used for documentation purposes. Description of function return value starts with @return as a part of @doc")
+;  (@params (
+;    (@param "String containing return value description")))
+;  (@return "Return value description"))
 (: @return (-> String DocReturnInformal))
 (: @return (-> DocType DocDescription DocReturn))
 
