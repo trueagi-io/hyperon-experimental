@@ -733,6 +733,55 @@ impl Bindings {
             .collect::<Vec<(VariableAtom, Atom)>>()
             .into()
     }
+
+    pub fn apply_and_retain<F>(&mut self, atom: &mut Atom, f: F) where F: Fn(&VariableAtom) -> bool {
+        let trace_data = match log::log_enabled!(log::Level::Trace) {
+            true => Some((self.clone(), atom.clone())),
+            false => None
+        };
+        let to_remove: HashSet<VariableAtom> = self.binding_by_var.keys()
+            .filter_map(|var| {
+                if !f(var) {
+                    Some(var.clone())
+                } else {
+                    None
+                }
+            }).collect();
+
+        atom.iter_mut().for_each(|atom| match atom {
+            Atom::Variable(var) => {
+                if to_remove.contains(&var) {
+                    match self.resolve(var) {
+                        Some(Atom::Variable(v)) if to_remove.contains(&v) => { self.rename_var(var, &to_remove).map(|v| *atom = v); },
+                        Some(value) => { *atom = value; },
+                        None => {},
+                    }
+                }
+            },
+            _ => {},
+        });
+        for var in &to_remove {
+            self.remove_var_from_binding(var);
+        }
+
+        if let Some((trace_bindings, trace_atom)) = trace_data {
+            log::trace!("Bindings::apply_and_retain: atom: {} -> {}", trace_atom, atom);
+            log::trace!("Bindings::apply_and_retain: bindings: {:?} / {:?} -> {:?}", trace_bindings, to_remove, self);
+        }
+    }
+
+    fn rename_var(&self, var: &VariableAtom, to_remove: &HashSet<VariableAtom>) -> Option<Atom> {
+        let renamed = match self.get_binding(var) {
+            None => None,
+            Some(binding) =>
+                match self.binding_by_var.iter().filter(|(v, &b)| b == binding.id && !to_remove.contains(*v)).next() {
+                    None => None,
+                    Some((v, _)) => Some(Atom::Variable(v.clone())),
+                },
+        };
+        log::trace!("Bindings::rename_var: {} -> {:?}", var, renamed);
+        renamed
+    }
 }
 
 impl Display for Bindings {
@@ -1116,6 +1165,13 @@ pub fn match_result_product(prev: MatchResultIter, next: MatchResultIter) -> Mat
     Box::new(prev.merge(&next).into_iter())
 }
 
+/// Applies bindings to atom and return it (see [apply_bindings_to_atom_mut]).
+#[inline]
+pub fn apply_bindings_to_atom_move(mut atom: Atom, bindings: &Bindings) -> Atom {
+    apply_bindings_to_atom_mut(&mut atom, bindings);
+    atom
+}
+
 /// Applies bindings to atom. Function replaces all variables in atom by
 /// corresponding bindings.
 ///
@@ -1123,25 +1179,30 @@ pub fn match_result_product(prev: MatchResultIter, next: MatchResultIter) -> Mat
 ///
 /// ```
 /// use hyperon::*;
-/// use hyperon::atom::matcher::apply_bindings_to_atom;
+/// use hyperon::atom::matcher::apply_bindings_to_atom_mut;
 ///
 /// let binds = bind!{ y: expr!("Y") };
-/// let atom = apply_bindings_to_atom(&expr!("+" "X" y), &binds);
+/// let mut atom = expr!("+" "X" y);
+/// apply_bindings_to_atom_mut(&mut atom, &binds);
 ///
 /// assert_eq!(atom, expr!("+" "X" "Y"));
 /// ```
-pub fn apply_bindings_to_atom(atom: &Atom, bindings: &Bindings) -> Atom {
-    let mut result = atom.clone();
+pub fn apply_bindings_to_atom_mut(atom: &mut Atom, bindings: &Bindings) {
+    let trace_atom = match log::log_enabled!(log::Level::Trace) {
+        true => Some(atom.clone()),
+        false => None,
+    };
     if !bindings.is_empty() {
-        result.iter_mut().for_each(|atom| match atom {
+        atom.iter_mut().for_each(|atom| match atom {
             Atom::Variable(var) => {
                 bindings.resolve(var).map(|value| *atom = value);
             },
             _ => {},
         });
     }
-    log::trace!("apply_bindings_to_atom: {} | {} -> {}", atom, bindings, result);
-    result
+    if let Some(atom_copy) = trace_atom {
+        log::trace!("apply_bindings_to_atom: {} | {} -> {}", atom_copy, bindings, atom);
+    }
 }
 
 /// Applies bindings `from` to the each value from bindings `to`.

@@ -20,9 +20,9 @@ pub const MOD_NAME_SEPARATOR: char = ':';
 /// `self` is an alias for the current module
 /// `self.some_mod` is a private sub-module of the current module
 ///
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub(crate) struct ModNameNode {
-    mod_id: ModId,
+    pub mod_id: ModId,
     children: Option<HashMap<String, ModNameNode>>
 }
 
@@ -32,6 +32,8 @@ pub(crate) fn mod_name_relative_path(name: &str) -> Option<&str> {
     mod_name_remove_prefix(name, SELF_MOD_NAME)
 }
 
+/// Returns the portion of `mod_path` that is a sub-path on top of `base_path`.  The reverse
+/// of `concat_relative_module_path`
 pub(crate) fn mod_name_remove_prefix<'a>(name: &'a str, prefix: &str) -> Option<&'a str> {
     if name.starts_with(prefix) {
         if name.len() == prefix.len() {
@@ -58,6 +60,70 @@ pub(crate) fn mod_name_from_path(path: &str) -> &str {
         }
     }
     &path[start_idx..]
+}
+
+pub(crate) fn chop_trailing_separator(path: &str) -> &str {
+    if path.ends_with(MOD_NAME_SEPARATOR) {
+        &path[0..path.len()-1]
+    } else {
+        path
+    }
+}
+
+/// Join a relative module path as a sub-module to `&self`
+pub(crate) fn concat_relative_module_path(base_path: &str, relative_path: &str) -> String {
+    if relative_path.len() > 0 {
+        format!("{base_path}:{relative_path}")
+    } else {
+        base_path.to_string()
+    }
+}
+
+/// Normalize a module name into a canonical name-path form, and expanding a relative module-path
+///
+/// On input, module names that don't begin with either `top` nor `self` will be assumed to be
+/// relative to the current module.  On output, the result will be an absolute path beginning
+/// with `top`.
+pub(crate) fn normalize_relative_module_name(base_path: &str, mod_name: &str) -> Result<String, String> {
+    let mod_name = chop_trailing_separator(mod_name);
+    let full_name_path = match mod_name_relative_path(mod_name) {
+        Some(remainder) => concat_relative_module_path(base_path, remainder),
+        None => {
+            match mod_name_remove_prefix(mod_name, TOP_MOD_NAME) {
+                Some(remainder) => {
+                    if remainder.len() > 0 {
+                        format!("{}:{}", TOP_MOD_NAME, remainder)
+                    } else {
+                        TOP_MOD_NAME.to_string()
+                    }
+                },
+                None => concat_relative_module_path(base_path, mod_name),
+            }
+        },
+    };
+    Ok(full_name_path)
+}
+
+/// Decomposes name path components into individual module names.  Reverse of [compose_name_path]
+pub(crate) fn decompose_name_path(name: &str) -> Result<Vec<&str>, String> {
+    let mut components: Vec<&str> = vec![];
+    let (_, _, last) = ModNameNode::parse_parent_generic(ModNameNode::top(), name, &OverlayMap::none(),
+        |node, _| Some(node),
+        |_, component| {components.push(component)})?;
+    if last.len() > 0 {
+        components.push(last);
+    }
+    Ok(components)
+}
+
+/// Composes a name path from a slice of individual module names.  Reverse of [decompose_name_path]
+pub(crate) fn compose_name_path(components: &[&str]) -> Result<String, String> {
+    let mut new_name = TOP_MOD_NAME.to_string();
+    for component in components {
+        new_name.push_str(":");
+        new_name.push_str(component);
+    }
+    Ok(new_name)
 }
 
 /// Internal map to allow subtrees to be overlaid and effectively merged
@@ -104,16 +170,38 @@ impl ModNameNode {
         }
     }
 
+    /// Updates the ModId of an existing node, or creates the node if it doesn't exist
+    /// Does NOT recursively add multiple nodes
+    pub fn update(&mut self, name: &str, mod_id: ModId) -> Result<(), String> {
+        self.update_in_layered(&mut[], name, mod_id)
+    }
+
+    /// Layered version of [Self::update].  See [Self::resolve_layered] for details
+    pub fn update_in_layered(&mut self, subtrees: &mut[(&str, &mut Self)], name: &str, mod_id: ModId) -> Result<(), String> {
+        if name == TOP_MOD_NAME || name.len() == 0 {
+            self.mod_id = mod_id;
+            return Ok(());
+        }
+        let (parent_node, mod_name) = self.parse_parent_layered_mut(subtrees, name)?;
+        if mod_name == TOP_MOD_NAME || mod_name == SELF_MOD_NAME || mod_name.len() == 0 {
+            return Err(format!("illegal module name: {name}"));
+        }
+        match parent_node.get_child_mut(mod_name) {
+            Some(node) => node.mod_id = mod_id,
+            None => parent_node.add_child_node(mod_name.to_string(), Self::new(mod_id))
+        }
+        Ok(())
+    }
+
     /// Adds a single new node to the tree.  Does NOT recursively add multiple nodes
     ///
-    /// Reuturns `true` if the node was sucessfully added, otherwise `false`.  If an entry
-    /// already exists at that name, the existing entry will be replaced
+    /// If an entry already exists at that name, the existing entry will be replaced
     pub fn add(&mut self, name: &str, mod_id: ModId) -> Result<(), String> {
         self.merge_subtree_into(name, Self::new(mod_id))
     }
 
-    /// Adds a single new node to a layered tree.  See [Self::add] and [Self::resolve_layered] for
-    /// details about behavior
+    /// Adds a single new node to a layered tree.  See [Self::resolve_layered] for details
+    #[allow(dead_code)] //NOTE: This function "feels" like it belongs in a complete API, and might be used in the future.  See discussion on [ModuleInitFrame::add_module_to_name_tree]
     pub fn add_to_layered(&mut self, subtrees: &mut[(&str, &mut Self)], name: &str, mod_id: ModId) -> Result<(), String> {
         self.merge_subtree_into_layered(subtrees, name, Self::new(mod_id))
     }
@@ -123,7 +211,7 @@ impl ModNameNode {
         self.merge_subtree_into_layered(&mut[], root_name, new_subtree)
     }
 
-    /// Merges `new_subtree` into `&self`, starting at `root_name`
+    /// Layered version of [Self::merge_subtree_into].  See [Self::resolve_layered] for details
     pub fn merge_subtree_into_layered(&mut self, layered_subtrees: &mut[(&str, &mut Self)], root_name: &str, new_subtree: Self) -> Result<(), String> {
         let (parent_node, mod_name) = self.parse_parent_layered_mut(layered_subtrees, root_name)?;
         if mod_name == TOP_MOD_NAME || mod_name == SELF_MOD_NAME || mod_name.len() == 0 {
@@ -155,6 +243,20 @@ impl ModNameNode {
             self.children = Some(HashMap::new());
         }
         self.children.as_mut().unwrap().insert(child_name, child_node);
+    }
+
+    /// Walks a tree running the provided function on each node, including the root
+    pub fn visit_mut<F: FnMut(&str, &mut Self)>(&mut self, root_node_name: &str, mut f: F) {
+        self.visit_mut_internal(root_node_name, &mut f);
+    }
+
+    fn visit_mut_internal<F: FnMut(&str, &mut Self)>(&mut self, root_node_name: &str, f: &mut F) {
+        f(root_node_name, self);
+        if let Some(children) = &mut self.children {
+            for (child_name, child_node) in children.iter_mut() {
+                child_node.visit_mut_internal(child_name, f);
+            }
+        }
     }
 
     /// Returns the [ModId] of a module name/path within `&self`, or None if it can't be resolved
@@ -230,41 +332,6 @@ impl ModNameNode {
             |node, name| node.get_child_mut(name),
             |_, _| {}).map(|(node, _subtree_idx, remaining)| (node, remaining))
     }
-
-    /// Parses a module name path into a canonical representation
-    pub fn normalize_name_path(name: &str) -> Result<String, String> {
-        let mut new_name = TOP_MOD_NAME.to_string();
-        let (_, _, last) = Self::parse_parent_generic(Self::top(), name, &OverlayMap::none(),
-            |node, _| Some(node),
-            |_, component| {new_name.push_str(":"); new_name.push_str(component)})?;
-        if last.len() > 0 {
-            new_name.push_str(":");
-            new_name.push_str(last);
-        }
-        Ok(new_name)
-    }
-
-    /// Decomposes name path components into individual module names.  Reverse of [Self::compose_name_path]
-    pub fn decompose_name_path(name: &str) -> Result<Vec<&str>, String> {
-        let mut components: Vec<&str> = vec![];
-        let (_, _, last) = Self::parse_parent_generic(Self::top(), name, &OverlayMap::none(),
-            |node, _| Some(node),
-            |_, component| {components.push(component)})?;
-        if last.len() > 0 {
-            components.push(last);
-        }
-        Ok(components)
-    }
-
-    /// Composes a name path from a slice of individual module names.  Reverse of [Self::decompose_name_path]
-    pub fn compose_name_path(components: &[&str]) -> Result<String, String> {
-        let mut new_name = TOP_MOD_NAME.to_string();
-        for component in components {
-            new_name.push_str(":");
-            new_name.push_str(component);
-        }
-        Ok(new_name)
-    } 
 
     /// Internal generic `parse_parent` that can expand to mutable and const versions.
     /// Return valus is (parent_node, subtree_idx, remaining_name_path)
@@ -518,9 +585,6 @@ fn module_name_parse_test() {
     assert_eq!(top.resolve("top:sub2:suba:subA").unwrap(), ModId(4));
     assert!(top.resolve("sub2:suba:subA:").is_none());
     assert!(top.resolve("sub1:suba").is_none());
-
-    assert_eq!(ModNameNode::normalize_name_path("").unwrap(), "top");
-    assert_eq!(ModNameNode::normalize_name_path("sub2:suba:subA").unwrap(), "top:sub2:suba:subA");
 
 // //NOTE: HashMap internals make the order unpredictable so this is hard to test
 // assert_eq!(format!("\n{top}"), r#"

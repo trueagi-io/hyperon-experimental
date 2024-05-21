@@ -73,7 +73,6 @@ use crate::common::collections::ListMap;
 use crate::metta::*;
 use crate::metta::types::{is_func, get_arg_types, get_type_bindings,
     get_atom_types, match_reducted_types};
-use crate::common::ReplacingMapper;
 
 use std::ops::Deref;
 use std::rc::Rc;
@@ -230,7 +229,7 @@ impl InterpreterCache {
     }
 
     fn get(&self, key: &Atom) -> Option<Results> {
-        let mut var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
+        let mut var_mapper = crate::common::CachingMapper::new(VariableAtom::make_unique);
         key.iter().filter_type::<&VariableAtom>()
             .for_each(|v| { var_mapper.mapping_mut().insert(v.clone(), v.clone()); });
 
@@ -240,7 +239,7 @@ impl InterpreterCache {
             for res in results {
                 let mut atom = res.atom().clone();
                 atom.iter_mut().filter_type::<&mut VariableAtom>()
-                    .for_each(|var| var_mapper.replace(var));
+                    .for_each(|var| *var = var_mapper.replace(var.clone()));
                 let bindings = res.bindings().clone().rename_vars(var_mapper.as_fn_mut());
                 result.push(InterpretedAtom(atom, bindings));
             }
@@ -251,7 +250,7 @@ impl InterpreterCache {
     fn insert(&mut self, key: Atom, mut value: Results) {
         value.iter_mut().for_each(|res| {
             let vars: HashSet<&VariableAtom> = key.iter().filter_type::<&VariableAtom>().collect();
-            res.0 = apply_bindings_to_atom(&res.0, &res.1);
+            apply_bindings_to_atom_mut(&mut res.0, &res.1);
             res.1.retain(|v| vars.contains(v));
         });
         self.0.insert(key, value)
@@ -363,7 +362,7 @@ fn interpret_as_type_plan<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a
 fn cast_atom_to_type_plan<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>,
         input: InterpretedAtom, typ: Atom) -> StepResult<'a, Results, InterpreterError> {
     // TODO: implement this via interpreting of the (:cast atom typ) expression
-    let typ = apply_bindings_to_atom(&typ, input.bindings());
+    let typ = apply_bindings_to_atom_move(typ, input.bindings());
     let mut results = get_type_bindings(&context.space, input.atom(), &typ);
     log::debug!("cast_atom_to_type_plan: type check results: {:?}", results);
     if !results.is_empty() {
@@ -374,7 +373,7 @@ fn cast_atom_to_type_plan<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a
             // should we apply bindings to bindings?
             let bindings = Bindings::merge(&bindings, &typ_bindings);
             if let Some(bindings) = bindings {
-                let atom = apply_bindings_to_atom(&atom, &bindings);
+                let atom = apply_bindings_to_atom_move(atom, &bindings);
                 Some(InterpretedAtom(atom, bindings))
             } else {
                 None
@@ -447,7 +446,7 @@ fn interpret_expression_as_type_op<'a, T: SpaceRef<'a>>(context: InterpreterCont
                     plan,
                     OperatorPlan::new(move |results: Results| {
                         make_alternives_plan(arg.clone(), results, move |result| -> NoInputPlan {
-                            let arg_typ = apply_bindings_to_atom(&arg_typ, result.bindings());
+                            let arg_typ = apply_bindings_to_atom_move(arg_typ.clone(), result.bindings());
                             Box::new(SequencePlan::new(
                                 interpret_as_type_plan(context.clone(),
                                     InterpretedAtom(arg.clone(), result.bindings().clone()),
@@ -501,7 +500,7 @@ fn insert_reducted_arg_op<'a>(expr: InterpretedAtom, atom_idx: usize, mut arg_va
         let InterpretedAtom(arg, bindings) = arg;
         let mut expr_with_arg = expr.atom().clone();
         get_expr_mut(&mut expr_with_arg).children_mut()[atom_idx] = arg;
-        InterpretedAtom(apply_bindings_to_atom(&expr_with_arg, &bindings), bindings)
+        InterpretedAtom(apply_bindings_to_atom_move(expr_with_arg, &bindings), bindings)
     }).collect();
     log::debug!("insert_reducted_arg_op: result: {:?}", result);
     StepResult::ret(result)
@@ -627,7 +626,7 @@ fn match_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input: I
     let results: Vec<InterpretedAtom> = query_bindings
         .drain(0..)
         .map(|query_binding| {
-            let result = apply_bindings_to_atom(&Atom::Variable(var_x.clone()), &query_binding);
+            let result = apply_bindings_to_atom_move(Atom::Variable(var_x.clone()), &query_binding);
             // TODO: sometimes we apply bindings twice: first time here,
             // second time when inserting matched argument into nesting
             // expression.  It should be enough doing it only once.

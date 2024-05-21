@@ -9,7 +9,7 @@ use std::cell::{RefCell, Ref, RefMut};
 
 use crate::common::FlexRef;
 use crate::atom::*;
-use crate::atom::matcher::{BindingsSet, apply_bindings_to_atom};
+use crate::atom::matcher::{BindingsSet, apply_bindings_to_atom_move};
 
 /// Contains information about space modification event.
 #[derive(Clone, Debug, PartialEq)]
@@ -193,7 +193,7 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
     /// ```
     fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
         self.query(pattern).drain(0..)
-            .map(| bindings | apply_bindings_to_atom(template, &bindings))
+            .map(| bindings | apply_bindings_to_atom_move(template.clone(), &bindings))
             .collect()
     }
 

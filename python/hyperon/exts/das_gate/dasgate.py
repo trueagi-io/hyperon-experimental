@@ -5,6 +5,7 @@ from hyperon.ext import register_atoms
 from hyperon_das import DistributedAtomSpace
 from hyperon_das.constants import QueryOutputFormat
 import time
+import ast
 
 from hyperon_das.pattern_matcher import (
     Link,
@@ -23,7 +24,9 @@ class DASpace(AbstractSpace):
         # self.das = DistributedAtomSpace('ram_only')
         if remote:
             self.das = DistributedAtomSpace(query_engine='remote', host=host, port=port)
+            self.remote = True
         else:
+            self.remote = False
             self.das = DistributedAtomSpace()
         self.unwrap = unwrap
 
@@ -108,22 +111,83 @@ class DASpace(AbstractSpace):
         elif h['type']=='Expression':
             return E(*[self._handle2atom3(ch) for ch in h['targets']])
 
+    def _handle2atom4(self, h):
+        h = self.das.get_atom(h)
+        if h['type']=='Symbol':
+            return S(h['name'])
+        elif h['type']=='Expression':
+            return E(*[self._handle2atom3(ch) for ch in h['targets']])
+
+    def _handle2atom5(self, h):
+        h = self.das.get_atom(h)
+        if h['type'] == 'Symbol':
+            return S(h['name'])
+        elif h['type'] == 'Expression':
+            return E(*[self._handle2atom5(ch) for ch in h['targets']])
+
+    def _query_temp_helper(self, answer, new_bindings_set):
+        for a in answer:
+            bindings = Bindings()
+            if a[0] is None:
+                bindings.add_var_binding("res", self._handle2atom3(a[1]))
+            else:
+                mapping = dict(ast.literal_eval(a[0]))
+                for var, val in mapping.items():
+                    # remove '$', because it is automatically added
+                    bindings.add_var_binding(V(var[1:]), self._handle2atom4(val))
+            new_bindings_set.push(bindings)
+        return new_bindings_set
+
+    def _query_actual_helper(self, answer, new_bindings_set):
+        for a in answer:
+            if type(a.subgraph) == list:
+                t_lvl_dolist = all([sg['is_toplevel'] for sg in a.subgraph])
+            else:
+                t_lvl_dolist =a.subgraph['is_toplevel']
+
+            if t_lvl_dolist:
+                bindings = Bindings()
+                if not a.assignment is None:
+                    for var, val in a.assignment.mapping.items():
+                        # remove '$', because it is automatically added
+                        bindings.add_var_binding(V(var[1:]), self._handle2atom5(val))
+                new_bindings_set.push(bindings)
+        return new_bindings_set
+
+    def _query_actual_helper_no_iter(self, answer, new_bindings_set):
+        for mapping, subgraph in answer:
+            bindings = Bindings()
+            for var, val in mapping.mapping.items():
+                # remove '$', because it is automatically added
+                bindings.add_var_binding(V(var[1:]), self._handle2atom5(val))
+            new_bindings_set.push(bindings)
+        return new_bindings_set
+
+
     def query(self, query_atom):
         query = self._atom2dict_new(query_atom)
-        answer = [query_answer for query_answer in self.das.query(query)]
+
+        query_params = {
+            "toplevel_only": True,
+            # "return_type": QueryOutputFormat.ATOM_INFO,
+            # 'query_scope': 'local_only',
+            "no_iterator": True,
+            }
+        answer = [query_answer for query_answer in self.das.query(query, query_params)]
         new_bindings_set = BindingsSet.empty()
 
         if not answer:
             return new_bindings_set
 
-        for a in answer:
-            bindings = Bindings()
-            for var, val in a.assignment.mapping.items():
-                # remove '$', because it is automatically added
-                bindings.add_var_binding(V(var[1:]), self._handle2atom(val))
-            new_bindings_set.push(bindings)
+        if self.remote:
+            return self._query_actual_helper(answer, new_bindings_set)
+            # return self._query_actual_helper_no_iter(answer, new_bindings_set)
+            # return self._query_temp_helper(answer, new_bindings_set)
+        else:
+            #return self._query_actual_helper_no_iter(answer, new_bindings_set)
+            return self._query_actual_helper(answer, new_bindings_set)
 
-        return new_bindings_set
+        # return new_bindings_set
 
     def query_old(self, query_atom):
         query = self._atom2query(query_atom)
@@ -159,7 +223,13 @@ class DASpace(AbstractSpace):
 
 
 def create_new_space(host, port):
-    return [G(SpaceRef(DASpace(remote=True, host=host.__repr__(), port=port.__repr__())))]
+    host = host.__repr__()
+    port = port.__repr__()
+    if host.startswith('"') and host.endswith('"'):
+        host = host[1:-1]
+    if port.startswith('"') and port.endswith('"'):
+        port = port[1:-1]
+    return [G(SpaceRef(DASpace(remote=True, host=host, port=port)))]
 
 @register_atoms(pass_metta=True)
 def my_glob_atoms(metta):

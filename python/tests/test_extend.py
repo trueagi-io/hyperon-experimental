@@ -1,8 +1,12 @@
 import unittest
 
 from hyperon import *
+from test_common import change_dir_to_parent_of
 
 class ExtendTest(unittest.TestCase):
+
+    def setUp(self):
+        change_dir_to_parent_of(__file__)
 
     def test_extend(self):
         '''

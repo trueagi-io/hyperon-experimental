@@ -5,8 +5,8 @@ use hyperon::space::DynSpace;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
-use hyperon::metta::runner::{Metta, RunContext, ModId, RunnerState, Environment, EnvBuilder};
-use hyperon::metta::runner::modules::ModuleLoader;
+use hyperon::metta::runner::{Metta, RunContext, RunnerState, Environment, EnvBuilder};
+use hyperon::metta::runner::modules::{ModuleLoader, ModId, ResourceKey};
 use hyperon::metta::runner::modules::catalog::{FsModuleFormat, ModuleDescriptor};
 use hyperon::atom::*;
 
@@ -876,11 +876,9 @@ pub extern "C" fn metta_new_with_space_environment_and_stdlib(space: *mut space_
     } else {
         Some(env_builder.into_inner())
     };
-    let loader_wrapper;
     let loader = match loader_callback {
         Some(callback) => {
-            loader_wrapper = CModLoaderWrapper{ callback, callback_context };
-            Some(&loader_wrapper as &dyn ModuleLoader)
+            Some(Box::new(CModLoaderWrapper{ callback, callback_context }) as Box<dyn ModuleLoader>)
         },
         None => None
     };
@@ -1113,9 +1111,9 @@ pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
     let rust_metta = metta.borrow();
     let name = cstr_as_str(name);
     let loader_callback = loader_callback.unwrap();
-    let loader = CModLoaderWrapper{ callback: loader_callback, callback_context };
+    let loader = Box::new(CModLoaderWrapper{ callback: loader_callback, callback_context });
 
-    match rust_metta.load_module_direct(&loader, name) {
+    match rust_metta.load_module_direct(loader, name) {
         Ok(mod_id) => mod_id.into(),
         Err(err) => {
             let err_cstring = std::ffi::CString::new(err).unwrap();
@@ -1928,6 +1926,10 @@ impl ModuleLoader for CFsModFmtLoader {
 
         Ok(())
     }
+    fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {
+        //TODO, add C API for providing resources
+        Err("resource not found".to_string())
+    }
 }
 
 impl Drop for CFsModFmtLoader {
@@ -1998,5 +2000,5 @@ pub extern "C" fn run_context_load_module(run_context: *mut run_context_t, name:
 pub extern "C" fn run_context_import_dependency(run_context: *mut run_context_t, mod_id: module_id_t) {
     let context = unsafe{ &mut *run_context }.borrow_mut();
 
-    context.module().import_all_from_dependency(context.metta(), mod_id.into_inner()).unwrap();
+    context.import_all_from_dependency(mod_id.into_inner()).unwrap();
 }

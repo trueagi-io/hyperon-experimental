@@ -4,9 +4,10 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
-use crate::metta::runner::{Metta, RunContext, ModuleLoader};
+use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
+use crate::common::CachingMapper;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -15,8 +16,7 @@ use std::collections::HashMap;
 use regex::Regex;
 
 use super::arithmetics::*;
-
-pub const VOID_SYMBOL : Atom = sym!("%void%");
+use super::string::*;
 
 fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
@@ -101,12 +101,12 @@ impl Grounded for ImportOp {
         // Import the module, as per the behavior described above
         match dest_arg {
             Atom::Symbol(dest_sym) => {
-                context.module().import_dependency_as(&context.metta, mod_id, Some(dest_sym.name().to_string()))?;
+                context.import_dependency_as(mod_id, Some(dest_sym.name().to_string()))?;
             }
             other_atom => {
                 match &other_atom {
                     Atom::Grounded(_) if Atom::as_gnd::<DynSpace>(other_atom) == Some(context.module().space()) => {
-                        context.module().import_all_from_dependency(&context.metta, mod_id)?;
+                        context.import_all_from_dependency(mod_id)?;
                     },
                     _ => {
                         return Err(format!("import! destination argument must be a symbol atom naming a new space, or &self.  Found: {other_atom:?}").into());
@@ -146,6 +146,70 @@ fn strip_quotes(src: &str) -> &str {
     src
 }
 
+#[derive(Clone, Debug)]
+pub struct IncludeOp {
+    //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+}
+
+impl PartialEq for IncludeOp {
+    fn eq(&self, _other: &Self) -> bool { true }
+}
+
+impl IncludeOp {
+    pub fn new(metta: Metta) -> Self {
+        Self{ context: metta.0.context.clone() }
+    }
+}
+
+impl Display for IncludeOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "include")
+    }
+}
+
+impl Grounded for IncludeOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("include expects a module name argument");
+        let mod_name_atom = args.get(0).ok_or_else(arg_error)?;
+
+        // TODO: replace Symbol by grounded String?
+        let mod_name = match mod_name_atom {
+            Atom::Symbol(mod_name) => mod_name.name(),
+            _ => return Err(arg_error())
+        };
+        let mod_name = strip_quotes(mod_name);
+
+        //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
+        let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
+        let mut context = ctx_ref.lock().unwrap();
+        let program_buf = context.load_resource_from_module(mod_name, ResourceKey::MainMettaSrc)?;
+
+        // Interpret the loaded MeTTa S-Expression text
+        let program_text = String::from_utf8(program_buf)
+            .map_err(|e| e.to_string())?;
+        let parser = crate::metta::text::OwnedSExprParser::new(program_text);
+        let eval_result = context.run_inline(|context| {
+            context.push_parser(Box::new(parser));
+            Ok(())
+        })?;
+
+        //NOTE: Current behavior returns the result of the last sub-eval to match the old
+        // `import!` before before module isolation.  However that means the results prior to
+        // the last are dropped.  I don't know how to fix this or if it's even wrong, but it's
+        // different from the way "eval-type" APIs work when called from host code, e.g. Rust
+        Ok(eval_result.into_iter().last().unwrap_or_else(|| vec![]))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
 /// mod-space! returns the space of a specified module, loading the module if it's not loaded already
 //NOTE: The "impure" '!' denoted in the op atom name is due to the side effect of loading the module.  If
 // we want a side-effect-free version, it could be implemented by calling `RunContext::get_module_by_name`
@@ -175,7 +239,7 @@ impl Display for ModSpaceOp {
 
 impl Grounded for ModSpaceOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, rust_type_atom::<DynSpace>()])
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -522,6 +586,35 @@ impl Grounded for GetTypeOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub struct GetTypeSpaceOp {}
+
+impl Display for GetTypeSpaceOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "get-type-space")
+    }
+}
+
+impl Grounded for GetTypeSpaceOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("get-type-space expects two arguments: space and atom");
+        let space = args.get(0).ok_or_else(arg_error)?;
+        let space = Atom::as_gnd::<DynSpace>(space).ok_or("get-type-space expects a space as the first argument")?;
+        let atom = args.get(1).ok_or_else(arg_error)?;
+        log::debug!("GetTypeSpaceOp::execute: space: {}, atom: {}", space, atom);
+
+        Ok(get_atom_types(space, atom))
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct GetMetaTypeOp { }
 
 impl Display for GetMetaTypeOp {
@@ -565,7 +658,7 @@ impl Grounded for PrintlnOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("println! expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
-        println!("{}", atom);
+        println!("{}", atom_to_string(atom));
         unit_result()
     }
 
@@ -573,6 +666,51 @@ impl Grounded for PrintlnOp {
         match_by_equality(self, other)
     }
 }
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct FormatArgsOp {}
+
+impl Display for FormatArgsOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "format-args")
+    }
+}
+
+use dyn_fmt::AsStrFormatExt;
+
+impl Grounded for FormatArgsOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("format-args expects format string as a first argument and expression as a second argument");
+        let format = atom_to_string(args.get(0).ok_or_else(arg_error)?);
+        let args = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?;
+        let args: Vec<String> = args.children().iter()
+            .map(|atom| atom_to_string(atom))
+            .collect();
+        let res = format.format(args.as_slice());
+        Ok(vec![Atom::gnd(Str::from_string(res))])
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+fn atom_to_string(atom: &Atom) -> String {
+    match atom {
+        Atom::Grounded(gnd) if gnd.type_() == ATOM_TYPE_STRING => {
+            let mut s = gnd.to_string();
+            s.remove(0);
+            s.pop();
+            s
+        },
+        _ => atom.to_string(),
+    }
+}
+
 
 /// Implement trace! built-in.
 ///
@@ -777,6 +915,48 @@ impl Grounded for ChangeStateOp {
 }
 
 #[derive(Clone, PartialEq, Debug)]
+pub struct SealedOp {}
+
+impl Display for SealedOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "sealed")
+    }
+}
+
+impl Grounded for SealedOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("sealed expects two arguments: var_list and expression");
+
+        let mut term_to_seal = args.get(1).ok_or_else(arg_error)?.clone();
+        let var_list = args.get(0).ok_or_else(arg_error)?.clone();
+
+        let mut local_var_mapper = CachingMapper::new(|var: &VariableAtom| var.clone().make_unique());
+
+        var_list.iter().filter_type::<&VariableAtom>()
+            .for_each(|var| { let _ = local_var_mapper.replace(var); });
+
+        term_to_seal.iter_mut().filter_type::<&mut VariableAtom>()
+            .for_each(|var| match local_var_mapper.mapping().get(var) {
+                Some(v) => *var = v.clone(),
+                None => {},
+            });
+
+        let result = vec![term_to_seal.clone()];
+        log::debug!("sealed::execute: var_list: {}, term_to_seal: {}, result: {:?}", var_list, term_to_seal, result);
+
+        Ok(result)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
 pub struct EqualOp {}
 
 impl Display for EqualOp {
@@ -839,7 +1019,6 @@ mod non_minimal_only_stdlib {
     use super::*;
     use crate::metta::interpreter::interpret;
     use crate::common::assert::vec_eq_no_order;
-    use crate::common::ReplacingMapper;
 
     // TODO: move it into hyperon::atom module?
     pub(crate) fn atom_as_expr(atom: &Atom) -> Option<&ExpressionAtom> {
@@ -947,6 +1126,41 @@ mod non_minimal_only_stdlib {
         }
     }
 
+    use std::collections::HashSet;
+
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct CaptureOp {
+        space: DynSpace,
+    }
+
+    impl CaptureOp {
+        pub fn new(space: DynSpace) -> Self {
+            Self{ space }
+        }
+    }
+
+    impl Display for CaptureOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "capture")
+        }
+    }
+
+    impl Grounded for CaptureOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        }
+
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = || ExecError::from("capture expects one argument");
+            let atom = args.get(0).ok_or_else(arg_error)?;
+            interpret_no_error(self.space.clone(), &atom).map_err(|e| ExecError::from(e))
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
     #[derive(Clone, PartialEq, Debug)]
     pub struct CaseOp {
         space: DynSpace,
@@ -971,7 +1185,7 @@ mod non_minimal_only_stdlib {
                 Ok(result) if result.is_empty() => {
                     cases.into_iter()
                         .find_map(|(pattern, template, _external_vars)| {
-                            if pattern == VOID_SYMBOL {
+                            if pattern == EMPTY_SYMBOL {
                                 Some(template)
                             } else {
                                 None
@@ -1021,7 +1235,7 @@ mod non_minimal_only_stdlib {
             for (pattern, template, external_vars) in cases {
                 let bindings = matcher::match_atoms(atom, &pattern)
                     .map(|b| b.convert_var_equalities_to_bindings(&external_vars));
-                let result: Vec<Atom> = bindings.map(|b| matcher::apply_bindings_to_atom(&template, &b)).collect();
+                let result: Vec<Atom> = bindings.map(|b| matcher::apply_bindings_to_atom_move(template.clone(), &b)).collect();
                 if !result.is_empty() {
                     return result
                 }
@@ -1225,8 +1439,6 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    use std::collections::HashSet;
-
     impl Grounded for LetOp {
         fn type_(&self) -> Atom {
             // TODO: Undefined for the argument is necessary to make argument reductable.
@@ -1243,7 +1455,7 @@ mod non_minimal_only_stdlib {
 
             let bindings = matcher::match_atoms(&pattern, &atom)
                 .map(|b| b.convert_var_equalities_to_bindings(&external_vars));
-            let result = bindings.map(|b| { matcher::apply_bindings_to_atom(&template, &b) }).collect();
+            let result = bindings.map(|b| { matcher::apply_bindings_to_atom_move(template.clone(), &b) }).collect();
             log::debug!("LetOp::execute: pattern: {}, atom: {}, template: {}, result: {:?}", pattern, atom, template, result);
             Ok(result)
         }
@@ -1266,11 +1478,11 @@ mod non_minimal_only_stdlib {
     }
 
     fn make_conflicting_vars_unique(pattern: &mut Atom, template: &mut Atom, external_vars: &HashSet<VariableAtom>) {
-        let mut local_var_mapper = ReplacingMapper::new(VariableAtom::make_unique);
+        let mut local_var_mapper = CachingMapper::new(VariableAtom::make_unique);
 
         pattern.iter_mut().filter_type::<&mut VariableAtom>()
             .filter(|var| external_vars.contains(var))
-            .for_each(|var| local_var_mapper.replace(var));
+            .for_each(|var| *var = local_var_mapper.replace(var.clone()));
 
         template.iter_mut().filter_type::<&mut VariableAtom>()
             .for_each(|var| match local_var_mapper.mapping_mut().get(var) {
@@ -1353,6 +1565,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
         let println_op = Atom::gnd(PrintlnOp{});
         tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
+        let format_args_op = Atom::gnd(FormatArgsOp{});
+        tref.register_token(regex(r"format-args"), move |_| { format_args_op.clone() });
         let trace_op = Atom::gnd(TraceOp{});
         tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
         let nop_op = Atom::gnd(NopOp{});
@@ -1375,6 +1589,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
         let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
         tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
+        let sealed_op = Atom::gnd(SealedOp{});
+        tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
     }
 
     //TODO: The metta argument is a temporary hack on account of the way the operation atoms store references
@@ -1382,6 +1598,8 @@ mod non_minimal_only_stdlib {
     #[cfg(not(feature = "minimal"))]
     pub fn register_runner_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
 
+        let capture_op = Atom::gnd(CaptureOp::new(space.clone()));
+        tref.register_token(regex(r"capture"), move |_| { capture_op.clone() });
         let case_op = Atom::gnd(CaseOp::new(space.clone()));
         tref.register_token(regex(r"case"), move |_| { case_op.clone() });
         let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
@@ -1394,8 +1612,12 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
         let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
         tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
+        let get_type_space_op = Atom::gnd(GetTypeSpaceOp{});
+        tref.register_token(regex(r"get-type-space"), move |_| { get_type_space_op.clone() });
         let import_op = Atom::gnd(ImportOp::new(metta.clone()));
         tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
+        let include_op = Atom::gnd(IncludeOp::new(metta.clone()));
+        tref.register_token(regex(r"include"), move |_| { include_op.clone() });
         let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
         tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
 
@@ -1415,14 +1637,16 @@ mod non_minimal_only_stdlib {
         let mut rust_tokens = Tokenizer::new();
         let tref = &mut rust_tokens;
 
-        tref.register_token(regex(r"[\-\+]?\d+"),
-            |token| { Atom::gnd(Number::from_int_str(token)) });
-        tref.register_token(regex(r"[\-\+]?\d+.\d+"),
-            |token| { Atom::gnd(Number::from_float_str(token)) });
-        tref.register_token(regex(r"[\-\+]?\d+(.\d+)?[eE][\-\+]?\d+"),
-            |token| { Atom::gnd(Number::from_float_str(token)) });
+        tref.register_fallible_token(regex(r"[\-\+]?\d+"),
+            |token| { Ok(Atom::gnd(Number::from_int_str(token)?)) });
+        tref.register_fallible_token(regex(r"[\-\+]?\d+\.\d+"),
+            |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
+        tref.register_fallible_token(regex(r"[\-\+]?\d+(\.\d+)?[eE][\-\+]?\d+"),
+            |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
         tref.register_token(regex(r"True|False"),
             |token| { Atom::gnd(Bool::from_str(token)) });
+        tref.register_token(regex(r#""[^"]+""#),
+            |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
         let sum_op = Atom::gnd(SumOp{});
         tref.register_token(regex(r"\+"), move |_| { sum_op.clone() });
         let sub_op = Atom::gnd(SubOp{});
@@ -1458,42 +1682,14 @@ mod non_minimal_only_stdlib {
         target.move_front(&mut rust_tokens);
     }
 
-    pub static METTA_CODE: &'static str = "
-        ; `$then`, `$else` should be of `Atom` type to avoid evaluation
-        ; and infinite cycle in inference
-        (: if (-> Bool Atom Atom $t))
-        (= (if True $then $else) $then)
-        (= (if False $then $else) $else)
-        (: Error (-> Atom Atom ErrorType))
-
-        (: add-reduct (-> Grounded %Undefined% (->)))
-        (= (add-reduct $dst $atom)  (add-atom $dst $atom))
-
-        ; quote prevents atom from being reduced
-        (: quote (-> Atom Atom))
-
-        ; unify matches two atoms and returns $then if they are matched
-        ; and $else otherwise.
-        (: unify (-> Atom Atom Atom Atom %Undefined%))
-        (= (unify $a $a $then $else) $then)
-        (= (unify $a $b $then $else)
-        (case (unify-or-empty $a $b) ((%void%  $else))) )
-        (: unify-or-empty (-> Atom Atom Atom))
-        (= (unify-or-empty $a $a) unified)
-        (= (unify-or-empty $a $b) (empty))
-
-
-        ; empty removes current result from a non-deterministic result
-        (: empty (-> %Undefined%))
-        (= (empty) (let a b never-happens))
-    ";
+    pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
 }
 
 #[cfg(not(feature = "minimal"))]
 pub use non_minimal_only_stdlib::*;
 
 #[cfg(feature = "minimal")]
-use super::stdlib2::*;
+use super::stdlib_minimal::*;
 
 #[cfg(feature = "minimal")]
 use crate::metta::runner::METTA_CODE;
@@ -1654,7 +1850,7 @@ mod tests {
         let borrowed = tokenizer.borrow();
         let constr = borrowed.find_token("&my");
         assert!(constr.is_some());
-        assert_eq!(constr.unwrap()("&my"), sym!("definition"));
+        assert_eq!(constr.unwrap()("&my"), Ok(sym!("definition")));
     }
 
     #[test]
@@ -1666,10 +1862,10 @@ mod tests {
         let case_op = CaseOp::new(space.clone());
 
         assert_eq!(case_op.execute(&mut vec![expr!(("foo")),
-                expr!(((n "B") n) ("%void%" "D"))]),
+                expr!(((n "B") n) ("Empty" "D"))]),
             Ok(vec![Atom::sym("A")]));
         assert_eq!(case_op.execute(&mut vec![expr!({MatchOp{}} {space} ("B" "C") ("C" "B")),
-                expr!(((n "C") n) ("%void%" "D"))]),
+                expr!(((n "C") n) ("Empty" "D"))]),
             Ok(vec![Atom::sym("D")]));
     }
 
@@ -1998,5 +2194,206 @@ mod tests {
 
         assert_eq_metta_results!(metta.run(parser),
             Ok(vec![vec![]]));
+    }
+
+    #[test]
+    fn sealed_op_runner() {
+        let nested = run_program("!(sealed ($x) (sealed ($a $b) (= ($a $x $c) ($b))))");
+        let simple_replace = run_program("!(sealed ($x $y) (= ($y) ($z)))");
+
+        assert!(crate::atom::matcher::atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("="(a b c) (z))));
+        assert!(crate::atom::matcher::atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("="(y) (z))));
+    }
+
+    #[test]
+    fn sealed_op_execute() {
+        let val = SealedOp{}.execute(&mut vec![expr!(x y), expr!("="(y z))]);
+        assert!(crate::atom::matcher::atoms_are_equivalent(&val.unwrap()[0], &expr!("="(y z))));
+    }
+
+    #[test]
+    fn use_sealed_to_make_scoped_variable() {
+        assert_eq!(run_program("!(let $x (input $x) (output $x))"), Ok(vec![vec![expr!("output" ("input" x))]]));
+        assert_eq!(run_program("!(let ($sv $st) (sealed ($x) ($x (output $x)))
+               (let $sv (input $x) $st))"), Ok(vec![vec![expr!("output" ("input" x))]]));
+    }
+
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct SomeGndAtom { }
+
+    impl Display for SomeGndAtom {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "some-gnd-atom")
+        }
+    }
+
+    impl Grounded for SomeGndAtom {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, sym!("Arg1Type"), sym!("Arg2Type"), sym!("ReturnType")])
+        }
+
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            execute_not_executable(self)
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    #[test]
+    fn test_get_doc_func() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new(r#"
+            (: Arg1Type Type)
+            (: Arg2Type Type)
+            (: ReturnType Type)
+            (: some-func (-> Arg1Type Arg2Type ReturnType))
+            (@doc some-func
+              (@desc "Test function")
+              (@params (
+                (@param "First argument")
+                (@param "Second argument")
+              ))
+              (@return "Return value")
+            )
+            
+            !(get-doc some-func)
+        "#);
+
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![
+            vec![expr!("@doc-formal"
+                ("@item" "some-func")
+                ("@kind" "function")
+                ("@type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
+                ("@desc" {Str::from_str("Test function")})
+                ("@params" (
+                    ("@param" ("@type" "Arg1Type") ("@desc" {Str::from_str("First argument")}))
+                    ("@param" ("@type" "Arg2Type") ("@desc" {Str::from_str("Second argument")})) ))
+                ("@return" ("@type" "ReturnType") ("@desc" {Str::from_str("Return value")})) )],
+        ]));
+    }
+
+    #[test]
+    fn test_get_doc_atom() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new(r#"
+            (: SomeAtom SomeType)
+            (@doc SomeAtom (@desc "Test symbol atom having specific type"))
+
+            !(get-doc SomeAtom)
+        "#);
+
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![
+            vec![expr!("@doc-formal"
+                ("@item" "SomeAtom")
+                ("@kind" "atom")
+                ("@type" "SomeType")
+                ("@desc" {Str::from_str("Test symbol atom having specific type")}) )],
+        ]));
+    }
+
+    #[test]
+    fn test_get_doc_gnd_func() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        metta.tokenizer().borrow_mut()
+            .register_token(regex::Regex::new(r"some-gnd-atom").unwrap(), |_| Atom::gnd(SomeGndAtom{}));
+        let parser = SExprParser::new(r#"
+            (@doc some-gnd-atom
+              (@desc "Test function")
+              (@params (
+                (@param "First argument")
+                (@param "Second argument")
+              ))
+              (@return "Return value")
+            )
+            !(get-doc some-gnd-atom)
+        "#);
+
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![
+            vec![expr!("@doc-formal"
+                ("@item" {SomeGndAtom{}})
+                ("@kind" "function")
+                ("@type" ("->" "Arg1Type" "Arg2Type" "ReturnType"))
+                ("@desc" {Str::from_str("Test function")})
+                ("@params" (
+                    ("@param" ("@type" "Arg1Type") ("@desc" {Str::from_str("First argument")}))
+                    ("@param" ("@type" "Arg2Type") ("@desc" {Str::from_str("Second argument")})) ))
+                ("@return" ("@type" "ReturnType") ("@desc" {Str::from_str("Return value")})) )],
+        ]));
+    }
+
+    #[test]
+    fn test_get_doc_no_doc() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new(r#"
+            !(get-doc NoSuchAtom)
+        "#);
+
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![
+            vec![expr!("@doc-formal"
+                ("@item" "NoSuchAtom")
+                ("@kind" "atom")
+                ("@type" "%Undefined%")
+                ("@desc" {Str::from_str("No documentation")}) )],
+        ]));
+    }
+
+    #[test]
+    fn test_get_doc_function_call() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new(r#"
+            (: Arg1Type Type)
+            (: Arg2Type Type)
+            (: ReturnType Type)
+            (: some-func (-> Arg1Type Arg2Type ReturnType))
+            (@doc some-func
+              (@desc "Test function")
+              (@params (
+                (@param "First argument")
+                (@param "Second argument")
+              ))
+              (@return "Return value")
+            )
+
+            !(get-doc (some-func arg1 arg2))
+        "#);
+
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![
+            vec![expr!("@doc-formal"
+                ("@item" ("some-func" "arg1" "arg2"))
+                ("@kind" "atom")
+                ("@type" "ReturnType")
+                ("@desc" {Str::from_str("No documentation")}) )],
+        ]));
+    }
+
+    #[test]
+    fn test_get_doc_no_type() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new(r#"
+            (@doc some-func-no-type
+              (@desc "Test function")
+              (@params (
+                (@param "First argument")
+                (@param "Second argument")
+              ))
+              (@return "Return value")
+            )
+
+            !(get-doc some-func-no-type)
+        "#);
+
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![
+            vec![expr!("@doc-formal"
+                ("@item" "some-func-no-type")
+                ("@kind" "function")
+                ("@type" "%Undefined%")
+                ("@desc" {Str::from_str("Test function")})
+                ("@params" (
+                    ("@param" ("@type" "%Undefined%") ("@desc" {Str::from_str("First argument")}))
+                    ("@param" ("@type" "%Undefined%") ("@desc" {Str::from_str("Second argument")})) ))
+                ("@return" ("@type" "%Undefined%") ("@desc" {Str::from_str("Return value")})) )],
+        ]));
     }
 }

@@ -27,9 +27,9 @@ class Atom:
         """Renders a human-readable text description of the Atom."""
         return hp.atom_to_str(self.catom)
 
-    def get_type(self):
-        """Gets the type of the current Atom instance"""
-        return hp.atom_get_type(self.catom)
+    def get_metatype(self):
+        """Gets the metatype (kind) of the current Atom instance"""
+        return hp.atom_get_metatype(self.catom)
 
     def iterate(self):
         """Performs a depth-first exhaustive iteration of an Atom and all its children recursively."""
@@ -46,7 +46,7 @@ class Atom:
     @staticmethod
     def _from_catom(catom):
         """Constructs an Atom by wrapping a C Atom"""
-        type = hp.atom_get_type(catom)
+        type = hp.atom_get_metatype(catom)
         if type == AtomKind.SYMBOL:
             return SymbolAtom(catom)
         elif type == AtomKind.VARIABLE:
@@ -190,7 +190,7 @@ def _priv_call_execute_on_grounded_atom(gnd, typ, args):
     Executes grounded Atoms.
     """
     # ... if hp.atom_to_str(typ) == AtomType.UNDEFINED
-    res_typ = AtomType.UNDEFINED if hp.atom_get_type(typ) != AtomKind.EXPR \
+    res_typ = AtomType.UNDEFINED if hp.atom_get_metatype(typ) != AtomKind.EXPR \
         else Atom._from_catom(hp.atom_get_children(typ)[-1])
     args = [Atom._from_catom(catom) for catom in args]
     return gnd.execute(*args, res_typ=res_typ)
@@ -214,7 +214,7 @@ def _priv_compare_value_atom(gnd, catom):
     Private glue for Hyperonpy implementation.
     Tests for equality between a grounded value atom and another atom
     """
-    if hp.atom_get_type(catom) == AtomKind.GROUNDED:
+    if hp.atom_get_metatype(catom) == AtomKind.GROUNDED:
         atom = GroundedAtom(catom)
         return gnd == atom.get_object()
     else:
@@ -349,7 +349,7 @@ class OperationObject(GroundedObject):
         """Returns the identifier name for this operation object."""
         return self.id
 
-    def execute(self, *args, res_typ=AtomType.UNDEFINED):
+    def execute(self, *atoms, res_typ=AtomType.UNDEFINED):
         """
         Executes the operation with the provided arguments.
 
@@ -370,21 +370,38 @@ class OperationObject(GroundedObject):
         """
         # type-check?
         if self.unwrap:
-            for arg in args:
-                if not isinstance(arg, GroundedAtom):
-                    # REM:
+            args = []
+            kwargs = {}
+            for a in atoms:
+                if isinstance(a, ExpressionAtom):
+                    ch = a.get_children()
+                    if len(ch) > 0 and repr(ch[0]) == "Kwargs":
+                        for c in ch[1:]:
+                            try:
+                                kwarg = c.get_children()
+                                assert len(kwarg) == 2
+                            except:
+                                raise RuntimeError(f"Incorrect kwarg format {kwarg}")
+                            try:
+                                kwargs[get_string_value(kwarg[0])] = kwarg[1].get_object().content
+                            except:
+                                raise NoReduceError()
+                        continue
+                try:
+                    args.append(a.get_object().content)
+                except:
+                    # NOTE:
                     # Currently, applying grounded operations to pure atoms is not reduced.
                     # If we want, we can raise an exception, or form an error expression instead,
                     # so a MeTTa program can catch and analyze it.
                     # raise RuntimeError("Grounded operation " + self.name + " with unwrap=True expects only grounded arguments")
                     raise NoReduceError()
-            args = [arg.get_object().content for arg in args]
-            result = self.op(*args)
+            result = self.op(*args, **kwargs)
             if result is None:
                 return [Atoms.UNIT]
             return [G(ValueObject(result), res_typ)]
         else:
-            result = self.op(*args)
+            result = self.op(*atoms)
             if not isinstance(result, list):
                 raise RuntimeError("Grounded operation `" + self.name + "` should return list")
             return result
@@ -688,3 +705,10 @@ class BindingsSet:
         for r in res:
             result.append(Bindings(r))
         return iter(result)
+
+def get_string_value(value) -> str:
+    if not isinstance(value, str):
+        value = repr(value)
+    if len(value) > 2 and ("\"" == value[0]) and ("\"" == value[-1]):
+        return value[1:-1]
+    return value

@@ -209,6 +209,13 @@ pub unsafe extern "C" fn atom_sym(name: *const c_char) -> atom_t {
 ///
 #[no_mangle]
 pub unsafe extern "C" fn atom_expr(children: *mut atom_t, size: usize) -> atom_t {
+    if children == core::ptr::null_mut() {
+        if size == 0 {
+            return Atom::expr(vec![]).into()
+        } else {
+            panic!("Null pointer is passed to the constructor of the expression with non-zero size");
+        }
+    }
     let c_arr = std::slice::from_raw_parts_mut(children, size);
     let children: Vec<Atom> = c_arr.into_iter().map(|atom| {
         core::mem::replace(atom, atom_t::null()).into_inner()
@@ -308,13 +315,13 @@ pub extern "C" fn atoms_are_equivalent(a: *const atom_ref_t, b: *const atom_ref_
     crate::atom::matcher::atoms_are_equivalent(a, b)
 }
 
-/// @brief Returns the type of an atom
+/// @brief Returns the metatype of an atom
 /// @ingroup atom_group
 /// @param[in]  atom  A pointer to an `atom_t` or an `atom_ref_t` to inspect
 /// @return An `atom_type_t` indicating the type of `atom`
 ///
 #[no_mangle]
-pub unsafe extern "C" fn atom_get_type(atom: *const atom_ref_t) -> atom_type_t {
+pub unsafe extern "C" fn atom_get_metatype(atom: *const atom_ref_t) -> atom_type_t {
     match (*atom).borrow() {
         Atom::Symbol(_) => atom_type_t::SYMBOL,
         Atom::Variable(_) => atom_type_t::VARIABLE,
@@ -871,6 +878,13 @@ pub extern "C" fn atom_vec_clone(vec: *const atom_vec_t) -> atom_vec_t {
 ///
 #[no_mangle]
 pub unsafe extern "C" fn atom_vec_from_array(atoms: *mut atom_t, size: usize) -> atom_vec_t {
+    if atoms == core::ptr::null_mut() {
+        if size == 0 {
+            return vec![].into()
+        } else {
+            panic!("Null pointer is passed to the constructor of the vector with non-zero size");
+        }
+    }
     let c_arr = std::slice::from_raw_parts_mut(atoms, size);
     let atoms: Vec<Atom> = c_arr.into_iter().map(|atom| {
         core::mem::replace(atom, atom_t::null()).into_inner()

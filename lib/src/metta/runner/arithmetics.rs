@@ -56,14 +56,14 @@ impl Into<f64> for Number {
 }
 
 impl Number {
-    pub fn from_int_str(num: &str) -> Self {
-        let n = num.parse::<i64>().expect("Could not parse integer");
-        Self::Integer(n)
+    pub fn from_int_str(num: &str) -> Result<Self, String> {
+        let n = num.parse::<i64>().map_err(|e| format!("Could not parse integer: '{num}', {e}"))?;
+        Ok(Self::Integer(n))
     }
 
-    pub fn from_float_str(num: &str) -> Self {
-        let n = num.parse::<f64>().expect("Could not parse float");
-        Self::Float(n)
+    pub fn from_float_str(num: &str) -> Result<Self, String> {
+        let n = num.parse::<f64>().map_err(|e| format!("Could not parse float: '{num}', {e}"))?;
+        Ok(Self::Float(n))
     }
 
     pub fn promote(a: Number, b: Number) -> (Number, Number) {
@@ -406,10 +406,10 @@ mod tests {
 
     #[test]
     fn number() {
-        assert_eq!(Number::from_int_str("12345"), Number::Integer(12345i64));
-        assert_eq!(Number::from_float_str("123.45"), Number::Float(123.45f64));
-        assert_eq!(Number::from_float_str("12345e-02"), Number::Float(123.45f64));
-        assert_eq!(Number::from_float_str("1.2345e+2"), Number::Float(123.45f64));
+        assert_eq!(Number::from_int_str("12345").unwrap(), Number::Integer(12345i64));
+        assert_eq!(Number::from_float_str("123.45").unwrap(), Number::Float(123.45f64));
+        assert_eq!(Number::from_float_str("12345e-02").unwrap(), Number::Float(123.45f64));
+        assert_eq!(Number::from_float_str("1.2345e+2").unwrap(), Number::Float(123.45f64));
         assert_eq!(format!("{}", Number::Integer(12345i64)), "12345");
         assert_eq!(format!("{}", Number::Float(123.45f64)), "123.45");
     }
