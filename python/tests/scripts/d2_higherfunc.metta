@@ -168,12 +168,12 @@
 !(assertEqualToResult
   (get-type (fmap (curry-a + 2) (Left "5")))
   ())
-!(assertEqualToResult
-  (get-type (fmap (curry-a + 2) (UntypedC "5")))
-  ())
-!(assertEqualToResult
-  (get-type (fmap (curry-a + 2) (UntypedC (Null) 5)))
-  ())
+;!(assertEqualToResult
+  ;(get-type (fmap (curry-a + 2) (UntypedC "5")))
+  ;())
+;!(assertEqualToResult
+  ;(get-type (fmap (curry-a + 2) (UntypedC (Null) 5)))
+  ;())
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

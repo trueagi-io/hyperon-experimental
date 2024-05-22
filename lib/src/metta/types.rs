@@ -181,7 +181,7 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 /// assert_eq_no_order!(get_atom_types(&space, &expr!({1})), vec![expr!("i32")]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("na")), vec![ATOM_TYPE_UNDEFINED]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("a")), vec![expr!("A"), expr!("B")]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("a" "b")), vec![expr!("A" "B"), expr!("B" "B")]);
+/// assert_eq_no_order!(get_atom_types(&space, &expr!("a" "b")), vec![expr!("A" "B"), expr!("B" "B"), ATOM_TYPE_UNDEFINED]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "a")), vec![expr!("B")]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "b")), Vec::<Atom>::new());
 /// ```
@@ -209,7 +209,8 @@ pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
             let applications = get_application_types(space, atom, expr);
 
             let mut types = Vec::new();
-            if tuples.is_empty() && applications == None {
+            if applications == None {
+                types.extend(tuples);
                 types.push(ATOM_TYPE_UNDEFINED);
             } else {
                 types.extend(tuples);
@@ -834,9 +835,9 @@ mod tests {
             (: b BB)
         ");
         assert_eq_no_order!(get_atom_types(&space, &atom("(a b)")),
-            vec![atom("(A B)"), atom("(AA B)"), atom("(A BB)"), atom("(AA BB)")]);
+            vec![atom("(A B)"), atom("(AA B)"), atom("(A BB)"), atom("(AA BB)"), ATOM_TYPE_UNDEFINED]);
         assert_eq_no_order!(get_atom_types(&space, &atom("(a c)")),
-            vec![atom("(A %Undefined%)"), atom("(AA %Undefined%)")]);
+            vec![atom("(A %Undefined%)"), atom("(AA %Undefined%)"), ATOM_TYPE_UNDEFINED]);
         assert_eq_no_order!(get_atom_types(&space, &atom("(c d)")), vec![ATOM_TYPE_UNDEFINED]);
     }
 
@@ -889,10 +890,13 @@ mod tests {
         //assert_eq!(get_atom_types(&space, &expr!("f_gnd" b)), vec![]);
 
         assert_eq!(get_atom_types(&space, &expr!("f_atom" ("b"))), vec![atom("D")]);
-        assert_eq!(get_atom_types(&space, &expr!("f_sym" ("b"))), vec![]);
+        // Here and below: when interpreter cannot find a function type for
+        // expression it evaluates it. Thus any argument expression without
+        // a function type can potentially suit as a legal argument.
+        assert_eq!(get_atom_types(&space, &expr!("f_sym" ("b"))), vec![atom("D")]);
         assert_eq!(get_atom_types(&space, &expr!("f_expr" ("b"))), vec![atom("D")]);
-        assert_eq!(get_atom_types(&space, &expr!("f_var" ("b"))), vec![]);
-        assert_eq!(get_atom_types(&space, &expr!("f_gnd" ("b"))), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_var" ("b"))), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_gnd" ("b"))), vec![atom("D")]);
 
         assert_eq!(get_atom_types(&space, &expr!("f_atom" {1})), vec![atom("D")]);
         assert_eq!(get_atom_types(&space, &expr!("f_sym" {1})), vec![]);
