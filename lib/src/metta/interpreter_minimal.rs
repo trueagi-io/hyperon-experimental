@@ -665,8 +665,10 @@ fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     }
 
     let prev = Stack::from_prev_with_vars(prev, collapse, vars, collapse_bind_ret);
-    let cur = atom_to_stack(nested, Some(Rc::new(RefCell::new(prev))));
-    vec![InterpretedAtom(cur, bindings)]
+    let prev = Rc::new(RefCell::new(prev));
+    let cur = atom_to_stack(nested, Some(prev.clone()));
+    let dummy = Stack::finished(Some(prev), EMPTY_SYMBOL);
+    vec![InterpretedAtom(dummy, bindings.clone()), InterpretedAtom(cur, bindings)]
 }
 
 fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
@@ -678,7 +680,9 @@ fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) 
             Some([_op, Atom::Expression(finished), _bindings]) => finished,
             _ => panic!("Unexpected state"),
         };
-        finished.children_mut().push(atom_bindings_into_atom(nested, bindings));
+        if nested != EMPTY_SYMBOL {
+            finished.children_mut().push(atom_bindings_into_atom(nested, bindings));
+        }
     }
 
     // all alternatives are evaluated
