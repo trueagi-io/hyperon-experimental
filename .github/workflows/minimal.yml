@@ -17,7 +17,7 @@ on:
 
 jobs:
   minimal:
-    runs-on: ubuntu-20.04
+    runs-on: "ubuntu-20.04"
 
     steps:
       - name: Check out repository code
@@ -49,17 +49,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.7
+          python-version: "3.7"
 
       - name: Install CMake
         uses: jwlawson/actions-setup-cmake@v1.14.1
         with:
-          cmake-version: 3.16.x
+          cmake-version: "3.16.x"
 
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.2
         with:
-          version: 1.60.2
+          version: "1.60.2"
 
       - name: Setup Conan profile
         run: |
