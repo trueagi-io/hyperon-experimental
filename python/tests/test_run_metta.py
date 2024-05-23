@@ -1,3 +1,4 @@
+import unittest
 from hyperon import MeTTa, Environment, E
 from test_common import HyperonTestCase
 
@@ -68,7 +69,30 @@ class MeTTaTest(HyperonTestCase):
         result = MeTTa(env_builder=Environment.test_env()).run(program)
         self.assertEqual('[[1]]', repr(result))
 
+    def test_run_step_by_step(self):
+        program = '''
+            (= (TupleCount $tuple) (if (== $tuple ()) 0 (+ 1 (TupleCount (cdr-atom $tuple)))))
+            (= tup (1 2))
+            (= tup (3 4 5))
+            !(match &self (= tup $t) (TupleCount $t))
+        '''
+        runner = MeTTa(env_builder=Environment.test_env())
+        i = 0
+        for state in runner.run_step_by_step(program):
+            pass
+            i += 1
+        print('number of steps ' + str(i))
+        self.assertLess(i, 600)
+        results = state.current_results()
+        self.assertEqual(len(results[0]), 2)
+
+    def process_exceptions(self, results):
+        for result in results:
+            self.assertEqual(result, [E()])
+
+
     def test_scripts(self):
+
 
         #LP-TODO-Next:  I'd like to remove the working directory for this runner, and instead try
         # to import child modules relative to their parents using `self:` paths.  See comments around
