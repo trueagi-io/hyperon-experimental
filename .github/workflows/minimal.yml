@@ -59,7 +59,7 @@ jobs:
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.2
         with:
-          version: "1.60.2"
+          version: "1.64"
 
       - name: Setup Conan profile
         run: |
