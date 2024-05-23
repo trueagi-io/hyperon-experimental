@@ -733,6 +733,55 @@ impl Bindings {
             .collect::<Vec<(VariableAtom, Atom)>>()
             .into()
     }
+
+    pub fn apply_and_retain<F>(&mut self, atom: &mut Atom, f: F) where F: Fn(&VariableAtom) -> bool {
+        let trace_data = match log::log_enabled!(log::Level::Trace) {
+            true => Some((self.clone(), atom.clone())),
+            false => None
+        };
+        let to_remove: HashSet<VariableAtom> = self.binding_by_var.keys()
+            .filter_map(|var| {
+                if !f(var) {
+                    Some(var.clone())
+                } else {
+                    None
+                }
+            }).collect();
+
+        atom.iter_mut().for_each(|atom| match atom {
+            Atom::Variable(var) => {
+                if to_remove.contains(&var) {
+                    match self.resolve(var) {
+                        Some(Atom::Variable(v)) if to_remove.contains(&v) => { self.rename_var(var, &to_remove).map(|v| *atom = v); },
+                        Some(value) => { *atom = value; },
+                        None => {},
+                    }
+                }
+            },
+            _ => {},
+        });
+        for var in &to_remove {
+            self.remove_var_from_binding(var);
+        }
+
+        if let Some((trace_bindings, trace_atom)) = trace_data {
+            log::trace!("Bindings::apply_and_retain: atom: {} -> {}", trace_atom, atom);
+            log::trace!("Bindings::apply_and_retain: bindings: {:?} / {:?} -> {:?}", trace_bindings, to_remove, self);
+        }
+    }
+
+    fn rename_var(&self, var: &VariableAtom, to_remove: &HashSet<VariableAtom>) -> Option<Atom> {
+        let renamed = match self.get_binding(var) {
+            None => None,
+            Some(binding) =>
+                match self.binding_by_var.iter().filter(|(v, &b)| b == binding.id && !to_remove.contains(*v)).next() {
+                    None => None,
+                    Some((v, _)) => Some(Atom::Variable(v.clone())),
+                },
+        };
+        log::trace!("Bindings::rename_var: {} -> {:?}", var, renamed);
+        renamed
+    }
 }
 
 impl Display for Bindings {
