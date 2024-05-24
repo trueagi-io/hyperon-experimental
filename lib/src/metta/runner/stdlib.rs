@@ -2004,10 +2004,18 @@ mod tests {
 
     #[test]
     fn unique_op() {
-        let space = DynSpace::new(GroundingSpace::new());
+        let space = DynSpace::new(metta_space("
+            (= (foo) (A (B C)))
+            (= (foo) (A (B C)))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) Z)
+        "));
         let unique_op = UniqueOp::new(space);
-        assert_eq!(unique_op.execute(&mut vec![expr!("A" ("B" "C")), expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("f" "g"), expr!(("Z"))]),
-                   Ok(vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!(("Z"))]));
+        let actual = unique_op.execute(&mut vec![expr!(("foo"))]).unwrap();
+        assert_eq!(actual,
+                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("Z")]);
     }
 
     #[test]
