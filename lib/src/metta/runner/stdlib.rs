@@ -1127,6 +1127,8 @@ mod non_minimal_only_stdlib {
     }
 
     use std::collections::HashSet;
+    use crate::common::multitrie::MultiTrie;
+    use crate::space::grounding::atom_to_trie_key;
 
     #[derive(Clone, PartialEq, Debug)]
     pub struct CaptureOp {
@@ -1516,6 +1518,66 @@ mod non_minimal_only_stdlib {
     }
 
     #[derive(Clone, PartialEq, Debug)]
+    pub struct IntersectionOp {
+        pub(crate) space: DynSpace,
+    }
+
+    impl IntersectionOp {
+        pub fn new(space: DynSpace) -> Self {
+            Self{ space }
+        }
+    }
+
+    impl Display for IntersectionOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "intersection")
+        }
+    }
+
+    impl Grounded for IntersectionOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        }
+
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = || ExecError::from("union expects and executable LHS and RHS atom");
+            let lhs = args.get(0).ok_or_else(arg_error)?;
+            let rhs = args.get(1).ok_or_else(arg_error)?;
+
+            // TODO: Calling interpreter inside the operation is not too good
+            // Could it be done via StepResult?
+            let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
+            let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
+            let mut rhs_index = MultiTrie::new();
+            for rhs_item in rhs_result.iter() {
+                let k = atom_to_trie_key(rhs_item);
+                let c = *rhs_index.get(&k).next().unwrap_or_else(|| &0);
+                rhs_index.remove(&k, &c);
+                rhs_index.insert(k.clone(), c + 1)
+            }
+
+            lhs_result.retain(|candidate| {
+                let k = atom_to_trie_key(candidate);
+                let item = rhs_index.get(&k).next().map(|i| i.clone());
+                match item {
+                    None => { false }
+                    Some(i) => {
+                        rhs_index.remove(&k, &i);
+                        if i > 1 { rhs_index.insert(k.clone(), i - 1); }
+                        true
+                    }
+                }
+            });
+
+            Ok(lhs_result)
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
+    #[derive(Clone, PartialEq, Debug)]
     pub struct LetOp {}
 
     impl Display for LetOp {
@@ -1699,6 +1761,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"unique"), move |_| { unique_op.clone() });
         let union_op = Atom::gnd(UnionOp::new(space.clone()));
         tref.register_token(regex(r"union"), move |_| { union_op.clone() });
+        let intersection_op = Atom::gnd(IntersectionOp::new(space.clone()));
+        tref.register_token(regex(r"intersection"), move |_| { intersection_op.clone() });
         let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
         tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
         let get_type_space_op = Atom::gnd(GetTypeSpaceOp{});
@@ -2080,6 +2144,30 @@ mod tests {
         assert_eq_no_order!(actual,
                    vec![expr!("A" ("B" "C")), expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("f" "g"), expr!("Z"),
                         expr!("A" ("B" "C")), expr!("p"), expr!("p"), expr!("Q" "a")]);
+    }
+
+    #[test]
+    fn intersection_op() {
+        let space = DynSpace::new(metta_space("
+            (= (foo) Z)
+            (= (foo) (A (B C)))
+            (= (foo) (A (B C)))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (P b))
+            (= (bar) (f g))
+            (= (bar) (f g))
+            (= (bar) (A (B C)))
+            (= (bar) p)
+            (= (bar) p)
+            (= (bar) (Q a))
+            (= (bar) Z)
+        "));
+        let intersection_op = IntersectionOp::new(space);
+        let actual = intersection_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]).unwrap();
+        assert_eq_no_order!(actual,
+                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("Z")]);
     }
 
     #[test]

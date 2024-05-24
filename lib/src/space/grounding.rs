@@ -47,7 +47,7 @@ impl<'a> Iterator for GroundingSpaceIter<'a> {
     }
 }
 
-fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
+pub(crate) fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
     fn fill_key(atom: &Atom, tokens: &mut Vec<TrieToken<SymbolAtom>>) {
         match atom {
             Atom::Symbol(sym) => tokens.push(TrieToken::Exact(sym.clone())),
