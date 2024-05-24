@@ -1,5 +1,4 @@
-# version supported by Ubuntu 18.04
-cmake_minimum_required(VERSION 3.10.2)
+cmake_minimum_required(VERSION 3.19)
 project(hyperonpy)
 
 enable_testing()
@@ -11,31 +10,14 @@ if (POLICY CMP0025)
 endif ()
 set(CMAKE_CXX_STANDARD 11)
 
-if (${CMAKE_VERSION} GREATER_EQUAL "3.12")
-    # The default value ("FIRST") prefers the installation with the highest
-    # version. "ONLY" sticks to a virtualenv even when its version is smaller
-    # which is usually expected by an user.
-    if (NOT DEFINED Python3_FIND_VIRTUALENV)
-        set(Python3_FIND_VIRTUALENV "ONLY")
-    endif()
-    if (${CMAKE_VERSION} GREATER_EQUAL "3.18")
-        # Development.Embed is not supported by cibuildwheel environment
-        find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
-    else()
-        find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development)
-    endif()
-else() # support Ubuntu 18.04
-    # pybind11 config looks for Python path again when deprecated PythonInterp
-    # and PythonLibs packages are used. It should find the same version though
-    # because PYTHON_EXECUTABLE is already set.
-    find_package(PythonInterp 3.7 REQUIRED)
-    find_package(PythonLibs 3.7 REQUIRED)
-    # Python installation path should be modified via Python environment.
-    # Following way of getting paths seems to be working (for Ubuntu as well).
-    execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('platlib'), end='')" OUTPUT_VARIABLE Python3_SITEARCH)
-    execute_process(COMMAND ${PYTHON_EXECUTABLE} -c "import sysconfig; print(sysconfig.get_path('purelib'), end='')" OUTPUT_VARIABLE Python3_SITELIB)
-    set(Python3_EXECUTABLE ${PYTHON_EXECUTABLE})
+# The default value ("FIRST") prefers the installation with the highest
+# version. "ONLY" sticks to a virtualenv even when its version is smaller
+# which is usually expected by an user.
+if (NOT DEFINED Python3_FIND_VIRTUALENV)
+    set(Python3_FIND_VIRTUALENV "ONLY")
 endif()
+# Development.Embed is not supported by cibuildwheel environment
+find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
 message(STATUS "Python native modules installation path (Python3_SITEARCH): ${Python3_SITEARCH}")
 message(STATUS "Python modules installation path (Python3_SITELIB): ${Python3_SITELIB}")
 

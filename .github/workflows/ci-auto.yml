@@ -14,4 +14,4 @@ jobs:
     with:
       python-version: "3.7"
       os: "ubuntu-20.04"
-      cmake-version: "3.16.x"
+      cmake-version: "3.19.x"

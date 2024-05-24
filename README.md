@@ -80,7 +80,7 @@ Rust (see the Notes at the installation page).
   * Python3 and Python3-dev (3.7 or later)
   * Pip (23.1.2 or later)
   * GCC (7.5 or later)
-  * CMake (3.15 or later)
+  * CMake (3.19 or later)
 
 * Install cbindgen:
 ```
