@@ -7,10 +7,13 @@ use crate::atom::*;
 use crate::atom::matcher::{MatchResultIter, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
+use crate::serial::{Error, Serializer};
 
 use std::fmt::Debug;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
+use std::hash::{BuildHasherDefault, DefaultHasher, Hasher};
+use crate::common::collections::ImmutableString;
 
 // Grounding space
 
@@ -47,6 +50,24 @@ impl<'a> Iterator for GroundingSpaceIter<'a> {
     }
 }
 
+impl Serializer for DefaultHasher { // there are much speedier hashers, but I didn't want to introduce a dependency
+    fn serialize_bool(&mut self, _v: bool) -> serial::Result { Ok(self.write_u8(_v as u8)) }
+    fn serialize_i64(&mut self, _v: i64) -> serial::Result { Ok(self.write_i64(_v)) }
+    fn serialize_f64(&mut self, _v: f64) -> serial::Result { Ok(self.write_u64(_v as u64)) }
+}
+
+impl Serializer for String { // for debugging
+    fn serialize_bool(&mut self, _v: bool) -> serial::Result { Ok(self.push_str(&*_v.to_string())) }
+    fn serialize_i64(&mut self, _v: i64) -> serial::Result { Ok(self.push_str(&*_v.to_string())) }
+    fn serialize_f64(&mut self, _v: f64) -> serial::Result { Ok(self.push_str(&*_v.to_string())) }
+}
+
+impl Serializer for Vec<u8> { // for speed, but is technically unsafe because not a valid utf-8 string
+    fn serialize_bool(&mut self, _v: bool) -> serial::Result { Ok(self.push(_v as u8)) }
+    fn serialize_i64(&mut self, _v: i64) -> serial::Result { Ok(self.extend(_v.to_le_bytes())) }
+    fn serialize_f64(&mut self, _v: f64) -> serial::Result { Ok(self.extend(_v.to_le_bytes())) }
+}
+
 pub(crate) fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
     fn fill_key(atom: &Atom, tokens: &mut Vec<TrieToken<SymbolAtom>>) {
         match atom {
@@ -56,6 +77,14 @@ pub(crate) fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
                 expr.children().iter().for_each(|child| fill_key(child, tokens));
                 tokens.push(TrieToken::RightPar);
             },
+            // FIXME, see below
+            Atom::Grounded(g) => {
+                let mut h = DefaultHasher::new();
+                match (*g).serialize(&mut h) {
+                    Ok(()) => { tokens.push(TrieToken::Exact(SymbolAtom::new(ImmutableString::Allocated(h.finish().to_string())))) }
+                    Err(_) => { tokens.push(TrieToken::Wildcard) }
+                }
+            }
             // TODO: At the moment all grounding symbols are matched as wildcards
             // because they potentially may have custom Grounded::match_()
             // implementation and we cannot understand it from data. We could improve

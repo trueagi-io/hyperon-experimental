@@ -8,11 +8,13 @@ use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
+use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
+use crate::space::grounding::atom_to_trie_key;
 
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::Display;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use regex::Regex;
 
 use super::arithmetics::*;
@@ -1126,10 +1128,6 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    use std::collections::HashSet;
-    use crate::common::multitrie::MultiTrie;
-    use crate::space::grounding::atom_to_trie_key;
-
     #[derive(Clone, PartialEq, Debug)]
     pub struct CaptureOp {
         space: DynSpace,
@@ -1549,11 +1547,11 @@ mod non_minimal_only_stdlib {
             let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
             let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
             let mut rhs_index = MultiTrie::new();
-            for rhs_item in rhs_result.iter() {
-                let k = atom_to_trie_key(rhs_item);
+            for rhs_item in rhs_result {
+                let k = atom_to_trie_key(&rhs_item);
                 let c = *rhs_index.get(&k).next().unwrap_or_else(|| &0);
-                rhs_index.remove(&k, &c);
-                rhs_index.insert(k.clone(), c + 1)
+                if c != 0 { rhs_index.remove(&k, &c); }
+                rhs_index.insert(k, c + 1)
             }
 
             lhs_result.retain(|candidate| {
@@ -1609,11 +1607,11 @@ mod non_minimal_only_stdlib {
             let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
             let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
             let mut rhs_index = MultiTrie::new();
-            for rhs_item in rhs_result.iter() {
-                let k = atom_to_trie_key(rhs_item);
+            for rhs_item in rhs_result {
+                let k = atom_to_trie_key(&rhs_item);
                 let c = *rhs_index.get(&k).next().unwrap_or_else(|| &0);
                 rhs_index.remove(&k, &c);
-                rhs_index.insert(k.clone(), c + 1)
+                rhs_index.insert(k, c + 1)
             }
 
             lhs_result.retain(|candidate| {
@@ -2226,11 +2224,21 @@ mod tests {
             (= (bar) p)
             (= (bar) (Q a))
             (= (bar) Z)
+
+            (= (nsl) 5)
+            (= (nsl) 4)
+            (= (nsl) 3)
+            (= (nsl) 2)
+            (= (nsr) 5)
+            (= (nsr) 3)
         "));
         let intersection_op = IntersectionOp::new(space);
         let actual = intersection_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]).unwrap();
         assert_eq_no_order!(actual,
                    vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("Z")]);
+
+        assert_eq_no_order!(intersection_op.execute(&mut vec![expr!(("nsl")), expr!(("nsr"))]).unwrap(),
+                   vec![expr!("5"), expr!("3")]);
     }
 
     #[test]
