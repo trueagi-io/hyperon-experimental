@@ -81,6 +81,7 @@ jobs:
           uname -a
           uname -p
           uname -r
+          uname -m
           echo "rustc --version"
           rustc --version
           echo "cbindgen --version"
@@ -123,6 +124,13 @@ jobs:
       - name: Build C API
         working-directory: ./build
         run: cmake --build .
+
+      - name: Archive code coverage results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cppunit-build
+          path: /Users/runner/.conan/data/cppunit/1.15.1/_/_/build
 
       - name: Test C API
         working-directory: ./build

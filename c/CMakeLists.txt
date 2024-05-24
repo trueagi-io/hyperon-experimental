@@ -9,7 +9,7 @@ add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 execute_process(
     # --build is required to build dependencies from source under cibuildwheel
     # environment
-    COMMAND cmake -E env CC= CXX= conan install --build -- ${CMAKE_CURRENT_SOURCE_DIR}
+    COMMAND cmake -E env CC= CXX= conan install --build -pr:b default -pr:h default -- ${CMAKE_CURRENT_SOURCE_DIR}
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 include(${CMAKE_CURRENT_BINARY_DIR}/conanbuildinfo.cmake)
 conan_basic_setup(TARGETS)
