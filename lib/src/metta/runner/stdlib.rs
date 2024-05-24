@@ -1430,6 +1430,50 @@ mod non_minimal_only_stdlib {
         }
     }
 
+
+    #[derive(Clone, PartialEq, Debug)]
+    pub struct UniqueOp {
+        pub(crate) space: DynSpace,
+    }
+
+    impl UniqueOp {
+        pub fn new(space: DynSpace) -> Self {
+            Self{ space }
+        }
+    }
+
+    impl Display for UniqueOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "unique")
+        }
+    }
+
+    impl Grounded for UniqueOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        }
+
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = || ExecError::from("unique expects single executable atom as an argument");
+            let atom = args.get(0).ok_or_else(arg_error)?;
+
+            // TODO: Calling interpreter inside the operation is not too good
+            // Could it be done via StepResult?
+            let mut result = interpret_no_error(self.space.clone(), atom)?;
+            let mut set = GroundingSpace::new();
+            result.retain(|x| {
+                let not_contained = set.query(x).is_empty();
+                if not_contained { set.add(x.clone()) };
+                not_contained
+            });
+            Ok(result)
+        }
+
+        fn match_(&self, other: &Atom) -> MatchResultIter {
+            match_by_equality(self, other)
+        }
+    }
+
     #[derive(Clone, PartialEq, Debug)]
     pub struct LetOp {}
 
@@ -1610,6 +1654,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
         let superpose_op = Atom::gnd(SuperposeOp::new(space.clone()));
         tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
+        let unique_op = Atom::gnd(UniqueOp::new(space.clone()));
+        tref.register_token(regex(r"unique"), move |_| { unique_op.clone() });
         let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
         tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
         let get_type_space_op = Atom::gnd(GetTypeSpaceOp{});
@@ -1954,6 +2000,14 @@ mod tests {
         let superpose_op = SuperposeOp::new(space);
         assert_eq!(superpose_op.execute(&mut vec![expr!("A" ("B" "C"))]),
             Ok(vec![sym!("A"), expr!("B" "C")]));
+    }
+
+    #[test]
+    fn unique_op() {
+        let space = DynSpace::new(GroundingSpace::new());
+        let unique_op = UniqueOp::new(space);
+        assert_eq!(unique_op.execute(&mut vec![expr!("A" ("B" "C")), expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("f" "g"), expr!(("Z"))]),
+                   Ok(vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!(("Z"))]));
     }
 
     #[test]
