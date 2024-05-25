@@ -1014,6 +1014,11 @@ pub(crate) mod pkg_mgmt_ops {
 
     /// Provides access to module in a remote git repo, from within MeTTa code
     /// Similar to `register-module!`, this op will bypass the catalog search
+    ///
+    /// NOTE: Even if Hyperon is build without git support, this operation may still be used to
+    /// load existing modules from a git cache.  That situation may occur if modules were fetched
+    /// earlier or by another tool that manages the module cache.  However this operation requres
+    /// git support to actually clone or pull from a git repository.
     #[derive(Clone, Debug)]
     pub struct GitModuleOp {
         //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
@@ -1095,19 +1100,24 @@ pub(crate) mod pkg_mgmt_ops {
 
     impl Display for CatalogListOp {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "catalog-list")
+            write!(f, "catalog-list!")
         }
     }
 
     impl Grounded for CatalogListOp {
         fn type_(&self) -> Atom {
-            //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
-            // allow an optional arg to list a specific catalog.  For now we list all of them
             //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-            Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
         }
 
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = "catalog-list! expects a catalog name, or \"all\" to list all available";
+            let cat_name_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+            let cat_name = if let Atom::Symbol(cat_name) = cat_name_arg_atom {
+                cat_name.name()
+            } else {
+                return Err(ExecError::from(arg_error));
+            };
 
             fn list_catalog(cat: &dyn crate::metta::runner::ModuleCatalog) {
                 if let Some(cat_iter) = cat.list() {
@@ -1118,13 +1128,23 @@ pub(crate) mod pkg_mgmt_ops {
                 }
             }
 
-            if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-                list_catalog(explicit_git_catalog);
+            let mut found_one = false;
+            if cat_name == "all" || cat_name == "git-modules" {
+                if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
+                    list_catalog(explicit_git_catalog);
+                    found_one = true;
+                }
             }
             for cat in self.metta.environment().catalogs() {
-                list_catalog(cat);
+                if cat_name == "all" || cat_name == cat.display_name() {
+                    list_catalog(cat);
+                    found_one = true;
+                }
             }
 
+            if !found_one {
+                return Err(ExecError::from(format!("no catalog(s) identified by \"{cat_name}\"")));
+            }
             unit_result()
         }
 
@@ -1151,7 +1171,7 @@ pub(crate) mod pkg_mgmt_ops {
 
     impl Display for CatalogUpdateOp {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "catalog-update")
+            write!(f, "catalog-update!")
         }
     }
 
@@ -1160,22 +1180,39 @@ pub(crate) mod pkg_mgmt_ops {
             //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
             // allow an optional arg to list a specific catalog.  For now we list all of them
             //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-            Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
         }
 
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = "catalog-update! expects a catalog name, or \"all\" to update all";
+            let cat_name_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+            let cat_name = if let Atom::Symbol(cat_name) = cat_name_arg_atom {
+                cat_name.name()
+            } else {
+                return Err(ExecError::from(arg_error));
+            };
 
-            if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-                explicit_git_catalog.fetch_newest_for_all(UpdateMode::FetchLatest)?;
+            let mut found_one = false;
+            if cat_name == "all" || cat_name == "git-modules" {
+                if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
+                    explicit_git_catalog.fetch_newest_for_all(UpdateMode::FetchLatest)?;
+                    found_one = true;
+                }
             }
 
             for cat in self.metta.environment().catalogs() {
                 match cat.as_managed() {
-                    Some(cat) => cat.fetch_newest_for_all(UpdateMode::FetchLatest)?,
+                    Some(cat) => if cat_name == "all" || cat_name == cat.display_name() {
+                        cat.fetch_newest_for_all(UpdateMode::FetchLatest)?;
+                        found_one = true;
+                    },
                     None => {}
                 }
             }
 
+            if !found_one {
+                return Err(ExecError::from(format!("no catalog(s) identified by \"{cat_name}\"")));
+            }
             unit_result()
         }
 
@@ -1202,7 +1239,7 @@ pub(crate) mod pkg_mgmt_ops {
 
     impl Display for CatalogClearOp {
         fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "catalog-clear")
+            write!(f, "catalog-clear!")
         }
     }
 
@@ -1211,18 +1248,36 @@ pub(crate) mod pkg_mgmt_ops {
             //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
             // allow an optional arg to list a specific catalog.  For now we list all of them
             //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-            Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
         }
 
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = "catalog-clear! expects a catalog name, or \"all\" to clear all";
+            let cat_name_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+            let cat_name = if let Atom::Symbol(cat_name) = cat_name_arg_atom {
+                cat_name.name()
+            } else {
+                return Err(ExecError::from(arg_error));
+            };
 
-            if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-                explicit_git_catalog.clear_all()?;
+            let mut found_one = false;
+            if cat_name == "all" || cat_name == "git-modules" {
+                if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
+                    explicit_git_catalog.clear_all()?;
+                    found_one = true;
+                }
             }
+
             for cat in self.metta.environment().catalogs().filter_map(|cat| cat.as_managed()) {
-                cat.clear_all()?;
+                if cat_name == "all" || cat_name == cat.display_name() {
+                    cat.clear_all()?;
+                    found_one = true;
+                }
             }
 
+            if !found_one {
+                return Err(ExecError::from(format!("no catalog(s) identified by \"{cat_name}\"")));
+            }
             unit_result()
         }
 
@@ -1237,11 +1292,11 @@ pub(crate) mod pkg_mgmt_ops {
         let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));
         tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
         let catalog_list_op = Atom::gnd(CatalogListOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-list"), move |_| { catalog_list_op.clone() });
+        tref.register_token(regex(r"catalog-list!"), move |_| { catalog_list_op.clone() });
         let catalog_update_op = Atom::gnd(CatalogUpdateOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-update"), move |_| { catalog_update_op.clone() });
+        tref.register_token(regex(r"catalog-update!"), move |_| { catalog_update_op.clone() });
         let catalog_clear_op = Atom::gnd(CatalogClearOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-clear"), move |_| { catalog_clear_op.clone() });
+        tref.register_token(regex(r"catalog-clear!"), move |_| { catalog_clear_op.clone() });
     }
 }
 
