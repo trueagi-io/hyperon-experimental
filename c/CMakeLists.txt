@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(hyperonc)
 
-option(GIT "Adds git features to hyperon library; requires OpenSSL" ON)
+option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 
 enable_testing()
 option(BUILD_SHARED_LIBS "Build shared library" ON)
