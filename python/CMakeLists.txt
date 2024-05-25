@@ -2,7 +2,7 @@
 cmake_minimum_required(VERSION 3.10.2)
 project(hyperonpy)
 
-option(GIT "Adds git features to hyperon library; requires OpenSSL" ON)
+option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 
 enable_testing()
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
