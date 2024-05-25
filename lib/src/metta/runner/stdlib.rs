@@ -1177,8 +1177,6 @@ pub(crate) mod pkg_mgmt_ops {
 
     impl Grounded for CatalogUpdateOp {
         fn type_(&self) -> Atom {
-            //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
-            // allow an optional arg to list a specific catalog.  For now we list all of them
             //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
         }
@@ -1245,8 +1243,6 @@ pub(crate) mod pkg_mgmt_ops {
 
     impl Grounded for CatalogClearOp {
         fn type_(&self) -> Atom {
-            //TODO-FUTURE, when we decide on a friendly standard for var-args, it would be nice to
-            // allow an optional arg to list a specific catalog.  For now we list all of them
             //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
         }
