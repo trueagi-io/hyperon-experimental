@@ -5,7 +5,7 @@ project(hyperon)
 
 include(ExternalProject)
 
-option(GIT "Adds git features to hyperon library; requires OpenSSL" ON)
+option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 
 set(HYPERONC_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/hyperonc-prefix")
 message(STATUS "HYPERONC_INSTALL_PREFIX = ${HYPERONC_INSTALL_PREFIX}")
