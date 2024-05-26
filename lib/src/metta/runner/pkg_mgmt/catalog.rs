@@ -318,7 +318,8 @@ impl PkgInfo {
             //If `version_req` is specified in the dep entry, then use it to constrain the catalog search
             version_req = entry.version_req.as_ref();
         } else {
-            //If the PkgInfo doesn't have an entry for the module, it's an error if the PkgInfo is flagged as "strict"
+            //If the PkgInfo doesn't have an entry for the module and the PkgInfo is flagged as "strict"
+            // then we will not attempt to resolve the module any further, and the resolution will fail.
             if self.strict {
                 return Ok(None);
             }
