@@ -11,8 +11,7 @@
 )
 
 (#gitCatalog
-    ; TODO, Default catalog should be moved to trueagi github account
-    (#name "luketpeterson-catalog")
-    (#url "https://github.com/luketpeterson/metta-mod-catalog.git")
+    (#name "trueagi-catalog")
+    (#url "https://github.com/trueagi-io/metta-catalog.git")
     (#refreshTime 259200) ; 3 days = 3 days * 24 hrs * 60 minutes * 60 seconds
 )
