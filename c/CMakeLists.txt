@@ -78,8 +78,10 @@ set(STATIC_LIBRARY_INSTALL_PATH "${BINARY_INSTALL_PATH}/${HYPERONC_STATIC_LIB_FI
 include(CMakePackageConfigHelpers)
 
 if(BUILD_SHARED_LIBS)
-    find_package(OpenSSL REQUIRED)
-    find_package(ZLIB REQUIRED)
+    if(GIT)
+        find_package(OpenSSL REQUIRED)
+        find_package(ZLIB REQUIRED)
+    endif(GIT)
 
     set(HYPERONC_SHARED_LIB_FILE ${CMAKE_SHARED_LIBRARY_PREFIX}hyperonc${CMAKE_SHARED_LIBRARY_SUFFIX})
     set(HYPERONC_SHARED_LIB_PATH ${HYPERONC_TARGET_DIR}/${HYPERONC_SHARED_LIB_FILE})
@@ -100,7 +102,9 @@ if(BUILD_SHARED_LIBS)
         # required to import hyperonc-shared by name not by relative path
         IMPORTED_NO_SONAME TRUE
         )
-    target_link_libraries(hyperonc-shared INTERFACE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
+    if(GIT)
+        target_link_libraries(hyperonc-shared INTERFACE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
+    endif(GIT)
     add_dependencies(hyperonc-shared copy-hyperonc-shared build-hyperonc)
 
     install(FILES "${HYPERONC_SHARED_LIB_PATH}"
