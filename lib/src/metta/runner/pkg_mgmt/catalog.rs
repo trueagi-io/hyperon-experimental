@@ -691,12 +691,14 @@ fn visit_modules_in_dir_using_mod_formats(fmts: &[Box<dyn FsModuleFormat>], dir_
     }
 }
 
-/// A data structure that uniquely identifies an exact version of a module with a particular provenance
+/// A data structure that uniquely identifies an exact instance of a module
 ///
 /// If two modules have the same ModuleDescriptor, they are considered to be the same module
 ///
-/// NOTE: It is possible for a module to have both a version and a uid.  Module version uniqueness is
-/// enforced by the catalog(s), and two catalogs may disagree
+/// The uid field encodes particulars about a module so it will never be mistaken for another copy
+/// or variation of the module even if the version field is the same.  For example, a module loaded
+/// from the file system will use the uid to hash the path, while a module fetched from git will
+/// hash the url and branch.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct ModuleDescriptor {
     name: String,
