@@ -54,9 +54,6 @@ impl ModId {
     }
 }
 
-#[cfg(feature = "pkg_mgmt")]
-pub(crate) static DEFAULT_PKG_INFO: OnceLock<PkgInfo> = OnceLock::new();
-
 /// Contains state associated with a loaded MeTTa module
 #[derive(Debug)]
 pub struct MettaMod {
@@ -302,16 +299,10 @@ impl MettaMod {
         mod_name_from_path(&self.mod_path)
     }
 
+    /// Returns a reference to the module's [PkgInfo], if it has one
     #[cfg(feature = "pkg_mgmt")]
-    pub fn pkg_info(&self) -> &PkgInfo {
-        let default_pkg_info = DEFAULT_PKG_INFO.get_or_init(|| PkgInfo::default());
-        match &self.loader {
-            Some(loader) => match loader.pkg_info() {
-                Some(pkg_info) => pkg_info,
-                _ => default_pkg_info
-            },
-            None => default_pkg_info
-        }
+    pub fn pkg_info(&self) -> Option<&PkgInfo> {
+        self.loader.as_ref().and_then(|loader| loader.pkg_info())
     }
 
     pub fn space(&self) -> &DynSpace {

@@ -879,7 +879,7 @@ impl<'input> RunContext<'_, '_, 'input> {
     #[cfg(feature = "pkg_mgmt")]
     fn load_module_internal(&mut self, mod_path: &str, parent_mod_id: ModId) -> Result<ModId, String> {
         self.in_mod_context(parent_mod_id, |context| {
-            match context.module().pkg_info().resolve_module(context, mod_path)? {
+            match resolve_module(context.module().pkg_info(), context, mod_path)? {
                 Some((loader, descriptor)) => {
                     context.get_or_init_module_with_descriptor(mod_path, descriptor, loader)
                 },
@@ -907,7 +907,7 @@ impl<'input> RunContext<'_, '_, 'input> {
                 let parent_mod_id = self.load_module_parents(mod_name)?;
                 let normalized_mod_path = self.normalize_module_name(mod_name)?;
                 self.in_mod_context(parent_mod_id, |context| {
-                    match context.module().pkg_info().resolve_module(context, &normalized_mod_path)? {
+                    match resolve_module(context.module().pkg_info(), context, &normalized_mod_path)? {
                         Some((loader, _descriptor)) => {
                             loader.get_resource(res_key)
                         },

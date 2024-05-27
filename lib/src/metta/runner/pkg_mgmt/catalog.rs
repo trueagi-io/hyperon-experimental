@@ -251,11 +251,15 @@ pub(crate) fn find_newest_module(mods_iter: impl Iterator<Item=ModuleDescriptor>
 #[derive(Clone, Debug, Default, Deserialize)]
 pub struct PkgInfo {
 
-    /// The public name of the module.  Should be composed of alpha-numeric characters with '-' and '_'
-    /// characters allowed.  Must not contain any other punctuation. 
+    /// The public name of the module
+    ///
+    /// Should be composed of alpha-numeric characters with '-' and '_' characters allowed.  Must not
+    /// contain any other punctuation
     pub name: Option<String>,
 
-    // The version of this module
+    /// The version of this module
+    ///
+    /// A `None` or missing version is considered inferior to all other versions
     #[serde(default)]
     pub version: Option<semver::Version>,
 
@@ -264,7 +268,7 @@ pub struct PkgInfo {
     #[serde(default)]
     pub strict: bool,
 
-    /// Entries mapping module names to requirements for each dependency sub-module
+    /// Requirements for each dependency sub-module
     ///
     /// A Duplicate entry for a given sub-module in the deps list is an error.
     #[serde(default)]
@@ -290,70 +294,6 @@ pub struct DepEntry {
 }
 
 impl PkgInfo {
-    /// Resolves which module to load from which available location or catalog, and returns the [ModuleLoader] to
-    /// load that module
-    pub fn resolve_module(&self, context: &RunContext, name_path: &str) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
-        let mod_name = mod_name_from_path(name_path);
-
-        //Make sure the name is a legal module name
-        if !module_name_is_legal(mod_name) {
-            return Err(format!("Illegal module name: {mod_name}"));
-        }
-
-        //See if we have a pkg_info dep entry for the module
-        let mut version_req = None;
-        if let Some(entry) = self.deps.get(mod_name) {
-
-            //If path is explicitly specified in the dep entry, then we must load the module at the
-            // specified path, and cannot search anywhere else
-            if let Some(path) = &entry.fs_path {
-                return loader_for_module_at_path(context.metta.environment().fs_mod_formats(), path, Some(mod_name), context.module().resource_dir());
-            }
-
-            //Get the module if it's specified with git keys
-            if let Some(pair) = entry.git_location.get_loader_in_explicit_catalog(mod_name, UpdateMode::FetchIfMissing, context.metta.environment())? {
-                return Ok(Some(pair));
-            }
-
-            //If `version_req` is specified in the dep entry, then use it to constrain the catalog search
-            version_req = entry.version_req.as_ref();
-        } else {
-            //If the PkgInfo doesn't have an entry for the module and the PkgInfo is flagged as "strict"
-            // then we will not attempt to resolve the module any further, and the resolution will fail.
-            if self.strict {
-                return Ok(None);
-            }
-        }
-
-        //Search the module's resource dir before searching the environment's catalogs
-        // This allows a module to import another module inside its directory or as a peer of itself for
-        // single-file modules, without including an explicit PkgInfo dep entry.  On the other hand, If we
-        // want to require module authors to include a dep entry to be explicit about their dependencies, we
-        // can remove this catalog
-        let resource_dir_catalog;
-        let mut local_catalogs = vec![];
-        if let Some(mod_resource_dir) = context.module().resource_dir() {
-            if context.metta.environment().working_dir() != Some(mod_resource_dir) {
-                resource_dir_catalog = DirCatalog::new(PathBuf::from(mod_resource_dir), context.metta().environment().fs_mod_formats.clone());
-                local_catalogs.push(&resource_dir_catalog as &dyn ModuleCatalog);
-            }
-        }
-
-        //Search the catalogs, starting with the resource dir, and continuing to the runner's Environment
-        for catalog in local_catalogs.into_iter().chain(context.metta.environment().catalogs()) {
-            log::trace!("Looking for module: \"{mod_name}\" inside {catalog:?}");
-            match catalog.lookup_newest_with_version_req(mod_name, version_req) {
-                Some(descriptor) => {
-                    log::info!("Found module: \"{mod_name}\" inside {:?}", catalog.display_name());
-                    log::info!("Preparing to load module: \'{}\' as \'{}\'", descriptor.name, name_path);
-                    return Ok(Some((catalog.get_loader(&descriptor)?, descriptor)))
-                },
-                None => {}
-            }
-        }
-
-        Ok(None)
-    }
     /// Returns the version of the package
     pub fn version(&self) -> Option<&semver::Version> {
         self.version.as_ref()
@@ -365,6 +305,73 @@ impl PkgInfo {
             None => Err("no version available".to_string())
         }
     }
+}
+
+/// Resolves which module to load from which available location or catalog, and returns the [ModuleLoader] to
+/// load that module
+pub(crate) fn resolve_module(pkg_info: Option<&PkgInfo>, context: &RunContext, name_path: &str) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
+    let mod_name = mod_name_from_path(name_path);
+
+    //Make sure the name is a legal module name
+    if !module_name_is_legal(mod_name) {
+        return Err(format!("Illegal module name: {mod_name}"));
+    }
+
+    //See if we have a pkg_info dep entry for the module
+    let mut version_req = None;
+    if let Some(entry) = pkg_info.as_ref().and_then(|pkg_info| pkg_info.deps.get(mod_name)) {
+
+        //If path is explicitly specified in the dep entry, then we must load the module at the
+        // specified path, and cannot search anywhere else
+        if let Some(path) = &entry.fs_path {
+            return loader_for_module_at_path(context.metta.environment().fs_mod_formats(), path, Some(mod_name), context.module().resource_dir());
+        }
+
+        //Get the module if it's specified with git keys
+        if let Some(pair) = entry.git_location.get_loader_in_explicit_catalog(mod_name, UpdateMode::FetchIfMissing, context.metta.environment())? {
+            return Ok(Some(pair));
+        }
+
+        //If `version_req` is specified in the dep entry, then use it to constrain the catalog search
+        version_req = entry.version_req.as_ref();
+    } else {
+        //If the PkgInfo doesn't have an entry for the module and the PkgInfo is flagged as "strict"
+        // then we will not attempt to resolve the module any further, and the resolution will fail.
+        if let Some(pkg_info) = &pkg_info {
+            if pkg_info.strict {
+                return Ok(None);
+            }
+        }
+    }
+
+    //Search the module's resource dir before searching the environment's catalogs
+    // This allows a module to import another module inside its directory or as a peer of itself for
+    // single-file modules, without including an explicit PkgInfo dep entry.  On the other hand, If we
+    // want to require module authors to include a dep entry to be explicit about their dependencies, we
+    // can remove this catalog
+    let resource_dir_catalog;
+    let mut local_catalogs = vec![];
+    if let Some(mod_resource_dir) = context.module().resource_dir() {
+        if context.metta.environment().working_dir() != Some(mod_resource_dir) {
+            resource_dir_catalog = DirCatalog::new(PathBuf::from(mod_resource_dir), context.metta().environment().fs_mod_formats.clone());
+            local_catalogs.push(&resource_dir_catalog as &dyn ModuleCatalog);
+        }
+    }
+
+    //Search the catalogs, starting with the resource dir, and continuing to the runner's Environment
+    for catalog in local_catalogs.into_iter().chain(context.metta.environment().catalogs()) {
+        log::trace!("Looking for module: \"{mod_name}\" inside {catalog:?}");
+        match catalog.lookup_newest_with_version_req(mod_name, version_req) {
+            Some(descriptor) => {
+                log::info!("Found module: \"{mod_name}\" inside {:?}", catalog.display_name());
+                log::info!("Preparing to load module: \'{}\' as \'{}\'", descriptor.name, name_path);
+                return Ok(Some((catalog.get_loader(&descriptor)?, descriptor)))
+            },
+            None => {}
+        }
+    }
+
+    Ok(None)
 }
 
 /// Internal function to get a loader for a module at a specific file system path, by trying each FsModuleFormat in order
