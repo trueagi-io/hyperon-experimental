@@ -208,11 +208,12 @@ impl GitCatalog {
         }
         Ok(new_self)
     }
-    /// Registers a new module in the catalog with a specified remote location, and returns the [ModuleDescriptor] to refer to that module
+    /// Registers a new module in the catalog with a specified remote location, and returns
+    /// the [ModuleDescriptor] to refer to that module
     ///
     /// WARNING: if a catalog is synced to an upstream source, the upstream source will
-    /// eventually overwrite anything you register with this method
-    pub(crate) fn register_mod(&self, mod_name: &str, version: Option<&semver::Version>, git_location: &ModuleGitLocation) -> Result<ModuleDescriptor, String> {
+    /// eventually overwrite anything you register with this method.
+    fn register_mod(&self, mod_name: &str, version: Option<&semver::Version>, git_location: &ModuleGitLocation) -> Result<ModuleDescriptor, String> {
         let descriptor = {
             let mut catalog_ref = self.catalog.lock().unwrap();
             catalog_ref.as_mut().unwrap().add(CatalogFileMod::new(mod_name.to_string(), version.cloned(), git_location.clone()))?
