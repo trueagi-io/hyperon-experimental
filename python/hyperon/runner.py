@@ -327,6 +327,8 @@ def _priv_load_py_stdlib(c_run_context):
     # can be found by MeTTa.  NOTE: We may want to explicitly give priority hyperon "exts" by first checking if Python
     # has a module at `"hyperon.exts." + mod_name` before just checking `mod_name`, but it's unclear that will
     # matter since we'll also search the `exts` directory with the include_path / fs_module_format logic
+    # #UPDATE: If we implement a Python module-space Catalog in the future, then the code to search site packages
+    #  directories directly, in the 'MeTTa.__init__' method, needs to be removed
 
 def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False, resource_dir=None):
     """
