@@ -399,7 +399,9 @@ class OperationObject(GroundedObject):
             result = self.op(*args, **kwargs)
             if result is None:
                 return [Atoms.UNIT]
-            return [G(ValueObject(result), res_typ)]
+            if callable(result):
+                return [OperationAtom(repr(result), result, unwrap=True)]
+            return [ValueAtom(result, res_typ)]
         else:
             result = self.op(*atoms)
             if not isinstance(result, list):
