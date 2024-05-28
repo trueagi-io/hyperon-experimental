@@ -2,6 +2,7 @@ import os
 from importlib import import_module
 import importlib.util
 import sys
+import site
 import hyperonpy as hp
 from .atoms import Atom, AtomType, OperationAtom
 from .base import GroundingSpaceRef, Tokenizer, SExprParser
@@ -120,6 +121,11 @@ class MeTTa:
 
             builtin_mods_path = os.path.join(os.path.dirname(__file__), 'exts')
             hp.env_builder_push_include_path(env_builder, builtin_mods_path)
+
+            py_site_packages_paths = site.getsitepackages()
+            for path in py_site_packages_paths:
+                hp.env_builder_push_include_path(env_builder, path)
+
             self.cmetta = hp.metta_new(space.cspace, env_builder)
 
     def __del__(self):
