@@ -2,6 +2,7 @@ import os
 from importlib import import_module
 import importlib.util
 import sys
+import site
 import hyperonpy as hp
 from .atoms import Atom, AtomType, OperationAtom
 from .base import GroundingSpaceRef, Tokenizer, SExprParser
@@ -120,6 +121,11 @@ class MeTTa:
 
             builtin_mods_path = os.path.join(os.path.dirname(__file__), 'exts')
             hp.env_builder_push_include_path(env_builder, builtin_mods_path)
+
+            py_site_packages_paths = site.getsitepackages()
+            for path in py_site_packages_paths:
+                hp.env_builder_push_include_path(env_builder, path)
+
             self.cmetta = hp.metta_new(space.cspace, env_builder)
 
     def __del__(self):
@@ -321,6 +327,8 @@ def _priv_load_py_stdlib(c_run_context):
     # can be found by MeTTa.  NOTE: We may want to explicitly give priority hyperon "exts" by first checking if Python
     # has a module at `"hyperon.exts." + mod_name` before just checking `mod_name`, but it's unclear that will
     # matter since we'll also search the `exts` directory with the include_path / fs_module_format logic
+    # #UPDATE: If we implement a Python module-space Catalog in the future, then the code to search site packages
+    #  directories directly, in the 'MeTTa.__init__' method, needs to be removed
 
 def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False, resource_dir=None):
     """
