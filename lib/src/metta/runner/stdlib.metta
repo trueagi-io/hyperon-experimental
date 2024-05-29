@@ -288,7 +288,7 @@
 (: help-param! (-> Atom (->)))
 (= (help-param! $param)
   (let (@param (@type $type) (@desc $desc)) $param
-    (println! (format-args "  {} {}" ($type $desc))) ))
+    (println! (format-args "  {} {}" ((type $type) $desc))) ))
 
 (@doc for-each-in-atom
   (@desc "Applies function passed as a second argument to each atom inside first argument")
@@ -324,3 +324,346 @@
     (@param "Atomspace to add atom into")
     (@param "Atom to add")))
   (@return "Unit atom"))
+
+(@doc match
+  (@desc "Searches for all declared atoms corresponding to the given pattern (second argument) and produces the output pattern (third argument)")
+  (@params (
+    (@param "A grounded atom referencing a Space")
+    (@param "Pattern atom to be matched")
+    (@param "Output pattern typically containing variables from the input pattern")))
+  (@return "If match was successfull it outputs pattern (third argument) with filled variables (if any were present in pattern) using matched pattern (second argument). Nothing - otherwise"))
+
+; TODO: help!/get-doc not working for some reason
+(@doc bind!
+  (@desc "Registers a new token which is replaced with an atom during the parsing of the rest of the program")
+  (@params (
+    (@param "Token name")
+    (@param "Atom, which is associated with the token after reduction")))
+  (@return "Unit atom"))
+
+(@doc new-space
+  (@desc "Creates new Atomspace which could be used further in the program as a separate from &self Atomspace")
+  (@params ())
+  (@return "Reference to a new space"))
+
+(@doc remove-atom
+  (@desc "Removes atom from the input Atomspace")
+  (@params (
+    (@param "Reference to the space from which the Atom needs to be removed")
+    (@param "Atom to be removed")))
+  (@return "Unit atom"))
+
+(@doc get-atoms
+  (@desc "Shows all atoms in the input Atomspace")
+  (@params (
+    (@param "Reference to the space")))
+  (@return "List of all atoms in the input space"))
+
+(@doc car-atom
+  (@desc "Extracts the first atom of an expression as a tuple")
+  (@params (
+    (@param "Expression")))
+  (@return "First atom of an expression"))
+
+(@doc cdr-atom
+  (@desc "Extracts the tail of an expression (all except first atom)")
+  (@params (
+    (@param "Expression")))
+  (@return "Tail of an expression"))
+
+(@doc cons-atom
+  (@desc "Constructs an expression using two arguments")
+  (@params (
+    (@param "Head of an expression")
+    (@param "Tail of an expression")))
+  (@return "New expression consists of two input arguments"))
+
+(@doc println!
+  (@desc "Prints a line of text to the console")
+  (@params (
+    (@param "Expression/atom to be printed out")))
+  (@return "Unit atom"))
+
+(@doc format-args
+  (@desc "Fills {} symbols in the input expression with atoms from the second expression. E.g. (format-args (Probability of {} is {}%) (head 50)) gives [(Probability of head is 50%)]. Atoms in the second input value could be variables")
+  (@params (
+    (@param "Expression with {} symbols to be replaced")
+    (@param "Atoms to be placed inside expression instead of {}")))
+  (@return "Expression with replaced {} with atoms"))
+
+(@doc trace!
+  (@desc "Prints its first argument and returns second. Both arguments will be evaluated before processing")
+  (@params (
+    (@param "Atom to print")
+    (@param "Atom to return")))
+  (@return "Evaluated second input"))
+
+(@doc nop
+  (@desc "Outputs unit atom for any input")
+  (@params (
+    (@param "Anything")))
+  (@return "Unit atom"))
+
+(@doc let
+  (@desc "Let function is utilized to establish temporary variable bindings within an expression. It allows introducing variables (first argument), assign values to them (second argument), and then use these values within the scope of the let block")
+  (@params (
+    (@param "Variable name (or several variables inside brackets ())")
+    (@param "Expression to be bound to variable (it is being reduced before bind)")
+    (@param "Expression which will be reduced and in which variable (first argument) could be used")))
+  (@return "Result of third argument's evaluation"))
+
+(@doc let*
+  (@desc "Same as let, but first argument is a tuple containing tuples of variables and their bindings, e.g. (($v (+ 1 2)) ($v2 (* 5 6)))")
+  (@params (
+    (@param "Tuple of tuples with variables and their bindings")
+    (@param "Expression which will be reduced and in which variable (first argument) could be used")))
+  (@return "Result of second argument's evaluation"))
+
+(@doc new-state
+  (@desc "Creates a new state atom wrapping its argument")
+  (@params (
+    (@param "Atom to be wrapped")))
+  (@return "Returns (State $value) where $value is an argument to a new-state"))
+
+(@doc change-state!
+  (@desc "Changes input state's wrapped atom to another value (second argument). E.g. (change-state! (State 5) 6) -> (State 6)")
+  (@params (
+    (@param "State created by new-state function")
+    (@param "Atom which will replace wrapped atom in the input state")))
+  (@return "State with replaced wrapped atom"))
+
+(@doc get-state
+  (@desc "Gets a state as an argument and returns its wrapped atom. E.g. (get-state (State 5)) -> 5")
+  (@params (
+    (@param "State")))
+  (@return "Atom wrapped by state"))
+
+(@doc get-metatype
+  (@desc "Returns metatype of the input atom")
+  (@params (
+    (@param "Atom to get metatype for")))
+  (@return "Metatype of input atom"))
+
+(@doc register-module!
+  (@desc "Takes a file system path (first argument) and loads the module into the runner")
+  (@params (
+    (@param "File system path")))
+  (@return "Unit atom"))
+
+(@doc mod-space!
+  (@desc "Returns the space of the module (first argument) and tries to load the module if it is not loaded into the module system")
+  (@params (
+    (@param "Module name")))
+  (@return "Space name"))
+
+(@doc print-mods!
+  (@desc "Prints all modules with their correspondent spaces")
+  (@params ())
+  (@return "Unit atom"))
+
+(@doc sealed
+  (@desc "Replaces all occurrences of any var from var list (first argument) inside atom (second argument) by unique variable. Can be used to create a locally scoped variables")
+  (@params (
+    (@param "Variable list e.g. ($x $y)")
+    (@param "Atom which uses those variables")))
+  (@return "Second argument but with variables being replaced with unique variables"))
+
+; TODO: get-doc/help! not working for capture
+(@doc capture
+  (@desc "Wraps an atom and capture the current space")
+  (@params (
+    (@param "Function name which space need to be captured")))
+  (@return "Function"))
+
+; TODO: get-doc/help! not working for case
+(@doc case
+  (@desc "Subsequently tests multiple pattern-matching conditions (second argument) for the given value (first argument)")
+  (@params (
+    (@param "Atom (it will be evaluated)")
+    (@param "Tuple of pairs mapping condition patterns to results")))
+  (@return "Result of evaluating of Atom bound to met condition"))
+
+; TODO: get-doc/help! not working for assertEqual
+(@doc assertEqual
+  (@desc "Compares (sets of) results of evaluation of two expressions")
+  (@params (
+    (@param "First expression")
+    (@param "Second expression")))
+  (@return "Unit atom if both expression after evaluation is equal, error - otherwise"))
+
+; TODO: get-doc/help! not working for assertEqualToResult
+(@doc assertEqualToResult
+  (@desc "Same as assertEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
+  (@params (
+    (@param "First expression (it will be evaluated)")
+    (@param "Second expression (it won't be evaluated)")))
+  (@return "Unit atom if both expression after evaluation is equal, error - otherwise"))
+
+; TODO: get-doc/help! not working for collapse
+(@doc collapse
+  (@desc "Converts a nondeterministic result into a tuple")
+  (@params (
+    (@param "Atom which will be evaluated")))
+  (@return "Tuple "))
+
+; TODO: get-doc/help! not working for superpose
+(@doc superpose
+  (@desc "Turns a tuple (first argument) into a nondeterministic result")
+  (@params (
+    (@param "Tuple to be converted")))
+  (@return "Argument converted to nondeterministic result"))
+
+; TODO: get-doc/help! not working for get-type
+(@doc get-type
+  (@desc "Returns type notation of input atom")
+  (@params (
+    (@param "Atom to get type for")))
+  (@return "Type notation or %Undefined% if there is no type for input Atom"))
+
+(@doc get-type-space
+  (@desc "Returns type notation of input Atom (second argument) relative to a specified atomspace (first argument)")
+  (@params (
+    (@param "Atomspace where type notation for input atom will be searched")
+    (@param "Atom to get type for")))
+  (@return "Type notation or %Undefined% if there is no type for input Atom in provided atomspace"))
+
+(@doc import!
+  (@desc "Imports module using its relative path (second argument) and binds it to the token (first argument) which will represent imported atomspace. If first argument is &self then everything will be imported to current atomspace")
+  (@params (
+    (@param "Symbol, which is turned into the token for accessing the imported module")
+    (@param "Module name")))
+  (@return "Unit atom"))
+
+(@doc include
+  (@desc "Works just like import! but with &self as a first argument. So everything from input file will be included in the current atomspace and evaluated")
+  (@params (
+    (@param "Name of metta script to import")))
+  (@return "Unit atom"))
+
+(@doc pragma!
+  (@desc "Changes global key's (first argument) value to a new one (second argument)")
+  (@params (
+    (@param "Key's name")
+    (@param "New value")))
+  (@return "Unit atom"))
+
+; TODO: Segmentation fault (core dumped) when calling !(help &self)
+(@doc &self
+  (@desc "Returns reference to the current atomspace")
+  (@params ())
+  (@return "Reference to the current atomspace"))
+
+; TODO: get-doc/help! not working for +
+(@doc +
+  (@desc "Sums two numbers")
+  (@params (
+    (@param "Addend")
+    (@param "Augend")))
+  (@return "Sum"))
+
+; TODO: get-doc/help! not working for -
+(@doc -
+  (@desc "Subtracts second argument from first one")
+  (@params (
+    (@param "Minuend")
+    (@param "Deductible")))
+  (@return "Difference"))
+
+; TODO: get-doc/help! not working for *
+(@doc *
+  (@desc "Multiplies two numbers")
+  (@params (
+    (@param "Multiplier")
+    (@param "Multiplicand")))
+  (@return "Product"))
+
+; TODO: get-doc/help! not working for /
+(@doc /
+  (@desc "Divides first argument by second one")
+  (@params (
+    (@param "Dividend")
+    (@param "Divisor")))
+  (@return "Fraction"))
+
+; TODO: get-doc/help! not working for %
+(@doc %
+  (@desc "Modulo operator. It returns remainder of dividing first argument by second argument")
+  (@params (
+    (@param "Dividend")
+    (@param "Divisor")))
+  (@return "Remainder"))
+
+; TODO: get-doc/help! not working for <
+(@doc <
+  (@desc "Less than. Checks if first argument is less than second one")
+  (@params (
+    (@param "First number")
+    (@param "Second number")))
+  (@return "True if first argument is less than second, False - otherwise"))
+
+; TODO: get-doc/help! not working for >
+(@doc >
+  (@desc "Greater than. Checks if first argument is greater than second one")
+  (@params (
+    (@param "First number")
+    (@param "Second number")))
+  (@return "True if first argument is greater than second, False - otherwise"))
+
+; TODO: get-doc/help! not working for <=
+(@doc <=
+  (@desc "Less than or equal. Checks if first argument is less than or equal to second one")
+  (@params (
+    (@param "First number")
+    (@param "Second number")))
+  (@return "True if first argument is less than or equal to second, False - otherwise"))
+
+; TODO: get-doc/help! not working for >=
+(@doc >=
+  (@desc "Greater than or equal. Checks if first argument is greater than or equal to second one")
+  (@params (
+    (@param "First number")
+    (@param "Second number")))
+  (@return "True if first argument is greater than or equal to second, False - otherwise"))
+
+; TODO: get-doc/help! not working for ==
+(@doc ==
+  (@desc "Checks equality for two arguments of the same type")
+  (@params (
+    (@param "First argument")
+    (@param "Second argument")))
+  (@return "Returns True if two arguments are equal, False - otherwise. If arguments are of different type function returns Error currently"))
+
+; TODO: get-doc/help! not working for and
+(@doc and
+  (@desc "Logical conjunction of two arguments")
+  (@params (
+    (@param "First argument")
+    (@param "Second argument")))
+  (@return "Returns True if both arguments are True, False - otherwise"))
+
+; TODO: get-doc/help! not working for or
+(@doc or
+  (@desc "Logical disjunction of two arguments")
+  (@params (
+    (@param "First argument")
+    (@param "Second argument")))
+  (@return "True if any of input arguments is True, False - otherwise"))
+
+; TODO: get-doc/help! not working for not
+(@doc not
+  (@desc "Negation")
+  (@params (
+    (@param "Argument")))
+  (@return "Negates boolean input argument (False -> True; True -> False)"))
+
+(@doc xor
+  (@desc "Exclusive disjunction of two arguments")
+  (@params (
+    (@param "First argument")
+    (@param "Second argument")))
+  (@return "Return values are the same as logical disjunction, but when both arguments are True xor will return False"))
+
+(@doc flip
+  (@desc "Produces random boolean value")
+  (@params ())
+  (@return "Random boolean value"))
