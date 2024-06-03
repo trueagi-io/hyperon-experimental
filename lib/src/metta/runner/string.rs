@@ -16,10 +16,7 @@ impl Str {
         Str(ImmutableString::Allocated(s))
     }
     pub fn as_str(&self) -> &str {
-        match &self.0 {
-            ImmutableString::Allocated(s) => { s.as_str() }
-            ImmutableString::Literal(s) => { s }
-        }
+        self.0.as_str()
     }
 }
 
