@@ -9,13 +9,13 @@ use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::metta::interpreter::interpret;
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
-use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
+use crate::common::multitrie::MultiTrie;
 use crate::space::grounding::atom_to_trie_key;
 
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::Display;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use regex::Regex;
 
 use super::arithmetics::*;
@@ -1233,6 +1233,7 @@ impl Grounded for SubtractionOp {
 /// The internal `non_minimal_only_stdlib` module contains code that is never used by the minimal stdlib
 #[cfg(not(feature = "minimal"))]
 mod non_minimal_only_stdlib {
+    use std::collections::HashSet;
     use super::*;
     use crate::common::assert::vec_eq_no_order;
 

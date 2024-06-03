@@ -7,12 +7,12 @@ use crate::atom::*;
 use crate::atom::matcher::{MatchResultIter, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
-use crate::serial::{Error, Serializer};
+use crate::serial::Serializer;
 
 use std::fmt::Debug;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
-use std::hash::{BuildHasherDefault, DefaultHasher, Hasher};
+use std::hash::{DefaultHasher, Hasher};
 use crate::common::collections::ImmutableString;
 
 // Grounding space
