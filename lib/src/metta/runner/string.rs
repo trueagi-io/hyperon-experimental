@@ -15,12 +15,6 @@ impl Str {
     pub fn from_string(s: String) -> Self {
         Str(ImmutableString::Allocated(s))
     }
-    pub fn bytes(&self) -> core::str::Bytes {
-        match &self.0 {
-            ImmutableString::Allocated(s) => { s.bytes() }
-            ImmutableString::Literal(s) => { s.bytes() }
-        }
-    }
     pub fn as_str(&self) -> &str {
         match &self.0 {
             ImmutableString::Allocated(s) => { s.as_str() }
@@ -43,7 +37,7 @@ impl Grounded for Str {
     }
 
     fn serialize(&self, serializer: &mut dyn Serializer) -> serial::Result {
-        serializer.serialize_str(self)
+        serializer.serialize_str(self.as_str())
     }
 }
 
@@ -60,8 +54,8 @@ pub(crate) struct StringSerializer {
 }
 
 impl Serializer for StringSerializer {
-    fn serialize_str(&mut self, v: &Str) -> serial::Result {
-        self.value = Some(v.clone());
+    fn serialize_str(&mut self, v: &str) -> serial::Result {
+        self.value = Some(Str::from_string(v.into()));
         Ok(())
     }
 }
