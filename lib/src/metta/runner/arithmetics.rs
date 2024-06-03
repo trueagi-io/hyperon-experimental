@@ -4,8 +4,6 @@ use crate::matcher::MatchResultIter;
 use crate::atom::serial;
 
 use std::fmt::Display;
-use crate::metta::runner::string;
-use crate::metta::runner::string::Str;
 
 pub const ATOM_TYPE_NUMBER : Atom = sym!("Number");
 pub const ATOM_TYPE_BOOL : Atom = sym!("Bool");
@@ -377,8 +375,6 @@ impl<'a> AsPrimitive<'a> {
     pub fn as_number(self) -> Option<Number> {
        self.as_type(NumberSerializer::default())
     }
-
-    pub fn as_str(self) -> Option<Str> { self.as_type(string::StringSerializer::default()) }
 }
 
 impl serial::ConvertingSerializer<Bool> for BoolSerializer {

@@ -43,26 +43,3 @@ impl std::fmt::Display for Str {
         write!(f, "\"{}\"", self.0)
     }
 }
-
-
-#[derive(Default)]
-pub(crate) struct StringSerializer {
-    value: Option<Str>,
-}
-
-impl serial::Serializer for StringSerializer {
-    fn serialize_str(&mut self, v: &str) -> serial::Result {
-        self.value = Some(Str::from_string(v.into()));
-        Ok(())
-    }
-}
-
-impl serial::ConvertingSerializer<Str> for StringSerializer {
-    fn as_mut(&mut self) -> &mut dyn serial::Serializer {
-        self
-    }
-    fn into_type(self) -> Option<Str> {
-        self.value
-    }
-}
-
