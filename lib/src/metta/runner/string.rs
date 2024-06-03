@@ -1,7 +1,7 @@
 use crate::*;
 use crate::common::collections::ImmutableString;
 use crate::matcher::MatchResultIter;
-use crate::serial::Serializer;
+use crate::serial;
 
 pub const ATOM_TYPE_STRING : Atom = sym!("String");
 
@@ -36,7 +36,7 @@ impl Grounded for Str {
         match_by_equality(self, other)
     }
 
-    fn serialize(&self, serializer: &mut dyn Serializer) -> serial::Result {
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
         serializer.serialize_str(self.as_str())
     }
 }
@@ -53,14 +53,14 @@ pub(crate) struct StringSerializer {
     value: Option<Str>,
 }
 
-impl Serializer for StringSerializer {
+impl serial::Serializer for StringSerializer {
     fn serialize_str(&mut self, v: &str) -> serial::Result {
         self.value = Some(Str::from_string(v.into()));
         Ok(())
     }
 }
 
-impl metta::runner::arithmetics::ConvertingSerializer<Str> for StringSerializer {
+impl serial::ConvertingSerializer<Str> for StringSerializer {
     fn as_mut(&mut self) -> &mut dyn serial::Serializer {
         self
     }

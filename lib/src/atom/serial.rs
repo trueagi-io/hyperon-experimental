@@ -35,6 +35,12 @@ pub enum Error {
     NotSupported,
 }
 
+/// Serializer which converts serialized atom into native Rust type T.
+pub trait ConvertingSerializer<T>: Serializer {
+    fn as_mut(&mut self) -> &mut dyn Serializer;
+    fn into_type(self) -> Option<T>;
+}
+
 /// Serialization result type
 pub type Result = std::result::Result<(), Error>;
 

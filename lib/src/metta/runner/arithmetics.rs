@@ -357,7 +357,7 @@ impl<'a> AsPrimitive<'a> {
         std::convert::TryInto::<&dyn super::GroundedAtom>::try_into(self.atom).ok()
     }
 
-    fn as_type<T: 'static + Clone, S: ConvertingSerializer<T>>(&self, mut serializer: S) -> Option<T> {
+    fn as_type<T: 'static + Clone, S: serial::ConvertingSerializer<T>>(&self, mut serializer: S) -> Option<T> {
        self.as_gnd()
            .map(|gnd| {
                gnd.as_any_ref()
@@ -381,12 +381,7 @@ impl<'a> AsPrimitive<'a> {
     pub fn as_str(self) -> Option<Str> { self.as_type(string::StringSerializer::default()) }
 }
 
-pub(crate) trait ConvertingSerializer<T>: serial::Serializer {
-    fn as_mut(&mut self) -> &mut dyn serial::Serializer;
-    fn into_type(self) -> Option<T>;
-}
-
-impl ConvertingSerializer<Bool> for BoolSerializer {
+impl serial::ConvertingSerializer<Bool> for BoolSerializer {
     fn as_mut(&mut self) -> &mut dyn serial::Serializer {
         self
     }
@@ -395,7 +390,7 @@ impl ConvertingSerializer<Bool> for BoolSerializer {
     }
 }
 
-impl ConvertingSerializer<Number> for NumberSerializer {
+impl serial::ConvertingSerializer<Number> for NumberSerializer {
     fn as_mut(&mut self) -> &mut dyn serial::Serializer {
         self
     }
