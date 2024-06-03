@@ -6,6 +6,7 @@ use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
 use crate::metta::types::{get_atom_types, get_meta_type};
+use crate::metta::interpreter::interpret;
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
 use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
@@ -22,6 +23,17 @@ use super::string::*;
 
 fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
+}
+
+// TODO: remove hiding errors completely after making it possible passing
+// them to the user
+fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
+    let result = interpret(space, expr);
+    log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
+    match result {
+        Ok(result) => Ok(result),
+        Err(_) => Ok(vec![]),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1014,12 +1026,214 @@ impl Grounded for MatchOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct UniqueOp {
+    pub(crate) space: DynSpace,
+}
+
+impl UniqueOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for UniqueOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unique")
+    }
+}
+
+impl Grounded for UniqueOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("unique expects single executable atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut result = interpret_no_error(self.space.clone(), atom)?;
+        let mut set = GroundingSpace::new();
+        result.retain(|x| {
+            let not_contained = set.query(x).is_empty();
+            if not_contained { set.add(x.clone()) };
+            not_contained
+        });
+        Ok(result)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct UnionOp {
+    pub(crate) space: DynSpace,
+}
+
+impl UnionOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for UnionOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "union")
+    }
+}
+
+impl Grounded for UnionOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("union expects and executable LHS and RHS atom");
+        let lhs = args.get(0).ok_or_else(arg_error)?;
+        let rhs = args.get(1).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
+        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
+        lhs_result.extend(rhs_result);
+
+        Ok(lhs_result)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct IntersectionOp {
+    pub(crate) space: DynSpace,
+}
+
+impl IntersectionOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for IntersectionOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "intersection")
+    }
+}
+
+impl Grounded for IntersectionOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("intersection expects and executable LHS and RHS atom");
+        let lhs = args.get(0).ok_or_else(arg_error)?;
+        let rhs = args.get(1).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
+        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
+        let mut rhs_index = MultiTrie::new();
+        for rhs_item in rhs_result {
+            let k = atom_to_trie_key(&rhs_item);
+            let c = *rhs_index.get(&k).next().unwrap_or_else(|| &0);
+            if c != 0 { rhs_index.remove(&k, &c); }
+            rhs_index.insert(k, c + 1)
+        }
+
+        lhs_result.retain(|candidate| {
+            let k = atom_to_trie_key(candidate);
+            let item = rhs_index.get(&k).next().map(|i| i.clone());
+            match item {
+                None => { false }
+                Some(i) => {
+                    rhs_index.remove(&k, &i);
+                    if i > 1 { rhs_index.insert(k.clone(), i - 1); }
+                    true
+                }
+            }
+        });
+
+        Ok(lhs_result)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct SubtractionOp {
+    pub(crate) space: DynSpace,
+}
+
+impl SubtractionOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for SubtractionOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "subtraction")
+    }
+}
+
+impl Grounded for SubtractionOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("subtraction expects and executable LHS and RHS atom");
+        let lhs = args.get(0).ok_or_else(arg_error)?;
+        let rhs = args.get(1).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
+        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
+        let mut rhs_index = MultiTrie::new();
+        for rhs_item in rhs_result {
+            let k = atom_to_trie_key(&rhs_item);
+            let c = *rhs_index.get(&k).next().unwrap_or_else(|| &0);
+            rhs_index.remove(&k, &c);
+            rhs_index.insert(k, c + 1)
+        }
+
+        lhs_result.retain(|candidate| {
+            let k = atom_to_trie_key(candidate);
+            let item = rhs_index.get(&k).next().map(|i| i.clone());
+            match item {
+                None => { true }
+                Some(i) => {
+                    rhs_index.remove(&k, &i);
+                    if i > 1 { rhs_index.insert(k.clone(), i - 1); }
+                    false
+                }
+            }
+        });
+
+        Ok(lhs_result)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
 
 /// The internal `non_minimal_only_stdlib` module contains code that is never used by the minimal stdlib
 #[cfg(not(feature = "minimal"))]
 mod non_minimal_only_stdlib {
     use super::*;
-    use crate::metta::interpreter::interpret;
     use crate::common::assert::vec_eq_no_order;
 
     // TODO: move it into hyperon::atom module?
@@ -1027,17 +1241,6 @@ mod non_minimal_only_stdlib {
         match atom {
             Atom::Expression(expr) => Some(expr),
             _ => None,
-        }
-    }
-
-    // TODO: remove hiding errors completely after making it possible passing
-    // them to the user
-    fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
-        let result = interpret(space, expr);
-        log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
-        match result {
-            Ok(result) => Ok(result),
-            Err(_) => Ok(vec![]),
         }
     }
 
@@ -1429,212 +1632,6 @@ mod non_minimal_only_stdlib {
             match_by_equality(self, other)
         }
     }
-
-
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct UniqueOp {
-        pub(crate) space: DynSpace,
-    }
-
-    impl UniqueOp {
-        pub fn new(space: DynSpace) -> Self {
-            Self{ space }
-        }
-    }
-
-    impl Display for UniqueOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "unique")
-        }
-    }
-
-    impl Grounded for UniqueOp {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
-        }
-
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = || ExecError::from("unique expects single executable atom as an argument");
-            let atom = args.get(0).ok_or_else(arg_error)?;
-
-            // TODO: Calling interpreter inside the operation is not too good
-            // Could it be done via StepResult?
-            let mut result = interpret_no_error(self.space.clone(), atom)?;
-            let mut set = GroundingSpace::new();
-            result.retain(|x| {
-                let not_contained = set.query(x).is_empty();
-                if not_contained { set.add(x.clone()) };
-                not_contained
-            });
-            Ok(result)
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
-    }
-
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct UnionOp {
-        pub(crate) space: DynSpace,
-    }
-
-    impl UnionOp {
-        pub fn new(space: DynSpace) -> Self {
-            Self{ space }
-        }
-    }
-
-    impl Display for UnionOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "union")
-        }
-    }
-
-    impl Grounded for UnionOp {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
-        }
-
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = || ExecError::from("union expects and executable LHS and RHS atom");
-            let lhs = args.get(0).ok_or_else(arg_error)?;
-            let rhs = args.get(1).ok_or_else(arg_error)?;
-
-            // TODO: Calling interpreter inside the operation is not too good
-            // Could it be done via StepResult?
-            let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
-            let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
-            lhs_result.extend(rhs_result);
-
-            Ok(lhs_result)
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
-    }
-
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct IntersectionOp {
-        pub(crate) space: DynSpace,
-    }
-
-    impl IntersectionOp {
-        pub fn new(space: DynSpace) -> Self {
-            Self{ space }
-        }
-    }
-
-    impl Display for IntersectionOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "intersection")
-        }
-    }
-
-    impl Grounded for IntersectionOp {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
-        }
-
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = || ExecError::from("intersection expects and executable LHS and RHS atom");
-            let lhs = args.get(0).ok_or_else(arg_error)?;
-            let rhs = args.get(1).ok_or_else(arg_error)?;
-
-            // TODO: Calling interpreter inside the operation is not too good
-            // Could it be done via StepResult?
-            let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
-            let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
-            let mut rhs_index = MultiTrie::new();
-            for rhs_item in rhs_result {
-                let k = atom_to_trie_key(&rhs_item);
-                let c = *rhs_index.get(&k).next().unwrap_or_else(|| &0);
-                if c != 0 { rhs_index.remove(&k, &c); }
-                rhs_index.insert(k, c + 1)
-            }
-
-            lhs_result.retain(|candidate| {
-                let k = atom_to_trie_key(candidate);
-                let item = rhs_index.get(&k).next().map(|i| i.clone());
-                match item {
-                    None => { false }
-                    Some(i) => {
-                        rhs_index.remove(&k, &i);
-                        if i > 1 { rhs_index.insert(k.clone(), i - 1); }
-                        true
-                    }
-                }
-            });
-
-            Ok(lhs_result)
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
-    }
-
-    #[derive(Clone, PartialEq, Debug)]
-    pub struct SubtractionOp {
-        pub(crate) space: DynSpace,
-    }
-
-    impl SubtractionOp {
-        pub fn new(space: DynSpace) -> Self {
-            Self{ space }
-        }
-    }
-
-    impl Display for SubtractionOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "subtraction")
-        }
-    }
-
-    impl Grounded for SubtractionOp {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
-        }
-
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = || ExecError::from("subtraction expects and executable LHS and RHS atom");
-            let lhs = args.get(0).ok_or_else(arg_error)?;
-            let rhs = args.get(1).ok_or_else(arg_error)?;
-
-            // TODO: Calling interpreter inside the operation is not too good
-            // Could it be done via StepResult?
-            let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
-            let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
-            let mut rhs_index = MultiTrie::new();
-            for rhs_item in rhs_result {
-                let k = atom_to_trie_key(&rhs_item);
-                let c = *rhs_index.get(&k).next().unwrap_or_else(|| &0);
-                rhs_index.remove(&k, &c);
-                rhs_index.insert(k, c + 1)
-            }
-
-            lhs_result.retain(|candidate| {
-                let k = atom_to_trie_key(candidate);
-                let item = rhs_index.get(&k).next().map(|i| i.clone());
-                match item {
-                    None => { true }
-                    Some(i) => {
-                        rhs_index.remove(&k, &i);
-                        if i > 1 { rhs_index.insert(k.clone(), i - 1); }
-                        false
-                    }
-                }
-            });
-
-            Ok(lhs_result)
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
-    }
-
 
     #[derive(Clone, PartialEq, Debug)]
     pub struct LetOp {}
