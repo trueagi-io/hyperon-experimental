@@ -1141,23 +1141,43 @@ impl Grounded for IntersectionOp {
         // Could it be done via StepResult?
         let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
         let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
-        let mut rhs_index = MultiTrie::new();
-        for rhs_item in rhs_result {
+        let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
+        for (index, rhs_item) in rhs_result.iter().enumerate() {
             let k = atom_to_trie_key(&rhs_item);
-            let c = *rhs_index.get(&k).next().unwrap_or_else(|| &0);
-            if c != 0 { rhs_index.remove(&k, &c); }
-            rhs_index.insert(k, c + 1)
+            // FIXME this should
+            // a) use a mutable value endpoint which the MultiTrie does not support atm
+            // b) use a linked list, which Rust barely supports atm
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
+                Some(bucket) => {
+                    rhs_index.remove(&k, &bucket);
+                    let mut nbucket = bucket;
+                    nbucket.push(index);
+                    let nbucket = nbucket;
+                    rhs_index.insert(k, nbucket);
+                }
+                None => { rhs_index.insert(k, vec![index]) }
+            }
         }
 
         lhs_result.retain(|candidate| {
             let k = atom_to_trie_key(candidate);
-            let item = rhs_index.get(&k).next().map(|i| i.clone());
-            match item {
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
                 None => { false }
-                Some(i) => {
-                    rhs_index.remove(&k, &i);
-                    if i > 1 { rhs_index.insert(k.clone(), i - 1); }
-                    true
+                Some(bucket) => {
+                    match bucket.iter().position(|item| &rhs_result[*item] == candidate) {
+                        None => { false }
+                        Some(i) => {
+                            rhs_index.remove(&k, &bucket);
+                            if bucket.len() > 1 {
+                                let mut nbucket = bucket;
+                                nbucket.remove(i);
+                                rhs_index.insert(k, nbucket);
+                            }
+                            true
+                        }
+                    }
                 }
             }
         });
@@ -1201,23 +1221,43 @@ impl Grounded for SubtractionOp {
         // Could it be done via StepResult?
         let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
         let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
-        let mut rhs_index = MultiTrie::new();
-        for rhs_item in rhs_result {
+        let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
+        for (index, rhs_item) in rhs_result.iter().enumerate() {
             let k = atom_to_trie_key(&rhs_item);
-            let c = *rhs_index.get(&k).next().unwrap_or_else(|| &0);
-            rhs_index.remove(&k, &c);
-            rhs_index.insert(k, c + 1)
+            // FIXME this should
+            // a) use a mutable value endpoint which the MultiTrie does not support atm
+            // b) use a linked list, which Rust barely supports atm
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
+                Some(bucket) => {
+                    rhs_index.remove(&k, &bucket);
+                    let mut nbucket = bucket;
+                    nbucket.push(index);
+                    let nbucket = nbucket;
+                    rhs_index.insert(k, nbucket);
+                }
+                None => { rhs_index.insert(k, vec![index]) }
+            }
         }
 
         lhs_result.retain(|candidate| {
             let k = atom_to_trie_key(candidate);
-            let item = rhs_index.get(&k).next().map(|i| i.clone());
-            match item {
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
                 None => { true }
-                Some(i) => {
-                    rhs_index.remove(&k, &i);
-                    if i > 1 { rhs_index.insert(k.clone(), i - 1); }
-                    false
+                Some(bucket) => {
+                    match bucket.iter().position(|item| &rhs_result[*item] == candidate) {
+                        None => { true }
+                        Some(i) => {
+                            rhs_index.remove(&k, &bucket);
+                            if bucket.len() > 1 {
+                                let mut nbucket = bucket;
+                                nbucket.remove(i);
+                                rhs_index.insert(k, nbucket);
+                            }
+                            false
+                        }
+                    }
                 }
             }
         });
