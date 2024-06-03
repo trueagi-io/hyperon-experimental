@@ -1,3 +1,6 @@
+use std::hash::{DefaultHasher, Hasher};
+use crate::metta::runner::string::Str;
+
 /// Serial module defines an API to implement serialization/deserialization of the
 /// grounded atoms. The serialization API can be used for saving grounded atoms to
 /// disk, sending them over network or implement value conversion between
@@ -23,6 +26,8 @@ pub trait Serializer {
     fn serialize_i64(&mut self, _v: i64) -> Result { Err(Error::NotSupported) }
     /// Serialize f64 value.
     fn serialize_f64(&mut self, _v: f64) -> Result { Err(Error::NotSupported) }
+    /// Serialize string value.
+    fn serialize_str(&mut self, _v: &Str) -> Result { Err(Error::NotSupported) }
 }
 
 /// Serialization error code
@@ -33,3 +38,27 @@ pub enum Error {
 
 /// Serialization result type
 pub type Result = std::result::Result<(), Error>;
+
+// there are much speedier hashers, but not sure if it's worth the extra dependency given the other options
+impl Serializer for DefaultHasher {
+    fn serialize_bool(&mut self, v: bool) -> Result { Ok(self.write_u8(v as u8)) }
+    fn serialize_i64(&mut self, v: i64) -> Result { Ok(self.write_i64(v)) }
+    fn serialize_f64(&mut self, v: f64) -> Result { Ok(self.write_u64(v as u64)) }
+    fn serialize_str(&mut self, v: &Str) -> Result { Ok(v.bytes().for_each(|b| self.write_u8(b))) }
+}
+
+// for debugging
+impl Serializer for String {
+    fn serialize_bool(&mut self, v: bool) -> Result { Ok(self.push_str(&*v.to_string())) }
+    fn serialize_i64(&mut self, v: i64) -> Result { Ok(self.push_str(&*v.to_string())) }
+    fn serialize_f64(&mut self, v: f64) -> Result { Ok(self.push_str(&*v.to_string())) }
+    fn serialize_str(&mut self, v: &Str) -> Result { Ok(self.push_str(v.as_str())) }
+}
+
+// for speed, but is technically unsafe at usage site because not a valid utf-8 string
+impl Serializer for Vec<u8> {
+    fn serialize_bool(&mut self, v: bool) -> Result { Ok(self.push(v as u8)) }
+    fn serialize_i64(&mut self, v: i64) -> Result { Ok(self.extend(v.to_le_bytes())) }
+    fn serialize_f64(&mut self, v: f64) -> Result { Ok(self.extend(v.to_le_bytes())) }
+    fn serialize_str(&mut self, v: &Str) -> Result { Ok(self.extend(v.bytes())) }
+}

@@ -50,24 +50,6 @@ impl<'a> Iterator for GroundingSpaceIter<'a> {
     }
 }
 
-impl Serializer for DefaultHasher { // there are much speedier hashers, but I didn't want to introduce a dependency
-    fn serialize_bool(&mut self, _v: bool) -> serial::Result { Ok(self.write_u8(_v as u8)) }
-    fn serialize_i64(&mut self, _v: i64) -> serial::Result { Ok(self.write_i64(_v)) }
-    fn serialize_f64(&mut self, _v: f64) -> serial::Result { Ok(self.write_u64(_v as u64)) }
-}
-
-impl Serializer for String { // for debugging
-    fn serialize_bool(&mut self, _v: bool) -> serial::Result { Ok(self.push_str(&*_v.to_string())) }
-    fn serialize_i64(&mut self, _v: i64) -> serial::Result { Ok(self.push_str(&*_v.to_string())) }
-    fn serialize_f64(&mut self, _v: f64) -> serial::Result { Ok(self.push_str(&*_v.to_string())) }
-}
-
-impl Serializer for Vec<u8> { // for speed, but is technically unsafe because not a valid utf-8 string
-    fn serialize_bool(&mut self, _v: bool) -> serial::Result { Ok(self.push(_v as u8)) }
-    fn serialize_i64(&mut self, _v: i64) -> serial::Result { Ok(self.extend(_v.to_le_bytes())) }
-    fn serialize_f64(&mut self, _v: f64) -> serial::Result { Ok(self.extend(_v.to_le_bytes())) }
-}
-
 pub(crate) fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
     fn fill_key(atom: &Atom, tokens: &mut Vec<TrieToken<SymbolAtom>>) {
         match atom {
