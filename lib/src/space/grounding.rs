@@ -7,7 +7,6 @@ use crate::atom::*;
 use crate::atom::matcher::{MatchResultIter, match_atoms};
 use crate::atom::subexpr::split_expr;
 use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
-use crate::serial::Serializer;
 
 use std::fmt::Debug;
 use std::collections::BTreeSet;
