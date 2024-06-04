@@ -351,7 +351,6 @@ pub(crate) enum ModuleInitState {
 
 pub(crate) struct ModuleInitStateInsides {
     frames: Vec<ModuleInitFrame>,
-    #[cfg(feature = "pkg_mgmt")]
     module_descriptors: HashMap<ModuleDescriptor, ModId>,
 }
 
@@ -362,7 +361,6 @@ impl ModuleInitState {
     pub fn new(mod_name: String) -> (Self, ModId) {
         let new_insides = ModuleInitStateInsides {
             frames: vec![ModuleInitFrame::new_with_name(mod_name)],
-            #[cfg(feature = "pkg_mgmt")]
             module_descriptors: HashMap::new(),
         };
         let init_state = Self::Root(Rc::new(RefCell::new(new_insides)));
@@ -397,7 +395,6 @@ impl ModuleInitState {
             _ => false
         }
     }
-    #[cfg(feature = "pkg_mgmt")]
     pub fn decompose(self) -> (Vec<ModuleInitFrame>, HashMap<ModuleDescriptor, ModId>) {
         match self {
             Self::Root(cell) => {
@@ -405,17 +402,6 @@ impl ModuleInitState {
                 let frames = core::mem::take(&mut insides_ref.frames);
                 let descriptors = core::mem::take(&mut insides_ref.module_descriptors);
                 (frames, descriptors)
-            },
-            _ => unreachable!()
-        }
-    }
-    #[cfg(not(feature = "pkg_mgmt"))]
-    pub fn decompose(self) -> Vec<ModuleInitFrame> {
-        match self {
-            Self::Root(cell) => {
-                let mut insides_ref = cell.borrow_mut();
-                let frames = core::mem::take(&mut insides_ref.frames);
-                frames
             },
             _ => unreachable!()
         }

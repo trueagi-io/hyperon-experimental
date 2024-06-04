@@ -74,6 +74,9 @@ pub mod pkg_mgmt;
 #[cfg(feature = "pkg_mgmt")]
 use pkg_mgmt::*;
 
+#[cfg(not(feature = "pkg_mgmt"))]
+pub(crate) type ModuleDescriptor = ();
+
 use std::rc::Rc;
 use std::path::PathBuf;
 use std::collections::HashMap;
@@ -317,10 +320,7 @@ impl Metta {
     /// Merges all modules in a [ModuleInitState] into the runner
     fn merge_init_state(&self, init_state: ModuleInitState) -> Result<ModId, String> {
         let mut main_mod_id = ModId::INVALID;
-        #[cfg(feature = "pkg_mgmt")]
         let (frames, descriptors) = init_state.decompose();
-        #[cfg(not(feature = "pkg_mgmt"))]
-        let frames = init_state.decompose();
 
         // Unpack each frame and ,erge the modules from the ModuleInitState into the
         // runner, and build the mapping table for ModIds
@@ -361,6 +361,8 @@ impl Metta {
             };
             self.add_module_descriptor(descriptor, mod_id);
         }
+        #[cfg(not(feature = "pkg_mgmt"))]
+        let _ = descriptors;
 
         // Finally, re-map the module's "deps" ModIds
         for added_mod_id in mod_id_mapping.values() {

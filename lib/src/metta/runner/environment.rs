@@ -4,7 +4,7 @@ use std::io::{Read, BufReader, Write};
 use std::fs;
 use std::sync::Arc;
 
-use crate::{sym, ExpressionAtom, SymbolAtom, metta::GroundingSpace};
+use crate::{sym, ExpressionAtom, metta::GroundingSpace};
 
 #[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::pkg_mgmt::{ModuleCatalog, DirCatalog, LocalCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt, git_catalog::*};
@@ -404,7 +404,10 @@ fn interpret_environment_metta<P: AsRef<Path>>(env_metta_path: P, env: &mut Envi
                 #[cfg(feature = "pkg_mgmt")]
                 env.catalogs.push(include_path_from_cfg_atom(&expr, env)?);
                 #[cfg(not(feature = "pkg_mgmt"))]
-                log::warn!("#includePath in environment.metta not supported without pkg_mgmt feature");
+                {
+                    let _ = &env;
+                    log::warn!("#includePath in environment.metta not supported without pkg_mgmt feature");
+                }
             },
             Some(atom_0) if *atom_0 == sym!("#gitCatalog") => {
                 #[cfg(feature = "pkg_mgmt")]
@@ -439,9 +442,9 @@ fn git_catalog_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Result
         };
 
         match key_atom {
-            _ if *key_atom == sym!("#name") => catalog_name = Some(<&SymbolAtom>::try_from(val_atom)?.name()),
-            _ if *key_atom == sym!("#url") => catalog_url = Some(<&SymbolAtom>::try_from(val_atom)?.name()),
-            _ if *key_atom == sym!("#refreshTime") => refresh_time = Some(<&SymbolAtom>::try_from(val_atom)?.name()),
+            _ if *key_atom == sym!("#name") => catalog_name = Some(<&crate::SymbolAtom>::try_from(val_atom)?.name()),
+            _ if *key_atom == sym!("#url") => catalog_url = Some(<&crate::SymbolAtom>::try_from(val_atom)?.name()),
+            _ if *key_atom == sym!("#refreshTime") => refresh_time = Some(<&crate::SymbolAtom>::try_from(val_atom)?.name()),
             _ => return Err(format!("Error in environment.metta. Unknown key: {key_atom}"))
         }
     }
@@ -470,7 +473,7 @@ fn include_path_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Resul
         Some(atom) => atom,
         None => return Err(format!("Error in environment.metta. #includePath missing path value"))
     };
-    let path = <&SymbolAtom>::try_from(path_atom)?.name();
+    let path = <&crate::SymbolAtom>::try_from(path_atom)?.name();
     let path = crate::metta::runner::string::strip_quotes(path);
 
     //TODO-FUTURE: In the future we may want to replace dyn-fmt with strfmt, and do something a
