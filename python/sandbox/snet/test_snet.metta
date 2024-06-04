@@ -5,9 +5,10 @@
 ;!((image-generation)
 ;     "Gen" "Text" (Kwargs (sentence "Hello World") (type False)))
 
-;!(import! &self snet:naint:code-generation)
-;!((code-generation)
+!(import! &self snet:naint:code-generation)
+;((code-generation)
 ;     "generate" "Query" (Kwargs (request "Write Hello World in C#")))
+!(generate "Write Hello World in C#")
 
 ;!(import! &self snet:naint:generative-lms)
 ;!((generative-lms)
@@ -17,8 +18,8 @@
 ;!((abstractive-summarisation)
 ;     "neural_summarisation" "Query" (Kwargs (text "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce ullamcorper vehicula augue. Curabitur maximus aliquet ex sed fringilla. Mauris id erat dolor.")))
 
-!(import! &self snet:naint:text-generation)
-!((text-generation)
+(import! &self snet:naint:text-generation)
+((text-generation)
      "gen_gpt_2" "Query"
      (Kwargs (start_text "What was the largest dinosaur?")
              (run_name "universal")
