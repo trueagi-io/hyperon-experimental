@@ -11,7 +11,7 @@ on:
       os:
         description: 'JSON array of OS to be checked'
         required: true
-        default: "[\"ubuntu-20.04\", \"ubuntu-22.04\", \"macos-11\", \"macos-12\", \"macos-13\"]"
+        default: "[\"ubuntu-20.04\", \"ubuntu-22.04\", \"ubuntu-24.04\", \"macos-11\", \"macos-12\", \"macos-13\", \"macos-14\"]"
         type: string
       python-version:
         description: 'JSON array of Python versions to be checked'
@@ -21,7 +21,7 @@ on:
       cmake-version:
         description: 'JSON array of CMake versions to be checked'
         required: true
-        default: "[\"3.15.x\"]"
+        default: "[\"3.19.x\"]"
         type: string
 
 jobs:

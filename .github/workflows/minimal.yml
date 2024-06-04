@@ -17,7 +17,7 @@ on:
 
 jobs:
   minimal:
-    runs-on: ubuntu-20.04
+    runs-on: "ubuntu-20.04"
 
     steps:
       - name: Check out repository code
@@ -49,17 +49,17 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: 3.7
+          python-version: "3.7"
 
       - name: Install CMake
         uses: jwlawson/actions-setup-cmake@v1.14.1
         with:
-          cmake-version: 3.16.x
+          cmake-version: "3.19.x"
 
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.2
         with:
-          version: 1.60.2
+          version: "1.64"
 
       - name: Setup Conan profile
         run: |
@@ -67,22 +67,38 @@ jobs:
 
       - name: Print environment
         run: |
+          echo "uname -a"
+          uname -a
           echo "rustc --version"
           rustc --version
           echo "cbindgen --version"
           cbindgen --version
           echo "python --version"
+          which python
           python --version
+          python -c "import platform; print(platform.platform())"
+          echo "python3 --version"
+          which python3
+          python3 --version
+          python3 -c "import platform; print(platform.platform())"
           echo "conan --version"
           conan --version
+          conan_python=$( head -1 $(which conan) | cut -c 3- )
+          echo "conan Python: $conan_python"
+          echo -n "conan Python platform: "
+          $conan_python -c "import platform; print(platform.platform())"
           echo "conan profile show default"
           conan profile show default
           echo "gcc --version"
           gcc --version
+          echo "g++ --version"
+          g++ --version
           echo "cmake --version"
           cmake --version
+          file $(which cmake)
           echo "make --version"
           make --version
+          file $(which make)
 
       - name: Setup C API build
         run: |
