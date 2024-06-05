@@ -102,6 +102,19 @@ pub trait ManagedCatalog: ModuleCatalog {
     }
 }
 
+/// A ManagedCatalog type to mediate and aggregate the contents of one or more "upstream" catalogs
+///
+/// ## Division of responsibilities with upstream catalogs
+///
+/// LocalCatalog:
+/// - Tracks which modules are installed on-disk
+/// - Manages the on-disk location of the downloaded / cached modules
+/// - TODO-Future: will track requirements and module dependency trees
+///
+/// upstream Catalogs:
+/// - Track which modules are available from the outside world
+/// - Track the remote location of each module and any parameters needed to access it
+///
 #[derive(Debug)]
 pub struct LocalCatalog {
     name: String,

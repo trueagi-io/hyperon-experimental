@@ -167,11 +167,18 @@ impl CatalogFileMod {
 /// Provides an interface to a git repo hosting a table of available modules
 #[derive(Debug)]
 pub struct GitCatalog {
+    /// The name of this catalog
     name: String,
+    /// The FsModuleFormats from the environment, to load the modules from their respective repositories
     fmts: Arc<Vec<Box<dyn FsModuleFormat>>>,
+    /// An interval in seconds to control the refresh of the catalog from the upstream source
     refresh_time: u64,
+    /// The git repo for the catalog info.  This is the table-of-contents for the catalog, not the modules
     catalog_repo: Option<CachedRepo>,
+    /// The path to the catalog file(s), to store the metadata to connect a module to its source location
+    /// parameters.  This path does not have any reliable connection to the on-disk location of the modules
     catalog_file_path: PathBuf,
+    /// The in-memory catalog object, mirroring what is on disk
     catalog: Mutex<Option<CatalogFileFormat>>,
 }
 
