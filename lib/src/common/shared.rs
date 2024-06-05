@@ -4,7 +4,6 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
 use crate::atom::*;
-use crate::matcher::MatchResultIter;
 
 pub trait LockBorrow<T: ?Sized> {
     fn borrow(&self) -> Box<dyn Deref<Target=T> + '_>;
@@ -164,12 +163,23 @@ impl<T: Grounded> Grounded for Shared<T> {
         rust_type_atom::<Self>()
     }
 
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        self.0.borrow().match_(other)
+    fn as_match(&self) -> Option<&dyn CustomMatch> {
+        match self.0.borrow().as_match() {
+            None => None,
+            Some(_) => Some(self),
+        }
     }
 
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         self.0.borrow().execute(args)
+    }
+}
+
+impl<T: Grounded> CustomMatch for Shared<T> {
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        self.0.borrow().as_match()
+            .expect("Custom match procedure is not expected to be changed in runtime")
+            .match_(other)
     }
 }
 
@@ -203,13 +213,8 @@ mod tests {
         fn type_(&self) -> Atom {
             Atom::sym("IgnoredType")
         }
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            let vec = if *other == Atom::sym("matchable") {
-                vec![bind!{ x: Atom::sym("match") }]
-            } else {
-                Vec::new()
-            };
-            Box::new(vec.into_iter())
+        fn as_match(&self) -> Option<&dyn CustomMatch> {
+            Some(self)
         }
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let mut result = vec![Atom::sym("executed")];
@@ -218,12 +223,23 @@ mod tests {
         }
     }
 
+    impl CustomMatch for SharedGrounded {
+        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+            let vec = if *other == Atom::sym("matchable") {
+                vec![bind!{ x: Atom::sym("match") }]
+            } else {
+                Vec::new()
+            };
+            Box::new(vec.into_iter())
+        }
+    }
+
     #[test]
     fn grounded_for_shared() {
         let shared = Shared::new(SharedGrounded{});
 
         assert_eq!(shared.type_(), Atom::sym("hyperon::common::shared::Shared<hyperon::common::shared::tests::SharedGrounded>"));
-        assert_eq!(shared.match_(&Atom::sym("matchable")).collect::<Vec<Bindings>>(), 
+        assert_eq!(shared.as_match().unwrap().match_(&Atom::sym("matchable")).collect::<Vec<Bindings>>(),
             vec![bind!{ x: Atom::sym("match") }]);
         assert_eq!(shared.execute(&mut vec![Atom::sym("arg")]), Ok(vec![Atom::sym("executed"), Atom::sym("arg")]));
     }

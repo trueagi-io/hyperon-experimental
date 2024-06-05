@@ -4,7 +4,7 @@
 use crate::*;
 use super::*;
 use crate::atom::*;
-use crate::atom::matcher::{MatchResultIter, match_atoms};
+use crate::atom::matcher::match_atoms;
 use crate::atom::subexpr::split_expr;
 use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
 
@@ -378,12 +378,18 @@ impl Grounded for GroundingSpace {
         rust_type_atom::<GroundingSpace>()
     }
 
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        Box::new(self.query(other).into_iter())
+    fn as_match(&self) -> Option<&dyn CustomMatch> {
+        Some(self)
     }
 
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
+    }
+}
+
+impl CustomMatch for GroundingSpace {
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        Box::new(self.query(other).into_iter())
     }
 }
 

@@ -31,7 +31,13 @@ impl Grounded for TestDict {
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
     }
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+    fn as_match(&self) -> Option<&dyn CustomMatch> {
+        Some(self)
+    }
+}
+
+impl CustomMatch for TestDict {
+    fn match_(&self, other: &Atom) -> MatchResultIter {
         if let Some(other) = other.as_gnd::<TestDict>() {
             other.0.iter().map(|(ko, vo)| {
                 self.0.iter().map(|(k, v)| {

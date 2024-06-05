@@ -44,10 +44,6 @@ impl Grounded for &'static Operation {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         (self.execute)(self, args)
     }
-
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 impl PartialEq for Operation {
