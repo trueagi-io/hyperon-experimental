@@ -58,24 +58,16 @@ pub(crate) fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
                 expr.children().iter().for_each(|child| fill_key(child, tokens));
                 tokens.push(TrieToken::RightPar);
             },
-            // FIXME, see below
-            Atom::Grounded(g) => {
+            Atom::Grounded(g) if g.as_grounded().as_match().is_none() => {
+                // TODO: Adding Hash on grounded atoms matched by equality is
+                // required in order to make TrieToken::Exact be generated for
+                // them.
                 let mut h = DefaultHasher::new();
                 match (*g).serialize(&mut h) {
                     Ok(()) => { tokens.push(TrieToken::Exact(SymbolAtom::new(ImmutableString::Allocated(h.finish().to_string())))) }
                     Err(_) => { tokens.push(TrieToken::Wildcard) }
                 }
             }
-            // TODO: At the moment all grounding symbols are matched as wildcards
-            // because they potentially may have custom Grounded::match_()
-            // implementation and we cannot understand it from data. We could improve
-            // speed of extracting grounded values from the index if GroundedAtom
-            // has a flag which says whether match_() is match_by_equality() or
-            // not. GroundedAtom with match_by_equality() implementation can be
-            // added as separate TrieToken::GroundedValue to navigate through
-            // the index quickly. GroundedAtom with custom match_() will be added
-            // as a wildcard to be matched after search in index. It also requires
-            // implementing Hash on Grounded.
             _ => tokens.push(TrieToken::Wildcard),
         }
     }
