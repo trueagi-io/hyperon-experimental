@@ -77,10 +77,10 @@ page](https://www.rust-lang.org/tools/install). Make sure your
 Rust (see the Notes at the installation page).
 
   Requirements for building C and Python API
-  * Python3 and Python3-dev (3.7 or later)
+  * Python3 and Python3-dev (3.7 or later, but not 3.12)
   * Pip (23.1.2 or later)
   * GCC (7.5 or later)
-  * CMake (3.15 or later)
+  * CMake (3.19 or later)
 
 * Install cbindgen:
 ```
@@ -89,7 +89,7 @@ cargo install --force cbindgen
 
 * Install Conan and make default Conan profile:
 ```
-python3 -m pip install conan==1.62
+python3 -m pip install conan==1.64
 conan profile new --detect default
 ```
 
