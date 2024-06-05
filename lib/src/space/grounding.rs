@@ -11,6 +11,8 @@ use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
 use std::fmt::Debug;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
+use std::hash::{DefaultHasher, Hasher};
+use crate::common::collections::ImmutableString;
 
 // Grounding space
 
@@ -47,7 +49,7 @@ impl<'a> Iterator for GroundingSpaceIter<'a> {
     }
 }
 
-fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
+pub(crate) fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
     fn fill_key(atom: &Atom, tokens: &mut Vec<TrieToken<SymbolAtom>>) {
         match atom {
             Atom::Symbol(sym) => tokens.push(TrieToken::Exact(sym.clone())),
@@ -56,6 +58,14 @@ fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
                 expr.children().iter().for_each(|child| fill_key(child, tokens));
                 tokens.push(TrieToken::RightPar);
             },
+            // FIXME, see below
+            Atom::Grounded(g) => {
+                let mut h = DefaultHasher::new();
+                match (*g).serialize(&mut h) {
+                    Ok(()) => { tokens.push(TrieToken::Exact(SymbolAtom::new(ImmutableString::Allocated(h.finish().to_string())))) }
+                    Err(_) => { tokens.push(TrieToken::Wildcard) }
+                }
+            }
             // TODO: At the moment all grounding symbols are matched as wildcards
             // because they potentially may have custom Grounded::match_()
             // implementation and we cannot understand it from data. We could improve

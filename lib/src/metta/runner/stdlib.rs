@@ -6,8 +6,11 @@ use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
 use crate::metta::types::{get_atom_types, get_meta_type};
+use crate::metta::interpreter::interpret;
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
+use crate::common::multitrie::MultiTrie;
+use crate::space::grounding::atom_to_trie_key;
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -20,6 +23,17 @@ use super::string::*;
 
 fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
+}
+
+// TODO: remove hiding errors completely after making it possible passing
+// them to the user
+fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
+    let result = interpret(space, expr);
+    log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
+    match result {
+        Ok(result) => Ok(result),
+        Err(_) => Ok(vec![]),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -1012,12 +1026,255 @@ impl Grounded for MatchOp {
     }
 }
 
+#[derive(Clone, PartialEq, Debug)]
+pub struct UniqueOp {
+    pub(crate) space: DynSpace,
+}
+
+impl UniqueOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for UniqueOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "unique")
+    }
+}
+
+impl Grounded for UniqueOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("unique expects single executable atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut result = interpret_no_error(self.space.clone(), atom)?;
+        let mut set = GroundingSpace::new();
+        result.retain(|x| {
+            let not_contained = set.query(x).is_empty();
+            if not_contained { set.add(x.clone()) };
+            not_contained
+        });
+        Ok(result)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct UnionOp {
+    pub(crate) space: DynSpace,
+}
+
+impl UnionOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for UnionOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "union")
+    }
+}
+
+impl Grounded for UnionOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("union expects and executable LHS and RHS atom");
+        let lhs = args.get(0).ok_or_else(arg_error)?;
+        let rhs = args.get(1).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
+        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
+        lhs_result.extend(rhs_result);
+
+        Ok(lhs_result)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct IntersectionOp {
+    pub(crate) space: DynSpace,
+}
+
+impl IntersectionOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for IntersectionOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "intersection")
+    }
+}
+
+impl Grounded for IntersectionOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("intersection expects and executable LHS and RHS atom");
+        let lhs = args.get(0).ok_or_else(arg_error)?;
+        let rhs = args.get(1).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
+        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
+        let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
+        for (index, rhs_item) in rhs_result.iter().enumerate() {
+            let k = atom_to_trie_key(&rhs_item);
+            // FIXME this should
+            // a) use a mutable value endpoint which the MultiTrie does not support atm
+            // b) use a linked list, which Rust barely supports atm
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
+                Some(bucket) => {
+                    rhs_index.remove(&k, &bucket);
+                    let mut nbucket = bucket;
+                    nbucket.push(index);
+                    let nbucket = nbucket;
+                    rhs_index.insert(k, nbucket);
+                }
+                None => { rhs_index.insert(k, vec![index]) }
+            }
+        }
+
+        lhs_result.retain(|candidate| {
+            let k = atom_to_trie_key(candidate);
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
+                None => { false }
+                Some(bucket) => {
+                    match bucket.iter().position(|item| &rhs_result[*item] == candidate) {
+                        None => { false }
+                        Some(i) => {
+                            rhs_index.remove(&k, &bucket);
+                            if bucket.len() > 1 {
+                                let mut nbucket = bucket;
+                                nbucket.remove(i);
+                                rhs_index.insert(k, nbucket);
+                            }
+                            true
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(lhs_result)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct SubtractionOp {
+    pub(crate) space: DynSpace,
+}
+
+impl SubtractionOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Display for SubtractionOp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "subtraction")
+    }
+}
+
+impl Grounded for SubtractionOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("subtraction expects and executable LHS and RHS atom");
+        let lhs = args.get(0).ok_or_else(arg_error)?;
+        let rhs = args.get(1).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
+        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
+        let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
+        for (index, rhs_item) in rhs_result.iter().enumerate() {
+            let k = atom_to_trie_key(&rhs_item);
+            // FIXME this should
+            // a) use a mutable value endpoint which the MultiTrie does not support atm
+            // b) use a linked list, which Rust barely supports atm
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
+                Some(bucket) => {
+                    rhs_index.remove(&k, &bucket);
+                    let mut nbucket = bucket;
+                    nbucket.push(index);
+                    let nbucket = nbucket;
+                    rhs_index.insert(k, nbucket);
+                }
+                None => { rhs_index.insert(k, vec![index]) }
+            }
+        }
+
+        lhs_result.retain(|candidate| {
+            let k = atom_to_trie_key(candidate);
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
+                None => { true }
+                Some(bucket) => {
+                    match bucket.iter().position(|item| &rhs_result[*item] == candidate) {
+                        None => { true }
+                        Some(i) => {
+                            rhs_index.remove(&k, &bucket);
+                            if bucket.len() > 1 {
+                                let mut nbucket = bucket;
+                                nbucket.remove(i);
+                                rhs_index.insert(k, nbucket);
+                            }
+                            false
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(lhs_result)
+    }
+
+    fn match_(&self, other: &Atom) -> MatchResultIter {
+        match_by_equality(self, other)
+    }
+}
 
 /// The internal `non_minimal_only_stdlib` module contains code that is never used by the minimal stdlib
 #[cfg(not(feature = "minimal"))]
 mod non_minimal_only_stdlib {
+    use std::collections::HashSet;
     use super::*;
-    use crate::metta::interpreter::interpret;
     use crate::common::assert::vec_eq_no_order;
 
     // TODO: move it into hyperon::atom module?
@@ -1025,17 +1282,6 @@ mod non_minimal_only_stdlib {
         match atom {
             Atom::Expression(expr) => Some(expr),
             _ => None,
-        }
-    }
-
-    // TODO: remove hiding errors completely after making it possible passing
-    // them to the user
-    fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
-        let result = interpret(space, expr);
-        log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
-        match result {
-            Ok(result) => Ok(result),
-            Err(_) => Ok(vec![]),
         }
     }
 
@@ -1125,8 +1371,6 @@ mod non_minimal_only_stdlib {
             match_by_equality(self, other)
         }
     }
-
-    use std::collections::HashSet;
 
     #[derive(Clone, PartialEq, Debug)]
     pub struct CaptureOp {
@@ -1610,6 +1854,14 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
         let superpose_op = Atom::gnd(SuperposeOp::new(space.clone()));
         tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
+        let unique_op = Atom::gnd(UniqueOp::new(space.clone()));
+        tref.register_token(regex(r"unique"), move |_| { unique_op.clone() });
+        let union_op = Atom::gnd(UnionOp::new(space.clone()));
+        tref.register_token(regex(r"union"), move |_| { union_op.clone() });
+        let intersection_op = Atom::gnd(IntersectionOp::new(space.clone()));
+        tref.register_token(regex(r"intersection"), move |_| { intersection_op.clone() });
+        let subtraction_op = Atom::gnd(SubtractionOp::new(space.clone()));
+        tref.register_token(regex(r"subtraction"), move |_| { subtraction_op.clone() });
         let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
         tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
         let get_type_space_op = Atom::gnd(GetTypeSpaceOp{});
@@ -1954,6 +2206,105 @@ mod tests {
         let superpose_op = SuperposeOp::new(space);
         assert_eq!(superpose_op.execute(&mut vec![expr!("A" ("B" "C"))]),
             Ok(vec![sym!("A"), expr!("B" "C")]));
+    }
+
+    #[test]
+    fn unique_op() {
+        let space = DynSpace::new(metta_space("
+            (= (foo) (A (B C)))
+            (= (foo) (A (B C)))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) Z)
+        "));
+        let unique_op = UniqueOp::new(space);
+        let actual = unique_op.execute(&mut vec![expr!(("foo"))]).unwrap();
+        assert_eq_no_order!(actual,
+                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("Z")]);
+    }
+
+    #[test]
+    fn union_op() {
+        let space = DynSpace::new(metta_space("
+            (= (foo) (A (B C)))
+            (= (foo) (A (B C)))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) Z)
+            (= (bar) (A (B C)))
+            (= (bar) p)
+            (= (bar) p)
+            (= (bar) (Q a))
+        "));
+        let union_op = UnionOp::new(space);
+        let actual = union_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]).unwrap();
+        assert_eq_no_order!(actual,
+                   vec![expr!("A" ("B" "C")), expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("f" "g"), expr!("Z"),
+                        expr!("A" ("B" "C")), expr!("p"), expr!("p"), expr!("Q" "a")]);
+    }
+
+    #[test]
+    fn intersection_op() {
+        let space = DynSpace::new(metta_space("
+            (= (foo) Z)
+            (= (foo) (A (B C)))
+            (= (foo) (A (B C)))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (P b))
+            (= (bar) (f g))
+            (= (bar) (f g))
+            (= (bar) (A (B C)))
+            (= (bar) p)
+            (= (bar) p)
+            (= (bar) (Q a))
+            (= (bar) Z)
+
+            (= (nsl) 5)
+            (= (nsl) 4)
+            (= (nsl) 3)
+            (= (nsl) 2)
+            (= (nsr) 5)
+            (= (nsr) 3)
+        "));
+        let intersection_op = IntersectionOp::new(space);
+        let actual = intersection_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]).unwrap();
+        assert_eq_no_order!(actual,
+                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("Z")]);
+
+        assert_eq_no_order!(intersection_op.execute(&mut vec![expr!(("nsl")), expr!(("nsr"))]).unwrap(),
+                   vec![expr!("5"), expr!("3")]);
+    }
+
+    #[test]
+    fn subtraction_op() {
+        let space = DynSpace::new(metta_space("
+            (= (foo) Z)
+            (= (foo) S)
+            (= (foo) S)
+            (= (foo) (A (B C)))
+            (= (foo) (A (B C)))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (P b))
+            (= (bar) (f g))
+            (= (bar) (A (B C)))
+            (= (bar) p)
+            (= (bar) p)
+            (= (bar) (Q a))
+            (= (bar) Z)
+            (= (bar) S)
+            (= (bar) S)
+            (= (bar) S)
+        "));
+        let subtraction_op = SubtractionOp::new(space);
+        let actual = subtraction_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]).unwrap();
+        assert_eq_no_order!(actual,
+                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("P" "b")]);
     }
 
     #[test]
