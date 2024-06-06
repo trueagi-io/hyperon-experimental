@@ -12,6 +12,49 @@ use crate::metta::runner::stdlib::{regex, unit_result};
 use crate::metta::matcher::*;
 use crate::atom::match_by_equality;
 
+//DISCUSSION: We want to expose more of the pkg_mgmt / catalog system to MeTTa through programmatic
+// interfaces, but the details are unclear.  Most importantly, the use cases are unclear, and those
+// will inform all design decisions.
+//
+//## Potential wish-list for operations available directly in MeTTa:
+// - Ability to work with semver version objects and requirements.  ie. parse versions and requirments
+//    from strings, compare versions to other versions and reqs, etc.
+// - Ability to resolve a module by name (and optionally with a version requirement) without loading it,
+//    returning a ModuleDescriptor and the Catalog in which it was found
+// - Ability to query within a specific catalog, rather than searching all catalogs in priority order
+// - Ability to load an exact module from a specific catalog based on its ModuleDescriptor
+// - Accessor for a resource (see [ResourceKey]) of a module
+// - Ability to inspect / traverse a module dependency hierarchy
+// - Full control over what is "installed".  (inspect, upgrade, install, remove)  See below.
+//
+//## The concept of "installed"
+// The user-level concept of an "installed" module has a imprecise mapping to concepts in the pkg_mgmt /
+// catalog system.  The loosest idea of "installed" is "available", but most users would not consider 
+// software that's freely available on the internet to be "installed".  Most users probably feel like
+// "installed" implies that a specific version of the module is local in their file system.
+//
+// Therefore, modules in remote catalogs wouldn't count as installed, while modules in local catalogs
+// would.  Right now, there are 2 kinds of "local" catalogs.  DirCatalog, and LocalCatalog.
+//
+// DirCatalogs cannot be managed via MeTTa because it is a "read-only" interface over a directory.  We
+// wouldn't want the user to do something that deletes items from a directory the user is managing
+// themselves or under the control of another piece of software like pip or apt.  Additionally, there
+// is no metadata available in a DirCatalog to automatically upgrade any of the contents.
+//
+// LocalCatalogs are designed to be managed by Hyperon, from MeTTa.  A LocalCatalog mirrors one or more
+// upstream module sources (remote Catalogs), so it's expected that a user will install, upgrade, remove,
+// etc. modules in a LocalCatalog. 
+//
+// Therefore, an interface for "managing" what is installed must be limited to LocalCatalogs.
+//
+//## Should it be supported to list the contents of a DirCatalog?
+// A DirCatalog that contains only MeTTa modules, such as the 'modules' directory in the MeTTa config dir,
+//    can be listed easily enough.  Things get complicated however because any directory can be loaded as
+//    a MeTTa module.  Therefore when configuration adds a heterogeneous directory, such as `site-packages`,
+//    the DirCatalog will report every subdir as a module.  Which is correct, but probably not useful.
+//    At the very least, it makes `!(catalog-list! all)` much more noisy
+//
+
 /// Loader to Initialize the "catalog" module
 #[derive(Debug)]
 pub(crate) struct CatalogModLoader;
