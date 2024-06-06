@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::collections::BTreeMap;
 use std::sync::Mutex;
 
+use git_catalog::{GitCatalog, ModuleGitLocation};
 use crate::metta::runner::*;
 use crate::metta::runner::pkg_mgmt::*;
 
@@ -140,6 +141,26 @@ impl LocalCatalog {
     }
     pub fn upstream_catalogs(&self) -> &[Box<dyn ModuleCatalog>] {
         &self.upstream_catalogs[..]
+    }
+    /// Returns an accessor for the first upstream [GitCatalog] if the LocalCatalog has one,
+    /// otherwise returns None
+    fn first_upstream_git_catalog(&self) -> Option<&GitCatalog> {
+        for upstream in self.upstream_catalogs() {
+            if let Some(git_catalog) = upstream.downcast::<GitCatalog>() {
+                return Some(git_catalog)
+            }
+        }
+        None
+    }
+    /// Adds a specific module into the catalog based on a [ModuleGitLocation]
+    ///
+    /// Returns an error if the LocalCatalog is not capable of working with git modules
+    pub(crate) fn loader_for_explicit_git_module(&self, mod_name: &str, update_mode: UpdateMode, location: &ModuleGitLocation) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
+        let descriptor = self.first_upstream_git_catalog()
+            .ok_or_else(|| format!("Catalog {} cannot pull modules from git", self.name))?
+            .register_mod(mod_name, None, location)?;
+        let loader = self.get_loader_with_explicit_refresh(&descriptor, update_mode)?;
+        Ok(Some((loader, descriptor)))
     }
     fn lookup_by_name_in_toc(&self, name: &str) -> Option<Vec<ModuleDescriptor>> {
         let local_toc = self.local_toc.lock().unwrap();

@@ -57,20 +57,6 @@ impl ModuleGitLocation {
 
         Ok(None)
     }
-    /// Gets a loader for a module identified by a ModuleGitLocation, using the [Environment]'s managed `explicit_git_mods` catalog
-    pub(crate) fn get_loader_in_explicit_catalog(&self, mod_name: &str, update_mode: UpdateMode, env: &Environment) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
-        if self.get_url().is_some() {
-            if let Some(explicit_git_catalog) = env.explicit_git_mods.as_ref() {
-                let descriptor = explicit_git_catalog.upstream_catalogs().first().unwrap().downcast::<GitCatalog>().unwrap().register_mod(mod_name, None, self)?;
-                let loader = explicit_git_catalog.get_loader_with_explicit_refresh(&descriptor, update_mode)?;
-                Ok(Some((loader, descriptor)))
-            } else {
-                Err(format!("Unable to pull module \"{mod_name}\" from git; no local \"caches\" directory available"))
-            }
-        } else {
-            Ok(None)
-        }
-    }
     pub(crate) fn get_cache(&self, mod_name: &str, local_cache_dir: PathBuf) -> Result<CachedRepo, String> {
         let url = self.git_url.as_ref().unwrap();
         let branch = self.git_branch.as_ref().map(|s| s.as_str());
@@ -218,9 +204,11 @@ impl GitCatalog {
     /// Registers a new module in the catalog with a specified remote location, and returns
     /// the [ModuleDescriptor] to refer to that module
     ///
-    /// WARNING: if a catalog is synced to an upstream source, the upstream source will
-    /// eventually overwrite anything you register with this method.
-    fn register_mod(&self, mod_name: &str, version: Option<&semver::Version>, git_location: &ModuleGitLocation) -> Result<ModuleDescriptor, String> {
+    /// WARNING: This method is incompatible with a catalog synced to an upstream source
+    pub(crate) fn register_mod(&self, mod_name: &str, version: Option<&semver::Version>, git_location: &ModuleGitLocation) -> Result<ModuleDescriptor, String> {
+        if self.catalog_repo.is_some() {
+            return Err(format!("cannot explicitly register module in a catalog synced to an upstream source"));
+        }
         let descriptor = {
             let mut catalog_ref = self.catalog.lock().unwrap();
             catalog_ref.as_mut().unwrap().add(CatalogFileMod::new(mod_name.to_string(), version.cloned(), git_location.clone()))?

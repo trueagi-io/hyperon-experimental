@@ -328,8 +328,13 @@ pub(crate) fn resolve_module(pkg_info: Option<&PkgInfo>, context: &RunContext, n
         }
 
         //Get the module if it's specified with git keys
-        if let Some(pair) = entry.git_location.get_loader_in_explicit_catalog(mod_name, UpdateMode::FetchIfMissing, context.metta.environment())? {
-            return Ok(Some(pair));
+        if entry.git_location.get_url().is_some() {
+            match context.metta.environment().explicit_git_mods.as_ref() {
+                Some(explicit_git_catalog) => if let Some(pair) = explicit_git_catalog.loader_for_explicit_git_module(mod_name, UpdateMode::FetchIfMissing, &entry.git_location)? {
+                    return Ok(Some(pair));
+                },
+                None => return Err(format!("Unable to pull module \"{mod_name}\" from git; no local \"caches\" directory available"))
+            }
         }
 
         //If `version_req` is specified in the dep entry, then use it to constrain the catalog search
