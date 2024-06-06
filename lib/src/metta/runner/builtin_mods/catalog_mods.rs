@@ -125,9 +125,9 @@ impl Grounded for CatalogListOp {
         }
 
         let mut found_one = false;
-        if cat_name == "all" || cat_name == "git-modules" {
-            if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-                list_catalog(explicit_git_catalog);
+        if cat_name == "all" || cat_name == "specified-mods" {
+            if let Some(specified_mods) = &self.metta.environment().specified_mods {
+                list_catalog(specified_mods);
                 found_one = true;
             }
         }
@@ -187,9 +187,9 @@ impl Grounded for CatalogUpdateOp {
         };
 
         let mut found_one = false;
-        if cat_name == "all" || cat_name == "git-modules" {
-            if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-                explicit_git_catalog.fetch_newest_for_all(UpdateMode::FetchLatest)?;
+        if cat_name == "all" || cat_name == "specified-mods" {
+            if let Some(specified_mods) = &self.metta.environment().specified_mods {
+                specified_mods.fetch_newest_for_all(UpdateMode::FetchLatest)?;
                 found_one = true;
             }
         }
@@ -253,9 +253,9 @@ impl Grounded for CatalogClearOp {
         };
 
         let mut found_one = false;
-        if cat_name == "all" || cat_name == "git-modules" {
-            if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-                explicit_git_catalog.clear_all()?;
+        if cat_name == "all" || cat_name == "specified-mods" {
+            if let Some(specified_mods) = &self.metta.environment().specified_mods {
+                specified_mods.clear_all()?;
                 found_one = true;
             }
         }

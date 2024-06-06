@@ -26,9 +26,9 @@ pub struct Environment {
     catalogs: Vec<Box<dyn ModuleCatalog>>,
     #[cfg(feature = "pkg_mgmt")]
     pub(crate) fs_mod_formats: Arc<Vec<Box<dyn FsModuleFormat>>>,
-    /// The store for modules loaded from git by explicit URL
+    /// The store for modules cached locally after loading from a specific location, for example, via git.
     #[cfg(feature = "pkg_mgmt")]
-    pub(crate) explicit_git_mods: Option<LocalCatalog>,
+    pub(crate) specified_mods: Option<LocalCatalog>,
 }
 
 const DEFAULT_INIT_METTA: &[u8] = include_bytes!("init.default.metta");
@@ -99,7 +99,7 @@ impl Environment {
             #[cfg(feature = "pkg_mgmt")]
             fs_mod_formats: Arc::new(vec![]),
             #[cfg(feature = "pkg_mgmt")]
-            explicit_git_mods: None,
+            specified_mods: None,
         }
     }
 }
@@ -362,11 +362,11 @@ impl EnvBuilder {
             //If we have a caches dir to cache modules locally then register remote catalogs
             if let Some(caches_dir) = &env.caches_dir {
 
-                //Setup the explicit_git_mods managed catalog to hold mods fetched by explicit URL
-                let mut explicit_git_mods = LocalCatalog::new(caches_dir, "git-modules").unwrap();
-                let git_mod_catalog = GitCatalog::new_without_source_repo(caches_dir, env.fs_mod_formats.clone(), "git-modules").unwrap();
-                explicit_git_mods.push_upstream_catalog(Box::new(git_mod_catalog));
-                env.explicit_git_mods = Some(explicit_git_mods);
+                //Setup the specified_mods managed catalog to hold mods fetched by explicit means
+                let mut specified_mods = LocalCatalog::new(caches_dir, "specified-mods").unwrap();
+                let git_mod_catalog = GitCatalog::new_without_source_repo(caches_dir, env.fs_mod_formats.clone(), "specified-mods").unwrap();
+                specified_mods.push_upstream_catalog(Box::new(git_mod_catalog));
+                env.specified_mods = Some(specified_mods);
             }
         }
 

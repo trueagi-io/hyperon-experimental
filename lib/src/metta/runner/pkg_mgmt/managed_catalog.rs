@@ -7,8 +7,8 @@ use git_catalog::{GitCatalog, ModuleGitLocation};
 use crate::metta::runner::*;
 use crate::metta::runner::pkg_mgmt::*;
 
-/// An interface to facilitate explicit management of a catalog, usually as a local mirror
-/// of one or more remote catalogs used by a user to insulate them from upstream changes
+/// An interface to facilitate direct programatic management of a catalog, usually as a local
+/// mirror of one or more remote catalogs used by a user to insulate them from upstream changes
 //
 //NOTE FOR THE FUTURE: There are two major problems with this `fetch_newest_for_all`
 // interface.

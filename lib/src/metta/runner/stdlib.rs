@@ -1079,8 +1079,8 @@ pub(crate) mod pkg_mgmt_ops {
 
             let git_mod_location = ModuleGitLocation::new(url.to_string());
 
-            match context.metta.environment().explicit_git_mods.as_ref() {
-                Some(explicit_git_catalog) => if let Some((loader, descriptor)) = explicit_git_catalog.loader_for_explicit_git_module(&mod_name, UpdateMode::TryFetchLatest, &git_mod_location)? {
+            match context.metta.environment().specified_mods.as_ref() {
+                Some(specified_mods) => if let Some((loader, descriptor)) = specified_mods.loader_for_explicit_git_module(&mod_name, UpdateMode::TryFetchLatest, &git_mod_location)? {
                     context.get_or_init_module_with_descriptor(&mod_name, descriptor, loader).map_err(|e| ExecError::from(e))?;
                 },
                 None => return Err(ExecError::from(format!("Unable to pull module \"{mod_name}\" from git; no local \"caches\" directory available")))
