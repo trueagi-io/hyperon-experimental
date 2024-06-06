@@ -318,15 +318,25 @@ impl LocalCatalogTOC {
             let name_str = file_name.to_str()
                 .ok_or_else(|| format!("Invalid characters found in local cache at path: {}", dir_entry.path().display()))?;
 
-            // Name reserved by GitCatalog.  We may generalize this "reserved" mechanism when
-            // we support additional upstream catalog types
-            if name_str != "_catalog.repo" && name_str != "_catalog.json" {
+            if !Self::should_ignore_dir_entry(name_str) {
                 let descriptor = parse_descriptor_from_dir_name(name_str)?;
                 new_self.add_descriptor(descriptor)?;
             }
         }
 
         Ok(new_self)
+    }
+    /// Returns `false` if the file / directory name is not a module entry, otherwise `true` if it could be
+    fn should_ignore_dir_entry(dir_name: &str) -> bool {
+        // GitCatalog reserves the names "_catalog.repo" and "_catalog.json"
+        if dir_name == "_catalog.repo" || dir_name == "_catalog.json" {
+            return true;
+        }
+        // '.' is illegal in a module name, but lots of software creates .invisible_files, e.g. `.DS_Store`
+        if dir_name.starts_with('.') {
+            return true;
+        }
+        false
     }
     fn lookup_by_name(&self, name: &str) -> Option<Vec<ModuleDescriptor>> {
         if let Some(descriptors) = self.mods_by_name.get(name) {
