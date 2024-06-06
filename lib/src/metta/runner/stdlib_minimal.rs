@@ -472,6 +472,14 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
     tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
+    let unique_op = Atom::gnd(stdlib::UniqueOp::new(space.clone()));
+    tref.register_token(regex(r"unique"), move |_| { unique_op.clone() });
+    let union_op = Atom::gnd(stdlib::UnionOp::new(space.clone()));
+    tref.register_token(regex(r"union"), move |_| { union_op.clone() });
+    let intersection_op = Atom::gnd(stdlib::IntersectionOp::new(space.clone()));
+    tref.register_token(regex(r"intersection"), move |_| { intersection_op.clone() });
+    let subtraction_op = Atom::gnd(stdlib::SubtractionOp::new(space.clone()));
+    tref.register_token(regex(r"subtraction"), move |_| { subtraction_op.clone() });
     let case_op = Atom::gnd(CaseOp::new(space.clone()));
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
     let capture_op = Atom::gnd(CaptureOp::new(space.clone()));
