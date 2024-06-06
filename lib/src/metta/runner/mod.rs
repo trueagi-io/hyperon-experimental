@@ -98,6 +98,9 @@ use stdlib_minimal::*;
 
 use stdlib::CoreLibLoader;
 
+mod builtin_mods;
+use builtin_mods::*;
+
 pub mod arithmetics;
 pub mod string;
 
@@ -175,6 +178,9 @@ impl Metta {
 
         //Set the runner's stdlib mod_id
         metta.0.stdlib_mod.set(stdlib_mod_id).unwrap();
+
+        //Load the rest of the builtin mods, but don't `import` (aka "use") them
+        load_builtin_mods(&metta).unwrap();
 
         //Import the stdlib into the top module, now that it is loaded
         let mut runner_state = RunnerState::new(&metta);

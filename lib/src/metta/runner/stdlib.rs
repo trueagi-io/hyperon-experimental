@@ -14,7 +14,7 @@ use crate::common::multitrie::MultiTrie;
 use crate::space::grounding::atom_to_trie_key;
 
 #[cfg(feature = "pkg_mgmt")]
-use crate::metta::runner::{git_catalog::ModuleGitLocation, mod_name_from_url, pkg_mgmt::{UpdateMode, ManagedCatalog}};
+use crate::metta::runner::{git_catalog::ModuleGitLocation, mod_name_from_url, pkg_mgmt::UpdateMode};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -25,7 +25,7 @@ use regex::Regex;
 use super::arithmetics::*;
 use super::string::*;
 
-fn unit_result() -> Result<Vec<Atom>, ExecError> {
+pub(crate) fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
 }
 
@@ -967,11 +967,6 @@ impl Grounded for MatchOp {
 pub(crate) mod pkg_mgmt_ops {
     use super::*;
 
-    //QUESTION: Do we want to factor these catalog management ops and specialized loading
-    // ops into a separate module?  The argument for "yes" is that the it avoids polluting
-    // the namespace with ops that are seldom used.  The argument for "no" is that importing
-    // the module to use the ops is another step users must remember.
-
     /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
     #[derive(Clone, Debug)]
     pub struct RegisterModuleOp {
@@ -1096,217 +1091,11 @@ pub(crate) mod pkg_mgmt_ops {
         }
     }
 
-    /// Lists contents of all Catalogs that support the "list" method
-    #[derive(Clone, Debug)]
-    pub struct CatalogListOp {
-        metta: Metta
-    }
-
-    impl PartialEq for CatalogListOp {
-        fn eq(&self, _other: &Self) -> bool { true }
-    }
-
-    impl CatalogListOp {
-        pub fn new(metta: Metta) -> Self {
-            Self{ metta }
-        }
-    }
-
-    impl Display for CatalogListOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "catalog-list!")
-        }
-    }
-
-    impl Grounded for CatalogListOp {
-        fn type_(&self) -> Atom {
-            //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
-        }
-
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = "catalog-list! expects a catalog name, or \"all\" to list all available";
-            let cat_name_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
-            let cat_name = if let Atom::Symbol(cat_name) = cat_name_arg_atom {
-                cat_name.name()
-            } else {
-                return Err(ExecError::from(arg_error));
-            };
-
-            fn list_catalog(cat: &dyn crate::metta::runner::ModuleCatalog) {
-                if let Some(cat_iter) = cat.list() {
-                    println!("{}:", cat.display_name());
-                    for desc in cat_iter {
-                        println!("   {desc}");
-                    }
-                }
-            }
-
-            let mut found_one = false;
-            if cat_name == "all" || cat_name == "git-modules" {
-                if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-                    list_catalog(explicit_git_catalog);
-                    found_one = true;
-                }
-            }
-            for cat in self.metta.environment().catalogs() {
-                if cat_name == "all" || cat_name == cat.display_name() {
-                    list_catalog(cat);
-                    found_one = true;
-                }
-            }
-
-            if !found_one {
-                return Err(ExecError::from(format!("no catalog(s) identified by \"{cat_name}\"")));
-            }
-            unit_result()
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
-    }
-
-    /// Update all contents of all ManagedCatalogs to the latest version of all modules
-    #[derive(Clone, Debug)]
-    pub struct CatalogUpdateOp {
-        metta: Metta
-    }
-
-    impl PartialEq for CatalogUpdateOp {
-        fn eq(&self, _other: &Self) -> bool { true }
-    }
-
-    impl CatalogUpdateOp {
-        pub fn new(metta: Metta) -> Self {
-            Self{ metta }
-        }
-    }
-
-    impl Display for CatalogUpdateOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "catalog-update!")
-        }
-    }
-
-    impl Grounded for CatalogUpdateOp {
-        fn type_(&self) -> Atom {
-            //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
-        }
-
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = "catalog-update! expects a catalog name, or \"all\" to update all";
-            let cat_name_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
-            let cat_name = if let Atom::Symbol(cat_name) = cat_name_arg_atom {
-                cat_name.name()
-            } else {
-                return Err(ExecError::from(arg_error));
-            };
-
-            let mut found_one = false;
-            if cat_name == "all" || cat_name == "git-modules" {
-                if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-                    explicit_git_catalog.fetch_newest_for_all(UpdateMode::FetchLatest)?;
-                    found_one = true;
-                }
-            }
-
-            for cat in self.metta.environment().catalogs() {
-                match cat.as_managed() {
-                    Some(cat) => if cat_name == "all" || cat_name == cat.display_name() {
-                        cat.fetch_newest_for_all(UpdateMode::FetchLatest)?;
-                        found_one = true;
-                    },
-                    None => {}
-                }
-            }
-
-            if !found_one {
-                return Err(ExecError::from(format!("no catalog(s) identified by \"{cat_name}\"")));
-            }
-            unit_result()
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
-    }
-
-    /// Clears the contents of all ManagedCatalogs
-    #[derive(Clone, Debug)]
-    pub struct CatalogClearOp {
-        metta: Metta
-    }
-
-    impl PartialEq for CatalogClearOp {
-        fn eq(&self, _other: &Self) -> bool { true }
-    }
-
-    impl CatalogClearOp {
-        pub fn new(metta: Metta) -> Self {
-            Self{ metta }
-        }
-    }
-
-    impl Display for CatalogClearOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "catalog-clear!")
-        }
-    }
-
-    impl Grounded for CatalogClearOp {
-        fn type_(&self) -> Atom {
-            //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
-        }
-
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = "catalog-clear! expects a catalog name, or \"all\" to clear all";
-            let cat_name_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
-            let cat_name = if let Atom::Symbol(cat_name) = cat_name_arg_atom {
-                cat_name.name()
-            } else {
-                return Err(ExecError::from(arg_error));
-            };
-
-            let mut found_one = false;
-            if cat_name == "all" || cat_name == "git-modules" {
-                if let Some(explicit_git_catalog) = &self.metta.environment().explicit_git_mods {
-                    explicit_git_catalog.clear_all()?;
-                    found_one = true;
-                }
-            }
-
-            for cat in self.metta.environment().catalogs().filter_map(|cat| cat.as_managed()) {
-                if cat_name == "all" || cat_name == cat.display_name() {
-                    cat.clear_all()?;
-                    found_one = true;
-                }
-            }
-
-            if !found_one {
-                return Err(ExecError::from(format!("no catalog(s) identified by \"{cat_name}\"")));
-            }
-            unit_result()
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
-    }
-
     pub fn register_pkg_mgmt_tokens(tref: &mut Tokenizer, metta: &Metta) {
         let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
         tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
         let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));
         tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
-        let catalog_list_op = Atom::gnd(CatalogListOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-list!"), move |_| { catalog_list_op.clone() });
-        let catalog_update_op = Atom::gnd(CatalogUpdateOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-update!"), move |_| { catalog_update_op.clone() });
-        let catalog_clear_op = Atom::gnd(CatalogClearOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-clear!"), move |_| { catalog_clear_op.clone() });
     }
 }
 
