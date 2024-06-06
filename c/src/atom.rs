@@ -618,14 +618,10 @@ impl Grounded for CGrounded {
         }
     }
 
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+    fn as_match(&self) -> Option<&dyn CustomMatch> {
         match self.api().match_ {
-            Some(func) => {
-                let other: atom_ref_t = other.into();
-                let set = func(self.get_ptr(), &other);
-                Box::new(set.into_inner().into_iter())
-            },
-            None => match_by_equality(self, other)
+            None => None,
+            Some(_) => Some(self),
         }
     }
 
@@ -638,6 +634,20 @@ impl Grounded for CGrounded {
             None => Err(serial::Error::NotSupported),
         }
     }
+}
+
+impl CustomMatch for CGrounded {
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        match self.api().match_ {
+            Some(func) => {
+                let other: atom_ref_t = other.into();
+                let set = func(self.get_ptr(), &other);
+                Box::new(set.into_inner().into_iter())
+            },
+            None => match_by_equality(self, other)
+        }
+    }
+
 }
 
 impl PartialEq for CGrounded {

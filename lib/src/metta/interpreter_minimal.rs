@@ -1150,9 +1150,6 @@ mod tests {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Err((*args[0].as_gnd::<&str>().unwrap()).into())
         }
-        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
     impl Display for ThrowError {
@@ -1170,9 +1167,6 @@ mod tests {
         }
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Err(ExecError::NoReduce)
-        }
-        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
@@ -1192,9 +1186,6 @@ mod tests {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])
         }
-        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
     impl Display for MulXUndefinedType {
@@ -1212,9 +1203,6 @@ mod tests {
         }
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![])
-        }
-        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 

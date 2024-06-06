@@ -8,10 +8,6 @@ use crate::metta::runner::{Metta, ModuleLoader, RunContext, DynSpace};
 use crate::metta::runner::pkg_mgmt::{UpdateMode, ManagedCatalog};
 use crate::metta::runner::stdlib::{regex, unit_result};
 
-//TODO, delete these when merging with https://github.com/trueagi-io/hyperon-experimental/pull/706
-use crate::metta::matcher::*;
-use crate::atom::match_by_equality;
-
 //DISCUSSION: We want to expose more of the pkg_mgmt / catalog system to MeTTa through programmatic
 // interfaces, but the details are unclear.  Most importantly, the use cases are unclear, and those
 // will inform all design decisions.
@@ -143,10 +139,6 @@ impl Grounded for CatalogListOp {
         }
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 /// Update all contents of all ManagedCatalogs to the latest version of all modules
@@ -209,10 +201,6 @@ impl Grounded for CatalogUpdateOp {
         }
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 /// Clears the contents of all ManagedCatalogs
@@ -271,9 +259,5 @@ impl Grounded for CatalogClearOp {
             return Err(ExecError::from(format!("no catalog(s) identified by \"{cat_name}\"")));
         }
         unit_result()
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }

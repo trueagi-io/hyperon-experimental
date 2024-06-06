@@ -1264,9 +1264,6 @@ mod tests {
             Ok(vec![expr!("Error" ("error") "TestError")])
             //Err("TestError".into())
         }
-        fn match_(&self, other: &Atom) -> crate::matcher::MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
     #[test]
@@ -1316,9 +1313,6 @@ mod tests {
         }
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![self.0.clone()])
-        }
-        fn match_(&self, other: &Atom) -> crate::matcher::MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 

@@ -1,5 +1,4 @@
 use crate::*;
-use crate::matcher::MatchResultIter;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
@@ -144,10 +143,6 @@ impl Grounded for ImportOp {
 
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -208,10 +203,6 @@ impl Grounded for IncludeOp {
         // different from the way "eval-type" APIs work when called from host code, e.g. Rust
         Ok(eval_result.into_iter().last().unwrap_or_else(|| vec![]))
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 /// mod-space! returns the space of a specified module, loading the module if it's not loaded already
@@ -266,10 +257,6 @@ impl Grounded for ModSpaceOp {
         let space = Atom::gnd(context.metta().module_space(mod_id));
         Ok(vec![space])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 /// This operation prints the modules loaded from the top of the runner
@@ -307,10 +294,6 @@ impl Grounded for PrintModsOp {
         self.metta.display_loaded_modules();
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -344,10 +327,6 @@ impl Grounded for BindOp {
         self.tokenizer.borrow_mut().register_token(token_regex, move |_| { atom.clone() });
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -371,10 +350,6 @@ impl Grounded for NewSpaceOp {
         } else {
             Err("new-space doesn't expect arguments".into())
         }
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -400,10 +375,6 @@ impl Grounded for AddAtomOp {
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("add-atom expects a space as the first argument")?;
         space.borrow_mut().add(atom.clone());
         unit_result()
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -431,10 +402,6 @@ impl Grounded for RemoveAtomOp {
         // TODO? Is it necessary to distinguish whether the atom was removed or not?
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -459,10 +426,6 @@ impl Grounded for GetAtomsOp {
         space.borrow().as_space().atom_iter()
             .map(|iter| iter.cloned().map(|a| make_variables_unique(a)).collect())
             .ok_or(ExecError::Runtime("Unsupported Operation. Can't traverse atoms in this space".to_string()))
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -495,10 +458,6 @@ impl Grounded for PragmaOp {
         self.settings.borrow_mut().insert(key.into(), value.clone());
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -529,10 +488,6 @@ impl Grounded for GetTypeOp {
 
         Ok(get_atom_types(self.space.borrow().as_space(), atom))
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -558,10 +513,6 @@ impl Grounded for GetTypeSpaceOp {
 
         Ok(get_atom_types(space, atom))
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -583,10 +534,6 @@ impl Grounded for GetMetaTypeOp {
         let atom = args.get(0).ok_or_else(arg_error)?;
 
         Ok(vec![get_meta_type(&atom)])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -610,10 +557,6 @@ impl Grounded for PrintlnOp {
         let atom = args.get(0).ok_or_else(arg_error)?;
         println!("{}", atom_to_string(atom));
         unit_result()
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -642,10 +585,6 @@ impl Grounded for FormatArgsOp {
             .collect();
         let res = format.format(args.as_slice());
         Ok(vec![Atom::gnd(Str::from_string(res))])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -715,10 +654,6 @@ impl Grounded for TraceOp {
         eprintln!("{}", msg);
         Ok(vec![val.clone()])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -737,10 +672,6 @@ impl Grounded for NopOp {
 
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         unit_result()
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -778,11 +709,6 @@ impl Grounded for StateAtom {
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        // Different state atoms with equal states are equal
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -804,10 +730,6 @@ impl Grounded for NewStateOp {
         let atom = args.get(0).ok_or(arg_error)?;
         Ok(vec![Atom::gnd(StateAtom::new(atom.clone()))])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -823,10 +745,6 @@ impl Grounded for GetStateOp {
         let state = args.get(0).ok_or(arg_error)?;
         let atom = Atom::as_gnd::<StateAtom>(state).ok_or(arg_error)?;
         Ok(vec![atom.state.borrow().clone()])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -857,10 +775,6 @@ impl Grounded for ChangeStateOp {
         let new_value = args.get(1).ok_or(arg_error)?;
         *state.state.borrow_mut() = new_value.clone();
         Ok(vec![atom.clone()])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -900,10 +814,6 @@ impl Grounded for SealedOp {
 
         Ok(result)
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -926,10 +836,6 @@ impl Grounded for EqualOp {
         let b = args.get(1).ok_or_else(arg_error)?;
 
         Ok(vec![Atom::gnd(Bool(a == b))])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -955,10 +861,6 @@ impl Grounded for MatchOp {
         log::debug!("MatchOp::execute: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
         Ok(space.borrow().subst(&pattern, &template))
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -1014,10 +916,6 @@ pub(crate) mod pkg_mgmt_ops {
             self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
 
             unit_result()
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
@@ -1088,10 +986,6 @@ pub(crate) mod pkg_mgmt_ops {
 
             unit_result()
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
     pub fn register_pkg_mgmt_tokens(tref: &mut Tokenizer, metta: &Metta) {
@@ -1139,10 +1033,6 @@ impl Grounded for UniqueOp {
         });
         Ok(result)
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -1179,10 +1069,6 @@ impl Grounded for UnionOp {
         lhs_result.extend(rhs_result);
 
         Ok(lhs_result)
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -1260,10 +1146,6 @@ impl Grounded for IntersectionOp {
 
         Ok(lhs_result)
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -1340,10 +1222,6 @@ impl Grounded for SubtractionOp {
 
         Ok(lhs_result)
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 /// The internal `non_minimal_only_stdlib` module contains code that is never used by the minimal stdlib
@@ -1382,10 +1260,6 @@ mod non_minimal_only_stdlib {
             let car = chld.get(0).ok_or("car-atom expects non-empty expression")?;
             Ok(vec![car.clone()])
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
     #[derive(Clone, PartialEq, Debug)]
@@ -1413,10 +1287,6 @@ mod non_minimal_only_stdlib {
                 Ok(vec![Atom::expr(cdr)])
             }
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
     #[derive(Clone, PartialEq, Debug)]
@@ -1441,10 +1311,6 @@ mod non_minimal_only_stdlib {
             let mut res = vec![atom.clone()];
             res.extend(chld.clone());
             Ok(vec![Atom::expr(res)])
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
@@ -1474,10 +1340,6 @@ mod non_minimal_only_stdlib {
             let arg_error = || ExecError::from("capture expects one argument");
             let atom = args.get(0).ok_or_else(arg_error)?;
             interpret_no_error(self.space.clone(), &atom).map_err(|e| ExecError::from(e))
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
@@ -1578,10 +1440,6 @@ mod non_minimal_only_stdlib {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             CaseOp::execute(self, args)
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
     fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
@@ -1625,10 +1483,6 @@ mod non_minimal_only_stdlib {
 
             assert_results_equal(&actual, &expected, actual_atom)
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
     #[derive(Clone, PartialEq, Debug)]
@@ -1664,10 +1518,6 @@ mod non_minimal_only_stdlib {
 
             assert_results_equal(&actual, expected, actual_atom)
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
     #[derive(Clone, PartialEq, Debug)]
@@ -1701,10 +1551,6 @@ mod non_minimal_only_stdlib {
             let result = interpret_no_error(self.space.clone(), atom)?;
 
             Ok(vec![Atom::expr(result)])
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
@@ -1744,10 +1590,6 @@ mod non_minimal_only_stdlib {
             }
             Ok(superposed)
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
     #[derive(Clone, PartialEq, Debug)]
@@ -1778,10 +1620,6 @@ mod non_minimal_only_stdlib {
             let result = bindings.map(|b| { matcher::apply_bindings_to_atom_move(template.clone(), &b) }).collect();
             log::debug!("LetOp::execute: pattern: {}, atom: {}, template: {}, result: {:?}", pattern, atom, template, result);
             Ok(result)
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
@@ -1849,10 +1687,6 @@ mod non_minimal_only_stdlib {
                         Atom::expr([Atom::gnd(LetVarOp{}), Atom::expr(tail), template])])])
                 },
             }
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
@@ -2658,10 +2492,6 @@ mod tests {
 
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
