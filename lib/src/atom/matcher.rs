@@ -1441,6 +1441,12 @@ mod test {
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
         }
+        fn as_match(&self) -> Option<&dyn CustomMatch> {
+            Some(self)
+        }
+    }
+
+    impl CustomMatch for Rand {
         fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
             match other {
                 Atom::Expression(expr) if expr.children().len() == 1 =>
@@ -1485,6 +1491,12 @@ mod test {
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
         }
+        fn as_match(&self) -> Option<&dyn CustomMatch> {
+            Some(self)
+        }
+    }
+
+    impl CustomMatch for ReturnPairInX {
         fn match_(&self, _other: &Atom) -> matcher::MatchResultIter {
             let result = vec![ bind!{ x: expr!("B") }, bind!{ x: expr!("C") } ];
             Box::new(result.into_iter())
@@ -1723,6 +1735,12 @@ mod test {
             fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 execute_not_executable(self)
             }
+            fn as_match(&self) -> Option<&dyn CustomMatch> {
+                Some(self)
+            }
+        }
+
+        impl CustomMatch for Assigner {
             fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
                 match other.iter().collect::<Vec<&Atom>>().as_slice() {
                     [ Atom::Variable(var), values @ .. ] => {

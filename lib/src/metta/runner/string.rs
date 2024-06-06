@@ -1,6 +1,5 @@
 use crate::*;
 use crate::common::collections::ImmutableString;
-use crate::matcher::MatchResultIter;
 use crate::serial;
 
 pub const ATOM_TYPE_STRING : Atom = sym!("String");
@@ -27,10 +26,6 @@ impl Grounded for Str {
 
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 
     fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
