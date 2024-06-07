@@ -4,12 +4,16 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
+use crate::metta::runner::string::Str;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::metta::interpreter::interpret;
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
 use crate::common::multitrie::MultiTrie;
 use crate::space::grounding::atom_to_trie_key;
+
+#[cfg(feature = "pkg_mgmt")]
+use crate::metta::runner::{git_catalog::ModuleGitLocation, mod_name_from_url, pkg_mgmt::UpdateMode};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -20,8 +24,12 @@ use regex::Regex;
 use super::arithmetics::*;
 use super::string::*;
 
-fn unit_result() -> Result<Vec<Atom>, ExecError> {
+pub(crate) fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
+}
+
+pub(crate) fn regex(regex: &str) -> Regex {
+    Regex::new(regex).unwrap()
 }
 
 // TODO: remove hiding errors completely after making it possible passing
@@ -137,24 +145,6 @@ impl Grounded for ImportOp {
     }
 }
 
-/// A utility function to return the part of a string in between starting and ending quotes
-// TODO: Roll this into a stdlib grounded string module, maybe as a test case for
-//   https://github.com/trueagi-io/hyperon-experimental/issues/351
-fn strip_quotes(src: &str) -> &str {
-    if let Some(first) = src.chars().next() {
-        if first == '"' {
-            if let Some(last) = src.chars().last() {
-                if last == '"' {
-                    if src.len() > 1 {
-                        return &src[1..src.len()-1]
-                    }
-                }
-            }
-        }
-    }
-    src
-}
-
 #[derive(Clone, Debug)]
 pub struct IncludeOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
@@ -266,56 +256,6 @@ impl Grounded for ModSpaceOp {
 
         let space = Atom::gnd(context.metta().module_space(mod_id));
         Ok(vec![space])
-    }
-}
-
-/// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
-#[derive(Clone, Debug)]
-pub struct RegisterModuleOp {
-    metta: Metta
-}
-
-impl PartialEq for RegisterModuleOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
-
-impl RegisterModuleOp {
-    pub fn new(metta: Metta) -> Self {
-        Self{ metta }
-    }
-}
-
-impl Display for RegisterModuleOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "register-module!")
-    }
-}
-
-impl Grounded for RegisterModuleOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
-    }
-
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = "register-module! expects a file system path; use quotes if needed";
-        let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
-
-        // TODO: replace Symbol by grounded String?
-        let path = match path_arg_atom {
-            Atom::Symbol(path_arg) => path_arg.name(),
-            _ => return Err(arg_error.into())
-        };
-        let path = strip_quotes(path);
-        let path = std::path::PathBuf::from(path);
-
-        // Load the module from the path
-        // QUESTION: Do we want to expose the ability to give the module a different name and/ or
-        // load it into a different part of the namespace hierarchy?  For now I was just thinking
-        // it is better to keep the args simple.  IMO this is a place for optional var-args when we
-        // decide on the best way to handle them language-wide.
-        self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
-
-        unit_result()
     }
 }
 
@@ -921,6 +861,138 @@ impl Grounded for MatchOp {
         log::debug!("MatchOp::execute: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
         Ok(space.borrow().subst(&pattern, &template))
+    }
+}
+
+/// The op atoms that depend on the pkg_mgmt feature
+#[cfg(feature = "pkg_mgmt")]
+pub(crate) mod pkg_mgmt_ops {
+    use super::*;
+
+    /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
+    #[derive(Clone, Debug)]
+    pub struct RegisterModuleOp {
+        metta: Metta
+    }
+
+    impl PartialEq for RegisterModuleOp {
+        fn eq(&self, _other: &Self) -> bool { true }
+    }
+
+    impl RegisterModuleOp {
+        pub fn new(metta: Metta) -> Self {
+            Self{ metta }
+        }
+    }
+
+    impl Display for RegisterModuleOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "register-module!")
+        }
+    }
+
+    impl Grounded for RegisterModuleOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        }
+
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = "register-module! expects a file system path; use quotes if needed";
+            let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+
+            let path = match path_arg_atom {
+                Atom::Symbol(path_arg) => path_arg.name(),
+                Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
+                _ => return Err(arg_error.into()),
+            };
+            let path = strip_quotes(path);
+            let path = std::path::PathBuf::from(path);
+
+            // Load the module from the path
+            // QUESTION: Do we want to expose the ability to give the module a different name and/ or
+            // load it into a different part of the namespace hierarchy?  For now I was just thinking
+            // it is better to keep the args simple.  IMO this is a place for optional var-args when we
+            // decide on the best way to handle them language-wide.
+            self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
+
+            unit_result()
+        }
+    }
+
+    /// Provides access to module in a remote git repo, from within MeTTa code
+    /// Similar to `register-module!`, this op will bypass the catalog search
+    ///
+    /// NOTE: Even if Hyperon is build without git support, this operation may still be used to
+    /// load existing modules from a git cache.  That situation may occur if modules were fetched
+    /// earlier or by another tool that manages the module cache.  However this operation requres
+    /// git support to actually clone or pull from a git repository.
+    #[derive(Clone, Debug)]
+    pub struct GitModuleOp {
+        //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
+        context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    }
+
+    impl PartialEq for GitModuleOp {
+        fn eq(&self, _other: &Self) -> bool { true }
+    }
+
+    impl GitModuleOp {
+        pub fn new(metta: Metta) -> Self {
+            Self{ context: metta.0.context.clone() }
+        }
+    }
+
+    impl Display for GitModuleOp {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            write!(f, "git-module!")
+        }
+    }
+
+    impl Grounded for GitModuleOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        }
+
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = "git-module! expects a URL; use quotes if needed";
+            let url_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+            // TODO: When we figure out how to address varargs, it will be nice to take an optional branch name
+
+            let url = match url_arg_atom {
+                Atom::Symbol(url_arg) => url_arg.name(),
+                Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
+                _ => return Err(arg_error.into()),
+            };
+            let url = strip_quotes(url);
+
+            // TODO: Depending on what we do with `register-module!`, we might want to let the
+            // caller provide an optional mod_name here too, rather than extracting it from the url
+            let mod_name = match mod_name_from_url(url) {
+                Some(mod_name) => mod_name,
+                None => return Err(ExecError::from("git-module! error extracting module name from URL"))
+            };
+
+            let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
+            let mut context = ctx_ref.lock().unwrap();
+
+            let git_mod_location = ModuleGitLocation::new(url.to_string());
+
+            match context.metta.environment().specified_mods.as_ref() {
+                Some(specified_mods) => if let Some((loader, descriptor)) = specified_mods.loader_for_explicit_git_module(&mod_name, UpdateMode::TryFetchLatest, &git_mod_location)? {
+                    context.get_or_init_module_with_descriptor(&mod_name, descriptor, loader).map_err(|e| ExecError::from(e))?;
+                },
+                None => return Err(ExecError::from(format!("Unable to pull module \"{mod_name}\" from git; no local \"caches\" directory available")))
+            }
+
+            unit_result()
+        }
+    }
+
+    pub fn register_pkg_mgmt_tokens(tref: &mut Tokenizer, metta: &Metta) {
+        let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
+        let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
     }
 }
 
@@ -1618,10 +1690,6 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    fn regex(regex: &str) -> Regex {
-        Regex::new(regex).unwrap()
-    }
-
     //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
     // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
     #[cfg(not(feature = "minimal"))]
@@ -1665,14 +1733,15 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
         let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
         tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
-        let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
-        tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
         let mod_space_op = Atom::gnd(ModSpaceOp::new(metta.clone()));
         tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
         let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
         tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
         let sealed_op = Atom::gnd(SealedOp{});
         tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
+
+        #[cfg(feature = "pkg_mgmt")]
+        pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
     }
 
     //TODO: The metta argument is a temporary hack on account of the way the operation atoms store references

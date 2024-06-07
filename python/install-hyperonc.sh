@@ -24,7 +24,7 @@ echo "hyperonc revision: $HYPERONC_REV"
 
 # This is to build subunit from Conan on CentOS based manylinux images.
 if test "$AUDITWHEEL_POLICY" = "manylinux2014"; then
-    yum install -y perl-devel
+    yum install -y perl-devel openssl-devel zlib-devel
 fi
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
@@ -45,8 +45,9 @@ git reset --hard FETCH_HEAD
 
 mkdir -p ${HOME}/hyperonc/c/build
 cd ${HOME}/hyperonc/c/build
-# Rust doesn't support building shared libraries under musllinux environment.
-CMAKE_ARGS="$CMAKE_ARGS -DBUILD_SHARED_LIBS=OFF"
+
+# Rust doesn't support building shared libraries under musllinux environment, so musllinux is currently unsupported
+CMAKE_ARGS="$CMAKE_ARGS -DBUILD_SHARED_LIBS=ON"
 # Local prefix is used to support MacOSX Apple Silicon GitHub actions environment.
 CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_INSTALL_PREFIX=${HOME}/.local"
 CMAKE_ARGS="$CMAKE_ARGS -DCMAKE_BUILD_TYPE=Release"

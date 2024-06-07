@@ -19,6 +19,12 @@ impl Str {
     }
 }
 
+impl AsRef<str> for Str {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
 impl Grounded for Str {
     fn type_(&self) -> Atom {
         ATOM_TYPE_STRING
@@ -37,4 +43,20 @@ impl std::fmt::Display for Str {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "\"{}\"", self.0)
     }
+}
+
+/// A utility function to return the part of a string in between starting and ending quotes
+pub fn strip_quotes(src: &str) -> &str {
+    if let Some(first) = src.chars().next() {
+        if first == '"' {
+            if let Some(last) = src.chars().last() {
+                if last == '"' {
+                    if src.len() > 1 {
+                        return &src[1..src.len()-1]
+                    }
+                }
+            }
+        }
+    }
+    src
 }
