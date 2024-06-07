@@ -64,6 +64,7 @@
 
 (@doc empty
   (@desc "Cuts evaluation of the non-deterministic branch and removes it from the result")
+  (@params ())
   (@return "Nothing"))
 (: empty (-> %Undefined%))
 (= (empty) (let a b never-happens))
@@ -504,7 +505,7 @@
   (@desc "Converts a nondeterministic result into a tuple")
   (@params (
     (@param "Atom which will be evaluated")))
-  (@return "Tuple "))
+  (@return "Tuple"))
 
 ; TODO: get-doc/help! not working for superpose
 (@doc superpose
@@ -654,7 +655,7 @@
   (@desc "Negation")
   (@params (
     (@param "Argument")))
-  (@return "Negates boolean input argument (False -> True; True -> False)"))
+  (@return "Negates boolean input argument (False -> True, True -> False)"))
 
 (@doc xor
   (@desc "Exclusive disjunction of two arguments")
