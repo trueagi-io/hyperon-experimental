@@ -24,6 +24,22 @@ use regex::Regex;
 use super::arithmetics::*;
 use super::string::*;
 
+macro_rules! grounded_op {
+    ($name:ident, $disp:literal) => {
+        impl PartialEq for $name {
+            fn eq(&self, _other: &Self) -> bool {
+                true
+            }
+        }
+
+        impl Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, $disp)
+            }
+        }
+    }
+}
+
 pub(crate) fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
 }
@@ -49,19 +65,11 @@ pub struct ImportOp {
     context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
-impl PartialEq for ImportOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(ImportOp, "import!");
 
 impl ImportOp {
     pub fn new(metta: Metta) -> Self {
         Self{ context: metta.0.context.clone() }
-    }
-}
-
-impl Display for ImportOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "import!")
     }
 }
 
@@ -151,19 +159,11 @@ pub struct IncludeOp {
     context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
-impl PartialEq for IncludeOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(IncludeOp, "include");
 
 impl IncludeOp {
     pub fn new(metta: Metta) -> Self {
         Self{ context: metta.0.context.clone() }
-    }
-}
-
-impl Display for IncludeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "include")
     }
 }
 
@@ -216,19 +216,11 @@ pub struct ModSpaceOp {
     context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
-impl PartialEq for ModSpaceOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(ModSpaceOp, "mod-space!");
 
 impl ModSpaceOp {
     pub fn new(metta: Metta) -> Self {
         Self{ context: metta.0.context.clone() }
-    }
-}
-
-impl Display for ModSpaceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "mod-space!")
     }
 }
 
@@ -269,19 +261,11 @@ pub struct PrintModsOp {
     metta: Metta
 }
 
-impl PartialEq for PrintModsOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(PrintModsOp, "print-mods!");
 
 impl PrintModsOp {
     pub fn new(metta: Metta) -> Self {
         Self{ metta }
-    }
-}
-
-impl Display for PrintModsOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "print-mods!")
     }
 }
 
@@ -296,20 +280,16 @@ impl Grounded for PrintModsOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct BindOp {
     tokenizer: Shared<Tokenizer>,
 }
 
+grounded_op!(BindOp, "bind!");
+
 impl BindOp {
     pub fn new(tokenizer: Shared<Tokenizer>) -> Self {
         Self{ tokenizer }
-    }
-}
-
-impl Display for BindOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "bind!")
     }
 }
 
@@ -329,14 +309,10 @@ impl Grounded for BindOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct NewSpaceOp {}
 
-impl Display for NewSpaceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "new-space")
-    }
-}
+grounded_op!(NewSpaceOp, "new-space");
 
 impl Grounded for NewSpaceOp {
     fn type_(&self) -> Atom {
@@ -353,14 +329,10 @@ impl Grounded for NewSpaceOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct AddAtomOp {}
 
-impl Display for AddAtomOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "add-atom")
-    }
-}
+grounded_op!(AddAtomOp, "add-atom");
 
 impl Grounded for AddAtomOp {
     fn type_(&self) -> Atom {
@@ -378,14 +350,10 @@ impl Grounded for AddAtomOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct RemoveAtomOp {}
 
-impl Display for RemoveAtomOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "remove-atom")
-    }
-}
+grounded_op!(RemoveAtomOp, "remove-atom");
 
 impl Grounded for RemoveAtomOp {
     fn type_(&self) -> Atom {
@@ -404,14 +372,10 @@ impl Grounded for RemoveAtomOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetAtomsOp {}
 
-impl Display for GetAtomsOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-atoms")
-    }
-}
+grounded_op!(GetAtomsOp, "get-atoms");
 
 impl Grounded for GetAtomsOp {
     fn type_(&self) -> Atom {
@@ -429,20 +393,16 @@ impl Grounded for GetAtomsOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct PragmaOp {
     settings: Shared<HashMap<String, Atom>>,
 }
 
+grounded_op!(PragmaOp, "pragma!");
+
 impl PragmaOp {
     pub fn new(settings: Shared<HashMap<String, Atom>>) -> Self {
         Self{ settings }
-    }
-}
-
-impl Display for PragmaOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "pragma!")
     }
 }
 
@@ -460,20 +420,16 @@ impl Grounded for PragmaOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetTypeOp {
     space: DynSpace,
 }
 
+grounded_op!(GetTypeOp, "get-type");
+
 impl GetTypeOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for GetTypeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-type")
     }
 }
 
@@ -490,14 +446,10 @@ impl Grounded for GetTypeOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetTypeSpaceOp {}
 
-impl Display for GetTypeSpaceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-type-space")
-    }
-}
+grounded_op!(GetTypeSpaceOp, "get-type-space");
 
 impl Grounded for GetTypeSpaceOp {
     fn type_(&self) -> Atom {
@@ -515,14 +467,10 @@ impl Grounded for GetTypeSpaceOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetMetaTypeOp { }
 
-impl Display for GetMetaTypeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-metatype")
-    }
-}
+grounded_op!(GetMetaTypeOp, "get-metatype");
 
 impl Grounded for GetMetaTypeOp {
     fn type_(&self) -> Atom {
@@ -538,14 +486,10 @@ impl Grounded for GetMetaTypeOp {
 }
 
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct PrintlnOp {}
 
-impl Display for PrintlnOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "println!")
-    }
-}
+grounded_op!(PrintlnOp, "println!");
 
 impl Grounded for PrintlnOp {
     fn type_(&self) -> Atom {
@@ -560,14 +504,10 @@ impl Grounded for PrintlnOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct FormatArgsOp {}
 
-impl Display for FormatArgsOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "format-args")
-    }
-}
+grounded_op!(FormatArgsOp, "format-args");
 
 use dyn_fmt::AsStrFormatExt;
 
@@ -633,14 +573,10 @@ fn atom_to_string(atom: &Atom) -> String {
 /// [42]
 /// ```
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct TraceOp {}
 
-impl Display for TraceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "trace!")
-    }
-}
+grounded_op!(TraceOp, "trace!");
 
 impl Grounded for TraceOp {
     fn type_(&self) -> Atom {
@@ -656,14 +592,10 @@ impl Grounded for TraceOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct NopOp {}
 
-impl Display for NopOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "nop")
-    }
-}
+grounded_op!(NopOp, "nop");
 
 impl Grounded for NopOp {
     fn type_(&self) -> Atom {
@@ -711,14 +643,10 @@ impl Grounded for StateAtom {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct NewStateOp { }
 
-impl Display for NewStateOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "new-state")
-    }
-}
+grounded_op!(NewStateOp, "new-state");
 
 impl Grounded for NewStateOp {
     fn type_(&self) -> Atom {
@@ -732,8 +660,10 @@ impl Grounded for NewStateOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetStateOp { }
+
+grounded_op!(GetStateOp, "get-state");
 
 impl Grounded for GetStateOp {
     fn type_(&self) -> Atom {
@@ -748,20 +678,10 @@ impl Grounded for GetStateOp {
     }
 }
 
-impl Display for GetStateOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-state")
-    }
-}
-
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct ChangeStateOp { }
 
-impl Display for ChangeStateOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "change-state!")
-    }
-}
+grounded_op!(ChangeStateOp, "change-state!");
 
 impl Grounded for ChangeStateOp {
     fn type_(&self) -> Atom {
@@ -778,14 +698,10 @@ impl Grounded for ChangeStateOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct SealedOp {}
 
-impl Display for SealedOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "sealed")
-    }
-}
+grounded_op!(SealedOp, "sealed");
 
 impl Grounded for SealedOp {
     fn type_(&self) -> Atom {
@@ -816,14 +732,10 @@ impl Grounded for SealedOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct EqualOp {}
 
-impl Display for EqualOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "==")
-    }
-}
+grounded_op!(EqualOp, "==");
 
 impl Grounded for EqualOp {
     fn type_(&self) -> Atom {
@@ -839,14 +751,10 @@ impl Grounded for EqualOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct MatchOp {}
 
-impl Display for MatchOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "match")
-    }
-}
+grounded_op!(MatchOp, "match");
 
 impl Grounded for MatchOp {
     fn type_(&self) -> Atom {
@@ -875,19 +783,11 @@ pub(crate) mod pkg_mgmt_ops {
         metta: Metta
     }
 
-    impl PartialEq for RegisterModuleOp {
-        fn eq(&self, _other: &Self) -> bool { true }
-    }
+    grounded_op!(RegisterModuleOp, "register-module!");
 
     impl RegisterModuleOp {
         pub fn new(metta: Metta) -> Self {
             Self{ metta }
-        }
-    }
-
-    impl Display for RegisterModuleOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "register-module!")
         }
     }
 
@@ -932,19 +832,11 @@ pub(crate) mod pkg_mgmt_ops {
         context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
     }
 
-    impl PartialEq for GitModuleOp {
-        fn eq(&self, _other: &Self) -> bool { true }
-    }
+    grounded_op!(GitModuleOp, "git-module!");
 
     impl GitModuleOp {
         pub fn new(metta: Metta) -> Self {
             Self{ context: metta.0.context.clone() }
-        }
-    }
-
-    impl Display for GitModuleOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "git-module!")
         }
     }
 
@@ -996,20 +888,16 @@ pub(crate) mod pkg_mgmt_ops {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct UniqueOp {
     pub(crate) space: DynSpace,
 }
 
+grounded_op!(UniqueOp, "unique");
+
 impl UniqueOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for UniqueOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "unique")
     }
 }
 
@@ -1035,20 +923,16 @@ impl Grounded for UniqueOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct UnionOp {
     pub(crate) space: DynSpace,
 }
 
+grounded_op!(UnionOp, "union");
+
 impl UnionOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for UnionOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "union")
     }
 }
 
@@ -1072,20 +956,16 @@ impl Grounded for UnionOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct IntersectionOp {
     pub(crate) space: DynSpace,
 }
 
+grounded_op!(IntersectionOp, "intersection");
+
 impl IntersectionOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for IntersectionOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "intersection")
     }
 }
 
@@ -1148,20 +1028,16 @@ impl Grounded for IntersectionOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct SubtractionOp {
     pub(crate) space: DynSpace,
 }
 
+grounded_op!(SubtractionOp, "subtraction");
+
 impl SubtractionOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for SubtractionOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "subtraction")
     }
 }
 
@@ -1239,14 +1115,10 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CarAtomOp {}
 
-    impl Display for CarAtomOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "car-atom")
-        }
-    }
+    grounded_op!(CarAtomOp, "car-atom");
 
     impl Grounded for CarAtomOp {
         fn type_(&self) -> Atom {
@@ -1262,14 +1134,10 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CdrAtomOp {}
 
-    impl Display for CdrAtomOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "cdr-atom")
-        }
-    }
+    grounded_op!(CdrAtomOp, "cdr-atom");
 
     impl Grounded for CdrAtomOp {
         fn type_(&self) -> Atom {
@@ -1289,14 +1157,10 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct ConsAtomOp {}
 
-    impl Display for ConsAtomOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "cons-atom")
-        }
-    }
+    grounded_op!(ConsAtomOp, "cons-atom");
 
     impl Grounded for ConsAtomOp {
         fn type_(&self) -> Atom {
@@ -1314,20 +1178,16 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CaptureOp {
         space: DynSpace,
     }
 
+    grounded_op!(CaptureOp, "capture");
+
     impl CaptureOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for CaptureOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "capture")
         }
     }
 
@@ -1343,10 +1203,12 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CaseOp {
         space: DynSpace,
     }
+
+    grounded_op!(CaseOp, "case");
 
     impl CaseOp {
         pub fn new(space: DynSpace) -> Self {
@@ -1426,12 +1288,6 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    impl Display for CaseOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "case")
-        }
-    }
-
     impl Grounded for CaseOp {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
@@ -1451,20 +1307,16 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct AssertEqualOp {
         space: DynSpace,
     }
 
+    grounded_op!(AssertEqualOp, "assertEqual");
+
     impl AssertEqualOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for AssertEqualOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "assertEqual")
         }
     }
 
@@ -1485,20 +1337,16 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct AssertEqualToResultOp {
         space: DynSpace,
     }
 
+    grounded_op!(AssertEqualToResultOp, "assertEqualToResult");
+
     impl AssertEqualToResultOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for AssertEqualToResultOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "assertEqualToResult")
         }
     }
 
@@ -1520,20 +1368,16 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CollapseOp {
         space: DynSpace,
     }
 
+    grounded_op!(CollapseOp, "collapse");
+
     impl CollapseOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for CollapseOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "collapse")
         }
     }
 
@@ -1554,20 +1398,16 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct SuperposeOp {
         pub(crate) space: DynSpace,
     }
 
+    grounded_op!(SuperposeOp, "superpose");
+
     impl SuperposeOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for SuperposeOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "superpose")
         }
     }
 
@@ -1592,14 +1432,10 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct LetOp {}
 
-    impl Display for LetOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "let")
-        }
-    }
+    grounded_op!(LetOp, "let");
 
     impl Grounded for LetOp {
         fn type_(&self) -> Atom {
@@ -1649,14 +1485,10 @@ mod non_minimal_only_stdlib {
             });
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct LetVarOp { }
 
-    impl Display for LetVarOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "let*")
-        }
-    }
+    grounded_op!(LetVarOp, "let*");
 
     impl Grounded for LetVarOp {
         fn type_(&self) -> Atom {

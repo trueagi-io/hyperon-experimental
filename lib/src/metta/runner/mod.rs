@@ -85,6 +85,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 mod environment;
 pub use environment::{Environment, EnvBuilder};
 
+#[macro_use]
 pub mod stdlib;
 #[cfg(not(feature = "minimal"))]
 use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
