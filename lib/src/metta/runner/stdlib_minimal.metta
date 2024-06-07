@@ -155,12 +155,6 @@
     (eval (if-error $atom (return (return $atom))
       (return $then) ))))))
 
-(@doc switch
-  (@desc "Subsequently tests multiple pattern-matching conditions (second argument) for the given value (first argument)")
-  (@params (
-    (@param "Atom (it will be evaluated)")
-    (@param "Tuple of pairs mapping condition patterns to results")))
-  (@return "Result of evaluating of Atom bound to met condition"))
 (: switch (-> %Undefined% Expression Atom))
 (= (switch $atom $cases)
   (function (chain (decons-atom $cases) $list
