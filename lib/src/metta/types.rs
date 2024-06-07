@@ -312,12 +312,18 @@ impl Grounded for UndefinedTypeMatch {
         ATOM_TYPE_TYPE
     }
 
-    fn match_(&self, _other: &Atom) -> crate::matcher::MatchResultIter {
-        Box::new(std::iter::once(crate::matcher::Bindings::new()))
+    fn as_match(&self) -> Option<&dyn CustomMatch> {
+        Some(self)
     }
 
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
+    }
+}
+
+impl CustomMatch for UndefinedTypeMatch {
+    fn match_(&self, _other: &Atom) -> matcher::MatchResultIter {
+        Box::new(std::iter::once(crate::matcher::Bindings::new()))
     }
 }
 
@@ -795,9 +801,6 @@ mod tests {
 
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
-        }
-        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 

@@ -4,13 +4,15 @@
 use crate::*;
 use super::*;
 use crate::atom::*;
-use crate::atom::matcher::{MatchResultIter, match_atoms};
+use crate::atom::matcher::match_atoms;
 use crate::atom::subexpr::split_expr;
 use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
 
 use std::fmt::Debug;
 use std::collections::BTreeSet;
 use std::collections::HashSet;
+use std::hash::{DefaultHasher, Hasher};
+use crate::common::collections::ImmutableString;
 
 // Grounding space
 
@@ -47,7 +49,7 @@ impl<'a> Iterator for GroundingSpaceIter<'a> {
     }
 }
 
-fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
+pub(crate) fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
     fn fill_key(atom: &Atom, tokens: &mut Vec<TrieToken<SymbolAtom>>) {
         match atom {
             Atom::Symbol(sym) => tokens.push(TrieToken::Exact(sym.clone())),
@@ -56,16 +58,16 @@ fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
                 expr.children().iter().for_each(|child| fill_key(child, tokens));
                 tokens.push(TrieToken::RightPar);
             },
-            // TODO: At the moment all grounding symbols are matched as wildcards
-            // because they potentially may have custom Grounded::match_()
-            // implementation and we cannot understand it from data. We could improve
-            // speed of extracting grounded values from the index if GroundedAtom
-            // has a flag which says whether match_() is match_by_equality() or
-            // not. GroundedAtom with match_by_equality() implementation can be
-            // added as separate TrieToken::GroundedValue to navigate through
-            // the index quickly. GroundedAtom with custom match_() will be added
-            // as a wildcard to be matched after search in index. It also requires
-            // implementing Hash on Grounded.
+            Atom::Grounded(g) if g.as_grounded().as_match().is_none() => {
+                // TODO: Adding Hash on grounded atoms matched by equality is
+                // required in order to make TrieToken::Exact be generated for
+                // them.
+                let mut h = DefaultHasher::new();
+                match (*g).serialize(&mut h) {
+                    Ok(()) => { tokens.push(TrieToken::Exact(SymbolAtom::new(ImmutableString::Allocated(h.finish().to_string())))) }
+                    Err(_) => { tokens.push(TrieToken::Wildcard) }
+                }
+            }
             _ => tokens.push(TrieToken::Wildcard),
         }
     }
@@ -368,12 +370,18 @@ impl Grounded for GroundingSpace {
         rust_type_atom::<GroundingSpace>()
     }
 
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        Box::new(self.query(other).into_iter())
+    fn as_match(&self) -> Option<&dyn CustomMatch> {
+        Some(self)
     }
 
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         execute_not_executable(self)
+    }
+}
+
+impl CustomMatch for GroundingSpace {
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        Box::new(self.query(other).into_iter())
     }
 }
 

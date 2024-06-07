@@ -1,5 +1,4 @@
 use crate::*;
-use crate::matcher::MatchResultIter;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
@@ -44,10 +43,6 @@ impl Grounded for PrintAlternativesOp {
         println!("{} {}:", args.len(), atom);
         args.iter().for_each(|arg| println!("    {}", arg));
         Ok(vec![UNIT_ATOM()])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -101,10 +96,6 @@ impl Grounded for GetTypeOp {
             Ok(types)
         }
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -133,10 +124,6 @@ impl Grounded for IfEqualOp {
         } else {
             Ok(vec![else_.clone()])
         }
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -198,10 +185,6 @@ impl Grounded for AssertEqualOp {
 
         assert_results_equal(&actual, &expected, actual_atom)
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -237,10 +220,6 @@ impl Grounded for AssertEqualToResultOp {
         let actual = interpret_no_error(self.space.clone(), actual_atom)?;
 
         assert_results_equal(&actual, expected, actual_atom)
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -284,10 +263,6 @@ impl Grounded for SuperposeOp {
             Ok(superposed)
         }
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -322,10 +297,6 @@ impl Grounded for CollapseOp {
 
         Ok(vec![Atom::expr(result)])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -354,10 +325,6 @@ impl Grounded for CaptureOp {
         let arg_error = || ExecError::from("capture expects one argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
         interpret(self.space.clone(), &atom).map_err(|e| ExecError::from(e))
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -415,10 +382,6 @@ impl Grounded for CaseOp {
         };
         Ok(results)
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 fn regex(regex: &str) -> Regex {
@@ -475,6 +438,14 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
     tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
+    let unique_op = Atom::gnd(stdlib::UniqueOp::new(space.clone()));
+    tref.register_token(regex(r"unique"), move |_| { unique_op.clone() });
+    let union_op = Atom::gnd(stdlib::UnionOp::new(space.clone()));
+    tref.register_token(regex(r"union"), move |_| { union_op.clone() });
+    let intersection_op = Atom::gnd(stdlib::IntersectionOp::new(space.clone()));
+    tref.register_token(regex(r"intersection"), move |_| { intersection_op.clone() });
+    let subtraction_op = Atom::gnd(stdlib::SubtractionOp::new(space.clone()));
+    tref.register_token(regex(r"subtraction"), move |_| { subtraction_op.clone() });
     let case_op = Atom::gnd(CaseOp::new(space.clone()));
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
     let capture_op = Atom::gnd(CaptureOp::new(space.clone()));
@@ -1104,10 +1075,6 @@ mod tests {
 
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             execute_not_executable(self)
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
