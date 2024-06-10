@@ -19,14 +19,10 @@ fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct PrintAlternativesOp {}
 
-impl Display for PrintAlternativesOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "print-alternatives!")
-    }
-}
+grounded_op!(PrintAlternativesOp, "print-alternatives!");
 
 impl Grounded for PrintAlternativesOp {
     fn type_(&self) -> Atom {
@@ -57,22 +53,18 @@ fn atom_to_string(atom: &Atom) -> String {
         _ => atom.to_string(),
     }
 }
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetTypeOp {
     // TODO: MINIMAL this is temporary compatibility fix to be removed after
     // migration to the minimal MeTTa
     space: DynSpace,
 }
 
+grounded_op!(GetTypeOp, "get-type");
+
 impl GetTypeOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for GetTypeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-type")
     }
 }
 
@@ -98,14 +90,10 @@ impl Grounded for GetTypeOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct IfEqualOp { }
 
-impl Display for IfEqualOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "if-equal")
-    }
-}
+grounded_op!(IfEqualOp, "if-equal");
 
 impl Grounded for IfEqualOp {
     fn type_(&self) -> Atom {
@@ -152,20 +140,16 @@ fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct AssertEqualOp {
     space: DynSpace,
 }
 
+grounded_op!(AssertEqualOp, "assertEqual");
+
 impl AssertEqualOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for AssertEqualOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "assertEqual")
     }
 }
 
@@ -187,20 +171,16 @@ impl Grounded for AssertEqualOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct AssertEqualToResultOp {
     space: DynSpace,
 }
 
+grounded_op!(AssertEqualToResultOp, "assertEqualToResult");
+
 impl AssertEqualToResultOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for AssertEqualToResultOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "assertEqualToResult")
     }
 }
 
@@ -223,20 +203,16 @@ impl Grounded for AssertEqualToResultOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct SuperposeOp {
     space: DynSpace,
 }
 
+grounded_op!(SuperposeOp, "superpose");
+
 impl SuperposeOp {
     fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for SuperposeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "superpose")
     }
 }
 
@@ -265,20 +241,16 @@ impl Grounded for SuperposeOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct CollapseOp {
     space: DynSpace,
 }
 
+grounded_op!(CollapseOp, "collapse");
+
 impl CollapseOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for CollapseOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "collapse")
     }
 }
 
@@ -299,20 +271,16 @@ impl Grounded for CollapseOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct CaptureOp {
     space: DynSpace,
 }
 
+grounded_op!(CaptureOp, "capture");
+
 impl CaptureOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for CaptureOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "capture")
     }
 }
 
@@ -328,20 +296,16 @@ impl Grounded for CaptureOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct CaseOp {
     space: DynSpace,
 }
 
+grounded_op!(CaseOp, "case");
+
 impl CaseOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for CaseOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "case")
     }
 }
 

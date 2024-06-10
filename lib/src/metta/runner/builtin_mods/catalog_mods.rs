@@ -80,19 +80,11 @@ pub struct CatalogListOp {
     metta: Metta
 }
 
-impl PartialEq for CatalogListOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(CatalogListOp, "catalog-list!");
 
 impl CatalogListOp {
     pub fn new(metta: Metta) -> Self {
         Self{ metta }
-    }
-}
-
-impl Display for CatalogListOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "catalog-list!")
     }
 }
 
@@ -147,19 +139,11 @@ pub struct CatalogUpdateOp {
     metta: Metta
 }
 
-impl PartialEq for CatalogUpdateOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(CatalogUpdateOp, "catalog-update!");
 
 impl CatalogUpdateOp {
     pub fn new(metta: Metta) -> Self {
         Self{ metta }
-    }
-}
-
-impl Display for CatalogUpdateOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "catalog-update!")
     }
 }
 
@@ -209,19 +193,11 @@ pub struct CatalogClearOp {
     metta: Metta
 }
 
-impl PartialEq for CatalogClearOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(CatalogClearOp, "catalog-clear!");
 
 impl CatalogClearOp {
     pub fn new(metta: Metta) -> Self {
         Self{ metta }
-    }
-}
-
-impl Display for CatalogClearOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "catalog-clear!")
     }
 }
 
