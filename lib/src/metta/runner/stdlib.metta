@@ -91,6 +91,7 @@
   (@return "Function description"))
 (: @desc (-> String DocDescription))
 
+; TODO: help! for @param and @return returns duplicating result
 ;(@doc @param
 ;  (@desc "Used for documentation purposes. Description of function parameter starts with @param as a part of @params which is a part of @doc")
 ;  (@params (
@@ -127,7 +128,7 @@
   (@return "(@item Atom) entity"))
 (: @item (-> Atom DocItem))
 
-; get-doc not showing docs for following two functions (@kind function) and (@kind atom) for some reason.
+; TODO: get-doc not showing docs for following two functions (@kind function) and (@kind atom) for some reason.
 (@doc (@kind function)
   (@desc "Used for documentation purposes. Shows type of entity to be documented. (@kind function) in this case")
   (@return "(@kind function) entity"))
@@ -334,7 +335,6 @@
     (@param "Output pattern typically containing variables from the input pattern")))
   (@return "If match was successfull it outputs pattern (third argument) with filled variables (if any were present in pattern) using matched pattern (second argument). Nothing - otherwise"))
 
-; TODO: help!/get-doc not working for some reason
 (@doc bind!
   (@desc "Registers a new token which is replaced with an atom during the parsing of the rest of the program")
   (@params (
@@ -469,14 +469,12 @@
     (@param "Atom which uses those variables")))
   (@return "Second argument but with variables being replaced with unique variables"))
 
-; TODO: get-doc/help! not working for capture
 (@doc capture
   (@desc "Wraps an atom and capture the current space")
   (@params (
     (@param "Function name which space need to be captured")))
   (@return "Function"))
 
-; TODO: get-doc/help! not working for case
 (@doc case
   (@desc "Subsequently tests multiple pattern-matching conditions (second argument) for the given value (first argument)")
   (@params (
@@ -484,7 +482,6 @@
     (@param "Tuple of pairs mapping condition patterns to results")))
   (@return "Result of evaluating of Atom bound to met condition"))
 
-; TODO: get-doc/help! not working for assertEqual
 (@doc assertEqual
   (@desc "Compares (sets of) results of evaluation of two expressions")
   (@params (
@@ -492,7 +489,6 @@
     (@param "Second expression")))
   (@return "Unit atom if both expression after evaluation is equal, error - otherwise"))
 
-; TODO: get-doc/help! not working for assertEqualToResult
 (@doc assertEqualToResult
   (@desc "Same as assertEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
   (@params (
@@ -500,21 +496,18 @@
     (@param "Second expression (it won't be evaluated)")))
   (@return "Unit atom if both expression after evaluation is equal, error - otherwise"))
 
-; TODO: get-doc/help! not working for collapse
 (@doc collapse
   (@desc "Converts a nondeterministic result into a tuple")
   (@params (
     (@param "Atom which will be evaluated")))
   (@return "Tuple"))
 
-; TODO: get-doc/help! not working for superpose
 (@doc superpose
   (@desc "Turns a tuple (first argument) into a nondeterministic result")
   (@params (
     (@param "Tuple to be converted")))
   (@return "Argument converted to nondeterministic result"))
 
-; TODO: get-doc/help! not working for get-type
 (@doc get-type
   (@desc "Returns type notation of input atom")
   (@params (

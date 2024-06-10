@@ -649,7 +649,9 @@
   (@return "(@item Atom) entity"))
 (: @item (-> Atom DocItem))
 
-; TODO: help! not working for (@kind function)
+; TODO: help! not working for (@kind function). Also it gives two outputs
+; Atom (@kind function): (%Undefined% (-> Atom Atom)) No documentation
+; Atom (@kind function): DocKindFunction No documentation
 (@doc (@kind function)
   (@desc "Used for documentation purposes. Shows type of entity to be documented. (@kind function) in this case")
   (@return "(@kind function) entity"))
@@ -831,7 +833,6 @@
     (@param "Atom to add")))
   (@return "Unit atom"))
 
-; TODO: help! not working for get-type
 (@doc get-type
   (@desc "Returns type notation of input atom")
   (@params (
@@ -922,7 +923,6 @@
   (@params ())
   (@return "Unit atom"))
 
-; TODO: help! not working for assertEqual
 (@doc assertEqual
   (@desc "Compares (sets of) results of evaluation of two expressions")
   (@params (
@@ -930,7 +930,6 @@
     (@param "Second expression")))
   (@return "Unit atom if both expression after evaluation is equal, error - otherwise"))
 
-; TODO: help! not working for assertEqualToResult
 (@doc assertEqualToResult
   (@desc "Same as assertEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
   (@params (
@@ -938,21 +937,18 @@
     (@param "Second expression (it won't be evaluated)")))
   (@return "Unit atom if both expression after evaluation is equal, error - otherwise"))
 
-; TODO: help! not working for superpose
 (@doc superpose
   (@desc "Turns a tuple (first argument) into a nondeterministic result")
   (@params (
     (@param "Tuple to be converted")))
   (@return "Argument converted to nondeterministic result"))
 
-; TODO: help! not working for collapse
 (@doc collapse
   (@desc "Converts a nondeterministic result into a tuple")
   (@params (
     (@param "Atom which will be evaluated")))
   (@return "Tuple"))
 
-; TODO: help! not working for case
 (@doc case
   (@desc "Subsequently tests multiple pattern-matching conditions (second argument) for the given value (first argument)")
   (@params (
@@ -960,7 +956,6 @@
     (@param "Tuple of pairs mapping condition patterns to results")))
   (@return "Result of evaluating of Atom bound to met condition"))
 
-; TODO: help! not working for capture
 (@doc capture
   (@desc "Wraps an atom and capture the current space")
   (@params (
@@ -987,7 +982,6 @@
     (@param "Name of metta script to import")))
   (@return "Unit atom"))
 
-; TODO: help! not working for bind!
 (@doc bind!
   (@desc "Registers a new token which is replaced with an atom during the parsing of the rest of the program")
   (@params (
