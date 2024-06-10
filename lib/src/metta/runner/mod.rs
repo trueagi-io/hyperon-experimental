@@ -424,11 +424,11 @@ impl Metta {
     }
 
     pub fn get_setting(&self, key: &str) -> Option<Atom> {
-        self.0.settings.borrow().get(key.into()).cloned()
+        self.0.settings.borrow().get(key).cloned()
     }
 
     pub fn get_setting_string(&self, key: &str) -> Option<String> {
-        self.0.settings.borrow().get(key.into()).map(|a| a.to_string())
+        self.0.settings.borrow().get(key).map(|a| a.to_string())
     }
 
     pub fn run(&self, parser: impl Parser) -> Result<Vec<Vec<Atom>>, String> {
