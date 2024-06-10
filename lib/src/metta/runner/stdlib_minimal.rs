@@ -9,7 +9,6 @@ use crate::common::shared::Shared;
 use crate::metta::runner::stdlib;
 use crate::metta::runner::stdlib::regex;
 
-use std::fmt::Display;
 use std::convert::TryInto;
 
 use super::arithmetics::*;
@@ -490,6 +489,7 @@ mod tests {
     use crate::common::test_utils::metta_space;
 
     use std::convert::TryFrom;
+    use std::fmt::Display;
     use regex::Regex;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {

@@ -1,6 +1,3 @@
-
-use std::fmt::Display;
-
 use crate::atom::{Atom, Grounded, ExecError};
 use crate::space::grounding::GroundingSpace;
 use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE};
