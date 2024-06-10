@@ -5,6 +5,8 @@ edition.workspace = true
 description = "A shell to execute MeTTa"
 
 [dependencies]
+log = { workspace = true }
+env_logger = { workspace = true }
 anyhow = { version = "1.0.75", features = ["std"] }
 rustyline = { version = "13.0.0", features = ["derive"] }
 clap = { version = "4.4.0", features = ["derive"] }
@@ -22,3 +24,4 @@ default = ["python"]
 no_python = ["hyperon"]
 python = ["pyo3", "pep440_rs"]
 minimal = ["hyperon/minimal", "no_python"] #WARNING: The interpreter belonging to the hyperon python module will be used if hyperon is run through python
+git = ["hyperon/git"]

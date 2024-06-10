@@ -7,9 +7,9 @@ use crate::metta::types::get_atom_types;
 use crate::common::assert::vec_eq_no_order;
 use crate::common::shared::Shared;
 use crate::metta::runner::stdlib;
+use crate::metta::runner::stdlib::regex;
 
 use std::fmt::Display;
-use regex::Regex;
 use std::convert::TryInto;
 
 use super::arithmetics::*;
@@ -19,14 +19,10 @@ fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct PrintAlternativesOp {}
 
-impl Display for PrintAlternativesOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "print-alternatives!")
-    }
-}
+grounded_op!(PrintAlternativesOp, "print-alternatives!");
 
 impl Grounded for PrintAlternativesOp {
     fn type_(&self) -> Atom {
@@ -57,22 +53,18 @@ fn atom_to_string(atom: &Atom) -> String {
         _ => atom.to_string(),
     }
 }
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetTypeOp {
     // TODO: MINIMAL this is temporary compatibility fix to be removed after
     // migration to the minimal MeTTa
     space: DynSpace,
 }
 
+grounded_op!(GetTypeOp, "get-type");
+
 impl GetTypeOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for GetTypeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-type")
     }
 }
 
@@ -98,14 +90,10 @@ impl Grounded for GetTypeOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct IfEqualOp { }
 
-impl Display for IfEqualOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "if-equal")
-    }
-}
+grounded_op!(IfEqualOp, "if-equal");
 
 impl Grounded for IfEqualOp {
     fn type_(&self) -> Atom {
@@ -152,20 +140,16 @@ fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct AssertEqualOp {
     space: DynSpace,
 }
 
+grounded_op!(AssertEqualOp, "assertEqual");
+
 impl AssertEqualOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for AssertEqualOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "assertEqual")
     }
 }
 
@@ -187,20 +171,16 @@ impl Grounded for AssertEqualOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct AssertEqualToResultOp {
     space: DynSpace,
 }
 
+grounded_op!(AssertEqualToResultOp, "assertEqualToResult");
+
 impl AssertEqualToResultOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for AssertEqualToResultOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "assertEqualToResult")
     }
 }
 
@@ -223,20 +203,16 @@ impl Grounded for AssertEqualToResultOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct SuperposeOp {
     space: DynSpace,
 }
 
+grounded_op!(SuperposeOp, "superpose");
+
 impl SuperposeOp {
     fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for SuperposeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "superpose")
     }
 }
 
@@ -265,20 +241,16 @@ impl Grounded for SuperposeOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct CollapseOp {
     space: DynSpace,
 }
 
+grounded_op!(CollapseOp, "collapse");
+
 impl CollapseOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for CollapseOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "collapse")
     }
 }
 
@@ -299,20 +271,16 @@ impl Grounded for CollapseOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct CaptureOp {
     space: DynSpace,
 }
 
+grounded_op!(CaptureOp, "capture");
+
 impl CaptureOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for CaptureOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "capture")
     }
 }
 
@@ -328,20 +296,16 @@ impl Grounded for CaptureOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct CaseOp {
     space: DynSpace,
 }
 
+grounded_op!(CaseOp, "case");
+
 impl CaseOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for CaseOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "case")
     }
 }
 
@@ -384,10 +348,6 @@ impl Grounded for CaseOp {
     }
 }
 
-fn regex(regex: &str) -> Regex {
-    Regex::new(regex).unwrap()
-}
-
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
 // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
 pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
@@ -418,12 +378,13 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
     let match_op = Atom::gnd(stdlib::MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
-    let register_module_op = Atom::gnd(stdlib::RegisterModuleOp::new(metta.clone()));
-    tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
     let mod_space_op = Atom::gnd(stdlib::ModSpaceOp::new(metta.clone()));
     tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
     let print_mods_op = Atom::gnd(stdlib::PrintModsOp::new(metta.clone()));
     tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
+
+    #[cfg(feature = "pkg_mgmt")]
+    stdlib::pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
 }
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
@@ -529,6 +490,7 @@ mod tests {
     use crate::common::test_utils::metta_space;
 
     use std::convert::TryFrom;
+    use regex::Regex;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
         let metta = Metta::new(Some(EnvBuilder::test_env()));

@@ -65,9 +65,17 @@ use super::text::{Tokenizer, Parser, SExprParser};
 use super::types::validate_atom;
 
 pub mod modules;
-use modules::{MettaMod, ModId, ModuleInitState, ModNameNode, ModuleLoader, ResourceKey, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name, decompose_name_path, compose_name_path};
+use modules::{MettaMod, ModId, ModuleInitState, ModNameNode, ModuleLoader, ResourceKey, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name};
 #[cfg(feature = "pkg_mgmt")]
-use modules::catalog::{ModuleDescriptor, loader_for_module_at_path};
+use modules::{decompose_name_path, compose_name_path};
+
+#[cfg(feature = "pkg_mgmt")]
+pub mod pkg_mgmt;
+#[cfg(feature = "pkg_mgmt")]
+use pkg_mgmt::*;
+
+#[cfg(not(feature = "pkg_mgmt"))]
+pub(crate) type ModuleDescriptor = ();
 
 use std::rc::Rc;
 use std::path::PathBuf;
@@ -77,6 +85,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 mod environment;
 pub use environment::{Environment, EnvBuilder};
 
+#[macro_use]
 pub mod stdlib;
 #[cfg(not(feature = "minimal"))]
 use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
@@ -89,6 +98,9 @@ use super::interpreter_minimal::{interpret, interpret_init, interpret_step, Inte
 use stdlib_minimal::*;
 
 use stdlib::CoreLibLoader;
+
+mod builtin_mods;
+use builtin_mods::*;
 
 pub mod arithmetics;
 pub mod string;
@@ -110,7 +122,7 @@ impl PartialEq for Metta {
 }
 
 #[derive(Debug)]
-pub struct MettaContents {
+pub(crate) struct MettaContents {
     /// All the runner's loaded modules
     modules: Mutex<Vec<Rc<MettaMod>>>,
     /// A tree to locate loaded mods by name
@@ -167,6 +179,9 @@ impl Metta {
 
         //Set the runner's stdlib mod_id
         metta.0.stdlib_mod.set(stdlib_mod_id).unwrap();
+
+        //Load the rest of the builtin mods, but don't `import` (aka "use") them
+        load_builtin_mods(&metta).unwrap();
 
         //Import the stdlib into the top module, now that it is loaded
         let mut runner_state = RunnerState::new(&metta);
@@ -302,6 +317,7 @@ impl Metta {
         descriptors.get(descriptor).cloned()
     }
 
+    #[cfg(feature = "pkg_mgmt")]
     /// Internal method to add a ModuleDescriptor, ModId pair to the runner's lookup table
     fn add_module_descriptor(&self, descriptor: ModuleDescriptor, mod_id: ModId) {
         let mut descriptors = self.0.module_descriptors.lock().unwrap();
@@ -344,6 +360,7 @@ impl Metta {
         }
 
         // Merge the [ModuleDescriptor]s into the runner's table
+        #[cfg(feature = "pkg_mgmt")]
         for (descriptor, mod_id) in descriptors.into_iter() {
             let mod_id = match mod_id_mapping.get(&mod_id) {
                 Some(mapped_id) => *mapped_id,
@@ -351,6 +368,8 @@ impl Metta {
             };
             self.add_module_descriptor(descriptor, mod_id);
         }
+        #[cfg(not(feature = "pkg_mgmt"))]
+        let _ = descriptors;
 
         // Finally, re-map the module's "deps" ModIds
         for added_mod_id in mod_id_mapping.values() {
@@ -721,6 +740,7 @@ impl<'input> RunContext<'_, '_, 'input> {
     }
 
     /// Runs the function in the context of the mod_id
+    #[allow(dead_code)] //Some clients are behind feature gates
     fn in_mod_context<T, F: FnOnce(&mut RunContext) -> Result<T, String>>(&mut self, mod_id: ModId, f: F) -> Result<T, String> {
         if mod_id == self.mod_id {
             f(self)
@@ -779,7 +799,7 @@ impl<'input> RunContext<'_, '_, 'input> {
         };
 
         // Get the loader and descriptor by trying the module formats
-        let (loader, descriptor) = match loader_for_module_at_path(&self.metta, &path, absolute_mod_name.as_deref(), self.module().resource_dir())? {
+        let (loader, descriptor) = match loader_for_module_at_path(self.metta.environment().fs_mod_formats(), &path, absolute_mod_name.as_deref(), self.module().resource_dir())? {
             Some((loader, descriptor)) => (loader, descriptor),
             None => return Err(format!("Failed to resolve module at path: {}", path.as_ref().display()))
         };
@@ -868,7 +888,7 @@ impl<'input> RunContext<'_, '_, 'input> {
     #[cfg(feature = "pkg_mgmt")]
     fn load_module_internal(&mut self, mod_path: &str, parent_mod_id: ModId) -> Result<ModId, String> {
         self.in_mod_context(parent_mod_id, |context| {
-            match context.module().pkg_info().resolve_module(context, mod_path)? {
+            match resolve_module(context.module().pkg_info(), context, mod_path)? {
                 Some((loader, descriptor)) => {
                     context.get_or_init_module_with_descriptor(mod_path, descriptor, loader)
                 },
@@ -896,7 +916,7 @@ impl<'input> RunContext<'_, '_, 'input> {
                 let parent_mod_id = self.load_module_parents(mod_name)?;
                 let normalized_mod_path = self.normalize_module_name(mod_name)?;
                 self.in_mod_context(parent_mod_id, |context| {
-                    match context.module().pkg_info().resolve_module(context, &normalized_mod_path)? {
+                    match resolve_module(context.module().pkg_info(), context, &normalized_mod_path)? {
                         Some((loader, _descriptor)) => {
                             loader.get_resource(res_key)
                         },
@@ -917,7 +937,7 @@ impl<'input> RunContext<'_, '_, 'input> {
     /// * If `descriptor` matches an existing loaded module, alias in the module name-space will be created,
     ///   and the module's ModId will be returned, otherwise,
     /// * The `loader` will be used to initialize a new module, and the new ModId will be returned
-    fn get_or_init_module_with_descriptor(&mut self, mod_name: &str, descriptor: ModuleDescriptor, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
+    pub(crate) fn get_or_init_module_with_descriptor(&mut self, mod_name: &str, descriptor: ModuleDescriptor, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
         match self.init_state.get_module_with_descriptor(&self.metta, &descriptor) {
             Some(mod_id) => {
                 self.load_module_alias(mod_name, mod_id)

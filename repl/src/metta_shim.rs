@@ -232,7 +232,7 @@ pub mod metta_interface_mod {
                 } else {
                     match result.downcast::<PyList>() {
                         Ok(result_list) => {
-                            Some(result_list.iter().map(|atom| strip_quotes(atom.to_string())).collect())
+                            Some(result_list.iter().map(|atom| strip_quotes(&atom.to_string()).to_string()).collect())
                         },
                         Err(_) => None
                     }
@@ -252,7 +252,7 @@ pub mod metta_interface_mod {
                 Ok(if result.is_none() {
                     None
                 } else {
-                    Some(strip_quotes(result.to_string()))
+                    Some(strip_quotes(&result.to_string()).to_string())
                 })
             }).unwrap()
         }
@@ -340,7 +340,7 @@ pub mod metta_interface_mod {
         pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
             let mut builder = EnvBuilder::new()
                 .set_working_dir(Some(&working_dir))
-                .create_config_dir();
+                .set_create_config_dir(true);
 
             for path in include_paths.into_iter().rev() {
                 builder = builder.push_include_path(path);
@@ -432,7 +432,7 @@ pub mod metta_interface_mod {
         pub fn get_config_string(&mut self, config_name: &str) -> Option<String> {
             let atom = self.get_config_atom(config_name)?;
             //TODO: We need to do atom type checking here
-            Some(strip_quotes(atom.to_string()))
+            Some(strip_quotes(&atom.to_string()).to_string())
         }
 
         pub fn get_config_expr_vec(&mut self, config_name: &str) -> Option<Vec<String>> {
@@ -442,7 +442,7 @@ pub mod metta_interface_mod {
                     .into_iter()
                     .map(|atom| {
                         //TODO: We need to do atom type checking here
-                        strip_quotes(atom.to_string())
+                        strip_quotes(&atom.to_string()).to_string()
                     })
                     .collect())
             } else {
@@ -457,20 +457,17 @@ pub mod metta_interface_mod {
 
 }
 
-/// A utility function to return the part of a string in between starting and ending quotes
-// TODO: Roll this into a stdlib grounded string module, maybe as a test case for
-//   https://github.com/trueagi-io/hyperon-experimental/issues/351
-fn strip_quotes(the_string: String) -> String {
-    if let Some(first) = the_string.chars().next() {
+pub fn strip_quotes(src: &str) -> &str {
+    if let Some(first) = src.chars().next() {
         if first == '"' {
-            if let Some(last) = the_string.chars().last() {
+            if let Some(last) = src.chars().last() {
                 if last == '"' {
-                    if the_string.len() > 1 {
-                        return String::from_utf8(the_string.as_bytes()[1..the_string.len()-1].to_vec()).unwrap();
+                    if src.len() > 1 {
+                        return &src[1..src.len()-1]
                     }
                 }
             }
         }
     }
-    the_string
+    src
 }

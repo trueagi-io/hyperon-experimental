@@ -4,12 +4,16 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
+use crate::metta::runner::string::Str;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::metta::interpreter::interpret;
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
 use crate::common::multitrie::MultiTrie;
 use crate::space::grounding::atom_to_trie_key;
+
+#[cfg(feature = "pkg_mgmt")]
+use crate::metta::runner::{git_catalog::ModuleGitLocation, mod_name_from_url, pkg_mgmt::UpdateMode};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -20,8 +24,28 @@ use regex::Regex;
 use super::arithmetics::*;
 use super::string::*;
 
-fn unit_result() -> Result<Vec<Atom>, ExecError> {
+macro_rules! grounded_op {
+    ($name:ident, $disp:literal) => {
+        impl PartialEq for $name {
+            fn eq(&self, _other: &Self) -> bool {
+                true
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, $disp)
+            }
+        }
+    }
+}
+
+pub(crate) fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
+}
+
+pub(crate) fn regex(regex: &str) -> Regex {
+    Regex::new(regex).unwrap()
 }
 
 // TODO: remove hiding errors completely after making it possible passing
@@ -41,19 +65,11 @@ pub struct ImportOp {
     context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
-impl PartialEq for ImportOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(ImportOp, "import!");
 
 impl ImportOp {
     pub fn new(metta: Metta) -> Self {
         Self{ context: metta.0.context.clone() }
-    }
-}
-
-impl Display for ImportOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "import!")
     }
 }
 
@@ -137,43 +153,17 @@ impl Grounded for ImportOp {
     }
 }
 
-/// A utility function to return the part of a string in between starting and ending quotes
-// TODO: Roll this into a stdlib grounded string module, maybe as a test case for
-//   https://github.com/trueagi-io/hyperon-experimental/issues/351
-fn strip_quotes(src: &str) -> &str {
-    if let Some(first) = src.chars().next() {
-        if first == '"' {
-            if let Some(last) = src.chars().last() {
-                if last == '"' {
-                    if src.len() > 1 {
-                        return &src[1..src.len()-1]
-                    }
-                }
-            }
-        }
-    }
-    src
-}
-
 #[derive(Clone, Debug)]
 pub struct IncludeOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
     context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
-impl PartialEq for IncludeOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(IncludeOp, "include");
 
 impl IncludeOp {
     pub fn new(metta: Metta) -> Self {
         Self{ context: metta.0.context.clone() }
-    }
-}
-
-impl Display for IncludeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "include")
     }
 }
 
@@ -226,19 +216,11 @@ pub struct ModSpaceOp {
     context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
-impl PartialEq for ModSpaceOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(ModSpaceOp, "mod-space!");
 
 impl ModSpaceOp {
     pub fn new(metta: Metta) -> Self {
         Self{ context: metta.0.context.clone() }
-    }
-}
-
-impl Display for ModSpaceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "mod-space!")
     }
 }
 
@@ -269,56 +251,6 @@ impl Grounded for ModSpaceOp {
     }
 }
 
-/// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
-#[derive(Clone, Debug)]
-pub struct RegisterModuleOp {
-    metta: Metta
-}
-
-impl PartialEq for RegisterModuleOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
-
-impl RegisterModuleOp {
-    pub fn new(metta: Metta) -> Self {
-        Self{ metta }
-    }
-}
-
-impl Display for RegisterModuleOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "register-module!")
-    }
-}
-
-impl Grounded for RegisterModuleOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
-    }
-
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = "register-module! expects a file system path; use quotes if needed";
-        let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
-
-        // TODO: replace Symbol by grounded String?
-        let path = match path_arg_atom {
-            Atom::Symbol(path_arg) => path_arg.name(),
-            _ => return Err(arg_error.into())
-        };
-        let path = strip_quotes(path);
-        let path = std::path::PathBuf::from(path);
-
-        // Load the module from the path
-        // QUESTION: Do we want to expose the ability to give the module a different name and/ or
-        // load it into a different part of the namespace hierarchy?  For now I was just thinking
-        // it is better to keep the args simple.  IMO this is a place for optional var-args when we
-        // decide on the best way to handle them language-wide.
-        self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
-
-        unit_result()
-    }
-}
-
 /// This operation prints the modules loaded from the top of the runner
 ///
 /// NOTE: This is a temporary stop-gap to help MeTTa users inspect which modules they have loaded and
@@ -329,19 +261,11 @@ pub struct PrintModsOp {
     metta: Metta
 }
 
-impl PartialEq for PrintModsOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(PrintModsOp, "print-mods!");
 
 impl PrintModsOp {
     pub fn new(metta: Metta) -> Self {
         Self{ metta }
-    }
-}
-
-impl Display for PrintModsOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "print-mods!")
     }
 }
 
@@ -356,20 +280,16 @@ impl Grounded for PrintModsOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct BindOp {
     tokenizer: Shared<Tokenizer>,
 }
 
+grounded_op!(BindOp, "bind!");
+
 impl BindOp {
     pub fn new(tokenizer: Shared<Tokenizer>) -> Self {
         Self{ tokenizer }
-    }
-}
-
-impl Display for BindOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "bind!")
     }
 }
 
@@ -389,14 +309,10 @@ impl Grounded for BindOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct NewSpaceOp {}
 
-impl Display for NewSpaceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "new-space")
-    }
-}
+grounded_op!(NewSpaceOp, "new-space");
 
 impl Grounded for NewSpaceOp {
     fn type_(&self) -> Atom {
@@ -413,14 +329,10 @@ impl Grounded for NewSpaceOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct AddAtomOp {}
 
-impl Display for AddAtomOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "add-atom")
-    }
-}
+grounded_op!(AddAtomOp, "add-atom");
 
 impl Grounded for AddAtomOp {
     fn type_(&self) -> Atom {
@@ -438,14 +350,10 @@ impl Grounded for AddAtomOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct RemoveAtomOp {}
 
-impl Display for RemoveAtomOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "remove-atom")
-    }
-}
+grounded_op!(RemoveAtomOp, "remove-atom");
 
 impl Grounded for RemoveAtomOp {
     fn type_(&self) -> Atom {
@@ -464,14 +372,10 @@ impl Grounded for RemoveAtomOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetAtomsOp {}
 
-impl Display for GetAtomsOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-atoms")
-    }
-}
+grounded_op!(GetAtomsOp, "get-atoms");
 
 impl Grounded for GetAtomsOp {
     fn type_(&self) -> Atom {
@@ -489,20 +393,16 @@ impl Grounded for GetAtomsOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct PragmaOp {
     settings: Shared<HashMap<String, Atom>>,
 }
 
+grounded_op!(PragmaOp, "pragma!");
+
 impl PragmaOp {
     pub fn new(settings: Shared<HashMap<String, Atom>>) -> Self {
         Self{ settings }
-    }
-}
-
-impl Display for PragmaOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "pragma!")
     }
 }
 
@@ -520,20 +420,16 @@ impl Grounded for PragmaOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetTypeOp {
     space: DynSpace,
 }
 
+grounded_op!(GetTypeOp, "get-type");
+
 impl GetTypeOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for GetTypeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-type")
     }
 }
 
@@ -550,14 +446,10 @@ impl Grounded for GetTypeOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetTypeSpaceOp {}
 
-impl Display for GetTypeSpaceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-type-space")
-    }
-}
+grounded_op!(GetTypeSpaceOp, "get-type-space");
 
 impl Grounded for GetTypeSpaceOp {
     fn type_(&self) -> Atom {
@@ -575,14 +467,10 @@ impl Grounded for GetTypeSpaceOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetMetaTypeOp { }
 
-impl Display for GetMetaTypeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-metatype")
-    }
-}
+grounded_op!(GetMetaTypeOp, "get-metatype");
 
 impl Grounded for GetMetaTypeOp {
     fn type_(&self) -> Atom {
@@ -598,14 +486,10 @@ impl Grounded for GetMetaTypeOp {
 }
 
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct PrintlnOp {}
 
-impl Display for PrintlnOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "println!")
-    }
-}
+grounded_op!(PrintlnOp, "println!");
 
 impl Grounded for PrintlnOp {
     fn type_(&self) -> Atom {
@@ -620,14 +504,10 @@ impl Grounded for PrintlnOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct FormatArgsOp {}
 
-impl Display for FormatArgsOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "format-args")
-    }
-}
+grounded_op!(FormatArgsOp, "format-args");
 
 use dyn_fmt::AsStrFormatExt;
 
@@ -693,14 +573,10 @@ fn atom_to_string(atom: &Atom) -> String {
 /// [42]
 /// ```
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct TraceOp {}
 
-impl Display for TraceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "trace!")
-    }
-}
+grounded_op!(TraceOp, "trace!");
 
 impl Grounded for TraceOp {
     fn type_(&self) -> Atom {
@@ -716,14 +592,10 @@ impl Grounded for TraceOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct NopOp {}
 
-impl Display for NopOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "nop")
-    }
-}
+grounded_op!(NopOp, "nop");
 
 impl Grounded for NopOp {
     fn type_(&self) -> Atom {
@@ -771,14 +643,10 @@ impl Grounded for StateAtom {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct NewStateOp { }
 
-impl Display for NewStateOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "new-state")
-    }
-}
+grounded_op!(NewStateOp, "new-state");
 
 impl Grounded for NewStateOp {
     fn type_(&self) -> Atom {
@@ -792,8 +660,10 @@ impl Grounded for NewStateOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetStateOp { }
+
+grounded_op!(GetStateOp, "get-state");
 
 impl Grounded for GetStateOp {
     fn type_(&self) -> Atom {
@@ -808,20 +678,10 @@ impl Grounded for GetStateOp {
     }
 }
 
-impl Display for GetStateOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-state")
-    }
-}
-
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct ChangeStateOp { }
 
-impl Display for ChangeStateOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "change-state!")
-    }
-}
+grounded_op!(ChangeStateOp, "change-state!");
 
 impl Grounded for ChangeStateOp {
     fn type_(&self) -> Atom {
@@ -838,14 +698,10 @@ impl Grounded for ChangeStateOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct SealedOp {}
 
-impl Display for SealedOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "sealed")
-    }
-}
+grounded_op!(SealedOp, "sealed");
 
 impl Grounded for SealedOp {
     fn type_(&self) -> Atom {
@@ -876,14 +732,10 @@ impl Grounded for SealedOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct EqualOp {}
 
-impl Display for EqualOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "==")
-    }
-}
+grounded_op!(EqualOp, "==");
 
 impl Grounded for EqualOp {
     fn type_(&self) -> Atom {
@@ -899,14 +751,10 @@ impl Grounded for EqualOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct MatchOp {}
 
-impl Display for MatchOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "match")
-    }
-}
+grounded_op!(MatchOp, "match");
 
 impl Grounded for MatchOp {
     fn type_(&self) -> Atom {
@@ -924,20 +772,132 @@ impl Grounded for MatchOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+/// The op atoms that depend on the pkg_mgmt feature
+#[cfg(feature = "pkg_mgmt")]
+pub(crate) mod pkg_mgmt_ops {
+    use super::*;
+
+    /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
+    #[derive(Clone, Debug)]
+    pub struct RegisterModuleOp {
+        metta: Metta
+    }
+
+    grounded_op!(RegisterModuleOp, "register-module!");
+
+    impl RegisterModuleOp {
+        pub fn new(metta: Metta) -> Self {
+            Self{ metta }
+        }
+    }
+
+    impl Grounded for RegisterModuleOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        }
+
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = "register-module! expects a file system path; use quotes if needed";
+            let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+
+            let path = match path_arg_atom {
+                Atom::Symbol(path_arg) => path_arg.name(),
+                Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
+                _ => return Err(arg_error.into()),
+            };
+            let path = strip_quotes(path);
+            let path = std::path::PathBuf::from(path);
+
+            // Load the module from the path
+            // QUESTION: Do we want to expose the ability to give the module a different name and/ or
+            // load it into a different part of the namespace hierarchy?  For now I was just thinking
+            // it is better to keep the args simple.  IMO this is a place for optional var-args when we
+            // decide on the best way to handle them language-wide.
+            self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
+
+            unit_result()
+        }
+    }
+
+    /// Provides access to module in a remote git repo, from within MeTTa code
+    /// Similar to `register-module!`, this op will bypass the catalog search
+    ///
+    /// NOTE: Even if Hyperon is build without git support, this operation may still be used to
+    /// load existing modules from a git cache.  That situation may occur if modules were fetched
+    /// earlier or by another tool that manages the module cache.  However this operation requres
+    /// git support to actually clone or pull from a git repository.
+    #[derive(Clone, Debug)]
+    pub struct GitModuleOp {
+        //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
+        context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    }
+
+    grounded_op!(GitModuleOp, "git-module!");
+
+    impl GitModuleOp {
+        pub fn new(metta: Metta) -> Self {
+            Self{ context: metta.0.context.clone() }
+        }
+    }
+
+    impl Grounded for GitModuleOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        }
+
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = "git-module! expects a URL; use quotes if needed";
+            let url_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+            // TODO: When we figure out how to address varargs, it will be nice to take an optional branch name
+
+            let url = match url_arg_atom {
+                Atom::Symbol(url_arg) => url_arg.name(),
+                Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
+                _ => return Err(arg_error.into()),
+            };
+            let url = strip_quotes(url);
+
+            // TODO: Depending on what we do with `register-module!`, we might want to let the
+            // caller provide an optional mod_name here too, rather than extracting it from the url
+            let mod_name = match mod_name_from_url(url) {
+                Some(mod_name) => mod_name,
+                None => return Err(ExecError::from("git-module! error extracting module name from URL"))
+            };
+
+            let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
+            let mut context = ctx_ref.lock().unwrap();
+
+            let git_mod_location = ModuleGitLocation::new(url.to_string());
+
+            match context.metta.environment().specified_mods.as_ref() {
+                Some(specified_mods) => if let Some((loader, descriptor)) = specified_mods.loader_for_explicit_git_module(&mod_name, UpdateMode::TryFetchLatest, &git_mod_location)? {
+                    context.get_or_init_module_with_descriptor(&mod_name, descriptor, loader).map_err(|e| ExecError::from(e))?;
+                },
+                None => return Err(ExecError::from(format!("Unable to pull module \"{mod_name}\" from git; no local \"caches\" directory available")))
+            }
+
+            unit_result()
+        }
+    }
+
+    pub fn register_pkg_mgmt_tokens(tref: &mut Tokenizer, metta: &Metta) {
+        let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
+        let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct UniqueOp {
     pub(crate) space: DynSpace,
 }
 
+grounded_op!(UniqueOp, "unique");
+
 impl UniqueOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for UniqueOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "unique")
     }
 }
 
@@ -963,20 +923,16 @@ impl Grounded for UniqueOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct UnionOp {
     pub(crate) space: DynSpace,
 }
 
+grounded_op!(UnionOp, "union");
+
 impl UnionOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for UnionOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "union")
     }
 }
 
@@ -1000,20 +956,16 @@ impl Grounded for UnionOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct IntersectionOp {
     pub(crate) space: DynSpace,
 }
 
+grounded_op!(IntersectionOp, "intersection");
+
 impl IntersectionOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for IntersectionOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "intersection")
     }
 }
 
@@ -1076,20 +1028,16 @@ impl Grounded for IntersectionOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct SubtractionOp {
     pub(crate) space: DynSpace,
 }
 
+grounded_op!(SubtractionOp, "subtraction");
+
 impl SubtractionOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for SubtractionOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "subtraction")
     }
 }
 
@@ -1167,14 +1115,10 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CarAtomOp {}
 
-    impl Display for CarAtomOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "car-atom")
-        }
-    }
+    grounded_op!(CarAtomOp, "car-atom");
 
     impl Grounded for CarAtomOp {
         fn type_(&self) -> Atom {
@@ -1190,14 +1134,10 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CdrAtomOp {}
 
-    impl Display for CdrAtomOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "cdr-atom")
-        }
-    }
+    grounded_op!(CdrAtomOp, "cdr-atom");
 
     impl Grounded for CdrAtomOp {
         fn type_(&self) -> Atom {
@@ -1217,14 +1157,10 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct ConsAtomOp {}
 
-    impl Display for ConsAtomOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "cons-atom")
-        }
-    }
+    grounded_op!(ConsAtomOp, "cons-atom");
 
     impl Grounded for ConsAtomOp {
         fn type_(&self) -> Atom {
@@ -1242,20 +1178,16 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CaptureOp {
         space: DynSpace,
     }
 
+    grounded_op!(CaptureOp, "capture");
+
     impl CaptureOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for CaptureOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "capture")
         }
     }
 
@@ -1271,10 +1203,12 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CaseOp {
         space: DynSpace,
     }
+
+    grounded_op!(CaseOp, "case");
 
     impl CaseOp {
         pub fn new(space: DynSpace) -> Self {
@@ -1354,12 +1288,6 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    impl Display for CaseOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "case")
-        }
-    }
-
     impl Grounded for CaseOp {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
@@ -1379,20 +1307,16 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct AssertEqualOp {
         space: DynSpace,
     }
 
+    grounded_op!(AssertEqualOp, "assertEqual");
+
     impl AssertEqualOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for AssertEqualOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "assertEqual")
         }
     }
 
@@ -1413,20 +1337,16 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct AssertEqualToResultOp {
         space: DynSpace,
     }
 
+    grounded_op!(AssertEqualToResultOp, "assertEqualToResult");
+
     impl AssertEqualToResultOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for AssertEqualToResultOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "assertEqualToResult")
         }
     }
 
@@ -1448,20 +1368,16 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CollapseOp {
         space: DynSpace,
     }
 
+    grounded_op!(CollapseOp, "collapse");
+
     impl CollapseOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for CollapseOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "collapse")
         }
     }
 
@@ -1482,20 +1398,16 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct SuperposeOp {
         pub(crate) space: DynSpace,
     }
 
+    grounded_op!(SuperposeOp, "superpose");
+
     impl SuperposeOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for SuperposeOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "superpose")
         }
     }
 
@@ -1520,14 +1432,10 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct LetOp {}
 
-    impl Display for LetOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "let")
-        }
-    }
+    grounded_op!(LetOp, "let");
 
     impl Grounded for LetOp {
         fn type_(&self) -> Atom {
@@ -1577,14 +1485,10 @@ mod non_minimal_only_stdlib {
             });
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct LetVarOp { }
 
-    impl Display for LetVarOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "let*")
-        }
-    }
+    grounded_op!(LetVarOp, "let*");
 
     impl Grounded for LetVarOp {
         fn type_(&self) -> Atom {
@@ -1616,10 +1520,6 @@ mod non_minimal_only_stdlib {
                 },
             }
         }
-    }
-
-    fn regex(regex: &str) -> Regex {
-        Regex::new(regex).unwrap()
     }
 
     //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
@@ -1665,14 +1565,15 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
         let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
         tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
-        let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
-        tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
         let mod_space_op = Atom::gnd(ModSpaceOp::new(metta.clone()));
         tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
         let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
         tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
         let sealed_op = Atom::gnd(SealedOp{});
         tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
+
+        #[cfg(feature = "pkg_mgmt")]
+        pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
     }
 
     //TODO: The metta argument is a temporary hack on account of the way the operation atoms store references

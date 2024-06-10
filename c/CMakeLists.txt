@@ -2,6 +2,8 @@
 cmake_minimum_required(VERSION 3.19)
 project(hyperonc)
 
+option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
+
 enable_testing()
 option(BUILD_SHARED_LIBS "Build shared library" ON)
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
@@ -34,10 +36,15 @@ set(HYPERONC_STATIC_LIB_PATH ${HYPERONC_TARGET_DIR}/${HYPERONC_STATIC_LIB_FILE})
 set(HYPERONC_INCLUDE_DIR ${HYPERONC_TARGET_DIR}/hyperon)
 separate_arguments(CARGO_ARGS_LIST NATIVE_COMMAND ${CARGO_ARGS})
 
+if(GIT)
+    set(GIT_FEATURE --features hyperon/git)
+endif()
+
 add_custom_target(build-hyperonc ALL
     COMMAND cargo build
         ${CARGO_ARGS_LIST}
         $<${IS_RELEASE_BUILD}:--release>
+        ${GIT_FEATURE}
         --target-dir ${HYPERONC_TARGET_DIR}
 
     COMMAND ${CMAKE_COMMAND} -E copy
@@ -71,6 +78,11 @@ set(STATIC_LIBRARY_INSTALL_PATH "${BINARY_INSTALL_PATH}/${HYPERONC_STATIC_LIB_FI
 include(CMakePackageConfigHelpers)
 
 if(BUILD_SHARED_LIBS)
+    if(GIT)
+        find_package(OpenSSL REQUIRED)
+        find_package(ZLIB REQUIRED)
+    endif(GIT)
+
     set(HYPERONC_SHARED_LIB_FILE ${CMAKE_SHARED_LIBRARY_PREFIX}hyperonc${CMAKE_SHARED_LIBRARY_SUFFIX})
     set(HYPERONC_SHARED_LIB_PATH ${HYPERONC_TARGET_DIR}/${HYPERONC_SHARED_LIB_FILE})
     set(SHARED_LIBRARY_INSTALL_PATH "${BINARY_INSTALL_PATH}/${HYPERONC_SHARED_LIB_FILE}")
@@ -90,6 +102,9 @@ if(BUILD_SHARED_LIBS)
         # required to import hyperonc-shared by name not by relative path
         IMPORTED_NO_SONAME TRUE
         )
+    if(GIT)
+        target_link_libraries(hyperonc-shared INTERFACE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
+    endif(GIT)
     add_dependencies(hyperonc-shared copy-hyperonc-shared build-hyperonc)
 
     install(FILES "${HYPERONC_SHARED_LIB_PATH}"
