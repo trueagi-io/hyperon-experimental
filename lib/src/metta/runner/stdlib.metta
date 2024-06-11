@@ -126,15 +126,12 @@
   (@return "(@item Atom) entity"))
 (: @item (-> Atom DocItem))
 
-; TODO: get-doc not showing docs for following two functions (@kind function) and (@kind atom) for some reason.
 (@doc (@kind function)
-  (@desc "Used for documentation purposes. Shows type of entity to be documented. (@kind function) in this case")
-  (@return "(@kind function) entity"))
+  (@desc "Used for documentation purposes. Shows type of entity to be documented. (@kind function) in this case"))
 (: (@kind function) DocKindFunction)
 
 (@doc (@kind atom)
-  (@desc "Used for documentation purposes. Shows type of entity to be documented. (@kind atom) in this case")
-  (@return "(@kind atom) entity"))
+  (@desc "Used for documentation purposes. Shows type of entity to be documented. (@kind atom) in this case"))
 (: (@kind atom) DocKindAtom)
 
 (@doc @type
@@ -540,10 +537,10 @@
   (@return "Unit atom"))
 
 ; TODO: Segmentation fault (core dumped) when calling !(help &self)
-(@doc &self
-  (@desc "Returns reference to the current atomspace")
-  (@params ())
-  (@return "Reference to the current atomspace"))
+;(@doc &self
+;  (@desc "Returns reference to the current atomspace")
+;  (@params ())
+;  (@return "Reference to the current atomspace"))
 
 ; TODO: get-doc/help! not working for +
 (@doc +

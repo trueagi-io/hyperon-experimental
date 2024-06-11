@@ -647,18 +647,15 @@
   (@return "(@item Atom) entity"))
 (: @item (-> Atom DocItem))
 
-; TODO: help! not working for (@kind function). Also it gives two outputs
-; Atom (@kind function): (%Undefined% (-> Atom Atom)) No documentation
-; Atom (@kind function): DocKindFunction No documentation
+; TODO: help! gives two outputs
+;Atom (@kind function): (%Undefined% (-> Atom Atom)) Used for documentation purposes. Shows type of entity to be documented. (@kind function) in this case
+;Atom (@kind function): DocKindFunction Used for documentation purposes. Shows type of entity to be documented. (@kind function) in this case
 (@doc (@kind function)
-  (@desc "Used for documentation purposes. Shows type of entity to be documented. (@kind function) in this case")
-  (@return "(@kind function) entity"))
+  (@desc "Used for documentation purposes. Shows type of entity to be documented. (@kind function) in this case"))
 (: (@kind function) DocKindFunction)
 
-; TODO: help! not working for (@kind atom)
 (@doc (@kind atom)
-  (@desc "Used for documentation purposes. Shows type of entity to be documented. (@kind atom) in this case")
-  (@return "(@kind atom) entity"))
+  (@desc "Used for documentation purposes. Shows type of entity to be documented. (@kind atom) in this case"))
 (: (@kind atom) DocKindAtom)
 
 (@doc @type
@@ -1015,10 +1012,10 @@
   (@return "Second argument but with variables being replaced with unique variables"))
 
 ; TODO: help! not working for bind! (segmentation fault)
-(@doc &self
-  (@desc "Returns reference to the current atomspace")
-  (@params ())
-  (@return "Reference to the current atomspace"))
+;(@doc &self
+;  (@desc "Returns reference to the current atomspace")
+;  (@params ())
+;  (@return "Reference to the current atomspace"))
 
 ; TODO: help! not working for '+'
 (@doc +
