@@ -656,3 +656,30 @@
   (@desc "Produces random boolean value")
   (@params ())
   (@return "Random boolean value"))
+
+(@doc unique
+  (@desc "Function takes non-deterministic input (first argument) and returns only unique entities. E.g. (unique (superpose (a b c d d))) -> [a, b, c, d]")
+  (@params (
+    (@param "Non-deterministic set of values")))
+  (@return "Unique values from input set"))
+
+(@doc union
+  (@desc "Function takes two non-deterministic inputs (first and second argument) and returns their union. E.g. (union (superpose (a b b c)) (superpose (b c c d))) -> [a, b, b, c, b, c, c, d]")
+  (@params (
+    (@param "Non-deterministic set of values")
+    (@param "Another non-deterministic set of values")))
+  (@return "Union of sets"))
+
+(@doc intersection
+  (@desc "Function takes two non-deterministic inputs (first and second argument) and returns their intersection. E.g. (intersection (superpose (a b c c)) (superpose (b c c c d))) -> [b, c, c]")
+  (@params (
+    (@param "Non-deterministic set of values")
+    (@param "Another non-deterministic set of values")))
+  (@return "Intersection of sets"))
+
+(@doc subtraction
+  (@desc "Function takes two non-deterministic inputs (first and second argument) and returns their subtraction. E.g. !(subtraction (superpose (a b b c)) (superpose (b c c d))) -> [a, b]")
+  (@params (
+    (@param "Non-deterministic set of values")
+    (@param "Another non-deterministic set of values")))
+  (@return "Subtraction of sets"))
