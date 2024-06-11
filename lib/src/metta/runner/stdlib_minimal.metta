@@ -1123,3 +1123,9 @@
     (@param "Non-deterministic set of values")
     (@param "Another non-deterministic set of values")))
   (@return "Subtraction of sets"))
+
+(@doc git-module!
+  (@desc "Provides access to module in a remote git repo, from within MeTTa code. Similar to `register-module!`, this op will bypass the catalog search")
+  (@params (
+    (@param "URL to github repo")))
+  (@return "Unit atom"))
