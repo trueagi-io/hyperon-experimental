@@ -454,9 +454,22 @@ fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: B
     }
 }
 
-fn eval_result(prev: Option<Rc<RefCell<Stack>>>, res: Atom, call_stack: &Rc<RefCell<Stack>>, bindings: Bindings) -> InterpretedAtom {
+fn eval_result(prev: Option<Rc<RefCell<Stack>>>, res: Atom, call_stack: &Rc<RefCell<Stack>>, mut bindings: Bindings) -> InterpretedAtom {
     let stack = if is_function_op(&res) {
-        atom_to_stack(res, Some(call_stack.clone()))
+        let mut stack = function_to_stack(res, Some(call_stack.clone()));
+        let call_stack = call_stack.borrow();
+        // Apply arguments bindings is required to replace formal argument
+        // variables by matched actual argument variables. Otherwise the
+        // equality of formal and actual argument variables will be cleaned up
+        // on any return from the nested function call.
+        // TODO: we could instead add formal argument variables of the called
+        // functions into stack.vars collection. One way of doing it is getting
+        // list of formal var parameters from the function definition atom
+        // but we don't have it returned from the query. Another way is to
+        // find all variables equalities in bindings with variables
+        // from call_stack.vars.
+        bindings.apply_and_retain(&mut stack.atom, |v| call_stack.vars.contains(v));
+        stack
     } else {
         Stack::finished(prev, res)
     };
@@ -880,10 +893,52 @@ mod tests {
         assert_eq!(result, vec![NOT_REDUCIBLE_SYMBOL]);
     }
 
+    #[test]
+    fn interpret_atom_evaluate_variable_via_call_direct_equality() {
+        let space = space("
+            (= (foo $x) (function
+              (chain (eval (bar $x)) $_ (return ())) ))
+            (= (bar $x) (function
+              ; fake internal call which wipes variables equalities
+              (chain (function (return ())) $_
+              (unify $x value
+                (return ())
+                (return (Error () \"Unexpected error\")) ))))");
+        let result = call_interpret(&space,
+            &metta_atom("(chain (eval (foo $y)) $_ $y)"));
+        assert_eq!(result[0], sym!("value"));
+    }
+
+    #[test]
+    fn interpret_atom_evaluate_variable_via_call_struct_equality() {
+        let formal_arg_struct = space("
+            (= (foo ($x)) (function
+              (chain (eval (bar $x)) $_ (return ())) ))
+            (= (bar ($x)) (function
+              ; fake internal call which wipes variables equalities
+              (chain (function (return ())) $_
+              (unify $x value
+                (return ())
+                (return (Error () \"Unexpected error\")) ))))");
+        let result = call_interpret(&formal_arg_struct,
+            &metta_atom("(chain (eval (foo $y)) $_ $y)"));
+        assert_eq!(result[0], expr!((("value"))));
+
+        let actual_arg_struct = space("
+            (= (foo $x) (function
+              ; fake internal call which wipes variables equalities
+              (chain (function (return ())) $_
+              (unify $x (value)
+                (return ())
+                (return (Error () \"Unexpected error\")) ))))");
+        let result = call_interpret(&actual_arg_struct,
+            &metta_atom("(chain (eval (foo ($y))) $_ $y)"));
+        assert_eq!(result[0], sym!("value"));
+    }
+
 
     #[test]
     fn interpret_atom_chain_incorrect_args() {
-        let _ = env_logger::builder().is_test(true).try_init();
         assert_eq!(call_interpret(&space(""), &metta_atom("(chain n $v t o)")),
             vec![expr!("Error" ("chain" "n" v "t" "o") "expected: (chain <nested> (: <var> Variable) <templ>), found: (chain n $v t o)")]);
         assert_eq!(call_interpret(&space(""), &metta_atom("(chain n v t)")),
@@ -1126,6 +1181,7 @@ mod tests {
     }
 
     fn call_interpret<'a, T: Space>(space: T, atom: &Atom) -> Vec<Atom> {
+        let _ = env_logger::builder().is_test(true).try_init();
         let result = interpret(space, atom);
         assert!(result.is_ok());
         result.unwrap()
