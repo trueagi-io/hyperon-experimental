@@ -133,13 +133,6 @@ impl Display for InterpretedAtom {
         if self.1.is_empty() {
             write!(f, "{}", self.0)
         } else {
-            // TODO: it is possible to cleanup all bindings for nested
-            // expressions which were introduced by matching when all
-            // sub-expressions are interpreted. This will simplify
-            // textual representation. For example in test_air_humidity_regulator
-            // (make air wet) leads to (start kettle), {$y: kettle}) result
-            // but $y is not present in the expression after interpreting
-            // (make air wet) and can be removed.
             write!(f, "{}\n{}", self.1, self.0)
         }
     }
@@ -228,9 +221,8 @@ impl<'a, T: SpaceRef<'a>> std::fmt::Display for InterpreterState<'a, T> {
     }
 }
 
-/// Initialize interpreter and returns the result of the zero step.
-/// It can be error, immediate result or interpretation plan to be executed.
-/// See [crate::metta::interpreter] for algorithm explanation.
+/// Initialize interpreter and returns the starting interpreter state.
+/// See [crate::metta::interpreter_minimal] for algorithm explanation.
 ///
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
@@ -245,13 +237,11 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
     }
 }
 
-//TODO: These docs are out of date for the new interpreter
-/// Perform next step of the interpretation plan and return the result. Panics
-/// when [StepResult::Return] or [StepResult::Error] are passed as input.
-/// See [crate::metta::interpreter] for algorithm explanation.
+/// Perform next step of the interpretation return the resulting interpreter
+/// state. See [crate::metta::interpreter_minimal] for algorithm explanation.
 ///
 /// # Arguments
-/// * `step` - [StepResult::Execute] result from the previous step.
+/// * `state` - interpreter state from the previous step.
 pub fn interpret_step<'a, T: Space + 'a>(mut state: InterpreterState<'a, T>) -> InterpreterState<'a, T> {
     let interpreted_atom = state.pop().unwrap();
     log::debug!("interpret_step:\n{}", interpreted_atom);
@@ -685,11 +675,6 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         }
     };
 
-    // TODO: Should unify() be symmetrical or not. While it is symmetrical then
-    // if variable is matched by variable then both variables have the same
-    // priority. Thus interpreter can use any of them further. This sometimes
-    // looks unexpected. For example see `metta_car` unit test where variable
-    // from car's argument is replaced.
     let matches: Vec<Bindings> = match_atoms(&atom, &pattern).collect();
     if matches.is_empty() {
         finished_result(else_, bindings, prev)

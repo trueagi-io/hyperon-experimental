@@ -532,9 +532,7 @@ mod tests {
         let result = run_program("!(eval (car-atom (A $b)))");
         assert_eq!(result, Ok(vec![vec![expr!("A")]]));
         let result = run_program("!(eval (car-atom ($a B)))");
-        //assert_eq!(result, Ok(vec![vec![expr!(a)]]));
-        assert!(result.is_ok_and(|res| res.len() == 1 && res[0].len() == 1 &&
-            atoms_are_equivalent(&res[0][0], &expr!(a))));
+        assert_eq!(result, Ok(vec![vec![expr!(a)]]));
         let result = run_program("!(eval (car-atom ()))");
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("car-atom" ()) {Str::from_str("car-atom expects a non-empty expression as an argument")})]]));
         let result = run_program("!(eval (car-atom A))");
