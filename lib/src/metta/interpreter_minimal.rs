@@ -553,7 +553,7 @@ fn chain_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         },
     };
     std::mem::swap(nested_arg, &mut nested);
-    let nested_vars: im::HashSet<&VariableAtom> = vars_from_atom(nested_arg).collect();
+    let nested_vars: im::HashSet<&VariableAtom> = vars_from_atom(&nested).collect();
     let templ_vars: im::HashSet<&VariableAtom> = vars_from_atom(templ_arg).collect();
     let both_vars = nested_vars.intersection(templ_vars).into_iter();
     let vars = Stack::add_vars_it(&prev, both_vars);
@@ -953,6 +953,12 @@ mod tests {
     fn interpret_atom_chain_return() {
         let result = call_interpret(&space(""), &metta_atom("(chain Empty $x (bar $x))"));
         assert_eq!(result, vec![metta_atom("(bar Empty)")]);
+    }
+
+    #[test]
+    fn interpret_atom_chain_keep_var_from_evaluated_part() {
+        let result = call_interpret(&space("(= (even 4) True)"), &metta_atom("(chain (eval (even $x)) $res (= (is-even $x) $res))"));
+        assert_eq!(result, vec![metta_atom("(= (is-even 4) True)")]);
     }
 
 
