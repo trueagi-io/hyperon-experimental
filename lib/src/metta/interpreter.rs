@@ -250,8 +250,7 @@ impl InterpreterCache {
     fn insert(&mut self, key: Atom, mut value: Results) {
         value.iter_mut().for_each(|res| {
             let vars: HashSet<&VariableAtom> = key.iter().filter_type::<&VariableAtom>().collect();
-            apply_bindings_to_atom_mut(&mut res.0, &res.1);
-            res.1.retain(|v| vars.contains(v));
+            res.1.apply_and_retain(&mut res.0, |v| vars.contains(v));
         });
         self.0.insert(key, value)
     }

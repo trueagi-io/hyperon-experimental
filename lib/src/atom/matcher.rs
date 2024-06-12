@@ -617,22 +617,6 @@ impl Bindings {
         self
     }
 
-    /// Keep only variables passed in vars
-    pub fn retain<F>(&mut self, f: F) where F: Fn(&VariableAtom) -> bool {
-        let to_remove: Vec<VariableAtom> = self.binding_by_var.keys()
-            .filter_map(|var| {
-                if !f(var) {
-                    Some(var.clone())
-                } else {
-                    None
-                }
-            }).collect();
-
-        for var in &to_remove {
-            self.remove_var_from_binding(var);
-        }
-    }
-
     pub fn has_loops(&self) -> bool {
         for binding in &self.bindings {
             let mut used_bindings = bitset::BitSet::with_capacity(self.bindings.index_upper_bound());
@@ -1777,31 +1761,37 @@ mod test {
 
     #[test]
     fn bindings_retain() -> Result<(), &'static str> {
+        let mut atom = expr!(a b);
         let mut bindings = Bindings::new()
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?;
-        bindings.retain(|v| *v == VariableAtom::new("a") || *v == VariableAtom::new("b"));
+        bindings.apply_and_retain(&mut atom, |v| *v == VariableAtom::new("a") || *v == VariableAtom::new("b"));
         assert_eq!(bindings, bind!{ a: expr!(b) });
+        assert_eq!(atom, expr!(a b));
 
+        let mut atom = expr!(a b c d e);
         let mut bindings = Bindings::new()
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?
             .add_var_binding_v2(VariableAtom::new("b"), expr!("B" d))?
-            .add_var_binding_v2(VariableAtom::new("c"), expr!("c"))?
+            .add_var_binding_v2(VariableAtom::new("c"), expr!("C"))?
             .add_var_binding_v2(VariableAtom::new("d"), expr!("D"))?
             .with_var_no_value(&VariableAtom::new("e"));
-        bindings.retain(|v| *v == VariableAtom::new("b") || *v == VariableAtom::new("e"));
+        bindings.apply_and_retain(&mut atom, |v| *v == VariableAtom::new("b") || *v == VariableAtom::new("e"));
         let expected = Bindings::new()
             .add_var_binding_v2(VariableAtom::new("b"), expr!("B" d))?
             .with_var_no_value(&VariableAtom::new("e"));
         assert_eq!(bindings, expected);
+        assert_eq!(atom, expr!(("B" "D") b "C" "D" e));
         Ok(())
     }
 
     #[test]
     fn bindings_retain_all() -> Result<(), &'static str> {
+        let mut atom = expr!(a b);
         let mut bindings = Bindings::new()
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?;
-        bindings.retain(|_| false);
+        bindings.apply_and_retain(&mut atom, |_| false);
         assert!(bindings.is_empty());
+        assert_eq!(atom, expr!(a b));
         Ok(())
     }
 
