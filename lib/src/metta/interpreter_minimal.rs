@@ -133,13 +133,6 @@ impl Display for InterpretedAtom {
         if self.1.is_empty() {
             write!(f, "{}", self.0)
         } else {
-            // TODO: it is possible to cleanup all bindings for nested
-            // expressions which were introduced by matching when all
-            // sub-expressions are interpreted. This will simplify
-            // textual representation. For example in test_air_humidity_regulator
-            // (make air wet) leads to (start kettle), {$y: kettle}) result
-            // but $y is not present in the expression after interpreting
-            // (make air wet) and can be removed.
             write!(f, "{}\n{}", self.1, self.0)
         }
     }
@@ -228,9 +221,8 @@ impl<'a, T: SpaceRef<'a>> std::fmt::Display for InterpreterState<'a, T> {
     }
 }
 
-/// Initialize interpreter and returns the result of the zero step.
-/// It can be error, immediate result or interpretation plan to be executed.
-/// See [crate::metta::interpreter] for algorithm explanation.
+/// Initialize interpreter and returns the starting interpreter state.
+/// See [crate::metta::interpreter_minimal] for algorithm explanation.
 ///
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
@@ -245,13 +237,11 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
     }
 }
 
-//TODO: These docs are out of date for the new interpreter
-/// Perform next step of the interpretation plan and return the result. Panics
-/// when [StepResult::Return] or [StepResult::Error] are passed as input.
-/// See [crate::metta::interpreter] for algorithm explanation.
+/// Perform next step of the interpretation return the resulting interpreter
+/// state. See [crate::metta::interpreter_minimal] for algorithm explanation.
 ///
 /// # Arguments
-/// * `step` - [StepResult::Execute] result from the previous step.
+/// * `state` - interpreter state from the previous step.
 pub fn interpret_step<'a, T: Space + 'a>(mut state: InterpreterState<'a, T>) -> InterpreterState<'a, T> {
     let interpreted_atom = state.pop().unwrap();
     log::debug!("interpret_step:\n{}", interpreted_atom);
@@ -464,9 +454,22 @@ fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: B
     }
 }
 
-fn eval_result(prev: Option<Rc<RefCell<Stack>>>, res: Atom, call_stack: &Rc<RefCell<Stack>>, bindings: Bindings) -> InterpretedAtom {
+fn eval_result(prev: Option<Rc<RefCell<Stack>>>, res: Atom, call_stack: &Rc<RefCell<Stack>>, mut bindings: Bindings) -> InterpretedAtom {
     let stack = if is_function_op(&res) {
-        atom_to_stack(res, Some(call_stack.clone()))
+        let mut stack = function_to_stack(res, Some(call_stack.clone()));
+        let call_stack = call_stack.borrow();
+        // Apply arguments bindings is required to replace formal argument
+        // variables by matched actual argument variables. Otherwise the
+        // equality of formal and actual argument variables will be cleaned up
+        // on any return from the nested function call.
+        // TODO: we could instead add formal argument variables of the called
+        // functions into stack.vars collection. One way of doing it is getting
+        // list of formal var parameters from the function definition atom
+        // but we don't have it returned from the query. Another way is to
+        // find all variables equalities in bindings with variables
+        // from call_stack.vars.
+        bindings.apply_and_retain(&mut stack.atom, |v| call_stack.vars.contains(v));
+        stack
     } else {
         Stack::finished(prev, res)
     };
@@ -685,11 +688,6 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         }
     };
 
-    // TODO: Should unify() be symmetrical or not. While it is symmetrical then
-    // if variable is matched by variable then both variables have the same
-    // priority. Thus interpreter can use any of them further. This sometimes
-    // looks unexpected. For example see `metta_car` unit test where variable
-    // from car's argument is replaced.
     let matches: Vec<Bindings> = match_atoms(&atom, &pattern).collect();
     if matches.is_empty() {
         finished_result(else_, bindings, prev)
@@ -895,10 +893,48 @@ mod tests {
         assert_eq!(result, vec![NOT_REDUCIBLE_SYMBOL]);
     }
 
+    #[test]
+    fn interpret_atom_evaluate_variable_via_call_direct_equality() {
+        let space = space("
+            (= (bar) (function (return ())))
+            (= (foo $b) (function
+              (chain (eval (bar)) $_
+              (unify $b value
+                (return ())
+                (return (Error () \"Unexpected error\")) ))))");
+        let result = call_interpret(&space,
+            &metta_atom("(chain (eval (foo $a)) $_ $a)"));
+        assert_eq!(result[0], sym!("value"));
+    }
+
+    #[test]
+    fn interpret_atom_evaluate_variable_via_call_struct_equality() {
+        let formal_arg_struct = space("
+            (= (bar) (function (return ())))
+            (= (foo ($b)) (function
+              (chain (eval (bar)) $_
+              (unify $b value
+                (return ())
+                (return (Error () \"Unexpected error\")) ))))");
+        let result = call_interpret(&formal_arg_struct,
+            &metta_atom("(chain (eval (foo $a)) $_ $a)"));
+        assert_eq!(result[0], expr!(("value")));
+
+        let actual_arg_struct = space("
+            (= (bar) (function (return ())))
+            (= (foo $b) (function
+              (chain (eval (bar)) $_
+              (unify $b (value)
+                (return ())
+                (return (Error () \"Unexpected error\")) ))))");
+        let result = call_interpret(&actual_arg_struct,
+            &metta_atom("(chain (eval (foo ($a))) $_ $a)"));
+        assert_eq!(result[0], sym!("value"));
+    }
+
 
     #[test]
     fn interpret_atom_chain_incorrect_args() {
-        let _ = env_logger::builder().is_test(true).try_init();
         assert_eq!(call_interpret(&space(""), &metta_atom("(chain n $v t o)")),
             vec![expr!("Error" ("chain" "n" v "t" "o") "expected: (chain <nested> (: <var> Variable) <templ>), found: (chain n $v t o)")]);
         assert_eq!(call_interpret(&space(""), &metta_atom("(chain n v t)")),
@@ -1141,6 +1177,7 @@ mod tests {
     }
 
     fn call_interpret<'a, T: Space>(space: T, atom: &Atom) -> Vec<Atom> {
+        let _ = env_logger::builder().is_test(true).try_init();
         let result = interpret(space, atom);
         assert!(result.is_ok());
         result.unwrap()
