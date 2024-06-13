@@ -896,43 +896,39 @@ mod tests {
     #[test]
     fn interpret_atom_evaluate_variable_via_call_direct_equality() {
         let space = space("
-            (= (foo $x) (function
-              (chain (eval (bar $x)) $_ (return ())) ))
-            (= (bar $x) (function
-              ; fake internal call which wipes variables equalities
-              (chain (function (return ())) $_
-              (unify $x value
+            (= (bar) (function (return ())))
+            (= (foo $b) (function
+              (chain (eval (bar)) $_
+              (unify $b value
                 (return ())
                 (return (Error () \"Unexpected error\")) ))))");
         let result = call_interpret(&space,
-            &metta_atom("(chain (eval (foo $y)) $_ $y)"));
+            &metta_atom("(chain (eval (foo $a)) $_ $a)"));
         assert_eq!(result[0], sym!("value"));
     }
 
     #[test]
     fn interpret_atom_evaluate_variable_via_call_struct_equality() {
         let formal_arg_struct = space("
-            (= (foo ($x)) (function
-              (chain (eval (bar $x)) $_ (return ())) ))
-            (= (bar ($x)) (function
-              ; fake internal call which wipes variables equalities
-              (chain (function (return ())) $_
-              (unify $x value
+            (= (bar) (function (return ())))
+            (= (foo ($b)) (function
+              (chain (eval (bar)) $_
+              (unify $b value
                 (return ())
                 (return (Error () \"Unexpected error\")) ))))");
         let result = call_interpret(&formal_arg_struct,
-            &metta_atom("(chain (eval (foo $y)) $_ $y)"));
-        assert_eq!(result[0], expr!((("value"))));
+            &metta_atom("(chain (eval (foo $a)) $_ $a)"));
+        assert_eq!(result[0], expr!(("value")));
 
         let actual_arg_struct = space("
-            (= (foo $x) (function
-              ; fake internal call which wipes variables equalities
-              (chain (function (return ())) $_
-              (unify $x (value)
+            (= (bar) (function (return ())))
+            (= (foo $b) (function
+              (chain (eval (bar)) $_
+              (unify $b (value)
                 (return ())
                 (return (Error () \"Unexpected error\")) ))))");
         let result = call_interpret(&actual_arg_struct,
-            &metta_atom("(chain (eval (foo ($y))) $_ $y)"));
+            &metta_atom("(chain (eval (foo ($a))) $_ $a)"));
         assert_eq!(result[0], sym!("value"));
     }
 
