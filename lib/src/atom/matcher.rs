@@ -744,13 +744,23 @@ impl Bindings {
             },
             _ => {},
         });
-        for var in &to_remove {
-            self.remove_var_from_binding(var);
+        let mut removed = Bindings::new();
+        for var in to_remove {
+            let atom = self.remove_var_from_binding(&var);
+            if let Some(atom) = atom {
+                removed.add_var_binding(var, atom);
+            }
+        }
+        for binding in &mut self.bindings {
+            match &mut binding.atom {
+                Some(atom) => apply_bindings_to_atom_mut(atom, &removed),
+                None => {},
+            }
         }
 
         if let Some((trace_bindings, trace_atom)) = trace_data {
             log::trace!("Bindings::apply_and_retain: atom: {} -> {}", trace_atom, atom);
-            log::trace!("Bindings::apply_and_retain: bindings: {:?} / {:?} -> {:?}", trace_bindings, to_remove, self);
+            log::trace!("Bindings::apply_and_retain: bindings: {:?} / {:?} -> {:?}", trace_bindings, removed, self);
         }
     }
 
@@ -1777,7 +1787,7 @@ mod test {
             .with_var_no_value(&VariableAtom::new("e"));
         bindings.apply_and_retain(&mut atom, |v| *v == VariableAtom::new("b") || *v == VariableAtom::new("e"));
         let expected = Bindings::new()
-            .add_var_binding_v2(VariableAtom::new("b"), expr!("B" d))?
+            .add_var_binding_v2(VariableAtom::new("b"), expr!("B" "D"))?
             .with_var_no_value(&VariableAtom::new("e"));
         assert_eq!(bindings, expected);
         assert_eq!(atom, expr!(("B" "D") b "C" "D" e));
@@ -1792,6 +1802,16 @@ mod test {
         bindings.apply_and_retain(&mut atom, |_| false);
         assert!(bindings.is_empty());
         assert_eq!(atom, expr!(a b));
+        Ok(())
+    }
+
+    #[test]
+    fn bindings_retain_apply_to_self() -> Result<(), &'static str> {
+        let mut bindings = Bindings::new()
+            .add_var_binding_v2(&VariableAtom::new("y"), expr!((x)))?
+            .add_var_binding_v2(&VariableAtom::new("x"), sym!("value"))?;
+        bindings.apply_and_retain(&mut expr!(), |v| *v == VariableAtom::new("y"));
+        assert_eq!(bindings, bind!{ y: expr!(("value")) });
         Ok(())
     }
 
