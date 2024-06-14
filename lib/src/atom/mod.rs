@@ -45,7 +45,7 @@
 //! behaviour if needed:
 //! - [rust_type_atom] - return Rust type name calculated by compiler;
 //! - [match_by_equality] - match two atoms when `PartialEq::eq` returns `true`;
-//! - [execute_not_executable] - return error "atom is not executable".
+//! - [execute_non_executable] - return error "atom is not executable".
 //!
 
 // Macros to simplify expression writing
@@ -350,7 +350,7 @@ pub trait GroundedAtom : Any + Debug + Display {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         match self.as_grounded().as_execute() {
             Some(execute) => execute.execute(args),
-            None => Err(ExecError::NoReduce),
+            None => execute_non_executable(),
         }
     }
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
@@ -607,11 +607,10 @@ pub fn match_by_bidirectional_equality<T>(this: &T, other: &Atom) -> matcher::Ma
     }
 }
 
-// TODO: pass args to execute_not_executable(), rename to execute_non_executable()
 /// Returns [ExecError::NoReduce] which means this atom should not be reduced
-/// further. This is a default implementation of `execute()` for the
-/// grounded types wrapped automatically.
-pub fn execute_not_executable<T: Debug>(_this: &T) -> Result<Vec<Atom>, ExecError> {
+/// further. This is a default behavior of `execute()` for the grounded types
+/// wrapped automatically.
+pub fn execute_non_executable() -> Result<Vec<Atom>, ExecError> {
     Err(ExecError::NoReduce)
 }
 
