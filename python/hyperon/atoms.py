@@ -216,7 +216,10 @@ def _priv_compare_value_atom(gnd, catom):
     """
     if hp.atom_get_metatype(catom) == AtomKind.GROUNDED:
         atom = GroundedAtom(catom)
-        return gnd == atom.get_object()
+        try:
+            return gnd == atom.get_object()
+        except TypeError:
+            return False
     else:
         return False
 
