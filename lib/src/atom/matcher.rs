@@ -736,8 +736,17 @@ impl Bindings {
             Atom::Variable(var) => {
                 if to_remove.contains(&var) {
                     match self.resolve(var) {
-                        Some(Atom::Variable(v)) if to_remove.contains(&v) => { self.rename_var(var, &to_remove).map(|v| *atom = v); },
-                        Some(value) => { *atom = value; },
+                        Some(mut value) => {
+                            value.iter_mut().for_each(|atom| match atom {
+                                Atom::Variable(var) if to_remove.contains(&var) => {
+                                    self.rename_var(var, &to_remove).map(|var| {
+                                        *atom = var;
+                                    });
+                                },
+                                _ => {},
+                            });
+                            *atom = value;
+                        },
                         None => {},
                     }
                 }
@@ -1801,7 +1810,7 @@ mod test {
             .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("b"))?;
         bindings.apply_and_retain(&mut atom, |_| false);
         assert!(bindings.is_empty());
-        assert_eq!(atom, expr!(a b));
+        assert_eq!(atom, expr!(a a));
         Ok(())
     }
 
@@ -1812,6 +1821,18 @@ mod test {
             .add_var_binding_v2(&VariableAtom::new("x"), sym!("value"))?;
         bindings.apply_and_retain(&mut expr!(), |v| *v == VariableAtom::new("y"));
         assert_eq!(bindings, bind!{ y: expr!(("value")) });
+        Ok(())
+    }
+
+    #[test]
+    fn bindings_retain_apply_wiped_variable() -> Result<(), &'static str> {
+        let mut atom = expr!(b);
+        let mut bindings = Bindings::new()
+            .add_var_equality(&VariableAtom::new("a"), &VariableAtom::new("retained"))?
+            .add_var_binding_v2(&VariableAtom::new("b"), expr!((a)))?;
+        bindings.apply_and_retain(&mut atom, |v| *v == VariableAtom::new("retained"));
+        assert_eq!(bindings, bind!{ retained: expr!(retained) });
+        assert_eq!(atom, expr!((retained)));
         Ok(())
     }
 
