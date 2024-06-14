@@ -45,7 +45,6 @@
 //! behaviour if needed:
 //! - [rust_type_atom] - return Rust type name calculated by compiler;
 //! - [match_by_equality] - match two atoms when `PartialEq::eq` returns `true`;
-//! - [execute_non_executable] - return error "atom is not executable".
 //!
 
 // Macros to simplify expression writing
@@ -347,12 +346,6 @@ pub trait GroundedAtom : Any + Debug + Display {
     fn type_(&self) -> Atom {
         self.as_grounded().type_()
     }
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        match self.as_grounded().as_execute() {
-            Some(execute) => execute.execute(args),
-            None => execute_non_executable(),
-        }
-    }
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
         match self.as_grounded().as_match() {
             Some(match_) => match_.match_(other),
@@ -425,7 +418,7 @@ impl dyn GroundedAtom {
 ///
 /// assert_eq!(atom.to_string(), "MyGrounded");
 /// assert_ne!(atom, Atom::sym("MyGrounded"));
-/// assert_eq!(gnd.execute(&mut vec![]), Err(ExecError::NoReduce));
+/// assert!(gnd.as_grounded().as_execute().is_none());
 /// assert_eq!(match_atoms(&atom, &other).collect::<Vec<Bindings>>(), vec![Bindings::new()]);
 /// assert_eq!(atom, other);
 /// ```
@@ -497,7 +490,7 @@ pub trait Grounded : Display {
 /// let atom = Atom::gnd(MyGrounded{});
 /// let gnd = if let Atom::Grounded(ref gnd) = atom { gnd } else { panic!("Non grounded atom"); };
 ///
-/// assert_eq!(gnd.execute(&mut vec![]), Ok(vec![sym!("result")]));
+/// assert_eq!(gnd.as_grounded().as_execute().unwrap().execute(&mut vec![]), Ok(vec![sym!("result")]));
 /// ```
 ///
 pub trait CustomExecute {
@@ -605,13 +598,6 @@ pub fn match_by_bidirectional_equality<T>(this: &T, other: &Atom) -> matcher::Ma
             _ => Box::new(std::iter::empty()),
         }
     }
-}
-
-/// Returns [ExecError::NoReduce] which means this atom should not be reduced
-/// further. This is a default behavior of `execute()` for the grounded types
-/// wrapped automatically.
-pub fn execute_non_executable() -> Result<Vec<Atom>, ExecError> {
-    Err(ExecError::NoReduce)
 }
 
 /// Alias for the list of traits required for the standard Rust types to be
@@ -1245,7 +1231,9 @@ mod test {
     fn test_custom_execution() {
         let mul3 = Atom::gnd(TestMulX(3));
         if let Atom::Grounded(gnd) = mul3 {
-            let res = gnd.execute(&mut vec![Atom::value(14)]);
+            let res = gnd.as_grounded()
+                .as_execute().unwrap()
+                .execute(&mut vec![Atom::value(14)]);
             assert_eq!(res, Ok(vec![Atom::value(42)]));
         } else {
             assert!(false, "GroundedAtom is expected");

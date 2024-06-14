@@ -640,7 +640,7 @@ impl CustomExecute for CGrounded {
                 log::trace!("CGrounded::execute: atom: {:?}, args: {:?}, ret: {:?}", self, args, ret);
                 ret
             },
-            None => execute_non_executable()
+            None => panic!("CustomExecute implementation should not be changed in runtime"),
         }
     }
 }
