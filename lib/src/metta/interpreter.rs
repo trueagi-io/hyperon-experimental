@@ -903,6 +903,12 @@ mod tests {
         fn type_(&self) -> Atom {
             expr!("->" "&str" "Error")
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for ThrowError {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Err((*args[0].as_gnd::<&str>().unwrap()).into())
         }
@@ -930,6 +936,12 @@ mod tests {
         fn type_(&self) -> Atom {
             expr!("->" "&str" "u32")
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for NonReducible {
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Err(ExecError::NoReduce)
         }
@@ -972,6 +984,12 @@ mod tests {
         fn type_(&self) -> Atom {
             ATOM_TYPE_UNDEFINED
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for MulXUndefinedType {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])
         }

@@ -348,7 +348,10 @@ pub trait GroundedAtom : Any + Debug + Display {
         self.as_grounded().type_()
     }
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        self.as_grounded().execute(args)
+        match self.as_grounded().as_execute() {
+            Some(execute) => execute.execute(args),
+            None => Err(ExecError::NoReduce),
+        }
     }
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
         match self.as_grounded().as_match() {
@@ -387,10 +390,9 @@ impl dyn GroundedAtom {
     }
 }
 
-/// Trait allows implementing grounded atom with custom behavior.
-/// [rust_type_atom] and [execute_not_executable] functions can be used to
-/// implement default behavior if required. If no custom behavior is needed
-/// then simpler way is using [Atom::value] function for automatic grounding.
+/// Trait allows implementing grounded atom with custom behavior. If no custom
+/// behavior is needed then simpler way is using [Atom::value] function for
+/// automatic grounding.
 ///
 /// # Examples
 ///
@@ -406,10 +408,6 @@ impl dyn GroundedAtom {
 /// impl Grounded for MyGrounded {
 ///     fn type_(&self) -> Atom {
 ///         rust_type_atom::<MyGrounded>()
-///     }
-///
-///     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-///         execute_not_executable(self)
 ///     }
 /// }
 ///
@@ -434,13 +432,16 @@ impl dyn GroundedAtom {
 ///
 pub trait Grounded : Display {
     /// Returns type of the grounded atom. Should return same type each time
-    /// it is called.
+    /// it is called. [rust_type_atom] function can be used to implement
+    /// default behavior if required.
     fn type_(&self) -> Atom;
 
-    // TODO: move `Grounded::execute` into a separate trait similarly to `CustomMatch`
-    /// Executes grounded function on passed `args` and returns list of
-    /// results as `Vec<Atom>` or [ExecError].
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError>;
+    /// Returns reference to the custom execution API implementation. If `None`
+    /// is returned then atom is not executable.
+    /// See [CustomExecute] for details.
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        None
+    }
 
     /// Returns reference to the custom matching API implementation. If `None`
     /// is returned then atom is matched by equality.
@@ -455,6 +456,54 @@ pub trait Grounded : Display {
     fn serialize(&self, _serializer: &mut dyn serial::Serializer) -> serial::Result {
         Err(serial::Error::NotSupported)
     }
+}
+
+/// Trait for implementing custom execution logic. Using this trait one can
+/// represent a grounded function as an atom. In order to make it work
+/// one should also implement [Grounded::as_execute] method.
+///
+/// # Examples
+///
+/// ```
+/// use hyperon::*;
+/// use std::fmt::{Display, Formatter};
+/// use std::iter::once;
+///
+/// #[derive(Debug, PartialEq, Clone)]
+/// struct MyGrounded {}
+///
+/// impl Grounded for MyGrounded {
+///     fn type_(&self) -> Atom {
+///         rust_type_atom::<MyGrounded>()
+///     }
+///
+///     fn as_execute(&self) -> Option<&dyn CustomExecute> {
+///         Some(self)
+///     }
+/// }
+///
+/// impl CustomExecute for MyGrounded {
+///     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+///         Ok(vec![sym!("result")])
+///     }
+/// }
+///
+/// impl Display for MyGrounded {
+///     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+///         write!(f, "MyGrounded")
+///     }
+/// }
+///
+/// let atom = Atom::gnd(MyGrounded{});
+/// let gnd = if let Atom::Grounded(ref gnd) = atom { gnd } else { panic!("Non grounded atom"); };
+///
+/// assert_eq!(gnd.execute(&mut vec![]), Ok(vec![sym!("result")]));
+/// ```
+///
+pub trait CustomExecute {
+    /// Executes grounded function on passed `args` and returns list of
+    /// results as `Vec<Atom>` or [ExecError].
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError>;
 }
 
 /// Trait for implementing custom matching logic. In order to make it work
@@ -474,10 +523,6 @@ pub trait Grounded : Display {
 /// impl Grounded for MyGrounded {
 ///     fn type_(&self) -> Atom {
 ///         rust_type_atom::<MyGrounded>()
-///     }
-///
-///     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-///         execute_not_executable(self)
 ///     }
 ///
 ///     fn as_match(&self) -> Option<&dyn CustomMatch> {
@@ -584,10 +629,6 @@ struct AutoGroundedAtom<T: AutoGroundedType>(T);
 impl<T: AutoGroundedType> Grounded for AutoGroundedAtom<T> {
     fn type_(&self) -> Atom {
         rust_type_atom::<T>()
-    }
-
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
     }
 }
 
@@ -1060,9 +1101,6 @@ mod test {
         fn type_(&self) -> Atom {
             Atom::sym("Integer")
         }
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            execute_not_executable(self)
-        }
     }
 
     impl Display for TestInteger {
@@ -1078,6 +1116,12 @@ mod test {
         fn type_(&self) -> Atom {
             expr!("->" "i32" "i32")
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for TestMulX {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])
         }

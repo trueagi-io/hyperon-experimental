@@ -116,10 +116,6 @@ impl Grounded for Number {
         ATOM_TYPE_NUMBER
     }
 
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
-
     fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
         match self {
             &Self::Integer(n) => serializer.serialize_i64(n),
@@ -161,10 +157,6 @@ impl Grounded for Bool {
         ATOM_TYPE_BOOL
     }
 
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
-
     fn as_match(&self) -> Option<&dyn CustomMatch> {
         Some(self)
     }
@@ -196,6 +188,12 @@ macro_rules! def_binary_number_op {
                 Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, $r])
             }
 
+            fn as_execute(&self) -> Option<&dyn CustomExecute> {
+                Some(self)
+            }
+        }
+
+        impl CustomExecute for $name {
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($op), " expects two number arguments"));
                 let a = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
@@ -240,6 +238,12 @@ macro_rules! def_binary_bool_op {
                 Atom::expr([ARROW_SYMBOL, ATOM_TYPE_BOOL, ATOM_TYPE_BOOL, ATOM_TYPE_BOOL])
             }
 
+            fn as_execute(&self) -> Option<&dyn CustomExecute> {
+                Some(self)
+            }
+        }
+
+        impl CustomExecute for $name {
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($disp), " expects two boolean arguments"));
                 let Bool(a) = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_bool().ok_or_else(arg_error)?;
@@ -271,6 +275,12 @@ impl Grounded for FlipOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_BOOL])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for FlipOp {
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         Ok(vec![Atom::gnd(Bool(rand::random()))])
     }
@@ -291,6 +301,12 @@ impl Grounded for NotOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_BOOL, ATOM_TYPE_BOOL])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for NotOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("not expects one boolean arguments");
         let &Bool(a) = args.get(0).ok_or_else(arg_error)?.as_gnd::<Bool>().ok_or_else(arg_error)?;

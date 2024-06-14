@@ -170,8 +170,19 @@ impl<T: Grounded> Grounded for Shared<T> {
         }
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        match self.0.borrow().as_execute() {
+            None => None,
+            Some(_) => Some(self),
+        }
+    }
+}
+
+impl <T: Grounded> CustomExecute for Shared<T> {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        self.0.borrow().execute(args)
+        self.0.borrow().as_execute()
+            .expect("Custom execution procedure is not expected to be changed in runtime")
+            .execute(args)
     }
 }
 
@@ -216,6 +227,12 @@ mod tests {
         fn as_match(&self) -> Option<&dyn CustomMatch> {
             Some(self)
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for SharedGrounded {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let mut result = vec![Atom::sym("executed")];
             result.extend(args.into_iter().cloned());

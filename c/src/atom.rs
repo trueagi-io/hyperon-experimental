@@ -599,22 +599,10 @@ impl Grounded for CGrounded {
         unsafe{ &(*self.get_ptr()).typ }.borrow().clone()
     }
 
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
         match self.api().execute {
-            Some(func) => {
-                let mut ret = atom_vec_t::new();
-                let c_args: atom_vec_t = args.into();
-                let error = func(self.get_ptr(), &c_args, &mut ret);
-                let ret = if error.is_no_err() {
-                    Ok(ret.into())
-                } else {
-                    let error = error.into_inner();
-                    Err(error)
-                };
-                log::trace!("CGrounded::execute: atom: {:?}, args: {:?}, ret: {:?}", self, args, ret);
-                ret
-            },
-            None => execute_not_executable(self)
+            None => None,
+            Some(_) => Some(self),
         }
     }
 
@@ -632,6 +620,27 @@ impl Grounded for CGrounded {
                 func(self.get_ptr(), &C_TO_RUST_SERIALIZER_API, &mut adapter as *mut _ as *mut c_void).into()
             },
             None => Err(serial::Error::NotSupported),
+        }
+    }
+}
+
+impl CustomExecute for CGrounded {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        match self.api().execute {
+            Some(func) => {
+                let mut ret = atom_vec_t::new();
+                let c_args: atom_vec_t = args.into();
+                let error = func(self.get_ptr(), &c_args, &mut ret);
+                let ret = if error.is_no_err() {
+                    Ok(ret.into())
+                } else {
+                    let error = error.into_inner();
+                    Err(error)
+                };
+                log::trace!("CGrounded::execute: atom: {:?}, args: {:?}, ret: {:?}", self, args, ret);
+                ret
+            },
+            None => execute_not_executable(self)
         }
     }
 }
