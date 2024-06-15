@@ -315,10 +315,6 @@ impl Grounded for UndefinedTypeMatch {
     fn as_match(&self) -> Option<&dyn CustomMatch> {
         Some(self)
     }
-
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
 }
 
 impl CustomMatch for UndefinedTypeMatch {
@@ -797,10 +793,6 @@ mod tests {
     impl Grounded for GroundedAtomWithParameterizedType {
         fn type_(&self) -> Atom {
             self.0.clone()
-        }
-
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            execute_not_executable(self)
         }
     }
 

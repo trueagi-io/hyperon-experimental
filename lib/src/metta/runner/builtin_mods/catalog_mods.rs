@@ -1,4 +1,4 @@
-use crate::atom::{Atom, Grounded, ExecError};
+use crate::atom::{Atom, Grounded, ExecError, CustomExecute};
 use crate::space::grounding::GroundingSpace;
 use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE};
 use crate::metta::runner::{Metta, ModuleLoader, RunContext, DynSpace};
@@ -91,6 +91,12 @@ impl Grounded for CatalogListOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for CatalogListOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "catalog-list! expects a catalog name, or \"all\" to list all available";
         let cat_name_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
@@ -150,6 +156,12 @@ impl Grounded for CatalogUpdateOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for CatalogUpdateOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "catalog-update! expects a catalog name, or \"all\" to update all";
         let cat_name_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
@@ -204,6 +216,12 @@ impl Grounded for CatalogClearOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for CatalogClearOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "catalog-clear! expects a catalog name, or \"all\" to clear all";
         let cat_name_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;

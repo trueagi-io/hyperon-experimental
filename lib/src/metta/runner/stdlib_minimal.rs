@@ -28,6 +28,12 @@ impl Grounded for PrintAlternativesOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for PrintAlternativesOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("print-alternatives! expects format string as a first argument and expression as a second argument");
         let atom = atom_to_string(args.get(0).ok_or_else(arg_error)?);
@@ -72,6 +78,12 @@ impl Grounded for GetTypeOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetTypeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-type expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -99,6 +111,12 @@ impl Grounded for IfEqualOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for IfEqualOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("if-equal expects <atom> <pattern> <then> <else> as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -157,6 +175,12 @@ impl Grounded for AssertEqualOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for AssertEqualOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         log::debug!("AssertEqualOp::execute: {:?}", args);
         let arg_error = || ExecError::from("assertEqual expects two atoms as arguments: actual and expected");
@@ -188,6 +212,12 @@ impl Grounded for AssertEqualToResultOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for AssertEqualToResultOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         log::debug!("AssertEqualToResultOp::execute: {:?}", args);
         let arg_error = || ExecError::from("assertEqualToResult expects two atoms as arguments: actual and expected");
@@ -220,6 +250,12 @@ impl Grounded for SuperposeOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for SuperposeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("superpose expects single expression as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -258,6 +294,12 @@ impl Grounded for CollapseOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for CollapseOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("collapse expects single executable atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -288,6 +330,12 @@ impl Grounded for CaptureOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for CaptureOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("capture expects one argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -313,6 +361,12 @@ impl Grounded for CaseOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for CaseOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("case expects two arguments: atom and expression of cases");
         let cases = args.get(1).ok_or_else(arg_error)?;
@@ -1031,10 +1085,6 @@ mod tests {
     impl Grounded for SomeGndAtom {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, sym!("Arg1Type"), sym!("Arg2Type"), sym!("RetType")])
-        }
-
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            execute_not_executable(self)
         }
     }
 

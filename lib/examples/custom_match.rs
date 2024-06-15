@@ -28,9 +28,6 @@ impl Grounded for TestDict {
     fn type_(&self) -> Atom {
         Atom::sym("Dict")
     }
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
     fn as_match(&self) -> Option<&dyn CustomMatch> {
         Some(self)
     }

@@ -1441,9 +1441,6 @@ mod test {
         fn type_(&self) -> Atom {
             Atom::sym("Rand")
         }
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            execute_not_executable(self)
-        }
         fn as_match(&self) -> Option<&dyn CustomMatch> {
             Some(self)
         }
@@ -1490,9 +1487,6 @@ mod test {
     impl Grounded for ReturnPairInX {
         fn type_(&self) -> Atom {
             Atom::sym("ReturnPairInX")
-        }
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            execute_not_executable(self)
         }
         fn as_match(&self) -> Option<&dyn CustomMatch> {
             Some(self)
@@ -1734,9 +1728,6 @@ mod test {
         impl Grounded for Assigner {
             fn type_(&self) -> Atom {
                 Atom::sym("Assigner")
-            }
-            fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-                execute_not_executable(self)
             }
             fn as_match(&self) -> Option<&dyn CustomMatch> {
                 Some(self)

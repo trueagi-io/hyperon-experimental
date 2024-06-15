@@ -419,33 +419,38 @@ fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: B
     log::debug!("eval: to_eval: {}", to_eval);
     match atom_as_slice(&to_eval) {
         Some([Atom::Grounded(op), args @ ..]) => {
-            let exec_res = op.execute(args);
-            log::debug!("eval: execution results: {:?}", exec_res);
-            match exec_res {
-                Ok(results) => {
-                    if results.is_empty() {
-                        // There is no valid reason to return empty result from
-                        // the grounded function. If alternative should be removed
-                        // from the plan then EMPTY_SYMBOL is a proper result.
-                        // If grounded atom returns no value then UNIT_ATOM()
-                        // should be returned. NotReducible or Exec::NoReduce
-                        // can be returned to let a caller know that function
-                        // is not defined on a passed input data. Thus we can
-                        // interpreter empty result by any way we like.
-                        finished_result(EMPTY_SYMBOL, bindings, prev)
-                    } else {
-                        let call_stack = call_to_stack(to_eval, vars, prev.clone());
-                        results.into_iter()
-                            .map(|res| eval_result(prev.clone(), res, &call_stack, bindings.clone()))
-                            .collect()
+            match op.as_grounded().as_execute() {
+                None => finished_result(return_not_reducible(), bindings, prev),
+                Some(executable) => {
+                    let exec_res = executable.execute(args);
+                    log::debug!("eval: execution results: {:?}", exec_res);
+                    match exec_res {
+                        Ok(results) => {
+                            if results.is_empty() {
+                                // There is no valid reason to return empty result from
+                                // the grounded function. If alternative should be removed
+                                // from the plan then EMPTY_SYMBOL is a proper result.
+                                // If grounded atom returns no value then UNIT_ATOM()
+                                // should be returned. NotReducible or Exec::NoReduce
+                                // can be returned to let a caller know that function
+                                // is not defined on a passed input data. Thus we can
+                                // interpreter empty result by any way we like.
+                                finished_result(EMPTY_SYMBOL, bindings, prev)
+                            } else {
+                                let call_stack = call_to_stack(to_eval, vars, prev.clone());
+                                results.into_iter()
+                                    .map(|res| eval_result(prev.clone(), res, &call_stack, bindings.clone()))
+                                    .collect()
+                            }
+                        },
+                        Err(ExecError::Runtime(err)) =>
+                            finished_result(error_atom(to_eval, err), bindings, prev),
+                        Err(ExecError::NoReduce) =>
+                            // TODO: we could remove ExecError::NoReduce and explicitly
+                            // return NOT_REDUCIBLE_SYMBOL from the grounded function instead.
+                            finished_result(return_not_reducible(), bindings, prev),
                     }
                 },
-                Err(ExecError::Runtime(err)) =>
-                    finished_result(error_atom(to_eval, err), bindings, prev),
-                Err(ExecError::NoReduce) =>
-                    // TODO: we could remove ExecError::NoReduce and explicitly
-                    // return NOT_REDUCIBLE_SYMBOL from the grounded function instead.
-                    finished_result(return_not_reducible(), bindings, prev),
             }
         },
         _ if is_embedded_op(&to_eval) =>
@@ -1190,6 +1195,12 @@ mod tests {
         fn type_(&self) -> Atom {
             expr!("->" "&str" "Error")
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for ThrowError {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Err((*args[0].as_gnd::<&str>().unwrap()).into())
         }
@@ -1208,6 +1219,12 @@ mod tests {
         fn type_(&self) -> Atom {
             expr!("->" "u32" "u32")
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for NonReducible {
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Err(ExecError::NoReduce)
         }
@@ -1226,6 +1243,12 @@ mod tests {
         fn type_(&self) -> Atom {
             ATOM_TYPE_UNDEFINED
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for MulXUndefinedType {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])
         }
@@ -1244,6 +1267,12 @@ mod tests {
         fn type_(&self) -> Atom {
             ATOM_TYPE_UNDEFINED
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for ReturnNothing {
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![])
         }

@@ -586,23 +586,28 @@ fn execute_op<'a, T: SpaceRef<'a>>(context: InterpreterContextRef<'a, T>, input:
             let op = expr.children().get(0);
             if let Some(Atom::Grounded(op)) = op {
                 let args = expr.children();
-                match op.execute(&args[1..]) {
-                    Ok(mut vec) => {
-                        let results: Vec<InterpretedAtom> = vec.drain(0..)
-                            .map(|atom| InterpretedAtom(atom, bindings.clone()))
-                            .collect();
-                        if results.is_empty() {
-                            StepResult::ret(results)
-                        } else {
-                            make_alternives_plan(input.0, results, move |result| {
-                                interpret_as_type_plan(context.clone(),
-                                    result, ATOM_TYPE_UNDEFINED)
-                            })
+                match op.as_grounded().as_execute() {
+                    None => StepResult::err((input.0, NOT_REDUCIBLE_SYMBOL)),
+                    Some(executable) => {
+                        match executable.execute(&args[1..]) {
+                            Ok(mut vec) => {
+                                let results: Vec<InterpretedAtom> = vec.drain(0..)
+                                    .map(|atom| InterpretedAtom(atom, bindings.clone()))
+                                    .collect();
+                                if results.is_empty() {
+                                    StepResult::ret(results)
+                                } else {
+                                    make_alternives_plan(input.0, results, move |result| {
+                                        interpret_as_type_plan(context.clone(),
+                                            result, ATOM_TYPE_UNDEFINED)
+                                    })
+                                }
+                            },
+                            Err(ExecError::Runtime(msg)) => StepResult::ret(vec![InterpretedAtom(
+                                   Atom::expr([ERROR_SYMBOL, input.0, Atom::sym(msg)]), input.1)]),
+                            Err(ExecError::NoReduce) => StepResult::err((input.0, NOT_REDUCIBLE_SYMBOL)),
                         }
                     },
-                    Err(ExecError::Runtime(msg)) => StepResult::ret(vec![InterpretedAtom(
-                           Atom::expr([ERROR_SYMBOL, input.0, Atom::sym(msg)]), input.1)]),
-                    Err(ExecError::NoReduce) => StepResult::err((input.0, NOT_REDUCIBLE_SYMBOL)),
                 }
             } else {
                 panic!("Trying to execute non grounded atom: {}", expr)
@@ -903,6 +908,12 @@ mod tests {
         fn type_(&self) -> Atom {
             expr!("->" "&str" "Error")
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for ThrowError {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Err((*args[0].as_gnd::<&str>().unwrap()).into())
         }
@@ -930,6 +941,12 @@ mod tests {
         fn type_(&self) -> Atom {
             expr!("->" "&str" "u32")
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for NonReducible {
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Err(ExecError::NoReduce)
         }
@@ -972,6 +989,12 @@ mod tests {
         fn type_(&self) -> Atom {
             ATOM_TYPE_UNDEFINED
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for MulXUndefinedType {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![Atom::value(self.0 * args.get(0).unwrap().as_gnd::<i32>().unwrap())])
         }

@@ -81,6 +81,12 @@ impl Grounded for ImportOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for ImportOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         //QUESTION: "Import" can mean several (3) different things.  In Python parlance, it can mean
         //1. "import module" opt. ("as bar")
@@ -172,6 +178,12 @@ impl Grounded for IncludeOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for IncludeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("include expects a module name argument");
         let mod_name_atom = args.get(0).ok_or_else(arg_error)?;
@@ -229,6 +241,12 @@ impl Grounded for ModSpaceOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, rust_type_atom::<DynSpace>()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for ModSpaceOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "mod-space! expects a module name argument";
         let mod_name_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
@@ -274,6 +292,12 @@ impl Grounded for PrintModsOp {
         Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for PrintModsOp {
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         self.metta.display_loaded_modules();
         unit_result()
@@ -298,6 +322,12 @@ impl Grounded for BindOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for BindOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("bind! expects two arguments: token and atom");
         let token = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "bind! expects symbol atom as a token")?.name();
@@ -319,6 +349,12 @@ impl Grounded for NewSpaceOp {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for NewSpaceOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         if args.len() == 0 {
             let space = Atom::gnd(DynSpace::new(GroundingSpace::new()));
@@ -340,6 +376,12 @@ impl Grounded for AddAtomOp {
             ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for AddAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("add-atom expects two arguments: space and atom");
         let space = args.get(0).ok_or_else(arg_error)?;
@@ -361,6 +403,12 @@ impl Grounded for RemoveAtomOp {
             ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for RemoveAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("remove-atom expects two arguments: space and atom");
         let space = args.get(0).ok_or_else(arg_error)?;
@@ -383,6 +431,12 @@ impl Grounded for GetAtomsOp {
             ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetAtomsOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-atoms expects one argument: space");
         let space = args.get(0).ok_or_else(arg_error)?;
@@ -411,6 +465,12 @@ impl Grounded for PragmaOp {
         ATOM_TYPE_UNDEFINED
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for PragmaOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("pragma! expects key and value as arguments");
         let key = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "pragma! expects symbol atom as a key")?.name();
@@ -438,6 +498,12 @@ impl Grounded for GetTypeOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetTypeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-type expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -456,6 +522,12 @@ impl Grounded for GetTypeSpaceOp {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetTypeSpaceOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-type-space expects two arguments: space and atom");
         let space = args.get(0).ok_or_else(arg_error)?;
@@ -477,6 +549,12 @@ impl Grounded for GetMetaTypeOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetMetaTypeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-metatype expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -496,6 +574,12 @@ impl Grounded for PrintlnOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for PrintlnOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("println! expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -516,6 +600,12 @@ impl Grounded for FormatArgsOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for FormatArgsOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("format-args expects format string as a first argument and expression as a second argument");
         let format = atom_to_string(args.get(0).ok_or_else(arg_error)?);
@@ -583,6 +673,12 @@ impl Grounded for TraceOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, Atom::var("a"), Atom::var("a")])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for TraceOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("trace! expects two atoms as arguments");
         let val = args.get(1).ok_or_else(arg_error)?;
@@ -602,6 +698,12 @@ impl Grounded for NopOp {
         ATOM_TYPE_UNDEFINED
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for NopOp {
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         unit_result()
     }
@@ -637,10 +739,6 @@ impl Grounded for StateAtom {
         };
         Atom::expr([expr!("StateMonad"), typ])
     }
-
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -653,6 +751,12 @@ impl Grounded for NewStateOp {
         Atom::expr([ARROW_SYMBOL, expr!(tnso), expr!("StateMonad" tnso)])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for NewStateOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "new-state expects single atom as an argument";
         let atom = args.get(0).ok_or(arg_error)?;
@@ -670,6 +774,12 @@ impl Grounded for GetStateOp {
         Atom::expr([ARROW_SYMBOL, expr!("StateMonad" tgso), expr!(tgso)])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetStateOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "get-state expects single state atom as an argument";
         let state = args.get(0).ok_or(arg_error)?;
@@ -688,6 +798,12 @@ impl Grounded for ChangeStateOp {
         Atom::expr([ARROW_SYMBOL, expr!("StateMonad" tcso), expr!(tcso), expr!("StateMonad" tcso)])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for ChangeStateOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "change-state! expects a state atom and its new value as arguments";
         let atom = args.get(0).ok_or(arg_error)?;
@@ -708,6 +824,12 @@ impl Grounded for SealedOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for SealedOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("sealed expects two arguments: var_list and expression");
 
@@ -742,6 +864,12 @@ impl Grounded for EqualOp {
         Atom::expr([ARROW_SYMBOL, expr!(t), expr!(t), ATOM_TYPE_BOOL])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for EqualOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from(concat!(stringify!($op), " expects two arguments"));
         let a = args.get(0).ok_or_else(arg_error)?;
@@ -761,6 +889,12 @@ impl Grounded for MatchOp {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for MatchOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("match expects three arguments: space, pattern and template");
         let space = args.get(0).ok_or_else(arg_error)?;
@@ -796,6 +930,12 @@ pub(crate) mod pkg_mgmt_ops {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for RegisterModuleOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = "register-module! expects a file system path; use quotes if needed";
             let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
@@ -845,6 +985,12 @@ pub(crate) mod pkg_mgmt_ops {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for GitModuleOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = "git-module! expects a URL; use quotes if needed";
             let url_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
@@ -906,6 +1052,12 @@ impl Grounded for UniqueOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for UniqueOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("unique expects single executable atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -941,6 +1093,12 @@ impl Grounded for UnionOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for UnionOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("union expects and executable LHS and RHS atom");
         let lhs = args.get(0).ok_or_else(arg_error)?;
@@ -974,6 +1132,12 @@ impl Grounded for IntersectionOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for IntersectionOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("intersection expects and executable LHS and RHS atom");
         let lhs = args.get(0).ok_or_else(arg_error)?;
@@ -1046,6 +1210,12 @@ impl Grounded for SubtractionOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for SubtractionOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("subtraction expects and executable LHS and RHS atom");
         let lhs = args.get(0).ok_or_else(arg_error)?;
@@ -1125,6 +1295,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for CarAtomOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("car-atom expects one argument: expression");
             let expr = args.get(0).ok_or_else(arg_error)?;
@@ -1144,6 +1320,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for CdrAtomOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("cdr-atom expects one argument: expression");
             let expr = args.get(0).ok_or_else(arg_error)?;
@@ -1167,6 +1349,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for ConsAtomOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("cons-atom expects two arguments: atom and expression");
             let atom = args.get(0).ok_or_else(arg_error)?;
@@ -1196,6 +1384,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for CaptureOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("capture expects one argument");
             let atom = args.get(0).ok_or_else(arg_error)?;
@@ -1293,6 +1487,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for CaseOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             CaseOp::execute(self, args)
         }
@@ -1325,6 +1525,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for AssertEqualOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("assertEqual expects two atoms as arguments: actual and expected");
             let actual_atom = args.get(0).ok_or_else(arg_error)?;
@@ -1355,6 +1561,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for AssertEqualToResultOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("assertEqualToResult expects two atoms as arguments: actual and expected");
             let actual_atom = args.get(0).ok_or_else(arg_error)?;
@@ -1386,6 +1598,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for CollapseOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("collapse expects single executable atom as an argument");
             let atom = args.get(0).ok_or_else(arg_error)?;
@@ -1416,6 +1634,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for SuperposeOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("superpose expects single expression as an argument");
             let atom = args.get(0).ok_or_else(arg_error)?;
@@ -1443,6 +1667,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for LetOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("let expects three arguments: pattern, atom and template");
             let mut template = args.get(2).ok_or_else(arg_error)?.clone();
@@ -1496,6 +1726,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for LetVarOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("let* list of couples and template as arguments");
             let expr = atom_as_expr(args.get(0).ok_or_else(arg_error)?).ok_or(arg_error())?;
@@ -2320,10 +2556,6 @@ mod tests {
     impl Grounded for SomeGndAtom {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, sym!("Arg1Type"), sym!("Arg2Type"), sym!("ReturnType")])
-        }
-
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            execute_not_executable(self)
         }
     }
 

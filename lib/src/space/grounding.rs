@@ -373,10 +373,6 @@ impl Grounded for GroundingSpace {
     fn as_match(&self) -> Option<&dyn CustomMatch> {
         Some(self)
     }
-
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
 }
 
 impl CustomMatch for GroundingSpace {
