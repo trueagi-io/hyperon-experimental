@@ -41,6 +41,12 @@ impl Grounded for &'static Operation {
         parser.parse(&Tokenizer::new()).unwrap().unwrap()
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for &'static Operation {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         (self.execute)(self, args)
     }

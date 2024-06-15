@@ -30,10 +30,6 @@ impl Grounded for Str {
         ATOM_TYPE_STRING
     }
 
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
-
     fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
         serializer.serialize_str(self.as_str())
     }

@@ -1247,23 +1247,23 @@ mod tests {
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     struct ErrorOp{}
 
-    impl std::fmt::Display for ErrorOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-            write!(f, "error")
-        }
-    }
+    grounded_op!(ErrorOp, "error");
 
     impl Grounded for ErrorOp {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED])
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for ErrorOp {
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            // TODO: why next two lines led to not equal results?
-            Ok(vec![expr!("Error" ("error") "TestError")])
-            //Err("TestError".into())
+            Err("TestError".into())
         }
     }
 
@@ -1280,7 +1280,7 @@ mod tests {
             |_| Atom::gnd(ErrorOp{}));
         let result = metta.run(SExprParser::new(program));
 
-        assert_eq!(result, Ok(vec![vec![expr!("Error" ("error") "TestError")]]));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ({ErrorOp{}}) "TestError")]]));
     }
 
     #[test]
@@ -1312,6 +1312,12 @@ mod tests {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED])
         }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for ReturnAtomOp {
         fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             Ok(vec![self.0.clone()])
         }

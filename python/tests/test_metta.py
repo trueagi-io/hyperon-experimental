@@ -68,3 +68,17 @@ class MettaTest(unittest.TestCase):
             self.assertTrue(False, "Parse error expected")
         except RuntimeError as e:
             self.assertEqual(e.args[0], 'Unexpected end of expression')
+
+    def test_match_with_rust_grounded_atom(self):
+        program = '''
+          ; True is used as a Python grounded object
+          (grounded True)
+          ; import! is used as a Rust grounded object which can be
+          ; received from Python
+          !(match &self (grounded import!) Ok)
+        '''
+        runner = MeTTa(env_builder=Environment.test_env())
+        result = runner.run(program)
+
+        self.assertEqual([[]], result)
+
