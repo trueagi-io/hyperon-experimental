@@ -346,23 +346,6 @@ pub trait GroundedAtom : Any + Debug + Display {
     fn type_(&self) -> Atom {
         self.as_grounded().type_()
     }
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        match self.as_grounded().as_match() {
-            Some(match_) => match_.match_(other),
-            None => {
-                let equal = match other {
-                    Atom::Grounded(other) => self.eq_gnd(other.as_ref()),
-                    _ => false,
-                };
-                let result = if equal {
-                    matcher::BindingsSet::single()
-                } else {
-                    matcher::BindingsSet::empty()
-                };
-                Box::new(result.into_iter())
-            },
-        }
-    }
     // A mutable reference is used here instead of a type parameter because
     // the type parameter makes impossible using GroundedAtom reference in the
     // Atom::Grounded. On the other hand the only advantage of using the type
@@ -594,7 +577,13 @@ pub fn match_by_bidirectional_equality<T>(this: &T, other: &Atom) -> matcher::Ma
     } else {
         let temp_atom = Atom::gnd(this.clone());
         match other {
-            Atom::Grounded(gnd) => gnd.match_(&temp_atom),
+            Atom::Grounded(gnd) => {
+                if let Some(matchable) = gnd.as_grounded().as_match() {
+                    matchable.match_(&temp_atom)
+                } else {
+                    Box::new(std::iter::empty())
+                }
+            },
             _ => Box::new(std::iter::empty()),
         }
     }
