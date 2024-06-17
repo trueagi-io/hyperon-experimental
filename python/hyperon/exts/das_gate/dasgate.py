@@ -21,7 +21,7 @@ class DASpace(AbstractSpace):
 
     def __init__(self, remote=False, host='localhost', port='22', unwrap=True):
         super().__init__()
-        # self.das = DistributedAtomSpace
+        # self.das = DistributedAtomSpace('ram_only')
         self.fetch_flag = False
         if remote:
             self.das = DistributedAtomSpace(query_engine='remote', host=host, port=port)
@@ -186,7 +186,7 @@ class DASpace(AbstractSpace):
         new_bindings_set = BindingsSet.empty()
 
         if not answer:
-            return
+            return new_bindings_set
 
         if self.fetch_flag:
             self.das.fetch()
