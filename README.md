@@ -82,6 +82,10 @@ Rust (see the Notes at the installation page).
   * GCC (7.5 or later)
   * CMake (3.19 or later)
 
+  To support Git based modules (enabled by default):
+  * OpenSSL library
+  * Zlib library
+
 * Install cbindgen:
 ```
 cargo install --force cbindgen
