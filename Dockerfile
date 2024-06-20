@@ -3,7 +3,8 @@ FROM ubuntu:22.04
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
-    apt-get install -y sudo git python3 python3-pip curl gcc cmake && \
+    apt-get install -y sudo git python3 python3-pip curl gcc cmake \
+        pkg-config libssl-dev zlib1g-dev && \
     rm -rf /var/lib/apt/lists/*
 
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
