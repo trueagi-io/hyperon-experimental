@@ -191,8 +191,8 @@ impl<'a> Iterator for AtomTokenIter<'a> {
     }
 }
 
-#[derive(Default, Debug)]
-struct AtomIndex {
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct AtomIndex {
     storage: AtomStorage,
     root: AtomIndexNode,
 }
@@ -227,20 +227,20 @@ impl AtomIndex {
         }
     }
 
-    pub fn query(&mut self, atom: &Atom) -> QueryResult {
+    pub fn query(&self, atom: &Atom) -> QueryResult {
         let key: Vec<IndexKey> = AtomTokenIter::new(&atom)
-            .map(|token| Self::atom_token_to_query_index_key(&mut self.storage, token))
+            .map(|token| Self::atom_token_to_query_index_key(&self.storage, token))
             .collect();
         Box::new(self.root.query(key.into_iter(), &self.storage).into_iter())
     }
 
-    fn atom_token_to_query_index_key<'a>(storage: &mut AtomStorage, token: AtomToken<'a>) -> IndexKey<'a> {
+    fn atom_token_to_query_index_key<'a>(storage: &AtomStorage, token: AtomToken<'a>) -> IndexKey<'a> {
         match token {
             AtomToken::Atom(atom @ Atom::Variable(_)) => {
                 IndexKey::CustomRef(atom)
             },
             AtomToken::Atom(atom) => {
-                match storage.insert(atom) {
+                match storage.get_id(atom) {
                     Some(id) => IndexKey::ExactRef((id, atom)),
                     None => IndexKey::CustomRef(atom),
                 }
@@ -268,7 +268,7 @@ enum ExactKey {
     Exact(usize),
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 struct AtomIndexNode {
     exact: HashMap<ExactKey, Box<Self>>, 
     custom: Vec<(Atom, Box<Self>)>,
