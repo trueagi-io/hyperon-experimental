@@ -58,7 +58,7 @@ impl AtomStorage {
         id
     }
 
-    pub fn get(&self, id: usize) -> Option<&Atom> {
+    pub fn get_atom(&self, id: usize) -> Option<&Atom> {
         self.atoms.get_by_right(&id).map(|h| h.as_atom())
     }
 
@@ -416,7 +416,7 @@ impl AtomIndexNode {
         let mut result: Vec<(Option<Atom>, &AtomIndexNode)> = Vec::new();
         for (exact, child) in &self.exact {
             match exact {
-                ExactKey::Exact(id) => result.push((Some(storage.get(*id).expect("Unexpected state!").clone()), child)),
+                ExactKey::Exact(id) => result.push((Some(storage.get_atom(*id).expect("Unexpected state!").clone()), child)),
                 ExactKey::EndExpr => result.push((None, child)),
                 ExactKey::StartExpr => {
                     let mut exprs: Vec<(Vec<Atom>, &AtomIndexNode)> = Vec::new();
@@ -462,7 +462,7 @@ mod test {
         let mut storage = AtomStorage::new();
         let id = storage.insert(&atom);
         assert!(id.is_some());
-        assert_eq!(Some(&atom), storage.get(id.unwrap()));
+        assert_eq!(Some(&atom), storage.get_atom(id.unwrap()));
     }
 
     #[test]
@@ -471,7 +471,7 @@ mod test {
         let mut storage = AtomStorage::new();
         let id = storage.insert(&atom);
         assert!(id.is_some());
-        assert_eq!(Some(&atom), storage.get(id.unwrap()));
+        assert_eq!(Some(&atom), storage.get_atom(id.unwrap()));
     }
 
     #[test]
@@ -480,7 +480,7 @@ mod test {
         let mut storage = AtomStorage::new();
         let id = storage.insert(&atom);
         assert!(id.is_some());
-        assert_eq!(Some(&atom), storage.get(id.unwrap()));
+        assert_eq!(Some(&atom), storage.get_atom(id.unwrap()));
     }
 
     #[test]
