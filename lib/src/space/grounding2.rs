@@ -131,13 +131,12 @@ enum AtomToken<'a> {
 enum AtomTokenIterState<'a> {
     Single(&'a Atom),
     Expression(&'a Atom, &'a ExpressionAtom),
-    Iterate(&'a Atom, &'a ExpressionAtom, usize, Box<AtomTokenIterState<'a>>),
+    Iterate(&'a ExpressionAtom, usize, Box<AtomTokenIterState<'a>>),
     #[default]
     End,
 }
 
 struct AtomTokenIter<'a> {
-    atom: &'a Atom,
     state: AtomTokenIterState<'a>,
 }
 
@@ -149,7 +148,7 @@ impl<'a> AtomTokenIter<'a> {
             Atom::Expression(expr) => 
                 AtomTokenIterState::Expression(atom, expr),
         };
-        Self{ atom, state }
+        Self{ state }
     }
 }
 
@@ -163,21 +162,21 @@ impl<'a> Iterator for AtomTokenIter<'a> {
                 Some(AtomToken::Atom(atom))
             },
             AtomTokenIterState::Expression(atom, expr) => {
-                self.state = AtomTokenIterState::Iterate(atom, expr, 0, Box::new(AtomTokenIterState::End));
+                self.state = AtomTokenIterState::Iterate(expr, 0, Box::new(AtomTokenIterState::End));
                 Some(AtomToken::StartExpr(atom))
             },
-            AtomTokenIterState::Iterate(atom, expr, i, prev) => {
+            AtomTokenIterState::Iterate(expr, i, prev) => {
                 let children = expr.children();
                 if i < children.len() {
                     let atom = unsafe{ children.get_unchecked(i) };
-                    let next_state = AtomTokenIterState::Iterate(atom, expr, i + 1, prev);
+                    let next_state = AtomTokenIterState::Iterate(expr, i + 1, prev);
                     match atom {
                         Atom::Symbol(_) | Atom::Variable(_) | Atom::Grounded(_) => {
                             self.state = next_state;
                             Some(AtomToken::Atom(atom))
                         },
                         Atom::Expression(e) => {
-                            self.state = AtomTokenIterState::Iterate(atom, e, 0, Box::new(next_state));
+                            self.state = AtomTokenIterState::Iterate(e, 0, Box::new(next_state));
                             Some(AtomToken::StartExpr(atom))
                         },
                     }
@@ -347,7 +346,7 @@ impl AtomIndexNode {
             // TODO: we could keep this information in the key itself
             tail = Self::skip_to_end_expr(tail);
         }
-        if let Some((atom, tail)) = Self::key_to_atom(exact, atom, tail, storage) {
+        if let Some((atom, tail)) = Self::key_to_atom(exact, atom, tail) {
             for (custom, child) in &self.custom {
                 let mut custom_res = Self::match_custom_index(custom, atom, child, tail.clone(), storage);
                 result.extend(custom_res.drain(..));
@@ -356,7 +355,7 @@ impl AtomIndexNode {
         result
     }
 
-    fn key_to_atom<'a, 'b, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(head: &ExactKey, atom: Option<&'b Atom>, tail: I, storage: &AtomStorage) -> Option<(&'b Atom, I)> {
+    fn key_to_atom<'a, 'b, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(head: &ExactKey, atom: Option<&'b Atom>, tail: I) -> Option<(&'b Atom, I)> {
         match (head, atom) {
             (ExactKey::Exact(_), Some(atom)) => Some((atom, tail)),
             (ExactKey::StartExpr, Some(atom)) => Some((atom, tail)),
