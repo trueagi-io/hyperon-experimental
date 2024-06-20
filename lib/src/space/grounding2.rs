@@ -249,6 +249,11 @@ impl AtomIndex {
             AtomToken::EndExpr => IndexKey::EndExpr,
         }
     }
+
+    pub fn iter(&self) -> Box<dyn Iterator<Item=Atom> + '_> {
+        Box::new(self.root.unpack_atoms(&self.storage)
+            .filter_map(|(a, _n)| a))
+    }
 }
 
 #[derive(Clone, Debug)]
