@@ -1,12 +1,16 @@
 use crate::atom::*;
 use crate::serial::NullSerializer;
+use crate::matcher::*;
 
 use bimap::BiMap;
 use std::hash::Hash;
 use std::hash::Hasher;
 use std::hash::DefaultHasher;
+use std::collections::HashMap;
+use std::collections::hash_map::Entry as HashMapEntry;
+use std::fmt::Debug;
 
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct AtomStorage {
     next_id: usize,
     atoms: BiMap<HashAtom, usize>,
@@ -62,7 +66,7 @@ impl AtomStorage {
     }
 }
 
-#[derive(Eq)]
+#[derive(Eq, Debug)]
 enum HashAtom {
     // Used pointer to eliminate lifetime which leaks through the usages.
     // At the same time HashAtom::Query is used only for querying before adding
@@ -104,15 +108,15 @@ impl PartialEq for HashAtom {
 #[derive(PartialEq, Debug)]
 enum AtomToken<'a> {
     Atom(&'a Atom),
-    StartExpr,
+    StartExpr(&'a Atom),
     EndExpr,
 }
 
 #[derive(Default)]
 enum AtomTokenIterState<'a> {
     Single(&'a Atom),
-    Expression(&'a ExpressionAtom),
-    Iterate(&'a ExpressionAtom, usize, Box<AtomTokenIterState<'a>>),
+    Expression(&'a Atom, &'a ExpressionAtom),
+    Iterate(&'a Atom, &'a ExpressionAtom, usize, Box<AtomTokenIterState<'a>>),
     #[default]
     End,
 }
@@ -128,7 +132,7 @@ impl<'a> AtomTokenIter<'a> {
             Atom::Symbol(_) | Atom::Variable(_) | Atom::Grounded(_) =>
                 AtomTokenIterState::Single(atom),
             Atom::Expression(expr) => 
-                AtomTokenIterState::Expression(expr),
+                AtomTokenIterState::Expression(atom, expr),
         };
         Self{ atom, state }
     }
@@ -143,23 +147,23 @@ impl<'a> Iterator for AtomTokenIter<'a> {
                 self.state = AtomTokenIterState::End;
                 Some(AtomToken::Atom(atom))
             },
-            AtomTokenIterState::Expression(expr) => {
-                self.state = AtomTokenIterState::Iterate(expr, 0, Box::new(AtomTokenIterState::End));
-                Some(AtomToken::StartExpr)
+            AtomTokenIterState::Expression(atom, expr) => {
+                self.state = AtomTokenIterState::Iterate(atom, expr, 0, Box::new(AtomTokenIterState::End));
+                Some(AtomToken::StartExpr(atom))
             },
-            AtomTokenIterState::Iterate(expr, i, prev) => {
+            AtomTokenIterState::Iterate(atom, expr, i, prev) => {
                 let children = expr.children();
                 if i < children.len() {
                     let atom = unsafe{ children.get_unchecked(i) };
-                    let next_state = AtomTokenIterState::Iterate(expr, i + 1, prev);
+                    let next_state = AtomTokenIterState::Iterate(atom, expr, i + 1, prev);
                     match atom {
                         Atom::Symbol(_) | Atom::Variable(_) | Atom::Grounded(_) => {
                             self.state = next_state;
                             Some(AtomToken::Atom(atom))
                         },
                         Atom::Expression(e) => {
-                            self.state = AtomTokenIterState::Iterate(e, 0, Box::new(next_state));
-                            Some(AtomToken::StartExpr)
+                            self.state = AtomTokenIterState::Iterate(atom, e, 0, Box::new(next_state));
+                            Some(AtomToken::StartExpr(atom))
                         },
                     }
                 } else {
@@ -172,10 +176,264 @@ impl<'a> Iterator for AtomTokenIter<'a> {
     }
 }
 
+#[derive(Default, Debug)]
+struct AtomIndex {
+    storage: AtomStorage,
+    root: AtomIndexNode,
+}
+
+impl AtomIndex {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert(&mut self, atom: Atom) {
+        let key = AtomTokenIter::new(&atom)
+            .map(|token| Self::atom_token_to_insert_index_key(&mut self.storage, token));
+        self.root.insert(key)
+    }
+
+    // FIXME: could merge two implementations atom_token_to_insert_index_key
+    // and atom_token_to_query_index_key
+    fn atom_token_to_insert_index_key<'a>(storage: &mut AtomStorage, token: AtomToken<'a>) -> IndexKey<'a> {
+        match token {
+            AtomToken::Atom(atom @ Atom::Variable(_)) => {
+                IndexKey::Custom(atom.clone())
+            },
+            AtomToken::Atom(atom) => {
+                match storage.insert(atom) {
+                    Some(id) => IndexKey::Exact(id),
+                    // FIXME: add iter to iterate without cloning
+                    None => IndexKey::Custom(atom.clone()),
+                }
+            },
+            AtomToken::StartExpr(e) => IndexKey::StartExpr(e),
+            AtomToken::EndExpr => IndexKey::EndExpr,
+        }
+    }
+
+    pub fn query(&mut self, atom: &Atom) -> QueryResult {
+        let key: Vec<IndexKey> = AtomTokenIter::new(&atom)
+            .map(|token| Self::atom_token_to_query_index_key(&mut self.storage, token))
+            .collect();
+        Box::new(self.root.query(key.into_iter(), &self.storage).into_iter())
+    }
+
+    fn atom_token_to_query_index_key<'a>(storage: &mut AtomStorage, token: AtomToken<'a>) -> IndexKey<'a> {
+        match token {
+            AtomToken::Atom(atom @ Atom::Variable(_)) => {
+                IndexKey::CustomRef(atom)
+            },
+            AtomToken::Atom(atom) => {
+                match storage.insert(atom) {
+                    Some(id) => IndexKey::ExactRef((id, atom)),
+                    None => IndexKey::CustomRef(atom),
+                }
+            },
+            AtomToken::StartExpr(e) => IndexKey::StartExpr(e),
+            AtomToken::EndExpr => IndexKey::EndExpr,
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+enum IndexKey<'a> {
+    StartExpr(&'a Atom),
+    EndExpr,
+    Exact(usize),
+    ExactRef((usize, &'a Atom)),
+    Custom(Atom),
+    CustomRef(&'a Atom),
+}
+
+#[derive(Hash, PartialEq, Eq, Clone, Debug)]
+enum ExactKey {
+    StartExpr,
+    EndExpr,
+    Exact(usize),
+}
+
+#[derive(Default, Debug)]
+struct AtomIndexNode {
+    exact: HashMap<ExactKey, Box<Self>>, 
+    custom: Vec<(Atom, Box<Self>)>,
+}
+
+type QueryResult = Box<dyn Iterator<Item=Bindings>>;
+
+impl AtomIndexNode {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn insert<'a, I: Iterator<Item=IndexKey<'a>>>(&mut self, mut key: I) {
+        match key.next() {
+            Some(head) => match head {
+                IndexKey::StartExpr(_) => self.insert_exact(ExactKey::StartExpr, key),
+                IndexKey::EndExpr => self.insert_exact(ExactKey::EndExpr, key),
+                IndexKey::Exact(id) => self.insert_exact(ExactKey::Exact(id), key),
+                IndexKey::Custom(atom) => self.insert_custom(atom, key),
+                IndexKey::ExactRef(_) => panic!("Not expected"),
+                IndexKey::CustomRef(_) => panic!("Not expected"),
+            },
+            None => {},
+        }
+    }
+
+    fn insert_exact<'a, I: Iterator<Item=IndexKey<'a>>>(&mut self, head: ExactKey, tail: I) {
+        match self.exact.entry(head) {
+            HashMapEntry::Occupied(mut old) => { old.get_mut().insert(tail); },
+            HashMapEntry::Vacant(new) => { new.insert(Self::new_branch(tail)); },
+        }
+    }
+
+    fn insert_custom<'a, I: Iterator<Item=IndexKey<'a>>>(&mut self, atom: Atom, tail: I) {
+        for (prev, child) in &mut self.custom {
+            if *prev == atom {
+                child.insert(tail);
+                return;
+            }
+        }
+        self.custom.push((atom, Self::new_branch(tail)));
+    }
+
+    fn new_branch<'a, I: Iterator<Item=IndexKey<'a>>>(key: I) -> Box<Self> {
+        let mut child = Box::new(AtomIndexNode::new());
+        child.insert(key);
+        child
+    }
+
+    // TODO: write an algorithm which returns an iterator instead of collected result
+    pub fn query<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(&self, mut key: I, storage: &AtomStorage) -> BindingsSet {
+        match key.next() {
+            Some(head) => match head {
+                IndexKey::ExactRef((id, atom)) => self.match_exact(&ExactKey::Exact(id), Some(atom), key, storage),
+                IndexKey::StartExpr(atom) => self.match_exact(&ExactKey::StartExpr, Some(atom), key, storage),
+                IndexKey::EndExpr => self.match_exact(&ExactKey::EndExpr, None, key, storage),
+                IndexKey::CustomRef(atom) => self.match_custom_key(atom, key, storage),
+                IndexKey::Exact(_) => panic!("Not expected"),
+                IndexKey::Custom(_) => panic!("Not expected"),
+            },
+            None => BindingsSet::single(),
+        }
+    }
+
+    fn match_exact<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(&self, exact: &ExactKey, atom: Option<&Atom>, mut tail: I, storage: &AtomStorage) -> BindingsSet {
+        let mut result = match self.exact.get(exact) {
+            None => BindingsSet::empty(),
+            Some(child) => child.query(tail.clone(), storage),
+        };
+        if let ExactKey::StartExpr = exact {
+            // TODO: we could keep this information in the key itself
+            tail = Self::skip_to_end_expr(tail);
+        }
+        if let Some((atom, tail)) = Self::key_to_atom(exact, atom, tail, storage) {
+            for (custom, child) in &self.custom {
+                let mut custom_res = Self::match_custom_index(custom, atom, child, tail.clone(), storage);
+                result.extend(custom_res.drain(..));
+            }
+        }
+        result
+    }
+
+    fn key_to_atom<'a, 'b, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(head: &ExactKey, atom: Option<&'b Atom>, tail: I, storage: &AtomStorage) -> Option<(&'b Atom, I)> {
+        match (head, atom) {
+            (ExactKey::Exact(_), Some(atom)) => Some((atom, tail)),
+            (ExactKey::StartExpr, Some(atom)) => Some((atom, tail)),
+            (ExactKey::EndExpr, None) => None,
+            _ => panic!("Unexpected state!"),
+        }
+    }
+
+    fn match_custom_index<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(matcher: &Atom, atom: &Atom, child: &AtomIndexNode, tail: I, storage: &AtomStorage) -> BindingsSet {
+        let mut result = BindingsSet::empty();
+        // TODO: conversion to Iterator and back
+        result.extend(match_atoms(matcher, atom));
+        let tail_result = child.query(tail, storage);
+        //log::trace!("match_custom_index: matcher: {}, atom: {}, child: {:?}, tail: {:?}, tail_result: {}", matcher, atom, child, tail.clone(), tail_result);
+        // TODO: we could move BindingsSet into merge instead of passing by reference
+        result.merge(&tail_result)
+    }
+
+    fn skip_to_end_expr<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(mut key: I) -> I {
+        let mut par = 0;
+        let mut is_end = |a| {
+            match a {
+                IndexKey::StartExpr(_) => {
+                    par = par + 1;
+                    false
+                },
+                IndexKey::EndExpr if par == 0 => true,
+                IndexKey::EndExpr if par > 0 => {
+                    par = par - 1;
+                    false
+                },
+                _ => false,
+            }
+        };
+        loop {
+            match key.next() {
+                Some(atom) => if is_end(atom) { break },
+                None => break,
+            }
+        }
+        key
+    }
+
+    fn match_custom_key<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(&self, head: &Atom, tail: I, storage: &AtomStorage) -> BindingsSet {
+        let mut result = BindingsSet::empty();
+        for (atom, child) in self.unpack_atoms(storage) {
+            if atom.is_none() {
+                continue;
+            }
+            let mut tail_result = Self::match_custom_index(&atom.unwrap(), head, child, tail.clone(), storage);
+            result.extend(tail_result.drain(..));
+        }
+        result
+    }
+
+    fn unpack_atoms<'a>(&'a self, storage: &'a AtomStorage) -> Box<dyn Iterator<Item=(Option<Atom>, &'a AtomIndexNode)> + 'a>{
+        let mut result: Vec<(Option<Atom>, &AtomIndexNode)> = Vec::new();
+        for (exact, child) in &self.exact {
+            match exact {
+                ExactKey::Exact(id) => result.push((Some(storage.get(*id).expect("Unexpected state!").clone()), child)),
+                ExactKey::EndExpr => result.push((None, child)),
+                ExactKey::StartExpr => {
+                    let mut exprs: Vec<(Vec<Atom>, &AtomIndexNode)> = Vec::new();
+                    exprs.push((Vec::new(), child));
+                    loop {
+                        let mut next: Vec<(Vec<Atom>, &AtomIndexNode)> = Vec::new();
+                        for (expr, child) in exprs.into_iter() {
+                            for (atom, child) in child.unpack_atoms(storage) {
+                                if let Some(atom) = atom {
+                                    let mut new_expr = expr.clone();
+                                    new_expr.push(atom);
+                                    next.push((new_expr, child));
+                                } else {
+                                    result.push((Some(Atom::expr(expr.clone())), child))
+                                }
+                            }
+                        }
+                        if next.is_empty() {
+                            break;
+                        }
+                        exprs = next;
+                    }
+                }
+            }
+        }
+        for (custom, child) in &self.custom {
+            result.push((Some(custom.clone()), child));
+        }
+        //log::trace!("unpack_atoms: {:?}", result);
+        Box::new(result.into_iter())
+    }
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::expr;
+    use crate::{expr, sym, bind, assert_eq_no_order};
     use crate::metta::runner::number::Number;
 
     #[test]
@@ -230,10 +488,37 @@ mod test {
         let atom = expr!(("sym" var {Number::Integer(42)} ("sym1" var1 {Number::Integer(43)})));
         let it = AtomTokenIter::new(&atom);
         let actual: Vec<AtomToken> = it.collect();
-        assert_eq!(vec![AtomToken::StartExpr, AtomToken::Atom(&expr!("sym")),
+        assert_eq!(vec![AtomToken::StartExpr(&atom), AtomToken::Atom(&expr!("sym")),
             AtomToken::Atom(&expr!(var)), AtomToken::Atom(&expr!({Number::Integer(42)})),
-            AtomToken::StartExpr, AtomToken::Atom(&expr!("sym1")),
-            AtomToken::Atom(&expr!(var1)), AtomToken::Atom(&expr!({Number::Integer(43)})),
+            AtomToken::StartExpr(&expr!("sym1" var1 {Number::Integer(43)})),
+            AtomToken::Atom(&expr!("sym1")), AtomToken::Atom(&expr!(var1)),
+            AtomToken::Atom(&expr!({Number::Integer(43)})),
             AtomToken::EndExpr, AtomToken::EndExpr], actual);
+    }
+
+    #[test]
+    fn atom_index_query_single() {
+        let mut index = AtomIndex::new();
+        index.insert(Atom::sym("A"));
+        index.insert(Atom::var("a"));
+        index.insert(Atom::gnd(Number::Integer(42)));
+
+        assert_eq_no_order!(index.query(&Atom::sym("A")).collect::<Vec<Bindings>>(), vec![bind!{}, bind!{a: Atom::sym("A")}]);
+        assert_eq_no_order!(index.query(&Atom::var("a")).collect::<Vec<Bindings>>(), vec![bind!{ a: Atom::sym("A") }, bind!{ a: Atom::gnd(Number::Integer(42)) }, bind!{ a: Atom::var("a") }]);
+        assert_eq_no_order!(index.query(&Atom::gnd(Number::Integer(42))).collect::<Vec<Bindings>>(), vec![bind!{}, bind!{a: Atom::gnd(Number::Integer(42))}]);
+        assert_eq_no_order!(index.query(&sym!("B")).collect::<Vec<Bindings>>(), vec![bind!{a: Atom::sym("B")}]);
+        assert_eq_no_order!(index.query(&Atom::var("b")).collect::<Vec<Bindings>>(), vec![bind!{ b: Atom::sym("A") }, bind!{ b: Atom::gnd(Number::Integer(42)) }, bind!{ b: Atom::var("a") }]);
+        assert_eq_no_order!(index.query(&Atom::gnd(Number::Integer(43))).collect::<Vec<Bindings>>(), vec![bind!{a: Atom::gnd(Number::Integer(43))}]);
+    }
+
+    #[test]
+    fn atom_index_query_expression() {
+        let mut index = AtomIndex::new();
+        index.insert(expr!("A" a {Number::Integer(42)} a));
+
+        assert_eq_no_order!(index.query(&expr!("A" "B" {Number::Integer(42)} "B")).collect::<Vec<Bindings>>(), vec![bind!{a: expr!("B")}]);
+        assert_eq_no_order!(index.query(&expr!("A" ("B" "C") {Number::Integer(42)} ("B" "C"))).collect::<Vec<Bindings>>(), vec![bind!{a: expr!("B" "C")}]);
+        assert_eq_no_order!(index.query(&expr!("A" "B" {Number::Integer(42)} "C")).collect::<Vec<Bindings>>(), Vec::<Bindings>::new());
+        assert_eq_no_order!(index.query(&expr!(b)).collect::<Vec<Bindings>>(), vec![bind!{ b: expr!("A" a {Number::Integer(42)} a)}]);
     }
 }
