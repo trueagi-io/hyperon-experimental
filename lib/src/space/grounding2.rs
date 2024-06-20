@@ -10,7 +10,7 @@ use std::collections::HashMap;
 use std::collections::hash_map::Entry as HashMapEntry;
 use std::fmt::Debug;
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
 struct AtomStorage {
     next_id: usize,
     atoms: BiMap<HashAtom, usize>,
@@ -22,13 +22,20 @@ impl AtomStorage {
     }
 
     pub fn insert(&mut self, atom: &Atom) -> Option<usize> {
+        if Self::is_hashable(atom) {
+            self.insert_internal(atom)
+        } else {
+            None
+        }
+    }
+
+    fn is_hashable(atom: &Atom) -> bool {
         match atom {
-            Atom::Symbol(_) => self.insert_internal(atom),
-            Atom::Variable(_) => self.insert_internal(atom),
+            Atom::Symbol(_) => true,
+            Atom::Variable(_) => true,
             Atom::Grounded(g) if g.as_grounded().as_match().is_none()
-                    && Self::is_serializable(&**g)
-                    => self.insert_internal(atom),
-            _ => None,
+                    && Self::is_serializable(&**g) => true,
+            _ => false,
         }
     }
 
@@ -55,6 +62,14 @@ impl AtomStorage {
         self.atoms.get_by_right(&id).map(|h| h.as_atom())
     }
 
+    pub fn get_id(&self, atom: &Atom) -> Option<usize> {
+        if Self::is_hashable(atom) {
+            self.atoms.get_by_left(&HashAtom::Query(atom)).map(|id| *id)
+        } else {
+            None
+        }
+    }
+
     // TODO: calling Grounded::serialize() is a workaround. We don't know
     // in advance whether atom is serializable and we understand it only
     // after calling Grounded::serialize.
@@ -66,7 +81,7 @@ impl AtomStorage {
     }
 }
 
-#[derive(Eq, Debug)]
+#[derive(Eq, Debug, Clone)]
 enum HashAtom {
     // Used pointer to eliminate lifetime which leaks through the usages.
     // At the same time HashAtom::Query is used only for querying before adding
