@@ -590,10 +590,7 @@ class Bindings:
     def iterator(self):
         """Returns an iterator over the variable-atom pairs in the bindings"""
         res = hp.bindings_list(self.cbindings)
-        result = []
-        for r in res:
-            result.append((r[0], Atom._from_catom(r[1])))
-
+        result = [(r[0], Atom._from_catom(r[1])) for r in res]
         return iter(result)
 
 class BindingsSet:
@@ -698,17 +695,15 @@ class BindingsSet:
         """Merges the contents of another BindingsSet or Bindings frame."""
         self.shadow_list = None
         if isinstance(input, BindingsSet):
-            hp.bindings_set_merge_into(self.c_set, input.c_set);
+            hp.bindings_set_merge_into(self.c_set, input.c_set)
         else:
-            new_set = BindingsSet(input);
-            hp.bindings_set_merge_into(self.c_set, new_set.c_set);
+            new_set = BindingsSet(input)
+            hp.bindings_set_merge_into(self.c_set, new_set.c_set)
 
     def iterator(self):
         """Returns an iterator over all Bindings frames"""
         res = hp.bindings_set_list(self.c_set)
-        result = []
-        for r in res:
-            result.append(Bindings(r))
+        result = [Bindings(r) for r in res]
         return iter(result)
 
 def get_string_value(value) -> str:
