@@ -2,8 +2,10 @@
 
 pub mod text;
 pub mod interpreter;
-#[cfg(feature = "minimal")]
+#[cfg(all(feature = "minimal", not(feature = "minimal_rust")))]
 pub mod interpreter_minimal;
+#[cfg(all(feature = "minimal", feature = "minimal_rust"))]
+pub mod interpreter_minimal_rust;
 pub mod types;
 pub mod runner;
 

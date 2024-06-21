@@ -92,8 +92,10 @@ use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterS
 
 #[cfg(feature = "minimal")]
 pub mod stdlib_minimal;
-#[cfg(feature = "minimal")]
+#[cfg(all(feature = "minimal", not(feature = "minimal_rust")))]
 use super::interpreter_minimal::{interpret, interpret_init, interpret_step, InterpreterState};
+#[cfg(all(feature = "minimal", feature = "minimal_rust"))]
+use super::interpreter_minimal_rust::{interpret, interpret_init, interpret_step, InterpreterState};
 #[cfg(feature = "minimal")]
 use stdlib_minimal::*;
 

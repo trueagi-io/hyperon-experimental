@@ -10,8 +10,10 @@ use regex::Regex;
 #[cfg(not(feature = "minimal"))]
 use super::stdlib::*;
 
-#[cfg(feature = "minimal")]
+#[cfg(all(feature = "minimal", not(feature = "minimal_rust")))]
 use super::interpreter_minimal::interpret;
+#[cfg(all(feature = "minimal", feature = "minimal_rust"))]
+use super::interpreter_minimal_rust::interpret;
 #[cfg(feature = "minimal")]
 use super::stdlib_minimal::*;
 
