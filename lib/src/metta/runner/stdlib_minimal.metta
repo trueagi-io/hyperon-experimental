@@ -180,13 +180,13 @@
       (return $atom)
       (eval (if-equal $type $meta
         (return $atom)
-        (eval (switch ($type $meta) (
-          (($type Variable) (return $atom))
-          (($type Symbol)
+        (eval (switch $meta (
+          (Variable (return $atom))
+          (Symbol
             (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
-          (($type Grounded)
+          (Grounded
             (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
-          (($type Expression)
+          (Expression
             (chain (eval (check-alternatives (eval (interpret-expression $atom $type $space)))) $ret (return $ret)))
         ))))))))))
 

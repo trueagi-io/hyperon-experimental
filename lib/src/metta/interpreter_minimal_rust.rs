@@ -8,6 +8,7 @@ use crate::*;
 use crate::atom::matcher::*;
 use crate::space::*;
 use crate::metta::*;
+use crate::metta::types::*;
 
 use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
@@ -276,7 +277,8 @@ fn is_embedded_op(atom: &Atom) -> bool {
             || *op == DECONS_ATOM_SYMBOL
             || *op == FUNCTION_SYMBOL
             || *op == COLLAPSE_BIND_SYMBOL
-            || *op == SUPERPOSE_BIND_SYMBOL,
+            || *op == SUPERPOSE_BIND_SYMBOL
+            || *op == INTERPRET_SYMBOL,
         _ => false,
     }
 }
@@ -385,6 +387,9 @@ fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, 
             },
             Some([op, ..]) if *op == SUPERPOSE_BIND_SYMBOL => {
                 superpose_bind(stack, bindings)
+            },
+            Some([op, ..]) if *op == INTERPRET_SYMBOL => {
+                interpret_sym(stack, bindings)
             },
             _ => {
                 let stack = Stack::finished(stack.prev, stack.atom);
@@ -789,6 +794,98 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
             })
         })
         .collect()
+}
+
+fn interpret_sym(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: interpret, ret: _, finished: _, vars: _ } = stack;
+    let (atom, typ, space) = match_atom!{
+        interpret ~ [_op, atom, typ, space]
+            if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
+        _ => {
+            let error = format!("expected: ({} atom type space), found: {}", INTERPRET_SYMBOL, interpret);
+            return finished_result(error_atom(interpret, error), bindings, prev);
+        }
+    };
+
+    interpret_impl(atom, typ, space, bindings)
+        .map(|(atom, bindings)| InterpretedAtom(atom_to_stack(atom, prev.clone()), bindings))
+        .collect()
+}
+
+type MettaResult = Box<dyn Iterator<Item=(Atom, Bindings)>>;
+
+fn once(atom: Atom, bindings: Bindings) -> MettaResult {
+    Box::new(std::iter::once((atom, bindings)))
+}
+
+fn empty() -> MettaResult {
+    Box::new(std::iter::empty())
+}
+
+fn interpret_impl(atom: Atom, typ: Atom, space: Atom, bindings: Bindings) -> MettaResult {
+    let meta = get_meta_type(&atom);
+    if typ == ATOM_TYPE_ATOM {
+        once(atom, bindings)
+    } else if typ == meta {
+        once(atom, bindings)
+    } else {
+        if meta == ATOM_TYPE_VARIABLE {
+            once(atom, bindings)
+        } else if meta == ATOM_TYPE_SYMBOL {
+            type_cast(space, atom, typ, bindings)
+        } else if meta == ATOM_TYPE_GROUNDED {
+            type_cast(space, atom, typ, bindings)
+        } else {
+            todo!()
+        }
+    }
+}
+
+fn get_meta_type(atom: &Atom) -> Atom {
+    match atom {
+        Atom::Variable(_) => ATOM_TYPE_VARIABLE,
+        Atom::Symbol(_) => ATOM_TYPE_SYMBOL,
+        Atom::Expression(_) => ATOM_TYPE_EXPRESSION,
+        Atom::Grounded(_) => ATOM_TYPE_GROUNDED,
+    }
+}
+
+fn type_cast(space: Atom, atom: Atom, expected_type: Atom, bindings: Bindings) -> MettaResult {
+    let meta = get_meta_type(&atom);
+    if expected_type == meta {
+        once(atom, bindings)
+    } else {
+        let space = space.as_gnd::<DynSpace>().unwrap();
+        let first_match = get_atom_types(space, &atom).into_iter()
+            .flat_map(|actual_type| match_types(expected_type.clone(), actual_type, Atom::value(true), Atom::value(false), bindings.clone()))
+            .filter(|(atom, _bindings)| *atom.as_gnd::<bool>().unwrap())
+            .next();
+        match first_match {
+            Some((_atom, bindings)) => once(atom, bindings),
+            None => empty(),
+        }
+    }
+}
+
+fn match_types(type1: Atom, type2: Atom, then: Atom, els: Atom, bindings: Bindings) -> MettaResult {
+    if type1 == ATOM_TYPE_UNDEFINED {
+        once(then, bindings)
+    } else if type2 == ATOM_TYPE_UNDEFINED {
+        once(then, bindings)
+    } else if type1 == ATOM_TYPE_ATOM {
+        once(then, bindings)
+    } else if type2 == ATOM_TYPE_ATOM {
+        once(then, bindings)
+    } else {
+        let mut result = match_atoms(&type1, &type2).peekable();
+        if result.peek().is_none() {
+            Box::new(std::iter::once((els, bindings.clone())))
+        } else {
+            Box::new(result
+                .flat_map(move |b| b.merge_v2(&bindings).into_iter())
+                .map(move |b| (then.clone(), b)))
+        }
+    }
 }
 
 #[cfg(test)]
