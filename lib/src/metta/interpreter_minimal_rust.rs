@@ -278,7 +278,8 @@ fn is_embedded_op(atom: &Atom) -> bool {
             || *op == FUNCTION_SYMBOL
             || *op == COLLAPSE_BIND_SYMBOL
             || *op == SUPERPOSE_BIND_SYMBOL
-            || *op == INTERPRET_SYMBOL,
+            || *op == INTERPRET_SYMBOL
+            || *op == CALL_NATIVE_SYMBOL,
         _ => false,
     }
 }
@@ -390,6 +391,9 @@ fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, 
             },
             Some([op, ..]) if *op == INTERPRET_SYMBOL => {
                 interpret_sym(stack, bindings)
+            },
+            Some([op, ..]) if *op == CALL_NATIVE_SYMBOL => {
+                call_native_symbol(stack, bindings)
             },
             _ => {
                 let stack = Stack::finished(stack.prev, stack.atom);
@@ -796,6 +800,25 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         .collect()
 }
 
+type NativeFunc = fn(Atom, Bindings) -> MettaResult;
+
+fn call_native_symbol(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: call, ret: _, finished: _, vars: _ } = stack;
+    let (func, args) = match_atom!{
+        call ~ [_op, func, args]
+            if func.as_gnd::<NativeFunc>().is_some() => (func, args),
+        _ => {
+            let error = format!("expected: ({} func args), found: {}", CALL_NATIVE_SYMBOL, call);
+            return finished_result(error_atom(call, error), bindings, prev);
+        }
+    };
+
+    let func = func.as_gnd::<NativeFunc>().expect("Unexpected state");
+    func(args, bindings)
+        .map(|(atom, bindings)| InterpretedAtom(atom_to_stack(atom, prev.clone()), bindings))
+        .collect()
+}
+
 fn interpret_sym(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: interpret, ret: _, finished: _, vars: _ } = stack;
     let (atom, typ, space) = match_atom!{
@@ -835,6 +858,10 @@ fn empty() -> MettaResult {
     Box::new(std::iter::empty())
 }
 
+fn call_native_atom(func: NativeFunc, args: Atom) -> Atom {
+    Atom::expr([CALL_NATIVE_SYMBOL, Atom::value(func), args])
+}
+
 fn interpret_impl(atom: Atom, typ: Atom, space: Atom, bindings: Bindings) -> MettaResult {
     let meta = get_meta_type(&atom);
     if typ == ATOM_TYPE_ATOM {
@@ -849,7 +876,12 @@ fn interpret_impl(atom: Atom, typ: Atom, space: Atom, bindings: Bindings) -> Met
         } else if meta == ATOM_TYPE_GROUNDED {
             type_cast(space, atom, typ, bindings)
         } else {
-            todo!()
+            let var = Atom::Variable(VariableAtom::new("x").make_unique());
+            once(Atom::expr([CHAIN_SYMBOL,
+                Atom::expr([COLLAPSE_BIND_SYMBOL, call_native_atom(interpret_expression, Atom::expr([atom, typ, space]))]),
+                var.clone(),
+                call_native_atom(check_alternatives, Atom::expr([var]))
+            ]), bindings)
         }
     }
 }
@@ -899,6 +931,36 @@ fn match_types(type1: Atom, type2: Atom, then: Atom, els: Atom, bindings: Bindin
                 .map(move |b| (then.clone(), b)))
         }
     }
+}
+
+fn check_alternatives(args: Atom, bindings: Bindings) -> MettaResult {
+    let expr = match_atom!{
+        args ~ [Atom::Expression(expr)] => expr,
+        _ => {
+            let error = format!("expected args: ((: expr Expression)), found: {}", args);
+            return Box::new(once(error_atom(call_native_atom(check_alternatives, args), error), bindings));
+        }
+    };
+    let results = expr.into_children().into_iter().map(atom_into_atom_bindings);
+    let mut succ = results.clone().filter(|(atom, _bindings)| !atom_is_error(&atom)).peekable();
+    let err = results.filter(|(atom, _bindings)| atom_is_error(&atom));
+    match succ.peek() {
+        Some(_) => Box::new(succ),
+        None => Box::new(err),
+    }
+}
+
+fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
+    let (atom, typ, space) = match_atom!{
+        args ~ [atom, typ, space]
+            if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
+        _ => {
+            let error = format!("expected args: (atom type space), found: {}", args);
+            return Box::new(once(error_atom(call_native_atom(interpret_expression, args), error), bindings));
+        }
+    };
+    let space = space.as_gnd::<DynSpace>().unwrap();
+    Box::new(once(atom, bindings))
 }
 
 #[cfg(test)]
