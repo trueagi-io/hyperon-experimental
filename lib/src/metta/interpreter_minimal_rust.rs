@@ -9,6 +9,7 @@ use crate::atom::matcher::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::types::*;
+use crate::metta::runner::stdlib_minimal::IfEqualOp;
 
 use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
@@ -32,6 +33,12 @@ macro_rules! match_atom {
             _ => $error,
         }
     };
+}
+
+macro_rules! call_native {
+    ($func:ident, $atom:expr) => {
+        call_native_atom($func, stringify!($func), $atom)
+    }
 }
 
 /// Operation return handler, it is triggered when nested operation is finished
@@ -410,6 +417,11 @@ fn return_not_reducible() -> Atom {
 
 fn error_atom(atom: Atom, err: String) -> Atom {
     Atom::expr([Atom::sym("Error"), atom, Atom::sym(err)])
+}
+
+// FIXME: rename
+fn error_atom_(atom: Atom, err: Atom) -> Atom {
+    Atom::expr([Atom::sym("Error"), atom, err])
 }
 
 fn finished_result(atom: Atom, bindings: Bindings, prev: Option<Rc<RefCell<Stack>>>) -> Vec<InterpretedAtom> {
@@ -805,7 +817,7 @@ type NativeFunc = fn(Atom, Bindings) -> MettaResult;
 fn call_native_symbol(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: call, ret: _, finished: _, vars: _ } = stack;
     let (func, args) = match_atom!{
-        call ~ [_op, func, args]
+        call ~ [_op, _name, func, args]
             if func.as_gnd::<NativeFunc>().is_some() => (func, args),
         _ => {
             let error = format!("expected: ({} func args), found: {}", CALL_NATIVE_SYMBOL, call);
@@ -850,16 +862,29 @@ impl Clone for MettaResult {
     }
 }
 
+#[inline]
 fn once(atom: Atom, bindings: Bindings) -> MettaResult {
     Box::new(std::iter::once((atom, bindings)))
 }
 
+#[inline]
 fn empty() -> MettaResult {
     Box::new(std::iter::empty())
 }
 
-fn call_native_atom(func: NativeFunc, args: Atom) -> Atom {
-    Atom::expr([CALL_NATIVE_SYMBOL, Atom::value(func), args])
+#[inline]
+fn call_native_atom(func: NativeFunc, name: &str, args: Atom) -> Atom {
+    Atom::expr([CALL_NATIVE_SYMBOL, Atom::sym(name), Atom::value(func), args])
+}
+
+#[inline]
+fn return_atom(atom: Atom) -> Atom {
+    Atom::expr([RETURN_SYMBOL, atom])
+}
+
+#[inline]
+fn function_atom(atom: Atom) -> Atom {
+    Atom::expr([FUNCTION_SYMBOL, atom])
 }
 
 fn interpret_impl(atom: Atom, typ: Atom, space: Atom, bindings: Bindings) -> MettaResult {
@@ -877,10 +902,8 @@ fn interpret_impl(atom: Atom, typ: Atom, space: Atom, bindings: Bindings) -> Met
             type_cast(space, atom, typ, bindings)
         } else {
             let var = Atom::Variable(VariableAtom::new("x").make_unique());
-            once(Atom::expr([CHAIN_SYMBOL,
-                Atom::expr([COLLAPSE_BIND_SYMBOL, call_native_atom(interpret_expression, Atom::expr([atom, typ, space]))]),
-                var.clone(),
-                call_native_atom(check_alternatives, Atom::expr([var]))
+            once(Atom::expr([CHAIN_SYMBOL, Atom::expr([COLLAPSE_BIND_SYMBOL, call_native!(interpret_expression, Atom::expr([atom, typ, space]))]), var.clone(),
+                call_native!(check_alternatives, Atom::expr([var]))
             ]), bindings)
         }
     }
@@ -907,7 +930,7 @@ fn type_cast(space: Atom, atom: Atom, expected_type: Atom, bindings: Bindings) -
             .next();
         match first_match {
             Some((_atom, bindings)) => once(atom, bindings),
-            None => empty(),
+            None => once(error_atom_(atom, BAD_TYPE_SYMBOL), bindings),
         }
     }
 }
@@ -924,7 +947,7 @@ fn match_types(type1: Atom, type2: Atom, then: Atom, els: Atom, bindings: Bindin
     } else {
         let mut result = match_atoms(&type1, &type2).peekable();
         if result.peek().is_none() {
-            Box::new(std::iter::once((els, bindings.clone())))
+            once(els, bindings.clone())
         } else {
             Box::new(result
                 .flat_map(move |b| b.merge_v2(&bindings).into_iter())
@@ -938,12 +961,16 @@ fn check_alternatives(args: Atom, bindings: Bindings) -> MettaResult {
         args ~ [Atom::Expression(expr)] => expr,
         _ => {
             let error = format!("expected args: ((: expr Expression)), found: {}", args);
-            return Box::new(once(error_atom(call_native_atom(check_alternatives, args), error), bindings));
+            return once(error_atom(call_native!(check_alternatives, args), error), bindings);
         }
     };
-    let results = expr.into_children().into_iter().map(atom_into_atom_bindings);
-    let mut succ = results.clone().filter(|(atom, _bindings)| !atom_is_error(&atom)).peekable();
-    let err = results.filter(|(atom, _bindings)| atom_is_error(&atom));
+    let results = expr.into_children().into_iter()
+        .map(atom_into_atom_bindings);
+    let mut succ = results.clone()
+        .filter(|(atom, _bindings)| !atom_is_error(&atom))
+        .peekable();
+    let err = results
+        .filter(|(atom, _bindings)| atom_is_error(&atom));
     match succ.peek() {
         Some(_) => Box::new(succ),
         None => Box::new(err),
@@ -956,11 +983,132 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
             if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
         _ => {
             let error = format!("expected args: (atom type space), found: {}", args);
-            return Box::new(once(error_atom(call_native_atom(interpret_expression, args), error), bindings));
+            return once(error_atom(call_native!(interpret_expression, args), error), bindings);
         }
     };
-    let space = space.as_gnd::<DynSpace>().unwrap();
-    Box::new(once(atom, bindings))
+    match atom_as_slice(&atom) {
+        Some([op, args @ ..]) => {
+            let space_ref = space.as_gnd::<DynSpace>().unwrap();
+            let actual_types = get_atom_types(space_ref, op);
+            // FIXME: this relies on the fact that get_atom_types() returns
+            // tuple types first. Either need to sort types or fix behavior
+            // in get_atom_types contract.
+            let func = actual_types.partition_point(|a| !is_func(a));
+            let mut tuple_types = actual_types[..func].into_iter().peekable();
+            let func_types = &actual_types[func..];
+
+            let tuple = if tuple_types.peek().is_some() {
+                let reduced = Atom::Variable(VariableAtom::new("reduced").make_unique());
+                let result = Atom::Variable(VariableAtom::new("result").make_unique());
+                once(
+                    Atom::expr([CHAIN_SYMBOL, function_atom(call_native!(interpret_tuple, Atom::expr([atom, space.clone()]))), reduced.clone(),
+                        Atom::expr([CHAIN_SYMBOL, call_native!(metta_call, Atom::expr([reduced, typ, space])), result.clone(),
+                            result
+                        ])
+                    ]), bindings)
+            } else {
+                empty()
+            };
+            Box::new(std::iter::empty().chain(tuple))
+        },
+        _ => type_cast(space, atom, typ, bindings),
+    }
+}
+
+fn interpret_tuple(args: Atom, bindings: Bindings) -> MettaResult {
+    let (expr, space) = match_atom!{
+        args ~ [Atom::Expression(expr), space]
+            if space.as_gnd::<DynSpace>().is_some() => (expr, space),
+        _ => {
+            let error = format!("expected args: ((: expr Expression) space), found: {}", args);
+            return once(return_atom(error_atom(call_native!(interpret_tuple, args), error)), bindings);
+        }
+    };
+    if expr.children().is_empty() {
+        once(return_atom(Atom::Expression(expr)), bindings)
+    } else {
+        let mut tuple = expr.into_children();
+        let head = tuple.remove(0);
+        let tail = tuple;
+        let rhead = Atom::Variable(VariableAtom::new("rhead").make_unique());
+        let rtail = Atom::Variable(VariableAtom::new("rtail").make_unique());
+        let result = Atom::Variable(VariableAtom::new("result").make_unique());
+        once(
+            Atom::expr([CHAIN_SYMBOL, Atom::expr([INTERPRET_SYMBOL, head, ATOM_TYPE_UNDEFINED, space.clone()]), rhead.clone(),
+                Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::gnd(IfEqualOp{}), rhead.clone(), EMPTY_SYMBOL, return_atom(EMPTY_SYMBOL),
+                    Atom::expr([CHAIN_SYMBOL, function_atom(call_native!(interpret_tuple, Atom::expr([Atom::expr(tail), space.clone()]))), rtail.clone(),
+                        Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::gnd(IfEqualOp{}), rtail.clone(), EMPTY_SYMBOL, return_atom(EMPTY_SYMBOL),
+                            Atom::expr([CHAIN_SYMBOL, Atom::expr([CONS_ATOM_SYMBOL, rhead, rtail]), result.clone(),
+                                return_atom(result)
+                            ])
+                        ])])
+                    ])
+                ])])
+            ]), bindings)
+    }
+}
+
+fn metta_call(args: Atom, bindings: Bindings) -> MettaResult {
+    let (atom, typ, space) = match_atom!{
+        args ~ [atom, typ, space]
+            if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
+        _ => {
+            let error = format!("expected args: (atom type space), found: {}", args);
+            return once(error_atom(call_native!(metta_call, args), error), bindings);
+        }
+    };
+    if atom_is_error(&atom) {
+        once(atom, bindings)
+    } else {
+        let space_ref = space.as_gnd::<DynSpace>().unwrap();
+        let res = query_(space_ref, &atom, bindings)
+            .map(move |(result, bindings)| {
+                if result == NOT_REDUCIBLE_SYMBOL {
+                    (atom.clone(), bindings)
+                } else if result == EMPTY_SYMBOL {
+                    (EMPTY_SYMBOL, bindings)
+                } else if atom_is_error(&result) {
+                    (result, bindings)
+                } else {
+                    let ret = Atom::Variable(VariableAtom::new("ret").make_unique());
+                    (Atom::expr([CHAIN_SYMBOL, Atom::expr([INTERPRET_SYMBOL, result, typ.clone(), space.clone()]), ret.clone(),
+                        ret]), bindings)
+                }
+            });
+        Box::new(res)
+    }
+}
+
+fn query_(space: &DynSpace, to_eval: &Atom, bindings: Bindings) -> MettaResult {
+    #[cfg(not(feature = "variable_operation"))]
+    if is_variable_op(to_eval) {
+        // TODO: this is a hotfix. better way of doing this is adding
+        // a function which modifies minimal metta interpreter code
+        // in order to skip such evaluations in metta-call function.
+        return once(NOT_REDUCIBLE_SYMBOL, bindings)
+    }
+    let var_x = VariableAtom::new("X").make_unique();
+    let query = Atom::expr([EQUAL_SYMBOL, to_eval.clone(), Atom::Variable(var_x.clone())]);
+    let results = space.query(&query);
+    if results.is_empty() {
+        once(NOT_REDUCIBLE_SYMBOL, bindings)
+    } else {
+        log::debug!("interpreter_minimal::query_: query: {}", query);
+        log::debug!("interpreter_minimal::query_: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
+            results.len(), bindings.len(), results, bindings);
+        let res = results.into_iter().flat_map(move |b| {
+            log::debug!("interpreter_minimal::query_: b: {}", b);
+            b.merge_v2(&bindings).into_iter()
+        }).filter_map(move |b| {
+            let res = b.resolve(&var_x).unwrap();
+            if b.has_loops() {
+                None
+            } else {
+                Some((res, b))
+            }
+        });
+        Box::new(res)
+    }
 }
 
 #[cfg(test)]
