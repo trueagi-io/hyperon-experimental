@@ -1065,13 +1065,80 @@ fn interpret_tuple(args: Atom, bindings: Bindings) -> MettaResult {
 fn interpret_function(args: Atom, bindings: Bindings) -> MettaResult {
     let (atom, op_type, ret_type, space) = match_atom!{
         args ~ [Atom::Expression(atom), Atom::Expression(op_type), ret_type, space]
-            if space.as_gnd::<DynSpace>().is_some() => (atom, op_type, ret_type, space),
+            if space.as_gnd::<DynSpace>().is_some() &&
+                op_type.children().get(0) == Some(&ARROW_SYMBOL) => (atom, op_type, ret_type, space),
         _ => {
             let error = format!("expected args: ((: atom Expression) (: op_type Expression) ret_type space), found: {}", args);
             return once(return_atom(error_atom(call_native!(interpret_function, args), error)), bindings);
         }
     };
-    once(return_atom(Atom::Expression(atom)), bindings)
+    let mut call = atom.clone().into_children();
+    let head = call.remove(0);
+    let args = call;
+    let mut arg_types = op_type.clone();
+    arg_types.children_mut().remove(0);
+    let arg_types = Atom::Expression(arg_types);
+    let rop = Atom::Variable(VariableAtom::new("rop").make_unique());
+    let rargs = Atom::Variable(VariableAtom::new("rargs").make_unique());
+    let result = Atom::Variable(VariableAtom::new("result").make_unique());
+    once(
+        Atom::expr([CHAIN_SYMBOL, Atom::expr([INTERPRET_SYMBOL, head, Atom::Expression(op_type), space.clone()]), rop.clone(),
+            Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::sym("return-on-error"), rop.clone(), 
+                Atom::expr([CHAIN_SYMBOL, function_atom(call_native!(interpret_args, Atom::expr([Atom::Expression(atom), Atom::expr(args), arg_types, ret_type, space.clone()]))), rargs.clone(),
+                    Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::sym("return-on-error"), rargs.clone(),
+                        Atom::expr([CHAIN_SYMBOL, Atom::expr([CONS_ATOM_SYMBOL, rop, rargs]), result.clone(),
+                            return_atom(result)
+                        ])
+                    ])])
+                ])
+            ])])
+        ]), bindings)
+}
+
+fn interpret_args(args_: Atom, bindings: Bindings) -> MettaResult {
+    let (atom, args, arg_types, ret_type, space) = match_atom!{
+        args_ ~ [atom, Atom::Expression(args), Atom::Expression(arg_types), ret_type, space]
+            if space.as_gnd::<DynSpace>().is_some() => (atom, args, arg_types, ret_type, space),
+        _ => {
+            let error = format!("expected args: (atom (: args Expression) (: arg_types Expression) ret_type space), found: {}", args_);
+            return once(return_atom(error_atom(call_native!(interpret_args, args_), error)), bindings);
+        }
+    };
+    let mut types = arg_types.into_children();
+    if types.is_empty() {
+        return once(return_atom(error_atom_(atom, INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings);
+    }
+    let types_head = types.remove(0);
+    let types_tail = types;
+    if args.children().is_empty() {
+        match_types(types_head, ret_type,
+            return_atom(Atom::Expression(args)), 
+            return_atom(error_atom_(atom, BAD_TYPE_SYMBOL)),
+            bindings)
+    } else {
+        let mut args = args.into_children();
+        let args_head = args.remove(0);
+        let args_tail = args;
+        let rhead = Atom::Variable(VariableAtom::new("rhead").make_unique());
+        let rtail = Atom::Variable(VariableAtom::new("rtail").make_unique());
+        let result = Atom::Variable(VariableAtom::new("result").make_unique());
+        let recursion = Atom::expr([CHAIN_SYMBOL, function_atom(call_native!(interpret_args, Atom::expr([atom, Atom::expr(args_tail), Atom::expr(types_tail), ret_type, space.clone()]))), rtail.clone(),
+            Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::sym("return-on-error"), rtail.clone(),
+                Atom::expr([CHAIN_SYMBOL, Atom::expr([CONS_ATOM_SYMBOL, rhead.clone(), rtail.clone()]), result.clone(),
+                    return_atom(result)
+                ])
+            ])])
+        ]);
+        once(
+            Atom::expr([CHAIN_SYMBOL, Atom::expr([INTERPRET_SYMBOL, args_head.clone(), types_head, space.clone()]), rhead.clone(),
+                Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::gnd(IfEqualOp{}), rhead.clone(), args_head,
+                    recursion.clone(),
+                    Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::sym("return-on-error"), rhead,
+                        recursion
+                    ])])
+                ])])
+            ]), bindings)
+    }
 }
 
 fn metta_call(args: Atom, bindings: Bindings) -> MettaResult {
