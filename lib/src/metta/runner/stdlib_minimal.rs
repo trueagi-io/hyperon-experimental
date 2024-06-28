@@ -1064,8 +1064,9 @@ mod tests {
         let program = "
             (= (bar) baz)
             (= (foo) (bar))
-            !(eval (foo))
+            !(foo)
             !(pragma! interpreter bare-minimal)
+            !(foo)
             !(eval (foo))
         ";
 
@@ -1073,6 +1074,7 @@ mod tests {
             Ok(vec![
                 vec![expr!("baz")],
                 vec![UNIT_ATOM()],
+                vec![expr!(("foo"))],
                 vec![expr!(("bar"))],
             ]));
     }
