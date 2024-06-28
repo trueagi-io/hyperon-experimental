@@ -1191,8 +1191,7 @@ impl<'i> InputStream<'i> {
 fn wrap_atom_by_metta_interpreter(space: DynSpace, atom: Atom) -> Atom {
     let space = Atom::gnd(space);
     let interpret = Atom::expr([Atom::sym("interpret"), atom, ATOM_TYPE_UNDEFINED, space]);
-    let eval = Atom::expr([EVAL_SYMBOL, interpret]);
-    eval
+    interpret
 }
 
 // *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*

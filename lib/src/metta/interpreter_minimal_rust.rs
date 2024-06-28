@@ -987,7 +987,7 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
         }
     };
     match atom_as_slice(&atom) {
-        Some([op, args @ ..]) => {
+        Some([op, _args @ ..]) => {
             let space_ref = space.as_gnd::<DynSpace>().unwrap();
             let mut actual_types = get_atom_types(space_ref, op);
             // FIXME: this relies on the fact that get_atom_types() returns
