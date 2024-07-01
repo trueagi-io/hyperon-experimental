@@ -3,6 +3,13 @@ from hyperon.ext import register_atoms
 import requests
 import json
 
+'''
+This is the very preliminary wrapper to the Kotlin-based
+MeTTa compiler, Jetta. For this gate to work, Jetta
+should be installed via clonning https://github.com/trueagi-io/jetta
+and running Application.kt of `server` subproject.
+'''
+
 default_url_base = 'http://0.0.0.0:9090/contexts'
 
 def jetta(metta, j_space, code, url=default_url_base):
