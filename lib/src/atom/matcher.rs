@@ -1132,6 +1132,10 @@ fn match_atoms_recursively(left: &Atom, right: &Atom) -> BindingsSet {
     let res = match (left, right) {
         (Atom::Symbol(a), Atom::Symbol(b)) if a == b => BindingsSet::single(),
         (Atom::Variable(dv), Atom::Variable(pv)) => BindingsSet::single().add_var_equality(dv, pv),
+        // TODO: If GroundedAtom is matched with VariableAtom there are
+        // two way to calculate match: (1) pass variable to the
+        // GroundedAtom::match(); (2) assign GroundedAtom to the Variable.
+        // Returning both results breaks tests right now.
         (Atom::Variable(v), b) => BindingsSet::single().add_var_binding(v, b),
         (a, Atom::Variable(v)) => BindingsSet::single().add_var_binding(v, a),
         (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b }))
@@ -1141,17 +1145,13 @@ fn match_atoms_recursively(left: &Atom, right: &Atom) -> BindingsSet {
                 acc.merge(&match_atoms_recursively(a, b))
             })
         },
-        // TODO: one more case for the special flag to see if GroundedAtom is
-        // matchable. If GroundedAtom is matched with VariableAtom there are
-        // two way to calculate match: (1) pass variable to the
-        // GroundedAtom::match(); (2) assign GroundedAtom to the Variable.
-        // Returning both results breaks tests right now.
-        (Atom::Grounded(a), _) => {
-            a.match_(right).collect()
+        (Atom::Grounded(a), _) if a.as_grounded().as_match().is_some() => {
+            a.as_grounded().as_match().unwrap().match_(right).collect()
         },
-        (_, Atom::Grounded(b)) => {
-            b.match_(left).collect()
+        (_, Atom::Grounded(b)) if b.as_grounded().as_match().is_some() => {
+            b.as_grounded().as_match().unwrap().match_(left).collect()
         },
+        (Atom::Grounded(a), Atom::Grounded(b)) if a.eq_gnd(AsRef::as_ref(b)) => BindingsSet::single(),
         _ => BindingsSet::empty(),
     };
     log::trace!("match_atoms_recursively: {} ~ {} => {}", left, right, res);

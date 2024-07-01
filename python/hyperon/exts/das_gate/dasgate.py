@@ -22,6 +22,7 @@ class DASpace(AbstractSpace):
     def __init__(self, remote=False, host='localhost', port='22', unwrap=True):
         super().__init__()
         # self.das = DistributedAtomSpace('ram_only')
+        self.fetch_flag = False
         if remote:
             self.das = DistributedAtomSpace(query_engine='remote', host=host, port=port)
             self.remote = True
@@ -163,6 +164,14 @@ class DASpace(AbstractSpace):
             new_bindings_set.push(bindings)
         return new_bindings_set
 
+    def _query_fetch_helper(self, answer, new_bindings_set):
+        for mapping, subgraph in answer:
+            bindings = Bindings()
+            for var, val in mapping.mapping.items():
+                # remove '$', because it is automatically added
+                bindings.add_var_binding(V(var[1:]), self._handle2atom(val))
+            new_bindings_set.push(bindings)
+        return new_bindings_set
 
     def query(self, query_atom):
         query = self._atom2dict_new(query_atom)
@@ -179,13 +188,17 @@ class DASpace(AbstractSpace):
         if not answer:
             return new_bindings_set
 
-        if self.remote:
-            return self._query_actual_helper(answer, new_bindings_set)
-            # return self._query_actual_helper_no_iter(answer, new_bindings_set)
-            # return self._query_temp_helper(answer, new_bindings_set)
+        if self.fetch_flag:
+            self.das.fetch()
+            return self._query_fetch_helper(answer, new_bindings_set)
         else:
-            #return self._query_actual_helper_no_iter(answer, new_bindings_set)
-            return self._query_actual_helper(answer, new_bindings_set)
+            if self.remote:
+                return self._query_actual_helper(answer, new_bindings_set)
+                # return self._query_actual_helper_no_iter(answer, new_bindings_set)
+                # return self._query_temp_helper(answer, new_bindings_set)
+            else:
+                #return self._query_actual_helper_no_iter(answer, new_bindings_set)
+                return self._query_actual_helper(answer, new_bindings_set)
 
         # return new_bindings_set
 
