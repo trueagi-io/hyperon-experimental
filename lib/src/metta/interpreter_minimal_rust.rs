@@ -415,13 +415,12 @@ fn return_not_reducible() -> Atom {
     NOT_REDUCIBLE_SYMBOL
 }
 
-fn error_atom(atom: Atom, err: String) -> Atom {
-    Atom::expr([Atom::sym("Error"), atom, Atom::sym(err)])
+fn error_msg(atom: Atom, err: String) -> Atom {
+    error_atom(atom, Atom::sym(err))
 }
 
-// FIXME: rename
-fn error_atom_(atom: Atom, err: Atom) -> Atom {
-    Atom::expr([Atom::sym("Error"), atom, err])
+fn error_atom(atom: Atom, err: Atom) -> Atom {
+    Atom::expr([ERROR_SYMBOL, atom, err])
 }
 
 fn finished_result(atom: Atom, bindings: Bindings, prev: Option<Rc<RefCell<Stack>>>) -> Vec<InterpretedAtom> {
@@ -434,7 +433,7 @@ fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: B
         eval ~ [_op, to_eval] => to_eval,
         _ => {
             let error = format!("expected: ({} <atom>), found: {}", EVAL_SYMBOL, eval);
-            return finished_result(error_atom(eval, error), bindings, prev);
+            return finished_result(error_msg(eval, error), bindings, prev);
         }
     };
     log::debug!("eval: to_eval: {}", to_eval);
@@ -465,7 +464,7 @@ fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: B
                             }
                         },
                         Err(ExecError::Runtime(err)) =>
-                            finished_result(error_atom(to_eval, err), bindings, prev),
+                            finished_result(error_msg(to_eval, err), bindings, prev),
                         Err(ExecError::NoReduce) =>
                             // TODO: we could remove ExecError::NoReduce and explicitly
                             // return NOT_REDUCIBLE_SYMBOL from the grounded function instead.
@@ -578,7 +577,7 @@ fn chain_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         Some([_op, nested, Atom::Variable(_var), templ]) => (nested, templ),
         _ => {
             let error: String = format!("expected: ({} <nested> (: <var> Variable) <templ>), found: {}", CHAIN_SYMBOL, atom);
-            return Stack::finished(prev, error_atom(atom, error));
+            return Stack::finished(prev, error_msg(atom, error));
         },
     };
     std::mem::swap(nested_arg, &mut nested);
@@ -621,7 +620,7 @@ fn function_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack 
         Some([_op, nested @ Atom::Expression(_)]) => nested,
         _ => {
             let error: String = format!("expected: ({} (: <body> Expression)), found: {}", FUNCTION_SYMBOL, atom);
-            return Stack::finished(prev, error_atom(atom, error));
+            return Stack::finished(prev, error_msg(atom, error));
         },
     };
     std::mem::swap(nested_arg, &mut nested);
@@ -698,7 +697,7 @@ fn unify_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
         Some([_op, _a, _b, _then, _else]) => (),
         _ => {
             let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", UNIFY_SYMBOL, atom);
-            return Stack::finished(prev, error_atom(atom, error));
+            return Stack::finished(prev, error_msg(atom, error));
         },
     };
     Stack::from_prev_with_vars(prev, atom, Variables::new(), no_handler)
@@ -710,7 +709,7 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         unify ~ [_op, atom, pattern, then, else_] => (atom, pattern, then, else_),
         _ => {
             let error: String = format!("expected: ({} <atom> <pattern> <then> <else>), found: {}", UNIFY_SYMBOL, unify);
-            return finished_result(error_atom(unify, error), bindings, prev);
+            return finished_result(error_msg(unify, error), bindings, prev);
         }
     };
 
@@ -741,7 +740,7 @@ fn decons_atom(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         decons ~ [_op, Atom::Expression(expr)] if expr.children().len() > 0 => expr,
         _ => {
             let error: String = format!("expected: ({} (: <expr> Expression)), found: {}", DECONS_ATOM_SYMBOL, decons);
-            return finished_result(error_atom(decons, error), bindings, prev);
+            return finished_result(error_msg(decons, error), bindings, prev);
         }
     };
     let mut children = expr.into_children();
@@ -756,7 +755,7 @@ fn cons_atom(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         cons ~ [_op, head, Atom::Expression(tail)] => (head, tail),
         _ => {
             let error: String = format!("expected: ({} <head> (: <tail> Expression)), found: {}", CONS_ATOM_SYMBOL, cons);
-            return finished_result(error_atom(cons, error), bindings, prev);
+            return finished_result(error_msg(cons, error), bindings, prev);
         }
     };
     let mut children = vec![head];
@@ -791,7 +790,7 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         superpose ~ [_op, Atom::Expression(collapsed)] => collapsed,
         _ => {
             let error: String = format!("expected: ({} (: <collapsed> Expression)), found: {}", SUPERPOSE_BIND_SYMBOL, superpose);
-            return finished_result(error_atom(superpose, error), bindings, prev);
+            return finished_result(error_msg(superpose, error), bindings, prev);
         }
     };
     collapsed.into_children().into_iter()
@@ -821,7 +820,7 @@ fn call_native_symbol(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> 
             if func.as_gnd::<NativeFunc>().is_some() => (func, args),
         _ => {
             let error = format!("expected: ({} func args), found: {}", CALL_NATIVE_SYMBOL, call);
-            return finished_result(error_atom(call, error), bindings, prev);
+            return finished_result(error_msg(call, error), bindings, prev);
         }
     };
 
@@ -838,7 +837,7 @@ fn interpret_sym(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
             if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
         _ => {
             let error = format!("expected: ({} atom type space), found: {}", INTERPRET_SYMBOL, interpret);
-            return finished_result(error_atom(interpret, error), bindings, prev);
+            return finished_result(error_msg(interpret, error), bindings, prev);
         }
     };
 
@@ -891,7 +890,7 @@ fn interpret_impl(args: Atom, bindings: Bindings) -> MettaResult {
             if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
         _ => {
             let error = format!("expected args: (atom type space), found: {}", args);
-            return once(return_atom(error_atom(call_native!(interpret_impl, args), error)), bindings);
+            return once(return_atom(error_msg(call_native!(interpret_impl, args), error)), bindings);
         }
     };
 
@@ -940,7 +939,7 @@ fn type_cast(space: Atom, atom: Atom, expected_type: Atom, bindings: Bindings) -
             .next();
         match first_match {
             Some((_atom, bindings)) => once(return_atom(atom), bindings),
-            None => once(return_atom(error_atom_(atom, BAD_TYPE_SYMBOL)), bindings),
+            None => once(return_atom(error_atom(atom, BAD_TYPE_SYMBOL)), bindings),
         }
     }
 }
@@ -971,7 +970,7 @@ fn check_alternatives(args: Atom, bindings: Bindings) -> MettaResult {
         args ~ [Atom::Expression(expr)] => expr,
         _ => {
             let error = format!("expected args: ((: expr Expression)), found: {}", args);
-            return once(return_atom(error_atom(call_native!(check_alternatives, args), error)), bindings);
+            return once(return_atom(error_msg(call_native!(check_alternatives, args), error)), bindings);
         }
     };
     let results = expr.into_children().into_iter()
@@ -995,7 +994,7 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
             if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
         _ => {
             let error = format!("expected args: (atom type space), found: {}", args);
-            return once(return_atom(error_atom(call_native!(interpret_expression, args), error)), bindings);
+            return once(return_atom(error_msg(call_native!(interpret_expression, args), error)), bindings);
         }
     };
     match atom_as_slice(&atom) {
@@ -1047,7 +1046,7 @@ fn interpret_tuple(args: Atom, bindings: Bindings) -> MettaResult {
             if space.as_gnd::<DynSpace>().is_some() => (expr, space),
         _ => {
             let error = format!("expected args: ((: expr Expression) space), found: {}", args);
-            return once(return_atom(error_atom(call_native!(interpret_tuple, args), error)), bindings);
+            return once(return_atom(error_msg(call_native!(interpret_tuple, args), error)), bindings);
         }
     };
     if expr.children().is_empty() {
@@ -1081,7 +1080,7 @@ fn interpret_function(args: Atom, bindings: Bindings) -> MettaResult {
                 op_type.children().get(0) == Some(&ARROW_SYMBOL) => (atom, op_type, ret_type, space),
         _ => {
             let error = format!("expected args: ((: atom Expression) (: op_type Expression) ret_type space), found: {}", args);
-            return once(return_atom(error_atom(call_native!(interpret_function, args), error)), bindings);
+            return once(return_atom(error_msg(call_native!(interpret_function, args), error)), bindings);
         }
     };
     let mut call = atom.clone().into_children();
@@ -1113,12 +1112,12 @@ fn interpret_args(args_: Atom, bindings: Bindings) -> MettaResult {
             if space.as_gnd::<DynSpace>().is_some() => (atom, args, arg_types, ret_type, space),
         _ => {
             let error = format!("expected args: (atom (: args Expression) (: arg_types Expression) ret_type space), found: {}", args_);
-            return once(return_atom(error_atom(call_native!(interpret_args, args_), error)), bindings);
+            return once(return_atom(error_msg(call_native!(interpret_args, args_), error)), bindings);
         }
     };
     let mut types = arg_types.into_children();
     if types.is_empty() {
-        return once(return_atom(error_atom_(atom, INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings);
+        return once(return_atom(error_atom(atom, INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings);
     }
     let types_head = types.remove(0);
     let types_tail = types;
@@ -1126,10 +1125,10 @@ fn interpret_args(args_: Atom, bindings: Bindings) -> MettaResult {
         if types_tail.is_empty() {
             match_types(types_head, ret_type,
                 return_atom(Atom::Expression(args)), 
-                return_atom(error_atom_(atom, BAD_TYPE_SYMBOL)),
+                return_atom(error_atom(atom, BAD_TYPE_SYMBOL)),
                 bindings)
         } else {
-            once(return_atom(error_atom_(atom, INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)
+            once(return_atom(error_atom(atom, INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)
         }
     } else {
         let mut args = args.into_children();
