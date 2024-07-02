@@ -814,19 +814,20 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
 type NativeFunc = fn(Atom, Bindings) -> MettaResult;
 
 fn call_native_symbol(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: call, ret: _, finished: _, vars: _ } = stack;
-    let (func, args) = match_atom!{
-        call ~ [_op, _name, func, args]
-            if func.as_gnd::<NativeFunc>().is_some() => (func, args),
+    let Stack{ prev, atom: call, ret: _, finished: _, vars } = stack;
+    let (name, func, args) = match_atom!{
+        call ~ [_op, name, func, args]
+            if func.as_gnd::<NativeFunc>().is_some() => (name, func, args),
         _ => {
             let error = format!("expected: ({} func args), found: {}", CALL_NATIVE_SYMBOL, call);
             return finished_result(error_msg(call, error), bindings, prev);
         }
     };
 
+    let call_stack = Some(call_to_stack(Atom::expr([name, args.clone()]), vars, prev));
     let func = func.as_gnd::<NativeFunc>().expect("Unexpected state");
     func(args, bindings)
-        .map(|(atom, bindings)| InterpretedAtom(atom_to_stack(atom, prev.clone()), bindings))
+        .map(|(atom, bindings)| InterpretedAtom(atom_to_stack(atom, call_stack.clone()), bindings))
         .collect()
 }
 
