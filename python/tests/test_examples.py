@@ -15,7 +15,8 @@ class ExamplesTest(HyperonTestCase):
         # interpreting this target in another space still works,
         # because substitution '&obj' -> obj is done by metta
         metta2 = MeTTa(env_builder=Environment.test_env())
-        result = interpret(metta2.space(), target)
+        result = interpret(metta2.space(), E(S('interpret'), target,
+                                             S('%Undefined%'), G(metta2.space())))
         self.assertTrue(obj.called)
         self.assertEqual(result, [Atoms.UNIT])
         # But it will not work if &obj is parsed in another space
@@ -89,7 +90,8 @@ class ExamplesTest(HyperonTestCase):
         # Now we try to change the grounded atom value directly
         # (equivalent to metta.run but keeping target)
         target = metta.parse_single('((py-dot (SetAtom ploc 5) latom))')
-        interpret(metta.space(), target)
+        interpret(metta.space(), E(S('interpret'), target, S('%Undefined%'),
+                                   G(metta.space())))
         t = target.get_children()[0] # unwrap outermost brackets
         # "ploc" value in the "target" is changed
         self.assertEqual(t.get_children()[1].get_children()[1].get_object().value, 5)

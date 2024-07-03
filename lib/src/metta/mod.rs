@@ -1,11 +1,12 @@
 //! Contains MeTTa specific types, constants and functions.
 
 pub mod text;
+#[cfg(feature = "old_interpreter")]
 pub mod interpreter;
-#[cfg(all(feature = "minimal", not(feature = "minimal_rust")))]
+#[cfg(not(feature = "old_interpreter"))]
 pub mod interpreter_minimal;
-#[cfg(all(feature = "minimal", feature = "minimal_rust"))]
-pub mod interpreter_minimal_rust;
+#[cfg(not(feature = "old_interpreter"))]
+pub use interpreter_minimal as interpreter;
 pub mod types;
 pub mod runner;
 

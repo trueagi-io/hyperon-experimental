@@ -1,5 +1,5 @@
 #![feature(test)]
-#[cfg(feature = "minimal")]
+#[cfg(not(feature = "old_interpreter"))]
 mod interpreter_minimal_bench {
 
 extern crate test;
@@ -9,10 +9,7 @@ use test::Bencher;
 use hyperon::*;
 use hyperon::space::grounding::*;
 use hyperon::metta::*;
-#[cfg(not(feature = "minimal_rust"))]
 use hyperon::metta::interpreter_minimal::*;
-#[cfg(feature = "minimal_rust")]
-use hyperon::metta::interpreter_minimal_rust::*;
 
 fn chain_atom(size: isize) -> Atom {
     let mut atom = Atom::expr([CHAIN_SYMBOL, Atom::sym("A"), Atom::var("x"), Atom::var("x")]);

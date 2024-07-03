@@ -145,10 +145,7 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
 
 fn interpret(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
     let expr = Atom::expr([EVAL_SYMBOL, Atom::expr([INTERPRET_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())])]);
-    #[cfg(not(feature = "minimal_rust"))]
-    let result = crate::metta::interpreter_minimal::interpret(space, &expr);
-    #[cfg(feature = "minimal_rust")]
-    let result = crate::metta::interpreter_minimal_rust::interpret(space, &expr);
+    let result = crate::metta::interpreter::interpret(space, &expr);
     result
 }
 
