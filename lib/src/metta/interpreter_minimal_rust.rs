@@ -1007,7 +1007,8 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
             // tuple types first. Either need to sort types or fix behavior
             // in get_atom_types contract.
             let func_start_index = actual_types.partition_point(|a| !is_func(a));
-            let mut func_types = actual_types.split_off(func_start_index).into_iter(); 
+            let has_func_types = func_start_index < actual_types.len();
+            let func_types = actual_types.split_off(func_start_index).into_iter(); 
             let mut tuple_types = actual_types.into_iter().peekable();
 
             let tuple = if tuple_types.peek().is_some() {
@@ -1023,15 +1024,17 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
                 empty()
             };
 
-            let func = if let Some(op_type) = func_types.next() {
-                let reduced = Atom::Variable(VariableAtom::new("reduced").make_unique());
-                let result = Atom::Variable(VariableAtom::new("result").make_unique());
-                once(
-                    Atom::expr([CHAIN_SYMBOL, call_native!(interpret_function, Atom::expr([atom, op_type, typ.clone(), space.clone()])), reduced.clone(),
-                        Atom::expr([CHAIN_SYMBOL, call_native!(metta_call, Atom::expr([reduced, typ, space])), result.clone(),
+            let func = if has_func_types {
+                Box::new(func_types.map(move |op_type| {
+                    let reduced = Atom::Variable(VariableAtom::new("reduced").make_unique());
+                    let result = Atom::Variable(VariableAtom::new("result").make_unique());
+                    Atom::expr([CHAIN_SYMBOL, call_native!(interpret_function, Atom::expr([atom.clone(), op_type, typ.clone(), space.clone()])), reduced.clone(),
+                        Atom::expr([CHAIN_SYMBOL, call_native!(metta_call, Atom::expr([reduced, typ.clone(), space.clone()])), result.clone(),
                             return_atom(result)
                         ])
-                    ]), bindings)
+                    ])
+                })
+                .map(move |atom| (atom, bindings.clone())))
             } else {
                 empty()
             };
