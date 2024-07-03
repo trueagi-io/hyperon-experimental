@@ -436,6 +436,7 @@ fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: B
             return finished_result(error_msg(eval, error), bindings, prev);
         }
     };
+    let to_eval = apply_bindings_to_atom_move(to_eval, &bindings);
     log::debug!("eval: to_eval: {}", to_eval);
     match atom_as_slice(&to_eval) {
         Some([Atom::Grounded(op), args @ ..]) => {
