@@ -60,12 +60,12 @@
 /// ```
 /// #[macro_use]
 /// use hyperon::expr;
-/// use hyperon::common::MUL;
+/// use hyperon::metta::runner::arithmetics::MulOp;
 ///
 /// let sym = expr!("A");
 /// let var = expr!(x);
 /// let gnd = expr!({42});
-/// let expr = expr!("=" ("*2" n) ({MUL} n {2}));
+/// let expr = expr!("=" ("*2" n) ({MulOp{}} n {2}));
 ///
 /// assert_eq!(sym.to_string(), "A");
 /// assert_eq!(var.to_string(), "$x");
