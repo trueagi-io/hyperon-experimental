@@ -40,7 +40,7 @@ jobs:
           echo "COMMIT_HEAD=${{github.ref_name != '' && github.ref_name || env.GITHUB_SHA}}" | tee -a $GITHUB_ENV
 
       - name: Build wheels on ${{ matrix.os }}
-        uses: pypa/cibuildwheel@v2.17.0
+        uses: pypa/cibuildwheel@v2.19.2
         env:
           CIBW_BEFORE_ALL: sh -c "./python/install-hyperonc.sh -u https://github.com/${{github.repository}}.git -r ${{env.COMMIT_HEAD}}"
         with:
