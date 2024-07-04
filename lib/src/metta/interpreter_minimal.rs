@@ -285,7 +285,7 @@ fn is_embedded_op(atom: &Atom) -> bool {
             || *op == FUNCTION_SYMBOL
             || *op == COLLAPSE_BIND_SYMBOL
             || *op == SUPERPOSE_BIND_SYMBOL
-            || *op == INTERPRET_SYMBOL
+            || *op == METTA_SYMBOL
             || *op == CALL_NATIVE_SYMBOL,
         _ => false,
     }
@@ -396,7 +396,7 @@ fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, 
             Some([op, ..]) if *op == SUPERPOSE_BIND_SYMBOL => {
                 superpose_bind(stack, bindings)
             },
-            Some([op, ..]) if *op == INTERPRET_SYMBOL => {
+            Some([op, ..]) if *op == METTA_SYMBOL => {
                 interpret_sym(stack, bindings)
             },
             Some([op, ..]) if *op == CALL_NATIVE_SYMBOL => {
@@ -838,7 +838,7 @@ fn interpret_sym(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
         interpret ~ [_op, atom, typ, space]
             if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
         _ => {
-            let error = format!("expected: ({} atom type space), found: {}", INTERPRET_SYMBOL, interpret);
+            let error = format!("expected: ({} atom type space), found: {}", METTA_SYMBOL, interpret);
             return finished_result(error_msg(interpret, error), bindings, prev);
         }
     };
@@ -1064,7 +1064,7 @@ fn interpret_tuple(args: Atom, bindings: Bindings) -> MettaResult {
         let rtail = Atom::Variable(VariableAtom::new("rtail").make_unique());
         let result = Atom::Variable(VariableAtom::new("result").make_unique());
         once(
-            Atom::expr([CHAIN_SYMBOL, Atom::expr([INTERPRET_SYMBOL, head, ATOM_TYPE_UNDEFINED, space.clone()]), rhead.clone(),
+            Atom::expr([CHAIN_SYMBOL, Atom::expr([METTA_SYMBOL, head, ATOM_TYPE_UNDEFINED, space.clone()]), rhead.clone(),
                 Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::gnd(IfEqualOp{}), rhead.clone(), EMPTY_SYMBOL, return_atom(EMPTY_SYMBOL),
                     Atom::expr([CHAIN_SYMBOL, call_native!(interpret_tuple, Atom::expr([Atom::expr(tail), space.clone()])), rtail.clone(),
                         Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::gnd(IfEqualOp{}), rtail.clone(), EMPTY_SYMBOL, return_atom(EMPTY_SYMBOL),
@@ -1098,7 +1098,7 @@ fn interpret_function(args: Atom, bindings: Bindings) -> MettaResult {
     let rargs = Atom::Variable(VariableAtom::new("rargs").make_unique());
     let result = Atom::Variable(VariableAtom::new("result").make_unique());
     once(
-        Atom::expr([CHAIN_SYMBOL, Atom::expr([INTERPRET_SYMBOL, head, Atom::Expression(op_type), space.clone()]), rop.clone(),
+        Atom::expr([CHAIN_SYMBOL, Atom::expr([METTA_SYMBOL, head, Atom::Expression(op_type), space.clone()]), rop.clone(),
             call_native!(return_on_error, Atom::expr([rop.clone(), 
                 Atom::expr([CHAIN_SYMBOL, call_native!(interpret_args, Atom::expr([Atom::Expression(atom), Atom::expr(args), arg_types, ret_type, space.clone()])), rargs.clone(),
                     call_native!(return_on_error, Atom::expr([rargs.clone(), 
@@ -1150,7 +1150,7 @@ fn interpret_args(args_: Atom, bindings: Bindings) -> MettaResult {
             ]))
         ]);
         once(
-            Atom::expr([CHAIN_SYMBOL, Atom::expr([INTERPRET_SYMBOL, args_head.clone(), types_head, space.clone()]), rhead.clone(),
+            Atom::expr([CHAIN_SYMBOL, Atom::expr([METTA_SYMBOL, args_head.clone(), types_head, space.clone()]), rhead.clone(),
                 Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::gnd(IfEqualOp{}), rhead.clone(), args_head,
                     recursion.clone(),
                     call_native!(return_on_error, Atom::expr([rhead, 
@@ -1219,7 +1219,7 @@ fn metta_call_return(args: Atom, bindings: Bindings) -> MettaResult {
     } else {
         let ret = Atom::Variable(VariableAtom::new("ret").make_unique());
         once(
-            Atom::expr([CHAIN_SYMBOL, Atom::expr([INTERPRET_SYMBOL, result, typ, space]), ret.clone(),
+            Atom::expr([CHAIN_SYMBOL, Atom::expr([METTA_SYMBOL, result, typ, space]), ret.clone(),
                 return_atom(ret)
             ]), bindings)
     }

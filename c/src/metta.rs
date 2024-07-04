@@ -639,6 +639,16 @@ pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, 
     hyperon::metta::UNIT_ATOM().into()
 }
 
+/// @brief Creates a Symbol atom for the special MeTTa symbol used to indicate
+/// calling MeTTa interpreter.
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the interpret atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
+#[no_mangle] pub extern "C" fn METTA_ATOM() -> atom_t {
+    hyperon::metta::METTA_SYMBOL.into()
+}
+
 /// @brief Checks whether Atom `atom` has Type `typ` in context of `space`
 /// @ingroup metta_language_group
 /// @param[in]  space  A pointer to the `space_t` representing the space context in which to perform the check

@@ -178,7 +178,7 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
 
 fn interpret_init_internal<'a, T: Space + 'a>(space: T, expr: &Atom) -> StepResult<'a, Results, InterpreterError> {
     let expr = match <&[Atom]>::try_from(expr).ok() {
-        Some([op, atom, _typ, _space]) if *op == INTERPRET_SYMBOL => atom,
+        Some([op, atom, _typ, _space]) if *op == METTA_SYMBOL => atom,
         _ => expr,
     };
     let context = InterpreterContextRef::new(space);

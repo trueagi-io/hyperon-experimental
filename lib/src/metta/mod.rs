@@ -43,7 +43,7 @@ pub const RETURN_SYMBOL : Atom = sym!("return");
 pub const COLLAPSE_BIND_SYMBOL : Atom = sym!("collapse-bind");
 pub const SUPERPOSE_BIND_SYMBOL : Atom = sym!("superpose-bind");
 
-pub const INTERPRET_SYMBOL : Atom = sym!("interpret");
+pub const METTA_SYMBOL : Atom = sym!("metta");
 pub const CALL_NATIVE_SYMBOL : Atom = sym!("call-native");
 
 //TODO: convert these from functions to static strcutures, when Atoms are Send+Sync

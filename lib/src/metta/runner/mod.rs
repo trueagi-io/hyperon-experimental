@@ -1185,7 +1185,7 @@ impl<'i> InputStream<'i> {
 #[cfg(not(feature = "old_interpreter"))]
 fn wrap_atom_by_metta_interpreter(space: DynSpace, atom: Atom) -> Atom {
     let space = Atom::gnd(space);
-    let interpret = Atom::expr([Atom::sym("interpret"), atom, ATOM_TYPE_UNDEFINED, space]);
+    let interpret = Atom::expr([METTA_SYMBOL, atom, ATOM_TYPE_UNDEFINED, space]);
     interpret
 }
 

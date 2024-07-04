@@ -92,7 +92,7 @@ class AtomTest(unittest.TestCase):
 
     def test_interpret(self):
         space = GroundingSpaceRef()
-        x2 = E(S('interpret'), E(x2Atom, ValueAtom(1)), S('%Undefined%'), G(space))
+        x2 = E(Atoms.METTA, E(x2Atom, ValueAtom(1)), AtomType.UNDEFINED, G(space))
         self.assertEqual(interpret(space, x2), [ValueAtom(2)])
 
     def test_grounded_returns_python_value_unwrap_false(self):
@@ -102,7 +102,7 @@ class AtomTest(unittest.TestCase):
         expr = E(x2Atom, ValueAtom(1))
 
         space = GroundingSpaceRef()
-        self.assertEqual(interpret(space, E(S('interpret'), expr, S('%Undefined%'), G(space))),
+        self.assertEqual(interpret(space, E(Atoms.METTA, expr, AtomType.UNDEFINED, G(space))),
                 [E(S('Error'), expr, S('Grounded operation which is defined using unwrap=False should return atom instead of Python type'))])
 
     def test_grounded_no_return(self):
@@ -111,15 +111,16 @@ class AtomTest(unittest.TestCase):
             print(input)
 
         printExpr = E(OperationAtom('print', print_op, type_names=["Atom", "->"], unwrap=False), S("test"))
-        printExpr = E(S('interpret'), printExpr, S('%Undefined%'), G(space))
+        printExpr = E(Atoms.METTA, printExpr, AtomType.UNDEFINED, G(space))
         self.assertTrue(atom_is_error(interpret(space, printExpr)[0]))
         printExpr = E(OperationAtom('print', print_op, type_names=["Atom", "->"], unwrap=True), ValueAtom("test"))
-        printExpr = E(S('interpret'), printExpr, S('%Undefined%'), G(space))
+        printExpr = E(Atoms.METTA, printExpr, AtomType.UNDEFINED, G(space))
         self.assertEqual(interpret(space, printExpr), [E()])
 
     def test_no_reduce(self):
         space = GroundingSpaceRef()
-        expr = E(S('interpret'), E(noReduceAtom, ValueAtom(1)), S('%Undefined%'), G(space))
+        expr = E(Atoms.METTA, E(noReduceAtom, ValueAtom(1)),
+                 AtomType.UNDEFINED, G(space))
         self.assertEqual(interpret(space, expr),
                 [E(noReduceAtom, ValueAtom(1))])
 
