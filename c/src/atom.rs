@@ -236,15 +236,27 @@ pub unsafe extern "C" fn atom_expr_from_vec(children: atom_vec_t) -> atom_t {
     Atom::expr(children).into()
 }
 
-/// @brief Create a new Variable atom with the specified identifier
+/// @brief Create a new Variable atom with the specified name
 /// @ingroup atom_group
-/// @param[in]  name  The identifier for the newly created Variable atom
+/// @param[in]  name  The name for the newly created Variable atom
 /// @return An `atom_t` for the Variable atom
 /// @note The caller must take ownership responsibility for the returned `atom_t`
 ///
 #[no_mangle]
 pub unsafe extern "C" fn atom_var(name: *const c_char) -> atom_t {
     Atom::var(cstr_as_str(name)).into()
+}
+
+/// @brief Create a new Variable atom with the specified name and id
+/// @ingroup atom_group
+/// @param[in]  name  The name for the newly created Variable atom
+/// @param[in]  id    The unique id for the newly created Variable atom
+/// @return An `atom_t` for the Variable atom
+/// @note The caller must take ownership responsibility for the returned `atom_t`
+///
+#[no_mangle]
+pub unsafe extern "C" fn atom_var_with_id(name: *const c_char, id: usize) -> atom_t {
+    Atom::var_with_id(cstr_as_str(name), id).into()
 }
 
 /// @ingroup atom_group

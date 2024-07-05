@@ -656,7 +656,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<CAtom>(m, "CAtom");
 
     m.def("atom_sym", [](char const* name) { return CAtom(atom_sym(name)); }, "Create symbol atom");
-    m.def("atom_var", [](char const* name) { return CAtom(atom_var(name)); }, "Create variable atom");
+    m.def("atom_var", [](char const* name, int id = 0) { return CAtom(atom_var_with_id(name, id)); }, "Create variable atom");
     m.def("atom_expr", [](py::list _children) {
             size_t size = py::len(_children);
             atom_t children[size];
@@ -754,6 +754,11 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("bindings_add_var_binding",
           [](CBindings bindings, char const* varName, CAtom atom) {
               return bindings_add_var_binding(bindings.ptr(), atom_var(varName), atom_clone(atom.ptr()));
+          },
+          "Links variable to atom" );
+    m.def("bindings_add_var_binding",
+          [](CBindings bindings, CAtom var, CAtom atom) {
+              return bindings_add_var_binding(bindings.ptr(), atom_clone(var.ptr()), atom_clone(atom.ptr()));
           },
           "Links variable to atom" );
     m.def("bindings_is_empty", [](CBindings bindings){ return bindings_is_empty(bindings.ptr());}, "Returns true if bindings is empty");
