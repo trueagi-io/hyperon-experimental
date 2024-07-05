@@ -439,8 +439,6 @@ impl Metta {
         state.run_to_completion()
     }
 
-    // TODO: MINIMAL this method is deprecated and should be removed after switching
-    // to the minimal MeTTa
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
         #[cfg(not(feature = "old_interpreter"))]
         let atom = if is_bare_minimal_interpreter(self) {

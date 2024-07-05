@@ -88,7 +88,13 @@ class VariableAtom(Atom):
 
 def V(name):
     """A convenient method to construct a VariableAtom"""
-    return VariableAtom(hp.atom_var(name))
+    if '#' in name:
+        vname, vid = name.split('#')[0:2]
+        vid = int(vid)
+    else:
+        vname = name
+        vid = 0
+    return VariableAtom(hp.atom_var(vname, vid))
 
 class ExpressionAtom(Atom):
     """An ExpressionAtom combines different kinds of Atoms, including expressions."""
@@ -567,7 +573,7 @@ class Bindings:
     def add_var_binding(self, var: Union[str, Atom], atom: Atom) -> bool:
         """Adds a binding between a variable and an Atom."""
         if isinstance(var, Atom):
-            return hp.bindings_add_var_binding(self.cbindings, var.get_name(), atom.catom)
+            return hp.bindings_add_var_binding(self.cbindings, var.catom, atom.catom)
         else:
             return hp.bindings_add_var_binding(self.cbindings, var, atom.catom)
 

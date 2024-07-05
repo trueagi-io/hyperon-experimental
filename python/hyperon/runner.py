@@ -205,13 +205,21 @@ class MeTTa:
         """Runs the MeTTa code from the program string containing S-Expression MeTTa syntax"""
         parser = SExprParser(program)
         results = hp.metta_run(self.cmetta, parser.cparser)
-        err_str = hp.metta_err_str(self.cmetta)
-        if (err_str is not None):
-            raise RuntimeError(err_str)
+        self._run_check_for_error()
         if flat:
             return [Atom._from_catom(catom) for result in results for catom in result]
         else:
             return [[Atom._from_catom(catom) for catom in result] for result in results]
+
+    def evaluate_atom(self, atom):
+        result = hp.metta_evaluate_atom(self.cmetta, atom.catom)
+        self._run_check_for_error()
+        return [Atom._from_catom(catom) for catom in result]
+
+    def _run_check_for_error(self):
+        err_str = hp.metta_err_str(self.cmetta)
+        if (err_str is not None):
+            raise RuntimeError(err_str)
 
 class Environment:
     """This class contains the API for configuring the host platform interface used by MeTTa"""
