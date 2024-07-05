@@ -656,7 +656,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<CAtom>(m, "CAtom");
 
     m.def("atom_sym", [](char const* name) { return CAtom(atom_sym(name)); }, "Create symbol atom");
-    m.def("atom_var", [](char const* name, int id = 0) { return CAtom(atom_var_with_id(name, id)); }, "Create variable atom");
+    m.def("atom_var", [](char const* name, unsigned int id = 0) { return CAtom(atom_var_with_id(name, id)); }, "Create variable atom");
     m.def("atom_expr", [](py::list _children) {
             size_t size = py::len(_children);
             atom_t children[size];
