@@ -593,7 +593,7 @@ class Bindings:
     def iterator(self):
         """Returns an iterator over the variable-atom pairs in the bindings"""
         res = hp.bindings_list(self.cbindings)
-        result = [(r[0], Atom._from_catom(r[1])) for r in res]
+        result = [(Atom._from_catom(r[0]), Atom._from_catom(r[1])) for r in res]
         return iter(result)
 
 class BindingsSet:

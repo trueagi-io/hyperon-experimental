@@ -495,14 +495,9 @@ void py_space_free_payload(void *payload) {
     delete static_cast<PySpace const*>(payload);
 }
 
-void copy_to_list_callback(atom_ref_t var, atom_ref_t atom, void* context){
-
+void copy_pair_of_atoms_to_list_callback(atom_ref_t var, atom_ref_t atom, void* context){
     pybind11::list& var_atom_list = *( (pybind11::list*)(context) );
-
-    var_atom_list.append(
-            std::make_pair(
-                func_to_string((write_to_buf_func_t)&atom_get_name, &var),
-                CAtom(atom)));
+    var_atom_list.append(std::make_pair(CAtom(var), CAtom(atom)));
 }
 
 void atom_copy_to_list_callback(atom_ref_t atom, void* context){
@@ -775,7 +770,7 @@ PYBIND11_MODULE(hyperonpy, m) {
         pybind11::list var_atom_list;
         bindings_traverse(
                 bindings.ptr(),
-                copy_to_list_callback,
+                copy_pair_of_atoms_to_list_callback,
                 &var_atom_list);
 
         return var_atom_list;

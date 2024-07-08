@@ -98,7 +98,7 @@ class SqlHelper:
         for val in res:
             temp_dict = {}
             for k, v in val.items():
-                temp_dict['$' + str(k)] = str(v)
+                temp_dict[k.get_name()] = str(v)
             variables.append(temp_dict)
         atoms = self.get_query_atoms(query_atom)
         new_atoms = []
