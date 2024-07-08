@@ -254,8 +254,8 @@ pub unsafe extern "C" fn atom_var(name: *const c_char) -> atom_t {
 /// @note The caller must take ownership responsibility for the returned `atom_t`
 ///
 #[no_mangle]
-pub unsafe extern "C" fn atom_var_from_name(name: *const c_char) -> atom_t {
-    VariableAtom::from_name(cstr_as_str(name))
+pub unsafe extern "C" fn atom_var_parse_name(name: *const c_char) -> atom_t {
+    VariableAtom::parse_name(cstr_as_str(name))
         .map_or(atom_t::null(), |v| Atom::Variable(v).into())
 }
 

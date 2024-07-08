@@ -217,7 +217,7 @@ pub struct VariableAtom {
 impl VariableAtom {
     /// Constructs new variable using `name` provided. Name should not contain
     /// `#` characted which is reserved for internal name formatting (see
-    /// [VariableAtom::from_name]). Usually [Atom::var] method should be used
+    /// [VariableAtom::parse_name]). Usually [Atom::var] method should be used
     /// to create new variable atom instance. But sometimes [VariableAtom]
     /// instance is required. For example for using as a key in variable bindings
     /// (see [matcher::Bindings]).
@@ -246,17 +246,17 @@ impl VariableAtom {
     /// ```
     /// use hyperon::VariableAtom;
     ///
-    /// let x0 = VariableAtom::from_name("x");
-    /// let x42 = VariableAtom::from_name("x#42");
-    /// let xn = VariableAtom::from_name("x#");
-    /// let xe = VariableAtom::from_name("x#42#");
+    /// let x0 = VariableAtom::parse_name("x");
+    /// let x42 = VariableAtom::parse_name("x#42");
+    /// let xn = VariableAtom::parse_name("x#");
+    /// let xe = VariableAtom::parse_name("x#42#");
     ///
     /// assert_eq!(x0, Ok(VariableAtom::new_id("x", 0)));
     /// assert_eq!(x42, Ok(VariableAtom::new_id("x", 42)));
     /// assert_eq!(xn, Err(format!("Variable name is expected to contain number after # sign")));
     /// assert_eq!(xe, Err(format!("Variable name should have the following format: name[#id], actual name is x#42#")));
     /// ```
-    pub fn from_name(formatted: &str) -> Result<Self, String> {
+    pub fn parse_name(formatted: &str) -> Result<Self, String> {
         let mut parts = formatted.split('#');
         let name = parts.next().unwrap().to_string();
         if name.is_empty() {
