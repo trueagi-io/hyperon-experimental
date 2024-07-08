@@ -752,11 +752,6 @@ PYBIND11_MODULE(hyperonpy, m) {
     }, "Merges bindings into a BindingsSet, allowing for conflicting bindings to split");
     m.def("bindings_eq", [](CBindings left, CBindings right){ return bindings_eq(left.ptr(), right.ptr());}, "Compares bindings"  );
     m.def("bindings_add_var_binding",
-          [](CBindings bindings, char const* varName, CAtom atom) {
-              return bindings_add_var_binding(bindings.ptr(), atom_var(varName), atom_clone(atom.ptr()));
-          },
-          "Links variable to atom" );
-    m.def("bindings_add_var_binding",
           [](CBindings bindings, CAtom var, CAtom atom) {
               return bindings_add_var_binding(bindings.ptr(), atom_clone(var.ptr()), atom_clone(atom.ptr()));
           },

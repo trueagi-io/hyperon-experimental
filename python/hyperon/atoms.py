@@ -569,12 +569,9 @@ class Bindings:
         """Merges with another Bindings instance, into a Bindings Set."""
         return BindingsSet(hp.bindings_merge(self.cbindings, other.cbindings))
 
-    def add_var_binding(self, var: Union[str, Atom], atom: Atom) -> bool:
+    def add_var_binding(self, var: VariableAtom, atom: Atom) -> bool:
         """Adds a binding between a variable and an Atom."""
-        if isinstance(var, Atom):
-            return hp.bindings_add_var_binding(self.cbindings, var.catom, atom.catom)
-        else:
-            return hp.bindings_add_var_binding(self.cbindings, var, atom.catom)
+        return hp.bindings_add_var_binding(self.cbindings, var.catom, atom.catom)
 
     def is_empty(self) -> bool:
         """Checks if a bindings contains no associations."""

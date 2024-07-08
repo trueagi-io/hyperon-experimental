@@ -130,7 +130,7 @@ class DASpace(AbstractSpace):
         for a in answer:
             bindings = Bindings()
             if a[0] is None:
-                bindings.add_var_binding("res", self._handle2atom3(a[1]))
+                bindings.add_var_binding(V("res"), self._handle2atom3(a[1]))
             else:
                 mapping = dict(ast.literal_eval(a[0]))
                 for var, val in mapping.items():

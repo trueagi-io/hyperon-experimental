@@ -9,8 +9,8 @@ class BindingsTest(unittest.TestCase):
         self.emptyBindings = Bindings()
 
         self.bindings = Bindings()
-        self.bindings.add_var_binding("a", S("b"))
-        self.bindings.add_var_binding("x", S("y"))
+        self.bindings.add_var_binding(V("a"), S("b"))
+        self.bindings.add_var_binding(V("x"), S("y"))
 
 
     def tearDown(self) -> None:
