@@ -247,16 +247,16 @@ pub unsafe extern "C" fn atom_var(name: *const c_char) -> atom_t {
     Atom::var(cstr_as_str(name)).into()
 }
 
-/// @brief Create a new Variable atom with the specified name and id
+/// @brief Create a new Variable atom parsing full formatted name of the variable
 /// @ingroup atom_group
-/// @param[in]  name  The name for the newly created Variable atom
-/// @param[in]  id    The unique id for the newly created Variable atom
-/// @return An `atom_t` for the Variable atom
+/// @param[in]  name  The name for the newly created Variable atom in a format `<name>#id`
+/// @return An `atom_t` for the Variable atom, returns `atom_t::null()` when parsing fails
 /// @note The caller must take ownership responsibility for the returned `atom_t`
 ///
 #[no_mangle]
-pub unsafe extern "C" fn atom_var_with_id(name: *const c_char, id: usize) -> atom_t {
-    Atom::var_with_id(cstr_as_str(name), id).into()
+pub unsafe extern "C" fn atom_var_from_name(name: *const c_char) -> atom_t {
+    VariableAtom::from_name(cstr_as_str(name))
+        .map_or(atom_t::null(), |v| Atom::Variable(v).into())
 }
 
 /// @ingroup atom_group

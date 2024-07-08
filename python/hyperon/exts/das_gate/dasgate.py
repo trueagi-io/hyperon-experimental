@@ -134,7 +134,7 @@ class DASpace(AbstractSpace):
             else:
                 mapping = dict(ast.literal_eval(a[0]))
                 for var, val in mapping.items():
-                    bindings.add_var_binding(V(var), self._handle2atom4(val))
+                    bindings.add_var_binding(VariableAtom.from_name(var), self._handle2atom4(val))
             new_bindings_set.push(bindings)
         return new_bindings_set
 
@@ -149,7 +149,7 @@ class DASpace(AbstractSpace):
                 bindings = Bindings()
                 if not a.assignment is None:
                     for var, val in a.assignment.mapping.items():
-                        bindings.add_var_binding(V(var), self._handle2atom5(val))
+                        bindings.add_var_binding(VariableAtom.from_name(var), self._handle2atom5(val))
                 new_bindings_set.push(bindings)
         return new_bindings_set
 
@@ -157,7 +157,7 @@ class DASpace(AbstractSpace):
         for mapping, subgraph in answer:
             bindings = Bindings()
             for var, val in mapping.mapping.items():
-                bindings.add_var_binding(V(var), self._handle2atom5(val))
+                bindings.add_var_binding(VariableAtom.from_name(var), self._handle2atom5(val))
             new_bindings_set.push(bindings)
         return new_bindings_set
 
@@ -165,7 +165,7 @@ class DASpace(AbstractSpace):
         for mapping, subgraph in answer:
             bindings = Bindings()
             for var, val in mapping.mapping.items():
-                bindings.add_var_binding(V(var), self._handle2atom(val))
+                bindings.add_var_binding(VariableAtom.from_name(var), self._handle2atom(val))
             new_bindings_set.push(bindings)
         return new_bindings_set
 
@@ -208,7 +208,7 @@ class DASpace(AbstractSpace):
         for a in answer['mapping']:
             bindings = Bindings()
             for var, val in a.mapping.items():
-                bindings.add_var_binding(V(var), self._handle2atom(val))
+                bindings.add_var_binding(VariableAtom.from_name(var), self._handle2atom(val))
             new_bindings_set.push(bindings)
         return new_bindings_set
 

@@ -86,15 +86,15 @@ class VariableAtom(Atom):
         """Returns the name of the Atom."""
         return hp.atom_get_name(self.catom)
 
+    @staticmethod
+    def from_name(name):
+        """Construct new VariableAtom instance from VariableAtom.get_name()
+        method results."""
+        return VariableAtom(hp.atom_var_from_name(name))
+
 def V(name):
     """A convenient method to construct a VariableAtom"""
-    if '#' in name:
-        vname, vid = name.split('#')[0:2]
-        vid = int(vid)
-    else:
-        vname = name
-        vid = 0
-    return VariableAtom(hp.atom_var(vname, vid))
+    return VariableAtom(hp.atom_var(name))
 
 class ExpressionAtom(Atom):
     """An ExpressionAtom combines different kinds of Atoms, including expressions."""

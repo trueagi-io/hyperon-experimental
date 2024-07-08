@@ -860,25 +860,6 @@ impl Atom {
         Self::Variable(VariableAtom::new(name))
     }
 
-    /// Constructs variable out of name and id.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use hyperon::Atom;
-    ///
-    /// let a = Atom::var_with_id("a", 1);
-    /// let aa = Atom::var_with_id("a", 1);
-    /// let b = Atom::var_with_id("b", 2);
-    ///
-    /// assert_eq!(a.to_string(), "$a#1");
-    /// assert_eq!(a, aa);
-    /// assert_ne!(a, b);
-    /// ```
-    pub fn var_with_id<T: Into<String>>(name: T, id: usize) -> Self {
-        Self::Variable(VariableAtom::new_id(name, id))
-    }
-
     /// Constructs grounded atom with customized behaviour.
     /// See [Grounded] for examples.
     pub fn gnd<T: CustomGroundedType>(gnd: T) -> Atom {
