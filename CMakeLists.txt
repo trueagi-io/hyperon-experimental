@@ -7,7 +7,7 @@ include(ExternalProject)
 
 option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 
-set(HYPERONC_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/hyperonc-prefix")
+set(HYPERONC_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/hyperonc-install")
 message(STATUS "HYPERONC_INSTALL_PREFIX = ${HYPERONC_INSTALL_PREFIX}")
 
 set(IS_RELEASE_BUILD $<IF:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>,1,0>)
@@ -16,7 +16,6 @@ set(BUILD_CONFIGURATION $<IF:${IS_RELEASE_BUILD},Release,Debug>)
 ExternalProject_Add(
     hyperonc
     BUILD_ALWAYS 1
-    PREFIX "${HYPERONC_INSTALL_PREFIX}"
     SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/c"
     CMAKE_ARGS
     -DGIT=${GIT}

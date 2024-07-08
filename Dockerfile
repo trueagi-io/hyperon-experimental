@@ -1,9 +1,15 @@
-FROM ubuntu:22.04
+FROM ubuntu:22.04 AS os
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
-    apt-get install -y sudo git python3 python3-pip curl gcc cmake \
+    apt-get install -y python3 python3-pip
+
+FROM os AS build
+
+RUN DEBIAN_FRONTEND=noninteractive \
+    TZ=UTC \
+    apt-get install -y sudo git curl gcc cmake \
         pkg-config libssl-dev zlib1g-dev && \
     rm -rf /var/lib/apt/lists/*
 
@@ -24,17 +30,31 @@ ENV PATH="${PATH}:/home/user/.local/bin"
 RUN conan profile new --detect default
 
 ADD --chown=user:users . ${HOME}/hyperon-experimental
+
+ENV PREFIX=${HOME}/prefix
+RUN mkdir ${PREFIX}
+
 WORKDIR ${HOME}/hyperon-experimental
-RUN mkdir build
-
-WORKDIR ${HOME}/hyperon-experimental/lib
-RUN cargo build
 RUN cargo test
+RUN cargo build --release
 
-WORKDIR ${HOME}/hyperon-experimental/build
-RUN cmake ..
+ENV BUILD=${HOME}/hyperon-experimental/build
+RUN mkdir ${BUILD}
+WORKDIR ${BUILD}
+RUN cmake -DCMAKE_BUILD_TYPE=Release ..
 RUN make
 RUN make check
 
-WORKDIR ${HOME}/hyperon-experimental
-RUN python3 -m pip install -e ./python[dev]
+ENV HYPERONPY=${BUILD}/hyperonpy-install
+RUN mkdir ${HYPERONPY}
+RUN python3 -m pip install --prefix ${HYPERONPY} ../python
+
+FROM os
+
+RUN rm -rf /var/lib/apt/lists/*
+
+ENV BUILD=/home/user/hyperon-experimental/build
+COPY --from=build /home/user/hyperon-experimental/target/release/metta /usr/bin/metta-rust
+COPY --from=build ${BUILD}/hyperonc-install /usr
+COPY --from=build ${BUILD}/hyperonpy-install /usr
+
