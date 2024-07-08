@@ -679,15 +679,12 @@ class BindingsSet:
         self.shadow_list = None
         hp.bindings_set_push(self.c_set, bindings.cbindings)
 
-    def add_var_binding(self, var: Union[str, Atom], value: Atom) -> bool:
+    def add_var_binding(self, var: VariableAtom, value: Atom) -> bool:
         """Adds a new variable to atom association to every Bindings frame in a
         BindingsSet.
         """
         self.shadow_list = None
-        if isinstance(var, Atom):
-            return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)
-        else:
-            return hp.bindings_set_add_var_binding(self.c_set, V(var), value.catom)
+        return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)
 
     def add_var_equality(self, a: Atom, b: Atom) -> bool:
         """Asserts equality between two Variable atoms in a BindingsSet."""
