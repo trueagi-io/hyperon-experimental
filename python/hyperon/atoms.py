@@ -585,9 +585,9 @@ class Bindings:
         hp.bindings_narrow_vars(self.cbindings, cvars)
         hp.atom_vec_free(cvars)
 
-    def resolve(self, var_name: str) -> Union[Atom, None]:
-        """Finds the atom for a given variable name"""
-        raw_atom = hp.bindings_resolve(self.cbindings, var_name)
+    def resolve(self, var: VariableAtom) -> Union[Atom, None]:
+        """Finds the atom for a given variable"""
+        raw_atom = hp.bindings_resolve(self.cbindings, var.catom)
         return None if raw_atom is None else Atom._from_catom(raw_atom)
 
     def iterator(self):

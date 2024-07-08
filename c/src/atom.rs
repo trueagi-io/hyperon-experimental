@@ -1235,15 +1235,18 @@ pub extern "C" fn bindings_is_empty(bindings: *const bindings_t) -> bool{
 /// @brief Returns the atom bound to the supplied variable name in the `bindings_t`
 /// @ingroup matching_group
 /// @param[in]  bindings  A pointer to the `bindings_t` to inspect
-/// @param[in]  var_name  A NULL-terminated C-style string containing the name of the variable
+/// @param[in]  var  The Variable atom (L-value) for the variable <-> atom association
 /// @return The `atom_t` representing the atom that corresponds to the specified variable, or a NULL `atom_ref_t` if the variable is not present.
 /// @note The caller must take ownership responsibility for the returned `atom_t`, if it is not NULL
 ///
 #[no_mangle]
-pub extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const c_char) -> atom_t
+pub extern "C" fn bindings_resolve(bindings: *const bindings_t, var: atom_t) -> atom_t
 {
     let bindings = unsafe{ &*bindings }.borrow();
-    let var = VariableAtom::new(cstr_into_string(var_name));
+    let var = match var.into_inner() {
+        Atom::Variable(variable) => variable,
+        _ => panic!("var argument must be variable atom")
+    };
 
     bindings.resolve(&var).into()
 }

@@ -68,11 +68,11 @@ class BindingsTest(unittest.TestCase):
 
     def test_bindings_resolve(self):
 
-        self.assertIsNone(self.emptyBindings.resolve("a"))
-        self.assertIsNone(self.bindings.resolve("XYXY"))
+        self.assertIsNone(self.emptyBindings.resolve(V("a")))
+        self.assertIsNone(self.bindings.resolve(V("XYXY")))
 
         atom_expected = S("b")
-        atom_resolved = self.bindings.resolve("a")
+        atom_resolved = self.bindings.resolve(V("a"))
         self.assertEqual(atom_expected, atom_resolved)
 
     def test_bindings_iterator(self):

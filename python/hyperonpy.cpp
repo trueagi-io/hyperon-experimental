@@ -762,8 +762,8 @@ PYBIND11_MODULE(hyperonpy, m) {
             bindings_narrow_vars(bindings.ptr(), vars.ptr());
         }, "Remove vars from Bindings, except those specified" );
 
-    m.def("bindings_resolve", [](CBindings bindings, char const* varName) -> nonstd::optional<CAtom> {
-            auto const res = bindings_resolve(bindings.ptr(), varName);
+    m.def("bindings_resolve", [](CBindings bindings, CAtom var) -> nonstd::optional<CAtom> {
+            auto const res = bindings_resolve(bindings.ptr(), atom_clone(var.ptr()));
             return atom_is_null(&res) ? nonstd::nullopt : nonstd::optional<CAtom>(CAtom(res));
         }, "Resolve" );
 
