@@ -788,12 +788,12 @@ impl Space for CSpace {
 
 impl std::fmt::Display for CSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CSpace")
+        write!(f, "CSpace-{self:p}")
     }
 }
 impl std::fmt::Debug for CSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "CSpace")
+        write!(f, "CSpace-{self:p}")
     }
 }
 
