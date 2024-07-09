@@ -45,6 +45,10 @@ ENV HYPERONPY=${BUILD}/hyperonpy-install
 RUN mkdir ${HYPERONPY}
 RUN python3 -m pip install --prefix ${HYPERONPY} ../python
 
+WORKDIR ${HOME}/hyperon-experimental
+
+CMD bash
+
 FROM os
 
 ENV BUILD=/home/user/hyperon-experimental/build
