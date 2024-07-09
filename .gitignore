@@ -1,4 +1,6 @@
-/build
+# `.gitignore` file is also used to exclued files going into Docker image
+# building context. All ignored files should be put into the same `.gitignore`
+# at the root of the repository by this reason.
 *.swp
 compile_commands.json
 .cache
@@ -7,3 +9,12 @@ Cargo.lock
 .DS_Store
 .vscode
 .aider*
+__pycache__
+/build
+/python/hyperon.egg-info
+/python/dist
+/python/build
+/python/*.so
+/python/*.dylib
+/python/wheelhouse
+/python/hyperon/_version.py
