@@ -7,7 +7,7 @@ use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::{Metta, RunContext, RunnerState, Environment, EnvBuilder};
 use hyperon::metta::runner::modules::{ModuleLoader, ModId, ResourceKey};
-use hyperon::metta::runner::modules::catalog::{FsModuleFormat, ModuleDescriptor};
+use hyperon::metta::runner::pkg_mgmt::{FsModuleFormat, ModuleDescriptor};
 use hyperon::atom::*;
 
 use crate::util::*;
@@ -1566,15 +1566,16 @@ pub extern "C" fn env_builder_set_config_dir(builder: *mut env_builder_t, path: 
     *builder_arg_ref = builder.into();
 }
 
-/// @brief Configures the environment to create the config dir if it doesn't already exist
+/// @brief Sets whether the config dir should be created if it doesn't already exist
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
+/// @param[in]  should_create  Whether the directory will be created.  Defaults to `true`
 ///
 #[no_mangle]
-pub extern "C" fn env_builder_create_config_dir(builder: *mut env_builder_t) {
+pub extern "C" fn env_builder_create_config_dir(builder: *mut env_builder_t, should_create: bool) {
     let builder_arg_ref = unsafe{ &mut *builder };
     let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
-    let builder = builder.create_config_dir();
+    let builder = builder.set_create_config_dir(should_create);
     *builder_arg_ref = builder.into();
 }
 
@@ -1738,7 +1739,8 @@ pub extern "C" fn module_id_is_valid(mod_id: *const module_id_t) -> bool {
 ///
 #[no_mangle]
 pub extern "C" fn module_descriptor_new(name: *const c_char) -> module_descriptor_t {
-    ModuleDescriptor::new(cstr_as_str(name).to_string()).into()
+    //TODO-NEXT: We should probably take a version string, and parse it into a semver version
+    ModuleDescriptor::new(cstr_as_str(name).to_string(), None, None).into()
 }
 
 /// @brief Creates a new module_descriptor_t that represents the error attempting to interpret a module
@@ -1906,7 +1908,10 @@ impl FsModuleFormat for CFsModFmtLoader {
 
         let result_context = (api.try_path)(self.payload, path_c_string.as_ptr(), mod_name_c_string.as_ptr());
         if !result_context.is_null() {
-            let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), path, self.fmt_id);
+            //TODO-NEXT.  We want to provide a way for the loader to support loading a PkgInfo, and also pass
+            // the version from that PkgInfo when the new descriptor is created
+
+            let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), None, path, self.fmt_id);
 
             let mut new_loader = self.clone();
             new_loader.callback_context = result_context;

@@ -34,6 +34,22 @@ class MettaTest(unittest.TestCase):
 
         self.assertEqual([[S('T')]], result)
 
+    def test_metta_evaluate_atom(self):
+        program = '''
+            (= (And T T) T)
+            (= (frog $x)
+                (And (croaks $x)
+                     (eat_flies $x)))
+            (= (croaks Fritz) T)
+            (= (eat_flies Fritz) T)
+            (= (green $x) (frog $x))
+        '''
+        runner = MeTTa(env_builder=Environment.test_env())
+        runner.run(program)
+        result = runner.evaluate_atom(E(S('green'), S('Fritz')))
+
+        self.assertEqual([S('T')], result)
+
     def test_incremental_runner(self):
         program = '''
             !(+ 1 (+ 2 (+ 3 4)))
@@ -68,3 +84,17 @@ class MettaTest(unittest.TestCase):
             self.assertTrue(False, "Parse error expected")
         except RuntimeError as e:
             self.assertEqual(e.args[0], 'Unexpected end of expression')
+
+    def test_match_with_rust_grounded_atom(self):
+        program = '''
+          ; True is used as a Python grounded object
+          (grounded True)
+          ; import! is used as a Rust grounded object which can be
+          ; received from Python
+          !(match &self (grounded import!) Ok)
+        '''
+        runner = MeTTa(env_builder=Environment.test_env())
+        result = runner.run(program)
+
+        self.assertEqual([[]], result)
+

@@ -360,12 +360,14 @@ impl crate::atom::Grounded for DynSpace {
         rust_type_atom::<DynSpace>()
     }
 
+    fn as_match(&self) -> Option<&dyn CustomMatch> {
+        Some(self)
+    }
+}
+
+impl CustomMatch for DynSpace {
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
         Box::new(self.query(other).into_iter())
-    }
-
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
     }
 }
 

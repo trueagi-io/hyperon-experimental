@@ -1,5 +1,4 @@
 use crate::*;
-use crate::matcher::MatchResultIter;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
@@ -8,9 +7,8 @@ use crate::metta::types::get_atom_types;
 use crate::common::assert::vec_eq_no_order;
 use crate::common::shared::Shared;
 use crate::metta::runner::stdlib;
+use crate::metta::runner::stdlib::regex;
 
-use std::fmt::Display;
-use regex::Regex;
 use std::convert::TryInto;
 
 use super::arithmetics::*;
@@ -20,20 +18,22 @@ fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct PrintAlternativesOp {}
 
-impl Display for PrintAlternativesOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "print-alternatives!")
-    }
-}
+grounded_op!(PrintAlternativesOp, "print-alternatives!");
 
 impl Grounded for PrintAlternativesOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for PrintAlternativesOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("print-alternatives! expects format string as a first argument and expression as a second argument");
         let atom = atom_to_string(args.get(0).ok_or_else(arg_error)?);
@@ -44,10 +44,6 @@ impl Grounded for PrintAlternativesOp {
         println!("{} {}:", args.len(), atom);
         args.iter().for_each(|arg| println!("    {}", arg));
         Ok(vec![UNIT_ATOM()])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -62,22 +58,18 @@ fn atom_to_string(atom: &Atom) -> String {
         _ => atom.to_string(),
     }
 }
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetTypeOp {
     // TODO: MINIMAL this is temporary compatibility fix to be removed after
     // migration to the minimal MeTTa
     space: DynSpace,
 }
 
+grounded_op!(GetTypeOp, "get-type");
+
 impl GetTypeOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for GetTypeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-type")
     }
 }
 
@@ -86,6 +78,12 @@ impl Grounded for GetTypeOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetTypeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-type expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -101,26 +99,24 @@ impl Grounded for GetTypeOp {
             Ok(types)
         }
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct IfEqualOp { }
 
-impl Display for IfEqualOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "if-equal")
-    }
-}
+grounded_op!(IfEqualOp, "if-equal");
 
 impl Grounded for IfEqualOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for IfEqualOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("if-equal expects <atom> <pattern> <then> <else> as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -133,10 +129,6 @@ impl Grounded for IfEqualOp {
         } else {
             Ok(vec![else_.clone()])
         }
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -165,20 +157,16 @@ fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct AssertEqualOp {
     space: DynSpace,
 }
 
+grounded_op!(AssertEqualOp, "assertEqual");
+
 impl AssertEqualOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for AssertEqualOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "assertEqual")
     }
 }
 
@@ -187,6 +175,12 @@ impl Grounded for AssertEqualOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for AssertEqualOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         log::debug!("AssertEqualOp::execute: {:?}", args);
         let arg_error = || ExecError::from("assertEqual expects two atoms as arguments: actual and expected");
@@ -198,26 +192,18 @@ impl Grounded for AssertEqualOp {
 
         assert_results_equal(&actual, &expected, actual_atom)
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct AssertEqualToResultOp {
     space: DynSpace,
 }
 
+grounded_op!(AssertEqualToResultOp, "assertEqualToResult");
+
 impl AssertEqualToResultOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for AssertEqualToResultOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "assertEqualToResult")
     }
 }
 
@@ -226,6 +212,12 @@ impl Grounded for AssertEqualToResultOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for AssertEqualToResultOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         log::debug!("AssertEqualToResultOp::execute: {:?}", args);
         let arg_error = || ExecError::from("assertEqualToResult expects two atoms as arguments: actual and expected");
@@ -238,26 +230,18 @@ impl Grounded for AssertEqualToResultOp {
 
         assert_results_equal(&actual, expected, actual_atom)
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct SuperposeOp {
     space: DynSpace,
 }
 
+grounded_op!(SuperposeOp, "superpose");
+
 impl SuperposeOp {
     fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for SuperposeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "superpose")
     }
 }
 
@@ -266,6 +250,12 @@ impl Grounded for SuperposeOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for SuperposeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("superpose expects single expression as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -284,26 +274,18 @@ impl Grounded for SuperposeOp {
             Ok(superposed)
         }
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct CollapseOp {
     space: DynSpace,
 }
 
+grounded_op!(CollapseOp, "collapse");
+
 impl CollapseOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for CollapseOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "collapse")
     }
 }
 
@@ -312,6 +294,12 @@ impl Grounded for CollapseOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for CollapseOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("collapse expects single executable atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
@@ -322,26 +310,18 @@ impl Grounded for CollapseOp {
 
         Ok(vec![Atom::expr(result)])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct CaptureOp {
     space: DynSpace,
 }
 
+grounded_op!(CaptureOp, "capture");
+
 impl CaptureOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for CaptureOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "capture")
     }
 }
 
@@ -350,31 +330,29 @@ impl Grounded for CaptureOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for CaptureOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("capture expects one argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
         interpret(self.space.clone(), &atom).map_err(|e| ExecError::from(e))
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct CaseOp {
     space: DynSpace,
 }
 
+grounded_op!(CaseOp, "case");
+
 impl CaseOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for CaseOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "case")
     }
 }
 
@@ -383,6 +361,12 @@ impl Grounded for CaseOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for CaseOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("case expects two arguments: atom and expression of cases");
         let cases = args.get(1).ok_or_else(arg_error)?;
@@ -415,14 +399,6 @@ impl Grounded for CaseOp {
         };
         Ok(results)
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
-
-fn regex(regex: &str) -> Regex {
-    Regex::new(regex).unwrap()
 }
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
@@ -455,12 +431,13 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
     let match_op = Atom::gnd(stdlib::MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
-    let register_module_op = Atom::gnd(stdlib::RegisterModuleOp::new(metta.clone()));
-    tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
     let mod_space_op = Atom::gnd(stdlib::ModSpaceOp::new(metta.clone()));
     tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
     let print_mods_op = Atom::gnd(stdlib::PrintModsOp::new(metta.clone()));
     tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
+
+    #[cfg(feature = "pkg_mgmt")]
+    stdlib::pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
 }
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
@@ -475,6 +452,14 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
     tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
+    let unique_op = Atom::gnd(stdlib::UniqueOp::new(space.clone()));
+    tref.register_token(regex(r"unique"), move |_| { unique_op.clone() });
+    let union_op = Atom::gnd(stdlib::UnionOp::new(space.clone()));
+    tref.register_token(regex(r"union"), move |_| { union_op.clone() });
+    let intersection_op = Atom::gnd(stdlib::IntersectionOp::new(space.clone()));
+    tref.register_token(regex(r"intersection"), move |_| { intersection_op.clone() });
+    let subtraction_op = Atom::gnd(stdlib::SubtractionOp::new(space.clone()));
+    tref.register_token(regex(r"subtraction"), move |_| { subtraction_op.clone() });
     let case_op = Atom::gnd(CaseOp::new(space.clone()));
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
     let capture_op = Atom::gnd(CaptureOp::new(space.clone()));
@@ -558,6 +543,8 @@ mod tests {
     use crate::common::test_utils::metta_space;
 
     use std::convert::TryFrom;
+    use std::fmt::Display;
+    use regex::Regex;
 
     fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -599,9 +586,7 @@ mod tests {
         let result = run_program("!(eval (car-atom (A $b)))");
         assert_eq!(result, Ok(vec![vec![expr!("A")]]));
         let result = run_program("!(eval (car-atom ($a B)))");
-        //assert_eq!(result, Ok(vec![vec![expr!(a)]]));
-        assert!(result.is_ok_and(|res| res.len() == 1 && res[0].len() == 1 &&
-            atoms_are_equivalent(&res[0][0], &expr!(a))));
+        assert_eq!(result, Ok(vec![vec![expr!(a)]]));
         let result = run_program("!(eval (car-atom ()))");
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("car-atom" ()) {Str::from_str("car-atom expects a non-empty expression as an argument")})]]));
         let result = run_program("!(eval (car-atom A))");
@@ -1100,14 +1085,6 @@ mod tests {
     impl Grounded for SomeGndAtom {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, sym!("Arg1Type"), sym!("Arg2Type"), sym!("RetType")])
-        }
-
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            execute_not_executable(self)
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 

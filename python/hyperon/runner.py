@@ -2,6 +2,7 @@ import os
 from importlib import import_module
 import importlib.util
 import sys
+import site
 import hyperonpy as hp
 from .atoms import Atom, AtomType, OperationAtom
 from .base import GroundingSpaceRef, Tokenizer, SExprParser
@@ -120,6 +121,11 @@ class MeTTa:
 
             builtin_mods_path = os.path.join(os.path.dirname(__file__), 'exts')
             hp.env_builder_push_include_path(env_builder, builtin_mods_path)
+
+            py_site_packages_paths = site.getsitepackages()
+            for path in py_site_packages_paths:
+                hp.env_builder_push_include_path(env_builder, path)
+
             self.cmetta = hp.metta_new(space.cspace, env_builder)
 
     def __del__(self):
@@ -199,13 +205,21 @@ class MeTTa:
         """Runs the MeTTa code from the program string containing S-Expression MeTTa syntax"""
         parser = SExprParser(program)
         results = hp.metta_run(self.cmetta, parser.cparser)
-        err_str = hp.metta_err_str(self.cmetta)
-        if (err_str is not None):
-            raise RuntimeError(err_str)
+        self._run_check_for_error()
         if flat:
             return [Atom._from_catom(catom) for result in results for catom in result]
         else:
             return [[Atom._from_catom(catom) for catom in result] for result in results]
+
+    def evaluate_atom(self, atom):
+        result = hp.metta_evaluate_atom(self.cmetta, atom.catom)
+        self._run_check_for_error()
+        return [Atom._from_catom(catom) for catom in result]
+
+    def _run_check_for_error(self):
+        err_str = hp.metta_err_str(self.cmetta)
+        if (err_str is not None):
+            raise RuntimeError(err_str)
 
 class Environment:
     """This class contains the API for configuring the host platform interface used by MeTTa"""
@@ -218,7 +232,7 @@ class Environment:
         else:
             return None
 
-    def init_common_env(working_dir = None, config_dir = None, create_config = False, disable_config = False, is_test = False, include_paths = []):
+    def init_common_env(working_dir = None, config_dir = None, create_config = True, disable_config = False, is_test = False, include_paths = []):
         """Initialize the common environment with the supplied args"""
         builder = Environment.custom_env(working_dir, config_dir, create_config, disable_config, is_test, include_paths)
         return hp.env_builder_init_common_env(builder)
@@ -227,15 +241,15 @@ class Environment:
         """Returns an EnvBuilder object specifying a unit-test environment, that can be used to init a MeTTa runner"""
         return hp.env_builder_use_test_env()
 
-    def custom_env(working_dir = None, config_dir = None, create_config = False, disable_config = False, is_test = False, include_paths = []):
+    def custom_env(working_dir = None, config_dir = None, create_config = True, disable_config = False, is_test = False, include_paths = []):
         """Returns an EnvBuilder object that can be used to init a MeTTa runner, if you need multiple environments to coexist in the same process"""
         builder = hp.env_builder_start()
         if (working_dir is not None):
             hp.env_builder_set_working_dir(builder, working_dir)
         if (config_dir is not None):
             hp.env_builder_set_config_dir(builder, config_dir)
-        if (create_config):
-            hp.env_builder_create_config_dir(builder)
+        if (create_config is False):
+            hp.env_builder_create_config_dir(builder, False) #Pass False to disable "create if missing" behavior
         if (disable_config):
             hp.env_builder_disable_config_dir(builder)
         if (is_test):
@@ -321,6 +335,8 @@ def _priv_load_py_stdlib(c_run_context):
     # can be found by MeTTa.  NOTE: We may want to explicitly give priority hyperon "exts" by first checking if Python
     # has a module at `"hyperon.exts." + mod_name` before just checking `mod_name`, but it's unclear that will
     # matter since we'll also search the `exts` directory with the include_path / fs_module_format logic
+    # #UPDATE: If we implement a Python module-space Catalog in the future, then the code to search site packages
+    #  directories directly, in the 'MeTTa.__init__' method, needs to be removed
 
 def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False, resource_dir=None):
     """

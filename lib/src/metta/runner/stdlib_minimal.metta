@@ -53,6 +53,14 @@
     (eval (if-error $atom (return (return $atom))
       (return $then) ))))))
 
+; Difference between `switch` and `case` is a way how they interpret `Empty`
+; result. `CaseOp` interprets first argument inside itself and then manually
+; checks whether result is empty. `switch` is interpreted in a context of
+; main interpreter. Minimal interpreter correctly passes `Empty` as an
+; argument to the `switch` but when `switch` is called from MeTTa interpreter
+; (for example user evaluates `!(switch (unify A B ok Empty) ...)` then
+; emptiness of the first argument is checked by interpreter and it will
+; break execution when `Empty` is returned.
 (: switch (-> %Undefined% Expression Atom))
 (= (switch $atom $cases)
   (function (chain (decons-atom $cases) $list

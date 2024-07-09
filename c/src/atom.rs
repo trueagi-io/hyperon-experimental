@@ -236,15 +236,27 @@ pub unsafe extern "C" fn atom_expr_from_vec(children: atom_vec_t) -> atom_t {
     Atom::expr(children).into()
 }
 
-/// @brief Create a new Variable atom with the specified identifier
+/// @brief Create a new Variable atom with the specified name
 /// @ingroup atom_group
-/// @param[in]  name  The identifier for the newly created Variable atom
+/// @param[in]  name  The name for the newly created Variable atom
 /// @return An `atom_t` for the Variable atom
 /// @note The caller must take ownership responsibility for the returned `atom_t`
 ///
 #[no_mangle]
 pub unsafe extern "C" fn atom_var(name: *const c_char) -> atom_t {
     Atom::var(cstr_as_str(name)).into()
+}
+
+/// @brief Create a new Variable atom with the specified name and id
+/// @ingroup atom_group
+/// @param[in]  name  The name for the newly created Variable atom
+/// @param[in]  id    The unique id for the newly created Variable atom
+/// @return An `atom_t` for the Variable atom
+/// @note The caller must take ownership responsibility for the returned `atom_t`
+///
+#[no_mangle]
+pub unsafe extern "C" fn atom_var_with_id(name: *const c_char, id: usize) -> atom_t {
+    Atom::var_with_id(cstr_as_str(name), id).into()
 }
 
 /// @ingroup atom_group
@@ -599,6 +611,32 @@ impl Grounded for CGrounded {
         unsafe{ &(*self.get_ptr()).typ }.borrow().clone()
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        match self.api().execute {
+            None => None,
+            Some(_) => Some(self),
+        }
+    }
+
+    fn as_match(&self) -> Option<&dyn CustomMatch> {
+        match self.api().match_ {
+            None => None,
+            Some(_) => Some(self),
+        }
+    }
+
+    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+        match self.api().serialize {
+            Some(func) => {
+                let mut adapter: c_to_rust_serializer_t = serializer.into();
+                func(self.get_ptr(), &C_TO_RUST_SERIALIZER_API, &mut adapter as *mut _ as *mut c_void).into()
+            },
+            None => Err(serial::Error::NotSupported),
+        }
+    }
+}
+
+impl CustomExecute for CGrounded {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         match self.api().execute {
             Some(func) => {
@@ -614,10 +652,12 @@ impl Grounded for CGrounded {
                 log::trace!("CGrounded::execute: atom: {:?}, args: {:?}, ret: {:?}", self, args, ret);
                 ret
             },
-            None => execute_not_executable(self)
+            None => panic!("CustomExecute implementation should not be changed in runtime"),
         }
     }
+}
 
+impl CustomMatch for CGrounded {
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
         match self.api().match_ {
             Some(func) => {
@@ -629,15 +669,6 @@ impl Grounded for CGrounded {
         }
     }
 
-    fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
-        match self.api().serialize {
-            Some(func) => {
-                let mut adapter: c_to_rust_serializer_t = serializer.into();
-                func(self.get_ptr(), &C_TO_RUST_SERIALIZER_API, &mut adapter as *mut _ as *mut c_void).into()
-            },
-            None => Err(serial::Error::NotSupported),
-        }
-    }
 }
 
 impl PartialEq for CGrounded {

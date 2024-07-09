@@ -3,7 +3,8 @@ FROM ubuntu:22.04
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
-    apt-get install -y sudo git python3 python3-pip curl gcc cmake && \
+    apt-get install -y sudo git python3 python3-pip curl gcc cmake \
+        pkg-config libssl-dev zlib1g-dev && \
     rm -rf /var/lib/apt/lists/*
 
 RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
@@ -18,7 +19,7 @@ RUN sh /tmp/rustup.sh -y && rm /tmp/rustup.sh
 ENV PATH="${PATH}:/home/user/.cargo/bin"
 RUN cargo install cbindgen
 
-RUN python3 -m pip install conan==1.62 pip==23.1.2
+RUN python3 -m pip install conan==1.64 pip==23.1.2
 ENV PATH="${PATH}:/home/user/.local/bin"
 RUN conan profile new --detect default
 

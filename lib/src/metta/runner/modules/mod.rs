@@ -1,6 +1,5 @@
 
-use std::path::{Path, PathBuf};
-use std::collections::HashMap;
+use std::path::Path;
 use std::cell::RefCell;
 
 use crate::metta::*;
@@ -16,13 +15,11 @@ use super::interpreter_minimal::interpret;
 #[cfg(feature = "minimal")]
 use super::stdlib_minimal::*;
 
-#[cfg(feature = "pkg_mgmt")]
-pub mod catalog;
-#[cfg(feature = "pkg_mgmt")]
-use catalog::*;
-
 mod mod_names;
-pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, module_name_is_legal, mod_name_remove_prefix, decompose_name_path, compose_name_path, ModNameNodeDisplayWrapper};
+pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, mod_name_remove_prefix, ModNameNodeDisplayWrapper};
+#[cfg(feature = "pkg_mgmt")]
+pub(crate) use mod_names::{module_name_is_legal, module_name_make_legal, decompose_name_path, compose_name_path};
+
 pub use mod_names::{TOP_MOD_NAME, SELF_MOD_NAME, MOD_NAME_SEPARATOR};
 
 /// A reference to a [MettaMod] that is loaded into a [Metta] runner
@@ -66,8 +63,6 @@ pub struct MettaMod {
     tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
     loader: Option<Box<dyn ModuleLoader>>,
-    #[cfg(feature = "pkg_mgmt")]
-    pkg_info: PkgInfo,
 }
 
 impl MettaMod {
@@ -91,8 +86,6 @@ impl MettaMod {
             imported_deps: Mutex::new(HashMap::new()),
             resource_dir,
             loader: None,
-            #[cfg(feature = "pkg_mgmt")]
-            pkg_info: PkgInfo::default(),
         };
 
         // Load the base tokens for the module's new Tokenizer
@@ -198,7 +191,7 @@ impl MettaMod {
         }
 
         // Get the space associated with the dependent module
-        log::info!("import_all_from_dependency: importing from {} into {}", mod_ptr.path(), self.path());
+        log::debug!("import_all_from_dependency: importing from {} into {}", mod_ptr.path(), self.path());
         let (dep_space, transitive_deps) = mod_ptr.stripped_space();
 
         // Add a new Grounded Space atom to the &self space, so we can access the dependent module
@@ -306,9 +299,10 @@ impl MettaMod {
         mod_name_from_path(&self.mod_path)
     }
 
+    /// Returns a reference to the module's [PkgInfo], if it has one
     #[cfg(feature = "pkg_mgmt")]
-    pub fn pkg_info(&self) -> &PkgInfo {
-        &self.pkg_info
+    pub fn pkg_info(&self) -> Option<&PkgInfo> {
+        self.loader.as_ref().and_then(|loader| loader.pkg_info())
     }
 
     pub fn space(&self) -> &DynSpace {
@@ -484,6 +478,13 @@ impl ModuleInitState {
     /// The init function will then call `context.init_self_module()` along with any other initialization code
     pub fn init_module(&mut self, runner: &Metta, mod_name: &str, loader: Box<dyn ModuleLoader>) -> Result<ModId, String> {
 
+        //Give the prepare function a chance to run, in case it hasn't yet
+        #[cfg(feature = "pkg_mgmt")]
+        let loader = match loader.prepare(None, UpdateMode::FetchIfMissing)? {
+            Some(new_loader) => new_loader,
+            None => loader
+        };
+
         //Create a new RunnerState in order to initialize the new module, and push the init function
         // to run within the new RunnerState.  The init function will then call `context.init_self_module()`
         let mut runner_state = RunnerState::new_for_loading(runner, mod_name, self);
@@ -504,6 +505,7 @@ impl ModuleInitState {
         Ok(mod_id)
     }
 
+    #[cfg(feature = "pkg_mgmt")]
     pub fn get_module_with_descriptor(&self, runner: &Metta, descriptor: &ModuleDescriptor) -> Option<ModId> {
         match self {
             Self::Root(cell) |
@@ -520,6 +522,7 @@ impl ModuleInitState {
         }
     }
 
+    #[cfg(feature = "pkg_mgmt")]
     pub fn add_module_descriptor(&self, runner: &Metta, descriptor: ModuleDescriptor, mod_id: ModId) {
         match self {
             Self::Root(cell) |
@@ -603,6 +606,31 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     /// [RunContext::load_module], or any other method that leads to the loading of modules
     fn load(&self, context: &mut RunContext) -> Result<(), String>;
 
+    /// A function to access the [PkgInfo] struct of meta-data associated with a module
+    ///
+    /// NOTE: Requires `pkg_mgmt` feature
+    #[cfg(feature = "pkg_mgmt")]
+    fn pkg_info(&self) -> Option<&PkgInfo> {
+        None
+    }
+
+    /// Prepares a module for loading.  This method is responsible for fetching resources
+    /// from the network, performing build or pre-computation steps, or any other operations
+    /// that only need to be performed once and then may be cached locally
+    ///
+    /// If this method returns `Ok(Some(_))` then the loader will be dropped and the returned
+    /// loader will replace it.
+    ///
+    /// NOTE: This method may become async in the future
+    ///
+    /// FUTURE-QUESTION: Should "Fetch" and "Build" be separated? Currently they are lumped
+    /// together into one interface but it may make sense to split them into separate entry
+    /// points. I will keep them as one until the need arises.
+    #[cfg(feature = "pkg_mgmt")]
+    fn prepare(&self, _local_dir: Option<&Path>, _update_mode: UpdateMode) -> Result<Option<Box<dyn ModuleLoader>>, String> {
+        Ok(None)
+    }
+
     /// Returns a data blob containing a given named resource belonging to a module
     fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {
         Err("resource not found".to_string())
@@ -619,6 +647,8 @@ pub enum ResourceKey<'a> {
     /// NOTE: there is no guarantee the code in the `module.metta` resource will work outside
     /// the module's context.  This use case must be supported by each module individually.
     MainMettaSrc,
+    /// A [semver compliant](https://semver.org) version string
+    Version,
     /// A list of people or organizations responsible for the module **TODO**
     Authors,
     /// A short description of the module **TODO**
@@ -631,115 +661,120 @@ pub enum ResourceKey<'a> {
 // TESTS
 //-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-=-=-+-
 
-#[derive(Debug)]
-struct OuterLoader;
+#[cfg(test)]
+mod test {
+    use super::*;
 
-impl ModuleLoader for OuterLoader {
-    fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let space = DynSpace::new(GroundingSpace::new());
-        context.init_self_module(space, None);
+    #[derive(Debug)]
+    struct OuterLoader;
 
-        let parser = SExprParser::new("outer-module-test-atom");
-        context.push_parser(Box::new(parser));
+    impl ModuleLoader for OuterLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            let space = DynSpace::new(GroundingSpace::new());
+            context.init_self_module(space, None);
 
-        Ok(())
+            let parser = SExprParser::new("outer-module-test-atom");
+            context.push_parser(Box::new(parser));
+
+            Ok(())
+        }
     }
-}
 
-#[derive(Debug)]
-struct InnerLoader;
+    #[derive(Debug)]
+    struct InnerLoader;
 
-impl ModuleLoader for InnerLoader {
-    fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let space = DynSpace::new(GroundingSpace::new());
-        context.init_self_module(space, None);
+    impl ModuleLoader for InnerLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            let space = DynSpace::new(GroundingSpace::new());
+            context.init_self_module(space, None);
 
-        let parser = SExprParser::new("inner-module-test-atom");
-        context.push_parser(Box::new(parser));
+            let parser = SExprParser::new("inner-module-test-atom");
+            context.push_parser(Box::new(parser));
 
-        Ok(())
+            Ok(())
+        }
     }
-}
 
-/// This tests loading a module as a sub-module of another loaded module using a hierarchical
-/// namespace path
-#[test]
-fn hierarchical_module_import_test() {
-    let runner = Metta::new(Some(EnvBuilder::test_env()));
+    /// This tests loading a module as a sub-module of another loaded module using a hierarchical
+    /// namespace path
+    #[test]
+    fn hierarchical_module_import_test() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
 
-    //Make sure we get a reasonable error, if we try to load a sub-module to a module that doesn't exist
-    let result = runner.load_module_direct(Box::new(InnerLoader), "outer:inner");
-    assert!(result.is_err());
+        //Make sure we get a reasonable error, if we try to load a sub-module to a module that doesn't exist
+        let result = runner.load_module_direct(Box::new(InnerLoader), "outer:inner");
+        assert!(result.is_err());
 
-    //Make sure we can load sub-modules sucessfully
-    let _outer_mod_id = runner.load_module_direct(Box::new(OuterLoader), "outer").unwrap();
-    let _inner_mod_id = runner.load_module_direct(Box::new(InnerLoader), "outer:inner").unwrap();
+        //Make sure we can load sub-modules sucessfully
+        let _outer_mod_id = runner.load_module_direct(Box::new(OuterLoader), "outer").unwrap();
+        let _inner_mod_id = runner.load_module_direct(Box::new(InnerLoader), "outer:inner").unwrap();
 
-    //Make sure we load the outer module sucessfully and can match the outer module's atom, but not
-    // the inner module's
-    let result = runner.run(SExprParser::new("!(import! &self outer)"));
-    assert_eq!(result, Ok(vec![vec![expr!()]]));
-    let result = runner.run(SExprParser::new("!(match &self outer-module-test-atom found!)"));
-    assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
-    let result = runner.run(SExprParser::new("!(match &self inner-module-test-atom found!)"));
-    assert_eq!(result, Ok(vec![vec![]]));
+        //Make sure we load the outer module sucessfully and can match the outer module's atom, but not
+        // the inner module's
+        let result = runner.run(SExprParser::new("!(import! &self outer)"));
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+        let result = runner.run(SExprParser::new("!(match &self outer-module-test-atom found!)"));
+        assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
+        let result = runner.run(SExprParser::new("!(match &self inner-module-test-atom found!)"));
+        assert_eq!(result, Ok(vec![vec![]]));
 
-    //Now import the inner module by relative module namespace, and check to make sure we can match
-    // its atom
-    let result = runner.run(SExprParser::new("!(import! &self outer:inner)"));
-    assert_eq!(result, Ok(vec![vec![expr!()]]));
-    let result = runner.run(SExprParser::new("!(match &self inner-module-test-atom found!)"));
-    assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
-}
-
-#[derive(Debug)]
-struct RelativeOuterLoader;
-
-impl ModuleLoader for RelativeOuterLoader {
-    fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let space = DynSpace::new(GroundingSpace::new());
-        context.init_self_module(space, None);
-
-        let _inner_mod_id = context.load_module_direct(Box::new(InnerLoader), "self:inner").unwrap();
-
-        let parser = SExprParser::new("outer-module-test-atom");
-        context.push_parser(Box::new(parser));
-
-        //Test to see if I can resolve the module we just loaded,
-        assert!(context.get_module_by_name("self:inner").is_ok());
-
-        Ok(())
+        //Now import the inner module by relative module namespace, and check to make sure we can match
+        // its atom
+        let result = runner.run(SExprParser::new("!(import! &self outer:inner)"));
+        assert_eq!(result, Ok(vec![vec![expr!()]]));
+        let result = runner.run(SExprParser::new("!(match &self inner-module-test-atom found!)"));
+        assert_eq!(result, Ok(vec![vec![sym!("found!")]]));
     }
+
+    #[derive(Debug)]
+    struct RelativeOuterLoader;
+
+    impl ModuleLoader for RelativeOuterLoader {
+        fn load(&self, context: &mut RunContext) -> Result<(), String> {
+            let space = DynSpace::new(GroundingSpace::new());
+            context.init_self_module(space, None);
+
+            let _inner_mod_id = context.load_module_direct(Box::new(InnerLoader), "self:inner").unwrap();
+
+            let parser = SExprParser::new("outer-module-test-atom");
+            context.push_parser(Box::new(parser));
+
+            //Test to see if I can resolve the module we just loaded,
+            assert!(context.get_module_by_name("self:inner").is_ok());
+
+            Ok(())
+        }
+    }
+
+    /// This tests loading a sub-module from another module's runner, using a relative namespace path
+    #[test]
+    fn relative_submodule_import_test() {
+        let runner = Metta::new(Some(EnvBuilder::test_env()));
+
+        //Load the "outer" module, which will load the inner module as part of its loader
+        let _outer_mod_id = runner.load_module_direct(Box::new(RelativeOuterLoader), "outer").unwrap();
+
+        // runner.display_loaded_modules();
+
+        //Make sure we didn't accidentally load "inner" at the top level
+        assert!(runner.get_module_by_name("inner").is_err());
+
+        //Confirm we didn't end up with a module called "self"
+        assert!(runner.get_module_by_name("self:inner").is_err());
+        assert!(runner.get_module_by_name("self").is_err());
+
+        //Now make sure we can actually resolve the loaded sub-module
+        runner.get_module_by_name("outer:inner").unwrap();
+
+        //LP-TODO-NEXT, test that I can add a second inner from the runner, by adding "top:outer:inner2",
+        // and then that I can import it directly into "outer" from within the runner's context using the "self:inner2" mod path
+
+    }
+
+    //LP-TODO-NEXT,  Make a test for an inner-loader that throws an error, blocking the outer-loader from loading sucessfully,
+    // and make sure neither module is loaded into the named index
+    //
+    //Also test the case where the inner loader is sucessul, but then the outer loader throws an error.  Also make sure neither
+    // module is loaded into the namespace
+    //
 }
-
-/// This tests loading a sub-module from another module's runner, using a relative namespace path
-#[test]
-fn relative_submodule_import_test() {
-    let runner = Metta::new(Some(EnvBuilder::test_env()));
-
-    //Load the "outer" module, which will load the inner module as part of its loader
-    let _outer_mod_id = runner.load_module_direct(Box::new(RelativeOuterLoader), "outer").unwrap();
-
-    // runner.display_loaded_modules();
-
-    //Make sure we didn't accidentally load "inner" at the top level
-    assert!(runner.get_module_by_name("inner").is_err());
-
-    //Confirm we didn't end up with a module called "self"
-    assert!(runner.get_module_by_name("self:inner").is_err());
-    assert!(runner.get_module_by_name("self").is_err());
-
-    //Now make sure we can actually resolve the loaded sub-module
-    runner.get_module_by_name("outer:inner").unwrap();
-
-    //LP-TODO-NEXT, test that I can add a second inner from the runner, by adding "top:outer:inner2",
-    // and then that I can import it directly into "outer" from within the runner's context using the "self:inner2" mod path
-
-}
-
-//LP-TODO-NEXT,  Make a test for an inner-loader that throws an error, blocking the outer-loader from loading sucessfully,
-// and make sure neither module is loaded into the named index
-//
-//Also test the case where the inner loader is sucessul, but then the outer loader throws an error.  Also make sure neither
-// module is loaded into the namespace
-//

@@ -88,7 +88,13 @@ class VariableAtom(Atom):
 
 def V(name):
     """A convenient method to construct a VariableAtom"""
-    return VariableAtom(hp.atom_var(name))
+    if '#' in name:
+        vname, vid = name.split('#')[0:2]
+        vid = int(vid)
+    else:
+        vname = name
+        vid = 0
+    return VariableAtom(hp.atom_var(vname, vid))
 
 class ExpressionAtom(Atom):
     """An ExpressionAtom combines different kinds of Atoms, including expressions."""
@@ -216,7 +222,10 @@ def _priv_compare_value_atom(gnd, catom):
     """
     if hp.atom_get_metatype(catom) == AtomKind.GROUNDED:
         atom = GroundedAtom(catom)
-        return gnd == atom.get_object()
+        try:
+            return gnd == atom.get_object()
+        except TypeError:
+            return False
     else:
         return False
 
@@ -399,7 +408,9 @@ class OperationObject(GroundedObject):
             result = self.op(*args, **kwargs)
             if result is None:
                 return [Atoms.UNIT]
-            return [G(ValueObject(result), res_typ)]
+            if callable(result):
+                return [OperationAtom(repr(result), result, unwrap=True)]
+            return [ValueAtom(result, res_typ)]
         else:
             result = self.op(*atoms)
             if not isinstance(result, list):
@@ -561,7 +572,7 @@ class Bindings:
     def add_var_binding(self, var: Union[str, Atom], atom: Atom) -> bool:
         """Adds a binding between a variable and an Atom."""
         if isinstance(var, Atom):
-            return hp.bindings_add_var_binding(self.cbindings, var.get_name(), atom.catom)
+            return hp.bindings_add_var_binding(self.cbindings, var.catom, atom.catom)
         else:
             return hp.bindings_add_var_binding(self.cbindings, var, atom.catom)
 
@@ -585,10 +596,7 @@ class Bindings:
     def iterator(self):
         """Returns an iterator over the variable-atom pairs in the bindings"""
         res = hp.bindings_list(self.cbindings)
-        result = []
-        for r in res:
-            result.append((r[0], Atom._from_catom(r[1])))
-
+        result = [(r[0], Atom._from_catom(r[1])) for r in res]
         return iter(result)
 
 class BindingsSet:
@@ -693,17 +701,15 @@ class BindingsSet:
         """Merges the contents of another BindingsSet or Bindings frame."""
         self.shadow_list = None
         if isinstance(input, BindingsSet):
-            hp.bindings_set_merge_into(self.c_set, input.c_set);
+            hp.bindings_set_merge_into(self.c_set, input.c_set)
         else:
-            new_set = BindingsSet(input);
-            hp.bindings_set_merge_into(self.c_set, new_set.c_set);
+            new_set = BindingsSet(input)
+            hp.bindings_set_merge_into(self.c_set, new_set.c_set)
 
     def iterator(self):
         """Returns an iterator over all Bindings frames"""
         res = hp.bindings_set_list(self.c_set)
-        result = []
-        for r in res:
-            result.append(Bindings(r))
+        result = [Bindings(r) for r in res]
         return iter(result)
 
 def get_string_value(value) -> str:

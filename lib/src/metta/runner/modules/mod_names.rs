@@ -105,6 +105,7 @@ pub(crate) fn normalize_relative_module_name(base_path: &str, mod_name: &str) ->
 }
 
 /// Decomposes name path components into individual module names.  Reverse of [compose_name_path]
+#[allow(dead_code)] //Some clients are behind feature gates
 pub(crate) fn decompose_name_path(name: &str) -> Result<Vec<&str>, String> {
     let mut components: Vec<&str> = vec![];
     let (_, _, last) = ModNameNode::parse_parent_generic(ModNameNode::top(), name, &OverlayMap::none(),
@@ -117,6 +118,7 @@ pub(crate) fn decompose_name_path(name: &str) -> Result<Vec<&str>, String> {
 }
 
 /// Composes a name path from a slice of individual module names.  Reverse of [decompose_name_path]
+#[allow(dead_code)] //Some clients are behind feature gates
 pub(crate) fn compose_name_path(components: &[&str]) -> Result<String, String> {
     let mut new_name = TOP_MOD_NAME.to_string();
     for component in components {
@@ -545,7 +547,8 @@ impl std::fmt::Display for ModNameNode {
 /// Returns `true` if a str is a legal name for a module
 ///
 /// A module name must be an ascii string, containing only alpha-numeric characters plus [`_`, `-`]
-pub(crate) fn module_name_is_legal(name: &str) -> bool {
+#[allow(dead_code)] //Some clients are behind feature gates
+pub fn module_name_is_legal(name: &str) -> bool {
     for the_char in name.chars() {
         if !the_char.is_ascii() {
             return false;
@@ -557,6 +560,22 @@ pub(crate) fn module_name_is_legal(name: &str) -> bool {
         }
     }
     return true;
+}
+
+/// Returns a legal module name composed from the supplied string, by removing or substituting
+/// all illlegal characters.  Returns None if that isn't possible
+#[allow(dead_code)] //Some clients are behind feature gates
+pub fn module_name_make_legal(name: &str) -> Option<String> {
+    let new_name: String = name.chars().filter(|&the_char| {
+        the_char.is_ascii_alphanumeric() ||
+        the_char == '-' ||
+        the_char != '_'
+    }).collect();
+    if new_name.len() > 0 {
+        Some(new_name)
+    } else {
+        None
+    }
 }
 
 /// This test is narrowly focussed on the module namespace path parsing behavior implemented in

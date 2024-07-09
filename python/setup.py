@@ -87,6 +87,7 @@ def version_scheme(*args):
 setup(
     ext_modules=[CMakeExtension("hyperonpy")],
     cmdclass={"build_ext": CMakeBuild},
+    url="https://github.com/trueagi-io/hyperon-experimental",
     use_scm_version={'root': '..',
                      'version_scheme': version_scheme,
                      'write_to': 'python/hyperon/_version.py'},

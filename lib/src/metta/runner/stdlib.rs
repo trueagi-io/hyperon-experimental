@@ -1,13 +1,19 @@
 use crate::*;
-use crate::matcher::MatchResultIter;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
+use crate::metta::runner::string::Str;
 use crate::metta::types::{get_atom_types, get_meta_type};
+use crate::metta::interpreter::interpret;
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
+use crate::common::multitrie::MultiTrie;
+use crate::space::grounding::atom_to_trie_key;
+
+#[cfg(feature = "pkg_mgmt")]
+use crate::metta::runner::{git_catalog::ModuleGitLocation, mod_name_from_url, pkg_mgmt::UpdateMode};
 
 use std::rc::Rc;
 use std::cell::RefCell;
@@ -18,8 +24,39 @@ use regex::Regex;
 use super::arithmetics::*;
 use super::string::*;
 
-fn unit_result() -> Result<Vec<Atom>, ExecError> {
+macro_rules! grounded_op {
+    ($name:ident, $disp:literal) => {
+        impl PartialEq for $name {
+            fn eq(&self, _other: &Self) -> bool {
+                true
+            }
+        }
+
+        impl std::fmt::Display for $name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                write!(f, $disp)
+            }
+        }
+    }
+}
+
+pub(crate) fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
+}
+
+pub(crate) fn regex(regex: &str) -> Regex {
+    Regex::new(regex).unwrap()
+}
+
+// TODO: remove hiding errors completely after making it possible passing
+// them to the user
+fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
+    let result = interpret(space, expr);
+    log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
+    match result {
+        Ok(result) => Ok(result),
+        Err(_) => Ok(vec![]),
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -28,19 +65,11 @@ pub struct ImportOp {
     context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
-impl PartialEq for ImportOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(ImportOp, "import!");
 
 impl ImportOp {
     pub fn new(metta: Metta) -> Self {
         Self{ context: metta.0.context.clone() }
-    }
-}
-
-impl Display for ImportOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "import!")
     }
 }
 
@@ -52,6 +81,12 @@ impl Grounded for ImportOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for ImportOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         //QUESTION: "Import" can mean several (3) different things.  In Python parlance, it can mean
         //1. "import module" opt. ("as bar")
@@ -122,28 +157,6 @@ impl Grounded for ImportOp {
 
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
-
-/// A utility function to return the part of a string in between starting and ending quotes
-// TODO: Roll this into a stdlib grounded string module, maybe as a test case for
-//   https://github.com/trueagi-io/hyperon-experimental/issues/351
-fn strip_quotes(src: &str) -> &str {
-    if let Some(first) = src.chars().next() {
-        if first == '"' {
-            if let Some(last) = src.chars().last() {
-                if last == '"' {
-                    if src.len() > 1 {
-                        return &src[1..src.len()-1]
-                    }
-                }
-            }
-        }
-    }
-    src
 }
 
 #[derive(Clone, Debug)]
@@ -152,19 +165,11 @@ pub struct IncludeOp {
     context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
-impl PartialEq for IncludeOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(IncludeOp, "include");
 
 impl IncludeOp {
     pub fn new(metta: Metta) -> Self {
         Self{ context: metta.0.context.clone() }
-    }
-}
-
-impl Display for IncludeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "include")
     }
 }
 
@@ -173,6 +178,12 @@ impl Grounded for IncludeOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for IncludeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("include expects a module name argument");
         let mod_name_atom = args.get(0).ok_or_else(arg_error)?;
@@ -204,10 +215,6 @@ impl Grounded for IncludeOp {
         // different from the way "eval-type" APIs work when called from host code, e.g. Rust
         Ok(eval_result.into_iter().last().unwrap_or_else(|| vec![]))
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 /// mod-space! returns the space of a specified module, loading the module if it's not loaded already
@@ -221,19 +228,11 @@ pub struct ModSpaceOp {
     context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
 }
 
-impl PartialEq for ModSpaceOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(ModSpaceOp, "mod-space!");
 
 impl ModSpaceOp {
     pub fn new(metta: Metta) -> Self {
         Self{ context: metta.0.context.clone() }
-    }
-}
-
-impl Display for ModSpaceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "mod-space!")
     }
 }
 
@@ -242,6 +241,12 @@ impl Grounded for ModSpaceOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, rust_type_atom::<DynSpace>()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for ModSpaceOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "mod-space! expects a module name argument";
         let mod_name_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
@@ -262,64 +267,6 @@ impl Grounded for ModSpaceOp {
         let space = Atom::gnd(context.metta().module_space(mod_id));
         Ok(vec![space])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-}
-
-/// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
-#[derive(Clone, Debug)]
-pub struct RegisterModuleOp {
-    metta: Metta
-}
-
-impl PartialEq for RegisterModuleOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
-
-impl RegisterModuleOp {
-    pub fn new(metta: Metta) -> Self {
-        Self{ metta }
-    }
-}
-
-impl Display for RegisterModuleOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "register-module!")
-    }
-}
-
-impl Grounded for RegisterModuleOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
-    }
-
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = "register-module! expects a file system path; use quotes if needed";
-        let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
-
-        // TODO: replace Symbol by grounded String?
-        let path = match path_arg_atom {
-            Atom::Symbol(path_arg) => path_arg.name(),
-            _ => return Err(arg_error.into())
-        };
-        let path = strip_quotes(path);
-        let path = std::path::PathBuf::from(path);
-
-        // Load the module from the path
-        // QUESTION: Do we want to expose the ability to give the module a different name and/ or
-        // load it into a different part of the namespace hierarchy?  For now I was just thinking
-        // it is better to keep the args simple.  IMO this is a place for optional var-args when we
-        // decide on the best way to handle them language-wide.
-        self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
-
-        unit_result()
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 /// This operation prints the modules loaded from the top of the runner
@@ -332,19 +279,11 @@ pub struct PrintModsOp {
     metta: Metta
 }
 
-impl PartialEq for PrintModsOp {
-    fn eq(&self, _other: &Self) -> bool { true }
-}
+grounded_op!(PrintModsOp, "print-mods!");
 
 impl PrintModsOp {
     pub fn new(metta: Metta) -> Self {
         Self{ metta }
-    }
-}
-
-impl Display for PrintModsOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "print-mods!")
     }
 }
 
@@ -353,30 +292,28 @@ impl Grounded for PrintModsOp {
         Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for PrintModsOp {
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         self.metta.display_loaded_modules();
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct BindOp {
     tokenizer: Shared<Tokenizer>,
 }
 
+grounded_op!(BindOp, "bind!");
+
 impl BindOp {
     pub fn new(tokenizer: Shared<Tokenizer>) -> Self {
         Self{ tokenizer }
-    }
-}
-
-impl Display for BindOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "bind!")
     }
 }
 
@@ -385,6 +322,12 @@ impl Grounded for BindOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for BindOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("bind! expects two arguments: token and atom");
         let token = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "bind! expects symbol atom as a token")?.name();
@@ -394,26 +337,24 @@ impl Grounded for BindOp {
         self.tokenizer.borrow_mut().register_token(token_regex, move |_| { atom.clone() });
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct NewSpaceOp {}
 
-impl Display for NewSpaceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "new-space")
-    }
-}
+grounded_op!(NewSpaceOp, "new-space");
 
 impl Grounded for NewSpaceOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for NewSpaceOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         if args.len() == 0 {
             let space = Atom::gnd(DynSpace::new(GroundingSpace::new()));
@@ -422,20 +363,12 @@ impl Grounded for NewSpaceOp {
             Err("new-space doesn't expect arguments".into())
         }
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct AddAtomOp {}
 
-impl Display for AddAtomOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "add-atom")
-    }
-}
+grounded_op!(AddAtomOp, "add-atom");
 
 impl Grounded for AddAtomOp {
     fn type_(&self) -> Atom {
@@ -443,6 +376,12 @@ impl Grounded for AddAtomOp {
             ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for AddAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("add-atom expects two arguments: space and atom");
         let space = args.get(0).ok_or_else(arg_error)?;
@@ -451,20 +390,12 @@ impl Grounded for AddAtomOp {
         space.borrow_mut().add(atom.clone());
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct RemoveAtomOp {}
 
-impl Display for RemoveAtomOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "remove-atom")
-    }
-}
+grounded_op!(RemoveAtomOp, "remove-atom");
 
 impl Grounded for RemoveAtomOp {
     fn type_(&self) -> Atom {
@@ -472,6 +403,12 @@ impl Grounded for RemoveAtomOp {
             ATOM_TYPE_ATOM, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for RemoveAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("remove-atom expects two arguments: space and atom");
         let space = args.get(0).ok_or_else(arg_error)?;
@@ -481,20 +418,12 @@ impl Grounded for RemoveAtomOp {
         // TODO? Is it necessary to distinguish whether the atom was removed or not?
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetAtomsOp {}
 
-impl Display for GetAtomsOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-atoms")
-    }
-}
+grounded_op!(GetAtomsOp, "get-atoms");
 
 impl Grounded for GetAtomsOp {
     fn type_(&self) -> Atom {
@@ -502,6 +431,12 @@ impl Grounded for GetAtomsOp {
             ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetAtomsOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-atoms expects one argument: space");
         let space = args.get(0).ok_or_else(arg_error)?;
@@ -510,26 +445,18 @@ impl Grounded for GetAtomsOp {
             .map(|iter| iter.cloned().map(|a| make_variables_unique(a)).collect())
             .ok_or(ExecError::Runtime("Unsupported Operation. Can't traverse atoms in this space".to_string()))
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct PragmaOp {
     settings: Shared<HashMap<String, Atom>>,
 }
 
+grounded_op!(PragmaOp, "pragma!");
+
 impl PragmaOp {
     pub fn new(settings: Shared<HashMap<String, Atom>>) -> Self {
         Self{ settings }
-    }
-}
-
-impl Display for PragmaOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "pragma!")
     }
 }
 
@@ -538,6 +465,12 @@ impl Grounded for PragmaOp {
         ATOM_TYPE_UNDEFINED
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for PragmaOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("pragma! expects key and value as arguments");
         let key = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "pragma! expects symbol atom as a key")?.name();
@@ -545,26 +478,18 @@ impl Grounded for PragmaOp {
         self.settings.borrow_mut().insert(key.into(), value.clone());
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetTypeOp {
     space: DynSpace,
 }
 
+grounded_op!(GetTypeOp, "get-type");
+
 impl GetTypeOp {
     pub fn new(space: DynSpace) -> Self {
         Self{ space }
-    }
-}
-
-impl Display for GetTypeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-type")
     }
 }
 
@@ -573,32 +498,36 @@ impl Grounded for GetTypeOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetTypeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-type expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
 
         Ok(get_atom_types(self.space.borrow().as_space(), atom))
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetTypeSpaceOp {}
 
-impl Display for GetTypeSpaceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-type-space")
-    }
-}
+grounded_op!(GetTypeSpaceOp, "get-type-space");
 
 impl Grounded for GetTypeSpaceOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetTypeSpaceOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-type-space expects two arguments: space and atom");
         let space = args.get(0).ok_or_else(arg_error)?;
@@ -608,73 +537,61 @@ impl Grounded for GetTypeSpaceOp {
 
         Ok(get_atom_types(space, atom))
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetMetaTypeOp { }
 
-impl Display for GetMetaTypeOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-metatype")
-    }
-}
+grounded_op!(GetMetaTypeOp, "get-metatype");
 
 impl Grounded for GetMetaTypeOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetMetaTypeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("get-metatype expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
 
         Ok(vec![get_meta_type(&atom)])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct PrintlnOp {}
 
-impl Display for PrintlnOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "println!")
-    }
-}
+grounded_op!(PrintlnOp, "println!");
 
 impl Grounded for PrintlnOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE()])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for PrintlnOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("println! expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
         println!("{}", atom_to_string(atom));
         unit_result()
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct FormatArgsOp {}
 
-impl Display for FormatArgsOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "format-args")
-    }
-}
+grounded_op!(FormatArgsOp, "format-args");
 
 use dyn_fmt::AsStrFormatExt;
 
@@ -683,6 +600,12 @@ impl Grounded for FormatArgsOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for FormatArgsOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("format-args expects format string as a first argument and expression as a second argument");
         let format = atom_to_string(args.get(0).ok_or_else(arg_error)?);
@@ -692,10 +615,6 @@ impl Grounded for FormatArgsOp {
             .collect();
         let res = format.format(args.as_slice());
         Ok(vec![Atom::gnd(Str::from_string(res))])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -744,20 +663,22 @@ fn atom_to_string(atom: &Atom) -> String {
 /// [42]
 /// ```
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct TraceOp {}
 
-impl Display for TraceOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "trace!")
-    }
-}
+grounded_op!(TraceOp, "trace!");
 
 impl Grounded for TraceOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, Atom::var("a"), Atom::var("a")])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for TraceOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("trace! expects two atoms as arguments");
         let val = args.get(1).ok_or_else(arg_error)?;
@@ -765,32 +686,26 @@ impl Grounded for TraceOp {
         eprintln!("{}", msg);
         Ok(vec![val.clone()])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct NopOp {}
 
-impl Display for NopOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "nop")
-    }
-}
+grounded_op!(NopOp, "nop");
 
 impl Grounded for NopOp {
     fn type_(&self) -> Atom {
         ATOM_TYPE_UNDEFINED
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for NopOp {
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         unit_result()
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -824,82 +739,71 @@ impl Grounded for StateAtom {
         };
         Atom::expr([expr!("StateMonad"), typ])
     }
-
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        // Different state atoms with equal states are equal
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct NewStateOp { }
 
-impl Display for NewStateOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "new-state")
-    }
-}
+grounded_op!(NewStateOp, "new-state");
 
 impl Grounded for NewStateOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, expr!(tnso), expr!("StateMonad" tnso)])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for NewStateOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "new-state expects single atom as an argument";
         let atom = args.get(0).ok_or(arg_error)?;
         Ok(vec![Atom::gnd(StateAtom::new(atom.clone()))])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct GetStateOp { }
+
+grounded_op!(GetStateOp, "get-state");
 
 impl Grounded for GetStateOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, expr!("StateMonad" tgso), expr!(tgso)])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for GetStateOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "get-state expects single state atom as an argument";
         let state = args.get(0).ok_or(arg_error)?;
         let atom = Atom::as_gnd::<StateAtom>(state).ok_or(arg_error)?;
         Ok(vec![atom.state.borrow().clone()])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-impl Display for GetStateOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "get-state")
-    }
-}
-
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct ChangeStateOp { }
 
-impl Display for ChangeStateOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "change-state!")
-    }
-}
+grounded_op!(ChangeStateOp, "change-state!");
 
 impl Grounded for ChangeStateOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, expr!("StateMonad" tcso), expr!(tcso), expr!("StateMonad" tcso)])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for ChangeStateOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "change-state! expects a state atom and its new value as arguments";
         let atom = args.get(0).ok_or(arg_error)?;
@@ -908,26 +812,24 @@ impl Grounded for ChangeStateOp {
         *state.state.borrow_mut() = new_value.clone();
         Ok(vec![atom.clone()])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct SealedOp {}
 
-impl Display for SealedOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "sealed")
-    }
-}
+grounded_op!(SealedOp, "sealed");
 
 impl Grounded for SealedOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for SealedOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("sealed expects two arguments: var_list and expression");
 
@@ -950,26 +852,24 @@ impl Grounded for SealedOp {
 
         Ok(result)
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct EqualOp {}
 
-impl Display for EqualOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "==")
-    }
-}
+grounded_op!(EqualOp, "==");
 
 impl Grounded for EqualOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, expr!(t), expr!(t), ATOM_TYPE_BOOL])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for EqualOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from(concat!(stringify!($op), " expects two arguments"));
         let a = args.get(0).ok_or_else(arg_error)?;
@@ -977,26 +877,24 @@ impl Grounded for EqualOp {
 
         Ok(vec![Atom::gnd(Bool(a == b))])
     }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Debug)]
 pub struct MatchOp {}
 
-impl Display for MatchOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "match")
-    }
-}
+grounded_op!(MatchOp, "match");
 
 impl Grounded for MatchOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for MatchOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("match expects three arguments: space, pattern and template");
         let space = args.get(0).ok_or_else(arg_error)?;
@@ -1006,18 +904,377 @@ impl Grounded for MatchOp {
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
         Ok(space.borrow().subst(&pattern, &template))
     }
+}
 
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
+/// The op atoms that depend on the pkg_mgmt feature
+#[cfg(feature = "pkg_mgmt")]
+pub(crate) mod pkg_mgmt_ops {
+    use super::*;
+
+    /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
+    #[derive(Clone, Debug)]
+    pub struct RegisterModuleOp {
+        metta: Metta
+    }
+
+    grounded_op!(RegisterModuleOp, "register-module!");
+
+    impl RegisterModuleOp {
+        pub fn new(metta: Metta) -> Self {
+            Self{ metta }
+        }
+    }
+
+    impl Grounded for RegisterModuleOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        }
+
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for RegisterModuleOp {
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = "register-module! expects a file system path; use quotes if needed";
+            let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+
+            let path = match path_arg_atom {
+                Atom::Symbol(path_arg) => path_arg.name(),
+                Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
+                _ => return Err(arg_error.into()),
+            };
+            let path = strip_quotes(path);
+            let path = std::path::PathBuf::from(path);
+
+            // Load the module from the path
+            // QUESTION: Do we want to expose the ability to give the module a different name and/ or
+            // load it into a different part of the namespace hierarchy?  For now I was just thinking
+            // it is better to keep the args simple.  IMO this is a place for optional var-args when we
+            // decide on the best way to handle them language-wide.
+            self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
+
+            unit_result()
+        }
+    }
+
+    /// Provides access to module in a remote git repo, from within MeTTa code
+    /// Similar to `register-module!`, this op will bypass the catalog search
+    ///
+    /// NOTE: Even if Hyperon is build without git support, this operation may still be used to
+    /// load existing modules from a git cache.  That situation may occur if modules were fetched
+    /// earlier or by another tool that manages the module cache.  However this operation requres
+    /// git support to actually clone or pull from a git repository.
+    #[derive(Clone, Debug)]
+    pub struct GitModuleOp {
+        //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
+        context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    }
+
+    grounded_op!(GitModuleOp, "git-module!");
+
+    impl GitModuleOp {
+        pub fn new(metta: Metta) -> Self {
+            Self{ context: metta.0.context.clone() }
+        }
+    }
+
+    impl Grounded for GitModuleOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        }
+
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for GitModuleOp {
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = "git-module! expects a URL; use quotes if needed";
+            let url_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+            // TODO: When we figure out how to address varargs, it will be nice to take an optional branch name
+
+            let url = match url_arg_atom {
+                Atom::Symbol(url_arg) => url_arg.name(),
+                Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
+                _ => return Err(arg_error.into()),
+            };
+            let url = strip_quotes(url);
+
+            // TODO: Depending on what we do with `register-module!`, we might want to let the
+            // caller provide an optional mod_name here too, rather than extracting it from the url
+            let mod_name = match mod_name_from_url(url) {
+                Some(mod_name) => mod_name,
+                None => return Err(ExecError::from("git-module! error extracting module name from URL"))
+            };
+
+            let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
+            let mut context = ctx_ref.lock().unwrap();
+
+            let git_mod_location = ModuleGitLocation::new(url.to_string());
+
+            match context.metta.environment().specified_mods.as_ref() {
+                Some(specified_mods) => if let Some((loader, descriptor)) = specified_mods.loader_for_explicit_git_module(&mod_name, UpdateMode::TryFetchLatest, &git_mod_location)? {
+                    context.get_or_init_module_with_descriptor(&mod_name, descriptor, loader).map_err(|e| ExecError::from(e))?;
+                },
+                None => return Err(ExecError::from(format!("Unable to pull module \"{mod_name}\" from git; no local \"caches\" directory available")))
+            }
+
+            unit_result()
+        }
+    }
+
+    pub fn register_pkg_mgmt_tokens(tref: &mut Tokenizer, metta: &Metta) {
+        let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
+        let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));
+        tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct UniqueOp {
+    pub(crate) space: DynSpace,
+}
+
+grounded_op!(UniqueOp, "unique");
+
+impl UniqueOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Grounded for UniqueOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for UniqueOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("unique expects single executable atom as an argument");
+        let atom = args.get(0).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut result = interpret_no_error(self.space.clone(), atom)?;
+        let mut set = GroundingSpace::new();
+        result.retain(|x| {
+            let not_contained = set.query(x).is_empty();
+            if not_contained { set.add(x.clone()) };
+            not_contained
+        });
+        Ok(result)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct UnionOp {
+    pub(crate) space: DynSpace,
+}
+
+grounded_op!(UnionOp, "union");
+
+impl UnionOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Grounded for UnionOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for UnionOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("union expects and executable LHS and RHS atom");
+        let lhs = args.get(0).ok_or_else(arg_error)?;
+        let rhs = args.get(1).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
+        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
+        lhs_result.extend(rhs_result);
+
+        Ok(lhs_result)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct IntersectionOp {
+    pub(crate) space: DynSpace,
+}
+
+grounded_op!(IntersectionOp, "intersection");
+
+impl IntersectionOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Grounded for IntersectionOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for IntersectionOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("intersection expects and executable LHS and RHS atom");
+        let lhs = args.get(0).ok_or_else(arg_error)?;
+        let rhs = args.get(1).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
+        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
+        let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
+        for (index, rhs_item) in rhs_result.iter().enumerate() {
+            let k = atom_to_trie_key(&rhs_item);
+            // FIXME this should
+            // a) use a mutable value endpoint which the MultiTrie does not support atm
+            // b) use a linked list, which Rust barely supports atm
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
+                Some(bucket) => {
+                    rhs_index.remove(&k, &bucket);
+                    let mut nbucket = bucket;
+                    nbucket.push(index);
+                    let nbucket = nbucket;
+                    rhs_index.insert(k, nbucket);
+                }
+                None => { rhs_index.insert(k, vec![index]) }
+            }
+        }
+
+        lhs_result.retain(|candidate| {
+            let k = atom_to_trie_key(candidate);
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
+                None => { false }
+                Some(bucket) => {
+                    match bucket.iter().position(|item| &rhs_result[*item] == candidate) {
+                        None => { false }
+                        Some(i) => {
+                            rhs_index.remove(&k, &bucket);
+                            if bucket.len() > 1 {
+                                let mut nbucket = bucket;
+                                nbucket.remove(i);
+                                rhs_index.insert(k, nbucket);
+                            }
+                            true
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(lhs_result)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SubtractionOp {
+    pub(crate) space: DynSpace,
+}
+
+grounded_op!(SubtractionOp, "subtraction");
+
+impl SubtractionOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Grounded for SubtractionOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for SubtractionOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("subtraction expects and executable LHS and RHS atom");
+        let lhs = args.get(0).ok_or_else(arg_error)?;
+        let rhs = args.get(1).ok_or_else(arg_error)?;
+
+        // TODO: Calling interpreter inside the operation is not too good
+        // Could it be done via StepResult?
+        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
+        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
+        let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
+        for (index, rhs_item) in rhs_result.iter().enumerate() {
+            let k = atom_to_trie_key(&rhs_item);
+            // FIXME this should
+            // a) use a mutable value endpoint which the MultiTrie does not support atm
+            // b) use a linked list, which Rust barely supports atm
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
+                Some(bucket) => {
+                    rhs_index.remove(&k, &bucket);
+                    let mut nbucket = bucket;
+                    nbucket.push(index);
+                    let nbucket = nbucket;
+                    rhs_index.insert(k, nbucket);
+                }
+                None => { rhs_index.insert(k, vec![index]) }
+            }
+        }
+
+        lhs_result.retain(|candidate| {
+            let k = atom_to_trie_key(candidate);
+            let r = rhs_index.get(&k).next();
+            match r.cloned() {
+                None => { true }
+                Some(bucket) => {
+                    match bucket.iter().position(|item| &rhs_result[*item] == candidate) {
+                        None => { true }
+                        Some(i) => {
+                            rhs_index.remove(&k, &bucket);
+                            if bucket.len() > 1 {
+                                let mut nbucket = bucket;
+                                nbucket.remove(i);
+                                rhs_index.insert(k, nbucket);
+                            }
+                            false
+                        }
+                    }
+                }
+            }
+        });
+
+        Ok(lhs_result)
+    }
+}
 
 /// The internal `non_minimal_only_stdlib` module contains code that is never used by the minimal stdlib
 #[cfg(not(feature = "minimal"))]
 mod non_minimal_only_stdlib {
+    use std::collections::HashSet;
     use super::*;
-    use crate::metta::interpreter::interpret;
     use crate::common::assert::vec_eq_no_order;
 
     // TODO: move it into hyperon::atom module?
@@ -1028,31 +1285,22 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    // TODO: remove hiding errors completely after making it possible passing
-    // them to the user
-    fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
-        let result = interpret(space, expr);
-        log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
-        match result {
-            Ok(result) => Ok(result),
-            Err(_) => Ok(vec![]),
-        }
-    }
-
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CarAtomOp {}
 
-    impl Display for CarAtomOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "car-atom")
-        }
-    }
+    grounded_op!(CarAtomOp, "car-atom");
 
     impl Grounded for CarAtomOp {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for CarAtomOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("car-atom expects one argument: expression");
             let expr = args.get(0).ok_or_else(arg_error)?;
@@ -1060,26 +1308,24 @@ mod non_minimal_only_stdlib {
             let car = chld.get(0).ok_or("car-atom expects non-empty expression")?;
             Ok(vec![car.clone()])
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CdrAtomOp {}
 
-    impl Display for CdrAtomOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "cdr-atom")
-        }
-    }
+    grounded_op!(CdrAtomOp, "cdr-atom");
 
     impl Grounded for CdrAtomOp {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for CdrAtomOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("cdr-atom expects one argument: expression");
             let expr = args.get(0).ok_or_else(arg_error)?;
@@ -1091,26 +1337,24 @@ mod non_minimal_only_stdlib {
                 Ok(vec![Atom::expr(cdr)])
             }
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct ConsAtomOp {}
 
-    impl Display for ConsAtomOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "cons-atom")
-        }
-    }
+    grounded_op!(ConsAtomOp, "cons-atom");
 
     impl Grounded for ConsAtomOp {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for ConsAtomOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("cons-atom expects two arguments: atom and expression");
             let atom = args.get(0).ok_or_else(arg_error)?;
@@ -1120,28 +1364,18 @@ mod non_minimal_only_stdlib {
             res.extend(chld.clone());
             Ok(vec![Atom::expr(res)])
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
-    use std::collections::HashSet;
-
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CaptureOp {
         space: DynSpace,
     }
 
+    grounded_op!(CaptureOp, "capture");
+
     impl CaptureOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for CaptureOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "capture")
         }
     }
 
@@ -1150,21 +1384,25 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for CaptureOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("capture expects one argument");
             let atom = args.get(0).ok_or_else(arg_error)?;
             interpret_no_error(self.space.clone(), &atom).map_err(|e| ExecError::from(e))
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CaseOp {
         space: DynSpace,
     }
+
+    grounded_op!(CaseOp, "case");
 
     impl CaseOp {
         pub fn new(space: DynSpace) -> Self {
@@ -1244,23 +1482,19 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    impl Display for CaseOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "case")
-        }
-    }
-
     impl Grounded for CaseOp {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for CaseOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             CaseOp::execute(self, args)
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
@@ -1273,20 +1507,16 @@ mod non_minimal_only_stdlib {
         }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct AssertEqualOp {
         space: DynSpace,
     }
 
+    grounded_op!(AssertEqualOp, "assertEqual");
+
     impl AssertEqualOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for AssertEqualOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "assertEqual")
         }
     }
 
@@ -1295,6 +1525,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for AssertEqualOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("assertEqual expects two atoms as arguments: actual and expected");
             let actual_atom = args.get(0).ok_or_else(arg_error)?;
@@ -1305,26 +1541,18 @@ mod non_minimal_only_stdlib {
 
             assert_results_equal(&actual, &expected, actual_atom)
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct AssertEqualToResultOp {
         space: DynSpace,
     }
 
+    grounded_op!(AssertEqualToResultOp, "assertEqualToResult");
+
     impl AssertEqualToResultOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for AssertEqualToResultOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "assertEqualToResult")
         }
     }
 
@@ -1333,6 +1561,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for AssertEqualToResultOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("assertEqualToResult expects two atoms as arguments: actual and expected");
             let actual_atom = args.get(0).ok_or_else(arg_error)?;
@@ -1344,26 +1578,18 @@ mod non_minimal_only_stdlib {
 
             assert_results_equal(&actual, expected, actual_atom)
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct CollapseOp {
         space: DynSpace,
     }
 
+    grounded_op!(CollapseOp, "collapse");
+
     impl CollapseOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for CollapseOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "collapse")
         }
     }
 
@@ -1372,6 +1598,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for CollapseOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("collapse expects single executable atom as an argument");
             let atom = args.get(0).ok_or_else(arg_error)?;
@@ -1382,26 +1614,18 @@ mod non_minimal_only_stdlib {
 
             Ok(vec![Atom::expr(result)])
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct SuperposeOp {
         pub(crate) space: DynSpace,
     }
 
+    grounded_op!(SuperposeOp, "superpose");
+
     impl SuperposeOp {
         pub fn new(space: DynSpace) -> Self {
             Self{ space }
-        }
-    }
-
-    impl Display for SuperposeOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "superpose")
         }
     }
 
@@ -1410,6 +1634,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for SuperposeOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("superpose expects single expression as an argument");
             let atom = args.get(0).ok_or_else(arg_error)?;
@@ -1424,20 +1654,12 @@ mod non_minimal_only_stdlib {
             }
             Ok(superposed)
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct LetOp {}
 
-    impl Display for LetOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "let")
-        }
-    }
+    grounded_op!(LetOp, "let");
 
     impl Grounded for LetOp {
         fn type_(&self) -> Atom {
@@ -1445,6 +1667,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for LetOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("let expects three arguments: pattern, atom and template");
             let mut template = args.get(2).ok_or_else(arg_error)?.clone();
@@ -1458,10 +1686,6 @@ mod non_minimal_only_stdlib {
             let result = bindings.map(|b| { matcher::apply_bindings_to_atom_move(template.clone(), &b) }).collect();
             log::debug!("LetOp::execute: pattern: {}, atom: {}, template: {}, result: {:?}", pattern, atom, template, result);
             Ok(result)
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 
@@ -1491,14 +1715,10 @@ mod non_minimal_only_stdlib {
             });
     }
 
-    #[derive(Clone, PartialEq, Debug)]
+    #[derive(Clone, Debug)]
     pub struct LetVarOp { }
 
-    impl Display for LetVarOp {
-        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-            write!(f, "let*")
-        }
-    }
+    grounded_op!(LetVarOp, "let*");
 
     impl Grounded for LetVarOp {
         fn type_(&self) -> Atom {
@@ -1506,6 +1726,12 @@ mod non_minimal_only_stdlib {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
         }
 
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for LetVarOp {
         fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
             let arg_error = || ExecError::from("let* list of couples and template as arguments");
             let expr = atom_as_expr(args.get(0).ok_or_else(arg_error)?).ok_or(arg_error())?;
@@ -1530,14 +1756,6 @@ mod non_minimal_only_stdlib {
                 },
             }
         }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
-        }
-    }
-
-    fn regex(regex: &str) -> Regex {
-        Regex::new(regex).unwrap()
     }
 
     //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
@@ -1583,14 +1801,15 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
         let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
         tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
-        let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
-        tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
         let mod_space_op = Atom::gnd(ModSpaceOp::new(metta.clone()));
         tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
         let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
         tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
         let sealed_op = Atom::gnd(SealedOp{});
         tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
+
+        #[cfg(feature = "pkg_mgmt")]
+        pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
     }
 
     //TODO: The metta argument is a temporary hack on account of the way the operation atoms store references
@@ -1610,6 +1829,14 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
         let superpose_op = Atom::gnd(SuperposeOp::new(space.clone()));
         tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
+        let unique_op = Atom::gnd(UniqueOp::new(space.clone()));
+        tref.register_token(regex(r"unique"), move |_| { unique_op.clone() });
+        let union_op = Atom::gnd(UnionOp::new(space.clone()));
+        tref.register_token(regex(r"union"), move |_| { union_op.clone() });
+        let intersection_op = Atom::gnd(IntersectionOp::new(space.clone()));
+        tref.register_token(regex(r"intersection"), move |_| { intersection_op.clone() });
+        let subtraction_op = Atom::gnd(SubtractionOp::new(space.clone()));
+        tref.register_token(regex(r"subtraction"), move |_| { subtraction_op.clone() });
         let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
         tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
         let get_type_space_op = Atom::gnd(GetTypeSpaceOp{});
@@ -1957,6 +2184,105 @@ mod tests {
     }
 
     #[test]
+    fn unique_op() {
+        let space = DynSpace::new(metta_space("
+            (= (foo) (A (B C)))
+            (= (foo) (A (B C)))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) Z)
+        "));
+        let unique_op = UniqueOp::new(space);
+        let actual = unique_op.execute(&mut vec![expr!(("foo"))]).unwrap();
+        assert_eq_no_order!(actual,
+                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("Z")]);
+    }
+
+    #[test]
+    fn union_op() {
+        let space = DynSpace::new(metta_space("
+            (= (foo) (A (B C)))
+            (= (foo) (A (B C)))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) Z)
+            (= (bar) (A (B C)))
+            (= (bar) p)
+            (= (bar) p)
+            (= (bar) (Q a))
+        "));
+        let union_op = UnionOp::new(space);
+        let actual = union_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]).unwrap();
+        assert_eq_no_order!(actual,
+                   vec![expr!("A" ("B" "C")), expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("f" "g"), expr!("Z"),
+                        expr!("A" ("B" "C")), expr!("p"), expr!("p"), expr!("Q" "a")]);
+    }
+
+    #[test]
+    fn intersection_op() {
+        let space = DynSpace::new(metta_space("
+            (= (foo) Z)
+            (= (foo) (A (B C)))
+            (= (foo) (A (B C)))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (P b))
+            (= (bar) (f g))
+            (= (bar) (f g))
+            (= (bar) (A (B C)))
+            (= (bar) p)
+            (= (bar) p)
+            (= (bar) (Q a))
+            (= (bar) Z)
+
+            (= (nsl) 5)
+            (= (nsl) 4)
+            (= (nsl) 3)
+            (= (nsl) 2)
+            (= (nsr) 5)
+            (= (nsr) 3)
+        "));
+        let intersection_op = IntersectionOp::new(space);
+        let actual = intersection_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]).unwrap();
+        assert_eq_no_order!(actual,
+                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("Z")]);
+
+        assert_eq_no_order!(intersection_op.execute(&mut vec![expr!(("nsl")), expr!(("nsr"))]).unwrap(),
+                   vec![expr!("5"), expr!("3")]);
+    }
+
+    #[test]
+    fn subtraction_op() {
+        let space = DynSpace::new(metta_space("
+            (= (foo) Z)
+            (= (foo) S)
+            (= (foo) S)
+            (= (foo) (A (B C)))
+            (= (foo) (A (B C)))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (f g))
+            (= (foo) (P b))
+            (= (bar) (f g))
+            (= (bar) (A (B C)))
+            (= (bar) p)
+            (= (bar) p)
+            (= (bar) (Q a))
+            (= (bar) Z)
+            (= (bar) S)
+            (= (bar) S)
+            (= (bar) S)
+        "));
+        let subtraction_op = SubtractionOp::new(space);
+        let actual = subtraction_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]).unwrap();
+        assert_eq_no_order!(actual,
+                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("P" "b")]);
+    }
+
+    #[test]
     fn superpose_op_type() {
         let space = DynSpace::new(GroundingSpace::new());
         assert!(validate_atom(space.borrow().as_space(), &expr!({SumOp{}}
@@ -2230,14 +2556,6 @@ mod tests {
     impl Grounded for SomeGndAtom {
         fn type_(&self) -> Atom {
             Atom::expr([ARROW_SYMBOL, sym!("Arg1Type"), sym!("Arg2Type"), sym!("ReturnType")])
-        }
-
-        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            execute_not_executable(self)
-        }
-
-        fn match_(&self, other: &Atom) -> MatchResultIter {
-            match_by_equality(self, other)
         }
     }
 

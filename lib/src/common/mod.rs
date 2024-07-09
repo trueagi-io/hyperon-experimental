@@ -41,12 +41,14 @@ impl Grounded for &'static Operation {
         parser.parse(&Tokenizer::new()).unwrap().unwrap()
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for &'static Operation {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         (self.execute)(self, args)
-    }
-
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 

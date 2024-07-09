@@ -1,6 +1,5 @@
 use crate::*;
 use crate::metta::*;
-use crate::matcher::MatchResultIter;
 use crate::atom::serial;
 
 use std::fmt::Display;
@@ -117,14 +116,6 @@ impl Grounded for Number {
         ATOM_TYPE_NUMBER
     }
 
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
-    }
-
     fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
         match self {
             &Self::Integer(n) => serializer.serialize_i64(n),
@@ -166,16 +157,18 @@ impl Grounded for Bool {
         ATOM_TYPE_BOOL
     }
 
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        execute_not_executable(self)
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_bidirectional_equality(self, other)
+    fn as_match(&self) -> Option<&dyn CustomMatch> {
+        Some(self)
     }
 
     fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
         serializer.serialize_bool(self.0)
+    }
+}
+
+impl CustomMatch for Bool {
+    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+        match_by_bidirectional_equality(self, other)
     }
 }
 
@@ -195,6 +188,12 @@ macro_rules! def_binary_number_op {
                 Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, $r])
             }
 
+            fn as_execute(&self) -> Option<&dyn CustomExecute> {
+                Some(self)
+            }
+        }
+
+        impl CustomExecute for $name {
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($op), " expects two number arguments"));
                 let a = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
@@ -208,10 +207,6 @@ macro_rules! def_binary_number_op {
                 };
 
                 Ok(vec![Atom::gnd(res)])
-            }
-
-            fn match_(&self, other: &Atom) -> MatchResultIter {
-                match_by_equality(self, other)
             }
         }
     }
@@ -243,16 +238,18 @@ macro_rules! def_binary_bool_op {
                 Atom::expr([ARROW_SYMBOL, ATOM_TYPE_BOOL, ATOM_TYPE_BOOL, ATOM_TYPE_BOOL])
             }
 
+            fn as_execute(&self) -> Option<&dyn CustomExecute> {
+                Some(self)
+            }
+        }
+
+        impl CustomExecute for $name {
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($disp), " expects two boolean arguments"));
                 let Bool(a) = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_bool().ok_or_else(arg_error)?;
                 let Bool(b) = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_bool().ok_or_else(arg_error)?;
 
                 Ok(vec![Atom::gnd(Bool(a $op b))])
-            }
-
-            fn match_(&self, other: &Atom) -> MatchResultIter {
-                match_by_equality(self, other)
             }
         }
     }
@@ -278,12 +275,14 @@ impl Grounded for FlipOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_BOOL])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for FlipOp {
     fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         Ok(vec![Atom::gnd(Bool(rand::random()))])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -302,15 +301,17 @@ impl Grounded for NotOp {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_BOOL, ATOM_TYPE_BOOL])
     }
 
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for NotOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("not expects one boolean arguments");
         let &Bool(a) = args.get(0).ok_or_else(arg_error)?.as_gnd::<Bool>().ok_or_else(arg_error)?;
 
         Ok(vec![Atom::gnd(Bool(!a))])
-    }
-
-    fn match_(&self, other: &Atom) -> MatchResultIter {
-        match_by_equality(self, other)
     }
 }
 
@@ -355,7 +356,7 @@ impl<'a> AsPrimitive<'a> {
         std::convert::TryInto::<&dyn super::GroundedAtom>::try_into(self.atom).ok()
     }
 
-    fn as_type<T: 'static + Clone, S: ConvertingSerializer<T>>(&self, mut serializer: S) -> Option<T> {
+    fn as_type<T: 'static + Clone, S: serial::ConvertingSerializer<T>>(&self, mut serializer: S) -> Option<T> {
        self.as_gnd()
            .map(|gnd| {
                gnd.as_any_ref()
@@ -377,12 +378,7 @@ impl<'a> AsPrimitive<'a> {
     }
 }
 
-trait ConvertingSerializer<T>: serial::Serializer {
-    fn as_mut(&mut self) -> &mut dyn serial::Serializer;
-    fn into_type(self) -> Option<T>;
-}
-
-impl ConvertingSerializer<Bool> for BoolSerializer {
+impl serial::ConvertingSerializer<Bool> for BoolSerializer {
     fn as_mut(&mut self) -> &mut dyn serial::Serializer {
         self
     }
@@ -391,7 +387,7 @@ impl ConvertingSerializer<Bool> for BoolSerializer {
     }
 }
 
-impl ConvertingSerializer<Number> for NumberSerializer {
+impl serial::ConvertingSerializer<Number> for NumberSerializer {
     fn as_mut(&mut self) -> &mut dyn serial::Serializer {
         self
     }

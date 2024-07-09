@@ -96,7 +96,7 @@ More information on the individual module file formats is available in the MeTTa
 
 ## The PkgInfo Structure
 
-Each module has an associated [PkgInfo] structure, which provides the module author a place to specify meta-data about the module and express requirements for the module's dependencies.  Additionally a [PkgInfo] can provide explicit loading instructions such as file system paths or github URIs for dependent modules.  The [PkgInfo] structure is the same concept as the Cargo.toml file used in Cargo/Rust.
+Each module has an associated [PkgInfo] structure, which provides the module author a place to specify meta-data about the module and express requirements for the module's dependencies.  Additionally a [PkgInfo] can provide explicit loading instructions such as file system paths or github URLs for dependent modules.  The [PkgInfo] structure is the same concept as the Cargo.toml file used in Cargo/Rust.
 
 The [PkgInfo] should be initialized inside the module's loader function.  If it is not initialized then default values will be used.
 

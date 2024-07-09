@@ -10,10 +10,16 @@ env_logger = { workspace = true }
 directories = "5.0.1" # For Environment to find platform-specific config location
 smallvec = "1.10.0"
 im = "15.1.0"
-xxhash-rust = {version="0.8.7", features=["xxh3"], optional=true}
 rand = "0.8.5"
 bitset = "0.1.2"
 dyn-fmt = "0.4.0"
+
+# pkg_mgmt deps
+xxhash-rust = {version="0.8.7", features=["xxh3"], optional=true }
+serde = { version="1.0.198", features = ["derive"], optional=true }
+serde_json = { version="1.0.116", optional=true }
+semver = { version="1.0", features = ["serde"], optional=true }
+git2 = { version="0.18.3", features=["vendored-libgit2"], optional=true }
 
 [lib]
 name = "hyperon"
@@ -27,4 +33,5 @@ default = ["pkg_mgmt"]
 minimal = [] # enables minimal MeTTa interpreter
 variable_operation = [] # enables evaluation of the expressions which have
                         # a variable on the first position
-pkg_mgmt = ["xxhash-rust"]
+git = ["git2", "pkg_mgmt"]
+pkg_mgmt = ["xxhash-rust", "serde", "serde_json", "semver"]

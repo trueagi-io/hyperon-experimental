@@ -656,7 +656,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<CAtom>(m, "CAtom");
 
     m.def("atom_sym", [](char const* name) { return CAtom(atom_sym(name)); }, "Create symbol atom");
-    m.def("atom_var", [](char const* name) { return CAtom(atom_var(name)); }, "Create variable atom");
+    m.def("atom_var", [](char const* name, unsigned int id = 0) { return CAtom(atom_var_with_id(name, id)); }, "Create variable atom");
     m.def("atom_expr", [](py::list _children) {
             size_t size = py::len(_children);
             atom_t children[size];
@@ -754,6 +754,11 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("bindings_add_var_binding",
           [](CBindings bindings, char const* varName, CAtom atom) {
               return bindings_add_var_binding(bindings.ptr(), atom_var(varName), atom_clone(atom.ptr()));
+          },
+          "Links variable to atom" );
+    m.def("bindings_add_var_binding",
+          [](CBindings bindings, CAtom var, CAtom atom) {
+              return bindings_add_var_binding(bindings.ptr(), atom_clone(var.ptr()), atom_clone(atom.ptr()));
           },
           "Links variable to atom" );
     m.def("bindings_is_empty", [](CBindings bindings){ return bindings_is_empty(bindings.ptr());}, "Returns true if bindings is empty");
@@ -1049,7 +1054,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("env_builder_init_common_env", [](EnvBuilder builder) { return env_builder_init_common_env(builder.obj); }, "Finish initialization of the common environment");
     m.def("env_builder_set_working_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_working_dir(builder.ptr(), path.c_str()); }, "Sets the working dir in the environment");
     m.def("env_builder_set_config_dir", [](EnvBuilder& builder, std::string path) { env_builder_set_config_dir(builder.ptr(), path.c_str()); }, "Sets the config dir in the environment");
-    m.def("env_builder_create_config_dir", [](EnvBuilder& builder) { env_builder_create_config_dir(builder.ptr()); }, "Creates the config dir if it doesn't exist");
+    m.def("env_builder_create_config_dir", [](EnvBuilder& builder, bool should_create) { env_builder_create_config_dir(builder.ptr(), should_create); }, "Creates the config dir if it doesn't exist");
     m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the environment");
     m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
     m.def("env_builder_push_include_path", [](EnvBuilder& builder, std::string path) { env_builder_push_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
