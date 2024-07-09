@@ -98,7 +98,7 @@ class SqlHelper:
         for val in res:
             temp_dict = {}
             for k, v in val.items():
-                temp_dict['$' + str(k)] = str(v)
+                temp_dict[k.get_name()] = str(v)
             variables.append(temp_dict)
         atoms = self.get_query_atoms(query_atom)
         new_atoms = []
@@ -175,7 +175,7 @@ class SqlSpace(GroundingSpace):
         except (Exception, psycopg2.DatabaseError) as error:
             bindings_set = BindingsSet.empty()
             bindings = Bindings()
-            bindings.add_var_binding("error on insert: ", ValueAtom(error))
+            bindings.add_var_binding(V("error on insert: "), ValueAtom(error))
             bindings_set.push(bindings)
             return bindings_set
         return BindingsSet.empty()
@@ -192,9 +192,9 @@ class SqlSpace(GroundingSpace):
                     self.cursor.execute(sql_query)
                     values = self.cursor.fetchall()
                     if len(vars_names) == 0 and len(values) > 0:
-                        vars = [f"var{i + 1}" for i in range(len(values[0]))]
+                        vars = [V(f"var{i + 1}") for i in range(len(values[0]))]
                     else:
-                        vars = [v[1:] for v in vars_names]
+                        vars = [V(v[1:]) for v in vars_names]
                     if len(vars) > 0 and len(values) > 0:
                         return results2bindings(vars, values)
                 return new_bindings_set

@@ -112,12 +112,8 @@ class ExtendErrorTest(unittest.TestCase):
         This test verifies that an error from a Python extension is properly propagated
         '''
         metta = MeTTa(env_builder=Environment.custom_env(working_dir=os.getcwd(), disable_config=True, is_test=True))
-        try:
-          metta.run("!(import! &self error_pyext)")
-        except Exception as err:
-            pass
-        else:
-            raise Exception('error_pyext.py should raise an error when loading, so no-err is an error')
+        result = metta.run("!(import! &self error_pyext)")
+        self.assertEqual(S('Error'), result[0][0].get_children()[0])
 
 if __name__ == "__main__":
     unittest.main()

@@ -86,15 +86,15 @@ class VariableAtom(Atom):
         """Returns the name of the Atom."""
         return hp.atom_get_name(self.catom)
 
+    @staticmethod
+    def parse_name(name):
+        """Construct new VariableAtom instance from VariableAtom.get_name()
+        method results."""
+        return VariableAtom(hp.atom_var_parse_name(name))
+
 def V(name):
     """A convenient method to construct a VariableAtom"""
-    if '#' in name:
-        vname, vid = name.split('#')[0:2]
-        vid = int(vid)
-    else:
-        vname = name
-        vid = 0
-    return VariableAtom(hp.atom_var(vname, vid))
+    return VariableAtom(hp.atom_var(name))
 
 class ExpressionAtom(Atom):
     """An ExpressionAtom combines different kinds of Atoms, including expressions."""
@@ -570,12 +570,9 @@ class Bindings:
         """Merges with another Bindings instance, into a Bindings Set."""
         return BindingsSet(hp.bindings_merge(self.cbindings, other.cbindings))
 
-    def add_var_binding(self, var: Union[str, Atom], atom: Atom) -> bool:
+    def add_var_binding(self, var: VariableAtom, atom: Atom) -> bool:
         """Adds a binding between a variable and an Atom."""
-        if isinstance(var, Atom):
-            return hp.bindings_add_var_binding(self.cbindings, var.catom, atom.catom)
-        else:
-            return hp.bindings_add_var_binding(self.cbindings, var, atom.catom)
+        return hp.bindings_add_var_binding(self.cbindings, var.catom, atom.catom)
 
     def is_empty(self) -> bool:
         """Checks if a bindings contains no associations."""
@@ -589,15 +586,15 @@ class Bindings:
         hp.bindings_narrow_vars(self.cbindings, cvars)
         hp.atom_vec_free(cvars)
 
-    def resolve(self, var_name: str) -> Union[Atom, None]:
-        """Finds the atom for a given variable name"""
-        raw_atom = hp.bindings_resolve(self.cbindings, var_name)
+    def resolve(self, var: VariableAtom) -> Union[Atom, None]:
+        """Finds the atom for a given variable"""
+        raw_atom = hp.bindings_resolve(self.cbindings, var.catom)
         return None if raw_atom is None else Atom._from_catom(raw_atom)
 
     def iterator(self):
         """Returns an iterator over the variable-atom pairs in the bindings"""
         res = hp.bindings_list(self.cbindings)
-        result = [(r[0], Atom._from_catom(r[1])) for r in res]
+        result = [(Atom._from_catom(r[0]), Atom._from_catom(r[1])) for r in res]
         return iter(result)
 
 class BindingsSet:
@@ -683,15 +680,12 @@ class BindingsSet:
         self.shadow_list = None
         hp.bindings_set_push(self.c_set, bindings.cbindings)
 
-    def add_var_binding(self, var: Union[str, Atom], value: Atom) -> bool:
+    def add_var_binding(self, var: VariableAtom, value: Atom) -> bool:
         """Adds a new variable to atom association to every Bindings frame in a
         BindingsSet.
         """
         self.shadow_list = None
-        if isinstance(var, Atom):
-            return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)
-        else:
-            return hp.bindings_set_add_var_binding(self.c_set, V(var), value.catom)
+        return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)
 
     def add_var_equality(self, a: Atom, b: Atom) -> bool:
         """Asserts equality between two Variable atoms in a BindingsSet."""

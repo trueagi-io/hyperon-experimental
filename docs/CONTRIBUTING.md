@@ -68,3 +68,8 @@ This makes it easier to find blocks that might be source of issues. Usually it i
 not required to mark C API functions `unsafe` because they are not intended to
 be used from the Rust safe code.
 
+### Git
+
+`.gitignore` file is also used to exclued files going into Docker image
+building context. All ignored files should be put into the same `.gitignore` at
+the root of the repository by this reason.
