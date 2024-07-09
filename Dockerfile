@@ -27,9 +27,6 @@ RUN conan profile new --detect default
 
 ADD --chown=user:users . ${HOME}/hyperon-experimental
 
-ENV PREFIX=${HOME}/prefix
-RUN mkdir ${PREFIX}
-
 WORKDIR ${HOME}/hyperon-experimental
 RUN cargo test --release
 RUN cargo build --release
