@@ -35,8 +35,8 @@ After installing package or starting Docker container run MeTTa Python based
 interpreter:
 ```
 metta-py
-
 ```
+
 Using Docker you can also run Rust REPL:
 ```
 metta-rust
