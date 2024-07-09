@@ -215,17 +215,61 @@ pub struct VariableAtom {
 }
 
 impl VariableAtom {
-    /// Constructs new variable using `name` provided. Usually [Atom::var]
-    /// should be preffered. But sometimes [VariableAtom] instance is required.
-    /// For example for using as a key in variable bindings (see [matcher::Bindings]).
+    /// Constructs new variable using `name` provided. Name should not contain
+    /// `#` characted which is reserved for internal name formatting (see
+    /// [VariableAtom::parse_name]). Usually [Atom::var] method should be used
+    /// to create new variable atom instance. But sometimes [VariableAtom]
+    /// instance is required. For example for using as a key in variable bindings
+    /// (see [matcher::Bindings]).
     pub fn new<T: Into<String>>(name: T) -> Self {
-        Self{ name: name.into(), id: 0 }
+        Self{ name: Self::check_name(name), id: 0 }
     }
 
     /// Constructs new variable using `name` and 'id' provided. This method is
-    /// used to convert C API [matcher::Bindings] to Rust.
+    /// used to construct proper variable for testing purposes only.
     pub fn new_id<T: Into<String>>(name: T, id: usize) -> Self {
-        Self{ name: name.into(), id: id }
+        Self{ name: Self::check_name(name), id }
+    }
+
+    #[inline]
+    fn check_name<T: Into<String>>(name: T) -> String {
+        let name = name.into();
+        assert!(name.find('#').is_none(), "character # is reserved and cannot be used in a variable name");
+        name
+    }
+
+    /// Constructs new variable instance by parsing name in format '<name>[#<id>]'.
+    /// Used to construct variable from result of the [VariableAtom::name] results.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::VariableAtom;
+    ///
+    /// let x0 = VariableAtom::parse_name("x");
+    /// let x42 = VariableAtom::parse_name("x#42");
+    /// let xn = VariableAtom::parse_name("x#");
+    /// let xe = VariableAtom::parse_name("x#42#");
+    ///
+    /// assert_eq!(x0, Ok(VariableAtom::new_id("x", 0)));
+    /// assert_eq!(x42, Ok(VariableAtom::new_id("x", 42)));
+    /// assert_eq!(xn, Err(format!("Variable name is expected to contain number after # sign")));
+    /// assert_eq!(xe, Err(format!("Variable name should have the following format: name[#id], actual name is x#42#")));
+    /// ```
+    pub fn parse_name(formatted: &str) -> Result<Self, String> {
+        let mut parts = formatted.split('#');
+        let name = parts.next().unwrap().to_string();
+        if name.is_empty() {
+            return Err(format!("Variable name should be non empty"));
+        }
+        let id: usize = match parts.next() {
+            Some(id) => id.parse().map_err(|_| "Variable name is expected to contain number after # sign")?,
+            None => 0,
+        };
+        if !parts.next().is_none() {
+            return Err(format!("Variable name should have the following format: name[#id], actual name is {formatted}"));
+        }
+        Ok(Self{ name, id })
     }
 
     // TODO: for now name() is used to expose keys of Bindings via C API as
@@ -814,25 +858,6 @@ impl Atom {
     /// ```
     pub fn var<T: Into<String>>(name: T) -> Self {
         Self::Variable(VariableAtom::new(name))
-    }
-
-    /// Constructs variable out of name and id.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use hyperon::Atom;
-    ///
-    /// let a = Atom::var_with_id("a", 1);
-    /// let aa = Atom::var_with_id("a", 1);
-    /// let b = Atom::var_with_id("b", 2);
-    ///
-    /// assert_eq!(a.to_string(), "$a#1");
-    /// assert_eq!(a, aa);
-    /// assert_ne!(a, b);
-    /// ```
-    pub fn var_with_id<T: Into<String>>(name: T, id: usize) -> Self {
-        Self::Variable(VariableAtom::new_id(name, id))
     }
 
     /// Constructs grounded atom with customized behaviour.
