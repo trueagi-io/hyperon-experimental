@@ -1180,6 +1180,7 @@ pub extern "C" fn metta_get_module_space(metta: *const metta_t, mod_id: module_i
 pub struct run_context_t {
     /// Internal.  Should not be accessed directly
     context: *mut RustRunContext,
+    err_string: *mut c_char,
 }
 
 //LP-TODO-NEXT I need to implement a solution to automatically retire run_context_t so we can throw a
@@ -1187,12 +1188,25 @@ pub struct run_context_t {
 // layer because it's harder to exercise lifecycle discipline in Python and a bug in Python shouldn't lead
 // to invlid memory access
 
+impl run_context_t {
+    fn take_err_string(&mut self) -> Option<String> {
+        if !self.err_string.is_null() {
+            let return_string = unsafe{ std::ffi::CString::from_raw(self.err_string) }.to_str().expect("UTF-8 error").to_string();
+            self.err_string = core::ptr::null_mut();
+            Some(return_string)
+        } else {
+            None
+        }
+    }
+}
+
 struct RustRunContext(RunContext<'static, 'static, 'static>);
 
 impl From<&mut RunContext<'_, '_, '_>> for run_context_t {
     fn from(context_ref: &mut RunContext<'_, '_, '_>) -> Self {
         Self {
-            context: (context_ref as *mut RunContext<'_, '_, '_>).cast()
+            context: (context_ref as *mut RunContext<'_, '_, '_>).cast(),
+            err_string: core::ptr::null_mut(),
         }
     }
 }
@@ -1258,6 +1272,20 @@ pub extern "C" fn run_context_get_space(run_context: *const run_context_t) -> sp
 pub extern "C" fn run_context_get_tokenizer(run_context: *const run_context_t) -> tokenizer_t {
     let context = unsafe{ &*run_context }.borrow();
     context.module().tokenizer().clone().into()
+}
+
+/// @brief Sets a runtime error
+/// @ingroup interpreter_group
+/// @param[in]  run_context  A pointer to the `run_context_t` to access the runner API
+/// @param[in]  message  A C-string specifying an error message
+/// @note Raising an error through this function will cause the MeTTa interpreter to take an error pathway
+///
+#[no_mangle]
+pub extern "C" fn run_context_raise_error(run_context: *mut run_context_t, message: *const c_char) {
+    let context = unsafe{ &mut *run_context };
+    let msg_str = unsafe{ std::ffi::CStr::from_ptr(message) };
+    let _ = context.take_err_string(); //Make sure an existing err string gets dropped.
+    context.err_string = std::ffi::CString::from(msg_str).into_raw();
 }
 
 /// @brief Represents the state of an in-flight MeTTa execution run
@@ -1929,7 +1957,10 @@ impl ModuleLoader for CFsModFmtLoader {
 
         (api.load)(self.payload, &mut c_context, self.callback_context);
 
-        Ok(())
+        match c_context.take_err_string() {
+            None => Ok(()),
+            Some(err_string) => Err(err_string),
+        }
     }
     fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {
         //TODO, add C API for providing resources
