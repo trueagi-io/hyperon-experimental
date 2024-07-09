@@ -40,7 +40,7 @@ metta-py
 
 Using Docker you can also run Rust REPL:
 ```
-metta-rust
+metta-repl
 ```
 
 # Using latest development version
@@ -131,9 +131,9 @@ cargo run --example sorted_list
 
 Run Rust REPL:
 ```
-cargo run --features no_python --bin metta-rust
+cargo run --features no_python --bin metta-repl
 ```
-You can also find executable at `./target/debug/metta-rust`.
+You can also find executable at `./target/debug/metta-repl`.
 
 To enable logging during running tests or examples export `RUST_LOG`
 environment variable:
@@ -189,9 +189,9 @@ metta-py ./tests/scripts/<name>.metta
 
 Run REPL:
 ```
-cargo run --bin metta-rust
+cargo run --bin metta-repl
 ```
-You can also find executable at `./target/debug/metta-rust`.
+You can also find executable at `./target/debug/metta-repl`.
 
 ### Logger
 

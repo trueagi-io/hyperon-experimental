@@ -49,7 +49,7 @@ CMD bash
 FROM os
 
 ENV BUILD=/home/user/hyperon-experimental/build
-COPY --from=build /home/user/hyperon-experimental/target/release/metta-rust /usr/bin
+COPY --from=build /home/user/hyperon-experimental/target/release/metta-repl /usr/bin
 COPY --from=build ${BUILD}/hyperonc-install /usr
 COPY --from=build ${BUILD}/hyperonpy-install /usr/local
 COPY --from=build ${BUILD}/../python/VERSION /root/version
@@ -59,7 +59,7 @@ echo ""
 echo "  Welcome to the MeTTa $(cat /root/version) running environment."
 echo "  Use the following commands to run MeTTa interpreter:"
 echo ""
-echo "  metta-rust - start Rust based REPL"
+echo "  metta-repl - start Rust based REPL"
 echo "  metta-py - start Python based script executor"
 echo ""
 EOF
