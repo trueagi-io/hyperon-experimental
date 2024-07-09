@@ -9,8 +9,8 @@ Cargo.lock
 .DS_Store
 .vscode
 .aider*
+__pycache__
 /build
-/python/__pycache__
 /python/hyperon.egg-info
 /python/dist
 /python/build
