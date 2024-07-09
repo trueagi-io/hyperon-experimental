@@ -564,7 +564,13 @@ void load_mod_fmt_callback(const void* payload, run_context_t* run_context, void
     py::object* callback_context_obj = (py::object*)callback_context;
     py::function py_func = fmt_interface_obj->attr("_load_called_from_c");
     CRunContext c_run_context = CRunContext(run_context);
-    py_func(&c_run_context, callback_context_obj);
+    try {
+        py_func(&c_run_context, callback_context_obj);
+    } catch (py::error_already_set &e) {
+        char message[4096];
+        snprintf(message, lenghtof(message), "Exception caught:\n%s", e.what());
+        run_context_raise_error(run_context, message);
+    }
 }
 
 void free_mod_fmt_context(void* callback_context) {

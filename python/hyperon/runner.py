@@ -362,8 +362,7 @@ def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False, reso
                 if '__name__' in dir(obj) and obj.__name__ == 'metta_register':
                     obj(run_context)
 
-        except:
-            # LP-TODO-Next, need to create error pathway through C interface 
-            raise RuntimeError("Error loading Python module: ", pymod_name)
+        except Exception as e:
+            raise RuntimeError("Error loading Python module: ", pymod_name, e)
 
     return loader_func
