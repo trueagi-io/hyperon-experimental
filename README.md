@@ -27,32 +27,36 @@ The following command installs the latest release version from PyPi package repo
 python3 -m pip install hyperon
 ```
 
-# Prepare development environment
-
-## Docker
-
-A docker image can be used as a ready to run stable and predictable development
-environment. Please keep in mind that resulting image contains temporary build
-files and takes a lot of a disk space. It is not recommended to distribute it
-as an image for running MeTTa because of its size.
-
-### Ready to use image
-
-Run latest docker image from the Dockerhub:
+Another way is using released Docker image:
 ```
 docker run -ti trueagi/hyperon:latest
 ```
 
-### Build image
+After installing package or starting Docker container run MeTTa Python based
+interpreter:
+```
+metta-py
+```
 
-Docker 26.0.0 or greater version is required.
+Using Docker you can also run Rust REPL:
+```
+metta-repl
+```
+
+# Using latest development version
+
+## Docker
+
+A docker image can be used as a ready to run stable and predictable development
+environment. Docker 26.0.0 or greater version is required to build image
+manually.
 
 Build Docker image from a local copy of the repo running:
 ```
 docker build -t trueagi/hyperon .
 ```
 
-Or build it without cloning the repo running:
+Or build it without local copy of the repo running:
 ```
 docker build \
     --build-arg BUILDKIT_CONTEXT_KEEP_GIT_DIR=1 \
@@ -60,9 +64,10 @@ docker build \
     http://github.com/trueagi-io/hyperon-experimental.git#main
 ```
 
-Run the image:
+Use `--target build` option to create an image which keeps the full build
+environment and can be used for developing interpreter:
 ```
-docker run --rm -ti trueagi/hyperon
+docker build --target build -t trueagi/hyperon .
 ```
 
 If the docker image doesn't work, please raise an
@@ -126,9 +131,9 @@ cargo run --example sorted_list
 
 Run Rust REPL:
 ```
-cargo run --features no_python --bin metta
+cargo run --features no_python --bin metta-repl
 ```
-You can also find executable at `./target/debug/metta`.
+You can also find executable at `./target/debug/metta-repl`.
 
 To enable logging during running tests or examples export `RUST_LOG`
 environment variable:
@@ -179,18 +184,18 @@ pytest ./tests
 
 One can run MeTTa script from command line:
 ```
-metta ./tests/scripts/<name>.metta
+metta-py ./tests/scripts/<name>.metta
 ```
 
 Run REPL:
 ```
-cargo run --bin metta
+cargo run --bin metta-repl
 ```
-You can also find executable at `./target/debug/metta`.
+You can also find executable at `./target/debug/metta-repl`.
 
 ### Logger
 
-You can enable logging by prefixing the `metta` command line by
+You can enable logging by prefixing the MeTTa command line by
 
 ```
 RUST_LOG=hyperon[::COMPONENT]*=LEVEL
