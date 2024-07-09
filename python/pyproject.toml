@@ -23,6 +23,7 @@ dynamic = [
 
 [project.scripts]
 metta = "hyperon.metta:main"
+metta-py = "hyperon.metta:main"
 
 [project.optional-dependencies]
 dev = [

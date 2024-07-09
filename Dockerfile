@@ -52,7 +52,7 @@ CMD bash
 FROM os
 
 ENV BUILD=/home/user/hyperon-experimental/build
-COPY --from=build /home/user/hyperon-experimental/target/release/metta /usr/bin/metta-rust
+COPY --from=build /home/user/hyperon-experimental/target/release/metta-rust /usr/bin
 COPY --from=build ${BUILD}/hyperonc-install /usr
 COPY --from=build ${BUILD}/hyperonpy-install /usr/local
 
