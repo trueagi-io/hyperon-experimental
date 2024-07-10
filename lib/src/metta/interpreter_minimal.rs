@@ -1,8 +1,5 @@
-//! MeTTa assembly language implementation.
-//!
-//! # Algorithm
-//!
-//! TODO: explain an algorithm
+//! MeTTa assembly language implementation. See
+//! [minimal MeTTa documentation](https://github.com/trueagi-io/hyperon-experimental/blob/main/docs/minimal-metta.md) for details.
 
 use crate::*;
 use crate::atom::matcher::*;
@@ -157,14 +154,20 @@ impl<T: Space> InterpreterContext<T> {
     }
 }
 
-// TODO: This wrapper is for compatibility with interpreter.rs only
+/// This wrapper is to keep interpreter interface compatible with previous
+/// implementation and will be removed in future.
+// TODO: MINIMAL: This wrapper is for compatibility with old_interpreter.rs only
 pub trait SpaceRef<'a> : Space + 'a {}
 impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
 
+/// State of the interpreter which passed between `interpret_step` calls.
 #[derive(Debug)]
 pub struct InterpreterState<'a, T: SpaceRef<'a>> {
+    /// List of the alternatives to evaluate further.
     plan: Vec<InterpretedAtom>,
+    /// List of the completely evaluated results to be returned.
     finished: Vec<Atom>,
+    /// Evaluation context.
     context: InterpreterContext<T>,
     phantom: std::marker::PhantomData<dyn SpaceRef<'a>>,
 }
@@ -194,10 +197,13 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
         }
     }
 
+    /// Returns true if there are alternatives which can be evaluated further.
     pub fn has_next(&self) -> bool {
         !self.plan.is_empty()
     }
 
+    /// Returns vector of fully evaluated results or error if there are still
+    /// alternatives to be evaluated.
     pub fn into_result(self) -> Result<Vec<Atom>, String> {
         if self.has_next() {
             Err("Evaluation is not finished".into())
