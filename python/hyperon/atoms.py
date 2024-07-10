@@ -129,6 +129,7 @@ class Atoms:
 
     EMPTY = Atom._from_catom(hp.CAtoms.EMPTY)
     UNIT = Atom._from_catom(hp.CAtoms.UNIT)
+    METTA = Atom._from_catom(hp.CAtoms.METTA)
 
 class GroundedAtom(Atom):
     """

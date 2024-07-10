@@ -12,9 +12,6 @@ pub mod owned_or_borrowed;
 mod flex_ref;
 pub use flex_ref::FlexRef;
 
-mod arithmetics;
-pub use arithmetics::*;
-
 use crate::*;
 use crate::metta::text::{Tokenizer, SExprParser};
 use std::cell::RefCell;

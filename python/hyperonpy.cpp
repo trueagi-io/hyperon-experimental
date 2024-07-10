@@ -956,7 +956,8 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CAtoms>(m, "CAtoms")
         ADD_ATOM(EMPTY, "Empty")
-        ADD_ATOM(UNIT, "Unit");
+        ADD_ATOM(UNIT, "Unit")
+        ADD_ATOM(METTA, "metta");
 
     py::class_<CRunContext>(m, "CRunContext");
     m.def("run_context_init_self_module", [](CRunContext& run_context, CSpace space, char const* resource_dir) {
