@@ -325,6 +325,23 @@ used on each exit path while nothing in code of function points to this. Using
 - functions which evaluate result in a loop and have to use `return`;
 - functions which just replace the calling expression by their bodies.
 
+# MeTTa interpreter written in Rust
+
+MeTTa interpreter written in minimal MeTTa has poor performance. To fix this
+the interpreter is rewritten in Rust. Rust implementation can be called using
+`(metta <atom> <type> <space>)` operation. To be able represent process of the
+interpretation as a list of steps and keep ability to control the inference
+`metta` doesn't evaluate passed atom till the end but instead analyses the atom
+and returns the plan written in minimal MeTTa. Plan includes steps written as a
+Rust functions. These steps are called using `(call_native <name> <function>
+<args>)` operation.
+
+Both `metta` and `call_native` could be written as a grounded operations and be
+a part of a standard library. But this requires grounded operations to be able
+returning bindings as a results. Returning bindings as results is a nice to
+have feature anyway to be able representing any functionality as a grounded
+atom. But it is not implemented yet.
+
 # Future work
 
 ## Explicit atomspace variable bindings
