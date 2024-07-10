@@ -7,12 +7,12 @@ use crate::metta::runner::*;
 
 use regex::Regex;
 
-#[cfg(not(feature = "minimal"))]
+#[cfg(feature = "old_interpreter")]
 use super::stdlib::*;
 
-#[cfg(feature = "minimal")]
+#[cfg(not(feature = "old_interpreter"))]
 use super::interpreter_minimal::interpret;
-#[cfg(feature = "minimal")]
+#[cfg(not(feature = "old_interpreter"))]
 use super::stdlib_minimal::*;
 
 mod mod_names;
