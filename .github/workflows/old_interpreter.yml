@@ -1,11 +1,11 @@
-# This workflow is intended to run tests on minimal MeTTa interpreter.
+# This workflow is intended to run tests on old Rust MeTTa interpreter.
 # It is indicative and temporary, it doesn't prevent any changes from merging.
 
 # This workflow uses actions that are not certified by GitHub.  They are
 # provided by a third-party and are governed by separate terms of service,
 # privacy policy, and support documentation.
 
-name: minimal
+name: old_interpreter
 
 on:
   push:
@@ -16,7 +16,7 @@ on:
       - main
 
 jobs:
-  minimal:
+  old_interpreter:
     runs-on: "ubuntu-20.04"
 
     steps:
@@ -32,13 +32,13 @@ jobs:
       - name: Build Rust library
         working-directory: ./lib
         run: |
-          cargo check --features minimal
-          cargo build --features minimal
+          cargo check --features old_interpreter
+          cargo build --features old_interpreter
 
       - name: Test Rust library
         working-directory: ./lib
         run: |
-          RUST_LOG=hyperon=debug cargo test --features minimal
+          RUST_LOG=hyperon=debug cargo test --features old_interpreter
 
       - name: Install cbindgen
         uses: actions-rs/cargo@v1.0.1
@@ -106,7 +106,7 @@ jobs:
           cd build
           # specify C compiler as conan could not find it automatically
           # see https://github.com/conan-io/conan/issues/4322
-          cmake -DCARGO_ARGS="--features hyperon/minimal" -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=`which python` -DCMAKE_C_COMPILER=gcc ..
+          cmake -DCARGO_ARGS="--features hyperon/old_interpreter" -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=`which python` -DCMAKE_C_COMPILER=gcc ..
 
       - name: Build C API
         working-directory: ./build

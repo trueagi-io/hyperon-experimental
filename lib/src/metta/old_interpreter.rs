@@ -88,7 +88,7 @@ pub struct InterpreterState<'a, T: SpaceRef<'a>> {
 impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
 
     /// INTERNAL USE ONLY. Create an InterpreterState that is ready to yield results
-    #[cfg(not(feature = "minimal"))]
+    #[cfg(feature = "old_interpreter")]
     pub(crate) fn new_finished(_space: T, results: Vec<Atom>) -> Self {
         Self {
             step_result: StepResult::Return(results.into_iter().map(|atom| InterpretedAtom(atom, Bindings::new())).collect()),
@@ -177,6 +177,10 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
 }
 
 fn interpret_init_internal<'a, T: Space + 'a>(space: T, expr: &Atom) -> StepResult<'a, Results, InterpreterError> {
+    let expr = match <&[Atom]>::try_from(expr).ok() {
+        Some([op, atom, _typ, _space]) if *op == METTA_SYMBOL => atom,
+        _ => expr,
+    };
     let context = InterpreterContextRef::new(space);
     interpret_as_type_plan(context,
         InterpretedAtom(expr.clone(), Bindings::new()),
