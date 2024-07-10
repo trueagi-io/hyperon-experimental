@@ -171,6 +171,35 @@ separate alternative.
 can collect the list of alternatives using `collapse-bind` filter them and
 return filtered items to the plan using `superpose-bind`.
 
+## Scope of a variable
+
+Variable name should be unique inside a separate expression evaluated. The
+reason is that the whole expression is a variable scope. For example one can
+write the expression `(chain (unify $parent Bob () ()) $_ $parent)`. And value
+of the `$parent` is returned correctly.
+
+When variable is passed as an argument to the function call and matched by a
+value then the value is assigned to the variable. If variable passed as an
+actual argument is matched by a formal argument variable then it is referenced
+by the formal argument variable. In this case the actual argument variable can
+receive a value outsides of its scope.
+
+For example the following code (written using MeTTa runner syntax) returns `B`:
+```
+(= (foo $b) (function (chain (unify B $b () ()) $_ (return ()))))
+!(chain (eval (foo $a)) $_ $a)
+```
+
+If two separate expressions in the atomspace has the variable with the same
+name inside then the scopes of the variables are different. Consider the
+following example:
+```
+(= (foo) (function (chain (unify A $a () ()) $_ (return ()))))
+!(chain (eval (foo)) $_ $a)
+```
+Here value will not be assigned to the `$a` from the caller expression because
+two variables has different scopes and not referenced by each other.
+
 # Examples
 
 Examples of the programs written using minimal MeTTa interpreter:
@@ -346,11 +375,6 @@ defining different versions of `eval` to program different kinds of chaining.
 Nevertheless defining `eval` through `unify` requires rework of the grounded
 functions interface to allow calling them by executing `unify` instructions.
 Which is an interesting direction to follow.
-
-## Scope of variables
-
-Scope of the variable inside instructions is not described in this
-specification. It is a clear gap and one of the TODO items.
 
 ## Special matching syntax
 
