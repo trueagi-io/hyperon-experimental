@@ -75,7 +75,7 @@ enum VarResolutionResult<T> {
 }
 
 /// Abstraction of the variable set. It is used to allow passing both
-/// HashSet<&VariableAtom> and HashSet<VariableAtom> to the
+/// `HashSet<&VariableAtom>` and `HashSet<VariableAtom>` to the
 /// [Bindings::narrow_vars] method.
 pub trait VariableSet : Debug {
     type Iter<'a> : Iterator<Item = &'a VariableAtom> where Self: 'a;
@@ -829,7 +829,7 @@ impl Debug for Bindings {
 impl PartialEq for Bindings {
 
     /// This implementation is for testing only. It doesn't take into account
-    /// names of the renamed variables (see [Binding::var]).
+    /// names of the renamed variables (see `Binding::var`).
     fn eq(&self, other: &Self) -> bool {
         for (var, self_binding_id) in &self.binding_by_var {
             match other.binding_by_var.get(var) {
@@ -1001,7 +1001,7 @@ impl BindingsSet {
     ///
     /// NOTE: This function is useful for making a Bindings Iterator that returns no results,
     /// as you might want for a return from a GroundedAtom match function that matched no atoms.
-    /// In other cases, you probably want to use [BinsingsSet::single].
+    /// In other cases, you probably want to use [Self::single].
     pub fn empty() -> Self {
         BindingsSet(smallvec::smallvec![])
     }
@@ -1014,7 +1014,7 @@ impl BindingsSet {
     /// Returns `true` if a BindingsSet contains no Bindings Objects (fully constrained)
     ///
     /// TODO: Need a better name that doesn't conflict with the intuitions about Bindings::is_empty()
-    /// https://github.com/trueagi-io/hyperon-experimental/issues/281
+    /// [issue#281](https://github.com/trueagi-io/hyperon-experimental/issues/281)
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -1022,7 +1022,7 @@ impl BindingsSet {
     /// Returns `true` if a BindingsSet contains no limiting Bindings inside (unconstrained)
     ///
     /// TODO: Need a better word to describe this concept than "single"
-    /// https://github.com/trueagi-io/hyperon-experimental/issues/281
+    /// [issue#281](https://github.com/trueagi-io/hyperon-experimental/issues/281)
     pub fn is_single(&self) -> bool {
         self.len() == 1 && self.0[0].is_empty()
     }

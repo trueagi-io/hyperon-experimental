@@ -238,7 +238,7 @@ impl VariableAtom {
         name
     }
 
-    /// Constructs new variable instance by parsing name in format '<name>[#<id>]'.
+    /// Constructs new variable instance by parsing name in format `<name>[#<id>]`.
     /// Used to construct variable from result of the [VariableAtom::name] results.
     ///
     /// # Examples
