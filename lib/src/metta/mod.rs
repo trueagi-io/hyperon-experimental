@@ -2,7 +2,9 @@
 
 pub mod text;
 #[cfg(feature = "old_interpreter")]
-pub mod interpreter;
+pub mod old_interpreter;
+#[cfg(feature = "old_interpreter")]
+pub use old_interpreter as interpreter;
 #[cfg(not(feature = "old_interpreter"))]
 pub mod interpreter_minimal;
 #[cfg(not(feature = "old_interpreter"))]
