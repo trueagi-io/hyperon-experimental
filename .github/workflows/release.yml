@@ -130,6 +130,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           load: true
+          build-args: |
+            BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
           tags: trueagi/hyperon:test
 
       - name: Test
@@ -146,6 +148,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
+          build-args: |
+            BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
           tags: |
             trueagi/hyperon:${{github.event.release.tag_name}}
             trueagi/hyperon:latest
