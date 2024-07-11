@@ -14,7 +14,7 @@ use directories::ProjectDirs;
 /// Contains state and host platform interfaces shared by all MeTTa runners.  This includes config settings
 /// and logger
 ///
-/// Generally there will be only one environment object needed, and it can be accessed by calling the [common_env] method
+/// Generally there will be only one environment object needed, and it can be accessed by calling the [Self::common_env] method
 #[derive(Debug)]
 pub struct Environment {
     config_dir: Option<PathBuf>,
@@ -131,7 +131,7 @@ impl EnvBuilder {
     /// NOTE: Unless otherwise specified, the default working directory will be the current process
     /// working dir (`cwd`)
     ///
-    /// NOTE: Unless otherwise specified by calling either [set_no_config_dir] or [set_config_dir], the
+    /// NOTE: Unless otherwise specified by calling either [Self::set_no_config_dir] or [Self::set_config_dir], the
     ///   [Environment] will be configured using files in the OS-Specific configuration file locations.
     ///
     /// Depending on the host OS, the config directory locations will be:
@@ -239,21 +239,21 @@ impl EnvBuilder {
         self
     }
 
-    /// Initializes the shared common Environment, accessible with [common_env]
+    /// Initializes the shared common Environment, accessible with [Environment::common_env]
     ///
     /// NOTE: This method will panic if the common Environment has already been initialized
     pub fn init_common_env(self) {
         self.try_init_common_env().expect("Fatal Error: Common Environment already initialized");
     }
 
-    /// Initializes the shared common Environment.  Non-panicking version of [init_common_env]
+    /// Initializes the shared common Environment.  Non-panicking version of [Self::init_common_env]
     pub fn try_init_common_env(self) -> Result<(), &'static str> {
         COMMON_ENV.set(Arc::new(self.build())).map_err(|_| "Common Environment already initialized")
     }
 
     /// Returns a newly created Environment from the builder configuration
     ///
-    /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [common_env] method.
+    /// NOTE: Creating owned Environments is usually not necessary.  It is usually sufficient to use the [Environment::common_env] method.
     pub(crate) fn build(self) -> Environment {
         let mut env = self.env;
         #[cfg(feature = "pkg_mgmt")]
