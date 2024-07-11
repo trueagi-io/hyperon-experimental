@@ -173,12 +173,12 @@ return filtered items to the plan using `superpose-bind`.
 
 ## Scope of a variable
 
-Variable name should be unique inside a separate expression evaluated. The
+Each separately evaluated expression is a variable scope, and therefore variable names are treated as unique inside an expression.
 reason is that the whole expression is a variable scope. For example one can
 write the expression `(chain (unify $parent Bob () ()) $_ $parent)`. And value
 of the `$parent` is returned correctly.
 
-When variable is passed as an argument to the function call and matched by a
+When a variable is passed as an argument to a function call and matched by a
 value then the value is assigned to the variable. If variable passed as an
 actual argument is matched by a formal argument variable then it is referenced
 by the formal argument variable. In this case the actual argument variable can
@@ -190,15 +190,15 @@ For example the following code (written using MeTTa runner syntax) returns `B`:
 !(chain (eval (foo $a)) $_ $a)
 ```
 
-If two separate expressions in the atomspace has the variable with the same
-name inside then the scopes of the variables are different. Consider the
+If two separate expressions in the space have a variable with the same
+name, but the variables reside in independent scopes, then the variables are different. Consider the
 following example:
 ```
 (= (foo) (function (chain (unify A $a () ()) $_ (return ()))))
 !(chain (eval (foo)) $_ $a)
 ```
-Here value will not be assigned to the `$a` from the caller expression because
-two variables has different scopes and not referenced by each other.
+Here the value will not be assigned to the `$a` from the caller expression because
+each of the two variables has a different scope and they do not reference each other.
 
 # Examples
 
