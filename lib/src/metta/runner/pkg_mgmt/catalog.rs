@@ -506,7 +506,7 @@ pub trait FsModuleFormat: std::fmt::Debug + Send + Sync {
     /// Returns the possible paths inside a parent directory which may point to a module
     ///
     /// NOTE: This function is allowed to return paths that may not be valid.  Paths returned
-    /// from this method will be passed to [try_path] to validate them.
+    /// from this method will be passed to [Self::try_path] to validate them.
     fn paths_for_name(&self, parent_dir: &Path, mod_name: &str) -> Vec<PathBuf>;
 
     /// Checks a specific path, and returns a [ModuleLoader] and a [ModuleDescriptor] if a
