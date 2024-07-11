@@ -51,7 +51,6 @@ pub mod metta_interface_mod {
     }
 
     pub fn confirm_hyperonpy_version(req_str: &str) -> Result<(), String> {
-
         let req = parse_version_specifiers(req_str).unwrap();
         let version_string = get_hyperonpy_version()?;
         //NOTE: Version parsing errors will be encountered by users building hyperonpy from source with an abnormal configuration
@@ -78,7 +77,8 @@ pub mod metta_interface_mod {
 
             match || -> Result<_, String> {
                 //Confirm the hyperonpy version is compatible
-                confirm_hyperonpy_version(">=0.1.0, <0.2.0")?;
+                let req_str = Self::required_hyperon_version();
+                confirm_hyperonpy_version(&req_str)?;
 
                 //Initialize the Hyperon environment
                 let new_shim = MettaShim::init_common_env(working_dir, include_paths)?;
@@ -91,6 +91,27 @@ pub mod metta_interface_mod {
                     std::process::exit(-1);
                 }
             }
+        }
+
+        fn required_hyperon_version() -> String {
+            const PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+            fn comparator(op: semver::Op, ver: &semver::Version) -> semver::Comparator {
+                semver::Comparator{
+                    op,
+                    major: ver.major,
+                    minor: Some(ver.minor),
+                    patch: Some(0),
+                    pre: semver::Prerelease::EMPTY,
+                }
+            }
+
+            let mut ver = semver::Version::parse(PACKAGE_VERSION).unwrap();
+            let lower_bound = comparator(semver::Op::GreaterEq, &ver);
+            ver.minor = ver.minor + 1;
+            let upper_bound = comparator(semver::Op::Less, &ver);
+            let req = semver::VersionReq{ comparators: vec![lower_bound, upper_bound] };
+            req.to_string()
         }
 
         pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
