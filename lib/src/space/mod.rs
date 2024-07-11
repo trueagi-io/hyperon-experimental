@@ -207,10 +207,10 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
         None
     }
 
-    /// Returns an &dyn [Any] for spaces where this is possible
+    /// Returns an `&dyn `[Any](std::any::Any) for spaces where this is possible
     fn as_any(&self) -> Option<&dyn std::any::Any>;
 
-    /// Returns an &mut dyn [Any] for spaces where this is possible
+    /// Returns an `&mut dyn `[Any](std::any::Any) for spaces where this is possible
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any>;
 }
 
@@ -274,7 +274,7 @@ pub trait SpaceMut: Space {
     fn replace(&mut self, from: &Atom, to: Atom) -> bool;
 
     /// Turn a &dyn SpaceMut into an &dyn Space.  Obsolete when Trait Upcasting is stabilized.
-    /// https://github.com/rust-lang/rust/issues/65991  Any month now.
+    /// [Rust issue #65991](https://github.com/rust-lang/rust/issues/65991)  Any month now.
     fn as_space(&self) -> &dyn Space;
 }
 
