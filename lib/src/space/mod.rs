@@ -207,10 +207,10 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
         None
     }
 
-    /// Returns an &dyn [std::any::Any] for spaces where this is possible
+    /// Returns an `&dyn `[Any](std::any::Any) for spaces where this is possible
     fn as_any(&self) -> Option<&dyn std::any::Any>;
 
-    /// Returns an &mut dyn [std::any::Any] for spaces where this is possible
+    /// Returns an `&mut dyn `[Any](std::any::Any) for spaces where this is possible
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any>;
 }
 
