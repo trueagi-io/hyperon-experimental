@@ -1,17 +1,17 @@
 # This workflow builds Python distribution packages using cibuildwheel tool and
-# environment and publishes packages as a part of a GitHub release.
+# environment and publishes packages as a part of a GitHub release. Also it
+# releases container image to the DockerHub.
 
 # This workflow uses actions that are not certified by GitHub.  They are
 # provided by a third-party and are governed by separate terms of service,
 # privacy policy, and support documentation.
 
-name: release python
+name: release
 
 on:
   workflow_dispatch:
   release:
     types: [published]
-
 
 jobs:
   build-wheels:
@@ -77,35 +77,79 @@ jobs:
     permissions:
       id-token: write
     environment:
-      name: test
+      name: pypi-test
     runs-on: ubuntu-latest
     needs: [build-wheels]
     if: github.event.action == 'published'
     steps:
-    - uses: actions/download-artifact@v4
-      with:
-        pattern: python-wheels-*
-        merge-multiple: true
-        path: dist
-    - name: Publish package distributions to Test PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
-      with:
-        repository-url: https://test.pypi.org/legacy/
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: python-wheels-*
+          merge-multiple: true
+          path: dist
+
+      - name: Publish package distributions to Test PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
 
   publish-pypi:
     name: Publish to PyPI
     permissions:
       id-token: write
     environment:
-      name: production
+      name: pypi-production
     runs-on: ubuntu-latest
     needs: [build-wheels]
     if: github.event.action == 'published'
     steps:
-    - uses: actions/download-artifact@v4
-      with:
-        pattern: python-wheels-*
-        merge-multiple: true
-        path: dist
-    - name: Publish package distributions to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: python-wheels-*
+          merge-multiple: true
+          path: dist
+
+      - name: Publish package distributions to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  publish-docker:
+    name: Publish Docker image
+    environment:
+      name: dockerhub-production
+    runs-on: ubuntu-latest
+    needs: [build-wheels]
+    if: github.event.action == 'published'
+    steps:
+
+      - name: Set up Docker BuildX
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and export to Docker
+        uses: docker/build-push-action@v6
+        with:
+          load: true
+          build-args: |
+            BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
+          tags: trueagi/hyperon:test
+
+      - name: Test
+        run: |
+          echo "(* 7 6)" | docker run --rm trueagi/hyperon:test metta-repl
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          build-args: |
+            BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
+          tags: |
+            trueagi/hyperon:${{github.event.release.tag_name}}
+            trueagi/hyperon:latest
