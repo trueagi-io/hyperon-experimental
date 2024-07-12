@@ -95,23 +95,7 @@ pub mod metta_interface_mod {
 
         fn required_hyperon_version() -> String {
             const PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
-
-            fn comparator(op: semver::Op, ver: &semver::Version) -> semver::Comparator {
-                semver::Comparator{
-                    op,
-                    major: ver.major,
-                    minor: Some(ver.minor),
-                    patch: Some(0),
-                    pre: semver::Prerelease::EMPTY,
-                }
-            }
-
-            let mut ver = semver::Version::parse(PACKAGE_VERSION).unwrap();
-            let lower_bound = comparator(semver::Op::GreaterEq, &ver);
-            ver.minor = ver.minor + 1;
-            let upper_bound = comparator(semver::Op::Less, &ver);
-            let req = semver::VersionReq{ comparators: vec![lower_bound, upper_bound] };
-            req.to_string()
+            format!("=={PACKAGE_VERSION}")
         }
 
         pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
