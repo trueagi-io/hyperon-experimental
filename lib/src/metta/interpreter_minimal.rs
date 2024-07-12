@@ -1103,15 +1103,18 @@ fn interpret_function(args: Atom, bindings: Bindings) -> MettaResult {
     let rop = Atom::Variable(VariableAtom::new("rop").make_unique());
     let rargs = Atom::Variable(VariableAtom::new("rargs").make_unique());
     let result = Atom::Variable(VariableAtom::new("result").make_unique());
+    let unpacked_args = Atom::Variable(VariableAtom::new("unpacked_args").make_unique());
+    let call_interpret_args = call_native!(interpret_args, Atom::expr([Atom::Expression(atom), Atom::expr(args), arg_types, ret_type, space.clone()]));
     once(
         Atom::expr([CHAIN_SYMBOL, Atom::expr([METTA_SYMBOL, head, Atom::Expression(op_type), space.clone()]), rop.clone(),
             call_native!(return_on_error, Atom::expr([rop.clone(), 
-                Atom::expr([CHAIN_SYMBOL, call_native!(interpret_args, Atom::expr([Atom::Expression(atom), Atom::expr(args), arg_types, ret_type, space.clone()])), rargs.clone(),
-                    call_native!(return_on_error, Atom::expr([rargs.clone(), 
-                        Atom::expr([CHAIN_SYMBOL, Atom::expr([CONS_ATOM_SYMBOL, rop, rargs]), result.clone(),
+                Atom::expr([CHAIN_SYMBOL, call_interpret_args.clone(), rargs.clone(),
+                    Atom::expr([UNIFY_SYMBOL, Atom::expr([Atom::sym("Ok"), unpacked_args.clone()]), rargs.clone(),
+                        Atom::expr([CHAIN_SYMBOL, Atom::expr([CONS_ATOM_SYMBOL, rop, unpacked_args]), result.clone(),
                             return_atom(result)
-                        ])
-                    ]))
+                        ]),
+                        return_atom(rargs)
+                    ])
                 ])
             ]))
         ]), bindings)
@@ -1135,7 +1138,7 @@ fn interpret_args(args_: Atom, bindings: Bindings) -> MettaResult {
     if args.children().is_empty() {
         if types_tail.is_empty() {
             match_types(types_head, ret_type,
-                return_atom(Atom::Expression(args)), 
+                return_atom(Atom::expr([Atom::sym("Ok"), Atom::Expression(args)])), 
                 return_atom(error_atom(atom, BAD_TYPE_SYMBOL)),
                 bindings)
         } else {
@@ -1148,12 +1151,15 @@ fn interpret_args(args_: Atom, bindings: Bindings) -> MettaResult {
         let rhead = Atom::Variable(VariableAtom::new("rhead").make_unique());
         let rtail = Atom::Variable(VariableAtom::new("rtail").make_unique());
         let result = Atom::Variable(VariableAtom::new("result").make_unique());
-        let recursion = Atom::expr([CHAIN_SYMBOL, call_native!(interpret_args, Atom::expr([atom, Atom::expr(args_tail), Atom::expr(types_tail), ret_type, space.clone()])), rtail.clone(),
-            call_native!(return_on_error, Atom::expr([rtail.clone(), 
-                Atom::expr([CHAIN_SYMBOL, Atom::expr([CONS_ATOM_SYMBOL, rhead.clone(), rtail.clone()]), result.clone(),
-                    return_atom(result)
-                ])
-            ]))
+        let tail = Atom::Variable(VariableAtom::new("tail").make_unique());
+        let call_self = call_native!(interpret_args, Atom::expr([atom, Atom::expr(args_tail), Atom::expr(types_tail), ret_type, space.clone()]));
+        let recursion = Atom::expr([CHAIN_SYMBOL, call_self.clone(), rtail.clone(),
+            Atom::expr([UNIFY_SYMBOL, Atom::expr([Atom::sym("Ok"), tail.clone()]), rtail.clone(),
+                Atom::expr([CHAIN_SYMBOL, Atom::expr([CONS_ATOM_SYMBOL, rhead.clone(), tail]), result.clone(),
+                    return_atom(Atom::expr([Atom::sym("Ok"), result]))
+                ]),
+                return_atom(rtail)
+            ])
         ]);
         once(
             Atom::expr([CHAIN_SYMBOL, Atom::expr([METTA_SYMBOL, args_head.clone(), types_head, space.clone()]), rhead.clone(),
