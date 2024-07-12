@@ -24,8 +24,8 @@
 (: id (-> Atom Atom))
 (= (id $x) $x)
 
-(: apply (-> Atom Variable Atom Atom))
-(= (apply $atom $var $templ)
+(: atom-subst (-> Atom Variable Atom Atom))
+(= (atom-subst $atom $var $templ)
   (function (chain (eval (id $atom)) $var (return $templ))) )
 
 (: if-decons-expr (-> Expression Variable Variable Atom Atom Atom))
@@ -124,7 +124,7 @@
 (= (filter-atom $list $var $filter)
   (function (eval (if-decons-expr $list $head $tail
     (chain (eval (filter-atom $tail $var $filter)) $tail-filtered
-      (chain (eval (apply $head $var $filter)) $filter-expr
+      (chain (eval (atom-subst $head $var $filter)) $filter-expr
         (chain $filter-expr $is-filtered
           (eval (if $is-filtered
             (chain (cons-atom $head $tail-filtered) $res (return $res))
@@ -135,7 +135,7 @@
 (= (map-atom $list $var $map)
   (function (eval (if-decons-expr $list $head $tail
     (chain (eval (map-atom $tail $var $map)) $tail-mapped
-      (chain (eval (apply $head $var $map)) $map-expr
+      (chain (eval (atom-subst $head $var $map)) $map-expr
         (chain $map-expr $head-mapped
           (chain (cons-atom $head-mapped $tail-mapped) $res (return $res)) )))
     (return ()) ))))
@@ -143,8 +143,8 @@
 (: foldl-atom (-> Expression Atom Variable Variable Atom Atom))
 (= (foldl-atom $list $init $a $b $op)
   (function (eval (if-decons-expr $list $head $tail
-    (chain (eval (apply $init $a $op)) $op-init
-      (chain (eval (apply $head $b $op-init)) $op-head
+    (chain (eval (atom-subst $init $a $op)) $op-init
+      (chain (eval (atom-subst $head $b $op-init)) $op-head
         (chain $op-head $head-folded
           (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) )))
     (return $init) ))))
