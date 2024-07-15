@@ -933,7 +933,7 @@ fn type_cast(space: Atom, atom: Atom, expected_type: Atom, bindings: Bindings) -
     } else {
         let space = space.as_gnd::<DynSpace>().unwrap();
         let first_match = get_atom_types(space, &atom).into_iter()
-            .flat_map(|actual_type| match_types(expected_type.clone(), actual_type, Atom::value(true), Atom::value(false), bindings.clone()))
+            .flat_map(|actual_type| match_types(&expected_type, &actual_type, Atom::value(true), Atom::value(false), bindings.clone()))
             .filter(|(atom, _bindings)| *atom.as_gnd::<bool>().unwrap())
             .next();
         match first_match {
@@ -943,19 +943,21 @@ fn type_cast(space: Atom, atom: Atom, expected_type: Atom, bindings: Bindings) -
     }
 }
 
-fn match_types(type1: Atom, type2: Atom, then: Atom, els: Atom, bindings: Bindings) -> MettaResult {
-    if type1 == ATOM_TYPE_UNDEFINED {
+// FIXME: return (T, Bindings) pairs instead of (Atom, Bindings) or even
+// (then_bindings, else_bindings) pair
+fn match_types(type1: &Atom, type2: &Atom, then: Atom, els: Atom, bindings: Bindings) -> MettaResult {
+    if *type1 == ATOM_TYPE_UNDEFINED {
         once(then, bindings)
-    } else if type2 == ATOM_TYPE_UNDEFINED {
+    } else if *type2 == ATOM_TYPE_UNDEFINED {
         once(then, bindings)
-    } else if type1 == ATOM_TYPE_ATOM {
+    } else if *type1 == ATOM_TYPE_ATOM {
         once(then, bindings)
-    } else if type2 == ATOM_TYPE_ATOM {
+    } else if *type2 == ATOM_TYPE_ATOM {
         once(then, bindings)
     } else {
-        let mut result = match_atoms(&type1, &type2).peekable();
+        let mut result = match_atoms(type1, type2).peekable();
         if result.peek().is_none() {
-            once(els, bindings.clone())
+            once(els, bindings)
         } else {
             Box::new(result
                 .flat_map(move |b| b.merge_v2(&bindings).into_iter())
@@ -1128,7 +1130,7 @@ fn interpret_args(args_: Atom, bindings: Bindings) -> MettaResult {
     let types_tail = types;
     if args.children().is_empty() {
         if types_tail.is_empty() {
-            match_types(types_head, ret_type,
+            match_types(&types_head, &ret_type,
                 return_atom(Atom::expr([Atom::sym("Ok"), Atom::Expression(args)])), 
                 return_atom(error_atom(atom, BAD_TYPE_SYMBOL)),
                 bindings)
