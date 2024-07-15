@@ -856,20 +856,7 @@ fn interpret_sym(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     vec![InterpretedAtom(atom_to_stack(call_native!(interpret_impl, Atom::expr([atom, typ, space])), prev), bindings)]
 }
 
-trait MettaResultIter: Iterator<Item=(Atom, Bindings)> {
-    fn clone_(&self) -> Box<dyn MettaResultIter>;
-}
-impl<T: 'static + Clone + Iterator<Item=(Atom, Bindings)>> MettaResultIter for T {
-    fn clone_(&self) -> Box<dyn MettaResultIter> {
-        Box::new(self.clone())
-    }
-}
-type MettaResult = Box<dyn MettaResultIter>;
-impl Clone for MettaResult {
-    fn clone(&self) -> Self {
-        self.clone_()
-    }
-}
+type MettaResult = Box<dyn Iterator<Item=(Atom, Bindings)>>;
 
 #[inline]
 fn once(atom: Atom, bindings: Bindings) -> MettaResult {
