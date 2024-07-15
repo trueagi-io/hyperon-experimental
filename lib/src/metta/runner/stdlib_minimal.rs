@@ -1252,4 +1252,22 @@ mod tests {
                 ("@return" ("@type" "%Undefined%") ("@desc" {Str::from_str("Return value")})) )],
         ]));
     }
+
+    #[test]
+    fn test_error_is_used_as_an_argument() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new(r#"
+            !(get-type Error)
+            !(get-metatype Error)
+            !(get-type (Error Foo Boo))
+            !(Error (+ 1 2) (+ 1 +))
+        "#);
+
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![
+            vec![expr!("->" "Atom" "Atom" "ErrorType")],
+            vec![expr!("Symbol")],
+            vec![expr!("ErrorType")],
+            vec![expr!("Error" ({SumOp{}} {Number::Integer(1)} {Number::Integer(2)}) ({SumOp{}} {Number::Integer(1)} {SumOp{}}))],
+        ]));
+    }
 }

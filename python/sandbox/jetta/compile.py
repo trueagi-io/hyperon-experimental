@@ -1,4 +1,4 @@
-from hyperon import MeTTa, OperationAtom, E, S, V
+from hyperon import *
 from hyperon.ext import register_atoms
 import requests
 import json
@@ -13,6 +13,8 @@ and running Application.kt of `server` subproject.
 default_url_base = 'http://0.0.0.0:9090/contexts'
 
 def jetta(metta, j_space, code, url=default_url_base):
+    # TODO: check if `code` is a string (otherwise  repr it)?
+    # TODO: accept metta expressions?
     r = requests.post(url + "/" + j_space, data=code)
     if r.status_code != 200:
         return None
@@ -24,7 +26,18 @@ def jetta(metta, j_space, code, url=default_url_base):
         r['result'] = int(r['result'])
     return r['result']
 
+def call_in_jetta(metta, j_space, func, *args):
+    return [ValueAtom(jetta(metta, j_space,
+                 f"({func} " + " ".join([repr(a) for a in args]) + ")"))]
+
 def compile(metta: MeTTa, j_space, func, arity=None):
+    j_space = j_space.get_object().content
+    if arity is not None:
+        arity = arity.get_object().content
+    if isinstance(func, GroundedAtom):
+        func = str(func.get_object().content)
+    else:
+        func = repr(func)
     typ = metta.space().query(
         E(S(':'), S(func), V('t'))
     )
@@ -49,12 +62,14 @@ def compile(metta: MeTTa, j_space, func, arity=None):
     code = "(= " + repr(f_args) + "\n   " +\
           repr(res[0]['__r']) + ")"
     code = typ + "\n" + code
+    # TODO: check if compilation is successful
     jetta(metta, j_space, code)
+    #TODO: doesn't work for passing expressions (e.g. lambdas)
     funcAtom = OperationAtom(func,
-        lambda *args: jetta(metta, j_space,
-                            f"({func} " + " ".join([repr(a) for a in args]) + ")"))
+        lambda *args: call_in_jetta(metta, j_space, func, *args),
+        unwrap=False)
     metta.register_atom(func+'-gnd', funcAtom)
-    return None
+    return [Atoms.UNIT]
 
 def jetta_space(url=default_url_base):
     r = requests.post(url)
@@ -67,7 +82,7 @@ def jettaspace_atoms(metta: MeTTa):
     jettaAtom = OperationAtom('jetta',
         lambda *args: jetta(metta, *args))
     compileAtom = OperationAtom('compile',
-        lambda *args: compile(metta, *args))
+        lambda *args: compile(metta, *args), unwrap=False)
     return {
         r"new-jetta-space": newJSpaceAtom,
         r"jetta": jettaAtom,
