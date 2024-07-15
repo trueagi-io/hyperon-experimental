@@ -59,7 +59,8 @@ Auto type-checking can be enabled
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; let binds without type checking, but errors when used
 (let $x (+ 5 "S") $x)
+
 (: f (-> $t Number))
 !(assertEqualToResult
    (f (+ 5 "S"))
-   ((Error "S" BadType)))
+   ((Error (+ 5 "S") BadType)))
