@@ -12,32 +12,64 @@ and running Application.kt of `server` subproject.
 
 default_url_base = 'http://0.0.0.0:9090/contexts'
 
-def jetta(metta, j_space, code, url=default_url_base):
-    # TODO: check if `code` is a string (otherwise  repr it)?
-    # TODO: accept metta expressions?
-    r = requests.post(url + "/" + j_space, data=code)
+class JettaServerError(RuntimeError):
+    pass
+
+def jetta(j_space_id: str, code: str, url=None):
+    """
+    The very basic caller to Jetta server with purely Python interface.
+    """
+    if url is None:
+        url = default_url_base
+    r = requests.post(url + "/" + j_space_id, data=code)
     if r.status_code != 200:
-        return None
+        raise JettaServerError(f"Status code: {r.status_code}")
     r = json.loads(r.content.decode())
     if not r['isSuccess']:
-        return r['messages']
-    # metta.parse_single(r['result'])
+        raise JettaServerError(r['messages'])
     if r['type'] == 'java.lang.Integer':
         r['result'] = int(r['result'])
     return r['result']
 
-def call_in_jetta(metta, j_space, func, *args):
-    return [ValueAtom(jetta(metta, j_space,
-                 f"({func} " + " ".join([repr(a) for a in args]) + ")"))]
+def _err_msg(expr, msg):
+    if not isinstance(expr, Atom):
+        expr = ValueAtom(str(expr))
+    if not isinstance(msg, Atom):
+        msg = ValueAtom(str(msg))
+    return [E(S('Error'), expr, E(S('JettaCompileError'), msg))]
 
-def compile(metta: MeTTa, j_space, func, arity=None):
-    j_space = j_space.get_object().content
+def jetta_unwrap_atom(j_space_a: Atom, code_a: Atom,
+                      url_a=ValueAtom(None)):
+    """
+    The caller to Jetta server with atom wrapping and unwrapping.
+    This is needed to pass MeTTa expressions to `jetta` as well
+    as to convert JettaServerError into ordinary MeTTa Error
+    atom without Python error log.
+    """
+    j_space = j_space_a.get_object().value
+    if isinstance(code_a, GroundedAtom):
+        code = code_a.get_object().value
+    else:
+        code = repr(code_a)
+    url = url_a.get_object().value
+    try:
+        result = jetta(j_space, code, url)
+        return [Atoms.UNIT if result is None else ValueAtom(result)]
+    except JettaServerError as e:
+        return _err_msg(code, e)
+        #return [E(S('Error'), ValueAtom(code),
+        #          E(S('JettaCompileError'), ValueAtom(str(e))))]
+
+def compile(metta: MeTTa, j_space_a, func_a, arity=None):
+    j_space = j_space_a.get_object().content
     if arity is not None:
         arity = arity.get_object().content
-    if isinstance(func, GroundedAtom):
-        func = str(func.get_object().content)
+    if isinstance(func_a, GroundedAtom):
+        func = str(func_a.get_object().content)
+    elif not isinstance(func_a, SymbolAtom):
+        return _err_msg(func_a, "compile expects a function name")
     else:
-        func = repr(func)
+        func = repr(func_a)
     typ = metta.space().query(
         E(S(':'), S(func), V('t'))
     )
@@ -47,7 +79,10 @@ def compile(metta: MeTTa, j_space, func, arity=None):
     if len(typ) == 0:
         typ = ""
         if arity is None:
-            raise RuntimeError("If type is not defined, arity should be provided")
+            return _err_msg(E(S('compile'), j_space_a, func_a),
+                            "If type is not defined, arity should be provided" )
+            #return [E(S('Error'), E(S('compile'), j_space_a, func_a),
+            #    E(S('JettaCompileError'), ValueAtom("If type is not defined, arity should be provided")))]
     else:
         typ = typ[0]['t']
         arity = len(typ.get_children()) - 2
@@ -63,10 +98,10 @@ def compile(metta: MeTTa, j_space, func, arity=None):
           repr(res[0]['__r']) + ")"
     code = typ + "\n" + code
     # TODO: check if compilation is successful
-    jetta(metta, j_space, code)
+    jetta(j_space, code)
     #TODO: doesn't work for passing expressions (e.g. lambdas)
     funcAtom = OperationAtom(func,
-        lambda *args: call_in_jetta(metta, j_space, func, *args),
+        lambda *args: jetta_unwrap_atom(j_space_a, E(func_a, *args)),
         unwrap=False)
     metta.register_atom(func+'-gnd', funcAtom)
     return [Atoms.UNIT]
@@ -79,8 +114,7 @@ def jetta_space(url=default_url_base):
 @register_atoms(pass_metta=True)
 def jettaspace_atoms(metta: MeTTa):
     newJSpaceAtom = OperationAtom('new-jetta-space', jetta_space)
-    jettaAtom = OperationAtom('jetta',
-        lambda *args: jetta(metta, *args))
+    jettaAtom = OperationAtom('jetta', jetta_unwrap_atom, unwrap=False)
     compileAtom = OperationAtom('compile',
         lambda *args: compile(metta, *args), unwrap=False)
     return {
