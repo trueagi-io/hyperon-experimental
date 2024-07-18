@@ -403,7 +403,7 @@ fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, 
                 superpose_bind(stack, bindings)
             },
             Some([op, ..]) if *op == METTA_SYMBOL => {
-                interpret_sym(stack, bindings)
+                metta_sym(stack, bindings)
             },
             Some([op, ..]) if *op == CALL_NATIVE_SYMBOL => {
                 call_native_symbol(stack, bindings)
@@ -842,18 +842,18 @@ fn call_native_symbol(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> 
         .collect()
 }
 
-fn interpret_sym(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: interpret, ret: _, finished: _, vars: _ } = stack;
+fn metta_sym(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: metta, ret: _, finished: _, vars: _ } = stack;
     let (atom, typ, space) = match_atom!{
-        interpret ~ [_op, atom, typ, space]
+        metta ~ [_op, atom, typ, space]
             if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
         _ => {
-            let error = format!("expected: ({} atom type space), found: {}", METTA_SYMBOL, interpret);
-            return finished_result(error_msg(interpret, error), bindings, prev);
+            let error = format!("expected: ({} atom type space), found: {}", METTA_SYMBOL, metta);
+            return finished_result(error_msg(metta, error), bindings, prev);
         }
     };
 
-    vec![InterpretedAtom(atom_to_stack(call_native!(interpret_impl, Atom::expr([atom, typ, space])), prev), bindings)]
+    vec![InterpretedAtom(atom_to_stack(call_native!(metta_impl, Atom::expr([atom, typ, space])), prev), bindings)]
 }
 
 type MettaResult = Box<dyn Iterator<Item=(Atom, Bindings)>>;
@@ -883,13 +883,13 @@ fn function_atom(atom: Atom) -> Atom {
     Atom::expr([FUNCTION_SYMBOL, atom])
 }
 
-fn interpret_impl(args: Atom, bindings: Bindings) -> MettaResult {
+fn metta_impl(args: Atom, bindings: Bindings) -> MettaResult {
     let (atom, typ, space) = match_atom!{
         args ~ [atom, typ, space]
             if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
         _ => {
             let error = format!("expected args: (atom type space), found: {}", args);
-            return once((return_atom(error_msg(call_native!(interpret_impl, args), error)), bindings));
+            return once((return_atom(error_msg(call_native!(metta_impl, args), error)), bindings));
         }
     };
 
@@ -1174,7 +1174,7 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
                     // the function call to another function. In this case ret_type is an expected
                     // type of the outer function argument. Second place is explicit call to
                     // `metta`. In this case ret_type is explicitly set as an argument and handled
-                    // in interpret_impl() Rust function which compares it with passed expression
+                    // in metta_impl() Rust function which compares it with passed expression
                     // meta-type. Thus if ret_type is meta-type it is always first compared to the
                     // expression's meta-type and type check finishes.
                     match match_types(&expected_ret_type, ret_type,bindings) {
