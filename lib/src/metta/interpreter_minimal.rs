@@ -1010,15 +1010,9 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
     match atom_as_slice(&atom) {
         Some([op, _args @ ..]) => {
             let space_ref = space.as_gnd::<DynSpace>().unwrap();
-            let mut actual_types = get_atom_types(space_ref, op);
-            // FIXME: this relies on the fact that get_atom_types() returns
-            // tuple types first. Either need to sort types or fix behavior
-            // in get_atom_types contract.
-            let func_start_index = actual_types.partition_point(|a| !is_func(a));
-            let has_func_types = func_start_index < actual_types.len();
-            let func_types = actual_types.split_off(func_start_index).into_iter(); 
-            let mut tuple_types = actual_types.into_iter().peekable();
+            let actual_types = get_atom_types(space_ref, op);
 
+            let mut tuple_types = actual_types.iter().filter(|typ| !is_func(typ)).peekable();
             let tuple = if tuple_types.peek().is_some() {
                 let reduced = Atom::Variable(VariableAtom::new("reduced").make_unique());
                 let result = Atom::Variable(VariableAtom::new("result").make_unique());
@@ -1032,11 +1026,10 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
                 empty()
             };
 
-            let func = if has_func_types {
+            let mut func_types = actual_types.into_iter().filter(|typ| is_func(typ)).peekable();
+            let func = if func_types.peek().is_some() {
                 let ret_typ = typ.clone();
-                let type_check_results = func_types
-                    // FIXME: I cannot pass reference here, but can pass the value
-                    .flat_map(|typ| check_if_function_type_is_applicable(&atom, typ, &ret_typ, space_ref, bindings.clone()));
+                let type_check_results = func_types.flat_map(|typ| check_if_function_type_is_applicable(&atom, typ, &ret_typ, space_ref, bindings.clone()));
                 let mut errors = Vec::new();
                 for res in type_check_results {
                     log::debug!("interpret_expression: function type check: atom: {} type: {:?}", atom, res);
