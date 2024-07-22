@@ -1300,6 +1300,15 @@ fn metta_call(args: Atom, bindings: Bindings) -> MettaResult {
         let result = Atom::Variable(VariableAtom::new("result").make_unique());
         let ret = Atom::Variable(VariableAtom::new("ret").make_unique());
         once((
+            // TODO: At the moment metta_call() is called we already know
+            // should we call atom as a tuple or as a function.
+            // But (eval (<op> <args>)) inside independently decides whether it
+            // should call grounded operation <op>, or match (= (<op> <args>) <res>).
+            // This can lead to the conflict if user defines a function using
+            // grounded atom (for instance (+3 1 2 3)) and after type analysis
+            // interpreter decides we need to match it then calling eval will
+            // analyze the expression again and may call grounded op instead of
+            // matching.
             Atom::expr([CHAIN_SYMBOL, Atom::expr([EVAL_SYMBOL, atom.clone()]), result.clone(),
                 Atom::expr([CHAIN_SYMBOL, call_native!(metta_call_return, Atom::expr([atom, result, typ, space])), ret.clone(),
                     return_atom(ret)
