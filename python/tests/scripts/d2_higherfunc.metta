@@ -168,7 +168,7 @@
 !(assertEqualToResult
   (get-type (fmap (curry-a + 2) (Left "5")))
   ())
-; Two examples below are type-checked successfully because, (UntypedC "5")
+; TODO: Two examples below are type-checked successfully because, (UntypedC "5")
 ; can return result which has an appropriate type.
 ;!(assertEqualToResult
 ;  (get-type (fmap (curry-a + 2) (UntypedC "5")))
