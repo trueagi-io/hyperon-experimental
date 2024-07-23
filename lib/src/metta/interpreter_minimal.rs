@@ -999,26 +999,26 @@ fn check_alternatives(args: Atom, bindings: Bindings) -> MettaResult {
 }
 
 fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
-    let (atom, typ, space) = match_atom!{
-        args ~ [atom, typ, space]
-            if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
+    let (expr, expr_typ, space) = match_atom!{
+        args ~ [expr, expr_typ, space]
+            if space.as_gnd::<DynSpace>().is_some() => (expr, expr_typ, space),
         _ => {
             let error = format!("expected args: (atom type space), found: {}", args);
             return once((return_atom(error_msg(call_native!(interpret_expression, args), error)), bindings));
         }
     };
-    match atom_as_slice(&atom) {
+    match atom_as_slice(&expr) {
         Some([op, _args @ ..]) => {
             let space_ref = space.as_gnd::<DynSpace>().unwrap();
             let actual_types = get_atom_types(space_ref, op);
 
-            let mut tuple_types = actual_types.iter().filter(|typ| !is_func(typ)).peekable();
-            let tuple = if tuple_types.peek().is_some() {
+            let has_tuple_type = actual_types.iter().filter(|typ| !is_func(typ)).next().is_some();
+            let tuple = if has_tuple_type {
                 let reduced = Atom::Variable(VariableAtom::new("reduced").make_unique());
                 let result = Atom::Variable(VariableAtom::new("result").make_unique());
                 once((
-                    Atom::expr([CHAIN_SYMBOL, call_native!(interpret_tuple, Atom::expr([atom.clone(), space.clone()])), reduced.clone(),
-                        Atom::expr([CHAIN_SYMBOL, call_native!(metta_call, Atom::expr([reduced, typ.clone(), space.clone()])), result.clone(),
+                    Atom::expr([CHAIN_SYMBOL, call_native!(interpret_tuple, Atom::expr([expr.clone(), space.clone()])), reduced.clone(),
+                        Atom::expr([CHAIN_SYMBOL, call_native!(metta_call, Atom::expr([reduced, expr_typ.clone(), space.clone()])), result.clone(),
                             return_atom(result)
                         ])
                     ]), bindings.clone()))
@@ -1028,17 +1028,17 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
 
             let mut func_types = actual_types.into_iter().filter(|typ| is_func(typ)).peekable();
             let func = if func_types.peek().is_some() {
-                let ret_typ = typ.clone();
-                let type_check_results = func_types.flat_map(|typ| check_if_function_type_is_applicable(&atom, typ, &ret_typ, space_ref, bindings.clone()));
+                let ret_typ = expr_typ.clone();
+                let type_check_results = func_types.flat_map(|typ| check_if_function_type_is_applicable(&expr, typ, &ret_typ, space_ref, bindings.clone()));
                 let mut errors = Vec::new();
                 for res in type_check_results {
-                    log::debug!("interpret_expression: function type check: atom: {} type: {:?}", atom, res);
+                    log::debug!("interpret_expression: function type check: expr: {} type: {:?}", expr, res);
                     match res {
                         (Ok(op_type), bindings) => {
                             let reduced = Atom::Variable(VariableAtom::new("reduced").make_unique());
                             let result = Atom::Variable(VariableAtom::new("result").make_unique());
-                            return once((Atom::expr([CHAIN_SYMBOL, call_native!(interpret_function, Atom::expr([atom.clone(), op_type, typ.clone(), space.clone()])), reduced.clone(),
-                                Atom::expr([CHAIN_SYMBOL, call_native!(metta_call, Atom::expr([reduced, typ, space.clone()])), result.clone(),
+                            return once((Atom::expr([CHAIN_SYMBOL, call_native!(interpret_function, Atom::expr([expr.clone(), op_type, expr_typ.clone(), space.clone()])), reduced.clone(),
+                                Atom::expr([CHAIN_SYMBOL, call_native!(metta_call, Atom::expr([reduced, expr_typ, space.clone()])), result.clone(),
                                     return_atom(result)
                                 ])
                             ]), bindings));
@@ -1054,7 +1054,7 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
 
             Box::new(std::iter::empty().chain(tuple).chain(func))
         },
-        _ => type_cast(space, atom, typ, bindings),
+        _ => type_cast(space, expr, expr_typ, bindings),
     }
 }
 
@@ -1127,18 +1127,17 @@ fn interpret_function(args: Atom, bindings: Bindings) -> MettaResult {
         ]), bindings))
 }
 
-fn check_if_function_type_is_applicable<'a>(expr: &'a Atom, typ: Atom, ret_type: &'a Atom, space: &'a DynSpace, bindings: Bindings) -> Box<dyn Iterator<Item=(Result<Atom, Atom>, Bindings)> + 'a> {
-    log::trace!("check_if_function_type_is_applicable: function type check: expr: {}, typ: {}, ret_type: {}", expr, typ, ret_type);
-    let args = match atom_as_slice(expr) {
-        Some([_op, args @ ..]) => args,
+fn check_if_function_type_is_applicable<'a>(expr: &'a Atom, op_type: Atom, expected_type: &'a Atom, space: &'a DynSpace, bindings: Bindings) -> Box<dyn Iterator<Item=(Result<Atom, Atom>, Bindings)> + 'a> {
+    log::trace!("check_if_function_type_is_applicable: function type check: expr: {}, op_type: {}, expected_type: {}", expr, op_type, expected_type);
+    let actual_args = match atom_as_slice(expr) {
+        Some([_op, actual_args @ ..]) => actual_args,
         _ => panic!("Unexpected state"),
     };
-    let op_type = typ;
-    let typ: ExpressionAtom = op_type.clone().try_into().unwrap();
-    let mut arg_types = typ.into_children(); 
+    let arg_types: ExpressionAtom = op_type.clone().try_into().unwrap();
+    let mut arg_types = arg_types.into_children(); 
     let arrow = arg_types.remove(0);
     assert_eq!(arrow, ARROW_SYMBOL);
-    check_if_function_type_is_applicable_(expr, op_type, arg_types, args, ret_type, space, bindings)
+    check_if_function_type_is_applicable_(expr, op_type, arg_types, actual_args, expected_type, space, bindings)
 }
 
 fn is_meta_type(atom: &Atom) -> bool {
@@ -1161,23 +1160,23 @@ fn match_meta_types(actual: &Atom, expected: &Atom) -> bool {
     }
 }
 
-fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut arg_types: Vec<Atom>, args: &'a[Atom], ret_type: &'a Atom, space: &'a DynSpace, bindings: Bindings) -> Box<dyn Iterator<Item=(Result<Atom, Atom>, Bindings)> + 'a> {
+fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut arg_types: Vec<Atom>, actual_args: &'a[Atom], expected_type: &'a Atom, space: &'a DynSpace, bindings: Bindings) -> Box<dyn Iterator<Item=(Result<Atom, Atom>, Bindings)> + 'a> {
     match arg_types.len() {
         0 => once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)),
         1 => {
-            let expected_ret_type = arg_types.pop().unwrap();
-            log::trace!("check_if_function_type_is_applicable_: function type check: expr: {}, expected_ret_type: {}, ret_type: {}", expr, expected_ret_type, ret_type);
-            match args {
+            let ret_type = arg_types.pop().unwrap();
+            log::trace!("check_if_function_type_is_applicable_: function type check: expr: {}, ret_type: {}, expected_type: {}", expr, ret_type, expected_type);
+            match actual_args {
                 [] => {
-                    // Here ret_type is always some specific type not meta-type. It is because
-                    // there are two places to assign ret_type. First place is passing result of
-                    // the function call to another function. In this case ret_type is an expected
+                    // Here expected_type is always some specific type not meta-type. It is because
+                    // there are two places to assign expected_type. First place is passing result of
+                    // the function call to another function. In this case expected_type is an expected
                     // type of the outer function argument. Second place is explicit call to
-                    // `metta`. In this case ret_type is explicitly set as an argument and handled
+                    // `metta`. In this case expected_type is explicitly set as an argument and handled
                     // in metta_impl() Rust function which compares it with passed expression
-                    // meta-type. Thus if ret_type is meta-type it is always first compared to the
+                    // meta-type. Thus if expected_type is meta-type it is always first compared to the
                     // expression's meta-type and type check finishes.
-                    match match_types(&expected_ret_type, ret_type,bindings) {
+                    match match_types(&ret_type, expected_type, bindings) {
                         Ok(matches) => Box::new(matches.map(move |bindings| (Ok(op_type.clone()), bindings))),
                         Err(nomatch) => Box::new(nomatch.map(move |bindings| (Err(error_atom(expr.clone(), BAD_TYPE_SYMBOL)), bindings))),
                     }
@@ -1186,24 +1185,24 @@ fn check_if_function_type_is_applicable_<'a>(expr: &'a Atom, op_type: Atom, mut 
             }
         },
         _ => {
-            let expected_arg_type = arg_types.remove(0);
+            let formal_arg_type = arg_types.remove(0);
             let arg_types_tail = arg_types;
-            match args {
+            match actual_args {
                 [] => once((Err(error_atom(expr.clone(), INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL)), bindings)),
                 [actual_arg, args_tail @ ..] => {
-                    if is_meta_type(&expected_arg_type) && match_meta_types(&get_meta_type(actual_arg), &expected_arg_type) {
-                        check_if_function_type_is_applicable_(expr, op_type.clone(), arg_types_tail.clone(), args_tail, ret_type, space, bindings)
+                    if is_meta_type(&formal_arg_type) && match_meta_types(&get_meta_type(actual_arg), &formal_arg_type) {
+                        check_if_function_type_is_applicable_(expr, op_type, arg_types_tail, args_tail, expected_type, space, bindings)
                     } else {
-                        let mut actual_types = get_atom_types(space, actual_arg).into_iter().peekable();
-                        if  actual_types.peek().is_none() {
+                        let mut actual_arg_types = get_atom_types(space, actual_arg).into_iter().peekable();
+                        if  actual_arg_types.peek().is_none() {
                             return once((Err(error_atom(actual_arg.clone(), BAD_TYPE_SYMBOL)), bindings))
                         }
-                        let actual_types = actual_types.inspect(move |typ| log::trace!("check_if_function_type_is_applicable_: function type check: expr: {}, arg: {}, actual_type: {}", expr, actual_arg, typ));
-                        let iter = actual_types.flat_map(move |actual_arg_type| -> Box<dyn Iterator<Item=(Result<Atom, Atom>, Bindings)> + '_> {
-                            let op_type = op_type.clone();
+                        let actual_arg_types = actual_arg_types.inspect(move |typ| log::trace!("check_if_function_type_is_applicable_: function type check: expr: {}, actual_arg: {}, actual_type: {}", expr, actual_arg, typ));
+                        let iter = actual_arg_types.flat_map(move |actual_arg_type| -> Box<dyn Iterator<Item=(Result<Atom, Atom>, Bindings)> + '_> {
                             let arg_types_tail = arg_types_tail.clone();
-                            match match_types(&expected_arg_type, &actual_arg_type, bindings.clone()) {
-                                Ok(matches) => Box::new(matches.flat_map(move |bindings| check_if_function_type_is_applicable_(expr, op_type.clone(), arg_types_tail.clone(), args_tail, ret_type, space, bindings))),
+                            let op_type = op_type.clone();
+                            match match_types(&formal_arg_type, &actual_arg_type, bindings.clone()) {
+                                Ok(matches) => Box::new(matches.flat_map(move |bindings| check_if_function_type_is_applicable_(expr, op_type.clone(), arg_types_tail.clone(), args_tail, expected_type, space, bindings))),
                                 Err(nomatch) => Box::new(nomatch.map(|bindings| (Err(error_atom(actual_arg.clone(), BAD_TYPE_SYMBOL)), bindings))),
                             }
                         });
