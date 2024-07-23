@@ -1832,4 +1832,17 @@ mod tests {
             write!(f, "return-nothing")
         }
     }
+
+    #[test]
+    fn interpret_duplicated_types() {
+        let space = DynSpace::new(space("
+            (: foo (-> A A))
+            (: foo (-> A A))
+            (: foo (-> Atom A))
+            (: a A)
+            (= (foo $x) a)
+        "));
+        let result = interpret(&space, &Atom::expr([METTA_SYMBOL, expr!("foo" "a"), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]));
+        assert_eq!(result, Ok(vec![metta_atom("a")]));
+    }
 }
