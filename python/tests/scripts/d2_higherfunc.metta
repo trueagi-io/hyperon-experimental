@@ -169,7 +169,8 @@
   (get-type (fmap (curry-a + 2) (Left "5")))
   ())
 ; TODO: Two examples below are type-checked successfully because, (UntypedC "5")
-; can return result which has an appropriate type.
+; can return result which has an appropriate type. Uncomment when old_interpreter 
+; feature is removed.
 ;!(assertEqualToResult
 ;  (get-type (fmap (curry-a + 2) (UntypedC "5")))
 ;  ())
