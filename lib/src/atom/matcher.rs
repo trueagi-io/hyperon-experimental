@@ -1073,24 +1073,10 @@ impl BindingsSet {
     }
 }
 
-pub trait BindingsResultIter: Iterator<Item=Bindings> {
-    fn clone_(&self) -> Box<dyn BindingsResultIter>;
-}
-impl<T: 'static + Clone + Iterator<Item=Bindings>> BindingsResultIter for T {
-    fn clone_(&self) -> Box<dyn BindingsResultIter> {
-        Box::new(self.clone())
-    }
-}
-
 /// Iterator over atom matching results. Each result is an instance of [Bindings].
 //TODO: A situation where a MatchResultIter returns an unbounded (infinite) number of results
 // will hang this implementation, on account of `.collect()`
-pub type MatchResultIter = Box<dyn BindingsResultIter>;
-impl Clone for MatchResultIter {
-    fn clone(&self) -> Self {
-        self.clone_()
-    }
-}
+pub type MatchResultIter = Box<dyn Iterator<Item=Bindings>>;
 
 /// Matches two atoms and returns an iterator over results. Atoms are
 /// treated symmetrically.
