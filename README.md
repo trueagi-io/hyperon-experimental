@@ -121,8 +121,7 @@ The experimental features can be enabled by editing
 [Cargo.toml](./lib/Cargo.toml) file before compilation or by using `--features`
 [command line option](https://doc.rust-lang.org/cargo/reference/features.html#command-line-feature-options).
 See comments in the `[features]` section of the file for the features
-descriptions. For example to turn on minimal MeTTa interpreter one can add
-"minimal" to default in [Cargo.toml](./lib/Cargo.toml)
+descriptions.
 
 Run examples:
 ```
