@@ -24,3 +24,12 @@
 !(assertEqual
   (my-goo-gnd 4 5)
   0)
+
+; error: compile expects a function name
+!(assertEqual
+  (< 0
+     ((py-dot
+       (case (compile &jspace (ffff a b))
+         (((Error $1 (JettaCompileError $2)) $2)))
+      "find") "function name"))
+  True)

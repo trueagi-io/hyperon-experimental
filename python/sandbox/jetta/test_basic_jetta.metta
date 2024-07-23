@@ -25,6 +25,30 @@
   (jetta &jspace "(+ 11 12)")
   23)
 
+; checking that we can pass an atom to `jetta`;
+; `(foo 11 4)` is not reduced in this case, because
+; `foo` was not defined and passed to `jetta` in a text code;
+; FIXME? Should `jetta` accept the code as `Atom` type to
+; avoid reducing such expressions in MeTTa?
+!(assertEqual
+  (jetta &jspace (foo 11 4))
+  16)
+
+; Testing errors
+!(assertEqualToResult
+  (case (jetta "WRON SPACE" "(foo 11 4)")
+    (((Error $1 (JettaCompileError $2)) $2)))
+  ("Status code: 500"))
+
+; error: cannot resolve symbol
+!(assertEqual
+  (< 0
+     ((py-dot
+       (case (jetta &jspace "(foof 11 4)")
+         (((Error $1 (JettaCompileError $2)) $2)))
+      "find") "CannotResolveSymbol"))
+  True)
+
 ; TODO: fix the behavior (one or multiple results)
 ;(jetta &jspace
 ;  "(foo 11 3)
