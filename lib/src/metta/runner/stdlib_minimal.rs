@@ -1091,7 +1091,6 @@ mod tests {
         }
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_func() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1125,7 +1124,6 @@ mod tests {
         ]));
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_atom() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1145,7 +1143,6 @@ mod tests {
         ]));
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_gnd_func() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1176,7 +1173,6 @@ mod tests {
         ]));
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_no_doc() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1193,7 +1189,6 @@ mod tests {
         ]));
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_function_call() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1223,7 +1218,6 @@ mod tests {
         ]));
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_no_type() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
