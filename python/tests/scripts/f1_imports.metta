@@ -1,6 +1,6 @@
-; NOTE: This test won't work under no_python mode because it relies on
+; NOTE: This test won't work under no python mode because it relies on
 ;  specific atoms in the space.  When running in Python, corelib and stdlib
-;  are separate modules, but in no_python mode there is no Python stdlib
+;  are separate modules, but in no python mode there is no Python stdlib
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Even at the very beginning of the script `(get-atoms &self)`
