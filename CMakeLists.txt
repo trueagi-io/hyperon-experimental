@@ -22,6 +22,7 @@ ExternalProject_Add(
     "-DCMAKE_INSTALL_PREFIX=${HYPERONC_INSTALL_PREFIX}"
     "-DCMAKE_BUILD_TYPE=${BUILD_CONFIGURATION}"
     "-DCARGO_ARGS=${CARGO_ARGS}"
+    "-DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake"
 )
 
 ExternalProject_Get_Property(hyperonc BINARY_DIR)
@@ -38,6 +39,7 @@ ExternalProject_Add(
     "-DHYPERONC_INSTALL_PREFIX=${HYPERONC_INSTALL_PREFIX}"
     "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${CMAKE_CURRENT_SOURCE_DIR}/python"
     "-DCMAKE_BUILD_TYPE=${BUILD_CONFIGURATION}"
+    "-DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake"
     INSTALL_COMMAND cmake -E echo "Skipping install step."
 )
 
