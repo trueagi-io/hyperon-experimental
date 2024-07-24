@@ -597,7 +597,7 @@ mod tests {
     #[test]
     fn metta_cdr_atom() {
         assert_eq!(run_program(&format!("!(cdr-atom (a b c))")), Ok(vec![vec![expr!("b" "c")]]));
-        assert_eq!(run_program(&format!("!(cdr-atom ($a $b $c))")), Ok(vec![vec![expr!(b c)]]));
+        assert_eq!(run_program(&format!("!(cdr-atom ($a b $c))")), Ok(vec![vec![expr!("b" c)]]));
         assert_eq!(run_program(&format!("!(cdr-atom ())")), Ok(vec![vec![expr!("Error" ("cdr-atom" ()) {Str::from_str("cdr-atom expects a non-empty expression as an argument")})]]));
         assert_eq!(run_program(&format!("!(cdr-atom a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" "a") {Str::from_str("cdr-atom expects a non-empty expression as an argument")})]]));
         assert_eq!(run_program(&format!("!(cdr-atom $a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" a) {Str::from_str("cdr-atom expects a non-empty expression as an argument")})]]));
@@ -1052,7 +1052,7 @@ mod tests {
     #[test]
     fn use_sealed_to_make_scoped_variable() {
         assert_eq!(run_program("!(let $x (input $x) (output $x))"), Ok(vec![vec![]]));
-        assert_eq!(run_program("!(let ($sv $st) (sealed ($x) ($x (output $x)))
+        assert_eq!(run_program("!(let (quote ($sv $st)) (sealed ($x) (quote ($x (output $x))))
                (let $sv (input $x) $st))"), Ok(vec![vec![expr!("output" ("input" x))]]));
     }
 
