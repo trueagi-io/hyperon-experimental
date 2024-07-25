@@ -24,11 +24,13 @@
 
 !(== (np.add &y &x) (np.add &x &y)) ; True
 !(== &x &y) ; False
-!(== &x (np.vector 1 2)) ; False
+; It becomes BadType now, because types (NPArray (2)) != (NPArray (3))
+;!(== &x (np.vector 1 2)) ; False
 
 ! (np.add &m (np.vector 1 2)) ; ((7 3) (8 4) (9 5))
 ! (np.matmul &mt &m) ; ((6 1) (7 2))
 
+; TODO: show that this is really a pattern
 ! (np.add &m $x) ; will be turned into pattern
 
 ! (case (np.array (((1 1) (2 2) (3 3)) ((2 3) (3 4) (4 5))))
