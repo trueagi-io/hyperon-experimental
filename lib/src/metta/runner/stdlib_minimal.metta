@@ -20,6 +20,7 @@
 (: decons-atom (-> Expression Expression))
 (: collapse-bind (-> Atom Expression))
 (: superpose-bind (-> Expression Atom))
+(: metta (-> Atom Type Grounded Atom))
 
 (: id (-> Atom Atom))
 (= (id $x) $x)
