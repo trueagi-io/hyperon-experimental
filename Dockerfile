@@ -29,7 +29,7 @@ ADD --chown=user:users . ${HOME}/hyperon-experimental
 
 WORKDIR ${HOME}/hyperon-experimental
 RUN cargo test --release
-RUN cargo build --release
+RUN cargo build --features python,git --release
 
 ENV BUILD=${HOME}/hyperon-experimental/build
 RUN mkdir ${BUILD}
