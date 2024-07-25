@@ -30,7 +30,7 @@ pub fn exec_state_should_break() -> bool {
     }
 }
 
-#[cfg(all(feature = "python", not(feature = "no_python")))]
+#[cfg(feature = "python")]
 pub mod metta_interface_mod {
     use std::str::FromStr;
     use std::path::PathBuf;
@@ -302,7 +302,7 @@ pub mod metta_interface_mod {
 
 }
 
-/// The "no_python" path involves a reimplementation of all of the MeTTa interface points calling MeTTa
+/// The "no python" path involves a reimplementation of all of the MeTTa interface points calling MeTTa
 /// directly instead of through Python.  Maintaining two paths is a temporary stop-gap solution because
 /// we can only link the Hyperon Rust library through one pathway and the HyperonPy module is that path
 /// when the Python repl is used.
@@ -310,7 +310,7 @@ pub mod metta_interface_mod {
 /// When we have the ability to statically link HyperonPy, we can remove this shim and call
 /// Hyperon and MeTTa from everywhere in the code.  This will likely mean we can get rid of the clumsy
 /// implementations in the "python" version of metta_interface_mod.  See See https://github.com/trueagi-io/hyperon-experimental/issues/283
-#[cfg(feature = "no_python")]
+#[cfg(not(feature = "python"))]
 pub mod metta_interface_mod {
     use std::path::{PathBuf, Path};
     use hyperon::metta::*;

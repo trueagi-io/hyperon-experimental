@@ -130,7 +130,7 @@ cargo run --example sorted_list
 
 Run Rust REPL:
 ```
-cargo run --features no_python --bin metta-repl
+cargo run --bin metta-repl
 ```
 You can also find executable at `./target/debug/metta-repl`.
 
@@ -188,7 +188,7 @@ metta-py ./tests/scripts/<name>.metta
 
 Run REPL:
 ```
-cargo run --bin metta-repl
+cargo run --features python --bin metta-repl
 ```
 You can also find executable at `./target/debug/metta-repl`.
 
