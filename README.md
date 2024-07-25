@@ -192,6 +192,9 @@ cargo run --features python --bin metta-repl
 ```
 You can also find executable at `./target/debug/metta-repl`.
 
+Please be aware that running REPL with Python support is not compatible with
+Python environments like PyEnv and Conda (see [troubleshooting](#rust-repl-cannot-load-python-library))
+
 ### Logger
 
 You can enable logging by prefixing the MeTTa command line by
@@ -269,6 +272,22 @@ ModuleNotFoundError: No module named 'hyperonpy'
 
 Please ensure you have installed the Python module, see
 [Running Python and MeTTa examples](#running-python-and-metta-examples).
+
+### Rust REPL cannot load Python library
+
+Rust REPL is not compatible with Python virtual environments like Conda and Pyenv
+(see [#432](https://github.com/trueagi-io/hyperon-experimental/issues/432)). 
+One can use `patchelf` on resulting REPL binary to manually link it with `libpython.so`:
+```
+ldd target/debug/metta-repl | grep libpython ; to find <libpython-name>
+patchelf --replace-needed <libpython-name> <path-to-libpython-in-virtual-env> target/debug/metta-repl
+```
+This should be reapplied after running `cargo build`.
+
+Another possibility is to locally override `LD_LIBRARY_PATH` when running the binary:
+```
+LD_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env> target/debug/metta-repl
+```
 
 # Development
 
