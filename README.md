@@ -192,7 +192,7 @@ cargo run --features python --bin metta-repl
 ```
 You can also find executable at `./target/debug/metta-repl`.
 
-Please be aware that running REPL with Python support is not compatible with
+Running the REPL with Python support in a Python virtual environment like PyEnv or Conda requires additional configuration.  See [troubleshooting](#rust-repl-cannot-load-python-library)
 Python environments like PyEnv and Conda (see [troubleshooting](#rust-repl-cannot-load-python-library))
 
 ### Logger
@@ -275,7 +275,25 @@ Please ensure you have installed the Python module, see
 
 ### Rust REPL cannot load Python library
 
-Rust REPL is not compatible with Python virtual environments like Conda and Pyenv
+The REPL needs a path to the libpython library in the current environment.  This can be done one of two ways:
+
+#### On Linux
+1. Use `patchelf` on resulting REPL binary to link it with `libpython.so`
+...
+2. Set the `LD_LIBRARY_PATH` environment variable
+...
+
+#### On Mac OS
+1. Use `install_name_tool` to change the REPL binary's link path
+` ` `
+otool -L target/debug/metta-repl | grep libpython ; to find <libpython-name>
+install_name_tool -change <libpython-name> <path-to-libpython-in-virtual-env> target/debug/metta-repl
+` ` `
+2. Set the `DYLD_FALLBACK_LIBRARY_PATH` environment variable
+` ` `
+export DYLD_FALLBACK_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env>
+` ` `
+This can be done in your `~/.bashrc` file if you don't want to do it each time you launch the REPL.
 (see [#432](https://github.com/trueagi-io/hyperon-experimental/issues/432)). 
 One can use `patchelf` on resulting REPL binary to manually link it with `libpython.so`:
 ```
