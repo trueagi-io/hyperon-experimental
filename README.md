@@ -192,6 +192,8 @@ cargo run --features python --bin metta-repl
 ```
 You can also find executable at `./target/debug/metta-repl`.
 
+Running the REPL with Python support in a Python virtual environment like PyEnv or Conda requires additional configuration.  See [troubleshooting](#rust-repl-cannot-load-python-library)
+
 ### Logger
 
 You can enable logging by prefixing the MeTTa command line by
@@ -269,6 +271,40 @@ ModuleNotFoundError: No module named 'hyperonpy'
 
 Please ensure you have installed the Python module, see
 [Running Python and MeTTa examples](#running-python-and-metta-examples).
+
+### Rust REPL cannot load Python library
+
+The REPL needs a path to the libpython library in the current environment.  This can be done one of two ways:
+
+#### On Linux
+
+##### Use `patchelf` on resulting REPL binary to link it with `libpython.so`
+```
+ldd target/debug/metta-repl | grep libpython ; to find <libpython-name>
+patchelf --replace-needed <libpython-name> <path-to-libpython-in-virtual-env> target/debug/metta-repl
+```
+This must be redone each time the repl is rebuilt, e.g. with `cargo build`.
+
+##### Set the `LD_LIBRARY_PATH` environment variable prior to launching `metta-repl`
+```
+export LD_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env>
+```
+
+#### On Mac OS
+##### Use `install_name_tool` to change the REPL binary's link path for `libpython`
+```
+otool -L target/debug/metta-repl | grep libpython ; to find <libpython-name>
+install_name_tool -change <libpython-name> <path-to-libpython-in-virtual-env> target/debug/metta-repl
+```
+This must be redone each time the repl is rebuilt, e.g. with `cargo build`.
+
+##### Set the `DYLD_FALLBACK_LIBRARY_PATH` environment variable prior to launching `metta-repl`
+```
+export DYLD_FALLBACK_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env>
+```
+This can be done in your `~/.bashrc` file if you don't want to do it each time you launch the REPL.
+
+For more information about linking `libpython`, see [#432](https://github.com/trueagi-io/hyperon-experimental/issues/432).
 
 # Development
 
