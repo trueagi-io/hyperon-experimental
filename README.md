@@ -277,34 +277,34 @@ Please ensure you have installed the Python module, see
 The REPL needs a path to the libpython library in the current environment.  This can be done one of two ways:
 
 #### On Linux
-1. Use `patchelf` on resulting REPL binary to link it with `libpython.so`
-...
-2. Set the `LD_LIBRARY_PATH` environment variable
-...
 
-#### On Mac OS
-1. Use `install_name_tool` to change the REPL binary's link path
-` ` `
-otool -L target/debug/metta-repl | grep libpython ; to find <libpython-name>
-install_name_tool -change <libpython-name> <path-to-libpython-in-virtual-env> target/debug/metta-repl
-` ` `
-2. Set the `DYLD_FALLBACK_LIBRARY_PATH` environment variable
-` ` `
-export DYLD_FALLBACK_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env>
-` ` `
-This can be done in your `~/.bashrc` file if you don't want to do it each time you launch the REPL.
-(see [#432](https://github.com/trueagi-io/hyperon-experimental/issues/432)). 
-One can use `patchelf` on resulting REPL binary to manually link it with `libpython.so`:
+##### Use `patchelf` on resulting REPL binary to link it with `libpython.so`
 ```
 ldd target/debug/metta-repl | grep libpython ; to find <libpython-name>
 patchelf --replace-needed <libpython-name> <path-to-libpython-in-virtual-env> target/debug/metta-repl
 ```
-This should be reapplied after running `cargo build`.
+This must be redone each time the repl is rebuilt, e.g. with `cargo build`.
 
-Another possibility is to locally override `LD_LIBRARY_PATH` when running the binary:
+##### Set the `LD_LIBRARY_PATH` environment variable prior to launching `metta-repl`
 ```
-LD_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env> target/debug/metta-repl
+export LD_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env>
 ```
+
+#### On Mac OS
+##### Use `install_name_tool` to change the REPL binary's link path for `libpython`
+```
+otool -L target/debug/metta-repl | grep libpython ; to find <libpython-name>
+install_name_tool -change <libpython-name> <path-to-libpython-in-virtual-env> target/debug/metta-repl
+```
+This must be redone each time the repl is rebuilt, e.g. with `cargo build`.
+
+##### Set the `DYLD_FALLBACK_LIBRARY_PATH` environment variable prior to launching `metta-repl`
+```
+export DYLD_FALLBACK_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env>
+```
+This can be done in your `~/.bashrc` file if you don't want to do it each time you launch the REPL.
+
+For more information about linking `libpython`, see [#432](https://github.com/trueagi-io/hyperon-experimental/issues/432).
 
 # Development
 
