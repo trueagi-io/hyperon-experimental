@@ -193,7 +193,6 @@ cargo run --features python --bin metta-repl
 You can also find executable at `./target/debug/metta-repl`.
 
 Running the REPL with Python support in a Python virtual environment like PyEnv or Conda requires additional configuration.  See [troubleshooting](#rust-repl-cannot-load-python-library)
-Python environments like PyEnv and Conda (see [troubleshooting](#rust-repl-cannot-load-python-library))
 
 ### Logger
 
