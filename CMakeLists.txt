@@ -1,5 +1,5 @@
 # Minimal version supported by hyperonc
-cmake_minimum_required(VERSION 3.19)
+cmake_minimum_required(VERSION 3.24)
 
 project(hyperon)
 
@@ -22,7 +22,7 @@ ExternalProject_Add(
     "-DCMAKE_INSTALL_PREFIX=${HYPERONC_INSTALL_PREFIX}"
     "-DCMAKE_BUILD_TYPE=${BUILD_CONFIGURATION}"
     "-DCARGO_ARGS=${CARGO_ARGS}"
-    "-DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake"
+    "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${CMAKE_CURRENT_SOURCE_DIR}/conan_provider.cmake"
 )
 
 ExternalProject_Get_Property(hyperonc BINARY_DIR)
@@ -39,7 +39,7 @@ ExternalProject_Add(
     "-DHYPERONC_INSTALL_PREFIX=${HYPERONC_INSTALL_PREFIX}"
     "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${CMAKE_CURRENT_SOURCE_DIR}/python"
     "-DCMAKE_BUILD_TYPE=${BUILD_CONFIGURATION}"
-    "-DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake"
+    "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${CMAKE_CURRENT_SOURCE_DIR}/conan_provider.cmake"
     INSTALL_COMMAND cmake -E echo "Skipping install step."
 )
 
