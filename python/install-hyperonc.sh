@@ -22,7 +22,6 @@ done
 echo "hyperonc repository URL: $HYPERONC_URL"
 echo "hyperonc revision: $HYPERONC_REV"
 
-# This is to build subunit from Conan on CentOS based manylinux images.
 if test "$AUDITWHEEL_POLICY" = "manylinux2014"; then
     yum install -y perl-devel openssl-devel zlib-devel
 fi
