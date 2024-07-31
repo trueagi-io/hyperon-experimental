@@ -86,7 +86,7 @@ Rust (see the Notes at the installation page).
   * Python3 and Python3-dev (3.7 or later)
   * Pip (23.1.2 or later)
   * GCC (7.5 or later)
-  * CMake (3.19 or later)
+  * CMake (3.24 or later)
 
   To support Git based modules (enabled by default):
   * OpenSSL library
@@ -99,8 +99,8 @@ cargo install --force cbindgen
 
 * Install Conan and make default Conan profile:
 ```
-python3 -m pip install conan==1.64
-conan profile new --detect default
+python3 -m pip install conan==2.5.0
+conan profile detect --force
 ```
 
 * Upgrade Pip to the required version:
@@ -233,21 +233,19 @@ If you see the following `cmake` output:
 ```
 ERROR: Not able to automatically detect '/usr/bin/cc' version
 ERROR: Unable to find a working compiler
-WARN: Remotes registry file missing, creating default one in /root/.conan/remotes.json
-ERROR: libcheck/0.15.2: 'settings.compiler' value not defined
 ```
 Try to create the default Conan profile manually:
 ```
-conan profile new --detect default
+conan profile detect --force
 ```
 If it doesn't help, then try to manually add `compiler`, `compiler.version` and
 `compiler.libcxx` values in the default Conan profile
-(`~/.conan/profiles/default`).
+(`~/.conan2/profiles/default`).
 For example:
 ```
-conan profile update settings.compiler=gcc default
-conan profile update settings.compiler.version=7 default
-conan profile update settings.compiler.libcxx=libstdc++ default
+compiler=gcc
+compiler.version=7
+compiler.libcxx=libstdc++
 ```
 
 ### Rust compiler shows errors

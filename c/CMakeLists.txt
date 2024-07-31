@@ -8,14 +8,6 @@ enable_testing()
 option(BUILD_SHARED_LIBS "Build shared library" ON)
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 
-execute_process(
-    # --build is required to build dependencies from source under cibuildwheel
-    # environment
-    COMMAND cmake -E env CC= CXX= conan install --build -pr:b default -pr:h default -- ${CMAKE_CURRENT_SOURCE_DIR}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-include(${CMAKE_CURRENT_BINARY_DIR}/conanbuildinfo.cmake)
-conan_basic_setup(TARGETS)
-
 # HYPERONC_TARGET_DIR is used as a target dir for cargo. Cargo automatically adds
 # `debug/release` suffix to the value of --target-dir argument so we need to
 # calculate actual path to compiled library using $<CONFIG:...> cmake generator

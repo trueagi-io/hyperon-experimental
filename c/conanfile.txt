@@ -2,7 +2,8 @@
 libcheck/0.15.2
 
 [generators]
-cmake
+CMakeDeps
+CMakeToolchain
 
 [options]
-libcheck:with_subunit=False
+libcheck/*:with_subunit=False

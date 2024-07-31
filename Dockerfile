@@ -21,9 +21,9 @@ RUN sh /tmp/rustup.sh -y && rm /tmp/rustup.sh
 ENV PATH="${PATH}:${HOME}/.cargo/bin"
 RUN cargo install cbindgen
 
-RUN python3 -m pip install conan==1.64 pip==23.1.2
+RUN python3 -m pip install conan==2.5.0 pip==23.1.2
 ENV PATH="${PATH}:${HOME}/.local/bin"
-RUN conan profile new --detect default
+RUN conan profile detect --force
 
 ADD --chown=user:users . ${HOME}/hyperon-experimental
 

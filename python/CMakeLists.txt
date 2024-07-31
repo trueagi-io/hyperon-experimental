@@ -23,13 +23,6 @@ find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
 message(STATUS "Python native modules installation path (Python3_SITEARCH): ${Python3_SITEARCH}")
 message(STATUS "Python modules installation path (Python3_SITELIB): ${Python3_SITELIB}")
 
-execute_process(
-    # --build is required to build dependencies from source under cibuildwheel
-    # environment
-    COMMAND conan install --build -- ${CMAKE_CURRENT_SOURCE_DIR}
-    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-include(${CMAKE_CURRENT_BINARY_DIR}/conan_paths.cmake)
-
 if(GIT)
     find_package(OpenSSL REQUIRED)
     find_package(ZLIB REQUIRED)
@@ -47,7 +40,7 @@ if(APPLE)
 endif()
 
 pybind11_add_module(hyperonpy MODULE ./hyperonpy.cpp)
-target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}")
+target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}" nonstd::optional-lite)
 if(GIT)
     target_link_libraries(hyperonpy PUBLIC ${PLATFORM_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
 endif()
