@@ -3,5 +3,5 @@ pybind11/2.10.1
 optional-lite/3.5.0
 
 [generators]
-cmake_paths
-cmake_find_package
+CMakeDeps
+CMakeToolchain

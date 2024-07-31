@@ -10,6 +10,7 @@ Cargo.lock
 .vscode
 .aider*
 __pycache__
+CMakeUserPresets.json
 /build
 /python/hyperon.egg-info
 /python/dist

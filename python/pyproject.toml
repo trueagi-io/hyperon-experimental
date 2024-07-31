@@ -1,12 +1,14 @@
 [build-system]
-requires = ["setuptools==65.6.3", "conan==1.64", "cmake==3.26.4", "setuptools_scm[toml]==7.1.0"]
+# setuptools >68.0.0 is incompatible with macos-13
+# setuptools_scm >7.1.0 is incompatible with Python 3.7
+requires = ["setuptools==68.0.0", "conan==2.5.0", "cmake==3.24", "setuptools_scm[toml]==7.1.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "hyperon"
 description = "Hyperon API in Python"
 readme = "README.md"
-requires-python = ">=3.7,<3.12"
+requires-python = ">=3.7"
 keywords = ["metta", "hyperon", "opencog"]
 license = {text = "MIT License"}
 classifiers = [

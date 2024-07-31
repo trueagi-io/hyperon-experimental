@@ -83,10 +83,10 @@ page](https://www.rust-lang.org/tools/install). Make sure your
 Rust (see the Notes at the installation page).
 
   Requirements for building C and Python API
-  * Python3 and Python3-dev (3.7 or later, but not 3.12)
+  * Python3 and Python3-dev (3.7 or later)
   * Pip (23.1.2 or later)
   * GCC (7.5 or later)
-  * CMake (3.19 or later)
+  * CMake (3.24 or later)
 
   To support Git based modules (enabled by default):
   * OpenSSL library
@@ -99,8 +99,8 @@ cargo install --force cbindgen
 
 * Install Conan and make default Conan profile:
 ```
-python3 -m pip install conan==1.64
-conan profile new --detect default
+python3 -m pip install conan==2.5.0
+conan profile detect --force
 ```
 
 * Upgrade Pip to the required version:
@@ -135,7 +135,7 @@ cargo run --example sorted_list
 
 Run Rust REPL:
 ```
-cargo run --features no_python --bin metta-repl
+cargo run --bin metta-repl
 ```
 You can also find executable at `./target/debug/metta-repl`.
 
@@ -193,9 +193,11 @@ metta-py ./tests/scripts/<name>.metta
 
 Run REPL:
 ```
-cargo run --bin metta-repl
+cargo run --features python --bin metta-repl
 ```
 You can also find executable at `./target/debug/metta-repl`.
+
+Running the REPL with Python support in a Python virtual environment like PyEnv or Conda requires additional configuration.  See [troubleshooting](#rust-repl-cannot-load-python-library)
 
 ### Logger
 
@@ -236,21 +238,19 @@ If you see the following `cmake` output:
 ```
 ERROR: Not able to automatically detect '/usr/bin/cc' version
 ERROR: Unable to find a working compiler
-WARN: Remotes registry file missing, creating default one in /root/.conan/remotes.json
-ERROR: libcheck/0.15.2: 'settings.compiler' value not defined
 ```
 Try to create the default Conan profile manually:
 ```
-conan profile new --detect default
+conan profile detect --force
 ```
 If it doesn't help, then try to manually add `compiler`, `compiler.version` and
 `compiler.libcxx` values in the default Conan profile
-(`~/.conan/profiles/default`).
+(`~/.conan2/profiles/default`).
 For example:
 ```
-conan profile update settings.compiler=gcc default
-conan profile update settings.compiler.version=7 default
-conan profile update settings.compiler.libcxx=libstdc++ default
+compiler=gcc
+compiler.version=7
+compiler.libcxx=libstdc++
 ```
 
 ### Rust compiler shows errors
@@ -274,6 +274,40 @@ ModuleNotFoundError: No module named 'hyperonpy'
 
 Please ensure you have installed the Python module, see
 [Running Python and MeTTa examples](#running-python-and-metta-examples).
+
+### Rust REPL cannot load Python library
+
+The REPL needs a path to the libpython library in the current environment.  This can be done one of two ways:
+
+#### On Linux
+
+##### Use `patchelf` on resulting REPL binary to link it with `libpython.so`
+```
+ldd target/debug/metta-repl | grep libpython ; to find <libpython-name>
+patchelf --replace-needed <libpython-name> <path-to-libpython-in-virtual-env> target/debug/metta-repl
+```
+This must be redone each time the repl is rebuilt, e.g. with `cargo build`.
+
+##### Set the `LD_LIBRARY_PATH` environment variable prior to launching `metta-repl`
+```
+export LD_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env>
+```
+
+#### On Mac OS
+##### Use `install_name_tool` to change the REPL binary's link path for `libpython`
+```
+otool -L target/debug/metta-repl | grep libpython ; to find <libpython-name>
+install_name_tool -change <libpython-name> <path-to-libpython-in-virtual-env> target/debug/metta-repl
+```
+This must be redone each time the repl is rebuilt, e.g. with `cargo build`.
+
+##### Set the `DYLD_FALLBACK_LIBRARY_PATH` environment variable prior to launching `metta-repl`
+```
+export DYLD_FALLBACK_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env>
+```
+This can be done in your `~/.bashrc` file if you don't want to do it each time you launch the REPL.
+
+For more information about linking `libpython`, see [#432](https://github.com/trueagi-io/hyperon-experimental/issues/432).
 
 # Development
 
