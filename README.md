@@ -112,6 +112,7 @@ Caveat: ensure that no old, say, 3.6 version of python is installed with
 pyenv as it will be picked up quite against your will, even if not
 activated, in a section of the build pertaining to pybind11. The python
 version constraints thus apply even to unactivated pyenv python version.
+See #749 for details.
 
 # Build and run
 
