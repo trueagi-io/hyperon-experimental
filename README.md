@@ -213,14 +213,14 @@ For example, to log all hyperon messages at the `debug` level and
 below, while running `script.metta`, you may type:
 
 ```
-RUST_LOG=hyperon=debug metta script.metta
+RUST_LOG=hyperon=debug metta-py script.metta
 ```
 
 Or, to log all hyperon messages at the `trace` level and below,
 restricted to module `metta` and submodule `types`, you may type:
 
 ```
-RUST_LOG=hyperon::metta::types=trace metta script.metta
+RUST_LOG=hyperon::metta::types=trace metta-py script.metta
 ```
 
 By default all log messages are directed to stderr.
