@@ -7,14 +7,15 @@ pre-alpha stage of development and experimentation. One of the focuses in the Hy
 to the OpenCog Classic Atomese language with clear semantics supporting meta-language features,
 different types of inference, etc. What we have landed on is an "Atomese 2" language called MeTTa (Meta Type Talk).
 
-In order to get familiar with MeTTa one can read [MeTTa specification](https://wiki.opencog.org/w/File:MeTTa_Specification.pdf)
-and watch video with different [MeTTa example explained](https://singularitynet.zoom.us/rec/share/VqHmU37XtbS7VnKY474tkTvvTglsgOIfsI-21MXWxVm_in7U3tGPcfjjiE0P_15R.yUwPdCzEONSUx1EL?startTime=1650636238000).
+In order to get familiar with MeTTa one can visit [MeTTa website](https://metta-lang.dev)
+and watch video with different [MeTTa examples explained](https://singularitynet.zoom.us/rec/share/VqHmU37XtbS7VnKY474tkTvvTglsgOIfsI-21MXWxVm_in7U3tGPcfjjiE0P_15R.yUwPdCzEONSUx1EL?startTime=1650636238000).
 The examples of MeTTa programs can be found in [./python/tests/scripts](./python/tests/scripts) directory.
 Please look at the [Python unit tests](./python/tests) to understand how one can use MeTTa from Python.
 More complex usage scenarios are located at [MeTTa examples repo](https://github.com/trueagi-io/metta-examples).
 A lot of different materials can be found on [OpenCog wiki server](https://wiki.opencog.org/w/Hyperon).
+Also see [MeTTa specification](https://wiki.opencog.org/w/File:MeTTa_Specification.pdf).
 
-If you want to contribute the project please see the [contribution guide](./docs/CONTRIBUTING.md) first.
+If you want to contribute the project please see the [contributing guide](./docs/CONTRIBUTING.md) first.
 If you find troubles with the installation, see the [Troubleshooting](#troubleshooting) section below.
 For development related instructions see the [development guide](./docs/DEVELOPMENT.md).
 
@@ -26,32 +27,36 @@ The following command installs the latest release version from PyPi package repo
 python3 -m pip install hyperon
 ```
 
-# Prepare development environment
-
-## Docker
-
-A docker image can be used as a ready to run stable and predictable development
-environment. Please keep in mind that resulting image contains temporary build
-files and takes a lot of a disk space. It is not recommended to distribute it
-as an image for running MeTTa because of its size.
-
-### Ready to use image
-
-Run latest docker image from the Dockerhub:
+Another way is using released Docker image:
 ```
 docker run -ti trueagi/hyperon:latest
 ```
 
-### Build image
+After installing package or starting Docker container run MeTTa Python based
+interpreter:
+```
+metta-py
+```
 
-Docker 26.0.0 or greater version is required.
+Using Docker you can also run Rust REPL:
+```
+metta-repl
+```
+
+# Using latest development version
+
+## Docker
+
+A docker image can be used as a ready to run stable and predictable development
+environment. Docker 26.0.0 or greater version is required to build image
+manually.
 
 Build Docker image from a local copy of the repo running:
 ```
 docker build -t trueagi/hyperon .
 ```
 
-Or build it without cloning the repo running:
+Or build it without local copy of the repo running:
 ```
 docker build \
     --build-arg BUILDKIT_CONTEXT_KEEP_GIT_DIR=1 \
@@ -59,9 +64,10 @@ docker build \
     http://github.com/trueagi-io/hyperon-experimental.git#main
 ```
 
-Run the image:
+Use `--target build` option to create an image which keeps the full build
+environment and can be used for developing interpreter:
 ```
-docker run --rm -ti trueagi/hyperon
+docker build --target build -t trueagi/hyperon .
 ```
 
 If the docker image doesn't work, please raise an
@@ -77,10 +83,14 @@ page](https://www.rust-lang.org/tools/install). Make sure your
 Rust (see the Notes at the installation page).
 
   Requirements for building C and Python API
-  * Python3 and Python3-dev (3.7 or later, but not 3.12)
+  * Python3 and Python3-dev (3.7 or later)
   * Pip (23.1.2 or later)
   * GCC (7.5 or later)
-  * CMake (3.19 or later)
+  * CMake (3.24 or later)
+
+  To support Git based modules (enabled by default):
+  * OpenSSL library
+  * Zlib library
 
 * Install cbindgen:
 ```
@@ -89,8 +99,8 @@ cargo install --force cbindgen
 
 * Install Conan and make default Conan profile:
 ```
-python3 -m pip install conan==1.64
-conan profile new --detect default
+python3 -m pip install conan==2.5.0
+conan profile detect --force
 ```
 
 * Upgrade Pip to the required version:
@@ -111,8 +121,7 @@ The experimental features can be enabled by editing
 [Cargo.toml](./lib/Cargo.toml) file before compilation or by using `--features`
 [command line option](https://doc.rust-lang.org/cargo/reference/features.html#command-line-feature-options).
 See comments in the `[features]` section of the file for the features
-descriptions. For example to turn on minimal MeTTa interpreter one can add
-"minimal" to default in [Cargo.toml](./lib/Cargo.toml)
+descriptions.
 
 Run examples:
 ```
@@ -121,9 +130,9 @@ cargo run --example sorted_list
 
 Run Rust REPL:
 ```
-cargo run --features no_python --bin metta
+cargo run --bin metta-repl
 ```
-You can also find executable at `./target/debug/metta`.
+You can also find executable at `./target/debug/metta-repl`.
 
 To enable logging during running tests or examples export `RUST_LOG`
 environment variable:
@@ -174,18 +183,20 @@ pytest ./tests
 
 One can run MeTTa script from command line:
 ```
-metta ./tests/scripts/<name>.metta
+metta-py ./tests/scripts/<name>.metta
 ```
 
 Run REPL:
 ```
-cargo run --bin metta
+cargo run --features python --bin metta-repl
 ```
-You can also find executable at `./target/debug/metta`.
+You can also find executable at `./target/debug/metta-repl`.
+
+Running the REPL with Python support in a Python virtual environment like PyEnv or Conda requires additional configuration.  See [troubleshooting](#rust-repl-cannot-load-python-library)
 
 ### Logger
 
-You can enable logging by prefixing the `metta` command line by
+You can enable logging by prefixing the MeTTa command line by
 
 ```
 RUST_LOG=hyperon[::COMPONENT]*=LEVEL
@@ -222,21 +233,19 @@ If you see the following `cmake` output:
 ```
 ERROR: Not able to automatically detect '/usr/bin/cc' version
 ERROR: Unable to find a working compiler
-WARN: Remotes registry file missing, creating default one in /root/.conan/remotes.json
-ERROR: libcheck/0.15.2: 'settings.compiler' value not defined
 ```
 Try to create the default Conan profile manually:
 ```
-conan profile new --detect default
+conan profile detect --force
 ```
 If it doesn't help, then try to manually add `compiler`, `compiler.version` and
 `compiler.libcxx` values in the default Conan profile
-(`~/.conan/profiles/default`).
+(`~/.conan2/profiles/default`).
 For example:
 ```
-conan profile update settings.compiler=gcc default
-conan profile update settings.compiler.version=7 default
-conan profile update settings.compiler.libcxx=libstdc++ default
+compiler=gcc
+compiler.version=7
+compiler.libcxx=libstdc++
 ```
 
 ### Rust compiler shows errors
@@ -260,6 +269,40 @@ ModuleNotFoundError: No module named 'hyperonpy'
 
 Please ensure you have installed the Python module, see
 [Running Python and MeTTa examples](#running-python-and-metta-examples).
+
+### Rust REPL cannot load Python library
+
+The REPL needs a path to the libpython library in the current environment.  This can be done one of two ways:
+
+#### On Linux
+
+##### Use `patchelf` on resulting REPL binary to link it with `libpython.so`
+```
+ldd target/debug/metta-repl | grep libpython ; to find <libpython-name>
+patchelf --replace-needed <libpython-name> <path-to-libpython-in-virtual-env> target/debug/metta-repl
+```
+This must be redone each time the repl is rebuilt, e.g. with `cargo build`.
+
+##### Set the `LD_LIBRARY_PATH` environment variable prior to launching `metta-repl`
+```
+export LD_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env>
+```
+
+#### On Mac OS
+##### Use `install_name_tool` to change the REPL binary's link path for `libpython`
+```
+otool -L target/debug/metta-repl | grep libpython ; to find <libpython-name>
+install_name_tool -change <libpython-name> <path-to-libpython-in-virtual-env> target/debug/metta-repl
+```
+This must be redone each time the repl is rebuilt, e.g. with `cargo build`.
+
+##### Set the `DYLD_FALLBACK_LIBRARY_PATH` environment variable prior to launching `metta-repl`
+```
+export DYLD_FALLBACK_LIBRARY_PATH=<path-to-libpython-directory-in-virtual-env>
+```
+This can be done in your `~/.bashrc` file if you don't want to do it each time you launch the REPL.
+
+For more information about linking `libpython`, see [#432](https://github.com/trueagi-io/hyperon-experimental/issues/432).
 
 # Development
 

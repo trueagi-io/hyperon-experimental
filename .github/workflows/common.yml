@@ -21,7 +21,7 @@ on:
         type: string
       cmake-version:
         description: "CMake version to use"
-        default: "3.19.x"
+        default: "3.24.x"
         required: false
         type: string
 
@@ -69,11 +69,11 @@ jobs:
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.2
         with:
-          version: "1.64"
+          version: "2.5.0"
 
       - name: Setup Conan profile
         run: |
-          conan profile new --detect default
+          conan profile detect --force
 
       - name: Print environment
         run: |
@@ -97,8 +97,8 @@ jobs:
           echo "conan Python: $conan_python"
           echo -n "conan Python platform: "
           $conan_python -c "import platform; print(platform.platform())"
-          echo "conan profile show default"
-          conan profile show default
+          echo "conan profile show"
+          conan profile show
           echo "gcc --version"
           gcc --version
           echo "g++ --version"

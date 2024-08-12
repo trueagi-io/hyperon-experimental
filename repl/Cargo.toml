@@ -16,12 +16,11 @@ pep440_rs = { version = "0.3.11", optional = true }
 hyperon = { workspace = true, optional = true } #TODO: We can only link Hyperon directly or through Python, but not both at the same time.  The right fix is to allow HyperonPy to be built within Hyperon, See https://github.com/trueagi-io/hyperon-experimental/issues/283
 
 [[bin]]
-name = "metta"
+name = "metta-repl"
 path = "src/main.rs"
 
 [features]
-default = ["python"]
-no_python = ["hyperon"]
+default = ["hyperon"]
 python = ["pyo3", "pep440_rs"]
-minimal = ["hyperon/minimal", "no_python"] #WARNING: The interpreter belonging to the hyperon python module will be used if hyperon is run through python
+old_interpreter = ["hyperon/old_interpreter"]
 git = ["hyperon/git"]

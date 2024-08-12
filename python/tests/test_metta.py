@@ -34,6 +34,22 @@ class MettaTest(unittest.TestCase):
 
         self.assertEqual([[S('T')]], result)
 
+    def test_metta_evaluate_atom(self):
+        program = '''
+            (= (And T T) T)
+            (= (frog $x)
+                (And (croaks $x)
+                     (eat_flies $x)))
+            (= (croaks Fritz) T)
+            (= (eat_flies Fritz) T)
+            (= (green $x) (frog $x))
+        '''
+        runner = MeTTa(env_builder=Environment.test_env())
+        runner.run(program)
+        result = runner.evaluate_atom(E(S('green'), S('Fritz')))
+
+        self.assertEqual([S('T')], result)
+
     def test_incremental_runner(self):
         program = '''
             !(+ 1 (+ 2 (+ 3 4)))

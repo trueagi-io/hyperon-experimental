@@ -86,6 +86,7 @@
     (@param "Expression in form (Atom Binding)")))
   (@return "Non-deterministic list of Atoms"))
 (: superpose-bind (-> Expression Atom))
+(: metta (-> Atom Type Grounded Atom))
 
 (@doc id
   (@desc "Returns its evaluated input")
@@ -95,15 +96,8 @@
 (: id (-> Atom Atom))
 (= (id $x) $x)
 
-(@doc apply
-  (@desc "Wrapper-function for convenient application of chain function. It takes atom (first argument) variable (second argument) and template (third argument) which contains a variable and sends it to a chain function wrapped into function-return")
-  (@params (
-    (@param "Atom which will be evaluated")
-    (@param "Variable which will contain evaluated atom")
-    (@param "Atom which evaluation will be returned as a result")))
-  (@return "Evaluated third argument"))
-(: apply (-> Atom Variable Atom Atom))
-(= (apply $atom $var $templ)
+(: atom-subst (-> Atom Variable Atom Atom))
+(= (atom-subst $atom $var $templ)
   (function (chain (eval (id $atom)) $var (return $templ))) )
 
 (@doc if-decons-expr
@@ -184,9 +178,36 @@
     (return $template)
     (chain (eval (switch $atom $tail)) $ret (return $ret)) )))
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; MeTTa interpreter implementation ;
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; TODO: Type is used here, but there is no definition for the -> type
+; constructor for instance, thus in practice it matches because -> has
+; %Undefined% type. We need to assign proper type to -> and other type
+; constructors but it is not possible until we support vararg types.
+(@doc is-function
+  (@desc "Function checks if input type is a function type")
+  (@params (
+    (@param "Type notation")))
+  (@return "True if input type notation is a function type, False - otherwise"))
+(: is-function (-> Type Bool))
+(= (is-function $type)
+  (function (chain (eval (get-metatype $type)) $meta
+    (eval (switch ($type $meta) (
+      (($type Expression)
+        (eval (if-decons-expr $type $head $_tail
+          (unify $head -> (return True) (return False))
+          (return (Error (is-function $type) "is-function non-empty expression as an argument")) )))
+      (($type $meta) (return False))
+    ))))))
+
+(= (type-cast $atom $type $space)
+  (function (chain (eval (get-metatype $atom)) $meta
+    (eval (if-equal $type $meta
+      (return $atom)
+      (chain (eval (collapse-bind (eval (get-type $atom $space)))) $collapsed
+        (chain (eval (map-atom $collapsed $pair (eval (first-from-pair $pair)))) $actual-types
+            (chain (eval (foldl-atom $actual-types False $a $b (eval (match-type-or $a $b $type)))) $is-some-comp
+              (eval (if $is-some-comp
+                (return $atom)
+                (return (Error $atom BadType)) ))))))))))
 
 (@doc match-types
   (@desc "Checks if two types are equal and returns third argument if equal, fourth - otherwise. Function also will return third argument if one of the input types is Atom or %Undefined%")
@@ -230,49 +251,11 @@
     (chain (eval (match-types $next $type True False)) $matched
       (chain (eval (or $folded $matched)) $or (return $or)) )))
 
-(= (type-cast $atom $type $space)
-  (function (chain (eval (get-metatype $atom)) $meta
-    (eval (if-equal $type $meta
-      (return $atom)
-      (chain (eval (collapse-bind (eval (get-type $atom $space)))) $collapsed
-        (chain (eval (map-atom $collapsed $pair (eval (first-from-pair $pair)))) $actual-types
-            (chain (eval (foldl-atom $actual-types False $a $b (eval (match-type-or $a $b $type)))) $is-some-comp
-              (eval (if $is-some-comp
-                (return $atom)
-                (return (Error $atom BadType)) ))))))))))
-
-; TODO: Type is used here, but there is no definition for the -> type
-; constructor for instance, thus in practice it matches because -> has
-; %Undefined% type. We need to assign proper type to -> and other type
-; constructors but it is not possible until we support vararg types.
-(@doc is-function-type
-  (@desc "Function checks if input type is a function type")
-  (@params (
-    (@param "Type notation")))
-  (@return "True if input type notation is a function type, False - otherwise"))
-(: is-function (-> Type Bool))
-(= (is-function $type)
-  (function (chain (eval (get-metatype $type)) $meta
-    (eval (switch ($type $meta) (
-      (($type Expression)
-        (eval (if-decons-expr $type $head $_tail
-          (unify $head -> (return True) (return False))
-          (return (Error (is-function $type) "is-function non-empty expression as an argument")) )))
-      (($type $meta) (return False))
-    ))))))
-
-(@doc filter-atom
-  (@desc "Function takes list of atoms (first argument), variable (second argument) and filter predicate (third argument) and returns sublist with items which passed filter. E.g. (filter-atom (1 2 3 4) $v (eval (> $v 2))) will give (3 4)")
-  (@params (
-    (@param "List of atoms")
-    (@param "Variable")
-    (@param "Filter predicate")))
-  (@return "Filtered list"))
 (: filter-atom (-> Expression Variable Atom Expression))
 (= (filter-atom $list $var $filter)
   (function (eval (if-decons-expr $list $head $tail
     (chain (eval (filter-atom $tail $var $filter)) $tail-filtered
-      (chain (eval (apply $head $var $filter)) $filter-expr
+      (chain (eval (atom-subst $head $var $filter)) $filter-expr
         (chain $filter-expr $is-filtered
           (eval (if $is-filtered
             (chain (cons-atom $head $tail-filtered) $res (return $res))
@@ -290,7 +273,7 @@
 (= (map-atom $list $var $map)
   (function (eval (if-decons-expr $list $head $tail
     (chain (eval (map-atom $tail $var $map)) $tail-mapped
-      (chain (eval (apply $head $var $map)) $map-expr
+      (chain (eval (atom-subst $head $var $map)) $map-expr
         (chain $map-expr $head-mapped
           (chain (cons-atom $head-mapped $tail-mapped) $res (return $res)) )))
     (return ()) ))))
@@ -307,150 +290,11 @@
 (: foldl-atom (-> Expression Atom Variable Variable Atom Atom))
 (= (foldl-atom $list $init $a $b $op)
   (function (eval (if-decons-expr $list $head $tail
-    (chain (eval (apply $init $a $op)) $op-init
-      (chain (eval (apply $head $b $op-init)) $op-head
+    (chain (eval (atom-subst $init $a $op)) $op-init
+      (chain (eval (atom-subst $head $b $op-init)) $op-head
         (chain $op-head $head-folded
           (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) )))
     (return $init) ))))
-
-(: separate-errors (-> Expression Expression Expression))
-(= (separate-errors $succ-err $res)
-  (function (unify $succ-err ($suc $err)
-    (unify $res ($a $_b)
-      (eval (if-error $a
-        (chain (cons-atom $res $err) $err' (return ($suc $err')))
-        (chain (cons-atom $res $suc) $suc' (return ($suc' $err))) ))
-      (return $succ-err))
-    (return $succ-err) )))
-
-(@doc check-alternatives
-  (@desc "Interprets all non-deterministic branches and returns non-error only results if they exist. If there are no results without errors then returns only error results.")
-  (@params (
-    (@param "Non-deterministic result")))
-  (@return "Non-error results (or only error results)"))
-(= (check-alternatives $atom)
-  (function
-    (chain (collapse-bind $atom) $collapsed
-;      (chain (eval (print-alternatives! $atom $collapsed)) $_
-      (chain (eval (foldl-atom $collapsed (() ()) $succ-err $res
-        (eval (separate-errors $succ-err $res)))) $separated
-        (unify $separated ($success $error)
-          (chain (eval (if-equal $success () $error $success)) $filtered
-            (chain (superpose-bind $filtered) $ret (return $ret)) )
-          (return (Error (check-alternatives $atom) "list of results was not filtered correctly")) )))))
-
-(@doc interpret
-  (@desc "Function is being called inside metta-call and is a part of interpretation process. It checks type of input atom (first argument) and (depending on the type) returns this atom as is or launches next step of interpretation process (interpret-expression)")
-  (@params (
-    (@param "Atom to be interpreted")
-    (@param "Type of input atom")
-    (@param "Atomspace where intepretation should take place")))
-  (@return "Result of interpretation"))
-(= (interpret $atom $type $space)
-  (function (chain (eval (get-metatype $atom)) $meta
-    (eval (if-equal $type Atom
-      (return $atom)
-      (eval (if-equal $type $meta
-        (return $atom)
-        (eval (switch ($type $meta) (
-          (($type Variable) (return $atom))
-          (($type Symbol)
-            (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
-          (($type Grounded)
-            (chain (eval (type-cast $atom $type $space)) $ret (return $ret)))
-          (($type Expression)
-            (chain (eval (check-alternatives (eval (interpret-expression $atom $type $space)))) $ret (return $ret)))
-        ))))))))))
-
-(@doc interpret-expression
-  (@desc "This function is a part of interpretation process for minimal metta. It is being called inside interpret function. It takes an expression for interpretation (first argument), type of this atom and space where interpretation process will take place")
-  (@params (
-    (@param "Expression to be interpreted")
-    (@param "Type of expression")
-    (@param "Atomspace")))
-  (@return "Interpretation result"))
-(= (interpret-expression $atom $type $space)
-  (function (eval (if-decons-expr $atom $op $args
-    (chain (eval (get-type $op $space)) $op-type
-      (chain (eval (is-function $op-type)) $is-func
-        (unify $is-func True
-          (chain (eval (interpret-func $atom $op-type $type $space)) $reduced-atom
-            (chain (eval (metta-call $reduced-atom $type $space)) $ret (return $ret)) )
-          (chain (eval (interpret-tuple $atom $space)) $reduced-atom
-            (chain (eval (metta-call $reduced-atom $type $space)) $ret (return $ret)) ))))
-    (chain (eval (type-cast $atom $type $space)) $ret (return $ret)) ))))
-
-(@doc interpret-func
-  (@desc "This function is a part of interpretation process for minimal metta. It is being called inside interpret-expression. It takes expression (first argument) its type (second argument), type of return value (third argument) and reference to atomspace where interpretation process should take place and tries to interpret expression as a function")
-  (@params (
-    (@param "Expression")
-    (@param "Type of expression")
-    (@param "Type of return value")
-    (@param "Atomspace")))
-  (@return ""))
-(= (interpret-func $expr $type $ret-type $space)
-  (function (eval (if-decons-expr $expr $op $args
-    (chain (eval (interpret $op $type $space)) $reduced-op
-      (eval (return-on-error $reduced-op
-        (eval (if-decons-expr $type $arrow $arg-types
-          (chain (eval (interpret-args $expr $args $arg-types $ret-type $space)) $reduced-args
-            (eval (return-on-error $reduced-args
-              (chain (cons-atom $reduced-op $reduced-args) $r (return $r)))))
-          (return (Error $type "Function type expected")) )))))
-    (return (Error $expr "Non-empty expression atom is expected")) ))))
-
-(= (interpret-args $atom $args $arg-types $ret-type $space)
-  (function (unify $args ()
-    (eval (if-decons-expr $arg-types $actual-ret-type $type-tail
-      (chain (eval (== () $type-tail)) $correct-type-len
-        (eval (if $correct-type-len
-          (eval (match-types $actual-ret-type $ret-type
-            (return ())
-            (return (Error $atom BadType)) ))
-          (return (Error $atom IncorrectNumberOfArguments)) )))
-      (return (Error $atom IncorrectNumberOfArguments)) ))
-    (eval (if-decons-expr $args $head $tail
-      (eval (if-decons-expr $arg-types $head-type $tail-types
-        (chain (eval (interpret $head $head-type $space)) $reduced-head
-          ; check that head was changed otherwise Error or Empty in the head
-          ; can be just an argument which is passed by intention
-          (eval (if-equal $reduced-head $head
-            (chain (eval (interpret-args-tail $atom $reduced-head $tail $tail-types $ret-type $space)) $ret (return $ret))
-            (eval (return-on-error $reduced-head
-              (chain (eval (interpret-args-tail $atom $reduced-head $tail $tail-types $ret-type $space)) $ret (return $ret)) )))))
-        (return (Error $atom BadType)) ))
-      (return (Error (interpret-atom $atom $args $arg-types $space) "Non-empty expression atom is expected")) )))))
-
-(= (interpret-args-tail $atom $head $args-tail $args-tail-types $ret-type $space)
-  (function (chain (eval (interpret-args $atom $args-tail $args-tail-types $ret-type $space)) $reduced-tail
-    (eval (return-on-error $reduced-tail
-      (chain (cons-atom $head $reduced-tail) $ret (return $ret)) )))))
-
-(= (interpret-tuple $atom $space)
-  (function (unify $atom ()
-    (return $atom)
-    (eval (if-decons-expr $atom $head $tail
-      (chain (eval (interpret $head %Undefined% $space)) $rhead
-        (eval (if-equal $rhead Empty (return Empty)
-          (chain (eval (interpret-tuple $tail $space)) $rtail
-            (eval (if-equal $rtail Empty (return Empty)
-              (chain (cons-atom $rhead $rtail) $ret (return $ret)) ))))))
-      (return (Error (interpret-tuple $atom $space) "Non-empty expression atom is expected as an argument")) )))))
-
-(@doc metta-call
-  (@desc "Call to metta intepreter")
-  (@params (
-    (@param "Atom to be interpreted")
-    (@param "Type of atom")
-    (@param "Space which will be used for interpretation")))
-  (@return "Result of interpretation"))
-(= (metta-call $atom $type $space)
-  (function (eval (if-error $atom (return $atom)
-    (chain (eval $atom) $result
-      (eval (if-equal $result NotReducible (return $atom)
-        (eval (if-equal $result Empty (return Empty)
-          (eval (if-error $result (return $result)
-            (chain (eval (interpret $result $type $space)) $ret (return $ret)) )))))))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Standard library written in MeTTa ;

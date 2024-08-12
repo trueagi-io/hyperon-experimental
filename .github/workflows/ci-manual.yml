@@ -21,7 +21,7 @@ on:
       cmake-version:
         description: 'JSON array of CMake versions to be checked'
         required: true
-        default: "[\"3.19.x\"]"
+        default: "[\"3.24.x\"]"
         type: string
 
 jobs:

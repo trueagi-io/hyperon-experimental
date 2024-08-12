@@ -22,6 +22,7 @@ class DASpace(AbstractSpace):
     def __init__(self, remote=False, host='localhost', port='22', unwrap=True):
         super().__init__()
         # self.das = DistributedAtomSpace('ram_only')
+        self.fetch_flag = False
         if remote:
             self.das = DistributedAtomSpace(query_engine='remote', host=host, port=port)
             self.remote = True
@@ -51,7 +52,7 @@ class DASpace(AbstractSpace):
                 [self._atom2dict_new(ch) for ch in targets]}
         else:
             if isinstance(atom, VariableAtom):
-                return {"atom_type": "variable", "name": repr(atom)}
+                return {"atom_type": "variable", "name": atom.get_name()}
             elif isinstance(atom, SymbolAtom):
                 return {"atom_type": "node", "type": "Symbol", "name": repr(atom)}
             elif isinstance(atom, GroundedAtom):
@@ -62,7 +63,7 @@ class DASpace(AbstractSpace):
         while stack:
             node = stack.pop()
             if isinstance(node, VariableAtom):
-                yield {"atom_type": "variable", "name": repr(node)}
+                yield {"atom_type": "variable", "name": node.get_name()}
             if isinstance(node, ExpressionAtom):
                 targets = node.get_children()
                 for ch in targets:
@@ -77,7 +78,7 @@ class DASpace(AbstractSpace):
                 targets=[self._atom2query(ch) for ch in targets])
         else:
             if isinstance(atom, VariableAtom):
-                return Variable(repr(atom))
+                return Variable(atom.get_name())
             else:
                 return Node("Symbol", repr(atom))
 
@@ -129,12 +130,11 @@ class DASpace(AbstractSpace):
         for a in answer:
             bindings = Bindings()
             if a[0] is None:
-                bindings.add_var_binding("res", self._handle2atom3(a[1]))
+                bindings.add_var_binding(V("res"), self._handle2atom3(a[1]))
             else:
                 mapping = dict(ast.literal_eval(a[0]))
                 for var, val in mapping.items():
-                    # remove '$', because it is automatically added
-                    bindings.add_var_binding(V(var[1:]), self._handle2atom4(val))
+                    bindings.add_var_binding(VariableAtom.parse_name(var), self._handle2atom4(val))
             new_bindings_set.push(bindings)
         return new_bindings_set
 
@@ -149,8 +149,7 @@ class DASpace(AbstractSpace):
                 bindings = Bindings()
                 if not a.assignment is None:
                     for var, val in a.assignment.mapping.items():
-                        # remove '$', because it is automatically added
-                        bindings.add_var_binding(V(var[1:]), self._handle2atom5(val))
+                        bindings.add_var_binding(VariableAtom.parse_name(var), self._handle2atom5(val))
                 new_bindings_set.push(bindings)
         return new_bindings_set
 
@@ -158,11 +157,17 @@ class DASpace(AbstractSpace):
         for mapping, subgraph in answer:
             bindings = Bindings()
             for var, val in mapping.mapping.items():
-                # remove '$', because it is automatically added
-                bindings.add_var_binding(V(var[1:]), self._handle2atom5(val))
+                bindings.add_var_binding(VariableAtom.parse_name(var), self._handle2atom5(val))
             new_bindings_set.push(bindings)
         return new_bindings_set
 
+    def _query_fetch_helper(self, answer, new_bindings_set):
+        for mapping, subgraph in answer:
+            bindings = Bindings()
+            for var, val in mapping.mapping.items():
+                bindings.add_var_binding(VariableAtom.parse_name(var), self._handle2atom(val))
+            new_bindings_set.push(bindings)
+        return new_bindings_set
 
     def query(self, query_atom):
         query = self._atom2dict_new(query_atom)
@@ -179,13 +184,17 @@ class DASpace(AbstractSpace):
         if not answer:
             return new_bindings_set
 
-        if self.remote:
-            return self._query_actual_helper(answer, new_bindings_set)
-            # return self._query_actual_helper_no_iter(answer, new_bindings_set)
-            # return self._query_temp_helper(answer, new_bindings_set)
+        if self.fetch_flag:
+            self.das.fetch()
+            return self._query_fetch_helper(answer, new_bindings_set)
         else:
-            #return self._query_actual_helper_no_iter(answer, new_bindings_set)
-            return self._query_actual_helper(answer, new_bindings_set)
+            if self.remote:
+                return self._query_actual_helper(answer, new_bindings_set)
+                # return self._query_actual_helper_no_iter(answer, new_bindings_set)
+                # return self._query_temp_helper(answer, new_bindings_set)
+            else:
+                #return self._query_actual_helper_no_iter(answer, new_bindings_set)
+                return self._query_actual_helper(answer, new_bindings_set)
 
         # return new_bindings_set
 
@@ -199,8 +208,7 @@ class DASpace(AbstractSpace):
         for a in answer['mapping']:
             bindings = Bindings()
             for var, val in a.mapping.items():
-                # remove '$', because it is automatically added
-                bindings.add_var_binding(V(var[1:]), self._handle2atom(val))
+                bindings.add_var_binding(VariableAtom.parse_name(var), self._handle2atom(val))
             new_bindings_set.push(bindings)
         return new_bindings_set
 

@@ -1,8 +1,0 @@
-__pycache__
-/hyperon.egg-info
-/dist
-/build
-/*.so
-/*.dylib
-/wheelhouse
-/hyperon/_version.py

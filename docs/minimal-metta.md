@@ -171,6 +171,35 @@ separate alternative.
 can collect the list of alternatives using `collapse-bind` filter them and
 return filtered items to the plan using `superpose-bind`.
 
+## Scope of a variable
+
+Each separately evaluated expression is a variable scope, and therefore variable names are treated as unique inside an expression.
+reason is that the whole expression is a variable scope. For example one can
+write the expression `(chain (unify $parent Bob () ()) $_ $parent)`. And value
+of the `$parent` is returned correctly.
+
+When a variable is passed as an argument to a function call and matched by a
+value then the value is assigned to the variable. If variable passed as an
+actual argument is matched by a formal argument variable then it is referenced
+by the formal argument variable. In this case the actual argument variable can
+receive a value outsides of its scope.
+
+For example the following code (written using MeTTa runner syntax) returns `B`:
+```
+(= (foo $b) (function (chain (unify B $b () ()) $_ (return ()))))
+!(chain (eval (foo $a)) $_ $a)
+```
+
+If two separate expressions in the space have a variable with the same
+name, but the variables reside in independent scopes, then the variables are different. Consider the
+following example:
+```
+(= (foo) (function (chain (unify A $a () ()) $_ (return ()))))
+!(chain (eval (foo)) $_ $a)
+```
+Here the value will not be assigned to the `$a` from the caller expression because
+each of the two variables has a different scope and they do not reference each other.
+
 # Examples
 
 Examples of the programs written using minimal MeTTa interpreter:
@@ -325,6 +354,23 @@ used on each exit path while nothing in code of function points to this. Using
 - functions which evaluate result in a loop and have to use `return`;
 - functions which just replace the calling expression by their bodies.
 
+# MeTTa interpreter written in Rust
+
+MeTTa interpreter written in minimal MeTTa has poor performance. To fix this
+the interpreter is rewritten in Rust. Rust implementation can be called using
+`(metta <atom> <type> <space>)` operation. To be able represent process of the
+interpretation as a list of steps and keep ability to control the inference
+`metta` doesn't evaluate passed atom till the end but instead analyses the atom
+and returns the plan written in minimal MeTTa. Plan includes steps written as a
+Rust functions. These steps are called using `(call_native <name> <function>
+<args>)` operation.
+
+Both `metta` and `call_native` could be written as a grounded operations and be
+a part of a standard library. But this requires grounded operations to be able
+returning bindings as a results. Returning bindings as results is a nice to
+have feature anyway to be able representing any functionality as a grounded
+atom. But it is not implemented yet.
+
 # Future work
 
 ## Explicit atomspace variable bindings
@@ -346,11 +392,6 @@ defining different versions of `eval` to program different kinds of chaining.
 Nevertheless defining `eval` through `unify` requires rework of the grounded
 functions interface to allow calling them by executing `unify` instructions.
 Which is an interesting direction to follow.
-
-## Scope of variables
-
-Scope of the variable inside instructions is not described in this
-specification. It is a clear gap and one of the TODO items.
 
 ## Special matching syntax
 

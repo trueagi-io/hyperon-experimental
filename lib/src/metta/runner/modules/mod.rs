@@ -7,12 +7,12 @@ use crate::metta::runner::*;
 
 use regex::Regex;
 
-#[cfg(not(feature = "minimal"))]
+#[cfg(feature = "old_interpreter")]
 use super::stdlib::*;
 
-#[cfg(feature = "minimal")]
+#[cfg(not(feature = "old_interpreter"))]
 use super::interpreter_minimal::interpret;
-#[cfg(feature = "minimal")]
+#[cfg(not(feature = "old_interpreter"))]
 use super::stdlib_minimal::*;
 
 mod mod_names;
@@ -221,7 +221,7 @@ impl MettaMod {
         Ok(())
     }
 
-    /// Returns `true` if a module used [import_all_from_dependency] to import a specific loaded dependency
+    /// Returns `true` if the `self` module has imported the `mod_id` module as a sub-dependency
     pub fn contains_imported_dep(&self, mod_id: &ModId) -> bool {
         let deps_table = self.imported_deps.lock().unwrap();
         deps_table.contains_key(&mod_id)

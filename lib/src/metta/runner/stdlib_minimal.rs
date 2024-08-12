@@ -144,8 +144,9 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
 }
 
 fn interpret(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
-    let expr = Atom::expr([EVAL_SYMBOL, Atom::expr([INTERPRET_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())])]);
-    crate::metta::interpreter_minimal::interpret(space, &expr)
+    let expr = Atom::expr([METTA_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]);
+    let result = crate::metta::interpreter::interpret(space, &expr);
+    result
 }
 
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
@@ -379,8 +380,8 @@ impl CustomExecute for CaseOp {
 
         // Interpreting argument inside CaseOp is required because otherwise `Empty` result
         // calculated inside interpreter cuts the whole branch of the interpretation. Also we
-        // cannot use `unify` in a unit test because after interpreting `(chain... (chain (eval
-        // (interpret (unify ...) Atom <space>))) ...)` `chain` executes `unify` and also gets
+        // cannot use `unify` in a unit test because after interpreting `(chain... (chain
+        // (metta (unify ...) Atom <space>)) ...)` `chain` executes `unify` and also gets
         // `Empty` even if we have `Atom` as a resulting type. It can be solved by different ways.
         // One way is to invent new type `EmptyType` (type of the `Empty` atom) and use this type
         // in a function to allow `Empty` atoms as an input. `EmptyType` type should not be
@@ -596,7 +597,7 @@ mod tests {
     #[test]
     fn metta_cdr_atom() {
         assert_eq!(run_program(&format!("!(cdr-atom (a b c))")), Ok(vec![vec![expr!("b" "c")]]));
-        assert_eq!(run_program(&format!("!(cdr-atom ($a $b $c))")), Ok(vec![vec![expr!(b c)]]));
+        assert_eq!(run_program(&format!("!(cdr-atom ($a b $c))")), Ok(vec![vec![expr!("b" c)]]));
         assert_eq!(run_program(&format!("!(cdr-atom ())")), Ok(vec![vec![expr!("Error" ("cdr-atom" ()) {Str::from_str("cdr-atom expects a non-empty expression as an argument")})]]));
         assert_eq!(run_program(&format!("!(cdr-atom a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" "a") {Str::from_str("cdr-atom expects a non-empty expression as an argument")})]]));
         assert_eq!(run_program(&format!("!(cdr-atom $a)")), Ok(vec![vec![expr!("Error" ("cdr-atom" a) {Str::from_str("cdr-atom expects a non-empty expression as an argument")})]]));
@@ -673,42 +674,42 @@ mod tests {
 
     #[test]
     fn metta_interpret_single_atom_as_atom() {
-        let result = run_program("!(eval (interpret A Atom &self))");
+        let result = run_program("!(metta A Atom &self)");
         assert_eq!(result, Ok(vec![vec![expr!("A")]]));
     }
 
     #[test]
     fn metta_interpret_single_atom_as_meta_type() {
-        assert_eq!(run_program("!(eval (interpret A Symbol &self))"), Ok(vec![vec![expr!("A")]]));
-        assert_eq!(run_program("!(eval (interpret $x Variable &self))"), Ok(vec![vec![expr!(x)]]));
-        assert_eq!(run_program("!(eval (interpret (A B) Expression &self))"), Ok(vec![vec![expr!("A" "B")]]));
-        assert_eq!(run_program("!(eval (interpret 42 Grounded &self))"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
+        assert_eq!(run_program("!(metta A Symbol &self)"), Ok(vec![vec![expr!("A")]]));
+        assert_eq!(run_program("!(metta $x Variable &self)"), Ok(vec![vec![expr!(x)]]));
+        assert_eq!(run_program("!(metta (A B) Expression &self)"), Ok(vec![vec![expr!("A" "B")]]));
+        assert_eq!(run_program("!(metta 42 Grounded &self)"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
     }
 
     #[test]
     fn metta_interpret_symbol_or_grounded_value_as_type() {
-        assert_eq!(run_program("(: a A) !(eval (interpret a A &self))"), Ok(vec![vec![expr!("a")]]));
-        assert_eq!(run_program("(: a A) !(eval (interpret a B &self))"), Ok(vec![vec![expr!("Error" "a" "BadType")]]));
-        assert_eq!(run_program("!(eval (interpret 42 Number &self))"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
+        assert_eq!(run_program("(: a A) !(metta a A &self)"), Ok(vec![vec![expr!("a")]]));
+        assert_eq!(run_program("(: a A) !(metta a B &self)"), Ok(vec![vec![expr!("Error" "a" "BadType")]]));
+        assert_eq!(run_program("!(metta 42 Number &self)"), Ok(vec![vec![expr!({Number::Integer(42)})]]));
     }
 
     #[test]
     fn metta_interpret_variable_as_type() {
-        assert_eq!(run_program("!(eval (interpret $x %Undefined% &self))"), Ok(vec![vec![expr!(x)]]));
-        assert_eq!(run_program("!(eval (interpret $x SomeType &self))"), Ok(vec![vec![expr!(x)]]));
+        assert_eq!(run_program("!(metta $x %Undefined% &self)"), Ok(vec![vec![expr!(x)]]));
+        assert_eq!(run_program("!(metta $x SomeType &self)"), Ok(vec![vec![expr!(x)]]));
     }
 
     #[test]
     fn metta_interpret_empty_expression_as_type() {
-        assert_eq!(run_program("!(eval (interpret () %Undefined% &self))"), Ok(vec![vec![expr!(())]]));
-        assert_eq!(run_program("!(eval (interpret () SomeType &self))"), Ok(vec![vec![expr!(())]]));
+        assert_eq!(run_program("!(metta () %Undefined% &self)"), Ok(vec![vec![expr!(())]]));
+        assert_eq!(run_program("!(metta () SomeType &self)"), Ok(vec![vec![expr!(())]]));
     }
 
     #[test]
     fn metta_interpret_single_atom_as_variable_type() {
         let result = run_program("
             (: S Int)
-            !(chain (eval (interpret S $t &self)) $res (: $res $t))
+            !(chain (metta S $t &self) $res (: $res $t))
         ");
         assert_eq!(result, Ok(vec![vec![expr!(":" "S" "Int")]]));
     }
@@ -720,14 +721,14 @@ mod tests {
             (: foo (-> T T))
             (= (foo $x) $x)
             (= (bar $x) $x)
-            !(eval (interpret (foo (bar a)) %Undefined% &self))
+            !(metta (foo (bar a)) %Undefined% &self)
         ");
         assert_eq!(result, Ok(vec![vec![expr!("a")]]));
         let result = run_program("
             (: b B)
             (: foo (-> T T))
             (= (foo $x) $x)
-            !(eval (interpret (foo b) %Undefined% &self))
+            !(metta (foo b) %Undefined% &self)
         ");
         assert_eq!(result, Ok(vec![vec![expr!("Error" "b" "BadType")]]));
         let result = run_program("
@@ -735,34 +736,34 @@ mod tests {
             (: Z Nat)
             (: S (-> Nat Nat))
             (: Cons (-> $t (List $t) (List $t)))
-            !(eval (interpret (Cons S (Cons Z Nil)) %Undefined% &self))
+            !(metta (Cons S (Cons Z Nil)) %Undefined% &self)
         ");
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("Cons" "Z" "Nil") "BadType")]]));
     }
 
     #[test]
     fn metta_interpret_tuple() {
-        assert_eq!(run_program("!(eval (interpret-tuple () &self))"), Ok(vec![vec![expr!(())]]));
-        assert_eq!(run_program("!(eval (interpret-tuple (a) &self))"), Ok(vec![vec![expr!(("a"))]]));
-        assert_eq!(run_program("!(eval (interpret-tuple (a b) &self))"), Ok(vec![vec![expr!(("a" "b"))]]));
+        assert_eq!(run_program("!(metta () %Undefined% &self)"), Ok(vec![vec![expr!(())]]));
+        assert_eq!(run_program("!(metta (a) %Undefined% &self)"), Ok(vec![vec![expr!(("a"))]]));
+        assert_eq!(run_program("!(metta (a b) %Undefined% &self)"), Ok(vec![vec![expr!(("a" "b"))]]));
         assert_eq!(run_program("
             (= (foo $x) (bar $x))
             (= (bar $x) (baz $x))
             (= (baz $x) $x)
-            !(eval (interpret-tuple ((foo A) (foo B)) &self))
+            !(metta ((foo A) (foo B)) %Undefined% &self)
         "), Ok(vec![vec![expr!("A" "B")]]));
     }
 
     #[test]
     fn metta_interpret_expression_as_type() {
-        assert_eq!(run_program("(= (foo $x) $x) !(eval (interpret (foo a) %Undefined% &self))"), Ok(vec![vec![expr!("a")]]));
-        assert_eq!(run_program("!(eval (interpret (foo a) %Undefined% &self))"), Ok(vec![vec![expr!("foo" "a")]]));
-        assert_eq!(run_program("!(eval (interpret () SomeType &self))"), Ok(vec![vec![expr!(())]]));
+        assert_eq!(run_program("(= (foo $x) $x) !(metta (foo a) %Undefined% &self)"), Ok(vec![vec![expr!("a")]]));
+        assert_eq!(run_program("!(metta (foo a) %Undefined% &self)"), Ok(vec![vec![expr!("foo" "a")]]));
+        assert_eq!(run_program("!(metta () SomeType &self)"), Ok(vec![vec![expr!(())]]));
     }
 
     #[test]
     fn metta_interpret_single_atom_with_two_types() {
-        let result = run_program("(: a A) (: a B) !(eval (interpret a %Undefined% &self))");
+        let result = run_program("(: a A) (: a B) !(metta a %Undefined% &self)");
         assert_eq!(result, Ok(vec![vec![expr!("a")]]));
     }
 
@@ -893,7 +894,7 @@ mod tests {
             (= (is Tweety yellow) True)
             (= (is Tweety eats-flies) True)
 
-            !(eval (interpret (if (and (is $x croaks) (is $x eats-flies)) (= (is $x frog) True) Empty) %Undefined% &self))
+            !(metta (if (and (is $x croaks) (is $x eats-flies)) (= (is $x frog) True) Empty) %Undefined% &self)
         ";
 
         assert_eq!(run_program(program),
@@ -907,7 +908,7 @@ mod tests {
             (= (color) red)
             (= (color) green)
 
-            !(eval (interpret (color) %Undefined% &self))
+            !(metta (color) %Undefined% &self)
         ";
 
         assert_eq_metta_results!(run_program(program),
@@ -921,8 +922,8 @@ mod tests {
             (= (plus Z $y) $y)
             (= (plus (S $k) $y) (S (plus $k $y)))
 
-            !(eval (interpret (eq (plus Z $n) $n) %Undefined% &self))
-            !(eval (interpret (eq (plus (S Z) $n) $n) %Undefined% &self))
+            !(metta (eq (plus Z $n) $n) %Undefined% &self)
+            !(metta (eq (plus (S Z) $n) $n) %Undefined% &self)
         ";
 
         assert_eq_metta_results!(run_program(program),
@@ -937,7 +938,7 @@ mod tests {
             (= (a $z) (mynot (b $z)))
             (= (b d) F)
 
-            !(eval (interpret (myif (a $x) $x) %Undefined% &self))
+            !(metta (myif (a $x) $x) %Undefined% &self)
         ";
 
         assert_eq_metta_results!(run_program(program),
@@ -949,7 +950,7 @@ mod tests {
         let program = "
             (= (a ($W)) True)
 
-            !(eval (interpret (a $W) %Undefined% &self))
+            !(metta (a $W) %Undefined% &self)
         ";
 
         assert_eq_metta_results!(run_program(program),
@@ -961,7 +962,7 @@ mod tests {
         let program = "
             (= (b ($x $y)) (c $x $y))
 
-            !(eval (interpret (a (b $a) $x $y) %Undefined% &self))
+            !(metta (a (b $a) $x $y) %Undefined% &self)
         ";
 
         let result = run_program(program);
@@ -977,7 +978,7 @@ mod tests {
             (= (foo) bar)
             (= (bar $x) $x)
 
-            !(eval (interpret ((foo) a) %Undefined% &self))
+            !(metta ((foo) a) %Undefined% &self)
         ";
 
         assert_eq_metta_results!(run_program(program), Ok(vec![vec![expr!("a")]]));
@@ -1000,7 +1001,7 @@ mod tests {
             (: id_a (-> A A))
             (= (id_a $a) $a)
 
-            !(eval (interpret (id_a myAtom) %Undefined% &self))
+            !(metta (id_a myAtom) %Undefined% &self)
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1011,7 +1012,7 @@ mod tests {
             Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
 
         let program2 = "
-            !(eval (interpret (id_num myAtom) %Undefined% &self))
+            !(metta (id_num myAtom) %Undefined% &self)
         ";
 
         assert_eq!(metta.run(SExprParser::new(program2)),
@@ -1027,7 +1028,7 @@ mod tests {
             (: foo (-> A B C))
             (= (foo $a $b) c)
 
-            !(eval (interpret (foo a b) %Undefined% &self))
+            !(metta (foo a b) %Undefined% &self)
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1037,12 +1038,12 @@ mod tests {
         assert_eq!(metta.run(SExprParser::new(program1)),
             Ok(vec![vec![expr!("c")]]));
 
-        let program2 = "!(eval (interpret (foo a) %Undefined% &self))";
+        let program2 = "!(metta (foo a) %Undefined% &self)";
 
         assert_eq!(metta.run(SExprParser::new(program2)),
             Ok(vec![vec![expr!("Error" ("foo" "a") "IncorrectNumberOfArguments")]]));
 
-        let program3 = "!(eval (interpret (foo a b c) %Undefined% &self))";
+        let program3 = "!(metta (foo a b c) %Undefined% &self)";
 
         assert_eq!(metta.run(SExprParser::new(program3)),
             Ok(vec![vec![expr!("Error" ("foo" "a" "b" "c") "IncorrectNumberOfArguments")]]));
@@ -1051,7 +1052,7 @@ mod tests {
     #[test]
     fn use_sealed_to_make_scoped_variable() {
         assert_eq!(run_program("!(let $x (input $x) (output $x))"), Ok(vec![vec![]]));
-        assert_eq!(run_program("!(let ($sv $st) (sealed ($x) ($x (output $x)))
+        assert_eq!(run_program("!(let (quote ($sv $st)) (sealed ($x) (quote ($x (output $x))))
                (let $sv (input $x) $st))"), Ok(vec![vec![expr!("output" ("input" x))]]));
     }
 
@@ -1060,8 +1061,9 @@ mod tests {
         let program = "
             (= (bar) baz)
             (= (foo) (bar))
-            !(eval (foo))
+            !(foo)
             !(pragma! interpreter bare-minimal)
+            !(foo)
             !(eval (foo))
         ";
 
@@ -1069,6 +1071,7 @@ mod tests {
             Ok(vec![
                 vec![expr!("baz")],
                 vec![UNIT_ATOM()],
+                vec![expr!(("foo"))],
                 vec![expr!(("bar"))],
             ]));
     }
@@ -1088,7 +1091,6 @@ mod tests {
         }
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_func() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1122,7 +1124,6 @@ mod tests {
         ]));
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_atom() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1142,7 +1143,6 @@ mod tests {
         ]));
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_gnd_func() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1173,7 +1173,6 @@ mod tests {
         ]));
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_no_doc() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1190,7 +1189,6 @@ mod tests {
         ]));
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_function_call() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1220,7 +1218,6 @@ mod tests {
         ]));
     }
 
-    #[ignore = "Test is slow"]
     #[test]
     fn test_get_doc_no_type() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
@@ -1247,6 +1244,24 @@ mod tests {
                     ("@param" ("@type" "%Undefined%") ("@desc" {Str::from_str("First argument")}))
                     ("@param" ("@type" "%Undefined%") ("@desc" {Str::from_str("Second argument")})) ))
                 ("@return" ("@type" "%Undefined%") ("@desc" {Str::from_str("Return value")})) )],
+        ]));
+    }
+
+    #[test]
+    fn test_error_is_used_as_an_argument() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new(r#"
+            !(get-type Error)
+            !(get-metatype Error)
+            !(get-type (Error Foo Boo))
+            !(Error (+ 1 2) (+ 1 +))
+        "#);
+
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![
+            vec![expr!("->" "Atom" "Atom" "ErrorType")],
+            vec![expr!("Symbol")],
+            vec![expr!("ErrorType")],
+            vec![expr!("Error" ({SumOp{}} {Number::Integer(1)} {Number::Integer(2)}) ({SumOp{}} {Number::Integer(1)} {SumOp{}}))],
         ]));
     }
 }

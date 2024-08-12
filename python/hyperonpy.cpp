@@ -495,14 +495,9 @@ void py_space_free_payload(void *payload) {
     delete static_cast<PySpace const*>(payload);
 }
 
-void copy_to_list_callback(atom_ref_t var, atom_ref_t atom, void* context){
-
+void copy_pair_of_atoms_to_list_callback(atom_ref_t var, atom_ref_t atom, void* context){
     pybind11::list& var_atom_list = *( (pybind11::list*)(context) );
-
-    var_atom_list.append(
-            std::make_pair(
-                func_to_string((write_to_buf_func_t)&atom_get_name, &var),
-                CAtom(atom)));
+    var_atom_list.append(std::make_pair(CAtom(var), CAtom(atom)));
 }
 
 void atom_copy_to_list_callback(atom_ref_t atom, void* context){
@@ -569,7 +564,13 @@ void load_mod_fmt_callback(const void* payload, run_context_t* run_context, void
     py::object* callback_context_obj = (py::object*)callback_context;
     py::function py_func = fmt_interface_obj->attr("_load_called_from_c");
     CRunContext c_run_context = CRunContext(run_context);
-    py_func(&c_run_context, callback_context_obj);
+    try {
+        py_func(&c_run_context, callback_context_obj);
+    } catch (py::error_already_set &e) {
+        char message[4096];
+        snprintf(message, lenghtof(message), "Exception caught:\n%s", e.what());
+        run_context_raise_error(run_context, message);
+    }
 }
 
 void free_mod_fmt_context(void* callback_context) {
@@ -657,6 +658,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     m.def("atom_sym", [](char const* name) { return CAtom(atom_sym(name)); }, "Create symbol atom");
     m.def("atom_var", [](char const* name) { return CAtom(atom_var(name)); }, "Create variable atom");
+    m.def("atom_var_parse_name", [](char const* name) { return CAtom(atom_var_parse_name(name)); }, "Create variable atom parsing name in format <name>#<id>");
     m.def("atom_expr", [](py::list _children) {
             size_t size = py::len(_children);
             atom_t children[size];
@@ -752,8 +754,8 @@ PYBIND11_MODULE(hyperonpy, m) {
     }, "Merges bindings into a BindingsSet, allowing for conflicting bindings to split");
     m.def("bindings_eq", [](CBindings left, CBindings right){ return bindings_eq(left.ptr(), right.ptr());}, "Compares bindings"  );
     m.def("bindings_add_var_binding",
-          [](CBindings bindings, char const* varName, CAtom atom) {
-              return bindings_add_var_binding(bindings.ptr(), atom_var(varName), atom_clone(atom.ptr()));
+          [](CBindings bindings, CAtom var, CAtom atom) {
+              return bindings_add_var_binding(bindings.ptr(), atom_clone(var.ptr()), atom_clone(atom.ptr()));
           },
           "Links variable to atom" );
     m.def("bindings_is_empty", [](CBindings bindings){ return bindings_is_empty(bindings.ptr());}, "Returns true if bindings is empty");
@@ -762,8 +764,8 @@ PYBIND11_MODULE(hyperonpy, m) {
             bindings_narrow_vars(bindings.ptr(), vars.ptr());
         }, "Remove vars from Bindings, except those specified" );
 
-    m.def("bindings_resolve", [](CBindings bindings, char const* varName) -> nonstd::optional<CAtom> {
-            auto const res = bindings_resolve(bindings.ptr(), varName);
+    m.def("bindings_resolve", [](CBindings bindings, CAtom var) -> nonstd::optional<CAtom> {
+            auto const res = bindings_resolve(bindings.ptr(), atom_clone(var.ptr()));
             return atom_is_null(&res) ? nonstd::nullopt : nonstd::optional<CAtom>(CAtom(res));
         }, "Resolve" );
 
@@ -775,7 +777,7 @@ PYBIND11_MODULE(hyperonpy, m) {
         pybind11::list var_atom_list;
         bindings_traverse(
                 bindings.ptr(),
-                copy_to_list_callback,
+                copy_pair_of_atoms_to_list_callback,
                 &var_atom_list);
 
         return var_atom_list;
@@ -954,7 +956,8 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CAtoms>(m, "CAtoms")
         ADD_ATOM(EMPTY, "Empty")
-        ADD_ATOM(UNIT, "Unit");
+        ADD_ATOM(UNIT, "Unit")
+        ADD_ATOM(METTA, "metta");
 
     py::class_<CRunContext>(m, "CRunContext");
     m.def("run_context_init_self_module", [](CRunContext& run_context, CSpace space, char const* resource_dir) {

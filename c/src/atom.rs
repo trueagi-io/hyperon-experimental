@@ -236,15 +236,27 @@ pub unsafe extern "C" fn atom_expr_from_vec(children: atom_vec_t) -> atom_t {
     Atom::expr(children).into()
 }
 
-/// @brief Create a new Variable atom with the specified identifier
+/// @brief Create a new Variable atom with the specified name
 /// @ingroup atom_group
-/// @param[in]  name  The identifier for the newly created Variable atom
+/// @param[in]  name  The name for the newly created Variable atom
 /// @return An `atom_t` for the Variable atom
 /// @note The caller must take ownership responsibility for the returned `atom_t`
 ///
 #[no_mangle]
 pub unsafe extern "C" fn atom_var(name: *const c_char) -> atom_t {
     Atom::var(cstr_as_str(name)).into()
+}
+
+/// @brief Create a new Variable atom parsing full formatted name of the variable
+/// @ingroup atom_group
+/// @param[in]  name  The name for the newly created Variable atom in a format `<name>#id`
+/// @return An `atom_t` for the Variable atom, returns `atom_t::null()` when parsing fails
+/// @note The caller must take ownership responsibility for the returned `atom_t`
+///
+#[no_mangle]
+pub unsafe extern "C" fn atom_var_parse_name(name: *const c_char) -> atom_t {
+    VariableAtom::parse_name(cstr_as_str(name))
+        .map_or(atom_t::null(), |v| Atom::Variable(v).into())
 }
 
 /// @ingroup atom_group
@@ -1223,15 +1235,18 @@ pub extern "C" fn bindings_is_empty(bindings: *const bindings_t) -> bool{
 /// @brief Returns the atom bound to the supplied variable name in the `bindings_t`
 /// @ingroup matching_group
 /// @param[in]  bindings  A pointer to the `bindings_t` to inspect
-/// @param[in]  var_name  A NULL-terminated C-style string containing the name of the variable
+/// @param[in]  var  The Variable atom (L-value) for the variable <-> atom association
 /// @return The `atom_t` representing the atom that corresponds to the specified variable, or a NULL `atom_ref_t` if the variable is not present.
 /// @note The caller must take ownership responsibility for the returned `atom_t`, if it is not NULL
 ///
 #[no_mangle]
-pub extern "C" fn bindings_resolve(bindings: *const bindings_t, var_name: *const c_char) -> atom_t
+pub extern "C" fn bindings_resolve(bindings: *const bindings_t, var: atom_t) -> atom_t
 {
     let bindings = unsafe{ &*bindings }.borrow();
-    let var = VariableAtom::new(cstr_into_string(var_name));
+    let var = match var.into_inner() {
+        Atom::Variable(variable) => variable,
+        _ => panic!("var argument must be variable atom")
+    };
 
     bindings.resolve(&var).into()
 }

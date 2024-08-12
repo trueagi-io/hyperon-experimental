@@ -1271,7 +1271,7 @@ impl CustomExecute for SubtractionOp {
 }
 
 /// The internal `non_minimal_only_stdlib` module contains code that is never used by the minimal stdlib
-#[cfg(not(feature = "minimal"))]
+#[cfg(feature = "old_interpreter")]
 mod non_minimal_only_stdlib {
     use std::collections::HashSet;
     use super::*;
@@ -1760,7 +1760,7 @@ mod non_minimal_only_stdlib {
 
     //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
     // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
-    #[cfg(not(feature = "minimal"))]
+    #[cfg(feature = "old_interpreter")]
     pub fn register_common_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, _space: &DynSpace, metta: &Metta) {
 
         let match_op = Atom::gnd(MatchOp{});
@@ -1814,7 +1814,7 @@ mod non_minimal_only_stdlib {
 
     //TODO: The metta argument is a temporary hack on account of the way the operation atoms store references
     // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
-    #[cfg(not(feature = "minimal"))]
+    #[cfg(feature = "old_interpreter")]
     pub fn register_runner_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
 
         let capture_op = Atom::gnd(CaptureOp::new(space.clone()));
@@ -1859,7 +1859,7 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"&self"), move |_| { self_atom.clone() });
     }
 
-    #[cfg(not(feature = "minimal"))]
+    #[cfg(feature = "old_interpreter")]
     pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
         let mut rust_tokens = Tokenizer::new();
         let tref = &mut rust_tokens;
@@ -1912,13 +1912,13 @@ mod non_minimal_only_stdlib {
     pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
 }
 
-#[cfg(not(feature = "minimal"))]
+#[cfg(feature = "old_interpreter")]
 pub use non_minimal_only_stdlib::*;
 
-#[cfg(feature = "minimal")]
+#[cfg(not(feature = "old_interpreter"))]
 use super::stdlib_minimal::*;
 
-#[cfg(feature = "minimal")]
+#[cfg(not(feature = "old_interpreter"))]
 use crate::metta::runner::METTA_CODE;
 
 /// Loader to Initialize the corelib module
@@ -1963,7 +1963,7 @@ fn mod_space_op() {
     assert_eq!(result[2], vec![Atom::gnd(stdlib_space)]);
 }
 
-#[cfg(all(test, not(feature = "minimal")))]
+#[cfg(all(test, feature = "old_interpreter"))]
 mod tests {
     use super::*;
     use crate::atom::matcher::atoms_are_equivalent;
@@ -2407,8 +2407,8 @@ mod tests {
     fn let_op_keep_variables_equalities_issue290() {
         assert_eq_metta_results!(run_program("!(let* (($f f) ($f $x)) $x)"), Ok(vec![vec![expr!("f")]]));
         assert_eq_metta_results!(run_program("!(let* (($f $x) ($f f)) $x)"), Ok(vec![vec![expr!("f")]]));
-        assert_eq_metta_results!(run_program("!(let ($x $x) ($z $y) (let $y A ($z $y)))"), Ok(vec![vec![expr!("A" "A")]]));
-        assert_eq_metta_results!(run_program("!(let ($x $x) ($z $y) (let $z A ($z $y)))"), Ok(vec![vec![expr!("A" "A")]]));
+        assert_eq_metta_results!(run_program("!(let (quote ($x $x)) (quote ($z $y)) (let $y A ($z $y)))"), Ok(vec![vec![expr!("A" "A")]]));
+        assert_eq_metta_results!(run_program("!(let (quote ($x $x)) (quote ($z $y)) (let $z A ($z $y)))"), Ok(vec![vec![expr!("A" "A")]]));
     }
 
     #[test]
@@ -2524,11 +2524,11 @@ mod tests {
 
     #[test]
     fn sealed_op_runner() {
-        let nested = run_program("!(sealed ($x) (sealed ($a $b) (= ($a $x $c) ($b))))");
-        let simple_replace = run_program("!(sealed ($x $y) (= ($y) ($z)))");
+        let nested = run_program("!(sealed ($x) (sealed ($a $b) (quote (= ($a $x $c) ($b)))))");
+        let simple_replace = run_program("!(sealed ($x $y) (quote (= ($y $z))))");
 
-        assert!(crate::atom::matcher::atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("="(a b c) (z))));
-        assert!(crate::atom::matcher::atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("="(y) (z))));
+        assert!(crate::atom::matcher::atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("quote" ("=" (a b c) (z)))));
+        assert!(crate::atom::matcher::atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("quote" ("=" (y z)))));
     }
 
     #[test]
@@ -2540,7 +2540,7 @@ mod tests {
     #[test]
     fn use_sealed_to_make_scoped_variable() {
         assert_eq!(run_program("!(let $x (input $x) (output $x))"), Ok(vec![vec![expr!("output" ("input" x))]]));
-        assert_eq!(run_program("!(let ($sv $st) (sealed ($x) ($x (output $x)))
+        assert_eq!(run_program("!(let (quote ($sv $st)) (sealed ($x) (quote ($x (output $x))))
                (let $sv (input $x) $st))"), Ok(vec![vec![expr!("output" ("input" x))]]));
     }
 

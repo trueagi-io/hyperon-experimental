@@ -86,6 +86,12 @@ class VariableAtom(Atom):
         """Returns the name of the Atom."""
         return hp.atom_get_name(self.catom)
 
+    @staticmethod
+    def parse_name(name):
+        """Construct new VariableAtom instance from VariableAtom.get_name()
+        method results."""
+        return VariableAtom(hp.atom_var_parse_name(name))
+
 def V(name):
     """A convenient method to construct a VariableAtom"""
     return VariableAtom(hp.atom_var(name))
@@ -123,6 +129,7 @@ class Atoms:
 
     EMPTY = Atom._from_catom(hp.CAtoms.EMPTY)
     UNIT = Atom._from_catom(hp.CAtoms.UNIT)
+    METTA = Atom._from_catom(hp.CAtoms.METTA)
 
 class GroundedAtom(Atom):
     """
@@ -563,12 +570,9 @@ class Bindings:
         """Merges with another Bindings instance, into a Bindings Set."""
         return BindingsSet(hp.bindings_merge(self.cbindings, other.cbindings))
 
-    def add_var_binding(self, var: Union[str, Atom], atom: Atom) -> bool:
+    def add_var_binding(self, var: VariableAtom, atom: Atom) -> bool:
         """Adds a binding between a variable and an Atom."""
-        if isinstance(var, Atom):
-            return hp.bindings_add_var_binding(self.cbindings, var.get_name(), atom.catom)
-        else:
-            return hp.bindings_add_var_binding(self.cbindings, var, atom.catom)
+        return hp.bindings_add_var_binding(self.cbindings, var.catom, atom.catom)
 
     def is_empty(self) -> bool:
         """Checks if a bindings contains no associations."""
@@ -582,18 +586,15 @@ class Bindings:
         hp.bindings_narrow_vars(self.cbindings, cvars)
         hp.atom_vec_free(cvars)
 
-    def resolve(self, var_name: str) -> Union[Atom, None]:
-        """Finds the atom for a given variable name"""
-        raw_atom = hp.bindings_resolve(self.cbindings, var_name)
+    def resolve(self, var: VariableAtom) -> Union[Atom, None]:
+        """Finds the atom for a given variable"""
+        raw_atom = hp.bindings_resolve(self.cbindings, var.catom)
         return None if raw_atom is None else Atom._from_catom(raw_atom)
 
     def iterator(self):
         """Returns an iterator over the variable-atom pairs in the bindings"""
         res = hp.bindings_list(self.cbindings)
-        result = []
-        for r in res:
-            result.append((r[0], Atom._from_catom(r[1])))
-
+        result = [(Atom._from_catom(r[0]), Atom._from_catom(r[1])) for r in res]
         return iter(result)
 
 class BindingsSet:
@@ -679,15 +680,12 @@ class BindingsSet:
         self.shadow_list = None
         hp.bindings_set_push(self.c_set, bindings.cbindings)
 
-    def add_var_binding(self, var: Union[str, Atom], value: Atom) -> bool:
+    def add_var_binding(self, var: VariableAtom, value: Atom) -> bool:
         """Adds a new variable to atom association to every Bindings frame in a
         BindingsSet.
         """
         self.shadow_list = None
-        if isinstance(var, Atom):
-            return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)
-        else:
-            return hp.bindings_set_add_var_binding(self.c_set, V(var), value.catom)
+        return hp.bindings_set_add_var_binding(self.c_set, var.catom, value.catom)
 
     def add_var_equality(self, a: Atom, b: Atom) -> bool:
         """Asserts equality between two Variable atoms in a BindingsSet."""
@@ -698,17 +696,15 @@ class BindingsSet:
         """Merges the contents of another BindingsSet or Bindings frame."""
         self.shadow_list = None
         if isinstance(input, BindingsSet):
-            hp.bindings_set_merge_into(self.c_set, input.c_set);
+            hp.bindings_set_merge_into(self.c_set, input.c_set)
         else:
-            new_set = BindingsSet(input);
-            hp.bindings_set_merge_into(self.c_set, new_set.c_set);
+            new_set = BindingsSet(input)
+            hp.bindings_set_merge_into(self.c_set, new_set.c_set)
 
     def iterator(self):
         """Returns an iterator over all Bindings frames"""
         res = hp.bindings_set_list(self.c_set)
-        result = []
-        for r in res:
-            result.append(Bindings(r))
+        result = [Bindings(r) for r in res]
         return iter(result)
 
 def get_string_value(value) -> str:

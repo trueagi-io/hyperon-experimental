@@ -30,7 +30,7 @@ pub fn exec_state_should_break() -> bool {
     }
 }
 
-#[cfg(all(feature = "python", not(feature = "no_python")))]
+#[cfg(feature = "python")]
 pub mod metta_interface_mod {
     use std::str::FromStr;
     use std::path::PathBuf;
@@ -51,7 +51,6 @@ pub mod metta_interface_mod {
     }
 
     pub fn confirm_hyperonpy_version(req_str: &str) -> Result<(), String> {
-
         let req = parse_version_specifiers(req_str).unwrap();
         let version_string = get_hyperonpy_version()?;
         //NOTE: Version parsing errors will be encountered by users building hyperonpy from source with an abnormal configuration
@@ -78,7 +77,8 @@ pub mod metta_interface_mod {
 
             match || -> Result<_, String> {
                 //Confirm the hyperonpy version is compatible
-                confirm_hyperonpy_version(">=0.1.0, <0.2.0")?;
+                let req_str = Self::required_hyperon_version();
+                confirm_hyperonpy_version(&req_str)?;
 
                 //Initialize the Hyperon environment
                 let new_shim = MettaShim::init_common_env(working_dir, include_paths)?;
@@ -91,6 +91,11 @@ pub mod metta_interface_mod {
                     std::process::exit(-1);
                 }
             }
+        }
+
+        fn required_hyperon_version() -> String {
+            const PACKAGE_VERSION: &str = env!("CARGO_PKG_VERSION");
+            format!("=={PACKAGE_VERSION}")
         }
 
         pub fn init_common_env(working_dir: PathBuf, include_paths: Vec<PathBuf>) -> Result<MettaShim, String> {
@@ -297,7 +302,7 @@ pub mod metta_interface_mod {
 
 }
 
-/// The "no_python" path involves a reimplementation of all of the MeTTa interface points calling MeTTa
+/// The "no python" path involves a reimplementation of all of the MeTTa interface points calling MeTTa
 /// directly instead of through Python.  Maintaining two paths is a temporary stop-gap solution because
 /// we can only link the Hyperon Rust library through one pathway and the HyperonPy module is that path
 /// when the Python repl is used.
@@ -305,7 +310,7 @@ pub mod metta_interface_mod {
 /// When we have the ability to statically link HyperonPy, we can remove this shim and call
 /// Hyperon and MeTTa from everywhere in the code.  This will likely mean we can get rid of the clumsy
 /// implementations in the "python" version of metta_interface_mod.  See See https://github.com/trueagi-io/hyperon-experimental/issues/283
-#[cfg(feature = "no_python")]
+#[cfg(not(feature = "python"))]
 pub mod metta_interface_mod {
     use std::path::{PathBuf, Path};
     use hyperon::metta::*;

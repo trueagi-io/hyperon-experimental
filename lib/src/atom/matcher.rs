@@ -75,7 +75,7 @@ enum VarResolutionResult<T> {
 }
 
 /// Abstraction of the variable set. It is used to allow passing both
-/// HashSet<&VariableAtom> and HashSet<VariableAtom> to the
+/// `HashSet<&VariableAtom>` and `HashSet<VariableAtom>` to the
 /// [Bindings::narrow_vars] method.
 pub trait VariableSet : Debug {
     type Iter<'a> : Iterator<Item = &'a VariableAtom> where Self: 'a;
@@ -829,7 +829,7 @@ impl Debug for Bindings {
 impl PartialEq for Bindings {
 
     /// This implementation is for testing only. It doesn't take into account
-    /// names of the renamed variables (see [Binding::var]).
+    /// names of the renamed variables (see `Binding::var`).
     fn eq(&self, other: &Self) -> bool {
         for (var, self_binding_id) in &self.binding_by_var {
             match other.binding_by_var.get(var) {
@@ -1001,7 +1001,7 @@ impl BindingsSet {
     ///
     /// NOTE: This function is useful for making a Bindings Iterator that returns no results,
     /// as you might want for a return from a GroundedAtom match function that matched no atoms.
-    /// In other cases, you probably want to use [BinsingsSet::single].
+    /// In other cases, you probably want to use [Self::single].
     pub fn empty() -> Self {
         BindingsSet(smallvec::smallvec![])
     }
@@ -1014,7 +1014,7 @@ impl BindingsSet {
     /// Returns `true` if a BindingsSet contains no Bindings Objects (fully constrained)
     ///
     /// TODO: Need a better name that doesn't conflict with the intuitions about Bindings::is_empty()
-    /// https://github.com/trueagi-io/hyperon-experimental/issues/281
+    /// [issue#281](https://github.com/trueagi-io/hyperon-experimental/issues/281)
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -1022,7 +1022,7 @@ impl BindingsSet {
     /// Returns `true` if a BindingsSet contains no limiting Bindings inside (unconstrained)
     ///
     /// TODO: Need a better word to describe this concept than "single"
-    /// https://github.com/trueagi-io/hyperon-experimental/issues/281
+    /// [issue#281](https://github.com/trueagi-io/hyperon-experimental/issues/281)
     pub fn is_single(&self) -> bool {
         self.len() == 1 && self.0[0].is_empty()
     }
@@ -1076,7 +1076,7 @@ impl BindingsSet {
 /// Iterator over atom matching results. Each result is an instance of [Bindings].
 //TODO: A situation where a MatchResultIter returns an unbounded (infinite) number of results
 // will hang this implementation, on account of `.collect()`
-pub type MatchResultIter = Box<dyn Iterator<Item=matcher::Bindings>>;
+pub type MatchResultIter = Box<dyn Iterator<Item=Bindings>>;
 
 /// Matches two atoms and returns an iterator over results. Atoms are
 /// treated symmetrically.
@@ -1132,6 +1132,10 @@ fn match_atoms_recursively(left: &Atom, right: &Atom) -> BindingsSet {
     let res = match (left, right) {
         (Atom::Symbol(a), Atom::Symbol(b)) if a == b => BindingsSet::single(),
         (Atom::Variable(dv), Atom::Variable(pv)) => BindingsSet::single().add_var_equality(dv, pv),
+        // TODO: If GroundedAtom is matched with VariableAtom there are
+        // two way to calculate match: (1) pass variable to the
+        // GroundedAtom::match(); (2) assign GroundedAtom to the Variable.
+        // Returning both results breaks tests right now.
         (Atom::Variable(v), b) => BindingsSet::single().add_var_binding(v, b),
         (a, Atom::Variable(v)) => BindingsSet::single().add_var_binding(v, a),
         (Atom::Expression(ExpressionAtom{ children: a }), Atom::Expression(ExpressionAtom{ children: b }))
@@ -1141,17 +1145,13 @@ fn match_atoms_recursively(left: &Atom, right: &Atom) -> BindingsSet {
                 acc.merge(&match_atoms_recursively(a, b))
             })
         },
-        // TODO: one more case for the special flag to see if GroundedAtom is
-        // matchable. If GroundedAtom is matched with VariableAtom there are
-        // two way to calculate match: (1) pass variable to the
-        // GroundedAtom::match(); (2) assign GroundedAtom to the Variable.
-        // Returning both results breaks tests right now.
-        (Atom::Grounded(a), _) => {
-            a.match_(right).collect()
+        (Atom::Grounded(a), _) if a.as_grounded().as_match().is_some() => {
+            a.as_grounded().as_match().unwrap().match_(right).collect()
         },
-        (_, Atom::Grounded(b)) => {
-            b.match_(left).collect()
+        (_, Atom::Grounded(b)) if b.as_grounded().as_match().is_some() => {
+            b.as_grounded().as_match().unwrap().match_(left).collect()
         },
+        (Atom::Grounded(a), Atom::Grounded(b)) if a.eq_gnd(AsRef::as_ref(b)) => BindingsSet::single(),
         _ => BindingsSet::empty(),
     };
     log::trace!("match_atoms_recursively: {} ~ {} => {}", left, right, res);

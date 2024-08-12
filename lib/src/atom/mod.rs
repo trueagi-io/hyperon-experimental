@@ -60,12 +60,12 @@
 /// ```
 /// #[macro_use]
 /// use hyperon::expr;
-/// use hyperon::common::MUL;
+/// use hyperon::metta::runner::arithmetics::MulOp;
 ///
 /// let sym = expr!("A");
 /// let var = expr!(x);
 /// let gnd = expr!({42});
-/// let expr = expr!("=" ("*2" n) ({MUL} n {2}));
+/// let expr = expr!("=" ("*2" n) ({MulOp{}} n {2}));
 ///
 /// assert_eq!(sym.to_string(), "A");
 /// assert_eq!(var.to_string(), "$x");
@@ -215,17 +215,61 @@ pub struct VariableAtom {
 }
 
 impl VariableAtom {
-    /// Constructs new variable using `name` provided. Usually [Atom::var]
-    /// should be preffered. But sometimes [VariableAtom] instance is required.
-    /// For example for using as a key in variable bindings (see [matcher::Bindings]).
+    /// Constructs new variable using `name` provided. Name should not contain
+    /// `#` characted which is reserved for internal name formatting (see
+    /// [VariableAtom::parse_name]). Usually [Atom::var] method should be used
+    /// to create new variable atom instance. But sometimes [VariableAtom]
+    /// instance is required. For example for using as a key in variable bindings
+    /// (see [matcher::Bindings]).
     pub fn new<T: Into<String>>(name: T) -> Self {
-        Self{ name: name.into(), id: 0 }
+        Self{ name: Self::check_name(name), id: 0 }
     }
 
     /// Constructs new variable using `name` and 'id' provided. This method is
-    /// used to convert C API [matcher::Bindings] to Rust.
+    /// used to construct proper variable for testing purposes only.
     pub fn new_id<T: Into<String>>(name: T, id: usize) -> Self {
-        Self{ name: name.into(), id: id }
+        Self{ name: Self::check_name(name), id }
+    }
+
+    #[inline]
+    fn check_name<T: Into<String>>(name: T) -> String {
+        let name = name.into();
+        assert!(name.find('#').is_none(), "character # is reserved and cannot be used in a variable name");
+        name
+    }
+
+    /// Constructs new variable instance by parsing name in format `<name>[#<id>]`.
+    /// Used to construct variable from result of the [VariableAtom::name] results.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use hyperon::VariableAtom;
+    ///
+    /// let x0 = VariableAtom::parse_name("x");
+    /// let x42 = VariableAtom::parse_name("x#42");
+    /// let xn = VariableAtom::parse_name("x#");
+    /// let xe = VariableAtom::parse_name("x#42#");
+    ///
+    /// assert_eq!(x0, Ok(VariableAtom::new_id("x", 0)));
+    /// assert_eq!(x42, Ok(VariableAtom::new_id("x", 42)));
+    /// assert_eq!(xn, Err(format!("Variable name is expected to contain number after # sign")));
+    /// assert_eq!(xe, Err(format!("Variable name should have the following format: name[#id], actual name is x#42#")));
+    /// ```
+    pub fn parse_name(formatted: &str) -> Result<Self, String> {
+        let mut parts = formatted.split('#');
+        let name = parts.next().unwrap().to_string();
+        if name.is_empty() {
+            return Err(format!("Variable name should be non empty"));
+        }
+        let id: usize = match parts.next() {
+            Some(id) => id.parse().map_err(|_| "Variable name is expected to contain number after # sign")?,
+            None => 0,
+        };
+        if !parts.next().is_none() {
+            return Err(format!("Variable name should have the following format: name[#id], actual name is {formatted}"));
+        }
+        Ok(Self{ name, id })
     }
 
     // TODO: for now name() is used to expose keys of Bindings via C API as
@@ -345,23 +389,6 @@ pub trait GroundedAtom : Any + Debug + Display {
     // by its alpha equivalent with unique variables
     fn type_(&self) -> Atom {
         self.as_grounded().type_()
-    }
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        match self.as_grounded().as_match() {
-            Some(match_) => match_.match_(other),
-            None => {
-                let equal = match other {
-                    Atom::Grounded(other) => self.eq_gnd(other.as_ref()),
-                    _ => false,
-                };
-                let result = if equal {
-                    matcher::BindingsSet::single()
-                } else {
-                    matcher::BindingsSet::empty()
-                };
-                Box::new(result.into_iter())
-            },
-        }
     }
     // A mutable reference is used here instead of a type parameter because
     // the type parameter makes impossible using GroundedAtom reference in the
@@ -594,7 +621,13 @@ pub fn match_by_bidirectional_equality<T>(this: &T, other: &Atom) -> matcher::Ma
     } else {
         let temp_atom = Atom::gnd(this.clone());
         match other {
-            Atom::Grounded(gnd) => gnd.match_(&temp_atom),
+            Atom::Grounded(gnd) => {
+                if let Some(matchable) = gnd.as_grounded().as_match() {
+                    matchable.match_(&temp_atom)
+                } else {
+                    Box::new(std::iter::empty())
+                }
+            },
             _ => Box::new(std::iter::empty()),
         }
     }
