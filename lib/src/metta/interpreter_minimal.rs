@@ -554,12 +554,13 @@ fn query<'a, T: Space>(space: T, prev: Option<Rc<RefCell<Stack>>>, to_eval: Atom
             log::debug!("interpreter_minimal::query: b: {}", b);
             b.merge_v2(&bindings).into_iter()
         }).filter_map(move |b| {
-            let res = b.resolve(&var_x).unwrap();
-            if b.has_loops() {
-                None
-            } else {
-                Some(result(res, b))
-            }
+            b.resolve(&var_x).map_or(None, |res| {
+                if b.has_loops() {
+                    None
+                } else {
+                    Some(result(res, b))
+                }
+            })
         })
         .collect()
     }
@@ -1408,6 +1409,13 @@ mod tests {
     fn interpret_atom_evaluate_pure_expression_no_definition() {
         let result = call_interpret(&space(""), &metta_atom("(eval (foo A))"));
         assert_eq!(result, vec![metta_atom("NotReducible")]);
+    }
+
+    #[test]
+    fn interpret_atom_evaluate_pure_expression_variable_in_space() {
+        let space = space("$t (= (foo $a B) $a)");
+        let result = call_interpret(&space, &metta_atom("(eval (foo A $b))"));
+        assert_eq!(result, vec![metta_atom("A")]);
     }
 
     #[test]
