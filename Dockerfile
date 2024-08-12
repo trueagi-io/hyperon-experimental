@@ -2,10 +2,10 @@ FROM python:3.10-slim-bookworm AS os
 
 FROM os AS build
 
-RUN apt update && \
+RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive \
     TZ=UTC \
-    apt install -y sudo git curl cmake build-essential \
+    apt-get install -y sudo git curl cmake build-essential \
         pkg-config libssl-dev zlib1g-dev && \
     rm -rf /var/lib/apt/lists/*
 
