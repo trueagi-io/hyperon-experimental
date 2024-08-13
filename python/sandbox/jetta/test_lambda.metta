@@ -15,8 +15,8 @@
     (: goo (-> Int Int Int))
     (= (goo $x $y) (* $x $y))"
 )
-; NOTE: doesn't work for now
-(assertEqual
+; passing a function
+!(assertEqual
   (jetta &jspace "(foo 2 3 goo)")
   6)
 ; checking that passing lamdas directly works
