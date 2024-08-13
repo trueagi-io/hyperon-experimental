@@ -48,15 +48,15 @@ def jetta_unwrap_atom(j_space_a: Atom, code_a: Atom,
     """
     j_space = j_space_a.get_object().value
     if isinstance(code_a, GroundedAtom):
-        code = code_a.get_object().value
-    else:
-        code = repr(code_a)
+        code_a = code_a.get_object().value
+    if not isinstance(code_a, str):
+        code_a = repr(code_a)
     url = url_a.get_object().value
     try:
-        result = jetta(j_space, code, url)
+        result = jetta(j_space, code_a, url)
         return [Atoms.UNIT if result is None else ValueAtom(result)]
     except JettaServerError as e:
-        return _err_msg(code, e)
+        return _err_msg(code_a, e)
         #return [E(S('Error'), ValueAtom(code),
         #          E(S('JettaCompileError'), ValueAtom(str(e))))]
 
