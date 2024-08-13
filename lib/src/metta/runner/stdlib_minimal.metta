@@ -218,7 +218,7 @@
     (@param "Atom to be casted")
     (@param "Type to cast atom to")
     (@param "Context atomspace")))
-  (@return "Atom if casting is successfule, (Error ... BadType) otherwise"))
+  (@return "Atom if casting is successful, (Error ... BadType) otherwise"))
 (= (type-cast $atom $type $space)
   (function (chain (eval (get-metatype $atom)) $meta
     (eval (if-equal $type $meta
