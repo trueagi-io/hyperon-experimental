@@ -9,34 +9,33 @@
 (@doc ErrorType (@desc "Type of the atom which contains error"))
 (: ErrorType Type)
 
-; TODO: help! not working for Error
 (@doc Error
   (@desc "Error constructor")
   (@params (
     (@param "Atom which contains error")
     (@param "Error message, can be one of the reserved symbols: BadType, IncorrectNumberOfArguments")))
-  (@return "Error atom"))
+  (@return "Instance of the error atom"))
 (: Error (-> Atom Atom ErrorType))
 
 (@doc return
-  (@desc "Explicitly defines a return value of a function")
+  (@desc "Returns value from the (function ...) expression")
   (@params (
     (@param "Value to be returned")))
-  (@return "Evaluated input"))
+  (@return "Passed argument"))
 (: return (-> $t $t))
 
 (@doc function
-  (@desc "It evaluates the Atom until it becomes (return Atom). Then (function (return Atom)) expression returns the Atom")
+  (@desc "Evaluates the argument until it becomes (return <result>). Then (function (return <result>)) is reduced to the <result>.")
   (@params (
     (@param "Atom to be evaluated")))
-  (@return "Result of atom's evaluation in form (return Atom)"))
+  (@return "Result of atom's evaluation"))
 (: function (-> Atom Atom))
 
 (@doc eval
-  (@desc "Evaluates input atom")
+  (@desc "Evaluates input atom, makes one step of the evaluation")
   (@params (
-    (@param "Atom to be evaluated")))
-  (@return "Evaluated atom"))
+    (@param "Atom to be evaluated, can be reduced via equality expression (= ...) or by calling a grounded function")))
+  (@return "Result of evaluation"))
 (: eval (-> Atom Atom))
 
 (@doc chain
@@ -86,29 +85,44 @@
     (@param "Expression in form (Atom Binding)")))
   (@return "Non-deterministic list of Atoms"))
 (: superpose-bind (-> Expression Atom))
+
+(@doc metta
+  (@desc "Run MeTTa interpreter on atom.")
+  (@params (
+    (@param "Atom to be interpreted")
+    (@param "Type of input atom")
+    (@param "Atomspace where intepretation should take place")))
+  (@return "Result of interpretation"))
 (: metta (-> Atom Type Grounded Atom))
 
 (@doc id
-  (@desc "Returns its evaluated input")
+  (@desc "Returns its argument")
   (@params (
-    (@param "Atom")))
-  (@return "Evaluated atom"))
+    (@param "Input argument")))
+  (@return "Input argument"))
 (: id (-> Atom Atom))
 (= (id $x) $x)
 
+(@doc atom-subst
+  (@desc "Substitutes variable passed as a second argument in the third argument by the first argument")
+  (@params (
+    (@param "Value to use for replacement")
+    (@param "Variable to replace")
+    (@param "Template to replace variable by the value")))
+  (@return "Template with substituted variable"))
 (: atom-subst (-> Atom Variable Atom Atom))
 (= (atom-subst $atom $var $templ)
   (function (chain (eval (id $atom)) $var (return $templ))) )
 
 (@doc if-decons-expr
-  (@desc "Checks if expression (first argument) after decons-atom is equal to (Variable Variable) (which are the second and third argument) and evaluates fourth argument. Fifth argument - otherwise")
+  (@desc "Checks if first argument is non empty expression. If so gets tail and head from the first argument and returns forth argument using head and tail values. Returns fifth argument otherwise.")
   (@params (
-    (@param "Expression to be deconsed")
-    (@param "First variable")
-    (@param "Second variable")
-    (@param "Atom")
-    (@param "Atom")))
-  (@return "Result of evaluation of fourth or fifth argument"))
+    (@param "Expression to be deconstructed")
+    (@param "Head variable")
+    (@param "Tail variable")
+    (@param "Template to return if first argument is a non-empty expression")
+    (@param "Default value to return otherwise")))
+  (@return "Either template with head and tail replaced by values or default value"))
 (: if-decons-expr (-> Expression Variable Variable Atom Atom Atom))
 (= (if-decons-expr $atom $head $tail $then $else)
   (function (eval (if-equal $atom ()
@@ -117,12 +131,12 @@
       (unify $list ($head $tail) (return $then) (return $else)) )))))
 
 (@doc if-error
-  (@desc "Checks if first argument gives an Error and returns evaluated second argument of True, evaluated third argumend - otherwise")
+  (@desc "Checks if first argument is an error atom. Returns second argument if so or third argument otherwise.")
   (@params (
-    (@param "Atom to be checked for an Error")
-    (@param "Atom which will be evaluated on Error")
-    (@param "Atom which will be evaluated if no Error")))
-  (@return "Evaluated second or third argument"))
+    (@param "Atom to be checked for the error")
+    (@param "Value to return if first argument is an error")
+    (@param "Value to return otherwise")))
+  (@return "Second or third argument"))
 (: if-error (-> Atom Atom Atom Atom))
 (= (if-error $atom $then $else)
   (function (chain (eval (get-metatype $atom)) $meta
@@ -136,11 +150,11 @@
       (return $else) )))))
 
 (@doc return-on-error
-  (@desc "Wrapper function for if-error which takes atom to be checked for an error (first argument) and atom to be evaluated if no error. If error then first argument is returned")
+  (@desc "Returns first argument if it is Empty or an error. Returns second argument otherwise.")
   (@params (
-    (@param "Atom to be checked for an Error")
-    (@param "Atom to be returned if no Error")))
-  (@return "Atom itself (on Error) or second argument (otherwise)"))
+    (@param "Previous evaluation result")
+    (@param "Atom for further evaluation")))
+  (@return "Return previous result if it is an error or Empty or continue evaluation"))
 (: return-on-error (-> Atom Atom Atom))
 (= (return-on-error $atom $then)
   (function (eval (if-equal $atom Empty (return (return Empty))
@@ -158,9 +172,9 @@
 (@doc switch
   (@desc "Subsequently tests multiple pattern-matching conditions (second argument) for the given value (first argument)")
   (@params (
-    (@param "Atom (it will be evaluated)")
+    (@param "Atom to be matched with patterns")
     (@param "Tuple of pairs mapping condition patterns to results")))
-  (@return "Result of evaluating of Atom bound to met condition"))
+  (@return "Result which corresponds to the pattern which is matched with the passed atom first"))
 (: switch (-> %Undefined% Expression Atom))
 (= (switch $atom $cases)
   (function (chain (decons-atom $cases) $list
@@ -185,8 +199,8 @@
 (@doc is-function
   (@desc "Function checks if input type is a function type")
   (@params (
-    (@param "Type notation")))
-  (@return "True if input type notation is a function type, False - otherwise"))
+    (@param "Type atom")))
+  (@return "True if type is a function type, False - otherwise"))
 (: is-function (-> Type Bool))
 (= (is-function $type)
   (function (chain (eval (get-metatype $type)) $meta
@@ -198,6 +212,13 @@
       (($type $meta) (return False))
     ))))))
 
+(@doc type-cast
+  (@desc "Casts atom passed as a first argument to the type passed as a second argument using space as a context")
+  (@params (
+    (@param "Atom to be casted")
+    (@param "Type to cast atom to")
+    (@param "Context atomspace")))
+  (@return "Atom if casting is successful, (Error ... BadType) otherwise"))
 (= (type-cast $atom $type $space)
   (function (chain (eval (get-metatype $atom)) $meta
     (eval (if-equal $type $meta
@@ -210,12 +231,12 @@
                 (return (Error $atom BadType)) ))))))))))
 
 (@doc match-types
-  (@desc "Checks if two types are equal and returns third argument if equal, fourth - otherwise. Function also will return third argument if one of the input types is Atom or %Undefined%")
+  (@desc "Checks if two types can be unified and returns third argument if so, fourth - otherwise")
   (@params (
     (@param "First type")
     (@param "Second type")
-    (@param "Atom to be returned on equality")
-    (@param "Atom to be returned on non-equality")))
+    (@param "Atom to be returned if types can be unified")
+    (@param "Atom to be returned if types cannot be unified")))
   (@return "Third or fourth argument"))
 (= (match-types $type1 $type2 $then $else)
   (function (eval (if-equal $type1 %Undefined%
@@ -240,7 +261,7 @@
       (return (Error (first-from-pair $pair) "incorrect pair format")))))
 
 (@doc match-type-or
-  (@desc "Checks if two types (second and third arguments) are equal and returns result of (or FirstArgument True/False) where True/False is the result of checking types equality using match-types")
+  (@desc "Checks if two types (second and third arguments) can be unified and returns result of OR operation between first argument and type checking result")
   (@params (
     (@param "Boolean value")
     (@param "First type")
@@ -251,6 +272,13 @@
     (chain (eval (match-types $next $type True False)) $matched
       (chain (eval (or $folded $matched)) $or (return $or)) )))
 
+(@doc filter-atom
+  (@desc "Function takes list of atoms (first argument), variable (second argument) and filter predicate (third argument) and returns list with items which passed filter. E.g. (filter-atom (1 2 3 4) $v (eval (> $v 2))) will give (3 4)")
+  (@params (
+    (@param "List of atoms")
+    (@param "Variable")
+    (@param "Filter predicate")))
+  (@return "Filtered list"))
 (: filter-atom (-> Expression Variable Atom Expression))
 (= (filter-atom $list $var $filter)
   (function (eval (if-decons-expr $list $head $tail
@@ -311,7 +339,8 @@
 (= (if True $then $else) $then)
 (= (if False $then $else) $else)
 
-; TODO: help! not working for 'or'
+; TODO: help! not working for operations which are defined in both Python and
+; Rust standard library: or, and, not
 (@doc or
   (@desc "Logical disjunction of two arguments")
   (@params (
@@ -324,7 +353,6 @@
 (= (or True False) True)
 (= (or True True) True)
 
-; TODO: help! not working for 'and'
 (@doc and
   (@desc "Logical conjunction of two arguments")
   (@params (
@@ -337,9 +365,8 @@
 (= (and True False) False)
 (= (and True True) True)
 
-; TODO: help! not working for 'not'
 (@doc not
-  (@desc "Negation")
+  (@desc "Logical negation")
   (@params (
     (@param "Argument")))
   (@return "Negates boolean input argument (False -> True, True -> False)"))
@@ -348,22 +375,22 @@
 (= (not False) True)
 
 (@doc let
-  (@desc "Let function is utilized to establish temporary variable bindings within an expression. It allows introducing variables (first argument), assign values to them (second argument), and then use these values within the scope of the let block")
+  (@desc "Unify two first argument and apply result of the unification on third argument. Second argument is evaluated before unification.")
   (@params (
-    (@param "Variable name (or several variables inside brackets ())")
-    (@param "Expression to be bound to variable (it is being reduced before bind)")
-    (@param "Expression which will be reduced and in which variable (first argument) could be used")))
-  (@return "Result of third argument's evaluation"))
+    (@param "First atom to be unified")
+    (@param "Second atom to be unified")
+    (@param "Expression which will be evaluated if two first arguments can be unified")))
+  (@return "Third argument or Empty"))
 (: let (-> Atom %Undefined% Atom %Undefined%))
 (= (let $pattern $atom $template)
   (unify $atom $pattern $template Empty))
 
 (@doc let*
-  (@desc "Same as let, but first argument is a tuple containing tuples of variables and their bindings, e.g. (($v (+ 1 2)) ($v2 (* 5 6)))")
+  (@desc "Same as let but inputs list of pairs of atoms to be unified. For example (let* (($v1 (+ 1 2)) ($v2 (* 5 6))) (+ $v1 $v2))")
   (@params (
-    (@param "Tuple of tuples with variables and their bindings")
-    (@param "Expression which will be reduced and in which variable (first argument) could be used")))
-  (@return "Result of second argument's evaluation"))
+    (@param "List of pairs, atoms in each pair to be unified")
+    (@param "Expression which will be evaluated if each pair can be unified")))
+  (@return "Second argument or Empty"))
 (: let* (-> Expression Atom %Undefined%))
 (= (let* $pairs $template)
   (eval (if-decons-expr $pairs ($pattern $atom) $tail
@@ -378,7 +405,6 @@
   (@return "Unit atom"))
 (: add-reduct (-> Grounded %Undefined% (->)))
 (= (add-reduct $dst $atom) (add-atom $dst $atom))
-
 
 (@doc car-atom
   (@desc "Extracts the first atom of an expression as a tuple")
@@ -411,7 +437,7 @@
 (= (quote $atom) NotReducible)
 
 (@doc unquote
-  (@desc "Unquotes quoted atom, e.g. (quote $x) -> $x")
+  (@desc "Unquotes quoted atom, e.g. (unquote (quote $x)) returns $x")
   (@params (
     (@param "Quoted atom")))
   (@return "Unquoted atom"))
@@ -738,12 +764,12 @@
   (@return "Atom wrapped by state"))
 
 (@doc match
-  (@desc "Searches for all declared atoms corresponding to the given pattern (second argument) and produces the output pattern (third argument)")
+  (@desc "Searches for all declared atoms corresponding to the given pattern (second argument) inside space (first argument) and returns the output template (third argument)")
   (@params (
-    (@param "A grounded atom referencing a Space")
-    (@param "Pattern atom to be matched")
-    (@param "Output pattern typically containing variables from the input pattern")))
-  (@return "If match was successfull it outputs pattern (third argument) with filled variables (if any were present in pattern) using matched pattern (second argument). Nothing - otherwise"))
+    (@param "Atomspace to search pattern")
+    (@param "Pattern atom to be searched")
+    (@param "Output template typically containing variables from the input pattern")))
+  (@return "If match was successfull it outputs template (third argument) with filled variables (if any were present in pattern) using matched pattern (second argument). Empty - otherwise"))
 
 (@doc register-module!
   (@desc "Takes a file system path (first argument) and loads the module into the runner")
@@ -855,13 +881,14 @@
     (@param "Atom which uses those variables")))
   (@return "Second argument but with variables being replaced with unique variables"))
 
-; TODO: help! not working for bind! (segmentation fault)
+; TODO: help! not working for &self (segmentation fault)
 ;(@doc &self
 ;  (@desc "Returns reference to the current atomspace")
 ;  (@params ())
 ;  (@return "Reference to the current atomspace"))
 
-; TODO: help! not working for '+'
+; TODO: help! not working for operations which are defined in both Python and
+; Rust standard library: +, -, *, /, %, <, >, <=, >=, ==
 (@doc +
   (@desc "Sums two numbers")
   (@params (
@@ -869,7 +896,6 @@
     (@param "Augend")))
   (@return "Sum"))
 
-; TODO: help! not working for '-'
 (@doc -
   (@desc "Subtracts second argument from first one")
   (@params (
@@ -877,7 +903,6 @@
     (@param "Deductible")))
   (@return "Difference"))
 
-; TODO: help! not working for '*'
 (@doc *
   (@desc "Multiplies two numbers")
   (@params (
@@ -885,7 +910,6 @@
     (@param "Multiplicand")))
   (@return "Product"))
 
-; TODO: help! not working for '/'
 (@doc /
   (@desc "Divides first argument by second one")
   (@params (
@@ -893,7 +917,6 @@
     (@param "Divisor")))
   (@return "Fraction"))
 
-; TODO: help! not working for '%'
 (@doc %
   (@desc "Modulo operator. It returns remainder of dividing first argument by second argument")
   (@params (
@@ -901,7 +924,6 @@
     (@param "Divisor")))
   (@return "Remainder"))
 
-; TODO: help! not working for '<'
 (@doc <
   (@desc "Less than. Checks if first argument is less than second one")
   (@params (
@@ -909,7 +931,6 @@
     (@param "Second number")))
   (@return "True if first argument is less than second, False - otherwise"))
 
-; TODO: help! not working for '>'
 (@doc >
   (@desc "Greater than. Checks if first argument is greater than second one")
   (@params (
@@ -917,7 +938,6 @@
     (@param "Second number")))
   (@return "True if first argument is greater than second, False - otherwise"))
 
-; TODO: help! not working for '<='
 (@doc <=
   (@desc "Less than or equal. Checks if first argument is less than or equal to second one")
   (@params (
@@ -925,7 +945,6 @@
     (@param "Second number")))
   (@return "True if first argument is less than or equal to second, False - otherwise"))
 
-; TODO: help! not working for '>='
 (@doc >=
   (@desc "Greater than or equal. Checks if first argument is greater than or equal to second one")
   (@params (
@@ -933,7 +952,6 @@
     (@param "Second number")))
   (@return "True if first argument is greater than or equal to second, False - otherwise"))
 
-; TODO: help! not working for '=='
 (@doc ==
   (@desc "Checks equality for two arguments of the same type")
   (@params (
