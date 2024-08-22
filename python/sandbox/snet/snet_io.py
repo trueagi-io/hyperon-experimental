@@ -12,26 +12,29 @@ class ServiceCall:
 def import_service(org_id, service_id,
         private_key=os.getenv("SNET_PRIVATE_KEY"),
         eth_rpc_endpoint=os.getenv("ETH_RPC_ENDPOINT"),
-        email=os.getenv("SNET_EMAIL", "test@mail.test.com"),
+        email=os.getenv("SNET_EMAIL", None),
         free_call_auth_token_bin=os.getenv("FREE_CALL_AUTH_TOKEN_BIN", None),
-        free_call_token_expiry_block=os.getenv("FREE_CALL_TOKEN_EXPIRE_BLOCK", 20685151)
+        free_call_token_expiry_block=os.getenv("FREE_CALL_TOKEN_EXPIRE_BLOCK", None)
       ):
-    # group_name="default_group"
+    if free_call_token_expiry_block is not None:
+        free_call_token_expiry_block = int(free_call_token_expiry_block)
     config = {
         "private_key": private_key,
         "eth_rpc_endpoint": eth_rpc_endpoint,
         "email": email,
-        "free_call_auth_token-bin": free_call_auth_token_bin,
-        "free-call-token-expiry-block": free_call_token_expiry_block,
         "concurrency": False,
-        "org_id": org_id,
-        "service_id": service_id,
-        "identity_name": "test",
+        "identity_name": "hyperon",
+        "network": "mainnet",
         "identity_type": "key",
-        # "force_update"=True
+        "force_update": False
     }
     snet_sdk = sdk.SnetSDK(config)
-    service_client = snet_sdk.create_service_client()#, group_name)
+
+    service_client = snet_sdk.create_service_client(
+        org_id=org_id, service_id=service_id,
+        #group_name="default_group",
+        free_call_auth_token_bin=free_call_auth_token_bin,
+        free_call_token_expiry_block=free_call_token_expiry_block)
     return ServiceCall(service_client)
 
 @register_atoms()
