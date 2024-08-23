@@ -1,6 +1,6 @@
 !(add-reduct &self
   (= (code-generation)
-     (snet-sdk create_service_client "naint" "code-generation"     
+     (snet-sdk create_service_client "naint" "code-generation"
        ; Put your data here or use environment variables
        ;(Kwargs
        ;  (free_call_auth_token_bin FREE_CALL_AUTH_TOKEN_BIN)
