@@ -959,6 +959,18 @@
     (@param "Second argument")))
   (@return "Returns True if two arguments are equal, False - otherwise. If arguments are of different type function returns Error currently"))
 
+(@doc xor
+  (@desc "Logical exclusive or")
+  (@params (
+    (@param "First argument")
+    (@param "Second argument")))
+  (@return "Returns True if one and only one of the inputs is True"))
+
+(@doc flip
+  (@desc "Random boolean value")
+  (@params ())
+  (@return "Returns uniformly distributed random boolean value"))
+
 (@doc unique
   (@desc "Function takes non-deterministic input (first argument) and returns only unique entities. E.g. (unique (superpose (a b c d d))) -> [a, b, c, d]")
   (@params (

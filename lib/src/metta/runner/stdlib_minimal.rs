@@ -528,6 +528,17 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     tref.register_token(regex(r">="), move |_| { ge_op.clone() });
     let eq_op = Atom::gnd(stdlib::EqualOp{});
     tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
+    let and_op = Atom::gnd(AndOp{});
+    tref.register_token(regex(r"and"), move |_| { and_op.clone() });
+    let or_op = Atom::gnd(OrOp{});
+    tref.register_token(regex(r"or"), move |_| { or_op.clone() });
+    let not_op = Atom::gnd(NotOp{});
+    tref.register_token(regex(r"not"), move |_| { not_op.clone() });
+    // NOTE: xor and flip are absent in Python intentionally for conversion testing
+    let xor_op = Atom::gnd(XorOp{});
+    tref.register_token(regex(r"xor"), move |_| { xor_op.clone() });
+    let flip_op = Atom::gnd(FlipOp{});
+    tref.register_token(regex(r"flip"), move |_| { flip_op.clone() });
 
     target.move_front(&mut rust_tokens);
 }
