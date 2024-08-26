@@ -306,6 +306,11 @@ class NoReduceError(Exception):
     """Custom exception; raised when a reduction operation cannot be performed."""
     pass
 
+class MettaError(Exception):
+    """Custom exception; raised when a error should be returned from OperationAtom,
+       , but we don't want to output Python error stack."""
+    pass
+
 class OperationObject(GroundedObject):
     """
     An OperationObject represents an operation as a grounded object, allowing for more
@@ -406,7 +411,10 @@ class OperationObject(GroundedObject):
                     # so a MeTTa program can catch and analyze it.
                     # raise RuntimeError("Grounded operation " + self.name + " with unwrap=True expects only grounded arguments")
                     raise NoReduceError()
-            result = self.op(*args, **kwargs)
+            try:
+                result = self.op(*args, **kwargs)
+            except MettaError as e:
+                return [E(S('Error'), *e.args)]
             if result is None:
                 return [Atoms.UNIT]
             if callable(result):
