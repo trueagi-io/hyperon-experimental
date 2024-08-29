@@ -118,6 +118,7 @@ class ServiceCall:
         return self.service_client.get_services_and_messages_info()
     def generate_metta_launch_code(self):
         inputs, outputs, func_name, keys = self.__get_inputs_outputs__()
+        service_id = self.get_service_details()[1]
         metta_fun_type = f'(: {func_name} (-> '
         for var_tuple in inputs:
             metta_fun_type += f'{var_tuple[0].capitalize()} '
