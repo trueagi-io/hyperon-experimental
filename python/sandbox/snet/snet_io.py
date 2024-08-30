@@ -88,55 +88,51 @@ class SNetSDKWrapper:
 class ServiceCall:
     def __init__(self, service_client):
         self.service_client = service_client
+        self.message_info = self.service_client.get_services_and_messages_info()
+        self.inputs = []
+        self.outputs = []
+        self.keys = []
+        self.func_name = ""
+        for key in self.message_info[0]:
+            val = self.message_info[0][key]
+            self.func_name = val[0][0]
+            self.keys = list(val[0])
+            self.keys.pop(0)
+            self.inputs.extend(self.message_info[1][self.keys[0]])
+            self.outputs.extend(self.message_info[1][self.keys[1]])
+
     def __call__(self, method, input_type, **kwargs):
         service_result = self.service_client.call_rpc(method, input_type, **kwargs)
-        _, outputs, _, keys = self.__get_inputs_outputs__()
         res_tuple = ()
-        for output in outputs:
+        for output in self.outputs:
             res_tuple+=getattr(service_result, output[1])
         if (len(res_tuple) > 1):
             return res_tuple
         return res_tuple[0]
 
-    def __get_inputs_outputs__(self):
-        message_info = self.get_service_messages()
-        inputs = []
-        outputs = []
-        keys = []
-        func_name = ""
-        for key in message_info[0]:
-            val = message_info[0][key]
-            func_name = val[0][0]
-            keys = list(val[0])
-            keys.pop(0)
-            inputs.extend(message_info[1][keys[0]])
-            outputs.extend(message_info[1][keys[1]])
-        return inputs, outputs, func_name, keys
     def get_service_details(self):
         return self.service_client.get_service_details()
-    def get_service_messages(self):
-        return self.service_client.get_services_and_messages_info()
+
     def generate_metta_launch_code(self):
-        inputs, outputs, func_name, keys = self.__get_inputs_outputs__()
         service_id = self.get_service_details()[1]
-        metta_fun_type = f'(: {func_name} (-> '
-        for var_tuple in inputs:
+        metta_fun_type = f'(: {self.func_name} (-> '
+        for var_tuple in self.inputs:
             metta_fun_type += f'{var_tuple[0].capitalize()} '
-        if (len(outputs) > 1):
+        if (len(self.outputs) > 1):
             metta_fun_type += "("
-        for var_tuple in outputs:
+        for var_tuple in self.outputs:
             metta_fun_type += f'{var_tuple[0].capitalize()} '
-        if (len(outputs) > 1):
+        if (len(self.outputs) > 1):
             metta_fun_type = metta_fun_type[:-1] + ")"
         metta_fun_type = metta_fun_type[:-1] + '))'
-        fun_header = f'({func_name} '
+        fun_header = f'({self.func_name} '
         kwargs = '(Kwargs '
-        for input in inputs:
+        for input in self.inputs:
             fun_header += f'${input[1]} '
             kwargs += f'({input[1]} ${input[1]}) '
         kwargs = kwargs[:-1] + ')'
         fun_header = fun_header[:-1] + ')'
-        result = f'''\n{metta_fun_type}\n( = {fun_header}\n\t(({service_id}) "{func_name}" "{keys[0]}"\n\t{kwargs}\n\t)\n)'''
+        result = f'''\n{metta_fun_type}\n( = {fun_header}\n\t(({service_id}) "{self.func_name}" "{self.keys[0]}"\n\t{kwargs}\n\t)\n)'''
         return result
 
 
