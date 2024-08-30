@@ -51,7 +51,9 @@ class SNetSDKWrapper:
         if isinstance(atom, GroundedAtom):
             return atom.get_object().content
         return repr(atom)
-    
+
+
+
     def __call__(self, command_a, *args_a):
         command = self._unwrap_atom(command_a)
         args = []
@@ -86,12 +88,55 @@ class SNetSDKWrapper:
 class ServiceCall:
     def __init__(self, service_client):
         self.service_client = service_client
+        self.message_info = self.service_client.get_services_and_messages_info()
+        self.inputs = []
+        self.outputs = []
+        self.keys = []
+        self.func_name = ""
+        for key in self.message_info[0]:
+            val = self.message_info[0][key]
+            self.func_name = val[0][0]
+            self.keys = list(val[0])
+            self.keys.pop(0)
+            self.inputs.extend(self.message_info[1][self.keys[0]])
+            self.outputs.extend(self.message_info[1][self.keys[1]])
+
     def __call__(self, method, input_type, **kwargs):
-        return self.service_client.call_rpc(method, input_type, **kwargs)
+        service_result = self.service_client.call_rpc(method, input_type, **kwargs)
+        res_tuple = ()
+        for output in self.outputs:
+            res_tuple+=getattr(service_result, output[1])
+        if (len(res_tuple) > 1):
+            return res_tuple
+        return res_tuple[0]
+
     def get_service_details(self):
         return self.service_client.get_service_details()
+
     def get_service_messages(self):
-        return self.service_client.get_services_and_messages_info()
+        return self.message_info
+
+    def generate_metta_launch_code(self):
+        service_id = self.get_service_details()[1]
+        metta_fun_type = f'(: {self.func_name} (-> '
+        for var_tuple in self.inputs:
+            metta_fun_type += f'{var_tuple[0].capitalize()} '
+        if (len(self.outputs) > 1):
+            metta_fun_type += "("
+        for var_tuple in self.outputs:
+            metta_fun_type += f'{var_tuple[0].capitalize()} '
+        if (len(self.outputs) > 1):
+            metta_fun_type = metta_fun_type[:-1] + ")"
+        metta_fun_type = metta_fun_type[:-1] + '))'
+        fun_header = f'({self.func_name} '
+        kwargs = '(Kwargs '
+        for input in self.inputs:
+            fun_header += f'${input[1]} '
+            kwargs += f'({input[1]} ${input[1]}) '
+        kwargs = kwargs[:-1] + ')'
+        fun_header = fun_header[:-1] + ')'
+        result = f'''\n{metta_fun_type}\n( = {fun_header}\n\t(({service_id}) "{self.func_name}" "{self.keys[0]}"\n\t{kwargs}\n\t)\n)'''
+        return result
 
 
 @register_atoms()
