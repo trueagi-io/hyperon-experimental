@@ -113,6 +113,9 @@ class ServiceCall:
     def get_service_details(self):
         return self.service_client.get_service_details()
 
+    def get_service_messages(self):
+        return self.message_info
+
     def generate_metta_launch_code(self):
         service_id = self.get_service_details()[1]
         metta_fun_type = f'(: {self.func_name} (-> '
