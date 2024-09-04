@@ -163,7 +163,7 @@ class ServiceCall:
         metta_fun_type = E(*(metta_fun_type))
         kwargs = E(*kwargs)
         fun_header = E(*fun_header)
-        function_expr = E(fun_header, E(E(S(f'{service_id}')), S(f'{self.func_name}'), S(f'{self.keys[0]}'), kwargs))
+        function_expr = E(S('='), fun_header, E(E(S(f'{service_id}')), S(f'{self.func_name}'), S(f'{self.keys[0]}'), kwargs))
         return E(metta_fun_type, function_expr)
 
 @register_atoms()
