@@ -79,8 +79,6 @@ class SNetSDKWrapper:
             self.init_sdk()
         if command == 'generate_metta_launch_code_atoms_wrapper':
             return [self.generate_metta_launch_code_atoms_wrapper(*args, **kwargs)]
-            # return [E()]
-            # return list(map(lambda x: ValueAtom(x), self.generate_metta_launch_code_atoms_wrapper(*args, **kwargs)))
         if command == 'organization_list':
             return list(map(lambda x: ValueAtom(x), self.organization_list()))
         if command == 'service_list':
@@ -91,8 +89,6 @@ class SNetSDKWrapper:
         return [E(S('Error'), E(S('snet-sdk'), command_a, *args_a),
                     ValueAtom(f'unknown command {repr(command_a)}'))]
 
-
-
 class ServiceCall:
     def __init__(self, service_client):
         self.service_client = service_client
@@ -101,6 +97,7 @@ class ServiceCall:
         self.outputs = []
         self.keys = []
         self.func_name = ""
+        self.service_details = self.service_client.get_service_details()
         for key in self.message_info[0]:
             val = self.message_info[0][key]
             self.func_name = val[0][0]
@@ -119,13 +116,13 @@ class ServiceCall:
         return res_tuple[0]
 
     def get_service_details(self):
-        return self.service_client.get_service_details()
+        return self.service_details
 
     def get_service_messages(self):
         return self.message_info
 
     def generate_metta_launch_code_text(self):
-        service_id = self.get_service_details()[1]
+        service_id = self.service_details[1]
         metta_fun_type = f'(: {self.func_name} (-> '
         fun_header = f'({self.func_name} '
         kwargs = '(Kwargs '
@@ -146,7 +143,7 @@ class ServiceCall:
         return result
 
     def generate_metta_launch_code_atoms(self):
-        service_id = self.get_service_details()[1]
+        service_id = self.service_details[1]
         metta_fun_type = []
         metta_fun_type.extend([S(':'), S(f'{self.func_name}')])
         type_symbols_in = []
