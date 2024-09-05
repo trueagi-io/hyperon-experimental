@@ -2,6 +2,7 @@ from hyperon import *
 from hyperon.ext import register_atoms
 import os
 from snet import sdk
+from hyperon import *
 
 class SNetSDKWrapper:
 
@@ -47,12 +48,13 @@ class SNetSDKWrapper:
             free_call_token_expiry_block=free_call_token_expiry_block)
         return ServiceCall(service_client)
 
+    def generate_metta_launch_code_atoms_wrapper(self, service_call):
+        return service_call.generate_metta_launch_code_atoms()
+
     def _unwrap_atom(self, atom):
         if isinstance(atom, GroundedAtom):
             return atom.get_object().content
         return repr(atom)
-
-
 
     def __call__(self, command_a, *args_a):
         command = self._unwrap_atom(command_a)
@@ -75,6 +77,8 @@ class SNetSDKWrapper:
             return [E()]
         if self.snet_sdk is None:
             self.init_sdk()
+        if command == 'generate_metta_launch_code_atoms_wrapper':
+            return [self.generate_metta_launch_code_atoms_wrapper(*args, **kwargs)]
         if command == 'organization_list':
             return list(map(lambda x: ValueAtom(x), self.organization_list()))
         if command == 'service_list':
@@ -93,6 +97,7 @@ class ServiceCall:
         self.outputs = []
         self.keys = []
         self.func_name = ""
+        self.service_details = self.service_client.get_service_details()
         for key in self.message_info[0]:
             val = self.message_info[0][key]
             self.func_name = val[0][0]
@@ -111,16 +116,20 @@ class ServiceCall:
         return res_tuple[0]
 
     def get_service_details(self):
-        return self.service_client.get_service_details()
+        return self.service_details
 
     def get_service_messages(self):
         return self.message_info
 
-    def generate_metta_launch_code(self):
-        service_id = self.get_service_details()[1]
+    def generate_metta_launch_code_text(self):
+        service_id = self.service_details[1]
         metta_fun_type = f'(: {self.func_name} (-> '
+        fun_header = f'({self.func_name} '
+        kwargs = '(Kwargs '
         for var_tuple in self.inputs:
             metta_fun_type += f'{var_tuple[0].capitalize()} '
+            fun_header += f'${var_tuple[1]} '
+            kwargs += f'({var_tuple[1]} ${var_tuple[1]}) '
         if (len(self.outputs) > 1):
             metta_fun_type += "("
         for var_tuple in self.outputs:
@@ -128,16 +137,34 @@ class ServiceCall:
         if (len(self.outputs) > 1):
             metta_fun_type = metta_fun_type[:-1] + ")"
         metta_fun_type = metta_fun_type[:-1] + '))'
-        fun_header = f'({self.func_name} '
-        kwargs = '(Kwargs '
-        for input in self.inputs:
-            fun_header += f'${input[1]} '
-            kwargs += f'({input[1]} ${input[1]}) '
         kwargs = kwargs[:-1] + ')'
         fun_header = fun_header[:-1] + ')'
         result = f'''\n{metta_fun_type}\n( = {fun_header}\n\t(({service_id}) "{self.func_name}" "{self.keys[0]}"\n\t{kwargs}\n\t)\n)'''
         return result
 
+    def generate_metta_launch_code_atoms(self):
+        service_id = self.service_details[1]
+        metta_fun_type = []
+        metta_fun_type.extend([S(':'), S(f'{self.func_name}')])
+        type_symbols_in = []
+        type_symbols_out = []
+        fun_header = [S(f'{self.func_name}')]
+        kwargs = [S('Kwargs')]
+        for var_tuple in self.inputs:
+            type_symbols_in.append(S(f'{var_tuple[0].capitalize()}'))
+            fun_header.append(V(f'{var_tuple[1]}'))
+            kwargs.append(E(S(f'{var_tuple[1]}'), V(f'{var_tuple[1]}')))
+        for var_tuple in self.outputs:
+            type_symbols_out.append(S(f'{var_tuple[0].capitalize()}'))
+        if (len(self.outputs) > 1):
+            metta_fun_type.extend([E(S('->'), *(type_symbols_in), E(*(type_symbols_out)))])
+        else:
+            metta_fun_type.extend([E(S('->'), *(type_symbols_in), *(type_symbols_out))])
+        metta_fun_type = E(*(metta_fun_type))
+        kwargs = E(*kwargs)
+        fun_header = E(*fun_header)
+        function_expr = E(S('='), fun_header, E(E(S(f'{service_id}')), S(f'{self.func_name}'), S(f'{self.keys[0]}'), kwargs))
+        return E(metta_fun_type, function_expr)
 
 @register_atoms()
 def snet_atoms():
