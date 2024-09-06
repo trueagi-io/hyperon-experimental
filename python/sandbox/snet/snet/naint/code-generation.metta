@@ -8,9 +8,10 @@
        ;)
      )))
 
-(: generate (-> String String))
-(= (generate $request)
-   ((code-generation) "generate" "Query"
-    (Kwargs (request $request))
-   )
-)
+; This should be generated automatically
+;(: generate (-> String String))
+;(= (generate $request)
+;   ((code-generation) "generate" "Query"
+;    (Kwargs (request $request))
+;   )
+;)

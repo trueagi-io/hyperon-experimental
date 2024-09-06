@@ -16,16 +16,17 @@
 (: top_k (-> Number int32))
 (: length (-> Number int32))
 
-(: gen_gpt_2 (-> String String Number Number Number String))
-(= (gen_gpt_2 $start_text $run_name $temperature $top_k $length)
-   ((text-generation) "gen_gpt_2" "Query"
-    (Kwargs (start_text $start_text)
-            (run_name $run_name)
-            (temperature $temperature)
-            (top_k $top_k)
-            (length $length))
-   )
-)
+; Should be generated automatically
+;(: gen_gpt_2 (-> String String Number Number Number String))
+;(= (gen_gpt_2 $start_text $run_name $temperature $top_k $length)
+;   ((text-generation) "gen_gpt_2" "Query"
+;    (Kwargs (start_text $start_text)
+;            (run_name $run_name)
+;            (temperature $temperature)
+;            (top_k $top_k)
+;            (length $length))
+;   )
+;)
 
 ; A sketch of ontological relations
 (:<proto AI:Text string)

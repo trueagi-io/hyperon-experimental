@@ -22,4 +22,5 @@
 ; we use `include` here, so `snet-sdk` is accessible in the included file
 !(include snet:naint:image-generation)
 !((py-dot (image-generation) get_service_messages))
-
+; turn service description in textual metta code
+!((py-dot (image-generation) generate_callers_text))
