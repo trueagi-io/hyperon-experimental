@@ -2,6 +2,9 @@
 
 (include snet:naint:code-generation)
 ((py-dot (code-generation) get_service_messages))
+; add a wrapper
+(add-reduct &self
+   (snet-sdk get_service_callers (code-generation)))
 ; code-generation requires passing data in json format,
 ; so it will return a parse error
 ;!(generate "Write Hello World in C#")
@@ -23,5 +26,7 @@
 ((abstractive-summarisation)
      "neural_summarisation" "Query" (Kwargs (text "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Fusce ullamcorper vehicula augue. Curabitur maximus aliquet ex sed fringilla. Mauris id erat dolor.")))
 
-(include snet:naint:text-generation)
-(gen_gpt_2 "What was the largest dinosaur?" "universal" 0.5 2 100)
+!(include snet:naint:text-generation)
+!(add-reduct &self
+   (snet-sdk get_service_callers (text-generation)))
+!(gen_gpt_2 "What was the largest dinosaur?" "universal" 0.5 2 100)
