@@ -19,8 +19,17 @@
    (snet-sdk create_service_client "naint" "question-answering-long-seq")
    ((py-dot $service get_service_messages)))
 
-; we use `include` here, so `snet-sdk` is accessible in the included file
-!(include snet:naint:image-generation)
-!((py-dot (image-generation) get_service_messages))
+(bind! &image-generation
+  (snet-sdk create_service_client "naint" "image-generation"))
+((py-dot &image-generation get_service_messages))
 ; turn service description in textual metta code
-!((py-dot (image-generation) generate_callers_text))
+((py-dot &image-generation generate_callers_text))
+
+; add all info to space at once
+!(add-reduct &self
+  (snet-sdk create_service_space naint punctuation-restoration))
+; (naint punctuation-restoration) returns a service caller now
+!((py-dot (naint punctuation-restoration) get_service_messages))
+; we can also get a list of all service methods as typed metta functions
+!(naint punctuation-restoration methods)
+
