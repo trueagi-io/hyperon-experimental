@@ -88,6 +88,8 @@ class SNetSDKWrapper:
             self.init_sdk()
         if command == 'get_service_callers':
             return args[0].generate_callers()
+        if command == 'get_service_callers_text':
+            return args[0].generate_callers_text()
         if command == 'create_service_space':
             return self.create_service_space(*args, **kwargs)
         if command == 'organization_list':
@@ -137,9 +139,105 @@ class ServiceCall:
     def get_operation_atom(self):
         return OperationAtom(self.service_details[1], self)
 
+    def __pretty_print__(self, input_str):
+        list_of_functions = ["if", "match", "let", "let*", "unify",
+                             "assertEqualToResult", "assertEqual", "remove-atom", "add-reduct",
+                             "case"] # list should be possibly extended if new functions with complicated body appears in the future
+        str_symbols = ["'", '"', "'''"] # if we met function name, but it was in quotes, we shouldn't treat it like real function
+        special_symbols = [" ", "\t", "\n"] # to read word symbol by symbol till special symbol appears
+        line_threshold = 30 #threshold after which line break will be inserted
+        len_to_previous_break = 0  # to prevent duplicate \n symbols
+        def pp_func(str, num_of_tabs_outer):
+            pp_func_res = ""
+            _num_of_brackets = 0
+            _num_of_symbols_in_line = 0
+            j = 0
+            _len_to_previous_break = len_to_previous_break
+            while j < len(str):
+                _symbol = str[j]
+                _add_symbol = _symbol
+                _num_of_symbols_in_line += 1
+                if (_symbol == '('):
+                    if (_num_of_brackets == 0) and (_len_to_previous_break > (num_of_tabs_outer + 2)):
+                        _add_symbol = "\n" + "\t" * num_of_tabs_outer + _add_symbol
+                        _num_of_symbols_in_line = 0
+                        _len_to_previous_break = 0
+                    _num_of_brackets += 1
+                elif (_symbol == ')'):
+                    _num_of_brackets -= 1
+                    if _num_of_brackets < 0:  # we are out of function's body
+                        pp_func_res += str[j:]
+                        break
+                    #in this case num_of_brackets means that we have reached end of inner (...). For example, in 'if' at leas condition is in brackets so we're putting line break there
+                    elif (_num_of_brackets == 0) and (_len_to_previous_break > (num_of_tabs_outer + 2)):
+                        if str[j + 1] in special_symbols:
+                            j += 1
+                        _add_symbol += "\n" + "\t" * num_of_tabs_outer
+                        _num_of_symbols_in_line = 0
+                        _len_to_previous_break = 0
+                pp_func_res += _add_symbol
+                j += 1
+                _len_to_previous_break += 1
+            return pp_func_res
+
+        num_of_tabs = 0 # currently num of tabs is strictly depends on number of '(' symbols
+        num_of_symbols_in_line = 0
+        pretty_res = ""
+        str_detected = {"'": False, '"': False, "'''": False} # to check if we are inside of quotes or not
+        word_memory = ""
+        input_str = ' '.join(input_str.split()) # to remove every possible spaces duplication
+        i = 0 # since input_str can be altered during parsing process I need while not for loop
+        while i < len(input_str):
+            symbol = input_str[i]
+            add_symbol = symbol
+            num_of_symbols_in_line += 1
+            if symbol in str_symbols:
+                word_memory = ""
+                str_detected[symbol] = not str_detected[symbol]
+            elif symbol in special_symbols: # word ended so we need to check if this is function
+                if word_memory in list_of_functions:
+                    pp_func_res = pp_func(input_str[i:], num_of_tabs) # every function separately treated
+                    input_str = input_str.replace(input_str[i + 1:], pp_func_res) # though we have ran pp_func over current function's body it is not full so we need to loop through renewed str_input
+                    num_of_symbols_in_line = 0
+                word_memory = ""
+                if symbol == "\n":
+                    num_of_symbols_in_line = 0
+                    len_to_previous_break = 0
+                elif symbol == "\t":
+                    num_of_symbols_in_line -= 1
+            elif symbol == '(':
+                word_memory = ""
+                num_of_tabs += 1
+                # we will put a line break not for every '(', only if number of symbols in line exceeded threshold. PLus, to prevent several consequent line breaks, we're checking distance to previous line break
+                if (num_of_symbols_in_line > line_threshold) and (len_to_previous_break > (num_of_tabs + 2)):
+                    add_symbol = "\n" + "\t" * (num_of_tabs - 1) + add_symbol
+                    num_of_symbols_in_line = 0
+                    len_to_previous_break = 0
+            elif symbol == ')':
+                word_memory = ""
+                num_of_tabs -= 1
+                # if num_of_tabs == 0 then it should be the end of the current expression (for example, we have function's type and function definition in one string).
+                if (num_of_tabs == 0) and (len_to_previous_break > (num_of_tabs + 2)):
+                    add_symbol = add_symbol + "\n"
+                    num_of_symbols_in_line = 0
+                    len_to_previous_break = 0
+            else:
+                str_flag = False
+                for key in str_detected:
+                    str_flag = str_flag or str_detected[key]
+                # we are adding something to a memory only if this is not a part of string
+                word_memory += symbol * (not str_flag)
+            pretty_res += add_symbol
+            i += 1
+            len_to_previous_break += 1
+        pretty_res = pretty_res.replace("  ", " ")
+        pretty_res = pretty_res.replace("\t ", "\t")
+        pretty_res = pretty_res.replace("\n ", "\n")
+        return pretty_res
+
     def generate_callers_text(self):
-        # TODO: pretty print
-        return "\n".join([repr(e) for e in self.generate_callers()])
+        res = "\n".join([repr(e) for e in self.generate_callers()])
+        return [S(self.__pretty_print__(res))]  # this is not right. Currently, this is a stub
 
     def _map_type(self, t):
         type_map = {'bool': 'Bool',
