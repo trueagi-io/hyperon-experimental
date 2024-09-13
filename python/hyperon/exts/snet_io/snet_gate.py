@@ -237,7 +237,7 @@ class ServiceCall:
 
     def generate_callers_text(self):
         res = "\n".join([repr(e) for e in self.generate_callers()])
-        return [S(self.__pretty_print__(res))]  # this is not right. Currently, this is a stub
+        return [ValueAtom(res)]
 
     def _map_type(self, t):
         type_map = {'bool': 'Bool',
