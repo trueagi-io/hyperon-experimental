@@ -88,8 +88,6 @@ class SNetSDKWrapper:
             self.init_sdk()
         if command == 'get_service_callers':
             return args[0].generate_callers()
-        if command == 'get_service_callers_text':
-            return args[0].generate_callers_text()
         if command == 'create_service_space':
             return self.create_service_space(*args, **kwargs)
         if command == 'organization_list':
