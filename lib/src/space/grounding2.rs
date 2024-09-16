@@ -1,6 +1,7 @@
 use crate::atom::*;
 use crate::serial::NullSerializer;
 use crate::matcher::*;
+use crate::common::CachingMapper;
 
 use bimap::BiMap;
 use std::hash::Hash;
@@ -323,13 +324,18 @@ impl AtomIndexNode {
     }
 
     // TODO: write an algorithm which returns an iterator instead of collected result
-    pub fn query<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(&self, mut key: I, storage: &AtomStorage) -> BindingsSet {
+    pub fn query<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(&self, key: I, storage: &AtomStorage) -> BindingsSet {
+        let mut mapper = CachingMapper::new(VariableAtom::make_unique);
+        self.query_internal(key, storage, &mut mapper)
+    }
+
+    fn query_internal<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, mut key: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
         match key.next() {
             Some(head) => match head {
-                IndexKey::ExactRef((id, atom)) => self.match_exact(&ExactKey::Exact(id), Some(atom), key, storage),
-                IndexKey::StartExpr(atom) => self.match_exact(&ExactKey::StartExpr, Some(atom), key, storage),
-                IndexKey::EndExpr => self.match_exact(&ExactKey::EndExpr, None, key, storage),
-                IndexKey::CustomRef(atom) => self.match_custom_key(atom, key, storage),
+                IndexKey::ExactRef((id, atom)) => self.match_exact(&ExactKey::Exact(id), Some(atom), key, storage, mapper),
+                IndexKey::StartExpr(atom) => self.match_exact(&ExactKey::StartExpr, Some(atom), key, storage, mapper),
+                IndexKey::EndExpr => self.match_exact(&ExactKey::EndExpr, None, key, storage, mapper),
+                IndexKey::CustomRef(atom) => self.match_custom_key(atom, key, storage, mapper),
                 IndexKey::Exact(_) => panic!("Not expected"),
                 IndexKey::Custom(_) => panic!("Not expected"),
             },
@@ -337,10 +343,10 @@ impl AtomIndexNode {
         }
     }
 
-    fn match_exact<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(&self, exact: &ExactKey, atom: Option<&Atom>, mut tail: I, storage: &AtomStorage) -> BindingsSet {
+    fn match_exact<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, exact: &ExactKey, atom: Option<&Atom>, mut tail: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
         let mut result = match self.exact.get(exact) {
             None => BindingsSet::empty(),
-            Some(child) => child.query(tail.clone(), storage),
+            Some(child) => child.query_internal(tail.clone(), storage, mapper),
         };
         if let ExactKey::StartExpr = exact {
             // TODO: we could keep this information in the key itself
@@ -348,7 +354,7 @@ impl AtomIndexNode {
         }
         if let Some((atom, tail)) = Self::key_to_atom(exact, atom, tail) {
             for (custom, child) in &self.custom {
-                let mut custom_res = Self::match_custom_index(custom, atom, child, tail.clone(), storage);
+                let mut custom_res = Self::match_custom_index(custom, atom, child, tail.clone(), storage, mapper);
                 result.extend(custom_res.drain(..));
             }
         }
@@ -364,11 +370,13 @@ impl AtomIndexNode {
         }
     }
 
-    fn match_custom_index<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(matcher: &Atom, atom: &Atom, child: &AtomIndexNode, tail: I, storage: &AtomStorage) -> BindingsSet {
+    fn match_custom_index<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(matcher: &Atom, atom: &Atom, child: &AtomIndexNode, tail: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
         let mut result = BindingsSet::empty();
+        let mut matcher = matcher.clone();
+        matcher.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
         // TODO: conversion to Iterator and back
-        result.extend(match_atoms(matcher, atom));
-        let tail_result = child.query(tail, storage);
+        result.extend(match_atoms(&matcher, atom));
+        let tail_result = child.query_internal(tail, storage, mapper);
         //log::trace!("match_custom_index: matcher: {}, atom: {}, child: {:?}, tail: {:?}, tail_result: {}", matcher, atom, child, tail.clone(), tail_result);
         // TODO: we could move BindingsSet into merge instead of passing by reference
         result.merge(&tail_result)
@@ -399,13 +407,13 @@ impl AtomIndexNode {
         key
     }
 
-    fn match_custom_key<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(&self, head: &Atom, tail: I, storage: &AtomStorage) -> BindingsSet {
+    fn match_custom_key<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, head: &Atom, tail: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
         let mut result = BindingsSet::empty();
         for (atom, child) in self.unpack_atoms(storage) {
             if atom.is_none() {
                 continue;
             }
-            let mut tail_result = Self::match_custom_index(&atom.unwrap(), head, child, tail.clone(), storage);
+            let mut tail_result = Self::match_custom_index(&atom.unwrap(), head, child, tail.clone(), storage, mapper);
             result.extend(tail_result.drain(..));
         }
         result
