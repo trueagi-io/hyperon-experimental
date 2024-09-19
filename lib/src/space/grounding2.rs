@@ -241,8 +241,8 @@ impl AtomIndex {
             },
             AtomToken::Atom(atom) => {
                 match storage.get_id(atom) {
-                    Some(id) => IndexKey::ExactRef((id, atom)),
-                    None => IndexKey::CustomRef(atom),
+                    Some(id) => IndexKey::ExactRef((Some(id), atom)),
+                    None => IndexKey::ExactRef((None, atom)),
                 }
             },
             AtomToken::StartExpr(e) => IndexKey::StartExpr(e),
@@ -261,7 +261,7 @@ enum IndexKey<'a> {
     StartExpr(&'a Atom),
     EndExpr,
     Exact(usize),
-    ExactRef((usize, &'a Atom)),
+    ExactRef((Option<usize>, &'a Atom)),
     Custom(Atom),
     CustomRef(&'a Atom),
 }
@@ -332,9 +332,9 @@ impl AtomIndexNode {
     fn query_internal<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, mut key: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
         match key.next() {
             Some(head) => match head {
-                IndexKey::ExactRef((id, atom)) => self.match_exact(&ExactKey::Exact(id), Some(atom), key, storage, mapper),
-                IndexKey::StartExpr(atom) => self.match_exact(&ExactKey::StartExpr, Some(atom), key, storage, mapper),
-                IndexKey::EndExpr => self.match_exact(&ExactKey::EndExpr, None, key, storage, mapper),
+                IndexKey::ExactRef((id, atom)) => self.match_exact(&id.map(ExactKey::Exact), Some(atom), key, storage, mapper),
+                IndexKey::StartExpr(atom) => self.match_exact(&Some(ExactKey::StartExpr), Some(atom), key, storage, mapper),
+                IndexKey::EndExpr => self.match_exact(&Some(ExactKey::EndExpr), None, key, storage, mapper),
                 IndexKey::CustomRef(atom) => self.match_custom_key(atom, key, storage, mapper),
                 IndexKey::Exact(_) => panic!("Not expected"),
                 IndexKey::Custom(_) => panic!("Not expected"),
@@ -343,14 +343,16 @@ impl AtomIndexNode {
         }
     }
 
-    fn match_exact<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, exact: &ExactKey, atom: Option<&Atom>, mut tail: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
-        let mut result = match self.exact.get(exact) {
-            None => BindingsSet::empty(),
-            Some(child) => child.query_internal(tail.clone(), storage, mapper),
-        };
-        if let ExactKey::StartExpr = exact {
-            // TODO: we could keep this information in the key itself
-            tail = Self::skip_to_end_expr(tail);
+    fn match_exact<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, exact: &Option<ExactKey>, atom: Option<&Atom>, mut tail: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
+        let mut result = BindingsSet::empty();
+        if let Some(exact) = exact {
+            if let Some(child) = self.exact.get(exact) {
+                result.extend(child.query_internal(tail.clone(), storage, mapper))
+            }
+            if let ExactKey::StartExpr = exact {
+                // TODO: we could keep this information in the key itself
+                tail = Self::skip_to_end_expr(tail);
+            }
         }
         if let Some((atom, tail)) = Self::key_to_atom(exact, atom, tail) {
             for (custom, child) in &self.custom {
@@ -361,11 +363,12 @@ impl AtomIndexNode {
         result
     }
 
-    fn key_to_atom<'a, 'b, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(head: &ExactKey, atom: Option<&'b Atom>, tail: I) -> Option<(&'b Atom, I)> {
+    fn key_to_atom<'a, 'b, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(head: &Option<ExactKey>, atom: Option<&'b Atom>, tail: I) -> Option<(&'b Atom, I)> {
         match (head, atom) {
-            (ExactKey::Exact(_), Some(atom)) => Some((atom, tail)),
-            (ExactKey::StartExpr, Some(atom)) => Some((atom, tail)),
-            (ExactKey::EndExpr, None) => None,
+            (None, Some(atom)) => Some((atom, tail)),
+            (Some(ExactKey::Exact(_)), Some(atom)) => Some((atom, tail)),
+            (Some(ExactKey::StartExpr), Some(atom)) => Some((atom, tail)),
+            (Some(ExactKey::EndExpr), None) => None,
             _ => panic!("Unexpected state!"),
         }
     }
