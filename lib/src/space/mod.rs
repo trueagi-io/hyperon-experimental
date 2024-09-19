@@ -2,6 +2,7 @@
 //! This module is intended to keep different space implementations.
 
 pub mod grounding;
+pub mod module;
 
 use std::fmt::Display;
 use std::rc::{Rc, Weak};
@@ -282,6 +283,9 @@ pub trait SpaceMut: Space {
 pub struct DynSpace(Rc<RefCell<dyn SpaceMut>>);
 
 impl DynSpace {
+    pub fn with_rc(space: Rc<RefCell<dyn SpaceMut>>) -> Self {
+        Self(space)
+    }
     pub fn new<T: SpaceMut + 'static>(space: T) -> Self {
         let shared = Rc::new(RefCell::new(space));
         DynSpace(shared)
