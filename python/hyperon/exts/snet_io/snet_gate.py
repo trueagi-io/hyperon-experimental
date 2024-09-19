@@ -66,8 +66,6 @@ class SNetSDKWrapper:
         return [G(space)]
 
     def __call__(self, command_a, *args_a):
-        import time
-        time.sleep(5)
         command = self._unwrap_atom(command_a)
         args = []
         kwargs = {}
