@@ -88,13 +88,15 @@ class SNetSDKWrapper:
             self.init_sdk()
         if command == 'get_service_callers':
             return args[0].generate_callers()
-        if command == 'create_service_space':
+        elif command == 'create_service_space':
             return self.create_service_space(*args, **kwargs)
-        if command == 'organization_list':
+        elif command == 'open_channel_and_deposit':
+            return args[0].open_channel_and_deposit(*args[1:], **kwargs)
+        elif command == 'organization_list':
             return list(map(lambda x: ValueAtom(x), self.organization_list()))
-        if command == 'service_list':
+        elif command == 'service_list':
             return list(map(lambda x: ValueAtom(x), self.service_list(*args, **kwargs)))
-        if command == 'create_service_client':
+        elif command == 'create_service_client':
             service_client = self.create_service_client(*args, **kwargs)
             return [service_client.get_operation_atom()]
         return [E(S('Error'), E(S('snet-sdk'), command_a, *args_a),
@@ -136,6 +138,10 @@ class ServiceCall:
 
     def get_operation_atom(self):
         return OperationAtom(self.service_details[1], self)
+
+    def open_channel_and_deposit(self, amount, expiration):
+        self.service_client.deposit_and_open_channel(amount, expiration)
+        return [E()]
 
     def generate_callers_text(self):
         # TODO: pretty print
