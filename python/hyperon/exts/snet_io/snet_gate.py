@@ -117,7 +117,6 @@ class ServiceCall:
         self.func_names = []
         self.len_threshold = 50
         self.current_len = 0
-        self.len_to_last_eol = 0
         for method in methods:
             self.func_names += [method[0]]
             types = method[1:]
@@ -200,7 +199,7 @@ class ServiceCall:
         type_map = {'bool': 'Bool',
                     'string': 'String',
                     'int32': 'Number',
-                    'float ': 'Number'}
+                    'float': 'Number'}
         return type_map[t] if t in type_map else t
 
     def generate_callers(self):
