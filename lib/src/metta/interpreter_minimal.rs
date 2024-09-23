@@ -542,27 +542,28 @@ fn query<'a, T: Space>(space: T, prev: Option<Rc<RefCell<Stack>>>, to_eval: Atom
     let var_x = &VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, to_eval.clone(), Atom::Variable(var_x.clone())]);
     let results = space.query(&query);
+    log::debug!("interpreter_minimal::query: query: {}", query);
+    log::debug!("interpreter_minimal::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
+        results.len(), bindings.len(), results, bindings);
+    let call_stack = call_to_stack(to_eval, vars, prev.clone());
+    let result = |res, bindings| eval_result(prev.clone(), res, &call_stack, bindings);
+    let results: Vec<InterpretedAtom> = results.into_iter().flat_map(|b| {
+        log::debug!("interpreter_minimal::query: b: {}", b);
+        b.merge_v2(&bindings).into_iter()
+    }).filter_map(move |b| {
+        b.resolve(&var_x).map_or(None, |res| {
+            if b.has_loops() {
+                None
+            } else {
+                Some(result(res, b))
+            }
+        })
+    })
+    .collect();
     if results.is_empty() {
         finished_result(return_not_reducible(), bindings, prev)
     } else {
-        log::debug!("interpreter_minimal::query: query: {}", query);
-        log::debug!("interpreter_minimal::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
-            results.len(), bindings.len(), results, bindings);
-        let call_stack = call_to_stack(to_eval, vars, prev.clone());
-        let result = |res, bindings| eval_result(prev.clone(), res, &call_stack, bindings);
-        results.into_iter().flat_map(|b| {
-            log::debug!("interpreter_minimal::query: b: {}", b);
-            b.merge_v2(&bindings).into_iter()
-        }).filter_map(move |b| {
-            b.resolve(&var_x).map_or(None, |res| {
-                if b.has_loops() {
-                    None
-                } else {
-                    Some(result(res, b))
-                }
-            })
-        })
-        .collect()
+        results
     }
 }
 
@@ -730,23 +731,25 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     };
 
     let matches: Vec<Bindings> = match_atoms(&atom, &pattern).collect();
+    let result = |bindings| {
+        let stack = Stack::finished(prev.clone(), then.clone());
+        InterpretedAtom(stack, bindings)
+    };
+    let bindings_ref = &bindings;
+    let matches: Vec<InterpretedAtom> = matches.into_iter().flat_map(move |b| {
+        b.merge_v2(bindings_ref).into_iter().filter_map(move |b| {
+            if b.has_loops() {
+                None
+            } else {
+                Some(result(b))
+            }
+        })
+    })
+    .collect();
     if matches.is_empty() {
         finished_result(else_, bindings, prev)
     } else {
-        let result = |bindings| {
-            let stack = Stack::finished(prev.clone(), then.clone());
-            InterpretedAtom(stack, bindings)
-        };
-        matches.into_iter().flat_map(move |b| {
-            b.merge_v2(&bindings).into_iter().filter_map(move |b| {
-                if b.has_loops() {
-                    None
-                } else {
-                    Some(result(b))
-                }
-            })
-        })
-        .collect()
+        matches
     }
 }
 
