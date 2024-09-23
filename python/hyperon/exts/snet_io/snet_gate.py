@@ -4,13 +4,14 @@ import os
 from snet import sdk
 from hyperon import *
 
+
 class SNetSDKWrapper:
 
     def __init__(self):
         self.snet_sdk = None
 
     def init_sdk(self,
-                 private_key=os.getenv("SNET_PRIVATE_KEY", '0'*32),
+                 private_key=os.getenv("SNET_PRIVATE_KEY", '0' * 32),
                  eth_rpc_endpoint=os.getenv("ETH_RPC_ENDPOINT"),
                  email=os.getenv("SNET_EMAIL"),
                  identity_name="hyperon",
@@ -32,7 +33,7 @@ class SNetSDKWrapper:
 
     def organization_list(self):
         return self.snet_sdk.get_organization_list()
-    
+
     def service_list(self, org_id):
         return self.snet_sdk.get_services_list(org_id)
 
@@ -43,7 +44,7 @@ class SNetSDKWrapper:
             free_call_token_expiry_block = int(free_call_token_expiry_block)
         service_client = self.snet_sdk.create_service_client(
             org_id=org_id, service_id=service_id,
-            #group_name="default_group",
+            # group_name="default_group",
             free_call_auth_token_bin=free_call_auth_token_bin,
             free_call_token_expiry_block=free_call_token_expiry_block)
         return ServiceCall(service_client)
@@ -57,7 +58,7 @@ class SNetSDKWrapper:
         space = GroundingSpaceRef()
         service_client = self.create_service_client(org_id, service_id, **kwargs)
         space.add_atom(E(S('='), E(S(org_id), S(service_id)),
-                   service_client.get_operation_atom()))
+                         service_client.get_operation_atom()))
         atoms = service_client.generate_callers()
         for atom in atoms:
             space.add_atom(atom)
@@ -98,7 +99,8 @@ class SNetSDKWrapper:
             service_client = self.create_service_client(*args, **kwargs)
             return [service_client.get_operation_atom()]
         return [E(S('Error'), E(S('snet-sdk'), command_a, *args_a),
-                    ValueAtom(f'unknown command {repr(command_a)}'))]
+                  ValueAtom(f'unknown command {repr(command_a)}'))]
+
 
 class ServiceCall:
 
@@ -111,8 +113,9 @@ class ServiceCall:
         self.outputs = []
         self.io_types = []
         self.func_names = []
-        self.len_threshold = 30
+        self.len_threshold = 50
         self.current_len = 0
+        self.len_to_last_eol = 0
         for method in methods:
             self.func_names += [method[0]]
             types = method[1:]
@@ -141,12 +144,7 @@ class ServiceCall:
 
     def __pretty_print_atoms__(self, input_atoms):
 
-        def process_symbol_and_variable_atom(atom):
-            repr_atom = repr(atom)
-            self.current_len += len(repr_atom)
-            return repr_atom
-
-        def process_grounded_atom(atom):
+        def process_svg_atom(atom):
             repr_atom = repr(atom)
             self.current_len += len(repr_atom)
             return repr_atom
@@ -162,12 +160,12 @@ class ServiceCall:
             process_res = ""
             metatype = atom.get_metatype()
             if metatype == AtomKind.EXPR:
-                self.current_len *= (depth <= 1)
-                process_res += ("\n" + "\t" * depth) * (depth > 1) + f"({process_expr_atom(atom, depth+1)})"
-            elif (metatype == AtomKind.SYMBOL) or (metatype == AtomKind.VARIABLE):
-                process_res += process_symbol_and_variable_atom(atom) + check_len(depth)
-            elif (metatype == AtomKind.GROUNDED):
-                process_res += process_grounded_atom(atom) + check_len(depth)
+                len_to_last_eol_flag = self.current_len > 5
+                self.current_len *= (depth <= 1) * (not len_to_last_eol_flag)
+                process_res += ("\n" + "\t" * depth) * (
+                        depth > 0) * len_to_last_eol_flag + f"({process_expr_atom(atom, depth + 1)})"
+            elif (metatype == AtomKind.SYMBOL) or (metatype == AtomKind.VARIABLE) or (metatype == AtomKind.GROUNDED):
+                process_res += process_svg_atom(atom) + check_len(depth)
             else:
                 raise Exception(f"Unexpected type of the Atom: {str(metatype)}")
             return process_res
@@ -196,7 +194,7 @@ class ServiceCall:
         type_map = {'bool': 'Bool',
                     'string': 'String',
                     'int32': 'Number',
-                    'float': 'Number'}
+                    'float ': 'Number'}
         return type_map[t] if t in type_map else t
 
     def generate_callers(self):
@@ -227,6 +225,7 @@ class ServiceCall:
                                 ValueAtom(func_name), ValueAtom(self.io_types[i][0]), kwargs))
             atoms += [metta_fun_type, function_expr]
         return atoms
+
 
 @register_atoms()
 def snet_atoms():
