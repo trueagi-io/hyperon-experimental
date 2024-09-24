@@ -84,7 +84,7 @@ impl SpaceMut for ModuleSpace {
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         self.main.replace(from, to)
     }
-    fn as_space(&self) -> &dyn Space {
+    fn as_space<'a>(&self) -> &(dyn Space + 'a) {
         self
     }
 }

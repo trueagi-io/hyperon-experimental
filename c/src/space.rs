@@ -827,7 +827,7 @@ impl SpaceMut for CSpace {
         let from: atom_ref_t = from.into();
         (api.replace)(&self.params, &from, to.into())
     }
-    fn as_space(&self) -> &dyn Space {
+    fn as_space<'a>(&self) -> &(dyn Space + 'a) {
         self
     }
 }

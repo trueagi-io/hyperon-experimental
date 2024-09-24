@@ -257,7 +257,7 @@ pub trait SpaceMut: Space {
 
     /// Turn a &dyn SpaceMut into an &dyn Space.  Obsolete when Trait Upcasting is stabilized.
     /// [Rust issue #65991](https://github.com/rust-lang/rust/issues/65991)  Any month now.
-    fn as_space(&self) -> &dyn Space;
+    fn as_space<'a>(&self) -> &(dyn Space + 'a);
 }
 
 #[derive(Clone)]
@@ -305,7 +305,7 @@ impl SpaceMut for DynSpace {
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         self.0.borrow_mut().replace(from, to)
     }
-    fn as_space(&self) -> &dyn Space {
+    fn as_space<'a>(&self) -> &(dyn Space + 'a) {
         self
     }
 }
