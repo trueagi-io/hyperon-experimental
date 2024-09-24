@@ -7,6 +7,7 @@ pub mod module;
 use std::fmt::Display;
 use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
+use std::ops::Deref;
 
 use crate::common::FlexRef;
 use crate::atom::*;
@@ -324,13 +325,44 @@ impl Space for DynSpace {
         self.0.borrow().atom_count()
     }
     fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
-        None
+        DynSpaceIter::new(self)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
     }
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         None
+    }
+}
+
+struct DynSpaceIter<'a> {
+    space_ref: Ref<'a, dyn Space>,
+    space_iter: Option<Box<dyn Iterator<Item=&'a Atom> + 'a>>,
+}
+
+impl<'a> DynSpaceIter<'a> {
+    fn new(space: &'a DynSpace) -> Option<Box<dyn Iterator<Item=&Atom> + 'a>> {
+        let space_ref = Ref::map(space.borrow(), SpaceMut::as_space);
+        let mut iter = Self{
+            space_ref,
+            space_iter: None,
+        };
+        let space_ptr = iter.space_ref.deref() as *const dyn Space;
+        match unsafe{ (*space_ptr).atom_iter() } {
+            Some(it) => {
+                iter.space_iter = Some(it);
+                Some(Box::new(iter))
+            },
+            None => None,
+        }
+    }
+}
+
+impl<'a> Iterator for DynSpaceIter<'a> {
+    type Item=&'a Atom;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.space_iter.as_mut().unwrap().next()
     }
 }
 
