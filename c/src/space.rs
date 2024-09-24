@@ -736,7 +736,7 @@ impl Space for CSpace {
             None
         }
     }
-    fn atom_iter(&self) -> Option<SpaceIter> {
+    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         struct CSpaceIterator<'a>(&'a CSpace, *mut c_void);
         impl<'a> Iterator for CSpaceIterator<'a> {
             type Item = &'a Atom;
@@ -772,7 +772,7 @@ impl Space for CSpace {
                 None
             } else {
                 let new_iter = CSpaceIterator(self, ctx);
-                Some(SpaceIter::new(new_iter))
+                Some(Box::new(new_iter))
             }
         } else {
             None

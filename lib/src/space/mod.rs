@@ -88,25 +88,6 @@ impl<T: SpaceObserver> From<Rc<RefCell<T>>> for SpaceObserverRef<T> {
     }
 }
 
-/// Space iterator.
-pub struct SpaceIter<'a> {
-    iter: Box<dyn Iterator<Item=&'a Atom> + 'a>
-}
-
-impl<'a> SpaceIter<'a> {
-    pub fn new<I: Iterator<Item=&'a Atom> + 'a>(iter: I) -> Self {
-        Self{ iter: Box::new(iter) }
-    }
-}
-
-impl<'a> Iterator for SpaceIter<'a> {
-    type Item = &'a Atom;
-
-    fn next(&mut self) -> Option<&'a Atom> {
-        self.iter.next()
-    }
-}
-
 /// A common object that needs to be maintained by all objects implementing the Space trait
 #[derive(Default)]
 pub struct SpaceCommon {
@@ -204,7 +185,7 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
     }
 
     /// Returns an iterator over every atom in the space, or None if that is not possible
-    fn atom_iter(&self) -> Option<SpaceIter> {
+    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         None
     }
 
@@ -342,7 +323,7 @@ impl Space for DynSpace {
     fn atom_count(&self) -> Option<usize> {
         self.0.borrow().atom_count()
     }
-    fn atom_iter(&self) -> Option<SpaceIter> {
+    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         None
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -388,7 +369,7 @@ impl<T: Space> Space for &T {
     fn atom_count(&self) -> Option<usize> {
         T::atom_count(*self)
     }
-    fn atom_iter(&self) -> Option<SpaceIter> {
+    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         T::atom_iter(*self)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {

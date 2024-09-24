@@ -291,8 +291,8 @@ impl GroundingSpace {
     }
 
     /// Returns the iterator over content of the space.
-    pub fn iter(&self) -> SpaceIter {
-        SpaceIter::new(GroundingSpaceIter::new(self))
+    fn iter(&self) -> GroundingSpaceIter<'_> {
+        GroundingSpaceIter::new(self)
     }
 
     /// Sets the name property for the `GroundingSpace` which can be useful for debugging
@@ -316,8 +316,8 @@ impl Space for GroundingSpace {
     fn atom_count(&self) -> Option<usize> {
         Some(self.iter().count())
     }
-    fn atom_iter(&self) -> Option<SpaceIter> {
-        Some(self.iter())
+    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
+        Some(Box::new(self.iter()))
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)

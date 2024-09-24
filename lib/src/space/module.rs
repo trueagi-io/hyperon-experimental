@@ -63,7 +63,7 @@ impl Space for ModuleSpace {
     fn atom_count(&self) -> Option<usize> {
         self.main.atom_count()
     }
-    fn atom_iter(&self) -> Option<SpaceIter> {
+    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         self.main.atom_iter()
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
