@@ -103,6 +103,60 @@ class SNetSDKWrapper:
         return [E(S('Error'), E(S('snet-sdk'), command_a, *args_a),
                   ValueAtom(f'unknown command {repr(command_a)}'))]
 
+len_threshold = 50
+current_len = 0
+def pretty_print_atoms(input_atoms):
+
+    global len_threshold
+    global current_len
+    def process_svg_atom(atom):
+        global len_threshold
+        global current_len
+        repr_atom = repr(atom)
+        current_len += len(repr_atom)
+        return repr_atom
+
+    def check_len(depth):
+        global len_threshold
+        global current_len
+        if current_len > len_threshold:
+            current_len = 0
+            return "\n" + "\t" * (depth - 1)
+        else:
+            return ""
+
+    def process_atom(atom, depth):
+        global len_threshold
+        global current_len
+        process_res = ""
+        metatype = atom.get_metatype()
+        if metatype == AtomKind.EXPR:
+            len_to_last_eol_flag = current_len > 5
+            current_len *= (depth <= 1) * (not len_to_last_eol_flag)
+            process_res += ("\n" + "\t" * depth) * (
+                    depth > 0) * len_to_last_eol_flag + f"({process_expr_atom(atom, depth + 1)})"
+        elif (metatype == AtomKind.SYMBOL) or (metatype == AtomKind.VARIABLE) or (metatype == AtomKind.GROUNDED):
+            process_res += process_svg_atom(atom) + check_len(depth)
+        else:
+            raise Exception(f"Unexpected type of the Atom: {str(metatype)}")
+        return process_res
+
+    def process_expr_atom(expr_atom, depth):
+        sub_atoms = expr_atom.get_children()
+        process_res = ""
+        for sub_atom in sub_atoms:
+            process_atom_res = process_atom(sub_atom, depth)
+            process_res += process_atom_res + check_len(depth)
+            process_res += " "
+        return process_res[:-1]
+
+    res_string = "(" * (not (input_atoms[0].get_metatype() == AtomKind.EXPR))
+    current_len = 0
+    for atom in input_atoms:
+        res_string += process_atom(atom, 0)
+        res_string += "\n\n"
+        current_len = 0
+    return res_string
 
 class ServiceCall:
 
@@ -115,8 +169,6 @@ class ServiceCall:
         self.outputs = []
         self.io_types = []
         self.func_names = []
-        self.len_threshold = 50
-        self.current_len = 0
         for method in methods:
             self.func_names += [method[0]]
             types = method[1:]
@@ -143,53 +195,8 @@ class ServiceCall:
     def get_operation_atom(self):
         return OperationAtom(self.service_details[1], self)
 
-    def __pretty_print_atoms__(self, input_atoms):
-
-        def process_svg_atom(atom):
-            repr_atom = repr(atom)
-            self.current_len += len(repr_atom)
-            return repr_atom
-
-        def check_len(depth):
-            if self.current_len > self.len_threshold:
-                self.current_len = 0
-                return "\n" + "\t" * (depth - 1)
-            else:
-                return ""
-
-        def process_atom(atom, depth):
-            process_res = ""
-            metatype = atom.get_metatype()
-            if metatype == AtomKind.EXPR:
-                len_to_last_eol_flag = self.current_len > 5
-                self.current_len *= (depth <= 1) * (not len_to_last_eol_flag)
-                process_res += ("\n" + "\t" * depth) * (
-                        depth > 0) * len_to_last_eol_flag + f"({process_expr_atom(atom, depth + 1)})"
-            elif (metatype == AtomKind.SYMBOL) or (metatype == AtomKind.VARIABLE) or (metatype == AtomKind.GROUNDED):
-                process_res += process_svg_atom(atom) + check_len(depth)
-            else:
-                raise Exception(f"Unexpected type of the Atom: {str(metatype)}")
-            return process_res
-
-        def process_expr_atom(expr_atom, depth):
-            sub_atoms = expr_atom.get_children()
-            process_res = ""
-            for sub_atom in sub_atoms:
-                process_atom_res = process_atom(sub_atom, depth)
-                process_res += process_atom_res + check_len(depth)
-                process_res += " "
-            return process_res[:-1]
-
-        res_string = "(" * (not (input_atoms[0].get_metatype() == AtomKind.EXPR))
-        self.current_len = 0
-        for atom in input_atoms:
-            res_string += process_atom(atom, 0)
-            res_string += "\n\n"
-            self.current_len = 0
-        return res_string
-
     def generate_callers_text(self):
-        return self.__pretty_print_atoms__(self.generate_callers())
+        return pretty_print_atoms(self.generate_callers())
 
     def open_channel_and_deposit(self, amount, expiration):
         self.service_client.deposit_and_open_channel(amount, expiration)
