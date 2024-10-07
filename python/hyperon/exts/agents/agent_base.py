@@ -1,8 +1,24 @@
 from hyperon import *
 from hyperon.ext import register_atoms
 
+'''
+This is very preliminary and incomplete PoC version.
+However, it is put to exts, because metta-motto depends on it.
+'''
+
 class AgentObject:
 
+    '''
+    The base agent object class, which purpose is twofold.
+    1) It allows using Metta scripts as agents.
+    2) Python classes inherited from it, can be used for
+       creating agents in metta (almost) without additional
+       boilerplate code.
+    These two purposes are combined in one base class, so one
+    can inherit from it and add functionality, which will be
+    shared between Python and Metta agents (as how it happens
+    in Metta-motto)
+    '''
     _name = None
 
     @classmethod
