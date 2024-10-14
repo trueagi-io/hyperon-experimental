@@ -73,9 +73,9 @@
 (: decons-atom (-> Expression Expression))
 
 (@doc collapse-bind
-  (@desc "Evaluates the Atom (first argument) and returns an expression which contains all alternative evaluations in a form (Atom Bindings). Bindings are represented in a form of a grounded atom.")
+  (@desc "Evaluates minimal MeTTa operation (first argument) and returns an expression which contains all alternative evaluations in a form (Atom Bindings). Bindings are represented in a form of a grounded atom.")
   (@params (
-    (@param "Atom to be evaluated")))
+    (@param "Minimal MeTTa operation to be evaluated")))
   (@return "All alternative evaluations"))
 (: collapse-bind (-> Atom Expression))
 
