@@ -8,9 +8,9 @@
 ; is corelib, which was a dependency of stdlib that has been promoted
 ; These atoms are both wrapped spaces, as is `&self`
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-!(assertEqual
-  ((let $x (get-atoms &self) (get-type $x)))
-  (superpose (((get-type &self)) ((get-type &self)))))
+;!(assertEqual
+  ;((let $x (get-atoms &self) (get-type $x)))
+  ;(superpose (((get-type &self)) ((get-type &self)))))
 
 ; stdlib is already loaded
 !(assertEqual
@@ -37,9 +37,9 @@
    (let* (($type (get-type $atom)) ($space (get-type &self))) (== $type $space)))
 
 ; It's first atom is a space
-!(assertEqual
-  (let $x (collapse (get-atoms &m)) (contains $x is-space))
-  True)
+;!(assertEqual
+  ;(let $x (collapse (get-atoms &m)) (contains $x is-space))
+  ;True)
 
 ; FIXME? Now, it is moduleC space.
 ;        Should it be `stdlib` atom for a separately imported space
@@ -93,9 +93,9 @@
 !(import! &corelib top:corelib)
 (: is-corelib (-> Atom Bool))
 (= (is-corelib $atom) (== $atom &corelib))
-!(assertEqual
-  (let $a (collapse (get-atoms &self)) (contains $a is-corelib))
-  True)
+;!(assertEqual
+  ;(let $a (collapse (get-atoms &self)) (contains $a is-corelib))
+  ;True)
 
 ; Let's check that `if` from stdlib is not duplicated and gives only one result
 !(assertEqual

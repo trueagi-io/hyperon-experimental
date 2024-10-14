@@ -2,10 +2,12 @@
 //! This module is intended to keep different space implementations.
 
 pub mod grounding;
+pub mod module;
 
 use std::fmt::Display;
 use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
+use std::ops::Deref;
 
 use crate::common::FlexRef;
 use crate::atom::*;
@@ -84,25 +86,6 @@ impl<T: SpaceObserver> SpaceObserverRef<T> {
 impl<T: SpaceObserver> From<Rc<RefCell<T>>> for SpaceObserverRef<T> {
     fn from(observer: Rc<RefCell<T>>) -> Self {
         Self(observer)
-    }
-}
-
-/// Space iterator.
-pub struct SpaceIter<'a> {
-    iter: Box<dyn Iterator<Item=&'a Atom> + 'a>
-}
-
-impl<'a> SpaceIter<'a> {
-    pub fn new<I: Iterator<Item=&'a Atom> + 'a>(iter: I) -> Self {
-        Self{ iter: Box::new(iter) }
-    }
-}
-
-impl<'a> Iterator for SpaceIter<'a> {
-    type Item = &'a Atom;
-
-    fn next(&mut self) -> Option<&'a Atom> {
-        self.iter.next()
     }
 }
 
@@ -203,7 +186,7 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
     }
 
     /// Returns an iterator over every atom in the space, or None if that is not possible
-    fn atom_iter(&self) -> Option<SpaceIter> {
+    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         None
     }
 
@@ -275,13 +258,16 @@ pub trait SpaceMut: Space {
 
     /// Turn a &dyn SpaceMut into an &dyn Space.  Obsolete when Trait Upcasting is stabilized.
     /// [Rust issue #65991](https://github.com/rust-lang/rust/issues/65991)  Any month now.
-    fn as_space(&self) -> &dyn Space;
+    fn as_space<'a>(&self) -> &(dyn Space + 'a);
 }
 
 #[derive(Clone)]
 pub struct DynSpace(Rc<RefCell<dyn SpaceMut>>);
 
 impl DynSpace {
+    pub fn with_rc(space: Rc<RefCell<dyn SpaceMut>>) -> Self {
+        Self(space)
+    }
     pub fn new<T: SpaceMut + 'static>(space: T) -> Self {
         let shared = Rc::new(RefCell::new(space));
         DynSpace(shared)
@@ -320,7 +306,7 @@ impl SpaceMut for DynSpace {
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         self.0.borrow_mut().replace(from, to)
     }
-    fn as_space(&self) -> &dyn Space {
+    fn as_space<'a>(&self) -> &(dyn Space + 'a) {
         self
     }
 }
@@ -338,14 +324,45 @@ impl Space for DynSpace {
     fn atom_count(&self) -> Option<usize> {
         self.0.borrow().atom_count()
     }
-    fn atom_iter(&self) -> Option<SpaceIter> {
-        None
+    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
+        DynSpaceIter::new(self)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
     }
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
         None
+    }
+}
+
+struct DynSpaceIter<'a> {
+    space_ref: Ref<'a, dyn Space>,
+    space_iter: Option<Box<dyn Iterator<Item=&'a Atom> + 'a>>,
+}
+
+impl<'a> DynSpaceIter<'a> {
+    fn new(space: &'a DynSpace) -> Option<Box<dyn Iterator<Item=&Atom> + 'a>> {
+        let space_ref = Ref::map(space.borrow(), SpaceMut::as_space);
+        let mut iter = Self{
+            space_ref,
+            space_iter: None,
+        };
+        let space_ptr = iter.space_ref.deref() as *const dyn Space;
+        match unsafe{ (*space_ptr).atom_iter() } {
+            Some(it) => {
+                iter.space_iter = Some(it);
+                Some(Box::new(iter))
+            },
+            None => None,
+        }
+    }
+}
+
+impl<'a> Iterator for DynSpaceIter<'a> {
+    type Item=&'a Atom;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.space_iter.as_mut().unwrap().next()
     }
 }
 
@@ -384,7 +401,7 @@ impl<T: Space> Space for &T {
     fn atom_count(&self) -> Option<usize> {
         T::atom_count(*self)
     }
-    fn atom_iter(&self) -> Option<SpaceIter> {
+    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         T::atom_iter(*self)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
