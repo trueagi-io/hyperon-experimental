@@ -79,6 +79,7 @@ class StdlibTest(HyperonTestCase):
         self.assertEqualMettaRunnerResults(metta.run("!(id' \"te st\")"), [[ValueAtom("te st")]])
         self.assertEqualMettaRunnerResults(metta.run("!(id' \"te\\\"st\")"), [[ValueAtom("te\"st")]])
         self.assertEqualMettaRunnerResults(metta.run("!(id' \"\")"), [[ValueAtom("")]])
+        self.assertEqualMettaRunnerResults(metta.run("!(id' \"te\\nst\")"), [[ValueAtom("te\nst")]])
 
     def test_regex(self):
         metta = MeTTa(env_builder=Environment.test_env())

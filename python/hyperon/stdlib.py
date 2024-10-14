@@ -119,7 +119,7 @@ def type_tokens():
         r"[-+]?\d+" : lambda token: ValueAtom(int(token), 'Number'),
         r"[-+]?\d+\.\d+": lambda token: ValueAtom(float(token), 'Number'),
         r"[-+]?\d+(\.\d+)?[eE][-+]?\d+": lambda token: ValueAtom(float(token), 'Number'),
-        r"^\".*\"$": lambda token: ValueAtom(str(token[1:-1]), 'String'),
+        r"(?s)^\".*\"$": lambda token: ValueAtom(str(token[1:-1]), 'String'),
         "\'[^\']\'": lambda token: ValueAtom(Char(token[1]), 'Char'),
         r"True|False": lambda token: ValueAtom(token == 'True', 'Bool'),
         r'regex:"[^"]*"': lambda token: G(RegexMatchableObject(token),  AtomType.UNDEFINED)

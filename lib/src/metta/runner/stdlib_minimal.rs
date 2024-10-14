@@ -506,7 +506,7 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
         |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
     tref.register_token(regex(r"True|False"),
         |token| { Atom::gnd(Bool::from_str(token)) });
-    tref.register_token(regex(r#"^".*"$"#),
+    tref.register_token(regex(r#"(?s)^".*"$"#),
         |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
     let sum_op = Atom::gnd(SumOp{});
     tref.register_token(regex(r"\+"), move |_| { sum_op.clone() });
@@ -1285,6 +1285,8 @@ mod tests {
             !(id "te st")
             !(id "te\"st")
             !(id "")
+            !(id "te\nst")
+            !("te\nst"test)
         "#);
 
         assert_eq_metta_results!(metta.run(parser), Ok(vec![
@@ -1292,6 +1294,8 @@ mod tests {
             vec![expr!({Str::from_str("te st")})],
             vec![expr!({Str::from_str("te\"st")})],
             vec![expr!({Str::from_str("")})],
+            vec![expr!({Str::from_str("te\nst")})],
+            vec![expr!({Str::from_str("te\nst")} "test")],
         ]));
     }
 }
