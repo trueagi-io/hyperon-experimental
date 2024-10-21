@@ -1037,13 +1037,13 @@ pub(crate) mod pkg_mgmt_ops {
 }
 
 #[derive(Clone, Debug)]
-pub struct UniqueOp {}
+pub struct UniqueAtomOp {}
 
-grounded_op!(UniqueOp, "unique");
+grounded_op!(UniqueAtomOp, "unique-atom");
 
-impl Grounded for UniqueOp {
+impl Grounded for UniqueAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -1051,7 +1051,7 @@ impl Grounded for UniqueOp {
     }
 }
 
-impl CustomExecute for UniqueOp {
+impl CustomExecute for UniqueAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("unique expects single expression atom as an argument");
         let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
@@ -1063,18 +1063,18 @@ impl CustomExecute for UniqueOp {
             if not_contained { set.add(x.clone()) };
             not_contained
         });
-        Ok(atoms)
+        Ok(vec![Atom::expr(atoms)])
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct UnionOp {}
+pub struct UnionAtomOp {}
 
-grounded_op!(UnionOp, "union");
+grounded_op!(UnionAtomOp, "union-atom");
 
-impl Grounded for UnionOp {
+impl Grounded for UnionAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -1082,7 +1082,7 @@ impl Grounded for UnionOp {
     }
 }
 
-impl CustomExecute for UnionOp {
+impl CustomExecute for UnionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("union expects and executable LHS and RHS atom");
         let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
@@ -1090,18 +1090,18 @@ impl CustomExecute for UnionOp {
 
         lhs.extend(rhs);
 
-        Ok(lhs)
+        Ok(vec![Atom::expr(lhs)])
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct IntersectionOp {}
+pub struct IntersectionAtomOp {}
 
-grounded_op!(IntersectionOp, "intersection");
+grounded_op!(IntersectionAtomOp, "intersection-atom");
 
-impl Grounded for IntersectionOp {
+impl Grounded for IntersectionAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -1109,7 +1109,7 @@ impl Grounded for IntersectionOp {
     }
 }
 
-impl CustomExecute for IntersectionOp {
+impl CustomExecute for IntersectionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("intersection expects and executable LHS and RHS atom");
         let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
@@ -1156,18 +1156,18 @@ impl CustomExecute for IntersectionOp {
             }
         });
 
-        Ok(lhs)
+        Ok(vec![Atom::expr(lhs)])
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct SubtractionOp {}
+pub struct SubtractionAtomOp {}
 
-grounded_op!(SubtractionOp, "subtraction");
+grounded_op!(SubtractionAtomOp, "subtraction-atom");
 
-impl Grounded for SubtractionOp {
+impl Grounded for SubtractionAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -1175,7 +1175,7 @@ impl Grounded for SubtractionOp {
     }
 }
 
-impl CustomExecute for SubtractionOp {
+impl CustomExecute for SubtractionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("subtraction expects and executable LHS and RHS atom");
         let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
@@ -1222,7 +1222,7 @@ impl CustomExecute for SubtractionOp {
             }
         });
 
-        Ok(lhs)
+        Ok(vec![Atom::expr(lhs)])
     }
 }
 
@@ -1763,14 +1763,14 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
         let sealed_op = Atom::gnd(SealedOp{});
         tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
-        let unique_op = Atom::gnd(UniqueOp{});
-        tref.register_token(regex(r"unique"), move |_| { unique_op.clone() });
-        let subtraction_op = Atom::gnd(SubtractionOp{});
-        tref.register_token(regex(r"subtraction"), move |_| { subtraction_op.clone() });
-        let intersection_op = Atom::gnd(IntersectionOp{});
-        tref.register_token(regex(r"intersection"), move |_| { intersection_op.clone() });
-        let union_op = Atom::gnd(UnionOp{});
-        tref.register_token(regex(r"union"), move |_| { union_op.clone() });
+        let unique_op = Atom::gnd(UniqueAtomOp{});
+        tref.register_token(regex(r"unique-atom"), move |_| { unique_op.clone() });
+        let subtraction_op = Atom::gnd(SubtractionAtomOp{});
+        tref.register_token(regex(r"subtraction-atom"), move |_| { subtraction_op.clone() });
+        let intersection_op = Atom::gnd(IntersectionAtomOp{});
+        tref.register_token(regex(r"intersection-atom"), move |_| { intersection_op.clone() });
+        let union_op = Atom::gnd(UnionAtomOp{});
+        tref.register_token(regex(r"union-atom"), move |_| { union_op.clone() });
 
         #[cfg(feature = "pkg_mgmt")]
         pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
@@ -2142,7 +2142,7 @@ mod tests {
 
     #[test]
     fn unique_op() {
-        let unique_op = UniqueOp{};
+        let unique_op = UniqueAtomOp{};
         let actual = unique_op.execute(&mut vec![expr!(
                 ("A" ("B" "C"))
                 ("A" ("B" "C"))
@@ -2152,12 +2152,12 @@ mod tests {
                 "Z"
         )]).unwrap();
         assert_eq_no_order!(actual,
-                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("Z")]);
+                   vec![expr!(("A" ("B" "C")) ("f" "g") "Z")]);
     }
 
     #[test]
     fn union_op() {
-        let union_op = UnionOp{};
+        let union_op = UnionAtomOp{};
         let actual = union_op.execute(&mut vec![expr!(
                 ("A" ("B" "C"))
                 ("A" ("B" "C"))
@@ -2172,13 +2172,14 @@ mod tests {
                 ("Q" "a")
             )]).unwrap();
         assert_eq_no_order!(actual,
-                   vec![expr!("A" ("B" "C")), expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("f" "g"), expr!("Z"),
-                        expr!("A" ("B" "C")), expr!("p"), expr!("p"), expr!("Q" "a")]);
+                   vec![expr!(("A" ("B" "C")) ("A" ("B" "C"))
+                        ("f" "g") ("f" "g") ("f" "g") "Z"
+                        ("A" ("B" "C")) "p" "p" ("Q" "a"))]);
     }
 
     #[test]
     fn intersection_op() {
-        let intersection_op = IntersectionOp{};
+        let intersection_op = IntersectionAtomOp{};
         let actual = intersection_op.execute(&mut vec![expr!(
                 "Z"
                 ("A" ("B" "C"))
@@ -2196,8 +2197,7 @@ mod tests {
                 ("Q" "a")
                 "Z"
             )]).unwrap();
-        assert_eq_no_order!(actual,
-                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("Z")]);
+        assert_eq_no_order!(actual, vec![expr!("Z" ("A" ("B" "C")) ("f" "g") ("f" "g"))]);
 
         assert_eq_no_order!(intersection_op.execute(&mut vec![expr!(
                 { Number::Integer(5) }
@@ -2207,12 +2207,12 @@ mod tests {
             ), expr!(
                 { Number::Integer(5) }
                 { Number::Integer(3) }
-            )]).unwrap(), vec![expr!({Number::Integer(5)}), expr!({Number::Integer(3)})]);
+            )]).unwrap(), vec![expr!({Number::Integer(5)} {Number::Integer(3)})]);
     }
 
     #[test]
     fn subtraction_op() {
-        let subtraction_op = SubtractionOp{};
+        let subtraction_op = SubtractionAtomOp{};
         let actual = subtraction_op.execute(&mut vec![expr!(
                 "Z"
                 "S"
@@ -2235,7 +2235,7 @@ mod tests {
                 "S"
             )]).unwrap();
         assert_eq_no_order!(actual,
-                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("P" "b")]);
+                   vec![expr!(("A" ("B" "C")) ("f" "g") ("f" "g") ("P" "b"))]);
     }
 
     #[test]
