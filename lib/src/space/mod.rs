@@ -8,6 +8,7 @@ use std::fmt::Display;
 use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
 use std::ops::Deref;
+use std::borrow::Cow;
 
 use crate::common::FlexRef;
 use crate::atom::*;
@@ -134,12 +135,12 @@ impl Clone for SpaceCommon {
 /// An interface for visiting space atoms.
 pub trait SpaceVisitor {
     /// Method is called by [Space::visit] implementation for each atom from the atomspace.
-    fn accept(&mut self, atom: &Atom);
+    fn accept(&mut self, atom: Cow<Atom>);
 }
 
 /// One can use closure instead of implementing [SpaceVisitor] interface manually.
-impl<T> SpaceVisitor for T where T: FnMut(&Atom) {
-    fn accept(&mut self, atom: &Atom) {
+impl<T> SpaceVisitor for T where T: FnMut(Cow<Atom>) {
+    fn accept(&mut self, atom: Cow<Atom>) {
         (*self)(atom)
     }
 }
@@ -205,6 +206,10 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
 
     /// Visit each atom of the space and call [SpaceVisitor::accept] method.
     /// This method is optional. Return `Err(())` if method is not implemented.
+    /// `Cow<Atom>` is used to allow passing both references and values. First
+    /// is appropriate for collection based atomspace. Second one is more
+    /// usable if atomspace is a generator or when values cannot be extracted
+    /// easily and should be reconstructed instead.
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()>;
 
     /// Returns an `&dyn `[Any](std::any::Any) for spaces where this is possible

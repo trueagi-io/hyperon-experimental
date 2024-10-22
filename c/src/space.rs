@@ -7,6 +7,7 @@ use hyperon::matcher::*;
 use crate::atom::*;
 
 use std::os::raw::*;
+use std::borrow::Cow;
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Space Client Interface
@@ -238,7 +239,7 @@ pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
 pub extern "C" fn space_iterate(space: *const space_t,
         callback: c_atom_callback_t, context: *mut c_void) -> bool {
     let dyn_space = unsafe{ &*space }.borrow();
-    match dyn_space.visit(&mut |atom: &Atom| callback(atom.into(), context)) {
+    match dyn_space.visit(&mut |atom: Cow<Atom>| callback(atom.as_ref().into(), context)) {
         Ok(()) => true,
         Err(()) => false,
     }
@@ -775,7 +776,7 @@ impl Space for CSpace {
     }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
         self.atom_iter().map_or(Err(()), |iter| {
-            iter.fold((), |_, atom| { v.accept(atom) });
+            iter.fold((), |_, atom| { v.accept(Cow::Borrowed(atom)) });
             Ok(())
         })
     }
