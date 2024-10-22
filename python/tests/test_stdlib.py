@@ -72,6 +72,15 @@ class StdlibTest(HyperonTestCase):
         self.assertEqualMettaRunnerResults(metta.run("!(+ 1.0e3 2.0e3)"), [[ValueAtom(3e3)]])
         self.assertEqualMettaRunnerResults(metta.run("!(+ 5e-3 -2e-3)"), [[ValueAtom(3e-3)]])
 
+    def test_string_parsing(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+        metta.run("(= (id' $x) $x)")
+        self.assertEqualMettaRunnerResults(metta.run("!(id' \"test\")"), [[ValueAtom("test")]])
+        self.assertEqualMettaRunnerResults(metta.run("!(id' \"te st\")"), [[ValueAtom("te st")]])
+        self.assertEqualMettaRunnerResults(metta.run("!(id' \"te\\\"st\")"), [[ValueAtom("te\"st")]])
+        self.assertEqualMettaRunnerResults(metta.run("!(id' \"\")"), [[ValueAtom("")]])
+        self.assertEqualMettaRunnerResults(metta.run("!(id' \"te\\nst\")"), [[ValueAtom("te\nst")]])
+
     def test_regex(self):
         metta = MeTTa(env_builder=Environment.test_env())
         metta.run('''(= (intent regex:"^Hello[[\.|!]]?$") (Intent Hello))
