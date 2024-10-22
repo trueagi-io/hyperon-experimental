@@ -506,7 +506,7 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
         |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
     tref.register_token(regex(r"True|False"),
         |token| { Atom::gnd(Bool::from_str(token)) });
-    tref.register_token(regex(r#""[^"]+""#),
+    tref.register_token(regex(r#"(?s)^".*"$"#),
         |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
     let sum_op = Atom::gnd(SumOp{});
     tref.register_token(regex(r"\+"), move |_| { sum_op.clone() });
@@ -550,6 +550,7 @@ mod tests {
     use super::*;
     use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
+    use crate::metta::runner::string::Str;
     use crate::matcher::atoms_are_equivalent;
     use crate::common::Operation;
     use crate::common::test_utils::metta_space;
@@ -1273,6 +1274,28 @@ mod tests {
             vec![expr!("Symbol")],
             vec![expr!("ErrorType")],
             vec![expr!("Error" ({SumOp{}} {Number::Integer(1)} {Number::Integer(2)}) ({SumOp{}} {Number::Integer(1)} {SumOp{}}))],
+        ]));
+    }
+
+    #[test]
+    fn test_string_parsing() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+        let parser = SExprParser::new(r#"
+            !(id "test")
+            !(id "te st")
+            !(id "te\"st")
+            !(id "")
+            !(id "te\nst")
+            !("te\nst"test)
+        "#);
+
+        assert_eq_metta_results!(metta.run(parser), Ok(vec![
+            vec![expr!({Str::from_str("test")})],
+            vec![expr!({Str::from_str("te st")})],
+            vec![expr!({Str::from_str("te\"st")})],
+            vec![expr!({Str::from_str("")})],
+            vec![expr!({Str::from_str("te\nst")})],
+            vec![expr!({Str::from_str("te\nst")} "test")],
         ]));
     }
 }
