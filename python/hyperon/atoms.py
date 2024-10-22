@@ -311,6 +311,35 @@ class MettaError(Exception):
        , but we don't want to output Python error stack."""
     pass
 
+def unwrap_args(atoms):
+    args = []
+    kwargs = {}
+    for a in atoms:
+        if isinstance(a, ExpressionAtom):
+            ch = a.get_children()
+            if len(ch) > 0 and repr(ch[0]) == "Kwargs":
+                for c in ch[1:]:
+                    try:
+                        kwarg = c.get_children()
+                        assert len(kwarg) == 2
+                    except:
+                        raise RuntimeError(f"Incorrect kwarg format {kwarg}")
+                    try:
+                        kwargs[get_string_value(kwarg[0])] = kwarg[1].get_object().content
+                    except:
+                        raise NoReduceError()
+                continue
+        try:
+            args.append(a.get_object().content)
+        except:
+            # NOTE:
+            # Currently, applying grounded operations to pure atoms is not reduced.
+            # If we want, we can raise an exception, or form an error expression instead,
+            # so a MeTTa program can catch and analyze it.
+            # raise RuntimeError("Grounded operation " + self.name + " with unwrap=True expects only grounded arguments")
+            raise NoReduceError()
+    return args, kwargs
+
 class OperationObject(GroundedObject):
     """
     An OperationObject represents an operation as a grounded object, allowing for more
@@ -385,32 +414,7 @@ class OperationObject(GroundedObject):
         """
         # type-check?
         if self.unwrap:
-            args = []
-            kwargs = {}
-            for a in atoms:
-                if isinstance(a, ExpressionAtom):
-                    ch = a.get_children()
-                    if len(ch) > 0 and repr(ch[0]) == "Kwargs":
-                        for c in ch[1:]:
-                            try:
-                                kwarg = c.get_children()
-                                assert len(kwarg) == 2
-                            except:
-                                raise RuntimeError(f"Incorrect kwarg format {kwarg}")
-                            try:
-                                kwargs[get_string_value(kwarg[0])] = kwarg[1].get_object().content
-                            except:
-                                raise NoReduceError()
-                        continue
-                try:
-                    args.append(a.get_object().content)
-                except:
-                    # NOTE:
-                    # Currently, applying grounded operations to pure atoms is not reduced.
-                    # If we want, we can raise an exception, or form an error expression instead,
-                    # so a MeTTa program can catch and analyze it.
-                    # raise RuntimeError("Grounded operation " + self.name + " with unwrap=True expects only grounded arguments")
-                    raise NoReduceError()
+            args, kwargs = unwrap_args(atoms)
             try:
                 result = self.op(*args, **kwargs)
             except MettaError as e:
@@ -422,7 +426,9 @@ class OperationObject(GroundedObject):
             return [ValueAtom(result, res_typ)]
         else:
             result = self.op(*atoms)
-            if not isinstance(result, list):
+            try:
+                iter(result)
+            except TypeError:
                 raise RuntimeError("Grounded operation `" + self.name + "` should return list")
             return result
 
