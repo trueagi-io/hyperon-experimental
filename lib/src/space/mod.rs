@@ -131,6 +131,19 @@ impl Clone for SpaceCommon {
     }
 }
 
+/// An interface for visiting space atoms.
+pub trait SpaceVisitor {
+    /// Method is called by [Space::visit] implementation for each atom from the atomspace.
+    fn accept(&mut self, atom: &Atom);
+}
+
+/// One can use closure instead of implementing [SpaceVisitor] interface manually.
+impl<T> SpaceVisitor for T where T: FnMut(&Atom) {
+    fn accept(&mut self, atom: &Atom) {
+        (*self)(atom)
+    }
+}
+
 /// Read-only space trait.
 pub trait Space: std::fmt::Debug + std::fmt::Display {
     /// Access the SpaceCommon object owned by the Space
@@ -189,6 +202,10 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
     fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         None
     }
+
+    /// Visit each atom of the space and call [SpaceVisitor::accept] method.
+    /// This method is optional. Return `Err(())` if method is not implemented.
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()>;
 
     /// Returns an `&dyn `[Any](std::any::Any) for spaces where this is possible
     fn as_any(&self) -> Option<&dyn std::any::Any>;
@@ -327,6 +344,9 @@ impl Space for DynSpace {
     fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         DynSpaceIter::new(self)
     }
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
+        self.0.borrow().visit(v)
+    }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
     }
@@ -403,6 +423,9 @@ impl<T: Space> Space for &T {
     }
     fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         T::atom_iter(*self)
+    }
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
+        T::visit(*self, v)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None

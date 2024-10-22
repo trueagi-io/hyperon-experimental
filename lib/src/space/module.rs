@@ -66,6 +66,9 @@ impl Space for ModuleSpace {
     fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         self.main.atom_iter()
     }
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
+        self.main.visit(v)
+    }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

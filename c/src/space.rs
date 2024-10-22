@@ -238,14 +238,9 @@ pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
 pub extern "C" fn space_iterate(space: *const space_t,
         callback: c_atom_callback_t, context: *mut c_void) -> bool {
     let dyn_space = unsafe{ &*space }.borrow();
-    match dyn_space.borrow().atom_iter() {
-        Some(atom_iter) => {
-            for atom in atom_iter {
-                callback(atom.into(), context);
-            }
-            true
-        },
-        None => false
+    match dyn_space.visit(&mut |atom: &Atom| callback(atom.into(), context)) {
+        Ok(()) => true,
+        Err(()) => false,
     }
 }
 
@@ -778,6 +773,12 @@ impl Space for CSpace {
             None
         }
     }
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
+        self.atom_iter().map_or(Err(()), |iter| {
+            iter.fold((), |_, atom| { v.accept(atom) });
+            Ok(())
+        })
+    }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }
@@ -803,6 +804,7 @@ struct DefaultSpace<'a>(&'a CSpace);
 impl Space for DefaultSpace<'_> {
     fn common(&self) -> FlexRef<SpaceCommon> { self.0.common() }
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> { self.0.visit(v) }
     fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self.0) }
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> { None }
 }

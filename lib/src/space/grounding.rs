@@ -319,6 +319,9 @@ impl Space for GroundingSpace {
     fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
         Some(Box::new(self.iter()))
     }
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
+        Ok(self.iter().fold((), |_, atom| v.accept(atom)))
+    }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
     }

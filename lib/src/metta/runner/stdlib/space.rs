@@ -160,9 +160,9 @@ impl CustomExecute for GetAtomsOp {
         let arg_error = || ExecError::from("get-atoms expects one argument: space");
         let space = args.get(0).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("get-atoms expects a space as its argument")?;
-        space.borrow().as_space().atom_iter()
-            .map(|iter| iter.cloned().map(|a| make_variables_unique(a)).collect())
-            .ok_or(ExecError::Runtime("Unsupported Operation. Can't traverse atoms in this space".to_string()))
+        let mut result = Vec::new();
+        space.borrow().as_space().visit(&mut |atom: &Atom| result.push(make_variables_unique(atom.clone())))
+            .map_or(Err(ExecError::Runtime("Unsupported Operation. Can't traverse atoms in this space".to_string())), |_| Ok(result))
     }
 }
 
