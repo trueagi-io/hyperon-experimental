@@ -6,6 +6,7 @@ use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, ResourceKey};
 use crate::metta::runner::string::Str;
 use crate::metta::types::{get_atom_types, get_meta_type};
+#[cfg(feature = "old_interpreter")]
 use crate::metta::interpreter::interpret;
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
@@ -50,6 +51,7 @@ pub(crate) fn regex(regex: &str) -> Regex {
 
 // TODO: remove hiding errors completely after making it possible passing
 // them to the user
+#[cfg(feature = "old_interpreter")]
 fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
     let result = interpret(space, expr);
     log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
@@ -1035,21 +1037,13 @@ pub(crate) mod pkg_mgmt_ops {
 }
 
 #[derive(Clone, Debug)]
-pub struct UniqueOp {
-    pub(crate) space: DynSpace,
-}
+pub struct UniqueAtomOp {}
 
-grounded_op!(UniqueOp, "unique");
+grounded_op!(UniqueAtomOp, "unique-atom");
 
-impl UniqueOp {
-    pub fn new(space: DynSpace) -> Self {
-        Self{ space }
-    }
-}
-
-impl Grounded for UniqueOp {
+impl Grounded for UniqueAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -1057,40 +1051,30 @@ impl Grounded for UniqueOp {
     }
 }
 
-impl CustomExecute for UniqueOp {
+impl CustomExecute for UniqueAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("unique expects single executable atom as an argument");
-        let atom = args.get(0).ok_or_else(arg_error)?;
+        let arg_error = || ExecError::from("unique expects single expression atom as an argument");
+        let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
 
-        // TODO: Calling interpreter inside the operation is not too good
-        // Could it be done via StepResult?
-        let mut result = interpret_no_error(self.space.clone(), atom)?;
+        let mut atoms = expr.children().clone();
         let mut set = GroundingSpace::new();
-        result.retain(|x| {
+        atoms.retain(|x| {
             let not_contained = set.query(x).is_empty();
             if not_contained { set.add(x.clone()) };
             not_contained
         });
-        Ok(result)
+        Ok(vec![Atom::expr(atoms)])
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct UnionOp {
-    pub(crate) space: DynSpace,
-}
+pub struct UnionAtomOp {}
 
-grounded_op!(UnionOp, "union");
+grounded_op!(UnionAtomOp, "union-atom");
 
-impl UnionOp {
-    pub fn new(space: DynSpace) -> Self {
-        Self{ space }
-    }
-}
-
-impl Grounded for UnionOp {
+impl Grounded for UnionAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -1098,38 +1082,26 @@ impl Grounded for UnionOp {
     }
 }
 
-impl CustomExecute for UnionOp {
+impl CustomExecute for UnionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("union expects and executable LHS and RHS atom");
-        let lhs = args.get(0).ok_or_else(arg_error)?;
-        let rhs = args.get(1).ok_or_else(arg_error)?;
+        let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
+        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children().clone();
 
-        // TODO: Calling interpreter inside the operation is not too good
-        // Could it be done via StepResult?
-        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
-        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
-        lhs_result.extend(rhs_result);
+        lhs.extend(rhs);
 
-        Ok(lhs_result)
+        Ok(vec![Atom::expr(lhs)])
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct IntersectionOp {
-    pub(crate) space: DynSpace,
-}
+pub struct IntersectionAtomOp {}
 
-grounded_op!(IntersectionOp, "intersection");
+grounded_op!(IntersectionAtomOp, "intersection-atom");
 
-impl IntersectionOp {
-    pub fn new(space: DynSpace) -> Self {
-        Self{ space }
-    }
-}
-
-impl Grounded for IntersectionOp {
+impl Grounded for IntersectionAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -1137,18 +1109,14 @@ impl Grounded for IntersectionOp {
     }
 }
 
-impl CustomExecute for IntersectionOp {
+impl CustomExecute for IntersectionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("intersection expects and executable LHS and RHS atom");
-        let lhs = args.get(0).ok_or_else(arg_error)?;
-        let rhs = args.get(1).ok_or_else(arg_error)?;
+        let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
+        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children().clone();
 
-        // TODO: Calling interpreter inside the operation is not too good
-        // Could it be done via StepResult?
-        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
-        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
         let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
-        for (index, rhs_item) in rhs_result.iter().enumerate() {
+        for (index, rhs_item) in rhs.iter().enumerate() {
             let k = atom_to_trie_key(&rhs_item);
             // FIXME this should
             // a) use a mutable value endpoint which the MultiTrie does not support atm
@@ -1166,13 +1134,13 @@ impl CustomExecute for IntersectionOp {
             }
         }
 
-        lhs_result.retain(|candidate| {
+        lhs.retain(|candidate| {
             let k = atom_to_trie_key(candidate);
             let r = rhs_index.get(&k).next();
             match r.cloned() {
                 None => { false }
                 Some(bucket) => {
-                    match bucket.iter().position(|item| &rhs_result[*item] == candidate) {
+                    match bucket.iter().position(|item| &rhs[*item] == candidate) {
                         None => { false }
                         Some(i) => {
                             rhs_index.remove(&k, &bucket);
@@ -1188,26 +1156,18 @@ impl CustomExecute for IntersectionOp {
             }
         });
 
-        Ok(lhs_result)
+        Ok(vec![Atom::expr(lhs)])
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct SubtractionOp {
-    pub(crate) space: DynSpace,
-}
+pub struct SubtractionAtomOp {}
 
-grounded_op!(SubtractionOp, "subtraction");
+grounded_op!(SubtractionAtomOp, "subtraction-atom");
 
-impl SubtractionOp {
-    pub fn new(space: DynSpace) -> Self {
-        Self{ space }
-    }
-}
-
-impl Grounded for SubtractionOp {
+impl Grounded for SubtractionAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -1215,18 +1175,14 @@ impl Grounded for SubtractionOp {
     }
 }
 
-impl CustomExecute for SubtractionOp {
+impl CustomExecute for SubtractionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("subtraction expects and executable LHS and RHS atom");
-        let lhs = args.get(0).ok_or_else(arg_error)?;
-        let rhs = args.get(1).ok_or_else(arg_error)?;
+        let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
+        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children().clone();
 
-        // TODO: Calling interpreter inside the operation is not too good
-        // Could it be done via StepResult?
-        let mut lhs_result = interpret_no_error(self.space.clone(), lhs)?;
-        let rhs_result = interpret_no_error(self.space.clone(), rhs)?;
         let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
-        for (index, rhs_item) in rhs_result.iter().enumerate() {
+        for (index, rhs_item) in rhs.iter().enumerate() {
             let k = atom_to_trie_key(&rhs_item);
             // FIXME this should
             // a) use a mutable value endpoint which the MultiTrie does not support atm
@@ -1244,13 +1200,13 @@ impl CustomExecute for SubtractionOp {
             }
         }
 
-        lhs_result.retain(|candidate| {
+        lhs.retain(|candidate| {
             let k = atom_to_trie_key(candidate);
             let r = rhs_index.get(&k).next();
             match r.cloned() {
                 None => { true }
                 Some(bucket) => {
-                    match bucket.iter().position(|item| &rhs_result[*item] == candidate) {
+                    match bucket.iter().position(|item| &rhs[*item] == candidate) {
                         None => { true }
                         Some(i) => {
                             rhs_index.remove(&k, &bucket);
@@ -1266,7 +1222,7 @@ impl CustomExecute for SubtractionOp {
             }
         });
 
-        Ok(lhs_result)
+        Ok(vec![Atom::expr(lhs)])
     }
 }
 
@@ -1807,6 +1763,14 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
         let sealed_op = Atom::gnd(SealedOp{});
         tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
+        let unique_op = Atom::gnd(UniqueAtomOp{});
+        tref.register_token(regex(r"unique-atom"), move |_| { unique_op.clone() });
+        let subtraction_op = Atom::gnd(SubtractionAtomOp{});
+        tref.register_token(regex(r"subtraction-atom"), move |_| { subtraction_op.clone() });
+        let intersection_op = Atom::gnd(IntersectionAtomOp{});
+        tref.register_token(regex(r"intersection-atom"), move |_| { intersection_op.clone() });
+        let union_op = Atom::gnd(UnionAtomOp{});
+        tref.register_token(regex(r"union-atom"), move |_| { union_op.clone() });
 
         #[cfg(feature = "pkg_mgmt")]
         pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
@@ -1829,14 +1793,6 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
         let superpose_op = Atom::gnd(SuperposeOp::new(space.clone()));
         tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
-        let unique_op = Atom::gnd(UniqueOp::new(space.clone()));
-        tref.register_token(regex(r"unique"), move |_| { unique_op.clone() });
-        let union_op = Atom::gnd(UnionOp::new(space.clone()));
-        tref.register_token(regex(r"union"), move |_| { union_op.clone() });
-        let intersection_op = Atom::gnd(IntersectionOp::new(space.clone()));
-        tref.register_token(regex(r"intersection"), move |_| { intersection_op.clone() });
-        let subtraction_op = Atom::gnd(SubtractionOp::new(space.clone()));
-        tref.register_token(regex(r"subtraction"), move |_| { subtraction_op.clone() });
         let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
         tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
         let get_type_space_op = Atom::gnd(GetTypeSpaceOp{});
@@ -2186,101 +2142,100 @@ mod tests {
 
     #[test]
     fn unique_op() {
-        let space = DynSpace::new(metta_space("
-            (= (foo) (A (B C)))
-            (= (foo) (A (B C)))
-            (= (foo) (f g))
-            (= (foo) (f g))
-            (= (foo) (f g))
-            (= (foo) Z)
-        "));
-        let unique_op = UniqueOp::new(space);
-        let actual = unique_op.execute(&mut vec![expr!(("foo"))]).unwrap();
+        let unique_op = UniqueAtomOp{};
+        let actual = unique_op.execute(&mut vec![expr!(
+                ("A" ("B" "C"))
+                ("A" ("B" "C"))
+                ("f" "g")
+                ("f" "g")
+                ("f" "g")
+                "Z"
+        )]).unwrap();
         assert_eq_no_order!(actual,
-                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("Z")]);
+                   vec![expr!(("A" ("B" "C")) ("f" "g") "Z")]);
     }
 
     #[test]
     fn union_op() {
-        let space = DynSpace::new(metta_space("
-            (= (foo) (A (B C)))
-            (= (foo) (A (B C)))
-            (= (foo) (f g))
-            (= (foo) (f g))
-            (= (foo) (f g))
-            (= (foo) Z)
-            (= (bar) (A (B C)))
-            (= (bar) p)
-            (= (bar) p)
-            (= (bar) (Q a))
-        "));
-        let union_op = UnionOp::new(space);
-        let actual = union_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]).unwrap();
+        let union_op = UnionAtomOp{};
+        let actual = union_op.execute(&mut vec![expr!(
+                ("A" ("B" "C"))
+                ("A" ("B" "C"))
+                ("f" "g")
+                ("f" "g")
+                ("f" "g")
+                "Z"
+            ), expr!(
+                ("A" ("B" "C"))
+                "p"
+                "p"
+                ("Q" "a")
+            )]).unwrap();
         assert_eq_no_order!(actual,
-                   vec![expr!("A" ("B" "C")), expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("f" "g"), expr!("Z"),
-                        expr!("A" ("B" "C")), expr!("p"), expr!("p"), expr!("Q" "a")]);
+                   vec![expr!(("A" ("B" "C")) ("A" ("B" "C"))
+                        ("f" "g") ("f" "g") ("f" "g") "Z"
+                        ("A" ("B" "C")) "p" "p" ("Q" "a"))]);
     }
 
     #[test]
     fn intersection_op() {
-        let space = DynSpace::new(metta_space("
-            (= (foo) Z)
-            (= (foo) (A (B C)))
-            (= (foo) (A (B C)))
-            (= (foo) (f g))
-            (= (foo) (f g))
-            (= (foo) (f g))
-            (= (foo) (P b))
-            (= (bar) (f g))
-            (= (bar) (f g))
-            (= (bar) (A (B C)))
-            (= (bar) p)
-            (= (bar) p)
-            (= (bar) (Q a))
-            (= (bar) Z)
+        let intersection_op = IntersectionAtomOp{};
+        let actual = intersection_op.execute(&mut vec![expr!(
+                "Z"
+                ("A" ("B" "C"))
+                ("A" ("B" "C"))
+                ("f" "g")
+                ("f" "g")
+                ("f" "g")
+                ("P" "b")
+            ), expr!(
+                ("f" "g")
+                ("f" "g")
+                ("A" ("B" "C"))
+                "p"
+                "p"
+                ("Q" "a")
+                "Z"
+            )]).unwrap();
+        assert_eq_no_order!(actual, vec![expr!("Z" ("A" ("B" "C")) ("f" "g") ("f" "g"))]);
 
-            (= (nsl) 5)
-            (= (nsl) 4)
-            (= (nsl) 3)
-            (= (nsl) 2)
-            (= (nsr) 5)
-            (= (nsr) 3)
-        "));
-        let intersection_op = IntersectionOp::new(space);
-        let actual = intersection_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]).unwrap();
-        assert_eq_no_order!(actual,
-                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("Z")]);
-
-        assert_eq_no_order!(intersection_op.execute(&mut vec![expr!(("nsl")), expr!(("nsr"))]).unwrap(),
-                   vec![expr!("5"), expr!("3")]);
+        assert_eq_no_order!(intersection_op.execute(&mut vec![expr!(
+                { Number::Integer(5) }
+                { Number::Integer(4) }
+                { Number::Integer(3) }
+                { Number::Integer(2) }
+            ), expr!(
+                { Number::Integer(5) }
+                { Number::Integer(3) }
+            )]).unwrap(), vec![expr!({Number::Integer(5)} {Number::Integer(3)})]);
     }
 
     #[test]
     fn subtraction_op() {
-        let space = DynSpace::new(metta_space("
-            (= (foo) Z)
-            (= (foo) S)
-            (= (foo) S)
-            (= (foo) (A (B C)))
-            (= (foo) (A (B C)))
-            (= (foo) (f g))
-            (= (foo) (f g))
-            (= (foo) (f g))
-            (= (foo) (P b))
-            (= (bar) (f g))
-            (= (bar) (A (B C)))
-            (= (bar) p)
-            (= (bar) p)
-            (= (bar) (Q a))
-            (= (bar) Z)
-            (= (bar) S)
-            (= (bar) S)
-            (= (bar) S)
-        "));
-        let subtraction_op = SubtractionOp::new(space);
-        let actual = subtraction_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]).unwrap();
+        let subtraction_op = SubtractionAtomOp{};
+        let actual = subtraction_op.execute(&mut vec![expr!(
+                "Z"
+                "S"
+                "S"
+                ("A" ("B" "C"))
+                ("A" ("B" "C"))
+                ("f" "g")
+                ("f" "g")
+                ("f" "g")
+                ("P" "b")
+            ), expr!(
+                ("f" "g")
+                ("A" ("B" "C"))
+                "p"
+                "P"
+                ("Q" "a")
+                "Z"
+                "S"
+                "S"
+                "S"
+            )]).unwrap();
         assert_eq_no_order!(actual,
-                   vec![expr!("A" ("B" "C")), expr!("f" "g"), expr!("f" "g"), expr!("P" "b")]);
+                   vec![expr!(("A" ("B" "C")) ("f" "g") ("f" "g") ("P" "b"))]);
     }
 
     #[test]

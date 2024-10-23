@@ -436,6 +436,14 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
     let print_mods_op = Atom::gnd(stdlib::PrintModsOp::new(metta.clone()));
     tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
+    let unique_op = Atom::gnd(stdlib::UniqueAtomOp{});
+    tref.register_token(regex(r"unique-atom"), move |_| { unique_op.clone() });
+    let subtraction_op = Atom::gnd(stdlib::SubtractionAtomOp{});
+    tref.register_token(regex(r"subtraction-atom"), move |_| { subtraction_op.clone() });
+    let intersection_op = Atom::gnd(stdlib::IntersectionAtomOp{});
+    tref.register_token(regex(r"intersection-atom"), move |_| { intersection_op.clone() });
+    let union_op = Atom::gnd(stdlib::UnionAtomOp{});
+    tref.register_token(regex(r"union-atom"), move |_| { union_op.clone() });
 
     #[cfg(feature = "pkg_mgmt")]
     stdlib::pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
@@ -453,14 +461,6 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
     tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
-    let unique_op = Atom::gnd(stdlib::UniqueOp::new(space.clone()));
-    tref.register_token(regex(r"unique"), move |_| { unique_op.clone() });
-    let union_op = Atom::gnd(stdlib::UnionOp::new(space.clone()));
-    tref.register_token(regex(r"union"), move |_| { union_op.clone() });
-    let intersection_op = Atom::gnd(stdlib::IntersectionOp::new(space.clone()));
-    tref.register_token(regex(r"intersection"), move |_| { intersection_op.clone() });
-    let subtraction_op = Atom::gnd(stdlib::SubtractionOp::new(space.clone()));
-    tref.register_token(regex(r"subtraction"), move |_| { subtraction_op.clone() });
     let case_op = Atom::gnd(CaseOp::new(space.clone()));
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
     let capture_op = Atom::gnd(CaptureOp::new(space.clone()));
