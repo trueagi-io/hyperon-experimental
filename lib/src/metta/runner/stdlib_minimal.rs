@@ -432,6 +432,8 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
     let match_op = Atom::gnd(stdlib::MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
+    let index_atom_op = Atom::gnd(stdlib::IndexAtomOp{});
+    tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
     let mod_space_op = Atom::gnd(stdlib::ModSpaceOp::new(metta.clone()));
     tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
     let print_mods_op = Atom::gnd(stdlib::PrintModsOp::new(metta.clone()));

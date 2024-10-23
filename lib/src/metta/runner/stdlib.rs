@@ -1359,10 +1359,42 @@ mod non_minimal_only_stdlib {
             let arg_error = || ExecError::from("cons-atom expects two arguments: atom and expression");
             let atom = args.get(0).ok_or_else(arg_error)?;
             let expr = args.get(1).ok_or_else(arg_error)?;
+            //println!(atom);
+            //println!(expr);
+            eprint!("check printing!!");
             let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
             let mut res = vec![atom.clone()];
             res.extend(chld.clone());
             Ok(vec![Atom::expr(res)])
+        }
+    }
+
+    #[derive(Clone, Debug)]
+    pub struct IndexAtomOp {}
+
+    grounded_op!(IndexAtomOp, "index-atom");
+
+    impl Grounded for IndexAtomOp {
+        fn type_(&self) -> Atom {
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        }
+
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for IndexAtomOp {
+        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            let arg_error = || ExecError::from("index-atom expects two arguments: expression and atom");
+            let expr = args.get(0).ok_or_else(arg_error)?;
+            let atom = args.get(1).ok_or_else(arg_error)?;
+            let actual = interpret_no_error(self.space.clone(), expr)?;
+            //let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
+            //let mut res = vec![atom.clone()];
+            //res.extend(chld.clone());
+            //Ok(vec![Atom::expr(actual)])
+            unit_result()
         }
     }
 
@@ -1781,6 +1813,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"cdr-atom"), move |_| { cdr_atom_op.clone() });
         let cons_atom_op = Atom::gnd(ConsAtomOp{});
         tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
+        let index_atom_op = Atom::gnd(IndexAtomOp{});
+        tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
         let println_op = Atom::gnd(PrintlnOp{});
         tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
         let format_args_op = Atom::gnd(FormatArgsOp{});
