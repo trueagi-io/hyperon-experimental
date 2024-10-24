@@ -1035,6 +1035,43 @@ pub(crate) mod pkg_mgmt_ops {
 }
 
 #[derive(Clone, Debug)]
+pub struct IndexAtomOp {
+    pub(crate) space: DynSpace,
+}
+
+grounded_op!(IndexAtomOp, "index-atom");
+
+impl IndexAtomOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Grounded for IndexAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for IndexAtomOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("index-atom expects two arguments: expression and atom");
+        let expr = args.get(0).ok_or_else(arg_error)?;
+        let atom = args.get(1).ok_or_else(arg_error)?;
+        let actual = interpret_no_error(self.space.clone(), expr)?;
+        //let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
+        //let mut res = vec![atom.clone()];
+        //res.extend(chld.clone());
+        //Ok(vec![Atom::expr(actual)])
+        unit_result()
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct UniqueOp {
     pub(crate) space: DynSpace,
 }
@@ -1366,35 +1403,6 @@ mod non_minimal_only_stdlib {
             let mut res = vec![atom.clone()];
             res.extend(chld.clone());
             Ok(vec![Atom::expr(res)])
-        }
-    }
-
-    #[derive(Clone, Debug)]
-    pub struct IndexAtomOp {}
-
-    grounded_op!(IndexAtomOp, "index-atom");
-
-    impl Grounded for IndexAtomOp {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
-        }
-
-        fn as_execute(&self) -> Option<&dyn CustomExecute> {
-            Some(self)
-        }
-    }
-
-    impl CustomExecute for IndexAtomOp {
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = || ExecError::from("index-atom expects two arguments: expression and atom");
-            let expr = args.get(0).ok_or_else(arg_error)?;
-            let atom = args.get(1).ok_or_else(arg_error)?;
-            let actual = interpret_no_error(self.space.clone(), expr)?;
-            //let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
-            //let mut res = vec![atom.clone()];
-            //res.extend(chld.clone());
-            //Ok(vec![Atom::expr(actual)])
-            unit_result()
         }
     }
 
