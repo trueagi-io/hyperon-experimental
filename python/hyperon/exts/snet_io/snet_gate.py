@@ -36,6 +36,7 @@ class SNetSDKWrapper:
             free_call_token_expiry_block = int(free_call_token_expiry_block)
         service_client = self.snet_sdk.create_service_client(
             org_id=org_id, service_id=service_id,
+            # group_name="default_group",
             email=self.email,
             free_call_auth_token_bin=free_call_auth_token_bin,
             free_call_token_expiry_block=free_call_token_expiry_block)
