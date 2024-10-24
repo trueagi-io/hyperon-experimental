@@ -41,7 +41,7 @@ documentation](https://cibuildwheel.pypa.io/en/stable/) for details.
 
 ## How to update the version
 
-Usually it is needed after releasing the artifacts or before making a test
+Usually it is needed before releasing the artifacts or before making a test
 release.
 
 There are three locations to update:
@@ -54,17 +54,16 @@ All three locations should contain the same version.
 
 ## How to release binaries
 
-Use [Create a new release
-link](https://github.com/trueagi-io/hyperon-experimental/releases/new) on the
-main page of the GitHub repo. Press `Choose a tag` control and type new tag
-which should be in form of `v<next-version>` (for example if next version is
-`0.1.7` then tag is `v0.1.7`). Next version should be identical to versions
-which are written in locations mentioned in [How to update the
-version](#how-to-update-the-version) instruction. After typing the tag press
-`Create new tag on publish`. Now press `Generate release notes` button. It will
-automatically fill the `Release title` and `Release description` fields. Tick
-`Set as a pre-release` checkbox if needed and press `Publish release` button.
-Now you have published new GitHub release and triggered a job to build release
+Update the version [How to update the version](#how-to-update-the-version) in
+the main branch of the repository, raise PR and merge it. Use [Create a new
+release link](https://github.com/trueagi-io/hyperon-experimental/releases/new)
+on the main page of the GitHub repo. Press `Choose a tag` control and type new
+tag which should be in form of `v<version>` (for example if version is
+`0.1.7` then tag is `v0.1.7`). After typing the tag press `Create new tag
+on publish`. Now press `Generate release notes` button. It will automatically
+fill the `Release title` and `Release description` fields. Tick `Set as a
+pre-release` checkbox if needed and press `Publish release` button.  Now you
+have published new GitHub release and triggered a job to build release
 artifacts.
 
 After release job is finished one need to approve publishing artifacts to the

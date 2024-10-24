@@ -460,6 +460,47 @@
   (@return "Nothing"))
 (= (empty) Empty)
 
+(@doc unique
+  (@desc "Function takes non-deterministic input (first argument) and returns only unique entities. E.g. (unique (superpose (a b c d d))) -> [a, b, c, d]")
+  (@params (
+    (@param "Non-deterministic set of values")))
+  (@return "Unique values from input set"))
+(: unique (-> Atom Atom))
+(= (unique $arg) (let $c (collapse $arg) (let $u (unique-atom $c) (superpose $u))))
+
+(@doc union
+  (@desc "Function takes two non-deterministic inputs (first and second argument) and returns their union. E.g. (union (superpose (a b b c)) (superpose (b c c d))) -> [a, b, b, c, b, c, c, d]")
+  (@params (
+    (@param "Non-deterministic set of values")
+    (@param "Another non-deterministic set of values")))
+  (@return "Union of sets"))
+(: union (-> Atom Atom Atom))
+(= (union $arg1 $arg2)
+   (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
+     (let $u (union-atom $c1 $c2) (superpose $u)))))
+
+(@doc intersection
+  (@desc "Function takes two non-deterministic inputs (first and second argument) and returns their intersection. E.g. (intersection (superpose (a b c c)) (superpose (b c c c d))) -> [b, c, c]")
+  (@params (
+    (@param "Non-deterministic set of values")
+    (@param "Another non-deterministic set of values")))
+  (@return "Intersection of sets"))
+(: intersection (-> Atom Atom Atom))
+(= (intersection $arg1 $arg2)
+   (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
+     (let $u (intersection-atom $c1 $c2) (superpose $u)))))
+
+(@doc subtraction
+  (@desc "Function takes two non-deterministic inputs (first and second argument) and returns their subtraction. E.g. !(subtraction (superpose (a b b c)) (superpose (b c c d))) -> [a, b]")
+  (@params (
+    (@param "Non-deterministic set of values")
+    (@param "Another non-deterministic set of values")))
+  (@return "Subtraction of sets"))
+(: subtraction (-> Atom Atom Atom))
+(= (subtraction $arg1 $arg2)
+   (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
+     (let $u (subtraction-atom $c1 $c2) (superpose $u)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -971,31 +1012,31 @@
   (@params ())
   (@return "Returns uniformly distributed random boolean value"))
 
-(@doc unique
-  (@desc "Function takes non-deterministic input (first argument) and returns only unique entities. E.g. (unique (superpose (a b c d d))) -> [a, b, c, d]")
+(@doc unique-atom
+  (@desc "Function takes tuple and returns only unique entities. E.g. (unique-atom (a b c d d)) -> (a b c d)")
   (@params (
-    (@param "Non-deterministic set of values")))
+    (@param "List of values")))
   (@return "Unique values from input set"))
 
-(@doc union
-  (@desc "Function takes two non-deterministic inputs (first and second argument) and returns their union. E.g. (union (superpose (a b b c)) (superpose (b c c d))) -> [a, b, b, c, b, c, c, d]")
+(@doc union-atom
+  (@desc "Function takes two tuples and returns their union. E.g. (union-atom (a b b c) (b c c d)) -> (a b b c b c c d)")
   (@params (
-    (@param "Non-deterministic set of values")
-    (@param "Another non-deterministic set of values")))
+    (@param "List of values")
+    (@param "List of values")))
   (@return "Union of sets"))
 
-(@doc intersection
-  (@desc "Function takes two non-deterministic inputs (first and second argument) and returns their intersection. E.g. (intersection (superpose (a b c c)) (superpose (b c c c d))) -> [b, c, c]")
+(@doc intersection-atom
+  (@desc "Function takes two tuples and returns their intersection. E.g. (intersection-atom (a b c c) (b c c c d)) -> (b c c)")
   (@params (
-    (@param "Non-deterministic set of values")
-    (@param "Another non-deterministic set of values")))
+    (@param "List of values")
+    (@param "List of values")))
   (@return "Intersection of sets"))
 
-(@doc subtraction
-  (@desc "Function takes two non-deterministic inputs (first and second argument) and returns their subtraction. E.g. !(subtraction (superpose (a b b c)) (superpose (b c c d))) -> [a, b]")
+(@doc subtraction-atom
+  (@desc "Function takes two tuples and returns their subtraction. E.g. !(subtraction-atom (a b b c) (b c c d)) -> (a b)")
   (@params (
-    (@param "Non-deterministic set of values")
-    (@param "Another non-deterministic set of values")))
+    (@param "List of values")
+    (@param "List of values")))
   (@return "Subtraction of sets"))
 
 (@doc git-module!
