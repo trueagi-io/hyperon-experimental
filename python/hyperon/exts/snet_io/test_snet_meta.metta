@@ -32,4 +32,3 @@
 !((py-dot (naint punctuation-restoration) get_service_messages))
 ; we can also get a list of all service methods as typed metta functions
 !(naint punctuation-restoration methods)
-
