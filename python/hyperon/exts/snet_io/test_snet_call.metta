@@ -24,7 +24,7 @@
 (&image-generation
     "Gen" "Text" (Kwargs (sentence "Hello World") (type False)))
 
-!(bind! &generative-lms
+(bind! &generative-lms
   (snet-sdk create_service_client "naint" "generative-lms"))
 ; we can add a wrapper for the service
 (add-reduct &self
