@@ -24,7 +24,7 @@
 (&image-generation
     "Gen" "Text" (Kwargs (sentence "Hello World") (type False)))
 
-(bind! &generative-lms
+!(bind! &generative-lms
   (snet-sdk create_service_client "naint" "generative-lms"))
 ; we can add a wrapper for the service
 (add-reduct &self
@@ -46,6 +46,3 @@
 
 ; possible usage of open_channel_and_deposit function. 100 is the amount of AGIX and 10000 is a payment channel's TTL in blocks
 (snet-sdk open_channel_and_deposit &generative-lms 100 10000)
-
-; usage of generate_callers_text method
-((py-dot &generative-lms generate_callers_text))
