@@ -1349,9 +1349,6 @@ mod non_minimal_only_stdlib {
             let arg_error = || ExecError::from("cons-atom expects two arguments: atom and expression");
             let atom = args.get(0).ok_or_else(arg_error)?;
             let expr = args.get(1).ok_or_else(arg_error)?;
-            //println!(atom);
-            //println!(expr);
-            eprint!("check printing!!");
             let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
             let mut res = vec![atom.clone()];
             res.extend(chld.clone());

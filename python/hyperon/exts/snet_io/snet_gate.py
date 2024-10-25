@@ -4,14 +4,13 @@ import os
 from snet import sdk
 from hyperon import *
 
-
 class SNetSDKWrapper:
 
     def __init__(self):
         self.snet_sdk = None
 
     def init_sdk(self,
-                 private_key=os.getenv("SNET_PRIVATE_KEY", '0' * 32),
+                 private_key=os.getenv("SNET_PRIVATE_KEY", '0'*32),
                  eth_rpc_endpoint=os.getenv("ETH_RPC_ENDPOINT"),
                  email=os.getenv("SNET_EMAIL"),
                  identity_name="hyperon",
@@ -44,7 +43,7 @@ class SNetSDKWrapper:
             free_call_token_expiry_block = int(free_call_token_expiry_block)
         service_client = self.snet_sdk.create_service_client(
             org_id=org_id, service_id=service_id,
-            # group_name="default_group",
+            #group_name="default_group",
             free_call_auth_token_bin=free_call_auth_token_bin,
             free_call_token_expiry_block=free_call_token_expiry_block)
         return ServiceCall(service_client)
@@ -58,7 +57,7 @@ class SNetSDKWrapper:
         space = GroundingSpaceRef()
         service_client = self.create_service_client(org_id, service_id, **kwargs)
         space.add_atom(E(S('='), E(S(org_id), S(service_id)),
-                         service_client.get_operation_atom()))
+                     service_client.get_operation_atom()))
         atoms = service_client.generate_callers()
         for atom in atoms:
             space.add_atom(atom)
@@ -103,60 +102,6 @@ class SNetSDKWrapper:
         return [E(S('Error'), E(S('snet-sdk'), command_a, *args_a),
                   ValueAtom(f'unknown command {repr(command_a)}'))]
 
-len_threshold = 50
-current_len = 0
-def pretty_print_atoms(input_atoms):
-
-    global len_threshold
-    global current_len
-    def process_svg_atom(atom):
-        global len_threshold
-        global current_len
-        repr_atom = repr(atom)
-        current_len += len(repr_atom)
-        return repr_atom
-
-    def check_len(depth):
-        global len_threshold
-        global current_len
-        if current_len > len_threshold:
-            current_len = 0
-            return "\n" + "\t" * (depth - 1)
-        else:
-            return ""
-
-    def process_atom(atom, depth):
-        global len_threshold
-        global current_len
-        process_res = ""
-        metatype = atom.get_metatype()
-        if metatype == AtomKind.EXPR:
-            len_to_last_eol_flag = current_len > 5
-            current_len *= (depth <= 1) * (not len_to_last_eol_flag)
-            process_res += ("\n" + "\t" * depth) * (
-                    depth > 0) * len_to_last_eol_flag + f"({process_expr_atom(atom, depth + 1)})"
-        elif (metatype == AtomKind.SYMBOL) or (metatype == AtomKind.VARIABLE) or (metatype == AtomKind.GROUNDED):
-            process_res += process_svg_atom(atom) + check_len(depth)
-        else:
-            raise Exception(f"Unexpected type of the Atom: {str(metatype)}")
-        return process_res
-
-    def process_expr_atom(expr_atom, depth):
-        sub_atoms = expr_atom.get_children()
-        process_res = ""
-        for sub_atom in sub_atoms:
-            process_atom_res = process_atom(sub_atom, depth)
-            process_res += process_atom_res + check_len(depth)
-            process_res += " "
-        return process_res[:-1]
-
-    res_string = "(" * (not (input_atoms[0].get_metatype() == AtomKind.EXPR))
-    current_len = 0
-    for atom in input_atoms:
-        res_string += process_atom(atom, 0)
-        res_string += "\n\n"
-        current_len = 0
-    return res_string
 
 class ServiceCall:
 
@@ -194,9 +139,6 @@ class ServiceCall:
 
     def get_operation_atom(self):
         return OperationAtom(self.service_details[1], self)
-
-    def generate_callers_text(self):
-        return pretty_print_atoms(self.generate_callers())
 
     def open_channel_and_deposit(self, amount, expiration):
         self.service_client.deposit_and_open_channel(amount, expiration)
