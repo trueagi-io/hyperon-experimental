@@ -148,7 +148,6 @@ def pretty_print_atoms(input_atoms):
         return process_res[:-1]
 
     res_string = "(" * (not (input_atoms[0].get_metatype() == AtomKind.EXPR))
-    current_len = 0
     for atom in input_atoms:
         res_string += process_atom(atom, 0)
         res_string += "\n\n"
