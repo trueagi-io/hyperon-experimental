@@ -1180,7 +1180,7 @@ impl CustomExecute for IndexAtomOp {
         let arg_error = || ExecError::from("index-atom expects two arguments: expression and atom");
         let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
         let atom = args.get(1).ok_or_else(arg_error)?;
-        let children = expr.children().clone();
+        let children = expr.children();
         let index = atom_to_string(atom).parse::<i32>().unwrap();
         if index < 0 {
             println!("Negative indexes currently not supported");
