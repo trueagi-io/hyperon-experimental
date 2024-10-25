@@ -57,7 +57,7 @@ class SNetSDKWrapper:
         space = GroundingSpaceRef()
         service_client = self.create_service_client(org_id, service_id, **kwargs)
         space.add_atom(E(S('='), E(S(org_id), S(service_id)),
-                     service_client.get_operation_atom()))
+                         service_client.get_operation_atom()))
         atoms = service_client.generate_callers()
         for atom in atoms:
             space.add_atom(atom)
@@ -102,7 +102,6 @@ class SNetSDKWrapper:
         return [E(S('Error'), E(S('snet-sdk'), command_a, *args_a),
                   ValueAtom(f'unknown command {repr(command_a)}'))]
 
-
 class ServiceCall:
 
     def __init__(self, service_client):
@@ -144,6 +143,10 @@ class ServiceCall:
         self.service_client.deposit_and_open_channel(amount, expiration)
         return [E()]
 
+    def generate_callers_text(self):
+        # TODO: pretty print
+        return "\n".join([repr(e) for e in self.generate_callers()])
+
     def _map_type(self, t):
         type_map = {'bool': 'Bool',
                     'string': 'String',
@@ -179,7 +182,6 @@ class ServiceCall:
                                 ValueAtom(func_name), ValueAtom(self.io_types[i][0]), kwargs))
             atoms += [metta_fun_type, function_expr]
         return atoms
-
 
 @register_atoms()
 def snet_atoms():
