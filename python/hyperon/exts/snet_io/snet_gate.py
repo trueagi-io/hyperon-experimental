@@ -142,7 +142,7 @@ class ServiceCall:
     def open_channel_and_deposit(self, amount, expiration):
         self.service_client.deposit_and_open_channel(amount, expiration)
         return [E()]
- 
+
     def generate_callers_text(self):
         # TODO: pretty print
         return "\n".join([repr(e) for e in self.generate_callers()])
