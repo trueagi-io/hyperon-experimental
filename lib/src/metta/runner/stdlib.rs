@@ -1161,6 +1161,40 @@ impl CustomExecute for IntersectionAtomOp {
 }
 
 #[derive(Clone, Debug)]
+pub struct IndexAtomOp {}
+
+grounded_op!(IndexAtomOp, "index-atom");
+
+impl Grounded for IndexAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for IndexAtomOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("index-atom expects two arguments: expression and atom");
+        let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
+        let atom = args.get(1).ok_or_else(arg_error)?;
+        let children = expr.children().clone();
+        let index = atom_to_string(atom).parse::<i32>().unwrap();
+        if index < 0 {
+            println!("Negative indexes currently not supported");
+            return unit_result()
+        }
+        else if (index as usize) >= children.len() {
+            println!("Index is out of bounds");
+            return unit_result()
+        }
+        Ok(vec![children.get(index as usize).clone().expect("Unknown error").clone()])
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SubtractionAtomOp {}
 
 grounded_op!(SubtractionAtomOp, "subtraction-atom");
@@ -1322,35 +1356,6 @@ mod non_minimal_only_stdlib {
             let mut res = vec![atom.clone()];
             res.extend(chld.clone());
             Ok(vec![Atom::expr(res)])
-        }
-    }
-
-    #[derive(Clone, Debug)]
-    pub struct IndexAtomOp {}
-
-    grounded_op!(IndexAtomOp, "index-atom");
-
-    impl Grounded for IndexAtomOp {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
-        }
-
-        fn as_execute(&self) -> Option<&dyn CustomExecute> {
-            Some(self)
-        }
-    }
-
-    impl CustomExecute for IndexAtomOp {
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = || ExecError::from("index-atom expects two arguments: expression and atom");
-            let expr = args.get(0).ok_or_else(arg_error)?;
-            let atom = args.get(1).ok_or_else(arg_error)?;
-            let actual = interpret_no_error(self.space.clone(), expr)?;
-            //let chld = atom_as_expr(expr).ok_or_else(arg_error)?.children();
-            //let mut res = vec![atom.clone()];
-            //res.extend(chld.clone());
-            //Ok(vec![Atom::expr(actual)])
-            unit_result()
         }
     }
 
