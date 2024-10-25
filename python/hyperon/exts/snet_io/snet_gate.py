@@ -102,7 +102,6 @@ class SNetSDKWrapper:
         return [E(S('Error'), E(S('snet-sdk'), command_a, *args_a),
                     ValueAtom(f'unknown command {repr(command_a)}'))]
 
-
 class ServiceCall:
 
     def __init__(self, service_client):
@@ -139,7 +138,7 @@ class ServiceCall:
 
     def get_operation_atom(self):
         return OperationAtom(self.service_details[1], self)
-        
+
     def open_channel_and_deposit(self, amount, expiration):
         self.service_client.deposit_and_open_channel(amount, expiration)
         return [E()]
