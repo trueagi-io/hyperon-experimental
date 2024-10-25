@@ -103,22 +103,19 @@ class SNetSDKWrapper:
         return [E(S('Error'), E(S('snet-sdk'), command_a, *args_a),
                   ValueAtom(f'unknown command {repr(command_a)}'))]
 
-len_threshold = 50
-current_len = 0
 def pretty_print_atoms(input_atoms):
-
-    global len_threshold
-    global current_len
+    len_threshold = 50
+    current_len = 0
     def process_svg_atom(atom):
-        global len_threshold
-        global current_len
+        nonlocal len_threshold
+        nonlocal current_len
         repr_atom = repr(atom)
         current_len += len(repr_atom)
         return repr_atom
 
     def check_len(depth):
-        global len_threshold
-        global current_len
+        nonlocal len_threshold
+        nonlocal current_len
         if current_len > len_threshold:
             current_len = 0
             return "\n" + "\t" * (depth - 1)
@@ -126,8 +123,8 @@ def pretty_print_atoms(input_atoms):
             return ""
 
     def process_atom(atom, depth):
-        global len_threshold
-        global current_len
+        nonlocal len_threshold
+        nonlocal current_len
         process_res = ""
         metatype = atom.get_metatype()
         if metatype == AtomKind.EXPR:
