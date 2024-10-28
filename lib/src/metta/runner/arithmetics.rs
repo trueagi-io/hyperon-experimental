@@ -343,7 +343,7 @@ impl serial::Serializer for NumberSerializer {
     }
 }
 
-struct AsPrimitive<'a> {
+pub struct AsPrimitive<'a> {
     atom: &'a super::Atom
 }
 
