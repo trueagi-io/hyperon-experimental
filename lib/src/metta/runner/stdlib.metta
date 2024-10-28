@@ -415,6 +415,13 @@
     (@param "Tail of an expression")))
   (@return "New expression consists of two input arguments"))
 
+(@doc index-atom
+  (@desc "Returns atom from an expression (first argument) using index (second argument) or error if index is out of bounds")
+  (@params (
+    (@param "Expression")
+    (@param "Index")))
+  (@return "Atom from an expression in the place defined by index. Error if index is out of bounds of an expression"))
+
 (@doc println!
   (@desc "Prints a line of text to the console")
   (@params (
