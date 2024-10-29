@@ -1161,6 +1161,33 @@ impl CustomExecute for IntersectionAtomOp {
 }
 
 #[derive(Clone, Debug)]
+pub struct IndexAtomOp {}
+
+grounded_op!(IndexAtomOp, "index-atom");
+
+impl Grounded for IndexAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_NUMBER, ATOM_TYPE_ATOM])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for IndexAtomOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("index-atom expects two arguments: expression and atom");
+        let children = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children();
+        let index = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
+        match children.get(Into::<i64>::into(index) as usize) {
+            Some(atom) => Ok(vec![atom.clone()]),
+            None => Err(ExecError::from("Index is out of bounds")),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SubtractionAtomOp {}
 
 grounded_op!(SubtractionAtomOp, "subtraction-atom");
@@ -1737,6 +1764,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"cdr-atom"), move |_| { cdr_atom_op.clone() });
         let cons_atom_op = Atom::gnd(ConsAtomOp{});
         tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
+        let index_atom_op = Atom::gnd(IndexAtomOp{});
+        tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
         let println_op = Atom::gnd(PrintlnOp{});
         tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
         let format_args_op = Atom::gnd(FormatArgsOp{});
@@ -2022,6 +2051,14 @@ mod tests {
         assert_eq!(res, vec![expr!(("A"))]);
         let res = ConsAtomOp{}.execute(&mut vec![expr!("A" "F"), expr!(("B" "C") "D")]).expect("No result returned");
         assert_eq!(res, vec![expr!(("A" "F") ("B" "C") "D")]);
+    }
+
+    #[test]
+    fn index_atom_op() {
+        let res = IndexAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} {Number::Integer(3)} {Number::Integer(2)} {Number::Integer(1)}), expr!({Number::Integer(2)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(3)})]);
+        let res = IndexAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} {Number::Integer(3)} {Number::Integer(2)} {Number::Integer(1)}), expr!({Number::Integer(5)})]);
+        assert_eq!(res, Err(ExecError::from("Index is out of bounds")));
     }
 
     #[test]
