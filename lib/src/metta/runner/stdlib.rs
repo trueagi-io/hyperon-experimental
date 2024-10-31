@@ -21,6 +21,7 @@ use std::cell::RefCell;
 use std::fmt::Display;
 use std::collections::HashMap;
 use regex::Regex;
+use rand::Rng;
 
 use super::arithmetics::*;
 use super::string::*;
@@ -1253,6 +1254,64 @@ impl CustomExecute for SubtractionAtomOp {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct RandomIntOp {}
+
+grounded_op!(RandomIntOp, "random-int");
+
+impl Grounded for RandomIntOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for RandomIntOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("random-int expects two arguments: number (start) and number (end)");
+        let start = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
+        let end = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
+        let range = Into::<i64>::into(start)..Into::<i64>::into(end);
+        if range.is_empty() {
+            return Err(ExecError::from("Wrong range"));
+        }
+        let mut rng = rand::thread_rng();
+        Ok(vec![Atom::value(rng.gen_range::<i64,_>(range))])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct RandomFloatOp {}
+
+grounded_op!(RandomFloatOp, "random-float");
+
+impl Grounded for RandomFloatOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for RandomFloatOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("random-float expects two arguments: number (start) and number (end)");
+        let start = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
+        let end = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
+        let range = Into::<f64>::into(start)..Into::<f64>::into(end);
+        if range.is_empty() {
+            return Err(ExecError::from("Wrong range"));
+        }
+        let mut rng = rand::thread_rng();
+        Ok(vec![Atom::value(rng.gen_range::<f64,_>(range))])
+    }
+}
+
 /// The internal `non_minimal_only_stdlib` module contains code that is never used by the minimal stdlib
 #[cfg(feature = "old_interpreter")]
 mod non_minimal_only_stdlib {
@@ -1766,6 +1825,10 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
         let index_atom_op = Atom::gnd(IndexAtomOp{});
         tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
+        let random_int_op = Atom::gnd(RandomIntOp{});
+        tref.register_token(regex(r"random-int"), move |_| { random_int_op.clone() });
+        let random_float_op = Atom::gnd(RandomFloatOp{});
+        tref.register_token(regex(r"random-float"), move |_| { random_float_op.clone() });
         let println_op = Atom::gnd(PrintlnOp{});
         tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
         let format_args_op = Atom::gnd(FormatArgsOp{});
@@ -2059,6 +2122,14 @@ mod tests {
         assert_eq!(res, vec![expr!({Number::Integer(3)})]);
         let res = IndexAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} {Number::Integer(3)} {Number::Integer(2)} {Number::Integer(1)}), expr!({Number::Integer(5)})]);
         assert_eq!(res, Err(ExecError::from("Index is out of bounds")));
+    }
+
+    #[test]
+    fn random_op() {
+        let res = RandomIntOp{}.execute(&mut vec![expr!({Number::Integer(2)}), expr!({Number::Integer(-2)})]);
+        assert_eq!(res, Err(ExecError::from("Wrong range")));
+        let res = RandomFloatOp{}.execute(&mut vec![expr!({Number::Integer(0)}), expr!({Number::Integer(0)})]);
+        assert_eq!(res, Err(ExecError::from("Wrong range")));
     }
 
     #[test]
