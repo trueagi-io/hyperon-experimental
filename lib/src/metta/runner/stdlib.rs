@@ -1254,6 +1254,11 @@ impl CustomExecute for SubtractionAtomOp {
     }
 }
 
+
+//TODO: In the current version of rand it is possible for rust to hang if range end's value is too
+// big. In future releases (0.9+) of rand signature of sample_single will be changed and it will be
+// possible to use match construction to cover overflow and other errors. So after library will be
+// upgraded RandomInt and RandomFloat codes should be altered.
 #[derive(Clone, Debug)]
 pub struct RandomIntOp {}
 
@@ -1272,14 +1277,14 @@ impl Grounded for RandomIntOp {
 impl CustomExecute for RandomIntOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("random-int expects two arguments: number (start) and number (end)");
-        let start = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
-        let end = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
-        let range = Into::<i64>::into(start)..Into::<i64>::into(end);
+        let start: i64 = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?.into();
+        let end: i64 = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?.into();
+        let range = start..end;
         if range.is_empty() {
-            return Err(ExecError::from("Wrong range"));
+            return Err(ExecError::from("Range is empty"));
         }
         let mut rng = rand::thread_rng();
-        Ok(vec![Atom::value(rng.gen_range::<i64,_>(range))])
+        Ok(vec![Atom::gnd(Number::Integer(rng.gen_range(range)))])
     }
 }
 
@@ -1301,14 +1306,14 @@ impl Grounded for RandomFloatOp {
 impl CustomExecute for RandomFloatOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("random-float expects two arguments: number (start) and number (end)");
-        let start = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
-        let end = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
-        let range = Into::<f64>::into(start)..Into::<f64>::into(end);
+        let start: f64 = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?.into();
+        let end: f64 = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?.into();
+        let range = start..end;
         if range.is_empty() {
-            return Err(ExecError::from("Wrong range"));
+            return Err(ExecError::from("Range is empty"));
         }
         let mut rng = rand::thread_rng();
-        Ok(vec![Atom::value(rng.gen_range::<f64,_>(range))])
+        Ok(vec![Atom::gnd(Number::Float(rng.gen_range(range)))])
     }
 }
 
@@ -2126,10 +2131,19 @@ mod tests {
 
     #[test]
     fn random_op() {
+        let res = RandomIntOp{}.execute(&mut vec![expr!({Number::Integer(0)}), expr!({Number::Integer(5)})]);
+        let range = 0..5;
+        let res_i64: i64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        assert!(range.contains(&res_i64));
         let res = RandomIntOp{}.execute(&mut vec![expr!({Number::Integer(2)}), expr!({Number::Integer(-2)})]);
-        assert_eq!(res, Err(ExecError::from("Wrong range")));
+        assert_eq!(res, Err(ExecError::from("Range is empty")));
+
+        let res = RandomFloatOp{}.execute(&mut vec![expr!({Number::Integer(0)}), expr!({Number::Integer(5)})]);
+        let range = 0.0..5.0;
+        let res_f64: f64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        assert!(range.contains(&res_f64));
         let res = RandomFloatOp{}.execute(&mut vec![expr!({Number::Integer(0)}), expr!({Number::Integer(0)})]);
-        assert_eq!(res, Err(ExecError::from("Wrong range")));
+        assert_eq!(res, Err(ExecError::from("Range is empty")));
     }
 
     #[test]

@@ -629,8 +629,17 @@ mod tests {
 
     #[test]
     fn metta_random() {
-        assert_eq!(run_program(&format!("!(random-int 0 0)")), Ok(vec![vec![expr!("Error" ({ stdlib::RandomIntOp{} } {Number::Integer(0)} {Number::Integer(0)}) "Wrong range")]]));
-        assert_eq!(run_program(&format!("!(random-float 0 -5)")), Ok(vec![vec![expr!("Error" ({ stdlib::RandomFloatOp{} } {Number::Integer(0)} {Number::Integer(-5)}) "Wrong range")]]));
+        let res = run_program(&format!("!(random-int 0 5)"));
+        let range = 0..5;
+        let res_i64: i64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap().get(0).unwrap()).as_number().unwrap().into();
+        assert!(range.contains(&res_i64));
+        assert_eq!(run_program(&format!("!(random-int 0 0)")), Ok(vec![vec![expr!("Error" ({ stdlib::RandomIntOp{} } {Number::Integer(0)} {Number::Integer(0)}) "Range is empty")]]));
+
+        let res = run_program(&format!("!(random-float 0 5)"));
+        let range = 0.0..5.0;
+        let res_f64: f64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap().get(0).unwrap()).as_number().unwrap().into();
+        assert!(range.contains(&res_f64));
+        assert_eq!(run_program(&format!("!(random-float 0 -5)")), Ok(vec![vec![expr!("Error" ({ stdlib::RandomFloatOp{} } {Number::Integer(0)} {Number::Integer(-5)}) "Range is empty")]]));
     }
 
     #[test]
