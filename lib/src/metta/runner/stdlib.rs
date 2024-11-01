@@ -1259,6 +1259,7 @@ impl CustomExecute for SubtractionAtomOp {
 // big. In future releases (0.9+) of rand signature of sample_single will be changed and it will be
 // possible to use match construction to cover overflow and other errors. So after library will be
 // upgraded RandomInt and RandomFloat codes should be altered.
+// see comment https://github.com/trueagi-io/hyperon-experimental/pull/791#discussion_r1824355414
 #[derive(Clone, Debug)]
 pub struct RandomIntOp {}
 
