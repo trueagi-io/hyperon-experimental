@@ -1161,6 +1161,30 @@ impl CustomExecute for IntersectionAtomOp {
 }
 
 #[derive(Clone, Debug)]
+pub struct SizeAtomOp {}
+
+grounded_op!(SizeAtomOp, "size-atom");
+
+impl Grounded for SizeAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for SizeAtomOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("size-atom expects one argument: expression");
+        let children = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children();
+        let size = children.len();
+        Ok(vec![Atom::gnd(Number::Integer(size as i64))])
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct IndexAtomOp {}
 
 grounded_op!(IndexAtomOp, "index-atom");
@@ -1764,6 +1788,8 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"cdr-atom"), move |_| { cdr_atom_op.clone() });
         let cons_atom_op = Atom::gnd(ConsAtomOp{});
         tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
+        let size_atom_op = Atom::gnd(SizeAtomOp{});
+        tref.register_token(regex(r"size-atom"), move |_| { size_atom_op.clone() });
         let index_atom_op = Atom::gnd(IndexAtomOp{});
         tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
         let println_op = Atom::gnd(PrintlnOp{});
@@ -2051,6 +2077,14 @@ mod tests {
         assert_eq!(res, vec![expr!(("A"))]);
         let res = ConsAtomOp{}.execute(&mut vec![expr!("A" "F"), expr!(("B" "C") "D")]).expect("No result returned");
         assert_eq!(res, vec![expr!(("A" "F") ("B" "C") "D")]);
+    }
+
+    #[test]
+    fn size_atom_op() {
+        let res = SizeAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} {Number::Integer(3)} {Number::Integer(2)} {Number::Integer(1)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(5)})]);
+        let res = SizeAtomOp{}.execute(&mut vec![expr!()]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(0)})]);
     }
 
     #[test]
