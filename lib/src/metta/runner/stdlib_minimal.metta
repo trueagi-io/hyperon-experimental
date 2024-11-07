@@ -72,6 +72,18 @@
   (@return "Deconsed expression"))
 (: decons-atom (-> Expression Expression))
 
+(@doc min-atom
+  (@desc "Returns atom with min value in the expression (first argument). Only numbers allowed")
+  (@params (
+    (@param "Expression")))
+  (@return "Min value in the expression. Error if expression contains non-numeric value or is empty"))
+
+(@doc max-atom
+  (@desc "Returns atom with max value in the expression (first argument). Only numbers allowed")
+  (@params (
+    (@param "Expression")))
+  (@return "Max value in the expression. Error if expression contains non-numeric value or is empty"))
+
 (@doc size-atom
   (@desc "Returns size of an expression (first argument)")
   (@params (
