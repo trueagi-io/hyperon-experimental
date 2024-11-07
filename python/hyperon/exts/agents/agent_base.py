@@ -40,7 +40,40 @@ class StreamMethod(threading.Thread):
             raise StopIteration
         return self._result.get()
 
-class AgentObject:
+
+class BaseListeningAgent:
+    def __init__(self):
+        self.messages = Queue()
+        self.running = True
+
+    def start(self,  *args):
+        if not args:
+            args = ()
+        st = StreamMethod(self.messages_processor, args)
+        st.start()
+
+    def message_processor(self, message, *args):
+        pass
+
+    def messages_processor(self, *args):
+        while self.running:
+            if not self.messages.empty():
+                m = self.messages.get()
+                self.output = []
+                res = self.message_processor(m, *args)
+                if isinstance(res, list):
+                    self.output.extend(res)
+                else:
+                    self.output.append(res)
+        return []
+
+    def stop(self):
+        self.running = False
+
+    def input(self, msg):
+        self.messages.put(msg)
+
+class AgentObject(BaseListeningAgent):
 
     '''
     The base agent object class, which purpose is twofold.
@@ -92,6 +125,7 @@ class AgentObject:
         return repr(val)
 
     def __init__(self, path=None, atoms={}, include_paths=None, code=None):
+        super().__init__()
         if path is None and code is None:
             # purely Python agent
             return
