@@ -329,9 +329,9 @@ def unwrap_args(atoms):
                     except:
                         raise NoReduceError()
                 continue
-        try:
+        if hasattr(a, 'get_object'):
             args.append(a.get_object().content)
-        except:
+        else:
             # NOTE:
             # Currently, applying grounded operations to pure atoms is not reduced.
             # If we want, we can raise an exception, or form an error expression instead,
