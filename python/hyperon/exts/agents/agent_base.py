@@ -73,7 +73,7 @@ class BaseListeningAgent:
     def input(self, msg):
         self.messages.put(msg)
 
-class AgentObject(BaseListeningAgent):
+class AgentObject:
 
     '''
     The base agent object class, which purpose is twofold.
@@ -125,7 +125,6 @@ class AgentObject(BaseListeningAgent):
         return repr(val)
 
     def __init__(self, path=None, atoms={}, include_paths=None, code=None):
-        super().__init__()
         if path is None and code is None:
             # purely Python agent
             return
