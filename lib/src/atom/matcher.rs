@@ -211,7 +211,6 @@ impl Bindings {
         self.bindings.remove(from_binding_id);
     }
 
-    #[allow(dead_code)] //TODO: MINIMAL only silence the warning until interpreter2 replaces interpreter
     pub(crate) fn len(&self) -> usize {
         self.binding_by_var.len()
     }

@@ -169,8 +169,10 @@
   (get-type (fmap (curry-a + 2) (Left "5")))
   ())
 ; TODO: Two examples below are type-checked successfully because, (UntypedC "5")
-; can return result which has an appropriate type. Uncomment when old_interpreter 
-; feature is removed.
+; can return result which has an appropriate type. But type returned contains
+; variable, for instance ($F#3287 Number). There is no function to compare such
+; atom easily with pattern yet. Uncomment after equivalent-atom operation is
+; introduced.
 ;!(assertEqualToResult
 ;  (get-type (fmap (curry-a + 2) (UntypedC "5")))
 ;  ())

@@ -492,7 +492,7 @@
 (= (nop) ())
 (= (nop $x) ())
 
-; TODO: MINIMAL added for compatibility, remove after migration
+; TODO: can be replaced by Empty atom and removed, kept for compatibility
 (@doc empty
   (@desc "Cuts evaluation of the non-deterministic branch and removes it from the result")
   (@params ())

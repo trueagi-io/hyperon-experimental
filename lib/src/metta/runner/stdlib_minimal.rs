@@ -1391,8 +1391,6 @@ fn atom_to_string(atom: &Atom) -> String {
 }
 #[derive(Clone, Debug)]
 pub struct GetTypeOp {
-    // TODO: MINIMAL this is temporary compatibility fix to be removed after
-    // migration to the minimal MeTTa
     space: DynSpace,
 }
 
