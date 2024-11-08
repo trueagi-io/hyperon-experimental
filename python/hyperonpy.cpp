@@ -256,11 +256,11 @@ struct PySerializer : public Serializer {
     }
 
     serial_result_t serialize_int(py::int_ v) override {
-        PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_longlong, v);
+        PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_int, v);
     }
 
     serial_result_t serialize_float(py::float_ v) override {
-        PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_double, v);
+        PYBIND11_OVERRIDE_PURE(serial_result_t, Serializer, serialize_float, v);
     }
 };
 
