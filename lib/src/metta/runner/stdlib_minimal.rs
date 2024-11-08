@@ -6,16 +6,20 @@ use crate::metta::runner::Metta;
 use crate::metta::types::get_atom_types;
 use crate::common::assert::vec_eq_no_order;
 use crate::common::shared::Shared;
-use crate::metta::runner::stdlib;
-use crate::metta::runner::stdlib::regex;
+use crate::metta::runner::stdlib_old;
 
 use std::convert::TryInto;
+use regex::Regex;
 
 use super::arithmetics::*;
 use super::string::*;
 
-fn unit_result() -> Result<Vec<Atom>, ExecError> {
+pub(crate) fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM()])
+}
+
+pub(crate) fn regex(regex: &str) -> Regex {
+    Regex::new(regex).unwrap()
 }
 
 #[derive(Clone, Debug)]
@@ -145,7 +149,7 @@ fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String>
 
 fn interpret(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
     let expr = Atom::expr([METTA_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]);
-    let result = crate::metta::interpreter::interpret(space, &expr);
+    let result = crate::metta::interpreter_minimal::interpret(space, &expr);
     result
 }
 
@@ -408,57 +412,57 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
 
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
-    let get_type_space_op = Atom::gnd(stdlib::GetTypeSpaceOp{});
+    let get_type_space_op = Atom::gnd(stdlib_old::GetTypeSpaceOp{});
     tref.register_token(regex(r"get-type-space"), move |_| { get_type_space_op.clone() });
-    let get_meta_type_op = Atom::gnd(stdlib::GetMetaTypeOp{});
+    let get_meta_type_op = Atom::gnd(stdlib_old::GetMetaTypeOp{});
     tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
     let is_equivalent = Atom::gnd(IfEqualOp{});
     tref.register_token(regex(r"if-equal"), move |_| { is_equivalent.clone() });
-    let new_space_op = Atom::gnd(stdlib::NewSpaceOp{});
+    let new_space_op = Atom::gnd(stdlib_old::NewSpaceOp{});
     tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
-    let add_atom_op = Atom::gnd(stdlib::AddAtomOp{});
+    let add_atom_op = Atom::gnd(stdlib_old::AddAtomOp{});
     tref.register_token(regex(r"add-atom"), move |_| { add_atom_op.clone() });
-    let remove_atom_op = Atom::gnd(stdlib::RemoveAtomOp{});
+    let remove_atom_op = Atom::gnd(stdlib_old::RemoveAtomOp{});
     tref.register_token(regex(r"remove-atom"), move |_| { remove_atom_op.clone() });
-    let get_atoms_op = Atom::gnd(stdlib::GetAtomsOp{});
+    let get_atoms_op = Atom::gnd(stdlib_old::GetAtomsOp{});
     tref.register_token(regex(r"get-atoms"), move |_| { get_atoms_op.clone() });
-    let new_state_op = Atom::gnd(stdlib::NewStateOp{});
+    let new_state_op = Atom::gnd(stdlib_old::NewStateOp{});
     tref.register_token(regex(r"new-state"), move |_| { new_state_op.clone() });
-    let change_state_op = Atom::gnd(stdlib::ChangeStateOp{});
+    let change_state_op = Atom::gnd(stdlib_old::ChangeStateOp{});
     tref.register_token(regex(r"change-state!"), move |_| { change_state_op.clone() });
-    let get_state_op = Atom::gnd(stdlib::GetStateOp{});
+    let get_state_op = Atom::gnd(stdlib_old::GetStateOp{});
     tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
-    let nop_op = Atom::gnd(stdlib::NopOp{});
+    let nop_op = Atom::gnd(stdlib_old::NopOp{});
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
-    let match_op = Atom::gnd(stdlib::MatchOp{});
+    let match_op = Atom::gnd(stdlib_old::MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
-    let min_atom_op = Atom::gnd(stdlib::MinAtomOp{});
+    let min_atom_op = Atom::gnd(stdlib_old::MinAtomOp{});
     tref.register_token(regex(r"min-atom"), move |_| { min_atom_op.clone() });
-    let max_atom_op = Atom::gnd(stdlib::MaxAtomOp{});
+    let max_atom_op = Atom::gnd(stdlib_old::MaxAtomOp{});
     tref.register_token(regex(r"max-atom"), move |_| { max_atom_op.clone() });
-    let size_atom_op = Atom::gnd(stdlib::SizeAtomOp{});
+    let size_atom_op = Atom::gnd(stdlib_old::SizeAtomOp{});
     tref.register_token(regex(r"size-atom"), move |_| { size_atom_op.clone() });
-    let index_atom_op = Atom::gnd(stdlib::IndexAtomOp{});
+    let index_atom_op = Atom::gnd(stdlib_old::IndexAtomOp{});
     tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
-    let random_int_op = Atom::gnd(stdlib::RandomIntOp{});
+    let random_int_op = Atom::gnd(stdlib_old::RandomIntOp{});
     tref.register_token(regex(r"random-int"), move |_| { random_int_op.clone() });
-    let random_float_op = Atom::gnd(stdlib::RandomFloatOp{});
+    let random_float_op = Atom::gnd(stdlib_old::RandomFloatOp{});
     tref.register_token(regex(r"random-float"), move |_| { random_float_op.clone() });
-    let mod_space_op = Atom::gnd(stdlib::ModSpaceOp::new(metta.clone()));
+    let mod_space_op = Atom::gnd(stdlib_old::ModSpaceOp::new(metta.clone()));
     tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
-    let print_mods_op = Atom::gnd(stdlib::PrintModsOp::new(metta.clone()));
+    let print_mods_op = Atom::gnd(stdlib_old::PrintModsOp::new(metta.clone()));
     tref.register_token(regex(r"print-mods!"), move |_| { print_mods_op.clone() });
-    let unique_op = Atom::gnd(stdlib::UniqueAtomOp{});
+    let unique_op = Atom::gnd(stdlib_old::UniqueAtomOp{});
     tref.register_token(regex(r"unique-atom"), move |_| { unique_op.clone() });
-    let subtraction_op = Atom::gnd(stdlib::SubtractionAtomOp{});
+    let subtraction_op = Atom::gnd(stdlib_old::SubtractionAtomOp{});
     tref.register_token(regex(r"subtraction-atom"), move |_| { subtraction_op.clone() });
-    let intersection_op = Atom::gnd(stdlib::IntersectionAtomOp{});
+    let intersection_op = Atom::gnd(stdlib_old::IntersectionAtomOp{});
     tref.register_token(regex(r"intersection-atom"), move |_| { intersection_op.clone() });
-    let union_op = Atom::gnd(stdlib::UnionAtomOp{});
+    let union_op = Atom::gnd(stdlib_old::UnionAtomOp{});
     tref.register_token(regex(r"union-atom"), move |_| { union_op.clone() });
 
     #[cfg(feature = "pkg_mgmt")]
-    stdlib::pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
+    stdlib_old::pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
 }
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
@@ -477,23 +481,23 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
     let capture_op = Atom::gnd(CaptureOp::new(space.clone()));
     tref.register_token(regex(r"capture"), move |_| { capture_op.clone() });
-    let pragma_op = Atom::gnd(stdlib::PragmaOp::new(metta.settings().clone()));
+    let pragma_op = Atom::gnd(stdlib_old::PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
-    let import_op = Atom::gnd(stdlib::ImportOp::new(metta.clone()));
+    let import_op = Atom::gnd(stdlib_old::ImportOp::new(metta.clone()));
     tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
-    let include_op = Atom::gnd(stdlib::IncludeOp::new(metta.clone()));
+    let include_op = Atom::gnd(stdlib_old::IncludeOp::new(metta.clone()));
     tref.register_token(regex(r"include"), move |_| { include_op.clone() });
-    let bind_op = Atom::gnd(stdlib::BindOp::new(tokenizer.clone()));
+    let bind_op = Atom::gnd(stdlib_old::BindOp::new(tokenizer.clone()));
     tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
-    let trace_op = Atom::gnd(stdlib::TraceOp{});
+    let trace_op = Atom::gnd(stdlib_old::TraceOp{});
     tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
-    let println_op = Atom::gnd(stdlib::PrintlnOp{});
+    let println_op = Atom::gnd(stdlib_old::PrintlnOp{});
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
-    let format_args_op = Atom::gnd(stdlib::FormatArgsOp{});
+    let format_args_op = Atom::gnd(stdlib_old::FormatArgsOp{});
     tref.register_token(regex(r"format-args"), move |_| { format_args_op.clone() });
     let print_alternatives_op = Atom::gnd(PrintAlternativesOp{});
     tref.register_token(regex(r"print-alternatives!"), move |_| { print_alternatives_op.clone() });
-    let sealed_op = Atom::gnd(stdlib::SealedOp{});
+    let sealed_op = Atom::gnd(stdlib_old::SealedOp{});
     tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
@@ -538,7 +542,7 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     tref.register_token(regex(r"<="), move |_| { le_op.clone() });
     let ge_op = Atom::gnd(GreaterEqOp{});
     tref.register_token(regex(r">="), move |_| { ge_op.clone() });
-    let eq_op = Atom::gnd(stdlib::EqualOp{});
+    let eq_op = Atom::gnd(stdlib_old::EqualOp{});
     tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
     let and_op = Atom::gnd(AndOp{});
     tref.register_token(regex(r"and"), move |_| { and_op.clone() });
@@ -636,29 +640,29 @@ mod tests {
     #[test]
     fn metta_min_atom() {
         assert_eq!(run_program(&format!("!(min-atom (5 4 5.5))")), Ok(vec![vec![expr!({Number::Integer(4)})]]));
-        assert_eq!(run_program(&format!("!(min-atom ())")), Ok(vec![vec![expr!("Error" ({ stdlib::MinAtomOp{} } ()) "Empty expression")]]));
-        assert_eq!(run_program(&format!("!(min-atom (3 A B 5))")), Ok(vec![vec![expr!("Error" ({ stdlib::MinAtomOp{} } ({Number::Integer(3)} "A" "B" {Number::Integer(5)})) "Only numbers are allowed in expression")]]));
+        assert_eq!(run_program(&format!("!(min-atom ())")), Ok(vec![vec![expr!("Error" ({ stdlib_old::MinAtomOp{} } ()) "Empty expression")]]));
+        assert_eq!(run_program(&format!("!(min-atom (3 A B 5))")), Ok(vec![vec![expr!("Error" ({ stdlib_old::MinAtomOp{} } ({Number::Integer(3)} "A" "B" {Number::Integer(5)})) "Only numbers are allowed in expression")]]));
     }
 
     #[test]
     fn metta_max_atom() {
         assert_eq!(run_program(&format!("!(max-atom (5 4 5.5))")), Ok(vec![vec![expr!({Number::Float(5.5)})]]));
-        assert_eq!(run_program(&format!("!(max-atom ())")), Ok(vec![vec![expr!("Error" ({ stdlib::MaxAtomOp{} } ()) "Empty expression")]]));
-        assert_eq!(run_program(&format!("!(max-atom (3 A B 5))")), Ok(vec![vec![expr!("Error" ({ stdlib::MaxAtomOp{} } ({Number::Integer(3)} "A" "B" {Number::Integer(5)})) "Only numbers are allowed in expression")]]));
+        assert_eq!(run_program(&format!("!(max-atom ())")), Ok(vec![vec![expr!("Error" ({ stdlib_old::MaxAtomOp{} } ()) "Empty expression")]]));
+        assert_eq!(run_program(&format!("!(max-atom (3 A B 5))")), Ok(vec![vec![expr!("Error" ({ stdlib_old::MaxAtomOp{} } ({Number::Integer(3)} "A" "B" {Number::Integer(5)})) "Only numbers are allowed in expression")]]));
     }
 
     #[test]
     fn metta_index_atom() {
         assert_eq!(run_program(&format!("!(index-atom (5 4 3 2 1) 2)")), Ok(vec![vec![expr!({Number::Integer(3)})]]));
-        assert_eq!(run_program(&format!("!(index-atom (A B C D E) 5)")), Ok(vec![vec![expr!("Error" ({ stdlib::IndexAtomOp{} } ("A" "B" "C" "D" "E") {Number::Integer(5)}) "Index is out of bounds")]]));
+        assert_eq!(run_program(&format!("!(index-atom (A B C D E) 5)")), Ok(vec![vec![expr!("Error" ({ stdlib_old::IndexAtomOp{} } ("A" "B" "C" "D" "E") {Number::Integer(5)}) "Index is out of bounds")]]));
     }
 
     #[test]
     fn metta_random() {
         assert_eq!(run_program(&format!("!(chain (eval (random-int 0 5)) $rint (and (>= $rint 0) (< $rint 5)))")), Ok(vec![vec![expr!({Bool(true)})]]));
-        assert_eq!(run_program(&format!("!(random-int 0 0)")), Ok(vec![vec![expr!("Error" ({ stdlib::RandomIntOp{} } {Number::Integer(0)} {Number::Integer(0)}) "Range is empty")]]));
+        assert_eq!(run_program(&format!("!(random-int 0 0)")), Ok(vec![vec![expr!("Error" ({ stdlib_old::RandomIntOp{} } {Number::Integer(0)} {Number::Integer(0)}) "Range is empty")]]));
         assert_eq!(run_program(&format!("!(chain (eval (random-float 0.0 5.0)) $rfloat (and (>= $rfloat 0.0) (< $rfloat 5.0)))")), Ok(vec![vec![expr!({Bool(true)})]]));
-        assert_eq!(run_program(&format!("!(random-float 0 -5)")), Ok(vec![vec![expr!("Error" ({ stdlib::RandomFloatOp{} } {Number::Integer(0)} {Number::Integer(-5)}) "Range is empty")]]));
+        assert_eq!(run_program(&format!("!(random-float 0 -5)")), Ok(vec![vec![expr!("Error" ({ stdlib_old::RandomFloatOp{} } {Number::Integer(0)} {Number::Integer(-5)}) "Range is empty")]]));
     }
 
     #[test]

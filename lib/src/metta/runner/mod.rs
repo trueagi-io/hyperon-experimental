@@ -86,15 +86,13 @@ mod environment;
 pub use environment::{Environment, EnvBuilder};
 
 #[macro_use]
-pub mod stdlib;
+pub mod stdlib_old;
 use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
 
-#[cfg(not(feature = "old_interpreter"))]
 pub mod stdlib_minimal;
-#[cfg(not(feature = "old_interpreter"))]
 use stdlib_minimal::*;
 
-use stdlib::CoreLibLoader;
+use stdlib_old::CoreLibLoader;
 
 mod builtin_mods;
 use builtin_mods::*;
@@ -440,7 +438,6 @@ impl Metta {
     }
 
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
-        #[cfg(not(feature = "old_interpreter"))]
         let atom = if is_bare_minimal_interpreter(self) {
             atom
         } else {
@@ -1061,7 +1058,6 @@ impl<'input> RunContext<'_, '_, 'input> {
                                 let type_err_exp = Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]);
                                 self.i_wrapper.interpreter_state = Some(InterpreterState::new_finished(self.module().space().clone(), vec![type_err_exp]));
                             } else {
-                                #[cfg(not(feature = "old_interpreter"))]
                                 let atom = if is_bare_minimal_interpreter(self.metta) {
                                     atom
                                 } else {
@@ -1087,7 +1083,6 @@ impl<'input> RunContext<'_, '_, 'input> {
 
 }
 
-#[cfg(not(feature = "old_interpreter"))]
 fn is_bare_minimal_interpreter(metta: &Metta) -> bool {
     metta.get_setting_string("interpreter") == Some("bare-minimal".into())
 }
@@ -1180,7 +1175,6 @@ impl<'i> InputStream<'i> {
     }
 }
 
-#[cfg(not(feature = "old_interpreter"))]
 fn wrap_atom_by_metta_interpreter(space: DynSpace, atom: Atom) -> Atom {
     let space = Atom::gnd(space);
     let interpret = Atom::expr([METTA_SYMBOL, atom, ATOM_TYPE_UNDEFINED, space]);
