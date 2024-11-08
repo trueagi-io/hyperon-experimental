@@ -72,6 +72,27 @@
   (@return "Deconsed expression"))
 (: decons-atom (-> Expression Expression))
 
+(@doc index-atom
+  (@desc "Returns atom from an expression (first argument) using index (second argument) or error if index is out of bounds")
+  (@params (
+    (@param "Expression")
+    (@param "Index")))
+  (@return "Atom from an expression in the place defined by index. Error if index is out of bounds"))
+
+(@doc random-int
+  (@desc "Returns random int number from range defined by two numbers (first and second argument)")
+  (@params (
+    (@param "Range start")
+    (@param "Range end")))
+  (@return "Random int number from defined range"))
+
+(@doc random-float
+  (@desc "Returns random float number from range defined by two numbers (first and second argument)")
+  (@params (
+    (@param "Range start")
+    (@param "Range end")))
+  (@return "Random float number from defined range"))
+
 (@doc collapse-bind
   (@desc "Evaluates minimal MeTTa operation (first argument) and returns an expression which contains all alternative evaluations in a form (Atom Bindings). Bindings are represented in a form of a grounded atom.")
   (@params (
