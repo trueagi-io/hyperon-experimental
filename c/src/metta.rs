@@ -720,19 +720,19 @@ pub struct step_result_t {
     result: *mut RustStepResult,
 }
 
-struct RustStepResult(InterpreterState<'static, DynSpace>);
+struct RustStepResult(InterpreterState<DynSpace>);
 
-impl From<InterpreterState<'static, DynSpace>> for step_result_t {
-    fn from(state: InterpreterState<'static, DynSpace>) -> Self {
+impl From<InterpreterState<DynSpace>> for step_result_t {
+    fn from(state: InterpreterState<DynSpace>) -> Self {
         Self{ result: Box::into_raw(Box::new(RustStepResult(state))) }
     }
 }
 
 impl step_result_t {
-    fn into_inner(self) -> InterpreterState<'static, DynSpace> {
+    fn into_inner(self) -> InterpreterState<DynSpace> {
         unsafe{ Box::from_raw(self.result).0 }
     }
-    fn borrow(&self) -> &InterpreterState<'static, DynSpace> {
+    fn borrow(&self) -> &InterpreterState<DynSpace> {
         &unsafe{ &*(&*self).result }.0
     }
 }
@@ -1210,22 +1210,22 @@ impl run_context_t {
     }
 }
 
-struct RustRunContext(RunContext<'static, 'static, 'static>);
+struct RustRunContext(RunContext<'static, 'static>);
 
-impl From<&mut RunContext<'_, '_, '_>> for run_context_t {
-    fn from(context_ref: &mut RunContext<'_, '_, '_>) -> Self {
+impl From<&mut RunContext<'_, '_>> for run_context_t {
+    fn from(context_ref: &mut RunContext<'_, '_>) -> Self {
         Self {
-            context: (context_ref as *mut RunContext<'_, '_, '_>).cast(),
+            context: (context_ref as *mut RunContext<'_, '_>).cast(),
             err_string: core::ptr::null_mut(),
         }
     }
 }
 
 impl run_context_t {
-    fn borrow(&self) -> &RunContext<'static, 'static, 'static> {
+    fn borrow(&self) -> &RunContext<'static, 'static> {
         &unsafe{ &*self.context.cast::<RustRunContext>() }.0
     }
-    fn borrow_mut(&mut self) -> &mut RunContext<'static, 'static, 'static> {
+    fn borrow_mut(&mut self) -> &mut RunContext<'static, 'static> {
         &mut unsafe{ &mut *self.context.cast::<RustRunContext>() }.0
     }
 }

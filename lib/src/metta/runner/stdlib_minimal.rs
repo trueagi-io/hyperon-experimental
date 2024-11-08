@@ -52,7 +52,7 @@ macro_rules! grounded_op {
 #[derive(Clone, Debug)]
 pub struct ImportOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static>>>>>>,
 }
 
 grounded_op!(ImportOp, "import!");
@@ -152,7 +152,7 @@ impl CustomExecute for ImportOp {
 #[derive(Clone, Debug)]
 pub struct IncludeOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static>>>>>>,
 }
 
 grounded_op!(IncludeOp, "include");
@@ -215,7 +215,7 @@ impl CustomExecute for IncludeOp {
 #[derive(Clone, Debug)]
 pub struct ModSpaceOp {
     //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static>>>>>>,
 }
 
 grounded_op!(ModSpaceOp, "mod-space!");
@@ -914,7 +914,7 @@ pub(crate) mod pkg_mgmt_ops {
     #[derive(Clone, Debug)]
     pub struct GitModuleOp {
         //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-        context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+        context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static>>>>>>,
     }
 
     grounded_op!(GitModuleOp, "git-module!");
