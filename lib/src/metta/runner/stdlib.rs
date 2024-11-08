@@ -1162,6 +1162,96 @@ impl CustomExecute for IntersectionAtomOp {
 }
 
 #[derive(Clone, Debug)]
+pub struct MaxAtomOp {}
+
+grounded_op!(MaxAtomOp, "max-atom");
+
+impl Grounded for MaxAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for MaxAtomOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("max-atom expects one argument: expression");
+        let children = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children();
+        if children.is_empty() {
+            Err(ExecError::from("Empty expression"))
+        } else {
+            children.into_iter().fold(Ok(f64::NEG_INFINITY), |res, x| {
+                match (res, AsPrimitive::from_atom(x).as_number()) {
+                    (res @ Err(_), _) => res,
+                    (_, None) => Err(ExecError::from("Only numbers are allowed in expression")),
+                    (Ok(max), Some(x)) => Ok(f64::max(max, x.into())),
+                }
+            })
+        }.map(|max| vec![Atom::gnd(Number::Float(max))])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MinAtomOp {}
+
+grounded_op!(MinAtomOp, "min-atom");
+
+impl Grounded for MinAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for MinAtomOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("min-atom expects one argument: expression");
+        let children = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children();
+        if children.is_empty() {
+            Err(ExecError::from("Empty expression"))
+        } else {
+            children.into_iter().fold(Ok(f64::INFINITY), |res, x| {
+                match (res, AsPrimitive::from_atom(x).as_number()) {
+                    (res @ Err(_), _) => res,
+                    (_, None) => Err(ExecError::from("Only numbers are allowed in expression")),
+                    (Ok(min), Some(x)) => Ok(f64::min(min, x.into())),
+                }
+            })
+        }.map(|min| vec![Atom::gnd(Number::Float(min))])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SizeAtomOp {}
+
+grounded_op!(SizeAtomOp, "size-atom");
+
+impl Grounded for SizeAtomOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for SizeAtomOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("size-atom expects one argument: expression");
+        let children = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children();
+        let size = children.len();
+        Ok(vec![Atom::gnd(Number::Integer(size as i64))])
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct IndexAtomOp {}
 
 grounded_op!(IndexAtomOp, "index-atom");
@@ -1829,6 +1919,12 @@ mod non_minimal_only_stdlib {
         tref.register_token(regex(r"cdr-atom"), move |_| { cdr_atom_op.clone() });
         let cons_atom_op = Atom::gnd(ConsAtomOp{});
         tref.register_token(regex(r"cons-atom"), move |_| { cons_atom_op.clone() });
+        let max_atom_op = Atom::gnd(MaxAtomOp{});
+        tref.register_token(regex(r"max-atom"), move |_| { max_atom_op.clone() });
+        let min_atom_op = Atom::gnd(MinAtomOp{});
+        tref.register_token(regex(r"min-atom"), move |_| { min_atom_op.clone() });
+        let size_atom_op = Atom::gnd(SizeAtomOp{});
+        tref.register_token(regex(r"size-atom"), move |_| { size_atom_op.clone() });
         let index_atom_op = Atom::gnd(IndexAtomOp{});
         tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
         let random_int_op = Atom::gnd(RandomIntOp{});
@@ -2120,6 +2216,34 @@ mod tests {
         assert_eq!(res, vec![expr!(("A"))]);
         let res = ConsAtomOp{}.execute(&mut vec![expr!("A" "F"), expr!(("B" "C") "D")]).expect("No result returned");
         assert_eq!(res, vec![expr!(("A" "F") ("B" "C") "D")]);
+    }
+
+    #[test]
+    fn size_atom_op() {
+        let res = SizeAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} {Number::Integer(3)} {Number::Integer(2)} {Number::Integer(1)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(5)})]);
+        let res = SizeAtomOp{}.execute(&mut vec![expr!()]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(0)})]);
+    }
+
+    #[test]
+    fn min_atom_op() {
+        let res = MinAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} {Number::Float(5.5)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(4)})]);
+        let res = MinAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} "A")]);
+        assert_eq!(res, Err(ExecError::from("Only numbers are allowed in expression")));
+        let res = MinAtomOp{}.execute(&mut vec![expr!()]);
+        assert_eq!(res, Err(ExecError::from("Empty expression")));
+    }
+
+    #[test]
+    fn max_atom_op() {
+        let res = MaxAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} {Number::Float(5.5)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Float(5.5)})]);
+        let res = MaxAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} "A")]);
+        assert_eq!(res, Err(ExecError::from("Only numbers are allowed in expression")));
+        let res = MaxAtomOp{}.execute(&mut vec![expr!()]);
+        assert_eq!(res, Err(ExecError::from("Empty expression")));
     }
 
     #[test]

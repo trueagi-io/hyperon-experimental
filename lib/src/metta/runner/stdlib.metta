@@ -415,6 +415,24 @@
     (@param "Tail of an expression")))
   (@return "New expression consists of two input arguments"))
 
+(@doc min-atom
+  (@desc "Returns atom with min value in the expression (first argument). Only numbers allowed")
+  (@params (
+    (@param "Expression which contains atoms of Number type")))
+  (@return "Min value in the expression. Error if expression contains non-numeric value or is empty"))
+
+(@doc max-atom
+  (@desc "Returns atom with max value in the expression (first argument). Only numbers allowed")
+  (@params (
+    (@param "Expression which contains atoms of Number type")))
+  (@return "Max value in the expression. Error if expression contains non-numeric value or is empty"))
+
+(@doc size-atom
+  (@desc "Returns size of an expression (first argument)")
+  (@params (
+    (@param "Expression")))
+  (@return "Size of an expression"))
+
 (@doc index-atom
   (@desc "Returns atom from an expression (first argument) using index (second argument) or error if index is out of bounds")
   (@params (
