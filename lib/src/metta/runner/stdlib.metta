@@ -418,13 +418,13 @@
 (@doc min-atom
   (@desc "Returns atom with min value in the expression (first argument). Only numbers allowed")
   (@params (
-    (@param "Expression")))
+    (@param "Expression which contains atoms of Number type")))
   (@return "Min value in the expression. Error if expression contains non-numeric value or is empty"))
 
 (@doc max-atom
   (@desc "Returns atom with max value in the expression (first argument). Only numbers allowed")
   (@params (
-    (@param "Expression")))
+    (@param "Expression which contains atoms of Number type")))
   (@return "Max value in the expression. Error if expression contains non-numeric value or is empty"))
 
 (@doc size-atom
