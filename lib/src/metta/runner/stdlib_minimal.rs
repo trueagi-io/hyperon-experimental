@@ -2,11 +2,12 @@ use crate::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-use crate::metta::runner::Metta;
 use crate::metta::types::get_atom_types;
 use crate::common::assert::vec_eq_no_order;
 use crate::common::shared::Shared;
 use crate::metta::runner::stdlib_old;
+use crate::metta::text::SExprParser;
+use crate::metta::runner::{Metta, RunContext, ModuleLoader};
 
 use std::convert::TryInto;
 use regex::Regex;
@@ -560,6 +561,33 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
 }
 
 pub static METTA_CODE: &'static str = include_str!("stdlib_minimal.metta");
+
+/// Loader to Initialize the corelib module
+///
+/// NOTE: the corelib will be loaded automatically if the runner is initialized with one of the high-level
+/// init functions such as [Metta::new] and [Metta::new_with_stdlib_loader]
+#[derive(Debug)]
+pub(crate) struct CoreLibLoader;
+
+impl Default for CoreLibLoader {
+    fn default() -> Self {
+        CoreLibLoader
+    }
+}
+
+impl ModuleLoader for CoreLibLoader {
+    fn load(&self, context: &mut RunContext) -> Result<(), String> {
+        let space = DynSpace::new(GroundingSpace::new());
+        context.init_self_module(space, None);
+
+        register_rust_stdlib_tokens(&mut *context.module().tokenizer().borrow_mut());
+
+        let parser = SExprParser::new(METTA_CODE);
+        context.push_parser(Box::new(parser));
+
+        Ok(())
+    }
+}
 
 #[cfg(test)]
 mod tests {
@@ -1347,5 +1375,19 @@ mod tests {
             vec![expr!({Str::from_str("te\nst")})],
             vec![expr!({Str::from_str("te\nst")} "test")],
         ]));
+    }
+
+    #[test]
+    fn mod_space_op() {
+        let program = r#"
+            !(bind! &new_space (new-space))
+            !(add-atom &new_space (mod-space! stdlib))
+            !(get-atoms &new_space)
+        "#;
+        let runner = Metta::new(Some(runner::environment::EnvBuilder::test_env()));
+        let result = runner.run(SExprParser::new(program)).unwrap();
+
+        let stdlib_space = runner.module_space(runner.get_module_by_name("stdlib").unwrap());
+        assert_eq!(result[2], vec![Atom::gnd(stdlib_space)]);
     }
 }

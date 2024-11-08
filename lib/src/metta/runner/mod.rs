@@ -90,9 +90,7 @@ pub mod stdlib_old;
 use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
 
 pub mod stdlib_minimal;
-use stdlib_minimal::*;
-
-use stdlib_old::CoreLibLoader;
+use stdlib_minimal::CoreLibLoader;
 
 mod builtin_mods;
 use builtin_mods::*;
