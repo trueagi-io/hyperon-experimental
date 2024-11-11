@@ -177,13 +177,16 @@ def _priv_gnd_get_object(atom):
         return SpaceRef._from_cspace(hp.atom_get_space(atom.catom))
     elif typ == S('Bool') or typ == S('Number'):
         converter = ConvertingSerializer()
-        hp.atom_gnd_serialize(atom.catom, converter)
-        if converter.value is None:
-            raise RuntimeError(f"Could not convert atom {atom}")
+        try:
+            res = hp.atom_gnd_serialize(atom.catom, converter)
+        except Exception as e:
+            raise RuntimeError(f"Could not convert atom {atom} to Python value, exception caught: {e}")
+        if res != SerialResult.OK or converter.value is None:
+            raise RuntimeError(f"Could not convert atom {atom} to Python value")
         else:
             return ValueObject(converter.value)
     else:
-        raise TypeError(f"Cannot get_object of unsupported non-C {atom}")
+        raise TypeError(f"Cannot get Python object of unsupported non-C atom {atom}")
 
 
 def G(object, type=AtomType.UNDEFINED):
@@ -329,9 +332,9 @@ def unwrap_args(atoms):
                     except:
                         raise NoReduceError()
                 continue
-        try:
+        if hasattr(a, 'get_object'):
             args.append(a.get_object().content)
-        except:
+        else:
             # NOTE:
             # Currently, applying grounded operations to pure atoms is not reduced.
             # If we want, we can raise an exception, or form an error expression instead,

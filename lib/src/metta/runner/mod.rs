@@ -85,16 +85,11 @@ use std::sync::{Arc, Mutex, OnceLock};
 mod environment;
 pub use environment::{Environment, EnvBuilder};
 
-#[macro_use]
-pub mod stdlib;
 use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
 
-#[cfg(not(feature = "old_interpreter"))]
+#[macro_use]
 pub mod stdlib_minimal;
-#[cfg(not(feature = "old_interpreter"))]
-use stdlib_minimal::*;
-
-use stdlib::CoreLibLoader;
+use stdlib_minimal::CoreLibLoader;
 
 mod builtin_mods;
 use builtin_mods::*;
@@ -141,7 +136,7 @@ pub(crate) struct MettaContents {
     //TODO-HACK: This is a terrible horrible ugly hack that should not be merged.  Delete this field
     // The real context is an interface to the state in a run, and should not live across runs
     // This hack will fail badly if we end up running code from two different modules in parallel
-    context: Arc<Mutex<Vec<Arc<Mutex<&'static mut RunContext<'static, 'static, 'static>>>>>>,
+    context: Arc<Mutex<Vec<Arc<Mutex<&'static mut RunContext<'static, 'static>>>>>>,
 }
 
 impl Metta {
@@ -440,7 +435,6 @@ impl Metta {
     }
 
     pub fn evaluate_atom(&self, atom: Atom) -> Result<Vec<Atom>, String> {
-        #[cfg(not(feature = "old_interpreter"))]
         let atom = if is_bare_minimal_interpreter(self) {
             atom
         } else {
@@ -495,7 +489,7 @@ pub struct RunnerState<'m, 'i> {
     mod_id: ModId,
     mod_ptr: Option<Rc<MettaMod>>,
     init_state: ModuleInitState,
-    i_wrapper: InterpreterWrapper<'m, 'i>,
+    i_wrapper: InterpreterWrapper<'i>,
 }
 
 impl std::fmt::Debug for RunnerState<'_, '_> {
@@ -591,7 +585,7 @@ impl<'m, 'input> RunnerState<'m, 'input> {
     //TODO: When we eliminate the RunnerState, this method should become a private method of Metta,
     // and an argument of type `Option<ModId>` should be added.  When this function is used to initialize
     // modules, the module type can be returned from this function
-    fn run_in_context<T, F: FnOnce(&mut RunContext<'_, 'm, 'input>) -> Result<T, String>>(&mut self, f: F) -> Result<T, String> {
+    fn run_in_context<T, F: FnOnce(&mut RunContext<'_, 'input>) -> Result<T, String>>(&mut self, f: F) -> Result<T, String> {
 
         // Construct the RunContext
         let mut context = RunContext {
@@ -647,22 +641,22 @@ impl<'m, 'input> RunnerState<'m, 'input> {
 // TODO: I think we may be able to remove the `'interpreter`` lifetime after the minimal MeTTa migration
 //  because the lifetime is separated on account of the inability of the compiler to shorten a lifetime
 //  used as a generic parameter on a trait.  In this case, the `Plan` trait.
-pub struct RunContext<'a, 'interpreter, 'input> {
+pub struct RunContext<'a, 'input> {
     metta: &'a Metta,
     mod_id: ModId,
     mod_ptr: &'a mut Option<Rc<MettaMod>>,
     init_state: &'a mut ModuleInitState,
-    i_wrapper: &'a mut InterpreterWrapper<'interpreter, 'input>
+    i_wrapper: &'a mut InterpreterWrapper<'input>
 }
 
-impl std::fmt::Debug for RunContext<'_, '_, '_> {
+impl std::fmt::Debug for RunContext<'_, '_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RunContext")
          .finish()
     }
 }
 
-impl<'input> RunContext<'_, '_, 'input> {
+impl<'input> RunContext<'_, 'input> {
     /// Returns access to the Metta runner that is hosting the context 
     pub fn metta(&self) -> &Metta {
         &self.metta
@@ -1061,7 +1055,6 @@ impl<'input> RunContext<'_, '_, 'input> {
                                 let type_err_exp = Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]);
                                 self.i_wrapper.interpreter_state = Some(InterpreterState::new_finished(self.module().space().clone(), vec![type_err_exp]));
                             } else {
-                                #[cfg(not(feature = "old_interpreter"))]
                                 let atom = if is_bare_minimal_interpreter(self.metta) {
                                     atom
                                 } else {
@@ -1087,7 +1080,6 @@ impl<'input> RunContext<'_, '_, 'input> {
 
 }
 
-#[cfg(not(feature = "old_interpreter"))]
 fn is_bare_minimal_interpreter(metta: &Metta) -> bool {
     metta.get_setting_string("interpreter") == Some("bare-minimal".into())
 }
@@ -1099,10 +1091,10 @@ fn is_bare_minimal_interpreter(metta: &Metta) -> bool {
 /// Private structure to contain everything associated with an InterpreterState.
 /// This is basically the part of RunContext that lasts across calls to run_step
 #[derive(Default)]
-struct InterpreterWrapper<'interpreter, 'i> {
+struct InterpreterWrapper<'i> {
     mode: MettaRunnerMode,
     input_src: InputStream<'i>,
-    interpreter_state: Option<InterpreterState<'interpreter, DynSpace>>,
+    interpreter_state: Option<InterpreterState<DynSpace>>,
     results: Vec<Vec<Atom>>,
 }
 
@@ -1180,7 +1172,6 @@ impl<'i> InputStream<'i> {
     }
 }
 
-#[cfg(not(feature = "old_interpreter"))]
 fn wrap_atom_by_metta_interpreter(space: DynSpace, atom: Atom) -> Atom {
     let space = Atom::gnd(space);
     let interpret = Atom::expr([METTA_SYMBOL, atom, ATOM_TYPE_UNDEFINED, space]);

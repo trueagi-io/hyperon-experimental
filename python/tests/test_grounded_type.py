@@ -138,5 +138,18 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertNotEqual(metta.parse_single("untop").get_grounded_type(),
                 metta.parse_single("untyped").get_grounded_type())
 
+    def test_conversion_between_rust_and_python(self):
+        self.maxDiff = None
+        metta = MeTTa(env_builder=Environment.test_env())
+        integer = metta.run('!(+ 1 (random-int 4 5))', flat=True)[0].get_object()
+        self.assertEqual(integer, ValueObject(5))
+        float = metta.run('!(+ 1.0 (random-float 4 5))', flat=True)[0].get_object()
+        self.assertTrue(float.value >= 5.0 and float.value < 6)
+        bool = metta.run('!(not (flip))', flat=True)[0].get_object()
+        self.assertTrue(bool.value or  not bool.value)
+        false = metta.run('!(not True)', flat=True)[0].get_object()
+        self.assertEquals(false, ValueObject(False))
+
+
 if __name__ == "__main__":
     unittest.main()
