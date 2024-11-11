@@ -41,38 +41,6 @@ class StreamMethod(threading.Thread):
         return self._result.get()
 
 
-class BaseListeningAgent:
-    def __init__(self):
-        self.messages = Queue()
-        self.running = True
-
-    def start(self,  *args):
-        if not args:
-            args = ()
-        st = StreamMethod(self.messages_processor, args)
-        st.start()
-
-    def message_processor(self, message, *args):
-        pass
-
-    def messages_processor(self, *args):
-        while self.running:
-            if not self.messages.empty():
-                m = self.messages.get()
-                self.output = []
-                res = self.message_processor(m, *args)
-                if isinstance(res, list):
-                    self.output.extend(res)
-                else:
-                    self.output.append(res)
-        return []
-
-    def stop(self):
-        self.running = False
-
-    def input(self, msg):
-        self.messages.put(msg)
-
 class AgentObject:
 
     '''
@@ -199,6 +167,40 @@ class AgentObject:
             return [E()]
         return st
 
+class BaseListeningAgent(AgentObject):
+    def __init__(self, path=None, atoms={}, include_paths=None, code=None):
+        super().__init__(path, atoms, include_paths, code)
+        self.messages = Queue()
+        self.running = True
+
+    def start(self,  *args):
+        if not args:
+            args = ()
+        st = StreamMethod(self.messages_processor, args)
+        st.start()
+
+    def message_processor(self, message, *args):
+        pass
+
+    def messages_processor(self, *args):
+        while self.running:
+            if not self.messages.empty():
+                m = self.messages.get()
+                self.output = []
+                res = self.message_processor(m, *args)
+                if isinstance(res, list):
+                    self.output.extend(res)
+                else:
+                    self.output.append(res)
+        return []
+
+    def stop(self):
+        self.running = False
+        return  []
+
+    def input(self, msg):
+        self.messages.put(msg)
+        return []
 
 @register_atoms(pass_metta=True)
 def agent_atoms(metta):
