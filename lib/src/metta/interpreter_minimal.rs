@@ -156,20 +156,16 @@ impl<T: Space> InterpreterContext<T> {
 
 /// This wrapper is to keep interpreter interface compatible with previous
 /// implementation and will be removed in future.
-// TODO: MINIMAL: This wrapper is for compatibility with old_interpreter.rs only
-pub trait SpaceRef<'a> : Space + 'a {}
-impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
 
 /// State of the interpreter which passed between `interpret_step` calls.
 #[derive(Debug)]
-pub struct InterpreterState<'a, T: SpaceRef<'a>> {
+pub struct InterpreterState<T: Space> {
     /// List of the alternatives to evaluate further.
     plan: Vec<InterpretedAtom>,
     /// List of the completely evaluated results to be returned.
     finished: Vec<Atom>,
     /// Evaluation context.
     context: InterpreterContext<T>,
-    phantom: std::marker::PhantomData<dyn SpaceRef<'a>>,
 }
 
 fn atom_as_slice(atom: &Atom) -> Option<&[Atom]> {
@@ -184,16 +180,14 @@ fn atom_into_array<const N: usize>(atom: Atom) -> Option<[Atom; N]> {
     <[Atom; N]>::try_from(atom).ok()
 }
 
-impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
+impl<T: Space> InterpreterState<T> {
 
     /// INTERNAL USE ONLY. Create an InterpreterState that is ready to yield results
-    #[allow(dead_code)] //TODO: MINIMAL only silence the warning until interpreter_minimal replaces interpreter
     pub(crate) fn new_finished(space: T, results: Vec<Atom>) -> Self {
         Self {
             plan: vec![],
             finished: results,
             context: InterpreterContext::new(space),
-            phantom: std::marker::PhantomData,
         }
     }
 
@@ -229,7 +223,7 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
     }
 }
 
-impl<'a, T: SpaceRef<'a>> std::fmt::Display for InterpreterState<'a, T> {
+impl<T: Space> std::fmt::Display for InterpreterState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}\n", self.plan)
     }
@@ -241,13 +235,12 @@ impl<'a, T: SpaceRef<'a>> std::fmt::Display for InterpreterState<'a, T> {
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
-pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterState<'a, T> {
+pub fn interpret_init<T: Space>(space: T, expr: &Atom) -> InterpreterState<T> {
     let context = InterpreterContext::new(space);
     InterpreterState {
         plan: vec![InterpretedAtom(atom_to_stack(expr.clone(), None), Bindings::new())],
         finished: vec![],
         context,
-        phantom: std::marker::PhantomData,
     }
 }
 
@@ -256,7 +249,7 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
 ///
 /// # Arguments
 /// * `state` - interpreter state from the previous step.
-pub fn interpret_step<'a, T: Space + 'a>(mut state: InterpreterState<'a, T>) -> InterpreterState<'a, T> {
+pub fn interpret_step<T: Space>(mut state: InterpreterState<T>) -> InterpreterState<T> {
     let interpreted_atom = state.pop().unwrap();
     log::debug!("interpret_step:\n{}", interpreted_atom);
     let InterpretedAtom(stack, bindings) = interpreted_atom;
