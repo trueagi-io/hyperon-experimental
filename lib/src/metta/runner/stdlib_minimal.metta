@@ -97,6 +97,20 @@
     (@param "Index")))
   (@return "Atom from an expression in the place defined by index. Error if index is out of bounds"))
 
+(@doc powi
+  (@desc "Takes base (first argument) and power (second argument) and returns result of a power function (base ^ power)")
+  (@params (
+    (@param "Base. Could be float")
+    (@param "Power. Only integer")))
+  (@return "Result of a power function"))
+
+(@doc powf
+  (@desc "Takes base (first argument) and power (second argument) and returns result of a power function (base ^ power)")
+  (@params (
+    (@param "Base. Could be float")
+    (@param "Power. Could be float")))
+  (@return "Result of a power function"))
+
 (@doc random-int
   (@desc "Returns random int number from range defined by two numbers (first and second argument)")
   (@params (

@@ -1221,6 +1221,56 @@ impl CustomExecute for IndexAtomOp {
 }
 
 #[derive(Clone, Debug)]
+pub struct PowiOp {}
+
+grounded_op!(PowiOp, "powi");
+
+impl Grounded for PowiOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for PowiOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("powi expects two arguments: number (base) and number (power)");
+        let base = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let pow = Into::<i64>::into(AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let res = base.powi(pow.try_into().unwrap());
+        Ok(vec![Atom::gnd(Number::Float(res))])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct PowfOp {}
+
+grounded_op!(PowfOp, "powf");
+
+impl Grounded for PowfOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for PowfOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("powf expects two arguments: number (base) and number (power)");
+        let base = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let pow = Into::<f64>::into(AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let res = base.powf(pow.try_into().unwrap());
+        Ok(vec![Atom::gnd(Number::Float(res))])
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SubtractionAtomOp {}
 
 grounded_op!(SubtractionAtomOp, "subtraction-atom");
@@ -1767,6 +1817,10 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"max-atom"), move |_| { max_atom_op.clone() });
     let size_atom_op = Atom::gnd(SizeAtomOp{});
     tref.register_token(regex(r"size-atom"), move |_| { size_atom_op.clone() });
+    let powi_op = Atom::gnd(PowiOp{});
+    tref.register_token(regex(r"powi"), move |_| { powi_op.clone() });
+    let powf_op = Atom::gnd(PowfOp{});
+    tref.register_token(regex(r"powf"), move |_| { powf_op.clone() });
     let index_atom_op = Atom::gnd(IndexAtomOp{});
     tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
     let random_int_op = Atom::gnd(RandomIntOp{});
@@ -2001,6 +2055,18 @@ mod tests {
         assert_eq!(run_program(&format!("!(max-atom (5 4 5.5))")), Ok(vec![vec![expr!({Number::Float(5.5)})]]));
         assert_eq!(run_program(&format!("!(max-atom ())")), Ok(vec![vec![expr!("Error" ({ MaxAtomOp{} } ()) "Empty expression")]]));
         assert_eq!(run_program(&format!("!(max-atom (3 A B 5))")), Ok(vec![vec![expr!("Error" ({ MaxAtomOp{} } ({Number::Integer(3)} "A" "B" {Number::Integer(5)})) "Only numbers are allowed in expression")]]));
+    }
+
+    #[test]
+    fn metta_powi() {
+        assert_eq!(run_program(&format!("!(powi 5 2)")), Ok(vec![vec![expr!({Number::Integer(25)})]]));
+        assert_eq!(run_program(&format!("!(powi A 2)")), Ok(vec![vec![expr!("Error" ({ PowiOp{} } "A" {Number::Integer(2)}) "powi expects two arguments: number (base) and number (power)")]]));
+    }
+
+    #[test]
+    fn metta_powf() {
+        assert_eq!(run_program(&format!("!(powf 5 2)")), Ok(vec![vec![expr!({Number::Integer(25)})]]));
+        assert_eq!(run_program(&format!("!(powf A 2)")), Ok(vec![vec![expr!("Error" ({ PowfOp{} } "A" {Number::Integer(2)}) "powf expects two arguments: number (base) and number (power)")]]));
     }
 
     #[test]
@@ -3127,5 +3193,21 @@ mod tests {
         assert_eq!(res, vec![expr!({Number::Integer(3)})]);
         let res = IndexAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} {Number::Integer(3)} {Number::Integer(2)} {Number::Integer(1)}), expr!({Number::Integer(5)})]);
         assert_eq!(res, Err(ExecError::from("Index is out of bounds")));
+    }
+
+    #[test]
+    fn powi_op() {
+        let res = PowiOp{}.execute(&mut vec![expr!({Number::Integer(5)}), expr!({Number::Integer(2)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(25)})]);
+        let res = PowiOp{}.execute(&mut vec![expr!("A"), expr!({Number::Integer(2)})]);
+        assert_eq!(res, Err(ExecError::from("powi expects two arguments: number (base) and number (power)")));
+    }
+
+    #[test]
+    fn powf_op() {
+        let res = PowfOp{}.execute(&mut vec![expr!({Number::Integer(5)}), expr!({Number::Integer(2)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(25)})]);
+        let res = PowfOp{}.execute(&mut vec![expr!("A"), expr!({Number::Integer(2)})]);
+        assert_eq!(res, Err(ExecError::from("powf expects two arguments: number (base) and number (power)")));
     }
 }
