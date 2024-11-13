@@ -111,6 +111,12 @@
     (@param "Power. Could be float")))
   (@return "Result of a power function"))
 
+(@doc sqrt
+  (@desc "Returns square root for input number (first argument) which should be >= 0")
+  (@params (
+    (@param "Input number")))
+  (@return "Result of a square root function"))
+
 (@doc random-int
   (@desc "Returns random int number from range defined by two numbers (first and second argument)")
   (@params (

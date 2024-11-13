@@ -1271,6 +1271,34 @@ impl CustomExecute for PowfOp {
 }
 
 #[derive(Clone, Debug)]
+pub struct SqrtOp {}
+
+grounded_op!(SqrtOp, "sqrt");
+
+impl Grounded for SqrtOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for SqrtOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("sqrt expects one argument: number");
+        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        if input < 0.0 {
+            Err(ExecError::from("Only numbers >= 0 allowed"))
+        }
+        else {
+            Ok(vec![Atom::gnd(Number::Float(input.sqrt()))])
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SubtractionAtomOp {}
 
 grounded_op!(SubtractionAtomOp, "subtraction-atom");
@@ -1821,6 +1849,8 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"powi"), move |_| { powi_op.clone() });
     let powf_op = Atom::gnd(PowfOp{});
     tref.register_token(regex(r"powf"), move |_| { powf_op.clone() });
+    let sqrt_op = Atom::gnd(SqrtOp{});
+    tref.register_token(regex(r"sqrt"), move |_| { sqrt_op.clone() });
     let index_atom_op = Atom::gnd(IndexAtomOp{});
     tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
     let random_int_op = Atom::gnd(RandomIntOp{});
@@ -2067,6 +2097,13 @@ mod tests {
     fn metta_powf() {
         assert_eq!(run_program(&format!("!(powf 5 2)")), Ok(vec![vec![expr!({Number::Integer(25)})]]));
         assert_eq!(run_program(&format!("!(powf A 2)")), Ok(vec![vec![expr!("Error" ({ PowfOp{} } "A" {Number::Integer(2)}) "powf expects two arguments: number (base) and number (power)")]]));
+    }
+
+    #[test]
+    fn metta_sqrt() {
+        assert_eq!(run_program(&format!("!(sqrt 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
+        assert_eq!(run_program(&format!("!(sqrt -5)")), Ok(vec![vec![expr!("Error" ({ SqrtOp{} } {Number::Integer(-5)}) "Only numbers >= 0 allowed")]]));
+        assert_eq!(run_program(&format!("!(sqrt A)")), Ok(vec![vec![expr!("Error" ({ SqrtOp{} } "A") "sqrt expects one argument: number")]]));
     }
 
     #[test]
@@ -3209,5 +3246,15 @@ mod tests {
         assert_eq!(res, vec![expr!({Number::Integer(25)})]);
         let res = PowfOp{}.execute(&mut vec![expr!("A"), expr!({Number::Integer(2)})]);
         assert_eq!(res, Err(ExecError::from("powf expects two arguments: number (base) and number (power)")));
+    }
+
+    #[test]
+    fn sqrt_op() {
+        let res = SqrtOp{}.execute(&mut vec![expr!({Number::Integer(4)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(2)})]);
+        let res = SqrtOp{}.execute(&mut vec![expr!({Number::Integer(-4)})]);
+        assert_eq!(res, Err(ExecError::from("Only numbers >= 0 allowed")));
+        let res = SqrtOp{}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("sqrt expects one argument: number")));
     }
 }
