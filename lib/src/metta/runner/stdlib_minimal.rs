@@ -999,7 +999,7 @@ impl CustomExecute for UniqueAtomOp {
         let arg_error = || ExecError::from("unique expects single expression atom as an argument");
         let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
 
-        let mut atoms = expr.children().clone();
+        let mut atoms: Vec<Atom> = expr.children().into();
         let mut set = GroundingSpace::new();
         atoms.retain(|x| {
             let not_contained = set.query(x).is_empty();
@@ -1028,8 +1028,8 @@ impl Grounded for UnionAtomOp {
 impl CustomExecute for UnionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("union expects and executable LHS and RHS atom");
-        let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
-        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children().clone();
+        let mut lhs: Vec<Atom> = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().into();
+        let rhs: Vec<Atom> = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children().into();
 
         lhs.extend(rhs);
 
@@ -1055,8 +1055,8 @@ impl Grounded for IntersectionAtomOp {
 impl CustomExecute for IntersectionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("intersection expects and executable LHS and RHS atom");
-        let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
-        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children().clone();
+        let mut lhs: Vec<Atom> = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().into();
+        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children();
 
         let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
         for (index, rhs_item) in rhs.iter().enumerate() {
@@ -1238,8 +1238,8 @@ impl Grounded for SubtractionAtomOp {
 impl CustomExecute for SubtractionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("subtraction expects and executable LHS and RHS atom");
-        let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
-        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children().clone();
+        let mut lhs: Vec<Atom> = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().into();
+        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children();
 
         let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
         for (index, rhs_item) in rhs.iter().enumerate() {
@@ -1558,7 +1558,7 @@ impl CustomExecute for AssertEqualToResultOp {
 
         let actual = interpret_no_error(self.space.clone(), actual_atom)?;
 
-        assert_results_equal(&actual, expected, actual_atom)
+        assert_results_equal(&actual, &expected.into(), actual_atom)
     }
 }
 

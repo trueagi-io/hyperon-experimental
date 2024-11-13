@@ -169,12 +169,12 @@ impl ExpressionAtom {
     }
 
     /// Returns a reference to a vector of sub-atoms.
-    pub fn children(&self) -> &Vec<Atom> {
+    pub fn children(&self) -> &[Atom] {
         &self.children
     }
 
     /// Returns a mutable reference to a vector of sub-atoms.
-    pub fn children_mut(&mut self) -> &mut Vec<Atom> {
+    pub fn children_mut(&mut self) -> &mut [Atom] {
         &mut self.children
     }
 
@@ -1013,7 +1013,7 @@ impl<'a> TryFrom<&'a Atom> for &'a [Atom] {
     type Error = &'static str;
     fn try_from(atom: &Atom) -> Result<&[Atom], &'static str> {
         match atom {
-            Atom::Expression(expr) => Ok(expr.children().as_slice()),
+            Atom::Expression(expr) => Ok(expr.children()),
             _ => Err("Atom is not an ExpressionAtom")
         }
     }
@@ -1023,7 +1023,7 @@ impl<'a> TryFrom<&'a mut Atom> for &'a mut [Atom] {
     type Error = &'static str;
     fn try_from(atom: &mut Atom) -> Result<&mut [Atom], &'static str> {
         match atom {
-            Atom::Expression(expr) => Ok(expr.children_mut().as_mut_slice()),
+            Atom::Expression(expr) => Ok(expr.children_mut()),
             _ => Err("Atom is not an ExpressionAtom")
         }
     }
