@@ -1299,6 +1299,29 @@ impl CustomExecute for SqrtOp {
 }
 
 #[derive(Clone, Debug)]
+pub struct AbsOp {}
+
+grounded_op!(AbsOp, "abs");
+
+impl Grounded for AbsOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for AbsOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("abs expects one argument: number");
+        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        Ok(vec![Atom::gnd(Number::Float(input.abs()))])
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SubtractionAtomOp {}
 
 grounded_op!(SubtractionAtomOp, "subtraction-atom");
@@ -1851,6 +1874,8 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"powf"), move |_| { powf_op.clone() });
     let sqrt_op = Atom::gnd(SqrtOp{});
     tref.register_token(regex(r"sqrt"), move |_| { sqrt_op.clone() });
+    let abs_op = Atom::gnd(AbsOp{});
+    tref.register_token(regex(r"abs"), move |_| { abs_op.clone() });
     let index_atom_op = Atom::gnd(IndexAtomOp{});
     tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
     let random_int_op = Atom::gnd(RandomIntOp{});
@@ -2104,6 +2129,13 @@ mod tests {
         assert_eq!(run_program(&format!("!(sqrt 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
         assert_eq!(run_program(&format!("!(sqrt -5)")), Ok(vec![vec![expr!("Error" ({ SqrtOp{} } {Number::Integer(-5)}) "Only numbers >= 0 allowed")]]));
         assert_eq!(run_program(&format!("!(sqrt A)")), Ok(vec![vec![expr!("Error" ({ SqrtOp{} } "A") "sqrt expects one argument: number")]]));
+    }
+
+    #[test]
+    fn abs_sqrt() {
+        assert_eq!(run_program(&format!("!(abs 4)")), Ok(vec![vec![expr!({Number::Integer(4)})]]));
+        assert_eq!(run_program(&format!("!(abs -5)")), Ok(vec![vec![expr!({Number::Integer(5)})]]));
+        assert_eq!(run_program(&format!("!(abs A)")), Ok(vec![vec![expr!("Error" ({ AbsOp{} } "A") "abs expects one argument: number")]]));
     }
 
     #[test]
@@ -3256,5 +3288,15 @@ mod tests {
         assert_eq!(res, Err(ExecError::from("Only numbers >= 0 allowed")));
         let res = SqrtOp{}.execute(&mut vec![expr!("A")]);
         assert_eq!(res, Err(ExecError::from("sqrt expects one argument: number")));
+    }
+
+    #[test]
+    fn abs_op() {
+        let res = AbsOp{}.execute(&mut vec![expr!({Number::Integer(4)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(4)})]);
+        let res = AbsOp{}.execute(&mut vec![expr!({Number::Integer(-4)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(4)})]);
+        let res = AbsOp{}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("abs expects one argument: number")));
     }
 }

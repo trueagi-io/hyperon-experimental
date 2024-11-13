@@ -117,6 +117,12 @@
     (@param "Input number")))
   (@return "Result of a square root function"))
 
+(@doc abs
+  (@desc "Returns absolute value of input number (first argument)")
+  (@params (
+    (@param "Input number")))
+  (@return "Absolute value"))
+
 (@doc random-int
   (@desc "Returns random int number from range defined by two numbers (first and second argument)")
   (@params (
