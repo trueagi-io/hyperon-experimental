@@ -117,7 +117,7 @@ use std::any::Any;
 use std::fmt::{Display, Debug};
 use std::convert::TryFrom;
 
-use crate::common::collections::ImmutableString;
+use crate::common::collections::{ImmutableString, CowArray};
 
 // Symbol atom
 
@@ -152,14 +152,14 @@ impl Display for SymbolAtom {
 /// An expression atom structure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpressionAtom {
-    children: Vec<Atom>,
+    children: CowArray<Atom>,
 }
 
 impl ExpressionAtom {
     /// Constructs new expression from vector of sub-atoms. Not intended to be
     /// used directly, use [Atom::expr] instead.
     #[doc(hidden)]
-    pub(crate) fn new(children: Vec<Atom>) -> Self {
+    pub(crate) fn new(children: CowArray<Atom>) -> Self {
         Self{ children }
     }
 
@@ -170,17 +170,17 @@ impl ExpressionAtom {
 
     /// Returns a reference to a vector of sub-atoms.
     pub fn children(&self) -> &[Atom] {
-        &self.children
+        self.children.as_slice()
     }
 
     /// Returns a mutable reference to a vector of sub-atoms.
     pub fn children_mut(&mut self) -> &mut [Atom] {
-        &mut self.children
+        self.children.as_slice_mut()
     }
 
     /// Converts into a vector of sub-atoms.
     pub fn into_children(self) -> Vec<Atom> {
-        self.children
+        self.children.into()
     }
 }
 
@@ -837,7 +837,7 @@ impl Atom {
     /// assert_eq!(expr, same_expr);
     /// assert_ne!(expr, other_expr);
     /// ```
-    pub fn expr<T: Into<Vec<Atom>>>(children: T) -> Self {
+    pub fn expr<T: Into<CowArray<Atom>>>(children: T) -> Self {
         Self::Expression(ExpressionAtom::new(children.into()))
     }
 
@@ -1093,8 +1093,8 @@ mod test {
     }
 
     #[inline]
-    fn expression(children: Vec<Atom>) -> Atom {
-        Atom::Expression(ExpressionAtom{ children })
+    fn expression<const N: usize>(children: [Atom; N]) -> Atom {
+        Atom::Expression(ExpressionAtom::new(CowArray::Allocated(Box::new(children))))
     }
 
     #[inline]
@@ -1175,15 +1175,15 @@ mod test {
     #[test]
     fn test_expr_expression() {
         assert_eq!(expr!("=" ("fact" n) ("*" n ("-" n "1"))),
-            expression(vec![symbol("="), expression(vec![symbol("fact"), variable("n")]),
-            expression(vec![symbol("*"), variable("n"),
-            expression(vec![symbol("-"), variable("n"), symbol("1") ]) ]) ]));
+            expression([symbol("="), expression([symbol("fact"), variable("n")]),
+            expression([symbol("*"), variable("n"),
+            expression([symbol("-"), variable("n"), symbol("1") ]) ]) ]));
         assert_eq!(expr!("=" n {[1, 2, 3]}),
-            expression(vec![symbol("="), variable("n"), value([1, 2, 3])]));
+            expression([symbol("="), variable("n"), value([1, 2, 3])]));
         assert_eq!(expr!("=" {6} ("fact" n)),
-            expression(vec![symbol("="), value(6), expression(vec![symbol("fact"), variable("n")])]));
+            expression([symbol("="), value(6), expression([symbol("fact"), variable("n")])]));
         assert_eq!(expr!({TestMulX(3)} {TestInteger(6)}),
-            expression(vec![grounded(TestMulX(3)), grounded(TestInteger(6))]));
+            expression([grounded(TestMulX(3)), grounded(TestInteger(6))]));
     }
 
     #[test]
@@ -1239,8 +1239,8 @@ mod test {
         assert_eq!(Atom::gnd(TestMulX(3)).clone(), grounded(TestMulX(3)));
         assert_eq!(Atom::expr([Atom::sym("="), Atom::value(6),
             Atom::expr([Atom::sym("fact"), Atom::var("n")])]).clone(),
-            expression(vec![symbol("="), value(6),
-                expression(vec![symbol("fact"), variable("n")])]));
+            expression([symbol("="), value(6),
+                expression([symbol("fact"), variable("n")])]));
     }
 
     #[test]

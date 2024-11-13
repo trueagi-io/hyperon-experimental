@@ -7,6 +7,7 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::types::*;
 use crate::metta::runner::stdlib_minimal::IfEqualOp;
+use crate::common::collections::CowArray;
 
 use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
@@ -679,11 +680,11 @@ fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) 
         let Stack{ prev: _, atom: collapse, ret: _, finished: _, vars: _ } = stack_ref;
         match atom_as_slice_mut(collapse) {
             Some([_op, Atom::Expression(finished_placeholder), _bindings]) => {
-                let mut finished = ExpressionAtom::new(Vec::new());
+                let mut finished = ExpressionAtom::new(CowArray::new());
                 std::mem::swap(&mut finished, finished_placeholder);
                 let mut finished = finished.into_children();
                 finished.push(atom_bindings_into_atom(nested, bindings));
-                std::mem::swap(&mut ExpressionAtom::new(finished), finished_placeholder);
+                std::mem::swap(&mut ExpressionAtom::new(finished.into()), finished_placeholder);
             },
             _ => panic!("Unexpected state"),
         };
