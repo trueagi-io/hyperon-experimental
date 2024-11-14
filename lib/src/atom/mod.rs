@@ -83,8 +83,16 @@ macro_rules! expr {
         use $crate::*;
         (&&$crate::Wrap($x)).to_atom()
     }};
-    (($($x:tt)*)) => { $crate::Atom::expr(vec![ $( expr!($x) , )* ]) };
-    ($($x:tt)*) => { $crate::Atom::expr(vec![ $( expr!($x) , )* ]) };
+    (($($x:tt)*)) => { $crate::Atom::expr([ $( expr!($x) , )* ]) };
+    ($($x:tt)*) => { $crate::Atom::expr([ $( expr!($x) , )* ]) };
+}
+
+#[macro_export]
+macro_rules! constexpr {
+    () => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(&[]))) };
+    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new($crate::common::collections::ImmutableString::Literal($x))) };
+    (($($x:tt)*)) => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
+    ($($x:tt)*) => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
 }
 
 /// Constructs new symbol atom. Can be used to construct `const` instances.
@@ -117,7 +125,7 @@ use std::any::Any;
 use std::fmt::{Display, Debug};
 use std::convert::TryFrom;
 
-use crate::common::collections::ImmutableString;
+use crate::common::collections::{ImmutableString, CowArray};
 
 // Symbol atom
 
@@ -130,7 +138,6 @@ pub struct SymbolAtom {
 impl SymbolAtom {
     /// Constructs new symbol from `name`. Not intended to be used directly,
     /// use [sym!] or [Atom::sym] instead.
-    #[doc(hidden)]
     pub const fn new(name: ImmutableString) -> Self {
         Self{ name }
     }
@@ -152,14 +159,13 @@ impl Display for SymbolAtom {
 /// An expression atom structure.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExpressionAtom {
-    children: Vec<Atom>,
+    children: CowArray<Atom>,
 }
 
 impl ExpressionAtom {
     /// Constructs new expression from vector of sub-atoms. Not intended to be
-    /// used directly, use [Atom::expr] instead.
-    #[doc(hidden)]
-    pub(crate) fn new(children: Vec<Atom>) -> Self {
+    /// used directly, use [expr!], [constexpr!] or [Atom::expr] instead.
+    pub const fn new(children: CowArray<Atom>) -> Self {
         Self{ children }
     }
 
@@ -169,18 +175,18 @@ impl ExpressionAtom {
     }
 
     /// Returns a reference to a vector of sub-atoms.
-    pub fn children(&self) -> &Vec<Atom> {
-        &self.children
+    pub fn children(&self) -> &[Atom] {
+        self.children.as_slice()
     }
 
     /// Returns a mutable reference to a vector of sub-atoms.
-    pub fn children_mut(&mut self) -> &mut Vec<Atom> {
-        &mut self.children
+    pub fn children_mut(&mut self) -> &mut [Atom] {
+        self.children.as_slice_mut()
     }
 
     /// Converts into a vector of sub-atoms.
     pub fn into_children(self) -> Vec<Atom> {
-        self.children
+        self.children.into()
     }
 }
 
@@ -837,7 +843,7 @@ impl Atom {
     /// assert_eq!(expr, same_expr);
     /// assert_ne!(expr, other_expr);
     /// ```
-    pub fn expr<T: Into<Vec<Atom>>>(children: T) -> Self {
+    pub fn expr<T: Into<CowArray<Atom>>>(children: T) -> Self {
         Self::Expression(ExpressionAtom::new(children.into()))
     }
 
@@ -1013,7 +1019,7 @@ impl<'a> TryFrom<&'a Atom> for &'a [Atom] {
     type Error = &'static str;
     fn try_from(atom: &Atom) -> Result<&[Atom], &'static str> {
         match atom {
-            Atom::Expression(expr) => Ok(expr.children().as_slice()),
+            Atom::Expression(expr) => Ok(expr.children()),
             _ => Err("Atom is not an ExpressionAtom")
         }
     }
@@ -1023,7 +1029,7 @@ impl<'a> TryFrom<&'a mut Atom> for &'a mut [Atom] {
     type Error = &'static str;
     fn try_from(atom: &mut Atom) -> Result<&mut [Atom], &'static str> {
         match atom {
-            Atom::Expression(expr) => Ok(expr.children_mut().as_mut_slice()),
+            Atom::Expression(expr) => Ok(expr.children_mut()),
             _ => Err("Atom is not an ExpressionAtom")
         }
     }
@@ -1093,8 +1099,8 @@ mod test {
     }
 
     #[inline]
-    fn expression(children: Vec<Atom>) -> Atom {
-        Atom::Expression(ExpressionAtom{ children })
+    fn expression<const N: usize>(children: [Atom; N]) -> Atom {
+        Atom::Expression(ExpressionAtom::new(CowArray::Allocated(Box::new(children))))
     }
 
     #[inline]
@@ -1175,15 +1181,15 @@ mod test {
     #[test]
     fn test_expr_expression() {
         assert_eq!(expr!("=" ("fact" n) ("*" n ("-" n "1"))),
-            expression(vec![symbol("="), expression(vec![symbol("fact"), variable("n")]),
-            expression(vec![symbol("*"), variable("n"),
-            expression(vec![symbol("-"), variable("n"), symbol("1") ]) ]) ]));
+            expression([symbol("="), expression([symbol("fact"), variable("n")]),
+            expression([symbol("*"), variable("n"),
+            expression([symbol("-"), variable("n"), symbol("1") ]) ]) ]));
         assert_eq!(expr!("=" n {[1, 2, 3]}),
-            expression(vec![symbol("="), variable("n"), value([1, 2, 3])]));
+            expression([symbol("="), variable("n"), value([1, 2, 3])]));
         assert_eq!(expr!("=" {6} ("fact" n)),
-            expression(vec![symbol("="), value(6), expression(vec![symbol("fact"), variable("n")])]));
+            expression([symbol("="), value(6), expression([symbol("fact"), variable("n")])]));
         assert_eq!(expr!({TestMulX(3)} {TestInteger(6)}),
-            expression(vec![grounded(TestMulX(3)), grounded(TestInteger(6))]));
+            expression([grounded(TestMulX(3)), grounded(TestInteger(6))]));
     }
 
     #[test]
@@ -1239,8 +1245,8 @@ mod test {
         assert_eq!(Atom::gnd(TestMulX(3)).clone(), grounded(TestMulX(3)));
         assert_eq!(Atom::expr([Atom::sym("="), Atom::value(6),
             Atom::expr([Atom::sym("fact"), Atom::var("n")])]).clone(),
-            expression(vec![symbol("="), value(6),
-                expression(vec![symbol("fact"), variable("n")])]));
+            expression([symbol("="), value(6),
+                expression([symbol("fact"), variable("n")])]));
     }
 
     #[test]

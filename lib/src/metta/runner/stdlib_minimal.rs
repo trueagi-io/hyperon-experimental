@@ -26,7 +26,7 @@ use super::arithmetics::*;
 use super::string::*;
 
 pub(crate) fn unit_result() -> Result<Vec<Atom>, ExecError> {
-    Ok(vec![UNIT_ATOM()])
+    Ok(vec![UNIT_ATOM])
 }
 
 pub(crate) fn regex(regex: &str) -> Regex {
@@ -68,7 +68,7 @@ impl Grounded for ImportOp {
         //TODO: Ideally the "import as" / "import into" part would be optional
         //A deeper discussion on arg semantics as it relates to import! is here:
         // https://github.com/trueagi-io/hyperon-experimental/pull/580#discussion_r1491332304
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -279,7 +279,7 @@ impl PrintModsOp {
 
 impl Grounded for PrintModsOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, UNIT_TYPE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -309,7 +309,7 @@ impl BindOp {
 
 impl Grounded for BindOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -363,7 +363,7 @@ grounded_op!(AddAtomOp, "add-atom");
 impl Grounded for AddAtomOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(),
-            ATOM_TYPE_ATOM, UNIT_TYPE()])
+            ATOM_TYPE_ATOM, UNIT_TYPE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -390,7 +390,7 @@ grounded_op!(RemoveAtomOp, "remove-atom");
 impl Grounded for RemoveAtomOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(),
-            ATOM_TYPE_ATOM, UNIT_TYPE()])
+            ATOM_TYPE_ATOM, UNIT_TYPE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -529,7 +529,7 @@ grounded_op!(PrintlnOp, "println!");
 
 impl Grounded for PrintlnOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -872,7 +872,7 @@ pub(crate) mod pkg_mgmt_ops {
 
     impl Grounded for RegisterModuleOp {
         fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE])
         }
 
         fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -927,7 +927,7 @@ pub(crate) mod pkg_mgmt_ops {
 
     impl Grounded for GitModuleOp {
         fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE()])
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE])
         }
 
         fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -999,7 +999,7 @@ impl CustomExecute for UniqueAtomOp {
         let arg_error = || ExecError::from("unique expects single expression atom as an argument");
         let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
 
-        let mut atoms = expr.children().clone();
+        let mut atoms: Vec<Atom> = expr.children().into();
         let mut set = GroundingSpace::new();
         atoms.retain(|x| {
             let not_contained = set.query(x).is_empty();
@@ -1028,8 +1028,8 @@ impl Grounded for UnionAtomOp {
 impl CustomExecute for UnionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("union expects and executable LHS and RHS atom");
-        let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
-        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children().clone();
+        let mut lhs: Vec<Atom> = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().into();
+        let rhs: Vec<Atom> = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children().into();
 
         lhs.extend(rhs);
 
@@ -1055,8 +1055,8 @@ impl Grounded for IntersectionAtomOp {
 impl CustomExecute for IntersectionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("intersection expects and executable LHS and RHS atom");
-        let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
-        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children().clone();
+        let mut lhs: Vec<Atom> = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().into();
+        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children();
 
         let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
         for (index, rhs_item) in rhs.iter().enumerate() {
@@ -1238,8 +1238,8 @@ impl Grounded for SubtractionAtomOp {
 impl CustomExecute for SubtractionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("subtraction expects and executable LHS and RHS atom");
-        let mut lhs = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().clone();
-        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children().clone();
+        let mut lhs: Vec<Atom> = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children().into();
+        let rhs = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children();
 
         let mut rhs_index: MultiTrie<SymbolAtom, Vec<usize>> = MultiTrie::new();
         for (index, rhs_item) in rhs.iter().enumerate() {
@@ -1356,7 +1356,7 @@ grounded_op!(PrintAlternativesOp, "print-alternatives!");
 
 impl Grounded for PrintAlternativesOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, UNIT_TYPE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -1374,7 +1374,7 @@ impl CustomExecute for PrintAlternativesOp {
             .collect();
         println!("{} {}:", args.len(), atom);
         args.iter().for_each(|arg| println!("    {}", arg));
-        Ok(vec![UNIT_ATOM()])
+        Ok(vec![UNIT_ATOM])
     }
 }
 
@@ -1558,7 +1558,7 @@ impl CustomExecute for AssertEqualToResultOp {
 
         let actual = interpret_no_error(self.space.clone(), actual_atom)?;
 
-        assert_results_equal(&actual, expected, actual_atom)
+        assert_results_equal(&actual, &expected.into(), actual_atom)
     }
 }
 
@@ -2191,7 +2191,7 @@ mod tests {
         ";
         assert_eq!(metta.run(SExprParser::new(program)), Ok(vec![]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) (bar A))")), Ok(vec![
-            vec![UNIT_ATOM()],
+            vec![UNIT_ATOM],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) (bar B))")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("foo" "A") ("bar" "B")) "\nExpected: [B]\nGot: [A]\nMissed result: B")],
@@ -2214,7 +2214,7 @@ mod tests {
         ";
         assert_eq!(metta.run(SExprParser::new(program)), Ok(vec![]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (foo) (A B))")), Ok(vec![
-            vec![UNIT_ATOM()],
+            vec![UNIT_ATOM],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (bar) (A))")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("bar") ("A")) "\nExpected: [A]\nGot: [C]\nMissed result: A")],
@@ -2500,7 +2500,7 @@ mod tests {
         assert_eq_metta_results!(run_program(program),
             Ok(vec![
                 vec![expr!("baz")],
-                vec![UNIT_ATOM()],
+                vec![UNIT_ATOM],
                 vec![expr!(("foo"))],
                 vec![expr!(("bar"))],
             ]));
@@ -2764,7 +2764,7 @@ mod tests {
         let space = DynSpace::new(GroundingSpace::new());
         let satom = Atom::gnd(space.clone());
         let res = AddAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
-        assert_eq!(res, vec![UNIT_ATOM()]);
+        assert_eq!(res, vec![UNIT_ATOM]);
         let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
         assert_eq_no_order!(space_atoms, vec![expr!(("foo" "bar"))]);
     }
@@ -2778,7 +2778,7 @@ mod tests {
         let satom = Atom::gnd(space.clone());
         let res = RemoveAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         // REM: can return Bool in future
-        assert_eq!(res, vec![UNIT_ATOM()]);
+        assert_eq!(res, vec![UNIT_ATOM]);
         let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
         assert_eq_no_order!(space_atoms, vec![expr!(("bar" "foo"))]);
     }
