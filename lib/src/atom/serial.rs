@@ -30,6 +30,7 @@ pub trait Serializer {
 }
 
 /// Serialization error code
+#[derive(Debug)]
 pub enum Error {
     /// Serialization of the type is not supported by serializer.
     NotSupported,
@@ -52,7 +53,7 @@ pub trait ConvertingSerializer<T>: Serializer {
                         .cloned()
                         .or_else(|| {
                             let mut serializer = Self::default();
-                            let _ = gnd.serialize(&mut serializer);
+                            gnd.serialize(&mut serializer).expect("ConvertingSerializer is not expected returning error");
                             serializer.into_type()
                         })
                 })
