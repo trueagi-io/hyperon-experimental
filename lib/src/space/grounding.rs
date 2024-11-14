@@ -179,16 +179,17 @@ impl GroundingSpace {
 
     fn remove_internal(&mut self, atom: &Atom) -> bool {
         let index_key = atom_to_trie_key(atom);
-        let indexes: Vec<usize> = self.index.get(&index_key).map(|i| *i).collect();
-        let mut indexes: Vec<usize> = indexes.into_iter()
-            .filter(|i| self.content[*i] == *atom).collect();
-        indexes.sort_by(|a, b| b.partial_cmp(a).unwrap());
-        let is_removed = indexes.len() > 0;
-        for i in indexes {
-            self.index.remove(&index_key, &i);
-            self.free.insert(i);
+        let index = self.index.get(&index_key)
+            .filter(|&&i| self.content[i] == *atom)
+            .next();
+        match index {
+            Some(&i) =>  {
+                self.index.remove(&index_key, &i);
+                self.free.insert(i);
+                true
+            },
+            None => false,
         }
-        is_removed
     }
 
     /// Replaces `from` atom to `to` atom inside space. Doesn't add `to` when
@@ -429,6 +430,22 @@ mod test {
         assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
             SpaceEvent::Add(sym!("b")), SpaceEvent::Add(sym!("c")),
             SpaceEvent::Remove(sym!("b"))]);
+    }
+
+    #[test]
+    fn remove_duplicated_atom() {
+        let mut space = GroundingSpace::new();
+        let observer = space.common.register_observer(SpaceEventCollector::new());
+
+        space.add(expr!("a"));
+        space.add(expr!("a"));
+        space.add(expr!("a"));
+        assert_eq!(space.remove(&expr!("a")), true);
+
+        assert_eq_no_order!(space, vec![expr!("a"), expr!("a")]);
+        assert_eq!(observer.borrow().events, vec![SpaceEvent::Add(sym!("a")),
+            SpaceEvent::Add(sym!("a")), SpaceEvent::Add(sym!("a")),
+            SpaceEvent::Remove(sym!("a"))]);
     }
 
     #[test]
