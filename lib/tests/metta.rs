@@ -18,5 +18,5 @@ fn test_reduce_higher_order() {
 
     let result = metta.run(SExprParser::new(program));
 
-    assert_eq!(result, Ok(vec![vec![UNIT_ATOM()]]));
+    assert_eq!(result, Ok(vec![vec![UNIT_ATOM]]));
 }

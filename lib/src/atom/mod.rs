@@ -83,8 +83,16 @@ macro_rules! expr {
         use $crate::*;
         (&&$crate::Wrap($x)).to_atom()
     }};
-    (($($x:tt)*)) => { $crate::Atom::expr(vec![ $( expr!($x) , )* ]) };
-    ($($x:tt)*) => { $crate::Atom::expr(vec![ $( expr!($x) , )* ]) };
+    (($($x:tt)*)) => { $crate::Atom::expr([ $( expr!($x) , )* ]) };
+    ($($x:tt)*) => { $crate::Atom::expr([ $( expr!($x) , )* ]) };
+}
+
+#[macro_export]
+macro_rules! constexpr {
+    () => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(&[]))) };
+    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new($crate::common::collections::ImmutableString::Literal($x))) };
+    (($($x:tt)*)) => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
+    ($($x:tt)*) => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
 }
 
 /// Constructs new symbol atom. Can be used to construct `const` instances.
@@ -130,7 +138,6 @@ pub struct SymbolAtom {
 impl SymbolAtom {
     /// Constructs new symbol from `name`. Not intended to be used directly,
     /// use [sym!] or [Atom::sym] instead.
-    #[doc(hidden)]
     pub const fn new(name: ImmutableString) -> Self {
         Self{ name }
     }
@@ -157,9 +164,8 @@ pub struct ExpressionAtom {
 
 impl ExpressionAtom {
     /// Constructs new expression from vector of sub-atoms. Not intended to be
-    /// used directly, use [Atom::expr] instead.
-    #[doc(hidden)]
-    pub(crate) fn new(children: CowArray<Atom>) -> Self {
+    /// used directly, use [expr!], [constexpr!] or [Atom::expr] instead.
+    pub const fn new(children: CowArray<Atom>) -> Self {
         Self{ children }
     }
 
