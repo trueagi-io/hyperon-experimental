@@ -97,46 +97,46 @@
     (@param "Index")))
   (@return "Atom from an expression in the place defined by index. Error if index is out of bounds"))
 
-(@doc powi
+(@doc powi-math
   (@desc "Takes base (first argument) and power (second argument) and returns result of a power function (base ^ power)")
   (@params (
     (@param "Base. Could be float")
     (@param "Power. Only integer")))
   (@return "Result of a power function"))
 
-(@doc powf
+(@doc powf-math
   (@desc "Takes base (first argument) and power (second argument) and returns result of a power function (base ^ power)")
   (@params (
     (@param "Base. Could be float")
     (@param "Power. Could be float")))
   (@return "Result of a power function"))
 
-(@doc sqrt
+(@doc sqrt-math
   (@desc "Returns square root for input number (first argument) which should be >= 0")
   (@params (
     (@param "Input number")))
   (@return "Result of a square root function"))
 
-(@doc abs
+(@doc abs-math
   (@desc "Returns absolute value of input number (first argument)")
   (@params (
     (@param "Input number")))
   (@return "Absolute value"))
 
-(@doc log
+(@doc log-math
   (@desc "Returns result of a logarithm function given base (first argument) and input number (second argument)")
   (@params (
     (@param "Base")
     (@param "Input number")))
   (@return "Result of log function"))
 
-(@doc trunc
+(@doc trunc-math
   (@desc "Returns integer part of the input value (first argument)")
   (@params (
     (@param "Float value")))
   (@return "Integer part of float"))
 
-(@doc ceil
+(@doc ceil-math
   (@desc "Returns the smallest integer greater than or equal to the input value (first argument)")
   (@params (
     (@param "Float value")))

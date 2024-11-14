@@ -1221,11 +1221,11 @@ impl CustomExecute for IndexAtomOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct PowiOp {}
+pub struct PowiMathOp {}
 
-grounded_op!(PowiOp, "powi");
+grounded_op!(PowiMathOp, "powi-math");
 
-impl Grounded for PowiOp {
+impl Grounded for PowiMathOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
     }
@@ -1235,9 +1235,9 @@ impl Grounded for PowiOp {
     }
 }
 
-impl CustomExecute for PowiOp {
+impl CustomExecute for PowiMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("powi expects two arguments: number (base) and number (power)");
+        let arg_error = || ExecError::from("powi-math expects two arguments: number (base) and number (power)");
         let base = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
         let pow = Into::<i64>::into(AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
         let res = base.powi(pow.try_into().unwrap());
@@ -1246,11 +1246,11 @@ impl CustomExecute for PowiOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct PowfOp {}
+pub struct PowfMathOp {}
 
-grounded_op!(PowfOp, "powf");
+grounded_op!(PowfMathOp, "powf-math");
 
-impl Grounded for PowfOp {
+impl Grounded for PowfMathOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
     }
@@ -1260,9 +1260,9 @@ impl Grounded for PowfOp {
     }
 }
 
-impl CustomExecute for PowfOp {
+impl CustomExecute for PowfMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("powf expects two arguments: number (base) and number (power)");
+        let arg_error = || ExecError::from("powf-math expects two arguments: number (base) and number (power)");
         let base = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
         let pow = Into::<f64>::into(AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
         let res = base.powf(pow.try_into().unwrap());
@@ -1271,11 +1271,11 @@ impl CustomExecute for PowfOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct SqrtOp {}
+pub struct SqrtMathOp {}
 
-grounded_op!(SqrtOp, "sqrt");
+grounded_op!(SqrtMathOp, "sqrt-math");
 
-impl Grounded for SqrtOp {
+impl Grounded for SqrtMathOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
     }
@@ -1285,9 +1285,9 @@ impl Grounded for SqrtOp {
     }
 }
 
-impl CustomExecute for SqrtOp {
+impl CustomExecute for SqrtMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("sqrt expects one argument: number");
+        let arg_error = || ExecError::from("sqrt-math expects one argument: number");
         let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
         if input < 0.0 {
             Err(ExecError::from("Only numbers >= 0 allowed"))
@@ -1299,11 +1299,11 @@ impl CustomExecute for SqrtOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct AbsOp {}
+pub struct AbsMathOp {}
 
-grounded_op!(AbsOp, "abs");
+grounded_op!(AbsMathOp, "abs-math");
 
-impl Grounded for AbsOp {
+impl Grounded for AbsMathOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
     }
@@ -1313,20 +1313,20 @@ impl Grounded for AbsOp {
     }
 }
 
-impl CustomExecute for AbsOp {
+impl CustomExecute for AbsMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("abs expects one argument: number");
+        let arg_error = || ExecError::from("abs-math expects one argument: number");
         let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.abs()))])
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct LogOp {}
+pub struct LogMathOp {}
 
-grounded_op!(LogOp, "log");
+grounded_op!(LogMathOp, "log-math");
 
-impl Grounded for LogOp {
+impl Grounded for LogMathOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
     }
@@ -1336,9 +1336,9 @@ impl Grounded for LogOp {
     }
 }
 
-impl CustomExecute for LogOp {
+impl CustomExecute for LogMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("log expects two arguments: base (number) and input value (number)");
+        let arg_error = || ExecError::from("log-math expects two arguments: base (number) and input value (number)");
         let base = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
         let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.log(base)))])
@@ -1346,11 +1346,11 @@ impl CustomExecute for LogOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct TruncOp {}
+pub struct TruncMathOp {}
 
-grounded_op!(TruncOp, "trunc");
+grounded_op!(TruncMathOp, "trunc-math");
 
-impl Grounded for TruncOp {
+impl Grounded for TruncMathOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
     }
@@ -1360,20 +1360,20 @@ impl Grounded for TruncOp {
     }
 }
 
-impl CustomExecute for TruncOp {
+impl CustomExecute for TruncMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("trunc expects one argument: input number");
+        let arg_error = || ExecError::from("trunc-math expects one argument: input number");
         let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.trunc()))])
     }
 }
 
 #[derive(Clone, Debug)]
-pub struct CeilOp {}
+pub struct CeilMathOp {}
 
-grounded_op!(CeilOp, "ceil");
+grounded_op!(CeilMathOp, "ceil-math");
 
-impl Grounded for CeilOp {
+impl Grounded for CeilMathOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
     }
@@ -1383,9 +1383,9 @@ impl Grounded for CeilOp {
     }
 }
 
-impl CustomExecute for CeilOp {
+impl CustomExecute for CeilMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("ceil expects one argument: input number");
+        let arg_error = || ExecError::from("ceil-math expects one argument: input number");
         let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.ceil()))])
     }
@@ -1961,20 +1961,20 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"max-atom"), move |_| { max_atom_op.clone() });
     let size_atom_op = Atom::gnd(SizeAtomOp{});
     tref.register_token(regex(r"size-atom"), move |_| { size_atom_op.clone() });
-    let powi_op = Atom::gnd(PowiOp{});
-    tref.register_token(regex(r"powi"), move |_| { powi_op.clone() });
-    let powf_op = Atom::gnd(PowfOp{});
-    tref.register_token(regex(r"powf"), move |_| { powf_op.clone() });
-    let sqrt_op = Atom::gnd(SqrtOp{});
-    tref.register_token(regex(r"sqrt"), move |_| { sqrt_op.clone() });
-    let abs_op = Atom::gnd(AbsOp{});
-    tref.register_token(regex(r"abs"), move |_| { abs_op.clone() });
-    let log_op = Atom::gnd(LogOp{});
-    tref.register_token(regex(r"log"), move |_| { log_op.clone() });
-    let trunc_op = Atom::gnd(TruncOp{});
-    tref.register_token(regex(r"trunc"), move |_| { trunc_op.clone() });
-    let ceil_op = Atom::gnd(CeilOp{});
-    tref.register_token(regex(r"ceil"), move |_| { ceil_op.clone() });
+    let powi_math_op = Atom::gnd(PowiMathOp {});
+    tref.register_token(regex(r"powi-math"), move |_| { powi_math_op.clone() });
+    let powf_math_op = Atom::gnd(PowfMathOp {});
+    tref.register_token(regex(r"powf-math"), move |_| { powf_math_op.clone() });
+    let sqrt_math_op = Atom::gnd(SqrtMathOp {});
+    tref.register_token(regex(r"sqrt-math"), move |_| { sqrt_math_op.clone() });
+    let abs_math_op = Atom::gnd(AbsMathOp {});
+    tref.register_token(regex(r"abs-math"), move |_| { abs_math_op.clone() });
+    let log_math_op = Atom::gnd(LogMathOp {});
+    tref.register_token(regex(r"log-math"), move |_| { log_math_op.clone() });
+    let trunc_math_op = Atom::gnd(TruncMathOp {});
+    tref.register_token(regex(r"trunc-math"), move |_| { trunc_math_op.clone() });
+    let ceil_math_op = Atom::gnd(CeilMathOp {});
+    tref.register_token(regex(r"ceil-math"), move |_| { ceil_math_op.clone() });
     let floor_math_op = Atom::gnd(FloorMathOp{});
     tref.register_token(regex(r"floor-math"), move |_| { floor_math_op.clone() });
     let index_atom_op = Atom::gnd(IndexAtomOp{});
@@ -2215,46 +2215,46 @@ mod tests {
 
     #[test]
     fn metta_powi() {
-        assert_eq!(run_program(&format!("!(powi 5 2)")), Ok(vec![vec![expr!({Number::Integer(25)})]]));
-        assert_eq!(run_program(&format!("!(powi A 2)")), Ok(vec![vec![expr!("Error" ({ PowiOp{} } "A" {Number::Integer(2)}) "powi expects two arguments: number (base) and number (power)")]]));
+        assert_eq!(run_program(&format!("!(powi-math 5 2)")), Ok(vec![vec![expr!({Number::Integer(25)})]]));
+        assert_eq!(run_program(&format!("!(powi-math A 2)")), Ok(vec![vec![expr!("Error" ({ PowiMathOp{} } "A" {Number::Integer(2)}) "powi-math expects two arguments: number (base) and number (power)")]]));
     }
 
     #[test]
     fn metta_powf() {
-        assert_eq!(run_program(&format!("!(powf 5 2)")), Ok(vec![vec![expr!({Number::Integer(25)})]]));
-        assert_eq!(run_program(&format!("!(powf A 2)")), Ok(vec![vec![expr!("Error" ({ PowfOp{} } "A" {Number::Integer(2)}) "powf expects two arguments: number (base) and number (power)")]]));
+        assert_eq!(run_program(&format!("!(powf-math 5 2)")), Ok(vec![vec![expr!({Number::Integer(25)})]]));
+        assert_eq!(run_program(&format!("!(powf-math A 2)")), Ok(vec![vec![expr!("Error" ({ PowfMathOp{} } "A" {Number::Integer(2)}) "powf-math expects two arguments: number (base) and number (power)")]]));
     }
 
     #[test]
     fn metta_sqrt() {
-        assert_eq!(run_program(&format!("!(sqrt 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
-        assert_eq!(run_program(&format!("!(sqrt -5)")), Ok(vec![vec![expr!("Error" ({ SqrtOp{} } {Number::Integer(-5)}) "Only numbers >= 0 allowed")]]));
-        assert_eq!(run_program(&format!("!(sqrt A)")), Ok(vec![vec![expr!("Error" ({ SqrtOp{} } "A") "sqrt expects one argument: number")]]));
+        assert_eq!(run_program(&format!("!(sqrt-math 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
+        assert_eq!(run_program(&format!("!(sqrt-math -5)")), Ok(vec![vec![expr!("Error" ({ SqrtMathOp{} } {Number::Integer(-5)}) "Only numbers >= 0 allowed")]]));
+        assert_eq!(run_program(&format!("!(sqrt-math A)")), Ok(vec![vec![expr!("Error" ({ SqrtMathOp{} } "A") "sqrt-math expects one argument: number")]]));
     }
 
     #[test]
     fn metta_abs() {
-        assert_eq!(run_program(&format!("!(abs 4)")), Ok(vec![vec![expr!({Number::Integer(4)})]]));
-        assert_eq!(run_program(&format!("!(abs -5)")), Ok(vec![vec![expr!({Number::Integer(5)})]]));
-        assert_eq!(run_program(&format!("!(abs A)")), Ok(vec![vec![expr!("Error" ({ AbsOp{} } "A") "abs expects one argument: number")]]));
+        assert_eq!(run_program(&format!("!(abs-math 4)")), Ok(vec![vec![expr!({Number::Integer(4)})]]));
+        assert_eq!(run_program(&format!("!(abs-math -5)")), Ok(vec![vec![expr!({Number::Integer(5)})]]));
+        assert_eq!(run_program(&format!("!(abs-math A)")), Ok(vec![vec![expr!("Error" ({ AbsMathOp{} } "A") "abs-math expects one argument: number")]]));
     }
 
     #[test]
     fn metta_log() {
-        assert_eq!(run_program(&format!("!(log 2 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
+        assert_eq!(run_program(&format!("!(log-math 2 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
     }
 
     #[test]
     fn metta_trunc() {
-        assert_eq!(run_program(&format!("!(trunc 2.4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
-        assert_eq!(run_program(&format!("!(trunc A)")), Ok(vec![vec![expr!("Error" ({ TruncOp{} } "A") "trunc expects one argument: input number")]]));
+        assert_eq!(run_program(&format!("!(trunc-math 2.4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
+        assert_eq!(run_program(&format!("!(trunc-math A)")), Ok(vec![vec![expr!("Error" ({ TruncMathOp{} } "A") "trunc-math expects one argument: input number")]]));
     }
 
     #[test]
     fn metta_ceil_math() {
-        assert_eq!(run_program(&format!("!(ceil 2.4)")), Ok(vec![vec![expr!({Number::Integer(3)})]]));
-        assert_eq!(run_program(&format!("!(ceil -2.4)")), Ok(vec![vec![expr!({Number::Integer(-2)})]]));
-        assert_eq!(run_program(&format!("!(ceil A)")), Ok(vec![vec![expr!("Error" ({ CeilOp{} } "A") "ceil expects one argument: input number")]]));
+        assert_eq!(run_program(&format!("!(ceil-math 2.4)")), Ok(vec![vec![expr!({Number::Integer(3)})]]));
+        assert_eq!(run_program(&format!("!(ceil-math -2.4)")), Ok(vec![vec![expr!({Number::Integer(-2)})]]));
+        assert_eq!(run_program(&format!("!(ceil-math A)")), Ok(vec![vec![expr!("Error" ({ CeilMathOp{} } "A") "ceil-math expects one argument: input number")]]));
     }
 
     #[test]
@@ -3392,64 +3392,64 @@ mod tests {
 
     #[test]
     fn powi_math_op() {
-        let res = PowiOp{}.execute(&mut vec![expr!({Number::Integer(5)}), expr!({Number::Integer(2)})]).expect("No result returned");
+        let res = PowiMathOp {}.execute(&mut vec![expr!({Number::Integer(5)}), expr!({Number::Integer(2)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(25)})]);
-        let res = PowiOp{}.execute(&mut vec![expr!("A"), expr!({Number::Integer(2)})]);
-        assert_eq!(res, Err(ExecError::from("powi expects two arguments: number (base) and number (power)")));
+        let res = PowiMathOp {}.execute(&mut vec![expr!("A"), expr!({Number::Integer(2)})]);
+        assert_eq!(res, Err(ExecError::from("powi-math expects two arguments: number (base) and number (power)")));
     }
 
     #[test]
     fn powf_math_op() {
-        let res = PowfOp{}.execute(&mut vec![expr!({Number::Integer(5)}), expr!({Number::Integer(2)})]).expect("No result returned");
+        let res = PowfMathOp {}.execute(&mut vec![expr!({Number::Integer(5)}), expr!({Number::Integer(2)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(25)})]);
-        let res = PowfOp{}.execute(&mut vec![expr!("A"), expr!({Number::Integer(2)})]);
-        assert_eq!(res, Err(ExecError::from("powf expects two arguments: number (base) and number (power)")));
+        let res = PowfMathOp {}.execute(&mut vec![expr!("A"), expr!({Number::Integer(2)})]);
+        assert_eq!(res, Err(ExecError::from("powf-math expects two arguments: number (base) and number (power)")));
     }
 
     #[test]
     fn sqrt_math_op() {
-        let res = SqrtOp{}.execute(&mut vec![expr!({Number::Integer(4)})]).expect("No result returned");
+        let res = SqrtMathOp {}.execute(&mut vec![expr!({Number::Integer(4)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(2)})]);
-        let res = SqrtOp{}.execute(&mut vec![expr!({Number::Integer(-4)})]);
+        let res = SqrtMathOp {}.execute(&mut vec![expr!({Number::Integer(-4)})]);
         assert_eq!(res, Err(ExecError::from("Only numbers >= 0 allowed")));
-        let res = SqrtOp{}.execute(&mut vec![expr!("A")]);
-        assert_eq!(res, Err(ExecError::from("sqrt expects one argument: number")));
+        let res = SqrtMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("sqrt-math expects one argument: number")));
     }
 
     #[test]
     fn abs_math_op() {
-        let res = AbsOp{}.execute(&mut vec![expr!({Number::Integer(4)})]).expect("No result returned");
+        let res = AbsMathOp {}.execute(&mut vec![expr!({Number::Integer(4)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(4)})]);
-        let res = AbsOp{}.execute(&mut vec![expr!({Number::Integer(-4)})]).expect("No result returned");
+        let res = AbsMathOp {}.execute(&mut vec![expr!({Number::Integer(-4)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(4)})]);
-        let res = AbsOp{}.execute(&mut vec![expr!("A")]);
-        assert_eq!(res, Err(ExecError::from("abs expects one argument: number")));
+        let res = AbsMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("abs-math expects one argument: number")));
     }
 
     #[test]
     fn log_math_op() {
-        let res = LogOp{}.execute(&mut vec![expr!({Number::Integer(2)}), expr!({Number::Integer(4)})]).expect("No result returned");
+        let res = LogMathOp {}.execute(&mut vec![expr!({Number::Integer(2)}), expr!({Number::Integer(4)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(2)})]);
-        let res = LogOp{}.execute(&mut vec![expr!({Number::Integer(2)}), expr!("A")]);
-        assert_eq!(res, Err(ExecError::from("log expects two arguments: base (number) and input value (number)")));
+        let res = LogMathOp {}.execute(&mut vec![expr!({Number::Integer(2)}), expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("log-math expects two arguments: base (number) and input value (number)")));
     }
 
     #[test]
     fn trunc_math_op() {
-        let res = TruncOp{}.execute(&mut vec![expr!({Number::Float(2.4)})]).expect("No result returned");
+        let res = TruncMathOp {}.execute(&mut vec![expr!({Number::Float(2.4)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(2)})]);
-        let res = TruncOp{}.execute(&mut vec![expr!("A")]);
-        assert_eq!(res, Err(ExecError::from("trunc expects one argument: input number")));
+        let res = TruncMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("trunc-math expects one argument: input number")));
     }
 
     #[test]
     fn ceil_math_op() {
-        let res = CeilOp{}.execute(&mut vec![expr!({Number::Float(2.4)})]).expect("No result returned");
+        let res = CeilMathOp {}.execute(&mut vec![expr!({Number::Float(2.4)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(3)})]);
-        let res = CeilOp{}.execute(&mut vec![expr!({Number::Float(-2.4)})]).expect("No result returned");
+        let res = CeilMathOp {}.execute(&mut vec![expr!({Number::Float(-2.4)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(-2)})]);
-        let res = CeilOp{}.execute(&mut vec![expr!("A")]);
-        assert_eq!(res, Err(ExecError::from("ceil expects one argument: input number")));
+        let res = CeilMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("ceil-math expects one argument: input number")));
     }
 
     #[test]
