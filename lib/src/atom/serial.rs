@@ -39,6 +39,26 @@ pub enum Error {
 pub trait ConvertingSerializer<T>: Serializer {
     fn as_mut(&mut self) -> &mut dyn Serializer;
     fn into_type(self) -> Option<T>;
+
+    /// Converts atom into Rust value using `Self::default`
+    fn convert(atom: &super::Atom) -> Option<T>
+    where
+        T: 'static + Clone,
+        Self: Default {
+            std::convert::TryInto::<&dyn super::GroundedAtom>::try_into(atom)
+                .ok()
+                .map(|gnd| {
+                    gnd.as_any_ref()
+                        .downcast_ref::<T>()
+                        .cloned()
+                        .or_else(|| {
+                            let mut serializer = Self::default();
+                            let _ = gnd.serialize(&mut serializer);
+                            serializer.into_type()
+                        })
+                })
+            .flatten()
+    }
 }
 
 /// Serialization result type
