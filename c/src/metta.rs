@@ -617,7 +617,7 @@ pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, 
 /// @return  The `atom_t` representing the atom
 /// @note The returned `atom_t` must be freed with `atom_free()`
 ///
-#[no_mangle] pub extern "C" fn ATOM_TYPE_UNIT() -> atom_t { hyperon::metta::UNIT_TYPE().into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_UNIT() -> atom_t { hyperon::metta::UNIT_TYPE.into() }
 
 /// @brief Creates a Symbol atom for the special MeTTa symbol used to indicate empty results
 /// returned by function.
@@ -636,7 +636,7 @@ pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, 
 /// @note The returned `atom_t` must be freed with `atom_free()`
 ///
 #[no_mangle] pub extern "C" fn UNIT_ATOM() -> atom_t {
-    hyperon::metta::UNIT_ATOM().into()
+    hyperon::metta::UNIT_ATOM.into()
 }
 
 /// @brief Creates a Symbol atom for the special MeTTa symbol used to indicate

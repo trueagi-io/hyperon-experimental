@@ -7,6 +7,7 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::types::*;
 use crate::metta::runner::stdlib_minimal::IfEqualOp;
+use crate::common::collections::CowArray;
 
 use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
@@ -652,16 +653,18 @@ fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Op
 }
 
 fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: mut collapse, ret: _, finished: _, vars } = stack;
+    let Stack{ prev, atom: collapse, ret: _, finished: _, vars } = stack;
 
     let mut nested = Atom::expr([]);
-    match &mut collapse {
+    let collapse = match collapse {
         Atom::Expression(expr) => {
-            std::mem::swap(&mut nested, &mut expr.children_mut()[1]);
-            expr.children_mut().push(Atom::value(bindings.clone()))
+            let mut children = expr.into_children();
+            std::mem::swap(&mut nested, &mut children[1]);
+            children.push(Atom::value(bindings.clone()));
+            Atom::expr(children)
         },
         _ => panic!("Unexpected state"),
-    }
+    };
 
     let prev = Stack::from_prev_with_vars(prev, collapse, vars, collapse_bind_ret);
     let prev = Rc::new(RefCell::new(prev));
@@ -672,16 +675,19 @@ fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
 
 fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     let nested = atom;
-    {
+    if nested != EMPTY_SYMBOL {
         let stack_ref = &mut *stack.borrow_mut();
         let Stack{ prev: _, atom: collapse, ret: _, finished: _, vars: _ } = stack_ref;
-        let finished = match atom_as_slice_mut(collapse) {
-            Some([_op, Atom::Expression(finished), _bindings]) => finished,
+        match atom_as_slice_mut(collapse) {
+            Some([_op, Atom::Expression(finished_placeholder), _bindings]) => {
+                let mut finished = ExpressionAtom::new(CowArray::new());
+                std::mem::swap(&mut finished, finished_placeholder);
+                let mut finished = finished.into_children();
+                finished.push(atom_bindings_into_atom(nested, bindings));
+                std::mem::swap(&mut ExpressionAtom::new(finished.into()), finished_placeholder);
+            },
             _ => panic!("Unexpected state"),
         };
-        if nested != EMPTY_SYMBOL {
-            finished.children_mut().push(atom_bindings_into_atom(nested, bindings));
-        }
     }
 
     // all alternatives are evaluated
@@ -1105,9 +1111,9 @@ fn interpret_function(args: Atom, bindings: Bindings) -> MettaResult {
     let mut call = atom.clone().into_children();
     let head = call.remove(0);
     let args = call;
-    let mut arg_types = op_type.clone();
-    arg_types.children_mut().remove(0);
-    let arg_types = Atom::Expression(arg_types);
+    let mut arg_types: Vec<Atom> = op_type.children().into();
+    arg_types.remove(0);
+    let arg_types = Atom::expr(arg_types);
     let rop = Atom::Variable(VariableAtom::new("rop").make_unique());
     let rargs = Atom::Variable(VariableAtom::new("rargs").make_unique());
     let result = Atom::Variable(VariableAtom::new("result").make_unique());
