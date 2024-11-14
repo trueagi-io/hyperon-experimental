@@ -123,6 +123,31 @@
     (@param "Input number")))
   (@return "Absolute value"))
 
+(@doc log
+  (@desc "Returns result of a logarithm function given base (first argument) and input number (second argument)")
+  (@params (
+    (@param "Base")
+    (@param "Input number")))
+  (@return "Result of log function"))
+
+(@doc trunc
+  (@desc "Returns integer part of the input value (first argument)")
+  (@params (
+    (@param "Float value")))
+  (@return "Integer part of float"))
+
+(@doc ceil
+  (@desc "Returns the smallest integer greater than or equal to the input value (first argument)")
+  (@params (
+    (@param "Float value")))
+  (@return "Integer value greater than or equal to the input"))
+
+(@doc floor-math
+  (@desc "Returns the smallest integer less than or equal to the input value (first argument)")
+  (@params (
+    (@param "Float value")))
+  (@return "Integer value less than or equal to the input"))
+
 (@doc random-int
   (@desc "Returns random int number from range defined by two numbers (first and second argument)")
   (@params (
