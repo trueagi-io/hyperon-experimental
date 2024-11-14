@@ -80,9 +80,6 @@ impl serial::Serializer for StrSerializer {
 }
 
 impl serial::ConvertingSerializer<Str> for StrSerializer {
-    fn as_mut(&mut self) -> &mut dyn serial::Serializer {
-        self
-    }
     fn into_type(self) -> Option<Str> {
         self.value
     }

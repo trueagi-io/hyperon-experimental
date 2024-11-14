@@ -37,7 +37,6 @@ pub enum Error {
 
 /// Serializer which converts serialized atom into native Rust type T.
 pub trait ConvertingSerializer<T>: Serializer {
-    fn as_mut(&mut self) -> &mut dyn Serializer;
     fn into_type(self) -> Option<T>;
 
     /// Converts atom into Rust value using `Self::default`
