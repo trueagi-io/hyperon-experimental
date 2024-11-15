@@ -136,7 +136,7 @@ fn query_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
 pub fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
     match fn_typ {
         Atom::Expression(expr) => {
-            let children = expr.children().as_slice();
+            let children = expr.children();
             match children {
                 [op,  args @ .., res] if *op == ARROW_SYMBOL => (args, res),
                 _ => panic!("Incorrect function type: {}", fn_typ)
@@ -151,7 +151,7 @@ fn get_op(expr: &ExpressionAtom) -> &Atom {
 }
 
 fn get_args(expr: &ExpressionAtom) -> &[Atom] {
-    &expr.children().as_slice()[1..]
+    &expr.children()[1..]
 }
 
 /// Returns vector of the types for the given `atom` in context of the given
@@ -185,7 +185,6 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "a")), vec![expr!("B")]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "b")), Vec::<Atom>::new());
 /// ```
-#[cfg(not(feature = "old_interpreter"))]
 pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     log::trace!("get_atom_types: atom: {}", atom);
     let types = match atom {
@@ -212,75 +211,6 @@ pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
             let mut types = Vec::new();
             if applications == None {
                 types.extend(tuples);
-                types.push(ATOM_TYPE_UNDEFINED);
-            } else {
-                types.extend(tuples);
-                applications.into_iter().for_each(|t| types.extend(t));
-            }
-            types
-        },
-    };
-    log::debug!("get_atom_types: return atom {} types {:?}", atom, types);
-    types
-}
-
-/// Returns vector of the types for the given `atom` in context of the given
-/// `space`. Returns `%Undefined%` if atom has no type assigned. Returns empty
-/// vector if atom is a function call but expected types of arguments are not
-/// compatible with passed values.
-///
-/// # Examples
-///
-/// ```
-/// use hyperon::{Atom, expr, assert_eq_no_order};
-/// use hyperon::metta::ATOM_TYPE_UNDEFINED;
-/// use hyperon::metta::runner::*;
-/// use hyperon::metta::text::SExprParser;
-/// use hyperon::metta::types::get_atom_types;
-///
-/// let metta = Metta::new(None);
-/// metta.run(SExprParser::new("
-///     (: f (-> A B))
-///     (: a A)
-///     (: a B)
-///     (: b B)
-/// ")).unwrap();
-///
-/// let space = metta.space();
-/// assert_eq_no_order!(get_atom_types(&space, &expr!(x)), vec![ATOM_TYPE_UNDEFINED]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!({1})), vec![expr!("i32")]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("na")), vec![ATOM_TYPE_UNDEFINED]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("a")), vec![expr!("A"), expr!("B")]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("a" "b")), vec![expr!("A" "B"), expr!("B" "B")]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "a")), vec![expr!("B")]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "b")), Vec::<Atom>::new());
-/// ```
-#[cfg(feature = "old_interpreter")]
-pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
-    log::trace!("get_atom_types: atom: {}", atom);
-    let types = match atom {
-        // TODO: type of the variable could be actually a type variable,
-        // in this case inside each variant of type for the atom we should
-        // also keep bindings for the type variables. For example,
-        // we have an expression `(let $n (foo) (+ $n $n))`, where
-        // `(: let (-> $t $t $r $r))`, `(: foo (-> $tt))`,
-        // and `(: + (-> Num Num Num))`then type checker can find that
-        // `{ $r = $t = $tt = Num }`.
-        Atom::Variable(_) => vec![ATOM_TYPE_UNDEFINED],
-        Atom::Grounded(gnd) => vec![make_variables_unique(gnd.type_())],
-        Atom::Symbol(_) => {
-            let mut types = query_types(space, atom);
-            if types.is_empty() {
-                types.push(ATOM_TYPE_UNDEFINED)
-            }
-            types
-        },
-        Atom::Expression(expr) => {
-            let tuples = get_tuple_types(space, atom, expr);
-            let applications = get_application_types(space, atom, expr);
-
-            let mut types = Vec::new();
-            if tuples.is_empty() && applications == None {
                 types.push(ATOM_TYPE_UNDEFINED);
             } else {
                 types.extend(tuples);
@@ -904,18 +834,10 @@ mod tests {
             (: b B)
             (: b BB)
         ");
-        #[cfg(not(feature = "old_interpreter"))]
         assert_eq_no_order!(get_atom_types(&space, &atom("(a b)")),
             vec![atom("(A B)"), atom("(AA B)"), atom("(A BB)"), atom("(AA BB)"), ATOM_TYPE_UNDEFINED]);
-        #[cfg(feature = "old_interpreter")]
-        assert_eq_no_order!(get_atom_types(&space, &atom("(a b)")),
-            vec![atom("(A B)"), atom("(AA B)"), atom("(A BB)"), atom("(AA BB)")]);
-        #[cfg(not(feature = "old_interpreter"))]
         assert_eq_no_order!(get_atom_types(&space, &atom("(a c)")),
             vec![atom("(A %Undefined%)"), atom("(AA %Undefined%)"), ATOM_TYPE_UNDEFINED]);
-        #[cfg(feature = "old_interpreter")]
-        assert_eq_no_order!(get_atom_types(&space, &atom("(a c)")),
-            vec![atom("(A %Undefined%)"), atom("(AA %Undefined%)")]);
         assert_eq_no_order!(get_atom_types(&space, &atom("(c d)")), vec![ATOM_TYPE_UNDEFINED]);
     }
 
@@ -971,19 +893,10 @@ mod tests {
         // Here and below: when interpreter cannot find a function type for
         // expression it evaluates it. Thus any argument expression without
         // a function type can potentially suit as a legal argument.
-        #[cfg(not(feature = "old_interpreter"))]
         assert_eq!(get_atom_types(&space, &expr!("f_sym" ("b"))), vec![atom("D")]);
-        #[cfg(feature = "old_interpreter")]
-        assert_eq!(get_atom_types(&space, &expr!("f_sym" ("b"))), vec![]);
         assert_eq!(get_atom_types(&space, &expr!("f_expr" ("b"))), vec![atom("D")]);
-        #[cfg(not(feature = "old_interpreter"))]
         assert_eq!(get_atom_types(&space, &expr!("f_var" ("b"))), vec![atom("D")]);
-        #[cfg(feature = "old_interpreter")]
-        assert_eq!(get_atom_types(&space, &expr!("f_var" ("b"))), vec![]);
-        #[cfg(not(feature = "old_interpreter"))]
         assert_eq!(get_atom_types(&space, &expr!("f_gnd" ("b"))), vec![atom("D")]);
-        #[cfg(feature = "old_interpreter")]
-        assert_eq!(get_atom_types(&space, &expr!("f_gnd" ("b"))), vec![]);
 
         assert_eq!(get_atom_types(&space, &expr!("f_atom" {1})), vec![atom("D")]);
         assert_eq!(get_atom_types(&space, &expr!("f_sym" {1})), vec![]);

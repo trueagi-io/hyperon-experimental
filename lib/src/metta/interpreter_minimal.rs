@@ -7,6 +7,7 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::types::*;
 use crate::metta::runner::stdlib_minimal::IfEqualOp;
+use crate::common::collections::CowArray;
 
 use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
@@ -156,20 +157,16 @@ impl<T: Space> InterpreterContext<T> {
 
 /// This wrapper is to keep interpreter interface compatible with previous
 /// implementation and will be removed in future.
-// TODO: MINIMAL: This wrapper is for compatibility with old_interpreter.rs only
-pub trait SpaceRef<'a> : Space + 'a {}
-impl<'a, T: Space + 'a> SpaceRef<'a> for T {}
 
 /// State of the interpreter which passed between `interpret_step` calls.
 #[derive(Debug)]
-pub struct InterpreterState<'a, T: SpaceRef<'a>> {
+pub struct InterpreterState<T: Space> {
     /// List of the alternatives to evaluate further.
     plan: Vec<InterpretedAtom>,
     /// List of the completely evaluated results to be returned.
     finished: Vec<Atom>,
     /// Evaluation context.
     context: InterpreterContext<T>,
-    phantom: std::marker::PhantomData<dyn SpaceRef<'a>>,
 }
 
 fn atom_as_slice(atom: &Atom) -> Option<&[Atom]> {
@@ -184,16 +181,14 @@ fn atom_into_array<const N: usize>(atom: Atom) -> Option<[Atom; N]> {
     <[Atom; N]>::try_from(atom).ok()
 }
 
-impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
+impl<T: Space> InterpreterState<T> {
 
     /// INTERNAL USE ONLY. Create an InterpreterState that is ready to yield results
-    #[allow(dead_code)] //TODO: MINIMAL only silence the warning until interpreter_minimal replaces interpreter
     pub(crate) fn new_finished(space: T, results: Vec<Atom>) -> Self {
         Self {
             plan: vec![],
             finished: results,
             context: InterpreterContext::new(space),
-            phantom: std::marker::PhantomData,
         }
     }
 
@@ -229,7 +224,7 @@ impl<'a, T: SpaceRef<'a>> InterpreterState<'a, T> {
     }
 }
 
-impl<'a, T: SpaceRef<'a>> std::fmt::Display for InterpreterState<'a, T> {
+impl<T: Space> std::fmt::Display for InterpreterState<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{:?}\n", self.plan)
     }
@@ -241,13 +236,12 @@ impl<'a, T: SpaceRef<'a>> std::fmt::Display for InterpreterState<'a, T> {
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
 /// * `expr` - atom to interpret
-pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterState<'a, T> {
+pub fn interpret_init<T: Space>(space: T, expr: &Atom) -> InterpreterState<T> {
     let context = InterpreterContext::new(space);
     InterpreterState {
         plan: vec![InterpretedAtom(atom_to_stack(expr.clone(), None), Bindings::new())],
         finished: vec![],
         context,
-        phantom: std::marker::PhantomData,
     }
 }
 
@@ -256,7 +250,7 @@ pub fn interpret_init<'a, T: Space + 'a>(space: T, expr: &Atom) -> InterpreterSt
 ///
 /// # Arguments
 /// * `state` - interpreter state from the previous step.
-pub fn interpret_step<'a, T: Space + 'a>(mut state: InterpreterState<'a, T>) -> InterpreterState<'a, T> {
+pub fn interpret_step<T: Space>(mut state: InterpreterState<T>) -> InterpreterState<T> {
     let interpreted_atom = state.pop().unwrap();
     log::debug!("interpret_step:\n{}", interpreted_atom);
     let InterpretedAtom(stack, bindings) = interpreted_atom;
@@ -659,16 +653,18 @@ fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Op
 }
 
 fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: mut collapse, ret: _, finished: _, vars } = stack;
+    let Stack{ prev, atom: collapse, ret: _, finished: _, vars } = stack;
 
     let mut nested = Atom::expr([]);
-    match &mut collapse {
+    let collapse = match collapse {
         Atom::Expression(expr) => {
-            std::mem::swap(&mut nested, &mut expr.children_mut()[1]);
-            expr.children_mut().push(Atom::value(bindings.clone()))
+            let mut children = expr.into_children();
+            std::mem::swap(&mut nested, &mut children[1]);
+            children.push(Atom::value(bindings.clone()));
+            Atom::expr(children)
         },
         _ => panic!("Unexpected state"),
-    }
+    };
 
     let prev = Stack::from_prev_with_vars(prev, collapse, vars, collapse_bind_ret);
     let prev = Rc::new(RefCell::new(prev));
@@ -679,16 +675,19 @@ fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
 
 fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     let nested = atom;
-    {
+    if nested != EMPTY_SYMBOL {
         let stack_ref = &mut *stack.borrow_mut();
         let Stack{ prev: _, atom: collapse, ret: _, finished: _, vars: _ } = stack_ref;
-        let finished = match atom_as_slice_mut(collapse) {
-            Some([_op, Atom::Expression(finished), _bindings]) => finished,
+        match atom_as_slice_mut(collapse) {
+            Some([_op, Atom::Expression(finished_placeholder), _bindings]) => {
+                let mut finished = ExpressionAtom::new(CowArray::new());
+                std::mem::swap(&mut finished, finished_placeholder);
+                let mut finished = finished.into_children();
+                finished.push(atom_bindings_into_atom(nested, bindings));
+                std::mem::swap(&mut ExpressionAtom::new(finished.into()), finished_placeholder);
+            },
             _ => panic!("Unexpected state"),
         };
-        if nested != EMPTY_SYMBOL {
-            finished.children_mut().push(atom_bindings_into_atom(nested, bindings));
-        }
     }
 
     // all alternatives are evaluated
@@ -1112,9 +1111,9 @@ fn interpret_function(args: Atom, bindings: Bindings) -> MettaResult {
     let mut call = atom.clone().into_children();
     let head = call.remove(0);
     let args = call;
-    let mut arg_types = op_type.clone();
-    arg_types.children_mut().remove(0);
-    let arg_types = Atom::Expression(arg_types);
+    let mut arg_types: Vec<Atom> = op_type.children().into();
+    arg_types.remove(0);
+    let arg_types = Atom::expr(arg_types);
     let rop = Atom::Variable(VariableAtom::new("rop").make_unique());
     let rargs = Atom::Variable(VariableAtom::new("rargs").make_unique());
     let result = Atom::Variable(VariableAtom::new("result").make_unique());

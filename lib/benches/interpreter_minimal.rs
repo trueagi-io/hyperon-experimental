@@ -1,5 +1,4 @@
 #![feature(test)]
-#[cfg(not(feature = "old_interpreter"))]
 mod interpreter_minimal_bench {
 
 extern crate test;

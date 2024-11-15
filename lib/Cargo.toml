@@ -30,7 +30,6 @@ crate-type = ["lib"]
 default = ["pkg_mgmt"]
 # Add one of the features below into default list to enable.
 # See https://doc.rust-lang.org/cargo/reference/features.html#the-features-section
-old_interpreter = [] # enables old Rust interpreter
 variable_operation = [] # enables evaluation of the expressions which have
                         # a variable on the first position
 git = ["git2", "pkg_mgmt"]

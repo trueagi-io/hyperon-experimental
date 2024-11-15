@@ -22,5 +22,4 @@ path = "src/main.rs"
 [features]
 default = ["hyperon"]
 python = ["pyo3", "pep440_rs"]
-old_interpreter = ["hyperon/old_interpreter"]
 git = ["hyperon/git"]
