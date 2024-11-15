@@ -491,7 +491,7 @@ pub unsafe extern "C" fn atom_get_space(atom: *const atom_ref_t) -> space_t {
 }
 
 /// Private convenience function to call an `c_atom_vec_callback_t` callback with each atom in a vec
-pub(crate) fn return_atoms(atoms: &Vec<Atom>, callback: c_atom_vec_callback_t, context: *mut c_void) {
+pub(crate) fn return_atoms(atoms: &[Atom], callback: c_atom_vec_callback_t, context: *mut c_void) {
     callback(&(&atoms[..]).into(), context);
 }
 

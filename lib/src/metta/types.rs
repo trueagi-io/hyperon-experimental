@@ -136,7 +136,7 @@ fn query_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
 pub fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
     match fn_typ {
         Atom::Expression(expr) => {
-            let children = expr.children().as_slice();
+            let children = expr.children();
             match children {
                 [op,  args @ .., res] if *op == ARROW_SYMBOL => (args, res),
                 _ => panic!("Incorrect function type: {}", fn_typ)
@@ -151,7 +151,7 @@ fn get_op(expr: &ExpressionAtom) -> &Atom {
 }
 
 fn get_args(expr: &ExpressionAtom) -> &[Atom] {
-    &expr.children().as_slice()[1..]
+    &expr.children()[1..]
 }
 
 /// Returns vector of the types for the given `atom` in context of the given

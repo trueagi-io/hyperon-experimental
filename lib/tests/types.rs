@@ -25,7 +25,7 @@ fn test_types_in_metta() {
     let metta = Metta::new(Some(EnvBuilder::test_env()));
     metta.tokenizer().borrow_mut().register_token(regex::Regex::new("is-int").unwrap(), |_t| Atom::gnd(IsInt{}));
     let result = metta.run(SExprParser::new(program));
-    assert_eq!(result, Ok(vec![vec![UNIT_ATOM()], vec![UNIT_ATOM()], vec![UNIT_ATOM()], vec![UNIT_ATOM()], vec![UNIT_ATOM()], vec![UNIT_ATOM()]]));
+    assert_eq!(result, Ok(vec![vec![UNIT_ATOM], vec![UNIT_ATOM], vec![UNIT_ATOM], vec![UNIT_ATOM], vec![UNIT_ATOM], vec![UNIT_ATOM]]));
 }
 
 #[derive(Clone, Debug)]
