@@ -14,21 +14,13 @@ class SNetSDKWrapper:
                  private_key=os.getenv("SNET_PRIVATE_KEY", '0' * 32),
                  eth_rpc_endpoint=os.getenv("ETH_RPC_ENDPOINT"),
                  email=os.getenv("SNET_EMAIL"),
-                 identity_name="hyperon",
-                 network="mainnet",
-                 identity_type="key",
                  concurrency=False,
                  force_update=False):
-        config = {
-            "private_key": private_key,
-            "eth_rpc_endpoint": eth_rpc_endpoint,
-            "email": email,
-            "concurrency": concurrency,
-            "identity_name": identity_name,
-            "network": network,
-            "identity_type": identity_type,
-            "force_update": force_update
-        }
+        self.email = email
+        config = sdk.config.Config(private_key=private_key,
+                                   eth_rpc_endpoint=eth_rpc_endpoint,
+                                   concurrency=concurrency,
+                                   force_update=force_update)
         self.snet_sdk = sdk.SnetSDK(config)
 
     def organization_list(self):
@@ -45,6 +37,7 @@ class SNetSDKWrapper:
         service_client = self.snet_sdk.create_service_client(
             org_id=org_id, service_id=service_id,
             # group_name="default_group",
+            email=self.email,
             free_call_auth_token_bin=free_call_auth_token_bin,
             free_call_token_expiry_block=free_call_token_expiry_block)
         return ServiceCall(service_client)
@@ -191,12 +184,13 @@ class ServiceCall:
     def get_operation_atom(self):
         return OperationAtom(self.service_details[1], self)
 
-    def generate_callers_text(self):
-        return pretty_print_atoms(self.generate_callers())
-
     def open_channel_and_deposit(self, amount, expiration):
         self.service_client.deposit_and_open_channel(amount, expiration)
         return [E()]
+
+    def generate_callers_text(self):
+        # TODO: pretty print
+        return "\n".join([repr(e) for e in self.generate_callers()])
 
     def _map_type(self, t):
         type_map = {'bool': 'Bool',
