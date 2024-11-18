@@ -160,11 +160,23 @@
     (@param "Angle in radians")))
   (@return "Result of the sine function"))
 
+(@doc asin-math
+  (@desc "Returns result of the arcsine function for an input value (first argument)")
+  (@params (
+    (@param "Float number")))
+  (@return "Result of the arcsine function"))
+
 (@doc cos-math
   (@desc "Returns result of the cosine function for an input value in radians (first argument)")
   (@params (
     (@param "Angle in radians")))
   (@return "Result of the cosine function"))
+
+(@doc acos-math
+  (@desc "Returns result of the arccosine function for an input value (first argument)")
+  (@params (
+    (@param "Float number")))
+  (@return "Result of the arccosine function"))
 
 (@doc tan-math
   (@desc "Returns result of the tangent function for an input value in radians (first argument)")
@@ -177,6 +189,18 @@
   (@params (
     (@param "Float number")))
   (@return "Result of the tangent function"))
+
+(@doc isnan-math
+  (@desc "Returns True if input value is NaN. False - otherwise")
+  (@params (
+    (@param "Number")))
+  (@return "True/False"))
+
+(@doc isinf-math
+  (@desc "Returns True if input value is positive or negative infinity. False - otherwise")
+  (@params (
+    (@param "Number")))
+  (@return "True/False"))
 
 (@doc random-int
   (@desc "Returns random int number from range defined by two numbers (first and second argument)")

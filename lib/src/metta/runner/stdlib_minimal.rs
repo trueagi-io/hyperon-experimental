@@ -1289,12 +1289,7 @@ impl CustomExecute for SqrtMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("sqrt-math expects one argument: number");
         let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
-        if input < 0.0 {
-            Err(ExecError::from("Only numbers >= 0 allowed"))
-        }
-        else {
-            Ok(vec![Atom::gnd(Number::Float(input.sqrt()))])
-        }
+        Ok(vec![Atom::gnd(Number::Float(input.sqrt()))])
     }
 }
 
@@ -1507,6 +1502,29 @@ impl CustomExecute for CosMathOp {
 }
 
 #[derive(Clone, Debug)]
+pub struct AcosMathOp {}
+
+grounded_op!(AcosMathOp, "acos-math");
+
+impl Grounded for AcosMathOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for AcosMathOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("acos-math expects one argument: input number");
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        Ok(vec![Atom::gnd(Number::Float(input.acos()))])
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct TanMathOp {}
 
 grounded_op!(TanMathOp, "tan-math");
@@ -1549,6 +1567,52 @@ impl CustomExecute for AtanMathOp {
         let arg_error = || ExecError::from("atan-math expects one argument: input number");
         let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.atan()))])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct IsNanMathOp {}
+
+grounded_op!(IsNanMathOp, "isnan-math");
+
+impl Grounded for IsNanMathOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for IsNanMathOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("isnan-math expects one argument: input number");
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        Ok(vec![Atom::gnd(Bool(input.is_nan()))])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct IsInfMathOp {}
+
+grounded_op!(IsInfMathOp, "isinf-math");
+
+impl Grounded for IsInfMathOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for IsInfMathOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("isinf-math expects one argument: input number");
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        Ok(vec![Atom::gnd(Bool(input.is_infinite()))])
     }
 }
 
@@ -2119,12 +2183,20 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"round-math"), move |_| { round_math_op.clone() });
     let sin_math_op = Atom::gnd(SinMathOp{});
     tref.register_token(regex(r"sin-math"), move |_| { sin_math_op.clone() });
+    let asin_math_op = Atom::gnd(AsinMathOp{});
+    tref.register_token(regex(r"asin-math"), move |_| { asin_math_op.clone() });
     let cos_math_op = Atom::gnd(CosMathOp{});
     tref.register_token(regex(r"cos-math"), move |_| { cos_math_op.clone() });
+    let acos_math_op = Atom::gnd(AcosMathOp{});
+    tref.register_token(regex(r"acos-math"), move |_| { acos_math_op.clone() });
     let tan_math_op = Atom::gnd(TanMathOp{});
     tref.register_token(regex(r"tan-math"), move |_| { tan_math_op.clone() });
     let atan_math_op = Atom::gnd(AtanMathOp{});
     tref.register_token(regex(r"atan-math"), move |_| { atan_math_op.clone() });
+    let isnan_math_op = Atom::gnd(IsNanMathOp{});
+    tref.register_token(regex(r"isnan-math"), move |_| { isnan_math_op.clone() });
+    let isinf_math_op = Atom::gnd(IsInfMathOp{});
+    tref.register_token(regex(r"isinf-math"), move |_| { isinf_math_op.clone() });
     let index_atom_op = Atom::gnd(IndexAtomOp{});
     tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
     let random_int_op = Atom::gnd(RandomIntOp{});
@@ -2376,7 +2448,7 @@ mod tests {
     #[test]
     fn metta_sqrt() {
         assert_eq!(run_program(&format!("!(sqrt-math 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
-        assert_eq!(run_program(&format!("!(sqrt-math -5)")), Ok(vec![vec![expr!("Error" ({ SqrtMathOp{} } {Number::Integer(-5)}) "Only numbers >= 0 allowed")]]));
+        // assert_eq!(run_program(&format!("!(sqrt-math -5)")), Ok(vec![vec![expr!("Error" ({ SqrtMathOp{} } {Number::Integer(-5)}) "Only numbers >= 0 allowed")]]));
         assert_eq!(run_program(&format!("!(sqrt-math A)")), Ok(vec![vec![expr!("Error" ({ SqrtMathOp{} } "A") "sqrt-math expects one argument: number")]]));
     }
 
@@ -2427,10 +2499,24 @@ mod tests {
     }
 
     #[test]
+    fn metta_asin_math() {
+        assert_eq!(run_program(&format!("!(asin-math 0)")), Ok(vec![vec![expr!({Number::Integer(0)})]]));
+        assert_eq!(run_program(&format!("!(chain (eval (sin-math 1)) $sin (< (- (asin-math $sin) 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(asin-math A)")), Ok(vec![vec![expr!("Error" ({ AsinMathOp{} } "A") "asin-math expects one argument: input number")]]));
+    }
+
+    #[test]
     fn metta_cos_math() {
         assert_eq!(run_program(&format!("!(cos-math 0)")), Ok(vec![vec![expr!({Number::Integer(1)})]]));
         assert_eq!(run_program(&format!("!(chain (eval (cos-math 1.570796327)) $cos (< (- $cos 0.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(cos-math A)")), Ok(vec![vec![expr!("Error" ({ CosMathOp{} } "A") "cos-math expects one argument: input number")]]));
+    }
+
+    #[test]
+    fn metta_acos_math() {
+        assert_eq!(run_program(&format!("!(acos-math 1)")), Ok(vec![vec![expr!({Number::Integer(0)})]]));
+        assert_eq!(run_program(&format!("!(chain (eval (cos-math 1)) $cos (< (- (acos-math $cos) 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(acos-math A)")), Ok(vec![vec![expr!("Error" ({ AcosMathOp{} } "A") "acos-math expects one argument: input number")]]));
     }
 
     #[test]
@@ -2445,6 +2531,20 @@ mod tests {
         assert_eq!(run_program(&format!("!(atan-math 0)")), Ok(vec![vec![expr!({Number::Integer(0)})]]));
         assert_eq!(run_program(&format!("!(chain (eval (atan-math 1)) $atan (< (- $atan 0.78539816339) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(atan-math A)")), Ok(vec![vec![expr!("Error" ({ AtanMathOp{} } "A") "atan-math expects one argument: input number")]]));
+    }
+
+    #[test]
+    fn metta_isnan_math() {
+        assert_eq!(run_program(&format!("!(isnan-math 0)")), Ok(vec![vec![expr!({Bool(false)})]]));
+        assert_eq!(run_program(&format!("!(chain (eval (log-math 0 0)) $log (isnan-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(isnan-math A)")), Ok(vec![vec![expr!("Error" ({ IsNanMathOp{} } "A") "isnan-math expects one argument: input number")]]));
+    }
+
+    #[test]
+    fn metta_isinf_math() {
+        assert_eq!(run_program(&format!("!(isinf-math 0)")), Ok(vec![vec![expr!({Bool(false)})]]));
+        assert_eq!(run_program(&format!("!(chain (eval (log-math 5 0)) $log (isinf-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(isinf-math A)")), Ok(vec![vec![expr!("Error" ({ IsInfMathOp{} } "A") "isinf-math expects one argument: input number")]]));
     }
 
     #[test]
@@ -3593,8 +3693,8 @@ mod tests {
     fn sqrt_math_op() {
         let res = SqrtMathOp {}.execute(&mut vec![expr!({Number::Integer(4)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(2)})]);
-        let res = SqrtMathOp {}.execute(&mut vec![expr!({Number::Integer(-4)})]);
-        assert_eq!(res, Err(ExecError::from("Only numbers >= 0 allowed")));
+        // let res = SqrtMathOp {}.execute(&mut vec![expr!({Number::Integer(-4)})]);
+        // assert_eq!(res, Err(ExecError::from("Only numbers >= 0 allowed")));
         let res = SqrtMathOp {}.execute(&mut vec![expr!("A")]);
         assert_eq!(res, Err(ExecError::from("sqrt-math expects one argument: number")));
     }
@@ -3668,6 +3768,18 @@ mod tests {
     }
 
     #[test]
+    fn asin_math_op() {
+        let res = AsinMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(0)})]);
+        let res = AsinMathOp {}.execute(&mut vec![expr!({Number::Float(1.0)})]);
+        let res_f64: f64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
+        let abs_difference = (res_f64 - std::f64::consts::FRAC_PI_2).abs();
+        assert!(abs_difference < 1e-10);
+        let res = AsinMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("asin-math expects one argument: input number")));
+    }
+
+    #[test]
     fn cos_math_op() {
         let res = CosMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(1)})]);
@@ -3677,6 +3789,18 @@ mod tests {
         assert!(abs_difference < 1e-10);
         let res = CosMathOp {}.execute(&mut vec![expr!("A")]);
         assert_eq!(res, Err(ExecError::from("cos-math expects one argument: input number")));
+    }
+
+    #[test]
+    fn acos_math_op() {
+        let res = AcosMathOp {}.execute(&mut vec![expr!({Number::Integer(1)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(0)})]);
+        let res = AcosMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]);
+        let res_f64: f64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
+        let abs_difference = (res_f64 - std::f64::consts::FRAC_PI_2).abs();
+        assert!(abs_difference < 1e-10);
+        let res = AcosMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("acos-math expects one argument: input number")));
     }
 
     #[test]
@@ -3701,5 +3825,25 @@ mod tests {
         assert!(abs_difference < 1e-10);
         let res = AtanMathOp {}.execute(&mut vec![expr!("A")]);
         assert_eq!(res, Err(ExecError::from("atan-math expects one argument: input number")));
+    }
+
+    #[test]
+    fn isnan_math_op() {
+        let res = IsNanMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Bool(false)})]);
+        let res = IsNanMathOp {}.execute(&mut vec![expr!({Number::Float(f64::NAN)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Bool(true)})]);
+        let res = IsNanMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("isnan-math expects one argument: input number")));
+    }
+
+    #[test]
+    fn isinf_math_op() {
+        let res = IsInfMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Bool(false)})]);
+        let res = IsInfMathOp {}.execute(&mut vec![expr!({Number::Float(f64::INFINITY)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Bool(true)})]);
+        let res = IsInfMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("isinf-math expects one argument: input number")));
     }
 }
