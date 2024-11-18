@@ -1126,7 +1126,7 @@ impl CustomExecute for MaxAtomOp {
             Err(ExecError::from("Empty expression"))
         } else {
             children.into_iter().fold(Ok(f64::NEG_INFINITY), |res, x| {
-                match (res, AsPrimitive::from_atom(x).as_number()) {
+                match (res, Number::from_atom(x)) {
                     (res @ Err(_), _) => res,
                     (_, None) => Err(ExecError::from("Only numbers are allowed in expression")),
                     (Ok(max), Some(x)) => Ok(f64::max(max, x.into())),
@@ -1159,7 +1159,7 @@ impl CustomExecute for MinAtomOp {
             Err(ExecError::from("Empty expression"))
         } else {
             children.into_iter().fold(Ok(f64::INFINITY), |res, x| {
-                match (res, AsPrimitive::from_atom(x).as_number()) {
+                match (res, Number::from_atom(x)) {
                     (res @ Err(_), _) => res,
                     (_, None) => Err(ExecError::from("Only numbers are allowed in expression")),
                     (Ok(min), Some(x)) => Ok(f64::min(min, x.into())),
@@ -1212,7 +1212,7 @@ impl CustomExecute for IndexAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("index-atom expects two arguments: expression and atom");
         let children = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children();
-        let index = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
+        let index = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?;
         match children.get(Into::<i64>::into(index) as usize) {
             Some(atom) => Ok(vec![atom.clone()]),
             None => Err(ExecError::from("Index is out of bounds")),
@@ -1641,8 +1641,8 @@ impl Grounded for RandomIntOp {
 impl CustomExecute for RandomIntOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("random-int expects two arguments: number (start) and number (end)");
-        let start: i64 = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?.into();
-        let end: i64 = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?.into();
+        let start: i64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
+        let end: i64 = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         let range = start..end;
         if range.is_empty() {
             return Err(ExecError::from("Range is empty"));
@@ -1670,8 +1670,8 @@ impl Grounded for RandomFloatOp {
 impl CustomExecute for RandomFloatOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("random-float expects two arguments: number (start) and number (end)");
-        let start: f64 = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?.into();
-        let end: f64 = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?.into();
+        let start: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
+        let end: f64 = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         let range = start..end;
         if range.is_empty() {
             return Err(ExecError::from("Range is empty"));
@@ -3524,14 +3524,14 @@ mod tests {
     fn random_op() {
         let res = RandomIntOp{}.execute(&mut vec![expr!({Number::Integer(0)}), expr!({Number::Integer(5)})]);
         let range = 0..5;
-        let res_i64: i64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        let res_i64: i64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
         assert!(range.contains(&res_i64));
         let res = RandomIntOp{}.execute(&mut vec![expr!({Number::Integer(2)}), expr!({Number::Integer(-2)})]);
         assert_eq!(res, Err(ExecError::from("Range is empty")));
 
         let res = RandomFloatOp{}.execute(&mut vec![expr!({Number::Integer(0)}), expr!({Number::Integer(5)})]);
         let range = 0.0..5.0;
-        let res_f64: f64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        let res_f64: f64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
         assert!(range.contains(&res_f64));
         let res = RandomFloatOp{}.execute(&mut vec![expr!({Number::Integer(0)}), expr!({Number::Integer(0)})]);
         assert_eq!(res, Err(ExecError::from("Range is empty")));
