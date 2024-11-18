@@ -1238,8 +1238,8 @@ impl Grounded for PowiMathOp {
 impl CustomExecute for PowiMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("powi-math expects two arguments: number (base) and number (power)");
-        let base = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
-        let pow = Into::<i64>::into(AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let base = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let pow = Into::<i64>::into(args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?);
         let res = base.powi(pow.try_into().unwrap());
         Ok(vec![Atom::gnd(Number::Float(res))])
     }
@@ -1263,8 +1263,8 @@ impl Grounded for PowfMathOp {
 impl CustomExecute for PowfMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("powf-math expects two arguments: number (base) and number (power)");
-        let base = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
-        let pow = Into::<f64>::into(AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let base = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let pow = Into::<f64>::into(args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?);
         let res = base.powf(pow.try_into().unwrap());
         Ok(vec![Atom::gnd(Number::Float(res))])
     }
@@ -1288,7 +1288,7 @@ impl Grounded for SqrtMathOp {
 impl CustomExecute for SqrtMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("sqrt-math expects one argument: number");
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         if input < 0.0 {
             Err(ExecError::from("Only numbers >= 0 allowed"))
         }
@@ -1316,7 +1316,7 @@ impl Grounded for AbsMathOp {
 impl CustomExecute for AbsMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("abs-math expects one argument: number");
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.abs()))])
     }
 }
@@ -1339,8 +1339,8 @@ impl Grounded for LogMathOp {
 impl CustomExecute for LogMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("log-math expects two arguments: base (number) and input value (number)");
-        let base = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let base = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.log(base)))])
     }
 }
@@ -1363,7 +1363,7 @@ impl Grounded for TruncMathOp {
 impl CustomExecute for TruncMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("trunc-math expects one argument: input number");
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.trunc()))])
     }
 }
@@ -1386,7 +1386,7 @@ impl Grounded for CeilMathOp {
 impl CustomExecute for CeilMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("ceil-math expects one argument: input number");
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.ceil()))])
     }
 }
@@ -1409,7 +1409,7 @@ impl Grounded for FloorMathOp {
 impl CustomExecute for FloorMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("floor-math expects one argument: input number");
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.floor()))])
     }
 }
@@ -1432,7 +1432,7 @@ impl Grounded for RoundMathOp {
 impl CustomExecute for RoundMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("round-math expects one argument: input number");
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.round()))])
     }
 }
@@ -1455,7 +1455,7 @@ impl Grounded for SinMathOp {
 impl CustomExecute for SinMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("sin-math expects one argument: input number");
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.sin()))])
     }
 }
@@ -1478,7 +1478,7 @@ impl Grounded for AsinMathOp {
 impl CustomExecute for AsinMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("asin-math expects one argument: input number");
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.asin()))])
     }
 }
@@ -1501,7 +1501,7 @@ impl Grounded for CosMathOp {
 impl CustomExecute for CosMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("cos-math expects one argument: input number");
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.cos()))])
     }
 }
@@ -1524,7 +1524,7 @@ impl Grounded for TanMathOp {
 impl CustomExecute for TanMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("tan-math expects one argument: input number");
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.tan()))])
     }
 }
@@ -1547,7 +1547,7 @@ impl Grounded for AtanMathOp {
 impl CustomExecute for AtanMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("atan-math expects one argument: input number");
-        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
         Ok(vec![Atom::gnd(Number::Float(input.atan()))])
     }
 }
@@ -3660,7 +3660,7 @@ mod tests {
         let res = SinMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(0)})]);
         let res = SinMathOp {}.execute(&mut vec![expr!({Number::Float(std::f64::consts::FRAC_PI_2)})]);
-        let res_f64: f64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        let res_f64: f64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
         let abs_difference = (res_f64 - 1.0).abs();
         assert!(abs_difference < 1e-10);
         let res = SinMathOp {}.execute(&mut vec![expr!("A")]);
@@ -3672,7 +3672,7 @@ mod tests {
         let res = CosMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(1)})]);
         let res = CosMathOp {}.execute(&mut vec![expr!({Number::Float(std::f64::consts::FRAC_PI_2)})]);
-        let res_f64: f64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        let res_f64: f64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
         let abs_difference = (res_f64 - 0.0).abs();
         assert!(abs_difference < 1e-10);
         let res = CosMathOp {}.execute(&mut vec![expr!("A")]);
@@ -3684,7 +3684,7 @@ mod tests {
         let res = TanMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(0)})]);
         let res = TanMathOp {}.execute(&mut vec![expr!({Number::Float(std::f64::consts::FRAC_PI_4)})]);
-        let res_f64: f64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        let res_f64: f64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
         let abs_difference = (res_f64 - 1.0).abs();
         assert!(abs_difference < 1e-10);
         let res = TanMathOp {}.execute(&mut vec![expr!("A")]);
@@ -3696,7 +3696,7 @@ mod tests {
         let res = AtanMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(0)})]);
         let res = AtanMathOp {}.execute(&mut vec![expr!({Number::Integer(1)})]);
-        let res_f64: f64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        let res_f64: f64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
         let abs_difference = (res_f64 - std::f64::consts::FRAC_PI_4).abs();
         assert!(abs_difference < 1e-10);
         let res = AtanMathOp {}.execute(&mut vec![expr!("A")]);
