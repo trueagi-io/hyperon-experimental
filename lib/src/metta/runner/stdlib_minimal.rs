@@ -2448,7 +2448,7 @@ mod tests {
     #[test]
     fn metta_sqrt() {
         assert_eq!(run_program(&format!("!(sqrt-math 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
-        // assert_eq!(run_program(&format!("!(sqrt-math -5)")), Ok(vec![vec![expr!("Error" ({ SqrtMathOp{} } {Number::Integer(-5)}) "Only numbers >= 0 allowed")]]));
+        assert_eq!(run_program(&format!("!(chain (eval (sqrt-math -4)) $sqrt (isnan-math $sqrt))")), Ok(vec![vec![expr!({Bool(true)})]]));
         assert_eq!(run_program(&format!("!(sqrt-math A)")), Ok(vec![vec![expr!("Error" ({ SqrtMathOp{} } "A") "sqrt-math expects one argument: number")]]));
     }
 
@@ -2462,6 +2462,8 @@ mod tests {
     #[test]
     fn metta_log() {
         assert_eq!(run_program(&format!("!(log-math 2 4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
+        assert_eq!(run_program(&format!("!(chain (eval (log-math 0 0)) $log (isnan-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(chain (eval (log-math 5 0)) $log (isinf-math $log))")), Ok(vec![vec![expr!({Bool(true)})]]));
     }
 
     #[test]
@@ -3693,8 +3695,9 @@ mod tests {
     fn sqrt_math_op() {
         let res = SqrtMathOp {}.execute(&mut vec![expr!({Number::Integer(4)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(2)})]);
-        // let res = SqrtMathOp {}.execute(&mut vec![expr!({Number::Integer(-4)})]);
-        // assert_eq!(res, Err(ExecError::from("Only numbers >= 0 allowed")));
+        let res = SqrtMathOp {}.execute(&mut vec![expr!({Number::Integer(-4)})]);
+        let res_f64: f64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
+        assert!(res_f64.is_nan());
         let res = SqrtMathOp {}.execute(&mut vec![expr!("A")]);
         assert_eq!(res, Err(ExecError::from("sqrt-math expects one argument: number")));
     }
@@ -3713,6 +3716,12 @@ mod tests {
     fn log_math_op() {
         let res = LogMathOp {}.execute(&mut vec![expr!({Number::Integer(2)}), expr!({Number::Integer(4)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(2)})]);
+        let res = LogMathOp {}.execute(&mut vec![expr!({Number::Integer(0)}), expr!({Number::Integer(0)})]);
+        let res_f64: f64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
+        assert!(res_f64.is_nan());
+        let res = LogMathOp {}.execute(&mut vec![expr!({Number::Integer(5)}), expr!({Number::Integer(0)})]);
+        let res_f64: f64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
+        assert!(res_f64.is_infinite());
         let res = LogMathOp {}.execute(&mut vec![expr!({Number::Integer(2)}), expr!("A")]);
         assert_eq!(res, Err(ExecError::from("log-math expects two arguments: base (number) and input value (number)")));
     }
