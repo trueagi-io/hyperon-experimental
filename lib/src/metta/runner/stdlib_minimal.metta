@@ -148,6 +148,36 @@
     (@param "Float value")))
   (@return "Integer value less than or equal to the input"))
 
+(@doc round-math
+  (@desc "Returns the nearest integer to the input float value (first argument)")
+  (@params (
+    (@param "Float value")))
+  (@return "Nearest integer to the input"))
+
+(@doc sin-math
+  (@desc "Returns result of the sine function for an input value in radians (first argument)")
+  (@params (
+    (@param "Angle in radians")))
+  (@return "Result of the sine function"))
+
+(@doc cos-math
+  (@desc "Returns result of the cosine function for an input value in radians (first argument)")
+  (@params (
+    (@param "Angle in radians")))
+  (@return "Result of the cosine function"))
+
+(@doc tan-math
+  (@desc "Returns result of the tangent function for an input value in radians (first argument)")
+  (@params (
+    (@param "Angle in radians")))
+  (@return "Result of the tangent function"))
+
+(@doc atan-math
+  (@desc "Returns result of the arctangent function for an input value (first argument)")
+  (@params (
+    (@param "Float number")))
+  (@return "Result of the tangent function"))
+
 (@doc random-int
   (@desc "Returns random int number from range defined by two numbers (first and second argument)")
   (@params (

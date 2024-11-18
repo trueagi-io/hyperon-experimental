@@ -1415,6 +1415,144 @@ impl CustomExecute for FloorMathOp {
 }
 
 #[derive(Clone, Debug)]
+pub struct RoundMathOp {}
+
+grounded_op!(RoundMathOp, "round-math");
+
+impl Grounded for RoundMathOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for RoundMathOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("round-math expects one argument: input number");
+        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        Ok(vec![Atom::gnd(Number::Float(input.round()))])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct SinMathOp {}
+
+grounded_op!(SinMathOp, "sin-math");
+
+impl Grounded for SinMathOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for SinMathOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("sin-math expects one argument: input number");
+        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        Ok(vec![Atom::gnd(Number::Float(input.sin()))])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AsinMathOp {}
+
+grounded_op!(AsinMathOp, "asin-math");
+
+impl Grounded for AsinMathOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for AsinMathOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("asin-math expects one argument: input number");
+        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        Ok(vec![Atom::gnd(Number::Float(input.asin()))])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct CosMathOp {}
+
+grounded_op!(CosMathOp, "cos-math");
+
+impl Grounded for CosMathOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for CosMathOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("cos-math expects one argument: input number");
+        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        Ok(vec![Atom::gnd(Number::Float(input.cos()))])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct TanMathOp {}
+
+grounded_op!(TanMathOp, "tan-math");
+
+impl Grounded for TanMathOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for TanMathOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("tan-math expects one argument: input number");
+        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        Ok(vec![Atom::gnd(Number::Float(input.tan()))])
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct AtanMathOp {}
+
+grounded_op!(AtanMathOp, "atan-math");
+
+impl Grounded for AtanMathOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for AtanMathOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("atan-math expects one argument: input number");
+        let input = Into::<f64>::into(AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?);
+        Ok(vec![Atom::gnd(Number::Float(input.atan()))])
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct SubtractionAtomOp {}
 
 grounded_op!(SubtractionAtomOp, "subtraction-atom");
@@ -1977,6 +2115,16 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"ceil-math"), move |_| { ceil_math_op.clone() });
     let floor_math_op = Atom::gnd(FloorMathOp{});
     tref.register_token(regex(r"floor-math"), move |_| { floor_math_op.clone() });
+    let round_math_op = Atom::gnd(RoundMathOp{});
+    tref.register_token(regex(r"round-math"), move |_| { round_math_op.clone() });
+    let sin_math_op = Atom::gnd(SinMathOp{});
+    tref.register_token(regex(r"sin-math"), move |_| { sin_math_op.clone() });
+    let cos_math_op = Atom::gnd(CosMathOp{});
+    tref.register_token(regex(r"cos-math"), move |_| { cos_math_op.clone() });
+    let tan_math_op = Atom::gnd(TanMathOp{});
+    tref.register_token(regex(r"tan-math"), move |_| { tan_math_op.clone() });
+    let atan_math_op = Atom::gnd(AtanMathOp{});
+    tref.register_token(regex(r"atan-math"), move |_| { atan_math_op.clone() });
     let index_atom_op = Atom::gnd(IndexAtomOp{});
     tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
     let random_int_op = Atom::gnd(RandomIntOp{});
@@ -2262,6 +2410,41 @@ mod tests {
         assert_eq!(run_program(&format!("!(floor-math 2.4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
         assert_eq!(run_program(&format!("!(floor-math -2.4)")), Ok(vec![vec![expr!({Number::Integer(-3)})]]));
         assert_eq!(run_program(&format!("!(floor-math A)")), Ok(vec![vec![expr!("Error" ({ FloorMathOp{} } "A") "floor-math expects one argument: input number")]]));
+    }
+
+    #[test]
+    fn metta_round_math() {
+        assert_eq!(run_program(&format!("!(round-math 2.4)")), Ok(vec![vec![expr!({Number::Integer(2)})]]));
+        assert_eq!(run_program(&format!("!(round-math -2.7)")), Ok(vec![vec![expr!({Number::Integer(-3)})]]));
+        assert_eq!(run_program(&format!("!(round-math A)")), Ok(vec![vec![expr!("Error" ({ RoundMathOp{} } "A") "round-math expects one argument: input number")]]));
+    }
+
+    #[test]
+    fn metta_sin_math() {
+        assert_eq!(run_program(&format!("!(sin-math 0)")), Ok(vec![vec![expr!({Number::Integer(0)})]]));
+        assert_eq!(run_program(&format!("!(chain (eval (sin-math 1.570796327)) $sin (< (- $sin 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(sin-math A)")), Ok(vec![vec![expr!("Error" ({ SinMathOp{} } "A") "sin-math expects one argument: input number")]]));
+    }
+
+    #[test]
+    fn metta_cos_math() {
+        assert_eq!(run_program(&format!("!(cos-math 0)")), Ok(vec![vec![expr!({Number::Integer(1)})]]));
+        assert_eq!(run_program(&format!("!(chain (eval (cos-math 1.570796327)) $cos (< (- $cos 0.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(cos-math A)")), Ok(vec![vec![expr!("Error" ({ CosMathOp{} } "A") "cos-math expects one argument: input number")]]));
+    }
+
+    #[test]
+    fn metta_tan_math() {
+        assert_eq!(run_program(&format!("!(tan-math 0)")), Ok(vec![vec![expr!({Number::Integer(0)})]]));
+        assert_eq!(run_program(&format!("!(chain (eval (tan-math 0.78539816339)) $tan (< (- $tan 1.0) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(tan-math A)")), Ok(vec![vec![expr!("Error" ({ TanMathOp{} } "A") "tan-math expects one argument: input number")]]));
+    }
+
+    #[test]
+    fn metta_atan_math() {
+        assert_eq!(run_program(&format!("!(atan-math 0)")), Ok(vec![vec![expr!({Number::Integer(0)})]]));
+        assert_eq!(run_program(&format!("!(chain (eval (atan-math 1)) $atan (< (- $atan 0.78539816339) 1e-10))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("!(atan-math A)")), Ok(vec![vec![expr!("Error" ({ AtanMathOp{} } "A") "atan-math expects one argument: input number")]]));
     }
 
     #[test]
@@ -3460,5 +3643,63 @@ mod tests {
         assert_eq!(res, vec![expr!({Number::Integer(-3)})]);
         let res = FloorMathOp {}.execute(&mut vec![expr!("A")]);
         assert_eq!(res, Err(ExecError::from("floor-math expects one argument: input number")));
+    }
+
+    #[test]
+    fn round_math_op() {
+        let res = RoundMathOp {}.execute(&mut vec![expr!({Number::Float(2.4)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(2)})]);
+        let res = RoundMathOp {}.execute(&mut vec![expr!({Number::Float(-2.7)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(-3)})]);
+        let res = RoundMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("round-math expects one argument: input number")));
+    }
+
+    #[test]
+    fn sin_math_op() {
+        let res = SinMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(0)})]);
+        let res = SinMathOp {}.execute(&mut vec![expr!({Number::Float(std::f64::consts::FRAC_PI_2)})]);
+        let res_f64: f64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        let abs_difference = (res_f64 - 1.0).abs();
+        assert!(abs_difference < 1e-10);
+        let res = SinMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("sin-math expects one argument: input number")));
+    }
+
+    #[test]
+    fn cos_math_op() {
+        let res = CosMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(1)})]);
+        let res = CosMathOp {}.execute(&mut vec![expr!({Number::Float(std::f64::consts::FRAC_PI_2)})]);
+        let res_f64: f64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        let abs_difference = (res_f64 - 0.0).abs();
+        assert!(abs_difference < 1e-10);
+        let res = CosMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("cos-math expects one argument: input number")));
+    }
+
+    #[test]
+    fn tan_math_op() {
+        let res = TanMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(0)})]);
+        let res = TanMathOp {}.execute(&mut vec![expr!({Number::Float(std::f64::consts::FRAC_PI_4)})]);
+        let res_f64: f64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        let abs_difference = (res_f64 - 1.0).abs();
+        assert!(abs_difference < 1e-10);
+        let res = TanMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("tan-math expects one argument: input number")));
+    }
+
+    #[test]
+    fn atan_math_op() {
+        let res = AtanMathOp {}.execute(&mut vec![expr!({Number::Integer(0)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(0)})]);
+        let res = AtanMathOp {}.execute(&mut vec![expr!({Number::Integer(1)})]);
+        let res_f64: f64 = AsPrimitive::from_atom(res.unwrap().get(0).unwrap()).as_number().unwrap().into();
+        let abs_difference = (res_f64 - std::f64::consts::FRAC_PI_4).abs();
+        assert!(abs_difference < 1e-10);
+        let res = AtanMathOp {}.execute(&mut vec![expr!("A")]);
+        assert_eq!(res, Err(ExecError::from("atan-math expects one argument: input number")));
     }
 }
