@@ -93,7 +93,6 @@ use stdlib_minimal::CoreLibLoader;
 
 #[macro_use]
 pub mod stdlib_math;
-// use stdlib_minimal::CoreLibLoader;
 
 mod builtin_mods;
 use builtin_mods::*;
