@@ -54,7 +54,7 @@ impl Grounded for SqrtMathOp {
 impl CustomExecute for SqrtMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("sqrt-math expects one argument: number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.sqrt()))])
     }
 }
@@ -77,7 +77,7 @@ impl Grounded for AbsMathOp {
 impl CustomExecute for AbsMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("abs-math expects one argument: number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.abs()))])
     }
 }
@@ -100,8 +100,8 @@ impl Grounded for LogMathOp {
 impl CustomExecute for LogMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("log-math expects two arguments: base (number) and input value (number)");
-        let base = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
-        let input = Into::<f64>::into(args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let base: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
+        let input: f64 = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.log(base)))])
     }
 }
@@ -124,7 +124,7 @@ impl Grounded for TruncMathOp {
 impl CustomExecute for TruncMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("trunc-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.trunc()))])
     }
 }
@@ -147,7 +147,7 @@ impl Grounded for CeilMathOp {
 impl CustomExecute for CeilMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("ceil-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.ceil()))])
     }
 }
@@ -170,7 +170,7 @@ impl Grounded for FloorMathOp {
 impl CustomExecute for FloorMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("floor-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.floor()))])
     }
 }
@@ -193,7 +193,7 @@ impl Grounded for RoundMathOp {
 impl CustomExecute for RoundMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("round-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.round()))])
     }
 }
@@ -216,7 +216,7 @@ impl Grounded for SinMathOp {
 impl CustomExecute for SinMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("sin-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.sin()))])
     }
 }
@@ -239,7 +239,7 @@ impl Grounded for AsinMathOp {
 impl CustomExecute for AsinMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("asin-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.asin()))])
     }
 }
@@ -262,7 +262,7 @@ impl Grounded for CosMathOp {
 impl CustomExecute for CosMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("cos-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.cos()))])
     }
 }
@@ -285,7 +285,7 @@ impl Grounded for AcosMathOp {
 impl CustomExecute for AcosMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("acos-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.acos()))])
     }
 }
@@ -308,7 +308,7 @@ impl Grounded for TanMathOp {
 impl CustomExecute for TanMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("tan-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.tan()))])
     }
 }
@@ -331,7 +331,7 @@ impl Grounded for AtanMathOp {
 impl CustomExecute for AtanMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("atan-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
+        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         Ok(vec![Atom::gnd(Number::Float(input.atan()))])
     }
 }
@@ -354,8 +354,12 @@ impl Grounded for IsNanMathOp {
 impl CustomExecute for IsNanMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("isnan-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
-        Ok(vec![Atom::gnd(Bool(input.is_nan()))])
+        let input = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        let res = match input {
+            Number::Integer(_) => false,
+            Number::Float(f) => f.is_nan(),
+        };
+        Ok(vec![Atom::gnd(Bool(res))])
     }
 }
 
@@ -377,8 +381,12 @@ impl Grounded for IsInfMathOp {
 impl CustomExecute for IsInfMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("isinf-math expects one argument: input number");
-        let input = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
-        Ok(vec![Atom::gnd(Bool(input.is_infinite()))])
+        let input = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        let res = match input {
+            Number::Integer(_) => false,
+            Number::Float(f) => f.is_infinite(),
+        };
+        Ok(vec![Atom::gnd(Bool(res))])
     }
 }
 
