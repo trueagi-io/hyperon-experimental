@@ -16,7 +16,6 @@ use crate::common::multitrie::MultiTrie;
 use crate::space::grounding::atom_to_trie_key;
 #[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::{git_catalog::ModuleGitLocation, mod_name_from_url, pkg_mgmt::UpdateMode};
-// use crate::metta::runner::stdlib_minimal::stdlib_math;
 
 use std::convert::TryInto;
 use std::rc::Rc;
@@ -52,6 +51,8 @@ macro_rules! grounded_op {
         }
     }
 }
+
+pub(crate) use grounded_op;
 
 #[derive(Clone, Debug)]
 pub struct ImportOp {
@@ -1789,10 +1790,8 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"intersection-atom"), move |_| { intersection_op.clone() });
     let union_op = Atom::gnd(UnionAtomOp{});
     tref.register_token(regex(r"union-atom"), move |_| { union_op.clone() });
-    let powi_math_op = Atom::gnd(stdlib_math::PowiMathOp {});
-    tref.register_token(regex(r"powi-math"), move |_| { powi_math_op.clone() });
-    let powf_math_op = Atom::gnd(stdlib_math::PowfMathOp {});
-    tref.register_token(regex(r"powf-math"), move |_| { powf_math_op.clone() });
+    let pow_math_op = Atom::gnd(stdlib_math::PowMathOp {});
+    tref.register_token(regex(r"pow-math"), move |_| { pow_math_op.clone() });
     let sqrt_math_op = Atom::gnd(stdlib_math::SqrtMathOp {});
     tref.register_token(regex(r"sqrt-math"), move |_| { sqrt_math_op.clone() });
     let abs_math_op = Atom::gnd(stdlib_math::AbsMathOp {});

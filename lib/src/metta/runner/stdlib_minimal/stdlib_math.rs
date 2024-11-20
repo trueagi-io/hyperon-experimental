@@ -5,70 +5,33 @@ use crate::metta::*;
 use std::convert::TryInto;
 
 use crate::metta::runner::arithmetics::*;
-
-
-macro_rules! grounded_op {
-    ($name:ident, $disp:literal) => {
-        impl PartialEq for $name {
-            fn eq(&self, _other: &Self) -> bool {
-                true
-            }
-        }
-
-        impl std::fmt::Display for $name {
-            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, $disp)
-            }
-        }
-    }
-}
+use crate::metta::runner::stdlib_minimal::grounded_op;
 
 #[derive(Clone, Debug)]
-pub struct PowiMathOp {}
-
-grounded_op!(PowiMathOp, "powi-math");
-
-impl Grounded for PowiMathOp {
+pub struct PowMathOp {}
+grounded_op!(PowMathOp, "pow-math");
+impl Grounded for PowMathOp {
     fn type_(&self) -> Atom {
         Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
     }
-
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
         Some(self)
     }
 }
-
-impl CustomExecute for PowiMathOp {
+impl CustomExecute for PowMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("powi-math expects two arguments: number (base) and number (power)");
-        let base = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
-        let pow = Into::<i64>::into(args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?);
-        let res = base.powi(pow.try_into().unwrap());
-        Ok(vec![Atom::gnd(Number::Float(res))])
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct PowfMathOp {}
-
-grounded_op!(PowfMathOp, "powf-math");
-
-impl Grounded for PowfMathOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for PowfMathOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("powf-math expects two arguments: number (base) and number (power)");
-        let base = Into::<f64>::into(args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?);
-        let pow = Into::<f64>::into(args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?);
-        let res = base.powf(pow.try_into().unwrap());
+        let arg_error = || ExecError::from("pow-math expects two arguments: number (base) and number (power)");
+        let base: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
+        let pow = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        let res = match pow {
+            Number::Integer(n) => {
+                match TryInto::<i32>::try_into(n) {
+                    Ok(n) => base.powi(n),
+                    Err(_) => return Err(ExecError::from("power argument is too big, try using float value")),
+                }
+            },
+            Number::Float(f) => base.powf(f),
+        };
         Ok(vec![Atom::gnd(Number::Float(res))])
     }
 }
@@ -432,15 +395,10 @@ mod tests {
     }
 
     #[test]
-    fn metta_powi_math() {
-        assert_eq!(run_program(&format!("!(powi-math 5 2)")), Ok(vec![vec![expr!({Number::Integer(25)})]]));
-        assert_eq!(run_program(&format!("!(powi-math A 2)")), Ok(vec![vec![expr!("Error" ({ PowiMathOp{} } "A" {Number::Integer(2)}) "powi-math expects two arguments: number (base) and number (power)")]]));
-    }
-
-    #[test]
-    fn metta_powf_math() {
-        assert_eq!(run_program(&format!("!(powf-math 5 2)")), Ok(vec![vec![expr!({Number::Integer(25)})]]));
-        assert_eq!(run_program(&format!("!(powf-math A 2)")), Ok(vec![vec![expr!("Error" ({ PowfMathOp{} } "A" {Number::Integer(2)}) "powf-math expects two arguments: number (base) and number (power)")]]));
+    fn metta_pow_math() {
+        assert_eq!(run_program(&format!("!(pow-math 5 2)")), Ok(vec![vec![expr!({Number::Integer(5_i64.pow(2))})]]));
+        assert_eq!(run_program(&format!("!(pow-math 5.5 2.3)")), Ok(vec![vec![expr!({Number::Float(5.5_f64.powf(2.3))})]]));
+        assert_eq!(run_program(&format!("!(pow-math A 2)")), Ok(vec![vec![expr!("Error" ({ PowMathOp{} } "A" {Number::Integer(2)}) "pow-math expects two arguments: number (base) and number (power)")]]));
     }
 
     #[test]
@@ -548,19 +506,13 @@ mod tests {
     }
 
     #[test]
-    fn powi_math_op() {
-        let res = PowiMathOp {}.execute(&mut vec![expr!({Number::Integer(5)}), expr!({Number::Integer(2)})]).expect("No result returned");
-        assert_eq!(res, vec![expr!({Number::Integer(25)})]);
-        let res = PowiMathOp {}.execute(&mut vec![expr!("A"), expr!({Number::Integer(2)})]);
-        assert_eq!(res, Err(ExecError::from("powi-math expects two arguments: number (base) and number (power)")));
-    }
-
-    #[test]
-    fn powf_math_op() {
-        let res = PowfMathOp {}.execute(&mut vec![expr!({Number::Integer(5)}), expr!({Number::Integer(2)})]).expect("No result returned");
-        assert_eq!(res, vec![expr!({Number::Integer(25)})]);
-        let res = PowfMathOp {}.execute(&mut vec![expr!("A"), expr!({Number::Integer(2)})]);
-        assert_eq!(res, Err(ExecError::from("powf-math expects two arguments: number (base) and number (power)")));
+    fn pow_math_op() {
+        let res = PowMathOp {}.execute(&mut vec![expr!({Number::Integer(5)}), expr!({Number::Integer(2)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Integer(5_i64.pow(2))})]);
+        let res = PowMathOp {}.execute(&mut vec![expr!({Number::Float(5.5)}), expr!({Number::Float(2.3)})]).expect("No result returned");
+        assert_eq!(res, vec![expr!({Number::Float(5.5_f64.powf(2.3))})]);
+        let res = PowMathOp {}.execute(&mut vec![expr!("A"), expr!({Number::Integer(2)})]);
+        assert_eq!(res, Err(ExecError::from("pow-math expects two arguments: number (base) and number (power)")));
     }
 
     #[test]
