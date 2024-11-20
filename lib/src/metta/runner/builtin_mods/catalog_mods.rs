@@ -88,7 +88,7 @@ impl CatalogListOp {
 impl Grounded for CatalogListOp {
     fn type_(&self) -> Atom {
         //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -153,7 +153,7 @@ impl CatalogUpdateOp {
 impl Grounded for CatalogUpdateOp {
     fn type_(&self) -> Atom {
         //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -213,7 +213,7 @@ impl CatalogClearOp {
 impl Grounded for CatalogClearOp {
     fn type_(&self) -> Atom {
         //TODO-FUTURE, we may want to return the list as atoms, but now it just prints to stdout
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {

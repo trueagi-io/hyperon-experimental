@@ -1,21 +1,31 @@
 use crate::*;
 use crate::common::collections::ImmutableString;
 use crate::serial;
+use crate::atom::serial::ConvertingSerializer;
 
+/// String type
 pub const ATOM_TYPE_STRING : Atom = sym!("String");
 
+/// Grounded Rust string representation
 #[derive(Clone, PartialEq, Debug)]
 pub struct Str(ImmutableString);
 
 impl Str {
+    /// Construct new instance from string literal
     pub fn from_str(s: &'static str) -> Self {
         Str(ImmutableString::Literal(s))
     }
+    /// Construct new instance from owned string
     pub fn from_string(s: String) -> Self {
         Str(ImmutableString::Allocated(s))
     }
+    /// Return reference to string slice
     pub fn as_str(&self) -> &str {
         self.0.as_str()
+    }
+    /// Try to convert an atom into `Str` instance
+    pub fn from_atom(atom: &Atom) -> Option<Self> {
+        StrSerializer::convert(atom)
     }
 }
 
@@ -55,4 +65,22 @@ pub fn strip_quotes(src: &str) -> &str {
         }
     }
     src
+}
+
+#[derive(Default)]
+struct StrSerializer {
+    value: Option<Str>,
+}
+
+impl serial::Serializer for StrSerializer {
+    fn serialize_str(&mut self, v: &str) -> serial::Result {
+        self.value = Some(Str::from_string(v.into()));
+        Ok(())
+    }
+}
+
+impl serial::ConvertingSerializer<Str> for StrSerializer {
+    fn into_type(self) -> Option<Str> {
+        self.value
+    }
 }

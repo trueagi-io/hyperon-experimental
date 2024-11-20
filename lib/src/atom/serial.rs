@@ -30,6 +30,7 @@ pub trait Serializer {
 }
 
 /// Serialization error code
+#[derive(Debug)]
 pub enum Error {
     /// Serialization of the type is not supported by serializer.
     NotSupported,
@@ -37,8 +38,27 @@ pub enum Error {
 
 /// Serializer which converts serialized atom into native Rust type T.
 pub trait ConvertingSerializer<T>: Serializer {
-    fn as_mut(&mut self) -> &mut dyn Serializer;
     fn into_type(self) -> Option<T>;
+
+    /// Converts atom into Rust value using `Self::default`
+    fn convert(atom: &super::Atom) -> Option<T>
+    where
+        T: 'static + Clone,
+        Self: Default {
+            std::convert::TryInto::<&dyn super::GroundedAtom>::try_into(atom)
+                .ok()
+                .map(|gnd| {
+                    gnd.as_any_ref()
+                        .downcast_ref::<T>()
+                        .cloned()
+                        .or_else(|| {
+                            let mut serializer = Self::default();
+                            gnd.serialize(&mut serializer).expect("ConvertingSerializer is not expected returning error");
+                            serializer.into_type()
+                        })
+                })
+            .flatten()
+    }
 }
 
 /// Serialization result type
