@@ -14,6 +14,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon::matcher::{Bindings, BindingsSet};
+use hyperon::metta::runner::arithmetics::Number;
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Atom Interface
@@ -267,6 +268,26 @@ pub unsafe extern "C" fn atom_var_parse_name(name: *const c_char) -> atom_t {
 #[no_mangle]
 pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> atom_t {
     Atom::gnd(CGrounded(AtomicPtr::new(gnd))).into()
+}
+
+/// @ingroup atom_group
+/// @param[in]  n  integer number
+/// @return an `atom_t` for the Number Grounded atom
+/// @note The caller must take ownership responsibility for the returned `atom_t`
+///
+#[no_mangle]
+pub extern "C" fn atom_int(n: i64) -> atom_t {
+    Atom::gnd(Number::Integer(n)).into()
+}
+
+/// @ingroup atom_group
+/// @param[in]  f  float number
+/// @return an `atom_t` for the Number Grounded atom
+/// @note The caller must take ownership responsibility for the returned `atom_t`
+///
+#[no_mangle]
+pub extern "C" fn atom_float(f: f64) -> atom_t {
+    Atom::gnd(Number::Float(f)).into()
 }
 
 /// @brief Creates a Grounded Atom referencing a Space

@@ -27,37 +27,14 @@ class Char:
         return False
 
 @register_atoms
-def arithm_ops():
-    subAtom = OperationAtom('-', lambda a, b: a - b, ['Number', 'Number', 'Number'])
-    mulAtom = OperationAtom('*', lambda a, b: a * b, ['Number', 'Number', 'Number'])
-    addAtom = OperationAtom('+', lambda a, b: a + b, ['Number', 'Number', 'Number'])
-    divAtom = OperationAtom('/', lambda a, b: a / b, ['Number', 'Number', 'Number'])
-    modAtom = OperationAtom('%', lambda a, b: a % b, ['Number', 'Number', 'Number'])
-    return {
-        r"\+": addAtom,
-        r"-": subAtom,
-        r"\*": mulAtom,
-        r"/": divAtom,
-        r"%": modAtom
-    }
-
-@register_atoms
 def bool_ops():
     equalAtom = OperationAtom('==', lambda a, b: [ValueAtom(a == b, 'Bool')],
                               ['$t', '$t', 'Bool'], unwrap=False)
-    greaterAtom = OperationAtom('>', lambda a, b: a > b, ['Number', 'Number', 'Bool'])
-    lessAtom = OperationAtom('<', lambda a, b: a < b, ['Number', 'Number', 'Bool'])
-    greaterEqAtom = OperationAtom('>=', lambda a, b: a >= b, ['Number', 'Number', 'Bool'])
-    lessEqAtom = OperationAtom('<=', lambda a, b: a <= b, ['Number', 'Number', 'Bool'])
     orAtom = OperationAtom('or', lambda a, b: a or b, ['Bool', 'Bool', 'Bool'])
     andAtom = OperationAtom('and', lambda a, b: a and b, ['Bool', 'Bool', 'Bool'])
     notAtom = OperationAtom('not', lambda a: not a, ['Bool', 'Bool'])
     return {
         r"==": equalAtom,
-        r"<": lessAtom,
-        r">": greaterAtom,
-        r"<=": lessEqAtom,
-        r">=": greaterEqAtom,
         r"or": orAtom,
         r"and": andAtom,
         r"not": notAtom
@@ -116,9 +93,6 @@ def text_ops(run_context):
 @register_tokens
 def type_tokens():
     return {
-        r"[-+]?\d+" : lambda token: ValueAtom(int(token), 'Number'),
-        r"[-+]?\d+\.\d+": lambda token: ValueAtom(float(token), 'Number'),
-        r"[-+]?\d+(\.\d+)?[eE][-+]?\d+": lambda token: ValueAtom(float(token), 'Number'),
         r"(?s)^\".*\"$": lambda token: ValueAtom(str(token[1:-1]), 'String'),
         "\'[^\']\'": lambda token: ValueAtom(Char(token[1]), 'Char'),
         r"True|False": lambda token: ValueAtom(token == 'True', 'Bool'),
