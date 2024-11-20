@@ -1822,9 +1822,9 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"isnan-math"), move |_| { isnan_math_op.clone() });
     let isinf_math_op = Atom::gnd(stdlib_math::IsInfMathOp{});
     tref.register_token(regex(r"isinf-math"), move |_| { isinf_math_op.clone() });
-    tref.register_token(regex(r"consts_PI"),
+    tref.register_token(regex(r"PI"),
                         |_| { Atom::gnd(Number::Float(std::f64::consts::PI)) });
-    tref.register_token(regex(r"consts_EXP"),
+    tref.register_token(regex(r"EXP"),
                         |_| { Atom::gnd(Number::Float(std::f64::consts::E)) });
 
     #[cfg(feature = "pkg_mgmt")]
