@@ -397,6 +397,7 @@ mod tests {
     #[test]
     fn metta_pow_math() {
         assert_eq!(run_program(&format!("!(pow-math 5 2)")), Ok(vec![vec![expr!({Number::Integer(5_i64.pow(2))})]]));
+        assert_eq!(run_program(&format!("!(pow-math 5 200000000000000)")), Ok(vec![vec![expr!("Error" ({ PowMathOp{} } {Number::Integer(5)} {Number::Integer(200000000000000)}) "power argument is too big, try using float value")]]));
         assert_eq!(run_program(&format!("!(pow-math 5.5 2.3)")), Ok(vec![vec![expr!({Number::Float(5.5_f64.powf(2.3))})]]));
         assert_eq!(run_program(&format!("!(pow-math A 2)")), Ok(vec![vec![expr!("Error" ({ PowMathOp{} } "A" {Number::Integer(2)}) "pow-math expects two arguments: number (base) and number (power)")]]));
     }
@@ -509,6 +510,8 @@ mod tests {
     fn pow_math_op() {
         let res = PowMathOp {}.execute(&mut vec![expr!({Number::Integer(5)}), expr!({Number::Integer(2)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(5_i64.pow(2))})]);
+        let res = PowMathOp {}.execute(&mut vec![expr!({Number::Integer(2)}), expr!({Number::Integer(200000000000000)})]);
+        assert_eq!(res, Err(ExecError::from("power argument is too big, try using float value")));
         let res = PowMathOp {}.execute(&mut vec![expr!({Number::Float(5.5)}), expr!({Number::Float(2.3)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Float(5.5_f64.powf(2.3))})]);
         let res = PowMathOp {}.execute(&mut vec![expr!("A"), expr!({Number::Integer(2)})]);

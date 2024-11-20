@@ -97,18 +97,11 @@
     (@param "Index")))
   (@return "Atom from an expression in the place defined by index. Error if index is out of bounds"))
 
-(@doc powi-math
+(@doc pow-math
   (@desc "Takes base (first argument) and power (second argument) and returns result of a power function (base ^ power)")
   (@params (
-    (@param "Base. Could be float")
-    (@param "Power. Only integer")))
-  (@return "Result of a power function"))
-
-(@doc powf-math
-  (@desc "Takes base (first argument) and power (second argument) and returns result of a power function (base ^ power)")
-  (@params (
-    (@param "Base. Could be float")
-    (@param "Power. Could be float")))
+    (@param "Base")
+    (@param "Power")))
   (@return "Result of a power function"))
 
 (@doc sqrt-math
