@@ -1,3 +1,6 @@
+#[macro_use]
+pub mod stdlib_math;
+
 use crate::*;
 use crate::space::*;
 use crate::metta::*;
@@ -13,7 +16,7 @@ use crate::common::multitrie::MultiTrie;
 use crate::space::grounding::atom_to_trie_key;
 #[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::{git_catalog::ModuleGitLocation, mod_name_from_url, pkg_mgmt::UpdateMode};
-use crate::metta::runner::stdlib_math;
+// use crate::metta::runner::stdlib_minimal::stdlib_math;
 
 use std::convert::TryInto;
 use std::rc::Rc;

@@ -91,9 +91,6 @@ use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterS
 pub mod stdlib_minimal;
 use stdlib_minimal::CoreLibLoader;
 
-#[macro_use]
-pub mod stdlib_math;
-
 mod builtin_mods;
 use builtin_mods::*;
 

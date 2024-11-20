@@ -4,7 +4,7 @@ use crate::metta::*;
 
 use std::convert::TryInto;
 
-use super::arithmetics::*;
+use crate::metta::runner::arithmetics::*;
 
 
 macro_rules! grounded_op {
