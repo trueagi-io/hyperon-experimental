@@ -77,8 +77,11 @@ impl Grounded for AbsMathOp {
 impl CustomExecute for AbsMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("abs-math expects one argument: number");
-        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
-        Ok(vec![Atom::gnd(Number::Float(input.abs()))])
+        let input = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        match input {
+            Number::Integer(n) => Ok(vec![Atom::gnd(Number::Integer(n.abs()))]),
+            Number::Float(f) => Ok(vec![Atom::gnd(Number::Float(f.abs()))])
+        }
     }
 }
 
