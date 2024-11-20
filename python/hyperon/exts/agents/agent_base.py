@@ -174,13 +174,14 @@ class BaseListeningAgent(AgentObject):
     def __init__(self, path=None, atoms={}, include_paths=None, code=None):
         super().__init__(path, atoms, include_paths, code)
         self.messages = Queue()
-        self.running = True
+        self.running = False
         self._output = []
         self.lock = threading.RLock()
 
     def start(self,  *args):
         if not args:
             args = ()
+        self.running = True
         st = StreamMethod(self.messages_processor, args)
         st.start()
 
