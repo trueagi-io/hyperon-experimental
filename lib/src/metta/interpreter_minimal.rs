@@ -278,6 +278,7 @@ fn is_embedded_op(atom: &Atom) -> bool {
     let expr = atom_as_slice(&atom);
     match expr {
         Some([op, ..]) => *op == EVAL_SYMBOL
+            || *op == EVALC_SYMBOL
             || *op == CHAIN_SYMBOL
             || *op == UNIFY_SYMBOL
             || *op == CONS_ATOM_SYMBOL
@@ -375,6 +376,9 @@ fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, 
             Some([op, ..]) if *op == EVAL_SYMBOL => {
                 eval(context, stack, bindings)
             },
+            Some([op, ..]) if *op == EVALC_SYMBOL => {
+                evalc(context, stack, bindings)
+            },
             Some([op, ..]) if *op == CHAIN_SYMBOL => {
                 chain(stack, bindings)
             },
@@ -427,6 +431,20 @@ fn finished_result(atom: Atom, bindings: Bindings, prev: Option<Rc<RefCell<Stack
     vec![InterpretedAtom(Stack::finished(prev, atom), bindings)]
 }
 
+fn evalc<'a, T: Space>(_context: &InterpreterContext<T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let Stack{ prev, atom: eval, ret: _, finished: _, vars } = stack;
+    let (to_eval, space) = match_atom!{
+        eval ~ [_op, to_eval, space]
+            if space.as_gnd::<DynSpace>().is_some() => (to_eval, space),
+        _ => {
+            let error = format!("expected: ({} <atom> <space>), found: {}", EVALC_SYMBOL, eval);
+            return finished_result(error_msg(eval, error), bindings, prev);
+        }
+    };
+    let space = space.as_gnd::<DynSpace>().unwrap();
+    eval_impl(to_eval, space, bindings, prev, vars)
+}
+
 fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     let Stack{ prev, atom: eval, ret: _, finished: _, vars } = stack;
     let to_eval = match_atom!{
@@ -436,6 +454,10 @@ fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: B
             return finished_result(error_msg(eval, error), bindings, prev);
         }
     };
+    eval_impl(to_eval, &context.space, bindings, prev, vars)
+}
+
+fn eval_impl<'a, T: Space>(to_eval: Atom, space: T, bindings: Bindings, prev: Option<Rc<RefCell<Stack>>>, vars: Variables) -> Vec<InterpretedAtom> {
     let to_eval = apply_bindings_to_atom_move(to_eval, &bindings);
     log::debug!("eval: to_eval: {}", to_eval);
     match atom_as_slice(&to_eval) {
@@ -476,7 +498,7 @@ fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: B
         },
         _ if is_embedded_op(&to_eval) =>
             vec![InterpretedAtom(atom_to_stack(to_eval, prev), bindings)],
-        _ => query(&context.space, prev, to_eval, bindings, vars),
+        _ => query(space, prev, to_eval, bindings, vars),
     }
 }
 
@@ -1315,7 +1337,7 @@ fn metta_call(args: Atom, bindings: Bindings) -> MettaResult {
             // interpreter decides we need to match it then calling eval will
             // analyze the expression again and may call grounded op instead of
             // matching.
-            Atom::expr([CHAIN_SYMBOL, Atom::expr([EVAL_SYMBOL, atom.clone()]), result.clone(),
+            Atom::expr([CHAIN_SYMBOL, Atom::expr([EVALC_SYMBOL, atom.clone(), space.clone()]), result.clone(),
                 Atom::expr([CHAIN_SYMBOL, call_native!(metta_call_return, Atom::expr([atom, result, typ, space])), ret.clone(),
                     return_atom(ret)
                 ])
@@ -1867,6 +1889,16 @@ mod tests {
             (= (foo $x) a)
         "));
         let result = interpret(&space, &Atom::expr([METTA_SYMBOL, expr!("foo" "a"), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]));
+        assert_eq!(result, Ok(vec![metta_atom("a")]));
+    }
+
+    #[test]
+    fn run_metta_using_context() {
+        let outer = DynSpace::new(space(""));
+        let nested = DynSpace::new(space("
+            (= (foo $x) $x)
+        "));
+        let result = interpret(&outer, &Atom::expr([METTA_SYMBOL, expr!("foo" "a"), ATOM_TYPE_UNDEFINED, Atom::gnd(nested)]));
         assert_eq!(result, Ok(vec![metta_atom("a")]));
     }
 }
