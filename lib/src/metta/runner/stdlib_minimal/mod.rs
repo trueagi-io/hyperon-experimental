@@ -1,3 +1,6 @@
+#[macro_use]
+pub mod stdlib_math;
+
 use crate::*;
 use crate::space::*;
 use crate::metta::*;
@@ -48,6 +51,8 @@ macro_rules! grounded_op {
         }
     }
 }
+
+pub(crate) use grounded_op;
 
 #[derive(Clone, Debug)]
 pub struct ImportOp {
@@ -1785,6 +1790,42 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"intersection-atom"), move |_| { intersection_op.clone() });
     let union_op = Atom::gnd(UnionAtomOp{});
     tref.register_token(regex(r"union-atom"), move |_| { union_op.clone() });
+    let pow_math_op = Atom::gnd(stdlib_math::PowMathOp {});
+    tref.register_token(regex(r"pow-math"), move |_| { pow_math_op.clone() });
+    let sqrt_math_op = Atom::gnd(stdlib_math::SqrtMathOp {});
+    tref.register_token(regex(r"sqrt-math"), move |_| { sqrt_math_op.clone() });
+    let abs_math_op = Atom::gnd(stdlib_math::AbsMathOp {});
+    tref.register_token(regex(r"abs-math"), move |_| { abs_math_op.clone() });
+    let log_math_op = Atom::gnd(stdlib_math::LogMathOp {});
+    tref.register_token(regex(r"log-math"), move |_| { log_math_op.clone() });
+    let trunc_math_op = Atom::gnd(stdlib_math::TruncMathOp {});
+    tref.register_token(regex(r"trunc-math"), move |_| { trunc_math_op.clone() });
+    let ceil_math_op = Atom::gnd(stdlib_math::CeilMathOp {});
+    tref.register_token(regex(r"ceil-math"), move |_| { ceil_math_op.clone() });
+    let floor_math_op = Atom::gnd(stdlib_math::FloorMathOp{});
+    tref.register_token(regex(r"floor-math"), move |_| { floor_math_op.clone() });
+    let round_math_op = Atom::gnd(stdlib_math::RoundMathOp{});
+    tref.register_token(regex(r"round-math"), move |_| { round_math_op.clone() });
+    let sin_math_op = Atom::gnd(stdlib_math::SinMathOp{});
+    tref.register_token(regex(r"sin-math"), move |_| { sin_math_op.clone() });
+    let asin_math_op = Atom::gnd(stdlib_math::AsinMathOp{});
+    tref.register_token(regex(r"asin-math"), move |_| { asin_math_op.clone() });
+    let cos_math_op = Atom::gnd(stdlib_math::CosMathOp{});
+    tref.register_token(regex(r"cos-math"), move |_| { cos_math_op.clone() });
+    let acos_math_op = Atom::gnd(stdlib_math::AcosMathOp{});
+    tref.register_token(regex(r"acos-math"), move |_| { acos_math_op.clone() });
+    let tan_math_op = Atom::gnd(stdlib_math::TanMathOp{});
+    tref.register_token(regex(r"tan-math"), move |_| { tan_math_op.clone() });
+    let atan_math_op = Atom::gnd(stdlib_math::AtanMathOp{});
+    tref.register_token(regex(r"atan-math"), move |_| { atan_math_op.clone() });
+    let isnan_math_op = Atom::gnd(stdlib_math::IsNanMathOp{});
+    tref.register_token(regex(r"isnan-math"), move |_| { isnan_math_op.clone() });
+    let isinf_math_op = Atom::gnd(stdlib_math::IsInfMathOp{});
+    tref.register_token(regex(r"isinf-math"), move |_| { isinf_math_op.clone() });
+    tref.register_token(regex(r"PI"),
+                        |_| { Atom::gnd(Number::Float(std::f64::consts::PI)) });
+    tref.register_token(regex(r"EXP"),
+                        |_| { Atom::gnd(Number::Float(std::f64::consts::E)) });
 
     #[cfg(feature = "pkg_mgmt")]
     pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
