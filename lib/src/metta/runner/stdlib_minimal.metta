@@ -38,6 +38,14 @@
   (@return "Result of evaluation"))
 (: eval (-> Atom Atom))
 
+(@doc evalc
+  (@desc "Evaluates input atom, makes one step of the evaluation")
+  (@params (
+    (@param "Atom to be evaluated, can be reduced via equality expression (= ...) or by calling a grounded function")
+    (@param "Space to evaluate atom in its context")))
+  (@return "Result of evaluation"))
+(: evalc (-> Atom Grounded Atom))
+
 (@doc chain
   (@desc "Evaluates first argument, binds it to the variable (second argument) and then evaluates third argument which contains (or not) mentioned variable")
   (@params (

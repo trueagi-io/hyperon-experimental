@@ -30,6 +30,7 @@ pub const NO_VALID_ALTERNATIVES : Atom = sym!("NoValidAlternatives");
 pub const EMPTY_SYMBOL : Atom = sym!("Empty");
 
 pub const EVAL_SYMBOL : Atom = sym!("eval");
+pub const EVALC_SYMBOL : Atom = sym!("evalc");
 pub const CHAIN_SYMBOL : Atom = sym!("chain");
 pub const UNIFY_SYMBOL : Atom = sym!("unify");
 pub const DECONS_ATOM_SYMBOL : Atom = sym!("decons-atom");
