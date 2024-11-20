@@ -127,8 +127,11 @@ impl Grounded for TruncMathOp {
 impl CustomExecute for TruncMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("trunc-math expects one argument: input number");
-        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
-        Ok(vec![Atom::gnd(Number::Float(input.trunc()))])
+        let input = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        match input {
+            Number::Integer(n) => Ok(vec![Atom::gnd(Number::Integer(n))]),
+            Number::Float(f) => Ok(vec![Atom::gnd(Number::Float(f.trunc()))])
+        }
     }
 }
 
@@ -150,8 +153,11 @@ impl Grounded for CeilMathOp {
 impl CustomExecute for CeilMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("ceil-math expects one argument: input number");
-        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
-        Ok(vec![Atom::gnd(Number::Float(input.ceil()))])
+        let input = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        match input {
+            Number::Integer(n) => Ok(vec![Atom::gnd(Number::Integer(n))]),
+            Number::Float(f) => Ok(vec![Atom::gnd(Number::Float(f.ceil()))])
+        }
     }
 }
 
@@ -173,8 +179,11 @@ impl Grounded for FloorMathOp {
 impl CustomExecute for FloorMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("floor-math expects one argument: input number");
-        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
-        Ok(vec![Atom::gnd(Number::Float(input.floor()))])
+        let input = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        match input {
+            Number::Integer(n) => Ok(vec![Atom::gnd(Number::Integer(n))]),
+            Number::Float(f) => Ok(vec![Atom::gnd(Number::Float(f.floor()))])
+        }
     }
 }
 
@@ -196,8 +205,11 @@ impl Grounded for RoundMathOp {
 impl CustomExecute for RoundMathOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("round-math expects one argument: input number");
-        let input: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
-        Ok(vec![Atom::gnd(Number::Float(input.round()))])
+        let input = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+        match input {
+            Number::Integer(n) => Ok(vec![Atom::gnd(Number::Integer(n))]),
+            Number::Float(f) => Ok(vec![Atom::gnd(Number::Float(f.round()))])
+        }
     }
 }
 
