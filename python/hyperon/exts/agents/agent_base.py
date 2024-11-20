@@ -30,15 +30,19 @@ class StreamMethod(threading.Thread):
         self._result = Queue()
         self.method = method
         self.args = args
+
     def run(self):
         for r in self.method(*self.args):
             self._result.put(r)
+
     def __iter__(self):
         return self
+
     def __next__(self):
         if self._result.empty() and not self.is_alive():
             raise StopIteration
         return self._result.get()
+
 
 class AgentObject:
 
@@ -166,6 +170,42 @@ class AgentObject:
             return [E()]
         return st
 
+class BaseListeningAgent(AgentObject):
+    def __init__(self, path=None, atoms={}, include_paths=None, code=None):
+        super().__init__(path, atoms, include_paths, code)
+        self.messages = Queue()
+        self.running = False
+        self._output = []
+        self.lock = threading.RLock()
+
+    def start(self,  *args):
+        if not args:
+            args = ()
+        self.running = True
+        st = StreamMethod(self.messages_processor, args)
+        st.start()
+
+    def message_processor(self, message, *args):
+        return []
+
+    def messages_processor(self, *args):
+        while self.running:
+            if not self.messages.empty():
+                m = self.messages.get()
+                with self.lock:
+                    self._output = self.message_processor(m, *args)
+        return []
+
+    def stop(self):
+        self.running = False
+        return []
+
+    def input(self, msg):
+        self.messages.put(msg)
+        return []
+
+    def get_output(self):
+        return self._output
 
 @register_atoms(pass_metta=True)
 def agent_atoms(metta):
