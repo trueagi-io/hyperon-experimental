@@ -408,14 +408,7 @@ impl CustomExecute for IsInfMathOp {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::text::SExprParser;
-    use crate::metta::runner::EnvBuilder;
-    use crate::metta::runner::Metta;
-
-    fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.run(SExprParser::new(program))
-    }
+    use crate::metta::runner::stdlib_minimal::tests::run_program;
 
     #[test]
     fn metta_pow_math() {

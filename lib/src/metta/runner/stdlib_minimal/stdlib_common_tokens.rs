@@ -768,11 +768,7 @@ mod tests {
     use crate::metta::runner::EnvBuilder;
     use crate::matcher::atoms_are_equivalent;
     use crate::common::test_utils::metta_space;
-
-    fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.run(SExprParser::new(program))
-    }
+    use crate::metta::runner::stdlib_minimal::tests::run_program;
 
     #[test]
     fn get_type_op() {

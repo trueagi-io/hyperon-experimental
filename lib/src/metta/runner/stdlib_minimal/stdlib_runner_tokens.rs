@@ -676,7 +676,7 @@ mod tests {
     use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
     use crate::common::test_utils::metta_space;
-
+    use crate::metta::runner::stdlib_minimal::tests::run_program;
     use std::convert::TryFrom;
     use regex::Regex;
 
@@ -686,11 +686,6 @@ mod tests {
                                                     "Incorrect error message:\nexpected: {:?}\n  actual: {:?}", expected.to_string(), msg),
             _ => assert!(false, "Error is expected as result, {:?} returned", actual),
         }
-    }
-
-    fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.run(SExprParser::new(program))
     }
 
     #[test]

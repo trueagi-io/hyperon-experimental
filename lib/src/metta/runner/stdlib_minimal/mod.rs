@@ -571,7 +571,7 @@ mod tests {
     use std::fmt::Display;
     use regex::Regex;
 
-    fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
+    pub fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
         metta.run(SExprParser::new(program))
     }
