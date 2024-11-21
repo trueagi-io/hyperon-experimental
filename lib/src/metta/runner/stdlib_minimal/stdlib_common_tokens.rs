@@ -6,7 +6,6 @@ use crate::metta::runner::{Metta, RunContext};
 use crate::common::multitrie::MultiTrie;
 use crate::space::grounding::atom_to_trie_key;
 #[cfg(feature = "pkg_mgmt")]
-// use crate::metta::runner::{git_catalog::ModuleGitLocation, mod_name_from_url, pkg_mgmt::UpdateMode};
 
 use std::convert::TryInto;
 
