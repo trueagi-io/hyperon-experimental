@@ -6,7 +6,7 @@ use crate::atom::matcher::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::types::*;
-use crate::metta::runner::stdlib_minimal::IfEqualOp;
+use crate::metta::runner::stdlib_minimal::stdlib_common_tokens::IfEqualOp;
 use crate::common::collections::CowArray;
 
 use std::fmt::{Debug, Display, Formatter};
