@@ -2,7 +2,6 @@
 
 pub mod text;
 pub mod interpreter;
-// pub use interpreter_minimal as interpreter;
 pub mod types;
 pub mod runner;
 
