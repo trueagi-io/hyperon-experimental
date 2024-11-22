@@ -492,6 +492,8 @@ fn eval_impl<'a, T: Space>(to_eval: Atom, space: T, bindings: Bindings, prev: Op
                             // TODO: we could remove ExecError::NoReduce and explicitly
                             // return NOT_REDUCIBLE_SYMBOL from the grounded function instead.
                             finished_result(return_not_reducible(), bindings, prev),
+                        Err(ExecError::IncorrectArgument) =>
+                            finished_result(return_not_reducible(), bindings, prev),
                     }
                 },
             }
@@ -1464,7 +1466,13 @@ mod tests {
     #[test]
     fn interpret_atom_evaluate_grounded_expression_noreduce() {
         let result = call_interpret(&space(""), &expr!("eval" ({NonReducible()} {6})));
-        assert_eq!(result, vec![expr!("NotReducible")]);
+        assert_eq!(result, vec![NOT_REDUCIBLE_SYMBOL]);
+    }
+
+    #[test]
+    fn interpret_atom_evaluate_grounded_expression_incorrect_argument() {
+        let result = call_interpret(&space(""), &expr!("eval" ({IncorrectArgument()} {6.5})));
+        assert_eq!(result, vec![NOT_REDUCIBLE_SYMBOL]);
     }
 
     #[test]
@@ -1828,6 +1836,30 @@ mod tests {
     impl Display for NonReducible {
         fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
             write!(f, "non-reducible")
+        }
+    }
+
+    #[derive(PartialEq, Clone, Debug)]
+    struct IncorrectArgument();
+
+    impl Grounded for IncorrectArgument {
+        fn type_(&self) -> Atom {
+            expr!("->" "u32" "u32")
+        }
+        fn as_execute(&self) -> Option<&dyn CustomExecute> {
+            Some(self)
+        }
+    }
+
+    impl CustomExecute for IncorrectArgument {
+        fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+            Err(ExecError::IncorrectArgument)
+        }
+    }
+
+    impl Display for IncorrectArgument {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "incorrect-argument")
         }
     }
 

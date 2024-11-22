@@ -332,6 +332,15 @@ class NoReduceError(Exception):
     """Custom exception; raised when a reduction operation cannot be performed."""
     pass
 
+class IncorrectArgumentError(Exception):
+    """
+    Argument is not recognized by function implementation. It can be
+    argument of incorrect type or in incorrect format. Interpreter handles
+    this error similarly to the situation when pure function definition
+    is not matched.
+    """
+    pass
+
 class MettaError(Exception):
     """Custom exception; raised when a error should be returned from OperationAtom,
        , but we don't want to output Python error stack."""

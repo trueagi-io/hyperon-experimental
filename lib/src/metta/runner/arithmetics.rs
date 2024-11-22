@@ -245,7 +245,7 @@ macro_rules! def_binary_number_op {
 
         impl CustomExecute for $name {
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-                let arg_error = || ExecError::from(concat!(stringify!($op), " expects two number arguments"));
+                let arg_error = || ExecError::IncorrectArgument;
                 let a = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
                 let b = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?;
 

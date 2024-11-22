@@ -166,6 +166,7 @@ exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _arg
     py::object hyperon = py::module_::import("hyperon.atoms");
     py::function _priv_call_execute_on_grounded_atom = hyperon.attr("_priv_call_execute_on_grounded_atom");
     py::handle NoReduceError = hyperon.attr("NoReduceError");
+    py::handle IncorrectArgumentError = hyperon.attr("IncorrectArgumentError");
     py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
     CAtom pytyp = static_cast<GroundedObject const*>(_cgnd)->typ;
     try {
@@ -185,6 +186,8 @@ exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _arg
     } catch (py::error_already_set &e) {
         if (e.matches(NoReduceError)) {
             return exec_error_no_reduce();
+        } else if (e.matches(IncorrectArgumentError)) {
+            return exec_error_incorrect_argument();
         } else {
             char message[4096];
             snprintf(message, lenghtof(message), "Exception caught:\n%s", e.what());

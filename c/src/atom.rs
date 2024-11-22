@@ -778,6 +778,18 @@ pub extern "C" fn exec_error_no_reduce() -> exec_error_t {
     ExecError::NoReduce.into()
 }
 
+/// @brief Creates a new `exec_error_t` representing a "Incorrect Argument" status, telling the
+/// MeTTa interpreter that argument was not recognized by the function implementation.
+/// @ingroup grounded_atom_group
+/// @return The newly created `exec_error_t`
+/// @note The caller must take ownership responsibility for the returned `exec_error_t`, and ultimately free
+///   it with `exec_error_free()` or return it from an `execute` function
+///
+#[no_mangle]
+pub extern "C" fn exec_error_incorrect_argument() -> exec_error_t {
+    ExecError::IncorrectArgument.into()
+}
+
 /// @brief Creates a new `exec_error_t` representing a "No Error" status.  This is the default interpreter status
 /// @ingroup grounded_atom_group
 /// @return The newly created `exec_error_t`

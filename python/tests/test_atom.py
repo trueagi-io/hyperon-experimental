@@ -124,6 +124,13 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(interpret(space, expr),
                 [E(noReduceAtom, ValueAtom(1))])
 
+    def test_incorrect_argument(self):
+        space = GroundingSpaceRef()
+        expr = E(Atoms.METTA, E(incorrectArgumentAtom, ValueAtom(1)),
+                 AtomType.UNDEFINED, G(space))
+        self.assertEqual(interpret(space, expr),
+                [E(incorrectArgumentAtom, ValueAtom(1))])
+
     def test_match_(self):
         space = GroundingSpaceRef()
         match_atom = MatchableAtomTest(S("MatchableAtom"), type_name=None, atom_id=None)
@@ -146,6 +153,10 @@ x2Atom = OperationAtom('*2', x2_op, type_names=["Number", "Number"], unwrap=Fals
 def no_reduce_op(atom):
     raise NoReduceError()
 noReduceAtom = OperationAtom('no-reduce', no_reduce_op, unwrap=False)
+
+def incorrect_argument_op(atom):
+    raise IncorrectArgumentError()
+incorrectArgumentAtom = OperationAtom('incorrect-argument', incorrect_argument_op, unwrap=False)
 
 class GroundedNoCopy:
     pass
