@@ -231,7 +231,7 @@ impl<T: Space> std::fmt::Display for InterpreterState<T> {
 }
 
 /// Initialize interpreter and returns the starting interpreter state.
-/// See [crate::metta::interpreter_minimal] for algorithm explanation.
+/// See [crate::metta::interpreter] for algorithm explanation.
 ///
 /// # Arguments
 /// * `space` - atomspace to query for interpretation
@@ -246,7 +246,7 @@ pub fn interpret_init<T: Space>(space: T, expr: &Atom) -> InterpreterState<T> {
 }
 
 /// Perform next step of the interpretation return the resulting interpreter
-/// state. See [crate::metta::interpreter_minimal] for algorithm explanation.
+/// state. See [crate::metta::interpreter] for algorithm explanation.
 ///
 /// # Arguments
 /// * `state` - interpreter state from the previous step.
@@ -558,13 +558,13 @@ fn query<'a, T: Space>(space: T, prev: Option<Rc<RefCell<Stack>>>, to_eval: Atom
     let var_x = &VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, to_eval.clone(), Atom::Variable(var_x.clone())]);
     let results = space.query(&query);
-    log::debug!("interpreter_minimal::query: query: {}", query);
-    log::debug!("interpreter_minimal::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
+    log::debug!("interpreter::query: query: {}", query);
+    log::debug!("interpreter::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
         results.len(), bindings.len(), results, bindings);
     let call_stack = call_to_stack(to_eval, vars, prev.clone());
     let result = |res, bindings| eval_result(prev.clone(), res, &call_stack, bindings);
     let results: Vec<InterpretedAtom> = results.into_iter().flat_map(|b| {
-        log::debug!("interpreter_minimal::query: b: {}", b);
+        log::debug!("interpreter::query: b: {}", b);
         b.merge_v2(&bindings).into_iter()
     }).filter_map(move |b| {
         b.resolve(&var_x).map_or(None, |res| {

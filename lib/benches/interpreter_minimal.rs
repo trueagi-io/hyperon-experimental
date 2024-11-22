@@ -1,5 +1,5 @@
 #![feature(test)]
-mod interpreter_minimal_bench {
+mod interpreter_bench {
 
 extern crate test;
 
@@ -8,7 +8,7 @@ use test::Bencher;
 use hyperon::*;
 use hyperon::space::grounding::*;
 use hyperon::metta::*;
-use hyperon::metta::interpreter_minimal::*;
+use hyperon::metta::interpreter::*;
 
 fn chain_atom(size: isize) -> Atom {
     let mut atom = Atom::expr([CHAIN_SYMBOL, Atom::sym("A"), Atom::var("x"), Atom::var("x")]);
