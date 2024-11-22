@@ -88,8 +88,8 @@ pub use environment::{Environment, EnvBuilder};
 use super::interpreter::{interpret, interpret_init, interpret_step, InterpreterState};
 
 #[macro_use]
-pub mod stdlib_minimal;
-use stdlib_minimal::CoreLibLoader;
+pub mod stdlib;
+use stdlib::CoreLibLoader;
 
 mod builtin_mods;
 use builtin_mods::*;

@@ -7,8 +7,8 @@ use crate::metta::runner::*;
 
 use regex::Regex;
 
-use super::interpreter_minimal::interpret;
-use super::stdlib_minimal::*;
+use super::interpreter::interpret;
+use super::stdlib::*;
 
 mod mod_names;
 pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, mod_name_remove_prefix, ModNameNodeDisplayWrapper};
