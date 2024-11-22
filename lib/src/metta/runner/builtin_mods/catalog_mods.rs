@@ -3,7 +3,7 @@ use crate::space::grounding::GroundingSpace;
 use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE};
 use crate::metta::runner::{Metta, ModuleLoader, RunContext, DynSpace};
 use crate::metta::runner::pkg_mgmt::{UpdateMode, ManagedCatalog};
-use crate::metta::runner::stdlib_minimal::{regex, unit_result};
+use crate::metta::runner::stdlib::{regex, unit_result};
 
 //DISCUSSION: We want to expose more of the pkg_mgmt / catalog system to MeTTa through programmatic
 // interfaces, but the details are unclear.  Most importantly, the use cases are unclear, and those

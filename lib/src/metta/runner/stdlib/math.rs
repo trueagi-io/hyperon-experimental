@@ -4,8 +4,13 @@ use crate::metta::*;
 
 use std::convert::TryInto;
 
+use crate::space::DynSpace;
+use crate::common::shared::Shared;
+use crate::metta::text::Tokenizer;
 use crate::metta::runner::arithmetics::*;
-use crate::metta::runner::stdlib_minimal::grounded_op;
+use crate::metta::runner::stdlib::grounded_op;
+use crate::metta::runner::Metta;
+use crate::metta::runner::stdlib::regex;
 
 #[derive(Clone, Debug)]
 pub struct PowMathOp {}
@@ -405,17 +410,55 @@ impl CustomExecute for IsInfMathOp {
     }
 }
 
+//TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
+// to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
+pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, _space: &DynSpace, metta: &Metta) {
+
+    let pow_math_op = Atom::gnd(PowMathOp {});
+    tref.register_token(regex(r"pow-math"), move |_| { pow_math_op.clone() });
+    let sqrt_math_op = Atom::gnd(SqrtMathOp {});
+    tref.register_token(regex(r"sqrt-math"), move |_| { sqrt_math_op.clone() });
+    let abs_math_op = Atom::gnd(AbsMathOp {});
+    tref.register_token(regex(r"abs-math"), move |_| { abs_math_op.clone() });
+    let log_math_op = Atom::gnd(LogMathOp {});
+    tref.register_token(regex(r"log-math"), move |_| { log_math_op.clone() });
+    let trunc_math_op = Atom::gnd(TruncMathOp {});
+    tref.register_token(regex(r"trunc-math"), move |_| { trunc_math_op.clone() });
+    let ceil_math_op = Atom::gnd(CeilMathOp {});
+    tref.register_token(regex(r"ceil-math"), move |_| { ceil_math_op.clone() });
+    let floor_math_op = Atom::gnd(FloorMathOp{});
+    tref.register_token(regex(r"floor-math"), move |_| { floor_math_op.clone() });
+    let round_math_op = Atom::gnd(RoundMathOp{});
+    tref.register_token(regex(r"round-math"), move |_| { round_math_op.clone() });
+    let sin_math_op = Atom::gnd(SinMathOp{});
+    tref.register_token(regex(r"sin-math"), move |_| { sin_math_op.clone() });
+    let asin_math_op = Atom::gnd(AsinMathOp{});
+    tref.register_token(regex(r"asin-math"), move |_| { asin_math_op.clone() });
+    let cos_math_op = Atom::gnd(CosMathOp{});
+    tref.register_token(regex(r"cos-math"), move |_| { cos_math_op.clone() });
+    let acos_math_op = Atom::gnd(AcosMathOp{});
+    tref.register_token(regex(r"acos-math"), move |_| { acos_math_op.clone() });
+    let tan_math_op = Atom::gnd(TanMathOp{});
+    tref.register_token(regex(r"tan-math"), move |_| { tan_math_op.clone() });
+    let atan_math_op = Atom::gnd(AtanMathOp{});
+    tref.register_token(regex(r"atan-math"), move |_| { atan_math_op.clone() });
+    let isnan_math_op = Atom::gnd(IsNanMathOp{});
+    tref.register_token(regex(r"isnan-math"), move |_| { isnan_math_op.clone() });
+    let isinf_math_op = Atom::gnd(IsInfMathOp{});
+    tref.register_token(regex(r"isinf-math"), move |_| { isinf_math_op.clone() });
+    tref.register_token(regex(r"PI"),
+                        |_| { Atom::gnd(Number::Float(std::f64::consts::PI)) });
+    tref.register_token(regex(r"EXP"),
+                        |_| { Atom::gnd(Number::Float(std::f64::consts::E)) });
+
+    #[cfg(feature = "pkg_mgmt")]
+    metta::runner::stdlib::pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::text::SExprParser;
-    use crate::metta::runner::EnvBuilder;
-    use crate::metta::runner::Metta;
-
-    fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.run(SExprParser::new(program))
-    }
+    use crate::metta::runner::stdlib::tests::run_program;
 
     #[test]
     fn metta_pow_math() {

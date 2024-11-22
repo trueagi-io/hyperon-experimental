@@ -1,8 +1,8 @@
 //! Contains MeTTa specific types, constants and functions.
 
 pub mod text;
-pub mod interpreter_minimal;
-pub use interpreter_minimal as interpreter;
+pub mod interpreter;
+// pub use interpreter_minimal as interpreter;
 pub mod types;
 pub mod runner;
 
