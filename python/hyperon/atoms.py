@@ -206,7 +206,10 @@ def _priv_atom_gnd(obj, type):
         catom = hp.atom_space(obj.cspace)
     elif isinstance(obj, ValueObject):
         value = obj.value
-        if isinstance(value, int) and not isinstance(value, bool):
+        if isinstance(value, bool):
+            # FIXME: add assert on type like for space
+            catom = hp.atom_bool(value)
+        elif isinstance(value, int):
             # FIXME: add assert on type like for space
             catom = hp.atom_int(value)
         elif isinstance(value, float):
@@ -579,7 +582,7 @@ def PrimitiveAtom(value, type_name=None, atom_id=None):
     converts Python primitives into MeTTa ones. This function is added to
     override this rule if needed.
     """
-    PRIMITIVE_TYPES = (int, float)
+    PRIMITIVE_TYPES = (int, float, bool)
     assert isinstance(value, PRIMITIVE_TYPES), f"Primitive value {PRIMITIVE_TYPES} is expected"
     type = _type_sugar(type_name)
     return GroundedAtom(hp.atom_py(ValueObject(value, atom_id), type.catom))

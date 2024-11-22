@@ -26,20 +26,6 @@ class Char:
             return self.char == other.char
         return False
 
-@register_atoms
-def bool_ops():
-    equalAtom = OperationAtom('==', lambda a, b: [ValueAtom(a == b, 'Bool')],
-                              ['$t', '$t', 'Bool'], unwrap=False)
-    orAtom = OperationAtom('or', lambda a, b: a or b, ['Bool', 'Bool', 'Bool'])
-    andAtom = OperationAtom('and', lambda a, b: a and b, ['Bool', 'Bool', 'Bool'])
-    notAtom = OperationAtom('not', lambda a: not a, ['Bool', 'Bool'])
-    return {
-        r"==": equalAtom,
-        r"or": orAtom,
-        r"and": andAtom,
-        r"not": notAtom
-    }
-
 class RegexMatchableObject(MatchableObject):
     ''' To match atoms with regular expressions'''
 
@@ -95,7 +81,6 @@ def type_tokens():
     return {
         r"(?s)^\".*\"$": lambda token: ValueAtom(str(token[1:-1]), 'String'),
         "\'[^\']\'": lambda token: ValueAtom(Char(token[1]), 'Char'),
-        r"True|False": lambda token: ValueAtom(token == 'True', 'Bool'),
         r'regex:"[^"]*"': lambda token: G(RegexMatchableObject(token),  AtomType.UNDEFINED)
     }
 

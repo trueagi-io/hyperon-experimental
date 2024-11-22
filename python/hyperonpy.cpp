@@ -680,6 +680,9 @@ PYBIND11_MODULE(hyperonpy, m) {
             atom_t typ = atom_clone(ctyp.ptr());
             return CAtom(atom_gnd(new GroundedObject(object, typ)));
         }, "Create general grounded atom from Python object");
+    m.def("atom_bool", [](bool b) {
+            return CAtom(atom_bool(b));
+        }, "Create bool grounded atom");
     m.def("atom_int", [](long long n) {
             return CAtom(atom_int(n));
         }, "Create int grounded atom");

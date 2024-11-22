@@ -14,6 +14,7 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon::matcher::{Bindings, BindingsSet};
+use hyperon::metta::runner::arithmetics::Bool;
 use hyperon::metta::runner::arithmetics::Number;
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
@@ -268,6 +269,16 @@ pub unsafe extern "C" fn atom_var_parse_name(name: *const c_char) -> atom_t {
 #[no_mangle]
 pub extern "C" fn atom_gnd(gnd: *mut gnd_t) -> atom_t {
     Atom::gnd(CGrounded(AtomicPtr::new(gnd))).into()
+}
+
+/// @ingroup atom_group
+/// @param[in]  b  boolean value
+/// @return an `atom_t` for the Bool Grounded atom
+/// @note The caller must take ownership responsibility for the returned `atom_t`
+///
+#[no_mangle]
+pub extern "C" fn atom_bool(b: bool) -> atom_t {
+    Atom::gnd(Bool(b)).into()
 }
 
 /// @ingroup atom_group
