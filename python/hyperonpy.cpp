@@ -942,7 +942,9 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_TYPE(EXPRESSION, "Expression")
         ADD_TYPE(GROUNDED, "Grounded")
         ADD_TYPE(GROUNDED_SPACE, "Space")
-        ADD_TYPE(UNIT, "Unit");
+        ADD_TYPE(UNIT, "Unit")
+        ADD_TYPE(NUMBER, "Number")
+        ADD_TYPE(BOOL, "Bool");
     m.def("check_type", [](CSpace space, CAtom& atom, CAtom& type) {
             return check_type(space.ptr(), atom.ptr(), type.ptr());
         }, "Check if atom is an instance of the passed type");

@@ -619,6 +619,20 @@ pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, 
 ///
 #[no_mangle] pub extern "C" fn ATOM_TYPE_UNIT() -> atom_t { hyperon::metta::UNIT_TYPE.into() }
 
+/// @brief Creates an atom used to indicate that an atom's type is a Number type.
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
+#[no_mangle] pub extern "C" fn ATOM_TYPE_NUMBER() -> atom_t { hyperon::metta::runner::arithmetics::ATOM_TYPE_NUMBER.into() }
+
+/// @brief Creates an atom used to indicate that an atom's type is a Bool type.
+/// @ingroup metta_language_group
+/// @return  The `atom_t` representing the atom
+/// @note The returned `atom_t` must be freed with `atom_free()`
+///
+#[no_mangle] pub extern "C" fn ATOM_TYPE_BOOL() -> atom_t { hyperon::metta::runner::arithmetics::ATOM_TYPE_BOOL.into() }
+
 /// @brief Creates a Symbol atom for the special MeTTa symbol used to indicate empty results
 /// returned by function.
 /// @ingroup metta_language_group

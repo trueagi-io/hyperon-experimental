@@ -124,6 +124,8 @@ class AtomType:
     GROUNDED = Atom._from_catom(hp.CAtomType.GROUNDED)
     GROUNDED_SPACE = Atom._from_catom(hp.CAtomType.GROUNDED_SPACE)
     UNIT = Atom._from_catom(hp.CAtomType.UNIT)
+    NUMBER = Atom._from_catom(hp.CAtomType.NUMBER)
+    BOOL = Atom._from_catom(hp.CAtomType.BOOL)
 
 class Atoms:
 
@@ -207,13 +209,13 @@ def _priv_atom_gnd(obj, type):
     elif isinstance(obj, ValueObject):
         value = obj.value
         if isinstance(value, bool):
-            # FIXME: add assert on type like for space
+            assert type == AtomType.BOOL or type == AtomType.UNDEFINED, f"Grounded bool {obj} can't have a custom type {type}"
             catom = hp.atom_bool(value)
         elif isinstance(value, int):
-            # FIXME: add assert on type like for space
+            assert type == AtomType.NUMBER or type == AtomType.UNDEFINED, f"Grounded int {obj} can't have a custom type {type}"
             catom = hp.atom_int(value)
         elif isinstance(value, float):
-            # FIXME: add assert on type like for space
+            assert type == AtomType.NUMBER or type == AtomType.UNDEFINED, f"Grounded float {obj} can't have a custom type {type}"
             catom = hp.atom_float(value)
     if catom is None:
         assert hasattr(obj, "copy"), f"Method copy should be implemented by grounded object {obj}"

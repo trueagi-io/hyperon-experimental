@@ -48,7 +48,7 @@ class GroundedTypeTest(unittest.TestCase):
         metta = MeTTa(env_builder=Environment.test_env())
         ### Basic functional types
         metta.register_atom(r"id_num", OperationAtom("id_num", lambda x: x, ['Number', 'Number']))
-        metta.register_atom(r"as_int", OperationAtom("as_int", lambda x: x, ['Number', 'Int']))
+        metta.register_atom(r"as_int", OperationAtom("as_int", lambda x: x, ['Number', 'Number']))
         v1 = metta.run("!(id_num (+ 2 2))")[0]
         v2 = metta.run("! 4")[0]
         v3 = metta.run("!(as_int (+ 2 2))")[0]
@@ -163,6 +163,23 @@ class GroundedTypeTest(unittest.TestCase):
         metta.register_atom("return-float", OperationAtom("return-float", lambda: 4.2))
         float = metta.run('!(return-float)', flat=True)[0].get_object()
         self.assertEqual(float, ValueObject(4.2))
+        metta.register_atom("return-bool", OperationAtom("return-bool", lambda: True))
+        float = metta.run('!(return-bool)', flat=True)[0].get_object()
+        self.assertEqual(float, ValueObject(True))
+
+    def test_assert_grounded_value_type(self):
+        with self.assertRaises(AssertionError) as cm:
+            ValueAtom(42, "Int")
+        msg = str(cm.exception)
+        self.assertTrue(msg.startswith("Grounded int 42 can't have a custom type Int"), f"Unexpected message \"{msg}\"")
+        with self.assertRaises(AssertionError) as cm:
+            ValueAtom(4.2, "Float")
+        msg = str(cm.exception)
+        self.assertTrue(msg.startswith("Grounded float 4.2 can't have a custom type Float"), f"Unexpected message \"{msg}\"")
+        with self.assertRaises(AssertionError) as cm:
+            ValueAtom(True, "bool")
+        msg = str(cm.exception)
+        self.assertTrue(msg.startswith("Grounded bool True can't have a custom type bool"), f"Unexpected message \"{msg}\"")
 
 if __name__ == "__main__":
     unittest.main()

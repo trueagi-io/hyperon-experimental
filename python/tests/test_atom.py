@@ -51,8 +51,8 @@ class AtomTest(unittest.TestCase):
     def test_grounded_no_copy(self):
         with self.assertRaises(AssertionError) as context:
             atom = G(GroundedNoCopy(), S("GroundedNoCopy"))
-            self.assertTrue(str(context.exception)
-                .startswith("Method copy should be implemented by grounded object"))
+        self.assertTrue(str(context.exception)
+            .startswith("Method copy should be implemented by grounded object"))
 
     # def test_grounded_execute_default(self):
         # self.assertEqual(ValueAtom(1.0).get_object().execute(VecAtom(),
