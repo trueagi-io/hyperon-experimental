@@ -41,9 +41,11 @@
   (let $x (collapse (get-atoms &m)) (contains $x is-space))
   True)
 
-; FIXME? Now, it is moduleC space.
-;        Should it be `stdlib` atom for a separately imported space
-; !(let $x (collapse (get-atoms &m)) (car-atom $x))
+; FIXME: It is the `stdlib` atom but equality check doesn't work
+;!(import! &stdlib top:stdlib)
+;!(assertEqual
+  ;(let $x (collapse (get-atoms &m)) (car-atom $x))
+  ;&stdlib)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
