@@ -1,5 +1,6 @@
 #[macro_use]
 pub mod math;
+pub mod random;
 
 use crate::*;
 use crate::space::*;
@@ -23,7 +24,6 @@ use std::cell::RefCell;
 use std::fmt::Display;
 use std::collections::HashMap;
 use regex::Regex;
-use rand::Rng;
 
 use super::arithmetics::*;
 use super::string::*;
@@ -1291,69 +1291,6 @@ impl CustomExecute for SubtractionAtomOp {
     }
 }
 
-//TODO: In the current version of rand it is possible for rust to hang if range end's value is too
-// big. In future releases (0.9+) of rand signature of sample_single will be changed and it will be
-// possible to use match construction to cover overflow and other errors. So after library will be
-// upgraded RandomInt and RandomFloat codes should be altered.
-// see comment https://github.com/trueagi-io/hyperon-experimental/pull/791#discussion_r1824355414
-#[derive(Clone, Debug)]
-pub struct RandomIntOp {}
-
-grounded_op!(RandomIntOp, "random-int");
-
-impl Grounded for RandomIntOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for RandomIntOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("random-int expects two arguments: number (start) and number (end)");
-        let start: i64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
-        let end: i64 = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
-        let range = start..end;
-        if range.is_empty() {
-            return Err(ExecError::from("Range is empty"));
-        }
-        let mut rng = rand::thread_rng();
-        Ok(vec![Atom::gnd(Number::Integer(rng.gen_range(range)))])
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct RandomFloatOp {}
-
-grounded_op!(RandomFloatOp, "random-float");
-
-impl Grounded for RandomFloatOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER, ATOM_TYPE_NUMBER])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for RandomFloatOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("random-float expects two arguments: number (start) and number (end)");
-        let start: f64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
-        let end: f64 = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
-        let range = start..end;
-        if range.is_empty() {
-            return Err(ExecError::from("Range is empty"));
-        }
-        let mut rng = rand::thread_rng();
-        Ok(vec![Atom::gnd(Number::Float(rng.gen_range(range)))])
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct PrintAlternativesOp {}
 
@@ -1774,10 +1711,6 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"size-atom"), move |_| { size_atom_op.clone() });
     let index_atom_op = Atom::gnd(IndexAtomOp{});
     tref.register_token(regex(r"index-atom"), move |_| { index_atom_op.clone() });
-    let random_int_op = Atom::gnd(RandomIntOp{});
-    tref.register_token(regex(r"random-int"), move |_| { random_int_op.clone() });
-    let random_float_op = Atom::gnd(RandomFloatOp{});
-    tref.register_token(regex(r"random-float"), move |_| { random_float_op.clone() });
     let mod_space_op = Atom::gnd(ModSpaceOp::new(metta.clone()));
     tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
     let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));
@@ -1790,7 +1723,9 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"intersection-atom"), move |_| { intersection_op.clone() });
     let union_op = Atom::gnd(UnionAtomOp{});
     tref.register_token(regex(r"union-atom"), move |_| { union_op.clone() });
-    math::register_common_tokens(tref, _tokenizer, space, metta);
+
+    math::register_common_tokens(tref, _tokenizer.clone(), space, metta);
+    random::register_common_tokens(tref, _tokenizer.clone(), space, metta);
 
     #[cfg(feature = "pkg_mgmt")]
     pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
@@ -1881,11 +1816,11 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     tref.register_token(regex(r"or"), move |_| { or_op.clone() });
     let not_op = Atom::gnd(NotOp{});
     tref.register_token(regex(r"not"), move |_| { not_op.clone() });
-    // NOTE: xor and flip are absent in Python intentionally for conversion testing
+    // NOTE: xor is absent in Python intentionally for conversion testing
     let xor_op = Atom::gnd(XorOp{});
     tref.register_token(regex(r"xor"), move |_| { xor_op.clone() });
-    let flip_op = Atom::gnd(FlipOp{});
-    tref.register_token(regex(r"flip"), move |_| { flip_op.clone() });
+
+    random::register_rust_stdlib_tokens(tref);
 
     target.move_front(&mut rust_tokens);
 }
@@ -2015,13 +1950,6 @@ mod tests {
         assert_eq!(run_program(&format!("!(index-atom (A B C D E) 5)")), Ok(vec![vec![expr!("Error" ({ IndexAtomOp{} } ("A" "B" "C" "D" "E") {Number::Integer(5)}) "Index is out of bounds")]]));
     }
 
-    #[test]
-    fn metta_random() {
-        assert_eq!(run_program(&format!("!(chain (eval (random-int 0 5)) $rint (and (>= $rint 0) (< $rint 5)))")), Ok(vec![vec![expr!({Bool(true)})]]));
-        assert_eq!(run_program(&format!("!(random-int 0 0)")), Ok(vec![vec![expr!("Error" ({ RandomIntOp{} } {Number::Integer(0)} {Number::Integer(0)}) "Range is empty")]]));
-        assert_eq!(run_program(&format!("!(chain (eval (random-float 0.0 5.0)) $rfloat (and (>= $rfloat 0.0) (< $rfloat 5.0)))")), Ok(vec![vec![expr!({Bool(true)})]]));
-        assert_eq!(run_program(&format!("!(random-float 0 -5)")), Ok(vec![vec![expr!("Error" ({ RandomFloatOp{} } {Number::Integer(0)} {Number::Integer(-5)}) "Range is empty")]]));
-    }
 
     #[test]
     fn metta_switch() {
@@ -3082,22 +3010,6 @@ mod tests {
             Ok(vec![vec![]]));
     }
 
-    #[test]
-    fn random_op() {
-        let res = RandomIntOp{}.execute(&mut vec![expr!({Number::Integer(0)}), expr!({Number::Integer(5)})]);
-        let range = 0..5;
-        let res_i64: i64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
-        assert!(range.contains(&res_i64));
-        let res = RandomIntOp{}.execute(&mut vec![expr!({Number::Integer(2)}), expr!({Number::Integer(-2)})]);
-        assert_eq!(res, Err(ExecError::from("Range is empty")));
-
-        let res = RandomFloatOp{}.execute(&mut vec![expr!({Number::Integer(0)}), expr!({Number::Integer(5)})]);
-        let range = 0.0..5.0;
-        let res_f64: f64 = res.unwrap().get(0).and_then(Number::from_atom).unwrap().into();
-        assert!(range.contains(&res_f64));
-        let res = RandomFloatOp{}.execute(&mut vec![expr!({Number::Integer(0)}), expr!({Number::Integer(0)})]);
-        assert_eq!(res, Err(ExecError::from("Range is empty")));
-    }
 
     #[test]
     fn size_atom_op() {
