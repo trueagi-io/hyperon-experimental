@@ -7,10 +7,7 @@ use std::convert::TryInto;
 use crate::space::DynSpace;
 use crate::common::shared::Shared;
 use crate::metta::text::Tokenizer;
-use crate::metta::runner::arithmetics::*;
-use crate::metta::runner::stdlib::grounded_op;
-use crate::metta::runner::Metta;
-use crate::metta::runner::stdlib::regex;
+use crate::metta::runner::{arithmetics::*,stdlib::grounded_op, Metta, stdlib::regex};
 
 #[derive(Clone, Debug)]
 pub struct PowMathOp {}
