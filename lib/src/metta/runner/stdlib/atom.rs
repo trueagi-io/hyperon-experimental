@@ -7,8 +7,7 @@ use crate::common::multitrie::MultiTrie;
 use crate::space::grounding::atom_to_trie_key;
 #[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::stdlib::{grounded_op, unit_result, regex};
-use crate::metta::runner::{arithmetics::*, Metta};
-use crate::common::shared::Shared;
+use crate::metta::runner::arithmetics::*;
 
 use std::convert::TryInto;
 
@@ -493,7 +492,7 @@ impl CustomExecute for GetTypeSpaceOp {
     }
 }
 
-pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
+pub fn register_common_tokens(tref: &mut Tokenizer, space: &DynSpace) {
     let get_type_space_op = Atom::gnd(GetTypeSpaceOp{});
     tref.register_token(regex(r"get-type-space"), move |_| { get_type_space_op.clone() });
     let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
@@ -522,8 +521,6 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"intersection-atom"), move |_| { intersection_op.clone() });
     let union_op = Atom::gnd(UnionAtomOp{});
     tref.register_token(regex(r"union-atom"), move |_| { union_op.clone() });
-    #[cfg(feature = "pkg_mgmt")]
-    metta::runner::stdlib::pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
 }
 
 #[cfg(test)]
@@ -534,6 +531,7 @@ mod tests {
     use crate::metta::runner::string::Str;
     use crate::common::test_utils::metta_space;
     use crate::metta::runner::stdlib::tests::run_program;
+    use crate::metta::runner::Metta;
 
     #[test]
     fn metta_car_atom() {

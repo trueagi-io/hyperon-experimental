@@ -3,6 +3,8 @@ pub mod math;
 pub mod random;
 pub mod atom;
 pub mod module;
+pub mod package;
+pub mod string_mod;
 
 use crate::*;
 use crate::space::*;
@@ -12,8 +14,7 @@ use crate::common::assert::vec_eq_no_order;
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
 #[cfg(feature = "pkg_mgmt")]
-use crate::metta::runner::{Metta, RunContext, ModuleLoader, string::Str,
-                           git_catalog::ModuleGitLocation, mod_name_from_url, pkg_mgmt::UpdateMode};
+use crate::metta::runner::{Metta, RunContext, ModuleLoader};
 
 use std::convert::TryInto;
 use std::rc::Rc;
@@ -23,7 +24,6 @@ use std::collections::HashMap;
 use regex::Regex;
 
 use super::{arithmetics::*, string::*};
-// use super::string::*;
 
 pub(crate) fn unit_result() -> Result<Vec<Atom>, ExecError> {
     Ok(vec![UNIT_ATOM])
@@ -50,8 +50,6 @@ macro_rules! grounded_op {
 }
 
 pub(crate) use grounded_op;
-
-
 
 #[derive(Clone, Debug)]
 pub struct NewSpaceOp {}
@@ -112,59 +110,9 @@ impl CustomExecute for PragmaOp {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct PrintlnOp {}
 
-grounded_op!(PrintlnOp, "println!");
 
-impl Grounded for PrintlnOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, UNIT_TYPE])
-    }
 
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for PrintlnOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("println! expects single atom as an argument");
-        let atom = args.get(0).ok_or_else(arg_error)?;
-        println!("{}", atom_to_string(atom));
-        unit_result()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct FormatArgsOp {}
-
-grounded_op!(FormatArgsOp, "format-args");
-
-use dyn_fmt::AsStrFormatExt;
-
-impl Grounded for FormatArgsOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for FormatArgsOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("format-args expects format string as a first argument and expression as a second argument");
-        let format = atom_to_string(args.get(0).ok_or_else(arg_error)?);
-        let args = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?;
-        let args: Vec<String> = args.children().iter()
-            .map(|atom| atom_to_string(atom))
-            .collect();
-        let res = format.format(args.as_slice());
-        Ok(vec![Atom::gnd(Str::from_string(res))])
-    }
-}
 
 /// Implement trace! built-in.
 ///
@@ -441,134 +389,6 @@ impl CustomExecute for MatchOp {
     }
 }
 
-/// The op atoms that depend on the pkg_mgmt feature
-#[cfg(feature = "pkg_mgmt")]
-pub(crate) mod pkg_mgmt_ops {
-    use super::*;
-
-    /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
-    #[derive(Clone, Debug)]
-    pub struct RegisterModuleOp {
-        metta: Metta
-    }
-
-    grounded_op!(RegisterModuleOp, "register-module!");
-
-    impl RegisterModuleOp {
-        pub fn new(metta: Metta) -> Self {
-            Self{ metta }
-        }
-    }
-
-    impl Grounded for RegisterModuleOp {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE])
-        }
-
-        fn as_execute(&self) -> Option<&dyn CustomExecute> {
-            Some(self)
-        }
-    }
-
-    impl CustomExecute for RegisterModuleOp {
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = "register-module! expects a file system path; use quotes if needed";
-            let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
-
-            let path = match path_arg_atom {
-                Atom::Symbol(path_arg) => path_arg.name(),
-                Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
-                _ => return Err(arg_error.into()),
-            };
-            let path = strip_quotes(path);
-            let path = std::path::PathBuf::from(path);
-
-            // Load the module from the path
-            // QUESTION: Do we want to expose the ability to give the module a different name and/ or
-            // load it into a different part of the namespace hierarchy?  For now I was just thinking
-            // it is better to keep the args simple.  IMO this is a place for optional var-args when we
-            // decide on the best way to handle them language-wide.
-            self.metta.load_module_at_path(path, None).map_err(|e| ExecError::from(e))?;
-
-            unit_result()
-        }
-    }
-
-    /// Provides access to module in a remote git repo, from within MeTTa code
-    /// Similar to `register-module!`, this op will bypass the catalog search
-    ///
-    /// NOTE: Even if Hyperon is build without git support, this operation may still be used to
-    /// load existing modules from a git cache.  That situation may occur if modules were fetched
-    /// earlier or by another tool that manages the module cache.  However this operation requres
-    /// git support to actually clone or pull from a git repository.
-    #[derive(Clone, Debug)]
-    pub struct GitModuleOp {
-        //TODO-HACK: This is a terrible horrible ugly hack that should be fixed ASAP
-        context: std::sync::Arc<std::sync::Mutex<Vec<std::sync::Arc<std::sync::Mutex<&'static mut RunContext<'static, 'static>>>>>>,
-    }
-
-    grounded_op!(GitModuleOp, "git-module!");
-
-    impl GitModuleOp {
-        pub fn new(metta: Metta) -> Self {
-            Self{ context: metta.0.context.clone() }
-        }
-    }
-
-    impl Grounded for GitModuleOp {
-        fn type_(&self) -> Atom {
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, UNIT_TYPE])
-        }
-
-        fn as_execute(&self) -> Option<&dyn CustomExecute> {
-            Some(self)
-        }
-    }
-
-    impl CustomExecute for GitModuleOp {
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let arg_error = "git-module! expects a URL; use quotes if needed";
-            let url_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
-            // TODO: When we figure out how to address varargs, it will be nice to take an optional branch name
-
-            let url = match url_arg_atom {
-                Atom::Symbol(url_arg) => url_arg.name(),
-                Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
-                _ => return Err(arg_error.into()),
-            };
-            let url = strip_quotes(url);
-
-            // TODO: Depending on what we do with `register-module!`, we might want to let the
-            // caller provide an optional mod_name here too, rather than extracting it from the url
-            let mod_name = match mod_name_from_url(url) {
-                Some(mod_name) => mod_name,
-                None => return Err(ExecError::from("git-module! error extracting module name from URL"))
-            };
-
-            let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
-            let mut context = ctx_ref.lock().unwrap();
-
-            let git_mod_location = ModuleGitLocation::new(url.to_string());
-
-            match context.metta.environment().specified_mods.as_ref() {
-                Some(specified_mods) => if let Some((loader, descriptor)) = specified_mods.loader_for_explicit_git_module(&mod_name, UpdateMode::TryFetchLatest, &git_mod_location)? {
-                    context.get_or_init_module_with_descriptor(&mod_name, descriptor, loader).map_err(|e| ExecError::from(e))?;
-                },
-                None => return Err(ExecError::from(format!("Unable to pull module \"{mod_name}\" from git; no local \"caches\" directory available")))
-            }
-
-            unit_result()
-        }
-    }
-
-    pub fn register_pkg_mgmt_tokens(tref: &mut Tokenizer, metta: &Metta) {
-        let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
-        tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
-        let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));
-        tref.register_token(regex(r"git-module!"), move |_| { git_module_op.clone() });
-    }
-}
-
 #[derive(Clone, Debug)]
 pub struct PrintAlternativesOp {}
 
@@ -598,7 +418,7 @@ impl CustomExecute for PrintAlternativesOp {
     }
 }
 
-fn atom_to_string(atom: &Atom) -> String {
+pub fn atom_to_string(atom: &Atom) -> String {
     match atom {
         Atom::Grounded(gnd) if gnd.type_() == ATOM_TYPE_STRING => {
             let mut s = gnd.to_string();
@@ -930,13 +750,13 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
 
 
-    math::register_common_tokens(tref, _tokenizer.clone(), space, metta);
-    random::register_common_tokens(tref, _tokenizer.clone(), space, metta);
-    atom::register_common_tokens(tref, _tokenizer.clone(), space, metta);
+    math::register_common_tokens(tref);
+    random::register_common_tokens(tref);
+    atom::register_common_tokens(tref, space);
     module::register_common_tokens(tref, metta);
 
     #[cfg(feature = "pkg_mgmt")]
-    pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
+    package::register_pkg_mgmt_tokens(tref, metta);
 }
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
@@ -958,16 +778,13 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
     let trace_op = Atom::gnd(TraceOp{});
     tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
-    let println_op = Atom::gnd(PrintlnOp{});
-    tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
-    let format_args_op = Atom::gnd(FormatArgsOp{});
-    tref.register_token(regex(r"format-args"), move |_| { format_args_op.clone() });
     let print_alternatives_op = Atom::gnd(PrintAlternativesOp{});
     tref.register_token(regex(r"print-alternatives!"), move |_| { print_alternatives_op.clone() });
     let sealed_op = Atom::gnd(SealedOp{});
     tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
 
     module::register_runner_tokens(tref, tokenizer.clone(), metta);
+    string_mod::register_runner_tokens(tref);
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
     // TODO: adding &self introduces self referencing and thus prevents space
@@ -1811,11 +1628,6 @@ mod tests {
         assert_eq!(assert_equal_to_result_op.execute(&mut vec![
                 expr!(("foo")), expr!(("B" "C") ("A" "B"))]),
                 unit_result());
-    }
-
-    #[test]
-    fn println_op() {
-        assert_eq!(PrintlnOp{}.execute(&mut vec![sym!("A")]), unit_result());
     }
 
     #[test]

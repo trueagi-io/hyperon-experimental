@@ -2,10 +2,8 @@ use crate::*;
 use crate::metta::*;
 #[cfg(feature = "pkg_mgmt")]
 
-use crate::space::DynSpace;
-use crate::common::shared::Shared;
 use crate::metta::text::Tokenizer;
-use crate::metta::runner::{arithmetics::*, stdlib::grounded_op, Metta, stdlib::regex};
+use crate::metta::runner::{arithmetics::*, stdlib::grounded_op, stdlib::regex};
 
 use std::fmt::Display;
 use rand::Rng;
@@ -99,13 +97,11 @@ impl CustomExecute for FlipOp {
     }
 }
 
-pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, _space: &DynSpace, metta: &Metta) {
+pub fn register_common_tokens(tref: &mut Tokenizer) {
     let random_int_op = Atom::gnd(RandomIntOp{});
     tref.register_token(regex(r"random-int"), move |_| { random_int_op.clone() });
     let random_float_op = Atom::gnd(RandomFloatOp{});
     tref.register_token(regex(r"random-float"), move |_| { random_float_op.clone() });
-    #[cfg(feature = "pkg_mgmt")]
-    metta::runner::stdlib::pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
 }
 
 pub fn register_rust_stdlib_tokens(tref: &mut Tokenizer) {
