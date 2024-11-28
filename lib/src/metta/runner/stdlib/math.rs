@@ -4,13 +4,8 @@ use crate::metta::*;
 
 use std::convert::TryInto;
 
-use crate::space::DynSpace;
-use crate::common::shared::Shared;
 use crate::metta::text::Tokenizer;
-use crate::metta::runner::arithmetics::*;
-use crate::metta::runner::stdlib::grounded_op;
-use crate::metta::runner::Metta;
-use crate::metta::runner::stdlib::regex;
+use crate::metta::runner::{arithmetics::*,stdlib::grounded_op, stdlib::regex};
 
 #[derive(Clone, Debug)]
 pub struct PowMathOp {}
@@ -412,7 +407,7 @@ impl CustomExecute for IsInfMathOp {
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
 // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
-pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, _space: &DynSpace, metta: &Metta) {
+pub fn register_common_tokens(tref: &mut Tokenizer) {
 
     let pow_math_op = Atom::gnd(PowMathOp {});
     tref.register_token(regex(r"pow-math"), move |_| { pow_math_op.clone() });
@@ -450,9 +445,6 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
                         |_| { Atom::gnd(Number::Float(std::f64::consts::PI)) });
     tref.register_token(regex(r"EXP"),
                         |_| { Atom::gnd(Number::Float(std::f64::consts::E)) });
-
-    #[cfg(feature = "pkg_mgmt")]
-    metta::runner::stdlib::pkg_mgmt_ops::register_pkg_mgmt_tokens(tref, metta);
 }
 
 #[cfg(test)]
