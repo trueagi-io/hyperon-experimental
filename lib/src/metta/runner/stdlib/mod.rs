@@ -4,10 +4,10 @@ pub mod random;
 pub mod atom;
 pub mod module;
 pub mod package;
-pub mod string_mod;
+pub mod string;
 pub mod debug;
 pub mod space;
-pub mod core_mod;
+pub mod core;
 
 use crate::*;
 use crate::space::*;
@@ -78,7 +78,7 @@ pub fn interpret(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
 // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
 pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
-    core_mod::register_common_tokens(tref);
+    core::register_common_tokens(tref);
     math::register_common_tokens(tref);
     random::register_common_tokens(tref);
     atom::register_common_tokens(tref, space);
@@ -93,9 +93,9 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
 // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
 pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
 
-    core_mod::register_runner_tokens(tref, space, metta);
+    core::register_runner_tokens(tref, space, metta);
     module::register_runner_tokens(tref, tokenizer.clone(), metta);
-    string_mod::register_runner_tokens(tref);
+    string::register_runner_tokens(tref);
     debug::register_runner_tokens(tref, space);
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
@@ -151,7 +151,7 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     tref.register_token(regex(r"xor"), move |_| { xor_op.clone() });
 
     random::register_rust_stdlib_tokens(tref);
-    core_mod::register_rust_stdlib_tokens(tref);
+    core::register_rust_stdlib_tokens(tref);
 
     target.move_front(&mut rust_tokens);
 }
