@@ -3,6 +3,7 @@ pub mod math;
 pub mod random;
 pub mod atom;
 pub mod module;
+#[cfg(feature = "pkg_mgmt")]
 pub mod package;
 pub mod string;
 pub mod debug;
@@ -14,7 +15,6 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::{Tokenizer, SExprParser};
 use crate::common::shared::Shared;
-#[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::{Metta, RunContext, ModuleLoader};
 use regex::Regex;
 
@@ -84,6 +84,7 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     atom::register_common_tokens(tref, space);
     module::register_common_tokens(tref, metta);
     space::register_common_tokens(tref);
+    debug::register_common_tokens(tref);
 
     #[cfg(feature = "pkg_mgmt")]
     package::register_pkg_mgmt_tokens(tref, metta);
@@ -150,7 +151,6 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     let xor_op = Atom::gnd(XorOp{});
     tref.register_token(regex(r"xor"), move |_| { xor_op.clone() });
 
-    random::register_rust_stdlib_tokens(tref);
     core::register_rust_stdlib_tokens(tref);
 
     target.move_front(&mut rust_tokens);

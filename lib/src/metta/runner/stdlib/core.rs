@@ -366,6 +366,8 @@ pub fn register_common_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
     let match_op = Atom::gnd(MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
+    let sealed_op = Atom::gnd(SealedOp{});
+    tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
 }
 
 pub fn register_runner_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Metta) {
@@ -379,8 +381,6 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Me
     tref.register_token(regex(r"capture"), move |_| { capture_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
-    let sealed_op = Atom::gnd(SealedOp{});
-    tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
 }
 
 pub fn register_rust_stdlib_tokens(tref: &mut Tokenizer) {

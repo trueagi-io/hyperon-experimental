@@ -179,11 +179,14 @@ impl CustomExecute for AssertEqualToResultOp {
     }
 }
 
-pub fn register_runner_tokens(tref: &mut Tokenizer, space: &DynSpace) {
+pub fn register_common_tokens(tref: &mut Tokenizer) {
     let trace_op = Atom::gnd(TraceOp{});
     tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
     let print_alternatives_op = Atom::gnd(PrintAlternativesOp{});
     tref.register_token(regex(r"print-alternatives!"), move |_| { print_alternatives_op.clone() });
+}
+
+pub fn register_runner_tokens(tref: &mut Tokenizer, space: &DynSpace) {
     let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
     tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
     let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));

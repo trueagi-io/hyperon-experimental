@@ -102,9 +102,6 @@ pub fn register_common_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r"random-int"), move |_| { random_int_op.clone() });
     let random_float_op = Atom::gnd(RandomFloatOp{});
     tref.register_token(regex(r"random-float"), move |_| { random_float_op.clone() });
-}
-
-pub fn register_rust_stdlib_tokens(tref: &mut Tokenizer) {
     let flip_op = Atom::gnd(FlipOp{});
     tref.register_token(regex(r"flip"), move |_| { flip_op.clone() });
 }
