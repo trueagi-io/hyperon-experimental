@@ -5,6 +5,8 @@ pub mod atom;
 pub mod module;
 pub mod package;
 pub mod string_mod;
+pub mod debug;
+pub mod space;
 
 use crate::*;
 use crate::space::*;
@@ -17,9 +19,6 @@ use crate::common::CachingMapper;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader};
 
 use std::convert::TryInto;
-use std::rc::Rc;
-use std::cell::RefCell;
-use std::fmt::Display;
 use std::collections::HashMap;
 use regex::Regex;
 
@@ -114,62 +113,7 @@ impl CustomExecute for PragmaOp {
 
 
 
-/// Implement trace! built-in.
-///
-/// It is equivalent to Idris or Haskell Trace, that is, it prints a
-/// message to stderr and pass a value along.
-///
-/// For instance
-/// ```metta
-/// !(trace! "Here?" 42)
-/// ```
-/// prints to stderr
-/// ```stderr
-/// Here?
-/// ```
-/// and returns
-/// ```metta
-/// [42]
-/// ```
-///
-/// Note that the first argument does not need to be a string, which
-/// makes `trace!` actually quite capable on its own.  For instance
-/// ```metta
-/// !(trace! ("Hello world!" (if True A B) 1 2 3) 42)
-/// ```
-/// prints to stderr
-/// ```stderr
-/// (Hello world! A 1 2 3)
-/// ```
-/// and returns
-/// ```metta
-/// [42]
-/// ```
 
-#[derive(Clone, Debug)]
-pub struct TraceOp {}
-
-grounded_op!(TraceOp, "trace!");
-
-impl Grounded for TraceOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, Atom::var("a"), Atom::var("a")])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for TraceOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("trace! expects two atoms as arguments");
-        let val = args.get(1).ok_or_else(arg_error)?;
-        let msg = args.get(0).ok_or_else(arg_error)?;
-        eprintln!("{}", msg);
-        Ok(vec![val.clone()])
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct NopOp {}
@@ -192,110 +136,7 @@ impl CustomExecute for NopOp {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
-pub struct StateAtom {
-    state: Rc<RefCell<Atom>>
-}
 
-impl StateAtom {
-    pub fn new(atom: Atom) -> Self {
-        Self{ state: Rc::new(RefCell::new(atom)) }
-    }
-}
-
-impl Display for StateAtom {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "(State {})", self.state.borrow())
-    }
-}
-
-impl Grounded for StateAtom {
-    fn type_(&self) -> Atom {
-        // TODO? Wrap metatypes for non-grounded atoms
-        // rust_type_atom::<StateAtom>() instead of StateMonad symbol might be used
-        let atom = &*self.state.borrow();
-        let typ = match atom {
-            Atom::Symbol(_) => ATOM_TYPE_SYMBOL,
-            Atom::Expression(_) => ATOM_TYPE_EXPRESSION,
-            Atom::Variable(_) => ATOM_TYPE_VARIABLE,
-            Atom::Grounded(a) => a.type_(),
-        };
-        Atom::expr([expr!("StateMonad"), typ])
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct NewStateOp { }
-
-grounded_op!(NewStateOp, "new-state");
-
-impl Grounded for NewStateOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, expr!(tnso), expr!("StateMonad" tnso)])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for NewStateOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = "new-state expects single atom as an argument";
-        let atom = args.get(0).ok_or(arg_error)?;
-        Ok(vec![Atom::gnd(StateAtom::new(atom.clone()))])
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct GetStateOp { }
-
-grounded_op!(GetStateOp, "get-state");
-
-impl Grounded for GetStateOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, expr!("StateMonad" tgso), expr!(tgso)])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for GetStateOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = "get-state expects single state atom as an argument";
-        let state = args.get(0).ok_or(arg_error)?;
-        let atom = Atom::as_gnd::<StateAtom>(state).ok_or(arg_error)?;
-        Ok(vec![atom.state.borrow().clone()])
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ChangeStateOp { }
-
-grounded_op!(ChangeStateOp, "change-state!");
-
-impl Grounded for ChangeStateOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, expr!("StateMonad" tcso), expr!(tcso), expr!("StateMonad" tcso)])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for ChangeStateOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = "change-state! expects a state atom and its new value as arguments";
-        let atom = args.get(0).ok_or(arg_error)?;
-        let state = Atom::as_gnd::<StateAtom>(atom).ok_or("change-state! expects a state as the first argument")?;
-        let new_value = args.get(1).ok_or(arg_error)?;
-        *state.state.borrow_mut() = new_value.clone();
-        Ok(vec![atom.clone()])
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct SealedOp {}
@@ -386,35 +227,6 @@ impl CustomExecute for MatchOp {
         log::debug!("MatchOp::execute: space: {:?}, pattern: {:?}, template: {:?}", space, pattern, template);
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("match expects a space as the first argument")?;
         Ok(space.borrow().subst(&pattern, &template))
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct PrintAlternativesOp {}
-
-grounded_op!(PrintAlternativesOp, "print-alternatives!");
-
-impl Grounded for PrintAlternativesOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, UNIT_TYPE])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for PrintAlternativesOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("print-alternatives! expects format string as a first argument and expression as a second argument");
-        let atom = atom_to_string(args.get(0).ok_or_else(arg_error)?);
-        let args = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?;
-        let args: Vec<String> = args.children().iter()
-            .map(|atom| atom_to_string(atom))
-            .collect();
-        println!("{} {}:", args.len(), atom);
-        args.iter().for_each(|arg| println!("    {}", arg));
-        Ok(vec![UNIT_ATOM])
     }
 }
 
@@ -738,22 +550,16 @@ pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer
     tref.register_token(regex(r"if-equal"), move |_| { is_equivalent.clone() });
     let new_space_op = Atom::gnd(NewSpaceOp{});
     tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
-    let new_state_op = Atom::gnd(NewStateOp{});
-    tref.register_token(regex(r"new-state"), move |_| { new_state_op.clone() });
-    let change_state_op = Atom::gnd(ChangeStateOp{});
-    tref.register_token(regex(r"change-state!"), move |_| { change_state_op.clone() });
-    let get_state_op = Atom::gnd(GetStateOp{});
-    tref.register_token(regex(r"get-state"), move |_| { get_state_op.clone() });
     let nop_op = Atom::gnd(NopOp{});
     tref.register_token(regex(r"nop"), move |_| { nop_op.clone() });
     let match_op = Atom::gnd(MatchOp{});
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
 
-
     math::register_common_tokens(tref);
     random::register_common_tokens(tref);
     atom::register_common_tokens(tref, space);
     module::register_common_tokens(tref, metta);
+    space::register_common_tokens(tref);
 
     #[cfg(feature = "pkg_mgmt")]
     package::register_pkg_mgmt_tokens(tref, metta);
@@ -776,15 +582,12 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"capture"), move |_| { capture_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
-    let trace_op = Atom::gnd(TraceOp{});
-    tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
-    let print_alternatives_op = Atom::gnd(PrintAlternativesOp{});
-    tref.register_token(regex(r"print-alternatives!"), move |_| { print_alternatives_op.clone() });
     let sealed_op = Atom::gnd(SealedOp{});
     tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
 
     module::register_runner_tokens(tref, tokenizer.clone(), metta);
     string_mod::register_runner_tokens(tref);
+    debug::register_runner_tokens(tref);
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
     // TODO: adding &self introduces self referencing and thus prevents space
@@ -1630,11 +1433,6 @@ mod tests {
                 unit_result());
     }
 
-    #[test]
-    fn trace_op() {
-        assert_eq!(TraceOp{}.execute(&mut vec![sym!("\"Here?\""), sym!("42")]),
-                   Ok(vec![sym!("42")]));
-    }
 
     #[test]
     fn nop_op() {
@@ -1674,19 +1472,6 @@ mod tests {
             ;; [(→ P R)]
         ";
         assert_eq_metta_results!(run_program(program), Ok(vec![vec![expr!("→" "P" "R")]]));
-    }
-
-    #[test]
-    fn state_ops() {
-        let result = NewStateOp{}.execute(&mut vec![expr!("A" "B")]).unwrap();
-        let old_state = result.get(0).ok_or("error").unwrap();
-        assert_eq!(old_state, &Atom::gnd(StateAtom::new(expr!("A" "B"))));
-        let result = ChangeStateOp{}.execute(&mut vec!(old_state.clone(), expr!("C" "D"))).unwrap();
-        let new_state = result.get(0).ok_or("error").unwrap();
-        assert_eq!(old_state, new_state);
-        assert_eq!(new_state, &Atom::gnd(StateAtom::new(expr!("C" "D"))));
-        let result = GetStateOp{}.execute(&mut vec![new_state.clone()]);
-        assert_eq!(result, Ok(vec![expr!("C" "D")]))
     }
 
     #[test]

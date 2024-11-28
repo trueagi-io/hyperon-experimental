@@ -6,7 +6,7 @@ use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::multitrie::MultiTrie;
 use crate::space::grounding::atom_to_trie_key;
 #[cfg(feature = "pkg_mgmt")]
-use crate::metta::runner::stdlib::{grounded_op, unit_result, regex};
+use crate::metta::runner::stdlib::{grounded_op, regex};
 use crate::metta::runner::arithmetics::*;
 
 use std::convert::TryInto;
@@ -319,88 +319,6 @@ impl CustomExecute for SubtractionAtomOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct AddAtomOp {}
-
-grounded_op!(AddAtomOp, "add-atom");
-
-impl Grounded for AddAtomOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(),
-            ATOM_TYPE_ATOM, UNIT_TYPE])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for AddAtomOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("add-atom expects two arguments: space and atom");
-        let space = args.get(0).ok_or_else(arg_error)?;
-        let atom = args.get(1).ok_or_else(arg_error)?;
-        let space = Atom::as_gnd::<DynSpace>(space).ok_or("add-atom expects a space as the first argument")?;
-        space.borrow_mut().add(atom.clone());
-        unit_result()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct RemoveAtomOp {}
-
-grounded_op!(RemoveAtomOp, "remove-atom");
-
-impl Grounded for RemoveAtomOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(),
-            ATOM_TYPE_ATOM, UNIT_TYPE])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for RemoveAtomOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("remove-atom expects two arguments: space and atom");
-        let space = args.get(0).ok_or_else(arg_error)?;
-        let atom = args.get(1).ok_or_else(arg_error)?;
-        let space = Atom::as_gnd::<DynSpace>(space).ok_or("remove-atom expects a space as the first argument")?;
-        space.borrow_mut().remove(atom);
-        // TODO? Is it necessary to distinguish whether the atom was removed or not?
-        unit_result()
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct GetAtomsOp {}
-
-grounded_op!(GetAtomsOp, "get-atoms");
-
-impl Grounded for GetAtomsOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(),
-            ATOM_TYPE_ATOM])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for GetAtomsOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("get-atoms expects one argument: space");
-        let space = args.get(0).ok_or_else(arg_error)?;
-        let space = Atom::as_gnd::<DynSpace>(space).ok_or("get-atoms expects a space as its argument")?;
-        space.borrow().as_space().atom_iter()
-            .map(|iter| iter.cloned().map(|a| make_variables_unique(a)).collect())
-            .ok_or(ExecError::Runtime("Unsupported Operation. Can't traverse atoms in this space".to_string()))
-    }
-}
-
-#[derive(Clone, Debug)]
 pub struct GetTypeOp {
     space: DynSpace,
 }
@@ -499,12 +417,8 @@ pub fn register_common_tokens(tref: &mut Tokenizer, space: &DynSpace) {
     tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
     let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
     tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
-    let add_atom_op = Atom::gnd(AddAtomOp{});
-    tref.register_token(regex(r"add-atom"), move |_| { add_atom_op.clone() });
-    let remove_atom_op = Atom::gnd(RemoveAtomOp{});
-    tref.register_token(regex(r"remove-atom"), move |_| { remove_atom_op.clone() });
-    let get_atoms_op = Atom::gnd(GetAtomsOp{});
-    tref.register_token(regex(r"get-atoms"), move |_| { get_atoms_op.clone() });
+
+
     let min_atom_op = Atom::gnd(MinAtomOp{});
     tref.register_token(regex(r"min-atom"), move |_| { min_atom_op.clone() });
     let max_atom_op = Atom::gnd(MaxAtomOp{});
@@ -599,19 +513,7 @@ mod tests {
         assert_eq!(run_program("!(eval (foldl-atom (1 2 3) 0 $a $b (eval (+ $a $b))))"), Ok(vec![vec![expr!({Number::Integer(6)})]]));
     }
 
-    #[test]
-    fn mod_space_op() {
-        let program = r#"
-            !(bind! &new_space (new-space))
-            !(add-atom &new_space (mod-space! stdlib))
-            !(get-atoms &new_space)
-        "#;
-        let runner = Metta::new(Some(runner::environment::EnvBuilder::test_env()));
-        let result = runner.run(SExprParser::new(program)).unwrap();
 
-        let stdlib_space = runner.module_space(runner.get_module_by_name("stdlib").unwrap());
-        assert_eq!(result[2], vec![Atom::gnd(stdlib_space)]);
-    }
 
     #[test]
     fn size_atom_op() {
@@ -650,16 +552,6 @@ mod tests {
     }
 
     #[test]
-    fn add_atom_op() {
-        let space = DynSpace::new(GroundingSpace::new());
-        let satom = Atom::gnd(space.clone());
-        let res = AddAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
-        assert_eq!(res, vec![UNIT_ATOM]);
-        let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
-        assert_eq_no_order!(space_atoms, vec![expr!(("foo" "bar"))]);
-    }
-
-    #[test]
     fn test_error_is_used_as_an_argument() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
         let parser = SExprParser::new(r#"
@@ -677,32 +569,9 @@ mod tests {
         ]));
     }
 
-    #[test]
-    fn remove_atom_op() {
-        let space = DynSpace::new(metta_space("
-            (foo bar)
-            (bar foo)
-        "));
-        let satom = Atom::gnd(space.clone());
-        let res = RemoveAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
-        // REM: can return Bool in future
-        assert_eq!(res, vec![UNIT_ATOM]);
-        let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
-        assert_eq_no_order!(space_atoms, vec![expr!(("bar" "foo"))]);
-    }
 
-    #[test]
-    fn get_atoms_op() {
-        let space = DynSpace::new(metta_space("
-            (foo bar)
-            (bar foo)
-        "));
-        let satom = Atom::gnd(space.clone());
-        let res = GetAtomsOp{}.execute(&mut vec![satom]).expect("No result returned");
-        let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
-        assert_eq_no_order!(res, space_atoms);
-        assert_eq_no_order!(res, vec![expr!(("foo" "bar")), expr!(("bar" "foo"))]);
-    }
+
+
 
     #[test]
     fn unique_op() {
