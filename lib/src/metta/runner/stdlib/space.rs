@@ -9,6 +9,32 @@ use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::Display;
 
+#[derive(Clone, Debug)]
+pub struct NewSpaceOp {}
+
+grounded_op!(NewSpaceOp, "new-space");
+
+impl Grounded for NewSpaceOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>()])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for NewSpaceOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        if args.len() == 0 {
+            let space = Atom::gnd(DynSpace::new(GroundingSpace::new()));
+            Ok(vec![space])
+        } else {
+            Err("new-space doesn't expect arguments".into())
+        }
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct StateAtom {
     state: Rc<RefCell<Atom>>
@@ -197,6 +223,8 @@ impl CustomExecute for RemoveAtomOp {
 }
 
 pub fn register_common_tokens(tref: &mut Tokenizer) {
+    let new_space_op = Atom::gnd(NewSpaceOp{});
+    tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
     let add_atom_op = Atom::gnd(AddAtomOp{});
     tref.register_token(regex(r"add-atom"), move |_| { add_atom_op.clone() });
     let remove_atom_op = Atom::gnd(RemoveAtomOp{});
@@ -257,6 +285,15 @@ mod tests {
         let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
         assert_eq_no_order!(res, space_atoms);
         assert_eq_no_order!(res, vec![expr!(("foo" "bar")), expr!(("bar" "foo"))]);
+    }
+
+    #[test]
+    fn new_space_op() {
+        let res = NewSpaceOp{}.execute(&mut vec![]).expect("No result returned");
+        let space = res.get(0).expect("Result is empty");
+        let space = space.as_gnd::<DynSpace>().expect("Result is not space");
+        let space_atoms: Vec<Atom> = space.borrow().as_space().atom_iter().unwrap().cloned().collect();
+        assert_eq_no_order!(space_atoms, Vec::<Atom>::new());
     }
 
     #[test]
