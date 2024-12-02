@@ -91,5 +91,7 @@
    (let $tnso (new-state 1) $tnso)
    (new-state 1))
 
-; FIXME: doesn't work as for 25 May 2023
-; !(get-state (let $x (new-state 1) $x))
+; New state atom can be instantiated just before calling get-state
+!(assertEqual
+   (get-state (let $x (new-state 1) $x))
+   1)

@@ -79,7 +79,9 @@ class GroundedTypeTest(unittest.TestCase):
             myAtom
             untyp
             '''))
-        # FIXME: why does it get reduced?
+        # FIXME: (id_atom (+ 1 1)) gets reduced because after id_atom returns
+        # (+ 1 1) it is evaluated further and becomes 2. We don't have a manner
+        # to prevent evaluation in MeTTa.
         # self.assertEqual(metta.run("!(id_atom (+ 1 1))"), [metta.parse_all("(+ 1 1)")])
         ### Polymorphic without unwrapping
         # Nothing is done with `$t` on the Grounded side, but we check that:

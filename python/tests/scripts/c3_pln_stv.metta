@@ -56,15 +56,9 @@
                   (Evaluation (Predicate F) (Concept A)))
      (stv 0.8 1.0))
 
-; FIXME? `(PA)` and `(PB)` are used because otherwise
-; substitution is not invoked (atm of test creation)
-(= (PA) (Evaluation (Predicate P) (Concept A)))
-(= (PB) (Evaluation (Predicate P) (Concept B)))
-(= (FA) (Evaluation (Predicate F) (Concept A)))
-
 ; Tests
-!(assertEqual (TV (And (PA) (PB))) (stv 0.3 0.8))
-!(assertEqual (TV (FA)) (stv 0.4 0.8))
+!(assertEqual (TV (And (Evaluation (Predicate P) (Concept A)) (Evaluation (Predicate P) (Concept B)))) (stv 0.3 0.8))
+!(assertEqual (TV (Evaluation (Predicate F) (Concept A))) (stv 0.4 0.8))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
