@@ -295,7 +295,7 @@ macro_rules! def_binary_bool_op {
 
         impl CustomExecute for $name {
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-                let arg_error = || ExecError::from(concat!(stringify!($disp), " expects two boolean arguments"));
+                let arg_error = || ExecError::IncorrectArgument;
                 let Bool(a) = args.get(0).and_then(Bool::from_atom).ok_or_else(arg_error)?;
                 let Bool(b) = args.get(1).and_then(Bool::from_atom).ok_or_else(arg_error)?;
 
@@ -333,7 +333,7 @@ impl Grounded for NotOp {
 
 impl CustomExecute for NotOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("not expects one boolean arguments");
+        let arg_error = || ExecError::IncorrectArgument;
         let &Bool(a) = args.get(0).and_then(Atom::as_gnd).ok_or_else(arg_error)?;
 
         Ok(vec![Atom::gnd(Bool(!a))])
