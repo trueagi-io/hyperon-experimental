@@ -166,6 +166,7 @@ exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _arg
     py::object hyperon = py::module_::import("hyperon.atoms");
     py::function _priv_call_execute_on_grounded_atom = hyperon.attr("_priv_call_execute_on_grounded_atom");
     py::handle NoReduceError = hyperon.attr("NoReduceError");
+    py::handle IncorrectArgumentError = hyperon.attr("IncorrectArgumentError");
     py::object pyobj = static_cast<GroundedObject const*>(_cgnd)->pyobj;
     CAtom pytyp = static_cast<GroundedObject const*>(_cgnd)->typ;
     try {
@@ -185,6 +186,8 @@ exec_error_t py_execute(const struct gnd_t* _cgnd, const struct atom_vec_t* _arg
     } catch (py::error_already_set &e) {
         if (e.matches(NoReduceError)) {
             return exec_error_no_reduce();
+        } else if (e.matches(IncorrectArgumentError)) {
+            return exec_error_incorrect_argument();
         } else {
             char message[4096];
             snprintf(message, lenghtof(message), "Exception caught:\n%s", e.what());
@@ -670,22 +673,22 @@ PYBIND11_MODULE(hyperonpy, m) {
             }
             return CAtom(atom_expr(children, size));
         }, "Create expression atom");
-    m.def("atom_gnd", [](py::object object, CAtom ctyp) {
-            if (py::hasattr(object, "cspace")) {
-                //TODO: We should make static constant type atoms, so we don't need to allocate and then
-                // free them, just to test a constant
-                atom_t undefined = ATOM_TYPE_UNDEFINED();
-                if (!atom_eq(ctyp.ptr(), &undefined)) {
-                    throw std::runtime_error("Grounded Space Atoms can't have a custom type");
-                }
-                atom_free(undefined);
-                space_t* space = object.attr("cspace").cast<CSpace&>().ptr();
-                return CAtom(atom_gnd_for_space(space));
-            } else {
-                atom_t typ = atom_clone(ctyp.ptr());
-                return CAtom(atom_gnd(new GroundedObject(object, typ)));
-            }
-            }, "Create grounded atom");
+    m.def("atom_space", [](CSpace& atom) {
+            return CAtom(atom_gnd_for_space(atom.ptr()));
+        }, "Create Space grounded atom");
+    m.def("atom_py", [](py::object object, CAtom ctyp) {
+            atom_t typ = atom_clone(ctyp.ptr());
+            return CAtom(atom_gnd(new GroundedObject(object, typ)));
+        }, "Create general grounded atom from Python object");
+    m.def("atom_bool", [](bool b) {
+            return CAtom(atom_bool(b));
+        }, "Create bool grounded atom");
+    m.def("atom_int", [](long long n) {
+            return CAtom(atom_int(n));
+        }, "Create int grounded atom");
+    m.def("atom_float", [](double d) {
+            return CAtom(atom_float(d));
+        }, "Create float grounded atom");
     m.def("atom_free", [](CAtom atom) { atom_free(atom.obj); }, "Free C atom");
 
     m.def("atom_eq", [](CAtom& a, CAtom& b) -> bool { return atom_eq(a.ptr(), b.ptr()); }, "Test if two atoms are equal");
@@ -939,7 +942,9 @@ PYBIND11_MODULE(hyperonpy, m) {
         ADD_TYPE(EXPRESSION, "Expression")
         ADD_TYPE(GROUNDED, "Grounded")
         ADD_TYPE(GROUNDED_SPACE, "Space")
-        ADD_TYPE(UNIT, "Unit");
+        ADD_TYPE(UNIT, "Unit")
+        ADD_TYPE(NUMBER, "Number")
+        ADD_TYPE(BOOL, "Bool");
     m.def("check_type", [](CSpace space, CAtom& atom, CAtom& type) {
             return check_type(space.ptr(), atom.ptr(), type.ptr());
         }, "Check if atom is an instance of the passed type");
@@ -1117,12 +1122,10 @@ PYBIND11_MODULE(hyperonpy, m) {
                             py::object obj;
                             // separate assignments are needed to get different types
                             if(ll == ld) {
-                                obj = ValueObject(ll);
+                                atom = atom_int(ll);
                             } else {
-                                obj = ValueObject(ld);
+                                atom = atom_float(ld);
                             }
-                            atom = atom_gnd(new GroundedObject(obj,
-                                            atom_sym("Number")));
                         }
                         catch(...) {
                             atom = atom_sym(str.c_str());

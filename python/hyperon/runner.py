@@ -151,6 +151,8 @@ class MeTTa:
         """Registers a token"""
         self.tokenizer().register_token(regexp, constr)
 
+    # FIXME: for operation atoms name is passed twice: first argument and
+    # field of the OperationAtom
     def register_atom(self, name, symbol):
         """Registers an Atom"""
         self.register_token(name, lambda _: symbol)
