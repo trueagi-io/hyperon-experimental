@@ -7,8 +7,10 @@ use crate::metta::runner::*;
 
 use regex::Regex;
 
-use super::interpreter_minimal::interpret;
-use super::stdlib_minimal::*;
+use super::interpreter::interpret;
+use super::stdlib::*;
+
+use std::mem;
 
 mod mod_names;
 pub(crate) use mod_names::{ModNameNode, mod_name_from_path, normalize_relative_module_name, mod_name_remove_prefix, ModNameNodeDisplayWrapper};
@@ -237,7 +239,7 @@ impl MettaMod {
     pub(crate) fn remap_imported_deps(&self, mapping: &HashMap<ModId, ModId>) {
         let mut deps = self.imported_deps.lock().unwrap();
         let mut temp = HashMap::with_capacity(deps.len());
-        core::mem::swap(&mut temp, &mut *deps);
+        mem::swap(&mut temp, &mut *deps);
         for (dep_mod_id, space) in temp.into_iter() {
             let new_mod_id = match mapping.get(&dep_mod_id) {
                 Some(mapped_id) => *mapped_id,
@@ -394,8 +396,8 @@ impl ModuleInitState {
         match self {
             Self::Root(cell) => {
                 let mut insides_ref = cell.borrow_mut();
-                let frames = core::mem::take(&mut insides_ref.frames);
-                let descriptors = core::mem::take(&mut insides_ref.module_descriptors);
+                let frames = mem::take(&mut insides_ref.frames);
+                let descriptors = mem::take(&mut insides_ref.module_descriptors);
                 (frames, descriptors)
             },
             _ => unreachable!()

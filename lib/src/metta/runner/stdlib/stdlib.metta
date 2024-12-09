@@ -38,6 +38,14 @@
   (@return "Result of evaluation"))
 (: eval (-> Atom Atom))
 
+(@doc evalc
+  (@desc "Evaluates input atom, makes one step of the evaluation")
+  (@params (
+    (@param "Atom to be evaluated, can be reduced via equality expression (= ...) or by calling a grounded function")
+    (@param "Space to evaluate atom in its context")))
+  (@return "Result of evaluation"))
+(: evalc (-> Atom Grounded Atom))
+
 (@doc chain
   (@desc "Evaluates first argument, binds it to the variable (second argument) and then evaluates third argument which contains (or not) mentioned variable")
   (@params (
@@ -96,6 +104,104 @@
     (@param "Expression")
     (@param "Index")))
   (@return "Atom from an expression in the place defined by index. Error if index is out of bounds"))
+
+(@doc pow-math
+  (@desc "Takes base (first argument) and power (second argument) and returns result of a power function (base ^ power)")
+  (@params (
+    (@param "Base")
+    (@param "Power")))
+  (@return "Result of a power function"))
+
+(@doc sqrt-math
+  (@desc "Returns square root for input number (first argument) which should be >= 0")
+  (@params (
+    (@param "Input number")))
+  (@return "Result of a square root function"))
+
+(@doc abs-math
+  (@desc "Returns absolute value of input number (first argument)")
+  (@params (
+    (@param "Input number")))
+  (@return "Absolute value"))
+
+(@doc log-math
+  (@desc "Returns result of a logarithm function given base (first argument) and input number (second argument)")
+  (@params (
+    (@param "Base")
+    (@param "Input number")))
+  (@return "Result of log function"))
+
+(@doc trunc-math
+  (@desc "Returns integer part of the input value (first argument)")
+  (@params (
+    (@param "Float value")))
+  (@return "Integer part of float"))
+
+(@doc ceil-math
+  (@desc "Returns the smallest integer greater than or equal to the input value (first argument)")
+  (@params (
+    (@param "Float value")))
+  (@return "Integer value greater than or equal to the input"))
+
+(@doc floor-math
+  (@desc "Returns the smallest integer less than or equal to the input value (first argument)")
+  (@params (
+    (@param "Float value")))
+  (@return "Integer value less than or equal to the input"))
+
+(@doc round-math
+  (@desc "Returns the nearest integer to the input float value (first argument)")
+  (@params (
+    (@param "Float value")))
+  (@return "Nearest integer to the input"))
+
+(@doc sin-math
+  (@desc "Returns result of the sine function for an input value in radians (first argument)")
+  (@params (
+    (@param "Angle in radians")))
+  (@return "Result of the sine function"))
+
+(@doc asin-math
+  (@desc "Returns result of the arcsine function for an input value (first argument)")
+  (@params (
+    (@param "Float number")))
+  (@return "Result of the arcsine function"))
+
+(@doc cos-math
+  (@desc "Returns result of the cosine function for an input value in radians (first argument)")
+  (@params (
+    (@param "Angle in radians")))
+  (@return "Result of the cosine function"))
+
+(@doc acos-math
+  (@desc "Returns result of the arccosine function for an input value (first argument)")
+  (@params (
+    (@param "Float number")))
+  (@return "Result of the arccosine function"))
+
+(@doc tan-math
+  (@desc "Returns result of the tangent function for an input value in radians (first argument)")
+  (@params (
+    (@param "Angle in radians")))
+  (@return "Result of the tangent function"))
+
+(@doc atan-math
+  (@desc "Returns result of the arctangent function for an input value (first argument)")
+  (@params (
+    (@param "Float number")))
+  (@return "Result of the tangent function"))
+
+(@doc isnan-math
+  (@desc "Returns True if input value is NaN. False - otherwise")
+  (@params (
+    (@param "Number")))
+  (@return "True/False"))
+
+(@doc isinf-math
+  (@desc "Returns True if input value is positive or negative infinity. False - otherwise")
+  (@params (
+    (@param "Number")))
+  (@return "True/False"))
 
 (@doc random-int
   (@desc "Returns random int number from range defined by two numbers (first and second argument)")

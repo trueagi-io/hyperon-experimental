@@ -1,8 +1,7 @@
 //! Contains MeTTa specific types, constants and functions.
 
 pub mod text;
-pub mod interpreter_minimal;
-pub use interpreter_minimal as interpreter;
+pub mod interpreter;
 pub mod types;
 pub mod runner;
 
@@ -30,6 +29,7 @@ pub const NO_VALID_ALTERNATIVES : Atom = sym!("NoValidAlternatives");
 pub const EMPTY_SYMBOL : Atom = sym!("Empty");
 
 pub const EVAL_SYMBOL : Atom = sym!("eval");
+pub const EVALC_SYMBOL : Atom = sym!("evalc");
 pub const CHAIN_SYMBOL : Atom = sym!("chain");
 pub const UNIFY_SYMBOL : Atom = sym!("unify");
 pub const DECONS_ATOM_SYMBOL : Atom = sym!("decons-atom");
@@ -42,16 +42,8 @@ pub const SUPERPOSE_BIND_SYMBOL : Atom = sym!("superpose-bind");
 pub const METTA_SYMBOL : Atom = sym!("metta");
 pub const CALL_NATIVE_SYMBOL : Atom = sym!("call-native");
 
-//TODO: convert these from functions to static strcutures, when Atoms are Send+Sync
-#[allow(non_snake_case)]
-pub fn UNIT_ATOM() -> Atom {
-    Atom::expr([])
-}
-
-#[allow(non_snake_case)]
-pub fn UNIT_TYPE() -> Atom {
-    Atom::expr([ARROW_SYMBOL])
-}
+pub const UNIT_ATOM: Atom = constexpr!();
+pub const UNIT_TYPE: Atom = constexpr!(("->"));
 
 /// Initializes an error expression atom
 pub fn error_atom(err_atom: Option<Atom>, err_code: Option<Atom>, message: String) -> Atom {
@@ -95,3 +87,13 @@ pub fn atom_error_message(atom: &Atom) -> &str {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unit_type() {
+        assert_eq!(UNIT_ATOM, Atom::expr([]));
+        assert_eq!(UNIT_TYPE, Atom::expr([ARROW_SYMBOL]));
+    }
+}

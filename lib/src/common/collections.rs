@@ -161,6 +161,97 @@ impl From<String> for ImmutableString {
     }
 }
 
+#[derive(Debug, Clone)]
+pub enum CowArray<T: 'static> {
+    Allocated(Box<[T]>),
+    Literal(&'static [T]),
+}
+
+impl<T: 'static> CowArray<T> {
+
+    pub fn new() -> Self {
+        Self::Literal(&[])
+    }
+
+    pub fn as_slice(&self) -> &[T] {
+        match self {
+            Self::Allocated(array) => &*array,
+            Self::Literal(array) => array,
+        }
+    }
+
+    pub fn as_slice_mut(&mut self) -> &mut [T] where T: Clone {
+        match self {
+            Self::Allocated(array) => &mut *array,
+            Self::Literal(array) => {
+                *self = Self::Allocated((*array).into());
+                self.as_slice_mut()
+            }
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        self.as_slice().len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item=&T> {
+        self.as_slice().iter()
+    }
+}
+
+impl<T: PartialEq> PartialEq for CowArray<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.as_slice() == other.as_slice()
+    }
+}
+
+impl<T: Eq> Eq for CowArray<T> {}
+
+impl<T: Display> Display for CowArray<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")
+            .and_then(|_| self.as_slice().iter().take(1).fold(Ok(()),
+                |res, atom| res.and_then(|_| write!(f, "{}", atom))))
+            .and_then(|_| self.as_slice().iter().skip(1).fold(Ok(()),
+                |res, atom| res.and_then(|_| write!(f, " {}", atom))))
+            .and_then(|_| write!(f, "]"))
+    }
+}
+
+impl<T: 'static> From<&'static [T]> for CowArray<T> {
+    fn from(a: &'static [T]) -> Self {
+        CowArray::Literal(a)
+    }
+}
+
+impl<T, const N: usize> From<[T; N]> for CowArray<T> {
+    fn from(a: [T; N]) -> Self {
+        CowArray::Allocated(Box::new(a))
+    }
+}
+
+impl<T> From<Vec<T>> for CowArray<T> {
+    fn from(v: Vec<T>) -> Self {
+        CowArray::Allocated(v.into_boxed_slice())
+    }
+}
+
+impl<T: Clone> Into<Vec<T>> for CowArray<T> {
+    fn into(self) -> Vec<T> {
+        match self {
+            Self::Allocated(array) => array.into(),
+            Self::Literal(array) => array.into(),
+        }
+    }
+}
+
+impl<'a, T> Into<&'a [T]> for &'a CowArray<T> {
+    fn into(self) -> &'a [T] {
+        self.as_slice()
+    }
+}
+
+
 #[cfg(test)]
 mod test {
     use super::*;

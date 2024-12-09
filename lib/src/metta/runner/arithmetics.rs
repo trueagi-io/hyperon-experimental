@@ -1,6 +1,7 @@
 use crate::*;
 use crate::metta::*;
 use crate::atom::serial;
+use crate::atom::serial::ConvertingSerializer;
 
 use std::fmt::Display;
 
@@ -70,6 +71,10 @@ impl Number {
         (a.cast(res_type), b.cast(res_type))
     }
 
+    pub fn from_atom(atom: &Atom) -> Option<Self> {
+        NumberSerializer::convert(atom)
+    }
+
     fn get_type(&self) -> NumberType {
         match self {
             Number::Integer(_) => NumberType::Integer,
@@ -124,6 +129,28 @@ impl Grounded for Number {
     }
 }
 
+#[derive(Default)]
+struct NumberSerializer {
+    value: Option<Number>,
+}
+
+impl serial::Serializer for NumberSerializer {
+    fn serialize_i64(&mut self, v: i64) -> serial::Result {
+        self.value = Some(Number::Integer(v));
+        Ok(())
+    }
+    fn serialize_f64(&mut self, v: f64) -> serial::Result {
+        self.value = Some(Number::Float(v));
+        Ok(())
+    }
+}
+
+impl serial::ConvertingSerializer<Number> for NumberSerializer {
+    fn into_type(self) -> Option<Number> {
+        self.value
+    }
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct Bool(pub bool);
 
@@ -134,6 +161,10 @@ impl Bool {
             "False" => Self(false),
             _ => panic!("Could not parse Bool value: {}", b),
         }
+    }
+
+    pub fn from_atom(atom: &Atom) -> Option<Self> {
+        BoolSerializer::convert(atom)
     }
 }
 
@@ -172,6 +203,25 @@ impl CustomMatch for Bool {
     }
 }
 
+#[derive(Default)]
+struct BoolSerializer {
+    value: Option<Bool>,
+}
+
+impl serial::Serializer for BoolSerializer {
+    fn serialize_bool(&mut self, v: bool) -> serial::Result {
+        self.value = Some(Bool(v));
+        Ok(())
+    }
+}
+
+impl serial::ConvertingSerializer<Bool> for BoolSerializer {
+    fn into_type(self) -> Option<Bool> {
+        self.value
+    }
+}
+
+
 macro_rules! def_binary_number_op {
     ($name:ident, $op:tt, $r:ident, $ret_type:ident) => {
         #[derive(Clone, PartialEq, Debug)]
@@ -196,8 +246,8 @@ macro_rules! def_binary_number_op {
         impl CustomExecute for $name {
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($op), " expects two number arguments"));
-                let a = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
-                let b = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_number().ok_or_else(arg_error)?;
+                let a = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?;
+                let b = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?;
 
                 let (a, b) = Number::promote(a, b);
                 let res: $ret_type = match (a, b) {
@@ -246,8 +296,8 @@ macro_rules! def_binary_bool_op {
         impl CustomExecute for $name {
             fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
                 let arg_error = || ExecError::from(concat!(stringify!($disp), " expects two boolean arguments"));
-                let Bool(a) = AsPrimitive::from_atom(args.get(0).ok_or_else(arg_error)?).as_bool().ok_or_else(arg_error)?;
-                let Bool(b) = AsPrimitive::from_atom(args.get(1).ok_or_else(arg_error)?).as_bool().ok_or_else(arg_error)?;
+                let Bool(a) = args.get(0).and_then(Bool::from_atom).ok_or_else(arg_error)?;
+                let Bool(b) = args.get(1).and_then(Bool::from_atom).ok_or_else(arg_error)?;
 
                 Ok(vec![Atom::gnd(Bool(a $op b))])
             }
@@ -258,33 +308,8 @@ macro_rules! def_binary_bool_op {
 def_binary_bool_op!(AndOp, and, &&);
 def_binary_bool_op!(OrOp, or, ||);
 
-// NOTE: xor and flip are absent in Python intentionally for conversion testing
+// NOTE: xor is absent in Python intentionally for conversion testing
 def_binary_bool_op!(XorOp, xor, ^);
-
-#[derive(Clone, PartialEq, Debug)]
-pub struct FlipOp{}
-
-impl Display for FlipOp {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "flip")
-    }
-}
-
-impl Grounded for FlipOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_BOOL])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for FlipOp {
-    fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        Ok(vec![Atom::gnd(Bool(rand::random()))])
-    }
-}
 
 
 #[derive(Clone, PartialEq, Debug)]
@@ -309,90 +334,9 @@ impl Grounded for NotOp {
 impl CustomExecute for NotOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("not expects one boolean arguments");
-        let &Bool(a) = args.get(0).ok_or_else(arg_error)?.as_gnd::<Bool>().ok_or_else(arg_error)?;
+        let &Bool(a) = args.get(0).and_then(Atom::as_gnd).ok_or_else(arg_error)?;
 
         Ok(vec![Atom::gnd(Bool(!a))])
-    }
-}
-
-#[derive(Default)]
-struct BoolSerializer {
-    value: Option<Bool>,
-}
-
-impl serial::Serializer for BoolSerializer {
-    fn serialize_bool(&mut self, v: bool) -> serial::Result {
-        self.value = Some(Bool(v));
-        Ok(())
-    }
-}
-
-#[derive(Default)]
-struct NumberSerializer {
-    value: Option<Number>,
-}
-
-impl serial::Serializer for NumberSerializer {
-    fn serialize_i64(&mut self, v: i64) -> serial::Result {
-        self.value = Some(Number::Integer(v));
-        Ok(())
-    }
-    fn serialize_f64(&mut self, v: f64) -> serial::Result {
-        self.value = Some(Number::Float(v));
-        Ok(())
-    }
-}
-
-pub struct AsPrimitive<'a> {
-    atom: &'a super::Atom
-}
-
-impl<'a> AsPrimitive<'a> {
-    pub fn from_atom(atom: &'a super::Atom) -> Self {
-        Self{ atom }
-    }
-
-    fn as_gnd(&self) -> Option<&dyn super::GroundedAtom> {
-        std::convert::TryInto::<&dyn super::GroundedAtom>::try_into(self.atom).ok()
-    }
-
-    fn as_type<T: 'static + Clone, S: serial::ConvertingSerializer<T>>(&self, mut serializer: S) -> Option<T> {
-       self.as_gnd()
-           .map(|gnd| {
-               gnd.as_any_ref()
-                   .downcast_ref::<T>()
-                   .cloned()
-                   .or_else(|| {
-                       let _ = gnd.serialize(serializer.as_mut());
-                       serializer.into_type()
-                   })
-           }).flatten()
-    }
-
-    pub fn as_bool(self) -> Option<Bool> {
-       self.as_type(BoolSerializer::default())
-    }
-
-    pub fn as_number(self) -> Option<Number> {
-       self.as_type(NumberSerializer::default())
-    }
-}
-
-impl serial::ConvertingSerializer<Bool> for BoolSerializer {
-    fn as_mut(&mut self) -> &mut dyn serial::Serializer {
-        self
-    }
-    fn into_type(self) -> Option<Bool> {
-        self.value
-    }
-}
-
-impl serial::ConvertingSerializer<Number> for NumberSerializer {
-    fn as_mut(&mut self) -> &mut dyn serial::Serializer {
-        self
-    }
-    fn into_type(self) -> Option<Number> {
-        self.value
     }
 }
 
