@@ -5,7 +5,9 @@ use crate::metta::*;
 use std::convert::TryInto;
 
 use crate::metta::text::Tokenizer;
-use crate::metta::runner::{arithmetics::*,stdlib::grounded_op, stdlib::regex};
+use super::{grounded_op, regex};
+use crate::metta::runner::number::*;
+use crate::metta::runner::bool::*;
 
 #[derive(Clone, Debug)]
 pub struct PowMathOp {}

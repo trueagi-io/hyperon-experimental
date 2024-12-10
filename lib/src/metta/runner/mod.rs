@@ -94,7 +94,8 @@ use stdlib::CoreLibLoader;
 mod builtin_mods;
 use builtin_mods::*;
 
-pub mod arithmetics;
+pub mod bool;
+pub mod number;
 pub mod string;
 
 const EXEC_SYMBOL : Atom = sym!("!");

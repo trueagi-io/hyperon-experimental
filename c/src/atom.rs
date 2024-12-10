@@ -14,8 +14,8 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon::matcher::{Bindings, BindingsSet};
-use hyperon::metta::runner::arithmetics::Bool;
-use hyperon::metta::runner::arithmetics::Number;
+use hyperon::metta::runner::bool::Bool;
+use hyperon::metta::runner::number::Number;
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Atom Interface

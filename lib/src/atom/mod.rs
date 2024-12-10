@@ -60,7 +60,7 @@
 /// ```
 /// #[macro_use]
 /// use hyperon::expr;
-/// use hyperon::metta::runner::arithmetics::MulOp;
+/// use hyperon::metta::runner::stdlib::arithmetics::MulOp;
 ///
 /// let sym = expr!("A");
 /// let var = expr!(x);

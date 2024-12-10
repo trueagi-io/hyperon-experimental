@@ -6,12 +6,12 @@ use crate::common::shared::Shared;
 use crate::common::CachingMapper;
 #[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::Metta;
+use crate::metta::runner::bool::*;
 
 use std::convert::TryInto;
 use std::collections::HashMap;
 
-use crate::metta::runner::stdlib::{interpret_no_error, grounded_op, unit_result, regex, interpret};
-use crate::metta::runner::arithmetics::*;
+use super::{interpret_no_error, grounded_op, unit_result, regex, interpret};
 
 #[derive(Clone, Debug)]
 pub struct PragmaOp {
