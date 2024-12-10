@@ -5,7 +5,6 @@ use crate::metta::text::Tokenizer;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::multitrie::MultiTrie;
 use crate::space::grounding::atom_to_trie_key;
-#[cfg(feature = "pkg_mgmt")]
 use super::{grounded_op, regex};
 use crate::metta::runner::number::*;
 

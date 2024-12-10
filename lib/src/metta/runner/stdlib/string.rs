@@ -1,10 +1,8 @@
 use crate::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-#[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::string::*;
-
-use crate::metta::runner::stdlib::{grounded_op, atom_to_string, unit_result, regex};
+use super::{grounded_op, atom_to_string, unit_result, regex};
 
 use std::convert::TryInto;
 

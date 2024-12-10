@@ -1,7 +1,5 @@
 use crate::*;
 use crate::metta::*;
-#[cfg(feature = "pkg_mgmt")]
-
 use super::{grounded_op, regex};
 use crate::metta::text::Tokenizer;
 use crate::metta::runner::number::*;

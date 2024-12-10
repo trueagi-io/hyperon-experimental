@@ -4,7 +4,6 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::common::shared::Shared;
 use crate::common::CachingMapper;
-#[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::Metta;
 use crate::metta::runner::bool::*;
 
