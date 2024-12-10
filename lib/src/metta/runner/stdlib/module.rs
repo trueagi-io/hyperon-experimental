@@ -4,8 +4,8 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::common::shared::Shared;
 use crate::metta::runner::{Metta, RunContext, ResourceKey};
-use crate::metta::runner::string::*;
-use crate::metta::runner::stdlib::{grounded_op, regex, unit_result};
+use crate::metta::runner::str::*;
+use super::{grounded_op, regex, unit_result};
 
 use regex::Regex;
 

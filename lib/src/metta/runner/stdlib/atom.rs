@@ -441,7 +441,7 @@ mod tests {
     use super::*;
     use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
-    use crate::metta::runner::string::Str;
+    use crate::metta::runner::str::Str;
     use crate::common::test_utils::metta_space;
     use crate::metta::runner::stdlib::tests::run_program;
     use crate::metta::runner::Metta;

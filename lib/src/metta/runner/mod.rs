@@ -96,7 +96,7 @@ use builtin_mods::*;
 
 pub mod bool;
 pub mod number;
-pub mod string;
+pub mod str;
 
 const EXEC_SYMBOL : Atom = sym!("!");
 

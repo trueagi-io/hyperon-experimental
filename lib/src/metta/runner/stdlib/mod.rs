@@ -17,9 +17,9 @@ use crate::metta::*;
 use crate::metta::text::{Tokenizer, SExprParser};
 use crate::common::shared::Shared;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader};
-use regex::Regex;
+use super::str::*;
 
-use super::string::*;
+use regex::Regex;
 
 macro_rules! grounded_op {
     ($name:ident, $disp:literal) => {
@@ -157,7 +157,7 @@ mod tests {
     use super::*;
     use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
-    use crate::metta::runner::string::Str;
+    use crate::metta::runner::str::Str;
     use crate::matcher::atoms_are_equivalent;
     use crate::common::Operation;
     use crate::metta::runner::bool::Bool;
