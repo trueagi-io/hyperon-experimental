@@ -1,10 +1,8 @@
 use crate::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-#[cfg(feature = "pkg_mgmt")]
-use crate::metta::runner::string::*;
-
-use crate::metta::runner::stdlib::{grounded_op, atom_to_string, unit_result, regex};
+use crate::metta::runner::str::*;
+use super::{grounded_op, atom_to_string, unit_result, regex};
 
 use std::convert::TryInto;
 
@@ -67,6 +65,11 @@ pub fn register_runner_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
     let format_args_op = Atom::gnd(FormatArgsOp{});
     tref.register_token(regex(r"format-args"), move |_| { format_args_op.clone() });
+}
+
+pub fn register_rust_stdlib_tokens(tref: &mut Tokenizer) {
+    tref.register_token(regex(r#"(?s)^".*"$"#),
+        |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
 }
 
 #[cfg(test)]

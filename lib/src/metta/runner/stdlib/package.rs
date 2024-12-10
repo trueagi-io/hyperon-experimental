@@ -1,12 +1,12 @@
-use crate::metta::runner::stdlib::{grounded_op, regex, unit_result};
+use super::{grounded_op, regex, unit_result};
 use crate::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-use crate::metta::runner::{Metta, RunContext, string::Str,
-                           git_catalog::ModuleGitLocation, mod_name_from_url, pkg_mgmt::UpdateMode};
-
-use crate::metta::runner::string::*;
-
+use crate::metta::runner::{Metta, RunContext,
+                           git_catalog::ModuleGitLocation,
+                           mod_name_from_url,
+                           pkg_mgmt::UpdateMode};
+use crate::metta::runner::str::*;
 
 /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
 #[derive(Clone, Debug)]
