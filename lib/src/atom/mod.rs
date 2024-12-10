@@ -60,7 +60,7 @@
 /// ```
 /// #[macro_use]
 /// use hyperon::expr;
-/// use hyperon::metta::runner::arithmetics::MulOp;
+/// use hyperon::metta::runner::stdlib::arithmetics::MulOp;
 ///
 /// let sym = expr!("A");
 /// let var = expr!(x);
@@ -367,6 +367,11 @@ pub enum ExecError {
     /// Returned intentionally to let [crate::metta::interpreter] algorithm
     /// know that this expression should be returned "as is" without reducing.
     NoReduce,
+    /// Argument is not recognized by function implementation. It can be
+    /// argument of incorrect type or in incorrect format. Interpreter handles
+    /// this error similarly to the situation when pure function definition
+    /// is not matched (see [crate::metta::interpreter]).
+    IncorrectArgument,
 }
 
 impl From<String> for ExecError {

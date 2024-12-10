@@ -1,9 +1,9 @@
 use crate::*;
 use crate::metta::*;
-#[cfg(feature = "pkg_mgmt")]
-
+use super::{grounded_op, regex};
 use crate::metta::text::Tokenizer;
-use crate::metta::runner::{arithmetics::*, stdlib::grounded_op, stdlib::regex};
+use crate::metta::runner::number::*;
+use crate::metta::runner::bool::*;
 
 use std::fmt::Display;
 use rand::Rng;

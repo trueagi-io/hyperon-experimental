@@ -30,6 +30,7 @@ class GroundedTypeTest(unittest.TestCase):
 
     def test_higher_func(self):
         metta = MeTTa(env_builder=Environment.test_env())
+        metta.register_atom(r"plus", OperationAtom("plus", lambda a, b: a + b))
         metta.register_atom(
             r"curry_num",
             OperationAtom(
@@ -38,23 +39,28 @@ class GroundedTypeTest(unittest.TestCase):
                     'lmd',
                     lambda y: op.get_object().op(x.get_object().value, y),
                     ['Number', 'Number'])],
-                #FIXME: interpreter refuses to execute typed curry_num
-                #[['Number', 'Number', 'Number'], 'Number', ['Number', 'Number']],
+                [['Number', 'Number', 'Number'], 'Number', ['Number', 'Number']],
                 unwrap=False))
-        self.assertEqual(metta.run("!((curry_num + 1) 2)"),
+        self.assertEqual(metta.run("!((curry_num plus 1) 2)"),
                          metta.run("! 3"))
 
     def test_meta_types(self):
         metta = MeTTa(env_builder=Environment.test_env())
         ### Basic functional types
         metta.register_atom(r"id_num", OperationAtom("id_num", lambda x: x, ['Number', 'Number']))
-        metta.register_atom(r"as_int", OperationAtom("as_int", lambda x: x, ['Number', 'Int']))
+        metta.register_atom(r"as_int", OperationAtom("as_int", lambda x: x, ['Number', 'Number']))
         v1 = metta.run("!(id_num (+ 2 2))")[0]
         v2 = metta.run("! 4")[0]
         v3 = metta.run("!(as_int (+ 2 2))")[0]
         self.assertEqual(v1, v2)
         self.assertEqual(v1[0].get_grounded_type(), v2[0].get_grounded_type())
-        self.assertNotEqual(v1[0].get_grounded_type(), v3[0].get_grounded_type())
+        # Python int is represented by the Rust Number grounded atom. Number is
+        # implemented to have constant type "Number" which is common
+        # implementation of the grounded atoms in Rust. Usually type is an
+        # attribute of the atom and cannot be changed by reassigning. Thus one
+        # cannot override type of the value by calling (-> Number Int)
+        # function. It doesn't work for usual Rust grounded atoms.
+        self.assertEqual(v1[0].get_grounded_type(), v3[0].get_grounded_type())
         # Untyped symbols don't cause type error, but the expression is not reduced
         self.assertEqual(metta.run("!(id_num untyp)"), [metta.parse_all("(id_num untyp)")])
         # Typed symbols cause type error when evaluated
@@ -141,7 +147,6 @@ class GroundedTypeTest(unittest.TestCase):
                 metta.parse_single("untyped").get_grounded_type())
 
     def test_conversion_between_rust_and_python(self):
-        self.maxDiff = None
         metta = MeTTa(env_builder=Environment.test_env())
         integer = metta.run('!(+ 1 (random-int 4 5))', flat=True)[0].get_object()
         self.assertEqual(integer, ValueObject(5))
@@ -150,8 +155,33 @@ class GroundedTypeTest(unittest.TestCase):
         bool = metta.run('!(not (flip))', flat=True)[0].get_object()
         self.assertTrue(bool.value or  not bool.value)
         false = metta.run('!(not True)', flat=True)[0].get_object()
-        self.assertEquals(false, ValueObject(False))
+        self.assertEqual(false, ValueObject(False))
 
+    def test_python_value_conversion(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+        metta.register_atom("return-int", OperationAtom("return-int", lambda: 42))
+        integer = metta.run('!(return-int)', flat=True)[0].get_object()
+        self.assertEqual(integer, ValueObject(42))
+        metta.register_atom("return-float", OperationAtom("return-float", lambda: 4.2))
+        float = metta.run('!(return-float)', flat=True)[0].get_object()
+        self.assertEqual(float, ValueObject(4.2))
+        metta.register_atom("return-bool", OperationAtom("return-bool", lambda: True))
+        float = metta.run('!(return-bool)', flat=True)[0].get_object()
+        self.assertEqual(float, ValueObject(True))
+
+    def test_assert_grounded_value_type(self):
+        with self.assertRaises(AssertionError) as cm:
+            ValueAtom(42, "Int")
+        msg = str(cm.exception)
+        self.assertTrue(msg.startswith("Grounded int 42 can't have a custom type Int"), f"Unexpected message \"{msg}\"")
+        with self.assertRaises(AssertionError) as cm:
+            ValueAtom(4.2, "Float")
+        msg = str(cm.exception)
+        self.assertTrue(msg.startswith("Grounded float 4.2 can't have a custom type Float"), f"Unexpected message \"{msg}\"")
+        with self.assertRaises(AssertionError) as cm:
+            ValueAtom(True, "bool")
+        msg = str(cm.exception)
+        self.assertTrue(msg.startswith("Grounded bool True can't have a custom type bool"), f"Unexpected message \"{msg}\"")
 
 if __name__ == "__main__":
     unittest.main()

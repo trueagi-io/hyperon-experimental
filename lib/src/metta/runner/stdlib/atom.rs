@@ -5,9 +5,8 @@ use crate::metta::text::Tokenizer;
 use crate::metta::types::{get_atom_types, get_meta_type};
 use crate::common::multitrie::MultiTrie;
 use crate::space::grounding::atom_to_trie_key;
-#[cfg(feature = "pkg_mgmt")]
-use crate::metta::runner::stdlib::{grounded_op, regex};
-use crate::metta::runner::arithmetics::*;
+use super::{grounded_op, regex};
+use crate::metta::runner::number::*;
 
 use std::convert::TryInto;
 
@@ -442,10 +441,11 @@ mod tests {
     use super::*;
     use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
-    use crate::metta::runner::string::Str;
+    use crate::metta::runner::str::Str;
     use crate::common::test_utils::metta_space;
     use crate::metta::runner::stdlib::tests::run_program;
     use crate::metta::runner::Metta;
+    use crate::metta::runner::stdlib::arithmetics::*;
 
     #[test]
     fn metta_car_atom() {
@@ -568,9 +568,6 @@ mod tests {
             vec![expr!("Error" ({SumOp{}} {Number::Integer(1)} {Number::Integer(2)}) ({SumOp{}} {Number::Integer(1)} {SumOp{}}))],
         ]));
     }
-
-
-
 
 
     #[test]

@@ -9,6 +9,7 @@ pub mod string;
 pub mod debug;
 pub mod space;
 pub mod core;
+pub mod arithmetics;
 
 use crate::*;
 use crate::space::*;
@@ -16,9 +17,9 @@ use crate::metta::*;
 use crate::metta::text::{Tokenizer, SExprParser};
 use crate::common::shared::Shared;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader};
-use regex::Regex;
+use super::str::*;
 
-use super::{arithmetics::*, string::*};
+use regex::Regex;
 
 macro_rules! grounded_op {
     ($name:ident, $disp:literal) => {
@@ -113,45 +114,9 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     let mut rust_tokens = Tokenizer::new();
     let tref = &mut rust_tokens;
 
-    tref.register_fallible_token(regex(r"[\-\+]?\d+"),
-        |token| { Ok(Atom::gnd(Number::from_int_str(token)?)) });
-    tref.register_fallible_token(regex(r"[\-\+]?\d+\.\d+"),
-        |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
-    tref.register_fallible_token(regex(r"[\-\+]?\d+(\.\d+)?[eE][\-\+]?\d+"),
-        |token| { Ok(Atom::gnd(Number::from_float_str(token)?)) });
-    tref.register_token(regex(r"True|False"),
-        |token| { Atom::gnd(Bool::from_str(token)) });
-    tref.register_token(regex(r#"(?s)^".*"$"#),
-        |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
-    let sum_op = Atom::gnd(SumOp{});
-    tref.register_token(regex(r"\+"), move |_| { sum_op.clone() });
-    let sub_op = Atom::gnd(SubOp{});
-    tref.register_token(regex(r"\-"), move |_| { sub_op.clone() });
-    let mul_op = Atom::gnd(MulOp{});
-    tref.register_token(regex(r"\*"), move |_| { mul_op.clone() });
-    let div_op = Atom::gnd(DivOp{});
-    tref.register_token(regex(r"/"), move |_| { div_op.clone() });
-    let mod_op = Atom::gnd(ModOp{});
-    tref.register_token(regex(r"%"), move |_| { mod_op.clone() });
-    let lt_op = Atom::gnd(LessOp{});
-    tref.register_token(regex(r"<"), move |_| { lt_op.clone() });
-    let gt_op = Atom::gnd(GreaterOp{});
-    tref.register_token(regex(r">"), move |_| { gt_op.clone() });
-    let le_op = Atom::gnd(LessEqOp{});
-    tref.register_token(regex(r"<="), move |_| { le_op.clone() });
-    let ge_op = Atom::gnd(GreaterEqOp{});
-    tref.register_token(regex(r">="), move |_| { ge_op.clone() });
-    let and_op = Atom::gnd(AndOp{});
-    tref.register_token(regex(r"and"), move |_| { and_op.clone() });
-    let or_op = Atom::gnd(OrOp{});
-    tref.register_token(regex(r"or"), move |_| { or_op.clone() });
-    let not_op = Atom::gnd(NotOp{});
-    tref.register_token(regex(r"not"), move |_| { not_op.clone() });
-    // NOTE: xor is absent in Python intentionally for conversion testing
-    let xor_op = Atom::gnd(XorOp{});
-    tref.register_token(regex(r"xor"), move |_| { xor_op.clone() });
-
     core::register_rust_stdlib_tokens(tref);
+    arithmetics::register_rust_stdlib_tokens(tref);
+    string::register_rust_stdlib_tokens(tref);
 
     target.move_front(&mut rust_tokens);
 }
@@ -190,9 +155,11 @@ mod tests {
     use super::*;
     use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
-    use crate::metta::runner::string::Str;
+    use crate::metta::runner::str::Str;
     use crate::matcher::atoms_are_equivalent;
     use crate::common::Operation;
+    use crate::metta::runner::bool::Bool;
+    use crate::metta::runner::number::Number;
 
     use std::fmt::Display;
     use regex::Regex;

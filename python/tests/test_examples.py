@@ -69,7 +69,7 @@ class ExamplesTest(HyperonTestCase):
         pglob = Global(10)
         ploc = 10
         metta.register_token("pglob", lambda _: ValueAtom(pglob))
-        metta.register_token("ploc", lambda _: ValueAtom(ploc))
+        metta.register_token("ploc", lambda _: PrimitiveAtom(ploc))
         metta.register_token("Setter", lambda token: newNewAtom(token, Setter))
         metta.register_token("SetAtom", lambda token: newNewAtom(token, Setter, False))
         # Just checking that interpretation of "pglob" gives us
@@ -99,7 +99,7 @@ class ExamplesTest(HyperonTestCase):
         # "ploc" creates ValueAtom(ploc) on each occurrence
         self.assertEqual(metta.run('! ploc')[0][0].get_object().value, 10)
         # Another way is to return the same atom each time
-        ploca = ValueAtom(ploc)
+        ploca = PrimitiveAtom(ploc)
         metta.register_token("ploca", lambda _: ploca)
         # It will be not affected by assigning unwrapped values:
         # we are still copying values while unwrapping

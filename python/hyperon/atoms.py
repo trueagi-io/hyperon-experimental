@@ -124,6 +124,8 @@ class AtomType:
     GROUNDED = Atom._from_catom(hp.CAtomType.GROUNDED)
     GROUNDED_SPACE = Atom._from_catom(hp.CAtomType.GROUNDED_SPACE)
     UNIT = Atom._from_catom(hp.CAtomType.UNIT)
+    NUMBER = Atom._from_catom(hp.CAtomType.NUMBER)
+    BOOL = Atom._from_catom(hp.CAtomType.BOOL)
 
 class Atoms:
 
@@ -191,8 +193,34 @@ def _priv_gnd_get_object(atom):
 
 def G(object, type=AtomType.UNDEFINED):
     """A convenient method to construct a GroundedAtom"""
-    assert hasattr(object, "copy"), "Method copy should be implemented by grounded object"
-    return GroundedAtom(hp.atom_gnd(object, type.catom))
+    return GroundedAtom(_priv_atom_gnd(object, type))
+
+def _priv_atom_gnd(obj, type):
+    """
+    Converts Python object into grounded atom. It has special processing for
+    the object which has cspace attribute and for ValueObject instances of primitive
+    types. Spaces usually should be treated by a special way. Primitive atoms
+    are converted into the MeTTa primitives.
+    """
+    catom = None
+    if hasattr(obj, "cspace"):
+        assert type == AtomType.UNDEFINED, f"Grounded Space Atoms {obj} can't have a custom type {type}"
+        catom = hp.atom_space(obj.cspace)
+    elif isinstance(obj, ValueObject):
+        value = obj.value
+        if isinstance(value, bool):
+            assert type == AtomType.BOOL or type == AtomType.UNDEFINED, f"Grounded bool {obj} can't have a custom type {type}"
+            catom = hp.atom_bool(value)
+        elif isinstance(value, int):
+            assert type == AtomType.NUMBER or type == AtomType.UNDEFINED, f"Grounded int {obj} can't have a custom type {type}"
+            catom = hp.atom_int(value)
+        elif isinstance(value, float):
+            assert type == AtomType.NUMBER or type == AtomType.UNDEFINED, f"Grounded float {obj} can't have a custom type {type}"
+            catom = hp.atom_float(value)
+    if catom is None:
+        assert hasattr(obj, "copy"), f"Method copy should be implemented by grounded object {obj}"
+        catom = hp.atom_py(obj, type.catom)
+    return catom
 
 def _priv_call_execute_on_grounded_atom(gnd, typ, args):
     """
@@ -307,6 +335,15 @@ class ValueObject(GroundedObject):
 
 class NoReduceError(Exception):
     """Custom exception; raised when a reduction operation cannot be performed."""
+    pass
+
+class IncorrectArgumentError(Exception):
+    """
+    Argument is not recognized by function implementation. It can be
+    argument of incorrect type or in incorrect format. Interpreter handles
+    this error similarly to the situation when pure function definition
+    is not matched.
+    """
     pass
 
 class MettaError(Exception):
@@ -531,8 +568,26 @@ def OperationAtom(name, op, type_names=None, unwrap=True):
     return G(OperationObject(name, op, unwrap), _type_sugar(type_names))
 
 def ValueAtom(value, type_name=None, atom_id=None):
-    """Creates a GroundedAtom that wraps a given value, optionally specifying its type and identifier."""
+    """
+    Creates a GroundedAtom that wraps a given value, optionally specifying its
+    type and identifier. It has special processing for the objects which have
+    cspace attribute and for ValueObject instances of primitive types. Spaces
+    usually should be treated by a special way. Primitive atoms are converted
+    into the MeTTa primitives.
+    """
     return G(ValueObject(value, atom_id), _type_sugar(type_name))
+
+def PrimitiveAtom(value, type_name=None, atom_id=None):
+    """
+    Creates a GroundedAtom that wraps a given Python primitive value without
+    converting it into the MeTTa primitive. By default ValueAtom function
+    converts Python primitives into MeTTa ones. This function is added to
+    override this rule if needed.
+    """
+    PRIMITIVE_TYPES = (int, float, bool)
+    assert isinstance(value, PRIMITIVE_TYPES), f"Primitive value {PRIMITIVE_TYPES} is expected"
+    type = _type_sugar(type_name)
+    return GroundedAtom(hp.atom_py(ValueObject(value, atom_id), type.catom))
 
 def MatchableAtom(value, type_name=None, atom_id=None):
     """

@@ -51,8 +51,8 @@ class AtomTest(unittest.TestCase):
     def test_grounded_no_copy(self):
         with self.assertRaises(AssertionError) as context:
             atom = G(GroundedNoCopy(), S("GroundedNoCopy"))
-        self.assertEqual("Method copy should be implemented by grounded object",
-                        str(context.exception))
+        self.assertTrue(str(context.exception)
+            .startswith("Method copy should be implemented by grounded object"))
 
     # def test_grounded_execute_default(self):
         # self.assertEqual(ValueAtom(1.0).get_object().execute(VecAtom(),
@@ -98,7 +98,7 @@ class AtomTest(unittest.TestCase):
     def test_grounded_returns_python_value_unwrap_false(self):
         def x2_op(atom):
             return [2 * atom.get_object().value]
-        x2Atom = OperationAtom('*2', x2_op, type_names=["int", "int"], unwrap=False)
+        x2Atom = OperationAtom('*2', x2_op, type_names=["Number", "Number"], unwrap=False)
         expr = E(x2Atom, ValueAtom(1))
 
         space = GroundingSpaceRef()
@@ -124,6 +124,13 @@ class AtomTest(unittest.TestCase):
         self.assertEqual(interpret(space, expr),
                 [E(noReduceAtom, ValueAtom(1))])
 
+    def test_incorrect_argument(self):
+        space = GroundingSpaceRef()
+        expr = E(Atoms.METTA, E(incorrectArgumentAtom, ValueAtom(1)),
+                 AtomType.UNDEFINED, G(space))
+        self.assertEqual(interpret(space, expr),
+                [E(incorrectArgumentAtom, ValueAtom(1))])
+
     def test_match_(self):
         space = GroundingSpaceRef()
         match_atom = MatchableAtomTest(S("MatchableAtom"), type_name=None, atom_id=None)
@@ -141,11 +148,15 @@ class AtomTest(unittest.TestCase):
 # No unwrap
 def x2_op(atom):
     return [ValueAtom(2 * atom.get_object().value)]
-x2Atom = OperationAtom('*2', x2_op, type_names=["int", "int"], unwrap=False)
+x2Atom = OperationAtom('*2', x2_op, type_names=["Number", "Number"], unwrap=False)
 
 def no_reduce_op(atom):
     raise NoReduceError()
 noReduceAtom = OperationAtom('no-reduce', no_reduce_op, unwrap=False)
+
+def incorrect_argument_op(atom):
+    raise IncorrectArgumentError()
+incorrectArgumentAtom = OperationAtom('incorrect-argument', incorrect_argument_op, unwrap=False)
 
 class GroundedNoCopy:
     pass
