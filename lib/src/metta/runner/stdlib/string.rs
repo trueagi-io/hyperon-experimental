@@ -67,6 +67,11 @@ pub fn register_runner_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r"format-args"), move |_| { format_args_op.clone() });
 }
 
+pub fn register_rust_stdlib_tokens(tref: &mut Tokenizer) {
+    tref.register_token(regex(r#"(?s)^".*"$"#),
+        |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

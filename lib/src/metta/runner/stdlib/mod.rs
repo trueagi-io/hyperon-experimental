@@ -114,11 +114,9 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     let mut rust_tokens = Tokenizer::new();
     let tref = &mut rust_tokens;
 
-    tref.register_token(regex(r#"(?s)^".*"$"#),
-        |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
-
-    arithmetics::register_rust_stdlib_tokens(tref);
     core::register_rust_stdlib_tokens(tref);
+    arithmetics::register_rust_stdlib_tokens(tref);
+    string::register_rust_stdlib_tokens(tref);
 
     target.move_front(&mut rust_tokens);
 }
