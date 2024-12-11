@@ -1343,6 +1343,9 @@ mod test {
 
     #[test]
     fn test_atoms_are_equivalent() {
+        assert!(atoms_are_equivalent(&expr!(x "b" {"c"}), &expr!(x "b" {"c"})));
+        assert!(atoms_are_equivalent(&expr!(x "b" x), &expr!(x "b" x)));
+        assert!(atoms_are_equivalent(&expr!(a a "b" {"c"}), &expr!(x x "b" {"c"})));
         assert!(atoms_are_equivalent(&expr!(a "b" {"c"}), &expr!(x "b" {"c"})));
         assert!(atoms_are_equivalent(&expr!(a b), &expr!(c d)));
         assert!(!atoms_are_equivalent(&expr!(a "b" {"c"}), &expr!(a "x" {"c"})));
