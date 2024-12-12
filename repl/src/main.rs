@@ -137,6 +137,9 @@ fn start_interactive_mode(repl_params: ReplParams, mut metta: MettaShim) -> rust
         }
     }
 
+    println!("Visit https://metta-lang.dev/ for tutorials.");
+    println!("Execute !(help!) to get list of the standard library functions.");
+
     //The Interpreter Loop
     loop {
 
