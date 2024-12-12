@@ -816,7 +816,7 @@
         (@doc-formal (@item $atom) (@kind atom) (@type $type) (@desc "No documentation")) )))))
 
 (@doc help!
-  (@desc "Function prints documentation for the input atom.")
+  (@desc "Function prints documentation for the input atom. Without parameters prints the list of the stdlib functions.")
   (@params (
     (@param "Input to get documentation for")))
   (@return "Unit atom"))
@@ -838,6 +838,16 @@
       (let () (println! (format-args "Atom {}: {} {}" ($item $type $descr)))
       () ))
     ($other (Error $other "Cannot match @doc-formal structure") ))))
+
+(: help! (-> (->)))
+(= (help!) (let $top-space (mod-space! top)
+    (unify $top-space (@doc $name (@desc $desc) $params $ret)
+      (let () (println! (format-args "{}\n\t{}" ($name $desc))) Empty)
+      Empty)))
+(= (help!) (let $top-space (mod-space! top)
+    (unify $top-space (@doc $name (@desc $desc))
+      (let () (println! (format-args "{}\n\t{}" ($name $desc))) Empty)
+      Empty)))
 
 (@doc help-param!
   (@desc "Function used by function help! to output parameters using println!")
