@@ -5,6 +5,7 @@ use crate::space::*;
 use crate::common::assert::vec_eq_no_order;
 use crate::atom::matcher::atoms_are_equivalent;
 use crate::metta::runner::stdlib::{grounded_op, atom_to_string, regex, interpret_no_error, unit_result};
+use crate::metta::runner::arithmetics::Bool;
 
 use std::convert::TryInto;
 
@@ -187,6 +188,42 @@ impl CustomExecute for AssertAlphaEqualOp {
 }
 
 #[derive(Clone, Debug)]
+pub struct AlphaEqOp {
+    space: DynSpace,
+}
+
+grounded_op!(AlphaEqOp, "=alpha");
+
+impl AlphaEqOp {
+    pub fn new(space: DynSpace) -> Self {
+        Self{ space }
+    }
+}
+
+impl Grounded for AlphaEqOp {
+    fn type_(&self) -> Atom {
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+    }
+
+    fn as_execute(&self) -> Option<&dyn CustomExecute> {
+        Some(self)
+    }
+}
+
+impl CustomExecute for AlphaEqOp {
+    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        log::debug!("AlphaEqOp::execute: {:?}", args);
+        let arg_error = || ExecError::from("=alpha expects two atoms as arguments: actual and expected");
+        let actual_atom = args.get(0).ok_or_else(arg_error)?;
+        let expected_atom = args.get(1).ok_or_else(arg_error)?;
+
+        let actual = interpret_no_error(self.space.clone(), actual_atom)?;
+        let expected = interpret_no_error(self.space.clone(), expected_atom)?;
+        Ok(vec![Atom::gnd(Bool(atoms_are_equivalent(actual.get(0).unwrap(), expected.get(0).unwrap())))])
+    }
+}
+
+#[derive(Clone, Debug)]
 pub struct AssertEqualToResultOp {
     space: DynSpace,
 }
@@ -238,6 +275,8 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, space: &DynSpace) {
     tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
     let assert_alpha_equal_op = Atom::gnd(AssertAlphaEqualOp::new(space.clone()));
     tref.register_token(regex(r"assertAlphaEqual"), move |_| { assert_alpha_equal_op.clone() });
+    let alpha_eq_op = Atom::gnd(AlphaEqOp::new(space.clone()));
+    tref.register_token(regex(r"=alpha"), move |_| { alpha_eq_op.clone() });
 }
 
 #[cfg(test)]
@@ -275,6 +314,12 @@ mod tests {
         assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) Empty)")), Ok(vec![
             vec![expr!("Error" ({assert.clone()} ("foo" "A") "Empty") "\nExpected: []\nGot: [A]\nExcessive result: A")]
         ]));
+    }
+
+    #[test]
+    fn metta_alpha_eq_op() {
+        assert_eq!(run_program(&format!("(= (foo) (R $x $y)) !(=alpha (foo) (R $x $y))")), Ok(vec![vec![expr!({Bool(true)})]]));
+        assert_eq!(run_program(&format!("(= (foo) (R $x $y)) !(=alpha (foo) (R $x $x))")), Ok(vec![vec![expr!({Bool(false)})]]));
     }
 
     #[test]
