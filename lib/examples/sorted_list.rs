@@ -1,6 +1,6 @@
 use hyperon::*;
 use hyperon::metta::runner::*;
-use hyperon::metta::runner::arithmetics::*;
+use hyperon::metta::runner::number::Number;
 use hyperon::metta::text::SExprParser;
 
 fn main() -> Result<(), String> {

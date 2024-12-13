@@ -2,7 +2,6 @@ use crate::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-#[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::stdlib::{grounded_op, unit_result, regex};
 
 use std::rc::Rc;
