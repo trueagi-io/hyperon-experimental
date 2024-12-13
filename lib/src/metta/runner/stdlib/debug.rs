@@ -5,7 +5,7 @@ use crate::space::*;
 use crate::common::assert::vec_eq_no_order;
 use crate::atom::matcher::atoms_are_equivalent;
 use crate::metta::runner::stdlib::{grounded_op, atom_to_string, regex, interpret_no_error, unit_result};
-use crate::metta::runner::arithmetics::Bool;
+use crate::metta::runner::arithmetics::*;
 
 use std::convert::TryInto;
 
