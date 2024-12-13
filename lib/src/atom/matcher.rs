@@ -921,10 +921,7 @@ pub struct BindingsSet(smallvec::SmallVec<[Bindings; 1]>);
 // BindingsSets are conceptually unordered
 impl PartialEq for BindingsSet {
     fn eq(&self, other: &Self) -> bool {
-        match crate::common::assert::vec_eq_no_order(self.iter(), other.iter()) {
-            Ok(()) => true,
-            Err(_) => false
-        }
+        !crate::common::assert::compare_vec_no_order(self.iter(), other.iter(), crate::common::collections::DefaultEquality{}).has_diff()
     }
 }
 

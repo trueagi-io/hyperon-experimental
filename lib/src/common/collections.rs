@@ -1,16 +1,31 @@
 use std::fmt::Display;
 
+pub trait Equality<T> {
+    fn eq(a: &T, b: &T) -> bool;
+}
+
+#[derive(Debug)]
+pub struct DefaultEquality {}
+
+impl<T: PartialEq> Equality<T> for DefaultEquality {
+    fn eq(a: &T, b: &T) -> bool {
+        a == b
+    }
+}
+
 #[derive(Clone, Debug)]
-pub struct ListMap<K, V> {
+pub struct ListMap<K, V, E: Equality<K> = DefaultEquality>
+{
     list: Vec<(K, V)>,
+    _phantom: std::marker::PhantomData<E>,
 }
 
-pub enum ListMapEntry<'a, K, V> {
-    Occupied(K, &'a mut ListMap<K, V>),
-    Vacant(K, &'a mut ListMap<K, V>),
+pub enum ListMapEntry<'a, K, V, E: Equality<K>> {
+    Occupied(K, &'a mut ListMap<K, V, E>),
+    Vacant(K, &'a mut ListMap<K, V, E>),
 }
 
-impl<'a, K: PartialEq, V> ListMapEntry<'a, K, V> {
+impl<'a, K, V, E: Equality<K>> ListMapEntry<'a, K, V, E> {
     pub fn or_insert(self, default: V) -> &'a mut V {
         match self {
             ListMapEntry::Occupied(key, map) => map.get_mut(&key).unwrap(),
@@ -44,7 +59,7 @@ macro_rules! list_map_get {
     ($get:ident, {$( $mut_:tt )?}) => {
         pub fn $get(& $( $mut_ )? self, key: &K) -> Option<& $( $mut_ )? V> {
             for (k, v) in & $( $mut_ )? self.list {
-                if *k == *key {
+                if E::eq(k, key) {
                     return Some(v)
                 }
             }
@@ -53,12 +68,12 @@ macro_rules! list_map_get {
     }
 }
 
-impl<K: PartialEq, V> ListMap<K, V> {
+impl<K, V, E: Equality<K>> ListMap<K, V, E> {
     pub fn new() -> Self {
-        Self{ list: vec![] }
+        Self{ list: vec![], _phantom: std::marker::PhantomData }
     }
 
-    pub fn entry<'a>(&'a mut self, key: K) -> ListMapEntry<'a, K, V> {
+    pub fn entry<'a>(&'a mut self, key: K) -> ListMapEntry<'a, K, V, E> {
         match self.get_mut(&key) {
             Some(_) => ListMapEntry::Occupied(key, self),
             None => ListMapEntry::Vacant(key, self)
