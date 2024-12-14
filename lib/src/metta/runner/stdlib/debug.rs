@@ -2,7 +2,8 @@ use crate::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::space::*;
-use crate::common::assert::vec_eq_no_order;
+use crate::common::collections::Equality;
+use crate::common::assert::{vec_eq_no_order, compare_vec_no_order};
 use crate::atom::matcher::atoms_are_equivalent;
 use crate::metta::runner::stdlib::{grounded_op, atom_to_string, regex, interpret_no_error, unit_result};
 use crate::metta::runner::bool::*;
@@ -14,17 +15,8 @@ fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -
     log::debug!("assert_results_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
     let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
     match vec_eq_no_order(actual.iter(), expected.iter()) {
-        Ok(()) => unit_result(),
-        Err(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
-    }
-}
-
-fn assert_alpha_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
-    log::debug!("assert_alpha_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
-    let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
-    match atoms_are_equivalent(actual.get(0).unwrap(), expected.get(0).unwrap()) {
-        true => unit_result(),
-        false => Err(ExecError::Runtime(format!("{}", report)))
+        None => unit_result(),
+        Some(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
 }
 
@@ -150,6 +142,25 @@ impl CustomExecute for AssertEqualOp {
         assert_results_equal(&actual, &expected, actual_atom)
     }
 }
+
+struct AlphaEquality{}
+
+impl Equality<&Atom> for AlphaEquality {
+    fn eq(a: &&Atom, b: &&Atom) -> bool {
+        atoms_are_equivalent(*a, *b)
+    }
+}
+
+fn assert_alpha_equal(actual: &Vec<Atom>, expected: &Vec<Atom>, atom: &Atom) -> Result<Vec<Atom>, ExecError> {
+    log::debug!("assert_alpha_equal: actual: {:?}, expected: {:?}, actual atom: {:?}", actual, expected, atom);
+    let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
+    let res = compare_vec_no_order(actual.iter(), expected.iter(), AlphaEquality{});
+    match res.as_string() {
+        None => unit_result(),
+        Some(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
+    }
+}
+
 
 #[derive(Clone, Debug)]
 pub struct AssertAlphaEqualOp {
