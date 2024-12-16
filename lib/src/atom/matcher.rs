@@ -1134,16 +1134,6 @@ fn match_atoms_recursively(left: &Atom, right: &Atom) -> BindingsSet {
     res
 }
 
-//TODO: This function is redundant, as the functionality is subsumed by BindingsSet::merge
-/// Merges each bindings from `prev` iter to each bindings from `next`
-/// iter. The result is an iter over successfully merged bindings.
-pub fn match_result_product(prev: MatchResultIter, next: MatchResultIter) -> MatchResultIter {
-    let next: BindingsSet = next.collect();
-    let prev: BindingsSet = prev.collect();
-    log::trace!("match_result_product_iter, next: {:?}", next);
-    Box::new(prev.merge(&next).into_iter())
-}
-
 /// Applies bindings to atom and return it (see [apply_bindings_to_atom_mut]).
 #[inline]
 pub fn apply_bindings_to_atom_move(mut atom: Atom, bindings: &Bindings) -> Atom {
