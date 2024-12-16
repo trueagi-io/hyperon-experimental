@@ -36,14 +36,15 @@ impl Grounded for TestDict {
 impl CustomMatch for TestDict {
     fn match_(&self, other: &Atom) -> MatchResultIter {
         if let Some(other) = other.as_gnd::<TestDict>() {
-            other.0.iter().map(|(ko, vo)| {
+            Box::new(other.0.iter().map(|(ko, vo)| {
                 self.0.iter().map(|(k, v)| {
                     match_atoms(&Atom::expr(vec![k.clone(), v.clone()]), &Atom::expr(vec![ko.clone(), vo.clone()]))
                 }).fold(Box::new(std::iter::empty()) as MatchResultIter, |acc, i| {
                     Box::new(acc.chain(i))
-                })
-            }).fold(Box::new(std::iter::once(Bindings::new())),
-            |acc, i| { matcher::match_result_product(acc, i) })
+                }).collect::<BindingsSet>()
+            }).fold(BindingsSet::single(),
+            |acc, i| { acc.merge(&i) })
+            .into_iter())
         } else {
             Box::new(std::iter::empty())
         }
