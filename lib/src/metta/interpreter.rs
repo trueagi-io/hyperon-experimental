@@ -640,7 +640,7 @@ fn chain(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
             panic!("Unexpected state")
         }
     };
-    let b = Bindings::new().add_var_binding_v2(var, nested).unwrap();
+    let b = Bindings::new().add_var_binding(var, nested).unwrap();
     let templ = apply_bindings_to_atom_move(templ, &b);
     vec![InterpretedAtom(atom_to_stack(templ, prev), bindings)]
 }

@@ -1256,7 +1256,7 @@ pub extern "C" fn bindings_add_var_binding(bindings: *mut bindings_t, var: atom_
         _ => panic!("var argument must be variable atom")
     };
     let atom = atom.into_inner();
-    match bindings.clone().add_var_binding_v2(var, atom) {
+    match bindings.clone().add_var_binding(var, atom) {
         Ok(new_bindings) => {
             *bindings = new_bindings;
             true
