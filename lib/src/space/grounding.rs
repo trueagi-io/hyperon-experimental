@@ -259,7 +259,7 @@ impl GroundingSpace {
                                 let query = matcher::apply_bindings_to_atom_move(query.clone(), &prev);
                                 let mut res = self.query(&query);
                                 res.drain(0..)
-                                    .flat_map(|next| next.merge_v2(&prev))
+                                    .flat_map(|next| next.merge(&prev))
                                     .collect()
                             }).collect()
                         };

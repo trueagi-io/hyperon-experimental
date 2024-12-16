@@ -1256,7 +1256,7 @@ pub extern "C" fn bindings_add_var_binding(bindings: *mut bindings_t, var: atom_
         _ => panic!("var argument must be variable atom")
     };
     let atom = atom.into_inner();
-    match bindings.clone().add_var_binding_v2(var, atom) {
+    match bindings.clone().add_var_binding(var, atom) {
         Ok(new_bindings) => {
             *bindings = new_bindings;
             true
@@ -1309,7 +1309,7 @@ pub extern "C" fn bindings_merge(_self: bindings_t, other: *const bindings_t) ->
     let other = unsafe{ &*other }.borrow();
     let owned_self = _self.into_inner();
 
-    let new_set = owned_self.merge_v2(other);
+    let new_set = owned_self.merge(other);
     new_set.into()
 }
 

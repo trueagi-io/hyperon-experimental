@@ -69,7 +69,7 @@ fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], 
                 for typ in actual {
                     result_bindings.extend(
                         match_reducted_types_v2(typ, expected)
-                            .flat_map(|b| b.merge_v2(&bindings))
+                            .flat_map(|b| b.merge(&bindings))
                             .flat_map(|b| check_arg_types(actual_tail, meta_tail, expected_tail, b))
                     );
                 }
@@ -347,7 +347,7 @@ pub fn match_reducted_types(left: &Atom, right: &Atom, bindings: &mut Bindings) 
     let matched = match result.len() {
         0 => false,
         1 => {
-            let result_set = result.pop().unwrap().merge_v2(bindings);
+            let result_set = result.pop().unwrap().merge(bindings);
             *bindings = result_set.try_into().expect("Single result is expected because custom matching for types is not supported yet!");
             true
         }
