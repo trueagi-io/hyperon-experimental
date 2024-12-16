@@ -1174,33 +1174,6 @@ pub fn apply_bindings_to_atom_mut(atom: &mut Atom, bindings: &Bindings) {
     }
 }
 
-/// Applies bindings `from` to the each value from bindings `to`.
-/// Function also checks that resulting value is not expressed recursively
-/// via variable to which value is bound. Function returns error if such
-/// value is detected.
-///
-/// # Examples
-///
-/// ```
-/// use hyperon::*;
-/// use hyperon::atom::matcher::apply_bindings_to_bindings;
-///
-/// let from = bind!{ x: expr!("Y") };
-/// let to = bind!{ y: expr!(x) };
-/// let rec = bind!{ x: expr!(y) };
-/// let _loop = bind!{ x: expr!((y)) };
-///
-/// assert_eq!(apply_bindings_to_bindings(&from, &to), Ok(bind!{ y: expr!("Y"), x: expr!(y) }));
-/// assert_eq!(apply_bindings_to_bindings(&rec, &to), Ok(bind!{ y: expr!(x) }));
-/// assert_eq!(apply_bindings_to_bindings(&_loop, &to), Err(()));
-/// ```
-pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bindings, ()> {
-    // TODO: apply_bindings_to_bindings can be replaced by Bindings::merge,
-    // when Bindings::merge are modified to return Vec<Bindings>
-    //TODO: Delete of this function pending refactor of Interpreter
-    from.clone().merge(to).into_iter().filter(|bindings| !bindings.has_loops()).next().ok_or(())
-}
-
 /// Checks if atoms are equal up to variables replacement.
 ///
 /// # Examples
