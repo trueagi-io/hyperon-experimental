@@ -567,7 +567,7 @@ fn query<'a, T: Space>(space: T, prev: Option<Rc<RefCell<Stack>>>, to_eval: Atom
     let result = |res, bindings| eval_result(prev.clone(), res, &call_stack, bindings);
     let results: Vec<InterpretedAtom> = results.into_iter().flat_map(|b| {
         log::debug!("interpreter::query: b: {}", b);
-        b.merge_v2(&bindings).into_iter()
+        b.merge(&bindings).into_iter()
     }).filter_map(move |b| {
         b.resolve(&var_x).map_or(None, |res| {
             if b.has_loops() {
@@ -760,7 +760,7 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     };
     let bindings_ref = &bindings;
     let matches: Vec<InterpretedAtom> = matches.into_iter().flat_map(move |b| {
-        b.merge_v2(bindings_ref).into_iter().filter_map(move |b| {
+        b.merge(bindings_ref).into_iter().filter_map(move |b| {
             if b.has_loops() {
                 None
             } else {
@@ -842,7 +842,7 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
                 let stack = Stack::finished(prev.clone(), atom);
                 InterpretedAtom(stack, bindings)
             };
-            b.merge_v2(&bindings).into_iter().filter_map(move |b| {
+            b.merge(&bindings).into_iter().filter_map(move |b| {
                 if b.has_loops() {
                     None
                 } else {
@@ -989,7 +989,7 @@ fn match_types(type1: &Atom, type2: &Atom, bindings: Bindings) -> Result<MatchRe
     } else {
         let bindings_copy = bindings.clone();
         let mut result = match_atoms(type1, type2)
-            .flat_map(move |b| b.merge_v2(&bindings).into_iter())
+            .flat_map(move |b| b.merge(&bindings).into_iter())
             .peekable();
         if result.peek().is_none() {
             log::trace!("match_types: no match: {} !~ {}", type1, type2);

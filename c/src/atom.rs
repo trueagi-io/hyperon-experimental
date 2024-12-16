@@ -1309,7 +1309,7 @@ pub extern "C" fn bindings_merge(_self: bindings_t, other: *const bindings_t) ->
     let other = unsafe{ &*other }.borrow();
     let owned_self = _self.into_inner();
 
-    let new_set = owned_self.merge_v2(other);
+    let new_set = owned_self.merge(other);
     new_set.into()
 }
 

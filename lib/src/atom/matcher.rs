@@ -319,7 +319,7 @@ impl Bindings {
 
     fn match_values(&self, current: &Atom, value: &Atom) -> BindingsSet {
         match_atoms_recursively(current, value).into_iter()
-            .flat_map(|binding| binding.merge_v2(self))
+            .flat_map(|binding| binding.merge(self))
             .collect()
     }
 
@@ -445,12 +445,10 @@ impl Bindings {
     /// let mut comp = bind!{ b: expr!("B") };
     /// let mut incomp = bind!{ a: expr!("B") };
     ///
-    /// assert_eq!(binds.clone().merge_v2(&comp), BindingsSet::from(bind!{ a: expr!("A"), b: expr!("B") }));
-    /// assert_eq!(binds.merge_v2(&incomp), BindingsSet::empty());
+    /// assert_eq!(binds.clone().merge(&comp), BindingsSet::from(bind!{ a: expr!("A"), b: expr!("B") }));
+    /// assert_eq!(binds.merge(&incomp), BindingsSet::empty());
     /// ```
-    ///
-    /// TODO: Rename to `merge` when clients have adopted new API
-    pub fn merge_v2(self, other: &Bindings) -> BindingsSet {
+    pub fn merge(self, other: &Bindings) -> BindingsSet {
         log::trace!("Bindings::merge: {} ^ {}", self, other);
         let trace_self = match log::log_enabled!(log::Level::Trace) {
             true => Some(self.clone()),
@@ -1036,7 +1034,7 @@ impl BindingsSet {
     }
 
     fn merge_bindings(self, b: &Bindings) -> Self {
-        self.perform_one_to_many_op(|bindings| bindings.merge_v2(b))
+        self.perform_one_to_many_op(|bindings| bindings.merge(b))
     }
 
     /// Merges each bindings from `other` to each bindings from `self`
@@ -1210,7 +1208,7 @@ pub fn apply_bindings_to_bindings(from: &Bindings, to: &Bindings) -> Result<Bind
     // TODO: apply_bindings_to_bindings can be replaced by Bindings::merge,
     // when Bindings::merge are modified to return Vec<Bindings>
     //TODO: Delete of this function pending refactor of Interpreter
-    from.clone().merge_v2(to).into_iter().filter(|bindings| !bindings.has_loops()).next().ok_or(())
+    from.clone().merge(to).into_iter().filter(|bindings| !bindings.has_loops()).next().ok_or(())
 }
 
 /// Checks if atoms are equal up to variables replacement.
@@ -1292,25 +1290,25 @@ mod test {
 
     #[test]
     fn bindings_merge_value_conflict() {
-        assert_eq!(bind!{ a: expr!("A") }.merge_v2(
+        assert_eq!(bind!{ a: expr!("A") }.merge(
             &bind!{ a: expr!("C"), b: expr!("B") }), BindingsSet::empty());
-        assert_eq!(bind!{ a: expr!("C"), b: expr!("B") }.merge_v2(
+        assert_eq!(bind!{ a: expr!("C"), b: expr!("B") }.merge(
             &bind!{ a: expr!("A") }), BindingsSet::empty());
     }
 
     #[test]
     fn bindings_merge() {
-        assert_eq!(bind!{ a: expr!("A") }.merge_v2(
+        assert_eq!(bind!{ a: expr!("A") }.merge(
             &bind!{ a: expr!("A"), b: expr!("B") }),
             bind_set![{ a: expr!("A"), b: expr!("B") }]);
-        assert_eq!(bind!{ a: expr!("A"), b: expr!("B") }.merge_v2(
+        assert_eq!(bind!{ a: expr!("A"), b: expr!("B") }.merge(
             &bind!{ a: expr!("A") }),
             bind_set![{ a: expr!("A"), b: expr!("B") }]);
     }
 
     #[test]
     fn bindings_merge_self_recursion() {
-        assert_eq!(bind!{ a: expr!(b)  }.merge_v2(
+        assert_eq!(bind!{ a: expr!(b)  }.merge(
             &bind!{ b: expr!("S" b) }),
             bind_set![{ a: expr!(b), b: expr!("S" b) }]);
     }
@@ -1737,7 +1735,7 @@ mod test {
         let a = bind!{ a: expr!({ assigner }), b: expr!({ assigner }) };
         let b = bind!{ a: expr!(x "C" "D"), b: expr!(y "E" "F") };
 
-        let bindings = a.merge_v2(&b);
+        let bindings = a.merge(&b);
 
         assert_eq!(bindings, bind_set![
             bind!{ a: expr!({ assigner }), b: expr!({ assigner }), x: expr!("C"), y: expr!("E") },
