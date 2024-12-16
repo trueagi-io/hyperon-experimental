@@ -439,14 +439,14 @@ impl Bindings {
     ///
     /// ```
     /// use hyperon::*;
-    /// use hyperon::matcher::Bindings;
+    /// use hyperon::matcher::{Bindings, BindingsSet};
     ///
     /// let mut binds = bind!{ a: expr!("A") };
     /// let mut comp = bind!{ b: expr!("B") };
     /// let mut incomp = bind!{ a: expr!("B") };
     ///
-    /// assert_eq!(Bindings::merge(&binds, &comp), Some(bind!{ a: expr!("A"), b: expr!("B") }));
-    /// assert_eq!(Bindings::merge(&binds, &incomp), None);
+    /// assert_eq!(binds.clone().merge_v2(&comp), BindingsSet::from(bind!{ a: expr!("A"), b: expr!("B") }));
+    /// assert_eq!(binds.merge_v2(&incomp), BindingsSet::empty());
     /// ```
     ///
     /// TODO: Rename to `merge` when clients have adopted new API
@@ -491,11 +491,6 @@ impl Bindings {
             log::trace!("Bindings::merge: {} ^ {} -> {:?}", self_copy, other, results);
         }
         results
-    }
-
-    /// Compatibility shim for merge_v2.  TODO: Delete then the new API has been adopted downstream
-    pub fn merge(a: &Bindings, b: &Bindings) -> Option<Bindings> {
-        a.clone().merge_v2(b).into_iter().next()
     }
 
     fn find_deps<'a>(&'a self, var: &'a VariableAtom, deps: &mut HashSet<&'a VariableAtom>) {
