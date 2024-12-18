@@ -36,28 +36,36 @@ pub enum Error {
     NotSupported,
 }
 
-/// Serializer which converts serialized atom into native Rust type T.
-pub trait ConvertingSerializer<T>: Serializer {
+/// Converts serializable grounded atom into native Rust type `T`.
+/// Returning error from this serializer is not expected as usually it should
+/// just write data into a memory buffer for conversion. [Default] is required
+/// to instantiate it in [ConvertingSerializer::convert] method.
+pub trait ConvertingSerializer<T>: Serializer + Default {
     fn into_type(self) -> Option<T>;
 
-    /// Converts atom into Rust value using `Self::default`
+    /// Converts atom into Rust value using `Self::default()` instance.
+    /// First it checks whether the grounded atom is already an instance of `T`
+    /// and clones value if it the case. Otherwise it uses `Self` to convert
+    /// into `T` via serialization.
     fn convert(atom: &super::Atom) -> Option<T>
-    where
-        T: 'static + Clone,
-        Self: Default {
-            std::convert::TryInto::<&dyn super::GroundedAtom>::try_into(atom)
-                .ok()
-                .map(|gnd| {
-                    gnd.as_any_ref()
-                        .downcast_ref::<T>()
-                        .cloned()
-                        .or_else(|| {
-                            let mut serializer = Self::default();
-                            gnd.serialize(&mut serializer).expect("ConvertingSerializer is not expected returning error");
-                            serializer.into_type()
-                        })
-                })
-            .flatten()
+        where T: 'static + Clone
+    {
+        std::convert::TryInto::<&dyn super::GroundedAtom>::try_into(atom)
+            .ok()
+            .and_then(|gnd| {
+                gnd.as_any_ref()
+                    // TODO: it is not clear whether this step really improves performance.
+                    // On the other hand it requires `T` to be static and implement `Clone`.
+                    // It is better to do a performance test and check if first step should be
+                    // removed.
+                    .downcast_ref::<T>()
+                    .cloned()
+                    .or_else(|| {
+                        let mut serializer = Self::default();
+                        gnd.serialize(&mut serializer).expect("ConvertingSerializer is not expected returning error");
+                        serializer.into_type()
+                    })
+            })
     }
 }
 
