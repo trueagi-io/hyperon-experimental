@@ -320,7 +320,7 @@ impl Space for GroundingSpace {
         Some(Box::new(self.iter()))
     }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
-        Ok(self.iter().fold((), |_, atom| v.accept(Cow::Borrowed(atom))))
+        Ok(self.iter().for_each(|atom| v.accept(Cow::Borrowed(atom))))
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)

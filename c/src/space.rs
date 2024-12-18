@@ -776,7 +776,7 @@ impl Space for CSpace {
     }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
         self.atom_iter().map_or(Err(()), |iter| {
-            iter.fold((), |_, atom| { v.accept(Cow::Borrowed(atom)) });
+            iter.for_each(|atom| { v.accept(Cow::Borrowed(atom)) });
             Ok(())
         })
     }
