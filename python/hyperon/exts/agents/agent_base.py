@@ -175,8 +175,9 @@ class BaseListeningAgent(AgentObject):
         super().__init__(path, atoms, include_paths, code)
         self.messages = Queue()
         self.running = False
-        self._output = []
+        self._output = Queue()
         self.lock = threading.RLock()
+        self.said = False
 
     def start(self,  *args):
         if not args:
@@ -186,14 +187,22 @@ class BaseListeningAgent(AgentObject):
         st.start()
 
     def message_processor(self, message, *args):
-        return []
+        yield None
+
+    def handle_event(self):
+        pass
 
     def messages_processor(self, *args):
         while self.running:
+            self.handle_event()
             if not self.messages.empty():
-                m = self.messages.get()
+                self.clear_output()
                 with self.lock:
-                    self._output = self.message_processor(m, *args)
+                    m = self.messages.get()
+                    self.said = False
+                for resp in self.message_processor(m, *args):
+                    with self.lock:
+                        self._output.put(resp)
         return []
 
     def stop(self):
@@ -201,11 +210,19 @@ class BaseListeningAgent(AgentObject):
         return []
 
     def input(self, msg):
-        self.messages.put(msg)
+        with self.lock:
+            self.messages.put(msg)
         return []
 
     def get_output(self):
-        return self._output
+        while not self._output.empty():
+            with self.lock:
+                self.said = True
+            yield self._output.get()
+
+    def clear_output(self):
+        with self.lock:
+            self._output = Queue()
 
 @register_atoms(pass_metta=True)
 def agent_atoms(metta):
