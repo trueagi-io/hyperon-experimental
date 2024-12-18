@@ -898,10 +898,7 @@ pub struct BindingsSet(smallvec::SmallVec<[Bindings; 1]>);
 // BindingsSets are conceptually unordered
 impl PartialEq for BindingsSet {
     fn eq(&self, other: &Self) -> bool {
-        match crate::common::assert::vec_eq_no_order(self.iter(), other.iter()) {
-            Ok(()) => true,
-            Err(_) => false
-        }
+        !crate::common::assert::compare_vec_no_order(self.iter(), other.iter(), crate::common::collections::DefaultEquality{}).has_diff()
     }
 }
 
@@ -1283,6 +1280,9 @@ mod test {
 
     #[test]
     fn test_atoms_are_equivalent() {
+        assert!(atoms_are_equivalent(&expr!(x "b" {"c"}), &expr!(x "b" {"c"})));
+        assert!(atoms_are_equivalent(&expr!(x "b" x), &expr!(x "b" x)));
+        assert!(atoms_are_equivalent(&expr!(a a "b" {"c"}), &expr!(x x "b" {"c"})));
         assert!(atoms_are_equivalent(&expr!(a "b" {"c"}), &expr!(x "b" {"c"})));
         assert!(atoms_are_equivalent(&expr!(a b), &expr!(c d)));
         assert!(!atoms_are_equivalent(&expr!(a "b" {"c"}), &expr!(a "x" {"c"})));

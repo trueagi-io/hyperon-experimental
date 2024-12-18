@@ -984,19 +984,40 @@
   (@params ())
   (@return "Unit atom"))
 
+(@doc =alpha
+  (@desc "Checks alpha equality of two expressions")
+  (@params (
+    (@param "First expression")
+    (@param "Second expression")))
+  (@return "True if both expressions are alpha equal, False - otherwise"))
+
 (@doc assertEqual
   (@desc "Compares (sets of) results of evaluation of two expressions")
   (@params (
     (@param "First expression")
     (@param "Second expression")))
-  (@return "Unit atom if both expression after evaluation is equal, error - otherwise"))
+  (@return "Unit atom if both expressions after evaluation are equal, error - otherwise"))
+
+(@doc assertAlphaEqual
+  (@desc "Compares (sets of) results of evaluation of two expressions using alpha equality")
+  (@params (
+    (@param "First expression")
+    (@param "Second expression")))
+  (@return "Unit atom if both expressions after evaluation are alpha equal, error - otherwise"))
 
 (@doc assertEqualToResult
   (@desc "Same as assertEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
   (@params (
     (@param "First expression (it will be evaluated)")
     (@param "Second expression (it won't be evaluated)")))
-  (@return "Unit atom if both expression after evaluation is equal, error - otherwise"))
+  (@return "Unit atom if both expressions after evaluation of the first argument are equal, error - otherwise"))
+
+(@doc assertAlphaEqualToResult
+  (@desc "Same as assertAlphaEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
+  (@params (
+    (@param "First expression (it will be evaluated)")
+    (@param "Second expression (it won't be evaluated)")))
+  (@return "Unit atom if both expressions after evaluation of the first argument are alpha equal, error - otherwise"))
 
 (@doc superpose
   (@desc "Turns a tuple (first argument) into a nondeterministic result")
