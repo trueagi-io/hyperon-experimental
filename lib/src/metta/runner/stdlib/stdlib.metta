@@ -987,14 +987,6 @@
     (@param "First expression")
     (@param "Second expression")))
   (@return "Unit atom if both expressions after evaluation are equal, error - otherwise"))
-(: assertEqual (-> Atom Atom (->)))
-(= (assertEqual $actual-atom $expected-atom)
-    (let $actual (collapse $actual-atom)
-        (let $expected (collapse $expected-atom)
-            (chain (eval (assertResultsEqual $actual $expected)) $res
-                (if-error $res
-                    (unify (Error $_ $msg) $res (Error (assertEqual $actual-atom $expected-atom) $msg) $res)
-                    $res)))))
 
 (@doc assertAlphaEqual
   (@desc "Compares (sets of) results of evaluation of two expressions using alpha equality")
@@ -1002,14 +994,6 @@
     (@param "First expression")
     (@param "Second expression")))
   (@return "Unit atom if both expressions after evaluation are alpha equal, error - otherwise"))
-(: assertAlphaEqual (-> Atom Atom (->)))
-(= (assertAlphaEqual $actual-atom $expected-atom)
-    (let $actual (collapse $actual-atom)
-        (let $expected (collapse $expected-atom)
-            (chain (eval (assertResultsAlphaEqual $actual $expected)) $res
-                (if-error $res
-                    (unify (Error $_ $msg) $res (Error (assertAlphaEqual $actual-atom $expected-atom) $msg) $res)
-                    $res)))))
 
 (@doc assertEqualToResult
   (@desc "Same as assertEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
@@ -1017,13 +1001,6 @@
     (@param "First expression (it will be evaluated)")
     (@param "Second expression (it won't be evaluated)")))
   (@return "Unit atom if both expressions after evaluation of the first argument are equal, error - otherwise"))
-(: assertEqualToResult (-> Atom Atom (->)))
-(= (assertEqualToResult $actual-atom $expected)
-    (let $actual (collapse $actual-atom)
-        (chain (eval (assertResultsEqual $actual $expected)) $res
-            (if-error $res
-                (unify (Error $_ $msg) $res (Error (assertEqualToResult $actual-atom $expected) $msg) $res)
-                $res))))
 
 (@doc assertAlphaEqualToResult
   (@desc "Same as assertAlphaEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
@@ -1031,13 +1008,6 @@
     (@param "First expression (it will be evaluated)")
     (@param "Second expression (it won't be evaluated)")))
   (@return "Unit atom if both expressions after evaluation of the first argument are alpha equal, error - otherwise"))
-(: assertAlphaEqualToResult (-> Atom Atom (->)))
-(= (assertAlphaEqualToResult $actual-atom $expected)
-    (let $actual (collapse $actual-atom)
-        (chain (eval (assertResultsAlphaEqual $actual $expected)) $res
-            (if-error $res
-                (unify (Error $_ $msg) $res (Error (assertAlphaEqualToResult $actual-atom $expected) $msg) $res)
-                $res))))
 
 (@doc superpose
   (@desc "Turns a tuple (first argument) into a nondeterministic result")
