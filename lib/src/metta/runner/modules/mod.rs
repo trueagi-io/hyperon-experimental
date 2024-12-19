@@ -4,6 +4,7 @@ use std::cell::RefCell;
 
 use crate::metta::*;
 use crate::metta::runner::*;
+use crate::space::module::ModuleSpace;
 
 use regex::Regex;
 
@@ -56,7 +57,7 @@ impl ModId {
 pub struct MettaMod {
     mod_path: String,
     resource_dir: Option<PathBuf>,
-    space: DynSpace,
+    space: Rc<RefCell<ModuleSpace>>,
     tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
     loader: Option<Box<dyn ModuleLoader>>,
@@ -75,6 +76,7 @@ impl MettaMod {
                 }
             }
         }
+        let space = Rc::new(RefCell::new(ModuleSpace::new(space)));
 
         let new_mod = Self {
             mod_path,
@@ -86,8 +88,8 @@ impl MettaMod {
         };
 
         // Load the base tokens for the module's new Tokenizer
-        register_runner_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), &new_mod.space, metta);
-        register_common_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), &new_mod.space, metta);
+        register_runner_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), &DynSpace::with_rc(new_mod.space.clone()), metta);
+        register_common_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), &DynSpace::with_rc(new_mod.space.clone()), metta);
 
         //Load the stdlib unless this module is no_std
         if !no_stdlib {
@@ -192,7 +194,7 @@ impl MettaMod {
         let (dep_space, transitive_deps) = mod_ptr.stripped_space();
 
         // Add a new Grounded Space atom to the &self space, so we can access the dependent module
-        self.insert_dep(mod_id, dep_space)?;
+        self.insert_dep(mod_id, DynSpace::with_rc(dep_space.clone()))?;
 
         // Add all the transitive deps from the dependency
         if let Some(transitive_deps) = transitive_deps {
@@ -228,7 +230,7 @@ impl MettaMod {
     fn insert_dep(&self, mod_id: ModId, dep_space: DynSpace) -> Result<(), String> {
         let mut deps_table = self.imported_deps.lock().unwrap();
         if !deps_table.contains_key(&mod_id) {
-            self.add_atom(Atom::gnd(dep_space.clone()), false).map_err(|a| a.to_string())?;
+            self.space.borrow_mut().add_dep(dep_space.clone());
             deps_table.insert(mod_id, dep_space);
         }
         Ok(())
@@ -251,39 +253,9 @@ impl MettaMod {
 
     /// Private function that returns a deep copy of a module's space, with the module's dependency
     /// sub-spaces stripped out and returned separately
-    //
-    // HACK.  This is a terrible design.  It is a stop-gap to get around problems caused by transitive
-    // imports described above, but it has some serious downsides, To name a few:
-    //  - It means we must copy every atom in the space for every import
-    //  - It only works when the dep module's space is a GroundingSpace
-    fn stripped_space(&self) -> (DynSpace, Option<HashMap<ModId, DynSpace>>) {
+    fn stripped_space(&self) -> (Rc<RefCell<ModuleSpace>>, Option<HashMap<ModId, DynSpace>>) {
         let deps_table = self.imported_deps.lock().unwrap();
-        if deps_table.len() == 0 {
-            (self.space.clone(), None)
-        } else {
-            if let Some(any_space) = self.space.borrow().as_any() {
-                if let Some(dep_g_space) = any_space.downcast_ref::<GroundingSpace>() {
-
-                    // Do a deep-clone of the dep-space atom-by-atom, because `space.remove()` doesn't recognize
-                    // two GroundedAtoms wrapping DynSpaces as being the same, even if the underlying space is
-                    let mut new_space = GroundingSpace::new();
-                    new_space.set_name(self.path().to_string());
-                    for atom in dep_g_space.atom_iter().unwrap() {
-                        if let Some(sub_space) = atom.as_gnd::<DynSpace>() {
-                            if !deps_table.values().any(|space| space == sub_space) {
-                                new_space.add(atom.clone());
-                            }
-                        } else {
-                            new_space.add(atom.clone());
-                        }
-                    }
-
-                    return (DynSpace::new(new_space), Some(deps_table.clone()));
-                }
-            }
-            log::warn!("import_all_from_dependency: Importing from module based on a non-GroundingSpace is currently unsupported");
-            (self.space.clone(), None)
-        }
+        (self.space.clone(), Some(deps_table.clone()))
     }
 
     /// Returns the full path of a loaded module.  For example: "top:parent_mod:this_mod"
@@ -302,8 +274,8 @@ impl MettaMod {
         self.loader.as_ref().and_then(|loader| loader.pkg_info())
     }
 
-    pub fn space(&self) -> &DynSpace {
-        &self.space
+    pub fn space(&self) -> DynSpace {
+        DynSpace::with_rc(self.space.clone())
     }
 
     pub fn tokenizer(&self) -> &Shared<Tokenizer> {

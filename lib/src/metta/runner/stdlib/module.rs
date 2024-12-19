@@ -90,7 +90,7 @@ impl CustomExecute for ImportOp {
             }
             other_atom => {
                 match &other_atom {
-                    Atom::Grounded(_) if Atom::as_gnd::<DynSpace>(other_atom) == Some(context.module().space()) => {
+                    Atom::Grounded(_) if Atom::as_gnd::<DynSpace>(other_atom) == Some(&context.module().space()) => {
                         context.import_all_from_dependency(mod_id)?;
                     },
                     _ => {

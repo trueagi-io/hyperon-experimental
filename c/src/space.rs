@@ -7,6 +7,7 @@ use hyperon::matcher::*;
 use crate::atom::*;
 
 use std::os::raw::*;
+use std::borrow::Cow;
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Space Client Interface
@@ -238,14 +239,9 @@ pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
 pub extern "C" fn space_iterate(space: *const space_t,
         callback: c_atom_callback_t, context: *mut c_void) -> bool {
     let dyn_space = unsafe{ &*space }.borrow();
-    match dyn_space.borrow().atom_iter() {
-        Some(atom_iter) => {
-            for atom in atom_iter {
-                callback(atom.into(), context);
-            }
-            true
-        },
-        None => false
+    match dyn_space.visit(&mut |atom: Cow<Atom>| callback(atom.as_ref().into(), context)) {
+        Ok(()) => true,
+        Err(()) => false,
     }
 }
 
@@ -736,46 +732,22 @@ impl Space for CSpace {
             None
         }
     }
-    fn atom_iter(&self) -> Option<SpaceIter> {
-        struct CSpaceIterator<'a>(&'a CSpace, *mut c_void);
-        impl<'a> Iterator for CSpaceIterator<'a> {
-            type Item = &'a Atom;
-            fn next(&mut self) -> Option<&'a Atom> {
-                let api = unsafe{ &*self.0.api };
-                if let Some(next_atom) = api.next_atom {
-                    let atom_ref = next_atom(&self.0.params, self.1);
-                    if atom_ref.is_null() {
-                        None
-                    } else {
-                        Some(atom_ref.into_ref())
-                    }
-                } else {
-                    panic!("next_atom function must be implemented if new_atom_iterator_state is implemented");
-                }
-            }
-        }
-        impl Drop for CSpaceIterator<'_> {
-            fn drop(&mut self) {
-                let api = unsafe{ &*self.0.api };
-                if let Some(free_atom_iterator_state) = api.free_atom_iterator_state {
-                    free_atom_iterator_state(&self.0.params, self.1);
-                } else {
-                    panic!("free_atom_iterator_state function must be implemented if new_atom_iterator_state is implemented");
-                }
-            }
-        }
-
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
         let api = unsafe{ &*self.api };
-        if let Some(new_atom_iterator_state) = api.new_atom_iterator_state {
-            let ctx = new_atom_iterator_state(&self.params);
-            if ctx.is_null() {
-                None
-            } else {
-                let new_iter = CSpaceIterator(self, ctx);
-                Some(SpaceIter::new(new_iter))
-            }
-        } else {
-            None
+        match (api.new_atom_iterator_state, api.next_atom) {
+            (Some(new_atom_iterator_state), Some(next_atom)) => {
+                let ctx = new_atom_iterator_state(&self.params);
+                loop {
+                    let atom_ref = next_atom(&self.params, ctx);
+                    if atom_ref.is_null() {
+                        break;
+                    } else {
+                        v.accept(Cow::Borrowed(atom_ref.into_ref()));
+                    }
+                }
+                Ok(())
+            },
+            _ => Err(()),
         }
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
@@ -803,6 +775,7 @@ struct DefaultSpace<'a>(&'a CSpace);
 impl Space for DefaultSpace<'_> {
     fn common(&self) -> FlexRef<SpaceCommon> { self.0.common() }
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> { self.0.visit(v) }
     fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self.0) }
     fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> { None }
 }
@@ -827,7 +800,7 @@ impl SpaceMut for CSpace {
         let from: atom_ref_t = from.into();
         (api.replace)(&self.params, &from, to.into())
     }
-    fn as_space(&self) -> &dyn Space {
+    fn as_space<'a>(&self) -> &(dyn Space + 'a) {
         self
     }
 }
