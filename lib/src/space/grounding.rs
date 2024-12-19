@@ -316,9 +316,6 @@ impl Space for GroundingSpace {
     fn atom_count(&self) -> Option<usize> {
         Some(self.iter().count())
     }
-    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
-        Some(Box::new(self.iter()))
-    }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
         Ok(self.iter().for_each(|atom| v.accept(Cow::Borrowed(atom))))
     }

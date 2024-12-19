@@ -732,53 +732,23 @@ impl Space for CSpace {
             None
         }
     }
-    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
-        struct CSpaceIterator<'a>(&'a CSpace, *mut c_void);
-        impl<'a> Iterator for CSpaceIterator<'a> {
-            type Item = &'a Atom;
-            fn next(&mut self) -> Option<&'a Atom> {
-                let api = unsafe{ &*self.0.api };
-                if let Some(next_atom) = api.next_atom {
-                    let atom_ref = next_atom(&self.0.params, self.1);
-                    if atom_ref.is_null() {
-                        None
-                    } else {
-                        Some(atom_ref.into_ref())
-                    }
-                } else {
-                    panic!("next_atom function must be implemented if new_atom_iterator_state is implemented");
-                }
-            }
-        }
-        impl Drop for CSpaceIterator<'_> {
-            fn drop(&mut self) {
-                let api = unsafe{ &*self.0.api };
-                if let Some(free_atom_iterator_state) = api.free_atom_iterator_state {
-                    free_atom_iterator_state(&self.0.params, self.1);
-                } else {
-                    panic!("free_atom_iterator_state function must be implemented if new_atom_iterator_state is implemented");
-                }
-            }
-        }
-
-        let api = unsafe{ &*self.api };
-        if let Some(new_atom_iterator_state) = api.new_atom_iterator_state {
-            let ctx = new_atom_iterator_state(&self.params);
-            if ctx.is_null() {
-                None
-            } else {
-                let new_iter = CSpaceIterator(self, ctx);
-                Some(Box::new(new_iter))
-            }
-        } else {
-            None
-        }
-    }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
-        self.atom_iter().map_or(Err(()), |iter| {
-            iter.for_each(|atom| { v.accept(Cow::Borrowed(atom)) });
-            Ok(())
-        })
+        let api = unsafe{ &*self.api };
+        match (api.new_atom_iterator_state, api.next_atom) {
+            (Some(new_atom_iterator_state), Some(next_atom)) => {
+                let ctx = new_atom_iterator_state(&self.params);
+                loop {
+                    let atom_ref = next_atom(&self.params, ctx);
+                    if atom_ref.is_null() {
+                        break;
+                    } else {
+                        v.accept(Cow::Borrowed(atom_ref.into_ref()));
+                    }
+                }
+                Ok(())
+            },
+            _ => Err(()),
+        }
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)

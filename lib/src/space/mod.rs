@@ -198,11 +198,6 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
         None
     }
 
-    /// Returns an iterator over every atom in the space, or None if that is not possible
-    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
-        None
-    }
-
     /// Visit each atom of the space and call [SpaceVisitor::accept] method.
     /// This method is optional. Return `Err(())` if method is not implemented.
     /// `Cow<Atom>` is used to allow passing both references and values. First
@@ -345,9 +340,6 @@ impl Space for DynSpace {
     fn atom_count(&self) -> Option<usize> {
         self.0.borrow().atom_count()
     }
-    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
-        None
-    }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
         self.0.borrow().visit(v)
     }
@@ -393,9 +385,6 @@ impl<T: Space> Space for &T {
     }
     fn atom_count(&self) -> Option<usize> {
         T::atom_count(*self)
-    }
-    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
-        T::atom_iter(*self)
     }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
         T::visit(*self, v)

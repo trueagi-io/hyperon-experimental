@@ -63,9 +63,6 @@ impl Space for ModuleSpace {
     fn atom_count(&self) -> Option<usize> {
         self.main.atom_count()
     }
-    fn atom_iter(&self) -> Option<Box<dyn Iterator<Item=&Atom> + '_>> {
-        self.main.atom_iter()
-    }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
         self.main.visit(v)
     }
