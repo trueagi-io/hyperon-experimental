@@ -2,36 +2,36 @@ use super::collections::{ListMap, Equality, DefaultEquality};
 
 use itertools::Itertools;
 
-pub fn vec_eq_no_order<'a, T, A, B>(left: A, right: B) -> Option<String>
+pub fn vec_eq_no_order<'a, T, A, B>(actual: A, expected: B) -> Option<String>
 where
     T: 'a + PartialEq + std::fmt::Debug,
     A: Iterator<Item=&'a T>,
     B: Iterator<Item=&'a T>,
 {
-    compare_vec_no_order(left, right, DefaultEquality{}).as_string()
+    compare_vec_no_order(actual, expected, DefaultEquality{}).as_string()
 }
 
-pub fn compare_vec_no_order<'a, T, A, B, E>(left: A, right: B, _cmp: E) -> VecDiff<'a, T, E>
+pub fn compare_vec_no_order<'a, T, A, B, E>(actual: A, expected: B, _cmp: E) -> VecDiff<'a, T, E>
 where
     A: Iterator<Item=&'a T>,
     B: Iterator<Item=&'a T>,
     E: Equality<&'a T>,
 {
     let mut diff: ListMap<&T, Count, E> = ListMap::new();
-    for i in left {
-        diff.entry(&i).or_default().left += 1;
+    for i in actual {
+        diff.entry(&i).or_default().actual += 1;
     }
-    for i in right {
-        diff.entry(&i).or_default().right += 1;
+    for i in expected {
+        diff.entry(&i).or_default().expected += 1;
     }
-    diff = diff.into_iter().filter(|(_v, c)| c.left != c.right).collect();
+    diff = diff.into_iter().filter(|(_v, c)| c.actual != c.expected).collect();
     VecDiff{ diff }
 }
 
 #[derive(Default)]
 struct Count {
-    left: usize,
-    right: usize,
+    actual: usize,
+    expected: usize,
 }
 
 pub struct VecDiff<'a, T, E: Equality<&'a T>> {
@@ -47,12 +47,12 @@ impl<'a, T: std::fmt::Debug, E: Equality<&'a T>> VecDiff<'a, T, E> {
         let mut diff = String::new();
         if self.has_diff() {
             let mut missed = self.diff.iter()
-                .filter(|(_v, c)| c.left < c.right)
-                .flat_map(|(v, c)| std::iter::repeat_n(v, c.right - c.left))
+                .filter(|(_v, c)| c.actual < c.expected)
+                .flat_map(|(v, c)| std::iter::repeat_n(v, c.expected - c.actual))
                 .peekable();
             let mut excessive = self.diff.iter()
-                .filter(|(_v, c)| c.left > c.right)
-                .flat_map(|(v, c)| std::iter::repeat_n(v, c.left - c.right))
+                .filter(|(_v, c)| c.actual > c.expected)
+                .flat_map(|(v, c)| std::iter::repeat_n(v, c.actual - c.expected))
                 .peekable();
             if missed.peek().is_some() {
                 diff.push_str(format!("Missed results: {:?}", missed.format(", ")).as_str());
@@ -72,21 +72,21 @@ impl<'a, T: std::fmt::Debug, E: Equality<&'a T>> VecDiff<'a, T, E> {
 
 #[macro_export]
 macro_rules! assert_eq_no_order {
-    ($left:expr, $right:expr) => {
+    ($actual:expr, $expected:expr) => {
         {
-            assert!($crate::common::assert::vec_eq_no_order($left.iter(), $right.iter()) == None,
-                "(left == right some order)\n  left: {:?}\n right: {:?}", $left, $right);
+            assert!($crate::common::assert::vec_eq_no_order($actual.iter(), $expected.iter()) == None,
+                "(actual == expected some order)\n  actual: {:?}\n expected: {:?}", $actual, $expected);
         }
     }
 }
 
 pub fn metta_results_eq<T: PartialEq + std::fmt::Debug>(
-    left: &Result<Vec<Vec<T>>, String>, right: &Result<Vec<Vec<T>>, String>) -> bool
+    actual: &Result<Vec<Vec<T>>, String>, expected: &Result<Vec<Vec<T>>, String>) -> bool
 {
-    match (left, right) {
-        (Ok(left), Ok(right)) if left.len() == right.len() => {
-            for (left, right) in left.iter().zip(right.iter()) {
-                if vec_eq_no_order(left.iter(), right.iter()).is_some() {
+    match (actual, expected) {
+        (Ok(actual), Ok(expected)) if actual.len() == expected.len() => {
+            for (actual, expected) in actual.iter().zip(expected.iter()) {
+                if vec_eq_no_order(actual.iter(), expected.iter()).is_some() {
                     return false;
                 }
             }
@@ -98,12 +98,12 @@ pub fn metta_results_eq<T: PartialEq + std::fmt::Debug>(
 
 #[macro_export]
 macro_rules! assert_eq_metta_results {
-    ($left:expr, $right:expr) => {
+    ($actual:expr, $expected:expr) => {
         {
-            let left = &$left;
-            let right = &$right;
-            assert!($crate::common::assert::metta_results_eq(left, right),
-                "(left == right)\n  left: {:?}\n right: {:?}", left, right);
+            let actual = &$actual;
+            let expected = &$expected;
+            assert!($crate::common::assert::metta_results_eq(actual, expected),
+                "(actual == expected)\n  actual: {:?}\n expected: {:?}", actual, expected);
         }
     }
 }
