@@ -26,6 +26,10 @@ pub enum ListMapEntry<'a, K, V, E: Equality<K>> {
 }
 
 impl<'a, K, V, E: Equality<K>> ListMapEntry<'a, K, V, E> {
+    pub fn or_default(self) -> &'a mut V where V: Default {
+        self.or_insert(Default::default())
+    }
+
     pub fn or_insert(self, default: V) -> &'a mut V {
         match self {
             ListMapEntry::Occupied(key, map) => map.get_mut(&key).unwrap(),
@@ -54,6 +58,8 @@ macro_rules! list_map_iterator {
 
 list_map_iterator!(ListMapIter, Iter, {});
 list_map_iterator!(ListMapIterMut, IterMut, { mut });
+
+type ListMapIntoIter<K, V> = std::vec::IntoIter<(K, V)>;
 
 macro_rules! list_map_get {
     ($get:ident, {$( $mut_:tt )?}) => {
@@ -92,6 +98,10 @@ impl<K, V, E: Equality<K>> ListMap<K, V, E> {
         &mut self.list.last_mut().unwrap().1
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.list.is_empty()
+    }
+
     pub fn clear(&mut self) {
         self.list.clear()
     }
@@ -103,11 +113,15 @@ impl<K, V, E: Equality<K>> ListMap<K, V, E> {
     pub fn iter_mut(&mut self) -> ListMapIterMut<'_, K, V> {
         ListMapIterMut{ delegate: self.list.iter_mut() }
     }
+
+    pub fn into_iter(self) -> ListMapIntoIter<K, V> {
+        self.list.into_iter()
+    }
 }
 
-impl<K: PartialEq, V: PartialEq> PartialEq for ListMap<K, V> {
+impl<K, V: PartialEq, E: Equality<K>> PartialEq for ListMap<K, V, E> {
     fn eq(&self, other: &Self) -> bool {
-        fn left_includes_right<K: PartialEq, V: PartialEq>(left: &ListMap<K, V>, right: &ListMap<K, V>) -> bool {
+        fn left_includes_right<K, V: PartialEq, E: Equality<K>>(left: &ListMap<K, V, E>, right: &ListMap<K, V, E>) -> bool {
             for e in right.iter() {
                 if left.get(e.0) != Some(e.1) {
                     return false;
@@ -119,12 +133,20 @@ impl<K: PartialEq, V: PartialEq> PartialEq for ListMap<K, V> {
     }
 }
 
-impl<K: PartialEq, V: PartialEq> From<Vec<(K, V)>> for ListMap<K, V> {
+impl<K: PartialEq, V> From<Vec<(K, V)>> for ListMap<K, V> {
     fn from(list: Vec<(K, V)>) -> Self {
         let mut map = ListMap::new();
         for (k, v) in list.into_iter() {
             map.insert(k, v)
         }
+        map
+    }
+}
+
+impl<K, V, E: Equality<K>> FromIterator<(K, V)> for ListMap<K, V, E> {
+    fn from_iter<T>(iter: T) -> Self where T: IntoIterator<Item = (K, V)> {
+        let mut map = ListMap::new();
+        iter.into_iter().for_each(|(k, v)| map.insert(k, v));
         map
     }
 }

@@ -1,6 +1,6 @@
 use super::collections::{ListMap, Equality, DefaultEquality};
 
-use std::cmp::Ordering;
+use itertools::Itertools;
 
 pub fn vec_eq_no_order<'a, T, A, B>(left: A, right: B) -> Option<String>
 where
@@ -17,80 +17,55 @@ where
     B: Iterator<Item=&'a T>,
     E: Equality<&'a T>,
 {
-    let mut left_count: ListMap<&T, usize, E> = ListMap::new();
-    let mut right_count: ListMap<&T, usize, E> = ListMap::new();
+    let mut diff: ListMap<&T, Count, E> = ListMap::new();
     for i in left {
-        *left_count.entry(&i).or_insert(0) += 1;
+        diff.entry(&i).or_default().left += 1;
     }
     for i in right {
-        *right_count.entry(&i).or_insert(0) += 1;
+        diff.entry(&i).or_default().right += 1;
     }
-    VecDiff{ left_count, right_count }
+    diff = diff.into_iter().filter(|(_v, c)| c.left != c.right).collect();
+    VecDiff{ diff }
+}
+
+#[derive(Default)]
+struct Count {
+    left: usize,
+    right: usize,
 }
 
 pub struct VecDiff<'a, T, E: Equality<&'a T>> {
-    left_count: ListMap<&'a T, usize, E>,
-    right_count: ListMap<&'a T, usize, E>,
-}
-
-trait DiffVisitor<'a, T> {
-    fn diff(&mut self, item: &'a T, left: usize, right: usize) -> bool;
+    diff: ListMap<&'a T, Count, E>,
 }
 
 impl<'a, T: std::fmt::Debug, E: Equality<&'a T>> VecDiff<'a, T, E> {
     pub fn has_diff(&self) -> bool {
-        #[derive(Default)]
-        struct FindDiff {
-            diff: bool,
-        }
-        impl<T: std::fmt::Debug> DiffVisitor<'_, T> for FindDiff {
-            fn diff(&mut self, _item: &T, left: usize, right: usize) -> bool {
-                if left == right {
-                    false
-                } else {
-                    self.diff = true;
-                    true
-                }
-            }
-        }
-        let mut f = FindDiff::default();
-        self.visit(&mut f);
-        f.diff
+        !self.diff.is_empty()
     }
 
     pub fn as_string(&self) -> Option<String> {
-        #[derive(Default)]
-        struct StringDiff {
-            diff: Option<String>,
-        }
-        impl<'a, T: std::fmt::Debug> DiffVisitor<'a, T> for StringDiff {
-            fn diff(&mut self, item: &'a T, left: usize, right: usize) -> bool {
-                match left.cmp(&right) {
-                    Ordering::Less => {
-                        self.diff = Some(format!("Missed result: {:?}", item));
-                        true
-                    },
-                    Ordering::Greater => {
-                        self.diff = Some(format!("Excessive result: {:?}", item));
-                        true
-                    },
-                    Ordering::Equal => false,
-                }
+        let mut diff = String::new();
+        if self.has_diff() {
+            let mut missed = self.diff.iter()
+                .filter(|(_v, c)| c.left < c.right)
+                .flat_map(|(v, c)| std::iter::repeat_n(v, c.right - c.left))
+                .peekable();
+            let mut excessive = self.diff.iter()
+                .filter(|(_v, c)| c.left > c.right)
+                .flat_map(|(v, c)| std::iter::repeat_n(v, c.left - c.right))
+                .peekable();
+            if missed.peek().is_some() {
+                diff.push_str(format!("Missed results: {:?}", missed.format(", ")).as_str());
             }
-        }
-        let mut d = StringDiff{ diff: None };
-        self.visit(&mut d);
-        d.diff
-    }
-
-    fn visit<'b, V: DiffVisitor<'b, T>>(&'b self, visitor: &mut V) {
-        for e in self.right_count.iter() {
-            let count = self.left_count.get(e.0).unwrap_or(&0);
-            if visitor.diff(e.0, *count, *e.1) { return }
-        }
-        for e in self.left_count.iter() {
-            let count = self.right_count.get(e.0).unwrap_or(&0);
-            if visitor.diff(e.0, *e.1, *count) { return }
+            if excessive.peek().is_some() {
+                if !diff.is_empty() {
+                    diff.push_str("\n");
+                }
+                diff.push_str(format!("Excessive results: {:?}", excessive.format(", ")).as_str());
+            }
+            Some(diff)
+        } else {
+            None
         }
     }
 }
