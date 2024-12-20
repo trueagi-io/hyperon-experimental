@@ -2,8 +2,8 @@ use crate::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::space::*;
-use crate::common::collections::Equality;
-use crate::common::assert::{vec_eq_no_order, compare_vec_no_order};
+use crate::common::collections::{Equality, DefaultEquality};
+use crate::common::assert::compare_vec_no_order;
 use crate::atom::matcher::atoms_are_equivalent;
 use crate::metta::runner::stdlib::{grounded_op, atom_to_string, regex, interpret_no_error, unit_result};
 use crate::metta::runner::bool::*;
@@ -13,7 +13,7 @@ use std::convert::TryInto;
 
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
     let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
-    match vec_eq_no_order(actual.iter(), expected.iter()) {
+    match compare_vec_no_order(actual.iter(), expected.iter(), DefaultEquality{}).as_string() {
         None => unit_result(),
         Some(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
