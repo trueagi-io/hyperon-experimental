@@ -38,6 +38,7 @@ pub mod metta_interface_mod {
     use pyo3::prelude::*;
     use pyo3::types::{PyTuple, PyString, PyBool, PyList, PyDict};
     use super::{strip_quotes, exec_state_prepare, exec_state_should_break};
+    use itertools::Itertools;
 
     /// Load the hyperon module, and get the "__version__" attribute
     pub fn get_hyperonpy_version() -> Result<String, String> {
@@ -166,7 +167,7 @@ pub mod metta_interface_mod {
             Python::with_gil(|py| -> PyResult<()> {
                 for result_vec in self.result.iter() {
                     let result_vec: Vec<&PyAny> = result_vec.iter().map(|atom| atom.as_ref(py)).collect();
-                    println!("{result_vec:?}");
+                    println!("[{}]", result_vec.iter().format(", "));
                 }
                 Ok(())
             }).unwrap()
@@ -319,6 +320,7 @@ pub mod metta_interface_mod {
     use hyperon::Atom;
     use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
     use super::{strip_quotes, exec_state_prepare, exec_state_should_break};
+    use itertools::Itertools;
 
     pub use hyperon::metta::text::SyntaxNodeType as SyntaxNodeType;
 
@@ -418,7 +420,7 @@ pub mod metta_interface_mod {
 
         pub fn print_result(&self) {
             for result in self.result.iter() {
-                println!("{result:?}");
+                println!("[{}]", result.iter().format(", "));
             }
         }
 
