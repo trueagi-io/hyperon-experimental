@@ -2,15 +2,6 @@ use super::collections::{ListMap, Equality, DefaultEquality};
 
 use itertools::Itertools;
 
-pub fn vec_eq_no_order<'a, T, A, B>(actual: A, expected: B) -> Option<String>
-where
-    T: 'a + PartialEq + std::fmt::Debug,
-    A: Iterator<Item=&'a T>,
-    B: Iterator<Item=&'a T>,
-{
-    compare_vec_no_order(actual, expected, DefaultEquality{}).as_string()
-}
-
 pub fn compare_vec_no_order<'a, T, A, B, E>(actual: A, expected: B, _cmp: E) -> VecDiff<'a, T, E>
 where
     A: Iterator<Item=&'a T>,
@@ -74,8 +65,11 @@ impl<'a, T: std::fmt::Debug, E: Equality<&'a T>> VecDiff<'a, T, E> {
 macro_rules! assert_eq_no_order {
     ($actual:expr, $expected:expr) => {
         {
-            assert!($crate::common::assert::vec_eq_no_order($actual.iter(), $expected.iter()) == None,
-                "(actual == expected some order)\n  actual: {:?}\n expected: {:?}", $actual, $expected);
+            let diff = $crate::common::assert::compare_vec_no_order($actual.iter(), $expected.iter(),
+                $crate::common::collections::DefaultEquality{}).as_string();
+            assert!(diff.is_none(),
+                "(actual != expected)\nActual: {:?}\nExpected: {:?}\n{}",
+                    $actual, $expected, diff.unwrap());
         }
     }
 }
@@ -86,7 +80,8 @@ pub fn metta_results_eq<T: PartialEq + std::fmt::Debug>(
     match (actual, expected) {
         (Ok(actual), Ok(expected)) if actual.len() == expected.len() => {
             for (actual, expected) in actual.iter().zip(expected.iter()) {
-                if vec_eq_no_order(actual.iter(), expected.iter()).is_some() {
+                let diff = compare_vec_no_order(actual.iter(), expected.iter(), DefaultEquality{});
+                if diff.has_diff() {
                     return false;
                 }
             }
