@@ -9,11 +9,12 @@ use crate::metta::runner::stdlib::{grounded_op, atom_to_string, regex, interpret
 use crate::metta::runner::bool::*;
 
 use std::convert::TryInto;
+use itertools::Itertools;
 
 
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-    let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
-    match compare_vec_no_order(actual.iter(), expected.iter(), DefaultEquality{}).as_string() {
+    let report = format!("\nExpected: [{}]\nGot: [{}]", expected.iter().format(", "), actual.iter().format(", "));
+    match compare_vec_no_order(actual.iter(), expected.iter(), DefaultEquality{}).as_display() {
         None => unit_result(),
         Some(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
@@ -114,9 +115,9 @@ impl Equality<&Atom> for AlphaEquality {
 }
 
 fn assert_alpha_equal(actual: &Vec<Atom>, expected: &Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-    let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
+    let report = format!("\nExpected: [{}]\nGot: [{}]", expected.iter().format(", "), actual.iter().format(", "));
     let res = compare_vec_no_order(actual.iter(), expected.iter(), AlphaEquality{});
-    match res.as_string() {
+    match res.as_display() {
         None => unit_result(),
         Some(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
