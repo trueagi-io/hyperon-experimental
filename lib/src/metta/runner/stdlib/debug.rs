@@ -2,18 +2,16 @@ use crate::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::space::*;
-use crate::common::collections::{Equality, DefaultEquality};
+use crate::common::collections::{VecDisplay, Equality, DefaultEquality};
 use crate::common::assert::compare_vec_no_order;
 use crate::atom::matcher::atoms_are_equivalent;
 use crate::metta::runner::stdlib::{grounded_op, atom_to_string, regex, interpret_no_error, unit_result};
 use crate::metta::runner::bool::*;
 
 use std::convert::TryInto;
-use itertools::Itertools;
-
 
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-    let report = format!("\nExpected: [{}]\nGot: [{}]", expected.iter().format(", "), actual.iter().format(", "));
+    let report = format!("\nExpected: {}\nGot: {}", VecDisplay(expected), VecDisplay(actual));
     match compare_vec_no_order(actual.iter(), expected.iter(), DefaultEquality{}).as_display() {
         None => unit_result(),
         Some(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
@@ -115,7 +113,7 @@ impl Equality<&Atom> for AlphaEquality {
 }
 
 fn assert_alpha_equal(actual: &Vec<Atom>, expected: &Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-    let report = format!("\nExpected: [{}]\nGot: [{}]", expected.iter().format(", "), actual.iter().format(", "));
+    let report = format!("\nExpected: {}\nGot: {}", VecDisplay(expected), VecDisplay(actual));
     let res = compare_vec_no_order(actual.iter(), expected.iter(), AlphaEquality{});
     match res.as_display() {
         None => unit_result(),

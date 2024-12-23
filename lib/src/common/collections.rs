@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use itertools::Itertools;
 
 pub trait Equality<T> {
     fn eq(a: &T, b: &T) -> bool;
@@ -285,6 +286,14 @@ impl<T: Clone> Into<Vec<T>> for CowArray<T> {
 impl<'a, T> Into<&'a [T]> for &'a CowArray<T> {
     fn into(self) -> &'a [T] {
         self.as_slice()
+    }
+}
+
+pub struct VecDisplay<'a, T: 'a + Display>(pub &'a Vec<T>);
+
+impl<'a, T: 'a + Display> Display for VecDisplay<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}]", self.0.iter().format(", "))
     }
 }
 
