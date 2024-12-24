@@ -14,7 +14,7 @@ use std::fmt::Debug;
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 struct AtomStorage {
     next_id: usize,
-    atoms: BiMap<HashAtom, usize>,
+    atoms: BiMap<HashableAtom, usize>,
 }
 
 impl AtomStorage {
@@ -41,11 +41,11 @@ impl AtomStorage {
     }
 
     fn insert_internal(&mut self, atom: &Atom) -> Option<usize> {
-        let id = match self.atoms.get_by_left(&HashAtom::Query(atom)) {
+        let id = match self.atoms.get_by_left(&HashableAtom::Query(atom)) {
             Some(id) => *id,
             None => {
                 let id = self.next_id();
-                self.atoms.insert(HashAtom::Store(atom.clone()), id);
+                self.atoms.insert(HashableAtom::Store(atom.clone()), id);
                 id
             },
         };
@@ -65,7 +65,7 @@ impl AtomStorage {
 
     pub fn get_id(&self, atom: &Atom) -> Option<usize> {
         if Self::is_hashable(atom) {
-            self.atoms.get_by_left(&HashAtom::Query(atom)).map(|id| *id)
+            self.atoms.get_by_left(&HashableAtom::Query(atom)).map(|id| *id)
         } else {
             None
         }
@@ -83,31 +83,31 @@ impl AtomStorage {
 }
 
 #[derive(Eq, Debug, Clone)]
-enum HashAtom {
+enum HashableAtom {
     // Used pointer to eliminate lifetime which leaks through the usages.
-    // At the same time HashAtom::Query is used only for querying before adding
+    // At the same time HashableAtom::Query is used only for querying before adding
     // where one can guarantee the reference to the added atom is correct.
     Query(*const Atom),
     Store(Atom),
 }
 
-impl HashAtom {
+impl HashableAtom {
     pub fn as_atom(&self) -> &Atom {
         match self {
-            HashAtom::Query(a) => unsafe{ &**a },
-            HashAtom::Store(a) => a,
+            HashableAtom::Query(a) => unsafe{ &**a },
+            HashableAtom::Store(a) => a,
         }
     }
 }
 
-impl Hash for HashAtom {
+impl Hash for HashableAtom {
     fn hash<H>(&self, state: &mut H) where H: Hasher {
         match self.as_atom() {
             Atom::Symbol(s) => s.hash(state),
             Atom::Variable(v) => v.hash(state),
             Atom::Grounded(g) => {
                 let mut hasher = DefaultHasher::new();
-                let _ = g.serialize(&mut hasher).expect("Expected to be hashable");
+                let _ = g.serialize(&mut hasher).expect("Expected to be serializable");
                 state.write_u64(hasher.finish());
             },
             _ => panic!("Not expected"),
@@ -115,7 +115,7 @@ impl Hash for HashAtom {
     }
 }
 
-impl PartialEq for HashAtom {
+impl PartialEq for HashableAtom {
     fn eq(&self, other: &Self) -> bool {
         self.as_atom() == other.as_atom()
     }
@@ -213,6 +213,7 @@ impl AtomIndex {
     fn atom_token_to_insert_index_key<'a>(storage: &mut AtomStorage, token: AtomToken<'a>) -> IndexKey<'a> {
         match token {
             AtomToken::Atom(atom @ Atom::Variable(_)) => {
+                // FIXME: eliminate cloning here and below we already have an ownership on atom
                 IndexKey::Custom(atom.clone())
             },
             AtomToken::Atom(atom) => {
