@@ -20,7 +20,7 @@ struct AtomStorage {
 
 impl AtomStorage {
     pub fn new() -> Self {
-        Self::default()
+        Default::default()
     }
 
     pub fn insert(&mut self, atom: Atom) -> Result<usize, Atom> {
@@ -122,25 +122,26 @@ impl PartialEq for HashableAtom {
 }
 
 // TODO: should we duplicate structure for an owned and borrowed cases to eliminate Cow
-// FIXME: rename to AtomIterItem? or AtomTrieToken or TrieToken?
 #[derive(PartialEq, Debug)]
 enum AtomToken<'a> {
     Atom(Cow<'a, Atom>),
-    StartExpr(Option<&'a Atom>), // atom is required to match custom atoms in index
+    StartExpr(Option<&'a Atom>), // atom is required to match custom entries from index
     EndExpr,
 }
 
 #[derive(Default, Debug, Clone)]
 enum AtomIterState<'a> {
-    /// Iterate a Symbol, Variable or Grounded
+    /// Start from a Symbol, Variable or Grounded
     StartSingle(Cow<'a, Atom>),
-    /// Iterate Expression atom
+    /// Start from Expression atom
     StartExpression(Cow<'a, Atom>),
 
     // Iterate via Expression
     Iterate(Cow<'a, ExpressionAtom>, usize, Box<AtomIterState<'a>>),
     // End of the iteration
+
     #[default]
+    /// End of iterator
     End,
 }
 
@@ -246,19 +247,19 @@ impl AtomIndex {
         self.root.insert(key)
     }
 
-    fn atom_token_to_insert_index_key<'a>(storage: &mut AtomStorage, token: AtomToken<'a>) -> IndexKey<'a> {
+    fn atom_token_to_insert_index_key<'a>(storage: &mut AtomStorage, token: AtomToken<'a>) -> InsertKey {
         match token {
             AtomToken::Atom(Cow::Owned(atom @ Atom::Variable(_))) => {
-                IndexKey::Custom(atom)
+                InsertKey::Custom(atom)
             },
             AtomToken::Atom(Cow::Owned(atom)) => {
                 match storage.insert(atom) {
-                    Ok(id) => IndexKey::ExactId(id),
-                    Err(atom) => IndexKey::Custom(atom),
+                    Ok(id) => InsertKey::Exact(id),
+                    Err(atom) => InsertKey::Custom(atom),
                 }
             },
-            AtomToken::StartExpr(atom) => IndexKey::StartExpr(atom),
-            AtomToken::EndExpr => IndexKey::EndExpr,
+            AtomToken::StartExpr(_) => InsertKey::StartExpr,
+            AtomToken::EndExpr => InsertKey::EndExpr,
             _ => panic!("Only owned atoms are expected to be inserted"),
         }
     }
@@ -269,7 +270,7 @@ impl AtomIndex {
         Box::new(self.root.query(key, &self.storage).into_iter())
     }
 
-    fn atom_token_to_query_index_key<'a>(storage: &AtomStorage, token: AtomToken<'a>) -> IndexKey<'a> {
+    fn atom_token_to_query_index_key<'a>(storage: &AtomStorage, token: AtomToken<'a>) -> QueryKey<'a> {
         match token {
             AtomToken::Atom(Cow::Borrowed(atom @ Atom::Variable(_))) => {
                 // FIXME: here CustomRef is returned only for variables but it
@@ -277,16 +278,16 @@ impl AtomIndex {
                 // Grounded::as_match, because for these atoms index should be
                 // unpacked and every unpacked atom or expression should be
                 // matched with a key. See Self::match_custom_key function.
-                IndexKey::CustomRef(atom)
+                QueryKey::Custom(atom)
             },
             AtomToken::Atom(Cow::Borrowed(atom)) => {
                 match storage.get_id(atom) {
-                    Some(id) => IndexKey::ExactRef((Some(id), atom)),
-                    None => IndexKey::ExactRef((None, atom)),
+                    Some(id) => QueryKey::Exact(Some(id), atom),
+                    None => QueryKey::Exact(None, atom),
                 }
             },
-            AtomToken::StartExpr(atom) => IndexKey::StartExpr(atom),
-            AtomToken::EndExpr => IndexKey::EndExpr,
+            AtomToken::StartExpr(Some(atom)) => QueryKey::StartExpr(atom),
+            AtomToken::EndExpr => QueryKey::EndExpr,
             _ => panic!("Only borrowed atoms are expected to be queried"),
         }
     }
@@ -297,25 +298,26 @@ impl AtomIndex {
     }
 }
 
-// TODO: ma be we should split this structure on InsertKey and QueryKey
-#[derive(Clone, Debug)]
-enum IndexKey<'a> {
-    StartExpr(Option<&'a Atom>), // FIXME: should we divide this key on insert and match?
+enum InsertKey {
+    StartExpr,
     EndExpr,
-    ExactId(usize),
-    // FIXME: looks like ExactRef is not needed, CustomRef should be used instead?
-    ExactRef((Option<usize>, &'a Atom)),
-    /// Atom to be added into a custom part of index
+    Exact(usize),
     Custom(Atom),
-    /// Atom to be matched with each of atoms unpacked from index
-    CustomRef(&'a Atom),
+}
+
+#[derive(Clone, Debug)]
+enum QueryKey<'a> {
+    StartExpr(&'a Atom),
+    EndExpr,
+    Exact(Option<usize>, &'a Atom),
+    Custom(&'a Atom),
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
 enum ExactKey {
     StartExpr,
     EndExpr,
-    ExactId(usize),
+    Exact(usize),
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -331,28 +333,26 @@ impl AtomTrieNode {
         Self::default()
     }
 
-    pub fn insert<'a, I: Iterator<Item=IndexKey<'a>>>(&mut self, mut key: I) {
+    pub fn insert<I: Iterator<Item=InsertKey>>(&mut self, mut key: I) {
         match key.next() {
             Some(head) => match head {
-                IndexKey::StartExpr(_) => self.insert_exact(ExactKey::StartExpr, key),
-                IndexKey::EndExpr => self.insert_exact(ExactKey::EndExpr, key),
-                IndexKey::ExactId(id) => self.insert_exact(ExactKey::ExactId(id), key),
-                IndexKey::Custom(atom) => self.insert_custom(atom, key),
-                IndexKey::ExactRef(_) => panic!("Not expected"),
-                IndexKey::CustomRef(_) => panic!("Not expected"),
+                InsertKey::StartExpr => self.insert_exact(ExactKey::StartExpr, key),
+                InsertKey::EndExpr => self.insert_exact(ExactKey::EndExpr, key),
+                InsertKey::Exact(id) => self.insert_exact(ExactKey::Exact(id), key),
+                InsertKey::Custom(atom) => self.insert_custom(atom, key),
             },
             None => {},
         }
     }
 
-    fn insert_exact<'a, I: Iterator<Item=IndexKey<'a>>>(&mut self, head: ExactKey, tail: I) {
+    fn insert_exact<'a, I: Iterator<Item=InsertKey>>(&mut self, head: ExactKey, tail: I) {
         match self.exact.entry(head) {
             HashMapEntry::Occupied(mut old) => { old.get_mut().insert(tail); },
             HashMapEntry::Vacant(new) => { new.insert(Self::new_branch(tail)); },
         }
     }
 
-    fn insert_custom<'a, I: Iterator<Item=IndexKey<'a>>>(&mut self, atom: Atom, tail: I) {
+    fn insert_custom<'a, I: Iterator<Item=InsertKey>>(&mut self, atom: Atom, tail: I) {
         for (prev, child) in &mut self.custom {
             if *prev == atom {
                 child.insert(tail);
@@ -362,27 +362,25 @@ impl AtomTrieNode {
         self.custom.push((atom, Self::new_branch(tail)));
     }
 
-    fn new_branch<'a, I: Iterator<Item=IndexKey<'a>>>(key: I) -> Box<Self> {
+    fn new_branch<'a, I: Iterator<Item=InsertKey>>(key: I) -> Box<Self> {
         let mut child = Box::new(AtomTrieNode::new());
         child.insert(key);
         child
     }
 
     // TODO: write an algorithm which returns an iterator instead of collected result
-    pub fn query<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(&self, key: I, storage: &AtomStorage) -> BindingsSet {
+    pub fn query<'a, I: Debug + Clone + Iterator<Item=QueryKey<'a>>>(&self, key: I, storage: &AtomStorage) -> BindingsSet {
         let mut mapper = CachingMapper::new(VariableAtom::make_unique);
         self.query_internal(key, storage, &mut mapper)
     }
 
-    fn query_internal<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, mut key: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
+    fn query_internal<'a, I: Debug + Clone + Iterator<Item=QueryKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, mut key: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
         match key.next() {
             Some(head) => match head {
-                IndexKey::ExactRef((id, atom)) => self.match_exact(&id.map(ExactKey::ExactId), Some(atom), key, storage, mapper),
-                IndexKey::StartExpr(atom) => self.match_exact(&Some(ExactKey::StartExpr), atom, key, storage, mapper),
-                IndexKey::EndExpr => self.match_exact(&Some(ExactKey::EndExpr), None, key, storage, mapper),
-                IndexKey::CustomRef(atom) => self.match_custom_key(atom, key, storage, mapper),
-                IndexKey::ExactId(_) => panic!("Not expected"),
-                IndexKey::Custom(_) => panic!("Not expected"),
+                QueryKey::Exact(id, atom) => self.match_exact(&id.map(ExactKey::Exact), Some(atom), key, storage, mapper),
+                QueryKey::StartExpr(atom) => self.match_exact(&Some(ExactKey::StartExpr), Some(atom), key, storage, mapper),
+                QueryKey::EndExpr => self.match_exact(&Some(ExactKey::EndExpr), None, key, storage, mapper),
+                QueryKey::Custom(atom) => self.match_custom_key(atom, key, storage, mapper),
             },
             None => BindingsSet::single(),
         }
@@ -391,7 +389,7 @@ impl AtomTrieNode {
     fn match_exact<'a, I, M>(&self, exact: &Option<ExactKey>, atom: Option<&Atom>, tail: I,
         storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
-            I: Debug + Clone + Iterator<Item=IndexKey<'a>>,
+            I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
             M: Fn(VariableAtom)->VariableAtom,
     {
         let mut result = BindingsSet::empty();
@@ -411,20 +409,20 @@ impl AtomTrieNode {
 
     fn key_to_atom<'a, 'b, I>(exact: &Option<ExactKey>, atom: Option<&'b Atom>, tail: I) -> Option<(&'b Atom, I)>
         where
-            I: Debug + Clone + Iterator<Item=IndexKey<'a>>
+            I: Debug + Clone + Iterator<Item=QueryKey<'a>>
     {
         match (exact, atom) {
             (None, Some(atom)) => Some((atom, tail)),
-            (Some(ExactKey::ExactId(_)), Some(atom)) => Some((atom, tail)),
+            (Some(ExactKey::Exact(_)), Some(atom)) => Some((atom, tail)),
             (Some(ExactKey::StartExpr), Some(atom)) => {
                 // TODO: At the moment we pass expression via
-                // AtomToken::StartExpr(Some(atom)) -> IndexKey::StartExpr(Some(atom)) -> here,
+                // AtomToken::StartExpr(Some(atom)) -> QueryKey::StartExpr(atom) -> here,
                 // because in case of query (when only reference to Atom is
-                // passed) we cannot get atom out of the key, while it is still
-                // there represented as a chain of tokens. Maybe using (N, [Atom; N])
-                // encoding can allow solve this issue if it is an issue at all.
-                // Also such encoding should allow us skip expressions in a single
-                // index addition operation.
+                // passed) we cannot get _reference_ to atom out of the key,
+                // while atom is still there represented as a chain of tokens.
+                // Maybe using (N, [Atom; N]) encoding can allow solve this
+                // issue if it is an issue at all. Also such encoding should
+                // allow us skip expressions in a single index addition operation.
                 let tail = Self::skip_expression(tail);
                 Some((atom, tail))
             },
@@ -436,7 +434,7 @@ impl AtomTrieNode {
     fn match_custom_entry<'a, I, M>(entry: &Atom, key: &Atom, child: &AtomTrieNode, tail: I,
         storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
-            I: Debug + Clone + Iterator<Item=IndexKey<'a>>,
+            I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
             M: Fn(VariableAtom)->VariableAtom
     {
         let mut result = BindingsSet::empty();
@@ -451,17 +449,17 @@ impl AtomTrieNode {
     }
 
     fn skip_expression<'a, I>(mut key: I) -> I
-        where I: Debug + Clone + Iterator<Item=IndexKey<'a>>
+        where I: Debug + Clone + Iterator<Item=QueryKey<'a>>
     {
         let mut par = 0;
         let mut is_end = |a| {
             match a {
-                IndexKey::StartExpr(_) => {
+                QueryKey::StartExpr(_) => {
                     par = par + 1;
                     false
                 },
-                IndexKey::EndExpr if par == 0 => true,
-                IndexKey::EndExpr if par > 0 => {
+                QueryKey::EndExpr if par == 0 => true,
+                QueryKey::EndExpr if par > 0 => {
                     par = par - 1;
                     false
                 },
@@ -480,7 +478,7 @@ impl AtomTrieNode {
     fn match_custom_key<'a, I, M>(&self, key: &Atom, tail: I, storage: &AtomStorage,
         mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
-            I: Debug + Clone + Iterator<Item=IndexKey<'a>>,
+            I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
             M: Fn(VariableAtom)->VariableAtom
     {
         let mut result = BindingsSet::empty();
@@ -497,7 +495,7 @@ impl AtomTrieNode {
         let mut result: Vec<(Option<Atom>, &AtomTrieNode)> = Vec::new();
         for (exact, child) in &self.exact {
             match exact {
-                ExactKey::ExactId(id) => result.push((Some(storage.get_atom(*id).expect("Unexpected state!").clone()), child)),
+                ExactKey::Exact(id) => result.push((Some(storage.get_atom(*id).expect("Unexpected state!").clone()), child)),
                 ExactKey::EndExpr => result.push((None, child)),
                 ExactKey::StartExpr => {
                     let mut exprs: Vec<(Vec<Atom>, &AtomTrieNode)> = Vec::new();
