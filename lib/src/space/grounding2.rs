@@ -407,7 +407,7 @@ impl AtomTrieNode {
         result
     }
 
-    fn key_to_atom<'a, 'b, I>(exact: &Option<ExactKey>, atom: Option<&'b Atom>, tail: I) -> Option<(&'b Atom, I)>
+    fn key_to_atom<'a, 'b, I>(exact: &Option<ExactKey>, atom: Option<&'b Atom>, mut tail: I) -> Option<(&'b Atom, I)>
         where
             I: Debug + Clone + Iterator<Item=QueryKey<'a>>
     {
@@ -423,7 +423,7 @@ impl AtomTrieNode {
                 // Maybe using (N, [Atom; N]) encoding can allow solve this
                 // issue if it is an issue at all. Also such encoding should
                 // allow us skip expressions in a single index addition operation.
-                let tail = Self::skip_expression(tail);
+                Self::skip_expression(&mut tail);
                 Some((atom, tail))
             },
             (Some(ExactKey::EndExpr), None) => None,
@@ -448,12 +448,10 @@ impl AtomTrieNode {
         result.merge(&tail_result)
     }
 
-    fn skip_expression<'a, I>(mut key: I) -> I
-        where I: Debug + Clone + Iterator<Item=QueryKey<'a>>
-    {
+    fn skip_expression<'a, I: Iterator<Item=QueryKey<'a>>>(key: &mut I) {
         let mut par = 0;
-        let mut is_end = |a| {
-            match a {
+        let mut is_end = |key: &QueryKey| {
+            match key {
                 QueryKey::StartExpr(_) => {
                     par = par + 1;
                     false
@@ -468,11 +466,10 @@ impl AtomTrieNode {
         };
         loop {
             match key.next() {
-                Some(atom) => if is_end(atom) { break },
+                Some(key) => if is_end(&key) { break },
                 None => break,
             }
         }
-        key
     }
 
     fn match_custom_key<'a, I, M>(&self, key: &Atom, tail: I, storage: &AtomStorage,
