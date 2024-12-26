@@ -181,29 +181,31 @@ impl<'a> Iterator for AtomIter<'a> {
     type Item = AtomToken<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
+        type State<'a> = AtomIterState<'a>;
+
         match std::mem::take(&mut self.state) {
-            AtomIterState::StartSingle(atom) => {
-                self.state = AtomIterState::End;
+            State::StartSingle(atom) => {
+                self.state = State::End;
                 Some(AtomToken::Atom(atom))
             },
-            AtomIterState::StartExpression(Cow::Owned(Atom::Expression(expr))) => {
-                self.state = AtomIterState::Iterate {
+            State::StartExpression(Cow::Owned(Atom::Expression(expr))) => {
+                self.state = State::Iterate {
                     expr: Cow::Owned(expr),
                     idx: 0,
-                    next: Box::new(AtomIterState::End)
+                    next: Box::new(State::End)
                 };
                 Some(AtomToken::StartExpr(None))
             },
-            AtomIterState::StartExpression(Cow::Borrowed(atom @ Atom::Expression(expr))) => {
-                self.state = AtomIterState::Iterate {
+            State::StartExpression(Cow::Borrowed(atom @ Atom::Expression(expr))) => {
+                self.state = State::Iterate {
                     expr: Cow::Borrowed(expr),
                     idx: 0,
-                    next: Box::new(AtomIterState::End)
+                    next: Box::new(State::End)
                 };
                 Some(AtomToken::StartExpr(Some(atom)))
             },
-            AtomIterState::StartExpression(_) => panic!("Only expressions are expected!"),
-            AtomIterState::Iterate { expr, idx, next } => {
+            State::StartExpression(_) => panic!("Only expressions are expected!"),
+            State::Iterate { expr, idx, next } => {
                 if idx < expr.children().len() {
                     fn extract_atom(mut expr: Cow<'_, ExpressionAtom>, idx: usize) -> (Cow<'_, Atom>, Cow<'_, ExpressionAtom>) {
                         match expr {
@@ -219,10 +221,10 @@ impl<'a> Iterator for AtomIter<'a> {
                         }
                     }
                     let (atom, expr) = extract_atom(expr, idx);
-                    let next_state = AtomIterState::Iterate{ expr, idx: idx + 1, next };
+                    let next_state = State::Iterate{ expr, idx: idx + 1, next };
                     match atom {
                         Cow::Owned(Atom::Expression(expr)) => {
-                            self.state = AtomIterState::Iterate {
+                            self.state = State::Iterate {
                                 expr: Cow::Owned(expr),
                                 idx: 0,
                                 next: Box::new(next_state)
@@ -230,7 +232,7 @@ impl<'a> Iterator for AtomIter<'a> {
                             Some(AtomToken::StartExpr(None))
                         },
                         Cow::Borrowed(atom @ Atom::Expression(expr)) => {
-                            self.state = AtomIterState::Iterate {
+                            self.state = State::Iterate {
                                 expr: Cow::Borrowed(expr),
                                 idx: 0,
                                 next: Box::new(next_state)
@@ -247,7 +249,7 @@ impl<'a> Iterator for AtomIter<'a> {
                     Some(AtomToken::EndExpr)
                 }
             },
-            AtomIterState::End => None,
+            State::End => None,
         }
     }
 }
@@ -315,8 +317,7 @@ impl AtomIndex {
     }
 
     pub fn iter(&self) -> Box<dyn Iterator<Item=Cow<'_, Atom>> + '_> {
-        Box::new(self.root.unpack_atoms(&self.storage)
-            .filter_map(|(a, _n)| a))
+        Box::new(self.root.unpack_atoms(&self.storage).map(|(a, _n)| a))
     }
 }
 
@@ -516,54 +517,124 @@ impl AtomTrieNode {
     {
         let mut result = BindingsSet::empty();
         for (entry, child) in self.unpack_atoms(storage) {
-            if let Some(entry) = entry {
-                let mut tail_result = Self::match_custom_entry(&entry, key, child, tail.clone(), storage, mapper);
-                result.extend(tail_result.drain(..));
-            }
+            let mut tail_result = Self::match_custom_entry(&entry, key, child, tail.clone(), storage, mapper);
+            result.extend(tail_result.drain(..));
         }
         result
     }
 
-    fn unpack_atoms<'a>(&'a self, storage: &'a AtomStorage) -> Box<dyn Iterator<Item=(Option<Cow<'a, Atom>>, &'a AtomTrieNode)> + 'a>{
-        const ATOM_NOT_IN_STORAGE: &'static str = "Exact entry contains atom which is not in storage";
-
-        let mut result: Vec<(Option<Cow<Atom>>, &AtomTrieNode)> = Vec::new();
-        for (key, child) in &self.exact {
-            match key {
-                ExactKey::Exact(id) => {
-                    let atom = storage.get_atom(*id).expect(ATOM_NOT_IN_STORAGE);
-                    result.push((Some(Cow::Borrowed(atom)), child))
-                },
-                ExactKey::EndExpr => result.push((None, child)),
-                ExactKey::StartExpr => {
-                    let mut exprs: Vec<(Vec<Atom>, &AtomTrieNode)> = Vec::new();
-                    exprs.push((Vec::new(), child));
-                    loop {
-                        let mut next: Vec<(Vec<Atom>, &AtomTrieNode)> = Vec::new();
-                        for (expr, child) in exprs.into_iter() {
-                            for (atom, child) in child.unpack_atoms(storage) {
-                                let mut new_expr = expr.clone();
-                                if let Some(atom) = atom {
-                                    new_expr.push(atom.into_owned());
-                                    next.push((new_expr, child));
-                                } else {
-                                    result.push((Some(Cow::Owned(Atom::expr(new_expr))), child))
-                                }
-                            }
-                        }
-                        if next.is_empty() {
-                            break;
-                        }
-                        exprs = next;
-                    }
+    fn unpack_atoms<'a>(&'a self, storage: &'a AtomStorage) -> Box<dyn Iterator<Item=(Cow<'a, Atom>, &'a AtomTrieNode)> + 'a>{
+        Box::new(AtomTrieNodeIter::new(self, storage)
+            .filter_map(|(res, child)| {
+                if let IterResult::Atom(atom) = res {
+                    Some((atom, child))
+                } else {
+                    None
                 }
+            }))
+    }
+}
+
+#[derive(Debug)]
+struct AtomTrieNodeIter<'a> {
+    node: &'a AtomTrieNode,
+    storage: &'a AtomStorage,
+    state: AtomTrieNodeIterState<'a>,
+}
+
+#[derive(Default, Debug)]
+enum AtomTrieNodeIterState<'a> {
+    VisitExact(hash_map::Iter<'a, ExactKey, Box<AtomTrieNode>>),
+    VisitCustom(std::slice::Iter<'a, (Atom, Box<AtomTrieNode>)>),
+    VisitExpression {
+        build_expr: Vec<Atom>,
+        cur_it: Box<AtomTrieNodeIter<'a>>,
+        next_state: Box<Self>,
+    },
+    #[default]
+    End,
+}
+
+impl<'a> AtomTrieNodeIter<'a> {
+    fn new(node: &'a AtomTrieNode, storage: &'a AtomStorage) -> Self {
+        Self {
+            node,
+            storage,
+            state: AtomTrieNodeIterState::VisitExact(node.exact.iter())
+        }
+    }
+}
+
+enum IterResult<'a> {
+    EndExpr,
+    Atom(Cow<'a, Atom>),
+}
+
+impl<'a> Iterator for AtomTrieNodeIter<'a> {
+    type Item = (IterResult<'a>, &'a AtomTrieNode);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        const ATOM_NOT_IN_STORAGE: &'static str = "Exact entry contains atom which is not in storage";
+        type State<'a> = AtomTrieNodeIterState<'a>;
+
+        loop {
+            match &mut self.state {
+                State::VisitExact(it) => {
+                    match it.next() {
+                        None => self.state = State::VisitCustom(self.node.custom.iter()),
+                        Some((key, child)) => {
+                            match key {
+                                ExactKey::Exact(id) => {
+                                    let atom = self.storage.get_atom(*id).expect(ATOM_NOT_IN_STORAGE);
+                                    return Some((IterResult::Atom(Cow::Borrowed(atom)), child.as_ref()));
+                                },
+                                ExactKey::EndExpr => {
+                                    return Some((IterResult::EndExpr, child.as_ref()));
+                                },
+                                ExactKey::StartExpr => {
+                                    let state = std::mem::take(&mut self.state);
+                                    self.state = State::VisitExpression{
+                                        build_expr: Vec::new(),
+                                        cur_it: Box::new(AtomTrieNodeIter::new(child, self.storage)),
+                                        next_state: Box::new(state),
+                                    }
+                                },
+                            }
+                        },
+                    }
+                },
+                State::VisitCustom(it) => {
+                    match it.next() {
+                        Some((atom, child)) => return Some((IterResult::Atom(Cow::Borrowed(atom)), child)),
+                        None => self.state = State::End,
+                    }
+                },
+                State::VisitExpression { build_expr, cur_it, next_state } => {
+                    match cur_it.next() {
+                        Some((IterResult::EndExpr, child)) => {
+                            let atom = Atom::expr(build_expr.clone());
+                            return Some((IterResult::Atom(Cow::Owned(atom)), child))
+                        },
+                        Some((IterResult::Atom(atom), child)) => {
+                            // FIXME: instead of cloning we could do push/pop?
+                            let mut build_expr = build_expr.clone();
+                            build_expr.push(atom.into_owned());
+                            let state = std::mem::take(&mut self.state);
+                            self.state = State::VisitExpression {
+                                build_expr,
+                                cur_it: Box::new(AtomTrieNodeIter::new(child, self.storage)),
+                                next_state: Box::new(state)
+                            }
+                        },
+                        None => {
+                            let next_state = std::mem::take(next_state);
+                            self.state = *next_state;
+                        }
+                    }
+                },
+                State::End => return None,
             }
         }
-        for (custom, child) in &self.custom {
-            result.push((Some(Cow::Borrowed(custom)), child));
-        }
-        //log::trace!("unpack_atoms: {:?}", result);
-        Box::new(result.into_iter())
     }
 }
 
@@ -658,5 +729,47 @@ mod test {
         assert_eq_no_order!(index.query(&expr!("A" ("B" "C") {Number::Integer(42)} ("B" "C"))).collect::<Vec<Bindings>>(), vec![bind!{a: expr!("B" "C")}]);
         assert_eq_no_order!(index.query(&expr!("A" "B" {Number::Integer(42)} "C")).collect::<Vec<Bindings>>(), Vec::<Bindings>::new());
         assert_eq_no_order!(index.query(&expr!(b)).collect::<Vec<Bindings>>(), vec![bind!{ b: expr!("A" a {Number::Integer(42)} a)}]);
+    }
+
+    #[test]
+    fn atom_index_iter_single() {
+        let mut index = AtomIndex::new();
+        index.insert(Atom::sym("A"));
+        index.insert(Atom::var("a"));
+        index.insert(Atom::gnd(Number::Integer(42)));
+
+        let atoms: Vec<Atom> = index.iter().map(|a| a.into_owned()).collect();
+        assert_eq_no_order!(atoms, vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Number::Integer(42))]);
+    }
+
+    #[test]
+    fn atom_index_iter_expression() {
+        let mut index = AtomIndex::new();
+        index.insert(expr!("A" a {Number::Integer(42)} a));
+
+        let atoms: Vec<Atom> = index.iter().map(|a| a.into_owned()).collect();
+        assert_eq_no_order!(atoms, vec![expr!("A" a {Number::Integer(42)} a)]);
+    }
+
+    #[test]
+    fn atom_index_iter_expression_1() {
+        let mut index = AtomIndex::new();
+        index.insert(expr!("A" "B" "C"));
+        index.insert(expr!("A" "D" "C"));
+
+        let atoms: Vec<Atom> = index.iter().map(|a| a.into_owned()).collect();
+        assert_eq_no_order!(atoms, vec![expr!("A" "B" "C"), expr!("A" "D" "C")]);
+    }
+
+    #[test]
+    fn atom_index_iter_expression_2() {
+        let mut index = AtomIndex::new();
+        index.insert(expr!(()));
+        index.insert(expr!(() "A"));
+        index.insert(expr!("A" ("B") "C"));
+        index.insert(expr!("A" ("D") "C"));
+
+        let atoms: Vec<Atom> = index.iter().map(|a| a.into_owned()).collect();
+        assert_eq_no_order!(atoms, vec![expr!(()), expr!(() "A"), expr!("A" ("B") "C"), expr!("A" ("D") "C")]);
     }
 }
