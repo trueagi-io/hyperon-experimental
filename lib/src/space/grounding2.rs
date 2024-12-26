@@ -272,6 +272,11 @@ impl AtomIndex {
     fn atom_token_to_query_index_key<'a>(storage: &AtomStorage, token: AtomToken<'a>) -> IndexKey<'a> {
         match token {
             AtomToken::Atom(Cow::Borrowed(atom @ Atom::Variable(_))) => {
+                // FIXME: here CustomRef is returned only for variables but it
+                // should also be returned for grounded atoms implementing
+                // Grounded::as_match, because for these atoms index should be
+                // unpacked and every unpacked atom or expression should be
+                // matched with a key. See Self::match_custom_key function.
                 IndexKey::CustomRef(atom)
             },
             AtomToken::Atom(Cow::Borrowed(atom)) => {
@@ -292,6 +297,7 @@ impl AtomIndex {
     }
 }
 
+// TODO: ma be we should split this structure on InsertKey and QueryKey
 #[derive(Clone, Debug)]
 enum IndexKey<'a> {
     StartExpr(Option<&'a Atom>), // FIXME: should we divide this key on insert and match?
@@ -299,7 +305,9 @@ enum IndexKey<'a> {
     ExactId(usize),
     // FIXME: looks like ExactRef is not needed, CustomRef should be used instead?
     ExactRef((Option<usize>, &'a Atom)),
+    /// Atom to be added into a custom part of index
     Custom(Atom),
+    /// Atom to be matched with each of atoms unpacked from index
     CustomRef(&'a Atom),
 }
 
@@ -393,8 +401,8 @@ impl AtomTrieNode {
             }
         }
         if let Some((atom, tail)) = Self::key_to_atom(exact, atom, tail) {
-            for (custom, child) in &self.custom {
-                let mut custom_res = Self::match_custom_index(custom, atom, child, tail.clone(), storage, mapper);
+            for (entry, child) in &self.custom {
+                let mut custom_res = Self::match_custom_entry(entry, atom, child, tail.clone(), storage, mapper);
                 result.extend(custom_res.drain(..));
             }
         }
@@ -425,19 +433,19 @@ impl AtomTrieNode {
         }
     }
 
-    fn match_custom_index<'a, I, M>(matcher: &Atom, atom: &Atom, child: &AtomTrieNode, tail: I,
+    fn match_custom_entry<'a, I, M>(entry: &Atom, key: &Atom, child: &AtomTrieNode, tail: I,
         storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
             I: Debug + Clone + Iterator<Item=IndexKey<'a>>,
             M: Fn(VariableAtom)->VariableAtom
     {
         let mut result = BindingsSet::empty();
-        let mut matcher = matcher.clone();
-        matcher.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
+        let mut entry = entry.clone();
+        entry.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
         // TODO: conversion to Iterator and back
-        result.extend(match_atoms(&matcher, atom));
+        result.extend(match_atoms(&entry, key));
         let tail_result = child.query_internal(tail, storage, mapper);
-        //log::trace!("match_custom_index: matcher: {}, atom: {}, child: {:?}, tail: {:?}, tail_result: {}", matcher, atom, child, tail.clone(), tail_result);
+        //log::trace!("match_custom_entry: entry: {}, key: {}, child: {:?}, tail: {:?}, tail_result: {}", entry, key, child, tail.clone(), tail_result);
         // TODO: we could move BindingsSet into merge instead of passing by reference
         result.merge(&tail_result)
     }
@@ -469,14 +477,18 @@ impl AtomTrieNode {
         key
     }
 
-    fn match_custom_key<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, head: &Atom, tail: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
+    fn match_custom_key<'a, I, M>(&self, key: &Atom, tail: I, storage: &AtomStorage,
+        mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
+        where
+            I: Debug + Clone + Iterator<Item=IndexKey<'a>>,
+            M: Fn(VariableAtom)->VariableAtom
+    {
         let mut result = BindingsSet::empty();
-        for (atom, child) in self.unpack_atoms(storage) {
-            if atom.is_none() {
-                continue;
+        for (entry, child) in self.unpack_atoms(storage) {
+            if let Some(entry) = entry {
+                let mut tail_result = Self::match_custom_entry(&entry, key, child, tail.clone(), storage, mapper);
+                result.extend(tail_result.drain(..));
             }
-            let mut tail_result = Self::match_custom_index(&atom.unwrap(), head, child, tail.clone(), storage, mapper);
-            result.extend(tail_result.drain(..));
         }
         result
     }
