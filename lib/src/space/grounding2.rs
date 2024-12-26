@@ -313,6 +313,18 @@ enum QueryKey<'a> {
     Custom(&'a Atom),
 }
 
+impl<'a> QueryKey<'a> {
+    fn as_exact_key(&self) -> Option<ExactKey> {
+        match self {
+            QueryKey::StartExpr(_) => Some(ExactKey::StartExpr),
+            QueryKey::EndExpr => Some(ExactKey::EndExpr),
+            QueryKey::Exact(Some(id), _) => Some(ExactKey::Exact(*id)),
+            QueryKey::Exact(None, _) => None,
+            QueryKey::Custom(_) => None,
+        }
+    }
+}
+
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
 enum ExactKey {
     StartExpr,
@@ -377,28 +389,30 @@ impl AtomTrieNode {
     fn query_internal<'a, I: Debug + Clone + Iterator<Item=QueryKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, mut key: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
         match key.next() {
             Some(head) => match head {
-                QueryKey::Exact(id, atom) => self.match_exact(&id.map(ExactKey::Exact), Some(atom), key, storage, mapper),
-                QueryKey::StartExpr(atom) => self.match_exact(&Some(ExactKey::StartExpr), Some(atom), key, storage, mapper),
-                QueryKey::EndExpr => self.match_exact(&Some(ExactKey::EndExpr), None, key, storage, mapper),
+                QueryKey::Exact(_, _) => self.match_exact_key(head, key, storage, mapper),
+                QueryKey::StartExpr(_) => self.match_exact_key(head, key, storage, mapper),
+                QueryKey::EndExpr => self.match_exact_key(head, key, storage, mapper),
                 QueryKey::Custom(atom) => self.match_custom_key(atom, key, storage, mapper),
             },
             None => BindingsSet::single(),
         }
     }
 
-    fn match_exact<'a, I, M>(&self, exact: &Option<ExactKey>, atom: Option<&Atom>, tail: I,
-        storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
+    fn match_exact_key<'a, I, M>(&self, key: QueryKey<'a>, mut tail: I, storage: &AtomStorage,
+        mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
             I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
             M: Fn(VariableAtom)->VariableAtom,
     {
         let mut result = BindingsSet::empty();
-        if let Some(exact) = exact {
-            if let Some(child) = self.exact.get(exact) {
+        // match exact entries if applicable
+        if let Some(exact) = key.as_exact_key() {
+            if let Some(child) = self.exact.get(&exact) {
                 result.extend(child.query_internal(tail.clone(), storage, mapper))
             }
         }
-        if let Some((atom, tail)) = Self::key_to_atom(exact, atom, tail) {
+        // match custom entries if applicable
+        if let Some(atom) = Self::key_to_atom(&key, &mut tail) {
             for (entry, child) in &self.custom {
                 let mut custom_res = Self::match_custom_entry(entry, atom, child, tail.clone(), storage, mapper);
                 result.extend(custom_res.drain(..));
@@ -407,14 +421,12 @@ impl AtomTrieNode {
         result
     }
 
-    fn key_to_atom<'a, 'b, I>(exact: &Option<ExactKey>, atom: Option<&'b Atom>, mut tail: I) -> Option<(&'b Atom, I)>
+    fn key_to_atom<'a, I>(key: &QueryKey<'a>, tail: &mut I) -> Option<&'a Atom>
         where
             I: Debug + Clone + Iterator<Item=QueryKey<'a>>
     {
-        match (exact, atom) {
-            (None, Some(atom)) => Some((atom, tail)),
-            (Some(ExactKey::Exact(_)), Some(atom)) => Some((atom, tail)),
-            (Some(ExactKey::StartExpr), Some(atom)) => {
+        match key {
+            QueryKey::StartExpr(atom) => {
                 // TODO: At the moment we pass expression via
                 // AtomToken::StartExpr(Some(atom)) -> QueryKey::StartExpr(atom) -> here,
                 // because in case of query (when only reference to Atom is
@@ -423,29 +435,13 @@ impl AtomTrieNode {
                 // Maybe using (N, [Atom; N]) encoding can allow solve this
                 // issue if it is an issue at all. Also such encoding should
                 // allow us skip expressions in a single index addition operation.
-                Self::skip_expression(&mut tail);
-                Some((atom, tail))
+                Self::skip_expression(tail);
+                Some(atom)
             },
-            (Some(ExactKey::EndExpr), None) => None,
-            _ => panic!("Unexpected state!"),
+            QueryKey::EndExpr => None,
+            QueryKey::Exact(_, atom) => Some(atom),
+            QueryKey::Custom(_) => panic!("Custom key is not expected!"),
         }
-    }
-
-    fn match_custom_entry<'a, I, M>(entry: &Atom, key: &Atom, child: &AtomTrieNode, tail: I,
-        storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
-        where
-            I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
-            M: Fn(VariableAtom)->VariableAtom
-    {
-        let mut result = BindingsSet::empty();
-        let mut entry = entry.clone();
-        entry.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
-        // TODO: conversion to Iterator and back
-        result.extend(match_atoms(&entry, key));
-        let tail_result = child.query_internal(tail, storage, mapper);
-        //log::trace!("match_custom_entry: entry: {}, key: {}, child: {:?}, tail: {:?}, tail_result: {}", entry, key, child, tail.clone(), tail_result);
-        // TODO: we could move BindingsSet into merge instead of passing by reference
-        result.merge(&tail_result)
     }
 
     fn skip_expression<'a, I: Iterator<Item=QueryKey<'a>>>(key: &mut I) {
@@ -470,6 +466,24 @@ impl AtomTrieNode {
                 None => break,
             }
         }
+    }
+
+    fn match_custom_entry<'a, I, M>(entry: &Atom, key: &Atom, child: &AtomTrieNode, tail: I,
+        storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
+        where
+            I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
+            M: Fn(VariableAtom)->VariableAtom
+    {
+        let mut result = BindingsSet::empty();
+        let mut entry = entry.clone();
+        // TODO: replacing variables each time could be eliminated
+        entry.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
+        // TODO: conversion to Iterator and back
+        result.extend(match_atoms(&entry, key));
+        let tail_result = child.query_internal(tail, storage, mapper);
+        //log::trace!("match_custom_entry: entry: {}, key: {}, child: {:?}, tail: {:?}, tail_result: {}", entry, key, child, tail.clone(), tail_result);
+        // TODO: we could move BindingsSet into merge instead of passing by reference
+        result.merge(&tail_result)
     }
 
     fn match_custom_key<'a, I, M>(&self, key: &Atom, tail: I, storage: &AtomStorage,
