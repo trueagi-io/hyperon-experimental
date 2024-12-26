@@ -292,7 +292,7 @@ impl AtomIndex {
         }
     }
 
-    pub fn iter(&self) -> Box<dyn Iterator<Item=Atom> + '_> {
+    pub fn iter(&self) -> Box<dyn Iterator<Item=Cow<'_, Atom>> + '_> {
         Box::new(self.root.unpack_atoms(&self.storage)
             .filter_map(|(a, _n)| a))
     }
@@ -502,11 +502,16 @@ impl AtomTrieNode {
         result
     }
 
-    fn unpack_atoms<'a>(&'a self, storage: &'a AtomStorage) -> Box<dyn Iterator<Item=(Option<Atom>, &'a AtomTrieNode)> + 'a>{
-        let mut result: Vec<(Option<Atom>, &AtomTrieNode)> = Vec::new();
+    fn unpack_atoms<'a>(&'a self, storage: &'a AtomStorage) -> Box<dyn Iterator<Item=(Option<Cow<'a, Atom>>, &'a AtomTrieNode)> + 'a>{
+        const ATOM_NOT_IN_STORAGE: &'static str = "Exact entry contains atom which is not in storage";
+
+        let mut result: Vec<(Option<Cow<Atom>>, &AtomTrieNode)> = Vec::new();
         for (exact, child) in &self.exact {
             match exact {
-                ExactKey::Exact(id) => result.push((Some(storage.get_atom(*id).expect("Unexpected state!").clone()), child)),
+                ExactKey::Exact(id) => {
+                    let atom = storage.get_atom(*id).expect(ATOM_NOT_IN_STORAGE);
+                    result.push((Some(Cow::Borrowed(atom)), child))
+                },
                 ExactKey::EndExpr => result.push((None, child)),
                 ExactKey::StartExpr => {
                     let mut exprs: Vec<(Vec<Atom>, &AtomTrieNode)> = Vec::new();
@@ -515,12 +520,15 @@ impl AtomTrieNode {
                         let mut next: Vec<(Vec<Atom>, &AtomTrieNode)> = Vec::new();
                         for (expr, child) in exprs.into_iter() {
                             for (atom, child) in child.unpack_atoms(storage) {
+                                let mut new_expr = expr.clone();
                                 if let Some(atom) = atom {
-                                    let mut new_expr = expr.clone();
-                                    new_expr.push(atom);
+                                    match atom {
+                                        Cow::Borrowed(atom) => new_expr.push(atom.clone()),
+                                        Cow::Owned(atom) => new_expr.push(atom),
+                                    }
                                     next.push((new_expr, child));
                                 } else {
-                                    result.push((Some(Atom::expr(expr.clone())), child))
+                                    result.push((Some(Cow::Owned(Atom::expr(new_expr))), child))
                                 }
                             }
                         }
@@ -533,7 +541,7 @@ impl AtomTrieNode {
             }
         }
         for (custom, child) in &self.custom {
-            result.push((Some(custom.clone()), child));
+            result.push((Some(Cow::Borrowed(custom)), child));
         }
         //log::trace!("unpack_atoms: {:?}", result);
         Box::new(result.into_iter())
