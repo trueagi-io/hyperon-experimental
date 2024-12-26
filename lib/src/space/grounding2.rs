@@ -10,6 +10,7 @@ use std::hash::DefaultHasher;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry as HashMapEntry;
 use std::fmt::Debug;
+use std::borrow::Cow;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 struct AtomStorage {
@@ -22,11 +23,11 @@ impl AtomStorage {
         Self::default()
     }
 
-    pub fn insert(&mut self, atom: &Atom) -> Option<usize> {
-        if Self::is_hashable(atom) {
-            self.insert_internal(atom)
+    pub fn insert(&mut self, atom: Atom) -> Result<usize, Atom> {
+        if Self::is_hashable(&atom) {
+            Ok(self.insert_internal(atom))
         } else {
-            None
+            Err(atom)
         }
     }
 
@@ -40,16 +41,15 @@ impl AtomStorage {
         }
     }
 
-    fn insert_internal(&mut self, atom: &Atom) -> Option<usize> {
-        let id = match self.atoms.get_by_left(&HashableAtom::Query(atom)) {
+    fn insert_internal(&mut self, atom: Atom) -> usize {
+        match self.atoms.get_by_left(&HashableAtom::Query(&atom)) {
             Some(id) => *id,
             None => {
                 let id = self.next_id();
-                self.atoms.insert(HashableAtom::Store(atom.clone()), id);
+                self.atoms.insert(HashableAtom::Store(atom), id);
                 id
             },
-        };
-        Some(id)
+        }
     }
 
     #[inline]
@@ -121,64 +121,102 @@ impl PartialEq for HashableAtom {
     }
 }
 
+// TODO: should we duplicate structure for an owned and borrowed cases to eliminate Cow
+// FIXME: rename to AtomIterItem? or AtomTrieToken or TrieToken?
 #[derive(PartialEq, Debug)]
 enum AtomToken<'a> {
-    Atom(&'a Atom),
-    StartExpr(&'a Atom),
+    Atom(Cow<'a, Atom>),
+    StartExpr(Option<&'a Atom>), // atom is required to match custom atoms in index
     EndExpr,
 }
 
-#[derive(Default)]
-enum AtomTokenIterState<'a> {
-    Single(&'a Atom),
-    Expression(&'a Atom, &'a ExpressionAtom),
-    Iterate(&'a ExpressionAtom, usize, Box<AtomTokenIterState<'a>>),
+#[derive(Default, Debug, Clone)]
+enum AtomIterState<'a> {
+    /// Iterate a Symbol, Variable or Grounded
+    StartSingle(Cow<'a, Atom>),
+    /// Iterate Expression atom
+    StartExpression(Cow<'a, Atom>),
+
+    // Iterate via Expression
+    Iterate(Cow<'a, ExpressionAtom>, usize, Box<AtomIterState<'a>>),
+    // End of the iteration
     #[default]
     End,
 }
 
-struct AtomTokenIter<'a> {
-    state: AtomTokenIterState<'a>,
+#[derive(Debug, Clone)]
+struct AtomIter<'a> {
+    state: AtomIterState<'a>,
 }
 
-impl<'a> AtomTokenIter<'a> {
-    fn new(atom: &'a Atom) -> Self {
+impl<'a> AtomIter<'a> {
+    fn from_ref(atom: &'a Atom) -> Self {
+        Self::from_cow(Cow::Borrowed(atom))
+    }
+
+    fn from_atom(atom: Atom) -> Self {
+        Self::from_cow(Cow::Owned(atom))
+    }
+
+    fn from_cow(atom: Cow<'a, Atom>) -> Self {
         let state = match atom {
-            Atom::Symbol(_) | Atom::Variable(_) | Atom::Grounded(_) =>
-                AtomTokenIterState::Single(atom),
-            Atom::Expression(expr) => 
-                AtomTokenIterState::Expression(atom, expr),
+            Cow::Owned(Atom::Expression(_)) =>
+                AtomIterState::StartExpression(atom),
+            Cow::Borrowed(Atom::Expression(_)) =>
+                AtomIterState::StartExpression(atom),
+            _ => AtomIterState::StartSingle(atom),
         };
         Self{ state }
     }
 }
 
-impl<'a> Iterator for AtomTokenIter<'a> {
+impl<'a> Iterator for AtomIter<'a> {
     type Item = AtomToken<'a>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match std::mem::take(&mut self.state) {
-            AtomTokenIterState::Single(atom) => {
-                self.state = AtomTokenIterState::End;
+            AtomIterState::StartSingle(atom) => {
+                self.state = AtomIterState::End;
                 Some(AtomToken::Atom(atom))
             },
-            AtomTokenIterState::Expression(atom, expr) => {
-                self.state = AtomTokenIterState::Iterate(expr, 0, Box::new(AtomTokenIterState::End));
-                Some(AtomToken::StartExpr(atom))
+            AtomIterState::StartExpression(Cow::Owned(Atom::Expression(expr))) => {
+                self.state = AtomIterState::Iterate(Cow::Owned(expr), 0, Box::new(AtomIterState::End));
+                Some(AtomToken::StartExpr(None))
             },
-            AtomTokenIterState::Iterate(expr, i, prev) => {
-                let children = expr.children();
-                if i < children.len() {
-                    let atom = unsafe{ children.get_unchecked(i) };
-                    let next_state = AtomTokenIterState::Iterate(expr, i + 1, prev);
+            AtomIterState::StartExpression(Cow::Borrowed(atom @ Atom::Expression(expr))) => {
+                self.state = AtomIterState::Iterate(Cow::Borrowed(expr), 0, Box::new(AtomIterState::End));
+                Some(AtomToken::StartExpr(Some(atom)))
+            },
+            AtomIterState::StartExpression(_) => panic!("Only expressions are expected!"),
+            AtomIterState::Iterate(expr, i, prev) => {
+                if i < expr.children().len() {
+                    fn extract_atom(mut expr: Cow<'_, ExpressionAtom>, i: usize) -> (Cow<'_, Atom>, Cow<'_, ExpressionAtom>) {
+                        match expr {
+                            Cow::Owned(ref mut e) => {
+                                let cell = unsafe { e.children_mut().get_unchecked_mut(i) };
+                                let atom = std::mem::replace(cell, Atom::sym(""));
+                                (Cow::Owned(atom), expr)
+                            },
+                            Cow::Borrowed(e) => {
+                                let atom = unsafe { e.children().get_unchecked(i) };
+                                (Cow::Borrowed(atom), expr)
+                            },
+                        }
+                    }
+                    let (atom, expr) = extract_atom(expr, i);
+                    let next_state = AtomIterState::Iterate(expr, i + 1, prev);
                     match atom {
-                        Atom::Symbol(_) | Atom::Variable(_) | Atom::Grounded(_) => {
+                        Cow::Owned(Atom::Expression(expr)) => {
+                            self.state = AtomIterState::Iterate(Cow::Owned(expr), 0, Box::new(next_state));
+                            Some(AtomToken::StartExpr(None))
+                        },
+                        Cow::Borrowed(atom @ Atom::Expression(expr)) => {
+                            self.state = AtomIterState::Iterate(Cow::Borrowed(expr), 0, Box::new(next_state));
+                            Some(AtomToken::StartExpr(Some(atom)))
+                        },
+                        _ => {
                             self.state = next_state;
                             Some(AtomToken::Atom(atom))
-                        },
-                        Atom::Expression(e) => {
-                            self.state = AtomTokenIterState::Iterate(e, 0, Box::new(next_state));
-                            Some(AtomToken::StartExpr(atom))
                         },
                     }
                 } else {
@@ -186,7 +224,7 @@ impl<'a> Iterator for AtomTokenIter<'a> {
                     Some(AtomToken::EndExpr)
                 }
             },
-            AtomTokenIterState::End => None,
+            AtomIterState::End => None,
         }
     }
 }
@@ -194,7 +232,7 @@ impl<'a> Iterator for AtomTokenIter<'a> {
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct AtomIndex {
     storage: AtomStorage,
-    root: AtomIndexNode,
+    root: AtomTrieNode,
 }
 
 impl AtomIndex {
@@ -203,51 +241,48 @@ impl AtomIndex {
     }
 
     pub fn insert(&mut self, atom: Atom) {
-        let key = AtomTokenIter::new(&atom)
+        let key = AtomIter::from_atom(atom)
             .map(|token| Self::atom_token_to_insert_index_key(&mut self.storage, token));
         self.root.insert(key)
     }
 
-    // FIXME: could merge two implementations atom_token_to_insert_index_key
-    // and atom_token_to_query_index_key
     fn atom_token_to_insert_index_key<'a>(storage: &mut AtomStorage, token: AtomToken<'a>) -> IndexKey<'a> {
         match token {
-            AtomToken::Atom(atom @ Atom::Variable(_)) => {
-                // FIXME: eliminate cloning here and below we already have an ownership on atom
-                IndexKey::Custom(atom.clone())
+            AtomToken::Atom(Cow::Owned(atom @ Atom::Variable(_))) => {
+                IndexKey::Custom(atom)
             },
-            AtomToken::Atom(atom) => {
+            AtomToken::Atom(Cow::Owned(atom)) => {
                 match storage.insert(atom) {
-                    Some(id) => IndexKey::Exact(id),
-                    // FIXME: add iter to iterate without cloning
-                    None => IndexKey::Custom(atom.clone()),
+                    Ok(id) => IndexKey::ExactId(id),
+                    Err(atom) => IndexKey::Custom(atom),
                 }
             },
-            AtomToken::StartExpr(e) => IndexKey::StartExpr(e),
+            AtomToken::StartExpr(atom) => IndexKey::StartExpr(atom),
             AtomToken::EndExpr => IndexKey::EndExpr,
+            _ => panic!("Only owned atoms are expected to be inserted"),
         }
     }
 
     pub fn query(&self, atom: &Atom) -> QueryResult {
-        let key: Vec<IndexKey> = AtomTokenIter::new(&atom)
-            .map(|token| Self::atom_token_to_query_index_key(&self.storage, token))
-            .collect();
-        Box::new(self.root.query(key.into_iter(), &self.storage).into_iter())
+        let key = AtomIter::from_ref(&atom)
+            .map(|token| Self::atom_token_to_query_index_key(&self.storage, token));
+        Box::new(self.root.query(key, &self.storage).into_iter())
     }
 
     fn atom_token_to_query_index_key<'a>(storage: &AtomStorage, token: AtomToken<'a>) -> IndexKey<'a> {
         match token {
-            AtomToken::Atom(atom @ Atom::Variable(_)) => {
+            AtomToken::Atom(Cow::Borrowed(atom @ Atom::Variable(_))) => {
                 IndexKey::CustomRef(atom)
             },
-            AtomToken::Atom(atom) => {
+            AtomToken::Atom(Cow::Borrowed(atom)) => {
                 match storage.get_id(atom) {
                     Some(id) => IndexKey::ExactRef((Some(id), atom)),
                     None => IndexKey::ExactRef((None, atom)),
                 }
             },
-            AtomToken::StartExpr(e) => IndexKey::StartExpr(e),
+            AtomToken::StartExpr(atom) => IndexKey::StartExpr(atom),
             AtomToken::EndExpr => IndexKey::EndExpr,
+            _ => panic!("Only borrowed atoms are expected to be queried"),
         }
     }
 
@@ -259,9 +294,10 @@ impl AtomIndex {
 
 #[derive(Clone, Debug)]
 enum IndexKey<'a> {
-    StartExpr(&'a Atom),
+    StartExpr(Option<&'a Atom>), // FIXME: should we divide this key on insert and match?
     EndExpr,
-    Exact(usize),
+    ExactId(usize),
+    // FIXME: looks like ExactRef is not needed, CustomRef should be used instead?
     ExactRef((Option<usize>, &'a Atom)),
     Custom(Atom),
     CustomRef(&'a Atom),
@@ -271,18 +307,18 @@ enum IndexKey<'a> {
 enum ExactKey {
     StartExpr,
     EndExpr,
-    Exact(usize),
+    ExactId(usize),
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-struct AtomIndexNode {
+struct AtomTrieNode {
     exact: HashMap<ExactKey, Box<Self>>, 
     custom: Vec<(Atom, Box<Self>)>,
 }
 
 type QueryResult = Box<dyn Iterator<Item=Bindings>>;
 
-impl AtomIndexNode {
+impl AtomTrieNode {
     pub fn new() -> Self {
         Self::default()
     }
@@ -292,7 +328,7 @@ impl AtomIndexNode {
             Some(head) => match head {
                 IndexKey::StartExpr(_) => self.insert_exact(ExactKey::StartExpr, key),
                 IndexKey::EndExpr => self.insert_exact(ExactKey::EndExpr, key),
-                IndexKey::Exact(id) => self.insert_exact(ExactKey::Exact(id), key),
+                IndexKey::ExactId(id) => self.insert_exact(ExactKey::ExactId(id), key),
                 IndexKey::Custom(atom) => self.insert_custom(atom, key),
                 IndexKey::ExactRef(_) => panic!("Not expected"),
                 IndexKey::CustomRef(_) => panic!("Not expected"),
@@ -319,7 +355,7 @@ impl AtomIndexNode {
     }
 
     fn new_branch<'a, I: Iterator<Item=IndexKey<'a>>>(key: I) -> Box<Self> {
-        let mut child = Box::new(AtomIndexNode::new());
+        let mut child = Box::new(AtomTrieNode::new());
         child.insert(key);
         child
     }
@@ -333,26 +369,27 @@ impl AtomIndexNode {
     fn query_internal<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, mut key: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
         match key.next() {
             Some(head) => match head {
-                IndexKey::ExactRef((id, atom)) => self.match_exact(&id.map(ExactKey::Exact), Some(atom), key, storage, mapper),
-                IndexKey::StartExpr(atom) => self.match_exact(&Some(ExactKey::StartExpr), Some(atom), key, storage, mapper),
+                IndexKey::ExactRef((id, atom)) => self.match_exact(&id.map(ExactKey::ExactId), Some(atom), key, storage, mapper),
+                IndexKey::StartExpr(atom) => self.match_exact(&Some(ExactKey::StartExpr), atom, key, storage, mapper),
                 IndexKey::EndExpr => self.match_exact(&Some(ExactKey::EndExpr), None, key, storage, mapper),
                 IndexKey::CustomRef(atom) => self.match_custom_key(atom, key, storage, mapper),
-                IndexKey::Exact(_) => panic!("Not expected"),
+                IndexKey::ExactId(_) => panic!("Not expected"),
                 IndexKey::Custom(_) => panic!("Not expected"),
             },
             None => BindingsSet::single(),
         }
     }
 
-    fn match_exact<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(&self, exact: &Option<ExactKey>, atom: Option<&Atom>, mut tail: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
+    fn match_exact<'a, I, M>(&self, exact: &Option<ExactKey>, atom: Option<&Atom>, tail: I,
+        storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
+        where
+            I: Debug + Clone + Iterator<Item=IndexKey<'a>>,
+            M: Fn(VariableAtom)->VariableAtom,
+    {
         let mut result = BindingsSet::empty();
         if let Some(exact) = exact {
             if let Some(child) = self.exact.get(exact) {
                 result.extend(child.query_internal(tail.clone(), storage, mapper))
-            }
-            if let ExactKey::StartExpr = exact {
-                // TODO: we could keep this information in the key itself
-                tail = Self::skip_to_end_expr(tail);
             }
         }
         if let Some((atom, tail)) = Self::key_to_atom(exact, atom, tail) {
@@ -364,17 +401,36 @@ impl AtomIndexNode {
         result
     }
 
-    fn key_to_atom<'a, 'b, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(head: &Option<ExactKey>, atom: Option<&'b Atom>, tail: I) -> Option<(&'b Atom, I)> {
-        match (head, atom) {
+    fn key_to_atom<'a, 'b, I>(exact: &Option<ExactKey>, atom: Option<&'b Atom>, tail: I) -> Option<(&'b Atom, I)>
+        where
+            I: Debug + Clone + Iterator<Item=IndexKey<'a>>
+    {
+        match (exact, atom) {
             (None, Some(atom)) => Some((atom, tail)),
-            (Some(ExactKey::Exact(_)), Some(atom)) => Some((atom, tail)),
-            (Some(ExactKey::StartExpr), Some(atom)) => Some((atom, tail)),
+            (Some(ExactKey::ExactId(_)), Some(atom)) => Some((atom, tail)),
+            (Some(ExactKey::StartExpr), Some(atom)) => {
+                // TODO: At the moment we pass expression via
+                // AtomToken::StartExpr(Some(atom)) -> IndexKey::StartExpr(Some(atom)) -> here,
+                // because in case of query (when only reference to Atom is
+                // passed) we cannot get atom out of the key, while it is still
+                // there represented as a chain of tokens. Maybe using (N, [Atom; N])
+                // encoding can allow solve this issue if it is an issue at all.
+                // Also such encoding should allow us skip expressions in a single
+                // index addition operation.
+                let tail = Self::skip_expression(tail);
+                Some((atom, tail))
+            },
             (Some(ExactKey::EndExpr), None) => None,
             _ => panic!("Unexpected state!"),
         }
     }
 
-    fn match_custom_index<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>, M: Fn(VariableAtom)->VariableAtom>(matcher: &Atom, atom: &Atom, child: &AtomIndexNode, tail: I, storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet {
+    fn match_custom_index<'a, I, M>(matcher: &Atom, atom: &Atom, child: &AtomTrieNode, tail: I,
+        storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
+        where
+            I: Debug + Clone + Iterator<Item=IndexKey<'a>>,
+            M: Fn(VariableAtom)->VariableAtom
+    {
         let mut result = BindingsSet::empty();
         let mut matcher = matcher.clone();
         matcher.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
@@ -386,7 +442,9 @@ impl AtomIndexNode {
         result.merge(&tail_result)
     }
 
-    fn skip_to_end_expr<'a, I: Debug + Clone + Iterator<Item=IndexKey<'a>>>(mut key: I) -> I {
+    fn skip_expression<'a, I>(mut key: I) -> I
+        where I: Debug + Clone + Iterator<Item=IndexKey<'a>>
+    {
         let mut par = 0;
         let mut is_end = |a| {
             match a {
@@ -423,17 +481,17 @@ impl AtomIndexNode {
         result
     }
 
-    fn unpack_atoms<'a>(&'a self, storage: &'a AtomStorage) -> Box<dyn Iterator<Item=(Option<Atom>, &'a AtomIndexNode)> + 'a>{
-        let mut result: Vec<(Option<Atom>, &AtomIndexNode)> = Vec::new();
+    fn unpack_atoms<'a>(&'a self, storage: &'a AtomStorage) -> Box<dyn Iterator<Item=(Option<Atom>, &'a AtomTrieNode)> + 'a>{
+        let mut result: Vec<(Option<Atom>, &AtomTrieNode)> = Vec::new();
         for (exact, child) in &self.exact {
             match exact {
-                ExactKey::Exact(id) => result.push((Some(storage.get_atom(*id).expect("Unexpected state!").clone()), child)),
+                ExactKey::ExactId(id) => result.push((Some(storage.get_atom(*id).expect("Unexpected state!").clone()), child)),
                 ExactKey::EndExpr => result.push((None, child)),
                 ExactKey::StartExpr => {
-                    let mut exprs: Vec<(Vec<Atom>, &AtomIndexNode)> = Vec::new();
+                    let mut exprs: Vec<(Vec<Atom>, &AtomTrieNode)> = Vec::new();
                     exprs.push((Vec::new(), child));
                     loop {
-                        let mut next: Vec<(Vec<Atom>, &AtomIndexNode)> = Vec::new();
+                        let mut next: Vec<(Vec<Atom>, &AtomTrieNode)> = Vec::new();
                         for (expr, child) in exprs.into_iter() {
                             for (atom, child) in child.unpack_atoms(storage) {
                                 if let Some(atom) = atom {
@@ -471,8 +529,8 @@ mod test {
     fn atom_storage_insert_symbol() {
         let atom = Atom::sym("Symbol");
         let mut storage = AtomStorage::new();
-        let id = storage.insert(&atom);
-        assert!(id.is_some());
+        let id = storage.insert(atom.clone());
+        assert!(id.is_ok());
         assert_eq!(Some(&atom), storage.get_atom(id.unwrap()));
     }
 
@@ -480,8 +538,8 @@ mod test {
     fn atom_storage_insert_variable() {
         let atom = Atom::var("Variable");
         let mut storage = AtomStorage::new();
-        let id = storage.insert(&atom);
-        assert!(id.is_some());
+        let id = storage.insert(atom.clone());
+        assert!(id.is_ok());
         assert_eq!(Some(&atom), storage.get_atom(id.unwrap()));
     }
 
@@ -489,41 +547,42 @@ mod test {
     fn atom_storage_insert_grounded_value() {
         let atom = Atom::gnd(Number::Integer(1234));
         let mut storage = AtomStorage::new();
-        let id = storage.insert(&atom);
-        assert!(id.is_some());
+        let id = storage.insert(atom.clone());
+        assert!(id.is_ok());
         assert_eq!(Some(&atom), storage.get_atom(id.unwrap()));
     }
 
     #[test]
     fn atom_storage_insert_grounded_atom() {
         let mut storage = AtomStorage::new();
-        assert!(storage.insert(&Atom::value(1)).is_none());
+        assert_eq!(storage.insert(Atom::value(1)), Err(Atom::value(1)));
     }
 
     #[test]
     fn atom_storage_insert_expression() {
         let mut storage = AtomStorage::new();
-        assert!(storage.insert(&expr!("A" b {Number::Integer(1)})).is_none());
+        assert_eq!(storage.insert(expr!("A" b {Number::Integer(1)})),
+            Err(expr!("A" b {Number::Integer(1)})));
     }
 
     #[test]
     fn atom_token_iter_symbol() {
         let atom = Atom::sym("sym");
-        let it = AtomTokenIter::new(&atom);
+        let it = AtomIter::from_ref(&atom);
         let actual: Vec<AtomToken> = it.collect();
-        assert_eq!(vec![AtomToken::Atom(&atom)], actual);
+        assert_eq!(vec![AtomToken::Atom(Cow::Borrowed(&atom))], actual);
     }
 
     #[test]
     fn atom_token_iter_expr() {
         let atom = expr!(("sym" var {Number::Integer(42)} ("sym1" var1 {Number::Integer(43)})));
-        let it = AtomTokenIter::new(&atom);
+        let it = AtomIter::from_ref(&atom);
         let actual: Vec<AtomToken> = it.collect();
-        assert_eq!(vec![AtomToken::StartExpr(&atom), AtomToken::Atom(&expr!("sym")),
-            AtomToken::Atom(&expr!(var)), AtomToken::Atom(&expr!({Number::Integer(42)})),
-            AtomToken::StartExpr(&expr!("sym1" var1 {Number::Integer(43)})),
-            AtomToken::Atom(&expr!("sym1")), AtomToken::Atom(&expr!(var1)),
-            AtomToken::Atom(&expr!({Number::Integer(43)})),
+        assert_eq!(vec![AtomToken::StartExpr(Some(&atom)), AtomToken::Atom(Cow::Borrowed(&expr!("sym"))),
+            AtomToken::Atom(Cow::Borrowed(&expr!(var))), AtomToken::Atom(Cow::Borrowed(&expr!({Number::Integer(42)}))),
+            AtomToken::StartExpr(Some(&expr!("sym1" var1 {Number::Integer(43)}))),
+            AtomToken::Atom(Cow::Borrowed(&expr!("sym1"))), AtomToken::Atom(Cow::Borrowed(&expr!(var1))),
+            AtomToken::Atom(Cow::Borrowed(&expr!({Number::Integer(43)}))),
             AtomToken::EndExpr, AtomToken::EndExpr], actual);
     }
 
