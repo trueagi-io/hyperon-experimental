@@ -8,7 +8,7 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::hash::DefaultHasher;
 use std::collections::HashMap;
-use std::collections::hash_map::Entry as HashMapEntry;
+use std::collections::hash_map;
 use std::fmt::Debug;
 use std::borrow::Cow;
 
@@ -136,9 +136,15 @@ enum AtomIterState<'a> {
     /// Start from Expression atom
     StartExpression(Cow<'a, Atom>),
 
-    // Iterate via Expression
-    Iterate(Cow<'a, ExpressionAtom>, usize, Box<AtomIterState<'a>>),
-    // End of the iteration
+    /// Iterate via Expression recursively
+    Iterate {
+        /// Expression to iterate
+        expr: Cow<'a, ExpressionAtom>,
+        /// Current index
+        idx: usize,
+        /// Next state to apply after end of the expression
+        next: Box<AtomIterState<'a>>
+    },
 
     #[default]
     /// End of iterator
@@ -181,38 +187,54 @@ impl<'a> Iterator for AtomIter<'a> {
                 Some(AtomToken::Atom(atom))
             },
             AtomIterState::StartExpression(Cow::Owned(Atom::Expression(expr))) => {
-                self.state = AtomIterState::Iterate(Cow::Owned(expr), 0, Box::new(AtomIterState::End));
+                self.state = AtomIterState::Iterate {
+                    expr: Cow::Owned(expr),
+                    idx: 0,
+                    next: Box::new(AtomIterState::End)
+                };
                 Some(AtomToken::StartExpr(None))
             },
             AtomIterState::StartExpression(Cow::Borrowed(atom @ Atom::Expression(expr))) => {
-                self.state = AtomIterState::Iterate(Cow::Borrowed(expr), 0, Box::new(AtomIterState::End));
+                self.state = AtomIterState::Iterate {
+                    expr: Cow::Borrowed(expr),
+                    idx: 0,
+                    next: Box::new(AtomIterState::End)
+                };
                 Some(AtomToken::StartExpr(Some(atom)))
             },
             AtomIterState::StartExpression(_) => panic!("Only expressions are expected!"),
-            AtomIterState::Iterate(expr, i, prev) => {
-                if i < expr.children().len() {
-                    fn extract_atom(mut expr: Cow<'_, ExpressionAtom>, i: usize) -> (Cow<'_, Atom>, Cow<'_, ExpressionAtom>) {
+            AtomIterState::Iterate { expr, idx, next } => {
+                if idx < expr.children().len() {
+                    fn extract_atom(mut expr: Cow<'_, ExpressionAtom>, idx: usize) -> (Cow<'_, Atom>, Cow<'_, ExpressionAtom>) {
                         match expr {
                             Cow::Owned(ref mut e) => {
-                                let cell = unsafe { e.children_mut().get_unchecked_mut(i) };
+                                let cell = unsafe { e.children_mut().get_unchecked_mut(idx) };
                                 let atom = std::mem::replace(cell, Atom::sym(""));
                                 (Cow::Owned(atom), expr)
                             },
                             Cow::Borrowed(e) => {
-                                let atom = unsafe { e.children().get_unchecked(i) };
+                                let atom = unsafe { e.children().get_unchecked(idx) };
                                 (Cow::Borrowed(atom), expr)
                             },
                         }
                     }
-                    let (atom, expr) = extract_atom(expr, i);
-                    let next_state = AtomIterState::Iterate(expr, i + 1, prev);
+                    let (atom, expr) = extract_atom(expr, idx);
+                    let next_state = AtomIterState::Iterate{ expr, idx: idx + 1, next };
                     match atom {
                         Cow::Owned(Atom::Expression(expr)) => {
-                            self.state = AtomIterState::Iterate(Cow::Owned(expr), 0, Box::new(next_state));
+                            self.state = AtomIterState::Iterate {
+                                expr: Cow::Owned(expr),
+                                idx: 0,
+                                next: Box::new(next_state)
+                            };
                             Some(AtomToken::StartExpr(None))
                         },
                         Cow::Borrowed(atom @ Atom::Expression(expr)) => {
-                            self.state = AtomIterState::Iterate(Cow::Borrowed(expr), 0, Box::new(next_state));
+                            self.state = AtomIterState::Iterate {
+                                expr: Cow::Borrowed(expr),
+                                idx: 0,
+                                next: Box::new(next_state)
+                            };
                             Some(AtomToken::StartExpr(Some(atom)))
                         },
                         _ => {
@@ -221,7 +243,7 @@ impl<'a> Iterator for AtomIter<'a> {
                         },
                     }
                 } else {
-                    self.state = *prev;
+                    self.state = *next;
                     Some(AtomToken::EndExpr)
                 }
             },
@@ -359,8 +381,8 @@ impl AtomTrieNode {
 
     fn insert_exact<'a, I: Iterator<Item=InsertKey>>(&mut self, head: ExactKey, tail: I) {
         match self.exact.entry(head) {
-            HashMapEntry::Occupied(mut old) => { old.get_mut().insert(tail); },
-            HashMapEntry::Vacant(new) => { new.insert(Self::new_branch(tail)); },
+            hash_map::Entry::Occupied(mut old) => { old.get_mut().insert(tail); },
+            hash_map::Entry::Vacant(new) => { new.insert(Self::new_branch(tail)); },
         }
     }
 
@@ -506,8 +528,8 @@ impl AtomTrieNode {
         const ATOM_NOT_IN_STORAGE: &'static str = "Exact entry contains atom which is not in storage";
 
         let mut result: Vec<(Option<Cow<Atom>>, &AtomTrieNode)> = Vec::new();
-        for (exact, child) in &self.exact {
-            match exact {
+        for (key, child) in &self.exact {
+            match key {
                 ExactKey::Exact(id) => {
                     let atom = storage.get_atom(*id).expect(ATOM_NOT_IN_STORAGE);
                     result.push((Some(Cow::Borrowed(atom)), child))
@@ -522,10 +544,7 @@ impl AtomTrieNode {
                             for (atom, child) in child.unpack_atoms(storage) {
                                 let mut new_expr = expr.clone();
                                 if let Some(atom) = atom {
-                                    match atom {
-                                        Cow::Borrowed(atom) => new_expr.push(atom.clone()),
-                                        Cow::Owned(atom) => new_expr.push(atom),
-                                    }
+                                    new_expr.push(atom.into_owned());
                                     next.push((new_expr, child));
                                 } else {
                                     result.push((Some(Cow::Owned(Atom::expr(new_expr))), child))
