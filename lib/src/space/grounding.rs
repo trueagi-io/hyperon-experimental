@@ -195,7 +195,7 @@ impl GroundingSpace {
 
     #[cfg(test)]
     fn into_vec(&self) -> Vec<Atom> {
-        self.index.iter().collect()
+        self.index.iter().map(|a| a.into_owned()).collect()
     }
 }
 
@@ -210,7 +210,7 @@ impl Space for GroundingSpace {
         Some(self.index.iter().count())
     }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
-       Ok(self.index.iter().for_each(|atom| v.accept(Cow::Owned(atom))))
+       Ok(self.index.iter().for_each(|atom| v.accept(atom)))
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
