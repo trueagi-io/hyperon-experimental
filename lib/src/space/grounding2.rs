@@ -673,8 +673,8 @@ impl<'a> Iterator for AtomTrieNodeIter<'a> {
                             return Some((IterResult::Atom(Cow::Owned(atom)), child))
                         },
                         Some((IterResult::Atom(atom), child)) => {
-                            // FIXME: instead of cloning we could do push/pop?
-                            let mut build_expr = build_expr.clone();
+                            // FIXME: replace Vec by Option<Vec> ?
+                            let mut build_expr = std::mem::take(build_expr);
                             build_expr.push(atom.into_owned());
                             let state = std::mem::take(&mut self.state);
                             self.state = State::VisitExpression {
@@ -684,7 +684,12 @@ impl<'a> Iterator for AtomTrieNodeIter<'a> {
                             }
                         },
                         None => {
-                            let next_state = std::mem::take(next_state);
+                            let mut expr = std::mem::take(build_expr);
+                            expr.pop();
+                            let mut next_state = std::mem::take(next_state);
+                            if let State::VisitExpression { build_expr, cur_it: _, next_state: _ } = &mut *next_state {
+                                *build_expr = expr;
+                            }
                             self.state = *next_state;
                         }
                     }
