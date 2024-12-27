@@ -2,6 +2,7 @@ use crate::atom::*;
 use crate::serial::NullSerializer;
 use crate::matcher::*;
 use crate::common::CachingMapper;
+use crate::common::collections::write_mapping;
 
 use bimap::BiMap;
 use std::hash::Hash;
@@ -9,7 +10,7 @@ use std::hash::Hasher;
 use std::hash::DefaultHasher;
 use std::collections::HashMap;
 use std::collections::hash_map;
-use std::fmt::Debug;
+use std::fmt::{Debug, Display, Formatter};
 use std::borrow::Cow;
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -82,6 +83,15 @@ impl AtomStorage {
     }
 }
 
+impl Display for AtomStorage {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        let mut sorted: Vec<_> = self.atoms.iter()
+            .map(|(atom, id)| (id, atom)).collect();
+        sorted.sort_unstable_by_key(|(&id, _)| id);
+        write_mapping(f, sorted.into_iter())
+    }
+}
+
 #[derive(Eq, Debug, Clone)]
 enum HashableAtom {
     // Used pointer to eliminate lifetime which leaks through the usages.
@@ -118,6 +128,15 @@ impl Hash for HashableAtom {
 impl PartialEq for HashableAtom {
     fn eq(&self, other: &Self) -> bool {
         self.as_atom() == other.as_atom()
+    }
+}
+
+impl Display for HashableAtom {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        match self {
+            Self::Store(atom) => Display::fmt(atom, f),
+            Self::Query(atom) => write!(f, "{}?", unsafe{ &**atom }),
+        }
     }
 }
 
@@ -535,14 +554,52 @@ impl AtomTrieNode {
     }
 }
 
-#[derive(Debug)]
+impl Display for AtomTrieNode {
+    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+        enum TrieKeyDisplay<'a> {
+            Id(usize),
+            Atom(&'a Atom),
+            Start,
+            End,
+        }
+
+        impl Display for TrieKeyDisplay<'_> {
+            fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+                match self {
+                    Self::Id(id) => write!(f, "Id({})", id),
+                    Self::Atom(atom) => write!(f, "Atom({})", atom),
+                    Self::Start => write!(f, "StartExpr",),
+                    Self::End => write!(f, "EndExpr",),
+                }
+            }
+        }
+
+        impl TrieKeyDisplay<'_> {
+            fn from_exact(key: &ExactKey) -> Self {
+                match key {
+                    ExactKey::StartExpr => Self::Start,
+                    ExactKey::EndExpr => Self::End,
+                    ExactKey::Exact(id) => Self::Id(*id),
+                }
+            }
+        }
+
+        let exact = self.exact.iter()
+            .map(|(key, child)| (TrieKeyDisplay::from_exact(key), child));
+        let custom = self.custom.iter().map(|p| (&p.0, &p.1))
+            .map(|(key, child)| (TrieKeyDisplay::Atom(key), child));
+        write_mapping(f, exact.chain(custom))
+    }
+}
+
+#[derive(Debug, Clone)]
 struct AtomTrieNodeIter<'a> {
     node: &'a AtomTrieNode,
     storage: &'a AtomStorage,
     state: AtomTrieNodeIterState<'a>,
 }
 
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 enum AtomTrieNodeIterState<'a> {
     VisitExact(hash_map::Iter<'a, ExactKey, Box<AtomTrieNode>>),
     VisitCustom(std::slice::Iter<'a, (Atom, Box<AtomTrieNode>)>),
@@ -685,6 +742,15 @@ mod test {
     }
 
     #[test]
+    fn atom_storage_display() {
+        let mut storage = AtomStorage::new();
+        assert!(storage.insert(Atom::sym("S")).is_ok());
+        assert!(storage.insert(Atom::var("V")).is_ok());
+        assert!(storage.insert(Atom::gnd(Number::Integer(42))).is_ok());
+        assert_eq!(format!("{}", storage), "{ 0: S, 1: $V, 2: 42 }");
+    }
+
+    #[test]
     fn atom_token_iter_symbol() {
         let atom = Atom::sym("sym");
         let it = AtomIter::from_ref(&atom);
@@ -771,5 +837,20 @@ mod test {
 
         let atoms: Vec<Atom> = index.iter().map(|a| a.into_owned()).collect();
         assert_eq_no_order!(atoms, vec![expr!(()), expr!(() "A"), expr!("A" ("B") "C"), expr!("A" ("D") "C")]);
+    }
+
+    #[test]
+    fn atom_trie_node_display() {
+        let mut node = AtomTrieNode::new();
+        node.insert([InsertKey::Exact(1)].into_iter());
+        assert_eq!(format!("{}", node), "{ Id(1): { } }");
+
+        let mut node = AtomTrieNode::new();
+        node.insert([InsertKey::Custom(Atom::sym("A"))].into_iter());
+        assert_eq!(format!("{}", node), "{ Atom(A): { } }");
+
+        let mut node = AtomTrieNode::new();
+        node.insert([InsertKey::StartExpr, InsertKey::Custom(Atom::sym("B")), InsertKey::EndExpr].into_iter());
+        assert_eq!(format!("{}", node), "{ StartExpr: { Atom(B): { EndExpr: { } } } }");
     }
 }
