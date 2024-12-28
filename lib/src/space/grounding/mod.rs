@@ -1,5 +1,6 @@
-//! Simple implementation of space which uses in-memory vector of atoms as
-//! an underlying storage.
+//! Atomspace implementation with in-memory atom storage
+
+pub mod index;
 
 use crate::*;
 use super::*;
@@ -8,7 +9,7 @@ use crate::atom::subexpr::split_expr;
 
 use std::fmt::Debug;
 use std::collections::HashSet;
-use crate::space::grounding2::*;
+use index::*;
 
 // Grounding space
 

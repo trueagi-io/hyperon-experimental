@@ -20,6 +20,7 @@ struct AtomStorage {
 }
 
 impl AtomStorage {
+    #[cfg(test)]
     pub fn new() -> Self {
         Default::default()
     }

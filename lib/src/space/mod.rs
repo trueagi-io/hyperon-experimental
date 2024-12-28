@@ -2,7 +2,6 @@
 //! This module is intended to keep different space implementations.
 
 pub mod grounding;
-pub mod grounding2;
 pub mod module;
 
 use std::fmt::Display;
