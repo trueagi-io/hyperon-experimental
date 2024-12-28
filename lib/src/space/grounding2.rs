@@ -316,11 +316,10 @@ impl AtomIndex {
     fn atom_token_to_query_index_key<'a>(storage: &AtomStorage, token: AtomToken<'a>) -> QueryKey<'a> {
         match token {
             AtomToken::Atom(Cow::Borrowed(atom @ Atom::Variable(_))) => {
-                // FIXME: here CustomRef is returned only for variables but it
-                // should also be returned for grounded atoms implementing
-                // Grounded::as_match, because for these atoms index should be
-                // unpacked and every unpacked atom or expression should be
-                // matched with a key. See Self::match_custom_key function.
+                QueryKey::Custom(atom)
+            },
+            AtomToken::Atom(Cow::Borrowed(atom @ Atom::Grounded(gnd)))
+                if gnd.as_grounded().as_match().is_some() => {
                 QueryKey::Custom(atom)
             },
             AtomToken::Atom(Cow::Borrowed(atom)) => {
@@ -857,5 +856,50 @@ mod test {
         let mut node = AtomTrieNode::new();
         node.insert([InsertKey::StartExpr, InsertKey::Custom(Atom::sym("B")), InsertKey::EndExpr].into_iter());
         assert_eq!(format!("{}", node), "{ StartExpr: { Atom(B): { EndExpr: { } } } }");
+    }
+
+    #[derive(PartialEq, Clone, Debug)]
+    struct MatchAsX { }
+
+    impl Display for MatchAsX {
+        fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
+            write!(f, "match-as-x")
+        }
+    }
+
+    impl CustomMatch for MatchAsX {
+        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
+            Box::new(std::iter::once(bind!{ x: other.clone() }))
+        }
+    }
+
+    impl Grounded for MatchAsX {
+        fn type_(&self) -> Atom {
+            rust_type_atom::<Self>()
+        }
+
+        fn as_match(&self) -> Option<&dyn CustomMatch> {
+            Some(self)
+        }
+    }
+
+    #[test]
+    fn atom_index_query_matchable() {
+        let mut index = AtomIndex::new();
+        index.insert(expr!("A" "B" "C"));
+        index.insert(Atom::sym("D"));
+
+        let actual: Vec<_> = index.query(&Atom::gnd(MatchAsX{})).collect();
+        assert_eq_no_order!(actual, vec![bind!{ x: sym!("D") },
+            bind!{ x: expr!("A" "B" "C") }]);
+    }
+
+    #[test]
+    fn atom_index_insert_matchable() {
+        let mut index = AtomIndex::new();
+        index.insert(Atom::gnd(MatchAsX{}));
+
+        let actual: Vec<_> = index.query(&expr!("A" "B" "C")).collect();
+        assert_eq_no_order!(actual, vec![bind!{ x: expr!("A" "B" "C") }]);
     }
 }
