@@ -368,6 +368,7 @@ class ExamplesTest(HyperonTestCase):
         self.assertEqual(repr(metta.run('!("A")')), '[[("A")]]')
         self.assertEqualMettaRunnerResults(metta.run("!(get-type 'A')"), [[S('Char')]])
         self.assertEqualMettaRunnerResults(metta.run('!(get-type "A")'), [[S('String')]])
+        self.assertEqual(metta.run('!(repr "A")')[0][0].get_object(), ValueObject("\"A\""))
 
 
 class SomeObject():
