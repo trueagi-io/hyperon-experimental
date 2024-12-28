@@ -334,6 +334,12 @@ impl AtomIndex {
         }
     }
 
+    pub fn remove(&mut self, atom: &Atom) -> bool {
+        let key = AtomIter::from_ref(&atom)
+            .map(|token| Self::atom_token_to_query_index_key(&self.storage, token));
+        self.root.remove(key, &self.storage)
+    }
+
     pub fn iter(&self) -> Box<dyn Iterator<Item=Cow<'_, Atom>> + '_> {
         Box::new(self.root.unpack_atoms(&self.storage).map(|(a, _n)| a))
     }
@@ -550,6 +556,59 @@ impl AtomTrieNode {
                     None
                 }
             }))
+    }
+
+    pub fn remove<'a, I: Iterator<Item=QueryKey<'a>>>(&mut self, mut key: I, storage: &AtomStorage) -> bool {
+        enum Found {
+            Exact(ExactKey),
+            Custom(usize),
+        }
+
+        match key.next() {
+            Some(head) => {
+                let entry = match head {
+                    QueryKey::StartExpr(_) => self.exact
+                        .get_mut(&ExactKey::StartExpr)
+                        .map(|child| (Found::Exact(ExactKey::StartExpr), child)),
+                    QueryKey::EndExpr => self.exact
+                        .get_mut(&ExactKey::EndExpr)
+                        .map(|child| (Found::Exact(ExactKey::EndExpr), child)),
+                    QueryKey::Exact(None, _) => None,
+                    QueryKey::Exact(Some(id), _) => self.exact
+                        .get_mut(&ExactKey::Exact(id))
+                        .map(|child| (Found::Exact(ExactKey::Exact(id)), child)),
+                    QueryKey::Custom(key) => self.custom.iter()
+                        .position(|(atom, _child)| atom == key)
+                        .map(|i| (Found::Custom(i), &mut unsafe{ self.custom.get_unchecked_mut(i) }.1)),
+                };
+                match entry {
+                    Some((child_key, child)) => {
+                        let removed = child.remove(key, storage);
+                        if child.is_empty() {
+                            match child_key {
+                                Found::Exact(key) => { self.exact.remove(&key); },
+                                // FIXME: replace self.custom by HoleyVec
+                                Found::Custom(i) => { self.custom.remove(i); },
+                            }
+                        }
+                        removed
+                    },
+                    None => false,
+                }
+            },
+            None => {
+                // TODO: should we replace leafs by special Node instead of empty Node
+                if self.is_empty() {
+                    true
+                } else {
+                    false
+                }
+            },
+        }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.exact.is_empty() && self.custom.is_empty()
     }
 }
 
