@@ -89,12 +89,11 @@ impl GroundingSpace {
     /// ```
     pub fn remove(&mut self, atom: &Atom) -> bool {
         //log::debug!("GroundingSpace::remove(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
-        todo!();
-        //let is_removed = self.remove_internal(atom);
-        //if is_removed {
-            //self.common.notify_all_observers(&SpaceEvent::Remove(atom.clone()));
-        //}
-        //is_removed
+        let is_removed = self.index.remove(atom);
+        if is_removed {
+            self.common.notify_all_observers(&SpaceEvent::Remove(atom.clone()));
+        }
+        is_removed
     }
 
     /// Replaces `from` atom to `to` atom inside space. Doesn't add `to` when
@@ -116,12 +115,12 @@ impl GroundingSpace {
     /// assert_eq!(space.query(&sym!("B")), BindingsSet::single());
     /// ```
     pub fn replace(&mut self, from: &Atom, to: Atom) -> bool {
-        todo!();
-        //let is_replaced = self.replace_internal(from, to.clone());
-        //if is_replaced {
-            //self.common.notify_all_observers(&SpaceEvent::Replace(from.clone(), to));
-        //}
-        //is_replaced
+        let is_replaced = self.index.remove(from);
+        if is_replaced {
+            self.index.insert(to.clone());
+            self.common.notify_all_observers(&SpaceEvent::Replace(from.clone(), to));
+        }
+        is_replaced
     }
 
     /// Executes `query` on the space and returns variable bindings found.
