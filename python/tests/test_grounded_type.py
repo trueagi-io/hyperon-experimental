@@ -44,6 +44,10 @@ class GroundedTypeTest(unittest.TestCase):
         self.assertEqual(metta.run("!((curry_num plus 1) 2)"),
                          metta.run("! 3"))
 
+    def test_string_repr(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+        self.assertEqual(metta.run('!(repr "A")')[0][0].get_object(), ValueObject("\"A\""))
+
     def test_meta_types(self):
         metta = MeTTa(env_builder=Environment.test_env())
         ### Basic functional types

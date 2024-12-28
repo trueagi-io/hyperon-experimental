@@ -279,7 +279,8 @@ class GroundedObject:
         # Overwrite Python default representation of a string to use
         # double quotes instead of single quotes.
         if isinstance(self.content, str):
-            return f'"{self.content}"'
+            newstr = self.content.translate(str.maketrans({'"' : r'\"'}))
+            return f'"{newstr}"'
 
         # Use default representation for everything else
         return repr(self.content) if self.id is None else self.id
