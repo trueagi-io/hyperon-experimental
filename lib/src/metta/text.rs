@@ -491,7 +491,7 @@ impl<'a> SExprParser<'a> {
         let start_idx = self.cur_idx();
 
         while let Some((_idx, c)) = self.it.peek() {
-            if c.is_whitespace() || *c == '(' || *c == ')' {
+            if c.is_whitespace() || *c == '(' || *c == ')' || *c == ';' {
                 break;
             }
             token.push(*c);
