@@ -60,6 +60,15 @@ class MeTTaTest(HyperonTestCase):
         self.assertEqual('[[5]]', repr(result))
 
         program = '''
+                (a; 4)
+                  5)
+                !(match &self (a $W) $W)
+            '''
+
+        result = MeTTa(env_builder=Environment.test_env()).run(program)
+        self.assertEqual('[[5]]', repr(result))
+
+        program = '''
                (a  1);
                !(match
                         &self (a $W) $W)
