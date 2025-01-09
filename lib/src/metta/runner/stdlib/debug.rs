@@ -2,18 +2,17 @@ use crate::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::space::*;
-use crate::common::collections::Equality;
-use crate::common::assert::{vec_eq_no_order, compare_vec_no_order};
+use crate::common::collections::{VecDisplay, Equality, DefaultEquality};
+use crate::common::assert::compare_vec_no_order;
 use crate::atom::matcher::atoms_are_equivalent;
 use crate::metta::runner::stdlib::{grounded_op, atom_to_string, regex, interpret_no_error, unit_result};
 use crate::metta::runner::bool::*;
 
 use std::convert::TryInto;
 
-
 fn assert_results_equal(actual: &Vec<Atom>, expected: &Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-    let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
-    match vec_eq_no_order(actual.iter(), expected.iter()) {
+    let report = format!("\nExpected: {}\nGot: {}", VecDisplay(expected), VecDisplay(actual));
+    match compare_vec_no_order(actual.iter(), expected.iter(), DefaultEquality{}).as_display() {
         None => unit_result(),
         Some(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
@@ -58,7 +57,7 @@ grounded_op!(TraceOp, "trace!");
 
 impl Grounded for TraceOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, Atom::var("a"), Atom::var("a")])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -114,9 +113,9 @@ impl Equality<&Atom> for AlphaEquality {
 }
 
 fn assert_alpha_equal(actual: &Vec<Atom>, expected: &Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-    let report = format!("\nExpected: {:?}\nGot: {:?}", expected, actual);
+    let report = format!("\nExpected: {}\nGot: {}", VecDisplay(expected), VecDisplay(actual));
     let res = compare_vec_no_order(actual.iter(), expected.iter(), AlphaEquality{});
-    match res.as_string() {
+    match res.as_display() {
         None => unit_result(),
         Some(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
     }
@@ -353,10 +352,10 @@ mod tests {
             vec![UNIT_ATOM],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) (bar B))")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("foo" "A") ("bar" "B")) "\nExpected: [B]\nGot: [A]\nMissed result: B")],
+            vec![expr!("Error" ({assert.clone()} ("foo" "A") ("bar" "B")) "\nExpected: [B]\nGot: [A]\nMissed results: B\nExcessive results: A")],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqual (foo A) Empty)")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("foo" "A") "Empty") "\nExpected: []\nGot: [A]\nExcessive result: A")]
+            vec![expr!("Error" ({assert.clone()} ("foo" "A") "Empty") "\nExpected: []\nGot: [A]\nExcessive results: A")]
         ]));
     }
 
@@ -373,10 +372,10 @@ mod tests {
             vec![UNIT_ATOM],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertAlphaEqual (foo A) (bar B))")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("foo" "A") ("bar" "B")) "\nExpected: [B]\nGot: [A]\nMissed result: B")],
+            vec![expr!("Error" ({assert.clone()} ("foo" "A") ("bar" "B")) "\nExpected: [B]\nGot: [A]\nMissed results: B\nExcessive results: A")],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertAlphaEqual (foo A) Empty)")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("foo" "A") "Empty") "\nExpected: []\nGot: [A]\nExcessive result: A")]
+            vec![expr!("Error" ({assert.clone()} ("foo" "A") "Empty") "\nExpected: []\nGot: [A]\nExcessive results: A")]
         ]));
     }
 
@@ -396,16 +395,17 @@ mod tests {
             (= (bar) C)
             (= (baz) D)
             (= (baz) D)
+            (= (baz) D)
         ";
         assert_eq!(metta.run(SExprParser::new(program)), Ok(vec![]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (foo) (A B))")), Ok(vec![
             vec![UNIT_ATOM],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (bar) (A))")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("bar") ("A")) "\nExpected: [A]\nGot: [C]\nMissed result: A")],
+            vec![expr!("Error" ({assert.clone()} ("bar") ("A")) "\nExpected: [A]\nGot: [C]\nMissed results: A\nExcessive results: C")],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertEqualToResult (baz) (D))")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("baz") ("D")) "\nExpected: [D]\nGot: [D, D]\nExcessive result: D")]
+            vec![expr!("Error" ({assert.clone()} ("baz") ("D")) "\nExpected: [D]\nGot: [D, D, D]\nExcessive results: D, D")]
         ]));
     }
 
@@ -416,6 +416,7 @@ mod tests {
         let program = "
             (= (foo) $x)
             (= (bar) C)
+            (= (baz) D)
             (= (baz) D)
             (= (baz) D)
         ";
@@ -433,10 +434,10 @@ mod tests {
         assert_eq!(res.get(0).unwrap().len(), 1);
 
         assert_eq!(metta.run(SExprParser::new("!(assertAlphaEqualToResult (bar) (A))")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("bar") ("A")) "\nExpected: [A]\nGot: [C]\nMissed result: A")],
+            vec![expr!("Error" ({assert.clone()} ("bar") ("A")) "\nExpected: [A]\nGot: [C]\nMissed results: A\nExcessive results: C")],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertAlphaEqualToResult (baz) (D))")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("baz") ("D")) "\nExpected: [D]\nGot: [D, D]\nExcessive result: D")]
+            vec![expr!("Error" ({assert.clone()} ("baz") ("D")) "\nExpected: [D]\nGot: [D, D, D]\nExcessive results: D, D")]
         ]));
     }
 
