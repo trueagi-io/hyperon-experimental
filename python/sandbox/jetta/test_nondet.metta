@@ -15,3 +15,16 @@
 !(assertEqualToResult
    (jetta &jspace "(bar)")
    (1 3 4 5 3 4 5))
+
+(@ goo multivalued)
+(: goo (-> Int))
+(= (goo) (seq 1 2 3))
+; FIXME: `(= (goo) (+ 1 (seq 1 2 3)))` doesn't work
+!(compile &jspace goo)
+;(@ doo multivalued)
+(: doo (-> Int Int))
+(= (doo $x) (+ $x (goo)))
+!(compile &jspace doo)
+!(assertEqualToResult
+  (doo-gnd 1)
+  (2 3 4))
