@@ -47,7 +47,7 @@ impl Grounded for Str {
 
 impl std::fmt::Display for Str {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", self.0)
+        write!(f, "{:?}", self.0.as_str())
     }
 }
 
