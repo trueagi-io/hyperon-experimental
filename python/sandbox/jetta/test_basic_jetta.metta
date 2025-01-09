@@ -9,6 +9,9 @@
 ; creating a space for repetitive use
 !(bind! &jspace (new-jetta-space))
 
+;!(jetta &jspace (+ 1 2)) ; TODO
+;!(metta (+ 1 2) Atom &jspace) ; TODO
+
 ; passing text code of a typed function definition
 !(jetta &jspace
   "(: foo (-> Int Int Int))

@@ -29,7 +29,10 @@ def jetta(j_space_id: str, code: str, url=None):
         raise JettaServerError(r['messages'])
     if r['type'] == 'java.lang.Integer':
         r['result'] = int(r['result'])
-    return r['result']
+    # NOTE: disambiguation is needed if java.util.ArrayList is used
+    #       as a grounded result instead of non-deterministic result
+    return r['result'] if r['type'] == 'java.util.ArrayList' \
+        else [r['result']]
 
 def _err_msg(expr, msg):
     if not isinstance(expr, Atom):
@@ -54,13 +57,16 @@ def jetta_unwrap_atom(j_space_a: Atom, code_a: Atom,
     url = url_a.get_object().value
     try:
         result = jetta(j_space, code_a, url)
-        return [Atoms.UNIT if result is None else ValueAtom(result)]
+        # NOTE: handling symbols and expressions will be needed at some point
+        return [Atoms.UNIT if r is None else ValueAtom(r) for r in result]
     except JettaServerError as e:
         return _err_msg(code_a, e)
         #return [E(S('Error'), ValueAtom(code),
         #          E(S('JettaCompileError'), ValueAtom(str(e))))]
 
 def compile(metta: MeTTa, j_space_a, func_a, arity=None):
+    code = ""
+    # Get the function name
     j_space = j_space_a.get_object().content
     if arity is not None:
         arity = arity.get_object().content
@@ -70,6 +76,15 @@ def compile(metta: MeTTa, j_space_a, func_a, arity=None):
         return _err_msg(func_a, "compile expects a function name")
     else:
         func = repr(func_a)
+
+    # Get annotations (if any)
+    annotations = metta.space().query(
+        E(S('@'), S(func), V('$ann'))
+    )
+    for a in annotations:
+        code += f"(@ {func} {repr(a['$ann'])})\n"
+
+    # Get the type
     typ = metta.space().query(
         E(S(':'), S(func), V('t'))
     )
@@ -86,7 +101,8 @@ def compile(metta: MeTTa, j_space_a, func_a, arity=None):
     else:
         typ = typ[0]['t']
         arity = len(typ.get_children()) - 2
-        typ = f"(: {func} {repr(typ)})"
+        typ = f"(: {func} {repr(typ)})\n"
+    code += typ
 
     f_args = E(S(func), *[V(f'x{i}') for i in range(arity)])
     res = metta.space().query(
@@ -94,9 +110,8 @@ def compile(metta: MeTTa, j_space_a, func_a, arity=None):
     )
     res = list(res)
     assert len(res) == 1, "Functions with one equality are allowed for now"
-    code = "(= " + repr(f_args) + "\n   " +\
-          repr(res[0]['__r']) + ")"
-    code = typ + "\n" + code
+    code += "(= " + repr(f_args) + "\n   " +\
+          repr(res[0]['__r']) + ")\n"
     # TODO: check if compilation is successful
     jetta(j_space, code)
     #TODO: doesn't work for passing expressions (e.g. lambdas)
