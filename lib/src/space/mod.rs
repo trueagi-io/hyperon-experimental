@@ -2,10 +2,12 @@
 //! This module is intended to keep different space implementations.
 
 pub mod grounding;
+pub mod module;
 
 use std::fmt::Display;
 use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
+use std::borrow::Cow;
 
 use crate::common::FlexRef;
 use crate::atom::*;
@@ -87,25 +89,6 @@ impl<T: SpaceObserver> From<Rc<RefCell<T>>> for SpaceObserverRef<T> {
     }
 }
 
-/// Space iterator.
-pub struct SpaceIter<'a> {
-    iter: Box<dyn Iterator<Item=&'a Atom> + 'a>
-}
-
-impl<'a> SpaceIter<'a> {
-    pub fn new<I: Iterator<Item=&'a Atom> + 'a>(iter: I) -> Self {
-        Self{ iter: Box::new(iter) }
-    }
-}
-
-impl<'a> Iterator for SpaceIter<'a> {
-    type Item = &'a Atom;
-
-    fn next(&mut self) -> Option<&'a Atom> {
-        self.iter.next()
-    }
-}
-
 /// A common object that needs to be maintained by all objects implementing the Space trait
 #[derive(Default)]
 pub struct SpaceCommon {
@@ -145,6 +128,19 @@ impl Clone for SpaceCommon {
             // where an observer can't know which space an event pertains to
             observers: RefCell::new(vec![]),
         }
+    }
+}
+
+/// An interface for visiting space atoms.
+pub trait SpaceVisitor {
+    /// Method is called by [Space::visit] implementation for each atom from the atomspace.
+    fn accept(&mut self, atom: Cow<Atom>);
+}
+
+/// One can use closure instead of implementing [SpaceVisitor] interface manually.
+impl<T> SpaceVisitor for T where T: FnMut(Cow<Atom>) {
+    fn accept(&mut self, atom: Cow<Atom>) {
+        (*self)(atom)
     }
 }
 
@@ -202,10 +198,13 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
         None
     }
 
-    /// Returns an iterator over every atom in the space, or None if that is not possible
-    fn atom_iter(&self) -> Option<SpaceIter> {
-        None
-    }
+    /// Visit each atom of the space and call [SpaceVisitor::accept] method.
+    /// This method is optional. Return `Err(())` if method is not implemented.
+    /// `Cow<Atom>` is used to allow passing both references and values. First
+    /// is appropriate for collection based atomspace. Second one is more
+    /// usable if atomspace is a generator or when values cannot be extracted
+    /// easily and should be reconstructed instead.
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()>;
 
     /// Returns an `&dyn `[Any](std::any::Any) for spaces where this is possible
     fn as_any(&self) -> Option<&dyn std::any::Any>;
@@ -275,13 +274,16 @@ pub trait SpaceMut: Space {
 
     /// Turn a &dyn SpaceMut into an &dyn Space.  Obsolete when Trait Upcasting is stabilized.
     /// [Rust issue #65991](https://github.com/rust-lang/rust/issues/65991)  Any month now.
-    fn as_space(&self) -> &dyn Space;
+    fn as_space<'a>(&self) -> &(dyn Space + 'a);
 }
 
 #[derive(Clone)]
 pub struct DynSpace(Rc<RefCell<dyn SpaceMut>>);
 
 impl DynSpace {
+    pub fn with_rc(space: Rc<RefCell<dyn SpaceMut>>) -> Self {
+        Self(space)
+    }
     pub fn new<T: SpaceMut + 'static>(space: T) -> Self {
         let shared = Rc::new(RefCell::new(space));
         DynSpace(shared)
@@ -320,7 +322,7 @@ impl SpaceMut for DynSpace {
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         self.0.borrow_mut().replace(from, to)
     }
-    fn as_space(&self) -> &dyn Space {
+    fn as_space<'a>(&self) -> &(dyn Space + 'a) {
         self
     }
 }
@@ -338,8 +340,8 @@ impl Space for DynSpace {
     fn atom_count(&self) -> Option<usize> {
         self.0.borrow().atom_count()
     }
-    fn atom_iter(&self) -> Option<SpaceIter> {
-        None
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
+        self.0.borrow().visit(v)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
@@ -384,8 +386,8 @@ impl<T: Space> Space for &T {
     fn atom_count(&self) -> Option<usize> {
         T::atom_count(*self)
     }
-    fn atom_iter(&self) -> Option<SpaceIter> {
-        T::atom_iter(*self)
+    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
+        T::visit(*self, v)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         None
