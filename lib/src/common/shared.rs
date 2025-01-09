@@ -48,7 +48,7 @@ impl<'a, T: 'a> Deref for RefHolder<'a, T> {
 }
 
 impl<T> LockBorrow<T> for &T {
-    fn borrow<'a>(&'a self) -> Box<dyn Deref<Target=T> + '_> {
+    fn borrow(&self) -> Box<dyn Deref<Target=T> + '_> {
         Box::new(RefHolder(self))
     }
 }
@@ -64,7 +64,7 @@ impl<'a, T: 'a> Deref for RefHolderMut<'a, T> {
 }
 
 impl<T> LockBorrow<T> for &mut T {
-    fn borrow<'a>(&'a self) -> Box<dyn Deref<Target=T> + '_> {
+    fn borrow(&self) -> Box<dyn Deref<Target=T> + '_> {
         Box::new(RefHolderMut(self))
     }
 }

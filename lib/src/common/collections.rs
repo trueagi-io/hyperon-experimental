@@ -297,6 +297,22 @@ impl<'a, T: 'a + Display> Display for VecDisplay<'a, T> {
     }
 }
 
+/// Helper function to implement Display for all mapping like code structures.
+/// Displays iterator over pairs in a format { <key>: <value>, ... }
+pub fn write_mapping<A, B, I>(f: &mut std::fmt::Formatter, it: I) -> std::fmt::Result
+    where
+        A: Display,
+        B: Display,
+        I: Iterator<Item=(A, B)>
+{
+    write!(f, "{{").and_then(|()| {
+        it.fold((Ok(()), true), |(res, start), (a, b)| {
+            let comma = if start { "" } else { "," };
+            (res.and_then(|()| write!(f, "{} {}: {}", comma, a, b)), false)
+        }).0
+    }).and_then(|()| write!(f, " }}"))
+}
+
 
 #[cfg(test)]
 mod test {
