@@ -5,8 +5,10 @@ use crate::space::*;
 use crate::common::collections::{VecDisplay, Equality, DefaultEquality};
 use crate::common::assert::compare_vec_no_order;
 use crate::atom::matcher::atoms_are_equivalent;
-use crate::metta::runner::stdlib::{grounded_op, atom_to_string, regex, interpret_no_error, unit_result};
+use crate::metta::runner::stdlib::{grounded_op, regex, interpret_no_error, unit_result};
 use crate::metta::runner::bool::*;
+
+use crate::metta::runner::str::atom_into_string;
 
 use std::convert::TryInto;
 
@@ -93,10 +95,10 @@ impl Grounded for PrintAlternativesOp {
 impl CustomExecute for PrintAlternativesOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("print-alternatives! expects format string as a first argument and expression as a second argument");
-        let atom = atom_to_string(args.get(0).ok_or_else(arg_error)?);
+        let atom = atom_into_string(args.get(0).ok_or_else(arg_error)?.clone());
         let args = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?;
         let args: Vec<String> = args.children().iter()
-            .map(|atom| atom_to_string(atom))
+            .map(|atom| atom_into_string(atom.clone()))
             .collect();
         println!("{} {}:", args.len(), atom);
         args.iter().for_each(|arg| println!("    {}", arg));

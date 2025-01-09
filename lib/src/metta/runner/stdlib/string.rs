@@ -2,7 +2,7 @@ use crate::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::runner::str::*;
-use super::{grounded_op, atom_to_string, unit_result, regex};
+use super::{grounded_op, unit_result, regex};
 
 use std::convert::TryInto;
 
@@ -25,7 +25,7 @@ impl CustomExecute for PrintlnOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("println! expects single atom as an argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
-        println!("{}", atom_to_string(atom));
+        println!("{}", atom_into_string(atom.clone()));
         unit_result()
     }
 }
@@ -50,10 +50,10 @@ impl Grounded for FormatArgsOp {
 impl CustomExecute for FormatArgsOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("format-args expects format string as a first argument and expression as a second argument");
-        let format = atom_to_string(args.get(0).ok_or_else(arg_error)?);
+        let format = atom_into_string(args.get(0).ok_or_else(arg_error)?.clone());
         let args = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?;
         let args: Vec<String> = args.children().iter()
-            .map(|atom| atom_to_string(atom))
+            .map(|atom| atom_into_string(atom.clone()))
             .collect();
         let res = format.format(args.as_slice());
         Ok(vec![Atom::gnd(Str::from_string(res))])

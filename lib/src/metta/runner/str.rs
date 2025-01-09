@@ -2,6 +2,7 @@ use crate::*;
 use crate::common::collections::ImmutableString;
 use crate::serial;
 use crate::atom::serial::ConvertingSerializer;
+use snailquote::unescape;
 
 /// String type
 pub const ATOM_TYPE_STRING : Atom = sym!("String");
@@ -83,4 +84,8 @@ impl serial::ConvertingSerializer<Str> for StrSerializer {
     fn into_type(self) -> Option<Str> {
         self.value
     }
+}
+
+pub fn atom_into_string(atom: Atom) -> String {
+    unescape(&atom.to_string()).unwrap()
 }

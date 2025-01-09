@@ -324,6 +324,7 @@ pub mod metta_interface_mod {
     use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
     use hyperon::common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
+    use hyperon::metta::runner::str::atom_into_string;
 
     pub use hyperon::metta::text::SyntaxNodeType as SyntaxNodeType;
 
@@ -463,10 +464,6 @@ pub mod metta_interface_mod {
         pub fn get_config_int(&mut self, _config_name: &str) -> Option<isize> {
             None //TODO.  Make this work when I have reliable value atom bridging
         }
-    }
-
-    pub fn atom_into_string(atom: Atom) -> String {
-        snailquote::unescape(&atom.to_string()).unwrap()
     }
 }
 
