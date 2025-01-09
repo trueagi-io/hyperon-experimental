@@ -1,117 +1,114 @@
 use super::collections::{ListMap, Equality, DefaultEquality};
 
-use std::cmp::Ordering;
+use std::fmt::{Debug, Display, Formatter};
+use itertools::Itertools;
 
-pub fn vec_eq_no_order<'a, T, A, B>(left: A, right: B) -> Option<String>
-where
-    T: 'a + PartialEq + std::fmt::Debug,
-    A: Iterator<Item=&'a T>,
-    B: Iterator<Item=&'a T>,
-{
-    compare_vec_no_order(left, right, DefaultEquality{}).as_string()
-}
-
-pub fn compare_vec_no_order<'a, T, A, B, E>(left: A, right: B, _cmp: E) -> VecDiff<'a, T, E>
+pub fn compare_vec_no_order<'a, T, A, B, E>(actual: A, expected: B, _cmp: E) -> VecDiff<'a, T, E>
 where
     A: Iterator<Item=&'a T>,
     B: Iterator<Item=&'a T>,
     E: Equality<&'a T>,
 {
-    let mut left_count: ListMap<&T, usize, E> = ListMap::new();
-    let mut right_count: ListMap<&T, usize, E> = ListMap::new();
-    for i in left {
-        *left_count.entry(&i).or_insert(0) += 1;
+    let mut diff: ListMap<&T, Count, E> = ListMap::new();
+    for i in actual {
+        diff.entry(&i).or_default().actual += 1;
     }
-    for i in right {
-        *right_count.entry(&i).or_insert(0) += 1;
+    for i in expected {
+        diff.entry(&i).or_default().expected += 1;
     }
-    VecDiff{ left_count, right_count }
+    diff = diff.into_iter().filter(|(_v, c)| c.actual != c.expected).collect();
+    VecDiff{ diff }
+}
+
+#[derive(Default)]
+struct Count {
+    actual: usize,
+    expected: usize,
 }
 
 pub struct VecDiff<'a, T, E: Equality<&'a T>> {
-    left_count: ListMap<&'a T, usize, E>,
-    right_count: ListMap<&'a T, usize, E>,
+    diff: ListMap<&'a T, Count, E>,
 }
 
-trait DiffVisitor<'a, T> {
-    fn diff(&mut self, item: &'a T, left: usize, right: usize) -> bool;
+struct FormatAsDebug<T: Debug>(T);
+impl<T: Debug> Display for FormatAsDebug<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Debug::fmt(&self.0, f)
+    }
 }
 
-impl<'a, T: std::fmt::Debug, E: Equality<&'a T>> VecDiff<'a, T, E> {
+struct FormatAsDisplay<T: Display>(T);
+impl<T: Display> Display for FormatAsDisplay<T> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.0, f)
+    }
+}
+
+impl<'a, T, E: Equality<&'a T>> VecDiff<'a, T, E> {
     pub fn has_diff(&self) -> bool {
-        #[derive(Default)]
-        struct FindDiff {
-            diff: bool,
-        }
-        impl<T: std::fmt::Debug> DiffVisitor<'_, T> for FindDiff {
-            fn diff(&mut self, _item: &T, left: usize, right: usize) -> bool {
-                if left == right {
-                    false
-                } else {
-                    self.diff = true;
-                    true
-                }
-            }
-        }
-        let mut f = FindDiff::default();
-        self.visit(&mut f);
-        f.diff
+        !self.diff.is_empty()
     }
 
-    pub fn as_string(&self) -> Option<String> {
-        #[derive(Default)]
-        struct StringDiff {
-            diff: Option<String>,
-        }
-        impl<'a, T: std::fmt::Debug> DiffVisitor<'a, T> for StringDiff {
-            fn diff(&mut self, item: &'a T, left: usize, right: usize) -> bool {
-                match left.cmp(&right) {
-                    Ordering::Less => {
-                        self.diff = Some(format!("Missed result: {:?}", item));
-                        true
-                    },
-                    Ordering::Greater => {
-                        self.diff = Some(format!("Excessive result: {:?}", item));
-                        true
-                    },
-                    Ordering::Equal => false,
-                }
-            }
-        }
-        let mut d = StringDiff{ diff: None };
-        self.visit(&mut d);
-        d.diff
+    pub fn as_display(&self) -> Option<String> where T: Display {
+        self.as_string(FormatAsDisplay)
     }
 
-    fn visit<'b, V: DiffVisitor<'b, T>>(&'b self, visitor: &mut V) {
-        for e in self.right_count.iter() {
-            let count = self.left_count.get(e.0).unwrap_or(&0);
-            if visitor.diff(e.0, *count, *e.1) { return }
-        }
-        for e in self.left_count.iter() {
-            let count = self.right_count.get(e.0).unwrap_or(&0);
-            if visitor.diff(e.0, *e.1, *count) { return }
+    pub fn as_debug(&self) -> Option<String> where T: Debug {
+        self.as_string(FormatAsDebug)
+    }
+    
+    fn as_string<F, I: Display>(&self, f: F) -> Option<String>
+        where F: Fn(&'a T) -> I
+    {
+        let mut diff = String::new();
+        if self.has_diff() {
+            let mut missed = self.diff.iter()
+                .filter(|(_v, c)| c.actual < c.expected)
+                .flat_map(|(v, c)| std::iter::repeat_n(v, c.expected - c.actual))
+                .map(|v| f(v))
+                .peekable();
+            let mut excessive = self.diff.iter()
+                .filter(|(_v, c)| c.actual > c.expected)
+                .flat_map(|(v, c)| std::iter::repeat_n(v, c.actual - c.expected))
+                .map(|v| f(v))
+                .peekable();
+            if missed.peek().is_some() {
+                diff.push_str(format!("Missed results: {}", missed.format(", ")).as_str());
+            }
+            if excessive.peek().is_some() {
+                if !diff.is_empty() {
+                    diff.push_str("\n");
+                }
+                diff.push_str(format!("Excessive results: {}", excessive.format(", ")).as_str());
+            }
+            Some(diff)
+        } else {
+            None
         }
     }
 }
 
 #[macro_export]
 macro_rules! assert_eq_no_order {
-    ($left:expr, $right:expr) => {
+    ($actual:expr, $expected:expr) => {
         {
-            assert!($crate::common::assert::vec_eq_no_order($left.iter(), $right.iter()) == None,
-                "(left == right some order)\n  left: {:?}\n right: {:?}", $left, $right);
+            let diff = $crate::common::assert::compare_vec_no_order($actual.iter(), $expected.iter(),
+                $crate::common::collections::DefaultEquality{}).as_debug();
+            assert!(diff.is_none(),
+                "(actual != expected)\nActual: {:?}\nExpected: {:?}\n{}",
+                    $actual, $expected, diff.unwrap());
         }
     }
 }
 
-pub fn metta_results_eq<T: PartialEq + std::fmt::Debug>(
-    left: &Result<Vec<Vec<T>>, String>, right: &Result<Vec<Vec<T>>, String>) -> bool
+pub fn metta_results_eq<T: PartialEq>(
+    actual: &Result<Vec<Vec<T>>, String>, expected: &Result<Vec<Vec<T>>, String>) -> bool
 {
-    match (left, right) {
-        (Ok(left), Ok(right)) if left.len() == right.len() => {
-            for (left, right) in left.iter().zip(right.iter()) {
-                if vec_eq_no_order(left.iter(), right.iter()).is_some() {
+    match (actual, expected) {
+        (Ok(actual), Ok(expected)) if actual.len() == expected.len() => {
+            for (actual, expected) in actual.iter().zip(expected.iter()) {
+                let diff = compare_vec_no_order(actual.iter(), expected.iter(), DefaultEquality{});
+                if diff.has_diff() {
                     return false;
                 }
             }
@@ -123,12 +120,12 @@ pub fn metta_results_eq<T: PartialEq + std::fmt::Debug>(
 
 #[macro_export]
 macro_rules! assert_eq_metta_results {
-    ($left:expr, $right:expr) => {
+    ($actual:expr, $expected:expr) => {
         {
-            let left = &$left;
-            let right = &$right;
-            assert!($crate::common::assert::metta_results_eq(left, right),
-                "(left == right)\n  left: {:?}\n right: {:?}", left, right);
+            let actual = &$actual;
+            let expected = &$expected;
+            assert!($crate::common::assert::metta_results_eq(actual, expected),
+                "(actual == expected)\n  actual: {:?}\n expected: {:?}", actual, expected);
         }
     }
 }

@@ -784,7 +784,7 @@ impl Clone for Box<dyn GroundedAtom> {
 
 /// Atoms are main components of the atomspace. There are four meta-types of
 /// atoms: symbol, expression, variable and grounded.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub enum Atom {
     /// Symbol represents some idea or concept. Two symbols having
     /// the same name are considered equal and representing the same concept.
@@ -1080,12 +1080,6 @@ impl Display for Atom {
             Atom::Variable(var) => Display::fmt(var, f),
             Atom::Grounded(gnd) => Display::fmt(gnd, f),
         }
-    }
-}
-
-impl Debug for Atom {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        Display::fmt(self, f)
     }
 }
 
