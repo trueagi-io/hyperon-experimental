@@ -324,7 +324,7 @@ pub mod metta_interface_mod {
     use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
     use hyperon::common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
-    use hyperon::metta::runner::str::atom_into_string;
+    use hyperon::metta::runner::str::atom_to_string;
 
     pub use hyperon::metta::text::SyntaxNodeType as SyntaxNodeType;
 
@@ -443,7 +443,7 @@ pub mod metta_interface_mod {
         pub fn get_config_string(&mut self, config_name: &str) -> Option<String> {
             let atom = self.get_config_atom(config_name)?;
             //TODO: We need to do atom type checking here
-            Some(atom_into_string(atom))
+            Some(atom_to_string(&atom))
         }
 
         pub fn get_config_expr_vec(&mut self, config_name: &str) -> Option<Vec<String>> {
@@ -453,7 +453,7 @@ pub mod metta_interface_mod {
                     .into_iter()
                     .map(|atom| {
                         //TODO: We need to do atom type checking here
-                        atom_into_string(atom)
+                        atom_to_string(&atom)
                     })
                     .collect())
             } else {

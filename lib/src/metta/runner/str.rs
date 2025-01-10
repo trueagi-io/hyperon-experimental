@@ -86,6 +86,6 @@ impl serial::ConvertingSerializer<Str> for StrSerializer {
     }
 }
 
-pub fn atom_into_string(atom: Atom) -> String {
+pub fn atom_to_string(atom: &Atom) -> String {
     unescape(&atom.to_string()).unwrap()
 }

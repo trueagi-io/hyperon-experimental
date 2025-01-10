@@ -48,6 +48,9 @@ class RegexMatchableObject(MatchableObject):
                 return [{"matched_pattern": S(pattern)}]
         return []
 
+def parseImpl():
+
+
 @register_atoms(pass_metta=True)
 def text_ops(run_context):
     """Add text operators
