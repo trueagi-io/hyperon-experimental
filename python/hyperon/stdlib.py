@@ -48,6 +48,9 @@ class RegexMatchableObject(MatchableObject):
                 return [{"matched_pattern": S(pattern)}]
         return []
 
+def parseImpl():
+
+
 @register_atoms(pass_metta=True)
 def text_ops(run_context):
     """Add text operators
@@ -61,7 +64,7 @@ def text_ops(run_context):
 
     """
 
-    reprAtom = OperationAtom('repr', lambda a: [ValueAtom(repr(a))],
+    reprAtom = OperationAtom('repr', lambda a: [ValueAtom(repr(a), 'String')],
                              ['Atom', 'String'], unwrap=False)
     parseAtom = OperationAtom('parse', lambda s: [SExprParser(str(s)[1:-1]).parse(run_context.tokenizer())],
                               ['String', 'Atom'], unwrap=False)

@@ -2,7 +2,7 @@ use crate::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::runner::str::*;
-use super::{grounded_op, atom_to_string, unit_result, regex};
+use super::{grounded_op, unit_result, regex};
 
 use std::convert::TryInto;
 

@@ -17,7 +17,6 @@ use crate::metta::*;
 use crate::metta::text::{Tokenizer, SExprParser};
 use crate::common::shared::Shared;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader};
-use super::str::*;
 
 use regex::Regex;
 
@@ -45,18 +44,6 @@ pub(crate) fn unit_result() -> Result<Vec<Atom>, ExecError> {
 
 pub(crate) fn regex(regex: &str) -> Regex {
     Regex::new(regex).unwrap()
-}
-
-pub fn atom_to_string(atom: &Atom) -> String {
-    match atom {
-        Atom::Grounded(gnd) if gnd.type_() == ATOM_TYPE_STRING => {
-            let mut s = gnd.to_string();
-            s.remove(0);
-            s.pop();
-            s
-        },
-        _ => atom.to_string(),
-    }
 }
 
 // TODO: remove hiding errors completely after making it possible passing

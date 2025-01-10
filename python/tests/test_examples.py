@@ -369,7 +369,6 @@ class ExamplesTest(HyperonTestCase):
         self.assertEqualMettaRunnerResults(metta.run("!(get-type 'A')"), [[S('Char')]])
         self.assertEqualMettaRunnerResults(metta.run('!(get-type "A")'), [[S('String')]])
 
-
 class SomeObject():
 
     def __init__(self):

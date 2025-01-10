@@ -5,8 +5,10 @@ use crate::space::*;
 use crate::common::collections::{VecDisplay, Equality, DefaultEquality};
 use crate::common::assert::compare_vec_no_order;
 use crate::atom::matcher::atoms_are_equivalent;
-use crate::metta::runner::stdlib::{grounded_op, atom_to_string, regex, interpret_no_error, unit_result};
+use crate::metta::runner::stdlib::{grounded_op, regex, interpret_no_error, unit_result};
 use crate::metta::runner::bool::*;
+
+use crate::metta::runner::str::atom_to_string;
 
 use std::convert::TryInto;
 

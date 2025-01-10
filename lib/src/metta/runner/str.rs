@@ -2,6 +2,7 @@ use crate::*;
 use crate::common::collections::ImmutableString;
 use crate::serial;
 use crate::atom::serial::ConvertingSerializer;
+use snailquote::unescape;
 
 /// String type
 pub const ATOM_TYPE_STRING : Atom = sym!("String");
@@ -47,7 +48,7 @@ impl Grounded for Str {
 
 impl std::fmt::Display for Str {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", self.0)
+        write!(f, "{:?}", self.0.as_str())
     }
 }
 
@@ -83,4 +84,8 @@ impl serial::ConvertingSerializer<Str> for StrSerializer {
     fn into_type(self) -> Option<Str> {
         self.value
     }
+}
+
+pub fn atom_to_string(atom: &Atom) -> String {
+    unescape(&atom.to_string()).unwrap()
 }
