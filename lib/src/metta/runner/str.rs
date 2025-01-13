@@ -2,7 +2,7 @@ use crate::*;
 use crate::common::collections::ImmutableString;
 use crate::serial;
 use crate::atom::serial::ConvertingSerializer;
-use snailquote::unescape;
+use unescaper;
 
 /// String type
 pub const ATOM_TYPE_STRING : Atom = sym!("String");
@@ -88,4 +88,29 @@ impl serial::ConvertingSerializer<Str> for StrSerializer {
 
 pub fn atom_to_string(atom: &Atom) -> String {
     unescape(&atom.to_string()).unwrap()
+}
+
+pub fn unescape(str: &str) -> unescaper::Result<String> {
+    unescaper::unescape(str).map(|mut s| {
+        s.remove(0);
+        s.pop();
+        s
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn str_display_escape() {
+        let s = Str::from_str("\\ \" \' \n \r \t \x1b abc");
+        assert_eq!(r#""\\ \" ' \n \r \t \u{1b} abc""#, s.to_string());
+    }
+
+    #[test]
+    fn str_unescape() {
+        let s = unescape(r#""\\ \" ' \n \r \t \u{1b} abc""#);
+        assert_eq!("\\ \" \' \n \r \t \x1b abc", s.unwrap());
+    }
 }
