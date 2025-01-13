@@ -491,7 +491,7 @@ impl<'a> SExprParser<'a> {
         let start_idx = self.cur_idx();
 
         while let Some((_idx, c)) = self.it.peek() {
-            if c.is_whitespace() || *c == '(' || *c == ')' {
+            if c.is_whitespace() || *c == '(' || *c == ')' || *c == ';' {
                 break;
             }
             token.push(*c);
@@ -642,6 +642,13 @@ mod tests {
         let node = parser.parse_token().unwrap();
         assert_eq!("n".to_string(), text[node.src_range]);
         assert_eq!(Some((1, ')')), parser.it.next());
+
+        let text = "n;Some comments.";
+        let mut parser = SExprParser::new(text);
+
+        let node = parser.parse_token().unwrap();
+        assert_eq!("n".to_string(), text[node.src_range]);
+        assert_eq!(Some((1, ';')), parser.it.next());
     }
 
     #[test]
@@ -749,6 +756,15 @@ mod tests {
         }
         let expected = vec![sym!("One"), expr!("two" "3"), sym!(r#""four""#)];
         assert_eq!(results, expected);
+    }
+
+    #[test]
+    fn test_comment_in_symbol() {
+        let program = "(a; 4)
+                  5)";
+        let expected = vec![expr!("a" "5")];
+        let res = parse_atoms(program);
+        assert_eq!(res, expected);
     }
 
 }
