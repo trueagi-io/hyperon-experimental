@@ -48,6 +48,16 @@ class RegexMatchableObject(MatchableObject):
                 return [{"matched_pattern": S(pattern)}]
         return []
 
+def parseImpl(atom, run_context):
+    try:
+        s = atom.get_object().content
+        if type(s) != str:
+            raise IncorrectArgumentError()
+        return [SExprParser(repr(s)[1:-1]).parse(run_context.tokenizer())]
+    except Exception as e:
+        raise IncorrectArgumentError()
+
+
 @register_atoms(pass_metta=True)
 def text_ops(run_context):
     """Add text operators
@@ -61,10 +71,9 @@ def text_ops(run_context):
 
     """
 
-    reprAtom = OperationAtom('repr', lambda a: [ValueAtom(repr(a))],
+    reprAtom = OperationAtom('repr', lambda a: [ValueAtom(repr(a), 'String')],
                              ['Atom', 'String'], unwrap=False)
-    parseAtom = OperationAtom('parse', lambda s: [SExprParser(str(s)[1:-1]).parse(run_context.tokenizer())],
-                              ['String', 'Atom'], unwrap=False)
+    parseAtom = OperationAtom('parse', lambda s: parseImpl(s, run_context), ['String', 'Atom'], unwrap=False)
     stringToCharsAtom = OperationAtom('stringToChars', lambda s: [E(*[ValueAtom(Char(c)) for c in str(s)[1:-1]])],
                                       ['String', 'Atom'], unwrap=False)
     charsToStringAtom = OperationAtom('charsToString', lambda a: [ValueAtom("".join([str(c)[1:-1] for c in a.get_children()]))],

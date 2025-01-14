@@ -2,6 +2,7 @@ use crate::*;
 use crate::common::collections::ImmutableString;
 use crate::serial;
 use crate::atom::serial::ConvertingSerializer;
+use unescaper;
 
 /// String type
 pub const ATOM_TYPE_STRING : Atom = sym!("String");
@@ -47,24 +48,8 @@ impl Grounded for Str {
 
 impl std::fmt::Display for Str {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "\"{}\"", self.0)
+        write!(f, "{:?}", self.0.as_str())
     }
-}
-
-/// A utility function to return the part of a string in between starting and ending quotes
-pub fn strip_quotes(src: &str) -> &str {
-    if let Some(first) = src.chars().next() {
-        if first == '"' {
-            if let Some(last) = src.chars().last() {
-                if last == '"' {
-                    if src.len() > 1 {
-                        return &src[1..src.len()-1]
-                    }
-                }
-            }
-        }
-    }
-    src
 }
 
 #[derive(Default)]
@@ -82,5 +67,55 @@ impl serial::Serializer for StrSerializer {
 impl serial::ConvertingSerializer<Str> for StrSerializer {
     fn into_type(self) -> Option<Str> {
         self.value
+    }
+}
+
+pub fn atom_to_string(atom: &Atom) -> String {
+    match atom {
+        Atom::Grounded(gnd) if gnd.type_() == ATOM_TYPE_STRING =>
+            // TODO: get string from internal representation using
+            // serialization like we do for Number
+            unescape(&atom.to_string()).unwrap(),
+        _ => atom.to_string(),
+    }
+}
+
+pub fn unescape(str: &str) -> unescaper::Result<String> {
+    unescaper::unescape(str).map(|mut s| {
+        s.remove(0);
+        s.pop();
+        s
+    })
+}
+
+pub(crate) fn expect_string_like_atom(atom: &Atom) -> Option<String> {
+    match atom {
+        Atom::Symbol(_) | Atom::Grounded(_) => Some(atom_to_string(atom)),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn str_display_escape() {
+        let s = Str::from_str("\\ \" \' \n \r \t \x1b abc");
+        assert_eq!(r#""\\ \" ' \n \r \t \u{1b} abc""#, s.to_string());
+    }
+
+    #[test]
+    fn str_unescape() {
+        let s = unescape(r#""\\ \" ' \n \r \t \u{1b} abc""#);
+        assert_eq!("\\ \" \' \n \r \t \x1b abc", s.unwrap());
+    }
+
+    #[test]
+    fn test_atom_to_string() {
+        let atom = Atom::gnd(Str::from_str("A\nB"));
+        assert_eq!("A\nB", atom_to_string(&atom));
+        let atom = Atom::sym(r#""AB""#);
+        assert_eq!(r#""AB""#, atom_to_string(&atom));
     }
 }

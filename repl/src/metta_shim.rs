@@ -38,7 +38,8 @@ pub mod metta_interface_mod {
     use pyo3::prelude::*;
     use pyo3::types::{PyTuple, PyString, PyBool, PyList, PyDict};
     use hyperon::common::collections::VecDisplay;
-    use super::{strip_quotes, exec_state_prepare, exec_state_should_break};
+    use super::{exec_state_prepare, exec_state_should_break};
+    use hyperon::metta::runner::str::unescape;
 
     /// Load the hyperon module, and get the "__version__" attribute
     pub fn get_hyperonpy_version() -> Result<String, String> {
@@ -238,7 +239,10 @@ pub mod metta_interface_mod {
                 } else {
                     match result.downcast::<PyList>() {
                         Ok(result_list) => {
-                            Some(result_list.iter().map(|atom| strip_quotes(&atom.to_string()).to_string()).collect())
+                            Some(result_list.into_iter()
+                                // String atom is expected as a value
+                                .map(|atom| unescape(&atom.to_string()).unwrap())
+                                .collect())
                         },
                         Err(_) => None
                     }
@@ -258,7 +262,8 @@ pub mod metta_interface_mod {
                 Ok(if result.is_none() {
                     None
                 } else {
-                    Some(strip_quotes(&result.to_string()).to_string())
+                    // String atom is expected as a value
+                    Some(unescape(&result.to_string()).unwrap())
                 })
             }).unwrap()
         }
@@ -300,7 +305,6 @@ pub mod metta_interface_mod {
             }
         }
     }
-
 }
 
 /// The "no python" path involves a reimplementation of all of the MeTTa interface points calling MeTTa
@@ -320,7 +324,8 @@ pub mod metta_interface_mod {
     use hyperon::Atom;
     use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
     use hyperon::common::collections::VecDisplay;
-    use super::{strip_quotes, exec_state_prepare, exec_state_should_break};
+    use super::{exec_state_prepare, exec_state_should_break};
+    use hyperon::metta::runner::str::atom_to_string;
 
     pub use hyperon::metta::text::SyntaxNodeType as SyntaxNodeType;
 
@@ -439,7 +444,7 @@ pub mod metta_interface_mod {
         pub fn get_config_string(&mut self, config_name: &str) -> Option<String> {
             let atom = self.get_config_atom(config_name)?;
             //TODO: We need to do atom type checking here
-            Some(strip_quotes(&atom.to_string()).to_string())
+            Some(atom_to_string(&atom))
         }
 
         pub fn get_config_expr_vec(&mut self, config_name: &str) -> Option<Vec<String>> {
@@ -449,7 +454,7 @@ pub mod metta_interface_mod {
                     .into_iter()
                     .map(|atom| {
                         //TODO: We need to do atom type checking here
-                        strip_quotes(&atom.to_string()).to_string()
+                        atom_to_string(&atom)
                     })
                     .collect())
             } else {
@@ -461,20 +466,5 @@ pub mod metta_interface_mod {
             None //TODO.  Make this work when I have reliable value atom bridging
         }
     }
-
 }
 
-pub fn strip_quotes(src: &str) -> &str {
-    if let Some(first) = src.chars().next() {
-        if first == '"' {
-            if let Some(last) = src.chars().last() {
-                if last == '"' {
-                    if src.len() > 1 {
-                        return &src[1..src.len()-1]
-                    }
-                }
-            }
-        }
-    }
-    src
-}
