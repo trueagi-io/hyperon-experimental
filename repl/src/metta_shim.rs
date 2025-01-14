@@ -240,7 +240,8 @@ pub mod metta_interface_mod {
                     match result.downcast::<PyList>() {
                         Ok(result_list) => {
                             Some(result_list.into_iter()
-                                .map(|atom| { unescape(&atom.to_string()).unwrap() })
+                                // String atom is expected as a value
+                                .map(|atom| unescape(&atom.to_string()).unwrap())
                                 .collect())
                         },
                         Err(_) => None
@@ -261,6 +262,7 @@ pub mod metta_interface_mod {
                 Ok(if result.is_none() {
                     None
                 } else {
+                    // String atom is expected as a value
                     Some(unescape(&result.to_string()).unwrap())
                 })
             }).unwrap()

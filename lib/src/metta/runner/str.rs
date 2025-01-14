@@ -87,7 +87,13 @@ impl serial::ConvertingSerializer<Str> for StrSerializer {
 }
 
 pub fn atom_to_string(atom: &Atom) -> String {
-    unescape(&atom.to_string()).unwrap()
+    match atom {
+        Atom::Grounded(gnd) if gnd.type_() == ATOM_TYPE_STRING =>
+            // TODO: get string from internal representation using
+            // serialization like we do for Number
+            unescape(&atom.to_string()).unwrap(),
+        _ => atom.to_string(),
+    }
 }
 
 pub fn unescape(str: &str) -> unescaper::Result<String> {
@@ -112,5 +118,13 @@ mod tests {
     fn str_unescape() {
         let s = unescape(r#""\\ \" ' \n \r \t \u{1b} abc""#);
         assert_eq!("\\ \" \' \n \r \t \x1b abc", s.unwrap());
+    }
+
+    #[test]
+    fn test_atom_to_string() {
+        let atom = Atom::gnd(Str::from_str("A\nB"));
+        assert_eq!("A\nB", atom_to_string(&atom));
+        let atom = Atom::sym(r#""AB""#);
+        assert_eq!(r#""AB""#, atom_to_string(&atom));
     }
 }
