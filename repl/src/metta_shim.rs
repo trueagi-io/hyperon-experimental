@@ -39,7 +39,7 @@ pub mod metta_interface_mod {
     use pyo3::types::{PyTuple, PyString, PyBool, PyList, PyDict};
     use hyperon::common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
-    use snailquote::unescape;
+    use hyperon::metta::runner::str::unescape;
 
     /// Load the hyperon module, and get the "__version__" attribute
     pub fn get_hyperonpy_version() -> Result<String, String> {
@@ -240,7 +240,7 @@ pub mod metta_interface_mod {
                     match result.downcast::<PyList>() {
                         Ok(result_list) => {
                             Some(result_list.into_iter()
-                                .map(|atom| unescape(&atom.to_string()).unwrap())
+                                .map(|atom| { unescape(&atom.to_string()).unwrap() })
                                 .collect())
                         },
                         Err(_) => None
@@ -303,7 +303,6 @@ pub mod metta_interface_mod {
             }
         }
     }
-
 }
 
 /// The "no python" path involves a reimplementation of all of the MeTTa interface points calling MeTTa
