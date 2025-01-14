@@ -6,7 +6,7 @@ use crate::metta::runner::{Metta, RunContext,
                            git_catalog::ModuleGitLocation,
                            mod_name_from_url,
                            pkg_mgmt::UpdateMode};
-use crate::metta::runner::str::*;
+use crate::metta::runner::str::expect_string_like_atom;
 
 /// Provides a way to access [Metta::load_module_at_path] from within MeTTa code
 #[derive(Clone, Debug)]
@@ -35,14 +35,8 @@ impl Grounded for RegisterModuleOp {
 impl CustomExecute for RegisterModuleOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "register-module! expects a file system path; use quotes if needed";
-        let path_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+        let path = args.get(0).and_then(expect_string_like_atom).ok_or_else(|| ExecError::from(arg_error))?;
 
-        let path = match path_arg_atom {
-            Atom::Symbol(path_arg) => path_arg.name(),
-            Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
-            _ => return Err(arg_error.into()),
-        };
-        let path = strip_quotes(path);
         let path = std::path::PathBuf::from(path);
 
         // Load the module from the path
@@ -90,19 +84,12 @@ impl Grounded for GitModuleOp {
 impl CustomExecute for GitModuleOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "git-module! expects a URL; use quotes if needed";
-        let url_arg_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
+        let url = args.get(0).and_then(expect_string_like_atom).ok_or_else(|| ExecError::from(arg_error))?;
         // TODO: When we figure out how to address varargs, it will be nice to take an optional branch name
-
-        let url = match url_arg_atom {
-            Atom::Symbol(url_arg) => url_arg.name(),
-            Atom::Grounded(g) => g.downcast_ref::<Str>().ok_or_else(|| ExecError::from(arg_error))?.as_str(),
-            _ => return Err(arg_error.into()),
-        };
-        let url = strip_quotes(url);
 
         // TODO: Depending on what we do with `register-module!`, we might want to let the
         // caller provide an optional mod_name here too, rather than extracting it from the url
-        let mod_name = match mod_name_from_url(url) {
+        let mod_name = match mod_name_from_url(&url) {
             Some(mod_name) => mod_name,
             None => return Err(ExecError::from("git-module! error extracting module name from URL"))
         };
