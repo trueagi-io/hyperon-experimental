@@ -4,8 +4,8 @@ use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::common::shared::Shared;
 use crate::metta::runner::{Metta, RunContext, ResourceKey};
-use crate::metta::runner::str::*;
 use super::{grounded_op, regex, unit_result};
+use crate::metta::runner::str::expect_string_like_atom;
 
 use regex::Regex;
 
@@ -68,20 +68,13 @@ impl CustomExecute for ImportOp {
 
         let arg_error = || ExecError::from("import! expects a destination &space and a module name argument");
         let dest_arg = args.get(0).ok_or_else(arg_error)?;
-        let mod_name_atom = args.get(1).ok_or_else(arg_error)?;
-
-        // TODO: replace Symbol by grounded String?
-        let mod_name = match mod_name_atom {
-            Atom::Symbol(mod_name) => mod_name.name(),
-            _ => return Err("import! expects a module name as the first argument".into())
-        };
-        let mod_name = strip_quotes(mod_name);
+        let mod_name = args.get(1).and_then(expect_string_like_atom).ok_or_else(arg_error)?;
 
         // Load the module into the runner, or get the ModId if it's already loaded
         //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
         let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
         let mut context = ctx_ref.lock().unwrap();
-        let mod_id = context.load_module(mod_name)?;
+        let mod_id = context.load_module(&mod_name)?;
 
         // Import the module, as per the behavior described above
         match dest_arg {
@@ -136,19 +129,12 @@ impl Grounded for IncludeOp {
 impl CustomExecute for IncludeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("include expects a module name argument");
-        let mod_name_atom = args.get(0).ok_or_else(arg_error)?;
-
-        // TODO: replace Symbol by grounded String?
-        let mod_name = match mod_name_atom {
-            Atom::Symbol(mod_name) => mod_name.name(),
-            _ => return Err(arg_error())
-        };
-        let mod_name = strip_quotes(mod_name);
+        let mod_name = args.get(0).and_then(expect_string_like_atom).ok_or_else(arg_error)?;
 
         //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
         let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
         let mut context = ctx_ref.lock().unwrap();
-        let program_buf = context.load_resource_from_module(mod_name, ResourceKey::MainMettaSrc)?;
+        let program_buf = context.load_resource_from_module(&mod_name, ResourceKey::MainMettaSrc)?;
 
         // Interpret the loaded MeTTa S-Expression text
         let program_text = String::from_utf8(program_buf)
@@ -199,20 +185,13 @@ impl Grounded for ModSpaceOp {
 impl CustomExecute for ModSpaceOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = "mod-space! expects a module name argument";
-        let mod_name_atom = args.get(0).ok_or_else(|| ExecError::from(arg_error))?;
-
-        // TODO: replace Symbol by grounded String?
-        let mod_name = match mod_name_atom {
-            Atom::Symbol(mod_name) => mod_name.name(),
-            _ => {return Err(ExecError::from(arg_error))}
-        };
-        let mod_name = strip_quotes(mod_name);
+        let mod_name = args.get(0).and_then(expect_string_like_atom).ok_or_else(|| ExecError::from(arg_error))?;
 
         // Load the module into the runner, or get the ModId if it's already loaded
         //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
         let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
         let mut context = ctx_ref.lock().unwrap();
-        let mod_id = context.load_module(mod_name)?;
+        let mod_id = context.load_module(&mod_name)?;
 
         let space = Atom::gnd(context.metta().module_space(mod_id));
         Ok(vec![space])

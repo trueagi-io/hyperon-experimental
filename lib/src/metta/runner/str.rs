@@ -52,22 +52,6 @@ impl std::fmt::Display for Str {
     }
 }
 
-/// A utility function to return the part of a string in between starting and ending quotes
-pub fn strip_quotes(src: &str) -> &str {
-    if let Some(first) = src.chars().next() {
-        if first == '"' {
-            if let Some(last) = src.chars().last() {
-                if last == '"' {
-                    if src.len() > 1 {
-                        return &src[1..src.len()-1]
-                    }
-                }
-            }
-        }
-    }
-    src
-}
-
 #[derive(Default)]
 struct StrSerializer {
     value: Option<Str>,
@@ -102,6 +86,13 @@ pub fn unescape(str: &str) -> unescaper::Result<String> {
         s.pop();
         s
     })
+}
+
+pub(crate) fn expect_string_like_atom(atom: &Atom) -> Option<String> {
+    match atom {
+        Atom::Symbol(_) | Atom::Grounded(_) => Some(atom_to_string(atom)),
+        _ => None,
+    }
 }
 
 #[cfg(test)]
