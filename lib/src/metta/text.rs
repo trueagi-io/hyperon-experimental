@@ -8,6 +8,8 @@ use std::iter::Peekable;
 use regex::Regex;
 use std::rc::Rc;
 
+use crate::metta::runner::str::unescape;
+
 #[derive(Clone, Debug)]
 pub struct Tokenizer {
     tokens: Vec<TokenDescr>,
@@ -439,7 +441,6 @@ impl<'a> SExprParser<'a> {
             }
             if c == '\\' {
                 let escape_err = |cur_idx| { SyntaxNode::incomplete_with_message(SyntaxNodeType::StringToken, char_idx..cur_idx, vec![], "Invalid escape sequence".to_string()) };
-
                 match self.it.next() {
                     Some((_idx, c)) => {
                         let val = match c {
@@ -453,6 +454,10 @@ impl<'a> SExprParser<'a> {
                                     None => {return escape_err(self.cur_idx()); }
                                 }
                             },
+                            'u' => {match self.parse_unicode_sequence() {
+                                Some(char_val) => char_val.into(),
+                                None => { return escape_err(self.cur_idx()); }
+                            }}
                             _ => {
                                 return escape_err(self.cur_idx());
                             }
@@ -484,6 +489,22 @@ impl<'a> SExprParser<'a> {
             let digits_buf = &[byte1, byte2];
             u8::from_str_radix(core::str::from_utf8(digits_buf).unwrap(), radix).ok()
         }).and_then(|code_val| (code_val <= 0x7F).then(|| code_val))
+    }
+
+    fn parse_unicode_sequence(&mut self) -> Option<char> {
+        let mut char_vec = vec!['\\', 'u'];
+        loop
+        {
+            let next_char = match self.it.next() {
+                Some(char_val) => char_val.1,
+                None => return None,
+            };
+            char_vec.push(next_char);
+            if next_char == '}' {break}
+        }
+        let resstr = unescaper::unescape(&String::from_iter(char_vec)).unwrap();
+        let res_vec: Vec<char> = resstr.chars().collect();
+        Some(res_vec[0])
     }
 
     fn parse_word(&mut self) -> SyntaxNode {
@@ -662,6 +683,12 @@ mod tests {
         let node = parser.parse_string();
         assert!(!node.is_complete);
         assert_eq!("Escaping sequence is not finished", node.message.unwrap());
+
+        let mut parser = SExprParser::new("\"\\u{012}\"");
+        let node = parser.parse_string();
+        assert!(!node.is_complete);
+        assert_eq!(unescape("\\u{012}").unwrap(), node.message.unwrap());
+
     }
 
     #[test]
