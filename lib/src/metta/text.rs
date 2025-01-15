@@ -8,8 +8,6 @@ use std::iter::Peekable;
 use regex::Regex;
 use std::rc::Rc;
 
-use crate::metta::runner::str::unescape;
-
 #[derive(Clone, Debug)]
 pub struct Tokenizer {
     tokens: Vec<TokenDescr>,
@@ -454,9 +452,11 @@ impl<'a> SExprParser<'a> {
                                     None => {return escape_err(self.cur_idx()); }
                                 }
                             },
-                            'u' => {match self.parse_unicode_sequence() {
-                                Some(char_val) => char_val.into(),
-                                None => { return escape_err(self.cur_idx()); }
+                            'u' => { // unicode sequence
+                                match self.parse_unicode_sequence() {
+                                    Some(char_val) => char_val.into(),
+                                    None => { return escape_err(self.cur_idx());
+                                }
                             }}
                             _ => {
                                 return escape_err(self.cur_idx());
@@ -492,6 +492,7 @@ impl<'a> SExprParser<'a> {
     }
 
     fn parse_unicode_sequence(&mut self) -> Option<char> {
+        // unicode sequence presumably looks like this '\\u{0123}'
         let mut char_vec = vec!['\\', 'u'];
         loop
         {
