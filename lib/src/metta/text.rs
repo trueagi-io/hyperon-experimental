@@ -503,7 +503,7 @@ impl<'a> SExprParser<'a> {
             char_vec.push(next_char);
             if next_char == '}' {break}
         }
-        let resstr = unescaper::unescape(&String::from_iter(char_vec)).unwrap();
+        let resstr = unescaper::unescape(&String::from_iter(char_vec.clone())).unwrap();
         let res_vec: Vec<char> = resstr.chars().collect();
         Some(res_vec[0])
     }
@@ -684,12 +684,19 @@ mod tests {
         let node = parser.parse_string();
         assert!(!node.is_complete);
         assert_eq!("Escaping sequence is not finished", node.message.unwrap());
+    }
 
-        let mut parser = SExprParser::new("\"\\u{012}\"");
+    #[test]
+    fn test_parse_unicode() {
+        let mut parser = SExprParser::new("\"\\u{0123}\"");
+        let node = parser.parse_string();
+        let node_atom = node.as_atom(&Tokenizer::new());
+        assert_eq!(unescaper::unescape("\"\\u{0123}\"").unwrap(), node_atom.unwrap().unwrap().to_string());
+
+        let mut parser = SExprParser::new("\"\\u{0123\"");
         let node = parser.parse_string();
         assert!(!node.is_complete);
-        assert_eq!(unescape("\\u{012}").unwrap(), node.message.unwrap());
-
+        assert_eq!("Invalid escape sequence", node.message.unwrap());
     }
 
     #[test]
