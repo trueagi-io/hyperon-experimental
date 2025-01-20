@@ -88,6 +88,7 @@ impl Tokenizer {
 }
 
 /// The meaning of a parsed syntactic element, generated from a substring in the input text
+#[cfg_attr(test, derive(PartialEq))]
 #[derive(Clone, Copy, Debug)]
 pub enum SyntaxNodeType {
     /// Comment line.  All text between a non-escaped ';' and a newline
@@ -127,6 +128,7 @@ impl SyntaxNodeType {
     }
 }
 
+#[cfg_attr(test, derive(PartialEq))]
 #[derive(Clone, Debug)]
 pub struct SyntaxNode {
     pub node_type: SyntaxNodeType,
@@ -493,19 +495,26 @@ impl<'a> SExprParser<'a> {
 
     fn parse_unicode_sequence(&mut self) -> Option<char> {
         // unicode sequence presumably looks like this '\\u{0123}'
-        let mut char_vec = vec!['\\', 'u'];
+        let mut result_u32: u32 = 0;
+        let mut cur_idx = 0;
         loop
         {
             let next_char = match self.it.next() {
                 Some(char_val) => char_val.1,
                 None => return None,
             };
-            char_vec.push(next_char);
+            if next_char == '{' {continue}
             if next_char == '}' {break}
+            cur_idx += 1;
+            if cur_idx > 8 { return None }
+            let char_to_digit = match next_char.to_digit(16) {
+                Some(digit) => digit,
+                None => return None,
+            };
+            result_u32 = (result_u32 << 4) | char_to_digit;
         }
-        let resstr = unescaper::unescape(&String::from_iter(char_vec.clone())).unwrap();
-        let res_vec: Vec<char> = resstr.chars().collect();
-        Some(res_vec[0])
+        let res_char = char::from_u32(result_u32).unwrap();
+        Some(res_char)
     }
 
     fn parse_word(&mut self) -> SyntaxNode {
@@ -689,14 +698,18 @@ mod tests {
     #[test]
     fn test_parse_unicode() {
         let mut parser = SExprParser::new("\"\\u{0123}\"");
-        let node = parser.parse_string();
-        let node_atom = node.as_atom(&Tokenizer::new());
-        assert_eq!(unescaper::unescape("\"\\u{0123}\"").unwrap(), node_atom.unwrap().unwrap().to_string());
+        assert_eq!(SyntaxNode::new_token_node(SyntaxNodeType::StringToken, 0..10, "\"\u{0123}\"".into()), parser.parse_string());
 
         let mut parser = SExprParser::new("\"\\u{0123\"");
         let node = parser.parse_string();
         assert!(!node.is_complete);
         assert_eq!("Invalid escape sequence", node.message.unwrap());
+
+        let mut parser = SExprParser::new("\"\\u{012345678\"");
+        let node = parser.parse_string();
+        assert!(!node.is_complete);
+        assert_eq!("Invalid escape sequence", node.message.unwrap());
+
     }
 
     #[test]
