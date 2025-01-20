@@ -98,3 +98,15 @@ class MettaTest(unittest.TestCase):
 
         self.assertEqual([[]], result)
 
+    def test_metta_evaluate_atom_using_stdlib(self):
+        program = '''
+            (= (f) (let ($x $y) (A B) $x))
+        '''
+        runner = MeTTa(env_builder=Environment.test_env())
+        runner.run(program)
+
+        result = runner.run('!(f)')
+        self.assertEqual([[S('A')]], result)
+
+        result = runner.evaluate_atom(E(S('f')))
+        self.assertEqual([S('A')], result)

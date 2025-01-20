@@ -9,13 +9,13 @@ pub struct ModuleSpace {
 
 impl Display for ModuleSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.main, f)
+        write!(f, "ModuleSpace({})", &self.main)
     }
 }
 
 impl Debug for ModuleSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(&self.main, f)
+        write!(f, "ModuleSpace({:?})", &self.main)
     }
 }
 
@@ -25,6 +25,7 @@ impl ModuleSpace {
     }
 
     pub fn query(&self, query: &Atom) -> BindingsSet {
+        log::debug!("ModuleSpace::query: {}", query);
         let mut results = self.main.query(query);
         for dep in &self.deps {
             if let Some(space) = dep.borrow().as_any() {
@@ -41,6 +42,7 @@ impl ModuleSpace {
     }
 
     fn query_no_deps(&self, query: &Atom) -> BindingsSet {
+        log::debug!("ModuleSpace::query_no_deps: {}", query);
         self.main.query(query)
     }
 

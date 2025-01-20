@@ -124,7 +124,10 @@ pub(crate) struct MettaContents {
     /// An index, to find a loaded module from a ModuleDescriptor
     module_descriptors: Mutex<HashMap<ModuleDescriptor, ModId>>,
     /// A clone of the top module's Space, so we don't need to do any locking to access it,
-    /// to support the metta.space() public function
+    /// to support the metta.space() public function. Actual module space is an instance
+    /// of the [module::ModuleSpace]. This instance contains dependencies of the
+    /// top module. This space is an original space passed to the Metta constructor
+    /// thus it doesn't contain any dependencies.
     top_mod_space: DynSpace,
     /// A clone of the top module's Tokenizer
     top_mod_tokenizer: Shared<Tokenizer>,
@@ -439,9 +442,9 @@ impl Metta {
         let atom = if is_bare_minimal_interpreter(self) {
             atom
         } else {
-            wrap_atom_by_metta_interpreter(self.0.top_mod_space.clone(), atom)
+            wrap_atom_by_metta_interpreter(self.module_space(ModId::TOP), atom)
         };
-        if self.type_check_is_enabled() && !validate_atom(self.0.top_mod_space.borrow().as_space(), &atom) {
+        if self.type_check_is_enabled() && !validate_atom(&self.module_space(ModId::TOP), &atom) {
             Ok(vec![Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL])])
         } else {
             interpret(self.space(), &atom)
