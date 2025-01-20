@@ -494,9 +494,13 @@ impl<'a> SExprParser<'a> {
     }
 
     fn parse_unicode_sequence(&mut self) -> Option<char> {
-        // unicode sequence presumably looks like this '\\u{0123}'
+        // unicode sequence presumably looks like this '\u{0123}'
         let mut result_u32: u32 = 0;
         let mut cur_idx = 0;
+        match self.it.next() {
+            Some((_, '{')) => (),
+            _ => return None,
+        };
         loop
         {
             let next_char = match self.it.next() {
@@ -513,8 +517,7 @@ impl<'a> SExprParser<'a> {
             };
             result_u32 = (result_u32 << 4) | char_to_digit;
         }
-        let res_char = char::from_u32(result_u32).unwrap();
-        Some(res_char)
+        char::from_u32(result_u32)
     }
 
     fn parse_word(&mut self) -> SyntaxNode {
@@ -704,6 +707,32 @@ mod tests {
         let node = parser.parse_string();
         assert!(!node.is_complete);
         assert_eq!("Invalid escape sequence", node.message.unwrap());
+
+        let mut parser = SExprParser::new("\"\\u0123}\"");
+        let node = parser.parse_string();
+        assert!(!node.is_complete);
+        assert_eq!("Invalid escape sequence", node.message.unwrap());
+
+        let mut parser = SExprParser::new("\"\\u0123\"");
+        let node = parser.parse_string();
+        assert!(!node.is_complete);
+        assert_eq!("Invalid escape sequence", node.message.unwrap());
+
+        let mut parser = SExprParser::new("\"\\u0{123}\"");
+        let node = parser.parse_string();
+        assert!(!node.is_complete);
+        assert_eq!("Invalid escape sequence", node.message.unwrap());
+
+        let mut parser = SExprParser::new("\"\\u{defg}\"");
+        let node = parser.parse_string();
+        assert!(!node.is_complete);
+        assert_eq!("Invalid escape sequence", node.message.unwrap());
+
+        let mut parser = SExprParser::new("\"\\u{130AC}\"");
+        assert_eq!(SyntaxNode::new_token_node(SyntaxNodeType::StringToken, 0..11, "\"\u{130AC}\"".into()), parser.parse_string());
+
+        let mut parser = SExprParser::new("\"\\u{130ac}\"");
+        assert_eq!(SyntaxNode::new_token_node(SyntaxNodeType::StringToken, 0..11, "\"\u{130ac}\"".into()), parser.parse_string());
 
         let mut parser = SExprParser::new("\"\\u{012345678\"");
         let node = parser.parse_string();
