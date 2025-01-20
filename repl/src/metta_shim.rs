@@ -8,6 +8,9 @@
 
 pub use metta_interface_mod::MettaShim;
 
+use hyperon::metta::text::SExprParser;
+use hyperon::metta::text::SyntaxNodeType;
+
 use crate::SIGINT_RECEIVED_COUNT;
 
 /// Prepares to enter an interruptible exec loop
@@ -190,28 +193,6 @@ pub mod metta_interface_mod {
             }).unwrap()
         }
 
-        pub fn parse_and_unroll_syntax_tree(&self, line: &str) -> Vec<(SyntaxNodeType, std::ops::Range<usize>)> {
-
-            Python::with_gil(|py| -> PyResult<Vec<(SyntaxNodeType, std::ops::Range<usize>)>> {
-                let mut result_nodes = vec![];
-                let py_line = PyString::new(py, line);
-                let args = PyTuple::new(py, &[py_line]);
-                let module: &PyModule = self.py_mod.as_ref(py);
-                let func = module.getattr("parse_line_to_syntax_tree")?;
-                let nodes = func.call1(args)?;
-                let result_list = nodes.downcast::<PyList>().unwrap();
-                for result in result_list {
-                    let result = result.downcast::<PyTuple>().unwrap();
-                    let node_type = SyntaxNodeType::from_py_str(&result[0].to_string());
-                    let start: usize = result[1].getattr("start")?.extract().unwrap();
-                    let end: usize = result[1].getattr("stop")?.extract().unwrap();
-                    let range = core::ops::Range{start, end};
-                    result_nodes.push((node_type, range))
-                }
-                Ok(result_nodes)
-            }).unwrap()
-        }
-
         pub fn config_dir(&self) -> Option<PathBuf> {
             Python::with_gil(|py| -> PyResult<Option<PathBuf>> {
                 let module: &PyModule = self.py_mod.as_ref(py);
@@ -272,39 +253,6 @@ pub mod metta_interface_mod {
             None //TODO.  Make this work when I have reliable value atom bridging
         }
     }
-
-    /// Duplicated from Hyperon because linking hyperon directly is not yet allowed
-    #[derive(Debug)]
-    pub enum SyntaxNodeType {
-        Comment,
-        VariableToken,
-        StringToken,
-        WordToken,
-        OpenParen,
-        CloseParen,
-        Whitespace,
-        LeftoverText,
-        ExpressionGroup,
-        ErrorGroup,
-    }
-
-    impl SyntaxNodeType {
-        fn from_py_str(the_str: &str) -> Self {
-            match the_str {
-                "SyntaxNodeType.COMMENT" => Self::Comment,
-                "SyntaxNodeType.VARIABLE_TOKEN" => Self::VariableToken,
-                "SyntaxNodeType.STRING_TOKEN" => Self::StringToken,
-                "SyntaxNodeType.WORD_TOKEN" => Self::WordToken,
-                "SyntaxNodeType.OPEN_PAREN" => Self::OpenParen,
-                "SyntaxNodeType.CLOSE_PAREN" => Self::CloseParen,
-                "SyntaxNodeType.WHITESPACE" => Self::Whitespace,
-                "SyntaxNodeType.LEFTOVER_TEXT" => Self::LeftoverText,
-                "SyntaxNodeType.EXPRESSION_GROUP" => Self::ExpressionGroup,
-                "SyntaxNodeType.ERROR_GROUP" => Self::ErrorGroup,
-                _ => panic!("Unrecognized syntax node type: {the_str}")
-            }
-        }
-    }
 }
 
 /// The "no python" path involves a reimplementation of all of the MeTTa interface points calling MeTTa
@@ -326,8 +274,6 @@ pub mod metta_interface_mod {
     use hyperon::common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
     use hyperon::metta::runner::str::atom_to_string;
-
-    pub use hyperon::metta::text::SyntaxNodeType as SyntaxNodeType;
 
     pub struct MettaShim {
         pub metta: Metta,
@@ -365,28 +311,6 @@ pub mod metta_interface_mod {
             };
 
             Ok(new_shim)
-        }
-
-        pub fn parse_and_unroll_syntax_tree(&self, line: &str) -> Vec<(SyntaxNodeType, std::ops::Range<usize>)> {
-
-            let mut nodes = vec![];
-            let mut parser = SExprParser::new(line);
-            loop {
-                match parser.parse_to_syntax_tree() {
-                    Some(root_node) => {
-                        root_node.visit_depth_first(|node| {
-                            // We will only render the leaf nodes in the syntax tree
-                            if !node.node_type.is_leaf() {
-                                return;
-                            }
-
-                            nodes.push((node.node_type, node.src_range.clone()))
-                        });
-                    },
-                    None => break,
-                }
-            }
-            nodes
         }
 
         pub fn parse_line(&mut self, line: &str) -> Result<(), String> {
@@ -468,3 +392,24 @@ pub mod metta_interface_mod {
     }
 }
 
+pub fn parse_and_unroll_syntax_tree(line: &str) -> Vec<(SyntaxNodeType, std::ops::Range<usize>)> {
+
+    let mut nodes = vec![];
+    let mut parser = SExprParser::new(line);
+    loop {
+        match parser.parse_to_syntax_tree() {
+            Some(root_node) => {
+                root_node.visit_depth_first(|node| {
+                    // We will only render the leaf nodes in the syntax tree
+                    if !node.node_type.is_leaf() {
+                        return;
+                    }
+
+                    nodes.push((node.node_type, node.src_range.clone()))
+                });
+            },
+            None => break,
+        }
+    }
+    nodes
+}
