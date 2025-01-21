@@ -76,8 +76,8 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::ffi::{OsStr, OsString};
 use std::collections::HashSet;
+use std::io::Read;
 
-use crate::metta::text::OwnedSExprParser;
 use crate::metta::runner::modules::*;
 use crate::metta::runner::{*, git_catalog::*};
 
@@ -417,6 +417,10 @@ impl SingleFileModule {
     fn new(path: &Path, pkg_info: PkgInfo) -> Self {
         Self {path: path.into(), pkg_info }
     }
+    fn open_file(&self) -> Result<std::fs::File, String> {
+        std::fs::File::open(&self.path)
+            .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))
+    }
     fn read_contents(&self) -> Result<Vec<u8>, String> {
         std::fs::read(&self.path)
             .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))
@@ -430,10 +434,7 @@ impl ModuleLoader for SingleFileModule {
         let resource_dir = self.path.parent().unwrap();
         context.init_self_module(space, Some(resource_dir.into()));
 
-        let program_text = String::from_utf8(self.read_contents()?)
-            .map_err(|e| e.to_string())?;
-
-        let parser = OwnedSExprParser::new(program_text);
+        let parser = SExprParser::from_iter(self.open_file()?.bytes());
         context.push_parser(Box::new(parser));
 
         Ok(())
@@ -463,9 +464,15 @@ impl DirModule {
     fn new(path: &Path, pkg_info: PkgInfo) -> Self {
         Self { path: path.into(), pkg_info }
     }
+    fn module_metta_path(&self) -> PathBuf {
+        self.path.join("module.metta")
+    }
+    fn open_file(&self) -> Result<std::fs::File, String> {
+        std::fs::File::open(&self.module_metta_path())
+            .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))
+    }
     fn read_module_metta(&self) -> Option<Vec<u8>> {
-        let module_metta_path = self.path.join("module.metta");
-        std::fs::read(&module_metta_path).ok()
+        std::fs::read(&self.module_metta_path()).ok()
     }
 }
 
@@ -478,10 +485,8 @@ impl ModuleLoader for DirModule {
 
         // A module.metta file is optional.  Without one a dir module behaves as just
         // a container for other resources and sub-modules.
-        if let Some(program_buf) = self.read_module_metta() {
-            let program_text = String::from_utf8(program_buf)
-                .map_err(|e| e.to_string())?;
-            let parser = OwnedSExprParser::new(program_text);
+        if let Some(program_file) = self.open_file().ok() {
+            let parser = SExprParser::from_iter(program_file.bytes());
             context.push_parser(Box::new(parser));
         }
 

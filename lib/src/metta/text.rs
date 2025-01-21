@@ -3,10 +3,13 @@
 use crate::*;
 
 use core::ops::Range;
-use std::str::CharIndices;
 use std::iter::Peekable;
+use std::iter::Enumerate;
 use regex::Regex;
 use std::rc::Rc;
+use unicode_reader::CodePoints;
+use std::io;
+use std::io::Read;
 
 #[derive(Clone, Debug)]
 pub struct Tokenizer {
@@ -249,11 +252,18 @@ impl SyntaxNode {
 /// by parsing source text
 pub trait Parser {
     fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String>;
+    // FIXME: temporary stub to make c/src/metta.rs compile
+    // could be safely removed from implementation or replaced by the chain of
+    // parsers: SExprSyntaxParser -> SExprAtomParser
+    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode>;
 }
 
-impl Parser for SExprParser<'_> {
+impl<R: Iterator<Item=io::Result<u8>>> Parser for SExprParser<R> {
     fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
         self.parse(tokenizer)
+    }
+    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode> {
+        self.parse_to_syntax_tree().expect("Expected to be called only on memory buffer")
     }
 }
 
@@ -261,26 +271,38 @@ impl Parser for &mut (dyn Parser + '_) {
     fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
         (**self).next_atom(tokenizer)
     }
+    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode> {
+        (**self).parse_to_syntax_tree()
+    }
 }
 
 /// Provides a parser for MeTTa code written in S-Expression Syntax
 ///
 /// NOTE: The SExprParser type is short-lived, and can be created cheaply to evaluate a specific block
 /// of MeTTa source code.
-#[derive(Clone)]
-pub struct SExprParser<'a> {
-    text: &'a str,
-    it: Peekable<CharIndices<'a>>,
+pub struct SExprParser<R: Iterator<Item=io::Result<u8>>> {
+    it: Peekable<Enumerate<CodePoints<R>>>,
+    last_idx: usize,
 }
 
-impl<'a> SExprParser<'a> {
+impl<'a> SExprParser<io::Bytes<&'a [u8]>> {
+    // FIXME: rename to from_str
     pub fn new(text: &'a str) -> Self {
-        Self{ text, it: text.char_indices().peekable() }
+        Self::from_iter(text.as_bytes().bytes())
+    }
+}
+
+impl<R: Iterator<Item=std::io::Result<u8>>> SExprParser<R> {
+    pub fn from_iter(it: R) -> Self {
+        let unicode: CodePoints<R> = it.into();
+        Self{ it: unicode.enumerate().peekable(), last_idx: 0 }
     }
 
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
         loop {
-            match self.parse_to_syntax_tree() {
+            // FIXME: either use SyntaxNode to pass all errors or use Result
+            // to pass all errors
+            match self.parse_to_syntax_tree()? {
                 Some(node) => {
                     if let Some(atom) = node.as_atom(tokenizer)? {
                         return Ok(Some(atom))
@@ -293,155 +315,180 @@ impl<'a> SExprParser<'a> {
         }
     }
 
-    pub fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode> {
-        if let Some((idx, c)) = self.it.peek().cloned() {
+    fn peek(&mut self) -> Result<Option<(usize, char)>, String> {
+        match self.it.peek() {
+            Some(&(idx, Ok(c))) => Ok(Some((idx, c))),
+            None => Ok(None),
+            Some((idx, Err(err))) => Err(format!("Input read error at position {}: {}", idx, err)),
+        }
+    }
+
+    fn next(&mut self) -> Result<Option<(usize, char)>, String> {
+        match self.it.next() {
+            Some((idx, Ok(c))) => {
+                self.last_idx = idx;
+                Ok(Some((idx, c)))
+            },
+            None => Ok(None),
+            Some((idx, Err(err))) => {
+                self.last_idx = idx;
+                Err(format!("Input read error at position {}: {}", idx, err))
+            },
+        }
+    }
+
+    fn skip_next(&mut self) {
+        match self.it.next() {
+            Some((idx, _)) => self.last_idx = idx,
+            _ => {},
+        }
+    }
+
+    pub fn parse_to_syntax_tree(&mut self) -> Result<Option<SyntaxNode>, String> {
+        if let Some((idx, c)) = self.peek()? {
             match c {
                 ';' => {
-                    let comment_node = self.parse_comment().unwrap();
-                    return Some(comment_node);
+                    return self.parse_comment();
                 },
                 _ if c.is_whitespace() => {
                     let whispace_node = SyntaxNode::new(SyntaxNodeType::Whitespace, idx..idx+1, vec![]);
-                    self.it.next();
-                    return Some(whispace_node);
+                    self.skip_next();
+                    return Ok(Some(whispace_node));
                 },
                 '$' => {
-                    let var_node = self.parse_variable();
-                    return Some(var_node);
+                    return self.parse_variable().map(Some);
                 },
                 '(' => {
-                    let expr_node = self.parse_expr();
-                    return Some(expr_node);
+                    return self.parse_expr().map(Some);
                 },
                 ')' => {
                     let close_paren_node = SyntaxNode::new(SyntaxNodeType::CloseParen, idx..idx+1, vec![]);
-                    self.it.next();
-                    let leftover_text_node = self.parse_leftovers("Unexpected right bracket".to_string());
+                    self.skip_next();
+                    let leftover_text_node = self.parse_leftovers(idx + 1, "Unexpected right bracket".to_string())?;
                     let error_group_node = SyntaxNode::new_error_group(idx..self.cur_idx(), vec![close_paren_node, leftover_text_node]);
-                    return Some(error_group_node);
+                    return Ok(Some(error_group_node));
                 },
                 _ => {
-                    let token_node = self.parse_token();
-                    return token_node;
+                    return self.parse_token();
                 },
-            }
+            };
         }
-        None
+        Ok(None)
     }
 
     ///WARNING: may be (often is) == to text.len(), and thus can't be used as an index to read a char
     fn cur_idx(&mut self) -> usize {
-        if let Some((idx, _)) = self.it.peek() {
-            *idx
+        if let Some(&(idx, _)) = self.it.peek() {
+            idx
         } else {
-            self.text.len()
+            self.last_idx + 1
         }
     }
 
     /// Parse to the next `\n` newline
-    fn parse_comment(&mut self) -> Option<SyntaxNode> {
-        if let Some((start_idx, _c)) = self.it.peek().cloned() {
-            while let Some((_idx, c)) = self.it.peek() {
+    fn parse_comment(&mut self) -> Result<Option<SyntaxNode>, String> {
+        if let Some((start_idx, _c)) = self.peek()? {
+            while let Some((_idx, c)) = self.peek()? {
                 match c {
                     '\n' => break,
-                    _ => { self.it.next(); }
+                    _ => self.skip_next(),
                 }
             }
             let range = start_idx..self.cur_idx();
-            Some(SyntaxNode::new(SyntaxNodeType::Comment, range, vec![]))
+            Ok(Some(SyntaxNode::new(SyntaxNodeType::Comment, range, vec![])))
         } else {
-            None
+            Ok(None)
         }
     }
 
-    fn parse_leftovers(&mut self, message: String) -> SyntaxNode {
-        let start_idx = self.cur_idx();
-        while let Some(_) = self.it.next() {}
+    fn parse_leftovers(&mut self, start_idx: usize, message: String) -> Result<SyntaxNode, String> {
+        while let Some(_) = self.next()? {}
         let range = start_idx..self.cur_idx();
-        SyntaxNode::incomplete_with_message(SyntaxNodeType::LeftoverText, range, vec![], message)
+        Ok(SyntaxNode::incomplete_with_message(SyntaxNodeType::LeftoverText, range, vec![], message))
     }
 
-    fn parse_expr(&mut self) -> SyntaxNode {
+    fn parse_expr(&mut self) -> Result<SyntaxNode, String> {
         let start_idx = self.cur_idx();
         let mut child_nodes: Vec<SyntaxNode> = Vec::new();
 
         let open_paren_node = SyntaxNode::new(SyntaxNodeType::OpenParen, start_idx..start_idx+1, vec![]);
         child_nodes.push(open_paren_node);
-        self.it.next();
+        self.skip_next();
 
-        while let Some((idx, c)) = self.it.peek().cloned() {
+        while let Some((idx, c)) = self.peek()? {
             match c {
                 ';' => {
-                    let comment_node = self.parse_comment().unwrap();
+                    let comment_node = self.parse_comment()?.unwrap();
                     child_nodes.push(comment_node);
                 },
                 _ if c.is_whitespace() => {
                     let whitespace_node = SyntaxNode::new(SyntaxNodeType::Whitespace, idx..idx+1, vec![]);
                     child_nodes.push(whitespace_node);
-                    self.it.next();
+                    self.skip_next();
                 },
                 ')' => {
                     let close_paren_node = SyntaxNode::new(SyntaxNodeType::CloseParen, idx..idx+1, vec![]);
                     child_nodes.push(close_paren_node);
-                    self.it.next();
+                    self.skip_next();
 
                     let expr_node = SyntaxNode::new(SyntaxNodeType::ExpressionGroup, start_idx..self.cur_idx(), child_nodes);
-                    return expr_node;
+                    return Ok(expr_node);
                 },
                 _ => {
-                    if let Some(parsed_node) = self.parse_to_syntax_tree() {
+                    if let Some(parsed_node) = self.parse_to_syntax_tree()? {
                         let is_err = !parsed_node.is_complete;
                         child_nodes.push(parsed_node);
 
                         //If we hit an error parsing a child, then bubble it up
                         if is_err {
                             let error_group_node = SyntaxNode::new_error_group(start_idx..self.cur_idx(), child_nodes);
-                            return error_group_node;
+                            return Ok(error_group_node);
                         }
                     } else {
                         let leftover_node = SyntaxNode::incomplete_with_message(SyntaxNodeType::ErrorGroup, start_idx..self.cur_idx(), child_nodes, "Unexpected end of expression member".to_string());
-                        return leftover_node;
+                        return Ok(leftover_node);
                     }
                 },
             }
         }
         let leftover_node = SyntaxNode::incomplete_with_message(SyntaxNodeType::ErrorGroup, start_idx..self.cur_idx(), child_nodes, "Unexpected end of expression".to_string());
-        leftover_node
+        Ok(leftover_node)
     }
 
-    fn parse_token(&mut self) -> Option<SyntaxNode> {
-        match self.it.peek().cloned() {
+    fn parse_token(&mut self) -> Result<Option<SyntaxNode>, String> {
+        match self.peek()? {
             Some((_idx, '"')) => {
-                let string_node = self.parse_string();
-                Some(string_node)
+                let string_node = self.parse_string()?;
+                Ok(Some(string_node))
             },
             Some((_idx, _)) => {
-                let word_node = self.parse_word();
-                Some(word_node)
+                let word_node = self.parse_word()?;
+                Ok(Some(word_node))
             },
-            None => None
+            None => Ok(None)
         }
     }
 
-    fn parse_string(&mut self) -> SyntaxNode {
+    fn parse_string(&mut self) -> Result<SyntaxNode, String> {
         let mut token = String::new();
         let start_idx = self.cur_idx();
 
-        if let Some((_idx, '"')) = self.it.next() {
+        if let Some((_idx, '"')) = self.next()? {
             token.push('"');
         } else {
             let leftover_text_node = SyntaxNode::incomplete_with_message(SyntaxNodeType::LeftoverText, start_idx..self.cur_idx(), vec![], "Double quote expected".to_string());
-            return leftover_text_node;
+            return Ok(leftover_text_node);
         }
-        while let Some((char_idx, c)) = self.it.next() {
+        while let Some((char_idx, c)) = self.next()? {
             if c == '"' {
                 token.push('"');
                 let string_node = SyntaxNode::new_token_node(SyntaxNodeType::StringToken, start_idx..self.cur_idx(), token);
-                return string_node;
+                return Ok(string_node);
             }
             if c == '\\' {
                 let escape_err = |cur_idx| { SyntaxNode::incomplete_with_message(SyntaxNodeType::StringToken, char_idx..cur_idx, vec![], "Invalid escape sequence".to_string()) };
-                match self.it.next() {
+
+                match self.next()? {
                     Some((_idx, c)) => {
                         let val = match c {
                             '\'' | '\"' | '\\' => c, //single quote, double quote, & backslash
@@ -449,26 +496,26 @@ impl<'a> SExprParser<'a> {
                             'r' => '\r', // carriage return
                             't' => '\t', // tab
                             'x' => { // hex sequence
-                                match self.parse_2_digit_radix_value(16) {
-                                    Some(code_val) => code_val.into(),
-                                    None => {return escape_err(self.cur_idx()); }
+                                match self.parse_2_digit_radix_char(16)? {
+                                    Some(c) => c,
+                                    None => {return Ok(escape_err(self.cur_idx())); }
                                 }
                             },
                             'u' => { // unicode sequence
-                                match self.parse_unicode_sequence() {
-                                    Some(char_val) => char_val.into(),
-                                    None => { return escape_err(self.cur_idx());
+                                match self.parse_unicode_sequence()? {
+                                    Some(c) => c,
+                                    None => { return Ok(escape_err(self.cur_idx()));
                                 }
                             }}
                             _ => {
-                                return escape_err(self.cur_idx());
+                                return Ok(escape_err(self.cur_idx()));
                             }
                         };
                         token.push(val);
                     },
                     None => {
                         let leftover_text_node = SyntaxNode::incomplete_with_message(SyntaxNodeType::StringToken, start_idx..self.cur_idx(), vec![], "Escaping sequence is not finished".to_string());
-                        return leftover_text_node;
+                        return Ok(leftover_text_node);
                     },
                 }
             } else {
@@ -476,114 +523,92 @@ impl<'a> SExprParser<'a> {
             }
         }
         let unclosed_string_node = SyntaxNode::incomplete_with_message(SyntaxNodeType::StringToken, start_idx..self.cur_idx(), vec![], "Unclosed String Literal".to_string());
-        unclosed_string_node
+        Ok(unclosed_string_node)
     }
 
     /// Parses a 2-digit value from the parser at the current location
-    fn parse_2_digit_radix_value(&mut self, radix: u32) -> Option<u8> {
-        self.it.next()
-        .and_then(|(_, digit1)| digit1.is_digit(radix).then(|| digit1))
-        .and_then(|digit1| TryInto::<u8>::try_into(digit1).ok())
-        .and_then(|byte1| self.it.next().map(|(_, digit2)| (byte1, digit2)))
-        .and_then(|(byte1, digit2)| digit2.is_digit(radix).then(|| (byte1, digit2)))
-        .and_then(|(byte1, digit2)| TryInto::<u8>::try_into(digit2).ok().map(|byte2| (byte1, byte2)))
-        .and_then(|(byte1, byte2)| {
-            let digits_buf = &[byte1, byte2];
-            u8::from_str_radix(core::str::from_utf8(digits_buf).unwrap(), radix).ok()
-        }).and_then(|code_val| (code_val <= 0x7F).then(|| code_val))
+    fn parse_2_digit_radix_char(&mut self, radix: u32) -> Result<Option<char>, String> {
+        let high = self.next()?.and_then(|(_, c)| c.to_digit(radix));
+        let high = match high {
+            Some(high) => high << 4,
+            None => return Ok(None),
+        };
+        let low = self.next()?.and_then(|(_, c)| c.to_digit(radix));
+        let low = match low {
+            Some(low) => low,
+            None => return Ok(None),
+        };
+        let hex = high | low;
+        if hex <= 0x7F {
+            Ok(char::from_u32(hex))
+        } else {
+            Ok(None)
+        }
     }
 
-    fn parse_unicode_sequence(&mut self) -> Option<char> {
+    fn parse_unicode_sequence(&mut self) -> Result<Option<char>, String> {
         // unicode sequence presumably looks like this '\u{0123}'
         let mut result_u32: u32 = 0;
         let mut cur_idx = 0;
-        match self.it.next() {
+        match self.next()? {
             Some((_, '{')) => (),
-            _ => return None,
+            _ => return Ok(None),
         };
         loop
         {
-            let next_char = match self.it.next() {
+            let next_char = match self.next()? {
                 Some(char_val) => char_val.1,
-                None => return None,
+                None => return Ok(None),
             };
             if next_char == '{' {continue}
             if next_char == '}' {break}
             cur_idx += 1;
-            if cur_idx > 8 { return None }
+            if cur_idx > 8 { return Ok(None) }
             let char_to_digit = match next_char.to_digit(16) {
                 Some(digit) => digit,
-                None => return None,
+                None => return Ok(None),
             };
             result_u32 = (result_u32 << 4) | char_to_digit;
         }
-        char::from_u32(result_u32)
+        Ok(char::from_u32(result_u32))
     }
 
-    fn parse_word(&mut self) -> SyntaxNode {
+    fn parse_word(&mut self) -> Result<SyntaxNode, String> {
         let mut token = String::new();
         let start_idx = self.cur_idx();
 
-        while let Some((_idx, c)) = self.it.peek() {
-            if c.is_whitespace() || *c == '(' || *c == ')' || *c == ';' {
+        while let Some((_idx, c)) = self.peek()? {
+            if c.is_whitespace() || c == '(' || c == ')' || c == ';' {
                 break;
             }
-            token.push(*c);
-            self.it.next();
+            token.push(c);
+            self.skip_next();
         }
 
         let word_node = SyntaxNode::new_token_node(SyntaxNodeType::WordToken, start_idx..self.cur_idx(), token);
-        word_node
+        Ok(word_node)
     }
 
-    fn parse_variable(&mut self) -> SyntaxNode {
-        let (start_idx, _c) = self.it.peek().cloned().unwrap();
-        let mut tmp_it = self.it.clone();
-        tmp_it.next();
+    fn parse_variable(&mut self) -> Result<SyntaxNode, String> {
+        let (start_idx, _c) = self.peek()?.unwrap();
+        self.skip_next();
 
         let mut token = String::new();
-        while let Some((_idx, c)) = tmp_it.peek() {
-            if c.is_whitespace() || *c == '(' || *c == ')' {
+        while let Some((_idx, c)) = self.peek()? {
+            if c.is_whitespace() || c == '(' || c == ')' {
                 break;
             }
-            if *c == '#' {
-                let leftover_node = self.parse_leftovers("'#' char is reserved for internal usage".to_string());
+            if c == '#' {
+                let leftover_node = self.parse_leftovers(start_idx, "'#' char is reserved for internal usage".to_string());
                 return leftover_node;
             }
-            token.push(*c);
-            tmp_it.next();
+            token.push(c);
+            self.skip_next();
         }
-        self.it = tmp_it;
         let var_token_node = SyntaxNode::new_token_node(SyntaxNodeType::VariableToken, start_idx..self.cur_idx(), token);
-        var_token_node
+        Ok(var_token_node)
     }
 
-}
-
-/// An version of [SExprParser] that owns its input text buffer so it has a `'static` lifetime
-#[derive(Clone)]
-pub struct OwnedSExprParser {
-    text: String,
-    last_pos: usize,
-}
-
-impl OwnedSExprParser {
-    pub fn new(text: String) -> Self {
-        Self{text, last_pos: 0}
-    }
-}
-
-impl Parser for OwnedSExprParser {
-    fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
-        if self.last_pos >= self.text.len() {
-            return Ok(None);
-        }
-        let slice = &self.text[self.last_pos..self.text.len()];
-        let mut parser = SExprParser::new(slice);
-        let result = parser.parse(tokenizer);
-        self.last_pos = self.last_pos + parser.cur_idx();
-        result
-    }
 }
 
 impl Parser for &[Atom] {
@@ -594,6 +619,9 @@ impl Parser for &[Atom] {
         } else {
             Ok(None)
         }
+    }
+    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode> {
+        None
     }
 }
 
@@ -673,27 +701,27 @@ mod tests {
         let text = "n)";
         let mut parser = SExprParser::new(text);
 
-        let node = parser.parse_token().unwrap();
+        let node = parser.parse_token().unwrap().unwrap();
         assert_eq!("n".to_string(), text[node.src_range]);
-        assert_eq!(Some((1, ')')), parser.it.next());
+        assert_eq!(Ok(Some((1, ')'))), parser.next());
 
         let text = "n;Some comments.";
         let mut parser = SExprParser::new(text);
 
-        let node = parser.parse_token().unwrap();
+        let node = parser.parse_token().unwrap().unwrap();
         assert_eq!("n".to_string(), text[node.src_range]);
-        assert_eq!(Some((1, ';')), parser.it.next());
+        assert_eq!(Ok(Some((1, ';'))), parser.next());
     }
 
     #[test]
     fn test_next_string_errors() {
         let mut parser = SExprParser::new("a");
-        let node = parser.parse_string();
+        let node = parser.parse_string().unwrap();
         assert!(!node.is_complete);
         assert_eq!("Double quote expected", node.message.unwrap());
 
         let mut parser = SExprParser::new("\"\\");
-        let node = parser.parse_string();
+        let node = parser.parse_string().unwrap();
         assert!(!node.is_complete);
         assert_eq!("Escaping sequence is not finished", node.message.unwrap());
     }
@@ -701,41 +729,41 @@ mod tests {
     #[test]
     fn test_parse_unicode() {
         let mut parser = SExprParser::new("\"\\u{0123}\"");
-        assert_eq!(SyntaxNode::new_token_node(SyntaxNodeType::StringToken, 0..10, "\"\u{0123}\"".into()), parser.parse_string());
+        assert_eq!(Ok(SyntaxNode::new_token_node(SyntaxNodeType::StringToken, 0..10, "\"\u{0123}\"".into())), parser.parse_string());
 
         let mut parser = SExprParser::new("\"\\u{0123\"");
-        let node = parser.parse_string();
+        let node = parser.parse_string().unwrap();
         assert!(!node.is_complete);
         assert_eq!("Invalid escape sequence", node.message.unwrap());
 
         let mut parser = SExprParser::new("\"\\u0123}\"");
-        let node = parser.parse_string();
+        let node = parser.parse_string().unwrap();
         assert!(!node.is_complete);
         assert_eq!("Invalid escape sequence", node.message.unwrap());
 
         let mut parser = SExprParser::new("\"\\u0123\"");
-        let node = parser.parse_string();
+        let node = parser.parse_string().unwrap();
         assert!(!node.is_complete);
         assert_eq!("Invalid escape sequence", node.message.unwrap());
 
         let mut parser = SExprParser::new("\"\\u0{123}\"");
-        let node = parser.parse_string();
+        let node = parser.parse_string().unwrap();
         assert!(!node.is_complete);
         assert_eq!("Invalid escape sequence", node.message.unwrap());
 
         let mut parser = SExprParser::new("\"\\u{defg}\"");
-        let node = parser.parse_string();
+        let node = parser.parse_string().unwrap();
         assert!(!node.is_complete);
         assert_eq!("Invalid escape sequence", node.message.unwrap());
 
         let mut parser = SExprParser::new("\"\\u{130AC}\"");
-        assert_eq!(SyntaxNode::new_token_node(SyntaxNodeType::StringToken, 0..11, "\"\u{130AC}\"".into()), parser.parse_string());
+        assert_eq!(Ok(SyntaxNode::new_token_node(SyntaxNodeType::StringToken, 0..11, "\"\u{130AC}\"".into())), parser.parse_string());
 
         let mut parser = SExprParser::new("\"\\u{130ac}\"");
-        assert_eq!(SyntaxNode::new_token_node(SyntaxNodeType::StringToken, 0..11, "\"\u{130ac}\"".into()), parser.parse_string());
+        assert_eq!(Ok(SyntaxNode::new_token_node(SyntaxNodeType::StringToken, 0..11, "\"\u{130ac}\"".into())), parser.parse_string());
 
         let mut parser = SExprParser::new("\"\\u{012345678\"");
-        let node = parser.parse_string();
+        let node = parser.parse_string().unwrap();
         assert!(!node.is_complete);
         assert_eq!("Invalid escape sequence", node.message.unwrap());
 
@@ -826,7 +854,11 @@ mod tests {
     #[test]
     fn test_owned_sexprparser() {
         let tokenizer = Tokenizer::new();
-        let mut parser = OwnedSExprParser::new(r#"One (two 3) "four""#.to_string());
+        let mut parser;
+        {
+            let owned = r#"One (two 3) "four""#.to_owned();
+            parser = SExprParser::from_iter(owned.into_bytes().into_iter().map(Ok));
+        }
         let mut results: Vec<Atom> = vec![];
         while let Ok(Some(atom)) = parser.next_atom(&tokenizer) {
             results.push(atom);

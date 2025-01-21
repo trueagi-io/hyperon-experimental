@@ -16,6 +16,7 @@ use crate::space::*;
 
 use std::os::raw::*;
 use std::path::{Path, PathBuf};
+use std::io;
 
 use regex::Regex;
 
@@ -159,7 +160,7 @@ pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> tokenizer_t 
 #[repr(C)]
 pub struct sexpr_parser_t {
     /// Internal.  Should not be accessed directly
-    parser: *mut RustSExprParser,
+    parser: *mut c_void,
     err_string: *mut c_char,
 }
 
@@ -173,56 +174,22 @@ impl sexpr_parser_t {
     }
 }
 
-#[derive(Clone)]
-enum RustSExprParser {
-    Borrowed(SExprParser<'static>),
-    Owned(OwnedSExprParser),
-}
-
-impl From<SExprParser<'static>> for sexpr_parser_t {
-    fn from(parser: SExprParser<'static>) -> Self {
-        RustSExprParser::Borrowed(parser).into()
-    }
-}
-
-impl From<OwnedSExprParser> for sexpr_parser_t {
-    fn from(parser: OwnedSExprParser) -> Self {
-        RustSExprParser::Owned(parser).into()
-    }
-}
-
-impl From<RustSExprParser> for sexpr_parser_t {
-    fn from(parser: RustSExprParser) -> Self {
+impl<R: 'static + Iterator<Item=io::Result<u8>>> From<SExprParser<R>> for sexpr_parser_t {
+    fn from(parser: SExprParser<R>) -> Self {
         Self{
-            parser: Box::into_raw(Box::new(parser)),
+            // additional Box is needed because Box<dyn ...> is a fat pointer
+            parser: Box::into_raw(Box::new(Box::new(parser) as Box<dyn Parser>)) as *mut c_void,
             err_string: core::ptr::null_mut(),
         }
     }
 }
 
 impl sexpr_parser_t {
-    fn into_inner_enum(mut self) -> RustSExprParser {
-        self.free_err_string();
-        unsafe{ *Box::from_raw(self.parser) }
-    }
     fn into_boxed_dyn(self) -> Box<dyn Parser> {
-        let boxed_parser = self.into_inner_enum();
-        match boxed_parser {
-            RustSExprParser::Borrowed(parser) => Box::new(parser),
-            RustSExprParser::Owned(parser) => Box::new(parser),
-        }
+        *unsafe{ Box::from_raw(self.parser as *mut Box<dyn Parser>) }
     }
     fn borrow_dyn_mut(&mut self) -> &mut dyn Parser {
-        match unsafe{ &mut *self.parser } {
-            RustSExprParser::Borrowed(parser) => parser,
-            RustSExprParser::Owned(parser) => parser,
-        }
-    }
-    fn borrow_sexpr_parser_mut(&mut self) -> &mut SExprParser<'static> {
-        match unsafe{ &mut *self.parser } {
-            RustSExprParser::Borrowed(parser) => parser,
-            RustSExprParser::Owned(_) => panic!("Fatal Error: Feature unsupported for owned src buffers"),
-        }
+        unsafe{ &mut **(self.parser as *mut Box<dyn Parser>) }
     }
 }
 
@@ -237,21 +204,8 @@ impl sexpr_parser_t {
 ///
 #[no_mangle]
 pub extern "C" fn sexpr_parser_new(text: *const c_char) -> sexpr_parser_t {
+    // FIXME: use SExprParser::from_iter() here
     SExprParser::new(cstr_as_str(text)).into()
-}
-
-/// @brief Creates a new S-Expression Parser, for situations where you must deallocate the text buffer
-///    before parsing is complete
-/// @ingroup tokenizer_and_parser_group
-/// @param[in]  text  A C-style string containing the input text to parse.  This function will make an
-///    internal copy of the text
-/// @return The new `sexpr_parser_t`, ready to parse the text
-/// @note The returned `sexpr_parser_t` must be freed with `sexpr_parser_free()` or passed to another
-///    function that takes ownership
-///
-#[no_mangle]
-pub extern "C" fn sexpr_parser_new_copy_src(text: *const c_char) -> sexpr_parser_t {
-    OwnedSExprParser::new(cstr_as_str(text).to_string()).into()
 }
 
 /// @brief Frees an S-Expression Parser
@@ -260,7 +214,7 @@ pub extern "C" fn sexpr_parser_new_copy_src(text: *const c_char) -> sexpr_parser
 ///
 #[no_mangle]
 pub extern "C" fn sexpr_parser_free(parser: sexpr_parser_t) {
-    let parser = parser.into_inner_enum();
+    let parser = parser.into_boxed_dyn();
     drop(parser);
 }
 
@@ -415,7 +369,7 @@ pub extern "C" fn sexpr_parser_parse_to_syntax_tree(parser: *mut sexpr_parser_t)
 {
     let parser = unsafe{ &mut *parser };
     parser.free_err_string();
-    let rust_parser = parser.borrow_sexpr_parser_mut();
+    let rust_parser = parser.borrow_dyn_mut();
     rust_parser.parse_to_syntax_tree().into()
 }
 

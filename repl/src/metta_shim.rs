@@ -398,7 +398,7 @@ pub fn parse_and_unroll_syntax_tree(line: &str) -> Vec<(SyntaxNodeType, std::ops
     let mut parser = SExprParser::new(line);
     loop {
         match parser.parse_to_syntax_tree() {
-            Some(root_node) => {
+            Ok(Some(root_node)) => {
                 root_node.visit_depth_first(|node| {
                     // We will only render the leaf nodes in the syntax tree
                     if !node.node_type.is_leaf() {
@@ -408,7 +408,8 @@ pub fn parse_and_unroll_syntax_tree(line: &str) -> Vec<(SyntaxNodeType, std::ops
                     nodes.push((node.node_type, node.src_range.clone()))
                 });
             },
-            None => break,
+            Ok(None) => break,
+            Err(msg) => panic!("Unexpected input error: {}", msg),
         }
     }
     nodes
