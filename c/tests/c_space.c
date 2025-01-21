@@ -1,6 +1,8 @@
 
+#include <stddef.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/types.h>
 
 #include "util.h"
 #include "c_space.h"
