@@ -212,9 +212,6 @@ impl sexpr_parser_t {
             RustSExprParser::Owned(parser) => Box::new(parser),
         }
     }
-    fn borrow_inner_enum(&self) -> &RustSExprParser {
-        unsafe{ &*self.parser }
-    }
     fn borrow_dyn_mut(&mut self) -> &mut dyn Parser {
         match unsafe{ &mut *self.parser } {
             RustSExprParser::Borrowed(parser) => parser,
@@ -255,21 +252,6 @@ pub extern "C" fn sexpr_parser_new(text: *const c_char) -> sexpr_parser_t {
 #[no_mangle]
 pub extern "C" fn sexpr_parser_new_copy_src(text: *const c_char) -> sexpr_parser_t {
     OwnedSExprParser::new(cstr_as_str(text).to_string()).into()
-}
-
-/// @brief Creates a new S-Expression Parser from an existing `sexpr_parser_t`
-/// @ingroup tokenizer_and_parser_group
-/// @param[in]  parser  The source `sexpr_parser_t` to clone
-/// @return The new `sexpr_parser_t`, ready to parse the text
-/// @note The returned `sexpr_parser_t` must be freed with `sexpr_parser_free()`
-/// @note A cloned parser can be thought of as an independent read cursor referencing the same source text.
-/// @warning The returned `sexpr_parser_t` borrows a reference to the same `text` pointer as the original,
-///    so the returned `sexpr_parser_t` must be freed before the `text` is freed or allowed to go out of scope.
-///
-#[no_mangle]
-pub extern "C" fn sexpr_parser_clone(parser: *const sexpr_parser_t) -> sexpr_parser_t {
-    let parser = unsafe{ &*parser }.borrow_inner_enum();
-    parser.clone().into()
 }
 
 /// @brief Frees an S-Expression Parser
