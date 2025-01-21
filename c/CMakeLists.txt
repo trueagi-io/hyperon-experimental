@@ -51,7 +51,7 @@ add_custom_target(build-hyperonc ALL
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
 # cmake checks INTERFACE_INCLUDE_DIRECTORIES contains existing path
-execute_process(COMMAND mkdir -p ${HYPERONC_TARGET_DIR})
+file(MAKE_DIRECTORY ${HYPERONC_TARGET_DIR})
 
 add_library(hyperonc-static STATIC IMPORTED GLOBAL)
 set_target_properties(hyperonc-static PROPERTIES
