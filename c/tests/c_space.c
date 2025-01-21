@@ -1,6 +1,6 @@
 
 #include <stdio.h>
-#include <strings.h>
+#include <string.h>
 
 #include "util.h"
 #include "c_space.h"
