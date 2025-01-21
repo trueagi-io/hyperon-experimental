@@ -83,13 +83,29 @@ if(BUILD_SHARED_LIBS)
         COMMAND ${CMAKE_COMMAND} -E copy
         ${HYPERONC_TARGET_DIR}/${RUST_BUILD_SUFFIX}/${HYPERONC_SHARED_LIB_FILE}
             ${HYPERONC_SHARED_LIB_PATH}
-
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
     add_dependencies(copy-hyperonc-shared build-hyperonc)
+
+    if (WIN32)
+        set(HYPERONC_IMPLIB_FILE hyperonc${CMAKE_LINK_LIBRARY_SUFFIX})
+        set(HYPERONC_IMPLIB_PATH ${HYPERONC_TARGET_DIR}/${HYPERONC_IMPLIB_FILE})
+        set(IMPLIB_INSTALL_PATH "${BINARY_INSTALL_PATH}/${HYPERONC_IMPLIB_FILE}")
+
+        add_custom_target(copy-hyperonc-implib ALL
+            COMMAND ${CMAKE_COMMAND} -E copy
+            ${HYPERONC_TARGET_DIR}/${RUST_BUILD_SUFFIX}/${HYPERONC_IMPLIB_FILE}
+                ${HYPERONC_IMPLIB_PATH}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+        add_dependencies(copy-hyperonc-implib build-hyperonc)
+    endif(WIN32)
 
     add_library(hyperonc-shared SHARED IMPORTED GLOBAL)
     set_target_properties(hyperonc-shared PROPERTIES
         IMPORTED_LOCATION "${HYPERONC_SHARED_LIB_PATH}"
+        # required by Windows
+        IMPORTED_IMPLIB "${HYPERONC_IMPLIB_PATH}"
         INTERFACE_INCLUDE_DIRECTORIES "${HYPERONC_TARGET_DIR}"
         # required to import hyperonc-shared by name not by relative path
         IMPORTED_NO_SONAME TRUE
@@ -97,10 +113,19 @@ if(BUILD_SHARED_LIBS)
     if(GIT)
         target_link_libraries(hyperonc-shared INTERFACE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
     endif(GIT)
-    add_dependencies(hyperonc-shared copy-hyperonc-shared build-hyperonc)
+
+    add_dependencies(hyperonc-shared build-hyperonc)
+    add_dependencies(hyperonc-shared copy-hyperonc-shared)
+    if (WIN32)
+        add_dependencies(hyperonc-shared copy-hyperonc-implib)
+    endif(WIN32)
 
     install(FILES "${HYPERONC_SHARED_LIB_PATH}"
         DESTINATION "${BINARY_INSTALL_PATH}")
+    if (WIN32)
+        install(FILES "${HYPERONC_IMPLIB_PATH}"
+            DESTINATION "${BINARY_INSTALL_PATH}")
+    endif(WIN32)
 
     configure_package_config_file("hyperonc-config-shared.cmake.in"
         "${CMAKE_CURRENT_BINARY_DIR}/hyperonc-config.cmake"
