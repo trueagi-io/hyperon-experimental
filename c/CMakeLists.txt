@@ -15,6 +15,9 @@ add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 # compilation because generator expressions cannot be used in install() and
 # set_target_properties() functions.
 set(HYPERONC_TARGET_DIR ${CMAKE_CURRENT_BINARY_DIR}/cargo)
+# cmake checks INTERFACE_INCLUDE_DIRECTORIES contains existing path
+file(MAKE_DIRECTORY "${HYPERONC_TARGET_DIR}" "${HYPERONC_TARGET_DIR}/shared"
+    "${HYPERONC_TARGET_DIR}/static")
 
 # Need to list release configurations explicitly here because $<CONFIG:Debug>
 # is FALSE by default (when CMAKE_BUILD_TYPE is unspecified).
@@ -24,7 +27,7 @@ add_custom_target(show-build-type-vars COMMAND ${CMAKE_COMMAND} -E echo
     "CMAKE_BUILD_TYPE:${BUILD_TYPE} IS_RELEASE_BUILD=${IS_RELEASE_BUILD} RUST_BUILD_SUFFIX=${RUST_BUILD_SUFFIX}")
 
 set(HYPERONC_STATIC_LIB_FILE ${CMAKE_STATIC_LIBRARY_PREFIX}hyperonc${CMAKE_STATIC_LIBRARY_SUFFIX})
-set(HYPERONC_STATIC_LIB_PATH ${HYPERONC_TARGET_DIR}/${HYPERONC_STATIC_LIB_FILE})
+set(HYPERONC_STATIC_LIB_PATH ${HYPERONC_TARGET_DIR}/static/${HYPERONC_STATIC_LIB_FILE})
 set(HYPERONC_INCLUDE_DIR ${HYPERONC_TARGET_DIR}/hyperon)
 separate_arguments(CARGO_ARGS_LIST NATIVE_COMMAND ${CARGO_ARGS})
 
@@ -50,9 +53,6 @@ add_custom_target(build-hyperonc ALL
 
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
 
-# cmake checks INTERFACE_INCLUDE_DIRECTORIES contains existing path
-file(MAKE_DIRECTORY ${HYPERONC_TARGET_DIR})
-
 add_library(hyperonc-static STATIC IMPORTED GLOBAL)
 set_target_properties(hyperonc-static PROPERTIES
     IMPORTED_LOCATION "${HYPERONC_STATIC_LIB_PATH}"
@@ -76,7 +76,7 @@ if(BUILD_SHARED_LIBS)
     endif(GIT)
 
     set(HYPERONC_SHARED_LIB_FILE ${CMAKE_SHARED_LIBRARY_PREFIX}hyperonc${CMAKE_SHARED_LIBRARY_SUFFIX})
-    set(HYPERONC_SHARED_LIB_PATH ${HYPERONC_TARGET_DIR}/${HYPERONC_SHARED_LIB_FILE})
+    set(HYPERONC_SHARED_LIB_PATH ${HYPERONC_TARGET_DIR}/shared/${HYPERONC_SHARED_LIB_FILE})
     set(SHARED_LIBRARY_INSTALL_PATH "${BINARY_INSTALL_PATH}/${HYPERONC_SHARED_LIB_FILE}")
 
     add_custom_target(copy-hyperonc-shared ALL
