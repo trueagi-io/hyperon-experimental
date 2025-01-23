@@ -7,6 +7,9 @@
 #include "util.h"
 #include "c_space.h"
 
+// required by MSVC compiler
+#define ssize_t ptrdiff_t
+
 typedef struct _atom_list_item {
     atom_t atom;
     struct _atom_list_item* next;
