@@ -76,7 +76,6 @@ use std::collections::hash_map::DefaultHasher;
 use std::hash::Hasher;
 use std::ffi::{OsStr, OsString};
 use std::collections::HashSet;
-use std::io::Read;
 
 use crate::metta::runner::modules::*;
 use crate::metta::runner::{*, git_catalog::*};
@@ -421,10 +420,6 @@ impl SingleFileModule {
         std::fs::File::open(&self.path)
             .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))
     }
-    fn read_contents(&self) -> Result<Vec<u8>, String> {
-        std::fs::read(&self.path)
-            .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))
-    }
 }
 
 impl ModuleLoader for SingleFileModule {
@@ -434,15 +429,15 @@ impl ModuleLoader for SingleFileModule {
         let resource_dir = self.path.parent().unwrap();
         context.init_self_module(space, Some(resource_dir.into()));
 
-        let parser = SExprParser::from_iter(self.open_file()?.bytes());
+        let parser: SExprParser<_> = self.open_file()?.into();
         context.push_parser(Box::new(parser));
 
         Ok(())
     }
-    fn get_resource(&self, res_key: ResourceKey) -> Result<Vec<u8>, String> {
+    fn get_resource(&self, res_key: ResourceKey) -> Result<Resource, String> {
         match res_key {
-            ResourceKey::MainMettaSrc => self.read_contents(),
-            ResourceKey::Version => self.pkg_info.version_bytes(),
+            ResourceKey::MainMettaSrc => self.open_file().map(Into::<Resource>::into),
+            ResourceKey::Version => self.pkg_info.version_bytes().map(Into::<Resource>::into),
             _ => Err("unsupported resource key".to_string())
         }
     }
@@ -471,9 +466,6 @@ impl DirModule {
         std::fs::File::open(&self.module_metta_path())
             .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))
     }
-    fn read_module_metta(&self) -> Option<Vec<u8>> {
-        std::fs::read(&self.module_metta_path()).ok()
-    }
 }
 
 impl ModuleLoader for DirModule {
@@ -486,16 +478,19 @@ impl ModuleLoader for DirModule {
         // A module.metta file is optional.  Without one a dir module behaves as just
         // a container for other resources and sub-modules.
         if let Some(program_file) = self.open_file().ok() {
-            let parser = SExprParser::from_iter(program_file.bytes());
+            let parser: SExprParser<_> = program_file.into();
             context.push_parser(Box::new(parser));
         }
 
         Ok(())
     }
-    fn get_resource(&self, res_key: ResourceKey) -> Result<Vec<u8>, String> {
+    fn get_resource(&self, res_key: ResourceKey) -> Result<Resource, String> {
         match res_key {
-            ResourceKey::MainMettaSrc => self.read_module_metta().ok_or_else(|| format!("no module.metta file found in {} dir module", self.path.display())),
-            ResourceKey::Version => self.pkg_info.version_bytes(),
+            ResourceKey::MainMettaSrc => self.open_file()
+                .map_err(|_| format!("no module.metta file found in {} dir module", self.path.display()))
+                .map(Into::<Resource>::into),
+            ResourceKey::Version => self.pkg_info.version_bytes()
+                .map(Into::<Resource>::into),
             _ => Err("unsupported resource key".to_string())
         }
     }

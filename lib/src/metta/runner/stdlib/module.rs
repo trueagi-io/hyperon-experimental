@@ -134,9 +134,8 @@ impl CustomExecute for IncludeOp {
         //TODO: Remove this hack to access the RunContext, when it's part of the arguments to `execute`
         let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
         let mut context = ctx_ref.lock().unwrap();
-        // FIXME: use stream instead of buffer
-        let program_buf = context.load_resource_from_module(&mod_name, ResourceKey::MainMettaSrc)?;
-        let parser = crate::metta::text::SExprParser::from_iter(program_buf.into_iter().map(Ok));
+        let resource = context.load_resource_from_module(&mod_name, ResourceKey::MainMettaSrc)?;
+        let parser: crate::metta::text::SExprParser<_> = resource.into();
         let eval_result = context.run_inline(|context| {
             context.push_parser(Box::new(parser));
             Ok(())

@@ -287,13 +287,13 @@ pub struct SExprParser<R: Iterator<Item=io::Result<char>>> {
 
 impl<R: Read> From<R> for SExprParser<CodePoints<std::io::Bytes<R>>> {
     fn from(input: R) -> Self {
-        Self::from_iter(input.bytes())
+        Self::from_bytes(input.bytes())
     }
 }
 
 impl<R: Iterator<Item=io::Result<u8>>> From<R> for SExprParser<CodePoints<R>> {
     fn from(input: R) -> Self {
-        Self::from_iter(input)
+        Self::from_bytes(input)
     }
 }
 
@@ -304,8 +304,7 @@ impl<'a> From<&'a str> for SExprParser<std::iter::Map<std::str::Chars<'a>, fn(ch
 }
 
 impl<B: Iterator<Item=io::Result<u8>>> SExprParser<CodePoints<B>> {
-    // FIXME: rename to from_bytes
-    pub fn from_iter(bytes: B) -> Self {
+    pub fn from_bytes(bytes: B) -> Self {
         let chars: CodePoints<B> = bytes.into();
         Self::from_chars(chars)
     }
@@ -883,7 +882,7 @@ mod tests {
         let mut parser;
         {
             let owned = r#"One (two 3) "four""#.to_owned();
-            parser = SExprParser::from_iter(owned.into_bytes().into_iter().map(Ok));
+            parser = SExprParser::from_bytes(owned.into_bytes().into_iter().map(Ok));
         }
         let mut results: Vec<Atom> = vec![];
         while let Ok(Some(atom)) = parser.next_atom(&tokenizer) {
