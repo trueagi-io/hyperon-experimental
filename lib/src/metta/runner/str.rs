@@ -52,6 +52,22 @@ impl std::fmt::Display for Str {
     }
 }
 
+/// A utility function to return the part of a string in between starting and ending quotes
+pub fn strip_quotes(src: &str) -> &str {
+    if let Some(first) = src.chars().next() {
+        if first == '"' {
+            if let Some(last) = src.chars().last() {
+                if last == '"' {
+                    if src.len() > 1 {
+                        return &src[1..src.len()-1]
+                    }
+                }
+            }
+        }
+    }
+    src
+}
+
 #[derive(Default)]
 struct StrSerializer {
     value: Option<Str>,
