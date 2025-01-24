@@ -471,6 +471,8 @@ fn include_path_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Resul
         None => return Err(format!("Error in environment.metta. #includePath missing path value"))
     };
     let path = <&crate::SymbolAtom>::try_from(path_atom)?.name();
+    //It is crucial to return strip_quotes here since otherwise running Metta will create folder {$cfgdir} and some subfolders.
+    let path = crate::metta::runner::str::strip_quotes(path);
 
     //TODO-FUTURE: In the future we may want to replace dyn-fmt with strfmt, and do something a
     // little bit nicer than this
