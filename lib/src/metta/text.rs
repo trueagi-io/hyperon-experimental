@@ -258,7 +258,7 @@ pub trait Parser {
     fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode>;
 }
 
-impl<R: Iterator<Item=io::Result<u8>>> Parser for SExprParser<R> {
+impl<R: Iterator<Item=io::Result<char>>> Parser for SExprParser<R> {
     fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
         self.parse(tokenizer)
     }
@@ -280,22 +280,48 @@ impl Parser for &mut (dyn Parser + '_) {
 ///
 /// NOTE: The SExprParser type is short-lived, and can be created cheaply to evaluate a specific block
 /// of MeTTa source code.
-pub struct SExprParser<R: Iterator<Item=io::Result<u8>>> {
-    it: Peekable<Enumerate<CodePoints<R>>>,
+pub struct SExprParser<R: Iterator<Item=io::Result<char>>> {
+    it: Peekable<Enumerate<R>>,
     last_idx: usize,
 }
 
-impl<'a> SExprParser<io::Bytes<&'a [u8]>> {
-    // FIXME: rename to from_str
-    pub fn new(text: &'a str) -> Self {
-        Self::from_iter(text.as_bytes().bytes())
+impl<R: Read> From<R> for SExprParser<CodePoints<std::io::Bytes<R>>> {
+    fn from(input: R) -> Self {
+        Self::from_iter(input.bytes())
     }
 }
 
-impl<R: Iterator<Item=std::io::Result<u8>>> SExprParser<R> {
-    pub fn from_iter(it: R) -> Self {
-        let unicode: CodePoints<R> = it.into();
-        Self{ it: unicode.enumerate().peekable(), last_idx: 0 }
+impl<R: Iterator<Item=io::Result<u8>>> From<R> for SExprParser<CodePoints<R>> {
+    fn from(input: R) -> Self {
+        Self::from_iter(input)
+    }
+}
+
+impl<'a> From<&'a str> for SExprParser<std::iter::Map<std::str::Chars<'a>, fn(char) -> io::Result<char>>> {
+    fn from(input: &'a str) -> Self {
+        Self::new(input)
+    }
+}
+
+impl<B: Iterator<Item=io::Result<u8>>> SExprParser<CodePoints<B>> {
+    // FIXME: rename to from_bytes
+    pub fn from_iter(bytes: B) -> Self {
+        let chars: CodePoints<B> = bytes.into();
+        Self::from_chars(chars)
+    }
+}
+
+impl<'a> SExprParser<std::iter::Map<std::str::Chars<'a>, fn(char) -> io::Result<char>>> {
+    // FIXME: rename to from_str
+    pub fn new(text: &'a str) -> Self {
+        Self::from_chars(text.chars().map(Ok))
+    }
+}
+
+impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
+
+    pub fn from_chars(chars: R) -> Self {
+        Self{ it: chars.enumerate().peekable(), last_idx: 0 }
     }
 
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {

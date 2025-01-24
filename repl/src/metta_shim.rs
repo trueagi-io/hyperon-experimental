@@ -330,8 +330,8 @@ pub mod metta_interface_mod {
             }
         }
 
-        pub fn exec(&mut self, line: &str) {
-            let parser = SExprParser::new(line);
+        pub fn exec<R: Iterator<Item=std::io::Result<char>>, P: Into<SExprParser<R>>>(&mut self, input: P) {
+            let parser: SExprParser<R> = input.into();
             let mut runner_state = RunnerState::new_with_parser(&self.metta, Box::new(parser));
 
             exec_state_prepare();
@@ -358,7 +358,7 @@ pub mod metta_interface_mod {
         }
 
         pub fn get_config_atom(&mut self, config_name: &str) -> Option<Atom> {
-            self.exec(&format!("!(get-state {config_name})"));
+            self.exec(format!("!(get-state {config_name})").as_str());
             self.result.get(0)
                 .and_then(|vec| vec.get(0))
                 .and_then(|atom| (!atom_is_error(atom)).then_some(atom))

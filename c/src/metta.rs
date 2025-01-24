@@ -174,7 +174,7 @@ impl sexpr_parser_t {
     }
 }
 
-impl<R: 'static + Iterator<Item=io::Result<u8>>> From<SExprParser<R>> for sexpr_parser_t {
+impl<R: 'static + Iterator<Item=io::Result<char>>> From<SExprParser<R>> for sexpr_parser_t {
     fn from(parser: SExprParser<R>) -> Self {
         Self{
             // additional Box is needed because Box<dyn ...> is a fat pointer
