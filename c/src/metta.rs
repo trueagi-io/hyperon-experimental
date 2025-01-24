@@ -204,8 +204,9 @@ impl sexpr_parser_t {
 ///
 #[no_mangle]
 pub extern "C" fn sexpr_parser_new(text: *const c_char) -> sexpr_parser_t {
-    // FIXME: use SExprParser::from_iter() here
-    SExprParser::new(cstr_as_str(text)).into()
+    let cstr = unsafe{ std::ffi::CStr::from_ptr(text) };
+    let parser = SExprParser::new(cstr.to_bytes());
+    parser.into()
 }
 
 /// @brief Frees an S-Expression Parser
