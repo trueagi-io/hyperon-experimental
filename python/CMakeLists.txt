@@ -22,8 +22,22 @@ endif ()
 # The default value ("FIRST") prefers the installation with the highest
 # version. "ONLY" sticks to a virtualenv even when its version is smaller
 # which is usually expected by an user.
-if (NOT DEFINED Python3_FIND_VIRTUALENV)
-    set(Python3_FIND_VIRTUALENV "ONLY")
+if(WIN32)
+    if (NOT DEFINED Python_FIND_VIRTUALENV)
+        set(Python_FIND_VIRTUALENV "ONLY")
+    endif()
+    # Development.Embed is not supported by cibuildwheel environment
+    find_package(Python 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
+    message(STATUS "Python native modules installation path (Python_SITEARCH): ${Python_SITEARCH}")
+    message(STATUS "Python modules installation path (Python_SITELIB): ${Python_SITELIB}")
+else()
+    if (NOT DEFINED Python3_FIND_VIRTUALENV)
+        set(Python3_FIND_VIRTUALENV "ONLY")
+    endif()
+    # Development.Embed is not supported by cibuildwheel environment
+    find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
+    message(STATUS "Python native modules installation path (Python3_SITEARCH): ${Python3_SITEARCH}")
+    message(STATUS "Python modules installation path (Python3_SITELIB): ${Python3_SITELIB}")
 endif()
 # Development.Embed is not supported by cibuildwheel environment
 find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
@@ -38,6 +52,7 @@ endif()
 find_package(pybind11 REQUIRED)
 find_package(optional-lite REQUIRED)
 include_directories(${nonstd_INCLUDE_DIRS})
+set(HYPERONC_INSTALL_PREFIX "../build/hyperonc-install")
 find_package(hyperonc REQUIRED HINTS ${HYPERONC_INSTALL_PREFIX})
 include_directories(${hyperonc_INCLUDE_DIRS})
 
@@ -50,6 +65,10 @@ pybind11_add_module(hyperonpy MODULE ./hyperonpy.cpp)
 target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}" nonstd::optional-lite)
 if(GIT)
     target_link_libraries(hyperonpy PUBLIC ${PLATFORM_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
+endif()
+
+if(WIN32)
+    target_link_libraries(hyperonpy PRIVATE wsock32 ws2_32 userenv ntdll bcrypt)
 endif()
 
 set(PYTHONPATH "${CMAKE_CURRENT_SOURCE_DIR}")

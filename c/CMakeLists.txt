@@ -118,6 +118,7 @@ if(BUILD_SHARED_LIBS)
     add_dependencies(hyperonc-shared copy-hyperonc-shared)
     if (WIN32)
         add_dependencies(hyperonc-shared copy-hyperonc-implib)
+        target_link_libraries(hyperonc-shared INTERFACE wsock32 ws2_32 userenv ntdll bcrypt)
     endif(WIN32)
 
     install(FILES "${HYPERONC_SHARED_LIB_PATH}"
