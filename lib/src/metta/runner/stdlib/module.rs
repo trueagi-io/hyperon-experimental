@@ -135,7 +135,7 @@ impl CustomExecute for IncludeOp {
         let ctx_ref = self.context.lock().unwrap().last().unwrap().clone();
         let mut context = ctx_ref.lock().unwrap();
         let resource = context.load_resource_from_module(&mod_name, ResourceKey::MainMettaSrc)?;
-        let parser: crate::metta::text::SExprParser<_> = resource.into();
+        let parser = crate::metta::text::SExprParser::new(resource);
         let eval_result = context.run_inline(|context| {
             context.push_parser(Box::new(parser));
             Ok(())

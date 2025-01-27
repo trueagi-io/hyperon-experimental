@@ -267,7 +267,7 @@ pub mod metta_interface_mod {
 pub mod metta_interface_mod {
     use std::path::{PathBuf, Path};
     use hyperon::metta::*;
-    use hyperon::metta::text::SExprParser;
+    use hyperon::metta::text::{CharReader, SExprParser};
     use hyperon::ExpressionAtom;
     use hyperon::Atom;
     use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
@@ -330,8 +330,8 @@ pub mod metta_interface_mod {
             }
         }
 
-        pub fn exec<R: Iterator<Item=std::io::Result<char>>, P: Into<SExprParser<R>>>(&mut self, input: P) {
-            let parser: SExprParser<R> = input.into();
+        pub fn exec<R: Iterator<Item=std::io::Result<char>>, I: Into<CharReader<R>>>(&mut self, input: I) {
+            let parser = SExprParser::new(input);
             let mut runner_state = RunnerState::new_with_parser(&self.metta, Box::new(parser));
 
             exec_state_prepare();

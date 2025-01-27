@@ -189,12 +189,12 @@ impl Metta {
 
         //Run the `init.metta` file
         if let Some(init_meta_file_path) = metta.0.environment.initialization_metta_file_path() {
-            let program = match std::fs::read_to_string(init_meta_file_path)
+            let metta_file = match std::fs::File::open(init_meta_file_path).map(std::io::BufReader::new)
             {
-                Ok(program) => program,
+                Ok(metta_file) => metta_file,
                 Err(err) => panic!("Could not read file, path: {}, error: {}", init_meta_file_path.display(), err)
             };
-            metta.run(SExprParser::new(program.as_str())).unwrap();
+            metta.run(SExprParser::new(metta_file)).unwrap();
         }
         metta
     }

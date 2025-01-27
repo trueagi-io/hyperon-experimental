@@ -276,51 +276,58 @@ impl Parser for &mut (dyn Parser + '_) {
     }
 }
 
+/// Proxy type to allow constructing [SExprParser] from different types
+/// automatically. CharReader implements [From] for different types, while
+/// [SExprParser::new] inputs `Into<CharReader<R>>` argument.
+pub struct CharReader<R: Iterator<Item=io::Result<char>>>(R);
+
+impl<R: Iterator<Item=io::Result<char>>> CharReader<R> {
+    /// Construct new instance from char reading iterator
+    pub fn new(chars: R) -> Self {
+        Self(chars)
+    }
+}
+
+impl<R: Iterator<Item=io::Result<char>>> Iterator for CharReader<R> {
+    type Item = io::Result<char>;
+    fn next(&mut self) -> Option<Self::Item> {
+        self.0.next()
+    }
+}
+
+impl<R: Read> From<R> for CharReader<CodePoints<std::io::Bytes<R>>> {
+    fn from(input: R) -> Self {
+        let chars: CodePoints<_> = input.bytes().into();
+        Self(chars)
+    }
+}
+
+impl<R: Iterator<Item=io::Result<u8>>> From<R> for CharReader<CodePoints<R>> {
+    fn from(input: R) -> Self {
+        let chars: CodePoints<_> = input.into();
+        Self(chars)
+    }
+}
+
+impl<'a> From<&'a str> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(char) -> io::Result<char>>> {
+    fn from(text: &'a str) -> Self {
+        Self(text.chars().map(Ok))
+    }
+}
+
 /// Provides a parser for MeTTa code written in S-Expression Syntax
 ///
 /// NOTE: The SExprParser type is short-lived, and can be created cheaply to evaluate a specific block
 /// of MeTTa source code.
 pub struct SExprParser<R: Iterator<Item=io::Result<char>>> {
-    it: Peekable<Enumerate<R>>,
+    it: Peekable<Enumerate<CharReader<R>>>,
     last_idx: usize,
-}
-
-impl<R: Read> From<R> for SExprParser<CodePoints<std::io::Bytes<R>>> {
-    fn from(input: R) -> Self {
-        Self::from_bytes(input.bytes())
-    }
-}
-
-impl<R: Iterator<Item=io::Result<u8>>> From<R> for SExprParser<CodePoints<R>> {
-    fn from(input: R) -> Self {
-        Self::from_bytes(input)
-    }
-}
-
-impl<'a> From<&'a str> for SExprParser<std::iter::Map<std::str::Chars<'a>, fn(char) -> io::Result<char>>> {
-    fn from(input: &'a str) -> Self {
-        Self::new(input)
-    }
-}
-
-impl<B: Iterator<Item=io::Result<u8>>> SExprParser<CodePoints<B>> {
-    pub fn from_bytes(bytes: B) -> Self {
-        let chars: CodePoints<B> = bytes.into();
-        Self::from_chars(chars)
-    }
-}
-
-impl<'a> SExprParser<std::iter::Map<std::str::Chars<'a>, fn(char) -> io::Result<char>>> {
-    // FIXME: rename to from_str
-    pub fn new(text: &'a str) -> Self {
-        Self::from_chars(text.chars().map(Ok))
-    }
 }
 
 impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
-    pub fn from_chars(chars: R) -> Self {
-        Self{ it: chars.enumerate().peekable(), last_idx: 0 }
+    pub fn new<I: Into<CharReader<R>>>(chars: I) -> Self {
+        Self{ it: chars.into().enumerate().peekable(), last_idx: 0 }
     }
 
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
@@ -882,7 +889,7 @@ mod tests {
         let mut parser;
         {
             let owned = r#"One (two 3) "four""#.to_owned();
-            parser = SExprParser::from_bytes(owned.into_bytes().into_iter().map(Ok));
+            parser = SExprParser::new(owned.into_bytes().into_iter().map(Ok));
         }
         let mut results: Vec<Atom> = vec![];
         while let Ok(Some(atom)) = parser.next_atom(&tokenizer) {
