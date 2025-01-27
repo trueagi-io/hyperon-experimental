@@ -10,7 +10,14 @@ add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 if (POLICY CMP0025)
     cmake_policy(SET CMP0025 NEW)
 endif ()
-set(CMAKE_CXX_STANDARD 11)
+if ("cxx_std_14" IN_LIST CMAKE_CXX_COMPILE_FEATURES)
+    message(STATUS "C++14 or higher is available")
+    set(CMAKE_CXX_STANDARD 14)
+else ()
+    # cibuildwheel images support only C++11 for some of the platforms
+    message(STATUS "Only C++11 is available")
+    set(CMAKE_CXX_STANDARD 11)
+endif ()
 
 # The default value ("FIRST") prefers the installation with the highest
 # version. "ONLY" sticks to a virtualenv even when its version is smaller
