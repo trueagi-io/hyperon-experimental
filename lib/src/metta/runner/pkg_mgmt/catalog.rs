@@ -429,7 +429,7 @@ impl ModuleLoader for SingleFileModule {
         let resource_dir = self.path.parent().unwrap();
         context.init_self_module(space, Some(resource_dir.into()));
 
-        let parser = SExprParser::new(self.open_file()?);
+        let parser = SExprParser::new(std::io::BufReader::new(self.open_file()?));
         context.push_parser(Box::new(parser));
 
         Ok(())
@@ -478,7 +478,7 @@ impl ModuleLoader for DirModule {
         // A module.metta file is optional.  Without one a dir module behaves as just
         // a container for other resources and sub-modules.
         if let Some(program_file) = self.open_file().ok() {
-            let parser = SExprParser::new(program_file);
+            let parser = SExprParser::new(std::io::BufReader::new(program_file));
             context.push_parser(Box::new(parser));
         }
 
