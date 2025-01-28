@@ -43,6 +43,7 @@ pub mod metta_interface_mod {
     use hyperon::common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
     use hyperon::metta::runner::str::unescape;
+    use hyperon::metta::text::CharReader;
 
     /// Load the hyperon module, and get the "__version__" attribute
     pub fn get_hyperonpy_version() -> Result<String, String> {
@@ -118,11 +119,13 @@ pub mod metta_interface_mod {
             }
         }
 
-        pub fn exec(&mut self, line: &str) {
+        pub fn exec<R: Iterator<Item=std::io::Result<char>>, I: Into<CharReader<R>>>(&mut self, input: I) {
+            // TODO: should be replaced by wrapping Rust CharReader into Python API
+            let line: String = input.into().map(|r| r.expect("Error while reading input")).collect();
 
             //Initialize the runner state
             let runner_state = Python::with_gil(|py| -> PyResult<Py<PyAny>> {
-                let line = PyString::new(py, line);
+                let line = PyString::new(py, &line);
                 let py_metta = self.py_metta.as_ref(py);
                 let module: &PyModule = self.py_mod.as_ref(py);
                 let runner_class = module.getattr("RunnerState")?;
