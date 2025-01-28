@@ -252,27 +252,17 @@ impl SyntaxNode {
 /// by parsing source text
 pub trait Parser {
     fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String>;
-    // FIXME: temporary stub to make c/src/metta.rs compile
-    // could be safely removed from implementation or replaced by the chain of
-    // parsers: SExprSyntaxParser -> SExprAtomParser
-    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode>;
 }
 
 impl<R: Iterator<Item=io::Result<char>>> Parser for SExprParser<R> {
     fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
         self.parse(tokenizer)
     }
-    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode> {
-        self.parse_to_syntax_tree().expect("Expected to be called only on memory buffer")
-    }
 }
 
 impl Parser for &mut (dyn Parser + '_) {
     fn next_atom(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
         (**self).next_atom(tokenizer)
-    }
-    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode> {
-        (**self).parse_to_syntax_tree()
     }
 }
 
@@ -651,9 +641,6 @@ impl Parser for &[Atom] {
         } else {
             Ok(None)
         }
-    }
-    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode> {
-        None
     }
 }
 

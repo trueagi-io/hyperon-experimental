@@ -153,6 +153,23 @@ pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> tokenizer_t 
     Shared::new(tokenizer.clone()).into()
 }
 
+/// Private trait to erase actual [SExprParser] type as it is parameterized.
+/// [Parser] trait is more abstract and doesn't contain [SExprParser::parse_to_syntax_tree]
+/// method.
+trait SExprParserTrait: Parser {
+    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode>;
+    fn into_parser(self: Box<Self>) -> Box<dyn Parser>;
+}
+
+impl<R: 'static + Iterator<Item=io::Result<char>>> SExprParserTrait for SExprParser<R> {
+    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode> {
+        self.parse_to_syntax_tree().expect("Expected to be called only on memory buffer")
+    }
+    fn into_parser(self: Box<Self>) -> Box<dyn Parser> {
+        Box::new(*self)
+    }
+}
+
 /// @brief Represents an S-Expression Parser state machine, to parse input text into an Atom
 /// @ingroup tokenizer_and_parser_group
 /// @note `sexpr_parser_t` objects must be freed with `sexpr_parser_free()`
@@ -178,18 +195,18 @@ impl<R: 'static + Iterator<Item=io::Result<char>>> From<SExprParser<R>> for sexp
     fn from(parser: SExprParser<R>) -> Self {
         Self{
             // additional Box is needed because Box<dyn ...> is a fat pointer
-            parser: Box::into_raw(Box::new(Box::new(parser) as Box<dyn Parser>)) as *mut c_void,
+            parser: Box::into_raw(Box::new(Box::new(parser) as Box<dyn SExprParserTrait>)) as *mut c_void,
             err_string: core::ptr::null_mut(),
         }
     }
 }
 
 impl sexpr_parser_t {
-    fn into_boxed_dyn(self) -> Box<dyn Parser> {
-        *unsafe{ Box::from_raw(self.parser as *mut Box<dyn Parser>) }
+    fn into_boxed_dyn(self) -> Box<dyn SExprParserTrait> {
+        *unsafe{ Box::from_raw(self.parser as *mut Box<dyn SExprParserTrait>) }
     }
-    fn borrow_dyn_mut(&mut self) -> &mut dyn Parser {
-        unsafe{ &mut **(self.parser as *mut Box<dyn Parser>) }
+    fn borrow_dyn_mut(&mut self) -> &mut dyn SExprParserTrait {
+        unsafe{ &mut **(self.parser as *mut Box<dyn SExprParserTrait>) }
     }
 }
 
@@ -1007,7 +1024,7 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: sexpr_parser_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
     let metta = unsafe{ &mut *metta };
     metta.free_err_string();
-    let mut parser = parser.into_boxed_dyn();
+    let mut parser = parser.into_boxed_dyn().into_parser();
     let rust_metta = metta.borrow();
     let results = rust_metta.run(&mut *parser);
     match results {
@@ -1189,7 +1206,7 @@ impl run_context_t {
 #[no_mangle]
 pub extern "C" fn run_context_push_parser(run_context: *mut run_context_t, parser: sexpr_parser_t) {
     let context = unsafe{ &mut *run_context }.borrow_mut();
-    let parser = parser.into_boxed_dyn();
+    let parser = parser.into_boxed_dyn().into_parser();
 
     context.push_parser(parser)
 }
@@ -1309,7 +1326,7 @@ impl runner_state_t {
 #[no_mangle]
 pub extern "C" fn runner_state_new_with_parser(metta: *const metta_t, parser: sexpr_parser_t) -> runner_state_t {
     let metta = unsafe{ &*metta }.borrow();
-    let parser = parser.into_boxed_dyn();
+    let parser = parser.into_boxed_dyn().into_parser();
     let state = RunnerState::new_with_parser(metta, parser);
     state.into()
 }
