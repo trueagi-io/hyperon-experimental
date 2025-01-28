@@ -322,8 +322,6 @@ impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
         loop {
-            // FIXME: either use SyntaxNode to pass all errors or use Result
-            // to pass all errors
             match self.parse_to_syntax_tree()? {
                 Some(node) => {
                     if let Some(atom) = node.as_atom(tokenizer)? {
