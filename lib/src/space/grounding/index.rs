@@ -364,9 +364,9 @@ enum QueryKey<'a> {
 impl<'a> QueryKey<'a> {
     fn as_exact_key(&self) -> Option<ExactKey> {
         match self {
-            QueryKey::StartExpr(_) => Some(ExactKey::StartExpr),
-            QueryKey::EndExpr => Some(ExactKey::EndExpr),
-            QueryKey::Exact(Some(id), _) => Some(ExactKey::Exact(*id)),
+            QueryKey::StartExpr(_) => Some(ExactKey::START_EXPR),
+            QueryKey::EndExpr => Some(ExactKey::END_EXPR),
+            QueryKey::Exact(Some(id), _) => Some(ExactKey(*id)),
             QueryKey::Exact(None, _) => None,
             QueryKey::Custom(_) => None,
         }
@@ -374,10 +374,11 @@ impl<'a> QueryKey<'a> {
 }
 
 #[derive(Hash, PartialEq, Eq, Clone, Debug)]
-enum ExactKey {
-    StartExpr,
-    EndExpr,
-    Exact(usize),
+struct ExactKey(usize);
+
+impl ExactKey {
+    const START_EXPR: ExactKey = ExactKey(usize::MAX - 1);
+    const END_EXPR: ExactKey = ExactKey(usize::MAX);
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
@@ -396,9 +397,9 @@ impl AtomTrieNode {
     pub fn insert<I: Iterator<Item=InsertKey>>(&mut self, mut key: I) {
         match key.next() {
             Some(head) => match head {
-                InsertKey::StartExpr => self.insert_exact(ExactKey::StartExpr, key),
-                InsertKey::EndExpr => self.insert_exact(ExactKey::EndExpr, key),
-                InsertKey::Exact(id) => self.insert_exact(ExactKey::Exact(id), key),
+                InsertKey::StartExpr => self.insert_exact(ExactKey::START_EXPR, key),
+                InsertKey::EndExpr => self.insert_exact(ExactKey::END_EXPR, key),
+                InsertKey::Exact(id) => self.insert_exact(ExactKey(id), key),
                 InsertKey::Custom(atom) => self.insert_custom(atom, key),
             },
             None => {},
@@ -569,15 +570,15 @@ impl AtomTrieNode {
             Some(head) => {
                 let entry = match head {
                     QueryKey::StartExpr(_) => self.exact
-                        .get_mut(&ExactKey::StartExpr)
-                        .map(|child| (Found::Exact(ExactKey::StartExpr), child)),
+                        .get_mut(&ExactKey::START_EXPR)
+                        .map(|child| (Found::Exact(ExactKey::START_EXPR), child)),
                     QueryKey::EndExpr => self.exact
-                        .get_mut(&ExactKey::EndExpr)
-                        .map(|child| (Found::Exact(ExactKey::EndExpr), child)),
+                        .get_mut(&ExactKey::END_EXPR)
+                        .map(|child| (Found::Exact(ExactKey::END_EXPR), child)),
                     QueryKey::Exact(None, _) => None,
                     QueryKey::Exact(Some(id), _) => self.exact
-                        .get_mut(&ExactKey::Exact(id))
-                        .map(|child| (Found::Exact(ExactKey::Exact(id)), child)),
+                        .get_mut(&ExactKey(id))
+                        .map(|child| (Found::Exact(ExactKey(id)), child)),
                     QueryKey::Custom(key) => self.custom.iter()
                         .position(|(atom, _child)| atom == key)
                         .map(|i| (Found::Custom(i), &mut unsafe{ self.custom.get_unchecked_mut(i) }.1)),
@@ -636,9 +637,9 @@ impl Display for AtomTrieNode {
         impl TrieKeyDisplay<'_> {
             fn from_exact(key: &ExactKey) -> Self {
                 match key {
-                    ExactKey::StartExpr => Self::Start,
-                    ExactKey::EndExpr => Self::End,
-                    ExactKey::Exact(id) => Self::Id(*id),
+                    key if *key == ExactKey::START_EXPR => Self::Start,
+                    key if *key == ExactKey::END_EXPR => Self::End,
+                    ExactKey(id) => Self::Id(*id),
                 }
             }
         }
@@ -700,20 +701,20 @@ impl<'a> Iterator for AtomTrieNodeIter<'a> {
                         None => self.state = State::VisitCustom(self.node.custom.iter()),
                         Some((key, child)) => {
                             match key {
-                                ExactKey::Exact(id) => {
-                                    let atom = self.storage.get_atom(*id).expect(ATOM_NOT_IN_STORAGE);
-                                    return Some((IterResult::Atom(Cow::Borrowed(atom)), child.as_ref()));
-                                },
-                                ExactKey::EndExpr => {
+                                key if *key == ExactKey::END_EXPR => {
                                     return Some((IterResult::EndExpr, child.as_ref()));
                                 },
-                                ExactKey::StartExpr => {
+                                key if *key == ExactKey::START_EXPR => {
                                     let state = std::mem::take(&mut self.state);
                                     self.state = State::VisitExpression{
                                         build_expr: Vec::new(),
                                         cur_it: Box::new(AtomTrieNodeIter::new(child, self.storage)),
                                         next_state: Box::new(state),
                                     }
+                                },
+                                ExactKey(id) => {
+                                    let atom = self.storage.get_atom(*id).expect(ATOM_NOT_IN_STORAGE);
+                                    return Some((IterResult::Atom(Cow::Borrowed(atom)), child.as_ref()));
                                 },
                             }
                         },
@@ -961,5 +962,10 @@ mod test {
 
         let actual: Vec<_> = index.query(&expr!("A" "B" "C")).collect();
         assert_eq_no_order!(actual, vec![bind!{ x: expr!("A" "B" "C") }]);
+    }
+
+    #[test]
+    fn atom_index_exact_key_size() {
+        assert_eq!(std::mem::size_of::<ExactKey>(), std::mem::size_of::<usize>());
     }
 }
