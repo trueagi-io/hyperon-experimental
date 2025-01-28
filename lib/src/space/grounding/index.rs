@@ -382,9 +382,16 @@ impl ExactKey {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-struct AtomTrieNode {
-    exact: HashMap<ExactKey, Box<Self>>, 
-    custom: Vec<(Atom, Box<Self>)>,
+enum AtomTrieNode {
+    Node(Box<AtomTrieNodeContent>),
+    #[default]
+    Leaf,
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+struct AtomTrieNodeContent {
+    exact: HashMap<ExactKey, AtomTrieNode>,
+    custom: Vec<(Atom, AtomTrieNode)>,
 }
 
 type QueryResult = Box<dyn Iterator<Item=Bindings>>;
@@ -406,25 +413,36 @@ impl AtomTrieNode {
         }
     }
 
+    fn content_mut(&mut self) -> &mut AtomTrieNodeContent {
+        if *self == AtomTrieNode::Leaf {
+            *self = AtomTrieNode::Node(Default::default());
+        }
+        match self {
+            AtomTrieNode::Node(content) => content,
+            AtomTrieNode::Leaf => panic!("Not expected"),
+        }
+    }
+
     fn insert_exact<'a, I: Iterator<Item=InsertKey>>(&mut self, head: ExactKey, tail: I) {
-        match self.exact.entry(head) {
+        match self.content_mut().exact.entry(head) {
             hash_map::Entry::Occupied(mut old) => { old.get_mut().insert(tail); },
             hash_map::Entry::Vacant(new) => { new.insert(Self::new_branch(tail)); },
         }
     }
 
     fn insert_custom<'a, I: Iterator<Item=InsertKey>>(&mut self, atom: Atom, tail: I) {
-        for (prev, child) in &mut self.custom {
+        let content = self.content_mut();
+        for (prev, child) in &mut content.custom {
             if *prev == atom {
                 child.insert(tail);
                 return;
             }
         }
-        self.custom.push((atom, Self::new_branch(tail)));
+        content.custom.push((atom, Self::new_branch(tail)));
     }
 
-    fn new_branch<'a, I: Iterator<Item=InsertKey>>(key: I) -> Box<Self> {
-        let mut child = Box::new(AtomTrieNode::new());
+    fn new_branch<'a, I: Iterator<Item=InsertKey>>(key: I) -> Self {
+        let mut child = AtomTrieNode::new();
         child.insert(key);
         child
     }
@@ -454,15 +472,19 @@ impl AtomTrieNode {
             M: Fn(VariableAtom)->VariableAtom,
     {
         let mut result = BindingsSet::empty();
+        let content = match self {
+            AtomTrieNode::Leaf => return result,
+            AtomTrieNode::Node(content) => content,
+        };
         // match exact entries if applicable
         if let Some(exact) = key.as_exact_key() {
-            if let Some(child) = self.exact.get(&exact) {
+            if let Some(child) = content.exact.get(&exact) {
                 result.extend(child.query_internal(tail.clone(), storage, mapper))
             }
         }
         // match custom entries if applicable
         if let Some(atom) = Self::key_to_atom(&key, &mut tail) {
-            for (entry, child) in &self.custom {
+            for (entry, child) in &content.custom {
                 let mut custom_res = Self::match_custom_entry(entry, atom, child, tail.clone(), storage, mapper);
                 result.extend(custom_res.drain(..));
             }
@@ -568,30 +590,37 @@ impl AtomTrieNode {
 
         match key.next() {
             Some(head) => {
+                let content = match self {
+                    AtomTrieNode::Leaf => return false,
+                    AtomTrieNode::Node(content) => content,
+                };
                 let entry = match head {
-                    QueryKey::StartExpr(_) => self.exact
+                    QueryKey::StartExpr(_) => content.exact
                         .get_mut(&ExactKey::START_EXPR)
                         .map(|child| (Found::Exact(ExactKey::START_EXPR), child)),
-                    QueryKey::EndExpr => self.exact
+                    QueryKey::EndExpr => content.exact
                         .get_mut(&ExactKey::END_EXPR)
                         .map(|child| (Found::Exact(ExactKey::END_EXPR), child)),
                     QueryKey::Exact(None, _) => None,
-                    QueryKey::Exact(Some(id), _) => self.exact
+                    QueryKey::Exact(Some(id), _) => content.exact
                         .get_mut(&ExactKey(id))
                         .map(|child| (Found::Exact(ExactKey(id)), child)),
-                    QueryKey::Custom(key) => self.custom.iter()
+                    QueryKey::Custom(key) => content.custom.iter()
                         .position(|(atom, _child)| atom == key)
-                        .map(|i| (Found::Custom(i), &mut unsafe{ self.custom.get_unchecked_mut(i) }.1)),
+                        .map(|i| (Found::Custom(i), &mut unsafe{ content.custom.get_unchecked_mut(i) }.1)),
                 };
                 match entry {
                     Some((child_key, child)) => {
                         let removed = child.remove(key, storage);
                         if child.is_empty() {
                             match child_key {
-                                Found::Exact(key) => { self.exact.remove(&key); },
+                                Found::Exact(key) => { content.exact.remove(&key); },
                                 // FIXME: replace self.custom by HoleyVec
-                                Found::Custom(i) => { self.custom.remove(i); },
+                                Found::Custom(i) => { content.custom.remove(i); },
                             }
+                        }
+                        if content.exact.is_empty() && content.custom.is_empty() {
+                            *self = AtomTrieNode::Leaf;
                         }
                         removed
                     },
@@ -599,7 +628,6 @@ impl AtomTrieNode {
                 }
             },
             None => {
-                // TODO: should we replace leafs by special Node instead of empty Node
                 if self.is_empty() {
                     true
                 } else {
@@ -610,7 +638,7 @@ impl AtomTrieNode {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.exact.is_empty() && self.custom.is_empty()
+        *self == AtomTrieNode::Leaf
     }
 }
 
@@ -644,11 +672,19 @@ impl Display for AtomTrieNode {
             }
         }
 
-        let exact = self.exact.iter()
-            .map(|(key, child)| (TrieKeyDisplay::from_exact(key), child));
-        let custom = self.custom.iter().map(|p| (&p.0, &p.1))
-            .map(|(key, child)| (TrieKeyDisplay::Atom(key), child));
-        write_mapping(f, exact.chain(custom))
+        match self {
+            AtomTrieNode::Node(content) => {
+                let exact = content.exact.iter()
+                    .map(|(key, child)| (TrieKeyDisplay::from_exact(key), child));
+                let custom = content.custom.iter().map(|p| (&p.0, &p.1))
+                    .map(|(key, child)| (TrieKeyDisplay::Atom(key), child));
+                write_mapping(f, exact.chain(custom))
+            },
+            AtomTrieNode::Leaf => {
+                // FIXME: can be replaced by something simpler
+                write_mapping(f, std::iter::empty::<(TrieKeyDisplay<'static>, AtomTrieNode)>())
+            },
+        }
     }
 }
 
@@ -661,8 +697,8 @@ struct AtomTrieNodeIter<'a> {
 
 #[derive(Default, Debug, Clone)]
 enum AtomTrieNodeIterState<'a> {
-    VisitExact(hash_map::Iter<'a, ExactKey, Box<AtomTrieNode>>),
-    VisitCustom(std::slice::Iter<'a, (Atom, Box<AtomTrieNode>)>),
+    VisitExact(hash_map::Iter<'a, ExactKey, AtomTrieNode>),
+    VisitCustom(std::slice::Iter<'a, (Atom, AtomTrieNode)>),
     VisitExpression {
         build_expr: Vec<Atom>,
         cur_it: Box<AtomTrieNodeIter<'a>>,
@@ -674,10 +710,14 @@ enum AtomTrieNodeIterState<'a> {
 
 impl<'a> AtomTrieNodeIter<'a> {
     fn new(node: &'a AtomTrieNode, storage: &'a AtomStorage) -> Self {
+        let state = match node {
+            AtomTrieNode::Node(content) => AtomTrieNodeIterState::VisitExact(content.exact.iter()),
+            AtomTrieNode::Leaf => AtomTrieNodeIterState::End,
+        };
         Self {
             node,
             storage,
-            state: AtomTrieNodeIterState::VisitExact(node.exact.iter())
+            state,
         }
     }
 }
@@ -697,12 +737,16 @@ impl<'a> Iterator for AtomTrieNodeIter<'a> {
         loop {
             match &mut self.state {
                 State::VisitExact(it) => {
+                    let content = match self.node {
+                        AtomTrieNode::Node(content) => content,
+                        AtomTrieNode::Leaf => panic!("Not expected"),
+                    };
                     match it.next() {
-                        None => self.state = State::VisitCustom(self.node.custom.iter()),
+                        None => self.state = State::VisitCustom(content.custom.iter()),
                         Some((key, child)) => {
                             match key {
                                 key if *key == ExactKey::END_EXPR => {
-                                    return Some((IterResult::EndExpr, child.as_ref()));
+                                    return Some((IterResult::EndExpr, child));
                                 },
                                 key if *key == ExactKey::START_EXPR => {
                                     let state = std::mem::take(&mut self.state);
@@ -714,7 +758,7 @@ impl<'a> Iterator for AtomTrieNodeIter<'a> {
                                 },
                                 ExactKey(id) => {
                                     let atom = self.storage.get_atom(*id).expect(ATOM_NOT_IN_STORAGE);
-                                    return Some((IterResult::Atom(Cow::Borrowed(atom)), child.as_ref()));
+                                    return Some((IterResult::Atom(Cow::Borrowed(atom)), child));
                                 },
                             }
                         },
