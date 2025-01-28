@@ -81,7 +81,7 @@ fn main() -> Result<()> {
     if let Some(metta_file) = &cli_args.file {
 
         //Only print the output from the primary .metta file
-        let metta_file = std::fs::File::open(metta_file)?;
+        let metta_file = std::io::BufReader::new(std::fs::File::open(metta_file)?);
         metta.exec(metta_file);
         metta.print_result();
         Ok(())
@@ -107,7 +107,7 @@ fn start_interactive_mode(repl_params: ReplParams, mut metta: MettaShim) -> rust
 
     //Run the repl init file
     if let Some(repl_config_metta_path) = &repl_params.repl_config_metta_path {
-        let init_metta_file = std::fs::File::open(repl_config_metta_path)?;
+        let init_metta_file = std::io::BufReader::new(std::fs::File::open(repl_config_metta_path)?);
         metta.exec(init_metta_file);
     }
 

@@ -305,6 +305,19 @@ impl<'a> From<&'a str> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(cha
     }
 }
 
+impl From<String> for CharReader<std::iter::Map<std::vec::IntoIter<char>, fn(char) -> io::Result<char>>> {
+    fn from(text: String) -> Self {
+        let chars: Vec<char> = text.chars().collect();
+        Self(chars.into_iter().map(Ok))
+    }
+}
+
+impl<'a> From<&'a String> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(char) -> io::Result<char>>> {
+    fn from(text: &'a String) -> Self {
+        Self(text.chars().map(Ok))
+    }
+}
+
 /// Provides a parser for MeTTa code written in S-Expression Syntax
 ///
 /// NOTE: The SExprParser type is short-lived, and can be created cheaply to evaluate a specific block
@@ -874,7 +887,7 @@ mod tests {
         let mut parser;
         {
             let owned = r#"One (two 3) "four""#.to_owned();
-            parser = SExprParser::new(owned.into_bytes().into_iter().map(Ok));
+            parser = SExprParser::new(owned);
         }
         let mut results: Vec<Atom> = vec![];
         while let Ok(Some(atom)) = parser.next_atom(&tokenizer) {

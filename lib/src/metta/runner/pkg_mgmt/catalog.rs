@@ -459,11 +459,9 @@ impl DirModule {
     fn new(path: &Path, pkg_info: PkgInfo) -> Self {
         Self { path: path.into(), pkg_info }
     }
-    fn module_metta_path(&self) -> PathBuf {
-        self.path.join("module.metta")
-    }
     fn open_file(&self) -> Result<std::fs::File, String> {
-        std::fs::File::open(&self.module_metta_path())
+        let module_metta_path = self.path.join("module.metta");
+        std::fs::File::open(module_metta_path)
             .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))
     }
 }

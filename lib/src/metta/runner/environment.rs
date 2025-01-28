@@ -1,6 +1,6 @@
 
 use std::path::{Path, PathBuf};
-use std::io::{Read, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::fs;
 use std::sync::Arc;
 
@@ -386,7 +386,7 @@ fn interpret_environment_metta<P: AsRef<Path>>(env_metta_path: P, env: &mut Envi
 
     let space = GroundingSpace::new();
     let tokenizer = crate::metta::runner::Tokenizer::new();
-    let mut parser = crate::metta::runner::SExprParser::new(buf_reader.bytes());
+    let mut parser = crate::metta::runner::SExprParser::new(buf_reader);
     while let Some(atom) = parser.parse(&tokenizer)? {
         let atoms = crate::metta::runner::interpret(&space, &atom)?;
         let atom = if atoms.len() != 1 {
