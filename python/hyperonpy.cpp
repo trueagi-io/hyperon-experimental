@@ -611,32 +611,53 @@ static token_api_t TOKEN_API = { .construct_atom = &CConstr::apply, .free_contex
 
 struct CSExprParser {
 
+    bool empty;
     std::string text;
     sexpr_parser_t parser;
 
-    CSExprParser(std::string text) : text(text) {
+    CSExprParser(std::string text) : empty(false), text(text) {
         parser = sexpr_parser_new(this->text.c_str());
     }
 
     virtual ~CSExprParser() {
-        sexpr_parser_free(parser);
+        if (!empty) {
+            sexpr_parser_free(parser);
+        }
     }
 
-    sexpr_parser_t* ptr () { return &(this->parser); }
+    sexpr_parser_t* ptr() {
+        empty_guard();
+        return &(this->parser);
+    }
 
     py::object parse(CTokenizer tokenizer) {
+        empty_guard();
         atom_t atom = sexpr_parser_parse(&this->parser, tokenizer.ptr());
         return !atom_is_null(&atom) ? py::cast(CAtom(atom)) : py::none();
     }
 
     py::object err_str() {
+        empty_guard();
         const char* err_str = sexpr_parser_err_str(&this->parser);
         return err_str != NULL ? py::cast(std::string(err_str)) : py::none();
     }
 
     py::object parse_to_syntax_tree() {
+        empty_guard();
         syntax_node_t root_node = sexpr_parser_parse_to_syntax_tree(&this->parser);
         return !syntax_node_is_null(&root_node) ? py::cast(CSyntaxNode(root_node)) : py::none();
+    }
+
+    void empty_guard() {
+        if (empty) {
+            throw std::runtime_error("CSExprParser: object is empty or moved out");
+        }
+    }
+
+    sexpr_parser_t into_parser() {
+        empty = true;
+        // TODO: here parser is moved out separately of this->text
+        return std::move(parser);
     }
 };
 
@@ -1013,8 +1034,7 @@ PYBIND11_MODULE(hyperonpy, m) {
     }, "Loads a module into a runner from a file system resource");
     m.def("metta_run", [](CMetta& metta, CSExprParser& parser) {
             py::list lists_of_atom;
-            sexpr_parser_t cloned_parser = sexpr_parser_clone(&parser.parser);
-            metta_run(metta.ptr(), cloned_parser, copy_lists_of_atom, &lists_of_atom);
+            metta_run(metta.ptr(), parser.into_parser(), copy_lists_of_atom, &lists_of_atom);
             return lists_of_atom;
         }, "Run MeTTa interpreter on an input");
     m.def("metta_evaluate_atom", [](CMetta& metta, CAtom atom) {
@@ -1028,8 +1048,7 @@ PYBIND11_MODULE(hyperonpy, m) {
             return func_to_string((write_to_buf_func_t)&runner_state_to_str, state.ptr());
         }, "Render a RunnerState as a human readable string");
     m.def("runner_state_new_with_parser", [](CMetta& metta, CSExprParser& parser) {
-        sexpr_parser_t cloned_parser = sexpr_parser_clone(&parser.parser);
-        return CRunnerState(runner_state_new_with_parser(metta.ptr(), cloned_parser));
+        return CRunnerState(runner_state_new_with_parser(metta.ptr(), parser.into_parser()));
     }, "Initializes the MeTTa runner state for incremental execution");
     m.def("runner_state_new_with_atoms", [](CMetta& metta, CVecAtom& atoms) {
         return CRunnerState(runner_state_new_with_atoms(metta.ptr(), atoms.ptr()));

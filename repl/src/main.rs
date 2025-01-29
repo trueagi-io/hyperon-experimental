@@ -81,8 +81,8 @@ fn main() -> Result<()> {
     if let Some(metta_file) = &cli_args.file {
 
         //Only print the output from the primary .metta file
-        let metta_code = std::fs::read_to_string(metta_file)?;
-        metta.exec(metta_code.as_str());
+        let metta_file = std::io::BufReader::new(std::fs::File::open(metta_file)?);
+        metta.exec(metta_file);
         metta.print_result();
         Ok(())
 
@@ -103,12 +103,12 @@ fn show_welcome_message() {
 fn start_interactive_mode(repl_params: ReplParams, mut metta: MettaShim) -> rustyline::Result<()> {
 
     //Run the built-in repl-init code
-    metta.exec(&builtin_init_metta_code());
+    metta.exec(builtin_init_metta_code().as_str());
 
     //Run the repl init file
     if let Some(repl_config_metta_path) = &repl_params.repl_config_metta_path {
-        let init_metta_code = std::fs::read_to_string(repl_config_metta_path)?;
-        metta.exec(&init_metta_code);
+        let init_metta_file = std::io::BufReader::new(std::fs::File::open(repl_config_metta_path)?);
+        metta.exec(init_metta_file);
     }
 
     let max_len = metta.get_config_int(CFG_HISTORY_MAX_LEN).unwrap_or_else(|| 500);

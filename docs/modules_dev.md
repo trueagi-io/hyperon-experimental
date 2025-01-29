@@ -154,7 +154,7 @@ fn load(&self, context: &mut RunContext, descriptor: ModuleDescriptor) -> Result
     let resource_dir = std::path::PathBuf::from("/tmp/test_module_resources")
     context.init_self_module(descriptor, space, Some(resource_dir.into()));
 
-    let parser = OwnedSExprParser::new(METTA_PROGRAM_TEXT);
+    let parser = SExprParser::new(METTA_PROGRAM_TEXT);
     context.push_parser(Box::new(parser));
 
     Ok(())

@@ -1,6 +1,6 @@
 
 use std::path::{Path, PathBuf};
-use std::io::{Read, BufReader, Write};
+use std::io::{BufReader, Write};
 use std::fs;
 use std::sync::Arc;
 
@@ -382,13 +382,11 @@ impl EnvBuilder {
 /// problem trying to using a runner here
 fn interpret_environment_metta<P: AsRef<Path>>(env_metta_path: P, env: &mut Environment) -> Result<(), String> {
     let file = fs::File::open(env_metta_path).map_err(|e| e.to_string())?;
-    let mut buf_reader = BufReader::new(file);
-    let mut file_contents = String::new();
-    buf_reader.read_to_string(&mut file_contents).map_err(|e| e.to_string())?;
+    let buf_reader = BufReader::new(file);
 
     let space = GroundingSpace::new();
     let tokenizer = crate::metta::runner::Tokenizer::new();
-    let mut parser = crate::metta::runner::SExprParser::new(&file_contents);
+    let mut parser = crate::metta::runner::SExprParser::new(buf_reader);
     while let Some(atom) = parser.parse(&tokenizer)? {
         let atoms = crate::metta::runner::interpret(&space, &atom)?;
         let atom = if atoms.len() != 1 {

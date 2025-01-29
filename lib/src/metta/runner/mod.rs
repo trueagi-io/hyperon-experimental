@@ -65,7 +65,7 @@ use super::text::{Tokenizer, Parser, SExprParser};
 use super::types::validate_atom;
 
 pub mod modules;
-use modules::{MettaMod, ModId, ModuleInitState, ModNameNode, ModuleLoader, ResourceKey, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name};
+use modules::{MettaMod, ModId, ModuleInitState, ModNameNode, ModuleLoader, ResourceKey, Resource, TOP_MOD_NAME, ModNameNodeDisplayWrapper, normalize_relative_module_name};
 #[cfg(feature = "pkg_mgmt")]
 use modules::{decompose_name_path, compose_name_path};
 
@@ -189,12 +189,12 @@ impl Metta {
 
         //Run the `init.metta` file
         if let Some(init_meta_file_path) = metta.0.environment.initialization_metta_file_path() {
-            let program = match std::fs::read_to_string(init_meta_file_path)
+            let metta_file = match std::fs::File::open(init_meta_file_path).map(std::io::BufReader::new)
             {
-                Ok(program) => program,
+                Ok(metta_file) => metta_file,
                 Err(err) => panic!("Could not read file, path: {}, error: {}", init_meta_file_path.display(), err)
             };
-            metta.run(SExprParser::new(program.as_str())).unwrap();
+            metta.run(SExprParser::new(metta_file)).unwrap();
         }
         metta
     }
@@ -401,7 +401,7 @@ impl Metta {
     }
 
     /// Returns a buffer containing the specified resource, if it is available from a loaded module
-    pub fn get_module_resource(&self, mod_id: ModId, res_key: ResourceKey) -> Result<Vec<u8>, String> {
+    pub fn get_module_resource(&self, mod_id: ModId, res_key: ResourceKey) -> Result<Resource, String> {
         let modules = self.0.modules.lock().unwrap();
         modules.get(mod_id.0).unwrap().get_resource(res_key)
     }
@@ -894,7 +894,7 @@ impl<'input> RunContext<'_, 'input> {
     /// and loads the specified resource from the module, without loading the module itself
     ///
     /// NOTE: Although this method won't load the module itself, it will load parent modules if necessary
-    pub fn load_resource_from_module(&mut self, mod_name: &str, res_key: ResourceKey) -> Result<Vec<u8>, String> {
+    pub fn load_resource_from_module(&mut self, mod_name: &str, res_key: ResourceKey) -> Result<Resource, String> {
 
         // Resolve the module name and see if the module is already loaded into the runner
         if let Ok(mod_id) = self.get_module_by_name(mod_name) {

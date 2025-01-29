@@ -6,7 +6,7 @@ use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::{Metta, RunContext, RunnerState, Environment, EnvBuilder};
-use hyperon::metta::runner::modules::{ModuleLoader, ModId, ResourceKey};
+use hyperon::metta::runner::modules::{ModuleLoader, ModId, ResourceKey, Resource};
 use hyperon::metta::runner::pkg_mgmt::{FsModuleFormat, ModuleDescriptor};
 use hyperon::atom::*;
 
@@ -16,6 +16,7 @@ use crate::space::*;
 
 use std::os::raw::*;
 use std::path::{Path, PathBuf};
+use std::io;
 
 use regex::Regex;
 
@@ -152,6 +153,23 @@ pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> tokenizer_t 
     Shared::new(tokenizer.clone()).into()
 }
 
+/// Private trait to erase actual [SExprParser] type as it is parameterized.
+/// [Parser] trait is more abstract and doesn't contain [SExprParser::parse_to_syntax_tree]
+/// method.
+trait SExprParserTrait: Parser {
+    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode>;
+    fn into_parser(self: Box<Self>) -> Box<dyn Parser>;
+}
+
+impl<R: 'static + Iterator<Item=io::Result<char>>> SExprParserTrait for SExprParser<R> {
+    fn parse_to_syntax_tree(&mut self) -> Option<SyntaxNode> {
+        self.parse_to_syntax_tree().expect("Expected to be called only on memory buffer")
+    }
+    fn into_parser(self: Box<Self>) -> Box<dyn Parser> {
+        Box::new(*self)
+    }
+}
+
 /// @brief Represents an S-Expression Parser state machine, to parse input text into an Atom
 /// @ingroup tokenizer_and_parser_group
 /// @note `sexpr_parser_t` objects must be freed with `sexpr_parser_free()`
@@ -159,7 +177,7 @@ pub extern "C" fn tokenizer_clone(tokenizer: *const tokenizer_t) -> tokenizer_t 
 #[repr(C)]
 pub struct sexpr_parser_t {
     /// Internal.  Should not be accessed directly
-    parser: *mut RustSExprParser,
+    parser: *mut c_void,
     err_string: *mut c_char,
 }
 
@@ -173,59 +191,22 @@ impl sexpr_parser_t {
     }
 }
 
-#[derive(Clone)]
-enum RustSExprParser {
-    Borrowed(SExprParser<'static>),
-    Owned(OwnedSExprParser),
-}
-
-impl From<SExprParser<'static>> for sexpr_parser_t {
-    fn from(parser: SExprParser<'static>) -> Self {
-        RustSExprParser::Borrowed(parser).into()
-    }
-}
-
-impl From<OwnedSExprParser> for sexpr_parser_t {
-    fn from(parser: OwnedSExprParser) -> Self {
-        RustSExprParser::Owned(parser).into()
-    }
-}
-
-impl From<RustSExprParser> for sexpr_parser_t {
-    fn from(parser: RustSExprParser) -> Self {
+impl<R: 'static + Iterator<Item=io::Result<char>>> From<SExprParser<R>> for sexpr_parser_t {
+    fn from(parser: SExprParser<R>) -> Self {
         Self{
-            parser: Box::into_raw(Box::new(parser)),
+            // additional Box is needed because Box<dyn ...> is a fat pointer
+            parser: Box::into_raw(Box::new(Box::new(parser) as Box<dyn SExprParserTrait>)) as *mut c_void,
             err_string: core::ptr::null_mut(),
         }
     }
 }
 
 impl sexpr_parser_t {
-    fn into_inner_enum(mut self) -> RustSExprParser {
-        self.free_err_string();
-        unsafe{ *Box::from_raw(self.parser) }
+    fn into_boxed_dyn(self) -> Box<dyn SExprParserTrait> {
+        *unsafe{ Box::from_raw(self.parser as *mut Box<dyn SExprParserTrait>) }
     }
-    fn into_boxed_dyn(self) -> Box<dyn Parser> {
-        let boxed_parser = self.into_inner_enum();
-        match boxed_parser {
-            RustSExprParser::Borrowed(parser) => Box::new(parser),
-            RustSExprParser::Owned(parser) => Box::new(parser),
-        }
-    }
-    fn borrow_inner_enum(&self) -> &RustSExprParser {
-        unsafe{ &*self.parser }
-    }
-    fn borrow_dyn_mut(&mut self) -> &mut dyn Parser {
-        match unsafe{ &mut *self.parser } {
-            RustSExprParser::Borrowed(parser) => parser,
-            RustSExprParser::Owned(parser) => parser,
-        }
-    }
-    fn borrow_sexpr_parser_mut(&mut self) -> &mut SExprParser<'static> {
-        match unsafe{ &mut *self.parser } {
-            RustSExprParser::Borrowed(parser) => parser,
-            RustSExprParser::Owned(_) => panic!("Fatal Error: Feature unsupported for owned src buffers"),
-        }
+    fn borrow_dyn_mut(&mut self) -> &mut dyn SExprParserTrait {
+        unsafe{ &mut **(self.parser as *mut Box<dyn SExprParserTrait>) }
     }
 }
 
@@ -240,36 +221,9 @@ impl sexpr_parser_t {
 ///
 #[no_mangle]
 pub extern "C" fn sexpr_parser_new(text: *const c_char) -> sexpr_parser_t {
-    SExprParser::new(cstr_as_str(text)).into()
-}
-
-/// @brief Creates a new S-Expression Parser, for situations where you must deallocate the text buffer
-///    before parsing is complete
-/// @ingroup tokenizer_and_parser_group
-/// @param[in]  text  A C-style string containing the input text to parse.  This function will make an
-///    internal copy of the text
-/// @return The new `sexpr_parser_t`, ready to parse the text
-/// @note The returned `sexpr_parser_t` must be freed with `sexpr_parser_free()` or passed to another
-///    function that takes ownership
-///
-#[no_mangle]
-pub extern "C" fn sexpr_parser_new_copy_src(text: *const c_char) -> sexpr_parser_t {
-    OwnedSExprParser::new(cstr_as_str(text).to_string()).into()
-}
-
-/// @brief Creates a new S-Expression Parser from an existing `sexpr_parser_t`
-/// @ingroup tokenizer_and_parser_group
-/// @param[in]  parser  The source `sexpr_parser_t` to clone
-/// @return The new `sexpr_parser_t`, ready to parse the text
-/// @note The returned `sexpr_parser_t` must be freed with `sexpr_parser_free()`
-/// @note A cloned parser can be thought of as an independent read cursor referencing the same source text.
-/// @warning The returned `sexpr_parser_t` borrows a reference to the same `text` pointer as the original,
-///    so the returned `sexpr_parser_t` must be freed before the `text` is freed or allowed to go out of scope.
-///
-#[no_mangle]
-pub extern "C" fn sexpr_parser_clone(parser: *const sexpr_parser_t) -> sexpr_parser_t {
-    let parser = unsafe{ &*parser }.borrow_inner_enum();
-    parser.clone().into()
+    let cstr = unsafe{ std::ffi::CStr::from_ptr(text) };
+    let parser = SExprParser::new(cstr.to_bytes());
+    parser.into()
 }
 
 /// @brief Frees an S-Expression Parser
@@ -278,7 +232,7 @@ pub extern "C" fn sexpr_parser_clone(parser: *const sexpr_parser_t) -> sexpr_par
 ///
 #[no_mangle]
 pub extern "C" fn sexpr_parser_free(parser: sexpr_parser_t) {
-    let parser = parser.into_inner_enum();
+    let parser = parser.into_boxed_dyn();
     drop(parser);
 }
 
@@ -433,7 +387,7 @@ pub extern "C" fn sexpr_parser_parse_to_syntax_tree(parser: *mut sexpr_parser_t)
 {
     let parser = unsafe{ &mut *parser };
     parser.free_err_string();
-    let rust_parser = parser.borrow_sexpr_parser_mut();
+    let rust_parser = parser.borrow_dyn_mut();
     rust_parser.parse_to_syntax_tree().into()
 }
 
@@ -1070,7 +1024,7 @@ pub extern "C" fn metta_run(metta: *mut metta_t, parser: sexpr_parser_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
     let metta = unsafe{ &mut *metta };
     metta.free_err_string();
-    let mut parser = parser.into_boxed_dyn();
+    let mut parser = parser.into_boxed_dyn().into_parser();
     let rust_metta = metta.borrow();
     let results = rust_metta.run(&mut *parser);
     match results {
@@ -1252,7 +1206,7 @@ impl run_context_t {
 #[no_mangle]
 pub extern "C" fn run_context_push_parser(run_context: *mut run_context_t, parser: sexpr_parser_t) {
     let context = unsafe{ &mut *run_context }.borrow_mut();
-    let parser = parser.into_boxed_dyn();
+    let parser = parser.into_boxed_dyn().into_parser();
 
     context.push_parser(parser)
 }
@@ -1372,7 +1326,7 @@ impl runner_state_t {
 #[no_mangle]
 pub extern "C" fn runner_state_new_with_parser(metta: *const metta_t, parser: sexpr_parser_t) -> runner_state_t {
     let metta = unsafe{ &*metta }.borrow();
-    let parser = parser.into_boxed_dyn();
+    let parser = parser.into_boxed_dyn().into_parser();
     let state = RunnerState::new_with_parser(metta, parser);
     state.into()
 }
@@ -1986,7 +1940,7 @@ impl ModuleLoader for CFsModFmtLoader {
             Some(err_string) => Err(err_string),
         }
     }
-    fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {
+    fn get_resource(&self, _res_key: ResourceKey) -> Result<Resource, String> {
         //TODO, add C API for providing resources
         Err("resource not found".to_string())
     }
