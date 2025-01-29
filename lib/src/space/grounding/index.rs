@@ -83,6 +83,10 @@ impl AtomStorage {
             Err(_) => false,
         }
     }
+
+    pub fn count(&self) -> usize {
+        self.atoms.left_values().count()
+    }
 }
 
 impl Display for AtomStorage {
@@ -344,6 +348,28 @@ impl AtomIndex {
 
     pub fn iter(&self) -> Box<dyn Iterator<Item=Cow<'_, Atom>> + '_> {
         Box::new(self.root.unpack_atoms(&self.storage).map(|(a, _n)| a))
+    }
+
+    pub fn stats(&self) -> AtomIndexStats {
+        AtomIndexStats{
+            storage_count: self.storage.count(),
+            trie_stats: self.root.stats(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct AtomIndexStats {
+    storage_count: usize,
+    trie_stats: AtomTrieNodeStats,
+}
+
+impl AtomIndexStats {
+    pub fn storage_count(&self) -> usize {
+        self.storage_count
+    }
+    pub fn trie_stats(&self) -> &AtomTrieNodeStats {
+        &self.trie_stats
     }
 }
 
@@ -640,6 +666,44 @@ impl AtomTrieNode {
 
     pub fn is_empty(&self) -> bool {
         *self == AtomTrieNode::Leaf
+    }
+
+    pub fn stats(&self) -> AtomTrieNodeStats {
+        let content = match self {
+            AtomTrieNode::Leaf => return AtomTrieNodeStats{ exact: 0, custom: 0, leaf: 1 },
+            AtomTrieNode::Node(content) => content,
+        };
+        let mut exact = content.exact.keys().count();
+        let mut custom = content.custom.len();
+        let mut leaf = 0usize;
+        let children = content.exact.iter().map(|(_, c)| c)
+            .chain(content.custom.iter().map(|(_, c)| c));
+        for child in children {
+            let AtomTrieNodeStats{ exact: e, custom: c, leaf: l} = child.stats();
+            exact += e;
+            custom += c;
+            leaf += l;
+        }
+        AtomTrieNodeStats{ exact, custom, leaf }
+    }
+}
+
+#[derive(Debug)]
+pub struct AtomTrieNodeStats {
+    exact: usize,
+    custom: usize,
+    leaf: usize,
+}
+
+impl AtomTrieNodeStats {
+    pub fn exact(&self) -> usize {
+        self.exact
+    }
+    pub fn custom(&self) -> usize {
+        self.custom
+    }
+    pub fn leaf(&self) -> usize {
+        self.leaf
     }
 }
 
