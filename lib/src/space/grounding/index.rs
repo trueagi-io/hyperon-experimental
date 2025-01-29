@@ -3,6 +3,7 @@ use crate::serial::NullSerializer;
 use crate::matcher::*;
 use crate::common::CachingMapper;
 use crate::common::collections::write_mapping;
+use crate::common::vecondemand::VecOnDemand;
 
 use bimap::BiMap;
 use std::hash::Hash;
@@ -391,7 +392,7 @@ enum AtomTrieNode {
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 struct AtomTrieNodeContent {
     exact: HashMap<ExactKey, AtomTrieNode>,
-    custom: Vec<(Atom, AtomTrieNode)>,
+    custom: VecOnDemand<(Atom, AtomTrieNode)>,
 }
 
 type QueryResult = Box<dyn Iterator<Item=Bindings>>;
