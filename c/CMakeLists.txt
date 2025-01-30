@@ -8,6 +8,8 @@ enable_testing()
 option(BUILD_SHARED_LIBS "Build shared library" ON)
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 
+
+
 # HYPERONC_TARGET_DIR is used as a target dir for cargo. Cargo automatically adds
 # `debug/release` suffix to the value of --target-dir argument so we need to
 # calculate actual path to compiled library using $<CONFIG:...> cmake generator

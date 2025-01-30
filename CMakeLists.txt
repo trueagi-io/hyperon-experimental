@@ -48,6 +48,17 @@ set(HYPERONPY_BINARY_DIR "${BINARY_DIR}")
 message(STATUS "HYPERONPY_BINARY_DIR = ${HYPERONPY_BINARY_DIR}")
 
 enable_testing()
-add_custom_target(check
-    COMMAND cd "${HYPERONC_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure
-    COMMAND cd "${HYPERONPY_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure)
+
+message(CMAKE_CURRENT_SOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR})
+message(PYTHONPATH=${PYTHONPATH})
+
+if(WIN32)
+    add_custom_target(check
+       #COMMAND cd "${HYPERONC_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure -C ${BUILD_CONFIGURATION}
+       COMMAND cd "${HYPERONPY_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure -C ${BUILD_CONFIGURATION})
+else()
+    add_custom_target(check
+       COMMAND cd "${HYPERONC_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure
+       COMMAND cd "${HYPERONPY_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure)
+endif()
+

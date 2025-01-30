@@ -455,6 +455,8 @@ fn git_catalog_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Result
     let refresh_time = refresh_time.ok_or_else(|| format!("Error in environment.metta. \"refreshTime\" property required for #gitCatalog"))?
         .parse::<u64>().map_err(|e| format!("Error in environment.metta.  Error parsing \"refreshTime\": {e}"))?;
 
+    let catalog_name = crate::metta::runner::str::strip_quotes(catalog_name);
+    let catalog_url = crate::metta::runner::str::strip_quotes(catalog_url);
     let mut managed_remote_catalog = LocalCatalog::new(caches_dir, catalog_name).unwrap();
     let remote_catalog = GitCatalog::new(caches_dir, env.fs_mod_formats.clone(), catalog_name, catalog_url, refresh_time).unwrap();
     managed_remote_catalog.push_upstream_catalog(Box::new(remote_catalog));

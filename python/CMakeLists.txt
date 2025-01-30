@@ -4,6 +4,7 @@ project(hyperonpy)
 option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 
 enable_testing()
+
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 
 # Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
@@ -71,5 +72,8 @@ if(WIN32)
     target_link_libraries(hyperonpy PRIVATE wsock32 ws2_32 userenv ntdll bcrypt)
 endif()
 
-set(PYTHONPATH "${CMAKE_CURRENT_SOURCE_DIR}")
+get_target_property(PYTHONPATH hyperonpy LIBRARY_OUTPUT_DIRECTORY)
+message(PYTHONPATH=${PYTHONPATH})
+cmake_path(APPEND PYTHONPATH $<CONFIG>)
+message(PYTHONPATH=${PYTHONPATH})
 add_subdirectory(tests)
