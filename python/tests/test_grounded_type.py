@@ -46,7 +46,8 @@ class GroundedTypeTest(unittest.TestCase):
 
     def test_string_repr(self):
         metta = MeTTa(env_builder=Environment.test_env())
-        self.assertEqual(metta.run('!(repr "A")')[0][0].get_object(), ValueObject("\"A\""))
+        self.assertEqual(metta.run('!(repr "A\n\tBB\x1b\u130A9")')[0][0].get_object(),
+                         ValueObject("\"A\\n\\tBB\\x1b\u130A9\""))
 
     def test_meta_types(self):
         metta = MeTTa(env_builder=Environment.test_env())
