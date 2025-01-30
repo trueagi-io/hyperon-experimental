@@ -881,15 +881,6 @@ impl<'a> Iterator for BindingsIter<'a> {
     }
 }
 
-impl<'a> IntoIterator for &'a Bindings {
-    type Item = (&'a VariableAtom, Atom);
-    type IntoIter = BindingsIter<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
 
 /// Represents a set of [Bindings] instances resulting from an operation where multiple matches are possible.
 #[derive(Clone, Debug)]

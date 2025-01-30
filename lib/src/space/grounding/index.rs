@@ -945,6 +945,39 @@ mod test {
             AtomToken::EndExpr, AtomToken::EndExpr], actual);
     }
 
+    fn plain_vars(bind: Bindings) -> Bindings {
+        fn plain(var: VariableAtom) -> VariableAtom {
+            let mut name = var.name();
+            match name.find('#') {
+                Some(p) => { let _ = name.split_off(p); },
+                None => {},
+            }
+            VariableAtom::new(name)
+        }
+        let mut res = Bindings::new();
+        for (var, mut atom) in bind.iter() {
+            let var = plain(var.clone());
+            res = match atom {
+                Atom::Variable(varval) => res.add_var_equality(&var, &plain(varval)),
+                Atom::Expression(_) => {
+                    atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| {
+                        *var = plain(var.clone())
+                    });
+                    res.add_var_binding(var, atom)
+                },
+                _ => res.add_var_binding(var, atom),
+            }.expect("Not expected");
+        }
+        println!("plain_vars: {} -> {}", bind, res);
+        res
+    }
+
+    macro_rules! assert_eq_bind_no_order {
+        ($actual:expr, $expected:expr) => {
+            assert_eq_no_order!($actual.map(plain_vars).collect::<Vec<Bindings>>(), $expected);
+        }
+    }
+
     #[test]
     fn atom_index_query_single() {
         let mut index = AtomIndex::new();
@@ -952,12 +985,36 @@ mod test {
         index.insert(Atom::var("a"));
         index.insert(Atom::gnd(Number::Integer(42)));
 
-        assert_eq_no_order!(index.query(&Atom::sym("A")).collect::<Vec<Bindings>>(), vec![bind!{}, bind!{a: Atom::sym("A")}]);
-        assert_eq_no_order!(index.query(&Atom::var("a")).collect::<Vec<Bindings>>(), vec![bind!{ a: Atom::sym("A") }, bind!{ a: Atom::gnd(Number::Integer(42)) }, bind!{ a: Atom::var("a") }]);
-        assert_eq_no_order!(index.query(&Atom::gnd(Number::Integer(42))).collect::<Vec<Bindings>>(), vec![bind!{}, bind!{a: Atom::gnd(Number::Integer(42))}]);
-        assert_eq_no_order!(index.query(&sym!("B")).collect::<Vec<Bindings>>(), vec![bind!{a: Atom::sym("B")}]);
-        assert_eq_no_order!(index.query(&Atom::var("b")).collect::<Vec<Bindings>>(), vec![bind!{ b: Atom::sym("A") }, bind!{ b: Atom::gnd(Number::Integer(42)) }, bind!{ b: Atom::var("a") }]);
-        assert_eq_no_order!(index.query(&Atom::gnd(Number::Integer(43))).collect::<Vec<Bindings>>(), vec![bind!{a: Atom::gnd(Number::Integer(43))}]);
+        assert_eq_bind_no_order!(index.query(&Atom::sym("A")), vec![bind!{}, bind!{a: Atom::sym("A")}]);
+        assert_eq_bind_no_order!(index.query(&Atom::var("b")), vec![bind!{ b: Atom::sym("A") }, bind!{ b: Atom::gnd(Number::Integer(42)) }, bind!{ b: Atom::var("a") }]);
+        assert_eq_bind_no_order!(index.query(&Atom::gnd(Number::Integer(42))), vec![bind!{}, bind!{a: Atom::gnd(Number::Integer(42))}]);
+        assert_eq_bind_no_order!(index.query(&sym!("B")), vec![bind!{a: Atom::sym("B")}]);
+        assert_eq_bind_no_order!(index.query(&Atom::gnd(Number::Integer(43))), vec![bind!{a: Atom::gnd(Number::Integer(43))}]);
+    }
+
+    #[test]
+    fn atom_index_unique_var_names() {
+        let mut index = AtomIndex::new();
+        let expected = Atom::var("a");
+        index.insert(expected.clone());
+
+        let mut result = index.query(&Atom::var("x"));
+        let actual = result.next().expect("Result is empty").resolve(&VariableAtom::new("x")).unwrap();
+
+        assert!(result.next().is_none());
+        assert!(atoms_are_equivalent(&actual, &expected));
+        assert_ne!(actual, expected);
+
+        let mut index = AtomIndex::new();
+        let expected = expr!("A" b "C");
+        index.insert(expected.clone());
+
+        let mut result = index.query(&Atom::var("x"));
+        let actual = result.next().expect("Result is empty").resolve(&VariableAtom::new("x")).unwrap();
+
+        assert!(result.next().is_none());
+        assert!(atoms_are_equivalent(&actual, &expected));
+        assert_ne!(actual, expected);
     }
 
     #[test]
@@ -965,10 +1022,10 @@ mod test {
         let mut index = AtomIndex::new();
         index.insert(expr!("A" a {Number::Integer(42)} a));
 
-        assert_eq_no_order!(index.query(&expr!("A" "B" {Number::Integer(42)} "B")).collect::<Vec<Bindings>>(), vec![bind!{a: expr!("B")}]);
-        assert_eq_no_order!(index.query(&expr!("A" ("B" "C") {Number::Integer(42)} ("B" "C"))).collect::<Vec<Bindings>>(), vec![bind!{a: expr!("B" "C")}]);
-        assert_eq_no_order!(index.query(&expr!("A" "B" {Number::Integer(42)} "C")).collect::<Vec<Bindings>>(), Vec::<Bindings>::new());
-        assert_eq_no_order!(index.query(&expr!(b)).collect::<Vec<Bindings>>(), vec![bind!{ b: expr!("A" a {Number::Integer(42)} a)}]);
+        assert_eq_bind_no_order!(index.query(&expr!("A" "B" {Number::Integer(42)} "B")), vec![bind!{a: expr!("B")}]);
+        assert_eq_bind_no_order!(index.query(&expr!("A" ("B" "C") {Number::Integer(42)} ("B" "C"))), vec![bind!{a: expr!("B" "C")}]);
+        assert_eq_bind_no_order!(index.query(&expr!("A" "B" {Number::Integer(42)} "C")), Vec::<Bindings>::new());
+        assert_eq_bind_no_order!(index.query(&expr!(b)), vec![bind!{ b: expr!("A" a {Number::Integer(42)} a)}]);
     }
 
     #[test]
