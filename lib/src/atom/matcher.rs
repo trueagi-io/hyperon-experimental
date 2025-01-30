@@ -1192,12 +1192,12 @@ pub fn atoms_are_equivalent(left: &Atom, right: &Atom) -> bool {
 
 use std::collections::hash_map::Entry;
 
-fn atoms_are_equivalent_with_bindings<'a, 'b: 'a>(left: &'b Atom, right: &'b Atom,
-        left_vars: &'a mut HashMap<&'b VariableAtom, &'b VariableAtom>,
-        right_vars: &'a mut HashMap<&'b VariableAtom, &'b VariableAtom>) -> bool {
+fn atoms_are_equivalent_with_bindings<'a>(left: &'a Atom, right: &'a Atom,
+        left_vars: &mut HashMap<&'a VariableAtom, &'a VariableAtom>,
+        right_vars: &mut HashMap<&'a VariableAtom, &'a VariableAtom>) -> bool {
 
-    fn can_be_renamed<'a, 'b: 'a>(map: &'a mut HashMap<&'b VariableAtom, &'b VariableAtom>,
-        var: &'b VariableAtom, atom: &'b VariableAtom) -> bool {
+    fn can_be_renamed<'a>(map: &mut HashMap<&'a VariableAtom, &'a VariableAtom>,
+        var: &'a VariableAtom, atom: &'a VariableAtom) -> bool {
         match map.entry(var) {
             Entry::Occupied(entry) => *entry.get() == atom,
             Entry::Vacant(entry) => {

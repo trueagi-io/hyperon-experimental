@@ -3,18 +3,18 @@ use super::collections::{ListMap, Equality, DefaultEquality};
 use std::fmt::{Debug, Display, Formatter};
 use itertools::Itertools;
 
-pub fn compare_vec_no_order<'a, T, A, B, E>(actual: A, expected: B, _cmp: E) -> VecDiff<'a, T, E>
+pub fn compare_vec_no_order<T, A, B, E>(actual: A, expected: B, _cmp: E) -> VecDiff<T, E>
 where
-    A: Iterator<Item=&'a T>,
-    B: Iterator<Item=&'a T>,
-    E: Equality<&'a T>,
+    A: Iterator<Item=T>,
+    B: Iterator<Item=T>,
+    E: Equality<T>,
 {
-    let mut diff: ListMap<&T, Count, E> = ListMap::new();
+    let mut diff: ListMap<T, Count, E> = ListMap::new();
     for i in actual {
-        diff.entry(&i).or_default().actual += 1;
+        diff.entry(i).or_default().actual += 1;
     }
     for i in expected {
-        diff.entry(&i).or_default().expected += 1;
+        diff.entry(i).or_default().expected += 1;
     }
     diff = diff.into_iter().filter(|(_v, c)| c.actual != c.expected).collect();
     VecDiff{ diff }
@@ -26,8 +26,8 @@ struct Count {
     expected: usize,
 }
 
-pub struct VecDiff<'a, T, E: Equality<&'a T>> {
-    diff: ListMap<&'a T, Count, E>,
+pub struct VecDiff<T, E: Equality<T>> {
+    diff: ListMap<T, Count, E>,
 }
 
 struct FormatAsDebug<T: Debug>(T);
@@ -44,7 +44,7 @@ impl<T: Display> Display for FormatAsDisplay<T> {
     }
 }
 
-impl<'a, T, E: Equality<&'a T>> VecDiff<'a, T, E> {
+impl<T, E: Equality<T>> VecDiff<T, E> {
     pub fn has_diff(&self) -> bool {
         !self.diff.is_empty()
     }
@@ -57,20 +57,20 @@ impl<'a, T, E: Equality<&'a T>> VecDiff<'a, T, E> {
         self.as_string(FormatAsDebug)
     }
     
-    fn as_string<F, I: Display>(&self, f: F) -> Option<String>
-        where F: Fn(&'a T) -> I
+    fn as_string<'a, F, I: 'a + Display>(&'a self, f: F) -> Option<String>
+        where F: Copy + Fn(&'a T) -> I
     {
         let mut diff = String::new();
         if self.has_diff() {
             let mut missed = self.diff.iter()
                 .filter(|(_v, c)| c.actual < c.expected)
                 .flat_map(|(v, c)| std::iter::repeat_n(v, c.expected - c.actual))
-                .map(|v| f(v))
+                .map(f)
                 .peekable();
             let mut excessive = self.diff.iter()
                 .filter(|(_v, c)| c.actual > c.expected)
                 .flat_map(|(v, c)| std::iter::repeat_n(v, c.actual - c.expected))
-                .map(|v| f(v))
+                .map(f)
                 .peekable();
             if missed.peek().is_some() {
                 diff.push_str(format!("Missed results: {}", missed.format(", ")).as_str());
