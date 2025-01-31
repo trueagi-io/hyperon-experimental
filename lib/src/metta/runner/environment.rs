@@ -76,13 +76,13 @@ impl Environment {
 
     /// Returns the [ModuleCatalog]s from the Environment, in search priority order
     #[cfg(feature = "pkg_mgmt")]
-    pub fn catalogs<'a>(&'a self) -> impl Iterator<Item=&dyn ModuleCatalog> + 'a {
+    pub fn catalogs(&self) -> impl Iterator<Item=&'_ dyn ModuleCatalog> + '_ {
         self.catalogs.iter().map(|catalog| &**catalog as &dyn ModuleCatalog)
     }
 
     /// Returns the [FsModuleFormat]s from the Environment, in priority order
     #[cfg(feature = "pkg_mgmt")]
-    pub fn fs_mod_formats<'a>(&'a self) -> impl Iterator<Item=&dyn FsModuleFormat> + 'a {
+    pub fn fs_mod_formats(&self) -> impl Iterator<Item=&'_ dyn FsModuleFormat> + '_ {
         self.fs_mod_formats.iter().map(|fmt| &**fmt as &dyn FsModuleFormat)
     }
 

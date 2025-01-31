@@ -3,12 +3,13 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::types::{get_atom_types, get_meta_type};
-use crate::common::multitrie::MultiTrie;
-use crate::space::grounding::atom_to_trie_key;
+use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
+use crate::common::collections::ImmutableString;
 use super::{grounded_op, regex};
 use crate::metta::runner::number::*;
 
 use std::convert::TryInto;
+use std::hash::{DefaultHasher, Hasher};
 
 #[derive(Clone, Debug)]
 pub struct UniqueAtomOp {}
@@ -82,6 +83,35 @@ impl Grounded for IntersectionAtomOp {
         Some(self)
     }
 }
+
+fn atom_to_trie_key(atom: &Atom) -> TrieKey<SymbolAtom> {
+    fn fill_key(atom: &Atom, tokens: &mut Vec<TrieToken<SymbolAtom>>) {
+        match atom {
+            Atom::Symbol(sym) => tokens.push(TrieToken::Exact(sym.clone())),
+            Atom::Expression(expr) => {
+                tokens.push(TrieToken::LeftPar);
+                expr.children().iter().for_each(|child| fill_key(child, tokens));
+                tokens.push(TrieToken::RightPar);
+            },
+            Atom::Grounded(g) if g.as_grounded().as_match().is_none() => {
+                // TODO: Adding Hash on grounded atoms matched by equality is
+                // required in order to make TrieToken::Exact be generated for
+                // them.
+                let mut h = DefaultHasher::new();
+                match (*g).serialize(&mut h) {
+                    Ok(()) => { tokens.push(TrieToken::Exact(SymbolAtom::new(ImmutableString::Allocated(h.finish().to_string())))) }
+                    Err(_) => { tokens.push(TrieToken::Wildcard) }
+                }
+            }
+            _ => tokens.push(TrieToken::Wildcard),
+        }
+    }
+
+    let mut tokens = Vec::new();
+    fill_key(atom, &mut tokens);
+    TrieKey::from(tokens)
+}
+
 
 impl CustomExecute for IntersectionAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
@@ -605,6 +635,19 @@ mod tests {
                    vec![expr!(("A" ("B" "C")) ("A" ("B" "C"))
                         ("f" "g") ("f" "g") ("f" "g") "Z"
                         ("A" ("B" "C")) "p" "p" ("Q" "a"))]);
+    }
+
+    #[test]
+    fn index_atom_to_key() {
+        assert_eq!(atom_to_trie_key(&Atom::sym("A")), TrieKey::from([TrieToken::Exact(SymbolAtom::new("A".into()))]));
+        assert_eq!(atom_to_trie_key(&Atom::value(1)), TrieKey::from([TrieToken::Wildcard]));
+        assert_eq!(atom_to_trie_key(&Atom::var("a")), TrieKey::from([TrieToken::Wildcard]));
+        assert_eq!(atom_to_trie_key(&expr!("A" "B")), TrieKey::from([
+                TrieToken::LeftPar,
+                TrieToken::Exact(SymbolAtom::new("A".into())),
+                TrieToken::Exact(SymbolAtom::new("B".into())),
+                TrieToken::RightPar
+        ]));
     }
 
     #[test]
