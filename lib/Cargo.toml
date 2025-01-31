@@ -15,6 +15,7 @@ bitset = "0.1.2"
 dyn-fmt = "0.4.0"
 itertools = "0.13.0"
 unescaper = "0.1.5"
+unicode_reader = "1.0.2"
 
 # pkg_mgmt deps
 xxhash-rust = {version="0.8.7", features=["xxh3"], optional=true }

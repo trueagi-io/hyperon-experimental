@@ -77,7 +77,6 @@ use std::hash::Hasher;
 use std::ffi::{OsStr, OsString};
 use std::collections::HashSet;
 
-use crate::metta::text::OwnedSExprParser;
 use crate::metta::runner::modules::*;
 use crate::metta::runner::{*, git_catalog::*};
 
@@ -417,8 +416,8 @@ impl SingleFileModule {
     fn new(path: &Path, pkg_info: PkgInfo) -> Self {
         Self {path: path.into(), pkg_info }
     }
-    fn read_contents(&self) -> Result<Vec<u8>, String> {
-        std::fs::read(&self.path)
+    fn open_file(&self) -> Result<std::fs::File, String> {
+        std::fs::File::open(&self.path)
             .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))
     }
 }
@@ -430,18 +429,15 @@ impl ModuleLoader for SingleFileModule {
         let resource_dir = self.path.parent().unwrap();
         context.init_self_module(space, Some(resource_dir.into()));
 
-        let program_text = String::from_utf8(self.read_contents()?)
-            .map_err(|e| e.to_string())?;
-
-        let parser = OwnedSExprParser::new(program_text);
+        let parser = SExprParser::new(std::io::BufReader::new(self.open_file()?));
         context.push_parser(Box::new(parser));
 
         Ok(())
     }
-    fn get_resource(&self, res_key: ResourceKey) -> Result<Vec<u8>, String> {
+    fn get_resource(&self, res_key: ResourceKey) -> Result<Resource, String> {
         match res_key {
-            ResourceKey::MainMettaSrc => self.read_contents(),
-            ResourceKey::Version => self.pkg_info.version_bytes(),
+            ResourceKey::MainMettaSrc => self.open_file().map(Into::<Resource>::into),
+            ResourceKey::Version => self.pkg_info.version_bytes().map(Into::<Resource>::into),
             _ => Err("unsupported resource key".to_string())
         }
     }
@@ -463,9 +459,10 @@ impl DirModule {
     fn new(path: &Path, pkg_info: PkgInfo) -> Self {
         Self { path: path.into(), pkg_info }
     }
-    fn read_module_metta(&self) -> Option<Vec<u8>> {
+    fn open_file(&self) -> Result<std::fs::File, String> {
         let module_metta_path = self.path.join("module.metta");
-        std::fs::read(&module_metta_path).ok()
+        std::fs::File::open(module_metta_path)
+            .map_err(|err| format!("Could not read file, path: {}, error: {}", self.path.display(), err))
     }
 }
 
@@ -478,19 +475,20 @@ impl ModuleLoader for DirModule {
 
         // A module.metta file is optional.  Without one a dir module behaves as just
         // a container for other resources and sub-modules.
-        if let Some(program_buf) = self.read_module_metta() {
-            let program_text = String::from_utf8(program_buf)
-                .map_err(|e| e.to_string())?;
-            let parser = OwnedSExprParser::new(program_text);
+        if let Some(program_file) = self.open_file().ok() {
+            let parser = SExprParser::new(std::io::BufReader::new(program_file));
             context.push_parser(Box::new(parser));
         }
 
         Ok(())
     }
-    fn get_resource(&self, res_key: ResourceKey) -> Result<Vec<u8>, String> {
+    fn get_resource(&self, res_key: ResourceKey) -> Result<Resource, String> {
         match res_key {
-            ResourceKey::MainMettaSrc => self.read_module_metta().ok_or_else(|| format!("no module.metta file found in {} dir module", self.path.display())),
-            ResourceKey::Version => self.pkg_info.version_bytes(),
+            ResourceKey::MainMettaSrc => self.open_file()
+                .map_err(|_| format!("no module.metta file found in {} dir module", self.path.display()))
+                .map(Into::<Resource>::into),
+            ResourceKey::Version => self.pkg_info.version_bytes()
+                .map(Into::<Resource>::into),
             _ => Err("unsupported resource key".to_string())
         }
     }

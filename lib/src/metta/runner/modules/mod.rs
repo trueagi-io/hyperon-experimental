@@ -286,7 +286,7 @@ impl MettaMod {
         self.resource_dir.as_deref()
     }
 
-    pub fn get_resource(&self, res_key: ResourceKey) -> Result<Vec<u8>, String> {
+    pub fn get_resource(&self, res_key: ResourceKey) -> Result<Resource, String> {
         if let Some(loader) = &self.loader {
             loader.get_resource(res_key)
         } else {
@@ -601,8 +601,37 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     }
 
     /// Returns a data blob containing a given named resource belonging to a module
-    fn get_resource(&self, _res_key: ResourceKey) -> Result<Vec<u8>, String> {
+    fn get_resource(&self, _res_key: ResourceKey) -> Result<Resource, String> {
         Err("resource not found".to_string())
+    }
+}
+
+/// Resource for loading
+pub enum Resource {
+    /// Resource backed by file
+    File(std::io::BufReader<std::fs::File>),
+    /// Resource backed by memory buffer
+    Bytes(std::io::Cursor<Vec<u8>>),
+}
+
+impl From<std::fs::File> for Resource {
+    fn from(file: std::fs::File) -> Self {
+        Self::File(std::io::BufReader::new(file))
+    }
+}
+
+impl From<Vec<u8>> for Resource {
+    fn from(bytes: Vec<u8>) -> Self {
+        Self::Bytes(std::io::Cursor::new(bytes))
+    }
+}
+
+impl std::io::Read for Resource {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        match self {
+            Resource::File(file) => file.read(buf),
+            Resource::Bytes(bytes) => bytes.read(buf),
+        }
     }
 }
 
