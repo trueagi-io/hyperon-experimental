@@ -11,6 +11,8 @@ use std::fmt::Debug;
 use std::collections::HashSet;
 use index::*;
 
+pub use index::{ALLOW_DUPLICATION, NO_DUPLICATION};
+
 // Grounding space
 
 /// Symbol to concatenate queries to space.
@@ -19,31 +21,37 @@ pub const COMMA_SYMBOL : Atom = sym!(",");
 /// In-memory space which can contain grounded atoms.
 // TODO: Clone is required by C API
 #[derive(Clone)]
-pub struct GroundingSpace {
-    index: AtomIndex,
+pub struct GroundingSpace<D: DuplicationStrategy = AllowDuplication> {
+    index: AtomIndex<D>,
     common: SpaceCommon,
     name: Option<String>,
 }
 
 impl GroundingSpace {
-
     /// Constructs new empty space.
     pub fn new() -> Self {
-        Self {
-            index: AtomIndex::new(),
-            common: SpaceCommon::default(),
-            name: None,
-        }
+        Self::with_strategy(ALLOW_DUPLICATION)
     }
 
     /// Constructs space from vector of atoms.
     pub fn from_vec(atoms: Vec<Atom>) -> Self {
-        let mut index = AtomIndex::new();
+        let mut index = AtomIndex::with_strategy(ALLOW_DUPLICATION);
         for atom in atoms {
             index.insert(atom);
         }
         Self{
             index,
+            common: SpaceCommon::default(),
+            name: None,
+        }
+    }
+}
+
+impl<D: DuplicationStrategy> GroundingSpace<D> {
+    /// Constructs new empty space using duplication strategy.
+    pub fn with_strategy(strategy: D) -> Self {
+        Self {
+            index: AtomIndex::with_strategy(strategy),
             common: SpaceCommon::default(),
             name: None,
         }

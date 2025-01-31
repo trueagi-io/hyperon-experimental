@@ -280,13 +280,19 @@ impl<'a> Iterator for AtomIter<'a> {
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-pub struct AtomIndex {
+pub struct AtomIndex<D: DuplicationStrategy = NoDuplication> {
     storage: AtomStorage,
-    root: AtomTrieNode,
+    root: AtomTrieNode<D>,
 }
 
 impl AtomIndex {
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<D: DuplicationStrategy> AtomIndex<D> {
+    pub fn with_strategy(_strategy: D) -> Self {
         Self::default()
     }
 
@@ -347,10 +353,8 @@ impl AtomIndex {
     }
 
     pub fn iter(&self) -> Box<dyn Iterator<Item=Cow<'_, Atom>> + '_> {
-        Box::new(self.root.unpack_atoms(&self.storage).flat_map(|(a, leaf)| {
-            let count = leaf.as_leaf();
-            std::iter::repeat_n(a, *count)
-        }))
+        Box::new(self.root.unpack_atoms(&self.storage)
+            .flat_map(|(a, leaf)| { std::iter::repeat_n(a, leaf.leaf_counter()) }))
     }
 
     pub fn is_empty(&self) -> bool {
@@ -364,6 +368,45 @@ impl AtomIndex {
         }
     }
 }
+
+pub trait DuplicationStrategyImplementor {
+    fn dup_counter_mut(&mut self) -> &mut usize;
+}
+
+pub trait DuplicationStrategy: Default {
+    fn add_atom(leaf: &mut dyn DuplicationStrategyImplementor);
+    fn remove_atom(leaf: &mut dyn DuplicationStrategyImplementor);
+}
+
+#[derive(Default, PartialEq, Clone)]
+pub struct NoDuplication {}
+impl DuplicationStrategy for NoDuplication {
+    fn add_atom(leaf: &mut dyn DuplicationStrategyImplementor) {
+        let count = leaf.dup_counter_mut();
+        *count = 1;
+    }
+    fn remove_atom(leaf: &mut dyn DuplicationStrategyImplementor) {
+        let count = leaf.dup_counter_mut();
+        *count = 0;
+    }
+}
+
+#[derive(Default, PartialEq, Clone)]
+pub struct AllowDuplication {}
+impl DuplicationStrategy for AllowDuplication {
+    fn add_atom(leaf: &mut dyn DuplicationStrategyImplementor) {
+        let count = leaf.dup_counter_mut();
+        *count += 1;
+    }
+    fn remove_atom(leaf: &mut dyn DuplicationStrategyImplementor) {
+        let count = leaf.dup_counter_mut();
+        *count -= 1;
+    }
+}
+
+pub const ALLOW_DUPLICATION: AllowDuplication = AllowDuplication{};
+pub const NO_DUPLICATION: NoDuplication = NoDuplication{};
+
 
 #[derive(Debug)]
 pub struct AtomIndexStats {
@@ -416,27 +459,41 @@ impl ExactKey {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum AtomTrieNode {
-    Node(Box<AtomTrieNodeContent>),
+enum AtomTrieNode<D: DuplicationStrategy = NoDuplication> {
+    Node(Box<AtomTrieNodeContent<D>>),
     Leaf(usize),
 }
 
-impl Default for AtomTrieNode {
+impl<D: DuplicationStrategy> DuplicationStrategyImplementor for AtomTrieNode<D> {
+    fn dup_counter_mut(&mut self) -> &mut usize {
+        self.leaf_counter_mut()
+    }
+}
+
+impl<D: DuplicationStrategy> Default for AtomTrieNode<D> {
     fn default() -> Self {
-        AtomTrieNode::Leaf(0)
+        AtomTrieNode::Leaf::<D>(0)
     }
 }
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-struct AtomTrieNodeContent {
-    exact: HashMap<ExactKey, AtomTrieNode>,
-    custom: VecOnDemand<(Atom, AtomTrieNode)>,
+struct AtomTrieNodeContent<D: DuplicationStrategy> {
+    exact: HashMap<ExactKey, AtomTrieNode<D>>,
+    custom: VecOnDemand<(Atom, AtomTrieNode<D>)>,
+    _phantom: std::marker::PhantomData<D>,
 }
 
 type QueryResult = Box<dyn Iterator<Item=Bindings>>;
 
 impl AtomTrieNode {
+    #[cfg(test)]
     pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<D: DuplicationStrategy> AtomTrieNode<D> {
+    pub fn with_strategy(_strategy: D) -> Self {
         Self::default()
     }
 
@@ -448,14 +505,11 @@ impl AtomTrieNode {
                 InsertKey::Exact(id) => self.insert_exact(ExactKey(id), key),
                 InsertKey::Custom(atom) => self.insert_custom(atom, key),
             },
-            None => {
-                let count = self.as_leaf_mut();
-                *count += 1;
-            },
+            None => D::add_atom(self),
         }
     }
 
-    fn content_mut(&mut self) -> &mut AtomTrieNodeContent {
+    fn content_mut(&mut self) -> &mut AtomTrieNodeContent<D> {
         if let AtomTrieNode::Leaf(count) = *self {
             assert_eq!(count, 0);
             *self = AtomTrieNode::Node(Default::default());
@@ -485,7 +539,7 @@ impl AtomTrieNode {
     }
 
     fn new_branch<'a, I: Iterator<Item=InsertKey>>(key: I) -> Self {
-        let mut child = AtomTrieNode::new();
+        let mut child = AtomTrieNode::with_strategy(D::default());
         child.insert(key);
         child
     }
@@ -505,8 +559,7 @@ impl AtomTrieNode {
                 QueryKey::Custom(atom) => self.match_custom_key(atom, key, storage, mapper),
             },
             None => {
-                let count = self.as_leaf();
-                BindingsSet::count(*count)
+                BindingsSet::count(self.leaf_counter())
             }
         }
     }
@@ -585,7 +638,7 @@ impl AtomTrieNode {
         }
     }
 
-    fn match_custom_entry<'a, I, M>(entry: &Atom, key: &Atom, child: &AtomTrieNode, tail: I,
+    fn match_custom_entry<'a, I, M>(entry: &Atom, key: &Atom, child: &AtomTrieNode<D>, tail: I,
         storage: &AtomStorage, mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
             I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
@@ -617,7 +670,7 @@ impl AtomTrieNode {
         result
     }
 
-    fn unpack_atoms<'a>(&'a self, storage: &'a AtomStorage) -> Box<dyn Iterator<Item=(Cow<'a, Atom>, &'a AtomTrieNode)> + 'a>{
+    fn unpack_atoms<'a>(&'a self, storage: &'a AtomStorage) -> Box<dyn Iterator<Item=(Cow<'a, Atom>, &'a AtomTrieNode<D>)> + 'a>{
         Box::new(AtomTrieNodeIter::new(self, storage)
             .filter_map(|(res, child)| {
                 if let IterResult::Atom(atom) = res {
@@ -674,27 +727,22 @@ impl AtomTrieNode {
                 }
             },
             None => {
-                let count = self.as_leaf_mut();
-                if *count > 0 {
-                    *count -= 1;
-                    true
-                } else {
-                    false
-                }
+                D::remove_atom(self);
+                true
             },
         }
     }
 
-    fn as_leaf(&self) -> &usize {
+    fn leaf_counter(&self) -> usize {
         match self {
-            AtomTrieNode::Leaf(count) => count,
+            AtomTrieNode::Leaf(count) => *count,
             // This invariant holds only for keys which are properly balanced
             // i.e. for keys constructed from atoms
             AtomTrieNode::Node(_) => panic!("Key is expected to end by leaf node"),
         }
     }
 
-    fn as_leaf_mut(&mut self) -> &mut usize {
+    fn leaf_counter_mut(&mut self) -> &mut usize {
         match self {
             AtomTrieNode::Leaf(count) => count,
             // This invariant holds only for keys which are properly balanced
@@ -746,7 +794,7 @@ impl AtomTrieNodeStats {
     }
 }
 
-impl Display for AtomTrieNode {
+impl<D: DuplicationStrategy> Display for AtomTrieNode<D> {
     fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
         enum TrieKeyDisplay<'a> {
             Id(usize),
@@ -796,27 +844,27 @@ impl Display for AtomTrieNode {
 }
 
 #[derive(Debug, Clone)]
-struct AtomTrieNodeIter<'a> {
-    node: &'a AtomTrieNode,
+struct AtomTrieNodeIter<'a, D: DuplicationStrategy> {
+    node: &'a AtomTrieNode<D>,
     storage: &'a AtomStorage,
-    state: AtomTrieNodeIterState<'a>,
+    state: AtomTrieNodeIterState<'a, D>,
 }
 
 #[derive(Default, Debug, Clone)]
-enum AtomTrieNodeIterState<'a> {
-    VisitExact(hash_map::Iter<'a, ExactKey, AtomTrieNode>),
-    VisitCustom(std::slice::Iter<'a, (Atom, AtomTrieNode)>),
+enum AtomTrieNodeIterState<'a, D: DuplicationStrategy> {
+    VisitExact(hash_map::Iter<'a, ExactKey, AtomTrieNode<D>>),
+    VisitCustom(std::slice::Iter<'a, (Atom, AtomTrieNode<D>)>),
     VisitExpression {
         build_expr: Vec<Atom>,
-        cur_it: Box<AtomTrieNodeIter<'a>>,
+        cur_it: Box<AtomTrieNodeIter<'a, D>>,
         next_state: Box<Self>,
     },
     #[default]
     End,
 }
 
-impl<'a> AtomTrieNodeIter<'a> {
-    fn new(node: &'a AtomTrieNode, storage: &'a AtomStorage) -> Self {
+impl<'a, D: DuplicationStrategy> AtomTrieNodeIter<'a, D> {
+    fn new(node: &'a AtomTrieNode<D>, storage: &'a AtomStorage) -> Self {
         let state = match node {
             AtomTrieNode::Node(content) => AtomTrieNodeIterState::VisitExact(content.exact.iter()),
             AtomTrieNode::Leaf(_count) => AtomTrieNodeIterState::End,
@@ -834,12 +882,12 @@ enum IterResult<'a> {
     Atom(Cow<'a, Atom>),
 }
 
-impl<'a> Iterator for AtomTrieNodeIter<'a> {
-    type Item = (IterResult<'a>, &'a AtomTrieNode);
+impl<'a, D: DuplicationStrategy> Iterator for AtomTrieNodeIter<'a, D> {
+    type Item = (IterResult<'a>, &'a AtomTrieNode<D>);
 
     fn next(&mut self) -> Option<Self::Item> {
         const ATOM_NOT_IN_STORAGE: &'static str = "Exact entry contains atom which is not in storage";
-        type State<'a> = AtomTrieNodeIterState<'a>;
+        type State<'a, D> = AtomTrieNodeIterState<'a, D>;
 
         loop {
             match &mut self.state {
@@ -1117,7 +1165,7 @@ mod test {
 
     #[test]
     fn atom_index_query_single_duplicate() {
-        let mut index = AtomIndex::new();
+        let mut index = AtomIndex::with_strategy(ALLOW_DUPLICATION);
         index.insert(Atom::sym("A"));
         index.insert(Atom::sym("A"));
         index.insert(Atom::var("a"));
@@ -1140,7 +1188,7 @@ mod test {
 
     #[test]
     fn atom_index_query_expression_duplicate() {
-        let mut index = AtomIndex::new();
+        let mut index = AtomIndex::with_strategy(ALLOW_DUPLICATION);
         index.insert(expr!("A" a {Number::Integer(42)} a));
         index.insert(expr!("A" a {Number::Integer(42)} a));
 
@@ -1156,14 +1204,14 @@ mod test {
 
     #[test]
     fn atom_index_query_expression_duplicate_1() {
-        let mut index = AtomIndex::new();
+        let mut index = AtomIndex::with_strategy(ALLOW_DUPLICATION);
         index.insert(expr!("A" ("B" "C") "D"));
         index.insert(expr!("A" ("B" "C") "D"));
 
         assert_eq_bind_no_order!(index.query(&expr!("A" x "D")),
             vec![bind!{x: expr!("B" "C")}, bind!{x: expr!("B" "C")}]);
 
-        let mut index = AtomIndex::new();
+        let mut index = AtomIndex::with_strategy(ALLOW_DUPLICATION);
         index.insert(expr!("A" ("B" "C") "D"));
         index.insert(expr!("A" ("B" "C") "E"));
 
@@ -1175,7 +1223,7 @@ mod test {
 
     #[test]
     fn atom_index_iter_single_duplicate() {
-        let mut index = AtomIndex::new();
+        let mut index = AtomIndex::with_strategy(ALLOW_DUPLICATION);
         index.insert(Atom::sym("A"));
         index.insert(Atom::sym("A"));
         index.insert(Atom::var("a"));
@@ -1185,6 +1233,32 @@ mod test {
 
         assert_eq_no_order!(get_atoms(&index),
             dup(vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Number::Integer(42))]));
+    }
+
+    #[test]
+    fn atom_index_iter_expression_duplicate() {
+        let mut index = AtomIndex::with_strategy(ALLOW_DUPLICATION);
+        index.insert(expr!(()));
+        index.insert(expr!(()));
+        index.insert(expr!(() "A"));
+        index.insert(expr!(() "A"));
+        index.insert(expr!("A" ("B") "C"));
+        index.insert(expr!("A" ("B") "C"));
+
+        assert_eq_no_order!(get_atoms(&index), dup(vec![expr!(()), expr!(() "A"), expr!("A" ("B") "C")]));
+    }
+
+    #[test]
+    fn atom_index_iter_expression_duplicate_no_dup_strategy() {
+        let mut index = AtomIndex::with_strategy(NO_DUPLICATION);
+        index.insert(expr!(()));
+        index.insert(expr!(()));
+        index.insert(expr!(() "A"));
+        index.insert(expr!(() "A"));
+        index.insert(expr!("A" ("B") "C"));
+        index.insert(expr!("A" ("B") "C"));
+
+        assert_eq_no_order!(get_atoms(&index), vec![expr!(()), expr!(() "A"), expr!("A" ("B") "C")]);
     }
 
     #[test]
@@ -1200,25 +1274,28 @@ mod test {
         let mut node = AtomTrieNode::new();
         node.insert([InsertKey::StartExpr, InsertKey::Custom(Atom::sym("B")), InsertKey::EndExpr].into_iter());
         assert_eq!(format!("{}", node), "{ StartExpr: { Atom(B): { EndExpr: {} } } }");
+    }
 
-        let mut node = AtomTrieNode::new();
+    #[test]
+    fn atom_trie_node_display_duplicate() {
+        let mut node = AtomTrieNode::with_strategy(ALLOW_DUPLICATION);
         node.insert([InsertKey::Custom(Atom::sym("A"))].into_iter());
         node.insert([InsertKey::Custom(Atom::sym("A"))].into_iter());
         assert_eq!(format!("{}", node), "{ Atom(A): { x2 } }");
 
-        let mut node = AtomTrieNode::new();
+        let mut node = AtomTrieNode::with_strategy(ALLOW_DUPLICATION);
         node.insert([InsertKey::StartExpr, InsertKey::Custom(Atom::sym("B")), InsertKey::EndExpr].into_iter());
         node.insert([InsertKey::StartExpr, InsertKey::Custom(Atom::sym("B")), InsertKey::EndExpr].into_iter());
         assert_eq!(format!("{}", node), "{ StartExpr: { Atom(B): { EndExpr: { x2 } } } }");
     }
 
-    fn get_atoms(index: &AtomIndex) -> Vec<Atom> {
+    fn get_atoms<D: DuplicationStrategy>(index: &AtomIndex<D>) -> Vec<Atom> {
         index.iter().map(|a| a.into_owned()).collect()
     }
 
     #[test]
     fn atom_index_remove_single_duplicate() {
-        let mut index = AtomIndex::new();
+        let mut index = AtomIndex::with_strategy(ALLOW_DUPLICATION);
         index.insert(Atom::sym("A"));
         index.insert(Atom::sym("A"));
         index.insert(Atom::var("a"));
@@ -1229,27 +1306,27 @@ mod test {
         assert_eq_no_order!(get_atoms(&index),
             dup(vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Number::Integer(42))]));
 
-        index.remove(&Atom::sym("A"));
+        assert!(index.remove(&Atom::sym("A")));
         assert_eq_no_order!(get_atoms(&index),
             vec![Atom::sym("A"), Atom::var("a"), Atom::var("a"), Atom::gnd(Number::Integer(42)), Atom::gnd(Number::Integer(42))]);
 
-        index.remove(&Atom::gnd(Number::Integer(42)));
+        assert!(index.remove(&Atom::gnd(Number::Integer(42))));
         assert_eq_no_order!(get_atoms(&index),
             vec![Atom::sym("A"), Atom::var("a"), Atom::var("a"), Atom::gnd(Number::Integer(42))]);
 
-        index.remove(&Atom::var("a"));
+        assert!(index.remove(&Atom::var("a")));
         assert_eq_no_order!(get_atoms(&index),
             vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Number::Integer(42))]);
 
-        index.remove(&Atom::var("a"));
-        index.remove(&Atom::gnd(Number::Integer(42)));
-        index.remove(&Atom::sym("A"));
+        assert!(index.remove(&Atom::var("a")));
+        assert!(index.remove(&Atom::gnd(Number::Integer(42))));
+        assert!(index.remove(&Atom::sym("A")));
         assert!(index.is_empty());
     }
 
     #[test]
     fn atom_index_remove_expression_duplicate() {
-        let mut index = AtomIndex::new();
+        let mut index = AtomIndex::with_strategy(ALLOW_DUPLICATION);
         index.insert(expr!(()));
         index.insert(expr!(()));
         index.insert(expr!(() "A"));
@@ -1262,27 +1339,65 @@ mod test {
         assert_eq_no_order!(get_atoms(&index),
             dup(vec![expr!(()), expr!(() "A"), expr!("A" b "C"), expr!("A" ("D") "C")]));
 
-        index.remove(&expr!(()));
+        assert!(index.remove(&expr!(())));
         assert_eq_no_order!(get_atoms(&index),
             vec![expr!(()), expr!(() "A"), expr!("A" b "C"), expr!("A" ("D") "C"), expr!(() "A"), expr!("A" b "C"), expr!("A" ("D") "C")]);
 
-        index.remove(&expr!(() "A"));
+        assert!(index.remove(&expr!(() "A")));
         assert_eq_no_order!(get_atoms(&index),
             vec![expr!(()), expr!("A" b "C"), expr!("A" ("D") "C"), expr!(() "A"), expr!("A" b "C"), expr!("A" ("D") "C")]);
 
-        index.remove(&expr!("A" b "C"));
+        assert!(index.remove(&expr!("A" b "C")));
         assert_eq_no_order!(get_atoms(&index),
             vec![expr!(()), expr!("A" ("D") "C"), expr!(() "A"), expr!("A" b "C"), expr!("A" ("D") "C")]);
 
-        index.remove(&expr!("A" ("D") "C"));
+        assert!(index.remove(&expr!("A" ("D") "C")));
         assert_eq_no_order!(get_atoms(&index),
             vec![expr!(()), expr!(() "A"), expr!("A" b "C"), expr!("A" ("D") "C")]);
 
-        index.remove(&expr!("A" ("D") "C"));
-        index.remove(&expr!("A" b "C"));
-        index.remove(&expr!(() "A"));
-        index.remove(&expr!(()));
+        assert!(index.remove(&expr!("A" ("D") "C")));
+        assert!(index.remove(&expr!("A" b "C")));
+        assert!(index.remove(&expr!(() "A")));
+        assert!(index.remove(&expr!(())));
         assert!(index.is_empty());
+    }
+
+    #[test]
+    fn atom_index_remove_expression_duplicate_no_duplication() {
+        let mut index = AtomIndex::with_strategy(NO_DUPLICATION);
+        index.insert(expr!(()));
+        index.insert(expr!(()));
+        index.insert(expr!(() "A"));
+        index.insert(expr!(() "A"));
+        index.insert(expr!("A" b "C"));
+        index.insert(expr!("A" b "C"));
+        index.insert(expr!("A" ("D") "C"));
+        index.insert(expr!("A" ("D") "C"));
+
+        assert_eq_no_order!(get_atoms(&index),
+            vec![expr!(()), expr!(() "A"), expr!("A" b "C"), expr!("A" ("D") "C")]);
+
+        assert!(index.remove(&expr!(())));
+        assert_eq_no_order!(get_atoms(&index),
+            vec![expr!(() "A"), expr!("A" b "C"), expr!("A" ("D") "C")]);
+
+        assert!(index.remove(&expr!(() "A")));
+        assert_eq_no_order!(get_atoms(&index),
+            vec![expr!("A" b "C"), expr!("A" ("D") "C")]);
+
+        assert!(index.remove(&expr!("A" b "C")));
+        assert_eq_no_order!(get_atoms(&index),
+            vec![expr!("A" ("D") "C")]);
+
+        assert!(index.remove(&expr!("A" ("D") "C")));
+        assert_eq_no_order!(get_atoms(&index), Vec::<Atom>::new());
+
+        assert!(index.is_empty());
+
+        assert!(!index.remove(&expr!("A" ("D") "C")));
+        assert!(!index.remove(&expr!("A" b "C")));
+        assert!(!index.remove(&expr!(() "A")));
+        assert!(!index.remove(&expr!(())));
     }
 
     #[derive(PartialEq, Clone, Debug)]
@@ -1337,6 +1452,6 @@ mod test {
 
     #[test]
     fn atom_trie_node_size() {
-        assert_eq!(std::mem::size_of::<AtomTrieNode>(), 2 * std::mem::size_of::<usize>());
+        assert_eq!(std::mem::size_of::<AtomTrieNode<AllowDuplication>>(), 2 * std::mem::size_of::<usize>());
     }
 }
