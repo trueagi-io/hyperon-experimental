@@ -1,0 +1,5 @@
+!(import! &self py_operations)
+!(+ 1 2)
+;! (assertEqualToResult (+ 1 2) ((+ 1 2)))
+;! (bind! abs (py-atom numpy.absolute (-> Number Number)))
+;! (+ (abs -5) 10)
