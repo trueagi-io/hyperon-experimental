@@ -48,8 +48,7 @@ fn main() -> Result<(), String> {
     let query = match args.get(2) {
         Some(query) => SExprParser::new(query).parse(&tokenizer)?
             .expect(format!("Incorrect atom: {}", query).as_str()),
-        //None => expr!("go_gene_product" ("ontology_term" "GO:0002377") ("protein" "A0A075B6H8")),
-        None => expr!("go_gene_product" ("ontology_term" x) ("protein" y)),
+        None => expr!("no_match"),
     };
 
     let start = now();
@@ -57,11 +56,14 @@ fn main() -> Result<(), String> {
     let duration = since(start);
     println!("{} -> {}, time {:?}", query, result, duration);
 
-    //use hyperon::space::grounding::index::*;
-    
+    // FILE: gaf/edges.metta
+    // QUERY: (go_gene_product (ontology_term GO:0002377) (protein A0A075B6H8))
+    //use hyperon::space::grounding::index::storage::AtomStorage;
+    //use hyperon::space::grounding::index::trie::{AllowDuplication, AtomTrie, AtomTrieNode, AtomTrieNodeContent};
+
     //println!("Atom size {}", std::mem::size_of::<Atom>());
     //println!("AtomTrieNode size {}", std::mem::size_of::<AtomTrieNode>());
-    //println!("AtomTrieNodeContent size {}", std::mem::size_of::<AtomTrieNodeContent>());
+    //println!("AtomTrieNodeContent size {}", std::mem::size_of::<AtomTrieNodeContent<AllowDuplication>>());
 
     //println!("atom storage count: {}", space.index.storage.count());
     //let mut storage = AtomStorage::default();
@@ -71,15 +73,15 @@ fn main() -> Result<(), String> {
     //let after = memory_usage().allocated;
     //println!("atom storage mem: {}", before - after);
 
-    //println!("atom index node count: {:?}", space.index.root.stats());
-    //let mut root = AtomTrieNode::new();
+    //println!("atom index node count: {:?}", space.index.trie.stats());
+    //let mut trie = AtomTrie::default();
     //let before = memory_usage().allocated;
-    //std::mem::swap(&mut space.index.root, &mut root);
-    //drop(root);
+    //std::mem::swap(&mut space.index.trie, &mut trie);
+    //drop(trie);
     //let after = memory_usage().allocated;
     //println!("atom index mem: {}", before - after);
 
-    //println!("{}", space.query(&expr!("go_gene_product" ("ontology_term" "GO:0005886") ("protein" "A0A075B6H8"))));
+    //println!("{}", space.query(&query));
 
     Ok(())
 }
