@@ -114,8 +114,8 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
     }
 
     #[inline]
-    pub fn remove<'a, I: Iterator<Item=QueryKey<'a>>>(&mut self, key: I, storage: &AtomStorage) -> bool {
-        self.0.remove(key, storage)
+    pub fn remove<'a, I: Iterator<Item=QueryKey<'a>>>(&mut self, key: I) -> bool {
+        self.0.remove(key)
     }
 
     #[inline]
@@ -358,7 +358,7 @@ impl<D: DuplicationStrategy> AtomTrieNode<D> {
             }))
     }
 
-    pub fn remove<'a, I: Iterator<Item=QueryKey<'a>>>(&mut self, mut key: I, storage: &AtomStorage) -> bool {
+    pub fn remove<'a, I: Iterator<Item=QueryKey<'a>>>(&mut self, mut key: I) -> bool {
         enum Found {
             Exact(ExactKey),
             Custom(usize),
@@ -387,7 +387,7 @@ impl<D: DuplicationStrategy> AtomTrieNode<D> {
                 };
                 match entry {
                     Some((child_key, child)) => {
-                        let removed = child.remove(key, storage);
+                        let removed = child.remove(key);
                         if child.is_empty() {
                             match child_key {
                                 Found::Exact(key) => { content.exact.remove(&key); },

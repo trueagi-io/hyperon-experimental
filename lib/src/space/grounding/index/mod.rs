@@ -213,7 +213,7 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
     pub fn remove(&mut self, atom: &Atom) -> bool {
         let key = AtomIter::from_ref(&atom)
             .map(|token| Self::atom_token_to_query_index_key(&self.storage, token));
-        self.trie.remove(key, &self.storage)
+        self.trie.remove(key)
     }
 
     pub fn iter(&self) -> Box<dyn Iterator<Item=Cow<'_, Atom>> + '_> {
