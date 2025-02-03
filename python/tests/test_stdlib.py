@@ -44,6 +44,7 @@ class StdlibTest(HyperonTestCase):
         metta.run('''
                   ! (bind! &pow (py-atom math.pow (-> Number Number Number)))
                   ! (bind! &math (py-atom math))
+                  ! (bind! &statistics (py-atom statistics))
         ''')
         self.assertEqual(metta.run('! (&pow 2 3)'),
                          metta.run('! ((py-dot &math pow) 2 3)'))
@@ -57,11 +58,11 @@ class StdlibTest(HyperonTestCase):
         # py-atom can return some built-in functions without modules
         self.assertEqual([[ValueAtom('5')]],
                          metta.run('! ((py-atom str) 5)'))
-        # Check that py-dot accepts a nested path as a second argument
-        self.assertEqual([[ValueAtom("/usr")]],
+        # This test was rewritten due to its non-multiplatform behavior. 
+        self.assertEqual([[ValueAtom(3.5)]],
             metta.run('''
-                ! ((py-dot (py-atom os) path.commonpath)
-                   (py-atom "['/usr/lib', '/usr/local/lib']"))
+                ! ((py-dot &statistics mean)
+                    (py-atom "[5, 2]"))
         '''))
 
 
