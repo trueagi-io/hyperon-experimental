@@ -194,6 +194,34 @@ You can also find executable at `./target/debug/metta-repl`.
 
 Running the REPL with Python support in a Python virtual environment like PyEnv or Conda requires additional configuration.  See [troubleshooting](#rust-repl-cannot-load-python-library)
 
+# Installation on Windows
+
+Installation on Windows has some peculiarities which are described here.
+
+## C and Python API
+
+Setup build:
+```
+mkdir -p build
+cd build
+cmake -DGIT=OFF -DCARGO_ARGS='--no-default-features' ..
+```
+
+Currently there are problems with SSL not being found by CMake on Windows so `-DGIT=OFF -DCARGO_ARGS='--no-default-features'` 
+params are needed.
+
+Build and run tests:
+```
+cmake --build . --config <Release|Debug>
+cmake --build . --target check --config <Release|Debug>
+```
+
+In Windows you should specify config since VS builder creates additional Debug/Release folders while `cmake ..` command
+creates multi-config build.
+
+All other parts of build process are the same. The only thing that should be mentioned that commands starting with
+`python3` may be needed to be run using `python` instead.
+
 ### Logger
 
 You can enable logging by prefixing the MeTTa command line by
