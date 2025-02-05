@@ -54,7 +54,7 @@ message(PYTHONPATH=${PYTHONPATH})
 
 if(WIN32)
     add_custom_target(check
-       #COMMAND cd "${HYPERONC_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure -C ${BUILD_CONFIGURATION}
+       COMMAND cd "${HYPERONC_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure -C ${BUILD_CONFIGURATION}
        COMMAND cd "${HYPERONPY_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure -C ${BUILD_CONFIGURATION})
 else()
     add_custom_target(check
