@@ -7,6 +7,11 @@ enable_testing()
 
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 
+foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
+    string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
+    set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_CURRENT_SOURCE_DIR} )
+endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
+
 # Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
 if (POLICY CMP0025)
     cmake_policy(SET CMP0025 NEW)
@@ -52,7 +57,8 @@ endif()
 
 find_package(pybind11 REQUIRED)
 find_package(optional-lite REQUIRED)
-include_directories(${nonstd_INCLUDE_DIRS})
+include_directories(${optional-lite_INCLUDE_DIRS})
+message(optional-lite_INCLUDE_DIRS=${optional-lite_INCLUDE_DIRS})
 set(HYPERONC_INSTALL_PREFIX "../build/hyperonc-install")
 find_package(hyperonc REQUIRED HINTS ${HYPERONC_INSTALL_PREFIX})
 include_directories(${hyperonc_INCLUDE_DIRS})

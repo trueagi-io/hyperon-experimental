@@ -58,7 +58,7 @@ class StdlibTest(HyperonTestCase):
         # py-atom can return some built-in functions without modules
         self.assertEqual([[ValueAtom('5')]],
                          metta.run('! ((py-atom str) 5)'))
-        # This test was rewritten due to its non-multiplatform behavior. 
+        # This test was rewritten due to its non-multiplatform behavior.
         self.assertEqual([[ValueAtom(3.5)]],
             metta.run('''
                 ! ((py-dot &statistics mean)
