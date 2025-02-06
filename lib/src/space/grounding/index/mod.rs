@@ -151,13 +151,13 @@ pub struct AtomIndex<D: DuplicationStrategy = NoDuplication> {
 
 impl AtomIndex {
     pub fn new() -> Self {
-        Self::default()
+        Default::default()
     }
 }
 
 impl<D: DuplicationStrategy> AtomIndex<D> {
     pub fn with_strategy(_strategy: D) -> Self {
-        Self::default()
+        Default::default()
     }
 
     pub fn insert(&mut self, atom: Atom) {
@@ -222,28 +222,6 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
 
     pub fn is_empty(&self) -> bool {
         self.trie.is_empty()
-    }
-
-    pub fn stats(&self) -> AtomIndexStats {
-        AtomIndexStats{
-            storage_count: self.storage.count(),
-            trie_stats: self.trie.stats(),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct AtomIndexStats {
-    storage_count: usize,
-    trie_stats: AtomTrieNodeStats,
-}
-
-impl AtomIndexStats {
-    pub fn storage_count(&self) -> usize {
-        self.storage_count
-    }
-    pub fn trie_stats(&self) -> &AtomTrieNodeStats {
-        &self.trie_stats
     }
 }
 
@@ -375,7 +353,7 @@ mod test {
     }
 
     #[test]
-    fn atom_index_iter_expression() {
+    fn atom_index_iter_expression_0() {
         let mut index = AtomIndex::new();
         index.insert(expr!("A" a {Number::Integer(42)} a));
 
@@ -656,10 +634,5 @@ mod test {
 
         let actual: Vec<_> = index.query(&expr!("A" "B" "C")).collect();
         assert_eq_no_order!(actual, vec![bind!{ x: expr!("A" "B" "C") }]);
-    }
-
-    #[test]
-    fn atom_index_exact_key_size() {
-        assert_eq!(std::mem::size_of::<ExactKey>(), std::mem::size_of::<usize>());
     }
 }
