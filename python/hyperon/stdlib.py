@@ -50,8 +50,6 @@ class RegexMatchableObject(MatchableObject):
 
 def parseImpl(atom, run_context):
     try:
-        while(True):
-            d = 0
         s = atom.get_object().content
         if type(s) != str:
             raise IncorrectArgumentError()
