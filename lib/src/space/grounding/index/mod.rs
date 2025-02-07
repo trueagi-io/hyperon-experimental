@@ -2,7 +2,6 @@ pub mod storage;
 pub mod trie;
 
 pub use trie::{ALLOW_DUPLICATION, NO_DUPLICATION, DuplicationStrategy, AllowDuplication, NoDuplication};
-use storage::*;
 use trie::*;
 
 use crate::atom::*;
@@ -145,7 +144,6 @@ impl<'a> Iterator for AtomIter<'a> {
 
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct AtomIndex<D: DuplicationStrategy = NoDuplication> {
-    storage: AtomStorage,
     trie: AtomTrie<D>,
 }
 
@@ -162,21 +160,14 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
 
     pub fn insert(&mut self, atom: Atom) {
         let key = AtomIter::from_atom(atom)
-            .map(|token| Self::atom_token_to_insert_index_key(&mut self.storage, token));
+            .map(|token| Self::atom_token_to_insert_index_key(token));
         self.trie.insert(key)
     }
 
-    fn atom_token_to_insert_index_key<'a>(storage: &mut AtomStorage, token: AtomToken<'a>) -> InsertKey {
+    fn atom_token_to_insert_index_key<'a>(token: AtomToken<'a>) -> InsertKey {
         match token {
-            AtomToken::Atom(Cow::Owned(atom @ Atom::Variable(_))) => {
-                InsertKey::Custom(atom)
-            },
-            AtomToken::Atom(Cow::Owned(atom)) => {
-                match storage.insert(atom) {
-                    Ok(id) => InsertKey::Exact(id),
-                    Err(atom) => InsertKey::Custom(atom),
-                }
-            },
+            AtomToken::Atom(Cow::Owned(atom @ Atom::Variable(_))) => InsertKey::Custom(atom),
+            AtomToken::Atom(Cow::Owned(atom)) => InsertKey::Exact(atom),
             AtomToken::StartExpr(_) => InsertKey::StartExpr,
             AtomToken::EndExpr => InsertKey::EndExpr,
             _ => panic!("Only owned atoms are expected to be inserted"),
@@ -185,25 +176,19 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
 
     pub fn query(&self, atom: &Atom) -> QueryResult {
         let key = AtomIter::from_ref(&atom)
-            .map(|token| Self::atom_token_to_query_index_key(&self.storage, token));
-        Box::new(self.trie.query(key, &self.storage).into_iter())
+            .map(|token| Self::atom_token_to_query_index_key(token));
+        Box::new(self.trie.query(key).into_iter())
     }
 
-    fn atom_token_to_query_index_key<'a>(storage: &AtomStorage, token: AtomToken<'a>) -> QueryKey<'a> {
+    fn atom_token_to_query_index_key<'a>(token: AtomToken<'a>) -> QueryKey<'a> {
         match token {
-            AtomToken::Atom(Cow::Borrowed(atom @ Atom::Variable(_))) => {
-                QueryKey::Custom(atom)
-            },
+            AtomToken::Atom(Cow::Borrowed(atom @ Atom::Variable(_))) =>
+                QueryKey::Custom(atom),
             AtomToken::Atom(Cow::Borrowed(atom @ Atom::Grounded(gnd)))
                 if gnd.as_grounded().as_match().is_some() => {
                 QueryKey::Custom(atom)
             },
-            AtomToken::Atom(Cow::Borrowed(atom)) => {
-                match storage.get_id(atom) {
-                    Some(id) => QueryKey::Exact(Some(id), atom),
-                    None => QueryKey::Exact(None, atom),
-                }
-            },
+            AtomToken::Atom(Cow::Borrowed(atom)) => QueryKey::Exact(atom),
             AtomToken::StartExpr(Some(atom)) => QueryKey::StartExpr(atom),
             AtomToken::EndExpr => QueryKey::EndExpr,
             _ => panic!("Only borrowed atoms are expected to be queried"),
@@ -212,12 +197,12 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
 
     pub fn remove(&mut self, atom: &Atom) -> bool {
         let key = AtomIter::from_ref(&atom)
-            .map(|token| Self::atom_token_to_query_index_key(&self.storage, token));
+            .map(|token| Self::atom_token_to_query_index_key(token));
         self.trie.remove(key)
     }
 
     pub fn iter(&self) -> Box<dyn Iterator<Item=Cow<'_, Atom>> + '_> {
-       self.trie.unpack_atoms(&self.storage)
+       self.trie.unpack_atoms()
     }
 
     pub fn is_empty(&self) -> bool {
@@ -289,7 +274,7 @@ mod test {
     }
 
     #[test]
-    fn atom_index_query_single() {
+    fn atom_index_query_single_simple() {
         let mut index = AtomIndex::new();
         index.insert(Atom::sym("A"));
         index.insert(Atom::var("a"));
@@ -410,7 +395,7 @@ mod test {
     }
 
     #[test]
-    fn atom_index_query_expression_duplicate() {
+    fn atom_index_query_expression_duplicate_0() {
         let mut index = AtomIndex::with_strategy(ALLOW_DUPLICATION);
         index.insert(expr!("A" a {Number::Integer(42)} a));
         index.insert(expr!("A" a {Number::Integer(42)} a));

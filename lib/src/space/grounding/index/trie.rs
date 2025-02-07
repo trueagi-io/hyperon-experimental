@@ -1,14 +1,13 @@
-use super::storage::AtomStorage;
+use super::storage::AtomStorage as HashableStorage;
 
 use crate::atom::*;
 use crate::matcher::*;
 use crate::common::CachingMapper;
-use crate::common::collections::write_mapping;
 use crate::common::holeyvec::HoleyVec;
 
 use std::hash::Hash;
 use std::collections::HashMap;
-use std::fmt::{Debug, Display, Formatter};
+use std::fmt::{Debug, Formatter};
 use std::borrow::Cow;
 
 pub trait DuplicationStrategyImplementor {
@@ -53,7 +52,7 @@ pub const NO_DUPLICATION: NoDuplication = NoDuplication{};
 pub enum InsertKey {
     StartExpr,
     EndExpr,
-    Exact(usize),
+    Exact(Atom),
     Custom(Atom),
 }
 
@@ -61,237 +60,11 @@ pub enum InsertKey {
 pub enum QueryKey<'a> {
     StartExpr(&'a Atom),
     EndExpr,
-    Exact(Option<usize>, &'a Atom),
+    Exact(&'a Atom),
     Custom(&'a Atom),
 }
 
-impl<'a> QueryKey<'a> {
-    fn as_exact_key(&self) -> Option<CustomExact> {
-        match self {
-            QueryKey::StartExpr(_) => Some(CustomExact::StartExpr()),
-            QueryKey::EndExpr => Some(CustomExact::EndExpr()),
-            QueryKey::Exact(Some(id), _) => Some(CustomExact::Exact(*id)),
-            QueryKey::Exact(None, _) => None,
-            QueryKey::Custom(_) => None,
-        }
-    }
-}
-
-type NodeId = usize;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct AtomTrie<D: DuplicationStrategy = NoDuplication>{
-    nodes: HoleyVec<AtomTrieNode>,
-    index: HashMap<(NodeId, CustomExact), NodeId>,
-    custom: HoleyVec<Atom>,
-    root: NodeId,
-    _phantom: std::marker::PhantomData<D>,
-}
-
-impl<D: DuplicationStrategy> Default for AtomTrie<D> {
-    fn default() -> Self {
-        let mut nodes = HoleyVec::new();
-        let root = nodes.push(Default::default());
-        Self {
-            nodes,
-            index: HashMap::new(),
-            custom: HoleyVec::new(),
-            root,
-            _phantom: Default::default(),
-        }
-    }
-}
-
-impl<D: DuplicationStrategy> AtomTrie<D> {
-
-    pub fn with_strategy(_strategy: D) -> Self {
-        Default::default()
-    }
-
-    #[inline]
-    pub fn insert<I: Iterator<Item=InsertKey>>(&mut self, key: I) {
-        self.insert_internal(self.root, key)
-    }
-
-    fn insert_internal<I: Iterator<Item=InsertKey>>(&mut self, node_id: NodeId, mut key: I) {
-        match key.next() {
-            // FIXME: can be improved by converting InsertKey into CustomExact
-            Some(head) => match head {
-                InsertKey::StartExpr => self.insert_exact(node_id, CustomExact::StartExpr(), key),
-                InsertKey::EndExpr => self.insert_exact(node_id, CustomExact::EndExpr(), key),
-                InsertKey::Exact(id) => self.insert_exact(node_id, CustomExact::Exact(id), key),
-                InsertKey::Custom(atom) => self.insert_custom(node_id, atom, key),
-            },
-            None => D::add_atom(self.node_mut(node_id)),
-        }
-    }
-
-    fn insert_exact<'a, I: Iterator<Item=InsertKey>>(&mut self, node_id: NodeId, head: CustomExact, tail: I) {
-        match self.index.get(&(node_id, head)) {
-            Some(child_id) => self.insert_internal(*child_id, tail),
-            None => {
-                self.nodes[node_id].push(head);
-                let child_id = self.new_branch(tail);
-                self.index.insert((node_id, head), child_id);
-            },
-        }
-    }
-
-    fn insert_custom<'a, I: Iterator<Item=InsertKey>>(&mut self, node_id: NodeId, atom: Atom, tail: I) {
-        match self.find_custom(node_id, &atom) {
-            Some(child_id) => self.insert_internal(child_id, tail),
-            None => {
-                let id = self.custom.push(atom);
-                let key = CustomExact::Custom(id);
-                self.nodes[node_id].push(key);
-                let child_id = self.new_branch(tail);
-                self.index.insert((node_id, key), child_id);
-            },
-        }
-    }
-
-    #[inline]
-    fn custom_key(&self, key: CustomExact) -> &Atom {
-        assert!(key.is_custom());
-        unsafe{ self.custom.get_unchecked(key.value()) }
-    }
-
-    #[inline]
-    fn custom_entry(&self, node_id: NodeId, key: CustomExact) -> (&Atom, NodeId) {
-        let atom = self.custom_key(key);
-        let child_id = self.child_unchecked(node_id, key);
-        (atom, child_id)
-    }
-
-    #[inline]
-    fn child_unchecked(&self, node_id: NodeId, key: CustomExact) -> NodeId {
-        *self.index.get(&(node_id, key)).unwrap()
-    }
-
-    fn new_branch<'a, I: Iterator<Item=InsertKey>>(&mut self, key: I) -> NodeId {
-        let child_id = self.nodes.push(Default::default());
-        self.insert_internal(child_id, key);
-        child_id
-    }
-
-    fn find_custom(&self, node_id: NodeId, atom: &Atom) -> Option<NodeId> {
-        match self.node(node_id) {
-            AtomTrieNode::Single(key) if key.is_custom() => {
-                if self.custom_key(*key) == atom {
-                    Some(self.child_unchecked(node_id, *key))
-                } else {
-                    None
-                }
-            },
-            AtomTrieNode::Many(list) => {
-                let result = list.iter().find(|&key| key.is_custom() && self.custom_key(*key) == atom);
-                result.map(|&key| self.child_unchecked(node_id, key))
-            },
-            AtomTrieNode::Single(_) | AtomTrieNode::Leaf(_) => None,
-        }
-    }
-
-    #[inline]
-    pub fn query<'a, I: Debug + Clone + Iterator<Item=QueryKey<'a>>>(&self, key: I, storage: &AtomStorage) -> BindingsSet {
-        let mut mapper = CachingMapper::new(VariableAtom::make_unique);
-        self.query_internal(self.root, key, storage, &mut mapper)
-    }
-
-    // TODO: write an algorithm which returns an iterator instead of collected result
-    fn query_internal<'a, I, M>(&self, node_id: NodeId, mut key: I, storage: &AtomStorage,
-        mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
-        where
-            I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
-            M: Fn(VariableAtom)->VariableAtom
-    {
-        match key.next() {
-            Some(head) => match head {
-                // FIXME: can be improved by converting InsertKey into CustomExact
-                QueryKey::Exact(_, _) => self.match_exact_key(node_id, head, key, storage, mapper),
-                QueryKey::StartExpr(_) => self.match_exact_key(node_id, head, key, storage, mapper),
-                QueryKey::EndExpr => self.match_exact_key(node_id, head, key, storage, mapper),
-                QueryKey::Custom(atom) => self.match_custom_key(node_id, atom, key, storage, mapper),
-            },
-            None => {
-                BindingsSet::count(self.nodes[node_id].leaf_counter())
-            }
-        }
-    }
-
-    #[inline]
-    fn node(&self, node_id: NodeId) -> &AtomTrieNode {
-        &self.nodes[node_id]
-    }
-
-    #[inline]
-    fn node_mut(&mut self, node_id: NodeId) -> &mut AtomTrieNode {
-        &mut self.nodes[node_id]
-    }
-
-    fn match_exact_key<'a, I, M>(&self, node_id: NodeId, key: QueryKey<'a>, mut tail: I, storage: &AtomStorage,
-        mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
-        where
-            I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
-            M: Fn(VariableAtom)->VariableAtom,
-    {
-        let mut result = BindingsSet::empty();
-        let node = self.node(node_id);
-        if let AtomTrieNode::Leaf(_count) = node {
-            return result;
-        }
-        
-        // match exact entries if applicable
-        if let Some(exact_key) = key.as_exact_key() {
-            if let Some(&child_id) = self.index.get(&(node_id, exact_key)) {
-                result.extend(self.query_internal(child_id, tail.clone(), storage, mapper))
-            }
-        }
-        // match custom entries if applicable
-        if let Some(atom) = Self::exact_key_to_atom(&key, &mut tail) {
-            self.visit_custom(node_id, |(entry, child_id)| {
-                let mut custom_res = self.match_custom_entry(entry, atom, child_id, tail.clone(), storage, mapper);
-                result.extend(custom_res.drain(..));
-            })
-        }
-        result
-    }
-
-    fn visit_custom<F>(&self, node_id: NodeId, mut visitor: F)
-        where F: FnMut((&Atom, NodeId)),
-    {
-        match self.node(node_id) {
-            AtomTrieNode::Single(key) if key.is_custom() =>
-                visitor(self.custom_entry(node_id, *key)),
-            AtomTrieNode::Many(list) =>
-                list.iter().filter(|&key| key.is_custom())
-                    .for_each(|&key| visitor(self.custom_entry(node_id, key))),
-            AtomTrieNode::Single(_) | AtomTrieNode::Leaf(_) => {},
-        }
-    }
-
-    fn exact_key_to_atom<'a, I>(key: &QueryKey<'a>, tail: &mut I) -> Option<&'a Atom>
-        where
-            I: Debug + Clone + Iterator<Item=QueryKey<'a>>
-    {
-        match key {
-            QueryKey::StartExpr(atom) => {
-                // TODO: At the moment we pass expression via
-                // AtomToken::StartExpr(Some(atom)) -> QueryKey::StartExpr(atom) -> here,
-                // because in case of query (when only reference to Atom is
-                // passed) we cannot get _reference_ to atom out of the key,
-                // while atom is still there represented as a chain of tokens.
-                // Maybe using (N, [Atom; N]) encoding can allow solve this
-                // issue if it is an issue at all. Also such encoding should
-                // allow us skip expressions in a single index addition operation.
-                Self::skip_expression(tail);
-                Some(atom)
-            },
-            QueryKey::EndExpr => None,
-            QueryKey::Exact(_, atom) => Some(atom),
-            QueryKey::Custom(_) => panic!("Custom key should not be passed"),
-        }
-    }
-
+impl QueryKey<'_> {
     fn skip_expression<'a, I: Iterator<Item=QueryKey<'a>>>(key: &mut I) {
         let mut par = 0;
         let mut is_end = |key: &QueryKey| {
@@ -316,8 +89,203 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         }
     }
 
+}
+
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+struct AtomStorage {
+    hashable: HashableStorage,
+    custom: HoleyVec<Atom>,
+}
+
+impl AtomStorage {
+    fn insert(&mut self, atom: Atom) -> CustomExact {
+        self.hashable.insert(atom).map_or_else(|atom| {
+            CustomExact::Custom(self.custom.push(atom))
+        }, |exact_id| {
+            // FIXME: if matchable grounded atom implements serialization
+            // it will be inserted and matched as exact
+            CustomExact::Exact(exact_id)
+        })
+    }
+
+    fn insert_custom(&mut self, atom: Atom) -> CustomExact {
+        CustomExact::Custom(self.custom.push(atom))
+    }
+
+    fn get_key<'a>(&self, atom: &'a Atom) -> Result<CustomExact, &'a Atom> {
+        self.hashable.get_id(atom).ok_or_else(|| atom)
+            .map(|exact_id| CustomExact::Exact(exact_id))
+    }
+
+    unsafe fn get_atom_unchecked(&self, key: CustomExact) -> &Atom {
+        match key.kind() {
+            CE_EXACT => self.hashable.get_atom(key.value()).unwrap(),
+            CE_CUSTOM => self.custom.get_unchecked(key.value()),
+            _ => unreachable!(),
+        }
+    }
+}
+
+type NodeId = usize;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AtomTrie<D: DuplicationStrategy = NoDuplication>{
+    storage: AtomStorage,
+    nodes: HoleyVec<AtomTrieNode>,
+    index: HashMap<(NodeId, CustomExact), NodeId>,
+    root: NodeId,
+    _phantom: std::marker::PhantomData<D>,
+}
+
+impl<D: DuplicationStrategy> Default for AtomTrie<D> {
+    fn default() -> Self {
+        let mut nodes = HoleyVec::new();
+        let root = nodes.push(Default::default());
+        Self {
+            storage: Default::default(),
+            nodes,
+            index: HashMap::new(),
+            root,
+            _phantom: Default::default(),
+        }
+    }
+}
+
+impl<D: DuplicationStrategy> AtomTrie<D> {
+
+    pub fn with_strategy(_strategy: D) -> Self {
+        Default::default()
+    }
+
+    #[inline]
+    pub fn insert<I: Iterator<Item=InsertKey>>(&mut self, key: I) {
+        self.insert_internal(self.root, key)
+    }
+
+    fn insert_internal<I: Iterator<Item=InsertKey>>(&mut self, node_id: NodeId, mut key: I) {
+        match key.next() {
+            Some(head) => {
+                let head = self.insert_key_into_custom_exact(head);
+                match self.index.get(&(node_id, head)) {
+                    Some(child_id) => self.insert_internal(*child_id, key),
+                    None => {
+                        let child_id = self.new_branch(key);
+                        self.nodes[node_id].push(head);
+                        self.index.insert((node_id, head), child_id);
+                    },
+                }
+            },
+            None => D::add_atom(&mut self.nodes[node_id]),
+        }
+    }
+
+    fn insert_key_into_custom_exact(&mut self, key: InsertKey) -> CustomExact {
+        match key {
+            InsertKey::StartExpr => CustomExact::StartExpr(),
+            InsertKey::EndExpr => CustomExact::EndExpr(),
+            InsertKey::Exact(atom) => self.storage.insert(atom),
+            InsertKey::Custom(atom) => self.storage.insert_custom(atom),
+        }
+    }
+
+    fn new_branch<'a, I: Iterator<Item=InsertKey>>(&mut self, key: I) -> NodeId {
+        let child_id = self.nodes.push(Default::default());
+        self.insert_internal(child_id, key);
+        child_id
+    }
+
+    #[inline]
+    pub fn query<'a, I: Debug + Clone + Iterator<Item=QueryKey<'a>>>(&self, key: I) -> BindingsSet {
+        let mut mapper = CachingMapper::new(VariableAtom::make_unique);
+        self.query_internal(self.root, key, &mut mapper)
+    }
+
+    // TODO: write an algorithm which returns an iterator instead of collected result
+    fn query_internal<'a, I, M>(&self, node_id: NodeId, mut key: I,
+        mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
+        where
+            I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
+            M: Fn(VariableAtom)->VariableAtom
+    {
+        match key.next() {
+            Some(head) => match head {
+                QueryKey::Exact(_) => self.match_exact_key(node_id, head, key, mapper),
+                QueryKey::StartExpr(_) => self.match_exact_key(node_id, head, key, mapper),
+                QueryKey::EndExpr => self.match_exact_key(node_id, head, key, mapper),
+                QueryKey::Custom(atom) => self.match_custom_key(node_id, atom, key, mapper),
+            },
+            None => {
+                BindingsSet::count(self.nodes[node_id].leaf_counter())
+            }
+        }
+    }
+
+    fn match_exact_key<'a, I, M>(&self, node_id: NodeId, key: QueryKey<'a>, mut tail: I,
+        mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
+        where
+            I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
+            M: Fn(VariableAtom)->VariableAtom,
+    {
+        let mut result = BindingsSet::empty();
+        if let AtomTrieNode::Leaf(_count) = self.nodes[node_id] {
+            return result;
+        }
+        
+        // match exact entries if applicable
+        if let Some(exact_key) = self.query_key_as_custom_exact(&key) {
+            if let Some(&child_id) = self.index.get(&(node_id, exact_key)) {
+                result.extend(self.query_internal(child_id, tail.clone(), mapper))
+            }
+        }
+        // match custom entries if applicable
+        if let Some(query) = self.query_key_as_atom(&key, &mut tail) {
+            let it = self.node_iter(node_id)
+                .filter(CustomExact::is_custom)
+                .map(|key| {
+                    let entry = unsafe{ self.storage.get_atom_unchecked(key) };
+                    let child_id = *self.index.get(&(node_id, key)).unwrap();
+                    (entry, child_id)
+                });
+            for (entry, child_id) in it {
+                let mut custom_res = self.match_custom_entry(entry, query, child_id, tail.clone(), mapper);
+                result.extend(custom_res.drain(..));
+            }
+        }
+        result
+    }
+
+    fn query_key_as_custom_exact(&self, key: &QueryKey) -> Option<CustomExact> {
+        match key {
+            QueryKey::StartExpr(_) => Some(CustomExact::StartExpr()),
+            QueryKey::EndExpr => Some(CustomExact::EndExpr()),
+            QueryKey::Exact(atom) => self.storage.get_key(atom).ok(),
+            QueryKey::Custom(_atom) => None,
+        }
+    }
+
+    fn query_key_as_atom<'a, I>(&self, key: &QueryKey<'a>, tail: &mut I) -> Option<&'a Atom>
+        where I: Debug + Clone + Iterator<Item=QueryKey<'a>>
+    {
+        match key {
+            QueryKey::StartExpr(atom) => {
+                // TODO: At the moment we pass expression via
+                // AtomToken::StartExpr(Some(atom)) -> QueryKey::StartExpr(atom) -> here,
+                // because in case of query (when only reference to Atom is
+                // passed) we cannot get _reference_ to atom out of the key,
+                // while atom is still there represented as a chain of tokens.
+                // Maybe using (N, [Atom; N]) encoding can allow solve this
+                // issue if it is an issue at all. Also such encoding should
+                // allow us skip expressions in a single index addition operation.
+                QueryKey::skip_expression(tail);
+                Some(atom)
+            },
+            QueryKey::EndExpr => None,
+            QueryKey::Exact(atom) => Some(atom),
+            QueryKey::Custom(_) => panic!("Custom key should not be passed"),
+        }
+    }
+
     fn match_custom_entry<'a, I, M>(&self, entry: &Atom, key: &Atom, child_id: NodeId, tail: I,
-        storage: &AtomStorage,
         mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
             I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
@@ -329,40 +297,43 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         entry.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
         // TODO: conversion to Iterator and back
         result.extend(match_atoms(&entry, key));
-        let tail_result = self.query_internal(child_id, tail, storage, mapper);
-        //log::trace!("match_custom_entry: entry: {}, key: {}, child: {:?}, tail: {:?}, tail_result: {}", entry, key, child, tail.clone(), tail_result);
-        // TODO: we could move BindingsSet into merge instead of passing by reference
-        result.merge(&tail_result)
+        if result.is_empty() {
+            result
+        } else {
+            let tail_result = self.query_internal(child_id, tail, mapper);
+            // TODO: we could move BindingsSet into merge instead of passing by reference
+            result.merge(&tail_result)
+        }
     }
 
-    fn match_custom_key<'a, I, M>(&self, node_id: NodeId, key: &Atom, tail: I, storage: &AtomStorage,
+    fn match_custom_key<'a, I, M>(&self, node_id: NodeId, key: &Atom, tail: I,
         mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
             I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
             M: Fn(VariableAtom)->VariableAtom
     {
         let mut result = BindingsSet::empty();
-        for (entry, child_id) in self.unpack_atoms_internal(node_id, storage) {
-            let mut tail_result = self.match_custom_entry(&entry, key, child_id, tail.clone(), storage, mapper);
+        for (entry, child_id) in self.unpack_atoms_internal(node_id) {
+            let mut tail_result = self.match_custom_entry(&entry, key, child_id, tail.clone(), mapper);
             result.extend(tail_result.drain(..));
         }
         result
     }
 
     #[inline]
-    pub fn unpack_atoms<'a>(&'a self, storage: &'a AtomStorage)
+    pub fn unpack_atoms<'a>(&'a self)
         -> Box<dyn Iterator<Item=Cow<'a, Atom>> + 'a>
     {
-        Box::new(self.unpack_atoms_internal(self.root, storage)
+        Box::new(self.unpack_atoms_internal(self.root)
             .flat_map(|(atom, child_id)| { 
                 std::iter::repeat_n(atom, self.nodes[child_id].leaf_counter())
             }))
     }
 
-    fn unpack_atoms_internal<'a>(&'a self, node_id: NodeId, storage: &'a AtomStorage)
+    fn unpack_atoms_internal<'a>(&'a self, node_id: NodeId)
         -> Box<dyn Iterator<Item=(Cow<'a, Atom>, NodeId)> + 'a>
     { 
-        Box::new(AtomTrieNodeIter::new(self, node_id, storage)
+        Box::new(AtomTrieNodeIter::new(self, node_id)
             .filter_map(|(atom, child_id)| {
                 if let IterResult::Atom(atom) = atom {
                     Some((atom, child_id))
@@ -394,15 +365,39 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
                     QueryKey::EndExpr => self.index
                         .get(&(node_id, CustomExact::EndExpr())).cloned()
                         .map(|child_id| (Found::Exact(CustomExact::EndExpr()), child_id)),
-                    QueryKey::Exact(None, _) => None,
-                    QueryKey::Exact(Some(id), _) => self.index
-                        .get(&(node_id, CustomExact::Exact(id))).cloned()
-                        .map(|child_id| (Found::Exact(CustomExact::Exact(id)), child_id)),
-                    QueryKey::Custom(atom) => self.node_iter(node_id)
-                        .enumerate()
-                        .filter(|(_idx, key)| key.is_custom())
-                        .find(|(_idx, key)| atom == &self.custom[key.value()])
-                        .map(|(idx, key)| (Found::Custom(key, idx), *self.index.get(&(node_id, key)).unwrap())),
+                    QueryKey::Exact(atom) => {
+                        match self.storage.get_key(atom) {
+                            Ok(key) => 
+                                match self.index.get(&(node_id, key)) {
+                                    Some(child_id) => {
+                                        assert!(key.kind() == CE_EXACT);
+                                        Some((Found::Exact(key), *child_id))
+                                    },
+                                    None => None,
+                                },
+                            Err(_atom) => None,
+                        }
+                    },
+                    QueryKey::Custom(atom) => {
+                        match self.storage.get_key(atom) {
+                            Ok(key) => 
+                                match self.index.get(&(node_id, key)) {
+                                    Some(child_id) => {
+                                        self.node_iter(node_id).enumerate()
+                                            .find(|(_i, k)| *k == key)
+                                            .map(|(i, k)| (Found::Custom(k, i), *child_id))
+                                    },
+                                    None => None,
+                                },
+                            Err(atom) => {
+                                self.node_iter(node_id)
+                                    .filter(CustomExact::is_custom)
+                                    .enumerate()
+                                    .find(|(_i, k)| atom == unsafe{ self.storage.get_atom_unchecked(*k) })
+                                    .map(|(i, k)| (Found::Custom(k, i), *self.index.get(&(node_id, k)).unwrap()))
+                            },
+                        }
+                    },
                 };
                 match entry {
                     Some((child_key, child_id)) => {
@@ -442,12 +437,6 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.nodes[self.root].is_empty()
-    }
-}
-
-impl<D: DuplicationStrategy> Display for AtomTrie<D> {
-    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        todo!();
     }
 }
 
@@ -500,18 +489,18 @@ impl CustomExact {
 
     #[inline]
     fn is_kind(&self, kind: usize) -> bool {
-        self.get_kind() == kind
+        self.kind() == kind
     }
 
     #[inline]
-    fn get_kind(&self) -> usize {
+    fn kind(&self) -> usize {
         self.0 & CE_KIND_MASK
     }
 }
 
 impl Debug for CustomExact {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let kind = self.get_kind();
+        let kind = self.kind();
         match kind {
             CE_CUSTOM => write!(f, "CustomExact::Exact({})", self.value()),
             CE_EXACT => write!(f, "CustomExact::Custom({})", self.value()),
@@ -544,11 +533,6 @@ impl Default for AtomTrieNode {
 pub type QueryResult = Box<dyn Iterator<Item=Bindings>>;
 
 impl AtomTrieNode {
-    #[cfg(test)]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     pub fn leaf_counter(&self) -> usize {
         match self {
             AtomTrieNode::Leaf(count) => *count,
@@ -617,63 +601,10 @@ impl AtomTrieNode {
     }
 }
 
-impl Display for AtomTrieNode {
-    fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-        todo!()
-        //enum TrieKeyDisplay<'a> {
-            //Id(usize),
-            //Atom(&'a Atom),
-            //Start,
-            //End,
-        //}
-
-        //impl Display for TrieKeyDisplay<'_> {
-            //fn fmt(&self, f: &mut Formatter) -> std::fmt::Result {
-                //match self {
-                    //Self::Id(id) => write!(f, "Id({})", id),
-                    //Self::Atom(atom) => write!(f, "Atom({})", atom),
-                    //Self::Start => write!(f, "StartExpr",),
-                    //Self::End => write!(f, "EndExpr",),
-                //}
-            //}
-        //}
-
-        //impl TrieKeyDisplay<'_> {
-            //fn from_exact(key: &ExactKey) -> Self {
-                //match key {
-                    //key if *key == ExactKey::START_EXPR => Self::Start,
-                    //key if *key == ExactKey::END_EXPR => Self::End,
-                    //ExactKey(id) => Self::Id(*id),
-                //}
-            //}
-        //}
-
-        //match self {
-            //AtomTrieNode::Node(content) => {
-                ////let exact = content.exact.iter()
-                    ////.map(|(key, child)| (TrieKeyDisplay::from_exact(key), child));
-                //let custom = content.custom.iter().map(|p| (&p.0, &p.1))
-                    //.map(|(key, child)| (TrieKeyDisplay::Atom(key), child));
-                //write_mapping(f, custom[>exact.chain(custom)<])
-            //},
-            //AtomTrieNode::Leaf(count) => {
-                //if *count > 1 {
-                    //write!(f, "{{ x{} }}", count)
-                //} else {
-                    //write!(f, "{{}}")
-                //}
-            //},
-        //}
-    }
-}
-
 #[derive(Debug, Clone)]
 struct AtomTrieNodeIter<'a, D: DuplicationStrategy> {
     trie: &'a AtomTrie<D>,
     node_id: NodeId,
-    // FIXME: return only ids and unpack atoms in AtomTrie code if needed
-    // it is not required for remove for instance
-    storage: &'a AtomStorage,
     state: AtomTrieNodeIterState<'a, D>,
 }
 
@@ -691,8 +622,8 @@ enum AtomTrieNodeIterState<'a, D: DuplicationStrategy> {
 }
 
 impl<'a, D: DuplicationStrategy> AtomTrieNodeIter<'a, D> {
-    fn new(trie: &'a AtomTrie<D>, node_id: NodeId, storage: &'a AtomStorage) -> Self {
-        let state = match trie.node(node_id) {
+    fn new(trie: &'a AtomTrie<D>, node_id: NodeId) -> Self {
+        let state = match &trie.nodes[node_id] {
             AtomTrieNode::Many(entries) => AtomTrieNodeIterState::VisitEntries(entries.iter()),
             AtomTrieNode::Single(entry) => AtomTrieNodeIterState::VisitSingle(*entry),
             AtomTrieNode::Leaf(_count) => AtomTrieNodeIterState::End,
@@ -700,41 +631,36 @@ impl<'a, D: DuplicationStrategy> AtomTrieNodeIter<'a, D> {
         Self {
             trie,
             node_id,
-            storage,
             state,
         }
     }
 
     fn single_step(&mut self, key: CustomExact) -> Option<(IterResult<'a>, NodeId)> {
-        const ATOM_NOT_IN_STORAGE: &'static str = "Exact entry contains atom which is not in storage";
         type State<'a, D> = AtomTrieNodeIterState<'a, D>;
 
         if matches!(self.state, State::VisitSingle(_)) {
             self.state = State::End;
         }
 
-        let child_id = self.trie.child_unchecked(self.node_id, key);
-        let kind = key.get_kind();
+        let child_id = *self.trie.index.get(&(self.node_id, key)).unwrap();
+        let kind = key.kind();
         match kind {
             CE_END_EXPR => return Some((IterResult::EndExpr, child_id)),
             CE_START_EXPR => {
                 let state = std::mem::take(&mut self.state);
                 self.state = State::VisitExpression{
                     build_expr: Vec::new(),
-                    cur_it: Box::new(AtomTrieNodeIter::new(self.trie, child_id, self.storage)),
+                    cur_it: Box::new(AtomTrieNodeIter::new(self.trie, child_id)),
                     next_state: Box::new(state),
                 };
                 return None;
             },
             CE_EXACT => {
-                let id = key.value();
-                // FIXME: here we can get in unchecked way
-                let atom = self.storage.get_atom(id).expect(ATOM_NOT_IN_STORAGE);
+                let atom = unsafe{ self.trie.storage.get_atom_unchecked(key) };
                 return Some((IterResult::Atom(Cow::Borrowed(atom)), child_id));
             },
             CE_CUSTOM => {
-                let id = key.value();
-                let atom = &self.trie.custom[id];
+                let atom = unsafe{ self.trie.storage.get_atom_unchecked(key) };
                 return Some((IterResult::Atom(Cow::Borrowed(atom)), child_id));
             },
             // FIXME: print kind correctly
@@ -789,7 +715,7 @@ impl<'a, D: DuplicationStrategy> Iterator for AtomTrieNodeIter<'a, D> {
                             let state = std::mem::take(&mut self.state);
                             self.state = State::VisitExpression {
                                 build_expr,
-                                cur_it: Box::new(AtomTrieNodeIter::new(self.trie, child_id, self.storage)),
+                                cur_it: Box::new(AtomTrieNodeIter::new(self.trie, child_id)),
                                 next_state: Box::new(state)
                             }
                         },
@@ -813,34 +739,6 @@ impl<'a, D: DuplicationStrategy> Iterator for AtomTrieNodeIter<'a, D> {
 #[cfg(test)]
 mod test {
     use super::*;
-
-    //#[test]
-    //fn atom_trie_node_display() {
-        //let mut node = AtomTrieNode::new();
-        //node.insert([InsertKey::Exact(1)].into_iter());
-        //assert_eq!(format!("{}", node), "{ Id(1): {} }");
-
-        //let mut node = AtomTrieNode::new();
-        //node.insert([InsertKey::Custom(Atom::sym("A"))].into_iter());
-        //assert_eq!(format!("{}", node), "{ Atom(A): {} }");
-
-        //let mut node = AtomTrieNode::new();
-        //node.insert([InsertKey::StartExpr, InsertKey::Custom(Atom::sym("B")), InsertKey::EndExpr].into_iter());
-        //assert_eq!(format!("{}", node), "{ StartExpr: { Atom(B): { EndExpr: {} } } }");
-    //}
-
-    //#[test]
-    //fn atom_trie_node_display_duplicate() {
-        //let mut node = AtomTrieNode::with_strategy(ALLOW_DUPLICATION);
-        //node.insert([InsertKey::Custom(Atom::sym("A"))].into_iter());
-        //node.insert([InsertKey::Custom(Atom::sym("A"))].into_iter());
-        //assert_eq!(format!("{}", node), "{ Atom(A): { x2 } }");
-
-        //let mut node = AtomTrieNode::with_strategy(ALLOW_DUPLICATION);
-        //node.insert([InsertKey::StartExpr, InsertKey::Custom(Atom::sym("B")), InsertKey::EndExpr].into_iter());
-        //node.insert([InsertKey::StartExpr, InsertKey::Custom(Atom::sym("B")), InsertKey::EndExpr].into_iter());
-        //assert_eq!(format!("{}", node), "{ StartExpr: { Atom(B): { EndExpr: { x2 } } } }");
-    //}
 
     #[test]
     fn atom_trie_node_size() {
