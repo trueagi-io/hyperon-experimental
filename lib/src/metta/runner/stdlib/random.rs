@@ -90,7 +90,7 @@ impl Grounded for crate::metta::runner::stdlib::random::SetRandomSeedOp {
 
 impl CustomExecute for crate::metta::runner::stdlib::random::SetRandomSeedOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("set-random-seed expects one argument: number (seed)");
+        let arg_error = || ExecError::from("set-random-seed! expects one argument: number (seed)");
         let seed: i64 = args.get(0).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
         THREAD_LOCAL_RNG.with(|generator| {*generator.borrow_mut() = StdRng::seed_from_u64(seed as u64)});
         Ok(vec![UNIT_ATOM])
