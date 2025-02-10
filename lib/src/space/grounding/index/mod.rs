@@ -5,6 +5,7 @@ pub use trie::{ALLOW_DUPLICATION, NO_DUPLICATION, DuplicationStrategy, AllowDupl
 use trie::*;
 
 use crate::atom::*;
+use crate::matcher::Bindings;
 
 use std::fmt::Debug;
 use std::borrow::Cow;
@@ -142,6 +143,8 @@ impl<'a> Iterator for AtomIter<'a> {
     }
 }
 
+pub type QueryResult = Box<dyn Iterator<Item=Bindings>>;
+
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct AtomIndex<D: DuplicationStrategy = NoDuplication> {
     trie: AtomTrie<D>,
@@ -166,10 +169,9 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
 
     fn atom_token_to_insert_index_key<'a>(token: AtomToken<'a>) -> InsertKey {
         match token {
-            AtomToken::Atom(Cow::Owned(atom @ Atom::Variable(_))) => InsertKey::Custom(atom),
-            AtomToken::Atom(Cow::Owned(atom)) => InsertKey::Exact(atom),
             AtomToken::StartExpr(_) => InsertKey::StartExpr,
             AtomToken::EndExpr => InsertKey::EndExpr,
+            AtomToken::Atom(Cow::Owned(atom)) => InsertKey::Atom(atom),
             _ => panic!("Only owned atoms are expected to be inserted"),
         }
     }
@@ -182,15 +184,9 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
 
     fn atom_token_to_query_index_key<'a>(token: AtomToken<'a>) -> QueryKey<'a> {
         match token {
-            AtomToken::Atom(Cow::Borrowed(atom @ Atom::Variable(_))) =>
-                QueryKey::Custom(atom),
-            AtomToken::Atom(Cow::Borrowed(atom @ Atom::Grounded(gnd)))
-                if gnd.as_grounded().as_match().is_some() => {
-                QueryKey::Custom(atom)
-            },
-            AtomToken::Atom(Cow::Borrowed(atom)) => QueryKey::Exact(atom),
             AtomToken::StartExpr(Some(atom)) => QueryKey::StartExpr(atom),
             AtomToken::EndExpr => QueryKey::EndExpr,
+            AtomToken::Atom(Cow::Borrowed(atom)) => QueryKey::Atom(atom),
             _ => panic!("Only borrowed atoms are expected to be queried"),
         }
     }
@@ -288,6 +284,15 @@ mod test {
     }
 
     #[test]
+    fn atom_index_query_single_exact_nonhashable() {
+        let mut index = AtomIndex::new();
+        index.insert(Atom::value(42));
+
+        assert_eq_bind_no_order!(index.query(&Atom::value(42)), vec![bind!{}]);
+        //assert_eq_bind_no_order!(index.query(&Atom::var("a")), vec![bind!{ a: Atom::value(42) }]);
+    }
+
+    #[test]
     fn atom_index_unique_var_names() {
         let mut index = AtomIndex::new();
         let expected = Atom::var("a");
@@ -313,7 +318,7 @@ mod test {
     }
 
     #[test]
-    fn atom_index_query_expression() {
+    fn atom_index_query_expression_simple() {
         let mut index = AtomIndex::new();
         index.insert(expr!("A" a {Number::Integer(42)} a));
 
