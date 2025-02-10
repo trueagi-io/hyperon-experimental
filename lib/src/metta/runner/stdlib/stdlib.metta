@@ -217,6 +217,12 @@
     (@param "Range end")))
   (@return "Random float number from defined range"))
 
+(@doc set-random-seed
+  (@desc "Sets a new seed (first argument) for random number generator")
+  (@params (
+    (@param "Seed")))
+  (@return "Unit atom"))
+
 (@doc collapse-bind
   (@desc "Evaluates minimal MeTTa operation (first argument) and returns an expression which contains all alternative evaluations in a form (Atom Bindings). Bindings are represented in a form of a grounded atom.")
   (@params (
