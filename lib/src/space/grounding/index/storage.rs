@@ -7,6 +7,7 @@ use std::hash::{Hash, Hasher};
 use std::hash::DefaultHasher;
 use std::fmt::{Debug, Display, Formatter};
 
+/// Storage for a hashable atoms.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct AtomStorage {
     next_id: usize,
@@ -14,11 +15,15 @@ pub struct AtomStorage {
 }
 
 impl AtomStorage {
+    /// New storage instance.
     #[cfg(test)]
     pub fn new() -> Self {
         Default::default()
     }
 
+    /// Insert atom into a storage. Returns `Ok(<id>)` if atom is hashable or
+    /// `Err(<atom>)` otherwise. Returns `Ok(<previous id>)` if atoms is already
+    /// in a storage.
     pub fn insert(&mut self, atom: Atom) -> Result<usize, Atom> {
         if Self::is_hashable(&atom) {
             Ok(self.insert_internal(atom))
@@ -55,10 +60,12 @@ impl AtomStorage {
         id
     }
 
+    /// Gets atom from the storage if any.
     pub fn get_atom(&self, id: usize) -> Option<&Atom> {
         self.atoms.get_by_right(&id).map(|h| h.as_atom())
     }
 
+    /// Gets id of the atom in the storage if any.
     pub fn get_id(&self, atom: &Atom) -> Option<usize> {
         if Self::is_hashable(atom) {
             self.atoms.get_by_left(&HashableAtom::Query(atom)).map(|id| *id)
@@ -77,6 +84,7 @@ impl AtomStorage {
         }
     }
 
+    /// Returns number of atoms in the storage.
     pub fn count(&self) -> usize {
         self.atoms.left_values().count()
     }

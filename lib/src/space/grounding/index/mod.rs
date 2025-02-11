@@ -143,24 +143,29 @@ impl<'a> Iterator for AtomIter<'a> {
     }
 }
 
+/// Iterator over results of the query to the index.
 pub type QueryResult = Box<dyn Iterator<Item=Bindings>>;
 
+/// Atom index implementation, parameterized by [DuplicationStrategy].
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 pub struct AtomIndex<D: DuplicationStrategy = NoDuplication> {
     trie: AtomTrie<D>,
 }
 
 impl AtomIndex {
+    /// New atom index instance using default [NoDuplication] duplication strategy.
     pub fn new() -> Self {
         Default::default()
     }
 }
 
 impl<D: DuplicationStrategy> AtomIndex<D> {
+    /// New atom index instance passing specific [DuplicationStrategy].
     pub fn with_strategy(_strategy: D) -> Self {
         Default::default()
     }
 
+    /// Insert atom into index.
     pub fn insert(&mut self, atom: Atom) {
         let key = AtomIter::from_atom(atom)
             .map(|token| Self::atom_token_to_insert_index_key(token));
@@ -176,6 +181,7 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
         }
     }
 
+    /// Query atoms which can be unified with `atom` from index.
     pub fn query(&self, atom: &Atom) -> QueryResult {
         let key = AtomIter::from_ref(&atom)
             .map(|token| Self::atom_token_to_query_index_key(token));
@@ -191,16 +197,19 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
         }
     }
 
+    /// Remove specific atom from index.
     pub fn remove(&mut self, atom: &Atom) -> bool {
         let key = AtomIter::from_ref(&atom)
             .map(|token| Self::atom_token_to_query_index_key(token));
         self.trie.remove(key)
     }
 
+    /// Iterate via atoms in index.
     pub fn iter(&self) -> Box<dyn Iterator<Item=Cow<'_, Atom>> + '_> {
        self.trie.unpack_atoms()
     }
 
+    /// Returns [true] if index has no atoms.
     pub fn is_empty(&self) -> bool {
         self.trie.is_empty()
     }

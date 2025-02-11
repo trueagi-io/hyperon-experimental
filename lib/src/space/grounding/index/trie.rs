@@ -10,16 +10,20 @@ use std::collections::HashMap;
 use std::fmt::{Debug, Formatter};
 use std::borrow::Cow;
 
+/// Implementer of the duplication strategy.
 pub trait DuplicationStrategyImplementor {
+    /// Return reference to the items counter.
     fn dup_counter_mut(&mut self) -> &mut usize;
 }
 
+/// Duplication strategy type.
 // TODO: modify duplication strategy to be able represent TrieKey::Leaf differently
 pub trait DuplicationStrategy: Default {
     fn add_atom(leaf: &mut dyn DuplicationStrategyImplementor);
     fn remove_atom(leaf: &mut dyn DuplicationStrategyImplementor);
 }
 
+/// Duplication strategy which forbids duplication.
 #[derive(Default, PartialEq, Clone)]
 pub struct NoDuplication {}
 impl DuplicationStrategy for NoDuplication {
@@ -33,6 +37,7 @@ impl DuplicationStrategy for NoDuplication {
     }
 }
 
+/// Duplication strategy which allows duplication.
 #[derive(Default, PartialEq, Clone)]
 pub struct AllowDuplication {}
 impl DuplicationStrategy for AllowDuplication {
@@ -46,24 +51,36 @@ impl DuplicationStrategy for AllowDuplication {
     }
 }
 
+/// [AllowDuplication] strategy instance.
 pub const ALLOW_DUPLICATION: AllowDuplication = AllowDuplication{};
+/// [NoDuplication] strategy instance.
 pub const NO_DUPLICATION: NoDuplication = NoDuplication{};
 
 
+/// Key for atoms insertion.
 pub enum InsertKey {
+    /// Start of the expression token.
     StartExpr,
+    /// End of the expression token.
     EndExpr,
+    /// Movable atom token.
     Atom(Atom),
 }
 
+/// Key for atoms querying.
 #[derive(Clone, Debug)]
 pub enum QueryKey<'a> {
+    /// Start expression token with expression to be queried.
     StartExpr(&'a Atom),
+    /// End expression token.
     EndExpr,
+    /// Borrowed atom token.
     Atom(&'a Atom),
 }
 
 impl QueryKey<'_> {
+    /// Consumes key until the end of the current expression. It assumes start
+    /// token of the expression is already consumed.
     fn skip_expression<'a, I: Iterator<Item=QueryKey<'a>>>(key: &mut I) {
         let mut par = 0;
         let mut is_end = |key: &QueryKey| {
@@ -90,74 +107,85 @@ impl QueryKey<'_> {
 
 }
 
+/// Storage for the atoms from the [AtomTrie] which maps atoms to the [TrieKey] and
+/// back. It consists of two storages. One for storing hashable atoms which
+/// allows atoms extraction. Second for storing non-hashable atoms which doesn't
+/// allow atoms extraction. It also manually maps two special keys: expression
+/// start and expression end.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
 struct TrieKeyStorage {
     hashable: HashableStorage,
     vec: HoleyVec<Atom>,
 }
 
-const TK_START_EXPR: TrieKey = TrieKey::new(TrieKeyStore::Hash, TrieKeyMatch::Exact, TK_VALUE_MASK);
-const TK_END_EXPR: TrieKey = TrieKey::new(TrieKeyStore::Hash, TrieKeyMatch::Exact, TK_VALUE_MASK - 1);
+/// Start expression key which is represented as a max possible value of the TrieKey.
+const TK_START_EXPR: TrieKey = TrieKey::new(TrieKeyStore::Hash, AtomMatchMode::Equality, TK_VALUE_MASK);
+/// End expression key which is represented as a max possible value of the TrieKey minus one.
+const TK_END_EXPR: TrieKey = TrieKey::new(TrieKeyStore::Hash, AtomMatchMode::Equality, TK_VALUE_MASK - 1);
 
 impl TrieKeyStorage {
+    /// Add key into the storage and return corresponding [TrieKey].
     pub fn insert_key(&mut self, key: InsertKey) -> TrieKey {
         match key {
             InsertKey::StartExpr => TK_START_EXPR,
             InsertKey::EndExpr => TK_END_EXPR,
-            InsertKey::Atom(atom @ Atom::Variable(_)) => self.add_atom(TrieKeyMatch::Custom, atom),
+            InsertKey::Atom(atom @ Atom::Variable(_)) => self.add_atom(AtomMatchMode::Unification, atom),
             InsertKey::Atom(atom @ Atom::Grounded(_)) => {
                 match &atom {
                     Atom::Grounded(gnd) =>
                         if gnd.as_grounded().as_match().is_some() {
-                            self.add_atom(TrieKeyMatch::Custom, atom)
+                            self.add_atom(AtomMatchMode::Unification, atom)
                         } else {
-                            self.add_atom(TrieKeyMatch::Exact, atom)
+                            self.add_atom(AtomMatchMode::Equality, atom)
                         }
                     _ => unreachable!(),
                 }
             }
-            InsertKey::Atom(atom) => self.add_atom(TrieKeyMatch::Exact, atom),
+            InsertKey::Atom(atom) => self.add_atom(AtomMatchMode::Equality, atom),
         }
     }
 
-    fn add_atom(&mut self, match_: TrieKeyMatch, atom: Atom) -> TrieKey {
+    fn add_atom(&mut self, match_mode: AtomMatchMode, atom: Atom) -> TrieKey {
         self.hashable.insert(atom).map_or_else(|atom| {
-            // There is a trade off between keeping non-hashable but exact
+            // There is a trade off between keeping non-hashable but equality
             // matchable keys (for instance grounded atom without both matching
-            // and serialization) in a collection for exact matching or in a
-            // collection for a custom matching. When they are kept in exact
+            // and serialization) in a collection for equality matching or in a
+            // collection for a unification matching. When they are kept in equality
             // matching collection then each occurence of such key in query
-            // will go through all exact entries + all custom entries. If they
-            // are kept in a custom matching collection (see AtomTrieNode)
-            // then when exact key is matched it is matched via all such keys
-            // as well while no custom matching with them is possible. Current
-            // code keeps such keys in exact matching collection which slows
+            // will go through all equality entries + all unifiable entries. If they
+            // are kept in a unification matching collection (see TrieNode)
+            // then when equality key is matched it is matched via all such keys
+            // as well while no unification matching with them is possible. Current
+            // code keeps such keys in equality matching collection which slows
             // down their matching. User should be advised to implement
-            // serialization for the grounded types which don't have custom
+            // serialization for the grounded types which don't have unification
             // matching to make them hashable.
-            TrieKey::new(TrieKeyStore::Index, match_, self.vec.push(atom))
+            TrieKey::new(TrieKeyStore::Index, match_mode, self.vec.push(atom))
         }, |hash_id| {
-            TrieKey::new(TrieKeyStore::Hash, match_, hash_id)
+            TrieKey::new(TrieKeyStore::Hash, match_mode, hash_id)
         })
     }
     
-    pub fn query_key<'a>(&self, key: &QueryKey<'a>) -> (TrieKeyMatch, Option<TrieKey>, Option<&'a Atom>) {
+    /// Check if key is in the storage and return matching mode, [TrieKey] if it is
+    /// possible and reference to the atom.
+    pub fn query_key<'a>(&self, key: &QueryKey<'a>) -> (AtomMatchMode, Option<TrieKey>, Option<&'a Atom>) {
         match key {
-            QueryKey::StartExpr(atom) => (TrieKeyMatch::Exact, Some(TK_START_EXPR), Some(atom)),
-            QueryKey::EndExpr => (TrieKeyMatch::Exact, Some(TK_END_EXPR), None),
-            QueryKey::Atom(atom @ Atom::Variable(_)) => self.get_key(TrieKeyMatch::Custom, atom),
+            QueryKey::StartExpr(atom) => (AtomMatchMode::Equality, Some(TK_START_EXPR), Some(atom)),
+            QueryKey::EndExpr => (AtomMatchMode::Equality, Some(TK_END_EXPR), None),
+            QueryKey::Atom(atom @ Atom::Variable(_)) => self.get_key(AtomMatchMode::Unification, atom),
             QueryKey::Atom(atom @ Atom::Grounded(gnd)) if gnd.as_grounded().as_match().is_some() =>
-                self.get_key(TrieKeyMatch::Custom, atom),
-            QueryKey::Atom(atom) => self.get_key(TrieKeyMatch::Exact, atom),
+                self.get_key(AtomMatchMode::Unification, atom),
+            QueryKey::Atom(atom) => self.get_key(AtomMatchMode::Equality, atom),
         }
     }
 
-    fn get_key<'a>(&self, match_: TrieKeyMatch, atom: &'a Atom) -> (TrieKeyMatch, Option<TrieKey>, Option<&'a Atom>) {
+    fn get_key<'a>(&self, match_mode: AtomMatchMode, atom: &'a Atom) -> (AtomMatchMode, Option<TrieKey>, Option<&'a Atom>) {
         let key = self.hashable.get_id(atom)
-            .map(|hash_id| TrieKey::new(TrieKeyStore::Hash, match_, hash_id));
-        (match_, key, Some(atom))
+            .map(|hash_id| TrieKey::new(TrieKeyStore::Hash, match_mode, hash_id));
+        (match_mode, key, Some(atom))
     }
 
+    /// Returns atom from storage by [TrieKey].
     pub unsafe fn get_atom_unchecked(&self, key: TrieKey) -> &Atom {
         match key.store() {
             TrieKeyStore::Hash => self.hashable.get_atom(key.value()).unwrap(),
@@ -166,12 +194,14 @@ impl TrieKeyStorage {
     }
 }
 
+/// Index of the trie node inside collection of the nodes.
 type NodeId = usize;
 
+/// Trie to keep and query atoms parameterized by [DuplicationStrategy].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AtomTrie<D: DuplicationStrategy = NoDuplication>{
     keys: TrieKeyStorage,
-    nodes: HoleyVec<AtomTrieNode>,
+    nodes: HoleyVec<TrieNode>,
     index: HashMap<(NodeId, TrieKey), NodeId>,
     root: NodeId,
     _phantom: std::marker::PhantomData<D>,
@@ -193,10 +223,12 @@ impl<D: DuplicationStrategy> Default for AtomTrie<D> {
 
 impl<D: DuplicationStrategy> AtomTrie<D> {
 
+    /// New instance of the [AtomTrie] using provided instance of the [DuplicationStrategy].
     pub fn with_strategy(_strategy: D) -> Self {
         Default::default()
     }
 
+    /// Insert list of [InsertKey] into the trie.
     #[inline]
     pub fn insert<I: Iterator<Item=InsertKey>>(&mut self, key: I) {
         self.insert_internal(self.root, key)
@@ -225,6 +257,7 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         child_id
     }
 
+    /// Query trie using list of the [QueryKey] instances.
     #[inline]
     pub fn query<'a, I: Debug + Clone + Iterator<Item=QueryKey<'a>>>(&self, key: I) -> BindingsSet {
         let mut mapper = CachingMapper::new(VariableAtom::make_unique);
@@ -241,11 +274,11 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         match key.next() {
             Some(head) => {
                 match self.keys.query_key(&head) {
-                    (TrieKeyMatch::Exact, head, atom) =>
-                        self.match_exact_key(node_id, atom, head, key, mapper),
-                    (TrieKeyMatch::Custom, _head, Some(atom)) =>
-                        self.match_custom_key(node_id, atom, key, mapper),
-                    (TrieKeyMatch::Custom, _head, None) => unreachable!(),
+                    (AtomMatchMode::Equality, head, atom) =>
+                        self.match_key_by_equality(node_id, atom, head, key, mapper),
+                    (AtomMatchMode::Unification, _head, Some(atom)) =>
+                        self.match_key_by_unification(node_id, atom, key, mapper),
+                    (AtomMatchMode::Unification, _head, None) => unreachable!(),
                 }
             },
             None => {
@@ -254,7 +287,7 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         }
     }
 
-    fn match_exact_key<'a, I, M>(&self, node_id: NodeId,
+    fn match_key_by_equality<'a, I, M>(&self, node_id: NodeId,
         atom: Option<&'a Atom>, key: Option<TrieKey>, mut tail: I,
         mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
@@ -262,21 +295,21 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
             M: Fn(VariableAtom)->VariableAtom,
     {
         let mut result = BindingsSet::empty();
-        if let AtomTrieNode::Leaf(_count) = self.nodes[node_id] {
+        if let TrieNode::Leaf(_count) = self.nodes[node_id] {
             return result;
         }
         
         let mut is_start_expr: bool = false;
-        if let Some(exact_key) = key {
-            // match exact hashable key
-            is_start_expr = exact_key == TK_START_EXPR;
-            if let Some(&child_id) = self.index.get(&(node_id, exact_key)) {
+        if let Some(equality_key) = key {
+            // match equality hashable key
+            is_start_expr = equality_key == TK_START_EXPR;
+            if let Some(&child_id) = self.index.get(&(node_id, equality_key)) {
                 result.extend(self.query_internal(child_id, tail.clone(), mapper))
             }
         } else {
-            // match exact nonhashable key (see TrieKeyStorage::add_atom)
+            // match equality nonhashable key (see TrieKeyStorage::add_atom)
             if let Some(query) = atom {
-                let it = self.nodes[node_id].iter_match(TrieKeyMatch::Exact)
+                let it = self.nodes[node_id].iter_match(AtomMatchMode::Equality)
                     .filter(|&(_index, key)| key != TK_START_EXPR && key != TK_END_EXPR)
                     .map(|(_index, key)| (unsafe{ self.keys.get_atom_unchecked(key) }, key));
                 for (entry, key) in it {
@@ -288,26 +321,26 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
             }
         }
 
-        // match custom matching entries with exact key
+        // match unification matching entries with equality key
         if let Some(query) = atom {
             if is_start_expr {
                 QueryKey::skip_expression(&mut tail);
             }
-            let it = self.nodes[node_id].iter_match(TrieKeyMatch::Custom)
+            let it = self.nodes[node_id].iter_match(AtomMatchMode::Unification)
                 .map(|(_index, key)| {
                     let entry = unsafe{ self.keys.get_atom_unchecked(key) };
                     let child_id = *self.index.get(&(node_id, key)).unwrap();
                     (entry, child_id)
                 });
             for (entry, child_id) in it {
-                let mut custom_res = self.match_custom_entry(entry, query, child_id, tail.clone(), mapper);
-                result.extend(custom_res.drain(..));
+                let mut unify_res = self.unify_entry(entry, query, child_id, tail.clone(), mapper);
+                result.extend(unify_res.drain(..));
             }
         }
         result
     }
 
-    fn match_custom_entry<'a, I, M>(&self, entry: &Atom, key: &Atom, child_id: NodeId, tail: I,
+    fn unify_entry<'a, I, M>(&self, entry: &Atom, key: &Atom, child_id: NodeId, tail: I,
         mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
             I: Debug + Clone + Iterator<Item=QueryKey<'a>>,
@@ -328,7 +361,7 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         }
     }
 
-    fn match_custom_key<'a, I, M>(&self, node_id: NodeId,
+    fn match_key_by_unification<'a, I, M>(&self, node_id: NodeId,
         atom: &Atom, tail: I,
         mapper: &mut CachingMapper<VariableAtom, VariableAtom, M>) -> BindingsSet
         where
@@ -337,15 +370,15 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
     {
         let mut result = BindingsSet::empty();
         for (entry, child_id) in self.unpack_atoms_internal(node_id) {
-            let mut tail_result = self.match_custom_entry(&entry, atom, child_id, tail.clone(), mapper);
+            let mut tail_result = self.unify_entry(&entry, atom, child_id, tail.clone(), mapper);
             result.extend(tail_result.drain(..));
         }
         result
     }
 
+    /// Get iterator over atoms of the trie.
     #[inline]
-    pub fn unpack_atoms<'a>(&'a self)
-        -> Box<dyn Iterator<Item=Cow<'a, Atom>> + 'a>
+    pub fn unpack_atoms<'a>(&'a self) -> Box<dyn Iterator<Item=Cow<'a, Atom>> + 'a>
     {
         Box::new(self.unpack_atoms_internal(self.root)
             .flat_map(|(atom, child_id)| { 
@@ -356,7 +389,7 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
     fn unpack_atoms_internal<'a>(&'a self, node_id: NodeId)
         -> Box<dyn Iterator<Item=(Cow<'a, Atom>, NodeId)> + 'a>
     { 
-        Box::new(AtomTrieNodeIter::new(self, node_id)
+        Box::new(TrieNodeAtomIter::new(self, node_id)
             .filter_map(|(atom, child_id)| {
                 if let IterResult::Atom(atom) = atom {
                     Some((atom, child_id))
@@ -366,6 +399,8 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
             }))
     }
 
+    /// Remove specific list of [QueryKey] from the trie. Each key is matched
+    /// by equality.
     #[inline]
     pub fn remove<'a, I: Iterator<Item=QueryKey<'a>>>(&mut self, key: I) -> bool {
         self.remove_internal(self.root, key)
@@ -378,18 +413,18 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
             Some(head) => {
                 let entry = match self.keys.query_key(&head) {
                     (_match, None, None) => None,
-                    (match_, Some(key), _atom) => {
+                    (match_mode, Some(key), _atom) => {
                         match self.index.get(&(node_id, key)) {
                             Some(child_id) => {
-                                self.nodes[node_id].iter_match(match_)
+                                self.nodes[node_id].iter_match(match_mode)
                                     .find(|(_i, k)| *k == key)
                                     .map(|(i, k)| (k, i, *child_id))
                             },
                             None => None,
                         }
                     },
-                    (match_, None, Some(atom)) => {
-                        self.nodes[node_id].iter_match(match_)
+                    (match_mode, None, Some(atom)) => {
+                        self.nodes[node_id].iter_match(match_mode)
                             .find(|(_i, k)| atom == unsafe{ self.keys.get_atom_unchecked(*k) })
                             .map(|(i, k)| (k, i, *self.index.get(&(node_id, k)).unwrap()))
                     },
@@ -397,7 +432,8 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
                 match entry {
                     Some((child_key, index, child_id)) => {
                         let removed = self.remove_internal(child_id, key);
-                        if removed && self.nodes[child_id].is_empty() {
+                        if removed && self.nodes[child_id].is_leaf() {
+                            // FIXME: remove from TrieKeyStorage as well
                             self.index.remove(&(node_id, child_key));
                             self.nodes[node_id].remove_key(child_key, index);
                         }
@@ -413,22 +449,29 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         }
     }
 
+    /// Return `true` if trie is empty.
     #[inline]
     pub fn is_empty(&self) -> bool {
-        self.nodes[self.root].is_empty()
+        self.nodes[self.root].is_leaf()
     }
 }
 
+/// Which storage keeps the value of the key.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum TrieKeyStore {
+    /// Value is kept in the storage for hashable atoms.
     Hash,
+    /// Value is kept in the storage for nonhashable atoms.
     Index,
 }
 
+/// How atom represented by the key should be matched.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum TrieKeyMatch {
-    Exact,
-    Custom,
+enum AtomMatchMode {
+    /// Atom is matched using equality.
+    Equality,
+    /// Atom is matched using unification.
+    Unification,
 }
 
 const TK_STORE_MASK: usize = 0b1 << 63;
@@ -440,23 +483,26 @@ const TK_STORE_INDEX: usize = 0b1 << 63;
 const TK_MATCH_EXACT: usize = 0b0 << 62;
 const TK_MATCH_CUSTOM: usize = 0b1 << 62;
 
+/// Compact representation of the atom from the trie. It represents each
+/// atom using single [usize] value. It keeps value of the key, key matching
+/// mode: equality or unification, key storage mode: hashable or indexed.
 #[derive(Hash, Copy, Clone, PartialEq, Eq)]
 struct TrieKey(usize);
 
 impl TrieKey {
     #[allow(non_snake_case)]
     #[inline]
-    const fn new(store: TrieKeyStore, match_: TrieKeyMatch, value: usize) -> Self {
+    const fn new(store: TrieKeyStore, match_mode: AtomMatchMode, value: usize) -> Self {
         let store = match store {
             TrieKeyStore::Hash => TK_STORE_HASH,
             TrieKeyStore::Index => TK_STORE_INDEX,
         };
-        let match_ = match match_ {
-            TrieKeyMatch::Exact => TK_MATCH_EXACT,
-            TrieKeyMatch::Custom => TK_MATCH_CUSTOM,
+        let match_mode = match match_mode {
+            AtomMatchMode::Equality => TK_MATCH_EXACT,
+            AtomMatchMode::Unification => TK_MATCH_CUSTOM,
         };
         assert!(((!TK_VALUE_MASK) & value) == 0);
-        Self(store | match_ | value)
+        Self(store | match_mode | value)
     }
 
     #[inline]
@@ -474,10 +520,10 @@ impl TrieKey {
     }
 
     #[inline]
-    fn match_(&self) -> TrieKeyMatch {
+    fn match_mode(&self) -> AtomMatchMode {
         match self.0 & TK_MATCH_MASK {
-            TK_MATCH_EXACT => TrieKeyMatch::Exact,
-            TK_MATCH_CUSTOM => TrieKeyMatch::Custom,
+            TK_MATCH_EXACT => AtomMatchMode::Equality,
+            TK_MATCH_CUSTOM => AtomMatchMode::Unification,
             _ => unreachable!(),
         }
     }
@@ -485,102 +531,115 @@ impl TrieKey {
 
 impl Debug for TrieKey {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "TrieKey{{ match_: {:?}, store: {:?}, value: {:?} }}",
-            self.match_(), self.store(), self.value())
+        write!(f, "TrieKey{{ match_mode: {:?}, store: {:?}, value: {:?} }}",
+            self.match_mode(), self.store(), self.value())
     }
 }
 
+/// [AtomTrie] node representation. Node doesn't keep a map between keys and
+/// successors. It keeps just a list of keys. The map is kept in the [AtomTrie]
+/// itself. It is much more compact memory representation. List of keys in the
+/// node is required to iterate over successors.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum AtomTrieNode {
+enum TrieNode {
+    /// Leaf node which contains the counter of atoms.
     Leaf(usize),
+    /// Single node which contains the only successor.
     Single(TrieKey),
-    Many(Box<AtomTrieNodeKeys>),
+    /// Collection of the successors.
+    Many(Box<TrieNodeKeys>),
 }
 
+/// [TrieNode] successors collection which keeps separately keys matched
+/// by equality and keys matched by unification.
 #[derive(Default, Debug, Clone, PartialEq, Eq)]
-struct AtomTrieNodeKeys {
-    exact: smallvec::SmallVec<[TrieKey; 2]>,
-    custom: smallvec::SmallVec<[TrieKey; 0]>,
+struct TrieNodeKeys {
+    equal: smallvec::SmallVec<[TrieKey; 2]>,
+    unify: smallvec::SmallVec<[TrieKey; 0]>,
 }
 
-impl AtomTrieNodeKeys {
+impl TrieNodeKeys {
     fn push(&mut self, key: TrieKey) {
-        match key.match_() {
-            TrieKeyMatch::Exact => self.exact.push(key),
-            TrieKeyMatch::Custom => self.custom.push(key),
+        match key.match_mode() {
+            AtomMatchMode::Equality => self.equal.push(key),
+            AtomMatchMode::Unification => self.unify.push(key),
         }
     }
 
     fn remove(&mut self, key: TrieKey, index: usize) {
-        match key.match_() {
-            TrieKeyMatch::Exact => self.exact.remove(index),
-            TrieKeyMatch::Custom => self.custom.remove(index),
+        match key.match_mode() {
+            AtomMatchMode::Equality => self.equal.remove(index),
+            AtomMatchMode::Unification => self.unify.remove(index),
         };
     }
 
     fn len(&self) -> usize {
-        self.exact.len() + self.custom.len()
+        self.equal.len() + self.unify.len()
     }
 
     fn single(&self) -> TrieKey {
-        if self.exact.len() == 1 {
-            self.exact[0]
-        } else if self.custom.len() == 1 {
-            self.custom[0]
+        if self.equal.len() == 1 {
+            self.equal[0]
+        } else if self.unify.len() == 1 {
+            self.unify[0]
         } else {
             panic!("Collection contains more than 1 item");
         }
     }
 
-    fn iter_match(&self, match_: TrieKeyMatch) -> std::slice::Iter<'_, TrieKey> {
-        match match_ {
-            TrieKeyMatch::Exact => self.exact.iter(),
-            TrieKeyMatch::Custom => self.custom.iter(),
+    fn iter_match(&self, match_mode: AtomMatchMode) -> std::slice::Iter<'_, TrieKey> {
+        match match_mode {
+            AtomMatchMode::Equality => self.equal.iter(),
+            AtomMatchMode::Unification => self.unify.iter(),
         }
     }
 }
 
-impl DuplicationStrategyImplementor for AtomTrieNode {
+impl DuplicationStrategyImplementor for TrieNode {
     fn dup_counter_mut(&mut self) -> &mut usize {
         self.leaf_counter_mut()
     }
 }
 
-impl Default for AtomTrieNode {
+impl Default for TrieNode {
     fn default() -> Self {
-        AtomTrieNode::Leaf(0)
+        TrieNode::Leaf(0)
     }
 }
 
-impl AtomTrieNode {
+impl TrieNode {
+    /// Return items counter from leaf node.
     pub fn leaf_counter(&self) -> usize {
         match self {
-            AtomTrieNode::Leaf(count) => *count,
+            TrieNode::Leaf(count) => *count,
             // This invariant holds only for keys which are properly balanced
             // i.e. for keys constructed from atoms
             _ => panic!("Key is expected to end by leaf node"),
         }
     }
 
+    /// Return mutable items counter from leaf node.
     fn leaf_counter_mut(&mut self) -> &mut usize {
         match self {
-            AtomTrieNode::Leaf(count) => count,
+            TrieNode::Leaf(count) => count,
             // This invariant holds only for keys which are properly balanced
             // i.e. for keys constructed from atoms
             _ => panic!("Key is expected to end by leaf node"),
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        matches!(*self, AtomTrieNode::Leaf(0))
+    /// Return `true` if node is a leaf.
+    pub fn is_leaf(&self) -> bool {
+        matches!(*self, TrieNode::Leaf(0))
     }
 
+    /// Push new key into a list of successors.
     pub fn push(&mut self, key: TrieKey) {
         match self {
             Self::Leaf(0) => *self = Self::Single(key),
             Self::Leaf(_) => panic!("Unexpected state"),
             Self::Single(prev) => {
-                let mut keys: AtomTrieNodeKeys = Default::default();
+                let mut keys: TrieNodeKeys = Default::default();
                 keys.push(*prev);
                 keys.push(key);
                 *self = Self::Many(Box::new(keys))
@@ -591,6 +650,7 @@ impl AtomTrieNode {
 
     }
 
+    /// Remove key from the node.
     pub fn remove_key(&mut self, key: TrieKey, idx: usize) {
         match self {
             Self::Leaf(_) => panic!("Unexpected state"),
@@ -608,37 +668,40 @@ impl AtomTrieNode {
         }
     }
 
-    pub fn iter_all(&self) -> std::iter::Chain<AtomTrieNodeIndexIter, AtomTrieNodeIndexIter> {
-        self.iter_match(TrieKeyMatch::Custom)
-            .chain(self.iter_match(TrieKeyMatch::Exact))
+    /// Iterate over all of keys in the list
+    pub fn iter_all(&self) -> std::iter::Chain<TrieNodeIndexIter, TrieNodeIndexIter> {
+        self.iter_match(AtomMatchMode::Unification)
+            .chain(self.iter_match(AtomMatchMode::Equality))
     }
 
-    pub fn iter_match(&self, match_: TrieKeyMatch) -> AtomTrieNodeIndexIter<'_> {
+    /// Iterate over keys which has specified matching mode.
+    pub fn iter_match(&self, match_mode: AtomMatchMode) -> TrieNodeIndexIter<'_> {
         match self {
-            Self::Leaf(_) => AtomTrieNodeIndexIter::Empty,
+            Self::Leaf(_) => TrieNodeIndexIter::Empty,
             Self::Single(key) => {
-                if key.match_() == match_ {
-                    AtomTrieNodeIndexIter::Single(*key)
+                if key.match_mode() == match_mode {
+                    TrieNodeIndexIter::Single(*key)
                 } else {
-                    AtomTrieNodeIndexIter::Empty
+                    TrieNodeIndexIter::Empty
                 }
             },
-            Self::Many(keys) => AtomTrieNodeIndexIter::Many(keys
-                    .iter_match(match_)
+            Self::Many(keys) => TrieNodeIndexIter::Many(keys
+                    .iter_match(match_mode)
                     .copied()
                     .enumerate())
         }
     }
 }
 
+/// Iterator over [TrieNode] keys and corresponding indexes.
 #[derive(Clone)]
-enum AtomTrieNodeIndexIter<'a> {
+enum TrieNodeIndexIter<'a> {
     Empty,
     Single(TrieKey),
     Many(std::iter::Enumerate<std::iter::Copied<std::slice::Iter<'a, TrieKey>>>),
 }
 
-impl Iterator for AtomTrieNodeIndexIter<'_> {
+impl Iterator for TrieNodeIndexIter<'_> {
     type Item = (usize, TrieKey);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -656,36 +719,41 @@ impl Iterator for AtomTrieNodeIndexIter<'_> {
     }
 }
 
+/// Iterator over atoms starting in the [TrieNode].
 #[derive(Clone)]
-struct AtomTrieNodeIter<'a, D: DuplicationStrategy> {
+struct TrieNodeAtomIter<'a, D: DuplicationStrategy> {
     trie: &'a AtomTrie<D>,
     node_id: NodeId,
-    state: AtomTrieNodeIterState<'a, D>,
+    state: TrieNodeAtomIterState<'a, D>,
 }
 
+/// State of the [TrieNode] atoms iterator.
 #[derive(Default, Clone)]
-enum AtomTrieNodeIterState<'a, D: DuplicationStrategy> {
-    VisitEntries(std::iter::Chain<AtomTrieNodeIndexIter<'a>, AtomTrieNodeIndexIter<'a>>),
+enum TrieNodeAtomIterState<'a, D: DuplicationStrategy> {
+    /// Iterator over items in the node.
+    VisitEntries(std::iter::Chain<TrieNodeIndexIter<'a>, TrieNodeIndexIter<'a>>),
+    /// Iterate through expression started in the node.
     VisitExpression {
         build_expr: Vec<Atom>,
-        cur_it: Box<AtomTrieNodeIter<'a, D>>,
+        cur_it: Box<TrieNodeAtomIter<'a, D>>,
         next_state: Box<Self>,
     },
+    /// End of the iterator.
     #[default]
     End,
 }
 
-impl<'a, D: DuplicationStrategy> AtomTrieNodeIter<'a, D> {
+impl<'a, D: DuplicationStrategy> TrieNodeAtomIter<'a, D> {
     fn new(trie: &'a AtomTrie<D>, node_id: NodeId) -> Self {
         Self {
             trie,
             node_id,
-            state: AtomTrieNodeIterState::VisitEntries(trie.nodes[node_id].iter_all()),
+            state: TrieNodeAtomIterState::VisitEntries(trie.nodes[node_id].iter_all()),
         }
     }
 
     fn single_step(&mut self, key: TrieKey) -> Option<(IterResult<'a>, NodeId)> {
-        type State<'a, D> = AtomTrieNodeIterState<'a, D>;
+        type State<'a, D> = TrieNodeAtomIterState<'a, D>;
 
         let child_id = *self.trie.index.get(&(self.node_id, key)).unwrap();
         if key == TK_END_EXPR {
@@ -694,7 +762,7 @@ impl<'a, D: DuplicationStrategy> AtomTrieNodeIter<'a, D> {
             let state = std::mem::take(&mut self.state);
             self.state = State::VisitExpression{
                 build_expr: Vec::new(),
-                cur_it: Box::new(AtomTrieNodeIter::new(self.trie, child_id)),
+                cur_it: Box::new(TrieNodeAtomIter::new(self.trie, child_id)),
                 next_state: Box::new(state),
             };
             None
@@ -711,11 +779,11 @@ enum IterResult<'a> {
     Atom(Cow<'a, Atom>),
 }
 
-impl<'a, D: DuplicationStrategy> Iterator for AtomTrieNodeIter<'a, D> {
+impl<'a, D: DuplicationStrategy> Iterator for TrieNodeAtomIter<'a, D> {
     type Item = (IterResult<'a>, NodeId);
 
     fn next(&mut self) -> Option<Self::Item> {
-        type State<'a, D> = AtomTrieNodeIterState<'a, D>;
+        type State<'a, D> = TrieNodeAtomIterState<'a, D>;
 
         loop {
             match &mut self.state {
@@ -743,7 +811,7 @@ impl<'a, D: DuplicationStrategy> Iterator for AtomTrieNodeIter<'a, D> {
                             let state = std::mem::take(&mut self.state);
                             self.state = State::VisitExpression {
                                 build_expr,
-                                cur_it: Box::new(AtomTrieNodeIter::new(self.trie, child_id)),
+                                cur_it: Box::new(TrieNodeAtomIter::new(self.trie, child_id)),
                                 next_state: Box::new(state)
                             }
                         },
@@ -770,11 +838,11 @@ mod test {
 
     #[test]
     fn atom_trie_node_size() {
-        assert_eq!(std::mem::size_of::<AtomTrieNode>(), 2 * std::mem::size_of::<usize>());
+        assert_eq!(std::mem::size_of::<TrieNode>(), 2 * std::mem::size_of::<usize>());
     }
 
     #[test]
-    fn atom_trie_custom_exact_key_size() {
+    fn atom_trie_trie_key_size() {
         assert_eq!(std::mem::size_of::<TrieKey>(), std::mem::size_of::<usize>());
     }
 }
