@@ -192,6 +192,17 @@ impl TrieKeyStorage {
             TrieKeyStore::Index => self.vec.get_unchecked(key.value()),
         }
     }
+
+    /// Remove [TrieKey] from the store
+    pub fn remove_key(&mut self, key: TrieKey) {
+        // TODO: Ability to remove hashable keys is to be added. To implement
+        // removing hashable keys we need to track how many nodes contains this
+        // key. When key is not hashable it is not reused and each instance is
+        // kept in exacly one node.
+        if key.store() == TrieKeyStore::Index {
+            self.vec.remove(key.value());
+        }
+    }
 }
 
 /// Index of the trie node inside collection of the nodes.
@@ -433,9 +444,9 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
                     Some((child_key, index, child_id)) => {
                         let removed = self.remove_internal(child_id, key);
                         if removed && self.nodes[child_id].is_leaf() {
-                            // FIXME: remove from TrieKeyStorage as well
                             self.index.remove(&(node_id, child_key));
                             self.nodes[node_id].remove_key(child_key, index);
+                            self.keys.remove_key(child_key);
                         }
                         removed
                     },
@@ -805,7 +816,7 @@ impl<'a, D: DuplicationStrategy> Iterator for TrieNodeAtomIter<'a, D> {
                             return Some((IterResult::Atom(Cow::Owned(atom)), child_id))
                         },
                         Some((IterResult::Atom(atom), child_id)) => {
-                            // FIXME: replace Vec by Option<Vec> ?
+                            // TODO: replace Vec by Option<Vec> ?
                             let mut build_expr = std::mem::take(build_expr);
                             build_expr.push(atom.into_owned());
                             let state = std::mem::take(&mut self.state);
