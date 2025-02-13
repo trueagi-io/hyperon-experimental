@@ -994,7 +994,7 @@ impl<'input> RunContext<'_, 'input> {
     /// WARNING: Module import behavior is still WIP, specifically around "import *" behavior, and
     /// especially around transitive imports
     pub fn import_all_from_dependency(&self, mod_id: ModId) -> Result<(), String> {
-        self.module().import_all_from_dependency(mod_id, self.get_mod_ptr(mod_id)?)
+        self.module().import_all_from_dependency(mod_id, self.get_mod_ptr(mod_id)?, self.metta)
     }
 
     /// Private method to advance the context forward one step

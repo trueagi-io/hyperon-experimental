@@ -87,14 +87,10 @@ impl MettaMod {
             loader: None,
         };
 
-        // Load the base tokens for the module's new Tokenizer
-        register_runner_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), &DynSpace::with_rc(new_mod.space.clone()), metta);
-        register_common_tokens(&mut *new_mod.tokenizer().borrow_mut(), new_mod.tokenizer().clone(), &DynSpace::with_rc(new_mod.space.clone()), metta);
-
         //Load the stdlib unless this module is no_std
         if !no_stdlib {
             if let Some(stdlib_mod_id) = metta.0.stdlib_mod.get() {
-                new_mod.import_all_from_dependency(*stdlib_mod_id, metta.get_mod_ptr(*stdlib_mod_id)).unwrap();
+                new_mod.import_all_from_dependency(*stdlib_mod_id, metta.get_mod_ptr(*stdlib_mod_id), metta).unwrap();
             }
         }
 
@@ -182,7 +178,7 @@ impl MettaMod {
 
     /// Effectively adds all atoms in a dependency module to the &self module, by adding the dependency
     /// module's space as an atom inside the &self module
-    pub(crate) fn import_all_from_dependency(&self, mod_id: ModId, mod_ptr: Rc<MettaMod>) -> Result<(), String> {
+    pub(crate) fn import_all_from_dependency(&self, mod_id: ModId, mod_ptr: Rc<MettaMod>, metta: &Metta) -> Result<(), String> {
 
         // See if the dependency has already been imported
         if self.contains_imported_dep(&mod_id) {
@@ -204,19 +200,22 @@ impl MettaMod {
         }
 
         // Finally, Import the tokens from the dependency
-        self.import_all_tokens_from_dependency(mod_ptr)
+        mod_ptr.export_all_tokens_into(self, metta)
     }
 
-    /// Merges all Tokenizer entries in a dependency module into &self
-    pub(crate) fn import_all_tokens_from_dependency(&self, mod_ptr: Rc<MettaMod>) -> Result<(), String> {
+    fn export_all_tokens_into(&self, target_mod: &MettaMod, metta: &Metta) -> Result<(), String> {
+        if self.name() == "stdlib" || self.name() == "corelib" {
+            register_runner_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
+            register_common_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
+            register_rust_stdlib_tokens(&mut *target_mod.tokenizer().borrow_mut());
+        } else {
+            // Get the tokenizer associated with the dependent module
+            let dep_tokenizer = self.tokenizer().clone();
 
-        // Get the tokenizer associated with the dependent module
-        let dep_tokenizer = mod_ptr.tokenizer().clone();
-
-        //Import all the Tokenizer entries from the dependency
-        let mut dep_tok_clone = dep_tokenizer.borrow().clone();
-        self.tokenizer.borrow_mut().move_front(&mut dep_tok_clone);
-
+            //Import all the Tokenizer entries from the dependency
+            let mut dep_tok_clone = dep_tokenizer.borrow().clone();
+            target_mod.tokenizer().borrow_mut().move_front(&mut dep_tok_clone);
+        }
         Ok(())
     }
 
