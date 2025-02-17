@@ -146,10 +146,6 @@ pub fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
     }
 }
 
-fn get_op(expr: &ExpressionAtom) -> &Atom {
-    expr.children().get(0).expect("Non-empty expression is expected")
-}
-
 fn get_args(expr: &ExpressionAtom) -> &[Atom] {
     &expr.children()[1..]
 }
@@ -205,16 +201,14 @@ pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
             types
         },
         Atom::Expression(expr) => {
-            let tuples = get_tuple_types(space, atom, expr);
-            let applications = get_application_types(space, atom, expr);
+            let children_types: Vec<Vec<Atom>> = expr.children().iter()
+                .map(|a| get_atom_types(space, a)).collect();
+            let mut types = get_tuple_types(space, atom, &children_types);
+            let applications = get_application_types(atom, expr, children_types);
 
-            let mut types = Vec::new();
-            if applications == None {
-                types.extend(tuples);
-                types.push(ATOM_TYPE_UNDEFINED);
-            } else {
-                types.extend(tuples);
-                applications.into_iter().for_each(|t| types.extend(t));
+            match applications {
+                None => types.push(ATOM_TYPE_UNDEFINED),
+                Some(applications) => types.extend(applications.into_iter()),
             }
             types
         },
@@ -223,16 +217,17 @@ pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     types
 }
 
-fn get_tuple_types(space: &dyn Space, atom: &Atom, expr: &ExpressionAtom) -> Vec<Atom> {
+fn get_tuple_types(space: &dyn Space, atom: &Atom, children_types: &[Vec<Atom>]) -> Vec<Atom> {
     let mut tuples = vec![vec![]];
-    for (i, child) in expr.children().iter().enumerate() {
+    for (i, child_types) in children_types.iter().enumerate() {
         // TODO: it is not straightforward, if (: a (-> B C)) then
         // what should we return for (d (a b)): (D ((-> B C) B)) or
         // (D C) or both? Same question for a function call.
-        let child_types = get_atom_types(space, child);
-        let not_a_function_call = |typ: &Atom| { i != 0 || !is_func(typ) };
-        let child_types = child_types.into_iter().filter(not_a_function_call);
-        tuples = child_types.flat_map(|typ| -> Vec<Vec<Atom>> {
+        let not_a_function_call = |typ: &&Atom| { i != 0 || !is_func(typ) };
+        let child_types = child_types.iter()
+            .filter(not_a_function_call);
+        tuples = child_types
+            .flat_map(|typ| -> Vec<Vec<Atom>> {
             tuples.iter().map(|prev| {
                 let mut next = prev.clone();
                 next.push(typ.clone());
@@ -269,24 +264,18 @@ fn get_tuple_types(space: &dyn Space, atom: &Atom, expr: &ExpressionAtom) -> Vec
 // This is a tricky logic. To simplify it we could  separate tuple and
 // function application using separate Atom types. Or use an embedded atom
 // to designate function application.
-fn get_application_types(space: &dyn Space, atom: &Atom, expr: &ExpressionAtom) -> Option<Vec<Atom>> {
+fn get_application_types(atom: &Atom, expr: &ExpressionAtom, mut children_types: Vec<Vec<Atom>>) -> Option<Vec<Atom>> {
     let mut has_function_types = false;
     let mut types = Vec::new();
     if !expr.children().is_empty() {
-        let op = get_op(expr);
         let args = get_args(expr);
-        let mut actual_arg_types = Vec::new();
-        let mut meta_arg_types = Vec::new();
-        for arg in args {
-            actual_arg_types.push(get_atom_types(space, arg));
-            meta_arg_types.push(vec![get_meta_type(arg), ATOM_TYPE_ATOM]);
-        }
-        let mut fn_types = get_atom_types(space, op);
+        let (fn_types, actual_arg_types) = children_types.split_first_mut().unwrap();
+        let meta_arg_types: Vec<Vec<Atom>> = args.iter().map(|a| vec![get_meta_type(a), ATOM_TYPE_ATOM]).collect();
         let fn_types = fn_types.drain(0..).filter(is_func);
         for fn_type in fn_types {
             has_function_types = true;
             let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
-            for bindings in check_arg_types(actual_arg_types.as_slice(), meta_arg_types.as_slice(), expected_arg_types, Bindings::new()) {
+            for bindings in check_arg_types(actual_arg_types, meta_arg_types.as_slice(), expected_arg_types, Bindings::new()) {
                 types.push(apply_bindings_to_atom_move(ret_typ.clone(), &bindings));
             }
         }
