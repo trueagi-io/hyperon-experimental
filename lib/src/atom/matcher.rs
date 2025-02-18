@@ -881,15 +881,6 @@ impl<'a> Iterator for BindingsIter<'a> {
     }
 }
 
-impl<'a> IntoIterator for &'a Bindings {
-    type Item = (&'a VariableAtom, Atom);
-    type IntoIter = BindingsIter<'a>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.iter()
-    }
-}
-
 
 /// Represents a set of [Bindings] instances resulting from an operation where multiple matches are possible.
 #[derive(Clone, Debug)]
@@ -979,9 +970,14 @@ impl BindingsSet {
         BindingsSet(smallvec::smallvec![])
     }
 
-    /// Creates a new unconstrained BindingsSet
+    /// Creates a new BindingsSet with a single full match
     pub fn single() -> Self {
         BindingsSet(smallvec::smallvec![Bindings::new()])
+    }
+    
+    /// Creates a new BindingsSet with `count` full matches
+    pub fn count(count: usize) -> Self {
+        BindingsSet(smallvec::SmallVec::from_elem(Bindings::new(), count))
     }
 
     /// Returns `true` if a BindingsSet contains no Bindings Objects (fully constrained)
