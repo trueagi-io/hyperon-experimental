@@ -1,10 +1,10 @@
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 enum Cell<T> {
     Value(T),
     Hole(usize),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HoleyVec<T> {
     first_hole: usize,
     vec: Vec<Cell<T>>,
@@ -13,39 +13,62 @@ pub struct HoleyVec<T> {
 impl<T> HoleyVec<T> {
 
     pub fn new() -> Self {
-        Self{ first_hole: 0, vec: Vec::new() }
+        Default::default()
     }
 
+    #[inline]
     pub fn next_index(&self) -> usize {
         self.first_hole
     }
 
+    #[inline]
     pub fn index_upper_bound(&self) -> usize {
         self.vec.len()
     }
 
+    #[inline]
     pub fn capacity(&self) -> usize {
         self.vec.capacity()
     }
 
+    #[inline]
     pub fn is_hole(&self, index: usize) -> bool {
-        match &self.vec[index] {
-            Cell::Value(_) => false,
-            Cell::Hole(_) => true,
-        }
+        matches!(self.vec[index], Cell::Hole(_))
     }
 
+    #[inline]
     pub fn get(&self, index: usize) -> Option<&T> {
-        match &self.vec[index] {
-            Cell::Value(value) => Some(value),
-            Cell::Hole(_) => None,
+        self.vec.get(index).and_then(|cell| {
+            match cell {
+                Cell::Value(value) => Some(value),
+                Cell::Hole(_) => None,
+            }
+        })
+    }
+
+    #[inline]
+    pub unsafe fn get_unchecked(&self, index: usize) -> &T {
+        match self.vec.get_unchecked(index) {
+            Cell::Value(value) => value,
+            Cell::Hole(_) => unreachable!(),
         }
     }
 
+    #[inline]
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
-        match &mut self.vec[index] {
-            Cell::Value(value) => Some(value),
-            Cell::Hole(_) => None,
+        self.vec.get_mut(index).and_then(|cell| {
+            match cell {
+                Cell::Value(value) => Some(value),
+                Cell::Hole(_) => None,
+            }
+        })
+    }
+
+    #[inline]
+    pub unsafe fn get_unchecked_mut(&mut self, index: usize) -> &mut T {
+        match self.vec.get_unchecked_mut(index) {
+            Cell::Value(value) => value,
+            Cell::Hole(_) => unreachable!(),
         }
     }
 
@@ -62,7 +85,7 @@ impl<T> HoleyVec<T> {
                     self.first_hole = next_hole;
                     self.vec[index] = Cell::Value(value);
                 },
-                _ => panic!("Unexpected state"),
+                _ => unreachable!(),
             }
             index
         }
@@ -82,18 +105,33 @@ impl<T> HoleyVec<T> {
         }
     }
 
+    #[inline]
     pub fn iter(&self) -> Iter<T> {
-        Iter::new(self)
+        fn unwrap<T>(cell: &Cell<T>) -> Option<&T> {
+            match cell {
+                Cell::Value(value) => Some(value),
+                Cell::Hole(_) => None,
+            }
+        }
+        Iter(self.vec.iter().filter_map(unwrap))
     }
 
+    #[inline]
     pub fn iter_mut(&mut self) -> IterMut<T> {
-        IterMut::new(self)
+        fn unwrap<T>(cell: &mut Cell<T>) -> Option<&mut T> {
+            match cell {
+                Cell::Value(value) => Some(value),
+                Cell::Hole(_) => None,
+            }
+        }
+        IterMut(self.vec.iter_mut().filter_map(unwrap))
     }
 }
 
 impl<T> std::ops::Index<usize> for HoleyVec<T> {
     type Output = T;
 
+    #[inline]
     fn index(&self, index: usize) -> &Self::Output {
         self.get(index).expect("Index doesn't exist")
     }
@@ -101,32 +139,21 @@ impl<T> std::ops::Index<usize> for HoleyVec<T> {
 
 impl<T> std::ops::IndexMut<usize> for HoleyVec<T> {
 
+    #[inline]
     fn index_mut(&mut self, index: usize) -> &mut Self::Output {
         self.get_mut(index).expect("Index doesn't exist")
     }
 }
 
-pub struct Iter<'a, T> {
-    delegate: std::slice::Iter<'a, Cell<T>>
-}
-
-impl<'a, T> Iter<'a, T> {
-    fn new(vec: &'a HoleyVec<T>) -> Self {
-        Self{ delegate: vec.vec.iter() }
-    }
-}
+pub struct Iter<'a, T>(std::iter::FilterMap<std::slice::Iter<'a, Cell<T>>, fn(&Cell<T>) -> Option<&T>>);
+pub struct IterMut<'a, T>(std::iter::FilterMap<std::slice::IterMut<'a, Cell<T>>, fn(&mut Cell<T>) -> Option<&mut T>>);
 
 impl<'a, T> std::iter::Iterator for Iter<'a, T> {
     type Item = &'a T;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.delegate.next() {
-                None => return None,
-                Some(Cell::Hole(_)) => continue,
-                Some(Cell::Value(value)) => return Some(value),
-            }
-        }
+        self.0.next()
     }
 }
 
@@ -134,32 +161,18 @@ impl<'a, T> IntoIterator for &'a HoleyVec<T> {
     type Item = &'a T;
     type IntoIter = Iter<'a, T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.iter()
-    }
-}
-
-pub struct IterMut<'a, T> {
-    delegate: std::slice::IterMut<'a, Cell<T>>
-}
-
-impl<'a, T> IterMut<'a, T> {
-    fn new(vec: &'a mut HoleyVec<T>) -> Self {
-        Self{ delegate: vec.vec.iter_mut() }
     }
 }
 
 impl<'a, T> std::iter::Iterator for IterMut<'a, T> {
     type Item = &'a mut T;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        loop {
-            match self.delegate.next() {
-                None => return None,
-                Some(Cell::Hole(_)) => continue,
-                Some(Cell::Value(value)) => return Some(value),
-            }
-        }
+        self.0.next()
     }
 }
 
@@ -167,7 +180,15 @@ impl<'a, T> IntoIterator for &'a mut HoleyVec<T> {
     type Item = &'a mut T;
     type IntoIter = IterMut<'a, T>;
 
+    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.iter_mut()
+    }
+}
+
+impl<T> Default for HoleyVec<T> {
+    #[inline]
+    fn default() -> Self {
+        Self{ first_hole: 0, vec: Vec::new() }
     }
 }

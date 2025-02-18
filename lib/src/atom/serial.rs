@@ -72,8 +72,11 @@ pub trait ConvertingSerializer<T>: Serializer + Default {
 /// Serialization result type
 pub type Result = std::result::Result<(), Error>;
 
+trait PrivHasher : Hasher {}
+impl PrivHasher for DefaultHasher {}
+
 // there are much speedier hashers, but not sure if it's worth the extra dependency given the other options
-impl Serializer for DefaultHasher {
+impl<H: PrivHasher> Serializer for H {
     fn serialize_bool(&mut self, v: bool) -> Result { Ok(self.write_u8(v as u8)) }
     fn serialize_i64(&mut self, v: i64) -> Result { Ok(self.write_i64(v)) }
     fn serialize_f64(&mut self, v: f64) -> Result { Ok(self.write_u64(v as u64)) }
@@ -95,3 +98,14 @@ impl Serializer for Vec<u8> {
     fn serialize_f64(&mut self, v: f64) -> Result { Ok(self.extend(v.to_le_bytes())) }
     fn serialize_str(&mut self, v: &str) -> Result { Ok(self.extend(v.bytes())) }
 }
+
+#[derive(Default)]
+pub struct NullSerializer();
+
+impl Serializer for NullSerializer {
+    fn serialize_bool(&mut self, _v: bool) -> Result { Ok(()) }
+    fn serialize_i64(&mut self, _v: i64) -> Result { Ok(()) }
+    fn serialize_f64(&mut self, _v: f64) -> Result { Ok(()) }
+    fn serialize_str(&mut self, _v: &str) -> Result { Ok(()) }
+}
+
