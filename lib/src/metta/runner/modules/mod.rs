@@ -89,8 +89,14 @@ impl MettaMod {
 
         //Load the stdlib unless this module is no_std
         if !no_stdlib {
-            if let Some(stdlib_mod_id) = metta.0.stdlib_mod.get() {
-                new_mod.import_all_from_dependency(*stdlib_mod_id, metta.get_mod_ptr(*stdlib_mod_id), metta).unwrap();
+            let mod_name = new_mod.name();
+            if mod_name != "corelib" && mod_name != "stdlib" {
+                if let Some(corelib_mod_id) = metta.0.corelib_mod.get() {
+                    new_mod.import_all_from_dependency(*corelib_mod_id, metta.get_mod_ptr(*corelib_mod_id), metta).unwrap();
+                }
+                if let Some(stdlib_mod_id) = metta.0.stdlib_mod.get() {
+                    new_mod.import_all_from_dependency(*stdlib_mod_id, metta.get_mod_ptr(*stdlib_mod_id), metta).unwrap();
+                }
             }
         }
 
@@ -204,7 +210,7 @@ impl MettaMod {
     }
 
     fn export_all_tokens_into(&self, target_mod: &MettaMod, metta: &Metta) -> Result<(), String> {
-        if self.name() == "stdlib" || self.name() == "corelib" {
+        if self.name() == "corelib" {
             register_runner_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
             register_common_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
             register_rust_stdlib_tokens(&mut *target_mod.tokenizer().borrow_mut());
