@@ -153,9 +153,9 @@ class GroundedTypeTest(unittest.TestCase):
 
     def test_conversion_between_rust_and_python(self):
         metta = MeTTa(env_builder=Environment.test_env())
-        integer = metta.run('!(+ 1 (random-int 4 5))', flat=True)[0].get_object()
+        integer = metta.run('!(+ 1 (random-int &rng 4 5))', flat=True)[0].get_object()
         self.assertEqual(integer, ValueObject(5))
-        float = metta.run('!(+ 1.0 (random-float 4 5))', flat=True)[0].get_object()
+        float = metta.run('!(+ 1.0 (random-float &rng 4 5))', flat=True)[0].get_object()
         self.assertTrue(float.value >= 5.0 and float.value < 6)
         bool = metta.run('!(not (flip))', flat=True)[0].get_object()
         self.assertTrue(bool.value or  not bool.value)
