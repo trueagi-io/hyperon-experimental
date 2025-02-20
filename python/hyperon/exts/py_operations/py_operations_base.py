@@ -2,12 +2,11 @@ from hyperon import OperationAtom, ValueAtom, AtomType, G
 from hyperon.ext import register_atoms, register_tokens
 from hyperon.stdlib import Char, RegexMatchableObject
 
-
 @register_atoms
 def arithm_ops():
+    addAtom = OperationAtom('+', lambda a, b: a + b, ['Number', 'Number', 'Number'])
     subAtom = OperationAtom('-', lambda a, b: a - b, ['Number', 'Number', 'Number'])
     mulAtom = OperationAtom('*', lambda a, b: a * b, ['Number', 'Number', 'Number'])
-    addAtom = OperationAtom('+', lambda a, b: a + b, ['Number', 'Number', 'Number'])
     divAtom = OperationAtom('/', lambda a, b: a / b, ['Number', 'Number', 'Number'])
     modAtom = OperationAtom('%', lambda a, b: a % b, ['Number', 'Number', 'Number'])
     return {

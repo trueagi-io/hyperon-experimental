@@ -131,6 +131,8 @@ pub(crate) struct MettaContents {
     top_mod_space: DynSpace,
     /// A clone of the top module's Tokenizer
     top_mod_tokenizer: Shared<Tokenizer>,
+    /// The ModId of the extended corelib to import into some modules loaded into the runner
+    corelib_mod: OnceLock<ModId>,
     /// The ModId of the extended stdlib to import into some modules loaded into the runner
     stdlib_mod: OnceLock<ModId>,
     /// The runner's pragmas, affecting runner-wide behavior
@@ -166,25 +168,36 @@ impl Metta {
 
         //Load the "corelib" module into the runner
         let corelib_mod_id = metta.load_module_direct(Box::new(CoreLibLoader), "corelib").expect("Failed to load corelib");
+        metta.0.corelib_mod.set(corelib_mod_id).unwrap();
 
         //Load the stdlib if we have one, and otherwise make an alias to corelib
-        let stdlib_mod_id = match loader {
-            Some(loader) => metta.load_module_direct(loader, "stdlib").expect("Failed to load stdlib"),
-            None => metta.load_module_alias("stdlib", corelib_mod_id).expect("Failed to create stdlib alias for corelib")
+        match loader {
+            Some(loader) => {
+                let stdlib_mod_id = metta.load_module_direct(loader, "stdlib").expect("Failed to load stdlib");
+                metta.0.stdlib_mod.set(stdlib_mod_id).unwrap();
+            },
+            None => {},
         };
-
-        //Set the runner's stdlib mod_id
-        metta.0.stdlib_mod.set(stdlib_mod_id).unwrap();
 
         //Load the rest of the builtin mods, but don't `import` (aka "use") them
         load_builtin_mods(&metta).unwrap();
-
-        //Import the stdlib into the top module, now that it is loaded
+        //Import the corelib and stdlib into the top module, now that it is loaded
         let mut runner_state = RunnerState::new(&metta);
-        runner_state.run_in_context(|context| {
-            context.import_all_from_dependency(stdlib_mod_id).unwrap();
-            Ok(())
-        }).expect("Failed to import stdlib");
+
+        if let Some(stdlib_mod_id) = metta.0.stdlib_mod.get() {
+            runner_state.run_in_context(|context| {
+                context.import_all_from_dependency(*stdlib_mod_id).unwrap();
+                Ok(())
+            }).expect("Failed to import stdlib");
+        }
+        
+        if let Some(corelib_mod_id) = metta.0.corelib_mod.get() {
+            runner_state.run_in_context(|context| {
+                context.import_all_from_dependency(*corelib_mod_id).unwrap();
+                Ok(())
+            }).expect("Failed to import corelib");
+        }
+       
         drop(runner_state);
 
         //Run the `init.metta` file
@@ -223,6 +236,7 @@ impl Metta {
             module_descriptors: Mutex::new(HashMap::new()),
             top_mod_space: space.clone(),
             top_mod_tokenizer: top_mod_tokenizer.clone(),
+            corelib_mod: OnceLock::new(),
             stdlib_mod: OnceLock::new(),
             settings,
             environment,
@@ -994,7 +1008,7 @@ impl<'input> RunContext<'_, 'input> {
     /// WARNING: Module import behavior is still WIP, specifically around "import *" behavior, and
     /// especially around transitive imports
     pub fn import_all_from_dependency(&self, mod_id: ModId) -> Result<(), String> {
-        self.module().import_all_from_dependency(mod_id, self.get_mod_ptr(mod_id)?)
+        self.module().import_all_from_dependency(mod_id, self.get_mod_ptr(mod_id)?, self.metta)
     }
 
     /// Private method to advance the context forward one step

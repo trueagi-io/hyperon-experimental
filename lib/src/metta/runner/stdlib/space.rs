@@ -250,13 +250,13 @@ mod tests {
     fn mod_space_op() {
         let program = r#"
             !(bind! &new_space (new-space))
-            !(add-atom &new_space (mod-space! stdlib))
+            !(add-atom &new_space (mod-space! corelib))
             !(get-atoms &new_space)
         "#;
         let runner = Metta::new(Some(runner::environment::EnvBuilder::test_env()));
         let result = runner.run(SExprParser::new(program)).unwrap();
 
-        let stdlib_space = runner.module_space(runner.get_module_by_name("stdlib").unwrap());
+        let stdlib_space = runner.module_space(runner.get_module_by_name("corelib").unwrap());
         assert_eq!(result[2], vec![Atom::gnd(stdlib_space)]);
     }
 
