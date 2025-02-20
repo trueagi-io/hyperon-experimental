@@ -3,50 +3,6 @@ from hyperon.exts.agents import AgentObject
 from queue import Queue
 from time import sleep
 
-class MyAgent(AgentObject):
-    '''
-    Purely Python agent
-    '''
-    def __init__(self, x):
-        self.x = x
-    def subs(self, a):
-        return self.x - a
-    def __call__(self, a, b):
-        return a + b + self.x
-
-m = MeTTa()
-atom = MyAgent.agent_creator_atom()
-m.register_atom('new-agent', atom)
-print(m.run('''
-  ! (bind! &agent (new-agent 5))
-  ! (&agent 7 8)
-  ! (&agent .subs 4)
-'''))
-
-# =================================
-
-class Agent1(AgentObject):
-    def __call__(self):
-        for x in range(10):
-            yield x
-            sleep(1)
-class Agent2(AgentObject):
-    def __call__(self, xs):
-        for x in xs:
-            yield x*2
-class Agent3(AgentObject):
-    def __call__(self, xs):
-        for x in xs:
-            print("Result: ", x)
-
-m = MeTTa()
-m.register_atom('new-agent-1', Agent1.agent_creator_atom())
-m.register_atom('new-agent-2', Agent2.agent_creator_atom())
-m.register_atom('new-agent-3', Agent3.agent_creator_atom())
-print(m.run('''
-  ! ((new-agent-3) ((new-agent-2) ((new-agent-1))))
-'''))
-
 # =================================
 
 class Agnt(AgentObject):
@@ -82,10 +38,10 @@ print(m.run('''
   ! (&a1)
   ! (println! "Agent is running")
   ! ((py-atom time.sleep) 1)
-  ! ("First response:" (&a1 .response))
+  ! (println! ("First response:" (&a1 .response)))
   ! (&a1 .input "Hello")
   ! (println! "Agent is receiving messages")
   ! ((py-atom time.sleep) 2)
-  ! ("Second response:" (&a1 .response))
+  ! (println! ("Second response:" (&a1 .response)))
   ! (&a1 .stop)
 '''))
