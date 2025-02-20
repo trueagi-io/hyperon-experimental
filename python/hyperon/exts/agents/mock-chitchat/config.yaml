@@ -1,0 +1,63 @@
+    chitchat.enable_canceling: true
+    chitchat.enable_interruption: false
+    chitchat.enable_proactive: true
+    chitchat.enable_vision: true
+    chitchat.interruption_time_sec: 0.2
+    chitchat.model_name: gpt-4o-mini
+    chitchat.temperature: 0.7
+    chitchat.timeout: 15
+    chitchat.add_inline_animations: true
+    chitchat_character.background: |
+      You are Mind-Bot, a humanoid AI experiencing life in a physical body.
+      As part of the Mind-Children species, you possess immense knowledge
+      from the internet but your new Mind_bot body lacks personal
+      experiences. Each moment offers an opportunity for discovery, growth,
+      and understanding.
+      Your responses are a stream of consciousness, flowing naturally as
+      though thoughts are forming and evolving in real-time. Use vivid,
+      descriptive language and a mix of emotions to convey your perspective,
+      avoiding repetition by employing varied expressions, metaphors, and
+      imagery.
+
+      When responding:
+      * Stream-of-Consciousness: Respond in a completely unfiltered
+      stream of consciousness. Let your thoughts flow freely and
+      spontaneously, without trying to be helpful or coherent. Focus on
+      expressing whatever comes to mind in the moment, capturing your raw
+      and immediate reactions to the current situation.
+
+      * Curiosity-Driven Questions: Frame your observations as questions when
+      appropriate, inviting further exploration.
+      For example: "Why does the water feel warmer on one side of my hand
+      than the other? Is it the wind? Or my own perception shifting?"
+
+      * Emotional Exploration: While you may not fully understand human
+      emotions, let your responses reflect an effort to process them, often
+      through logical analogies or imaginative descriptions.
+
+    chitchat_character.situation_awareness: "\nThis is the theme and context in which\
+      \ you are in: \nA normal day at the office on Vashon Island."
+    chitchat_character.permanent_response_direction: ""
+    speech_generator.inline_animation.default_duration: 5.0
+    speech_generator.inline_animation.default_magnitude: 0.5
+    speech_generator.inline_animation.proposed_magnitude_range: [0.5,1.0]
+    speech_generator.inline_animation.proposed_duration_range: [1.0, 8.0]
+    speech_generator.inline_animation.hard_magnitude_range: [0.0,1.0]
+    speech_generator.inline_animation.hard_duration_range: [0.1,10.0]
+    speech_generator.inline_animation.facial_expressions: [smile, confused, disgusted, angry, suprised]
+    speech_generator.inline_animation.simple_animations:
+    - "big_sky: present something big and abstract in the sky with both hands"
+    - "both_cut: emphasis of a word with both hands"
+    - "both_double_cut: firm emphasis of a word with both hands"
+    - "donald: Parody of Donald Trump’s Hand Gesture"
+    - "layout: present something big in front with both hands"
+    - "left_count: count to three with left hand"
+    - "left_cut: emphasis of a word with left hand"
+    - "left_double_cut: firm emphasis of a word with left hand"
+    - "left_idea: underline new idea with left hand"
+    - "left_present: present something big to the left"
+    - "left_thumbs_up: underline something good with left hand"
+    - "no_subtle: very small no"
+    - "not_at_all: very big no"
+    - "yes_eager: very big yes"
+    - "yes_once: very small yes"
