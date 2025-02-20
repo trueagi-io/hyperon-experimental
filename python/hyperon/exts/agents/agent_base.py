@@ -33,8 +33,13 @@ class StreamMethod(threading.Thread):
         self.args = args
 
     def run(self):
-        for r in self.method(*self.args):
-            self._result.put(r)
+        # FIXME? if we raise the exception here, the thread is not stopped
+        # but should we put Error into the result?
+        try:
+            for r in self.method(*self.args):
+                self._result.put(r)
+        except Exception as e:
+            self._result.put(E(S('Error'), ValueAtom(self.args), ValueAtom(e)))
 
     def __iter__(self):
         return self
@@ -164,6 +169,7 @@ class AgentObject:
 
     def __metta_call__(self, *args):
         call = True
+        unwrap = self._unwrap
         method = self.__call__
         if len(args) > 0 and isinstance(args[0], SymbolAtom):
             n = args[0].get_name()
@@ -171,7 +177,9 @@ class AgentObject:
                 method = getattr(self, n[1:])
                 args = args[1:]
                 call = False
-        if self._unwrap:
+                # FIXME? Python methods called via . are supposed to be purely Python
+                unwrap = True
+        if unwrap:
             method = OperationObject(f"{method}", method).execute
         st = StreamMethod(method, args)
         st.start()
