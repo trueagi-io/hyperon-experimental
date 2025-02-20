@@ -16,7 +16,7 @@ on:
         type: string
       os:
         description: "A container which is used to make a build"
-        default: "ubuntu-20.04"
+        default: "ubuntu-22.04"
         required: false
         type: string
       cmake-version:
