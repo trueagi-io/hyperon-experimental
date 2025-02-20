@@ -1,4 +1,4 @@
-!(import! &self agents)
+!(import! &self agents) ; ()
 
 !((create-agent agent.metta) (g 3)) ; 9
 
