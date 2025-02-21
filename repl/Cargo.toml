@@ -5,6 +5,7 @@ edition.workspace = true
 description = "A shell to execute MeTTa"
 
 [dependencies]
+ctrlc = "3.4"
 log = { workspace = true }
 env_logger = { workspace = true }
 anyhow = { version = "1.0.75", features = ["std"] }

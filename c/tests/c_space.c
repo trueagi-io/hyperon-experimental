@@ -1,9 +1,14 @@
 
+#include <stddef.h>
 #include <stdio.h>
-#include <strings.h>
+#include <string.h>
+#include <sys/types.h>
 
 #include "util.h"
 #include "c_space.h"
+
+// required by MSVC compiler
+#define ssize_t ptrdiff_t
 
 typedef struct _atom_list_item {
     atom_t atom;
