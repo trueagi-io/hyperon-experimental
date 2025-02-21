@@ -89,14 +89,13 @@ impl MettaMod {
 
         //Load the stdlib unless this module is no_std
         if !no_stdlib {
-            let mod_name = new_mod.name();
-            if mod_name != "corelib" && mod_name != "stdlib" {
-                if let Some(corelib_mod_id) = metta.0.corelib_mod.get() {
+            if let Some(corelib_mod_id) = metta.0.corelib_mod.get() {
+                if new_mod.name() != "stdlib" {
                     new_mod.import_all_from_dependency(*corelib_mod_id, metta.get_mod_ptr(*corelib_mod_id), metta).unwrap();
                 }
-                if let Some(stdlib_mod_id) = metta.0.stdlib_mod.get() {
-                    new_mod.import_all_from_dependency(*stdlib_mod_id, metta.get_mod_ptr(*stdlib_mod_id), metta).unwrap();
-                }
+            }
+            if let Some(stdlib_mod_id) = metta.0.stdlib_mod.get() {
+                new_mod.import_all_from_dependency(*stdlib_mod_id, metta.get_mod_ptr(*stdlib_mod_id), metta).unwrap();
             }
         }
 
