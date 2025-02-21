@@ -219,7 +219,7 @@ impl MettaMod {
 
             //Import all the Tokenizer entries from the dependency
             let mut dep_tok_clone = dep_tokenizer.borrow().clone();
-            target_mod.tokenizer().borrow_mut().move_front(&mut dep_tok_clone);
+            target_mod.tokenizer().borrow_mut().move_back(&mut dep_tok_clone);
         }
         Ok(())
     }
