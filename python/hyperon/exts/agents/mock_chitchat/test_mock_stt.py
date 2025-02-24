@@ -1,4 +1,4 @@
-from mock_ros2_node import MockROS2Node
+from hyperon.exts.agents.events.mock_ros2_node import MockROS2Node
 from mock_stt import MockSTT
 
 import unittest

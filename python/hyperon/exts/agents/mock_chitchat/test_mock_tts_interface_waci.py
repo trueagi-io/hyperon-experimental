@@ -1,5 +1,5 @@
 from mock_tts_interface_waci import MockTTSInterfaceWACI
-from mock_ros2_node import MockROS2Node
+from hyperon.exts.agents.events.mock_ros2_node import MockROS2Node
 from mock_auto_conv_history import MockAutoConvHistory
 from mock_messages import MockStrMessage
 

@@ -1,7 +1,7 @@
 from hyperon import MeTTa
 from hyperon.exts.agents import EventAgent
 from hyperon.exts.agents.events.mock_ros2_node import MockROS2Node
-from hyperon.exts.agents.events.mock_messages import MockChatMessage, MockStrMessage
+from hyperon.exts.agents.mock_chitchat.mock_messages import MockChatMessage, MockStrMessage
 from queue import Queue
 from time import sleep
 

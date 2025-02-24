@@ -1,6 +1,6 @@
 from mock_tts_say_with_cancel import MockTTSSayWithCancel
 from mock_auto_conv_history import MockAutoConvHistory
-from mock_ros2_node import MockROS2Node
+from hyperon.exts.agents.events.mock_ros2_node import MockROS2Node
 import random
 import unittest
 import time

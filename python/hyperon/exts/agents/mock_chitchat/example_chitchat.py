@@ -1,6 +1,6 @@
 ﻿import yaml
 from mock_tts_interface_waci import MockTTSInterfaceWACI
-from mock_ros2_node import MockROS2Node
+from hyperon.exts.agents.events.mock_ros2_node import MockROS2Node
 from mock_tts import MockTTS
 from mock_stt import MockSTT
 from mock_config import MockConfig
