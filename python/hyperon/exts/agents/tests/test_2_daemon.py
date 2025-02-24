@@ -1,11 +1,10 @@
-from hyperon import MeTTa
+from hyperon import MeTTa, E
 from hyperon.exts.agents import AgentObject
 from queue import Queue
 from time import sleep
 
-# =================================
-
-class Agnt(AgentObject):
+# A simple purely Python custom daemon agent
+class DaemonAgent(AgentObject):
     def __init__(self):
         self.messages = Queue()
         self.running = False
@@ -17,7 +16,7 @@ class Agnt(AgentObject):
         while self.running:
             if self.messages.empty():
                 self.output.put(f"Waiting {cnt}")
-                sleep(2)
+                sleep(0.05)
                 cnt += 1
             else:
                 m = self.messages.get()
@@ -32,16 +31,20 @@ class Agnt(AgentObject):
         return self.output.get()
 
 m = MeTTa()
-m.register_atom('agnt', Agnt.agent_creator_atom())
-print(m.run('''
+m.register_atom('agnt', DaemonAgent.agent_creator_atom())
+# NOTE: the test may occasionally fail
+result = m.run('''
   ! (bind! &a1 (agnt))
-  ! (&a1)
-  ! (println! "Agent is running")
-  ! ((py-atom time.sleep) 1)
-  ! (println! ("First response:" (&a1 .response)))
+  ! (&a1) ; run the agent
+  ; ! (println! "Agent is running")
+  ! ((py-atom time.sleep) 0.03)
+  ! (assertEqual (&a1 .response) "Waiting 0")
   ! (&a1 .input "Hello")
-  ! (println! "Agent is receiving messages")
-  ! ((py-atom time.sleep) 2)
-  ! (println! ("Second response:" (&a1 .response)))
+  ; ! (println! "Agent is receiving messages")
+  ! ((py-atom time.sleep) 0.03)
+  ! (assertEqual (&a1 .response) "olleH")
   ! (&a1 .stop)
-'''))
+''')
+
+for r in result:
+    assert r == [E()], r
