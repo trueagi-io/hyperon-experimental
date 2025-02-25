@@ -7,22 +7,20 @@ set(TEST_SOURCES
     util.c
 )
 
-add_executable(check_atom check_atom.c ${TEST_SOURCES})
-target_link_libraries(check_atom hyperonc-shared Check::check)
-add_test(NAME check_atom COMMAND check_atom)
 
-add_executable(check_space check_space.c ${TEST_SOURCES})
-target_link_libraries(check_space hyperonc-shared Check::check)
-add_test(NAME check_space COMMAND check_space)
+set(DLL_PATH "${CMAKE_CURRENT_BINARY_DIR}\\..\\cargo")
 
-add_executable(check_sexpr_parser check_sexpr_parser.c ${TEST_SOURCES})
-target_link_libraries(check_sexpr_parser hyperonc-shared Check::check)
-add_test(NAME check_sexpr_parser COMMAND check_sexpr_parser)
+macro(ADD_TESTS)
+    set(TEST_NAME "${ARGV0}")
+    add_executable(${TEST_NAME} ${TEST_NAME}.c ${TEST_SOURCES})
+    target_link_libraries(${TEST_NAME} hyperonc-shared Check::check)
+    add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
+    set_property(TEST ${TEST_NAME}
+            APPEND PROPERTY ENVIRONMENT PATH=$<SHELL_PATH:${DLL_PATH}>)
+endmacro()
 
-add_executable(check_types check_types.c ${TEST_SOURCES})
-target_link_libraries(check_types hyperonc-shared Check::check)
-add_test(NAME check_types COMMAND check_types)
-
-add_executable(check_runner check_runner.c ${TEST_SOURCES})
-target_link_libraries(check_runner hyperonc-shared Check::check)
-add_test(NAME check_runner COMMAND check_runner)
+ADD_TESTS("check_atom")
+ADD_TESTS("check_space")
+ADD_TESTS("check_sexpr_parser")
+ADD_TESTS("check_types")
+ADD_TESTS("check_runner")
