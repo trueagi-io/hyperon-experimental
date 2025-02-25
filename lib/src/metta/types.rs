@@ -68,7 +68,7 @@ fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], 
                 let mut result_bindings = BindingsSet::empty();
                 for typ in actual {
                     result_bindings.extend(
-                        match_reducted_types_v2(typ, expected)
+                        match_reducted_types(typ, expected)
                             .flat_map(|b| b.merge(&bindings))
                             .flat_map(|b| check_arg_types(actual_tail, meta_tail, expected_tail, b))
                     );
@@ -313,10 +313,7 @@ impl CustomMatch for UndefinedTypeMatch {
     }
 }
 
-/// Matches two types and puts new variable bindings into `bindings`. Returns
-/// true when match is found. Function matches types using previous bindings
-/// passed. If match is not found some new bindings can still be added. If
-/// caller need bindings unchanged it should pass a copy.
+/// Matches two types and returns an iterator over resulting bindings.
 ///
 /// # Examples
 ///
@@ -325,41 +322,11 @@ impl CustomMatch for UndefinedTypeMatch {
 /// use hyperon::matcher::Bindings;
 /// use hyperon::metta::types::match_reducted_types;
 ///
-/// let mut bindings = Bindings::new();
-/// let is_matched = match_reducted_types(&expr!("List" t), &expr!("List" "A"), &mut bindings);
-///
-/// assert!(is_matched);
-/// assert_eq!(bindings, bind!{ t: expr!("A") });
-/// ```
-pub fn match_reducted_types(left: &Atom, right: &Atom, bindings: &mut Bindings) -> bool {
-    let mut result: Vec<Bindings> = match_reducted_types_v2(left, right).collect();
-    let matched = match result.len() {
-        0 => false,
-        1 => {
-            let result_set = result.pop().unwrap().merge(bindings);
-            *bindings = result_set.try_into().expect("Single result is expected because custom matching for types is not supported yet!");
-            true
-        }
-        _ => panic!("Single result is expected because custom matching for types is not supported yet!")
-    };
-    log::debug!("match_reducted_types: {} ~ {} => {}, bindings: {}", left, right, matched, bindings);
-    matched
-}
-
-/// Matches two types and returns an iterator over resulting bindings.
-///
-/// # Examples
-///
-/// ```
-/// use hyperon::{expr, bind};
-/// use hyperon::matcher::Bindings;
-/// use hyperon::metta::types::match_reducted_types_v2;
-///
-/// let bindings: Vec<Bindings> = match_reducted_types_v2(&expr!("List" t), &expr!("List" "A")).collect();
+/// let bindings: Vec<Bindings> = match_reducted_types(&expr!("List" t), &expr!("List" "A")).collect();
 ///
 /// assert_eq!(bindings, vec![ bind!{ t: expr!("A") } ]);
 /// ```
-pub fn match_reducted_types_v2(left: &Atom, right: &Atom) -> matcher::MatchResultIter {
+pub fn match_reducted_types(left: &Atom, right: &Atom) -> matcher::MatchResultIter {
     let left = replace_undefined_types(left);
     let right = replace_undefined_types(right);
     matcher::match_atoms(&left, &right)
@@ -377,7 +344,7 @@ fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, B
     types.drain(0..).flat_map(|t| {
         // TODO: write a unit test
         let t = make_variables_unique(t);
-        match_reducted_types_v2(&t, typ).map(move |bindings| (t.clone(), bindings))
+        match_reducted_types(&t, typ).map(move |bindings| (t.clone(), bindings))
     }).collect()
 }
 
