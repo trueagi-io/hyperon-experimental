@@ -58,26 +58,30 @@ fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
     }
 }
 
-fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> BindingsSet {
+fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom]) -> BindingsSet {
+    if actual.len() != expected.len() {
+        BindingsSet::empty()
+    } else {
+        check_arg_types_internal(actual, meta, expected, Bindings::new())
+    }
+}
+
+fn check_arg_types_internal(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> BindingsSet {
     log::trace!("check_arg_types: actual: {:?}, expected: {:?}", actual, expected);
     let matched = match (actual, meta, expected) {
         ([actual, actual_tail @ ..], [meta, meta_tail @ ..], [expected, expected_tail @ ..]) => {
-            if meta.contains(expected) {
-                BindingsSet::single()
+            let matches: &mut dyn Iterator<Item=Bindings> = if *expected == ATOM_TYPE_UNDEFINED || meta.contains(expected) {
+                &mut std::iter::once(Bindings::new())
             } else {
-                let mut result_bindings = BindingsSet::empty();
-                for typ in actual {
-                    result_bindings.extend(
-                        match_reducted_types(typ, expected)
-                            .flat_map(|b| b.merge(&bindings))
-                            .flat_map(|b| check_arg_types(actual_tail, meta_tail, expected_tail, b))
-                    );
-                }
-                result_bindings
-            }
+                &mut actual.into_iter().flat_map(|typ| match_reducted_types(typ, expected))
+            };
+            matches
+                .flat_map(|b| b.merge(&bindings))
+                .flat_map(|b| check_arg_types_internal(actual_tail, meta_tail, expected_tail, b))
+                .collect()
         },
         ([], [], []) => BindingsSet::from(bindings),
-        _ => BindingsSet::empty(),
+        _ => unreachable!(),
     };
     log::trace!("check_arg_types: actual: {:?}, expected: {:?}, matched: {:?}", actual, expected, matched);
     matched
@@ -275,7 +279,7 @@ fn get_application_types(atom: &Atom, expr: &ExpressionAtom, mut children_types:
         for fn_type in fn_types {
             has_function_types = true;
             let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
-            for bindings in check_arg_types(actual_arg_types, meta_arg_types.as_slice(), expected_arg_types, Bindings::new()) {
+            for bindings in check_arg_types(actual_arg_types, meta_arg_types.as_slice(), expected_arg_types) {
                 types.push(apply_bindings_to_atom_move(ret_typ.clone(), &bindings));
             }
         }
