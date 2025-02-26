@@ -44,8 +44,6 @@ endif()
 find_package(pybind11 REQUIRED)
 find_package(optional-lite REQUIRED)
 include_directories(${optional-lite_INCLUDE_DIRS})
-message(optional-lite_INCLUDE_DIRS=${optional-lite_INCLUDE_DIRS})
-set(HYPERONC_INSTALL_PREFIX "../build/hyperonc-install")
 find_package(hyperonc REQUIRED HINTS ${HYPERONC_INSTALL_PREFIX})
 include_directories(${hyperonc_INCLUDE_DIRS})
 
