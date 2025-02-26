@@ -4,6 +4,8 @@ from queue import Queue
 from time import sleep
 
 # A simple purely Python custom daemon agent
+# All calls to its methods run in separate threads
+# and do not return results directly
 class DaemonAgent(AgentObject):
     def __init__(self):
         self.messages = Queue()

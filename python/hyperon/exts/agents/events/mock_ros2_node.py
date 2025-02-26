@@ -1,5 +1,7 @@
 from collections import defaultdict
 import logging
+from hyperon import OperationAtom
+from hyperon.ext import register_atoms
 
 class MockROS2Node:
     def __init__(self):
@@ -14,3 +16,9 @@ class MockROS2Node:
             cb(msg)
     def get_logger(self):
         return logging.getLogger("MockNode")
+
+@register_atoms
+def event_atoms():
+    return {
+        r"basic-event-bus": OperationAtom('basic-event-bus', MockROS2Node)
+    }

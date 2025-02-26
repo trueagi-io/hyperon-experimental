@@ -195,11 +195,14 @@ class EventAgent(AgentObject):
 
     def __init__(self, path=None, atoms={}, include_paths=None, code=None, event_bus=None):
         if event_bus is not None:
-            self.daemon = True
+            # EventAgent is not a daemon by default: although its `event_processor` runs in a thread
+            # and should be stopped, other non-event methods are more convenient to call directly to
+            # get their results back in a caller
+            # self.daemon = True
             atoms = {**atoms}
             atoms['&event_bus'] = event_bus if isinstance(event_bus, Atom) else ValueAtom(event_bus)
             atoms['queue-subscription'] = OperationAtom('queue-subscription', self.queue_subscription, unwrap=False)
-        self.event_bus = event_bus
+        self.event_bus = event_bus.get_object().value if isinstance(event_bus, GroundedAtom) else event_bus
         super().__init__(path, atoms, include_paths, code)
         # Even if there is no event bus, events can be submitted by child class methods
         self.events = Queue()
@@ -240,18 +243,18 @@ class EventAgent(AgentObject):
                 with self.lock:
                     # TODO? func can be a Python function?
                     (event_id, func, args) = self.events.get()
-                    resp = self._metta.evaluate_atom(E(func, *[ValueAtom(a) for a in args]))
+                    # Wrapping into ValueAtom if arg is not an atom yet
+                    resp = self._metta.evaluate_atom(E(func,
+                        *[a if isinstance(a, Atom) else ValueAtom(a) for a in args]))
                     # TODO? do we need `outputs` here? we may want to publish `resp` to a certain channel
                     # or let `func` to do this direclty...
                     # ??? self.clear_outputs()
                     for r in resp:
                         with self.lock:
                             self.outputs.put(r)
-        return []
 
     def stop(self):
         self.running = False
-        return []
 
     # TODO? choose the model of dealing with outputs... do we need them at all?
     def clear_outputs(self):
@@ -271,6 +274,16 @@ def subscribe_metta_func(metta: MeTTa, event_bus: GroundedAtom, event_id: Atom, 
         lambda *args: metta.evaluate_atom(E(func, *[ValueAtom(a) for a in args])))
     return [E()]
 
+# The function to be called from MeTTa
+def publish_event(event_bus: Atom, event_id: Atom, content: Atom):
+    assert isinstance(event_bus, GroundedAtom), f"{event_bus} is not a grounded object"
+    event_bus = event_bus.get_object().value
+    event_id = _try_atom2str(event_id)
+    # FIXME? We want to be able to pass Atoms as event content, but not
+    # any event bus can support this... or should we always use wrappers,
+    # which provide this support?
+    event_bus.publish(event_id, content)
+    return [E()]
 
 @register_atoms(pass_metta=True)
 def agent_atoms(metta):
@@ -281,5 +294,7 @@ def agent_atoms(metta):
             lambda path=None, event_bus=None: EventAgent.get_agent_atom(None, unwrap=False, path=path, event_bus=event_bus),
             unwrap=False),
         r"direct-subscription": OperationAtom('direct-subscription',
-            lambda *args: subscribe_metta_func(metta, *args), unwrap=False)
+            lambda *args: subscribe_metta_func(metta, *args), unwrap=False),
+        r"publish-event": OperationAtom('publish-event',
+            publish_event, unwrap=False)
     }
