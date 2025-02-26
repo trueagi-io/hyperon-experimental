@@ -58,26 +58,30 @@ fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
     }
 }
 
-fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> BindingsSet {
+fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom]) -> BindingsSet {
+    if actual.len() != expected.len() {
+        BindingsSet::empty()
+    } else {
+        check_arg_types_internal(actual, meta, expected, Bindings::new())
+    }
+}
+
+fn check_arg_types_internal(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> BindingsSet {
     log::trace!("check_arg_types: actual: {:?}, expected: {:?}", actual, expected);
     let matched = match (actual, meta, expected) {
         ([actual, actual_tail @ ..], [meta, meta_tail @ ..], [expected, expected_tail @ ..]) => {
-            if meta.contains(expected) {
-                BindingsSet::single()
+            let matches: &mut dyn Iterator<Item=Bindings> = if *expected == ATOM_TYPE_UNDEFINED || meta.contains(expected) {
+                &mut std::iter::once(Bindings::new())
             } else {
-                let mut result_bindings = BindingsSet::empty();
-                for typ in actual {
-                    result_bindings.extend(
-                        match_reducted_types_v2(typ, expected)
-                            .flat_map(|b| b.merge(&bindings))
-                            .flat_map(|b| check_arg_types(actual_tail, meta_tail, expected_tail, b))
-                    );
-                }
-                result_bindings
-            }
+                &mut actual.into_iter().flat_map(|typ| match_reducted_types(typ, expected))
+            };
+            matches
+                .flat_map(|b| b.merge(&bindings))
+                .flat_map(|b| check_arg_types_internal(actual_tail, meta_tail, expected_tail, b))
+                .collect()
         },
         ([], [], []) => BindingsSet::from(bindings),
-        _ => BindingsSet::empty(),
+        _ => unreachable!(),
     };
     log::trace!("check_arg_types: actual: {:?}, expected: {:?}, matched: {:?}", actual, expected, matched);
     matched
@@ -146,10 +150,6 @@ pub fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
     }
 }
 
-fn get_op(expr: &ExpressionAtom) -> &Atom {
-    expr.children().get(0).expect("Non-empty expression is expected")
-}
-
 fn get_args(expr: &ExpressionAtom) -> &[Atom] {
     &expr.children()[1..]
 }
@@ -205,16 +205,14 @@ pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
             types
         },
         Atom::Expression(expr) => {
-            let tuples = get_tuple_types(space, atom, expr);
-            let applications = get_application_types(space, atom, expr);
+            let children_types: Vec<Vec<Atom>> = expr.children().iter()
+                .map(|a| get_atom_types(space, a)).collect();
+            let mut types = get_tuple_types(space, atom, &children_types);
+            let applications = get_application_types(atom, expr, children_types);
 
-            let mut types = Vec::new();
-            if applications == None {
-                types.extend(tuples);
-                types.push(ATOM_TYPE_UNDEFINED);
-            } else {
-                types.extend(tuples);
-                applications.into_iter().for_each(|t| types.extend(t));
+            match applications {
+                None => types.push(ATOM_TYPE_UNDEFINED),
+                Some(applications) => types.extend(applications.into_iter()),
             }
             types
         },
@@ -223,16 +221,17 @@ pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     types
 }
 
-fn get_tuple_types(space: &dyn Space, atom: &Atom, expr: &ExpressionAtom) -> Vec<Atom> {
+fn get_tuple_types(space: &dyn Space, atom: &Atom, children_types: &[Vec<Atom>]) -> Vec<Atom> {
     let mut tuples = vec![vec![]];
-    for (i, child) in expr.children().iter().enumerate() {
+    for (i, child_types) in children_types.iter().enumerate() {
         // TODO: it is not straightforward, if (: a (-> B C)) then
         // what should we return for (d (a b)): (D ((-> B C) B)) or
         // (D C) or both? Same question for a function call.
-        let child_types = get_atom_types(space, child);
-        let not_a_function_call = |typ: &Atom| { i != 0 || !is_func(typ) };
-        let child_types = child_types.into_iter().filter(not_a_function_call);
-        tuples = child_types.flat_map(|typ| -> Vec<Vec<Atom>> {
+        let not_a_function_call = |typ: &&Atom| { i != 0 || !is_func(typ) };
+        let child_types = child_types.iter()
+            .filter(not_a_function_call);
+        tuples = child_types
+            .flat_map(|typ| -> Vec<Vec<Atom>> {
             tuples.iter().map(|prev| {
                 let mut next = prev.clone();
                 next.push(typ.clone());
@@ -269,24 +268,18 @@ fn get_tuple_types(space: &dyn Space, atom: &Atom, expr: &ExpressionAtom) -> Vec
 // This is a tricky logic. To simplify it we could  separate tuple and
 // function application using separate Atom types. Or use an embedded atom
 // to designate function application.
-fn get_application_types(space: &dyn Space, atom: &Atom, expr: &ExpressionAtom) -> Option<Vec<Atom>> {
+fn get_application_types(atom: &Atom, expr: &ExpressionAtom, mut children_types: Vec<Vec<Atom>>) -> Option<Vec<Atom>> {
     let mut has_function_types = false;
     let mut types = Vec::new();
     if !expr.children().is_empty() {
-        let op = get_op(expr);
         let args = get_args(expr);
-        let mut actual_arg_types = Vec::new();
-        let mut meta_arg_types = Vec::new();
-        for arg in args {
-            actual_arg_types.push(get_atom_types(space, arg));
-            meta_arg_types.push(vec![get_meta_type(arg), ATOM_TYPE_ATOM]);
-        }
-        let mut fn_types = get_atom_types(space, op);
+        let (fn_types, actual_arg_types) = children_types.split_first_mut().unwrap();
+        let meta_arg_types: Vec<Vec<Atom>> = args.iter().map(|a| vec![get_meta_type(a), ATOM_TYPE_ATOM]).collect();
         let fn_types = fn_types.drain(0..).filter(is_func);
         for fn_type in fn_types {
             has_function_types = true;
             let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
-            for bindings in check_arg_types(actual_arg_types.as_slice(), meta_arg_types.as_slice(), expected_arg_types, Bindings::new()) {
+            for bindings in check_arg_types(actual_arg_types, meta_arg_types.as_slice(), expected_arg_types) {
                 types.push(apply_bindings_to_atom_move(ret_typ.clone(), &bindings));
             }
         }
@@ -324,10 +317,7 @@ impl CustomMatch for UndefinedTypeMatch {
     }
 }
 
-/// Matches two types and puts new variable bindings into `bindings`. Returns
-/// true when match is found. Function matches types using previous bindings
-/// passed. If match is not found some new bindings can still be added. If
-/// caller need bindings unchanged it should pass a copy.
+/// Matches two types and returns an iterator over resulting bindings.
 ///
 /// # Examples
 ///
@@ -336,41 +326,11 @@ impl CustomMatch for UndefinedTypeMatch {
 /// use hyperon::matcher::Bindings;
 /// use hyperon::metta::types::match_reducted_types;
 ///
-/// let mut bindings = Bindings::new();
-/// let is_matched = match_reducted_types(&expr!("List" t), &expr!("List" "A"), &mut bindings);
-///
-/// assert!(is_matched);
-/// assert_eq!(bindings, bind!{ t: expr!("A") });
-/// ```
-pub fn match_reducted_types(left: &Atom, right: &Atom, bindings: &mut Bindings) -> bool {
-    let mut result: Vec<Bindings> = match_reducted_types_v2(left, right).collect();
-    let matched = match result.len() {
-        0 => false,
-        1 => {
-            let result_set = result.pop().unwrap().merge(bindings);
-            *bindings = result_set.try_into().expect("Single result is expected because custom matching for types is not supported yet!");
-            true
-        }
-        _ => panic!("Single result is expected because custom matching for types is not supported yet!")
-    };
-    log::debug!("match_reducted_types: {} ~ {} => {}, bindings: {}", left, right, matched, bindings);
-    matched
-}
-
-/// Matches two types and returns an iterator over resulting bindings.
-///
-/// # Examples
-///
-/// ```
-/// use hyperon::{expr, bind};
-/// use hyperon::matcher::Bindings;
-/// use hyperon::metta::types::match_reducted_types_v2;
-///
-/// let bindings: Vec<Bindings> = match_reducted_types_v2(&expr!("List" t), &expr!("List" "A")).collect();
+/// let bindings: Vec<Bindings> = match_reducted_types(&expr!("List" t), &expr!("List" "A")).collect();
 ///
 /// assert_eq!(bindings, vec![ bind!{ t: expr!("A") } ]);
 /// ```
-pub fn match_reducted_types_v2(left: &Atom, right: &Atom) -> matcher::MatchResultIter {
+pub fn match_reducted_types(left: &Atom, right: &Atom) -> matcher::MatchResultIter {
     let left = replace_undefined_types(left);
     let right = replace_undefined_types(right);
     matcher::match_atoms(&left, &right)
@@ -388,7 +348,7 @@ fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, B
     types.drain(0..).flat_map(|t| {
         // TODO: write a unit test
         let t = make_variables_unique(t);
-        match_reducted_types_v2(&t, typ).map(move |bindings| (t.clone(), bindings))
+        match_reducted_types(&t, typ).map(move |bindings| (t.clone(), bindings))
     }).collect()
 }
 
