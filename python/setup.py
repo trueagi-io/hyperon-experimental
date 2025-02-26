@@ -38,10 +38,7 @@ class CMakeBuild(build_ext):
         extdir = ext_fullpath.parent.resolve()
         debug = int(os.environ.get("DEBUG", 0)) if self.debug is None else self.debug
         cfg = "Debug" if debug else "Release"
-        if os.name == 'nt':
-            local_prefix = os.path.join(os.path.expanduser('~'), ".local")
-        else:
-            local_prefix = os.path.join(os.environ["HOME"], ".local")
+        local_prefix = os.path.join(os.path.expanduser('~'), ".local")
 
         cmake_args = [
             f"-DCMAKE_LIBRARY_OUTPUT_DIRECTORY={extdir}{os.sep}",

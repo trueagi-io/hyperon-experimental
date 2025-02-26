@@ -7,16 +7,13 @@ set(TEST_SOURCES
     util.c
 )
 
-
-set(DLL_PATH "${CMAKE_CURRENT_BINARY_DIR}\\..\\cargo")
-
 macro(ADD_TESTS)
     set(TEST_NAME "${ARGV0}")
     add_executable(${TEST_NAME} ${TEST_NAME}.c ${TEST_SOURCES})
     target_link_libraries(${TEST_NAME} hyperonc-shared Check::check)
     add_test(NAME ${TEST_NAME} COMMAND ${TEST_NAME})
     set_property(TEST ${TEST_NAME}
-            APPEND PROPERTY ENVIRONMENT PATH=$<SHELL_PATH:${DLL_PATH}>)
+        APPEND PROPERTY ENVIRONMENT PATH=$<SHELL_PATH:${HYPERONC_TARGET_DIR}>)
 endmacro()
 
 ADD_TESTS("check_atom")
