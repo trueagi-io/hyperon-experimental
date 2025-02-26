@@ -153,18 +153,50 @@ Docs can be found at `./target/doc/hyperon/index.html`.
 
 ## C and Python API
 
-Setup build:
+Create build directory:
 ```
 mkdir -p build
 cd build
-cmake ..
 ```
-To run release build use `-DCMAKE_BUILD_TYPE=Release` cmake flag.
 
-Build and run tests:
+Initialize CMake project:
+- Linux: `cmake ..`
+- Windows: `cmake -DGIT=OFF ..` (Windows build doesn't support Git libraries
+  yet)
+
+Commands for building and testing project depend on a type of a configuration
+generator which is used by CMake. `cmake --help` command lists supported
+generators at the end of its output. Default generator is marked by `*`. One
+can select the configuration generator by specifying `-G <generator>` CMake
+option.
+
+### Single configuration generators like "Unix Makefiles"
+
+For this kind of generators the build type is selected at the CMake project
+initialization stage. To use release build type add
+`-DCMAKE_BUILD_TYPE=Release` CMake flag to the command above. To change the
+build type the whole project configuration should be regenerated.
+
+Build and run tests commands:
 ```
-make
-make check
+cmake --build .
+cmake --build . --target check
+```
+
+### Multiple configuration generator like "Visual Studio ..."
+
+This kind of generators allows generating configuration once and select it each
+time when making build or running tests. One can add `--config` parameter to
+select configuration. By default `Debug` configuration is built.
+
+Keep in mind that one cannot select the library used by `metta` command even in
+case of multiple configuration generator. `metta` command uses the last
+configuration built.
+
+Build and run tests commands:
+```
+cmake --build . [--config <Release|Debug>]
+cmake --build . --target check [--config <Release|Debug>]
 ```
 
 ## Running Python and MeTTa examples

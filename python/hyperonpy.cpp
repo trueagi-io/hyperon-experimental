@@ -7,6 +7,9 @@
 
 #include <hyperon/hyperon.h>
 
+// required by MSVC compiler
+#define ssize_t ptrdiff_t
+
 namespace py = pybind11;
 
 namespace PYBIND11_NAMESPACE { namespace detail {
@@ -583,10 +586,10 @@ void free_mod_fmt_context(void* callback_context) {
 
 // Module Format API Declaration for a module implementation in C
 static mod_file_fmt_api_t const C_FMT_API= {
-    .path_for_name = &path_for_name_mod_fmt_callback,
-    .try_path = &try_path_mod_fmt_callback,
-    .load = &load_mod_fmt_callback,
-    .free_callback_context = &free_mod_fmt_context,
+    &path_for_name_mod_fmt_callback,
+    &try_path_mod_fmt_callback,
+    &load_mod_fmt_callback,
+    &free_mod_fmt_context,
 };
 
 struct CConstr {
@@ -607,7 +610,7 @@ struct CConstr {
     }
 };
 
-static token_api_t TOKEN_API = { .construct_atom = &CConstr::apply, .free_context = &CConstr::free };
+static token_api_t TOKEN_API = { &CConstr::apply, &CConstr::free };
 
 struct CSExprParser {
 
@@ -685,14 +688,14 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("atom_var_parse_name", [](char const* name) { return CAtom(atom_var_parse_name(name)); }, "Create variable atom parsing name in format <name>#<id>");
     m.def("atom_expr", [](py::list _children) {
             size_t size = py::len(_children);
-            atom_t children[size];
-            int idx = 0;
+            auto children = std::unique_ptr<atom_t[]>(new atom_t[size]);
+            size_t idx = 0;
             for (py::handle atom : _children) {
                 // Copying atom is required because atom_expr() moves children
                 // catoms inside new expression atom.
                 children[idx++] = atom_clone(atom.cast<CAtom&>().ptr());
             }
-            return CAtom(atom_expr(children, size));
+            return CAtom(atom_expr(children.get(), size));
         }, "Create expression atom");
     m.def("atom_space", [](CSpace& atom) {
             return CAtom(atom_gnd_for_space(atom.ptr()));
@@ -1127,14 +1130,14 @@ PYBIND11_MODULE(hyperonpy, m) {
                 isescape = false;
                 continue;
             }
-            if((isspace or c == '(' or c == ')')) {
-                if(c == ')' and depth == 0) {
+            if ((isspace || c == '(' || c == ')')) {
+                if (c == ')' && depth == 0) {
                     // ignore for now --> exception
                     continue;
                 }
                 if(str.size() > 0) {
                     atom_t atom;
-                    if(str[0] >= '0' and str[0] <= '9' or str[0] == '-') {
+                    if (str[0] >= '0' && str[0] <= '9' || str[0] == '-') {
                         try {
                             long double ld = std::stold(str);
                             long long ll = std::stoll(str);

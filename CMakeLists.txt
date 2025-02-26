@@ -48,6 +48,13 @@ set(HYPERONPY_BINARY_DIR "${BINARY_DIR}")
 message(STATUS "HYPERONPY_BINARY_DIR = ${HYPERONPY_BINARY_DIR}")
 
 enable_testing()
+
+list(APPEND CTEST_ARGS --no-tests=error --output-on-failure)
+if(CMAKE_CONFIGURATION_TYPES)
+    list(APPEND CTEST_ARGS -C ${BUILD_CONFIGURATION})
+endif()
+
 add_custom_target(check
-    COMMAND cd "${HYPERONC_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure
-    COMMAND cd "${HYPERONPY_BINARY_DIR}" && ${CMAKE_CTEST_COMMAND} --no-tests=error --output-on-failure)
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir "${HYPERONC_BINARY_DIR}" ${CTEST_ARGS}
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir "${HYPERONPY_BINARY_DIR}" ${CTEST_ARGS}
+)
