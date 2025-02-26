@@ -3,10 +3,6 @@ project(hyperonpy)
 
 option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 
-enable_testing()
-
-add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
-
 # Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
 if (POLICY CMP0025)
     cmake_policy(SET CMP0025 NEW)
@@ -31,16 +27,15 @@ find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
 message(STATUS "Python native modules installation path (Python3_SITEARCH): ${Python3_SITEARCH}")
 message(STATUS "Python modules installation path (Python3_SITELIB): ${Python3_SITELIB}")
 
-if(GIT)
-    find_package(OpenSSL REQUIRED)
-    find_package(ZLIB REQUIRED)
-endif()
-
 find_package(pybind11 REQUIRED)
 find_package(optional-lite REQUIRED)
 include_directories(${optional-lite_INCLUDE_DIRS})
 find_package(hyperonc REQUIRED HINTS ${HYPERONC_INSTALL_PREFIX})
 include_directories(${hyperonc_INCLUDE_DIRS})
+if(GIT)
+    find_package(OpenSSL REQUIRED)
+    find_package(ZLIB REQUIRED)
+endif()
 
 # Use the same location of the target library for each configuration of
 # multi-configuration build
@@ -62,12 +57,10 @@ if(GIT)
 endif()
 
 get_target_property(PYTHONPATH hyperonpy LIBRARY_OUTPUT_DIRECTORY)
-message(PYTHONPATH=${PYTHONPATH})
-if(WIN32)
-    set(IS_RELEASE_BUILD $<IF:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>,1,0>)
-    set(BUILD_CONFIGURATION $<IF:${IS_RELEASE_BUILD},Release,Debug>)
-    set(PYTHONPATH "${PYTHONPATH}/${BUILD_CONFIGURATION}/" "${PYTHONPATH}")
-else()
-    set(PYTHONPATH "${CMAKE_CURRENT_SOURCE_DIR}")
-endif()
+message(STATUS "PYTHONPATH = ${PYTHONPATH}")
+
+enable_testing()
+
+add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
+
 add_subdirectory(tests)
