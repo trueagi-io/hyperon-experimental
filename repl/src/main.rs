@@ -1,6 +1,5 @@
 
 use std::path::PathBuf;
-use std::thread;
 use std::process::exit;
 use std::sync::{Arc, Mutex};
 
@@ -9,7 +8,6 @@ use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent, KeyCode
 
 use anyhow::Result;
 use clap::Parser;
-use std::sync::mpsc::channel;
 use ctrlc;
 
 mod metta_shim;
@@ -71,7 +69,7 @@ fn main() -> Result<()> {
         }
         *signal_received_cnt += 1;
         drop(signal_received_cnt);
-    }).expect("Error setting Ctrl-C handler");
+    })?;
 
 
     //If we have .metta files to run, then run them
