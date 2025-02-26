@@ -7,6 +7,7 @@
 
 #include <hyperon/hyperon.h>
 
+// required by MSVC compiler
 #define ssize_t ptrdiff_t
 
 namespace py = pybind11;
