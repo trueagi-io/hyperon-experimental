@@ -49,8 +49,6 @@ message(STATUS "HYPERONPY_BINARY_DIR = ${HYPERONPY_BINARY_DIR}")
 
 enable_testing()
 
-message(STATUS "PYTHONPATH = ${PYTHONPATH}")
-
 list(APPEND CTEST_ARGS --no-tests=error --output-on-failure)
 if(CMAKE_CONFIGURATION_TYPES)
     list(APPEND CTEST_ARGS -C ${BUILD_CONFIGURATION})
