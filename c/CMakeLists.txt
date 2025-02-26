@@ -8,8 +8,6 @@ enable_testing()
 option(BUILD_SHARED_LIBS "Build shared library" ON)
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 
-
-
 # HYPERONC_TARGET_DIR is used as a target dir for cargo. Cargo automatically adds
 # `debug/release` suffix to the value of --target-dir argument so we need to
 # calculate actual path to compiled library using $<CONFIG:...> cmake generator
@@ -114,12 +112,16 @@ if(BUILD_SHARED_LIBS)
     if(GIT)
         target_link_libraries(hyperonc-shared INTERFACE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
     endif(GIT)
+    if (WIN32)
+        # These libraries are required to be linked under Windows platform as
+        # they are dependencies of the Rust standard library.
+        # See https://doc.rust-lang.org/reference/linkage.html#r-link.staticlib
+        target_link_libraries(hyperonc-shared INTERFACE wsock32 ws2_32 userenv ntdll bcrypt)
+    endif(WIN32)
 
-    add_dependencies(hyperonc-shared build-hyperonc)
     add_dependencies(hyperonc-shared copy-hyperonc-shared)
     if (WIN32)
         add_dependencies(hyperonc-shared copy-hyperonc-implib)
-        target_link_libraries(hyperonc-shared INTERFACE wsock32 ws2_32 userenv ntdll bcrypt)
     endif(WIN32)
 
     install(FILES "${HYPERONC_SHARED_LIB_PATH}"
