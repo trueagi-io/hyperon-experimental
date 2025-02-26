@@ -16,14 +16,14 @@ endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
 if (POLICY CMP0025)
     cmake_policy(SET CMP0025 NEW)
 endif ()
-if ("cxx_std_14" IN_LIST CMAKE_CXX_COMPILE_FEATURES)
-    message(STATUS "C++14 or higher is available")
+if (MSVC)
+    # MSVC doesn't support C++11 standard, so lowest possible is C++14
     set(CMAKE_CXX_STANDARD 14)
 else ()
     # cibuildwheel images support only C++11 for some of the platforms
-    message(STATUS "Only C++11 is available")
     set(CMAKE_CXX_STANDARD 11)
 endif ()
+message(STATUS "CMAKE_CXX_STANDARD = ${CMAKE_CXX_STANDARD}")
 
 # The default value ("FIRST") prefers the installation with the highest
 # version. "ONLY" sticks to a virtualenv even when its version is smaller

@@ -688,8 +688,8 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("atom_var_parse_name", [](char const* name) { return CAtom(atom_var_parse_name(name)); }, "Create variable atom parsing name in format <name>#<id>");
     m.def("atom_expr", [](py::list _children) {
             size_t size = py::len(_children);
-            auto children = std::make_unique<atom_t[]>(size);
-            int idx = 0;
+            auto children = std::unique_ptr<atom_t[]>(new atom_t[size]);
+            size_t idx = 0;
             for (py::handle atom : _children) {
                 // Copying atom is required because atom_expr() moves children
                 // catoms inside new expression atom.
