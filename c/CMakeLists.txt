@@ -109,15 +109,15 @@ if(BUILD_SHARED_LIBS)
         # required to import hyperonc-shared by name not by relative path
         IMPORTED_NO_SONAME TRUE
         )
-    if(GIT)
-        target_link_libraries(hyperonc-shared INTERFACE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
-    endif(GIT)
     if (WIN32)
         # These libraries are required to be linked under Windows platform as
         # they are dependencies of the Rust standard library.
         # See https://doc.rust-lang.org/reference/linkage.html#r-link.staticlib
         target_link_libraries(hyperonc-shared INTERFACE wsock32 ws2_32 userenv ntdll bcrypt)
     endif(WIN32)
+    if(GIT)
+        target_link_libraries(hyperonc-shared INTERFACE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
+    endif(GIT)
 
     add_dependencies(hyperonc-shared copy-hyperonc-shared)
     if (WIN32)

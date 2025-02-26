@@ -7,11 +7,6 @@ enable_testing()
 
 add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 
-foreach( OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES} )
-    string( TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG )
-    set( CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_CURRENT_SOURCE_DIR} )
-endforeach( OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES )
-
 # Fix behavior of CMAKE_CXX_STANDARD when targeting macOS.
 if (POLICY CMP0025)
     cmake_policy(SET CMP0025 NEW)
@@ -47,19 +42,23 @@ include_directories(${optional-lite_INCLUDE_DIRS})
 find_package(hyperonc REQUIRED HINTS ${HYPERONC_INSTALL_PREFIX})
 include_directories(${hyperonc_INCLUDE_DIRS})
 
-if(APPLE)
-    # macOS specific libraries
-    set(PLATFORM_LIBRARIES "-framework CoreFoundation" "-framework Security")
-endif()
+# Use the same location of the target library for each configuration of
+# multi-configuration build
+foreach(OUTPUTCONFIG ${CMAKE_CONFIGURATION_TYPES})
+    string(TOUPPER ${OUTPUTCONFIG} OUTPUTCONFIG)
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY_${OUTPUTCONFIG} ${CMAKE_CURRENT_SOURCE_DIR})
+endforeach(OUTPUTCONFIG CMAKE_CONFIGURATION_TYPES)
 
 pybind11_add_module(hyperonpy MODULE ./hyperonpy.cpp)
 target_link_libraries(hyperonpy PRIVATE "${hyperonc_STATIC_LIBRARY}" nonstd::optional-lite)
-if(GIT)
-    target_link_libraries(hyperonpy PUBLIC ${PLATFORM_LIBRARIES} OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
+if(APPLE)
+    target_link_libraries(hyperonpy PRIVATE "-framework CoreFoundation" "-framework Security")
 endif()
-
 if(WIN32)
     target_link_libraries(hyperonpy PRIVATE wsock32 ws2_32 userenv ntdll bcrypt)
+endif()
+if(GIT)
+    target_link_libraries(hyperonpy PRIVATE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
 endif()
 
 get_target_property(PYTHONPATH hyperonpy LIBRARY_OUTPUT_DIRECTORY)
