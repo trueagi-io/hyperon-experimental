@@ -28,22 +28,8 @@ message(STATUS "CMAKE_CXX_STANDARD = ${CMAKE_CXX_STANDARD}")
 # The default value ("FIRST") prefers the installation with the highest
 # version. "ONLY" sticks to a virtualenv even when its version is smaller
 # which is usually expected by an user.
-if(WIN32)
-    if (NOT DEFINED Python_FIND_VIRTUALENV)
-        set(Python_FIND_VIRTUALENV "ONLY")
-    endif()
-    # Development.Embed is not supported by cibuildwheel environment
-    find_package(Python 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
-    message(STATUS "Python native modules installation path (Python_SITEARCH): ${Python_SITEARCH}")
-    message(STATUS "Python modules installation path (Python_SITELIB): ${Python_SITELIB}")
-else()
-    if (NOT DEFINED Python3_FIND_VIRTUALENV)
-        set(Python3_FIND_VIRTUALENV "ONLY")
-    endif()
-    # Development.Embed is not supported by cibuildwheel environment
-    find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
-    message(STATUS "Python native modules installation path (Python3_SITEARCH): ${Python3_SITEARCH}")
-    message(STATUS "Python modules installation path (Python3_SITELIB): ${Python3_SITELIB}")
+if (NOT DEFINED Python3_FIND_VIRTUALENV)
+    set(Python3_FIND_VIRTUALENV "ONLY")
 endif()
 # Development.Embed is not supported by cibuildwheel environment
 find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
