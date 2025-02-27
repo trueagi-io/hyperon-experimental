@@ -202,6 +202,9 @@ class EventAgent(AgentObject):
             atoms = {**atoms}
             atoms['&event_bus'] = event_bus if isinstance(event_bus, Atom) else ValueAtom(event_bus)
             atoms['queue-subscription'] = OperationAtom('queue-subscription', self.queue_subscription, unwrap=False)
+            atoms['has-event-bus'] = OperationAtom('has-event-bus',
+                lambda: self.event_bus is not None and \
+                        hasattr(self.event_bus, "create_subscription"))
         self.event_bus = event_bus.get_object().value if isinstance(event_bus, GroundedAtom) else event_bus
         super().__init__(path, atoms, include_paths, code)
         # Even if there is no event bus, events can be submitted by child class methods
@@ -209,6 +212,13 @@ class EventAgent(AgentObject):
         self.running = False
         self.outputs = Queue()
         self.lock = threading.RLock()
+
+    def _init_metta(self):
+        # NOTE: atm, there is no utility for the base agent to import `agents` by default,
+        # but event agents in metta typically need it
+        super()._init_metta()
+        if self._metta is not None:
+            self._metta.run("! (import! &self agents)")
 
     def start(self, *args):
         if not args:

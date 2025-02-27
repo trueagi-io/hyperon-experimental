@@ -25,7 +25,6 @@ fc = FeedbackCatch(node)
 
 metta_agent = EventAgent(code=
 '''
-!(import! &self agents)
 (= (on_event $arg)
    ((py-dot &event_bus publish) "agent-event"
     (if (== $arg "Ping") "Pong" "Wrong")))

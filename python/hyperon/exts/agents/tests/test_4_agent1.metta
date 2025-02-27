@@ -1,4 +1,4 @@
-!(import! &self agents)
+!(assertEqual (has-event-bus) True)
 
 !(let $state (new-state False)
     (add-atom &self (= (success?) $state)))
