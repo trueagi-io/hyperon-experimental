@@ -1,5 +1,5 @@
 from hyperon.exts.agents import EventAgent
-from hyperon.exts.agents.events.mock_ros2_node import MockROS2Node
+from hyperon.exts.agents.events.basic_bus import BasicEventBus
 from time import sleep
 
 '''
@@ -20,7 +20,7 @@ class FeedbackCatch:
        assert e == "Pong", e
        self.catched = True
 
-node = MockROS2Node()
+node = BasicEventBus()
 fc = FeedbackCatch(node)
 
 metta_agent = EventAgent(code=

@@ -1,3 +1,3 @@
-from .mock_ros2_node import event_atoms
+from .basic_bus import event_atoms
 
 

@@ -3,7 +3,7 @@ import logging
 from hyperon import OperationAtom
 from hyperon.ext import register_atoms
 
-class MockROS2Node:
+class BasicEventBus:
     def __init__(self):
         self.subscriptions = defaultdict(list)
         self.is_running = True
@@ -20,5 +20,5 @@ class MockROS2Node:
 @register_atoms
 def event_atoms():
     return {
-        r"basic-event-bus": OperationAtom('basic-event-bus', MockROS2Node)
+        r"basic-event-bus": OperationAtom('basic-event-bus', BasicEventBus)
     }
