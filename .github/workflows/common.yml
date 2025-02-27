@@ -14,11 +14,6 @@ on:
         default: "3.7"
         required: false
         type: string
-      os:
-        description: "A container which is used to make a build"
-        default: "[\"ubuntu-22.04\", \"windows-latest\"]"
-        required: false
-        type: string
       cmake-version:
         description: "CMake version to use"
         default: "3.24.x"
