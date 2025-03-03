@@ -244,30 +244,20 @@ impl Display for AtomType {
 /// assert_eq_no_order!(get_atom_types(&space, &expr!({1})), vec![expr!("i32")]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("na")), vec![ATOM_TYPE_UNDEFINED]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("a")), vec![expr!("A"), expr!("B")]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("a" "b")), vec![expr!("A" "B"), expr!("B" "B"), ATOM_TYPE_UNDEFINED]);
+/// assert_eq_no_order!(get_atom_types(&space, &expr!("a" "b")), vec![expr!("A" "B"), expr!("B" "B")]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "a")), vec![expr!("B")]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "b")), Vec::<Atom>::new());
 /// ```
 pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     let atom_types = get_atom_types_v2(space, atom);
-    let mut has_applications = false;
-    let mut types = Vec::with_capacity(atom_types.len());
-    for typ in atom_types.into_iter() {
-        has_applications = has_applications || typ.is_application();
-        if !typ.is_error() {
-            types.push(typ.into_atom());
-        }
-    }
-    if matches!(atom, Atom::Expression(_)) {
-        if !has_applications {
-            types.push(ATOM_TYPE_UNDEFINED);
-        }
+    if atom_types.is_empty() {
+        vec![ATOM_TYPE_UNDEFINED]
     } else {
-        if types.is_empty() {
-            types.push(ATOM_TYPE_UNDEFINED);
-        }
+        atom_types.into_iter()
+            .filter(|t| !t.is_error())
+            .map(AtomType::into_atom)
+            .collect()
     }
-    types
 }
 
 struct ExprTypeInfo {
@@ -960,7 +950,7 @@ mod tests {
             (: b BB)
         ");
         assert_eq_no_order!(get_atom_types(&space, &atom("(a b)")),
-            vec![atom("(A B)"), atom("(AA B)"), atom("(A BB)"), atom("(AA BB)"), ATOM_TYPE_UNDEFINED]);
+            vec![atom("(A B)"), atom("(AA B)"), atom("(A BB)"), atom("(AA BB)")]);
         assert_eq_no_order!(get_atom_types(&space, &atom("(a c)")),
             vec![ATOM_TYPE_UNDEFINED]);
         assert_eq_no_order!(get_atom_types(&space, &atom("(c d)")), vec![ATOM_TYPE_UNDEFINED]);
