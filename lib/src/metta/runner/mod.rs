@@ -1314,6 +1314,19 @@ mod tests {
         assert_eq!(result, Ok(vec![vec![expr!("Error" "b" "BadType")]]));
     }
 
+    #[test]
+    fn metta_first_call_in_the_tuple_has_incorrect_typing() {
+        let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
+        let program = "
+            (: foo (-> A B))
+            (: b B)
+            !((foo b) s)
+        ";
+        let result = metta.run(SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
+    }
+
+
     #[derive(Clone, PartialEq, Debug)]
     struct ReturnAtomOp(Atom);
 

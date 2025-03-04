@@ -14,6 +14,7 @@ use std::convert::TryFrom;
 use std::rc::Rc;
 use std::fmt::Write;
 use std::cell::RefCell;
+use itertools::Itertools;
 
 macro_rules! match_atom {
     ($atom:tt ~ $pattern:tt => $succ:tt , _ => $error:tt) => {
@@ -1041,9 +1042,20 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
     match atom_as_slice(&expr) {
         Some([op, _args @ ..]) => {
             let space_ref = space.as_gnd::<DynSpace>().unwrap();
-            let actual_types = get_atom_types(space_ref, op);
+            let actual_types = get_atom_types_v2(space_ref, op);
 
-            let has_tuple_type = actual_types.iter().filter(|typ| !is_func(typ)).next().is_some();
+            let only_error_types = !actual_types.is_empty() && actual_types.iter().all(AtomType::is_error);
+            let err = if only_error_types {
+                log::debug!("interpret_expression: op type check: expr: {}, op types: [{}]", expr, actual_types.iter().format(", "));
+                once((return_atom(error_atom(op.clone(), BAD_TYPE_SYMBOL)), bindings.clone()))
+            } else {
+                empty()
+            };
+
+            let has_tuple_type = actual_types.is_empty() || actual_types.iter()
+                .filter(|t| !t.is_error() && !t.is_function())
+                .next()
+                .is_some();
             let tuple = if has_tuple_type {
                 let reduced = Atom::Variable(VariableAtom::new("reduced").make_unique());
                 let result = Atom::Variable(VariableAtom::new("result").make_unique());
@@ -1057,7 +1069,10 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
                 empty()
             };
 
-            let mut func_types = actual_types.into_iter().filter(|typ| is_func(typ)).peekable();
+            let mut func_types = actual_types.into_iter()
+                .filter(|t| !t.is_error() && t.is_function())
+                .map(AtomType::into_atom)
+                .peekable();
             let func = if func_types.peek().is_some() {
                 let ret_typ = expr_typ.clone();
                 let type_check_results = func_types.flat_map(|typ| check_if_function_type_is_applicable(&expr, typ, &ret_typ, space_ref, bindings.clone()));
@@ -1083,7 +1098,7 @@ fn interpret_expression(args: Atom, bindings: Bindings) -> MettaResult {
                 empty()
             };
 
-            Box::new(std::iter::empty().chain(tuple).chain(func))
+            Box::new(tuple.chain(func).chain(err))
         },
         _ => type_cast(space, expr, expr_typ, bindings),
     }
