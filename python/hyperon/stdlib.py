@@ -3,7 +3,7 @@ import sys
 import os
 
 from .atoms import ExpressionAtom, E, GroundedAtom, OperationAtom, ValueAtom, NoReduceError, AtomType, MatchableObject, \
-    G, S, Atoms, get_string_value, GroundedObject, SymbolAtom
+    G, S, Atoms, get_string_value, GroundedObject, SymbolAtom, IncorrectArgumentError
 from .base import Tokenizer, SExprParser
 from .ext import register_atoms, register_tokens
 import hyperonpy as hp

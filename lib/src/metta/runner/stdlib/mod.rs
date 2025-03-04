@@ -128,7 +128,12 @@ impl ModuleLoader for CoreLibLoader {
         let space = DynSpace::new(GroundingSpace::new());
         context.init_self_module(space, None);
 
-        register_rust_stdlib_tokens(&mut *context.module().tokenizer().borrow_mut());
+        let module = context.module();
+        let tokenizer = module.tokenizer();
+
+        register_runner_tokens(&mut *tokenizer.borrow_mut(), tokenizer.clone(), &module.space(), context.metta);
+        register_common_tokens(&mut *tokenizer.borrow_mut(), tokenizer.clone(), &module.space(), context.metta);
+        register_rust_stdlib_tokens(&mut *tokenizer.borrow_mut());
 
         let parser = SExprParser::new(METTA_CODE);
         context.push_parser(Box::new(parser));
