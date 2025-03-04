@@ -1110,13 +1110,17 @@ fn interpret_tuple(args: Atom, bindings: Bindings) -> MettaResult {
         once((
             Atom::expr([CHAIN_SYMBOL, Atom::expr([METTA_SYMBOL, head, ATOM_TYPE_UNDEFINED, space.clone()]), rhead.clone(),
                 Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::gnd(IfEqualOp{}), rhead.clone(), EMPTY_SYMBOL, return_atom(EMPTY_SYMBOL),
-                    Atom::expr([CHAIN_SYMBOL, call_native!(interpret_tuple, Atom::expr([Atom::expr(tail), space.clone()])), rtail.clone(),
-                        Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::gnd(IfEqualOp{}), rtail.clone(), EMPTY_SYMBOL, return_atom(EMPTY_SYMBOL),
-                            Atom::expr([CHAIN_SYMBOL, Atom::expr([CONS_ATOM_SYMBOL, rhead, rtail]), result.clone(),
-                                return_atom(result)
-                            ])
-                        ])])
-                    ])
+                    call_native!(return_on_error, Atom::expr([rhead.clone(),
+                        Atom::expr([CHAIN_SYMBOL, call_native!(interpret_tuple, Atom::expr([Atom::expr(tail), space.clone()])), rtail.clone(),
+                            Atom::expr([EVAL_SYMBOL, Atom::expr([Atom::gnd(IfEqualOp{}), rtail.clone(), EMPTY_SYMBOL, return_atom(EMPTY_SYMBOL),
+                                call_native!(return_on_error, Atom::expr([rtail.clone(),
+                                    Atom::expr([CHAIN_SYMBOL, Atom::expr([CONS_ATOM_SYMBOL, rhead, rtail]), result.clone(),
+                                        return_atom(result)
+                                    ])
+                                ]))
+                            ])])
+                        ])
+                    ]))
                 ])])
             ]), bindings))
     }
