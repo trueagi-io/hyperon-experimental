@@ -1189,6 +1189,7 @@ fn wrap_atom_by_metta_interpreter(space: DynSpace, atom: Atom) -> Atom {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use super::bool::Bool;
 
     #[test]
     fn test_space() {
@@ -1288,6 +1289,45 @@ mod tests {
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
 
+    #[test]
+    fn metta_stop_after_error_happens_inside_tuple() {
+        let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
+        let program = "
+            !(a b c (Error e SomeError))
+        ";
+        let result = metta.run(SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" "e" "SomeError")]]));
+
+        let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
+        let program = "
+            !((Error e SomeError) a b c)
+        ";
+        let result = metta.run(SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" "e" "SomeError")]]));
+
+        let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
+        let program = "
+            (: foo (-> A B))
+            (: b B)
+            !(s (foo b))
+        ";
+        let result = metta.run(SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" "b" "BadType")]]));
+    }
+
+    #[test]
+    fn metta_first_call_in_the_tuple_has_incorrect_typing() {
+        let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
+        let program = "
+            (: foo (-> A B))
+            (: b B)
+            !((foo b) s)
+        ";
+        let result = metta.run(SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
+    }
+
+
     #[derive(Clone, PartialEq, Debug)]
     struct ReturnAtomOp(Atom);
 
@@ -1324,6 +1364,26 @@ mod tests {
         let result = metta.run(SExprParser::new(program));
 
         assert_eq!(result, Ok(vec![vec![expr!()]]));
+    }
+
+    #[test]
+    fn metta_empty_results_issue_481() {
+        let metta = Metta::new(Some(EnvBuilder::test_env()));
+
+        let program = "
+            !(== () (collapse
+              (let* (($L ()) ($x (superpose $L))) $x) ))
+        ";
+        let result = metta.run(SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![Atom::gnd(Bool(true))]]));
+
+        let program = "!(let $x (empty) OK)";
+        let result = metta.run(SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![]]));
+
+        let program = "!(let* (($x (empty))) OK)";
+        let result = metta.run(SExprParser::new(program));
+        assert_eq!(result, Ok(vec![vec![]]));
     }
 
 }

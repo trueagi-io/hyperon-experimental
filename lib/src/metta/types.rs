@@ -163,7 +163,7 @@ pub struct AtomType {
 
 impl AtomType {
     #[inline]
-    fn value(typ: Atom) -> Self {
+    pub fn value(typ: Atom) -> Self {
         let is_function = is_func(&typ);
         Self {
             typ,
@@ -174,7 +174,7 @@ impl AtomType {
     }
 
     #[inline]
-    fn application(typ: Atom, is_error: bool) -> Self {
+    pub fn application(typ: Atom, is_error: bool) -> Self {
         let is_function = is_func(&typ);
         Self {
             typ,
@@ -185,25 +185,25 @@ impl AtomType {
     }
 
     #[inline]
-    fn is_error(&self) -> bool {
+    pub fn is_error(&self) -> bool {
         self.is_error
     }
     #[inline]
-    fn is_function(&self) -> bool {
+    pub fn is_function(&self) -> bool {
         self.is_function
     }
     #[inline]
-    fn is_application(&self) -> bool {
+    pub fn is_application(&self) -> bool {
         self.is_application
     }
 
     #[inline]
-    fn as_atom(&self) -> &Atom {
+    pub fn as_atom(&self) -> &Atom {
         &self.typ
     }
 
     #[inline]
-    fn into_atom(self) -> Atom {
+    pub fn into_atom(self) -> Atom {
         self.typ
     }
 }
