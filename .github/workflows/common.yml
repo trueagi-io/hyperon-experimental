@@ -68,18 +68,19 @@ jobs:
       - name: Install Conan
         uses: turtlebrowser/get-conan@v1.2
         with:
-          version: "2.5.0"
+          version: "2.13.0"
 
       - name: Setup Conan profile
+        shell: bash
         run: |
           conan profile detect --force
-        shell: bash
 
-      - name: Test Rust library
-        run: RUST_LOG=hyperon=debug cargo test
+      - name: Test Rust build
         shell: bash
+        run: RUST_LOG=hyperon=debug cargo test
 
       - name: Print environment
+        shell: bash
         run: |
           echo "uname -a"
           uname -a
@@ -109,22 +110,19 @@ jobs:
           echo "make --version"
           make --version
           file $(which make)
-        shell: bash
 
       - name: Setup C API build
         run: |
           mkdir -p build
           cd build
-          # specify C compiler as conan could not find it automatically
-          # see https://github.com/conan-io/conan/issues/4322
-          cmake -DCMAKE_C_COMPILER=gcc ${{ env.CMAKE_GIT_EXCLUDE }} ..
+          cmake ${{ env.CMAKE_GIT_EXCLUDE }} ..
 
       - name: Build C API
         working-directory: ./build
-        run: cmake --build . ${{ env.CMAKE_MULTIBUILD_CONFIG }}
         shell: bash
+        run: cmake --build . ${{ env.CMAKE_MULTIBUILD_CONFIG }}
 
       - name: Test C API
         working-directory: ./build
-        run: cmake --build . --target check ${{ env.CMAKE_MULTIBUILD_CONFIG }}
         shell: bash
+        run: cmake --build . --target check ${{ env.CMAKE_MULTIBUILD_CONFIG }}
