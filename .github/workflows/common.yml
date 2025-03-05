@@ -71,15 +71,16 @@ jobs:
           version: "2.5.0"
 
       - name: Setup Conan profile
+        shell: bash
         run: |
           conan profile detect --force
-        shell: bash
 
       - name: Test Rust library
-        run: RUST_LOG=hyperon=debug cargo test
         shell: bash
+        run: RUST_LOG=hyperon=debug cargo test
 
       - name: Print environment
+        shell: bash
         run: |
           echo "uname -a"
           uname -a
@@ -109,7 +110,6 @@ jobs:
           echo "make --version"
           make --version
           file $(which make)
-        shell: bash
 
       - name: Setup C API build
         run: |
@@ -121,10 +121,10 @@ jobs:
 
       - name: Build C API
         working-directory: ./build
-        run: cmake --build . ${{ env.CMAKE_MULTIBUILD_CONFIG }}
         shell: bash
+        run: cmake --build . ${{ env.CMAKE_MULTIBUILD_CONFIG }}
 
       - name: Test C API
         working-directory: ./build
-        run: cmake --build . --target check ${{ env.CMAKE_MULTIBUILD_CONFIG }}
         shell: bash
+        run: cmake --build . --target check ${{ env.CMAKE_MULTIBUILD_CONFIG }}
