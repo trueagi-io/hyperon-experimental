@@ -75,7 +75,7 @@ jobs:
         run: |
           conan profile detect --force
 
-      - name: Test Rust library
+      - name: Test Rust build
         shell: bash
         run: RUST_LOG=hyperon=debug cargo test
 
@@ -115,9 +115,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          # specify C compiler as conan could not find it automatically
-          # see https://github.com/conan-io/conan/issues/4322
-          cmake -DCMAKE_C_COMPILER=gcc ${{ env.CMAKE_GIT_EXCLUDE }} ..
+          cmake ${{ env.CMAKE_GIT_EXCLUDE }} ..
 
       - name: Build C API
         working-directory: ./build
