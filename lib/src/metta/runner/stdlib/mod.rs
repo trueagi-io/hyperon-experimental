@@ -261,6 +261,15 @@ mod tests {
             !(metta (Cons S (Cons Z Nil)) %Undefined% &self)
         ");
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("Cons" "Z" "Nil") "BadType")]]));
+        let result = run_program("
+            (: (a b) (C D))
+
+            (: foo (-> (A B) %Undefined%))
+            (= (foo $x) succ)
+
+            !(foo (a b))
+        ");
+        assert_eq!(result, Ok(vec![vec![expr!("Error" ("a" "b") "BadType")]]));
     }
 
     #[test]

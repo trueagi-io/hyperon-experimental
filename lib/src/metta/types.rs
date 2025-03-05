@@ -22,6 +22,9 @@ use super::*;
 use crate::atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom_move};
 use crate::space::Space;
 
+use std::fmt::{Display, Debug};
+use itertools::Itertools;
+
 fn typeof_query(atom: &Atom, typ: &Atom) -> Atom {
     Atom::expr(vec![HAS_TYPE_SYMBOL, atom.clone(), typ.clone()])
 }
@@ -37,9 +40,9 @@ fn query_has_type(space: &dyn Space, sub_type: &Atom, super_type: &Atom) -> Bind
 fn query_super_types(space: &dyn Space, sub_type: &Atom) -> Vec<Atom> {
     // TODO: query should check that sub type is a type and not another typed symbol
     let var_x = VariableAtom::new("X").make_unique();
-    let mut super_types = space.query(&isa_query(&sub_type, &Atom::Variable(var_x.clone())));
+    let super_types = space.query(&isa_query(&sub_type, &Atom::Variable(var_x.clone())));
     let atom_x = Atom::Variable(var_x);
-    super_types.drain(0..).map(|bindings| { apply_bindings_to_atom_move(atom_x.clone(), &bindings) }).collect()
+    super_types.into_iter().map(|bindings| { apply_bindings_to_atom_move(atom_x.clone(), &bindings) }).collect()
 }
 
 fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
@@ -58,7 +61,7 @@ fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
     }
 }
 
-fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom]) -> BindingsSet {
+fn check_arg_types(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expected: &[Atom]) -> BindingsSet {
     if actual.len() != expected.len() {
         BindingsSet::empty()
     } else {
@@ -66,14 +69,19 @@ fn check_arg_types(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom]) 
     }
 }
 
-fn check_arg_types_internal(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> BindingsSet {
-    log::trace!("check_arg_types: actual: {:?}, expected: {:?}", actual, expected);
+fn check_arg_types_internal(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expected: &[Atom], bindings: Bindings) -> BindingsSet {
+    log::trace!("check_arg_types: actual: {}, expected: {}",
+        actual.iter().format_with(", ", |v, f| f(&format_args!("{}", v.iter().format(", ")))),
+        expected.iter().format(", "));
     let matched = match (actual, meta, expected) {
         ([actual, actual_tail @ ..], [meta, meta_tail @ ..], [expected, expected_tail @ ..]) => {
-            let matches: &mut dyn Iterator<Item=Bindings> = if *expected == ATOM_TYPE_UNDEFINED || meta.contains(expected) {
+            let undefined_or_meta = actual.is_empty()
+                || *expected == ATOM_TYPE_UNDEFINED
+                || meta.contains(expected);
+            let matches: &mut dyn Iterator<Item=Bindings> = if undefined_or_meta {
                 &mut std::iter::once(Bindings::new())
             } else {
-                &mut actual.into_iter().flat_map(|typ| match_reducted_types(typ, expected))
+                &mut actual.into_iter().flat_map(|typ| match_reducted_types(typ.as_atom(), expected))
             };
             matches
                 .flat_map(|b| b.merge(&bindings))
@@ -83,7 +91,10 @@ fn check_arg_types_internal(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: 
         ([], [], []) => BindingsSet::from(bindings),
         _ => unreachable!(),
     };
-    log::trace!("check_arg_types: actual: {:?}, expected: {:?}, matched: {:?}", actual, expected, matched);
+    log::trace!("check_arg_types: actual: {}, expected: {}, matched: {}",
+        actual.iter().format_with(", ", |v, f| f(&format_args!("{}", v.iter().format(", ")))),
+        expected.iter().format(", "),
+        matched);
     matched
 }
 
@@ -98,6 +109,7 @@ fn check_arg_types_internal(actual: &[Vec<Atom>], meta: &[Vec<Atom>], expected: 
 /// assert!(is_func(&expr!("->" "A" "B")));
 /// assert!(!is_func(&expr!("A")));
 /// ```
+#[inline]
 pub fn is_func(typ: &Atom) -> bool {
     match typ {
         Atom::Expression(expr) => {
@@ -109,9 +121,9 @@ pub fn is_func(typ: &Atom) -> bool {
 
 fn query_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
     let var_x = VariableAtom::new("X").make_unique();
-    let mut types = query_has_type(space, atom, &Atom::Variable(var_x.clone()));
+    let types = query_has_type(space, atom, &Atom::Variable(var_x.clone()));
     let atom_x = Atom::Variable(var_x);
-    let mut types = types.drain(0..).filter_map(|bindings| {
+    let mut types = types.into_iter().filter_map(|bindings| {
         let atom = apply_bindings_to_atom_move(atom_x.clone(), &bindings);
         if atom_x == atom {
             None
@@ -124,21 +136,8 @@ fn query_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
 }
 
 /// Splits function type on array of argument types and return type.
-///
-/// # Examples
-///
-/// ```
-/// use hyperon::expr;
-/// use hyperon::metta::types::get_arg_types;
-///
-/// let typ = expr!("->" "A" "B" "C");
-/// let (args, ret) = get_arg_types(&typ);
-///
-/// assert_eq!(args, (&[expr!("A"), expr!("B")][..]));
-/// assert_eq!(ret, &expr!("C"));
-/// ```
-pub fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
-    match fn_typ {
+fn get_arg_types<'a>(fn_typ: &'a AtomType) -> (&'a [Atom], &'a Atom) {
+    match fn_typ.as_atom() {
         Atom::Expression(expr) => {
             let children = expr.children();
             match children {
@@ -152,6 +151,70 @@ pub fn get_arg_types<'a>(fn_typ: &'a Atom) -> (&'a [Atom], &'a Atom) {
 
 fn get_args(expr: &ExpressionAtom) -> &[Atom] {
     &expr.children()[1..]
+}
+
+#[derive(Debug)]
+pub struct AtomType {
+    typ: Atom,
+    is_function: bool,
+    is_error: bool,
+    is_application: bool,
+}
+
+impl AtomType {
+    #[inline]
+    fn value(typ: Atom) -> Self {
+        let is_function = is_func(&typ);
+        Self {
+            typ,
+            is_function,
+            is_error: false,
+            is_application: false,
+        }
+    }
+
+    #[inline]
+    fn application(typ: Atom, is_error: bool) -> Self {
+        let is_function = is_func(&typ);
+        Self {
+            typ,
+            is_function,
+            is_error,
+            is_application: true,
+        }
+    }
+
+    #[inline]
+    fn is_error(&self) -> bool {
+        self.is_error
+    }
+    #[inline]
+    fn is_function(&self) -> bool {
+        self.is_function
+    }
+    #[inline]
+    fn is_application(&self) -> bool {
+        self.is_application
+    }
+
+    #[inline]
+    fn as_atom(&self) -> &Atom {
+        &self.typ
+    }
+
+    #[inline]
+    fn into_atom(self) -> Atom {
+        self.typ
+    }
+}
+
+impl Display for AtomType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}(", self.typ)
+            .and_then(|r| if self.is_application() { write!(f, "A") } else { Ok(r) })
+            .and_then(|r| if self.is_error() { write!(f, "E") } else { Ok(r) })
+            .and_then(|_| write!(f, ")"))
+    }
 }
 
 /// Returns vector of the types for the given `atom` in context of the given
@@ -181,12 +244,64 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
 /// assert_eq_no_order!(get_atom_types(&space, &expr!({1})), vec![expr!("i32")]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("na")), vec![ATOM_TYPE_UNDEFINED]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("a")), vec![expr!("A"), expr!("B")]);
-/// assert_eq_no_order!(get_atom_types(&space, &expr!("a" "b")), vec![expr!("A" "B"), expr!("B" "B"), ATOM_TYPE_UNDEFINED]);
+/// assert_eq_no_order!(get_atom_types(&space, &expr!("a" "b")), vec![expr!("A" "B"), expr!("B" "B")]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "a")), vec![expr!("B")]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "b")), Vec::<Atom>::new());
 /// ```
 pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
-    log::trace!("get_atom_types: atom: {}", atom);
+    let atom_types = get_atom_types_v2(space, atom);
+    if atom_types.is_empty() {
+        vec![ATOM_TYPE_UNDEFINED]
+    } else {
+        atom_types.into_iter()
+            .filter(|t| !t.is_error())
+            .map(AtomType::into_atom)
+            .collect()
+    }
+}
+
+struct ExprTypeInfo {
+    op_value_types: Vec<AtomType>,
+    op_func_types: Vec<AtomType>,
+    arg_types: Vec<Vec<AtomType>>,
+}
+
+impl ExprTypeInfo {
+    fn new(space: &dyn Space, expr: &ExpressionAtom) -> Self {
+        let (op, args) = expr.children().split_first().unwrap();
+        let op_types = get_atom_types_v2(space, op);
+        let mut op_func_types = Vec::with_capacity(op_types.len());
+        let mut op_value_types = Vec::with_capacity(op_types.len());
+        op_types.into_iter().for_each(|t| {
+            if t.is_function() {
+                op_func_types.push(t);
+            } else {
+                op_value_types.push(t);
+            }
+        });
+        let arg_types: Vec<Vec<AtomType>> = args.iter()
+            .map(|a| get_atom_types_v2(space, a)).collect();
+            // Code below allows returning partially defined tuples
+            // for example (a c) where (: a A) has type (A %Undefined%)
+            // see get_atom_types_tuple test
+            //.map(|a| {
+                //let mut types = get_atom_types_v2(space, a);
+                //if types.is_empty() {
+                    //types.push(AtomType::value(ATOM_TYPE_UNDEFINED));
+                //}
+                //types
+            //}).collect();
+        Self{ op_value_types, op_func_types, arg_types }
+    }
+
+    #[inline]
+    fn arity(&self) -> usize {
+        self.arg_types.len() + 1
+    }
+}
+
+pub fn get_atom_types_v2(space: &dyn Space, atom: &Atom) -> Vec<AtomType> {
+    log::trace!("get_atom_types_v2: atom: {}", atom);
     let types = match atom {
         // TODO: type of the variable could be actually a type variable,
         // in this case inside each variant of type for the atom we should
@@ -195,58 +310,103 @@ pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
         // `(: let (-> $t $t $r $r))`, `(: foo (-> $tt))`,
         // and `(: + (-> Num Num Num))`then type checker can find that
         // `{ $r = $t = $tt = Num }`.
-        Atom::Variable(_) => vec![ATOM_TYPE_UNDEFINED],
-        Atom::Grounded(gnd) => vec![make_variables_unique(gnd.type_())],
-        Atom::Symbol(_) => {
-            let mut types = query_types(space, atom);
-            if types.is_empty() {
-                types.push(ATOM_TYPE_UNDEFINED)
-            }
-            types
-        },
+        Atom::Variable(_) => vec![],
+        Atom::Grounded(gnd) => vec![AtomType::value(make_variables_unique(gnd.type_()))],
+        Atom::Symbol(_) => query_types(space, atom).into_iter()
+            .map(AtomType::value).collect(),
+        // FIXME: incorrect type
+        Atom::Expression(expr) if expr.children().len() == 0 => vec![],
         Atom::Expression(expr) => {
-            let children_types: Vec<Vec<Atom>> = expr.children().iter()
-                .map(|a| get_atom_types(space, a)).collect();
-            let mut types = get_tuple_types(space, atom, &children_types);
-            let applications = get_application_types(atom, expr, children_types);
-
-            match applications {
-                None => types.push(ATOM_TYPE_UNDEFINED),
-                Some(applications) => types.extend(applications.into_iter()),
-            }
+            let type_info = ExprTypeInfo::new(space, expr);
+            let mut types = get_tuple_types(space, atom, &type_info);
+            let applications = get_application_types(atom, expr, type_info);
+            types.extend(applications.into_iter());
             types
         },
     };
-    log::debug!("get_atom_types: return atom {} types {:?}", atom, types);
+    log::debug!("get_atom_types_v2: return atom {} types {}", atom, types.iter().format(", "));
     types
 }
 
-fn get_tuple_types(space: &dyn Space, atom: &Atom, children_types: &[Vec<Atom>]) -> Vec<Atom> {
-    let mut tuples = vec![vec![]];
-    for (i, child_types) in children_types.iter().enumerate() {
-        // TODO: it is not straightforward, if (: a (-> B C)) then
-        // what should we return for (d (a b)): (D ((-> B C) B)) or
-        // (D C) or both? Same question for a function call.
-        let not_a_function_call = |typ: &&Atom| { i != 0 || !is_func(typ) };
-        let child_types = child_types.iter()
-            .filter(not_a_function_call);
-        tuples = child_types
-            .flat_map(|typ| -> Vec<Vec<Atom>> {
-            tuples.iter().map(|prev| {
-                let mut next = prev.clone();
-                next.push(typ.clone());
-                next
-            }).collect()
-        }).collect();
+struct TupleIndex<'a> {
+    type_info: &'a ExprTypeInfo,
+    index: Vec<usize>,
+    max: Vec<usize>,
+    size: usize,
+}
+
+impl<'a> TupleIndex<'a> {
+    fn new(type_info: &'a ExprTypeInfo) -> Option<Self> {
+        let n_of_types = type_info.arg_types.iter()
+            .fold(type_info.op_value_types.len(), |n, types| n * types.len());
+        if n_of_types == 0 {
+            return None
+        }
+        let arity = type_info.arity();
+        let mut max = Vec::with_capacity(arity);
+        max.push(type_info.op_value_types.len());
+        max.extend(type_info.arg_types.iter().map(Vec::len));
+        let mut index = vec![0; arity];
+        index[arity - 1] = usize::wrapping_sub(index[arity - 1], 1);
+        Some(Self{ type_info, index, max, size: n_of_types })
     }
-    // if all members of tuple is Undefined then whole tuple is Undefined
-    let mut types: Vec<Atom> = tuples.drain(0..)
-        // FIXME: could we remove this?
-        .filter(|children| children.iter().any(|child| *child != ATOM_TYPE_UNDEFINED))
-        .map(Atom::expr).collect();
+
+    #[inline]
+    fn inc(&mut self) -> bool {
+        let mut i = self.index.len() - 1;
+        loop {
+            let d = usize::wrapping_add(self.index[i], 1);
+            if d < self.max[i] {
+                self.index[i] = d;
+                return true;
+            } else {
+                if i == 0 {
+                    return false;
+                } else {
+                    self.index[i] = 0;
+                    i -= 1;
+                }
+            }
+        }
+    }
+
+    #[inline]
+    fn size(&self) -> usize {
+        self.size
+    }
+}
+
+impl<'a> Iterator for TupleIndex<'a> {
+    type Item = Vec<Atom>;
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.inc() {
+            let arity = self.index.len();
+            let mut v = Vec::with_capacity(arity);
+            v.push(self.type_info.op_value_types[self.index[0]].as_atom().clone());
+            for i in 1..arity {
+                v.push(self.type_info.arg_types[i - 1][self.index[i]].as_atom().clone());
+            }
+            Some(v)
+        } else {
+            None
+        }
+    }
+}
+
+fn get_tuple_types(space: &dyn Space, atom: &Atom, type_info: &ExprTypeInfo) -> Vec<AtomType> {
+    let mut types = if let Some(index) = TupleIndex::new(type_info) {
+        let mut types = Vec::with_capacity(index.size());
+        index.for_each(|v| types.push(Atom::expr(v)));
+        types
+    } else {
+        vec![]
+    };
+
     types.append(&mut query_types(space, atom));
     add_super_types(space, &mut types, 0);
-    log::trace!("get_tuple_types: tuple {} types {:?}", atom, types);
+    // FIXME: ineffective
+    let types: Vec<AtomType> = types.into_iter().map(AtomType::value).collect();
+    log::trace!("get_tuple_types: tuple {} types {}", atom, types.iter().format(", "));
     types
 }
 
@@ -268,28 +428,23 @@ fn get_tuple_types(space: &dyn Space, atom: &Atom, children_types: &[Vec<Atom>])
 // This is a tricky logic. To simplify it we could  separate tuple and
 // function application using separate Atom types. Or use an embedded atom
 // to designate function application.
-fn get_application_types(atom: &Atom, expr: &ExpressionAtom, mut children_types: Vec<Vec<Atom>>) -> Option<Vec<Atom>> {
-    let mut has_function_types = false;
-    let mut types = Vec::new();
-    if !expr.children().is_empty() {
-        let args = get_args(expr);
-        let (fn_types, actual_arg_types) = children_types.split_first_mut().unwrap();
-        let meta_arg_types: Vec<Vec<Atom>> = args.iter().map(|a| vec![get_meta_type(a), ATOM_TYPE_ATOM]).collect();
-        let fn_types = fn_types.drain(0..).filter(is_func);
-        for fn_type in fn_types {
-            has_function_types = true;
-            let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
-            for bindings in check_arg_types(actual_arg_types, meta_arg_types.as_slice(), expected_arg_types) {
-                types.push(apply_bindings_to_atom_move(ret_typ.clone(), &bindings));
+fn get_application_types(atom: &Atom, expr: &ExpressionAtom, type_info: ExprTypeInfo) -> Vec<AtomType> {
+    let args = get_args(expr);
+    let meta_arg_types: Vec<Vec<Atom>> = args.iter().map(|a| vec![get_meta_type(a), ATOM_TYPE_ATOM]).collect();
+    let mut types = Vec::with_capacity(type_info.op_func_types.len());
+    for fn_type in type_info.op_func_types.into_iter() {
+        let (expected_arg_types, ret_typ) = get_arg_types(&fn_type);
+        let correct = check_arg_types(&type_info.arg_types, meta_arg_types.as_slice(), expected_arg_types);
+        if correct.is_empty() {
+            types.push(AtomType::application(fn_type.into_atom(), true));
+        } else {
+            for bindings in correct {
+                types.push(AtomType::application(apply_bindings_to_atom_move(ret_typ.clone(), &bindings), false));
             }
         }
-        log::trace!("get_application_types: function application {} types {:?}", atom, types);
     }
-    if has_function_types {
-        Some(types)
-    } else {
-        None
-    }
+    log::trace!("get_application_types: function application {} types {}", atom, types.iter().format(", "));
+    types
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -344,8 +499,8 @@ fn replace_undefined_types(atom: &Atom) -> Atom {
 }
 
 fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
-    let mut types = get_atom_types(space, atom);
-    types.drain(0..).flat_map(|t| {
+    let types = get_atom_types(space, atom);
+    types.into_iter().flat_map(|t| {
         // TODO: write a unit test
         let t = make_variables_unique(t);
         match_reducted_types(&t, typ).map(move |bindings| (t.clone(), bindings))
@@ -398,7 +553,7 @@ pub fn get_type_bindings(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Ato
     }
     result.append(&mut get_matched_types(space, atom, typ));
     if result.len() > 1 {
-        result = result.drain(0..).filter(|(typ, _)| *typ != ATOM_TYPE_UNDEFINED).collect();
+        result = result.into_iter().filter(|(typ, _)| *typ != ATOM_TYPE_UNDEFINED).collect();
     }
     result
 }
@@ -795,9 +950,9 @@ mod tests {
             (: b BB)
         ");
         assert_eq_no_order!(get_atom_types(&space, &atom("(a b)")),
-            vec![atom("(A B)"), atom("(AA B)"), atom("(A BB)"), atom("(AA BB)"), ATOM_TYPE_UNDEFINED]);
+            vec![atom("(A B)"), atom("(AA B)"), atom("(A BB)"), atom("(AA BB)")]);
         assert_eq_no_order!(get_atom_types(&space, &atom("(a c)")),
-            vec![atom("(A %Undefined%)"), atom("(AA %Undefined%)"), ATOM_TYPE_UNDEFINED]);
+            vec![ATOM_TYPE_UNDEFINED]);
         assert_eq_no_order!(get_atom_types(&space, &atom("(c d)")), vec![ATOM_TYPE_UNDEFINED]);
     }
 
@@ -818,7 +973,7 @@ mod tests {
     }
 
     #[test]
-    fn get_atom_types_function_call() {
+    fn get_atom_types_function_call_simple() {
         let space = metta_space("
             (: f (-> B C))
             (: b B)
@@ -853,10 +1008,10 @@ mod tests {
         // Here and below: when interpreter cannot find a function type for
         // expression it evaluates it. Thus any argument expression without
         // a function type can potentially suit as a legal argument.
-        assert_eq!(get_atom_types(&space, &expr!("f_sym" ("b"))), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_sym" ("b"))), vec![]);
         assert_eq!(get_atom_types(&space, &expr!("f_expr" ("b"))), vec![atom("D")]);
-        assert_eq!(get_atom_types(&space, &expr!("f_var" ("b"))), vec![atom("D")]);
-        assert_eq!(get_atom_types(&space, &expr!("f_gnd" ("b"))), vec![atom("D")]);
+        assert_eq!(get_atom_types(&space, &expr!("f_var" ("b"))), vec![]);
+        assert_eq!(get_atom_types(&space, &expr!("f_gnd" ("b"))), vec![]);
 
         assert_eq!(get_atom_types(&space, &expr!("f_atom" {1})), vec![atom("D")]);
         assert_eq!(get_atom_types(&space, &expr!("f_sym" {1})), vec![]);
