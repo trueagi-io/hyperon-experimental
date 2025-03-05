@@ -259,6 +259,18 @@ By default all log messages are directed to stderr.
 
 ## Troubleshooting
 
+### Conan unable to find library in remotes
+
+If you see the following error from Conan:
+```
+ERROR: Package 'libcheck/0.15.2' not resolved: Unable to find 'libcheck/0.15.2' in remotes
+```
+
+Make sure your Conan remote repository is updated to the latest URL:
+```
+conan remote update conancenter --url="https://center2.conan.io"
+```
+
 ### Conan claims it cannot find out the version of the C compiler
 
 If you see the following `cmake` output:
