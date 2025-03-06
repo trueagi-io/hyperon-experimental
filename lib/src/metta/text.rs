@@ -36,6 +36,10 @@ impl Tokenizer {
         Self{ tokens: Vec::new() }
     }
 
+    pub fn print_tokens_count(&self) {
+        println!("Token {:?}", self.tokens.len());
+    }
+
     pub fn register_token<C: 'static + Fn(&str) -> Atom>(&mut self, regex: Regex, constr: C) {
         self.register_token_with_func_ptr(regex, Rc::new(move |the_str| Ok(constr(the_str))))
     }
@@ -86,6 +90,13 @@ impl Tokenizer {
         self.tokens.iter().rfind(|descr| {
             descr.regex.as_str() == regex_str
         }).map(|descr| descr.constr.clone())
+    }
+
+    pub fn remove_token(&mut self, regex_str: &str) {
+        if let Some(pos) = self.tokens.iter().position(|descr| descr.regex.as_str() == regex_str) {
+            println!("position {:?}",pos);
+            self.tokens.remove(pos);
+        }
     }
 
 }

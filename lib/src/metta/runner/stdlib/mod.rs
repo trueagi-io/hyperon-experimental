@@ -105,7 +105,7 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     arithmetics::register_rust_stdlib_tokens(tref);
     string::register_rust_stdlib_tokens(tref);
 
-    target.move_front(&mut rust_tokens);
+    target.move_back(&mut rust_tokens);
 }
 
 pub static METTA_CODE: &'static str = include_str!("stdlib.metta");

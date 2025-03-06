@@ -184,17 +184,19 @@ impl Metta {
 
         //Import the corelib and stdlib into the top module, now that it is loaded
         let mut runner_state = RunnerState::new(&metta);
-        if let Some(stdlib_mod_id) = metta.0.stdlib_mod.get() {
-            runner_state.run_in_context(|context| {
-                context.import_all_from_dependency(*stdlib_mod_id).unwrap();
-                Ok(())
-            }).expect("Failed to import stdlib");
-        }
+       
         if let Some(corelib_mod_id) = metta.0.corelib_mod.get() {
             runner_state.run_in_context(|context| {
                 context.import_all_from_dependency(*corelib_mod_id).unwrap();
                 Ok(())
             }).expect("Failed to import corelib");
+        }
+
+        if let Some(stdlib_mod_id) = metta.0.stdlib_mod.get() {
+            runner_state.run_in_context(|context| {
+                context.import_all_from_dependency(*stdlib_mod_id).unwrap();
+                Ok(())
+            }).expect("Failed to import stdlib");
         }
         drop(runner_state);
 

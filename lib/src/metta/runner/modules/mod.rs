@@ -209,18 +209,28 @@ impl MettaMod {
     }
 
     fn export_all_tokens_into(&self, target_mod: &MettaMod, metta: &Metta) -> Result<(), String> {
+
+        // println!("export_all_tokens_into from {:?}", self.name());
+        // println!("export_all_tokens_into to {:?}", target_mod.name());
+        // println!("token {:?}",  target_mod.tokenizer().borrow().print_tokens_count());
+        // println!("before import {:?}", target_mod.tokenizer().borrow().clone());
         if self.name() == "corelib" {
             register_runner_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
             register_common_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
             register_rust_stdlib_tokens(&mut *target_mod.tokenizer().borrow_mut());
         } else {
-            // Get the tokenizer associated with the dependent module
+            // Get the tokenizer associated with the dependent module 
+            self.tokenizer().borrow_mut().remove_token("&self");
+            self.tokenizer().borrow_mut().remove_token("assertEqual");
+            self.tokenizer().borrow_mut().remove_token("assertEqualToResult");
             let dep_tokenizer = self.tokenizer().clone();
 
             //Import all the Tokenizer entries from the dependency
-            let mut dep_tok_clone = dep_tokenizer.borrow().clone();
+            let mut dep_tok_clone = dep_tokenizer.borrow().clone();           
             target_mod.tokenizer().borrow_mut().move_back(&mut dep_tok_clone);
         }
+        // println!("token {:?}", target_mod.tokenizer().borrow().print_tokens_count());
+        // println!("after {:?}", target_mod.tokenizer().borrow().clone());
         Ok(())
     }
 
