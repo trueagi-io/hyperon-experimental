@@ -27,7 +27,6 @@ on:
 
 env:
   CMAKE_MULTIBUILD_CONFIG: "${{ startsWith(inputs.os, 'windows') && '--config Debug' || '' }}"
-  CMAKE_GIT_EXCLUDE: "${{ startsWith(inputs.os, 'windows') && '-DGIT=OFF' || '' }}"
 
 jobs:
   build-all:
@@ -115,7 +114,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake ${{ env.CMAKE_GIT_EXCLUDE }} ..
+          cmake ..
 
       - name: Build C API
         working-directory: ./build

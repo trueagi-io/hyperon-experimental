@@ -1,6 +1,7 @@
 [requires]
 pybind11/2.10.1
 optional-lite/3.5.0
+openssl/3.4.1
 
 [generators]
 CMakeDeps
