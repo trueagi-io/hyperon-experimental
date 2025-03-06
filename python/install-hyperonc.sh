@@ -23,7 +23,7 @@ echo "hyperonc repository URL: $HYPERONC_URL"
 echo "hyperonc revision: $HYPERONC_REV"
 
 if test "$AUDITWHEEL_POLICY" = "manylinux2014"; then
-    yum install -y perl-devel openssl-devel zlib-devel
+    yum install -y perl-devel openssl-devel zlib-devel libatomic
 fi
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
