@@ -464,7 +464,7 @@ fn eval_impl<'a, T: Space>(to_eval: Atom, space: T, bindings: Bindings, prev: Op
     match atom_as_slice(&to_eval) {
         Some([Atom::Grounded(op), args @ ..]) => {
             match op.as_grounded().as_execute() {
-                None => finished_result(return_not_reducible(), bindings, prev),
+                None => query(space, prev, to_eval, bindings, vars),
                 Some(executable) => {
                     let exec_res = executable.execute(args);
                     log::debug!("eval: execution results: {:?}", exec_res);
@@ -1557,6 +1557,14 @@ mod tests {
         assert_eq!(result, vec![metta_atom("(A B)")]);
         #[cfg(not(feature = "variable_operation"))]
         assert_eq!(result, vec![NOT_REDUCIBLE_SYMBOL]);
+    }
+
+    #[test]
+    fn interpret_atom_evaluate_non_executable_grounded_atom_on_a_first_position() {
+        let space = space("(= ($x > $y) (> $x $y))");
+
+        let result = call_interpret(space, &expr!("eval" ({1} ">" {2})));
+        assert_eq!(result, vec![expr!(">" {1} {2})]);
     }
 
 
