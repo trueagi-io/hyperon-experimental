@@ -485,14 +485,16 @@ enum AtomMatchMode {
     Unification,
 }
 
-const TK_STORE_MASK: usize = 0b1 << 63;
-const TK_MATCH_MASK: usize = 0b1 << 62;
-const TK_VALUE_MASK: usize = !(0b11 << 62);
+const BITS_PER_ID: u32 = usize::BITS - 2;
 
-const TK_STORE_HASH: usize = 0b0 << 63;
-const TK_STORE_INDEX: usize = 0b1 << 63;
-const TK_MATCH_EXACT: usize = 0b0 << 62;
-const TK_MATCH_CUSTOM: usize = 0b1 << 62;
+const TK_STORE_MASK: usize = 0b10 << BITS_PER_ID;
+const TK_MATCH_MASK: usize = 0b01 << BITS_PER_ID;
+const TK_VALUE_MASK: usize = !(0b11 << BITS_PER_ID);
+
+const TK_STORE_HASH: usize = 0b00 << BITS_PER_ID;
+const TK_STORE_INDEX: usize = 0b10 << BITS_PER_ID;
+const TK_MATCH_EXACT: usize = 0b00 << BITS_PER_ID;
+const TK_MATCH_CUSTOM: usize = 0b01 << BITS_PER_ID;
 
 /// Compact representation of the atom from the trie. It represents each
 /// atom using single [usize] value. It keeps value of the key, key matching
