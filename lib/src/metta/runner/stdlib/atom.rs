@@ -182,14 +182,15 @@ impl Grounded for MaxAtomOp {
 impl CustomExecute for MaxAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("max-atom expects one argument: expression");
-        let children = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children();
+        let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
+        let children = expr.children();
         if children.is_empty() {
             Err(ExecError::from("Empty expression"))
         } else {
             children.into_iter().fold(Ok(f64::NEG_INFINITY), |res, x| {
                 match (res, Number::from_atom(x)) {
                     (res @ Err(_), _) => res,
-                    (_, None) => Err(ExecError::from("Only numbers are allowed in expression")),
+                    (_, None) => Err(ExecError::from(format!("Only numbers are allowed in expression: {}", expr))),
                     (Ok(max), Some(x)) => Ok(f64::max(max, x.into())),
                 }
             })
@@ -215,14 +216,15 @@ impl Grounded for MinAtomOp {
 impl CustomExecute for MinAtomOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("min-atom expects one argument: expression");
-        let children = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children();
+        let expr = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
+        let children = expr.children();
         if children.is_empty() {
             Err(ExecError::from("Empty expression"))
         } else {
             children.into_iter().fold(Ok(f64::INFINITY), |res, x| {
                 match (res, Number::from_atom(x)) {
                     (res @ Err(_), _) => res,
-                    (_, None) => Err(ExecError::from("Only numbers are allowed in expression")),
+                    (_, None) => Err(ExecError::from(format!("Only numbers are allowed in expression: {}", expr))),
                     (Ok(min), Some(x)) => Ok(f64::min(min, x.into())),
                 }
             })
@@ -508,14 +510,14 @@ mod tests {
     fn metta_min_atom() {
         assert_eq!(run_program(&format!("!(min-atom (5 4 5.5))")), Ok(vec![vec![expr!({Number::Integer(4)})]]));
         assert_eq!(run_program(&format!("!(min-atom ())")), Ok(vec![vec![expr!("Error" ({ MinAtomOp{} } ()) "Empty expression")]]));
-        assert_eq!(run_program(&format!("!(min-atom (3 A B 5))")), Ok(vec![vec![expr!("Error" ({ MinAtomOp{} } ({Number::Integer(3)} "A" "B" {Number::Integer(5)})) "Only numbers are allowed in expression")]]));
+        assert_eq!(run_program(&format!("!(min-atom (3 A B 5))")), Ok(vec![vec![expr!("Error" ({ MinAtomOp{} } ({Number::Integer(3)} "A" "B" {Number::Integer(5)})) "Only numbers are allowed in expression: (3 A B 5)")]]));
     }
 
     #[test]
     fn metta_max_atom() {
         assert_eq!(run_program(&format!("!(max-atom (5 4 5.5))")), Ok(vec![vec![expr!({Number::Float(5.5)})]]));
         assert_eq!(run_program(&format!("!(max-atom ())")), Ok(vec![vec![expr!("Error" ({ MaxAtomOp{} } ()) "Empty expression")]]));
-        assert_eq!(run_program(&format!("!(max-atom (3 A B 5))")), Ok(vec![vec![expr!("Error" ({ MaxAtomOp{} } ({Number::Integer(3)} "A" "B" {Number::Integer(5)})) "Only numbers are allowed in expression")]]));
+        assert_eq!(run_program(&format!("!(max-atom (3 A B 5))")), Ok(vec![vec![expr!("Error" ({ MaxAtomOp{} } ({Number::Integer(3)} "A" "B" {Number::Integer(5)})) "Only numbers are allowed in expression: (3 A B 5)")]]));
     }
 
     #[test]
@@ -558,7 +560,7 @@ mod tests {
         let res = MinAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} {Number::Float(5.5)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Integer(4)})]);
         let res = MinAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} "A")]);
-        assert_eq!(res, Err(ExecError::from("Only numbers are allowed in expression")));
+        assert_eq!(res, Err(ExecError::from("Only numbers are allowed in expression: (5 4 A)")));
         let res = MinAtomOp{}.execute(&mut vec![expr!()]);
         assert_eq!(res, Err(ExecError::from("Empty expression")));
     }
@@ -568,9 +570,11 @@ mod tests {
         let res = MaxAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} {Number::Float(5.5)})]).expect("No result returned");
         assert_eq!(res, vec![expr!({Number::Float(5.5)})]);
         let res = MaxAtomOp{}.execute(&mut vec![expr!({Number::Integer(5)} {Number::Integer(4)} "A")]);
-        assert_eq!(res, Err(ExecError::from("Only numbers are allowed in expression")));
+        assert_eq!(res, Err(ExecError::from("Only numbers are allowed in expression: (5 4 A)")));
         let res = MaxAtomOp{}.execute(&mut vec![expr!()]);
         assert_eq!(res, Err(ExecError::from("Empty expression")));
+        let res = MaxAtomOp{}.execute(&mut vec![expr!({Number::Integer(4)} {Str::from_str("5")})]);
+        assert_eq!(res, Err(ExecError::from("Only numbers are allowed in expression: (4 \"5\")")));
     }
 
     #[test]
