@@ -171,7 +171,7 @@ grounded_op!(MaxAtomOp, "max-atom");
 
 impl Grounded for MaxAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_NUMBER])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_NUMBER])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -205,7 +205,7 @@ grounded_op!(MinAtomOp, "min-atom");
 
 impl Grounded for MinAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_NUMBER])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_NUMBER])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -511,6 +511,7 @@ mod tests {
         assert_eq!(run_program(&format!("!(min-atom (5 4 5.5))")), Ok(vec![vec![expr!({Number::Integer(4)})]]));
         assert_eq!(run_program(&format!("!(min-atom ())")), Ok(vec![vec![expr!("Error" ({ MinAtomOp{} } ()) "Empty expression")]]));
         assert_eq!(run_program(&format!("!(min-atom (3 A B 5))")), Ok(vec![vec![expr!("Error" ({ MinAtomOp{} } ({Number::Integer(3)} "A" "B" {Number::Integer(5)})) "Only numbers are allowed in expression: (3 A B 5)")]]));
+        assert_eq!(run_program(&format!("(= (nums) (5 4 5.5)) !(min-atom (nums))")), Ok(vec![vec![expr!({Number::Integer(4)})]]));
     }
 
     #[test]
@@ -518,6 +519,7 @@ mod tests {
         assert_eq!(run_program(&format!("!(max-atom (5 4 5.5))")), Ok(vec![vec![expr!({Number::Float(5.5)})]]));
         assert_eq!(run_program(&format!("!(max-atom ())")), Ok(vec![vec![expr!("Error" ({ MaxAtomOp{} } ()) "Empty expression")]]));
         assert_eq!(run_program(&format!("!(max-atom (3 A B 5))")), Ok(vec![vec![expr!("Error" ({ MaxAtomOp{} } ({Number::Integer(3)} "A" "B" {Number::Integer(5)})) "Only numbers are allowed in expression: (3 A B 5)")]]));
+        assert_eq!(run_program(&format!("(= (nums) (5 4 5.5)) !(max-atom (nums))")), Ok(vec![vec![expr!({Number::Float(5.5)})]]));
     }
 
     #[test]
