@@ -113,7 +113,7 @@ if(BUILD_SHARED_LIBS)
         # These libraries are required to be linked under Windows platform as
         # they are dependencies of the Rust standard library.
         # See https://doc.rust-lang.org/reference/linkage.html#r-link.staticlib
-        target_link_libraries(hyperonc-shared INTERFACE wsock32 ws2_32 userenv ntdll bcrypt)
+        target_link_libraries(hyperonc-shared INTERFACE wsock32 ws2_32 userenv ntdll bcrypt winhttp Rpcrt4)
     endif(WIN32)
     if(GIT)
         target_link_libraries(hyperonc-shared INTERFACE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
