@@ -181,14 +181,20 @@ class AgentObject:
                 unwrap = True
         if unwrap:
             method = OperationObject(f"{method}", method).execute
-        st = StreamMethod(method, args)
-        st.start()
-        # We don't return the stream here; otherwise it will be consumed immediately.
-        # If the agent itself would be StreamMethod, its results could be accessbile.
-        # Here, they are lost (TODO?).
         if call and self.is_daemon():
+            st = StreamMethod(method, args)
+            st.start()
+            # We don't return the stream here; otherwise it will be consumed immediately.
+            # If the agent itself would be StreamMethod, its results could be accessbile.
+            # Here, they are lost (TODO?).
             return [E()]
-        return st
+        # NOTE: previously, `StreamMethod` object was created always and returned here
+        # instead of calling `method` directly. The idea was that agents could consume
+        # a part of the stream from other agents they are calling, but this cannot work
+        # without support from MeTTa, because StreamMethod also calls `method` (just in
+        # a separate thread), thus, it should be MeTTa itself, which turns `match` results
+        # into a stream. Thus, we return the result directly now
+        return method(*args)
 
 
 class EventAgent(AgentObject):
