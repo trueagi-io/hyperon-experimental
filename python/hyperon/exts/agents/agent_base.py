@@ -196,6 +196,7 @@ class AgentObject:
         # into a stream. Thus, we return the result directly now
         return method(*args)
 
+StopEvent = object()
 
 class EventAgent(AgentObject):
 
@@ -255,21 +256,22 @@ class EventAgent(AgentObject):
     def event_processor(self, *args):
         # `*args` received on `start`
         while self.running:
-            if not self.events.empty():
+            # TODO? func can be a Python function?
+            (event_id, func, args) = self.events.get()
+            if event_id is StopEvent:
+                break
+            # Wrapping into ValueAtom if arg is not an atom yet
+            resp = self._metta.evaluate_atom(E(func,
+                *[a if isinstance(a, Atom) else ValueAtom(a) for a in args]))
+            # TODO? do we need `outputs` here? we may want to publish `resp` to a certain channel
+            # or let `func` to do this direclty...
+            # ??? self.clear_outputs()
+            for r in resp:
                 with self.lock:
-                    # TODO? func can be a Python function?
-                    (event_id, func, args) = self.events.get()
-                    # Wrapping into ValueAtom if arg is not an atom yet
-                    resp = self._metta.evaluate_atom(E(func,
-                        *[a if isinstance(a, Atom) else ValueAtom(a) for a in args]))
-                    # TODO? do we need `outputs` here? we may want to publish `resp` to a certain channel
-                    # or let `func` to do this direclty...
-                    # ??? self.clear_outputs()
-                    for r in resp:
-                        with self.lock:
-                            self.outputs.put(r)
+                    self.outputs.put(r)
 
     def stop(self):
+        self.events.put((StopEvent, None, None))
         self.running = False
 
     # TODO? choose the model of dealing with outputs... do we need them at all?
