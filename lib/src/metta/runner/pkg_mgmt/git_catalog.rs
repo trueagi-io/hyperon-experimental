@@ -191,6 +191,12 @@ impl GitCatalog {
         Ok(new_self)
     }
     /// Used for a git-based catalog that isn't synced to a remote source
+    ///
+    /// The primary use of this method is to make a `GitCatalog` to back the `git-module!` MeTTa operation,
+    /// so it will track the locations of explicitly sourced modules.  It's a fairly special-purpose object
+    /// designed to associate git information (repo url, branch, etc.) with some modules available through a
+    /// [LocalCatalog], so the user can "install" modules by fetching them from wherever, and then pull the
+    /// latest version without needing to re-supply the details about where to fetch the module from.
     pub fn new_without_source_repo(caches_dir: &Path, fmts: Arc<Vec<Box<dyn FsModuleFormat>>>, name: &str) -> Result<Self, String> {
         let catalog_file_path = caches_dir.join(name).join("_catalog.json");
         let new_self = Self::new_internal(fmts, name, catalog_file_path, Some(CatalogFileFormat::default()));
