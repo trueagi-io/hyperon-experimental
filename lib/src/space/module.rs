@@ -25,7 +25,7 @@ impl ModuleSpace {
     }
 
     pub fn query(&self, query: &Atom) -> BindingsSet {
-        log::debug!("ModuleSpace::query: {}", query);
+        log::debug!("ModuleSpace::query: {} {}", self, query);
         let mut results = self.main.query(query);
         for dep in &self.deps {
             if let Some(space) = dep.borrow().as_any() {
@@ -42,7 +42,7 @@ impl ModuleSpace {
     }
 
     fn query_no_deps(&self, query: &Atom) -> BindingsSet {
-        log::debug!("ModuleSpace::query_no_deps: {}", query);
+        log::debug!("ModuleSpace::query_no_deps: {} {}", self, query);
         self.main.query(query)
     }
 

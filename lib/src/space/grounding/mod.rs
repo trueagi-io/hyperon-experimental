@@ -75,7 +75,7 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
     /// assert_eq!(space.query(&sym!("C")), BindingsSet::empty());
     /// ```
     pub fn add(&mut self, atom: Atom) {
-        //log::debug!("GroundingSpace::add(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
+        log::debug!("GroundingSpace::add: {}, atom: {}", self, atom);
         self.index.insert(atom.clone());
         self.common.notify_all_observers(&SpaceEvent::Add(atom));
     }
@@ -97,7 +97,7 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
     /// assert_eq!(space.query(&sym!("A")), BindingsSet::empty());
     /// ```
     pub fn remove(&mut self, atom: &Atom) -> bool {
-        //log::debug!("GroundingSpace::remove(): self: {:?}, atom: {:?}", self as *const GroundingSpace, atom);
+        log::debug!("GroundingSpace::remove: {}, atom: {}", self, atom);
         let is_removed = self.index.remove(atom);
         if is_removed {
             self.common.notify_all_observers(&SpaceEvent::Remove(atom.clone()));
@@ -152,6 +152,7 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
     /// assert_eq!(result, bind_set![{x: sym!("B")}]);
     /// ```
     pub fn query(&self, query: &Atom) -> BindingsSet {
+        log::debug!("GroundingSpace::query: {} query: {}", self, query);
         match split_expr(query) {
             // Cannot match with COMMA_SYMBOL here, because Rust allows
             // it only when Atom has PartialEq and Eq derived.
@@ -169,7 +170,7 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
                                     .collect()
                             }).collect()
                         };
-                        log::debug!("query: current result: {:?}", result);
+                        log::debug!("GroundingSpace::query: {} current result: {}", self, result);
                         result
                     })
             },
@@ -179,7 +180,7 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
 
     /// Executes simple `query` without sub-queries on the space.
     fn single_query(&self, query: &Atom) -> BindingsSet {
-        log::debug!("single_query: query: {}", query);
+        log::debug!("GroundingSpace::single_query: {} query: {}", self, query);
         let mut result = BindingsSet::empty();
         let query_vars: HashSet<&VariableAtom> = query.iter().filter_type::<&VariableAtom>().collect();
         for bindings in self.index.query(query) {
@@ -187,7 +188,7 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
             log::trace!("single_query: push result: {}", bindings);
             result.push(bindings);
         }
-        log::debug!("single_query: result: {:?}", result);
+        log::debug!("GroundinSpace::single_query: {} result: {}", self, result);
         result
     }
 
@@ -249,7 +250,7 @@ impl PartialEq for GroundingSpace {
     }
 }
 
-impl Debug for GroundingSpace {
+impl<D: DuplicationStrategy> Debug for GroundingSpace<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.name {
             Some(name) => write!(f, "GroundingSpace-{name} ({self:p})"),
@@ -258,7 +259,7 @@ impl Debug for GroundingSpace {
     }
 }
 
-impl Display for GroundingSpace {
+impl<D: DuplicationStrategy> Display for GroundingSpace<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.name {
             Some(name) => write!(f, "GroundingSpace-{name}"),
