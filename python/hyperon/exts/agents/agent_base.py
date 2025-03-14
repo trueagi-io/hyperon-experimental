@@ -1,5 +1,6 @@
 from hyperon import *
 from hyperon.ext import register_atoms
+import queue
 
 '''
 This is very preliminary and incomplete PoC version.
@@ -196,9 +197,9 @@ class AgentObject:
         # into a stream. Thus, we return the result directly now
         return method(*args)
 
-StopEvent = object()
-
 class EventAgent(AgentObject):
+
+    StopEvent = object()
 
     def __init__(self, path=None, atoms={}, include_paths=None, code=None, event_bus=None):
         if event_bus is not None:
@@ -228,6 +229,8 @@ class EventAgent(AgentObject):
             self._metta.run("! (import! &self agents)")
 
     def start(self, *args):
+        if self.running:
+            raise RuntimeError("Currently, EventAgent is supposed to be running in one thread")
         if not args:
             args = ()
         self.running = True
@@ -258,7 +261,7 @@ class EventAgent(AgentObject):
         while self.running:
             # TODO? func can be a Python function?
             (event_id, func, args) = self.events.get()
-            if event_id is StopEvent:
+            if event_id is self.StopEvent:
                 break
             # Wrapping into ValueAtom if arg is not an atom yet
             resp = self._metta.evaluate_atom(E(func,
@@ -271,17 +274,23 @@ class EventAgent(AgentObject):
                     self.outputs.put(r)
 
     def stop(self):
-        self.events.put((StopEvent, None, None))
+        self.events.put((self.StopEvent, None, None))
         self.running = False
 
     # TODO? choose the model of dealing with outputs... do we need them at all?
     def clear_outputs(self):
-        with self.lock:
-            self.outputs = Queue()
-    def get_output(self):
-        while not self.outputs.empty():
-            yield self.outputs.get()
+        try:
+            while True:
+                self.outputs.get_nowait()
+        except queue.Empty:
+            pass
 
+    def get_output(self):
+        try:
+            while True:
+                yield self.outputs.get_nowait()
+        except queue.Empty:
+            pass
 
 def subscribe_metta_func(metta: MeTTa, event_bus: GroundedAtom, event_id: Atom, func: Atom): #metta,
     event_bus = event_bus.get_object().content
