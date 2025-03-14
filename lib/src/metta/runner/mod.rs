@@ -950,7 +950,7 @@ impl<'input> RunContext<'_, 'input> {
                 self.load_module_alias(mod_name, mod_id)
             },
             None => {
-                let new_id = self.init_module(mod_name, loader)?;
+                let new_id = self.init_module(mod_name, loader)?;             
                 self.init_state.add_module_descriptor(&self.metta, descriptor, new_id);
                 Ok(new_id)
             }

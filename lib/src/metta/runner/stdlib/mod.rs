@@ -108,6 +108,13 @@ pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
     target.move_back(&mut rust_tokens);
 }
 
+
+pub fn register_all_corelib_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta){
+    register_runner_tokens(tref, tokenizer.clone(),space, metta);
+    register_common_tokens(tref, tokenizer.clone(), space, metta);
+    register_rust_stdlib_tokens(tref);
+}
+
 pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
 
 /// Loader to Initialize the corelib module
@@ -130,14 +137,12 @@ impl ModuleLoader for CoreLibLoader {
 
         let module = context.module();
         let tokenizer = module.tokenizer();
-
-        register_runner_tokens(&mut *tokenizer.borrow_mut(), tokenizer.clone(), &module.space(), context.metta);
-        register_common_tokens(&mut *tokenizer.borrow_mut(), tokenizer.clone(), &module.space(), context.metta);
-        register_rust_stdlib_tokens(&mut *tokenizer.borrow_mut());
+        let own_tokenizer = module.own_tokenizer();
+        register_all_corelib_tokens(&mut *tokenizer.borrow_mut(), tokenizer.clone(), &module.space(), context.metta);
+        register_all_corelib_tokens(&mut *own_tokenizer.borrow_mut(), own_tokenizer.clone(), &module.space(), context.metta);
 
         let parser = SExprParser::new(METTA_CODE);
         context.push_parser(Box::new(parser));
-
         Ok(())
     }
 }

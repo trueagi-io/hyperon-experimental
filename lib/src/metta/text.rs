@@ -94,7 +94,6 @@ impl Tokenizer {
 
     pub fn remove_token(&mut self, regex_str: &str) {
         if let Some(pos) = self.tokens.iter().position(|descr| descr.regex.as_str() == regex_str) {
-            println!("position {:?}",pos);
             self.tokens.remove(pos);
         }
     }
