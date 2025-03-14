@@ -62,8 +62,8 @@ pub trait ConvertingSerializer<T>: Serializer + Default {
                     .cloned()
                     .or_else(|| {
                         let mut serializer = Self::default();
-                        gnd.serialize(&mut serializer).expect("ConvertingSerializer is not expected returning error");
-                        serializer.into_type()
+                        gnd.serialize(&mut serializer).ok()
+                            .and_then(|()| serializer.into_type())
                     })
             })
     }
@@ -109,3 +109,53 @@ impl Serializer for NullSerializer {
     fn serialize_str(&mut self, _v: &str) -> Result { Ok(()) }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::*;
+
+    use std::fmt::Display;
+
+    #[derive(Default)]
+    struct I64Serializer {
+        value: Option<i64>,
+    }
+
+    impl Serializer for I64Serializer {
+        fn serialize_i64(&mut self, v: i64) -> super::Result {
+            self.value = Some(v);
+            Ok(())
+        }
+    }
+
+    impl ConvertingSerializer<i64> for I64Serializer {
+        fn into_type(self) -> Option<i64> {
+            self.value
+        }
+    }
+
+    #[derive(PartialEq, Debug, Clone)]
+    struct I64Gnd(i64);
+
+    impl Display for I64Gnd {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl Grounded for I64Gnd {
+        fn type_(&self) -> Atom {
+            rust_type_atom::<Self>()
+        }
+
+        fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+            serializer.serialize_i64(self.0)
+        }
+    }
+
+    #[test]
+    fn convert_return_none_on_incorrect_grounded_atom() {
+        assert_eq!(I64Serializer::convert(&Atom::gnd(I64Gnd(42))), Some(42));
+        assert_eq!(I64Serializer::convert(&Atom::value("42")), None);
+    }
+}
