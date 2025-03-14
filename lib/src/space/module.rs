@@ -25,7 +25,11 @@ impl ModuleSpace {
     }
 
     pub fn query(&self, query: &Atom) -> BindingsSet {
-        log::debug!("ModuleSpace::query: {}", query);
+        complex_query(query, |query| self.single_query(query))
+    }
+ 
+    fn single_query(&self, query: &Atom) -> BindingsSet {
+        log::debug!("ModuleSpace::query: {} {}", self, query);
         let mut results = self.main.query(query);
         for dep in &self.deps {
             if let Some(space) = dep.borrow().as_any() {
@@ -42,7 +46,7 @@ impl ModuleSpace {
     }
 
     fn query_no_deps(&self, query: &Atom) -> BindingsSet {
-        log::debug!("ModuleSpace::query_no_deps: {}", query);
+        log::debug!("ModuleSpace::query_no_deps: {} {}", self, query);
         self.main.query(query)
     }
 
@@ -88,6 +92,28 @@ impl SpaceMut for ModuleSpace {
     }
     fn as_space<'a>(&self) -> &(dyn Space + 'a) {
         self
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::*;
+    use crate::space::grounding::*;
+    use super::*;
+
+    #[test]
+    fn complex_query_two_subspaces() {
+        let mut a = GroundingSpace::new();
+        a.add(expr!("a" "b"));
+        let mut b = GroundingSpace::new();
+        b.add(expr!("b" "c"));
+
+        let mut main = ModuleSpace::new(GroundingSpace::new());
+        main.add_dep(DynSpace::new(ModuleSpace::new(a)));
+        main.add_dep(DynSpace::new(ModuleSpace::new(b)));
+
+        assert_eq_no_order!(main.query(&expr!("," (a "b") ("b" c))), vec![bind!{ a: sym!("a"), c: sym!("c") }]);
+        assert_eq_no_order!(main.query(&expr!("," ("a" b) (b "c"))), vec![bind!{ b: sym!("b") }]);
     }
 }
 
