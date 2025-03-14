@@ -2,10 +2,8 @@
 
 pub mod index;
 
-use crate::*;
 use super::*;
 use crate::atom::*;
-use crate::atom::subexpr::split_expr;
 
 use std::fmt::Debug;
 use std::collections::HashSet;
@@ -14,9 +12,6 @@ use index::*;
 pub use index::{ALLOW_DUPLICATION, NO_DUPLICATION};
 
 // Grounding space
-
-/// Symbol to concatenate queries to space.
-pub const COMMA_SYMBOL : Atom = sym!(",");
 
 /// In-memory space which can contain grounded atoms.
 // TODO: Clone is required by C API
@@ -152,30 +147,7 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
     /// assert_eq!(result, bind_set![{x: sym!("B")}]);
     /// ```
     pub fn query(&self, query: &Atom) -> BindingsSet {
-        log::debug!("GroundingSpace::query: {} query: {}", self, query);
-        match split_expr(query) {
-            // Cannot match with COMMA_SYMBOL here, because Rust allows
-            // it only when Atom has PartialEq and Eq derived.
-            Some((sym @ Atom::Symbol(_), args)) if *sym == COMMA_SYMBOL => {
-                args.fold(BindingsSet::single(),
-                    |mut acc, query| {
-                        let result = if acc.is_empty() {
-                            acc
-                        } else {
-                            acc.drain(0..).flat_map(|prev| -> BindingsSet {
-                                let query = matcher::apply_bindings_to_atom_move(query.clone(), &prev);
-                                let mut res = self.query(&query);
-                                res.drain(0..)
-                                    .flat_map(|next| next.merge(&prev))
-                                    .collect()
-                            }).collect()
-                        };
-                        log::debug!("GroundingSpace::query: {} current result: {}", self, result);
-                        result
-                    })
-            },
-            _ => self.single_query(query),
-        }
+        complex_query(query, |query| self.single_query(query))
     }
 
     /// Executes simple `query` without sub-queries on the space.

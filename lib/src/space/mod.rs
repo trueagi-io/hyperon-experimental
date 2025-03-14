@@ -9,9 +9,14 @@ use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
 use std::borrow::Cow;
 
+use crate::*;
 use crate::common::FlexRef;
 use crate::atom::*;
 use crate::atom::matcher::{BindingsSet, apply_bindings_to_atom_move};
+use crate::atom::subexpr::split_expr;
+
+/// Symbol to concatenate queries to space.
+pub const COMMA_SYMBOL : Atom = sym!(",");
 
 /// Contains information about space modification event.
 #[derive(Clone, Debug, PartialEq)]
@@ -397,3 +402,32 @@ impl<T: Space> Space for &T {
     }
 }
 
+fn complex_query<F>(query: &Atom, single_query: F) -> BindingsSet
+where
+    F: Fn(&Atom) -> BindingsSet,
+{
+    log::debug!("complex_query: query: {}", query);
+    match split_expr(query) {
+        // Cannot match with COMMA_SYMBOL here, because Rust allows
+        // it only when Atom has PartialEq and Eq derived.
+        Some((sym @ Atom::Symbol(_), args)) if *sym == COMMA_SYMBOL => {
+            args.fold(BindingsSet::single(),
+                |mut acc, query| {
+                    let result = if acc.is_empty() {
+                        acc
+                    } else {
+                        acc.drain(0..).flat_map(|prev| -> BindingsSet {
+                            let query = matcher::apply_bindings_to_atom_move(query.clone(), &prev);
+                            let mut res = single_query(&query);
+                            res.drain(0..)
+                                .flat_map(|next| next.merge(&prev))
+                                .collect()
+                        }).collect()
+                    };
+                    log::debug!("ModuleSpace::query: current result: {}", result);
+                    result
+                })
+        },
+        _ => single_query(query),
+    }
+}
