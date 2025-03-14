@@ -46,10 +46,12 @@ class StreamMethod(threading.Thread):
         return self
 
     def __next__(self):
-        if self._result.empty() and not self.is_alive():
-            raise StopIteration
-        return self._result.get()
-
+        try:
+            while self.is_alive():
+                yield self._result.get_nowait()
+        except queue.Empty:
+            pass
+        raise StopIteration
 
 def _try_atom2str(val):
     if isinstance(val, GroundedAtom):
