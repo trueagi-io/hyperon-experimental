@@ -219,7 +219,6 @@ class EventAgent(AgentObject):
         self.events = Queue()
         self.running = False
         self.outputs = Queue()
-        self.lock = threading.RLock()
 
     def _init_metta(self):
         # NOTE: atm, there is no utility for the base agent to import `agents` by default,
@@ -270,8 +269,7 @@ class EventAgent(AgentObject):
             # or let `func` to do this direclty...
             # ??? self.clear_outputs()
             for r in resp:
-                with self.lock:
-                    self.outputs.put(r)
+                self.outputs.put(r)
 
     def stop(self):
         self.events.put((self.StopEvent, None, None))
