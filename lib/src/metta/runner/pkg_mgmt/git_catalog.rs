@@ -35,12 +35,18 @@ pub struct ModuleGitLocation {
     /// within the repo or `git_subdir` directory if provided.
     #[serde(default)]
     pub git_main_file: Option<PathBuf>,
+
+    /// A path relative to the catalog repo, from which to load the module
+    ///
+    /// WARNING: This key will be ignored if a `git_url` is provided.
+    #[serde(default)]
+    pub local_path: Option<PathBuf>,
 }
 
 impl ModuleGitLocation {
     /// Fetches the module from git if it doesn't exist in `local_cache_dir`, and then returns
     /// a ModuleLoader & ModuleDescriptor pair for the module
-    pub(crate) fn fetch_and_get_loader<'a, FmtIter: Iterator<Item=&'a dyn FsModuleFormat>>(&self, fmts: FmtIter, mod_name: &str, local_cache_dir: PathBuf, update_mode: UpdateMode) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
+    pub(crate) fn fetch_and_get_loader<'a, FmtIter: Iterator<Item=&'a dyn FsModuleFormat>>(&self, fmts: FmtIter, mod_name: &str, local_cache_dir: PathBuf, catalog_file_path: &Path, update_mode: UpdateMode) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
 
         //If a git URL is specified in the entry, see if we have it in the git-cache and
         // clone it locally if we don't
@@ -53,6 +59,15 @@ impl ModuleGitLocation {
                 None => cached_repo.local_path().to_owned(),
             };
             return loader_for_module_at_path(fmts, &mod_path, Some(mod_name), None);
+        }
+
+        //If a `local_path` was specified, then load the module from there
+        match &self.local_path {
+            Some(local_path) => {
+                let mod_path = catalog_file_path.parent().unwrap().join(local_path);
+                return loader_for_module_at_path(fmts, &mod_path, Some(mod_name), None);
+            },
+            None => {}
         }
 
         Ok(None)
@@ -306,12 +321,13 @@ impl ModuleCatalog for GitCatalog {
             .ok_or_else(|| format!("Error: module {descriptor} no longer exists in catalog {}", self.display_name()))?;
 
         let mod_dir_name = super::managed_catalog::dir_name_from_descriptor(descriptor);
-        let backup_mod_dir = self.caches_dir.join(mod_dir_name);
+        let fallback_mod_dir = self.caches_dir.join(mod_dir_name);
 
         Ok(Box::new(GitModLoader{
             module: module.clone(),
             fmts: self.fmts.clone(),
-            backup_mod_dir,
+            fallback_mod_dir,
+            catalog_file_path: self.catalog_file_path.clone(),
         }))
     }
     fn sync_toc(&self, update_mode: UpdateMode) -> Result<(), String> {
@@ -328,16 +344,18 @@ pub struct GitModLoader {
     module: CatalogFileMod,
     fmts: Arc<Vec<Box<dyn FsModuleFormat>>>,
     /// A local path to clone the module into, if a path isn't provided by a downstream LocalCatalog
-    backup_mod_dir: PathBuf,
+    fallback_mod_dir: PathBuf,
+    /// The location of the catalog file from which the `module` field was deserialized
+    catalog_file_path: PathBuf,
 }
 
 impl ModuleLoader for GitModLoader {
     fn prepare(&self, local_dir: Option<&Path>, update_mode: UpdateMode) -> Result<Option<Box<dyn ModuleLoader>>, String> {
         let local_dir = match local_dir {
             Some(local_dir) => local_dir,
-            None => &self.backup_mod_dir
+            None => &self.fallback_mod_dir
         };
-        let loader = match self.module.git_location.fetch_and_get_loader(self.fmts.iter().map(|f| &**f), &self.module.name, local_dir.to_owned(), update_mode)? {
+        let loader = match self.module.git_location.fetch_and_get_loader(self.fmts.iter().map(|f| &**f), &self.module.name, local_dir.to_owned(), &self.catalog_file_path, update_mode)? {
             Some((loader, _)) => loader,
             None => unreachable!(),
         };
