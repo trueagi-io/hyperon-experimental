@@ -79,6 +79,10 @@ jobs:
         shell: bash
         run: RUST_LOG=hyperon=debug cargo test
 
+      - name: Test Rust build with online feature
+        shell: bash
+        run: RUST_LOG=hyperon=debug cargo test --features "git online-test"
+
       - name: Print environment
         shell: bash
         run: |

@@ -351,14 +351,14 @@ impl ModuleLoader for GitModLoader {
 /// This test is similar to `git_remote_catalog_fetch_test` in [crate::metta::runner::pkg_mgmt::catalog],
 /// but tests the `GitCatalog` without a `LocalCatalog` and also loads a local catalog so
 /// the test can run without a network connection.
-#[ignore] //NOTE: Ignored until we settle on how and where to commit the test repo(s)
+
 #[test]
+#[cfg(feature="online-test")]
 fn git_catalog_direct_test() {
-    let _ = env_logger::builder().is_test(true).try_init();
-    let gitcat = GitCatalog::new(&std::env::temp_dir(), EnvBuilder::test_env().build().fs_mod_formats, "git_catalog", "file:///Users/admin/rustProjects/local-metta-catalog/",0).unwrap();
+    let gitcat = GitCatalog::new(&std::env::temp_dir(), EnvBuilder::test_env().build().fs_mod_formats, "metta-catalog", "https://github.com/trueagi-io/metta-catalog/",0).unwrap();
     let runner = Metta::new(Some(EnvBuilder::test_env().push_module_catalog(gitcat).set_caches_dir(&std::env::temp_dir().join("hyperon-test"))));
 
-    let result = runner.run(SExprParser::new("!(import! &self factorial)"));
+    let result = runner.run(SExprParser::new("!(import! &self example)"));
     assert_eq!(result, Ok(vec![vec![expr!()]]));
 
     runner.display_loaded_modules();
@@ -366,3 +366,4 @@ fn git_catalog_direct_test() {
     let result = runner.run(SExprParser::new("!(fact 5)"));
     assert_eq!(result, Ok(vec![vec![expr!({crate::metta::runner::number::Number::Integer(120)})]]));
 }
+
