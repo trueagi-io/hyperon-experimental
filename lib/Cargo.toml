@@ -39,6 +39,6 @@ default = ["pkg_mgmt"]
 # See https://doc.rust-lang.org/cargo/reference/features.html#the-features-section
 variable_operation = [] # enables evaluation of the expressions which have
                         # a variable on the first position
-online-test = []
+online-test = [] # includes tests which require internet access
 git = ["git2", "pkg_mgmt"]
 pkg_mgmt = ["xxhash-rust", "serde", "serde_json", "semver"]
