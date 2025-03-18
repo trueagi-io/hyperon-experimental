@@ -176,7 +176,10 @@ impl Metta {
                 let stdlib_mod_id = metta.load_module_direct(loader, "stdlib").expect("Failed to load stdlib");
                 metta.0.stdlib_mod.set(stdlib_mod_id).unwrap();
             },
-            None => {},
+            None => {
+                metta.load_module_alias("stdlib", corelib_mod_id).expect("Failed to create stdlib alias for corelib");
+                ()
+            }
         };
 
         //Load the rest of the builtin mods, but don't `import` (aka "use") them
