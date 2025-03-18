@@ -560,6 +560,15 @@ mod test {
     }
 
     #[test]
+    fn test_match_results_with_variable_loop() {
+        let space = GroundingSpace::from_vec(vec![
+            expr!("R" a a),
+        ]);
+        let result = space.query(&expr!("R" b ("S" b)));
+        assert_eq!(result, bind_set![]);
+    }
+
+    #[test]
     fn test_custom_match_with_space() {
         let space = GroundingSpace::from_vec(vec![
             expr!("A" {1} x "a"),
@@ -569,5 +578,4 @@ mod test {
         let result: BindingsSet = match_atoms(&Atom::gnd(space), &expr!("A" {1} x x)).collect();
         assert_eq!(result, bind_set![{x: sym!("a")}]);
     }
-
 }
