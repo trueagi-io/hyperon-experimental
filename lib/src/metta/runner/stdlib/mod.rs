@@ -137,9 +137,7 @@ impl ModuleLoader for CoreLibLoader {
 
         let module = context.module();
         let tokenizer = module.tokenizer();
-        let own_tokenizer = module.own_tokenizer();
         register_all_corelib_tokens(&mut *tokenizer.borrow_mut(), tokenizer.clone(), &module.space(), context.metta);
-        register_all_corelib_tokens(&mut *own_tokenizer.borrow_mut(), own_tokenizer.clone(), &module.space(), context.metta);
 
         let parser = SExprParser::new(METTA_CODE);
         context.push_parser(Box::new(parser));
