@@ -15,13 +15,13 @@ add_custom_target(check COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure)
 # compilation because generator expressions cannot be used in install() and
 # set_target_properties() functions.
 set(HYPERONC_TARGET_DIR ${CMAKE_CURRENT_BINARY_DIR}/cargo)
+# cmake checks INTERFACE_INCLUDE_DIRECTORIES contains existing path
+file(MAKE_DIRECTORY "${HYPERONC_TARGET_DIR}")
 
 # Need to list release configurations explicitly here because $<CONFIG:Debug>
-# is FALSE by default (when CMAKE_BUILD_TYPE is unspecified).
+# is FALSE by default (when config is unspecified).
 set(IS_RELEASE_BUILD $<IF:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>,1,0>)
 set(RUST_BUILD_SUFFIX $<IF:${IS_RELEASE_BUILD},release,debug>)
-add_custom_target(show-build-type-vars COMMAND ${CMAKE_COMMAND} -E echo
-    "CMAKE_BUILD_TYPE:${BUILD_TYPE} IS_RELEASE_BUILD=${IS_RELEASE_BUILD} RUST_BUILD_SUFFIX=${RUST_BUILD_SUFFIX}")
 
 set(HYPERONC_STATIC_LIB_FILE ${CMAKE_STATIC_LIBRARY_PREFIX}hyperonc${CMAKE_STATIC_LIBRARY_SUFFIX})
 set(HYPERONC_STATIC_LIB_PATH ${HYPERONC_TARGET_DIR}/${HYPERONC_STATIC_LIB_FILE})
@@ -49,9 +49,6 @@ add_custom_target(build-hyperonc ALL
         -o ${HYPERONC_INCLUDE_DIR}/hyperon.h
 
     WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
-
-# cmake checks INTERFACE_INCLUDE_DIRECTORIES contains existing path
-execute_process(COMMAND mkdir -p ${HYPERONC_TARGET_DIR})
 
 add_library(hyperonc-static STATIC IMPORTED GLOBAL)
 set_target_properties(hyperonc-static PROPERTIES
@@ -83,24 +80,54 @@ if(BUILD_SHARED_LIBS)
         COMMAND ${CMAKE_COMMAND} -E copy
         ${HYPERONC_TARGET_DIR}/${RUST_BUILD_SUFFIX}/${HYPERONC_SHARED_LIB_FILE}
             ${HYPERONC_SHARED_LIB_PATH}
-
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
     add_dependencies(copy-hyperonc-shared build-hyperonc)
+
+    if (WIN32)
+        set(HYPERONC_IMPLIB_FILE ${HYPERONC_SHARED_LIB_FILE}${CMAKE_LINK_LIBRARY_SUFFIX})
+        set(HYPERONC_IMPLIB_PATH ${HYPERONC_TARGET_DIR}/${HYPERONC_IMPLIB_FILE})
+        set(IMPLIB_INSTALL_PATH "${BINARY_INSTALL_PATH}/${HYPERONC_IMPLIB_FILE}")
+
+        add_custom_target(copy-hyperonc-implib ALL
+            COMMAND ${CMAKE_COMMAND} -E copy
+            ${HYPERONC_TARGET_DIR}/${RUST_BUILD_SUFFIX}/${HYPERONC_IMPLIB_FILE}
+                ${HYPERONC_IMPLIB_PATH}
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR})
+
+        add_dependencies(copy-hyperonc-implib build-hyperonc)
+    endif(WIN32)
 
     add_library(hyperonc-shared SHARED IMPORTED GLOBAL)
     set_target_properties(hyperonc-shared PROPERTIES
         IMPORTED_LOCATION "${HYPERONC_SHARED_LIB_PATH}"
+        # required by Windows
+        IMPORTED_IMPLIB "${HYPERONC_IMPLIB_PATH}"
         INTERFACE_INCLUDE_DIRECTORIES "${HYPERONC_TARGET_DIR}"
         # required to import hyperonc-shared by name not by relative path
         IMPORTED_NO_SONAME TRUE
         )
+    if (WIN32)
+        # These libraries are required to be linked under Windows platform as
+        # they are dependencies of the Rust standard library.
+        # See https://doc.rust-lang.org/reference/linkage.html#r-link.staticlib
+        target_link_libraries(hyperonc-shared INTERFACE wsock32 ws2_32 userenv ntdll bcrypt)
+    endif(WIN32)
     if(GIT)
         target_link_libraries(hyperonc-shared INTERFACE OpenSSL::SSL OpenSSL::Crypto ZLIB::ZLIB)
     endif(GIT)
-    add_dependencies(hyperonc-shared copy-hyperonc-shared build-hyperonc)
+
+    add_dependencies(hyperonc-shared copy-hyperonc-shared)
+    if (WIN32)
+        add_dependencies(hyperonc-shared copy-hyperonc-implib)
+    endif(WIN32)
 
     install(FILES "${HYPERONC_SHARED_LIB_PATH}"
         DESTINATION "${BINARY_INSTALL_PATH}")
+    if (WIN32)
+        install(FILES "${HYPERONC_IMPLIB_PATH}"
+            DESTINATION "${BINARY_INSTALL_PATH}")
+    endif(WIN32)
 
     configure_package_config_file("hyperonc-config-shared.cmake.in"
         "${CMAKE_CURRENT_BINARY_DIR}/hyperonc-config.cmake"

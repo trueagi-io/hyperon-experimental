@@ -55,8 +55,8 @@ impl Environment {
 
     /// Returns the [Path] to a directory where the MeTTa runner can put persistent caches
     ///
-    /// NOTE: Currently the `caches_dir` dir is within `cfg_dir`, but there may be a reason
-    ///  to move it in the future.
+    /// NOTE: The default location of the `caches_dir` dir is within `cfg_dir`, but if may be
+    /// overridden with [`EnvBuilder::set_caches_dir`].
     pub fn caches_dir(&self) -> Option<&Path> {
         self.caches_dir.as_deref()
     }
@@ -111,6 +111,7 @@ pub struct EnvBuilder {
     env: Environment,
     no_cfg_dir: bool,
     create_cfg_dir: bool,
+    caches_dir: Option<PathBuf>,
     #[cfg(feature = "pkg_mgmt")]
     proto_catalogs: Vec<ProtoCatalog>,
     #[cfg(feature = "pkg_mgmt")]
@@ -119,6 +120,7 @@ pub struct EnvBuilder {
 
 /// Private type representing something that will become an entry in the "Environment::catalogs" Vec
 #[cfg(feature = "pkg_mgmt")]
+#[derive(Debug)]
 enum ProtoCatalog {
     Path(PathBuf),
     Other(Box<dyn ModuleCatalog>),
@@ -144,6 +146,7 @@ impl EnvBuilder {
         Self {
             env: Environment::new(),
             no_cfg_dir: false,
+            caches_dir: None,
             create_cfg_dir: true,
             #[cfg(feature = "pkg_mgmt")]
             proto_catalogs: vec![],
@@ -172,6 +175,14 @@ impl EnvBuilder {
         if self.no_cfg_dir {
             panic!("Fatal Error: set_config_dir is incompatible with set_no_config_dir");
         }
+        self
+    }
+
+    /// Sets the directory used for caching files, such as those fetched from remote catalogs
+    ///
+    /// This location will override the default location within the config dir.
+    pub fn set_caches_dir(mut self, caches_dir: &Path) -> Self {
+        self.caches_dir = Some(caches_dir.into());
         self
     }
 
@@ -308,8 +319,11 @@ impl EnvBuilder {
                 env.config_dir = None;
             }
 
-            // Set the caches dir within the config dir.  We may want to move it elsewhere in the future
-            env.caches_dir = env.config_dir.as_ref().map(|cfg_dir| cfg_dir.join("caches"));
+            // If an explicit caches_dir wasn't provided then set the caches dir within the config dir
+            env.caches_dir = match self.caches_dir {
+                Some(caches_dir) => Some(caches_dir),
+                None => env.config_dir.as_ref().map(|cfg_dir| cfg_dir.join("caches"))
+            };
 
             if init_metta_path.exists() {
                 env.init_metta_path = Some(init_metta_path);
@@ -453,6 +467,8 @@ fn git_catalog_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Result
     let refresh_time = refresh_time.ok_or_else(|| format!("Error in environment.metta. \"refreshTime\" property required for #gitCatalog"))?
         .parse::<u64>().map_err(|e| format!("Error in environment.metta.  Error parsing \"refreshTime\": {e}"))?;
 
+    let catalog_name = crate::metta::runner::str::strip_quotes(catalog_name);
+    let catalog_url = crate::metta::runner::str::strip_quotes(catalog_url);
     let mut managed_remote_catalog = LocalCatalog::new(caches_dir, catalog_name).unwrap();
     let remote_catalog = GitCatalog::new(caches_dir, env.fs_mod_formats.clone(), catalog_name, catalog_url, refresh_time).unwrap();
     managed_remote_catalog.push_upstream_catalog(Box::new(remote_catalog));

@@ -860,6 +860,7 @@ mod tests {
                     git_branch: None, //Some("Hyperpose".to_string()),
                     git_subdir: None,
                     git_main_file: Some(PathBuf::from("mettamorph.metta")),
+                    local_path: None,
                 },
                 version_req: None,
             });

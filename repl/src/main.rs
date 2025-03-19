@@ -1,6 +1,5 @@
 
 use std::path::PathBuf;
-use std::thread;
 use std::process::exit;
 use std::sync::{Arc, Mutex};
 
@@ -9,7 +8,7 @@ use rustyline::{Cmd, CompletionType, Config, EditMode, Editor, KeyEvent, KeyCode
 
 use anyhow::Result;
 use clap::Parser;
-use signal_hook::{consts::SIGINT, iterator::Signals};
+use ctrlc;
 
 mod metta_shim;
 use metta_shim::*;
@@ -35,7 +34,6 @@ struct CliArgs {
 
 fn main() -> Result<()> {
     let cli_args = CliArgs::parse();
-
     let _ = env_logger::builder().filter_level(log::LevelFilter::Info).try_init();
 
     //If we have a metta_file, then the working dir is the parent of that file
@@ -59,23 +57,20 @@ fn main() -> Result<()> {
     let repl_params = ReplParams::new(&metta);
 
     //Spawn a signal handler background thread, to deal with passing interrupts to the execution loop
-    let mut signals = Signals::new(&[SIGINT])?;
-    thread::spawn(move || {
-        for _sig in signals.forever() {
-            //Assume SIGINT, since that's the only registered handler
-            let mut signal_received_cnt = SIGINT_RECEIVED_COUNT.lock().unwrap();
-            match *signal_received_cnt {
-                0 => println!("Interrupt received, stopping MeTTa..."),
-                1 => println!("Stopping in progress.  Please wait..."),
-                _ => {
-                    println!("Ok, I get it!  Yeesh!");
-                    exit(-1);
-                },
-            }
-            *signal_received_cnt += 1;
-            drop(signal_received_cnt);
+    ctrlc::set_handler(move || {
+        let mut signal_received_cnt = SIGINT_RECEIVED_COUNT.lock().unwrap();
+        match *signal_received_cnt {
+            0 => println!("Interrupt received, stopping MeTTa..."),
+            1 => println!("Stopping in progress.  Please wait..."),
+            _ => {
+                println!("Ok, I get it!  Yeesh!");
+                exit(-1);
+            },
         }
-    });
+        *signal_received_cnt += 1;
+        drop(signal_received_cnt);
+    })?;
+
 
     //If we have .metta files to run, then run them
     if let Some(metta_file) = &cli_args.file {

@@ -11,17 +11,22 @@ on:
       os:
         description: 'JSON array of OS to be checked'
         required: true
-        default: "[\"ubuntu-20.04\", \"ubuntu-22.04\", \"ubuntu-24.04\", \"macos-11\", \"macos-12\", \"macos-13\", \"macos-14\"]"
+        default: "[\"ubuntu-22.04\", \"ubuntu-24.04\", \"macos-13\", \"macos-14\", \"macos-15\", \"windows-latest\"]"
         type: string
       python-version:
         description: 'JSON array of Python versions to be checked'
         required: true
-        default: "[\"3.7\", \"3.8\", \"3.9\", \"3.10\", \"3.11\"]"
+        default: "[\"3.7\", \"3.8\", \"3.9\", \"3.10\", \"3.11\", \"3.12\", \"3.13\"]"
         type: string
       cmake-version:
         description: 'JSON array of CMake versions to be checked'
         required: true
         default: "[\"3.24.x\"]"
+        type: string
+      build-type:
+        description: 'JSON array of build types to be checked'
+        required: true
+        default: "[\"Debug\", \"Release\", \"RelWithDebInfo\", \"MinSizeRel\"]"
         type: string
 
 jobs:
@@ -32,6 +37,7 @@ jobs:
         os: ${{ fromJson(inputs.os) }}
         python-version: ${{ fromJson(inputs.python-version) }}
         cmake-version: ${{ fromJson(inputs.cmake-version) }}
+        build-type: ${{ fromJson(inputs.build-type) }}
       max-parallel: 5
 
     uses: ./.github/workflows/common.yml
@@ -39,3 +45,4 @@ jobs:
       os: ${{ matrix.os }}
       python-version: ${{ matrix.python-version }}
       cmake-version: ${{ matrix.cmake-version }}
+      build-type: ${{ matrix.build-type }}

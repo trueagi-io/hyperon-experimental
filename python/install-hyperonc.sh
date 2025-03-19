@@ -23,7 +23,7 @@ echo "hyperonc repository URL: $HYPERONC_URL"
 echo "hyperonc revision: $HYPERONC_REV"
 
 if test "$AUDITWHEEL_POLICY" = "manylinux2014"; then
-    yum install -y perl-devel openssl-devel zlib-devel
+    yum install -y perl-devel openssl-devel zlib-devel libatomic
 fi
 
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs > /tmp/rustup.sh
@@ -31,7 +31,7 @@ sh /tmp/rustup.sh -y && rm /tmp/rustup.sh
 export PATH="${PATH}:${HOME}/.cargo/bin"
 cargo install cbindgen
 
-python3 -m pip install cmake==3.24 conan==2.5.0 pip==23.1.2
+python3 -m pip install cmake==3.24 conan==2.13.0 pip==23.1.2
 PATH="${PATH}:${HOME}/.local/bin"
 conan profile detect --force
 

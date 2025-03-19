@@ -35,12 +35,18 @@ pub struct ModuleGitLocation {
     /// within the repo or `git_subdir` directory if provided.
     #[serde(default)]
     pub git_main_file: Option<PathBuf>,
+
+    /// A path relative to the catalog repo, from which to load the module
+    ///
+    /// WARNING: This key will be ignored if a `git_url` is provided.
+    #[serde(default)]
+    pub local_path: Option<PathBuf>,
 }
 
 impl ModuleGitLocation {
     /// Fetches the module from git if it doesn't exist in `local_cache_dir`, and then returns
     /// a ModuleLoader & ModuleDescriptor pair for the module
-    pub(crate) fn fetch_and_get_loader<'a, FmtIter: Iterator<Item=&'a dyn FsModuleFormat>>(&self, fmts: FmtIter, mod_name: &str, local_cache_dir: PathBuf, update_mode: UpdateMode) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
+    pub(crate) fn fetch_and_get_loader<'a, FmtIter: Iterator<Item=&'a dyn FsModuleFormat>>(&self, fmts: FmtIter, mod_name: &str, local_cache_dir: PathBuf, catalog_file_path: &Path, update_mode: UpdateMode) -> Result<Option<(Box<dyn ModuleLoader>, ModuleDescriptor)>, String> {
 
         //If a git URL is specified in the entry, see if we have it in the git-cache and
         // clone it locally if we don't
@@ -53,6 +59,15 @@ impl ModuleGitLocation {
                 None => cached_repo.local_path().to_owned(),
             };
             return loader_for_module_at_path(fmts, &mod_path, Some(mod_name), None);
+        }
+
+        //If a `local_path` was specified, then load the module from there
+        match &self.local_path {
+            Some(local_path) => {
+                let mod_path = catalog_file_path.parent().unwrap().join(local_path);
+                return loader_for_module_at_path(fmts, &mod_path, Some(mod_name), None);
+            },
+            None => {}
         }
 
         Ok(None)
@@ -161,6 +176,10 @@ pub struct GitCatalog {
     refresh_time: u64,
     /// The git repo for the catalog info.  This is the table-of-contents for the catalog, not the modules
     catalog_repo: Option<CachedRepo>,
+    /// A path to a directory where this catalog may cache local files.  When a `GitCatalog` is upstream of
+    /// a [LocalCatalog], this directory will not contain modules, but modules will be stored here when the
+    /// `GitCatalog` is used by itself
+    caches_dir: PathBuf,
     /// The path to the catalog file(s), to store the metadata to connect a module to its source location
     /// parameters.  This path does not have any reliable connection to the on-disk location of the modules
     catalog_file_path: PathBuf,
@@ -169,12 +188,13 @@ pub struct GitCatalog {
 }
 
 impl GitCatalog {
-    fn new_internal(fmts: Arc<Vec<Box<dyn FsModuleFormat>>>, name: &str, catalog_file_path: PathBuf, catalog: Option<CatalogFileFormat>) -> Self {
+    fn new_internal(fmts: Arc<Vec<Box<dyn FsModuleFormat>>>, name: &str, caches_dir: PathBuf, catalog_file_path: PathBuf, catalog: Option<CatalogFileFormat>) -> Self {
         Self {
             name: name.to_string(),
             fmts,
             refresh_time: 0,
             catalog_repo: None,
+            caches_dir,
             catalog_file_path,
             catalog: Mutex::new(catalog),
         }
@@ -182,18 +202,26 @@ impl GitCatalog {
     /// Creates a new GitCatalog with the name and url specified.  `refresh_time` is the time, in
     /// seconds, between refreshes of the catalog file
     pub fn new(caches_dir: &Path, fmts: Arc<Vec<Box<dyn FsModuleFormat>>>, name: &str, url: &str, refresh_time: u64) -> Result<Self, String> {
-        let catalog_repo_dir = caches_dir.join(name).join("_catalog.repo");
+        let caches_dir = caches_dir.join(name);
+        let catalog_repo_dir = caches_dir.join("_catalog.repo");
         let catalog_repo_name = format!("{name}-catalog.repo");
         let catalog_repo = CachedRepo::new(&catalog_repo_name, catalog_repo_dir, url, None, None)?;
-        let mut new_self = Self::new_internal(fmts, name, catalog_repo.local_path().join("catalog.json"), None);
+        let mut new_self = Self::new_internal(fmts, name, caches_dir, catalog_repo.local_path().join("catalog.json"), None);
         new_self.refresh_time = refresh_time;
         new_self.catalog_repo = Some(catalog_repo);
         Ok(new_self)
     }
     /// Used for a git-based catalog that isn't synced to a remote source
+    ///
+    /// The primary use of this method is to make a `GitCatalog` to back the `git-module!` MeTTa operation,
+    /// so it will track the locations of explicitly sourced modules.  It's a fairly special-purpose object
+    /// designed to associate git information (repo url, branch, etc.) with some modules available through a
+    /// [LocalCatalog], so the user can "install" modules by fetching them from wherever, and then pull the
+    /// latest version without needing to re-supply the details about where to fetch the module from.
     pub fn new_without_source_repo(caches_dir: &Path, fmts: Arc<Vec<Box<dyn FsModuleFormat>>>, name: &str) -> Result<Self, String> {
-        let catalog_file_path = caches_dir.join(name).join("_catalog.json");
-        let new_self = Self::new_internal(fmts, name, catalog_file_path, Some(CatalogFileFormat::default()));
+        let caches_dir = caches_dir.join(name);
+        let catalog_file_path = caches_dir.join("_catalog.json");
+        let new_self = Self::new_internal(fmts, name, caches_dir, catalog_file_path, Some(CatalogFileFormat::default()));
         if new_self.catalog_file_path.exists() {
             new_self.parse_catalog()?
         } else {
@@ -292,9 +320,14 @@ impl ModuleCatalog for GitCatalog {
         let module = catalog.find_mod_with_descriptor(descriptor)
             .ok_or_else(|| format!("Error: module {descriptor} no longer exists in catalog {}", self.display_name()))?;
 
+        let mod_dir_name = super::managed_catalog::dir_name_from_descriptor(descriptor);
+        let fallback_mod_dir = self.caches_dir.join(mod_dir_name);
+
         Ok(Box::new(GitModLoader{
             module: module.clone(),
             fmts: self.fmts.clone(),
+            fallback_mod_dir,
+            catalog_file_path: self.catalog_file_path.clone(),
         }))
     }
     fn sync_toc(&self, update_mode: UpdateMode) -> Result<(), String> {
@@ -310,15 +343,19 @@ impl ModuleCatalog for GitCatalog {
 pub struct GitModLoader {
     module: CatalogFileMod,
     fmts: Arc<Vec<Box<dyn FsModuleFormat>>>,
+    /// A local path to clone the module into, if a path isn't provided by a downstream LocalCatalog
+    fallback_mod_dir: PathBuf,
+    /// The location of the catalog file from which the `module` field was deserialized
+    catalog_file_path: PathBuf,
 }
 
 impl ModuleLoader for GitModLoader {
     fn prepare(&self, local_dir: Option<&Path>, update_mode: UpdateMode) -> Result<Option<Box<dyn ModuleLoader>>, String> {
         let local_dir = match local_dir {
             Some(local_dir) => local_dir,
-            None => return Err("GitCatalog: Cannot prepare git-based module without local cache directory".to_string())
+            None => &self.fallback_mod_dir
         };
-        let loader = match self.module.git_location.fetch_and_get_loader(self.fmts.iter().map(|f| &**f), &self.module.name, local_dir.to_owned(), update_mode)? {
+        let loader = match self.module.git_location.fetch_and_get_loader(self.fmts.iter().map(|f| &**f), &self.module.name, local_dir.to_owned(), &self.catalog_file_path, update_mode)? {
             Some((loader, _)) => loader,
             None => unreachable!(),
         };
@@ -328,3 +365,23 @@ impl ModuleLoader for GitModLoader {
         unreachable!()
     }
 }
+
+/// This test is similar to `git_remote_catalog_fetch_test` in [crate::metta::runner::pkg_mgmt::catalog],
+/// but tests the `GitCatalog` without a `LocalCatalog` and also loads a local catalog so
+/// the test can run without a network connection.
+
+#[test]
+#[cfg(feature="online-test")]
+fn git_catalog_direct_test() {
+    let gitcat = GitCatalog::new(&std::env::temp_dir(), EnvBuilder::test_env().build().fs_mod_formats, "metta-catalog", "https://github.com/trueagi-io/metta-catalog/",0).unwrap();
+    let runner = Metta::new(Some(EnvBuilder::test_env().push_module_catalog(gitcat).set_caches_dir(&std::env::temp_dir().join("hyperon-test"))));
+
+    let result = runner.run(SExprParser::new("!(import! &self example)"));
+    assert_eq!(result, Ok(vec![vec![expr!()]]));
+
+    runner.display_loaded_modules();
+
+    let result = runner.run(SExprParser::new("!(fact 5)"));
+    assert_eq!(result, Ok(vec![vec![expr!({crate::metta::runner::number::Number::Integer(120)})]]));
+}
+
