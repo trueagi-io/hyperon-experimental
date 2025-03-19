@@ -31,8 +31,8 @@ on:
         type: string
 
 env:
-  CMAKE_MULTIBUILD_CONFIG: "${{ startsWith(inputs.os, 'windows') && format('--config {0}', inputs.build-type) || '' }}"
-  CMAKE_UNIX_BUILD_TYPE: "${{ startsWith(inputs.os, 'windows') && '' || format('-DCMAKE_BUILD_TYPE={0}', inputs.build-type)}}"
+  CMAKE_CONFIG_ARGUMENT: "${{ startsWith(inputs.os, 'windows') && format('--config {0}', inputs.build-type) || '' }}"
+  CMAKE_BUILD_TYPE_VARIABLE: "${{ startsWith(inputs.os, 'windows') && '' || format('-DCMAKE_BUILD_TYPE={0}', inputs.build-type)}}"
   CMAKE_GIT_EXCLUDE: "${{ startsWith(inputs.os, 'windows') && '-DGIT=OFF' || '' }}"
 
 jobs:
@@ -121,14 +121,14 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake ${{env.CMAKE_UNIX_BUILD_TYPE}} ${{ env.CMAKE_GIT_EXCLUDE }} ..
+          cmake ${{env.CMAKE_BUILD_TYPE_VARIABLE}} ${{ env.CMAKE_GIT_EXCLUDE }} ..
 
       - name: Build C API
         working-directory: ./build
         shell: bash
-        run: cmake --build . ${{ env.CMAKE_MULTIBUILD_CONFIG }}
+        run: cmake --build . ${{ env.CMAKE_CONFIG_ARGUMENT }}
 
       - name: Test C API
         working-directory: ./build
         shell: bash
-        run: cmake --build . --target check ${{ env.CMAKE_MULTIBUILD_CONFIG }}
+        run: cmake --build . --target check ${{ env.CMAKE_CONFIG_ARGUMENT }}
