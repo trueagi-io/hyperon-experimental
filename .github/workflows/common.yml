@@ -24,9 +24,15 @@ on:
         default: "3.24.x"
         required: false
         type: string
+      build-type:
+        description: "One of the {Debug, Release, MinSizeRel, RelWithDebInfo} (or maybe custom) build types"
+        default: "Debug"
+        required: false
+        type: string
 
 env:
-  CMAKE_MULTIBUILD_CONFIG: "${{ startsWith(inputs.os, 'windows') && '--config Debug' || '' }}"
+  CMAKE_MULTIBUILD_CONFIG: "${{ startsWith(inputs.os, 'windows') && format('--config {0}', inputs.build-type) || '' }}"
+  CMAKE_UNIX_BUILD_TYPE: "${{ startsWith(inputs.os, 'windows') && '' || format('-DCMAKE_BUILD_TYPE={0}', inputs.build-type)}}"
   CMAKE_GIT_EXCLUDE: "${{ startsWith(inputs.os, 'windows') && '-DGIT=OFF' || '' }}"
 
 jobs:
@@ -115,7 +121,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake ${{ env.CMAKE_GIT_EXCLUDE }} ..
+          cmake ${{env.CMAKE_UNIX_BUILD_TYPE}} ${{ env.CMAKE_GIT_EXCLUDE }} ..
 
       - name: Build C API
         working-directory: ./build
