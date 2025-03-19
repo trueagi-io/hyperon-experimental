@@ -36,10 +36,6 @@ impl Tokenizer {
         Self{ tokens: Vec::new() }
     }
 
-    pub fn print_tokens_count(&self) {
-        println!("Token {:?}", self.tokens.len());
-    }
-
     pub fn register_token<C: 'static + Fn(&str) -> Atom>(&mut self, regex: Regex, constr: C) {
         self.register_token_with_func_ptr(regex, Rc::new(move |the_str| Ok(constr(the_str))))
     }
