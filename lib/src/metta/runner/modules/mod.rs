@@ -89,7 +89,6 @@ impl MettaMod {
             resource_dir,
             loader: None,
         };
-              
         //Load the stdlib unless this module is no_std
         if !no_stdlib {
             if let Some(corelib_mod_id) = metta.0.corelib_mod.get() {
@@ -102,7 +101,6 @@ impl MettaMod {
             }
         }
         new_mod
-        
     }
 
     /// Internal method to store the loader with its module, for resource access later on
@@ -212,18 +210,13 @@ impl MettaMod {
     }
 
     fn export_all_tokens_into(&self, target_mod: &MettaMod, metta: &Metta) -> Result<(), String> {
-
-        // println!("export_all_tokens_into from {:?}", self.name());
-        // println!("export_all_tokens_into to {:?}", target_mod.name());
-        // print!("self tokens count:");
-        //target_mod.tokenizer().borrow().print_tokens_count();
         if self.name() == "corelib" {
             register_all_corelib_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
           
         } else {
             let dep_tokenizer = self.own_tokenizer().clone();
             //Import all the Tokenizer entries from the dependency
-            let mut dep_tok_clone = dep_tokenizer.borrow().clone();               
+            let mut dep_tok_clone = dep_tokenizer.borrow().clone();
             target_mod.tokenizer().borrow_mut().move_back(&mut dep_tok_clone);
            
         }        
