@@ -214,7 +214,7 @@ impl MettaMod {
             register_all_corelib_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
           
         } else {
-            let dep_tokenizer = self.own_tokenizer().clone();
+            let dep_tokenizer = self.own_tokenizer();
             // Export all the owned Tokenizer entries from self to the dependent module
             let mut dep_tok_clone = dep_tokenizer.borrow().clone();
             target_mod.tokenizer().borrow_mut().move_back(&mut dep_tok_clone);
