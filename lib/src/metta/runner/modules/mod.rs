@@ -59,6 +59,7 @@ pub struct MettaMod {
     resource_dir: Option<PathBuf>,
     space: Rc<RefCell<ModuleSpace>>,
     tokenizer: Shared<Tokenizer>,
+    own_tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
     loader: Option<Box<dyn ModuleLoader>>,
 }
@@ -77,16 +78,17 @@ impl MettaMod {
             }
         }
         let space = Rc::new(RefCell::new(ModuleSpace::new(space)));
+        let own_tokenizer  = Shared::new(Tokenizer::new());
 
         let new_mod = Self {
             mod_path,
             space,
             tokenizer,
+            own_tokenizer,
             imported_deps: Mutex::new(HashMap::new()),
             resource_dir,
             loader: None,
         };
-
         //Load the stdlib unless this module is no_std
         if !no_stdlib {
             if let Some(corelib_mod_id) = metta.0.corelib_mod.get() {
@@ -98,7 +100,6 @@ impl MettaMod {
                 new_mod.import_all_from_dependency(*stdlib_mod_id, metta.get_mod_ptr(*stdlib_mod_id), metta).unwrap();
             }
         }
-
         new_mod
     }
 
@@ -210,17 +211,15 @@ impl MettaMod {
 
     fn export_all_tokens_into(&self, target_mod: &MettaMod, metta: &Metta) -> Result<(), String> {
         if self.name() == "corelib" {
-            register_runner_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
-            register_common_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
-            register_rust_stdlib_tokens(&mut *target_mod.tokenizer().borrow_mut());
+            register_all_corelib_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
+          
         } else {
-            // Get the tokenizer associated with the dependent module
-            let dep_tokenizer = self.tokenizer().clone();
-
-            //Import all the Tokenizer entries from the dependency
+            let dep_tokenizer = self.own_tokenizer();
+            // Export all the owned Tokenizer entries from self to the dependent module
             let mut dep_tok_clone = dep_tokenizer.borrow().clone();
             target_mod.tokenizer().borrow_mut().move_back(&mut dep_tok_clone);
-        }
+           
+        }        
         Ok(())
     }
 
@@ -284,6 +283,10 @@ impl MettaMod {
 
     pub fn tokenizer(&self) -> &Shared<Tokenizer> {
         &self.tokenizer
+    }
+
+    pub fn own_tokenizer(&self) -> &Shared<Tokenizer> {
+        &self.own_tokenizer
     }
 
     pub fn resource_dir(&self) -> Option<&Path> {
