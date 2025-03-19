@@ -215,7 +215,7 @@ impl MettaMod {
           
         } else {
             let dep_tokenizer = self.own_tokenizer().clone();
-            //Import all the Tokenizer entries from the dependency
+            // Export all the owned Tokenizer entries from self to the dependent module
             let mut dep_tok_clone = dep_tokenizer.borrow().clone();
             target_mod.tokenizer().borrow_mut().move_back(&mut dep_tok_clone);
            
