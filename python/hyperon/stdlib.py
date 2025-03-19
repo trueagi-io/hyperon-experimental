@@ -137,20 +137,22 @@ def find_py_obj(path, mod=None):
             raise RuntimeError(f'Failed to find "{path}"')
     return obj
 
-def get_py_atom(path, typ=AtomType.UNDEFINED, mod=None):
+def get_py_atom(path, unwrap=True, typ=AtomType.UNDEFINED, mod=None):
     name = str(path.get_object().content if isinstance(path, GroundedAtom) else path)
     if mod is not None:
         if not isinstance(mod, GroundedAtom):
             raise NoReduceError()
         mod = mod.get_object().content
     obj = find_py_obj(name, mod)
+    if isinstance(unwrap, GroundedAtom):
+        unwrap = unwrap.get_object().content
     if callable(obj):
-        return [OperationAtom(name, obj, typ, unwrap=True)]
+        return [OperationAtom(name, obj, typ, unwrap=unwrap)]
     else:
         return [ValueAtom(obj, typ)]
 
-def do_py_dot(mod, path, typ=AtomType.UNDEFINED):
-    return get_py_atom(path, typ, mod)
+def do_py_dot(mod, path, unwrap=True, typ=AtomType.UNDEFINED):
+    return get_py_atom(path, unwrap, typ, mod)
 
 @register_atoms
 def py_obj_atoms():

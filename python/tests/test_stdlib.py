@@ -65,6 +65,12 @@ class StdlibTest(HyperonTestCase):
                     (py-atom "[5, 2]"))
         '''))
 
+    def test_py_atom_unwraup(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+        metta.run('''(bind! &math (py-atom math))''')
+        self.assertEqual(TypeError('must be real number, not GroundedAtom'),
+                         metta.run('!((py-dot &math pow False) 5 3)'))
+
 
     def test_number_parsing(self):
         metta = MeTTa(env_builder=Environment.test_env())
