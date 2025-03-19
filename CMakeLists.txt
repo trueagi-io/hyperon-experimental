@@ -10,8 +10,18 @@ option(GIT "Adds git features to hyperon library; requires OpenSSL and Zlib" ON)
 set(HYPERONC_INSTALL_PREFIX "${CMAKE_CURRENT_BINARY_DIR}/hyperonc-install")
 message(STATUS "HYPERONC_INSTALL_PREFIX = ${HYPERONC_INSTALL_PREFIX}")
 
-set(IS_RELEASE_BUILD $<IF:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>,1,0>)
-set(BUILD_CONFIGURATION $<IF:${IS_RELEASE_BUILD},Release,Debug>)
+get_property(IS_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+if(IS_MULTI_CONFIG)
+    message(STATUS "Multi-config generator")
+    set(BUILD_CONFIG "--config $<CONFIG>")
+else()
+    message(STATUS "Single-config generator")
+    set(NONEMPTY_BUILD_CONFIG $<IF:$<STREQUAL:"$<CONFIG>","">,Debug,$<CONFIG>>)
+    set(BUILD_TYPE "-DCMAKE_BUILD_TYPE=${NONEMPTY_BUILD_CONFIG}")
+endif()
+
+add_custom_target(show-build-type-vars COMMAND ${CMAKE_COMMAND} -E echo
+    "CONFIG:$<CONFIG> NONEMPTY_BUILD_CONFIG:${NONEMPTY_BUILD_CONFIG} BUILD_CONFIG:${BUILD_CONFIG} BUILD_TYPE:${BUILD_TYPE}")
 
 ExternalProject_Add(
     hyperonc
@@ -20,9 +30,10 @@ ExternalProject_Add(
     CMAKE_ARGS
     -DGIT=${GIT}
     "-DCMAKE_INSTALL_PREFIX=${HYPERONC_INSTALL_PREFIX}"
-    "-DCMAKE_BUILD_TYPE=${BUILD_CONFIGURATION}"
     "-DCARGO_ARGS=${CARGO_ARGS}"
     "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${CMAKE_CURRENT_SOURCE_DIR}/conan_provider.cmake"
+    ${BUILD_TYPE}
+    BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> ${BUILD_CONFIG}
 )
 
 ExternalProject_Get_Property(hyperonc BINARY_DIR)
@@ -38,9 +49,10 @@ ExternalProject_Add(
     -DGIT=${GIT}
     "-DHYPERONC_INSTALL_PREFIX=${HYPERONC_INSTALL_PREFIX}"
     "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${CMAKE_CURRENT_SOURCE_DIR}/python"
-    "-DCMAKE_BUILD_TYPE=${BUILD_CONFIGURATION}"
     "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${CMAKE_CURRENT_SOURCE_DIR}/conan_provider.cmake"
-    INSTALL_COMMAND cmake -E echo "Skipping install step."
+    ${BUILD_TYPE}
+    BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> ${BUILD_CONFIG}
+    INSTALL_COMMAND ${CMAKE_COMMAND} -E echo "Skipping install step."
 )
 
 ExternalProject_Get_Property(hyperonpy BINARY_DIR)
@@ -50,8 +62,8 @@ message(STATUS "HYPERONPY_BINARY_DIR = ${HYPERONPY_BINARY_DIR}")
 enable_testing()
 
 list(APPEND CTEST_ARGS --no-tests=error --output-on-failure)
-if(CMAKE_CONFIGURATION_TYPES)
-    list(APPEND CTEST_ARGS -C ${BUILD_CONFIGURATION})
+if(IS_MULTI_CONFIG)
+    list(APPEND CTEST_ARGS -C $<CONFIG>)
 endif()
 
 add_custom_target(check
