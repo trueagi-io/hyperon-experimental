@@ -309,39 +309,6 @@ class ExamplesTest(HyperonTestCase):
         # application `(Human Socrates)` is not mixed up with dependent type definition
         self.assertEqualMettaRunnerResults(metta.run("!(:? (HumansAreMortal (Human Socrates)))"), [[]])
 
-    def test_visit_kim(self):
-        # legacy test
-        # can be moved to b4_nondeterm.metta or removed
-        metta = MeTTa(env_builder=Environment.test_env())
-        metta.run('''
-            (= (perform (visit $x)) (perform (lunch-order $x)))
-            (= (perform (visit $x)) (perform (health-check $x)))
-
-            (impl (is-achieved (visit $x))
-                (And (is-achieved (lunch-order $x)) (is-achieved (health-check $x))))
-
-            (= (achieve $goal)
-                (match &self (impl (is-achieved $goal)
-                                (And (is-achieved $subgoal1) (is-achieved $subgoal2)))
-                    (do $subgoal1 $subgoal2)))
-
-            (= (achieve (health-check Kim)) True)
-            (= (achieve (lunch-order Kim)) False)
-        ''')
-        self.assertEqualMettaRunnerResults(metta.run('''
-            !(perform (visit Kim))
-            !(achieve (visit Kim))
-            '''),
-            [metta.parse_all('(perform (lunch-order Kim)) (perform (health-check Kim))'),
-             metta.parse_all('(do (lunch-order Kim) (health-check Kim))')]
-        )
-        metta.run('''
-            (= (do $goal1 $goal2) (achieve $goal1))
-            (= (do $goal1 $goal2) (achieve $goal2))
-        ''')
-        self.assertEqualMettaRunnerResults(metta.run('!(achieve (visit Kim))'),
-            [metta.parse_all('False True')])
-
     def test_char_vs_string(self):
         metta = MeTTa(env_builder=Environment.test_env())
         self.assertEqual(repr(metta.run("!('A')")), "[[('A')]]")
