@@ -43,21 +43,23 @@ class ExamplesTest(HyperonTestCase):
              [ValueAtom(2)]]
             )
 
-    # TODO: it's a custom implementation of State. We may not need it anymore
     def test_self_modify(self):
+        # This is the only test on add/remove atom
         metta = MeTTa(env_builder=Environment.test_env())
         metta.run(
         '''
             (= (remove-st $var)
                (match &self (state $var $y)
                   (remove-atom &self (state $var $y))))
+            (= (new-st $var $val)
+               (add-atom &self (state $var $val)))
             (= (change-st $var $value)
-               (superpose ((remove-st $var)
-                  (add-atom &self (state $var $value)))))
+               (let () (remove-st $var)
+                  (add-atom &self (state $var $value))))
             (= (get-st $var)
                (match &self (state $var $value) $value))
         ''')
-        metta.run('!(change-st (name id-001) Fritz)')
+        metta.run('!(new-st (name id-001) Fritz)')
         self.assertEqualMettaRunnerResults(metta.run('!(get-st (name id-001))'),
                          [[S('Fritz')]])
         metta.run('!(change-st (name id-001) Sam)')
