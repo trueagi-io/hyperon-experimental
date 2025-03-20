@@ -23,6 +23,12 @@ endif()
 add_custom_target(show-build-type-vars COMMAND ${CMAKE_COMMAND} -E echo
     "CONFIG:$<CONFIG> NONEMPTY_BUILD_CONFIG:${NONEMPTY_BUILD_CONFIG} BUILD_CONFIG:${BUILD_CONFIG} BUILD_TYPE:${BUILD_TYPE}")
 
+#Change in conan-provider.cmake to solve #875 depends on using ExternalProject
+#(see https://github.com/conan-io/cmake-conan/issues/687#issuecomment-2736031979).
+#If ExternalProject is replaced by usual CMake add_subdirectory function then conan-provider.cmake
+#doesn't have information about current configuration because $<CONFIG> is not available at the CMake
+#configuration stage. Possible solution in this case is using manual conan install command in CI.
+
 ExternalProject_Add(
     hyperonc
     BUILD_ALWAYS 1
