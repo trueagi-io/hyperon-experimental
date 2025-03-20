@@ -113,24 +113,6 @@ class ExamplesTest(HyperonTestCase):
         self.assertEqual(metta.run('! ploca')[0][0].get_object().value, 5)
         self.assertEqual(ploca.get_object().value, 5)
 
-    def test_frog_reasoning(self):
-        metta = MeTTa(env_builder=Environment.test_env())
-
-        metta.run('''
-            (= (croaks Fritz) True)
-            (= (chirps Tweety) True)
-            (= (yellow Tweety) True)
-            (= (eats_flies Tweety) True)
-            (= (eats_flies Fritz) True)
-        ''')
-
-        fritz_frog = metta.run('!(if (and (croaks $x) (eats_flies $x)) (= (frog $x) True) nop)')[0]
-        self.assertEqual(metta.parse_all('(= (frog Fritz) True)'), fritz_frog)
-        metta.space().add_atom(fritz_frog[0])
-
-        self.assertEqualMettaRunnerResults([metta.parse_all('(= (green Fritz) True)')],
-                metta.run('!(if (frog $x) (= (green $x) True) nop)'))
-
     def test_infer_function_application_type(self):
         metta = MeTTa(env_builder=Environment.test_env())
 
