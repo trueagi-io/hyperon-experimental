@@ -19,11 +19,9 @@ set(HYPERONC_TARGET_DIR ${CMAKE_CURRENT_BINARY_DIR}/cargo)
 file(MAKE_DIRECTORY "${HYPERONC_TARGET_DIR}")
 
 # Need to list release configurations explicitly here because $<CONFIG:Debug>
-# is FALSE by default (when CMAKE_BUILD_TYPE is unspecified).
+# is FALSE by default (when config is unspecified).
 set(IS_RELEASE_BUILD $<IF:$<OR:$<CONFIG:Release>,$<CONFIG:RelWithDebInfo>,$<CONFIG:MinSizeRel>>,1,0>)
 set(RUST_BUILD_SUFFIX $<IF:${IS_RELEASE_BUILD},release,debug>)
-add_custom_target(show-build-type-vars COMMAND ${CMAKE_COMMAND} -E echo
-    "CMAKE_BUILD_TYPE:${BUILD_TYPE} IS_RELEASE_BUILD=${IS_RELEASE_BUILD} RUST_BUILD_SUFFIX=${RUST_BUILD_SUFFIX}")
 
 set(HYPERONC_STATIC_LIB_FILE ${CMAKE_STATIC_LIBRARY_PREFIX}hyperonc${CMAKE_STATIC_LIBRARY_SUFFIX})
 set(HYPERONC_STATIC_LIB_PATH ${HYPERONC_TARGET_DIR}/${HYPERONC_STATIC_LIB_FILE})

@@ -368,7 +368,7 @@ impl<D: DuplicationStrategy> AtomTrie<D> {
         } else {
             let tail_result = self.query_internal(child_id, tail, mapper);
             // TODO: we could move BindingsSet into merge instead of passing by reference
-            result.merge(&tail_result)
+            result.merge(&tail_result).into_iter().filter(|b| !b.has_loops()).collect()
         }
     }
 
