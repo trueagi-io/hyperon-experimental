@@ -23,6 +23,12 @@ endif()
 add_custom_target(show-build-type-vars COMMAND ${CMAKE_COMMAND} -E echo
     "CONFIG:$<CONFIG> NONEMPTY_BUILD_CONFIG:${NONEMPTY_BUILD_CONFIG} BUILD_CONFIG:${BUILD_CONFIG} BUILD_TYPE:${BUILD_TYPE}")
 
+#Change in conan-provider.cmake to solve #875 depends on using ExternalProject
+#(see https://github.com/conan-io/cmake-conan/issues/687#issuecomment-2736031979).
+#If ExternalProject is replaced by usual CMake add_subdirectory function then conan-provider.cmake
+#doesn't have information about current configuration because $<CONFIG> is not available at the CMake
+#configuration stage. Possible solution in this case is using manual conan install command in CI.
+
 ExternalProject_Add(
     hyperonc
     BUILD_ALWAYS 1
@@ -32,6 +38,7 @@ ExternalProject_Add(
     "-DCMAKE_INSTALL_PREFIX=${HYPERONC_INSTALL_PREFIX}"
     "-DCARGO_ARGS=${CARGO_ARGS}"
     "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${CMAKE_CURRENT_SOURCE_DIR}/conan_provider.cmake"
+    "-DCMAKE_CONFIGURATION_TYPES=$<CONFIG>"
     ${BUILD_TYPE}
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> ${BUILD_CONFIG}
 )
@@ -50,6 +57,7 @@ ExternalProject_Add(
     "-DHYPERONC_INSTALL_PREFIX=${HYPERONC_INSTALL_PREFIX}"
     "-DCMAKE_LIBRARY_OUTPUT_DIRECTORY=${CMAKE_CURRENT_SOURCE_DIR}/python"
     "-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=${CMAKE_CURRENT_SOURCE_DIR}/conan_provider.cmake"
+    "-DCMAKE_CONFIGURATION_TYPES=$<CONFIG>"
     ${BUILD_TYPE}
     BUILD_COMMAND ${CMAKE_COMMAND} --build <BINARY_DIR> ${BUILD_CONFIG}
     INSTALL_COMMAND ${CMAKE_COMMAND} -E echo "Skipping install step."
