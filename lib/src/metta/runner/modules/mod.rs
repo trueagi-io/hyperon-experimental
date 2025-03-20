@@ -211,7 +211,7 @@ impl MettaMod {
 
     fn export_all_tokens_into(&self, target_mod: &MettaMod, metta: &Metta) -> Result<(), String> {
         if self.name() == "corelib" {
-            register_all_corelib_tokens(&mut *target_mod.tokenizer().borrow_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
+            register_all_corelib_tokens(target_mod.tokenizer().borrow_mut().deref_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
           
         } else {
             let dep_tokenizer = self.own_tokenizer();

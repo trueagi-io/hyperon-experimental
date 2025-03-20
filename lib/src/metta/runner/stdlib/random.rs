@@ -228,7 +228,7 @@ impl CustomExecute for FlipOp {
     }
 }
 
-pub fn register_common_tokens(tref: &mut Tokenizer) {
+pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let random_int_op = Atom::gnd(RandomIntOp{});
     tref.register_token(regex(r"random-int"), move |_| { random_int_op.clone() });
     let random_float_op = Atom::gnd(RandomFloatOp{});

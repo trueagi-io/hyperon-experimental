@@ -222,7 +222,7 @@ impl CustomExecute for RemoveAtomOp {
     }
 }
 
-pub fn register_common_tokens(tref: &mut Tokenizer) {
+pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let new_space_op = Atom::gnd(NewSpaceOp{});
     tref.register_token(regex(r"new-space"), move |_| { new_space_op.clone() });
     let add_atom_op = Atom::gnd(AddAtomOp{});
