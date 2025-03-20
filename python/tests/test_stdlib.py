@@ -4,6 +4,16 @@ from hyperon import *
 from hyperon.stdlib import Char
 from test_common import *
 
+class SimpleObject:
+    def method(self, *args, **kwargs):
+        # Expecting specific arguments for testing purposes
+        return -1 if "arg2" not in args else kwargs["arg3"]
+
+def proc_atom_noreduce(a: Atom):
+    # Checking that the input atom is an expression
+    # Reducible expression like (+ 1 2) should be passed here for check
+    return [ValueAtom(isinstance(a, ExpressionAtom))]
+
 class StdlibTest(HyperonTestCase):
     def test_text_ops(self):
         metta = MeTTa(env_builder=Environment.test_env())
@@ -62,9 +72,27 @@ class StdlibTest(HyperonTestCase):
         self.assertEqual([[ValueAtom(3.5)]],
             metta.run('''
                 ! ((py-dot &statistics mean)
-                    (py-atom "[5, 2]"))
+                   (py-atom "[5, 2]"))
         '''))
+        # Checking that we can import custom classes, create objects and access their methods
+        metta.run('!(bind! &SimpleObject (py-atom test_stdlib.SimpleObject))')
+        self.assertEqual([[ValueAtom(3)]],
+            metta.run('!((py-dot (&SimpleObject) method) "arg1" "arg2" (Kwargs (arg3 3)))'))
 
+    def test_py_atom_unwrap(self):
+        metta = MeTTa(env_builder=Environment.test_env())
+        metta.run('!(bind! &math (py-atom math))')
+        self.assertTrue(atom_is_error(metta.run('!((py-dot &math pow False) 5 3)', True)[0]))
+        self.assertEqual(metta.run('!((py-dot &math pow True) 5 3)', True)[0], ValueAtom(125.0))
+        self.assertEqual(metta.run('!((py-dot &math pow True) 5 3)', True)[0], ValueAtom(125.0))
+        self.assertEqual(metta.run('!((py-dot &math pow (-> Number Number Number)) 5 3)', True)[0], ValueAtom(125.0))
+        self.assertEqual(metta.run('!((py-dot &math pow) 5 3)', True)[0], ValueAtom(125.0))
+        # Here, we check that the Atom argument of unwrap=False function will not be reduced
+        # NOTE: this works with bind!, but doesn't work with `(let $noreduce (py-atom ...) ...)`
+        #       (+ 1 2) gets reduced before getting to proc_atom_noreduce...
+        metta.run('!(bind! &noreduce (py-atom test_stdlib.proc_atom_noreduce (-> Atom Atom) False))')
+        self.assertEqual(metta.run('!(&noreduce (+ 1 2))'),
+                         [[ValueAtom(True)]])
 
     def test_number_parsing(self):
         metta = MeTTa(env_builder=Environment.test_env())
@@ -107,7 +135,14 @@ class StdlibTest(HyperonTestCase):
 
         self.assertEqual(str(metta.run('!(py-list (a b c))')[0][0].get_object().content[2]), "c")
 
-        # We need py-chain for langchain, but we test with bitwise operation | (1 | 2 | 3 | 4 = 7)
+        # We need py-chain for langchain, e.g.
+        #    !(bind! ChatOpenAI (py-atom langchain_openai.ChatOpenAI))
+        #    !(bind! ChatPromptTemplate (py-atom langchain_core.prompts.ChatPromptTemplate))
+        #    !(bind! StrOutputParser (py-atom langchain_core.output_parsers.StrOutputParser))
+        #    !(bind! model (ChatOpenAI (Kwargs (temperature 0) (model "gpt-3.5-turbo"))))
+        #    !(bind! prompt ((py-dot ChatPromptTemplate from_template) "tell me a joke about cat"))
+        #    !((py-dot (py-chain (prompt model (StrOutputParser))) invoke) (py-dict ()))
+        # but we test with bitwise operation | (1 | 2 | 3 | 4 = 7)
         self.assertEqual(metta.run('!(py-chain (1 2 3 4))'), [[ValueAtom( 7 )]])
 
         # test when we except errors (just in case we reset metta after each exception)
