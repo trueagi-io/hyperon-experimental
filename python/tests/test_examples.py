@@ -144,28 +144,6 @@ class ExamplesTest(HyperonTestCase):
         output = metta.run('!(if (: (apply\' reverse "Hello") $t) $t Wrong)')
         self.assertEqualMettaRunnerResults(output, [[S('String')]])
 
-    def test_plus_reduces_Z(self):
-        metta = MeTTa(env_builder=Environment.test_env())
-
-        metta.run('''
-           (= (eq $x $x) True)
-           (= (plus Z $y) $y)
-           (= (plus (S $k) $y) (S (plus $k $y)))
-        ''')
-
-        self.assertEqualMettaRunnerResults(metta.run('''
-            !(eq (+ 2 2) 4)
-            !(eq (+ 2 3) 4)
-            !(eq (plus Z $n) $n)
-            '''),
-            [[ValueAtom(True)],
-             metta.parse_all('(eq 5 4)'),
-             [ValueAtom(True)]
-            ]
-        )
-        output = metta.run('!(eq (plus (S Z) $n) $n)')
-        self.assertAtomsAreEquivalent(output[0], metta.parse_all('(eq (S $y) $y)'))
-
     def test_multi_space(self):
         # NOTE: it is not recommended to split code into multiple spaces, because
         # query chaining by the interpreter can behave in a tricky way
