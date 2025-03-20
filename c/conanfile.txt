@@ -1,5 +1,6 @@
 [requires]
 libcheck/0.15.2
+openssl/3.4.1
 
 [generators]
 CMakeDeps
