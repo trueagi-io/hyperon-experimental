@@ -60,14 +60,11 @@ impl CustomExecute for FormatArgsOp {
     }
 }
 
-pub fn register_runner_tokens(tref: &mut Tokenizer) {
+pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let println_op = Atom::gnd(PrintlnOp{});
     tref.register_token(regex(r"println!"), move |_| { println_op.clone() });
     let format_args_op = Atom::gnd(FormatArgsOp{});
     tref.register_token(regex(r"format-args"), move |_| { format_args_op.clone() });
-}
-
-pub fn register_rust_stdlib_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r#"(?s)^".*"$"#),
         |token| { let mut s = String::from(token); s.remove(0); s.pop(); Atom::gnd(Str::from_string(s)) });
 }

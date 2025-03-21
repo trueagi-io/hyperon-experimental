@@ -88,6 +88,12 @@ impl Tokenizer {
         }).map(|descr| descr.constr.clone())
     }
 
+    pub fn remove_token(&mut self, regex_str: &str) {
+        if let Some(pos) = self.tokens.iter().position(|descr| descr.regex.as_str() == regex_str) {
+            self.tokens.remove(pos);
+        }
+    }
+
 }
 
 /// The meaning of a parsed syntactic element, generated from a substring in the input text

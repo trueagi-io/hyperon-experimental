@@ -405,10 +405,7 @@ impl CustomExecute for IsInfMathOp {
     }
 }
 
-//TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
-// to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
-pub fn register_common_tokens(tref: &mut Tokenizer) {
-
+pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let pow_math_op = Atom::gnd(PowMathOp {});
     tref.register_token(regex(r"pow-math"), move |_| { pow_math_op.clone() });
     let sqrt_math_op = Atom::gnd(SqrtMathOp {});

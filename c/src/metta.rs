@@ -1252,6 +1252,12 @@ pub extern "C" fn run_context_get_tokenizer(run_context: *const run_context_t) -
     context.module().tokenizer().clone().into()
 }
 
+#[no_mangle]
+pub extern "C" fn run_context_get_own_tokenizer(run_context: *const run_context_t) -> tokenizer_t {
+    let context = unsafe{ &*run_context }.borrow();
+    context.module().own_tokenizer().clone().into()
+}
+
 /// @brief Sets a runtime error
 /// @ingroup interpreter_group
 /// @param[in]  run_context  A pointer to the `run_context_t` to access the runner API
@@ -1934,7 +1940,6 @@ impl ModuleLoader for CFsModFmtLoader {
         let mut c_context = run_context_t::from(context);
 
         (api.load)(self.payload, &mut c_context, self.callback_context);
-
         match c_context.take_err_string() {
             None => Ok(()),
             Some(err_string) => Err(err_string),

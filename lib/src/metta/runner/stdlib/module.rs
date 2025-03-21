@@ -264,16 +264,13 @@ impl CustomExecute for BindOp {
     }
 }
 
-pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, metta: &Metta) {
+pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, metta: &Metta) {
     let import_op = Atom::gnd(ImportOp::new(metta.clone()));
     tref.register_token(regex(r"import!"), move |_| { import_op.clone() });
     let include_op = Atom::gnd(IncludeOp::new(metta.clone()));
     tref.register_token(regex(r"include"), move |_| { include_op.clone() });
     let bind_op = Atom::gnd(BindOp::new(tokenizer.clone()));
     tref.register_token(regex(r"bind!"), move |_| { bind_op.clone() });
-}
-
-pub fn register_common_tokens(tref: &mut Tokenizer, metta: &Metta) {
     let mod_space_op = Atom::gnd(ModSpaceOp::new(metta.clone()));
     tref.register_token(regex(r"mod-space!"), move |_| { mod_space_op.clone() });
     let print_mods_op = Atom::gnd(PrintModsOp::new(metta.clone()));

@@ -110,7 +110,7 @@ impl CustomExecute for GitModuleOp {
     }
 }
 
-pub fn register_pkg_mgmt_tokens(tref: &mut Tokenizer, metta: &Metta) {
+pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, metta: &Metta) {
     let register_module_op = Atom::gnd(RegisterModuleOp::new(metta.clone()));
     tref.register_token(regex(r"register-module!"), move |_| { register_module_op.clone() });
     let git_module_op = Atom::gnd(GitModuleOp::new(metta.clone()));

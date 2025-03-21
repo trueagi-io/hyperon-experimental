@@ -358,7 +358,7 @@ impl CustomExecute for CaseOp {
     }
 }
 
-pub fn register_common_tokens(tref: &mut Tokenizer) {
+pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let is_equivalent = Atom::gnd(IfEqualOp{});
     tref.register_token(regex(r"if-equal"), move |_| { is_equivalent.clone() });
     let nop_op = Atom::gnd(NopOp{});
@@ -367,9 +367,11 @@ pub fn register_common_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r"match"), move |_| { match_op.clone() });
     let sealed_op = Atom::gnd(SealedOp{});
     tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
+    let eq_op = Atom::gnd(EqualOp{});
+    tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
 }
 
-pub fn register_runner_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Metta) {
+pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Metta) {
     let superpose_op = Atom::gnd(SuperposeOp::new(space.clone()));
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
     let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
@@ -380,11 +382,6 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Me
     tref.register_token(regex(r"capture"), move |_| { capture_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });
-}
-
-pub fn register_rust_stdlib_tokens(tref: &mut Tokenizer) {
-    let eq_op = Atom::gnd(EqualOp{});
-    tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
 }
 
 #[cfg(test)]

@@ -125,7 +125,7 @@ impl CustomExecute for NotOp {
     }
 }
 
-pub fn register_rust_stdlib_tokens(tref: &mut Tokenizer) {
+pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     tref.register_fallible_token(regex(r"[\-\+]?\d+"),
         |token| { Ok(Atom::gnd(Number::from_int_str(token)?)) });
     tref.register_fallible_token(regex(r"[\-\+]?\d+\.\d+"),

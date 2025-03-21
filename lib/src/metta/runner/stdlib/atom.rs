@@ -441,15 +441,16 @@ impl CustomExecute for GetTypeSpaceOp {
     }
 }
 
-pub fn register_common_tokens(tref: &mut Tokenizer, space: &DynSpace) {
+pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &DynSpace) {
+    let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
+    tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
+}
+
+pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let get_type_space_op = Atom::gnd(GetTypeSpaceOp{});
     tref.register_token(regex(r"get-type-space"), move |_| { get_type_space_op.clone() });
     let get_meta_type_op = Atom::gnd(GetMetaTypeOp{});
     tref.register_token(regex(r"get-metatype"), move |_| { get_meta_type_op.clone() });
-    let get_type_op = Atom::gnd(GetTypeOp::new(space.clone()));
-    tref.register_token(regex(r"get-type"), move |_| { get_type_op.clone() });
-
-
     let min_atom_op = Atom::gnd(MinAtomOp{});
     tref.register_token(regex(r"min-atom"), move |_| { min_atom_op.clone() });
     let max_atom_op = Atom::gnd(MaxAtomOp{});

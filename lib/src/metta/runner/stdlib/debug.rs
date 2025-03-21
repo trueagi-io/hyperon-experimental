@@ -300,28 +300,24 @@ impl CustomExecute for AssertAlphaEqualToResultOp {
 }
 
 
-pub fn register_common_tokens(tref: &mut Tokenizer) {
+pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let trace_op = Atom::gnd(TraceOp{});
     tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
     let print_alternatives_op = Atom::gnd(PrintAlternativesOp{});
     tref.register_token(regex(r"print-alternatives!"), move |_| { print_alternatives_op.clone() });
-}
-
-pub fn register_runner_tokens(tref: &mut Tokenizer, space: &DynSpace) {
-    let assert_alpha_equal_to_result_op = Atom::gnd(AssertAlphaEqualToResultOp::new(space.clone()));
-    tref.register_token(regex(r"assertAlphaEqualToResult"), move |_| { assert_alpha_equal_to_result_op.clone() });
-
-    let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
-    tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
-
-    let assert_alpha_equal_op = Atom::gnd(AssertAlphaEqualOp::new(space.clone()));
-    tref.register_token(regex(r"assertAlphaEqual"), move |_| { assert_alpha_equal_op.clone() });
-
-    let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
-    tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
-
     let alpha_eq_op = Atom::gnd(AlphaEqOp{});
     tref.register_token(regex(r"=alpha"), move |_| { alpha_eq_op.clone() });
+}
+
+pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &DynSpace) {
+    let assert_alpha_equal_to_result_op = Atom::gnd(AssertAlphaEqualToResultOp::new(space.clone()));
+    tref.register_token(regex(r"assertAlphaEqualToResult"), move |_| { assert_alpha_equal_to_result_op.clone() });
+    let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
+    tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
+    let assert_alpha_equal_op = Atom::gnd(AssertAlphaEqualOp::new(space.clone()));
+    tref.register_token(regex(r"assertAlphaEqual"), move |_| { assert_alpha_equal_op.clone() });
+    let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
+    tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
 }
 
 #[cfg(test)]

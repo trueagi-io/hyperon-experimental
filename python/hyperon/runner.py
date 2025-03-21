@@ -90,6 +90,8 @@ class RunContext:
     def register_token(self, regexp, constr):
         """Registers a token in the currently running module's Tokenizer"""
         self.tokenizer().register_token(regexp, constr)
+        own_tokenizer = Tokenizer._from_ctokenizer(hp.run_context_get_own_tokenizer(self.c_run_context))
+        own_tokenizer.register_token(regexp, constr)
 
     def register_atom(self, name, symbol):
         """Registers an Atom with a name in the currently running module's Tokenizer"""
@@ -324,7 +326,7 @@ def _priv_load_py_stdlib(c_run_context):
     """
     run_context = RunContext(c_run_context)
 
-    stdlib_loader = _priv_make_module_loader_func_for_pymod("hyperon.stdlib", load_corelib=True)
+    stdlib_loader = _priv_make_module_loader_func_for_pymod("hyperon.stdlib")
     stdlib_loader(run_context)
 
     # #LP-TODO-Next Make a test for loading a metta module from a python module using load_module_direct_from_pymod
@@ -340,7 +342,7 @@ def _priv_load_py_stdlib(c_run_context):
     # #UPDATE: If we implement a Python module-space Catalog in the future, then the code to search site packages
     #  directories directly, in the 'MeTTa.__init__' method, needs to be removed
 
-def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False, resource_dir=None):
+def _priv_make_module_loader_func_for_pymod(pymod_name, resource_dir=None):
     """
     Private function to return a loader function to load a module into the runner directly from the specified Python module
     """
@@ -353,11 +355,6 @@ def _priv_make_module_loader_func_for_pymod(pymod_name, load_corelib=False, reso
             #  space before the rest of the init code runs
             space = GroundingSpaceRef()
             run_context.init_self_module(space, resource_dir)
-
-            #Load and import the corelib using "import *" behavior, if that flag was specified
-            if load_corelib:
-                corelib_id = run_context.load_module("top:corelib")
-                run_context.import_dependency(corelib_id)
 
             for n in dir(mod):
                 obj = getattr(mod, n)
