@@ -62,10 +62,9 @@
   (get-type (dropN (ConsN "1" NilN)))
   (VecN String 0))
 
-; TODO: doesn't work after type checking fixes
 ; However, without any validation, invalid lengths like -1 can be derived.
-(assertEqual
-  ((get-type (dropN (dropN (ConsN "1" NilN)))))
+!(assertEqual
+   (get-type (dropN (dropN (ConsN "1" NilN))))
    (VecN String -1))
 
 ; Applying `dropN` to `NilN` is not badly typed, but it
