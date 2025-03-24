@@ -36,3 +36,14 @@ class ModulesTest(HyperonTestCase):
 
         result = metta.run("!(match &self ($x notprime) $x)")
         self.assertEqual(result[0], [S("six")])
+
+
+class PyOpsTest(HyperonTestCase):
+    def test_py_ops(self):
+        """
+        Tests that a MeTTa module from exts can be imported
+        """
+        runner = MeTTa(env_builder=Environment.custom_env())
+        runner.run("!(import! &self py_ops)")
+        result = runner.run('!(* "a" 4)')
+        self.assertEqual(result[0][0], ValueAtom('aaaa'))
