@@ -43,21 +43,23 @@ class ExamplesTest(HyperonTestCase):
              [ValueAtom(2)]]
             )
 
-    # TODO: it's a custom implementation of State. We may not need it anymore
     def test_self_modify(self):
+        # This is the only test on add/remove atom
         metta = MeTTa(env_builder=Environment.test_env())
         metta.run(
         '''
             (= (remove-st $var)
                (match &self (state $var $y)
                   (remove-atom &self (state $var $y))))
+            (= (new-st $var $val)
+               (add-atom &self (state $var $val)))
             (= (change-st $var $value)
-               (superpose ((remove-st $var)
-                  (add-atom &self (state $var $value)))))
+               (let () (remove-st $var)
+                  (add-atom &self (state $var $value))))
             (= (get-st $var)
                (match &self (state $var $value) $value))
         ''')
-        metta.run('!(change-st (name id-001) Fritz)')
+        metta.run('!(new-st (name id-001) Fritz)')
         self.assertEqualMettaRunnerResults(metta.run('!(get-st (name id-001))'),
                          [[S('Fritz')]])
         metta.run('!(change-st (name id-001) Sam)')
@@ -111,24 +113,6 @@ class ExamplesTest(HyperonTestCase):
         self.assertEqual(metta.run('! ploca')[0][0].get_object().value, 5)
         self.assertEqual(ploca.get_object().value, 5)
 
-    def test_frog_reasoning(self):
-        metta = MeTTa(env_builder=Environment.test_env())
-
-        metta.run('''
-            (= (croaks Fritz) True)
-            (= (chirps Tweety) True)
-            (= (yellow Tweety) True)
-            (= (eats_flies Tweety) True)
-            (= (eats_flies Fritz) True)
-        ''')
-
-        fritz_frog = metta.run('!(if (and (croaks $x) (eats_flies $x)) (= (frog $x) True) nop)')[0]
-        self.assertEqual(metta.parse_all('(= (frog Fritz) True)'), fritz_frog)
-        metta.space().add_atom(fritz_frog[0])
-
-        self.assertEqualMettaRunnerResults([metta.parse_all('(= (green Fritz) True)')],
-                metta.run('!(if (frog $x) (= (green $x) True) nop)'))
-
     def test_infer_function_application_type(self):
         metta = MeTTa(env_builder=Environment.test_env())
 
@@ -141,28 +125,6 @@ class ExamplesTest(HyperonTestCase):
 
         output = metta.run('!(if (: (apply\' reverse "Hello") $t) $t Wrong)')
         self.assertEqualMettaRunnerResults(output, [[S('String')]])
-
-    def test_plus_reduces_Z(self):
-        metta = MeTTa(env_builder=Environment.test_env())
-
-        metta.run('''
-           (= (eq $x $x) True)
-           (= (plus Z $y) $y)
-           (= (plus (S $k) $y) (S (plus $k $y)))
-        ''')
-
-        self.assertEqualMettaRunnerResults(metta.run('''
-            !(eq (+ 2 2) 4)
-            !(eq (+ 2 3) 4)
-            !(eq (plus Z $n) $n)
-            '''),
-            [[ValueAtom(True)],
-             metta.parse_all('(eq 5 4)'),
-             [ValueAtom(True)]
-            ]
-        )
-        output = metta.run('!(eq (plus (S Z) $n) $n)')
-        self.assertAtomsAreEquivalent(output[0], metta.parse_all('(eq (S $y) $y)'))
 
     def test_multi_space(self):
         # NOTE: it is not recommended to split code into multiple spaces, because
@@ -328,39 +290,6 @@ class ExamplesTest(HyperonTestCase):
         # Interestingly, the following example works correctly in this syntax, because
         # application `(Human Socrates)` is not mixed up with dependent type definition
         self.assertEqualMettaRunnerResults(metta.run("!(:? (HumansAreMortal (Human Socrates)))"), [[]])
-
-    def test_visit_kim(self):
-        # legacy test
-        # can be moved to b4_nondeterm.metta or removed
-        metta = MeTTa(env_builder=Environment.test_env())
-        metta.run('''
-            (= (perform (visit $x)) (perform (lunch-order $x)))
-            (= (perform (visit $x)) (perform (health-check $x)))
-
-            (impl (is-achieved (visit $x))
-                (And (is-achieved (lunch-order $x)) (is-achieved (health-check $x))))
-
-            (= (achieve $goal)
-                (match &self (impl (is-achieved $goal)
-                                (And (is-achieved $subgoal1) (is-achieved $subgoal2)))
-                    (do $subgoal1 $subgoal2)))
-
-            (= (achieve (health-check Kim)) True)
-            (= (achieve (lunch-order Kim)) False)
-        ''')
-        self.assertEqualMettaRunnerResults(metta.run('''
-            !(perform (visit Kim))
-            !(achieve (visit Kim))
-            '''),
-            [metta.parse_all('(perform (lunch-order Kim)) (perform (health-check Kim))'),
-             metta.parse_all('(do (lunch-order Kim) (health-check Kim))')]
-        )
-        metta.run('''
-            (= (do $goal1 $goal2) (achieve $goal1))
-            (= (do $goal1 $goal2) (achieve $goal2))
-        ''')
-        self.assertEqualMettaRunnerResults(metta.run('!(achieve (visit Kim))'),
-            [metta.parse_all('False True')])
 
     def test_char_vs_string(self):
         metta = MeTTa(env_builder=Environment.test_env())

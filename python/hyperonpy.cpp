@@ -1004,6 +1004,10 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("run_context_get_tokenizer", [](CRunContext& run_context) {
         return CTokenizer(run_context_get_tokenizer(run_context.ptr));
     }, "Returns the Tokenizer for the currently running module");
+    m.def("run_context_get_own_tokenizer", [](CRunContext& run_context) {
+        return CTokenizer(run_context_get_own_tokenizer(run_context.ptr));
+    }, "Returns the Own Tokenizer for the currently running module");
+
     m.def("run_context_import_dependency", [](CRunContext& run_context, ModuleId mod_id) {
         run_context_import_dependency(run_context.ptr, mod_id.obj);
     }, "Imports a dependency into a module");

@@ -45,6 +45,10 @@
   (Add (S Z) (S Z))
   (S (S Z)))
 
+; These are just equalities, which can be applied to anything
+!(assertEqual (Add $n Z) $n)
+!(assertEqual (Add $n (S Z)) (S $n))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; In the current implementation, child expressions

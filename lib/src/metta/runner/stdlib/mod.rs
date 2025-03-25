@@ -65,27 +65,15 @@ pub fn interpret(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
 // to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
-pub fn register_common_tokens(tref: &mut Tokenizer, _tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
-    core::register_common_tokens(tref);
-    math::register_common_tokens(tref);
-    random::register_common_tokens(tref);
-    atom::register_common_tokens(tref, space);
-    module::register_common_tokens(tref, metta);
-    space::register_common_tokens(tref);
-    debug::register_common_tokens(tref);
+fn register_context_dependent_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
 
+    atom::register_context_dependent_tokens(tref, space);
+    core::register_context_dependent_tokens(tref, space, metta);
+    debug::register_context_dependent_tokens(tref, space);
+    module::register_context_dependent_tokens(tref, tokenizer.clone(), metta);
     #[cfg(feature = "pkg_mgmt")]
-    package::register_pkg_mgmt_tokens(tref, metta);
-}
+    package::register_context_dependent_tokens(tref, metta);
 
-//TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
-// to the runner & module state.  https://github.com/trueagi-io/hyperon-experimental/issues/410
-pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta) {
-
-    core::register_runner_tokens(tref, space, metta);
-    module::register_runner_tokens(tref, tokenizer.clone(), metta);
-    string::register_runner_tokens(tref);
-    debug::register_runner_tokens(tref, space);
     // &self should be updated
     // TODO: adding &self might be done not by stdlib, but by MeTTa itself.
     // TODO: adding &self introduces self referencing and thus prevents space
@@ -97,15 +85,21 @@ pub fn register_runner_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>
     tref.register_token(regex(r"&self"), move |_| { self_atom.clone() });
 }
 
-pub fn register_rust_stdlib_tokens(target: &mut Tokenizer) {
-    let mut rust_tokens = Tokenizer::new();
-    let tref = &mut rust_tokens;
+fn register_context_independent_tokens(tref: &mut Tokenizer) {
+    atom::register_context_independent_tokens(tref);
+    core::register_context_independent_tokens(tref);
+    debug::register_context_independent_tokens(tref);
+    math::register_context_independent_tokens(tref);
+    random::register_context_independent_tokens(tref);
+    arithmetics::register_context_independent_tokens(tref);
+    string::register_context_independent_tokens(tref);
+    space::register_context_independent_tokens(tref);
+}
 
-    core::register_rust_stdlib_tokens(tref);
-    arithmetics::register_rust_stdlib_tokens(tref);
-    string::register_rust_stdlib_tokens(tref);
 
-    target.move_front(&mut rust_tokens);
+pub(crate) fn register_all_corelib_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tokenizer>, space: &DynSpace, metta: &Metta){
+    register_context_dependent_tokens(tref, tokenizer.clone(),space, metta);
+    register_context_independent_tokens(tref);
 }
 
 pub static METTA_CODE: &'static str = include_str!("stdlib.metta");
@@ -128,11 +122,12 @@ impl ModuleLoader for CoreLibLoader {
         let space = DynSpace::new(GroundingSpace::new());
         context.init_self_module(space, None);
 
-        register_rust_stdlib_tokens(&mut *context.module().tokenizer().borrow_mut());
+        let module = context.module();
+        let tokenizer = module.tokenizer();
+        register_all_corelib_tokens(tokenizer.borrow_mut().deref_mut(), tokenizer.clone(), &module.space(), context.metta);
 
         let parser = SExprParser::new(METTA_CODE);
         context.push_parser(Box::new(parser));
-
         Ok(())
     }
 }
