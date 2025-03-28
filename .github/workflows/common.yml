@@ -121,7 +121,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          cmake ${{env.CMAKE_BUILD_TYPE_VARIABLE}} ${{ env.CMAKE_GIT_EXCLUDE }} ..
+          cmake ${{env.CMAKE_BUILD_TYPE_VARIABLE}} ..
 
       - name: Build C API
         working-directory: ./build
