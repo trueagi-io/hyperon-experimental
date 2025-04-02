@@ -4,6 +4,7 @@ use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE};
 use crate::metta::runner::{Metta, ModuleLoader, RunContext, DynSpace};
 use crate::metta::runner::pkg_mgmt::{UpdateMode, ManagedCatalog};
 use crate::metta::runner::stdlib::{regex, unit_result};
+use crate::metta::runner::modules::MettaMod;
 
 //DISCUSSION: We want to expose more of the pkg_mgmt / catalog system to MeTTa through programmatic
 // interfaces, but the details are unclear.  Most importantly, the use cases are unclear, and those
@@ -56,16 +57,18 @@ impl ModuleLoader for CatalogModLoader {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
         let space = DynSpace::new(GroundingSpace::new());
         context.init_self_module(space, None);
+        self.load_tokens(context.module(), context.metta)
+    }
 
-        let metta = context.metta();
-        let module = context.module();
+    fn load_tokens(&self, target: &MettaMod, metta: &Metta) -> Result<(), String> {
+        let mut tref = target.tokenizer().borrow_mut();
 
         let catalog_list_op = Atom::gnd(CatalogListOp::new(metta.clone()));
-        module.register_token(regex(r"catalog-list!"), move |_| { catalog_list_op.clone() });
+        tref.register_token(regex(r"catalog-list!"), move |_| { catalog_list_op.clone() });
         let catalog_update_op = Atom::gnd(CatalogUpdateOp::new(metta.clone()));
-        module.register_token(regex(r"catalog-update!"), move |_| { catalog_update_op.clone() });
+        tref.register_token(regex(r"catalog-update!"), move |_| { catalog_update_op.clone() });
         let catalog_clear_op = Atom::gnd(CatalogClearOp::new(metta.clone()));
-        module.register_token(regex(r"catalog-clear!"), move |_| { catalog_clear_op.clone() });
+        tref.register_token(regex(r"catalog-clear!"), move |_| { catalog_clear_op.clone() });
 
         Ok(())
     }

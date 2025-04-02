@@ -17,6 +17,7 @@ use crate::metta::*;
 use crate::metta::text::{Tokenizer, SExprParser};
 use crate::common::shared::Shared;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, PragmaSettings};
+use crate::metta::runner::modules::MettaMod;
 
 use regex::Regex;
 
@@ -131,12 +132,17 @@ impl ModuleLoader for CoreLibLoader {
         let space = DynSpace::new(GroundingSpace::new());
         context.init_self_module(space, None);
 
-        let module = context.module();
-        let tokenizer = module.tokenizer();
-        register_all_corelib_tokens(tokenizer.borrow_mut().deref_mut(), tokenizer.clone(), &module.space(), context.metta);
+        self.load_tokens(context.module(), context.metta)?;
 
         let parser = SExprParser::new(METTA_CODE);
         context.push_parser(Box::new(parser));
+        Ok(())
+    }
+
+    fn load_tokens(&self, target: &MettaMod, metta: &Metta) -> Result<(), String> {
+        let tokenizer = target.tokenizer();
+        register_all_corelib_tokens(tokenizer.borrow_mut().deref_mut(),
+            tokenizer.clone(), &target.space(), metta);
         Ok(())
     }
 }

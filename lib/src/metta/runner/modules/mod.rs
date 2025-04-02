@@ -5,12 +5,10 @@ use std::cell::RefCell;
 use crate::metta::*;
 use crate::metta::runner::*;
 use crate::space::module::ModuleSpace;
-use crate::gnd::*;
 
 use regex::Regex;
 
 use super::interpreter::interpret;
-use super::stdlib::*;
 
 use std::mem;
 
@@ -207,21 +205,10 @@ impl MettaMod {
         }
 
         // Finally, Import the tokens from the dependency
-        mod_ptr.export_all_tokens_into(self, metta)
-    }
-
-    fn export_all_tokens_into(&self, target_mod: &MettaMod, metta: &Metta) -> Result<(), String> {
-        if self.name() == "corelib" {
-            register_all_corelib_tokens(target_mod.tokenizer().borrow_mut().deref_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
-          
-        } else {
-            let dep_tokenizer = self.own_tokenizer();
-            // Export all the owned Tokenizer entries from self to the dependent module
-            let mut dep_tok_clone = dep_tokenizer.borrow().clone();
-            target_mod.tokenizer().borrow_mut().move_back(&mut dep_tok_clone);
-           
-        }        
-        Ok(())
+        match &mod_ptr.loader {
+            Some(loader) => loader.load_tokens(self, metta),
+            None => Ok(()), // no tokens are exported by mod_ptr
+        }
     }
 
     /// Returns `true` if the `self` module has imported the `mod_id` module as a sub-dependency
@@ -309,23 +296,6 @@ impl MettaMod {
         }
         self.space.borrow_mut().add(atom);
         Ok(())
-    }
-
-    // TODO: This method is hotfix before proper method of loading module's tokens is
-    // implemented.
-    pub fn register_token<C: 'static + for<'a> Fn(&'a str) -> Atom>(&self, regex: Regex, constr: C) {
-        let constr = Rc::new(move |token: &str| -> Result<Atom, String> { Ok(constr(token)) });
-        self.tokenizer.borrow_mut().register_token_with_func_ptr(regex.clone(), constr.clone());
-        self.own_tokenizer.borrow_mut().register_token_with_func_ptr(regex, constr);
-    }
-
-    // TODO: This method is hotfix before proper method of loading module's tokens is
-    // implemented.
-    pub fn register_method<T: GroundedFunction + 'static>(&self, method: GroundedFunctionAtom<T>) {
-        let regex = Regex::new(method.name()).unwrap();
-        let constr = Rc::new(move |_token: &str| -> Result<Atom, String> { Ok(Atom::gnd(method.clone())) });
-        self.tokenizer.borrow_mut().register_token_with_func_ptr(regex.clone(), constr.clone());
-        self.own_tokenizer.borrow_mut().register_token_with_func_ptr(regex, constr);
     }
 }
 
@@ -627,6 +597,13 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     /// Returns a data blob containing a given named resource belonging to a module
     fn get_resource(&self, _res_key: ResourceKey) -> Result<Resource, String> {
         Err("resource not found".to_string())
+    }
+
+    /// Loads module's tokens into target module. This method is used for both
+    /// initial token loading and exporting module's tokens into importing
+    /// module.
+    fn load_tokens(&self, _target: &MettaMod, _metta: &Metta) -> Result<(), String> {
+        Ok(())
     }
 }
 

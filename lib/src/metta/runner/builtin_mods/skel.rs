@@ -1,7 +1,7 @@
 use crate::metta::*;
 use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
-use crate::metta::runner::{ModuleLoader, RunContext, DynSpace};
+use crate::metta::runner::{ModuleLoader, RunContext, DynSpace, Metta, MettaMod};
 use crate::atom::gnd::*;
 
 pub static SKEL_METTA: &'static str = include_str!("skel.metta");
@@ -16,10 +16,7 @@ impl ModuleLoader for SkelModLoader {
         context.init_self_module(space, None);
 
         // Load module's tokens
-        context.module().register_method(GroundedFunctionAtom::new(
-                r"skel-swap-pair-native".into(),
-                expr!("->" ("PairType" ta tb) ("PairType" tb ta)),
-                skel_swap_pair_native));
+        let _ = self.load_tokens(context.module(), context.metta)?;
 
         // Parse MeTTa code of the module
         let parser = SExprParser::new(SKEL_METTA);
@@ -28,6 +25,16 @@ impl ModuleLoader for SkelModLoader {
         Ok(())
     }
 
+    fn load_tokens(&self, target: &MettaMod, _metta: &Metta) -> Result<(), String> {
+        let mut tref = target.tokenizer().borrow_mut();
+
+        tref.register_function(GroundedFunctionAtom::new(
+                r"skel-swap-pair-native".into(),
+                expr!("->" ("PairType" ta tb) ("PairType" tb ta)),
+                skel_swap_pair_native));
+
+        Ok(())
+    }
 }
 
 fn skel_swap_pair_native(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
