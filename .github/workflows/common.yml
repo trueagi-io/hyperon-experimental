@@ -33,7 +33,6 @@ on:
 env:
   CMAKE_CONFIG_ARGUMENT: "${{ startsWith(inputs.os, 'windows') && format('--config {0}', inputs.build-type) || '' }}"
   CMAKE_BUILD_TYPE_VARIABLE: "${{ !startsWith(inputs.os, 'windows') && format('-DCMAKE_BUILD_TYPE={0}', inputs.build-type) || ''}}"
-  CMAKE_GIT_EXCLUDE: "${{ startsWith(inputs.os, 'windows') && '-DGIT=OFF' || '' }}"
 
 jobs:
   build-all:
