@@ -81,7 +81,7 @@ impl CustomExecute for GetAllKeysOp {
         let space = args.get(0).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("get-all-keys expects a space as the first argument")?;
 
-        let result = space.subst(&expr!(key value), &expr!(key));
+        let result = space.subst(&Atom::expr([Atom::var("key"), Atom::var("x")]), &Atom::var("key"));
 
         Ok(result)
     }
