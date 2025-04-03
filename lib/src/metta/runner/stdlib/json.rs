@@ -2,15 +2,9 @@ use crate::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-use super::{grounded_op, regex};
+use super::{grounded_op, regex, unit_result};
 
 use std::convert::TryInto;
-use itertools::Itertools;
-use crate::common::collections::CowArray;
-use crate::common::collections::ImmutableString::Allocated;
-use crate::metta::runner::number::Number;
-use crate::metta::runner::stdlib::core::MatchOp;
-use crate::metta::runner::str::{Str, ATOM_TYPE_STRING};
 
 #[derive(Clone, Debug)]
 pub struct JsonDictOp {}
@@ -34,17 +28,7 @@ impl CustomExecute for JsonDictOp {
 
         let atoms = expr.children();
         let mut json_space = GroundingSpace::new();
-        for atom in atoms.iter() {
-            let first: Atom = atom.iter().get(..1).collect();
-            let rest: Atom = atom.iter().get(1..).collect();
-            println!("first {:?}", first);
-            println!("rest {:?}", rest);
-            for sub_atom in atom.iter()
-            {
-
-            }
-            json_space.add(atom.clone());
-        }
+        for atom in atoms.iter() { json_space.add(atom.clone()); }
         Ok(vec![Atom::gnd(DynSpace::new(json_space))])
     }
 }
@@ -56,7 +40,7 @@ grounded_op!(GetValueByKeyOp, "get-value-by-key");
 
 impl Grounded for GetValueByKeyOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_STRING, ATOM_TYPE_UNDEFINED])
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -69,38 +53,9 @@ impl CustomExecute for GetValueByKeyOp {
         let arg_error = || ExecError::from("get-value-by-key expects json-dict space and key as input");
         let space = args.get(0).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("get-value-by-key expects a space as the first argument")?;
-        let key = args.get(1).and_then(Str::from_atom).ok_or_else(arg_error)?;
+        let key = args.get(1).ok_or_else(arg_error)?;
 
-        let str2 = "key1";
-
-        let sym = sym!("key1");
-        // println!("{:?}", key.clone());
-        println!("{:?}", expr!("key1" x));
-        println!("{:?}", expr!({2} {5}));
-        // println!("{:?}", expr!({"key1"} x));
-        // println!("{:?}", expr!({str2} x));
-        println!("{:?}", expr!({key.clone()} x));
-        // println!("{:?}", expr!({sym.clone()} x));
-        // println!("{:?}", expr!({format!("{}", "key1")} x));
-        println!("{:?}", space.subst(&expr!("key1" x), &expr!(x)));
-        println!("{:?}", space.subst(&expr!({"key1"} x), &expr!(x)));
-        println!("{:?}", space.subst(&expr!({str2} x), &expr!(x)));
-        // println!("{:?}", space.subst(&expr!({key.clone()} x), &expr!(x)));
-        // println!("{:?}", space.subst(&expr!({sym.clone()} x), &expr!(x)));
-        // println!("{:?}", space.subst(&expr!({format!("{}", sym)} x), &expr!(x)));
-        let match_op = MatchOp{};
-        println!("{:?}", match_op.execute(&mut vec![expr!({space.clone()}), expr!({str2} x), expr!(x)]));
-
-        let mut result = Vec::new();
-        space.borrow().as_space().visit(&mut |atom: std::borrow::Cow<Atom>| {
-            result.push(make_variables_unique(atom.into_owned()))
-        });
-        println!("{:?}", result);
-
-        let result = space.subst(&expr!({str2} x), &expr!(x));
-
-
-
+        let result = space.subst(&Atom::expr([key.clone(), Atom::var("x")]), &Atom::var("x"));
         Ok(result)
     }
 }
@@ -122,7 +77,7 @@ impl Grounded for GetAllKeysOp {
 
 impl CustomExecute for GetAllKeysOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("get-all-keys expects json-dict space as an argument");
+        let arg_error = || ExecError::from("get-all-keys expects json-dict as an argument");
         let space = args.get(0).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("get-all-keys expects a space as the first argument")?;
 
@@ -140,3 +95,36 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let get_all_keys_op = Atom::gnd(GetAllKeysOp {});
     tref.register_token(regex(r"get-all-keys"), move |_| { get_all_keys_op.clone() });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::metta::runner::stdlib::tests::run_program;
+
+    #[test]
+    fn metta_json_dict() {
+        assert_eq!(run_program(&format!("!(json-dict key1 value1)")), Ok(vec![vec![expr!("Error" ({ JsonDictOp{} } "key1" "value1") "IncorrectNumberOfArguments")]]));
+        assert_eq!(run_program(&format!("!(json-dict key1)")), Ok(vec![vec![expr!("Error" ({ JsonDictOp{} } "key1") "Atom is not an ExpressionAtom")]]));
+    }
+
+    #[test]
+    fn metta_get_all_keys() {
+        assert_eq!(run_program(&format!("!(assertEqual (let $jsondict (json-dict ((key1 value1) (key2 value2))) (get-all-keys $jsondict)) (superpose (key1 key2)))")), Ok(vec![vec![UNIT_ATOM]]));
+        assert_eq!(run_program(&format!("!(let $jsondict (json-dict ((key1 value1) (key2 value2))) (get-all-keys key))")), Ok(vec![vec![expr!("Error" ({ GetAllKeysOp{} } "key") "get-all-keys expects a space as the first argument")]]));
+    }
+
+    #[test]
+    fn metta_get_value_by_key() {
+        assert_eq!(run_program(&format!("!(assertEqual (let $jsondict (json-dict ((key1 value1) (key2 value2))) (get-value-by-key $jsondict key1)) (superpose (value1)))")), Ok(vec![vec![UNIT_ATOM]]));
+        assert_eq!(run_program(&format!("!(let $jsondict (json-dict ((key1 value1) (key2 value2))) (get-value-by-key key1 key2))")), Ok(vec![vec![expr!("Error" ({ GetValueByKeyOp{} } "key1" "key2") "get-value-by-key expects a space as the first argument")]]));
+        assert_eq!(run_program(&format!("!(let $jsondict (json-dict ((key1 value1) (key2 value2))) (get-value-by-key key1))")), Ok(vec![vec![expr!("Error" ({ GetValueByKeyOp{} } "key1") "IncorrectNumberOfArguments")]]));
+    }
+
+    #[test]
+    fn json_dict_op() {
+        let res = JsonDictOp {}.execute(&mut vec![expr!("key1")]);
+        assert_eq!(res, Err(ExecError::from("Atom is not an ExpressionAtom")));
+    }
+}
+
+
