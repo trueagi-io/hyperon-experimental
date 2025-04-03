@@ -1,4 +1,4 @@
-find_package(check REQUIRED)
+find_package(Check REQUIRED)
 
 set(TEST_SOURCES
     test.c

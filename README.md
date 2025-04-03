@@ -153,16 +153,12 @@ Docs can be found at `./target/doc/hyperon/index.html`.
 
 ## C and Python API
 
-Create build directory:
+Create build directory and initialize CMake project:
 ```
 mkdir -p build
 cd build
+cmake ..
 ```
-
-Initialize CMake project:
-- Linux: `cmake ..`
-- Windows: `cmake -DGIT=OFF ..` (Windows build doesn't support Git libraries
-  yet)
 
 Commands for building and testing project depend on a type of a configuration
 generator which is used by CMake. `cmake --help` command lists supported
