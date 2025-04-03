@@ -1066,7 +1066,10 @@
   (@return "Function"))
 
 (@doc pragma!
-  (@desc "Changes global key's (first argument) value to a new one (second argument)")
+  (@desc "Changes global key's (first argument) value to a new one (second argument).
+Possible pragmas:
+  (pragma! type-check auto) - check type of the atom before evaluation
+  (pragma! interpreter bare-minimal) - use minimal MeTTa semantics when evaluating atom")
   (@params (
     (@param "Key's name")
     (@param "New value")))
