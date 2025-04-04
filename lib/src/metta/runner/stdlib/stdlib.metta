@@ -667,6 +667,16 @@
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (subtraction-atom $c1 $c2) (superpose $u)))))
 
+(@doc add-reducts
+  (@desc "Function takes space and expression which contains key-value pairs and adds them into given space")
+  (@params (
+    (@param "Space")
+    (@param "Key-value pairs in form of expression")))
+  (@return "Unit atom"))
+(: add-reducts (-> Grounded %Undefined% (->)))
+(= (add-reducts $space $tuple)
+    (foldl-atom $tuple () $a $b (eval (add-atom $space $b))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
