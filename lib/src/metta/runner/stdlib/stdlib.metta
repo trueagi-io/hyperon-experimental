@@ -662,6 +662,18 @@
 (= (add-atoms $space $tuple)
     (foldl-atom $tuple () $a $b (add-atom $space $b)))
 
+(@doc assert
+  (@desc "Asserts that the result of evaluating an expression is True")
+  (@params (
+    (@param "Expression to evaluate")))
+  (@return "Unit atom if the expression evaluates to True, error - otherwise"))
+(: assert (-> Expression Atom))
+(= (assert $arg)
+   (let $atom (eval $arg)
+        (if (== $atom True)
+            ()
+            (Error $arg (Expected True, evaluated to  $atom)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
