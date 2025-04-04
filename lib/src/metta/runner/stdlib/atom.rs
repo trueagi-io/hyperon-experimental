@@ -548,7 +548,23 @@ mod tests {
         assert_eq!(run_program("!(eval (foldl-atom (1 2 3) 0 $a $b (eval (+ $a $b))))"), Ok(vec![vec![expr!({Number::Integer(6)})]]));
     }
 
+    #[test]
+    fn metta_add_reducts() {
+        assert_eq!(run_program(&format!("!(chain (eval (new-space)) $newspace (add-reducts key1))")), Ok(vec![vec![expr!("Error" ("add-reducts" "key1") "IncorrectNumberOfArguments")]]));
 
+        assert_eq!(run_program(&format!("!(chain (eval (new-space)) $newspace
+                                                 (assertEqual
+                                                     (add-reducts $newspace ((key1 value1) (key2 value2) (key3 value3)))
+                                                     ()))")),
+                   Ok(vec![vec![UNIT_ATOM]]));
+
+        assert_eq!(run_program(&format!("!(chain (eval (new-space)) $newspace
+                                                    (let $f (add-reducts $newspace ((k1 v1) (k2 v2) (k3 v3)))
+                                                        (assertEqual
+                                                            (match $newspace (k1 $v) $v)
+                                                            v1)))")),
+                   Ok(vec![vec![UNIT_ATOM]]));
+    }
 
     #[test]
     fn size_atom_op() {
