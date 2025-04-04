@@ -667,6 +667,18 @@
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (subtraction-atom $c1 $c2) (superpose $u)))))
 
+(@doc assert
+  (@desc "Asserts that the result of evaluating an expression is True")
+  (@params (
+    (@param "Expression to evaluate")))
+  (@return "Unit atom if the expression evaluates to True, error - otherwise"))
+(: assert (-> Expression Atom))
+(= (assert $arg)
+   (let $atom (eval $arg)
+        (if (== $atom True)
+            ()
+            (Error $arg (Expected True, evaluated to  $atom)))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
