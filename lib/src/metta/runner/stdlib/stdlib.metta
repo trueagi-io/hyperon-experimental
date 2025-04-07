@@ -679,6 +679,22 @@
             ()
             (Error $arg (Expected True, evaluated to  $atom)))))
 
+(@doc assertContains
+  (@desc "Checks if the second argument is one of the results of the first argument's evaluation, rather than requiring all the results")
+  (@params (
+    (@param "First expression")
+    (@param "Second expression")))
+  (@return "Unit atom if the second argument is contained in the results of the first argument's evaluation, error - otherwise"))
+(: assertContains (-> Expression Expression (->)))
+(= (assertContains $atom $content)
+    (let $diff (collapse (subtraction (superpose ($content)) $atom))
+        (if (== $diff ())
+            ()
+            (Error $diff ("assertContains error:" $diff "not contained in" $atom))
+        )
+    )
+)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
