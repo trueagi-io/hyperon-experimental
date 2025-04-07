@@ -550,11 +550,11 @@ mod tests {
 
     #[test]
     fn metta_add_reducts() {
-        assert_eq!(run_program(&format!("!(chain (eval (new-space)) $newspace (add-reducts key1))")), Ok(vec![vec![expr!("Error" ("add-reducts" "key1") "IncorrectNumberOfArguments")]]));
+        assert_eq!(run_program(&format!("!(chain (eval (new-space)) $newspace (add-reducts k1))")), Ok(vec![vec![expr!("Error" ("add-reducts" "k1") "IncorrectNumberOfArguments")]]));
 
         assert_eq!(run_program(&format!("!(chain (eval (new-space)) $newspace
                                                  (assertEqual
-                                                     (add-reducts $newspace ((key1 value1) (key2 value2) (key3 value3)))
+                                                     (add-reducts $newspace ((k1 v1) (k2 v2) (k3 v3)))
                                                      ()))")),
                    Ok(vec![vec![UNIT_ATOM]]));
 
@@ -563,6 +563,44 @@ mod tests {
                                                         (assertEqual
                                                             (match $newspace (k1 $v) $v)
                                                             v1)))")),
+                   Ok(vec![vec![UNIT_ATOM]]));
+
+        assert_eq!(run_program(&format!("(= (pair1) (k1 v1))
+                                                 (= (pair2) (k2 v2))
+                                                 (= (pair3) (k3 v3))
+                                                 !(chain (eval (new-space)) $newspace
+                                                    (let $f (add-reducts $newspace ((pair1) (pair2) (pair3)))
+                                                        (assertEqual
+                                                            (match $newspace (k1 $v) $v)
+                                                            v1)))")),
+                   Ok(vec![vec![UNIT_ATOM]]));
+    }
+
+    #[test]
+    fn metta_add_atoms() {
+        assert_eq!(run_program(&format!("!(chain (eval (new-space)) $newspace (add-atoms k1))")), Ok(vec![vec![expr!("Error" ("add-atoms" "k1") "IncorrectNumberOfArguments")]]));
+
+        assert_eq!(run_program(&format!("!(chain (eval (new-space)) $newspace
+                                                 (assertEqual
+                                                     (add-atoms $newspace ((k1 v1) (k2 v2) (k3 v3)))
+                                                     ()))")),
+                   Ok(vec![vec![UNIT_ATOM]]));
+
+        assert_eq!(run_program(&format!("!(chain (eval (new-space)) $newspace
+                                                    (let $f (add-atoms $newspace ((k1 v1) (k2 v2) (k3 v3)))
+                                                        (assertEqual
+                                                            (match $newspace (k1 $v) $v)
+                                                            v1)))")),
+                   Ok(vec![vec![UNIT_ATOM]]));
+
+        assert_eq!(run_program(&format!("(= (pair1) (k1 v1))
+                                                 (= (pair2) (k2 v2))
+                                                 (= (pair3) (k3 v3))
+                                                 !(chain (eval (new-space)) $newspace
+                                                    (let $f (add-atoms $newspace ((pair1) (pair2) (pair3)))
+                                                        (assertEqual
+                                                            (match $newspace (k1 $v) $v)
+                                                            (empty))))")),
                    Ok(vec![vec![UNIT_ATOM]]));
     }
 
