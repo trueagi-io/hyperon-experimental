@@ -71,3 +71,11 @@
 !(assertEqualToResult
    (eq Green Blue)
   ((eq Green Blue)))
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+; `assert` checks if the result of evaluating an
+;  expression is True
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+!(assert (or True False))
+!(assert (< 5 8))

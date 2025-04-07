@@ -667,6 +667,34 @@
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (subtraction-atom $c1 $c2) (superpose $u)))))
 
+(@doc assert
+  (@desc "Asserts that the result of evaluating an expression is True")
+  (@params (
+    (@param "Expression to evaluate")))
+  (@return "Unit atom if the expression evaluates to True, error - otherwise"))
+(: assert (-> Expression Atom))
+(= (assert $arg)
+   (let $atom (eval $arg)
+        (if (== $atom True)
+            ()
+            (Error $arg (Expected True, evaluated to  $atom)))))
+
+(@doc assertContains
+  (@desc "Checks if the second argument is one of the results of the first argument's evaluation, rather than requiring all the results")
+  (@params (
+    (@param "First expression")
+    (@param "Second expression")))
+  (@return "Unit atom if the second argument is contained in the results of the first argument's evaluation, error - otherwise"))
+(: assertContains (-> Expression Expression (->)))
+(= (assertContains $atom $content)
+    (let $diff (collapse (subtraction (superpose ($content)) $atom))
+        (if (== $diff ())
+            ()
+            (Error $diff ("assertContains error:" $diff "not contained in" $atom))
+        )
+    )
+)
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
