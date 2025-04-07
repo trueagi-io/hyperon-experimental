@@ -57,9 +57,15 @@ pub fn interpret_no_error(space: DynSpace, expr: &Atom, settings: PragmaSettings
     }
 }
 
-pub fn interpret(space: DynSpace, expr: &Atom, _settings: PragmaSettings) -> Result<Vec<Atom>, String> {
+pub fn interpret(space: DynSpace, expr: &Atom, settings: PragmaSettings) -> Result<Vec<Atom>, String> {
     let expr = Atom::expr([METTA_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]);
     let mut state = crate::metta::interpreter::interpret_init(space, &expr);
+    
+    if let Some(depth) = settings.get_string("max-stack-depth") {
+        let depth = depth.parse::<usize>().unwrap();
+        state.set_max_stack_depth(depth);
+    }
+
     while state.has_next() {
         state = crate::metta::interpreter::interpret_step(state);
     }

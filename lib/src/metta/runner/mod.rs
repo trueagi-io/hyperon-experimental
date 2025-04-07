@@ -1095,6 +1095,10 @@ impl<'input> RunContext<'_, 'input> {
                                     wrap_atom_by_metta_interpreter(self.module().space().clone(), atom)
                                 };
                                 self.i_wrapper.interpreter_state = Some(interpret_init(self.module().space().clone(), &atom));
+                                if let Some(depth) = self.metta.settings().get_string("max-stack-depth") {
+                                    let depth = depth.parse::<usize>().unwrap();
+                                    self.i_wrapper.interpreter_state.as_mut().map(|state| state.set_max_stack_depth(depth));
+                                }
                             }
                         },
                         MettaRunnerMode::TERMINATE => {

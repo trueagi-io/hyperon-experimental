@@ -39,6 +39,12 @@ impl CustomExecute for PragmaOp {
         let arg_error = || ExecError::from("pragma! expects key and value as arguments");
         let key = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "pragma! expects symbol atom as a key")?.name();
         let value = args.get(1).ok_or_else(arg_error)?;
+        match key {
+            "max-stack-depth" => {
+                value.to_string().parse::<usize>().map_err(|_| "UnsignedIntegerIsExpected")?;
+            },
+            _ => {},
+        }
         self.settings.set(key.into(), value.clone());
         unit_result()
     }
@@ -393,6 +399,7 @@ mod tests {
     use crate::metta::runner::stdlib::tests::run_program;
     use crate::matcher::atoms_are_equivalent;
     use crate::common::test_utils::metta_space;
+    use crate::metta::runner::number::Number;
 
     use std::convert::TryFrom;
 
@@ -456,6 +463,40 @@ mod tests {
                 vec![UNIT_ATOM],
                 vec![expr!(("foo"))],
                 vec![expr!(("bar"))],
+            ]));
+    }
+
+    #[test]
+    fn test_pragma_max_stack_depth() {
+        let program = "!(assertEqual (pragma! max-stack-depth -12) (Error (pragma! max-stack-depth -12) UnsignedIntegerIsExpected))";
+        assert_eq_metta_results!(run_program(program), Ok(vec![ vec![expr!()] ]));
+
+        let program = "
+            !(pragma! max-stack-depth 21)
+            !(pragma! max-stack-depth 0)
+            (= (fac $n) (if (== $n 0) 1 (* $n (fac (- $n 1)))))
+            !(fac 6)
+        ";
+        assert_eq_metta_results!(run_program(program),
+            Ok(vec![
+                vec![UNIT_ATOM],
+                vec![UNIT_ATOM],
+                vec![expr!({Number::Integer(720)})],
+            ]));
+
+        let program = "
+            (= (fac $n) (if (== $n 0) 1 (* $n (fac (- $n 1)))))
+            !(pragma! max-stack-depth 200)
+            !(fac 3)
+            !(case (fac 6) (
+               ((Error $a StackOverflow) ())
+               ($_ (Error (fac 6) \"StackOverflow error is expected\")) ))
+        ";
+        assert_eq_metta_results!(run_program(program),
+            Ok(vec![
+                vec![UNIT_ATOM],
+                vec![Atom::gnd(Number::Integer(6))],
+                vec![UNIT_ATOM],
             ]));
     }
 

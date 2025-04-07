@@ -24,7 +24,7 @@ pub const ERROR_SYMBOL : Atom = sym!("Error");
 pub const BAD_TYPE_SYMBOL : Atom = sym!("BadType");
 pub const INCORRECT_NUMBER_OF_ARGUMENTS_SYMBOL : Atom = sym!("IncorrectNumberOfArguments");
 pub const NOT_REDUCIBLE_SYMBOL : Atom = sym!("NotReducible");
-pub const NO_VALID_ALTERNATIVES : Atom = sym!("NoValidAlternatives");
+pub const STACK_OVERFLOW_SYMBOL : Atom = sym!("StackOverflow");
 
 pub const EMPTY_SYMBOL : Atom = sym!("Empty");
 
@@ -70,7 +70,7 @@ pub fn atom_is_error(atom: &Atom) -> bool {
 
 /// Returns a message string from an error expression
 ///
-/// NOTE: this function will panic if the suppoed atom is not a valid error expression
+/// NOTE: this function will panic if the supported atom is not a valid error expression
 pub fn atom_error_message(atom: &Atom) -> &str {
     const PANIC_STR: &str = "Atom is not error expression";
     match atom {

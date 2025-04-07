@@ -1069,7 +1069,8 @@
   (@desc "Changes global key's (first argument) value to a new one (second argument).
 Possible pragmas:
   (pragma! type-check auto) - check type of the atom before evaluation
-  (pragma! interpreter bare-minimal) - use minimal MeTTa semantics when evaluating atom")
+  (pragma! interpreter bare-minimal) - use minimal MeTTa semantics when evaluating atom
+  (pragma! max-stack-depth <number>) - limit depth of the interpreter's stack, 0 - no limit (default behavior)")
   (@params (
     (@param "Key's name")
     (@param "New value")))
