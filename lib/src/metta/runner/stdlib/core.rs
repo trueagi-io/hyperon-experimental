@@ -2,25 +2,24 @@ use crate::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-use crate::common::shared::Shared;
 use crate::common::CachingMapper;
 use crate::metta::runner::Metta;
+use crate::metta::runner::PragmaSettings;
 use crate::metta::runner::bool::*;
 
 use std::convert::TryInto;
-use std::collections::HashMap;
 
 use super::{interpret_no_error, grounded_op, unit_result, regex, interpret};
 
 #[derive(Clone, Debug)]
 pub struct PragmaOp {
-    settings: Shared<HashMap<String, Atom>>,
+    settings: PragmaSettings,
 }
 
 grounded_op!(PragmaOp, "pragma!");
 
 impl PragmaOp {
-    pub fn new(settings: Shared<HashMap<String, Atom>>) -> Self {
+    pub fn new(settings: PragmaSettings) -> Self {
         Self{ settings }
     }
 }
@@ -40,7 +39,7 @@ impl CustomExecute for PragmaOp {
         let arg_error = || ExecError::from("pragma! expects key and value as arguments");
         let key = <&SymbolAtom>::try_from(args.get(0).ok_or_else(arg_error)?).map_err(|_| "pragma! expects symbol atom as a key")?.name();
         let value = args.get(1).ok_or_else(arg_error)?;
-        self.settings.borrow_mut().insert(key.into(), value.clone());
+        self.settings.set(key.into(), value.clone());
         unit_result()
     }
 }
@@ -192,13 +191,14 @@ impl CustomExecute for IfEqualOp {
 #[derive(Clone, Debug)]
 pub struct SuperposeOp {
     space: DynSpace,
+    settings: PragmaSettings,
 }
 
 grounded_op!(SuperposeOp, "superpose");
 
 impl SuperposeOp {
-    fn new(space: DynSpace) -> Self {
-        Self{ space }
+    fn new(space: DynSpace, settings: PragmaSettings) -> Self {
+        Self{ space, settings }
     }
 }
 
@@ -223,7 +223,7 @@ impl CustomExecute for SuperposeOp {
         } else {
             let mut superposed = Vec::new();
             for atom in expr.children() {
-                match interpret_no_error(self.space.clone(), atom) {
+                match interpret_no_error(self.space.clone(), atom, self.settings.clone()) {
                     Ok(results) => { superposed.extend(results); },
                     Err(message) => { return Err(format!("Error: {}", message).into()) },
                 }
@@ -236,13 +236,14 @@ impl CustomExecute for SuperposeOp {
 #[derive(Clone, Debug)]
 pub struct CollapseOp {
     space: DynSpace,
+    settings: PragmaSettings,
 }
 
 grounded_op!(CollapseOp, "collapse");
 
 impl CollapseOp {
-    pub fn new(space: DynSpace) -> Self {
-        Self{ space }
+    pub fn new(space: DynSpace, settings: PragmaSettings) -> Self {
+        Self{ space, settings }
     }
 }
 
@@ -263,7 +264,7 @@ impl CustomExecute for CollapseOp {
 
         // TODO: Calling interpreter inside the operation is not too good
         // Could it be done via returning atom for the further interpretation?
-        let result = interpret_no_error(self.space.clone(), atom)?;
+        let result = interpret_no_error(self.space.clone(), atom, self.settings.clone())?;
 
         Ok(vec![Atom::expr(result)])
     }
@@ -272,13 +273,14 @@ impl CustomExecute for CollapseOp {
 #[derive(Clone, Debug)]
 pub struct CaptureOp {
     space: DynSpace,
+    settings: PragmaSettings, 
 }
 
 grounded_op!(CaptureOp, "capture");
 
 impl CaptureOp {
-    pub fn new(space: DynSpace) -> Self {
-        Self{ space }
+    pub fn new(space: DynSpace, settings: PragmaSettings) -> Self {
+        Self{ space, settings }
     }
 }
 
@@ -296,20 +298,21 @@ impl CustomExecute for CaptureOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("capture expects one argument");
         let atom = args.get(0).ok_or_else(arg_error)?;
-        interpret(self.space.clone(), &atom).map_err(|e| ExecError::from(e))
+        interpret(self.space.clone(), &atom, self.settings.clone()).map_err(|e| ExecError::from(e))
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct CaseOp {
     space: DynSpace,
+    settings: PragmaSettings,
 }
 
 grounded_op!(CaseOp, "case");
 
 impl CaseOp {
-    pub fn new(space: DynSpace) -> Self {
-        Self{ space }
+    pub fn new(space: DynSpace, settings: PragmaSettings) -> Self {
+        Self{ space, settings }
     }
 }
 
@@ -345,7 +348,7 @@ impl CustomExecute for CaseOp {
         // `%Undefined%`. Another way is to introduce "call" level. Thus if function called
         // returned the result to the `chain` it should stop reducing it and insert it into the
         // last argument.
-        let results = interpret(self.space.clone(), atom);
+        let results = interpret(self.space.clone(), atom, self.settings.clone());
         log::debug!("CaseOp::execute: atom results: {:?}", results);
         let results = match results {
             Ok(results) if results.is_empty() =>
@@ -372,13 +375,13 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
 }
 
 pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Metta) {
-    let superpose_op = Atom::gnd(SuperposeOp::new(space.clone()));
+    let superpose_op = Atom::gnd(SuperposeOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
-    let collapse_op = Atom::gnd(CollapseOp::new(space.clone()));
+    let collapse_op = Atom::gnd(CollapseOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
-    let case_op = Atom::gnd(CaseOp::new(space.clone()));
+    let case_op = Atom::gnd(CaseOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
-    let capture_op = Atom::gnd(CaptureOp::new(space.clone()));
+    let capture_op = Atom::gnd(CaptureOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"capture"), move |_| { capture_op.clone() });
     let pragma_op = Atom::gnd(PragmaOp::new(metta.settings().clone()));
     tref.register_token(regex(r"pragma!"), move |_| { pragma_op.clone() });

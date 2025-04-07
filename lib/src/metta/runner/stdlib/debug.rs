@@ -7,8 +7,8 @@ use crate::common::assert::compare_vec_no_order;
 use crate::atom::matcher::atoms_are_equivalent;
 use crate::metta::runner::stdlib::{grounded_op, regex, interpret_no_error, unit_result};
 use crate::metta::runner::bool::*;
-
 use crate::metta::runner::str::atom_to_string;
+use crate::metta::runner::{Metta, PragmaSettings};
 
 use std::convert::TryInto;
 
@@ -126,13 +126,14 @@ fn assert_alpha_equal(actual: &Vec<Atom>, expected: &Vec<Atom>) -> Result<Vec<At
 #[derive(Clone, Debug)]
 pub struct AssertEqualOp {
     space: DynSpace,
+    settings: PragmaSettings,
 }
 
 grounded_op!(AssertEqualOp, "assertEqual");
 
 impl AssertEqualOp {
-    pub fn new(space: DynSpace) -> Self {
-        Self{ space }
+    pub fn new(space: DynSpace, settings: PragmaSettings) -> Self {
+        Self{ space, settings }
     }
 }
 
@@ -153,8 +154,8 @@ impl CustomExecute for AssertEqualOp {
         let actual_atom = args.get(0).ok_or_else(arg_error)?;
         let expected_atom = args.get(1).ok_or_else(arg_error)?;
 
-        let actual = interpret_no_error(self.space.clone(), actual_atom)?;
-        let expected = interpret_no_error(self.space.clone(), expected_atom)?;
+        let actual = interpret_no_error(self.space.clone(), actual_atom, self.settings.clone())?;
+        let expected = interpret_no_error(self.space.clone(), expected_atom, self.settings.clone())?;
 
         assert_results_equal(&actual, &expected)
     }
@@ -163,13 +164,14 @@ impl CustomExecute for AssertEqualOp {
 #[derive(Clone, Debug)]
 pub struct AssertAlphaEqualOp {
     space: DynSpace,
+    settings: PragmaSettings,
 }
 
 grounded_op!(AssertAlphaEqualOp, "assertAlphaEqual");
 
 impl AssertAlphaEqualOp {
-    pub fn new(space: DynSpace) -> Self {
-        Self{ space }
+    pub fn new(space: DynSpace, settings: PragmaSettings) -> Self {
+        Self{ space, settings }
     }
 }
 
@@ -190,8 +192,8 @@ impl CustomExecute for AssertAlphaEqualOp {
         let actual_atom = args.get(0).ok_or_else(arg_error)?;
         let expected_atom = args.get(1).ok_or_else(arg_error)?;
 
-        let actual = interpret_no_error(self.space.clone(), actual_atom)?;
-        let expected = interpret_no_error(self.space.clone(), expected_atom)?;
+        let actual = interpret_no_error(self.space.clone(), actual_atom, self.settings.clone())?;
+        let expected = interpret_no_error(self.space.clone(), expected_atom, self.settings.clone())?;
 
         assert_alpha_equal(&actual, &expected)
     }
@@ -226,13 +228,14 @@ impl CustomExecute for AlphaEqOp {
 #[derive(Clone, Debug)]
 pub struct AssertEqualToResultOp {
     space: DynSpace,
+    settings: PragmaSettings,
 }
 
 grounded_op!(AssertEqualToResultOp, "assertEqualToResult");
 
 impl AssertEqualToResultOp {
-    pub fn new(space: DynSpace) -> Self {
-        Self{ space }
+    pub fn new(space: DynSpace, settings: PragmaSettings) -> Self {
+        Self{ space, settings }
     }
 }
 
@@ -255,7 +258,7 @@ impl CustomExecute for AssertEqualToResultOp {
             .map_err(|_| arg_error())?
             .children();
 
-        let actual = interpret_no_error(self.space.clone(), actual_atom)?;
+        let actual = interpret_no_error(self.space.clone(), actual_atom, self.settings.clone())?;
 
         assert_results_equal(&actual, &expected.into())
     }
@@ -264,13 +267,14 @@ impl CustomExecute for AssertEqualToResultOp {
 #[derive(Clone, Debug)]
 pub struct AssertAlphaEqualToResultOp {
     space: DynSpace,
+    settings: PragmaSettings,
 }
 
 grounded_op!(AssertAlphaEqualToResultOp, "assertAlphaEqualToResult");
 
 impl AssertAlphaEqualToResultOp {
-    pub fn new(space: DynSpace) -> Self {
-        Self{ space }
+    pub fn new(space: DynSpace, settings: PragmaSettings) -> Self {
+        Self{ space, settings }
     }
 }
 
@@ -293,7 +297,7 @@ impl CustomExecute for AssertAlphaEqualToResultOp {
             .map_err(|_| arg_error())?
             .children();
 
-        let actual = interpret_no_error(self.space.clone(), actual_atom)?;
+        let actual = interpret_no_error(self.space.clone(), actual_atom, self.settings.clone())?;
 
         assert_alpha_equal(&actual, &expected.into())
     }
@@ -309,14 +313,14 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r"=alpha"), move |_| { alpha_eq_op.clone() });
 }
 
-pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &DynSpace) {
-    let assert_alpha_equal_to_result_op = Atom::gnd(AssertAlphaEqualToResultOp::new(space.clone()));
+pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Metta) {
+    let assert_alpha_equal_to_result_op = Atom::gnd(AssertAlphaEqualToResultOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"assertAlphaEqualToResult"), move |_| { assert_alpha_equal_to_result_op.clone() });
-    let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone()));
+    let assert_equal_to_result_op = Atom::gnd(AssertEqualToResultOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"assertEqualToResult"), move |_| { assert_equal_to_result_op.clone() });
-    let assert_alpha_equal_op = Atom::gnd(AssertAlphaEqualOp::new(space.clone()));
+    let assert_alpha_equal_op = Atom::gnd(AssertAlphaEqualOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"assertAlphaEqual"), move |_| { assert_alpha_equal_op.clone() });
-    let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone()));
+    let assert_equal_op = Atom::gnd(AssertEqualOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"assertEqual"), move |_| { assert_equal_op.clone() });
 }
 
@@ -340,7 +344,7 @@ mod tests {
     #[test]
     fn metta_assert_equal_op() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        let assert = AssertEqualOp::new(metta.space().clone());
+        let assert = AssertEqualOp::new(metta.space().clone(), metta.settings().clone());
         let program = "
             (= (foo $x) $x)
             (= (bar $x) $x)
@@ -360,7 +364,7 @@ mod tests {
     #[test]
     fn metta_assert_alpha_equal_op() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        let assert = AssertAlphaEqualOp::new(metta.space().clone());
+        let assert = AssertAlphaEqualOp::new(metta.space().clone(), metta.settings().clone());
         let program = "
             (= (foo $x) $x)
             (= (bar $x) $x)
@@ -386,7 +390,7 @@ mod tests {
     #[test]
     fn metta_assert_equal_to_result_op() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        let assert = AssertEqualToResultOp::new(metta.space().clone());
+        let assert = AssertEqualToResultOp::new(metta.space().clone(), metta.settings().clone());
         let program = "
             (= (foo) A)
             (= (foo) B)
@@ -410,7 +414,7 @@ mod tests {
     #[test]
     fn metta_assert_alpha_equal_to_result_op() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        let assert = AssertAlphaEqualToResultOp::new(metta.space().clone());
+        let assert = AssertAlphaEqualToResultOp::new(metta.space().clone(), metta.settings().clone());
         let program = "
             (= (foo) $x)
             (= (bar) C)
@@ -449,7 +453,7 @@ mod tests {
             (= (err) (A B))
         "));
 
-        let assert_equal_op = AssertEqualOp::new(space);
+        let assert_equal_op = AssertEqualOp::new(space, PragmaSettings::new());
 
         assert_eq!(assert_equal_op.execute(&mut vec![expr!(("foo")), expr!(("bar"))]), unit_result());
 
@@ -468,7 +472,7 @@ mod tests {
             (= (foo) (A B))
             (= (foo) (B C))
         "));
-        let assert_equal_to_result_op = AssertEqualToResultOp::new(space);
+        let assert_equal_to_result_op = AssertEqualToResultOp::new(space, PragmaSettings::new());
 
         assert_eq!(assert_equal_to_result_op.execute(&mut vec![
             expr!(("foo")), expr!(("B" "C") ("A" "B"))]),
