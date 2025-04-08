@@ -1,7 +1,7 @@
 [build-system]
 # setuptools >68.0.0 is incompatible with macos-13
-# urllib3 >=2.0.0 is incompatible with OpenSSL <1.1.1+ which is used by cp37-manylinux_x86_64 wheel
-requires = ["setuptools==68.0.0", "conan==2.13.0", "urllib3==1.26.20", "cmake==3.24", "setuptools_scm[toml]==8.2.0"]
+# urllib3 >=2.1.0 is incompatible with Conan 2.13
+requires = ["setuptools==68.0.0", "conan==2.13.0", "urllib3==2.0.7", "cmake==3.24", "setuptools_scm[toml]==8.2.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
