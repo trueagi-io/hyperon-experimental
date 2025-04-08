@@ -63,6 +63,7 @@ struct Stack {
     // TODO: Could it be replaced by calling a return handler when setting the flag?
     finished: bool,
     vars: Variables,
+    depth: usize,
 }
 
 fn no_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> Option<(Stack, Bindings)> {
@@ -71,20 +72,23 @@ fn no_handler(_stack: Rc<RefCell<Stack>>, _atom: Atom, _bindings: Bindings) -> O
 
 impl Stack {
     fn from_prev_with_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, vars: Variables, ret: ReturnHandler) -> Self {
-        Self{ prev, atom, ret, finished: false, vars }
+        let depth = prev.as_ref().map_or(1, |prev| prev.borrow().depth + 1);
+        Self{ prev, atom, ret, finished: false, vars, depth }
     }
 
     fn from_prev_keep_vars(prev: Option<Rc<RefCell<Self>>>, atom: Atom, ret: ReturnHandler) -> Self {
         let vars = Self::vars_copy(&prev);
-        Self{ prev, atom, ret, finished: false, vars }
+        let depth = prev.as_ref().map_or(1, |prev| prev.borrow().depth + 1);
+        Self{ prev, atom, ret, finished: false, vars, depth }
     }
 
     fn finished(prev: Option<Rc<RefCell<Self>>>, atom: Atom) -> Self {
-        Self{ prev, atom, ret: no_handler, finished: true, vars: Variables::new() }
+        let depth = prev.as_ref().map_or(1, |prev| prev.borrow().depth + 1);
+        Self{ prev, atom, ret: no_handler, finished: true, vars: Variables::new(), depth }
     }
 
-    fn len(&self) -> usize {
-        self.fold(0, |len, _stack| len + 1)
+    fn depth(&self) -> usize {
+        self.depth
     }
 
     // TODO: should it be replaced by Iterator implementation?
@@ -120,7 +124,7 @@ impl Display for Stack {
         }
 
         let buffer = &mut String::new();
-        let last_level = self.len();
+        let last_level = self.depth();
         let res = print_level(buffer, last_level, true, self);
         self.prev.as_ref().map_or(res, |prev| {
             prev.borrow().fold((res, last_level - 1), |(res, level), top| {
@@ -168,6 +172,8 @@ pub struct InterpreterState<T: Space> {
     finished: Vec<Atom>,
     /// Evaluation context.
     context: InterpreterContext<T>,
+    /// Maximum stack depth
+    max_stack_depth: usize,
 }
 
 fn atom_as_slice(atom: &Atom) -> Option<&[Atom]> {
@@ -190,6 +196,7 @@ impl<T: Space> InterpreterState<T> {
             plan: vec![],
             finished: results,
             context: InterpreterContext::new(space),
+            max_stack_depth: 0,
         }
     }
 
@@ -223,6 +230,10 @@ impl<T: Space> InterpreterState<T> {
             self.plan.push(atom);
         }
     }
+
+    pub fn set_max_stack_depth(&mut self, depth: usize) {
+        self.max_stack_depth = depth;
+    }
 }
 
 impl<T: Space> std::fmt::Display for InterpreterState<T> {
@@ -243,6 +254,7 @@ pub fn interpret_init<T: Space>(space: T, expr: &Atom) -> InterpreterState<T> {
         plan: vec![InterpretedAtom(atom_to_stack(expr.clone(), None), Bindings::new())],
         finished: vec![],
         context,
+        max_stack_depth: 0,
     }
 }
 
@@ -255,7 +267,7 @@ pub fn interpret_step<T: Space>(mut state: InterpreterState<T>) -> InterpreterSt
     let interpreted_atom = state.pop().unwrap();
     log::debug!("interpret_step:\n{}", interpreted_atom);
     let InterpretedAtom(stack, bindings) = interpreted_atom;
-    for result in interpret_stack(&state.context, stack, bindings) {
+    for result in interpret_stack(&state.context, stack, bindings, state.max_stack_depth) {
         state.push(result);
     }
     state
@@ -353,13 +365,13 @@ impl Display for Variables {
     }
 }
 
-fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, mut bindings: Bindings) -> Vec<InterpretedAtom> {
+fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, mut bindings: Bindings, max_stack_depth: usize) -> Vec<InterpretedAtom> {
     if stack.finished {
         // first executed minimal operation returned error
         if stack.prev.is_none() {
             return vec![InterpretedAtom(stack, bindings)];
         }
-        let Stack{ prev, mut atom, ret: _, finished: _, vars: _ } = stack;
+        let Stack{ prev, mut atom, .. } = stack;
         let prev = match prev {
             Some(prev) => prev,
             None => panic!("Unexpected state"),
@@ -371,6 +383,28 @@ fn interpret_stack<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, 
         let ret = prev.borrow().ret;
         ret(prev, atom, bindings)
             .map_or(vec![], |(stack, bindings)| vec![InterpretedAtom(stack, bindings)])
+    } else if max_stack_depth > 0 && stack.depth >= max_stack_depth 
+        && atom_as_slice(&stack.atom).map_or(false, |expr| expr[0] == METTA_SYMBOL)
+    {
+        // Return error if stack depth limit is reached.
+        // Current implementation has the following pecularities:
+        //
+        // 1. The stack depth is calculated in terms of the minimal MeTTa
+        // instructions not MeTTa instructions thus the actual stack depth can
+        // be bigger than expected as minimal MeTTa instructions are more
+        // detailed.
+        //
+        // 2. Execution is interrupted and returns error only on the next MeTTa
+        // function call. This is required to correctly return error from the
+        // minimal MeTTa stack when MeTTa program is executed.
+        //
+        // 3. Case/capture/superpose/collapse/assert operations call interpreter
+        // from the interpreter stack and it leads to the creation of the new
+        // stack. Thus if case (or other similar operation) is used the limit
+        // counter is started from the beginning for the nested expression.
+        let Stack{ prev, atom, .. } = stack;
+        let stack = Stack::finished(prev, error_atom(atom, STACK_OVERFLOW_SYMBOL));
+        vec![InterpretedAtom(stack, bindings)]
     } else {
         let expr = atom_as_slice(&stack.atom);
         let result = match expr {
@@ -433,7 +467,7 @@ fn finished_result(atom: Atom, bindings: Bindings, prev: Option<Rc<RefCell<Stack
 }
 
 fn evalc<'a, T: Space>(_context: &InterpreterContext<T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: eval, ret: _, finished: _, vars } = stack;
+    let Stack{ prev, atom: eval, vars, .. } = stack;
     let (to_eval, space) = match_atom!{
         eval ~ [_op, to_eval, space]
             if space.as_gnd::<DynSpace>().is_some() => (to_eval, space),
@@ -447,7 +481,7 @@ fn evalc<'a, T: Space>(_context: &InterpreterContext<T>, stack: Stack, bindings:
 }
 
 fn eval<'a, T: Space>(context: &InterpreterContext<T>, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: eval, ret: _, finished: _, vars } = stack;
+    let Stack{ prev, atom: eval, vars, .. } = stack;
     let to_eval = match_atom!{
         eval ~ [_op, to_eval] => to_eval,
         _ => {
@@ -624,7 +658,7 @@ fn chain_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
 fn chain_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Option<(Stack, Bindings)> {
     let mut stack = (*stack.borrow()).clone();
     let nested = atom;
-    let Stack{ prev: _, atom: chain, ret: _, finished: _, vars: _} = &mut stack;
+    let Stack{ atom: chain, .. } = &mut stack;
     let arg = match atom_as_slice_mut(chain) {
         Some([_op, nested, Atom::Variable(_var), _templ]) => nested,
         _ => panic!("Unexpected state"),
@@ -634,7 +668,7 @@ fn chain_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Optio
 }
 
 fn chain(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: chain, ret: _, finished: _, vars: _} = stack;
+    let Stack{ prev, atom: chain, .. } = stack;
     let (nested, var, templ) = match_atom!{
         chain ~ [_op, nested, Atom::Variable(var), templ] => (nested, var, templ),
         _ => {
@@ -678,7 +712,7 @@ fn function_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) -> Op
 }
 
 fn collapse_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: collapse, ret: _, finished: _, vars } = stack;
+    let Stack{ prev, atom: collapse, vars, .. } = stack;
 
     let mut nested = Atom::expr([]);
     let collapse = match collapse {
@@ -702,7 +736,7 @@ fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) 
     let nested = atom;
     if nested != EMPTY_SYMBOL {
         let stack_ref = &mut *stack.borrow_mut();
-        let Stack{ prev: _, atom: collapse, ret: _, finished: _, vars: _ } = stack_ref;
+        let Stack{ atom: collapse, .. } = stack_ref;
         match atom_as_slice_mut(collapse) {
             Some([_op, Atom::Expression(finished_placeholder), _bindings]) => {
                 let mut finished = ExpressionAtom::new(CowArray::new());
@@ -718,7 +752,7 @@ fn collapse_bind_ret(stack: Rc<RefCell<Stack>>, atom: Atom, bindings: Bindings) 
     // all alternatives are evaluated
     match Rc::into_inner(stack).map(RefCell::into_inner) {
         Some(stack) => {
-            let Stack{ prev, atom: collapse, ret: _, finished: _, vars: _ } = stack;
+            let Stack{ prev, atom: collapse, .. } = stack;
             let (result, bindings) = match atom_into_array(collapse) {
                 Some([_op, result, bindings]) => (result, atom_into_bindings(bindings)),
                 None => panic!("Unexpected state"),
@@ -745,7 +779,7 @@ fn unify_to_stack(mut atom: Atom, prev: Option<Rc<RefCell<Stack>>>) -> Stack {
 }
 
 fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: unify, ret: _, finished: _, vars: _ } = stack;
+    let Stack{ prev, atom: unify, .. } = stack;
     let (atom, pattern, then, else_) = match_atom!{
         unify ~ [_op, atom, pattern, then, else_] => (atom, pattern, then, else_),
         _ => {
@@ -778,7 +812,7 @@ fn unify(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
 }
 
 fn decons_atom(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: decons, ret: _, finished: _, vars: _ } = stack;
+    let Stack{ prev, atom: decons, .. } = stack;
     let expr = match_atom!{
         decons ~ [_op, Atom::Expression(expr)] if expr.children().len() > 0 => expr,
         _ => {
@@ -793,7 +827,7 @@ fn decons_atom(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
 }
 
 fn cons_atom(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: cons, ret: _, finished: _, vars: _ } = stack;
+    let Stack{ prev, atom: cons, .. } = stack;
     let (head, tail) = match_atom!{
         cons ~ [_op, head, Atom::Expression(tail)] => (head, tail),
         _ => {
@@ -828,7 +862,7 @@ fn atom_into_bindings(bindings: Atom) -> Bindings {
 }
 
 fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: superpose, ret: _, finished: _, vars: _ } = stack;
+    let Stack{ prev, atom: superpose, .. } = stack;
     let collapsed = match_atom!{
         superpose ~ [_op, Atom::Expression(collapsed)] => collapsed,
         _ => {
@@ -857,7 +891,7 @@ fn superpose_bind(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
 type NativeFunc = fn(Atom, Bindings) -> MettaResult;
 
 fn call_native_symbol(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: call, ret: _, finished: _, vars } = stack;
+    let Stack{ prev, atom: call, vars, .. } = stack;
     let (name, func, args) = match_atom!{
         call ~ [_op, name, func, args]
             if func.as_gnd::<NativeFunc>().is_some() => (name, func, args),
@@ -875,7 +909,7 @@ fn call_native_symbol(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> 
 }
 
 fn metta_sym(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
-    let Stack{ prev, atom: metta, ret: _, finished: _, vars: _ } = stack;
+    let Stack{ prev, atom: metta, .. } = stack;
     let (atom, typ, space) = match_atom!{
         metta ~ [_op, atom, typ, space]
             if space.as_gnd::<DynSpace>().is_some() => (atom, typ, space),
@@ -1717,12 +1751,12 @@ mod tests {
         let vars: Variables = [ "a", "b", "c" ].into_iter().map(VariableAtom::new).collect();
         let atom = Atom::expr([Atom::sym("superpose-bind"),
             Atom::expr([atom_bindings_into_atom(expr!("foo" a b), bind!{ a: expr!("A"), c: expr!("C") })])]);
-        let stack = Stack{ prev: None, atom, ret: no_handler, finished: false, vars: vars.clone() };
+        let stack = Stack{ prev: None, atom, ret: no_handler, finished: false, vars: vars.clone(), depth: 1 };
 
         let result = superpose_bind(stack, bind!{ b: expr!("B"), d: expr!("D") });
 
         assert_eq!(result, vec![InterpretedAtom(
-                Stack{ prev: None, atom: expr!("foo" a b), ret: no_handler, finished: true, vars: Variables::new() },
+                Stack{ prev: None, atom: expr!("foo" a b), ret: no_handler, finished: true, vars: Variables::new(), depth: 1 },
                 bind!{ a: expr!("A"), b: expr!("B"), c: expr!("C"), d: expr!("D") }
         )]);
     }

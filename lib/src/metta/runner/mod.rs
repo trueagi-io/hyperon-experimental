@@ -114,6 +114,27 @@ impl PartialEq for Metta {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct PragmaSettings(Shared<HashMap<String, Atom>>);
+
+impl PragmaSettings {
+    pub fn new() -> Self {
+        Self(Shared::new(HashMap::new()))
+    }
+
+    pub fn set(&self, key: String, value: Atom) {
+        self.0.borrow_mut().insert(key, value);
+    }
+
+    pub fn get(&self, key: &str) -> Option<Atom> {
+        self.0.borrow().get(key).cloned()
+    }
+
+    pub fn get_string(&self, key: &str) -> Option<String> {
+        self.0.borrow().get(key).map(|a| a.to_string())
+    }
+}
+
 #[derive(Debug)]
 pub(crate) struct MettaContents {
     /// All the runner's loaded modules
@@ -136,7 +157,7 @@ pub(crate) struct MettaContents {
     /// The ModId of the extended stdlib to import into some modules loaded into the runner
     stdlib_mod: OnceLock<ModId>,
     /// The runner's pragmas, affecting runner-wide behavior
-    settings: Shared<HashMap<String, Atom>>,
+    settings: PragmaSettings,
     /// The runner's Environment
     environment: Arc<Environment>,
     //TODO-HACK: This is a terrible horrible ugly hack that should not be merged.  Delete this field
@@ -225,7 +246,7 @@ impl Metta {
             Some(space) => space,
             None => DynSpace::new(GroundingSpace::new())
         };
-        let settings = Shared::new(HashMap::new());
+        let settings = PragmaSettings::new();
         let environment = match env_builder {
             Some(env_builder) => Arc::new(env_builder.build()),
             None => Environment::common_env_arc()
@@ -428,20 +449,12 @@ impl Metta {
         &self.0.top_mod_tokenizer
     }
 
-    pub fn settings(&self) -> &Shared<HashMap<String, Atom>> {
+    pub fn settings(&self) -> &PragmaSettings {
         &self.0.settings
     }
 
-    pub fn set_setting(&self, key: String, value: Atom) {
-        self.0.settings.borrow_mut().insert(key, value);
-    }
-
-    pub fn get_setting(&self, key: &str) -> Option<Atom> {
-        self.0.settings.borrow().get(key).cloned()
-    }
-
     pub fn get_setting_string(&self, key: &str) -> Option<String> {
-        self.0.settings.borrow().get(key).map(|a| a.to_string())
+        self.0.settings.get(key).map(|a| a.to_string())
     }
 
     pub fn run(&self, parser: impl Parser) -> Result<Vec<Vec<Atom>>, String> {
@@ -469,7 +482,7 @@ impl Metta {
     }
 
     fn type_check_is_enabled(&self) -> bool {
-        self.get_setting_string("type-check").map_or(false, |val| val == "auto")
+        self.settings().get_string("type-check").map_or(false, |val| val == "auto")
     }
 
 }
@@ -1082,6 +1095,10 @@ impl<'input> RunContext<'_, 'input> {
                                     wrap_atom_by_metta_interpreter(self.module().space().clone(), atom)
                                 };
                                 self.i_wrapper.interpreter_state = Some(interpret_init(self.module().space().clone(), &atom));
+                                if let Some(depth) = self.metta.settings().get_string("max-stack-depth") {
+                                    let depth = depth.parse::<usize>().unwrap();
+                                    self.i_wrapper.interpreter_state.as_mut().map(|state| state.set_max_stack_depth(depth));
+                                }
                             }
                         },
                         MettaRunnerMode::TERMINATE => {
@@ -1102,7 +1119,7 @@ impl<'input> RunContext<'_, 'input> {
 }
 
 fn is_bare_minimal_interpreter(metta: &Metta) -> bool {
-    metta.get_setting_string("interpreter") == Some("bare-minimal".into())
+    metta.settings().get_string("interpreter") == Some("bare-minimal".into())
 }
 
 // *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
@@ -1235,7 +1252,7 @@ mod tests {
         ";
 
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
-        metta.set_setting("type-check".into(), sym!("auto"));
+        metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
@@ -1249,7 +1266,7 @@ mod tests {
         ";
 
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
-        metta.set_setting("type-check".into(), sym!("auto"));
+        metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }
@@ -1301,7 +1318,7 @@ mod tests {
         ";
 
         let metta = Metta::new_core(None, Some(EnvBuilder::test_env()));
-        metta.set_setting("type-check".into(), sym!("auto"));
+        metta.settings().set("type-check".into(), sym!("auto"));
         let result = metta.run(SExprParser::new(program));
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("foo" "b") "BadType")]]));
     }

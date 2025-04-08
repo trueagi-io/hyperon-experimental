@@ -16,7 +16,7 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::{Tokenizer, SExprParser};
 use crate::common::shared::Shared;
-use crate::metta::runner::{Metta, RunContext, ModuleLoader};
+use crate::metta::runner::{Metta, RunContext, ModuleLoader, PragmaSettings};
 
 use regex::Regex;
 
@@ -48,8 +48,8 @@ pub(crate) fn regex(regex: &str) -> Regex {
 
 // TODO: remove hiding errors completely after making it possible passing
 // them to the user
-pub fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
-    let result = interpret(space, &expr);
+pub fn interpret_no_error(space: DynSpace, expr: &Atom, settings: PragmaSettings) -> Result<Vec<Atom>, String> {
+    let result = interpret(space, &expr, settings);
     log::debug!("interpret_no_error: interpretation expr: {}, result {:?}", expr, result);
     match result {
         Ok(result) => Ok(result),
@@ -57,10 +57,19 @@ pub fn interpret_no_error(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, Str
     }
 }
 
-pub fn interpret(space: DynSpace, expr: &Atom) -> Result<Vec<Atom>, String> {
+pub fn interpret(space: DynSpace, expr: &Atom, settings: PragmaSettings) -> Result<Vec<Atom>, String> {
     let expr = Atom::expr([METTA_SYMBOL, expr.clone(), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]);
-    let result = crate::metta::interpreter::interpret(space, &expr);
-    result
+    let mut state = crate::metta::interpreter::interpret_init(space, &expr);
+    
+    if let Some(depth) = settings.get_string("max-stack-depth") {
+        let depth = depth.parse::<usize>().unwrap();
+        state.set_max_stack_depth(depth);
+    }
+
+    while state.has_next() {
+        state = crate::metta::interpreter::interpret_step(state);
+    }
+    state.into_result()
 }
 
 //TODO: The additional arguments are a temporary hack on account of the way the operation atoms store references
@@ -69,7 +78,7 @@ fn register_context_dependent_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tok
 
     atom::register_context_dependent_tokens(tref, space);
     core::register_context_dependent_tokens(tref, space, metta);
-    debug::register_context_dependent_tokens(tref, space);
+    debug::register_context_dependent_tokens(tref, space, metta);
     module::register_context_dependent_tokens(tref, tokenizer.clone(), metta);
     #[cfg(feature = "pkg_mgmt")]
     package::register_context_dependent_tokens(tref, metta);
