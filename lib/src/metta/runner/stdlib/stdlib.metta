@@ -668,20 +668,20 @@
      (let $u (subtraction-atom $c1 $c2) (superpose $u)))))
 
 (@doc add-reducts
-  (@desc "Function takes space and expression which contains key-value pairs, reduces them and adds result into given space")
+  (@desc "Function takes space and expression, evaluates atoms in it and adds them into given space")
   (@params (
     (@param "Space")
-    (@param "Key-value pairs in form of expression")))
+    (@param "Expression")))
   (@return "Unit atom"))
 (: add-reducts (-> Grounded %Undefined% (->)))
 (= (add-reducts $space $tuple)
     (foldl-atom $tuple () $a $b (eval (add-atom $space $b))))
 
 (@doc add-atoms
-  (@desc "Function takes space and expression which contains key-value pairs and adds them into given space. No reducing")
+  (@desc "Function takes space and expression and adds atoms in Expression into given space without reducing them")
   (@params (
     (@param "Space")
-    (@param "Key-value pairs in form of expression")))
+    (@param "Expression")))
   (@return "Unit atom"))
 (: add-atoms (-> Grounded Expression (->)))
 (= (add-atoms $space $tuple)
