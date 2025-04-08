@@ -96,5 +96,5 @@ setup(
     url="https://github.com/trueagi-io/hyperon-experimental",
     use_scm_version={'root': '..',
                      'version_scheme': version_scheme,
-                     'write_to': 'python/hyperon/_version.py'},
+                     'version_file': './hyperon/_version.py'},
  )
