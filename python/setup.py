@@ -71,7 +71,7 @@ class CMakeBuild(build_ext):
         )
         subprocess.run(
             ["cmake", ext.sourcedir,
-             "-DCMAKE_TOOLCHAIN_FILE=conan_toolchain.cmake", *cmake_args],
+             f"-DCMAKE_TOOLCHAIN_FILE=./build/{cfg}/generators/conan_toolchain.cmake", *cmake_args],
             cwd=build_temp, check=True
         )
         subprocess.run(
@@ -96,5 +96,5 @@ setup(
     url="https://github.com/trueagi-io/hyperon-experimental",
     use_scm_version={'root': '..',
                      'version_scheme': version_scheme,
-                     'write_to': 'python/hyperon/_version.py'},
+                     'version_file': './hyperon/_version.py'},
  )

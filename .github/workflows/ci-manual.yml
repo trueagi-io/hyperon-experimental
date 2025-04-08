@@ -16,7 +16,7 @@ on:
       python-version:
         description: 'JSON array of Python versions to be checked'
         required: true
-        default: "[\"3.7\", \"3.8\", \"3.9\", \"3.10\", \"3.11\", \"3.12\", \"3.13\"]"
+        default: "[\"3.8\", \"3.9\", \"3.10\", \"3.11\", \"3.12\", \"3.13\"]"
         type: string
       cmake-version:
         description: 'JSON array of CMake versions to be checked'

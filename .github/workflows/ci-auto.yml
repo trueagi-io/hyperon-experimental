@@ -12,7 +12,7 @@ jobs:
   ci-auto-unix:
     uses: ./.github/workflows/common.yml
     with:
-      python-version: "3.7"
+      python-version: "3.8"
       os: "ubuntu-22.04"
       cmake-version: "3.24.x"
       build-type: "Debug"

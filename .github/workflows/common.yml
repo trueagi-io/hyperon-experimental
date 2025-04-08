@@ -11,7 +11,7 @@ on:
     inputs:
       python-version:
         description: "A version of a python interpreter to use"
-        default: "3.7"
+        default: "3.8"
         required: false
         type: string
       os:

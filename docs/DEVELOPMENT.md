@@ -32,7 +32,7 @@ whether release works. This can be done using
 [CIBW_BUILD](https://cibuildwheel.pypa.io/en/stable/options/#build-skip)
 variable:
 ```
-export CIBW_BUILD=cp37-manylinux_x86_64
+export CIBW_BUILD=cp310-manylinux_x86_64
 ```
 
 After exporting the variables above one can start release by executing
