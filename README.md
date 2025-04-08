@@ -83,7 +83,7 @@ page](https://www.rust-lang.org/tools/install). Make sure your
 Rust (see the Notes at the installation page).
 
   Requirements for building C and Python API
-  * Python3 and Python3-dev (3.7 or later)
+  * Python3 and Python3-dev (3.8 or later)
   * Pip (23.1.2 or later)
   * GCC (7.5 or later)
   * CMake (3.24 or later)

@@ -23,7 +23,7 @@ if (NOT DEFINED Python3_FIND_VIRTUALENV)
     set(Python3_FIND_VIRTUALENV "ONLY")
 endif()
 # Development.Embed is not supported by cibuildwheel environment
-find_package(Python3 3.7 REQUIRED COMPONENTS Interpreter Development.Module)
+find_package(Python3 3.8 REQUIRED COMPONENTS Interpreter Development.Module)
 message(STATUS "Python native modules installation path (Python3_SITEARCH): ${Python3_SITEARCH}")
 message(STATUS "Python modules installation path (Python3_SITELIB): ${Python3_SITELIB}")
 
