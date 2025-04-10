@@ -17,10 +17,8 @@ impl ModuleLoader for SkelModLoader {
         context.init_self_module(space, None);
 
         // Load module's tokens
-        let mut tref = context.module().tokenizer().borrow_mut();
         let skel_swap_pair_native = Atom::gnd(SkelSwapPairNativeOp{});
-        tref.register_token(regex(r"skel-swap-pair-native"), move |_| { skel_swap_pair_native.clone() });
-        drop(tref);
+        context.module().register_token(regex(r"skel-swap-pair-native"), move |_| { skel_swap_pair_native.clone() });
 
         // Parse MeTTa code of the module
         let parser = SExprParser::new(SKEL_METTA);
