@@ -58,3 +58,23 @@ impl CustomExecute for SkelSwapPairNativeOp {
         Ok(vec![pair])
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::metta::*;
+    use crate::metta::runner::run_program;
+
+    #[test]
+    fn test_import_skel() {
+        let program = "
+            !(import! &self skel)
+            !(skel-swap-pair (a b))
+            !(skel-swap-pair-native (a b))
+        ";
+        assert_eq!(run_program(program), Ok(vec![
+                vec![UNIT_ATOM],
+                vec![expr!("b" "a")],
+                vec![expr!("b" "a")],
+        ]));
+    }
+}
