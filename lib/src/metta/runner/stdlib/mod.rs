@@ -151,14 +151,10 @@ mod tests {
     use crate::common::Operation;
     use crate::metta::runner::bool::Bool;
     use crate::metta::runner::number::Number;
+    use crate::metta::runner::run_program;
 
     use std::fmt::Display;
     use regex::Regex;
-
-    pub fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.run(SExprParser::new(program))
-    }
 
     #[test]
     fn metta_switch() {

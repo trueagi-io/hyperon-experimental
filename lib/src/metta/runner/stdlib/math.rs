@@ -447,7 +447,7 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::runner::stdlib::tests::run_program;
+    use crate::metta::runner::run_program;
 
     #[test]
     fn metta_pow_math() {

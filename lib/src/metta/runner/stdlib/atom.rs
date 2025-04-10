@@ -476,7 +476,7 @@ mod tests {
     use crate::metta::runner::EnvBuilder;
     use crate::metta::runner::str::Str;
     use crate::common::test_utils::metta_space;
-    use crate::metta::runner::stdlib::tests::run_program;
+    use crate::metta::runner::run_program;
     use crate::metta::runner::Metta;
     use crate::metta::runner::stdlib::arithmetics::*;
 
