@@ -672,12 +672,14 @@
   (@params (
     (@param "Expression to evaluate")))
   (@return "Unit atom if the expression evaluates to True, error - otherwise"))
-(: assert (-> Expression Atom))
+(: assert (-> Atom (->)))
 (= (assert $arg)
-   (let $atom (eval $arg)
-        (if (== $atom True)
-            ()
-            (Error $arg (Expected True, evaluated to  $atom)))))
+      (case $arg (
+        (True ())
+        ((True) ())
+        (Empty (Error $arg "Empty result encountered"))
+        (() (Error $arg "Empty result encountered"))
+        ($_ (let $atom $arg (Error $arg (Expected True, evaluated to $atom)))))))
 
 (@doc assertContains
   (@desc "Checks if the second argument is one of the results of the first argument's evaluation, rather than requiring all the results")
