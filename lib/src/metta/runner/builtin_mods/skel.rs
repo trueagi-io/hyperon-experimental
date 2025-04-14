@@ -40,7 +40,7 @@ impl Display for SkelSwapPairNativeOp {
 
 impl Grounded for SkelSwapPairNativeOp {
     fn type_(&self) -> Atom {
-        expr!("->" (ta tb) (tb ta))
+        expr!("->" ("PairType" ta tb) ("PairType" tb ta))
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -52,7 +52,7 @@ impl CustomExecute for SkelSwapPairNativeOp {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         let arg_error = || ExecError::from("skel-swap-pair-native expects single pair as argument");
         let pair = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?;
-        let pair = Atom::expr([pair.children()[1].clone(), pair.children()[0].clone()]) ;
+        let pair = Atom::expr([pair.children()[0].clone(), pair.children()[2].clone(), pair.children()[1].clone()]) ;
         Ok(vec![pair])
     }
 }
@@ -66,13 +66,13 @@ mod tests {
     fn test_import_skel() {
         let program = "
             !(import! &self skel)
-            !(skel-swap-pair (a b))
-            !(skel-swap-pair-native (a b))
+            !(skel-swap-pair (Pair a b))
+            !(skel-swap-pair-native (Pair a b))
         ";
         assert_eq!(run_program(program), Ok(vec![
                 vec![UNIT_ATOM],
-                vec![expr!("b" "a")],
-                vec![expr!("b" "a")],
+                vec![expr!("Pair" "b" "a")],
+                vec![expr!("Pair" "b" "a")],
         ]));
     }
 }
