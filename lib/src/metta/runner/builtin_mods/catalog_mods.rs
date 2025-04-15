@@ -58,14 +58,14 @@ impl ModuleLoader for CatalogModLoader {
         context.init_self_module(space, None);
 
         let metta = context.metta();
-        let mut tref = context.module().tokenizer().borrow_mut();
+        let module = context.module();
 
         let catalog_list_op = Atom::gnd(CatalogListOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-list!"), move |_| { catalog_list_op.clone() });
+        module.register_token(regex(r"catalog-list!"), move |_| { catalog_list_op.clone() });
         let catalog_update_op = Atom::gnd(CatalogUpdateOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-update!"), move |_| { catalog_update_op.clone() });
+        module.register_token(regex(r"catalog-update!"), move |_| { catalog_update_op.clone() });
         let catalog_clear_op = Atom::gnd(CatalogClearOp::new(metta.clone()));
-        tref.register_token(regex(r"catalog-clear!"), move |_| { catalog_clear_op.clone() });
+        module.register_token(regex(r"catalog-clear!"), move |_| { catalog_clear_op.clone() });
 
         Ok(())
     }

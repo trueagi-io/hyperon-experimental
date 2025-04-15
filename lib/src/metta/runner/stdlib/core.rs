@@ -396,7 +396,7 @@ pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &Dy
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::runner::stdlib::tests::run_program;
+    use crate::metta::runner::run_program;
     use crate::matcher::atoms_are_equivalent;
     use crate::common::test_utils::metta_space;
     use crate::metta::runner::number::Number;

@@ -5,6 +5,7 @@ use std::cell::RefCell;
 use crate::metta::*;
 use crate::metta::runner::*;
 use crate::space::module::ModuleSpace;
+use crate::gnd::*;
 
 use regex::Regex;
 
@@ -310,6 +311,22 @@ impl MettaMod {
         Ok(())
     }
 
+    // TODO: This method is hotfix before proper method of loading module's tokens is
+    // implemented.
+    pub fn register_token<C: 'static + for<'a> Fn(&'a str) -> Atom>(&self, regex: Regex, constr: C) {
+        let constr = Rc::new(move |token: &str| -> Result<Atom, String> { Ok(constr(token)) });
+        self.tokenizer.borrow_mut().register_token_with_func_ptr(regex.clone(), constr.clone());
+        self.own_tokenizer.borrow_mut().register_token_with_func_ptr(regex, constr);
+    }
+
+    // TODO: This method is hotfix before proper method of loading module's tokens is
+    // implemented.
+    pub fn register_method<T: GroundedFunction + 'static>(&self, method: GroundedFunctionAtom<T>) {
+        let regex = Regex::new(method.name()).unwrap();
+        let constr = Rc::new(move |_token: &str| -> Result<Atom, String> { Ok(Atom::gnd(method.clone())) });
+        self.tokenizer.borrow_mut().register_token_with_func_ptr(regex.clone(), constr.clone());
+        self.own_tokenizer.borrow_mut().register_token_with_func_ptr(regex, constr);
+    }
 }
 
 /// ModuleInitState is a smart-pointer to a state that contains some objects to be merged
