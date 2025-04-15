@@ -687,15 +687,13 @@
     (@param "First expression")
     (@param "Second expression")))
   (@return "Unit atom if the second argument is contained in the results of the first argument's evaluation, error - otherwise"))
-(: assertContains (-> Expression Expression (->)))
+(: assertContains (-> Atom Atom (->)))
 (= (assertContains $atom $content)
-    (let $diff (collapse (subtraction (superpose ($content)) $atom))
-        (if (== $diff ())
-            ()
-            (Error $diff ("assertContains error:" $diff "not contained in" $atom))
-        )
-    )
-)
+    (let $eval_atom $atom
+        (let $diff (collapse (subtraction (superpose ($content)) $eval_atom))
+            (if (== $diff ())
+                ()
+                (Error $eval_atom (assertContains error: $content not contained in result))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
