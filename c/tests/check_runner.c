@@ -166,7 +166,7 @@ START_TEST (test_custom_module_format)
 
     //Start by initializing a runner using an environment with our custom module format
     space_t space = space_new_grounding_space();
-    metta_t runner = metta_new_with_space_environment_and_stdlib(&space, env_builder, NULL, NULL);
+    metta_t runner = metta_new_with_space_environment_and_stdlib_2(&space, env_builder, NULL);
     space_free(space);
 
     //Load a module using our custom format, and verify it was loaded sucessfully
@@ -182,7 +182,7 @@ START_TEST (test_custom_module_format)
 }
 END_TEST
 
-void custom_stdlib_loader(run_context_t *run_context, void* callback_context) {
+ssize_t custom_stdlib_loader(void* loader, run_context_t *run_context) {
 
     //Init our new module
     space_t space = space_new_grounding_space();
@@ -196,13 +196,18 @@ void custom_stdlib_loader(run_context_t *run_context, void* callback_context) {
     //Load a custom atom using the MeTTa syntax
     sexpr_parser_t parser = sexpr_parser_new("test-atom");
     run_context_push_parser(run_context, parser);
+
+    return 0;
 }
 
 START_TEST (test_custom_stdlib)
 {
     //Start by initializing a runner using our custom stdlib loader
     space_t space = space_new_grounding_space();
-    metta_t runner = metta_new_with_space_environment_and_stdlib(&space, env_builder_use_test_env(), &custom_stdlib_loader, NULL);
+    module_loader_t* stdlib_loader = calloc(sizeof(module_loader_t), 1);
+    stdlib_loader->load = custom_stdlib_loader;
+    stdlib_loader->free = free;
+    metta_t runner = metta_new_with_space_environment_and_stdlib_2(&space, env_builder_use_test_env(), stdlib_loader);
     space_free(space);
 
     //Test that we can match an atom loaded from the custom stdlib function

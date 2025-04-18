@@ -16,7 +16,7 @@ impl ModuleLoader for SkelModLoader {
         context.init_self_module(space, None);
 
         // Load module's tokens
-        let _ = self.load_tokens(context.module(), context.metta)?;
+        let _ = self.load_tokens(context.module(), context.metta.clone())?;
 
         // Parse MeTTa code of the module
         let parser = SExprParser::new(SKEL_METTA);
@@ -25,7 +25,7 @@ impl ModuleLoader for SkelModLoader {
         Ok(())
     }
 
-    fn load_tokens(&self, target: &MettaMod, _metta: &Metta) -> Result<(), String> {
+    fn load_tokens(&self, target: &MettaMod, _metta: Metta) -> Result<(), String> {
         let mut tref = target.tokenizer().borrow_mut();
 
         tref.register_function(GroundedFunctionAtom::new(

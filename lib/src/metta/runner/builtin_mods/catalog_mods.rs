@@ -57,10 +57,10 @@ impl ModuleLoader for CatalogModLoader {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
         let space = DynSpace::new(GroundingSpace::new());
         context.init_self_module(space, None);
-        self.load_tokens(context.module(), context.metta)
+        self.load_tokens(context.module(), context.metta.clone())
     }
 
-    fn load_tokens(&self, target: &MettaMod, metta: &Metta) -> Result<(), String> {
+    fn load_tokens(&self, target: &MettaMod, metta: Metta) -> Result<(), String> {
         let mut tref = target.tokenizer().borrow_mut();
 
         let catalog_list_op = Atom::gnd(CatalogListOp::new(metta.clone()));

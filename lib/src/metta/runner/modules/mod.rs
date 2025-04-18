@@ -206,7 +206,7 @@ impl MettaMod {
 
         // Finally, Import the tokens from the dependency
         match &mod_ptr.loader {
-            Some(loader) => loader.load_tokens(self, metta),
+            Some(loader) => loader.load_tokens(self, metta.clone()),
             None => Ok(()), // no tokens are exported by mod_ptr
         }
     }
@@ -602,7 +602,7 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     /// Loads module's tokens into target module. This method is used for both
     /// initial token loading and exporting module's tokens into importing
     /// module.
-    fn load_tokens(&self, _target: &MettaMod, _metta: &Metta) -> Result<(), String> {
+    fn load_tokens(&self, _target: &MettaMod, _metta: Metta) -> Result<(), String> {
         Ok(())
     }
 }

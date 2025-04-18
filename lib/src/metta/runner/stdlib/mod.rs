@@ -132,17 +132,17 @@ impl ModuleLoader for CoreLibLoader {
         let space = DynSpace::new(GroundingSpace::new());
         context.init_self_module(space, None);
 
-        self.load_tokens(context.module(), context.metta)?;
+        self.load_tokens(context.module(), context.metta.clone())?;
 
         let parser = SExprParser::new(METTA_CODE);
         context.push_parser(Box::new(parser));
         Ok(())
     }
 
-    fn load_tokens(&self, target: &MettaMod, metta: &Metta) -> Result<(), String> {
+    fn load_tokens(&self, target: &MettaMod, metta: Metta) -> Result<(), String> {
         let tokenizer = target.tokenizer();
         register_all_corelib_tokens(tokenizer.borrow_mut().deref_mut(),
-            tokenizer.clone(), &target.space(), metta);
+            tokenizer.clone(), &target.space(), &metta);
         Ok(())
     }
 }

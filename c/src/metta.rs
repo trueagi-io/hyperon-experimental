@@ -13,6 +13,7 @@ use hyperon::atom::*;
 use crate::util::*;
 use crate::atom::*;
 use crate::space::*;
+use crate::module::*;
 
 use std::os::raw::*;
 use std::path::{Path, PathBuf};
@@ -865,6 +866,37 @@ pub extern "C" fn metta_new_with_space_environment_and_stdlib(space: *mut space_
     metta.into()
 }
 
+
+/// @brief Creates a new top-level MeTTa Runner, with the specified `stdlib` module loaded
+/// @ingroup interpreter_group
+/// @param[in]  space_ref  A pointer to a handle for the Space for use in the Runner's top-level module
+/// @param[in]  env_builder_mov  An `env_builder_t` handle to configure the environment to use
+/// @param[in]  stdlib_loader_mov  Stdlib loader implemented in C code. Pass NULL to use the default `stdlib`
+/// @return A `metta_t` handle to the newly created Runner
+/// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
+/// @note Most callers can simply call `metta_new`.  This function is provided to support languages
+///     with their own stdlib, that needs to be loaded before the init.metta file is run
+///
+#[no_mangle]
+pub extern "C" fn metta_new_with_space_environment_and_stdlib_2(space_ref: *mut space_t,
+    env_builder_mov: env_builder_t, stdlib_loader_mov: *mut module_loader_t) -> metta_t
+{
+    let dyn_space = unsafe{ &*space_ref }.borrow();
+    let env_builder_mov = if env_builder_mov.is_default() {
+        None
+    } else {
+        Some(env_builder_mov.into_inner())
+    };
+    let stdlib_loader = if !stdlib_loader_mov.is_null() {
+        Some(Box::new(CModuleLoader::new(stdlib_loader_mov)) as Box<dyn ModuleLoader>)
+    } else {
+        None
+    };
+
+    let metta = Metta::new_with_stdlib_loader(stdlib_loader, Some(dyn_space.clone()), env_builder_mov);
+    metta.into()
+}
+
 /// Internal wrapper to turn a mod_loader_callback_t into an trait object that implements [ModuleLoader]
 #[derive(Debug)]
 struct CModLoaderWrapper {
@@ -1090,6 +1122,37 @@ pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
     let name = cstr_as_str(name);
     let loader_callback = loader_callback.unwrap();
     let loader = Box::new(CModLoaderWrapper{ callback: loader_callback, callback_context });
+
+    match rust_metta.load_module_direct(loader, name) {
+        Ok(mod_id) => mod_id.into(),
+        Err(err) => {
+            let err_cstring = std::ffi::CString::new(err).unwrap();
+            metta.err_string = err_cstring.into_raw();
+            ModId::INVALID.into()
+        }
+    }
+}
+
+/// @brief Loads a module directly into the runner, from a module_loader_t
+/// @ingroup interpreter_group
+/// @param[in]  metta_ref  A pointer to the handle specifying the runner into which to load the module
+/// @param[in]  name_ref  A C-string specifying a name for the module
+/// @param[in]  loader_mov  The `module_loader_t` instance to load the module
+/// @return  The `module_id_t` for the loaded module, or `invalid` if there was an error
+/// @note  This function might be useful to provide MeTTa modules that are built-in as part of your
+///    application
+/// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
+///
+#[no_mangle]
+pub extern "C" fn metta_load_module_direct_2(metta_ref: *mut metta_t,
+        name_ref: *const c_char,
+        loader_mov: *mut module_loader_t) -> module_id_t {
+
+    let metta = unsafe{ &mut *metta_ref };
+    metta.free_err_string();
+    let rust_metta = metta.borrow();
+    let name = cstr_as_str(name_ref);
+    let loader = Box::new(CModuleLoader::new(loader_mov));
 
     match rust_metta.load_module_direct(loader, name) {
         Ok(mod_id) => mod_id.into(),
