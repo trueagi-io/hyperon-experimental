@@ -6,6 +6,7 @@ import site
 import hyperonpy as hp
 from .atoms import Atom, AtomType, OperationAtom
 from .base import GroundingSpaceRef, Tokenizer, SExprParser
+from .ext import RegisterType
 from hyperonpy import EnvBuilder, ModuleId
 
 class RunnerState:
@@ -358,8 +359,19 @@ def _priv_make_module_loader_func_for_pymod(pymod_name, resource_dir=None):
 
             for n in dir(mod):
                 obj = getattr(mod, n)
-                if '__name__' in dir(obj) and obj.__name__ == 'metta_register':
-                    obj(run_context)
+                if 'metta_type' in dir(obj):
+                    typ = obj.metta_type
+                    pass_metta = obj.metta_pass_metta
+                    if pass_metta:
+                        items = obj(run_context.metta())
+                    else:
+                        items = obj()
+                    if typ == RegisterType.ATOM:
+                        for rex, atom in items.items():
+                            run_context.register_atom(rex, atom)
+                    if typ == RegisterType.TOKEN:
+                        for rex, lam in items.items():
+                            run_context.register_token(rex, lam)
 
         except Exception as e:
             raise RuntimeError("Error loading Python module: ", pymod_name, e)
