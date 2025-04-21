@@ -53,6 +53,7 @@ using CRunContext = CPtr<run_context_t>;
 using CModuleDescriptor = CConstPtr<module_descriptor_t>;
 using ModuleId = CStruct<module_id_t>;
 using EnvBuilder = CStruct<env_builder_t>;
+using CMettaModRef = CStruct<metta_mod_ref_t>;
 
 // Returns a string, created by executing a function that writes string data into a buffer
 typedef size_t (*write_to_buf_func_t)(void*, char*, size_t);
@@ -524,11 +525,30 @@ void syntax_node_copy_to_list_callback(const syntax_node_t* node, void *context)
 };
 
 // A C function that wraps a Python function, so that the python code to load the stdlib can be run inside `metta_new_with_space_environment_and_stdlib()`
-void run_python_stdlib_loader(run_context_t* run_context, void* callback_context) {
+ssize_t stdlib_load(void* loader, run_context_t* run_context) {
     py::object runner_mod = py::module_::import("hyperon.runner");
-    py::function load_py_stdlib = runner_mod.attr("_priv_load_py_stdlib");
+    py::function load = runner_mod.attr("_priv_load_py_stdlib");
     CRunContext c_run_context = CRunContext(run_context);
-    load_py_stdlib(&c_run_context);
+    load(&c_run_context);
+    return 0;
+}
+
+ssize_t stdlib_load_tokens(void* loader, metta_mod_ref_t target, metta_t metta) {
+    py::object runner_mod = py::module_::import("hyperon.runner");
+    py::function load_tokens = runner_mod.attr("_priv_load_tokens_py_stdlib");
+    CMettaModRef c_target = CMettaModRef(target);
+    CMetta c_metta = CMetta(metta);
+    // FIXME: convert error string
+    return load_tokens(&c_target, &c_metta).cast<ssize_t>();
+}
+
+module_loader_t* new_stdlib_loader() {
+    module_loader_t* loader = static_cast<module_loader_t*>(calloc(sizeof(module_loader_t), 1));
+    loader->load = stdlib_load;
+    loader->load_tokens = stdlib_load_tokens;
+    // FIXME: free error string as well
+    loader->free = free;
+    return loader;
 }
 
 // A C function that dispatches to a Python function, so that the Python module loader code can be run inside `metta_load_module_direct()`
@@ -1017,9 +1037,12 @@ PYBIND11_MODULE(hyperonpy, m) {
     py::class_<ModuleId>(m, "ModuleId")
         .def("is_valid", [](ModuleId& id) { return module_id_is_valid(id.ptr()); }, "Returns True if a ModuleId is valid");
 
+    py::class_<CMettaModRef>(m, "CMettaModRef")
+        .def("tokenizer", [](CMettaModRef& cmodref) { return CTokenizer(metta_mod_ref_tokenizer(cmodref.ptr())); }, "Return tokenizer of the metta module");
+
     py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, EnvBuilder env_builder) {
-        return CMetta(metta_new_with_space_environment_and_stdlib(space.ptr(), env_builder.obj, &run_python_stdlib_loader, NULL));
+        return CMetta(metta_new_with_space_environment_and_stdlib_2(space.ptr(), env_builder.obj, new_stdlib_loader()));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
     m.def("metta_err_str", [](CMetta& metta) {

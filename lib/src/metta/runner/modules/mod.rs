@@ -58,6 +58,7 @@ pub struct MettaMod {
     resource_dir: Option<PathBuf>,
     space: Rc<RefCell<ModuleSpace>>,
     tokenizer: Shared<Tokenizer>,
+    // FIXME: remove own_tokenizer from everywhere
     own_tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
     loader: Option<Box<dyn ModuleLoader>>,

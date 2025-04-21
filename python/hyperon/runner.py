@@ -7,6 +7,7 @@ import hyperonpy as hp
 from .atoms import Atom, AtomType, OperationAtom
 from .base import GroundingSpaceRef, Tokenizer, SExprParser
 from .ext import RegisterType
+from .module import MettaModRef
 from hyperonpy import EnvBuilder, ModuleId
 
 class RunnerState:
@@ -343,6 +344,40 @@ def _priv_load_py_stdlib(c_run_context):
     # #UPDATE: If we implement a Python module-space Catalog in the future, then the code to search site packages
     #  directories directly, in the 'MeTTa.__init__' method, needs to be removed
 
+def _priv_load_tokens_py_stdlib(cmettamod, cmetta):
+    """
+    """
+    try:
+        target = MettaModRef(cmettamod)
+        tokenizer = target.tokenizer()
+        metta = MeTTa(cmetta=cmetta)
+
+        mod = import_module("hyperon.stdlib")
+        for n in dir(mod):
+            obj = getattr(mod, n)
+            if 'metta_type' in dir(obj):
+                typ = obj.metta_type
+                pass_metta = obj.metta_pass_metta
+                if pass_metta:
+                    items = obj(metta)
+                else:
+                    items = obj()
+                if typ == RegisterType.ATOM:
+                    def register(r, a):
+                        tokenizer.register_token(r, lambda _: a)
+                    for rex, atom in items.items():
+                        register(rex, atom)
+                elif typ == RegisterType.TOKEN:
+                    for rex, lam in items.items():
+                        tokenizer.register_token(rex, lam)
+
+        return 0
+    except Exception as e:
+        # FIXME: return error description
+        #raise RuntimeError("Error loading tokens from Python module: ", pymod_name, e)
+        print("Exception:", e)
+        return 1
+
 def _priv_make_module_loader_func_for_pymod(pymod_name, resource_dir=None):
     """
     Private function to return a loader function to load a module into the runner directly from the specified Python module
@@ -369,7 +404,7 @@ def _priv_make_module_loader_func_for_pymod(pymod_name, resource_dir=None):
                     if typ == RegisterType.ATOM:
                         for rex, atom in items.items():
                             run_context.register_atom(rex, atom)
-                    if typ == RegisterType.TOKEN:
+                    elif typ == RegisterType.TOKEN:
                         for rex, lam in items.items():
                             run_context.register_token(rex, lam)
 

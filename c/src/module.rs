@@ -11,17 +11,29 @@ use std::os::raw::*;
 ///
 #[repr(C)]
 pub struct metta_mod_ref_t<'a> {
-    module: *const RustMettaMod<'a>,
+    module: *const RustMettaModRef<'a>,
 }
 
+/// This structure is required to remove notice of MettaMod from C header file
 #[allow(dead_code)]
-struct RustMettaMod<'a>(&'a MettaMod);
+struct RustMettaModRef<'a>(&'a MettaMod);
 
 impl<'a> From<&'a MettaMod> for metta_mod_ref_t<'a> {
     fn from(module: &'a MettaMod) -> Self {
-        let module = Box::into_raw(Box::new(RustMettaMod(module)));
+        let module = Box::into_raw(Box::new(RustMettaModRef(module)));
         Self { module }
     }
+}
+
+/// @brief Returns tokenizer of the MeTTa module
+/// @ingroup module_group
+/// @param[in]  mod_ref  A pointer to the `metta_mod_ref_t`
+/// @return tokenizer_t instance
+///
+#[no_mangle]
+pub extern "C" fn metta_mod_ref_tokenizer(mod_ref: *const metta_mod_ref_t) -> tokenizer_t {
+    let mod_ref = unsafe{ &*(*mod_ref).module };
+    mod_ref.0.tokenizer().clone().into()
 }
 
 /// @brief A C representation of the Rust [ModuleLoader] interface. User can
@@ -44,7 +56,7 @@ pub struct module_loader_t {
     /// @param[in]  metta  The context MeTTa runner
     /// @return 0 if success, non-zero otherwise; code should put the explanation text
     /// to the `err` field.
-    load_tokens: Option<extern "C" fn(loader: *mut c_void, target: *const metta_mod_ref_t, metta: *const metta_t) -> isize>,
+    load_tokens: Option<extern "C" fn(loader: *mut c_void, target: metta_mod_ref_t, metta: metta_t) -> isize>,
     /// @brief Prints module loader content as a string, used for implementing
     /// [std::fmt::Debug].
     /// @param[in]  loader  The module loader self pointer
@@ -78,7 +90,11 @@ impl CModuleLoader {
         if rc == 0 {
             Ok(())
         } else {
-            Err(cstr_into_string(self.cloader().err))
+            if self.cloader().err.is_null() {
+                Err("Unexpected error while loading tokens".into())
+            } else {
+                Err(cstr_into_string(self.cloader().err))
+            }
         }
     }
     fn this(&self) -> *mut c_void {
@@ -116,7 +132,7 @@ impl ModuleLoader for CModuleLoader {
     fn load_tokens(&self, target: &MettaMod, metta: Metta) -> Result<(), String> {
         match self.cloader().load_tokens {
             Some(load_tokens) => {
-                let rc = load_tokens(self.this(), &target.into(), &metta.into());
+                let rc = load_tokens(self.this(), target.into(), metta.into());
                 self.result(rc)
             },
             None => Ok(()),

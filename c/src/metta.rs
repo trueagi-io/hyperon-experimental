@@ -786,7 +786,7 @@ pub extern "C" fn step_get_result(step: step_result_t,
 #[repr(C)]
 pub struct metta_t {
     /// Internal.  Should not be accessed directly
-    metta: *mut RustMettaRunner,
+    metta: *mut RustMetta,
     err_string: *mut c_char,
 }
 
@@ -800,12 +800,12 @@ impl metta_t {
     }
 }
 
-struct RustMettaRunner(Metta);
+struct RustMetta(Metta);
 
 impl From<Metta> for metta_t {
     fn from(metta: Metta) -> Self {
         Self{
-            metta: Box::into_raw(Box::new(RustMettaRunner(metta))),
+            metta: Box::into_raw(Box::new(RustMetta(metta))),
             err_string: core::ptr::null_mut(),
         }
     }

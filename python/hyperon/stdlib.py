@@ -59,7 +59,7 @@ def parseImpl(atom, run_context):
 
 
 @register_atoms(pass_metta=True)
-def text_ops(run_context):
+def text_ops(metta):
     """Add text operators
 
     repr: convert Atom to string.
@@ -73,7 +73,7 @@ def text_ops(run_context):
 
     reprAtom = OperationAtom('repr', lambda a: [ValueAtom(repr(a), 'String')],
                              ['Atom', 'String'], unwrap=False)
-    parseAtom = OperationAtom('parse', lambda s: parseImpl(s, run_context), ['String', 'Atom'], unwrap=False)
+    parseAtom = OperationAtom('parse', lambda s: parseImpl(s, metta), ['String', 'Atom'], unwrap=False)
     stringToCharsAtom = OperationAtom('stringToChars', lambda s: [E(*[ValueAtom(Char(c)) for c in str(s)[1:-1]])],
                                       ['String', 'Atom'], unwrap=False)
     charsToStringAtom = OperationAtom('charsToString', lambda a: [ValueAtom("".join([str(c)[1:-1] for c in a.get_children()]))],
