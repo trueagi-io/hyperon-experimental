@@ -90,25 +90,27 @@ impl CModuleLoader {
         if rc == 0 {
             Ok(())
         } else {
-            if self.cloader().err.is_null() {
+            if self.reference().err.is_null() {
                 Err("Unexpected error while loading tokens".into())
             } else {
-                Err(cstr_into_string(self.cloader().err))
+                Err(cstr_into_string(self.reference().err))
             }
         }
     }
-    fn this(&self) -> *mut c_void {
+
+    fn ptr(&self) -> *mut c_void {
         self.ptr.cast()
     }
-    fn cloader(&self) -> &module_loader_t {
+
+    fn reference(&self) -> &module_loader_t {
         unsafe{ &*self.ptr }
     }
 }
 
 impl Drop for CModuleLoader {
     fn drop(&mut self) {
-        match self.cloader().free {
-            Some(free) => free(self.this()),
+        match self.reference().free {
+            Some(free) => free(self.ptr()),
             None => {},
         }
     }
@@ -116,8 +118,8 @@ impl Drop for CModuleLoader {
 
 impl std::fmt::Debug for CModuleLoader {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self.cloader().to_string {
-            Some(to_string) => CWrite::new(f).with(|w| to_string(self.this(), w.into())),
+        match self.reference().to_string {
+            Some(to_string) => CWrite::new(f).with(|w| to_string(self.ptr(), w.into())),
             None => write!(f, "CModuleLoader-{:?}", self.ptr),
         }
     }
@@ -125,14 +127,14 @@ impl std::fmt::Debug for CModuleLoader {
 
 impl ModuleLoader for CModuleLoader {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let rc = (self.cloader().load.unwrap())(self.this(), &mut context.into());
+        let rc = (self.reference().load.unwrap())(self.ptr(), &mut context.into());
         self.result(rc)
     }
 
     fn load_tokens(&self, target: &MettaMod, metta: Metta) -> Result<(), String> {
-        match self.cloader().load_tokens {
+        match self.reference().load_tokens {
             Some(load_tokens) => {
-                let rc = load_tokens(self.this(), target.into(), metta.into());
+                let rc = load_tokens(self.ptr(), target.into(), metta.into());
                 self.result(rc)
             },
             None => Ok(()),

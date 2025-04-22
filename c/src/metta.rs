@@ -790,16 +790,6 @@ pub struct metta_t {
     err_string: *mut c_char,
 }
 
-impl metta_t {
-    fn free_err_string(&mut self) {
-        if !self.err_string.is_null() {
-            let string = unsafe{ std::ffi::CString::from_raw(self.err_string) };
-            drop(string);
-            self.err_string = core::ptr::null_mut();
-        }
-    }
-}
-
 struct RustMetta(Metta);
 
 impl From<Metta> for metta_t {
@@ -812,6 +802,13 @@ impl From<Metta> for metta_t {
 }
 
 impl metta_t {
+    fn free_err_string(&mut self) {
+        if !self.err_string.is_null() {
+            let string = unsafe{ std::ffi::CString::from_raw(self.err_string) };
+            drop(string);
+            self.err_string = core::ptr::null_mut();
+        }
+    }
     fn borrow(&self) -> &Metta {
         &unsafe{ &*self.metta }.0
     }
