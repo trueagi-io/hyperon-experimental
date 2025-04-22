@@ -48,12 +48,12 @@ class RegexMatchableObject(MatchableObject):
                 return [{"matched_pattern": S(pattern)}]
         return []
 
-def parseImpl(atom, run_context):
+def parseImpl(atom, metta):
     try:
         s = atom.get_object().content
         if type(s) != str:
             raise IncorrectArgumentError()
-        return [SExprParser(repr(s)[1:-1]).parse(run_context.tokenizer())]
+        return [SExprParser(repr(s)[1:-1]).parse(metta.tokenizer())]
     except Exception as e:
         raise IncorrectArgumentError()
 

@@ -539,7 +539,7 @@ ssize_t stdlib_load_tokens(void* loader, metta_mod_ref_t target, metta_t metta) 
     CMettaModRef c_target = CMettaModRef(target);
     CMetta c_metta = CMetta(metta);
     // FIXME: convert error string
-    return load_tokens(&c_target, &c_metta).cast<ssize_t>();
+    return load_tokens(&c_target, c_metta).cast<ssize_t>();
 }
 
 module_loader_t* new_stdlib_loader() {
