@@ -831,41 +831,6 @@ pub extern "C" fn metta_new() -> metta_t {
 
 /// @brief Creates a new top-level MeTTa Runner, with the specified `stdlib` module loaded
 /// @ingroup interpreter_group
-/// @param[in]  space  A pointer to a handle for the Space for use in the Runner's top-level module
-/// @param[in]  environment  An `env_builder_t` handle to configure the environment to use
-/// @param[in]  loader_callback  The `mod_loader_callback_t` for a function to load the stdlib, if it is
-///     not already loaded.  Pass NULL to use the default `stdlib`
-/// @param[in]  callback_context  A pointer to a caller-defined structure that will be passed to the
-///     `loader_callback` function
-/// @return A `metta_t` handle to the newly created Runner
-/// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
-/// @note Most callers can simply call `metta_new`.  This function is provided to support languages
-///     with their own stdlib, that needs to be loaded before the init.metta file is run
-///
-#[no_mangle]
-pub extern "C" fn metta_new_with_space_environment_and_stdlib(space: *mut space_t,
-    env_builder: env_builder_t, loader_callback: mod_loader_callback_t, callback_context: *mut c_void) -> metta_t
-{
-    let dyn_space = unsafe{ &*space }.borrow();
-    let env_builder = if env_builder.is_default() {
-        None
-    } else {
-        Some(env_builder.into_inner())
-    };
-    let loader = match loader_callback {
-        Some(callback) => {
-            Some(Box::new(CModLoaderWrapper{ callback, callback_context }) as Box<dyn ModuleLoader>)
-        },
-        None => None
-    };
-
-    let metta = Metta::new_with_stdlib_loader(loader, Some(dyn_space.clone()), env_builder);
-    metta.into()
-}
-
-
-/// @brief Creates a new top-level MeTTa Runner, with the specified `stdlib` module loaded
-/// @ingroup interpreter_group
 /// @param[in]  space_ref  A pointer to a handle for the Space for use in the Runner's top-level module
 /// @param[in]  env_builder_mov  An `env_builder_t` handle to configure the environment to use
 /// @param[in]  stdlib_loader_mov  Stdlib loader implemented in C code. Pass NULL to use the default `stdlib`

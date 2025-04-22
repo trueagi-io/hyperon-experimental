@@ -524,7 +524,7 @@ void syntax_node_copy_to_list_callback(const syntax_node_t* node, void *context)
     }
 };
 
-// A C function that wraps a Python function, so that the python code to load the stdlib can be run inside `metta_new_with_space_environment_and_stdlib()`
+// A C function that wraps a Python function, so that the python code to load the stdlib
 ssize_t stdlib_load(void* loader, run_context_t* run_context) {
     py::object runner_mod = py::module_::import("hyperon.runner");
     py::function load = runner_mod.attr("_priv_load_py_stdlib");
