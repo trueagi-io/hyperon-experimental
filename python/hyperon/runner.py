@@ -308,56 +308,35 @@ class _PyFileMeTTaModFmt:
             hp.log_error("Python error loading MeTTa module '" + metta_mod_name + "'. " + repr(e))
             return None
 
-def _priv_load_py_module(mod_name, path, c_run_context):
+def _priv_load_module(mod_name, path, c_run_context):
     """Loads the items from the python module into the runner as a MeTTa module"""
     run_context = RunContext(c_run_context)
-
     resource_dir = os.path.dirname(path)
-    loader_func = _priv_make_module_loader_func_for_pymod(mod_name, resource_dir=resource_dir)
-    return loader_func(run_context)
+    space = GroundingSpaceRef()
+    run_context.init_self_module(space, resource_dir)
+    return _priv_register_module_tokens_no_exception(mod_name,
+                                    run_context.tokenizer(),
+                                    run_context.metta(),
+                                    resource_dir=resource_dir)
 
-def _priv_load_tokens_py_module(mod_name, cmettamod, cmetta):
+def _priv_load_module_tokens(mod_name, cmettamod, cmetta):
     """
     """
-    try:
-        target = MettaModRef(cmettamod)
-        tokenizer = target.tokenizer()
-        metta = MeTTa(cmetta=cmetta)
-
-        mod = import_module(mod_name)
-        for n in dir(mod):
-            obj = getattr(mod, n)
-            if 'metta_type' in dir(obj):
-                typ = obj.metta_type
-                pass_metta = obj.metta_pass_metta
-                if pass_metta:
-                    items = obj(metta)
-                else:
-                    items = obj()
-                if typ == RegisterType.ATOM:
-                    def register(r, a):
-                        tokenizer.register_token(r, lambda _: a)
-                    for rex, atom in items.items():
-                        register(rex, atom)
-                elif typ == RegisterType.TOKEN:
-                    for rex, lam in items.items():
-                        tokenizer.register_token(rex, lam)
-
-        return 0
-    except Exception as e:
-        # FIXME: return error description
-        #raise RuntimeError("Error loading tokens from Python module: ", pymod_name, e)
-        print("Exception:", e)
-        return 1
+    target = MettaModRef(cmettamod)
+    tokenizer = target.tokenizer()
+    metta = MeTTa(cmetta=cmetta)
+    return _priv_register_module_tokens_no_exception(mod_name, tokenizer, metta)
 
 def _priv_load_py_stdlib(c_run_context):
     """
     Private function called indirectly to load the Python stdlib during Python runner initialization
     """
     run_context = RunContext(c_run_context)
-
-    stdlib_loader = _priv_make_module_loader_func_for_pymod("hyperon.stdlib")
-    return stdlib_loader(run_context)
+    space = GroundingSpaceRef()
+    run_context.init_self_module(space, None)
+    return _priv_register_module_tokens_no_exception("hyperon.stdlib",
+                                                   run_context.tokenizer(),
+                                                   run_context.metta())
 
     # #LP-TODO-Next Make a test for loading a metta module from a python module using load_module_direct_from_pymod
 
@@ -375,18 +354,36 @@ def _priv_load_py_stdlib(c_run_context):
 def _priv_load_tokens_py_stdlib(cmettamod, cmetta):
     """
     """
-    try:
-        target = MettaModRef(cmettamod)
-        tokenizer = target.tokenizer()
-        metta = MeTTa(cmetta=cmetta)
+    target = MettaModRef(cmettamod)
+    tokenizer = target.tokenizer()
+    metta = MeTTa(cmetta=cmetta)
+    return _priv_register_module_tokens_no_exception("hyperon.stdlib", tokenizer, metta)
 
-        mod = import_module("hyperon.stdlib")
+def _priv_register_module_tokens_no_exception(pymod_name, tokenizer, metta, resource_dir=None):
+    """
+    Private function to load tokens from Python module.
+    """
+
+    try:
+        _priv_register_module_tokens(pymod_name, tokenizer, metta,
+                                     resource_dir)
+        return 0
+    except Exception as e:
+        print("Error loading Python module:", pymod_name, e)
+        return 1
+
+def _priv_register_module_tokens(pymod_name, tokenizer, metta, resource_dir=None):
+    """
+    Private function to load tokens from Python module.
+    """
+
+    try:
+        mod = import_module(pymod_name)
         for n in dir(mod):
             obj = getattr(mod, n)
             if 'metta_type' in dir(obj):
                 typ = obj.metta_type
-                pass_metta = obj.metta_pass_metta
-                if pass_metta:
+                if obj.metta_pass_metta:
                     items = obj(metta)
                 else:
                     items = obj()
@@ -399,12 +396,8 @@ def _priv_load_tokens_py_stdlib(cmettamod, cmetta):
                     for rex, lam in items.items():
                         tokenizer.register_token(rex, lam)
 
-        return 0
     except Exception as e:
-        # FIXME: return error description
-        #raise RuntimeError("Error loading tokens from Python module: ", pymod_name, e)
-        print("Exception:", e)
-        return 1
+        raise RuntimeError("Error loading Python module: ", pymod_name, e)
 
 def _priv_make_module_loader_func_for_pymod(pymod_name, resource_dir=None):
     """
@@ -412,34 +405,11 @@ def _priv_make_module_loader_func_for_pymod(pymod_name, resource_dir=None):
     """
 
     def loader_func(run_context):
-        try:
-            mod = import_module(pymod_name)
-
-            # LP-TODO-Next, I should create an entry point that allows the python module to initialize the
-            #  space before the rest of the init code runs
-            space = GroundingSpaceRef()
-            run_context.init_self_module(space, resource_dir)
-
-            for n in dir(mod):
-                obj = getattr(mod, n)
-                if 'metta_type' in dir(obj):
-                    typ = obj.metta_type
-                    pass_metta = obj.metta_pass_metta
-                    if pass_metta:
-                        items = obj(run_context.metta())
-                    else:
-                        items = obj()
-                    if typ == RegisterType.ATOM:
-                        for rex, atom in items.items():
-                            run_context.register_atom(rex, atom)
-                    elif typ == RegisterType.TOKEN:
-                        for rex, lam in items.items():
-                            run_context.register_token(rex, lam)
-
-            return 0
-        except Exception as e:
-            #raise RuntimeError("Error loading Python module: ", pymod_name, e)
-            print("Error loading Python module:", pymod_name, e)
-            return 1
+        space = GroundingSpaceRef()
+        run_context.init_self_module(space, resource_dir)
+        _priv_register_module_tokens(pymod_name,
+                                     run_context.tokenizer(),
+                                     run_context.metta())
 
     return loader_func
+

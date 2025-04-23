@@ -559,7 +559,7 @@ struct python_module_loader_t {
 ssize_t module_load(void const* pyloader, run_context_t* run_context) {
     python_module_loader_t const* loader = static_cast<python_module_loader_t const*>(pyloader);
     py::object runner_mod = py::module_::import("hyperon.runner");
-    py::function load = runner_mod.attr("_priv_load_py_module");
+    py::function load = runner_mod.attr("_priv_load_module");
     CRunContext c_run_context = CRunContext(run_context);
     return load(loader->mod_name, loader->path, &c_run_context).cast<ssize_t>();
 }
@@ -567,7 +567,7 @@ ssize_t module_load(void const* pyloader, run_context_t* run_context) {
 ssize_t module_load_tokens(void const* pyloader, metta_mod_ref_t target, metta_t metta) {
     python_module_loader_t const* loader = static_cast<python_module_loader_t const*>(pyloader);
     py::object runner_mod = py::module_::import("hyperon.runner");
-    py::function load_tokens = runner_mod.attr("_priv_load_tokens_py_module");
+    py::function load_tokens = runner_mod.attr("_priv_load_module_tokens");
     CMettaModRef c_target = CMettaModRef(target);
     CMetta c_metta = CMetta(metta);
     // FIXME: convert error string
