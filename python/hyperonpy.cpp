@@ -592,7 +592,7 @@ struct python_fs_module_format_t {
     py::object* py_format;
 };
 
-size_t path_for_name_mod_fmt_callback(const void* payload, const char* parent_dir, const char* mod_name, char* dst_buf, uintptr_t buf_size) {
+size_t fs_module_format_path_for_name(const void* payload, const char* parent_dir, const char* mod_name, char* dst_buf, uintptr_t buf_size) {
     python_fs_module_format_t const* format = static_cast<python_fs_module_format_t const*>(payload);
     py::object* fmt_interface_obj = format->py_format;
     py::function py_func = fmt_interface_obj->attr("path_for_name");
@@ -609,7 +609,7 @@ size_t path_for_name_mod_fmt_callback(const void* payload, const char* parent_di
     }
 }
 
-bool try_path_mod_fmt_callback(const void* payload, const char* path,
+bool fs_module_format_try_path(const void* payload, const char* path,
         const char* mod_name, module_loader_t const ** mod_loader,
         module_descriptor_t *mod_descriptor) {
     python_fs_module_format_t const* format = static_cast<python_fs_module_format_t const*>(payload);
@@ -630,16 +630,16 @@ bool try_path_mod_fmt_callback(const void* payload, const char* path,
     }
 }
 
-void free_mod_fmt_context(void* callback_context) {
+void fs_module_format_free(void* callback_context) {
     py::object* py_context_obj = (py::object*)callback_context;
     delete py_context_obj;
 }
 
-fs_module_format_t* new_fs_module_format(py::object* py_format) {
+fs_module_format_t* fs_module_format_new(py::object* py_format) {
     python_fs_module_format_t* format = static_cast<python_fs_module_format_t*>(malloc(sizeof(python_fs_module_format_t)));
-    format->api.path_for_name = path_for_name_mod_fmt_callback;
-    format->api.try_path = try_path_mod_fmt_callback;
-    format->api.free = free_mod_fmt_context;
+    format->api.path_for_name = fs_module_format_path_for_name;
+    format->api.try_path = fs_module_format_try_path;
+    format->api.free = fs_module_format_free;
     format->py_format = py_format;
     return reinterpret_cast<fs_module_format_t*>(format);
 }
@@ -1146,7 +1146,7 @@ PYBIND11_MODULE(hyperonpy, m) {
         //TODO. We end up leaking this object, but it's a non-issue in practice because environments usually live the life of the program.
         // To fix this, give the Python MeTTa object built from this EnvBuilder a reference to the `interface` object, rather than allocating it here
         py::object* py_impl = new py::object(interface);
-        env_builder_push_fs_module_format(builder.ptr(), new_fs_module_format(py_impl));
+        env_builder_push_fs_module_format(builder.ptr(), fs_module_format_new(py_impl));
     }, "Adds a new module format to the environment");
 
     m.def("log_error", [](std::string msg) { log_error(msg.c_str()); }, "Logs an error through the MeTTa logger");

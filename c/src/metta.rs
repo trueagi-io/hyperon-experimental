@@ -1036,37 +1036,6 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
     }
 }
 
-/// @brief Loads a module directly into the runner using passed module loader
-/// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the handle specifying the runner into which to load the module
-/// @param[in]  name  A C-string specifying a name for the module
-/// @param[in]  mod_loader An instance of the module loader
-/// @return  The `module_id_t` for the loaded module, or `invalid` if there was an error
-/// @note  This function might be useful to provide MeTTa modules that are built-in as part of your
-///    application
-/// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
-///
-#[no_mangle]
-pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
-        name: *const c_char,
-        mod_loader: *const module_loader_t) -> module_id_t {
-
-    let metta = unsafe{ &mut *metta };
-    metta.free_err_string();
-    let rust_metta = metta.borrow();
-    let name = cstr_as_str(name);
-    let loader = Box::new(CModuleLoader::new(mod_loader));
-
-    match rust_metta.load_module_direct(loader, name) {
-        Ok(mod_id) => mod_id.into(),
-        Err(err) => {
-            let err_cstring = std::ffi::CString::new(err).unwrap();
-            metta.err_string = err_cstring.into_raw();
-            ModId::INVALID.into()
-        }
-    }
-}
-
 /// @brief Loads a module directly into the runner, from a module_loader_t
 /// @ingroup interpreter_group
 /// @param[in]  metta_ref  A pointer to the handle specifying the runner into which to load the module
@@ -1078,7 +1047,7 @@ pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
 /// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
 ///
 #[no_mangle]
-pub extern "C" fn metta_load_module_direct_2(metta_ref: *mut metta_t,
+pub extern "C" fn metta_load_module_direct(metta_ref: *mut metta_t,
         name_ref: *const c_char,
         loader_mov: *mut module_loader_t) -> module_id_t {
 
