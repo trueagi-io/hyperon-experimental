@@ -858,29 +858,6 @@ pub extern "C" fn metta_new_with_space_environment_and_stdlib(space_ref: *mut sp
     metta.into()
 }
 
-/// Internal wrapper to turn a mod_loader_callback_t into an trait object that implements [ModuleLoader]
-#[derive(Debug)]
-struct CModLoaderWrapper {
-    //NOTE: This function type matches the internals of mod_loader_callback_t.  This is necessary because
-    //  CBindGen has some unfortunate inconsistencies around how Rust types are included in the C header
-    callback: extern "C" fn(run_context: *mut run_context_t, callback_context: *mut c_void),
-    callback_context: *mut c_void,
-}
-
-//FUTURE TODO.  See QUESTION around CFsModuleFormat about whether we trust the C plugins to be reentrant
-unsafe impl Send for CModLoaderWrapper {}
-unsafe impl Sync for CModLoaderWrapper {}
-
-impl ModuleLoader for CModLoaderWrapper {
-    fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let mut c_context = run_context_t::from(context);
-
-        (self.callback)(&mut c_context, self.callback_context);
-
-        Ok(())
-    }
-}
-
 /// @brief Creates a new core MeTTa runner, with no loaded stdlib nor initialization
 /// @ingroup interpreter_group
 /// @param[in]  space  A pointer to a handle for the Space for use as the space of the top-level module
@@ -1059,13 +1036,11 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
     }
 }
 
-/// @brief Loads a module directly into the runner, from a mod_loader_callback_t
+/// @brief Loads a module directly into the runner using passed module loader
 /// @ingroup interpreter_group
 /// @param[in]  metta  A pointer to the handle specifying the runner into which to load the module
 /// @param[in]  name  A C-string specifying a name for the module
-/// @param[in]  loader_callback  The `mod_loader_callback_t` for a function to load the module
-/// @param[in]  callback_context  A pointer to a caller-defined structure that will be passed to the
-///    `loader_callback` function
+/// @param[in]  mod_loader An instance of the module loader
 /// @return  The `module_id_t` for the loaded module, or `invalid` if there was an error
 /// @note  This function might be useful to provide MeTTa modules that are built-in as part of your
 ///    application
@@ -1074,15 +1049,13 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
 #[no_mangle]
 pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
         name: *const c_char,
-        loader_callback: mod_loader_callback_t,
-        callback_context: *mut c_void) -> module_id_t {
+        mod_loader: *const module_loader_t) -> module_id_t {
 
     let metta = unsafe{ &mut *metta };
     metta.free_err_string();
     let rust_metta = metta.borrow();
     let name = cstr_as_str(name);
-    let loader_callback = loader_callback.unwrap();
-    let loader = Box::new(CModLoaderWrapper{ callback: loader_callback, callback_context });
+    let loader = Box::new(CModuleLoader::new(mod_loader));
 
     match rust_metta.load_module_direct(loader, name) {
         Ok(mod_id) => mod_id.into(),
@@ -1669,13 +1642,6 @@ pub extern "C" fn env_builder_push_fs_module_format(builder: *mut env_builder_t,
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Module Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-/// @brief A callback to loads a module into a runner, by making calls into the `run_context_t`
-/// @ingroup module_group
-/// @param[in]  run_context  The `run_context_t` to provide access to the MeTTa run interface
-/// @param[in]  callback_context  The state pointer initially passed to the upstream function
-///
-pub type mod_loader_callback_t = Option<extern "C" fn(run_context: *mut run_context_t, callback_context: *mut c_void)>;
 
 /// @brief Called within a module `loader` function to initialize the new module
 /// @ingroup module_group
