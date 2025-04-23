@@ -630,13 +630,14 @@ bool fs_module_format_try_path(const void* payload, const char* path,
     }
 }
 
-void fs_module_format_free(void* callback_context) {
-    py::object* py_context_obj = (py::object*)callback_context;
-    delete py_context_obj;
+void fs_module_format_free(void* payload) {
+    python_fs_module_format_t const* format = static_cast<python_fs_module_format_t const*>(payload);
+    delete format->py_format;
+    delete format;
 }
 
 fs_module_format_t* fs_module_format_new(py::object* py_format) {
-    python_fs_module_format_t* format = static_cast<python_fs_module_format_t*>(malloc(sizeof(python_fs_module_format_t)));
+    python_fs_module_format_t* format = new python_fs_module_format_t;
     format->api.path_for_name = fs_module_format_path_for_name;
     format->api.try_path = fs_module_format_try_path;
     format->api.free = fs_module_format_free;
