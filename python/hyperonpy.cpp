@@ -594,8 +594,6 @@ void run_python_module_loader(run_context_t* run_context, void* callback_context
 
 struct python_fs_module_format_t {
     fs_module_format_t api;
-    // FIXME: return fmt_id from py_format
-    uint64_t fmt_id;
     py::object* py_format;
 };
 
@@ -629,7 +627,8 @@ bool try_path_mod_fmt_callback(const void* payload, const char* path,
         py::dict python_descriptor = result.cast<py::dict>();
         std::string mod_name = python_descriptor["pymod_name"].cast<std::string>();
         std::string path = python_descriptor["path"].cast<std::string>();
-        *mod_descriptor = module_descriptor_new_with_path_and_fmt_id(mod_name.c_str(), path.c_str(), format->fmt_id);
+        uint64_t fmt_id = python_descriptor["fmt_id"].cast<uint64_t>();
+        *mod_descriptor = module_descriptor_new_with_path_and_fmt_id(mod_name.c_str(), path.c_str(), fmt_id);
         *mod_loader = module_loader_new(mod_name, path);
         return true;
     }
@@ -640,12 +639,11 @@ void free_mod_fmt_context(void* callback_context) {
     delete py_context_obj;
 }
 
-fs_module_format_t* new_fs_module_format(py::object* py_format, uint64_t fmt_id) {
+fs_module_format_t* new_fs_module_format(py::object* py_format) {
     python_fs_module_format_t* format = static_cast<python_fs_module_format_t*>(malloc(sizeof(python_fs_module_format_t)));
     format->api.path_for_name = path_for_name_mod_fmt_callback;
     format->api.try_path = try_path_mod_fmt_callback;
     format->api.free = free_mod_fmt_context;
-    format->fmt_id = fmt_id;
     format->py_format = py_format;
     return reinterpret_cast<fs_module_format_t*>(format);
 }
@@ -1146,11 +1144,11 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("env_builder_disable_config_dir", [](EnvBuilder& builder) { env_builder_disable_config_dir(builder.ptr()); }, "Disables the config dir in the environment");
     m.def("env_builder_set_is_test", [](EnvBuilder& builder, bool is_test) { env_builder_set_is_test(builder.ptr(), is_test); }, "Disables the config dir in the environment");
     m.def("env_builder_push_include_path", [](EnvBuilder& builder, std::string path) { env_builder_push_include_path(builder.ptr(), path.c_str()); }, "Adds an include path to the environment");
-    m.def("env_builder_push_fs_module_format", [](EnvBuilder& builder, py::object interface, uint64_t fmt_id) {
+    m.def("env_builder_push_fs_module_format", [](EnvBuilder& builder, py::object interface) {
         //TODO. We end up leaking this object, but it's a non-issue in practice because environments usually live the life of the program.
         // To fix this, give the Python MeTTa object built from this EnvBuilder a reference to the `interface` object, rather than allocating it here
         py::object* py_impl = new py::object(interface);
-        env_builder_push_fs_module_format(builder.ptr(), new_fs_module_format(py_impl, fmt_id));
+        env_builder_push_fs_module_format(builder.ptr(), new_fs_module_format(py_impl));
     }, "Adds a new module format to the environment");
 
     m.def("log_error", [](std::string msg) { log_error(msg.c_str()); }, "Logs an error through the MeTTa logger");
