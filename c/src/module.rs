@@ -47,29 +47,28 @@ pub struct module_loader_t {
     /// @brief A function to load the module my making MeTTa API calls.
     /// @param[in]  payload  The module loader self pointer
     /// @param[in]  run_context  The `run_context_t` to provide access to the MeTTa run interface
+    /// @param[in]  err  The writer to fill with error message if any
     /// @return 0 if success, non-zero otherwise; code should put the explanation text
     /// to the `err` field.
-    load: Option<extern "C" fn(payload: *const c_void, context: *mut run_context_t) -> isize>,
+    load: Option<extern "C" fn(payload: *const c_void, context: *mut run_context_t, err: write_t) -> isize>,
     /// @brief Loads module's tokens into target module. This method is used for both
     /// initial token loading and exporting module's tokens into importing
     /// module.
     /// @param[in]  payload  The module loader self pointer
     /// @param[in]  target  The module to load tokens into
     /// @param[in]  metta  The context MeTTa runner
+    /// @param[in]  err  The writer to fill with error message if any
     /// @return 0 if success, non-zero otherwise; code should put the explanation text
     /// to the `err` field.
-    load_tokens: Option<extern "C" fn(payload: *const c_void, target: metta_mod_ref_t, metta: metta_t) -> isize>,
+    load_tokens: Option<extern "C" fn(payload: *const c_void, target: metta_mod_ref_t, metta: metta_t, err: write_t) -> isize>,
     /// @brief Prints module loader content as a string, used for implementing
     /// [std::fmt::Debug].
     /// @param[in]  payload  The module loader self pointer
-    /// @param[in]  write  Object to write the text into
-    to_string: Option<extern "C" fn(payload: *const c_void, write: write_t)>,
+    /// @param[in]  text  Object to write the text into
+    to_string: Option<extern "C" fn(payload: *const c_void, text: write_t)>,
     /// @brief Frees module loader and all associated memory
     /// @param[in]  payload  The module loader self pointer
     free: Option<extern "C" fn(payload: *mut c_void)>,
-    /// @brief Field which contains last happened error as UTF-8 string. This
-    /// memory should also be cleaned up by [free] function.
-    err: *const c_char,
 }
 
 /// The wrapper of the module_loader_t providing Rust API of the C implementation
@@ -88,14 +87,14 @@ impl CModuleLoader {
         Self{ payload: cloader }
     }
 
-    fn result(&self, rc: isize) -> Result<(), String> {
+    fn result(&self, rc: isize, err: String) -> Result<(), String> {
         if rc == 0 {
             Ok(())
         } else {
-            if self.reference().err.is_null() {
+            if err.is_empty() {
                 Err("Unexpected error while loading module".into())
             } else {
-                Err(cstr_into_string(self.reference().err))
+                Err(format!("Error loading module: loader: {}, error: {}", self, err))
             }
         }
     }
@@ -118,7 +117,7 @@ impl Drop for CModuleLoader {
     }
 }
 
-impl std::fmt::Debug for CModuleLoader {
+impl std::fmt::Display for CModuleLoader {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self.reference().to_string {
             Some(to_string) => CWrite::new(f).with(|w| to_string(self.payload(), w.into())),
@@ -127,17 +126,25 @@ impl std::fmt::Debug for CModuleLoader {
     }
 }
 
+impl std::fmt::Debug for CModuleLoader {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
 impl ModuleLoader for CModuleLoader {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let rc = (self.reference().load.unwrap())(self.payload(), &mut context.into());
-        self.result(rc)
+        let mut err = String::new();
+        let rc = (self.reference().load.unwrap())(self.payload(), &mut context.into(), (&mut CWrite::new(&mut err)).into());
+        self.result(rc, err)
     }
 
     fn load_tokens(&self, target: &MettaMod, metta: Metta) -> Result<(), String> {
         match self.reference().load_tokens {
             Some(load_tokens) => {
-                let rc = load_tokens(self.payload(), target.into(), metta.into());
-                self.result(rc)
+                let mut err = String::new();
+                let rc = load_tokens(self.payload(), target.into(), metta.into(), (&mut CWrite::new(&mut err)).into());
+                self.result(rc, err)
             },
             None => Ok(()),
         }

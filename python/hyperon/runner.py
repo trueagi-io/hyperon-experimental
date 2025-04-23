@@ -317,10 +317,10 @@ def _priv_load_module(mod_name, path, c_run_context):
         resource_dir = None
     space = GroundingSpaceRef()
     run_context.init_self_module(space, resource_dir)
-    return _priv_register_module_tokens_no_exception(mod_name,
-                                    run_context.tokenizer(),
-                                    run_context.metta(),
-                                    resource_dir=resource_dir)
+    _priv_register_module_tokens(mod_name,
+                                 run_context.tokenizer(),
+                                 run_context.metta(),
+                                 resource_dir=resource_dir)
 
 def _priv_load_module_tokens(mod_name, cmettamod, cmetta):
     """
@@ -328,21 +328,7 @@ def _priv_load_module_tokens(mod_name, cmettamod, cmetta):
     target = MettaModRef(cmettamod)
     tokenizer = target.tokenizer()
     metta = MeTTa(cmetta=cmetta)
-    return _priv_register_module_tokens_no_exception(mod_name, tokenizer, metta)
-
-
-def _priv_register_module_tokens_no_exception(pymod_name, tokenizer, metta, resource_dir=None):
-    """
-    Private function to load tokens from Python module.
-    """
-
-    try:
-        _priv_register_module_tokens(pymod_name, tokenizer, metta,
-                                     resource_dir)
-        return 0
-    except Exception as e:
-        print("Error loading Python module:", pymod_name, e)
-        return 1
+    _priv_register_module_tokens(mod_name, tokenizer, metta)
 
 # #LP-TODO-Next Make a test for loading a metta module from a python module using load_module_direct_from_pymod
 
@@ -361,32 +347,28 @@ def _priv_register_module_tokens(pymod_name, tokenizer, metta, resource_dir=None
     """
     Private function to load tokens from Python module.
     """
-
-    try:
-        mod = import_module(pymod_name)
-        for n in dir(mod):
-            obj = getattr(mod, n)
-            if 'metta_type' in dir(obj):
-                typ = obj.metta_type
-                if obj.metta_pass_metta:
-                    items = obj(metta)
-                else:
-                    items = obj()
-                if typ == RegisterType.ATOM:
-                    def register(r, a):
-                        tokenizer.register_token(r, lambda _: a)
-                    for rex, atom in items.items():
-                        register(rex, atom)
-                elif typ == RegisterType.TOKEN:
-                    for rex, lam in items.items():
-                        tokenizer.register_token(rex, lam)
-
-    except Exception as e:
-        raise RuntimeError("Error loading Python module: ", pymod_name, e)
+    mod = import_module(pymod_name)
+    for n in dir(mod):
+        obj = getattr(mod, n)
+        if 'metta_type' in dir(obj):
+            typ = obj.metta_type
+            if obj.metta_pass_metta:
+                items = obj(metta)
+            else:
+                items = obj()
+            if typ == RegisterType.ATOM:
+                def register(r, a):
+                    tokenizer.register_token(r, lambda _: a)
+                for rex, atom in items.items():
+                    register(rex, atom)
+            elif typ == RegisterType.TOKEN:
+                for rex, lam in items.items():
+                    tokenizer.register_token(rex, lam)
 
 def _priv_make_module_loader_func_for_pymod(pymod_name, resource_dir=None):
     """
-    Private function to return a loader function to load a module into the runner directly from the specified Python module
+    Private function to return a loader function to load a module into the
+    runner directly from the specified Python module. Left for compatibility.
     """
 
     def loader_func(run_context):

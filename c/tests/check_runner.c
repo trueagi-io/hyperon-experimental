@@ -96,7 +96,7 @@ START_TEST (test_runner_errors)
 }
 END_TEST
 
-ssize_t load(void const* payload, run_context_t* run_context) {
+ssize_t load(void const* payload, run_context_t* run_context, write_t err) {
     space_t space = space_new_grounding_space();
     run_context_init_self_module(run_context, &space, NULL);
     space_free(space);
@@ -189,7 +189,7 @@ START_TEST (test_custom_module_format)
 }
 END_TEST
 
-ssize_t custom_stdlib_loader(void const* loader, run_context_t *run_context) {
+ssize_t custom_stdlib_loader(void const* loader, run_context_t *run_context, write_t err) {
 
     //Init our new module
     space_t space = space_new_grounding_space();

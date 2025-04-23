@@ -526,53 +526,63 @@ void syntax_node_copy_to_list_callback(const syntax_node_t* node, void *context)
 
 struct python_module_loader_t {
     module_loader_t api;
-    py::str mod_name;
-    py::str path;
+    std::string mod_name;
+    nonstd::optional<std::string> path;
 };
 
-ssize_t module_load(void const* pyloader, run_context_t* run_context) {
+void module_loader_save_last_error(py::error_already_set &e, write_t err) {
+    char message[4096];
+    snprintf(message, lenghtof(message), "Exception caught:\n%s", e.what());
+    write_str(err, message);
+}
+
+ssize_t module_loader_load(void const* pyloader, run_context_t* run_context, write_t err) {
     python_module_loader_t const* loader = static_cast<python_module_loader_t const*>(pyloader);
     py::object runner_mod = py::module_::import("hyperon.runner");
     py::function load = runner_mod.attr("_priv_load_module");
     CRunContext c_run_context = CRunContext(run_context);
-    return load(loader->mod_name, loader->path, &c_run_context).cast<ssize_t>();
+    try {
+        load(loader->mod_name, loader->path, &c_run_context);
+        return 0;
+    } catch (py::error_already_set &e) {
+        module_loader_save_last_error(e, err);
+        return -1;
+    }
 }
 
-ssize_t module_load_tokens(void const* pyloader, metta_mod_ref_t target, metta_t metta) {
+ssize_t module_loader_load_tokens(void const* pyloader, metta_mod_ref_t target, metta_t metta, write_t err) {
     python_module_loader_t const* loader = static_cast<python_module_loader_t const*>(pyloader);
     py::object runner_mod = py::module_::import("hyperon.runner");
     py::function load_tokens = runner_mod.attr("_priv_load_module_tokens");
     CMettaModRef c_target = CMettaModRef(target);
     CMetta c_metta = CMetta(metta);
-    // FIXME: convert error string
-    return load_tokens(loader->mod_name, &c_target, c_metta).cast<ssize_t>();
+    try {
+        load_tokens(loader->mod_name, &c_target, c_metta);
+        return 0;
+    } catch (py::error_already_set &e) {
+        module_loader_save_last_error(e, err);
+        return -1;
+    }
+}
+void module_loader_to_string(void const* pyloader, write_t writer) {
+    python_module_loader_t const* loader = static_cast<python_module_loader_t const*>(pyloader);
+    write_str(writer, loader->mod_name.c_str());
 }
 
-module_loader_t* new_module_loader(py::str mod_name, py::str path) {
-    python_module_loader_t* loader = static_cast<python_module_loader_t*>(calloc(sizeof(python_module_loader_t), 1));
-    loader->api.load = module_load;
-    loader->api.load_tokens = module_load_tokens;
-    // FIXME: free error string as well
-    // FIXME: free mod_name and path correctly
-    loader->api.free = free;
+void module_loader_free(void* pyloader) {
+    python_module_loader_t const* loader = static_cast<python_module_loader_t const*>(pyloader);
+    delete loader;
+}
+
+module_loader_t* module_loader_new(std::string mod_name, nonstd::optional<std::string> path) {
+    python_module_loader_t* loader = new python_module_loader_t;
+    loader->api.load = module_loader_load;
+    loader->api.load_tokens = module_loader_load_tokens;
+    loader->api.to_string = module_loader_to_string;
+    loader->api.free = module_loader_free;
     loader->mod_name = mod_name;
     loader->path = path;
     return reinterpret_cast<module_loader_t*>(loader);
-}
-
-// FIXME: get error processing code from here
-void load_mod_fmt_callback(const void* payload, run_context_t* run_context, void* callback_context) {
-    py::object* fmt_interface_obj = (py::object*)payload;
-    py::object* callback_context_obj = (py::object*)callback_context;
-    py::function py_func = fmt_interface_obj->attr("_load_called_from_c");
-    CRunContext c_run_context = CRunContext(run_context);
-    try {
-        py_func(&c_run_context, callback_context_obj);
-    } catch (py::error_already_set &e) {
-        char message[4096];
-        snprintf(message, lenghtof(message), "Exception caught:\n%s", e.what());
-        run_context_raise_error(run_context, message);
-    }
 }
 
 // A C function that dispatches to a Python function, so that the Python module loader code can be run inside `metta_load_module_direct()`
@@ -620,7 +630,7 @@ bool try_path_mod_fmt_callback(const void* payload, const char* path,
         std::string mod_name = python_descriptor["pymod_name"].cast<std::string>();
         std::string path = python_descriptor["path"].cast<std::string>();
         *mod_descriptor = module_descriptor_new_with_path_and_fmt_id(mod_name.c_str(), path.c_str(), format->fmt_id);
-        *mod_loader = new_module_loader(mod_name, path);
+        *mod_loader = module_loader_new(mod_name, path);
         return true;
     }
 }
@@ -1071,7 +1081,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, EnvBuilder env_builder) {
-        return CMetta(metta_new_with_space_environment_and_stdlib_2(space.ptr(), env_builder.obj, new_module_loader("hyperon.stdlib", py::none())));
+        return CMetta(metta_new_with_space_environment_and_stdlib_2(space.ptr(), env_builder.obj, module_loader_new("hyperon.stdlib", nonstd::nullopt)));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
     m.def("metta_err_str", [](CMetta& metta) {
