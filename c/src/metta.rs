@@ -867,7 +867,7 @@ struct CModLoaderWrapper {
     callback_context: *mut c_void,
 }
 
-//FUTURE TODO.  See QUESTION around CFsModFmtLoader about whether we trust the C plugins to be reentrant
+//FUTURE TODO.  See QUESTION around CFsModuleFormat about whether we trust the C plugins to be reentrant
 unsafe impl Send for CModLoaderWrapper {}
 unsafe impl Sync for CModLoaderWrapper {}
 
@@ -1661,20 +1661,13 @@ pub extern "C" fn env_builder_push_include_path(builder: *mut env_builder_t, pat
 /// @brief Adds logic to interpret a foreign format for MeTTa modules loaded from the file system
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
-/// @param[in]  api  A pointer to the `mod_file_fmt_api_t` table of functions to define the behavior of the
-///    module format
-/// @param[in]  payload  A pointer to a user-defined structure to store information related to this format
-/// @param[in]  fmt_id  An arbitrary number to ensure modules identified by one format are not mistaken
-///    for another
-/// @warning The data referenced by both the `api` and the `payload` pointers must remain valid for the
-///    entire life of the environment.  In the case of the common_env, that is the entire life of the program
-/// @note Formats will be tried in the order they are added to the `env_builder_t``
+/// @param[in]  format  A pointer to a user-defined structure to store information related to this format
 ///
 #[no_mangle]
-pub extern "C" fn env_builder_push_fs_module_format(builder: *mut env_builder_t, api: *const mod_file_fmt_api_t, payload: *const c_void, fmt_id: u64) {
+pub extern "C" fn env_builder_push_fs_module_format(builder: *mut env_builder_t, format: *const fs_module_format_t) {
     let builder_arg_ref = unsafe{ &mut *builder };
     let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
-    let c_loader = CFsModFmtLoader::new(api, payload, fmt_id);
+    let c_loader = CFsModuleFormat::new(format);
     let builder = builder.push_fs_module_format(c_loader);
     *builder_arg_ref = builder.into();
 }

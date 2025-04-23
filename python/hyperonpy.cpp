@@ -525,15 +525,14 @@ void syntax_node_copy_to_list_callback(const syntax_node_t* node, void *context)
 };
 
 // A C function that wraps a Python function, so that the python code to load the stdlib
-ssize_t stdlib_load(void* loader, run_context_t* run_context) {
+ssize_t stdlib_load(void const* loader, run_context_t* run_context) {
     py::object runner_mod = py::module_::import("hyperon.runner");
     py::function load = runner_mod.attr("_priv_load_py_stdlib");
     CRunContext c_run_context = CRunContext(run_context);
-    load(&c_run_context);
-    return 0;
+    return load(&c_run_context).cast<ssize_t>();
 }
 
-ssize_t stdlib_load_tokens(void* loader, metta_mod_ref_t target, metta_t metta) {
+ssize_t stdlib_load_tokens(void const* loader, metta_mod_ref_t target, metta_t metta) {
     py::object runner_mod = py::module_::import("hyperon.runner");
     py::function load_tokens = runner_mod.attr("_priv_load_tokens_py_stdlib");
     CMettaModRef c_target = CMettaModRef(target);
@@ -551,40 +550,43 @@ module_loader_t* new_stdlib_loader() {
     return loader;
 }
 
-// A C function that dispatches to a Python function, so that the Python module loader code can be run inside `metta_load_module_direct()`
-void run_python_module_loader(run_context_t* run_context, void* callback_context) {
-    py::function* py_func = (py::function*)callback_context;
+struct python_module_loader_t {
+    module_loader_t api;
+    std::string mod_name;
+    std::string path;
+};
+
+ssize_t module_load(void const* pyloader, run_context_t* run_context) {
+    python_module_loader_t const* loader = static_cast<python_module_loader_t const*>(pyloader);
+    py::object runner_mod = py::module_::import("hyperon.runner");
+    py::function load = runner_mod.attr("_priv_load_py_module");
     CRunContext c_run_context = CRunContext(run_context);
-    (*py_func)(&c_run_context);
+    return load(loader->mod_name, loader->path, &c_run_context).cast<ssize_t>();
 }
 
-size_t path_for_name_mod_fmt_callback(const void* payload, const char* parent_dir, const char* mod_name, char* dst_buf, uintptr_t buf_size) {
-    py::object* fmt_interface_obj = (py::object*)payload;
-    py::function py_func = fmt_interface_obj->attr("path_for_name");
-
-    py::object result_path_py = py_func(parent_dir, mod_name);
-    std::string result_path_string = py::str(result_path_py);
-
-    if (buf_size >= result_path_string.length()+1) {
-        strncpy(dst_buf, &result_path_string[0], result_path_string.length());
-        dst_buf[result_path_string.length()] = 0;
-        return result_path_string.length()+1;
-    } else {
-        return 0;
-    }
+ssize_t module_load_tokens(void const* pyloader, metta_mod_ref_t target, metta_t metta) {
+    python_module_loader_t const* loader = static_cast<python_module_loader_t const*>(pyloader);
+    py::object runner_mod = py::module_::import("hyperon.runner");
+    py::function load_tokens = runner_mod.attr("_priv_load_tokens_py_module");
+    CMettaModRef c_target = CMettaModRef(target);
+    CMetta c_metta = CMetta(metta);
+    // FIXME: convert error string
+    return load_tokens(loader->mod_name, &c_target, c_metta).cast<ssize_t>();
 }
 
-void* try_path_mod_fmt_callback(const void* payload, const char* path, const char* mod_name) {
-    py::object* fmt_interface_obj = (py::object*)payload;
-    py::function py_func = fmt_interface_obj->attr("try_path");
-    py::object context_obj = py_func(path, mod_name);
-    if (context_obj.is_none()) {
-        return NULL;
-    } else {
-        return (void*) new py::object(context_obj);
-    }
+module_loader_t* new_module_loader(std::string mod_name, std::string path) {
+    python_module_loader_t* loader = static_cast<python_module_loader_t*>(calloc(sizeof(python_module_loader_t), 1));
+    loader->api.load = module_load;
+    loader->api.load_tokens = module_load_tokens;
+    // FIXME: free error string as well
+    // FIXME: free mod_name and path correctly
+    loader->api.free = free;
+    loader->mod_name = mod_name;
+    loader->path = path;
+    return reinterpret_cast<module_loader_t*>(loader);
 }
 
+// FIXME: get error processing code from here
 void load_mod_fmt_callback(const void* payload, run_context_t* run_context, void* callback_context) {
     py::object* fmt_interface_obj = (py::object*)payload;
     py::object* callback_context_obj = (py::object*)callback_context;
@@ -599,18 +601,71 @@ void load_mod_fmt_callback(const void* payload, run_context_t* run_context, void
     }
 }
 
+// A C function that dispatches to a Python function, so that the Python module loader code can be run inside `metta_load_module_direct()`
+void run_python_module_loader(run_context_t* run_context, void* callback_context) {
+    py::function* py_func = (py::function*)callback_context;
+    CRunContext c_run_context = CRunContext(run_context);
+    (*py_func)(&c_run_context);
+}
+
+struct python_fs_module_format_t {
+    fs_module_format_t api;
+    // FIXME: return fmt_id from py_format
+    uint64_t fmt_id;
+    py::object* py_format;
+};
+
+size_t path_for_name_mod_fmt_callback(const void* payload, const char* parent_dir, const char* mod_name, char* dst_buf, uintptr_t buf_size) {
+    python_fs_module_format_t const* format = static_cast<python_fs_module_format_t const*>(payload);
+    py::object* fmt_interface_obj = format->py_format;
+    py::function py_func = fmt_interface_obj->attr("path_for_name");
+
+    py::object result_path_py = py_func(parent_dir, mod_name);
+    std::string result_path_string = py::str(result_path_py);
+
+    if (buf_size >= result_path_string.length()+1) {
+        strncpy(dst_buf, &result_path_string[0], result_path_string.length());
+        dst_buf[result_path_string.length()] = 0;
+        return result_path_string.length()+1;
+    } else {
+        return 0;
+    }
+}
+
+bool try_path_mod_fmt_callback(const void* payload, const char* path,
+        const char* mod_name, module_loader_t const ** mod_loader,
+        module_descriptor_t *mod_descriptor) {
+    python_fs_module_format_t const* format = static_cast<python_fs_module_format_t const*>(payload);
+    py::object* fmt_interface_obj = format->py_format;
+    py::function py_func = fmt_interface_obj->attr("try_path");
+    py::object result = py_func(path, mod_name);
+    if (result.is_none()) {
+        return false;
+    } else {
+        py::dict python_descriptor = result.cast<py::dict>();
+        std::string mod_name = python_descriptor["pymod_name"].cast<std::string>();
+        std::string path = python_descriptor["path"].cast<std::string>();
+        *mod_descriptor = module_descriptor_new_with_path_and_fmt_id(mod_name.c_str(), path.c_str(), format->fmt_id);
+        *mod_loader = new_module_loader(mod_name, path);
+        return true;
+    }
+}
+
 void free_mod_fmt_context(void* callback_context) {
     py::object* py_context_obj = (py::object*)callback_context;
     delete py_context_obj;
 }
 
-// Module Format API Declaration for a module implementation in C
-static mod_file_fmt_api_t const C_FMT_API= {
-    &path_for_name_mod_fmt_callback,
-    &try_path_mod_fmt_callback,
-    &load_mod_fmt_callback,
-    &free_mod_fmt_context,
-};
+fs_module_format_t* new_fs_module_format(py::object* py_format, uint64_t fmt_id) {
+    python_fs_module_format_t* format = static_cast<python_fs_module_format_t*>(malloc(sizeof(python_fs_module_format_t)));
+    format->api.path_for_name = path_for_name_mod_fmt_callback;
+    format->api.try_path = try_path_mod_fmt_callback;
+    format->api.free = free_mod_fmt_context;
+    format->fmt_id = fmt_id;
+    format->py_format = py_format;
+    return reinterpret_cast<fs_module_format_t*>(format);
+}
+
 
 struct CConstr {
 
@@ -1114,7 +1169,7 @@ PYBIND11_MODULE(hyperonpy, m) {
         //TODO. We end up leaking this object, but it's a non-issue in practice because environments usually live the life of the program.
         // To fix this, give the Python MeTTa object built from this EnvBuilder a reference to the `interface` object, rather than allocating it here
         py::object* py_impl = new py::object(interface);
-        env_builder_push_fs_module_format(builder.ptr(), &C_FMT_API, (void*)py_impl, fmt_id);
+        env_builder_push_fs_module_format(builder.ptr(), new_fs_module_format(py_impl, fmt_id));
     }, "Adds a new module format to the environment");
 
     m.def("log_error", [](std::string msg) { log_error(msg.c_str()); }, "Logs an error through the MeTTa logger");
