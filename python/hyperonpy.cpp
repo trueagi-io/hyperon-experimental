@@ -524,36 +524,10 @@ void syntax_node_copy_to_list_callback(const syntax_node_t* node, void *context)
     }
 };
 
-// A C function that wraps a Python function, so that the python code to load the stdlib
-ssize_t stdlib_load(void const* loader, run_context_t* run_context) {
-    py::object runner_mod = py::module_::import("hyperon.runner");
-    py::function load = runner_mod.attr("_priv_load_py_stdlib");
-    CRunContext c_run_context = CRunContext(run_context);
-    return load(&c_run_context).cast<ssize_t>();
-}
-
-ssize_t stdlib_load_tokens(void const* loader, metta_mod_ref_t target, metta_t metta) {
-    py::object runner_mod = py::module_::import("hyperon.runner");
-    py::function load_tokens = runner_mod.attr("_priv_load_tokens_py_stdlib");
-    CMettaModRef c_target = CMettaModRef(target);
-    CMetta c_metta = CMetta(metta);
-    // FIXME: convert error string
-    return load_tokens(&c_target, c_metta).cast<ssize_t>();
-}
-
-module_loader_t* new_stdlib_loader() {
-    module_loader_t* loader = static_cast<module_loader_t*>(calloc(sizeof(module_loader_t), 1));
-    loader->load = stdlib_load;
-    loader->load_tokens = stdlib_load_tokens;
-    // FIXME: free error string as well
-    loader->free = free;
-    return loader;
-}
-
 struct python_module_loader_t {
     module_loader_t api;
-    std::string mod_name;
-    std::string path;
+    py::str mod_name;
+    py::str path;
 };
 
 ssize_t module_load(void const* pyloader, run_context_t* run_context) {
@@ -574,7 +548,7 @@ ssize_t module_load_tokens(void const* pyloader, metta_mod_ref_t target, metta_t
     return load_tokens(loader->mod_name, &c_target, c_metta).cast<ssize_t>();
 }
 
-module_loader_t* new_module_loader(std::string mod_name, std::string path) {
+module_loader_t* new_module_loader(py::str mod_name, py::str path) {
     python_module_loader_t* loader = static_cast<python_module_loader_t*>(calloc(sizeof(python_module_loader_t), 1));
     loader->api.load = module_load;
     loader->api.load_tokens = module_load_tokens;
@@ -1097,7 +1071,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, EnvBuilder env_builder) {
-        return CMetta(metta_new_with_space_environment_and_stdlib_2(space.ptr(), env_builder.obj, new_stdlib_loader()));
+        return CMetta(metta_new_with_space_environment_and_stdlib_2(space.ptr(), env_builder.obj, new_module_loader("hyperon.stdlib", py::none())));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
     m.def("metta_err_str", [](CMetta& metta) {

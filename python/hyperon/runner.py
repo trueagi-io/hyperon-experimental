@@ -311,7 +311,10 @@ class _PyFileMeTTaModFmt:
 def _priv_load_module(mod_name, path, c_run_context):
     """Loads the items from the python module into the runner as a MeTTa module"""
     run_context = RunContext(c_run_context)
-    resource_dir = os.path.dirname(path)
+    if path is not None:
+        resource_dir = os.path.dirname(path)
+    else:
+        resource_dir = None
     space = GroundingSpaceRef()
     run_context.init_self_module(space, resource_dir)
     return _priv_register_module_tokens_no_exception(mod_name,
@@ -327,37 +330,6 @@ def _priv_load_module_tokens(mod_name, cmettamod, cmetta):
     metta = MeTTa(cmetta=cmetta)
     return _priv_register_module_tokens_no_exception(mod_name, tokenizer, metta)
 
-def _priv_load_py_stdlib(c_run_context):
-    """
-    Private function called indirectly to load the Python stdlib during Python runner initialization
-    """
-    run_context = RunContext(c_run_context)
-    space = GroundingSpaceRef()
-    run_context.init_self_module(space, None)
-    return _priv_register_module_tokens_no_exception("hyperon.stdlib",
-                                                   run_context.tokenizer(),
-                                                   run_context.metta())
-
-    # #LP-TODO-Next Make a test for loading a metta module from a python module using load_module_direct_from_pymod
-
-    # #LP-TODO-Next Also make a test for a module that loads another module
-    # py_stdlib_id = run_context.metta().load_module_direct_from_pymod("stdlib-py", descriptor, "hyperon.stdlib")
-    # run_context.import_dependency(py_stdlib_id)
-
-    # #LP-TODO-Next Implement a Catalog that uses the Python module-space, so that any module loaded via `pip`
-    # can be found by MeTTa.  NOTE: We may want to explicitly give priority hyperon "exts" by first checking if Python
-    # has a module at `"hyperon.exts." + mod_name` before just checking `mod_name`, but it's unclear that will
-    # matter since we'll also search the `exts` directory with the include_path / fs_module_format logic
-    # #UPDATE: If we implement a Python module-space Catalog in the future, then the code to search site packages
-    #  directories directly, in the 'MeTTa.__init__' method, needs to be removed
-
-def _priv_load_tokens_py_stdlib(cmettamod, cmetta):
-    """
-    """
-    target = MettaModRef(cmettamod)
-    tokenizer = target.tokenizer()
-    metta = MeTTa(cmetta=cmetta)
-    return _priv_register_module_tokens_no_exception("hyperon.stdlib", tokenizer, metta)
 
 def _priv_register_module_tokens_no_exception(pymod_name, tokenizer, metta, resource_dir=None):
     """
@@ -371,6 +343,19 @@ def _priv_register_module_tokens_no_exception(pymod_name, tokenizer, metta, reso
     except Exception as e:
         print("Error loading Python module:", pymod_name, e)
         return 1
+
+# #LP-TODO-Next Make a test for loading a metta module from a python module using load_module_direct_from_pymod
+
+# #LP-TODO-Next Also make a test for a module that loads another module
+# py_stdlib_id = run_context.metta().load_module_direct_from_pymod("stdlib-py", descriptor, "hyperon.stdlib")
+# run_context.import_dependency(py_stdlib_id)
+
+# #LP-TODO-Next Implement a Catalog that uses the Python module-space, so that any module loaded via `pip`
+# can be found by MeTTa.  NOTE: We may want to explicitly give priority hyperon "exts" by first checking if Python
+# has a module at `"hyperon.exts." + mod_name` before just checking `mod_name`, but it's unclear that will
+# matter since we'll also search the `exts` directory with the include_path / fs_module_format logic
+# #UPDATE: If we implement a Python module-space Catalog in the future, then the code to search site packages
+#  directories directly, in the 'MeTTa.__init__' method, needs to be removed
 
 def _priv_register_module_tokens(pymod_name, tokenizer, metta, resource_dir=None):
     """
