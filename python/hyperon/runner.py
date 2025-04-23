@@ -92,8 +92,6 @@ class RunContext:
     def register_token(self, regexp, constr):
         """Registers a token in the currently running module's Tokenizer"""
         self.tokenizer().register_token(regexp, constr)
-        own_tokenizer = Tokenizer._from_ctokenizer(hp.run_context_get_own_tokenizer(self.c_run_context))
-        own_tokenizer.register_token(regexp, constr)
 
     def register_atom(self, name, symbol):
         """Registers an Atom with a name in the currently running module's Tokenizer"""

@@ -1063,9 +1063,6 @@ PYBIND11_MODULE(hyperonpy, m) {
     m.def("run_context_get_tokenizer", [](CRunContext& run_context) {
         return CTokenizer(run_context_get_tokenizer(run_context.ptr));
     }, "Returns the Tokenizer for the currently running module");
-    m.def("run_context_get_own_tokenizer", [](CRunContext& run_context) {
-        return CTokenizer(run_context_get_own_tokenizer(run_context.ptr));
-    }, "Returns the Own Tokenizer for the currently running module");
 
     m.def("run_context_import_dependency", [](CRunContext& run_context, ModuleId mod_id) {
         run_context_import_dependency(run_context.ptr, mod_id.obj);
@@ -1081,7 +1078,7 @@ PYBIND11_MODULE(hyperonpy, m) {
 
     py::class_<CMetta>(m, "CMetta");
     m.def("metta_new", [](CSpace space, EnvBuilder env_builder) {
-        return CMetta(metta_new_with_space_environment_and_stdlib_2(space.ptr(), env_builder.obj, module_loader_new("hyperon.stdlib", nonstd::nullopt)));
+        return CMetta(metta_new_with_space_environment_and_stdlib(space.ptr(), env_builder.obj, module_loader_new("hyperon.stdlib", nonstd::nullopt)));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
     m.def("metta_err_str", [](CMetta& metta) {

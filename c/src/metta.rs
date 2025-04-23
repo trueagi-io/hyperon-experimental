@@ -839,7 +839,7 @@ pub extern "C" fn metta_new() -> metta_t {
 ///     with their own stdlib, that needs to be loaded before the init.metta file is run
 ///
 #[no_mangle]
-pub extern "C" fn metta_new_with_space_environment_and_stdlib_2(space_ref: *mut space_t,
+pub extern "C" fn metta_new_with_space_environment_and_stdlib(space_ref: *mut space_t,
     env_builder_mov: env_builder_t, stdlib_loader_mov: *mut module_loader_t) -> metta_t
 {
     let dyn_space = unsafe{ &*space_ref }.borrow();
@@ -1274,12 +1274,6 @@ pub extern "C" fn run_context_get_space(run_context: *const run_context_t) -> sp
 pub extern "C" fn run_context_get_tokenizer(run_context: *const run_context_t) -> tokenizer_t {
     let context = unsafe{ &*run_context }.borrow();
     context.module().tokenizer().clone().into()
-}
-
-#[no_mangle]
-pub extern "C" fn run_context_get_own_tokenizer(run_context: *const run_context_t) -> tokenizer_t {
-    let context = unsafe{ &*run_context }.borrow();
-    context.module().own_tokenizer().clone().into()
 }
 
 /// @brief Sets a runtime error

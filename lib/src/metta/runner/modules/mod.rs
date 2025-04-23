@@ -58,8 +58,6 @@ pub struct MettaMod {
     resource_dir: Option<PathBuf>,
     space: Rc<RefCell<ModuleSpace>>,
     tokenizer: Shared<Tokenizer>,
-    // FIXME: remove own_tokenizer from everywhere
-    own_tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
     loader: Option<Box<dyn ModuleLoader>>,
 }
@@ -78,13 +76,11 @@ impl MettaMod {
             }
         }
         let space = Rc::new(RefCell::new(ModuleSpace::new(space)));
-        let own_tokenizer  = Shared::new(Tokenizer::new());
 
         let new_mod = Self {
             mod_path,
             space,
             tokenizer,
-            own_tokenizer,
             imported_deps: Mutex::new(HashMap::new()),
             resource_dir,
             loader: None,
@@ -272,10 +268,6 @@ impl MettaMod {
 
     pub fn tokenizer(&self) -> &Shared<Tokenizer> {
         &self.tokenizer
-    }
-
-    pub fn own_tokenizer(&self) -> &Shared<Tokenizer> {
-        &self.own_tokenizer
     }
 
     pub fn resource_dir(&self) -> Option<&Path> {
