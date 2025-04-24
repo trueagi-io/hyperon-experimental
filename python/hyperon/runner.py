@@ -128,7 +128,7 @@ class MeTTa:
             for path in py_site_packages_paths:
                 hp.env_builder_push_include_path(env_builder, path)
 
-            self.cmetta = hp.metta_new(space.cspace, env_builder)
+            self.cmetta = hp.metta_new_with_stdlib_loader(_priv_load_module_stdlib, space.cspace, env_builder)
 
     def __del__(self):
         hp.metta_free(self.cmetta)

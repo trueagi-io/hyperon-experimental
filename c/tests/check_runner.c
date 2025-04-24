@@ -173,7 +173,7 @@ START_TEST (test_custom_module_format)
 
     //Start by initializing a runner using an environment with our custom module format
     space_t space = space_new_grounding_space();
-    metta_t runner = metta_new_with_space_environment_and_stdlib(&space, env_builder, NULL);
+    metta_t runner = metta_new_with_stdlib_loader(NULL, &space, env_builder);
     space_free(space);
 
     //Load a module using our custom format, and verify it was loaded sucessfully
@@ -214,7 +214,7 @@ START_TEST (test_custom_stdlib)
     module_loader_t* stdlib_loader = calloc(sizeof(module_loader_t), 1);
     stdlib_loader->load = custom_stdlib_loader;
     stdlib_loader->free = free;
-    metta_t runner = metta_new_with_space_environment_and_stdlib(&space, env_builder_use_test_env(), stdlib_loader);
+    metta_t runner = metta_new_with_stdlib_loader(stdlib_loader, &space, env_builder_use_test_env());
     space_free(space);
 
     //Test that we can match an atom loaded from the custom stdlib function

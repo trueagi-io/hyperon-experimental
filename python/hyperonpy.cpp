@@ -1072,10 +1072,8 @@ PYBIND11_MODULE(hyperonpy, m) {
         .def("tokenizer", [](CMettaModRef& cmodref) { return CTokenizer(metta_mod_ref_tokenizer(cmodref.ptr())); }, "Return tokenizer of the metta module");
 
     py::class_<CMetta>(m, "CMetta");
-    m.def("metta_new", [](CSpace space, EnvBuilder env_builder) {
-        py::object runner_mod = py::module_::import("hyperon.runner");
-        py::function loader_func = runner_mod.attr("_priv_load_module_stdlib");
-        return CMetta(metta_new_with_space_environment_and_stdlib(space.ptr(), env_builder.obj, module_loader_new("hyperon.stdlib", loader_func, nonstd::nullopt)));
+    m.def("metta_new_with_stdlib_loader", [](py::function stdlib_loader, CSpace space, EnvBuilder env_builder) {
+        return CMetta(metta_new_with_stdlib_loader(module_loader_new("stdlib", stdlib_loader, nonstd::nullopt), space.ptr(), env_builder.obj));
     }, "New MeTTa interpreter instance");
     m.def("metta_free", [](CMetta metta) { metta_free(metta.obj); }, "Free MeTTa interpreter");
     m.def("metta_err_str", [](CMetta& metta) {

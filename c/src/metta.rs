@@ -839,8 +839,8 @@ pub extern "C" fn metta_new() -> metta_t {
 ///     with their own stdlib, that needs to be loaded before the init.metta file is run
 ///
 #[no_mangle]
-pub extern "C" fn metta_new_with_space_environment_and_stdlib(space_ref: *mut space_t,
-    env_builder_mov: env_builder_t, stdlib_loader_mov: *mut module_loader_t) -> metta_t
+pub extern "C" fn metta_new_with_stdlib_loader(stdlib_loader_mov: *mut module_loader_t,
+    space_ref: *mut space_t, env_builder_mov: env_builder_t, ) -> metta_t
 {
     let dyn_space = unsafe{ &*space_ref }.borrow();
     let env_builder_mov = if env_builder_mov.is_default() {
