@@ -71,14 +71,14 @@
     (@param "Head of an expression")
     (@param "Tail of an expression")))
   (@return "New expression consists of two input arguments"))
-(: cons-atom (-> Atom Expression Expression))
+(: cons-atom (-> Atom Expression Atom))
 
 (@doc decons-atom
   (@desc "Works as a reverse to cons-atom function. It gets Expression as an input and returns it splitted to head and tail, e.g. (decons-atom (Cons X Nil)) -> (Cons (X Nil))")
   (@params (
     (@param "Expression")))
   (@return "Deconsed expression"))
-(: decons-atom (-> Expression Expression))
+(: decons-atom (-> Expression Atom))
 
 (@doc min-atom
   (@desc "Returns atom with min value in the expression (first argument). Only numbers allowed")
@@ -250,7 +250,7 @@
   (@params (
     (@param "Expression in form (Atom Binding)")))
   (@return "Non-deterministic list of Atoms"))
-(: superpose-bind (-> Expression %Undefined%))
+(: superpose-bind (-> Expression Atom))
 
 (@doc metta
   (@desc "Run MeTTa interpreter on atom.")
@@ -259,14 +259,14 @@
     (@param "Type of input atom")
     (@param "Atomspace where intepretation should take place")))
   (@return "Result of interpretation"))
-(: metta (-> Atom Type Grounded %Undefined%))
+(: metta (-> Atom Type Grounded Atom))
 
 (@doc id
   (@desc "Returns its argument")
   (@params (
     (@param "Input argument")))
   (@return "Input argument"))
-(: id (-> Atom %Undefined%))
+(: id (-> Atom Atom))
 (= (id $x) $x)
 
 (@doc atom-subst
@@ -276,7 +276,7 @@
     (@param "Variable to replace")
     (@param "Template to replace variable by the value")))
   (@return "Template with substituted variable"))
-(: atom-subst (-> Atom Variable Atom %Undefined%))
+(: atom-subst (-> Atom Variable Atom Atom))
 (= (atom-subst $atom $var $templ)
   (function (chain (eval (id $atom)) $var (return $templ))) )
 
@@ -611,7 +611,7 @@
 (= (unquote (quote $atom)) $atom)
 
 ; TODO: there is no way to define operation which consumes any number of
-; arguments  and returns unit
+; arguments and returns unit
 (@doc nop
   (@desc "Outputs unit atom")
   (@params ())
@@ -631,7 +631,7 @@
   (@params (
     (@param "Non-deterministic set of values")))
   (@return "Unique values from input set"))
-(: unique (-> Atom %Undefined%))
+(: unique (-> Atom Atom))
 (= (unique $arg) (let $c (collapse $arg) (let $u (unique-atom $c) (superpose $u))))
 
 (@doc union
@@ -640,7 +640,7 @@
     (@param "Non-deterministic set of values")
     (@param "Another non-deterministic set of values")))
   (@return "Union of sets"))
-(: union (-> Atom Atom %Undefined%))
+(: union (-> Atom Atom Atom))
 (= (union $arg1 $arg2)
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (union-atom $c1 $c2) (superpose $u)))))
@@ -651,7 +651,7 @@
     (@param "Non-deterministic set of values")
     (@param "Another non-deterministic set of values")))
   (@return "Intersection of sets"))
-(: intersection (-> Atom Atom %Undefined%))
+(: intersection (-> Atom Atom Atom))
 (= (intersection $arg1 $arg2)
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (intersection-atom $c1 $c2) (superpose $u)))))
@@ -662,7 +662,7 @@
     (@param "Non-deterministic set of values")
     (@param "Another non-deterministic set of values")))
   (@return "Subtraction of sets"))
-(: subtraction (-> Atom Atom %Undefined%))
+(: subtraction (-> Atom Atom Atom))
 (= (subtraction $arg1 $arg2)
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (subtraction-atom $c1 $c2) (superpose $u)))))
