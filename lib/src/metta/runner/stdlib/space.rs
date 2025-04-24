@@ -146,8 +146,7 @@ grounded_op!(GetAtomsOp, "get-atoms");
 
 impl Grounded for GetAtomsOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(),
-            ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -256,8 +255,7 @@ mod tests {
         let runner = Metta::new(Some(runner::environment::EnvBuilder::test_env()));
         let result = runner.run(SExprParser::new(program)).unwrap();
 
-        let stdlib_space = runner.module_space(runner.get_module_by_name("stdlib").unwrap());
-        assert_eq!(result[2], vec![Atom::gnd(stdlib_space)]);
+        assert_eq!(result[2], vec![Atom::expr([Atom::gnd(super::super::module::ModSpaceOp::new(runner.clone())), Atom::sym("stdlib")])]);
     }
 
     fn collect_atoms(space: &dyn Space) -> Vec<Atom> {

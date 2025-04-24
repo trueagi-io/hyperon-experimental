@@ -4,7 +4,7 @@
     (@param "Pattern to be matched against expression to be reduced")
     (@param "Result of reduction or transformation of the first pattern") ))
   (@return "Not reduced itself unless custom equalities over equalities are added") )
-(: = (-> $t $t Atom))
+(: = (-> $t $t %Undefined%))
 
 (@doc ErrorType (@desc "Type of the atom which contains error"))
 (: ErrorType Type)
@@ -29,14 +29,14 @@
   (@params (
     (@param "Atom to be evaluated")))
   (@return "Result of atom's evaluation"))
-(: function (-> Atom Atom))
+(: function (-> Atom %Undefined%))
 
 (@doc eval
   (@desc "Evaluates input atom, makes one step of the evaluation")
   (@params (
     (@param "Atom to be evaluated, can be reduced via equality expression (= ...) or by calling a grounded function")))
   (@return "Result of evaluation"))
-(: eval (-> Atom Atom))
+(: eval (-> Atom %Undefined%))
 
 (@doc evalc
   (@desc "Evaluates input atom, makes one step of the evaluation")
@@ -44,7 +44,7 @@
     (@param "Atom to be evaluated, can be reduced via equality expression (= ...) or by calling a grounded function")
     (@param "Space to evaluate atom in its context")))
   (@return "Result of evaluation"))
-(: evalc (-> Atom Grounded Atom))
+(: evalc (-> Atom Grounded %Undefined%))
 
 (@doc chain
   (@desc "Evaluates first argument, binds it to the variable (second argument) and then evaluates third argument which contains (or not) mentioned variable")
@@ -53,7 +53,7 @@
     (@param "Variable")
     (@param "Atom which will be evaluated at the end")))
   (@return "Result of evaluating third input argument"))
-(: chain (-> Atom Variable Atom Atom))
+(: chain (-> Atom Variable Atom %Undefined%))
 
 (@doc unify
   (@desc "Matches two first arguments and returns third argument if they are matched and forth argument otherwise")
@@ -63,7 +63,7 @@
     (@param "Result if two atoms unified successfully")
     (@param "Result otherwise")))
   (@return "Third argument when first two atoms are matched of forth one otherwise"))
-(: unify (-> Atom Atom Atom Atom Atom))
+(: unify (-> Atom Atom Atom Atom %Undefined%))
 
 (@doc cons-atom
   (@desc "Constructs an expression using two arguments")
@@ -250,7 +250,7 @@
   (@params (
     (@param "Expression in form (Atom Binding)")))
   (@return "Non-deterministic list of Atoms"))
-(: superpose-bind (-> Expression Atom))
+(: superpose-bind (-> Expression %Undefined%))
 
 (@doc metta
   (@desc "Run MeTTa interpreter on atom.")
@@ -259,14 +259,14 @@
     (@param "Type of input atom")
     (@param "Atomspace where intepretation should take place")))
   (@return "Result of interpretation"))
-(: metta (-> Atom Type Grounded Atom))
+(: metta (-> Atom Type Grounded %Undefined%))
 
 (@doc id
   (@desc "Returns its argument")
   (@params (
     (@param "Input argument")))
   (@return "Input argument"))
-(: id (-> Atom Atom))
+(: id (-> Atom %Undefined%))
 (= (id $x) $x)
 
 (@doc atom-subst
@@ -276,7 +276,7 @@
     (@param "Variable to replace")
     (@param "Template to replace variable by the value")))
   (@return "Template with substituted variable"))
-(: atom-subst (-> Atom Variable Atom Atom))
+(: atom-subst (-> Atom Variable Atom %Undefined%))
 (= (atom-subst $atom $var $templ)
   (function (chain (eval (id $atom)) $var (return $templ))) )
 
@@ -289,7 +289,7 @@
     (@param "Template to return if first argument is a non-empty expression")
     (@param "Default value to return otherwise")))
   (@return "Either template with head and tail replaced by values or default value"))
-(: if-decons-expr (-> Expression Variable Variable Atom Atom Atom))
+(: if-decons-expr (-> Expression Variable Variable Atom Atom %Undefined%))
 (= (if-decons-expr $atom $head $tail $then $else)
   (function (eval (if-equal $atom ()
     (return $else)
@@ -303,7 +303,7 @@
     (@param "Value to return if first argument is an error")
     (@param "Value to return otherwise")))
   (@return "Second or third argument"))
-(: if-error (-> Atom Atom Atom Atom))
+(: if-error (-> Atom Atom Atom %Undefined%))
 (= (if-error $atom $then $else)
   (function (chain (eval (get-metatype $atom)) $meta
     (eval (if-equal $meta Expression
@@ -321,7 +321,7 @@
     (@param "Previous evaluation result")
     (@param "Atom for further evaluation")))
   (@return "Return previous result if it is an error or Empty or continue evaluation"))
-(: return-on-error (-> Atom Atom Atom))
+(: return-on-error (-> Atom Atom %Undefined%))
 (= (return-on-error $atom $then)
   (function (eval (if-equal $atom Empty (return (return Empty))
     (eval (if-error $atom (return (return $atom))
@@ -341,7 +341,7 @@
     (@param "Atom to be matched with patterns")
     (@param "Tuple of pairs mapping condition patterns to results")))
   (@return "Result which corresponds to the pattern which is matched with the passed atom first"))
-(: switch (-> %Undefined% Expression Atom))
+(: switch (-> %Undefined% Expression %Undefined%))
 (= (switch $atom $cases)
   (function (chain (decons-atom $cases) $list
     (chain (eval (switch-internal $atom $list)) $res
@@ -481,7 +481,7 @@
     (@param "Variable")
     (@param "Operation")))
   (@return "Result of applying operation to the list of values"))
-(: foldl-atom (-> Expression Atom Variable Variable Atom Atom))
+(: foldl-atom (-> Expression Atom Variable Variable Atom %Undefined%))
 (= (foldl-atom $list $init $a $b $op)
   (function (eval (if-decons-expr $list $head $tail
     (chain (eval (atom-subst $init $a $op)) $op-init
@@ -577,7 +577,7 @@
   (@params (
     (@param "Expression")))
   (@return "First atom of an expression"))
-(: car-atom (-> Expression Atom))
+(: car-atom (-> Expression %Undefined%))
 (= (car-atom $atom)
   (eval (if-decons-expr $atom $head $_
     $head
@@ -631,7 +631,7 @@
   (@params (
     (@param "Non-deterministic set of values")))
   (@return "Unique values from input set"))
-(: unique (-> Atom Atom))
+(: unique (-> Atom %Undefined%))
 (= (unique $arg) (let $c (collapse $arg) (let $u (unique-atom $c) (superpose $u))))
 
 (@doc union
@@ -640,7 +640,7 @@
     (@param "Non-deterministic set of values")
     (@param "Another non-deterministic set of values")))
   (@return "Union of sets"))
-(: union (-> Atom Atom Atom))
+(: union (-> Atom Atom %Undefined%))
 (= (union $arg1 $arg2)
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (union-atom $c1 $c2) (superpose $u)))))
@@ -651,7 +651,7 @@
     (@param "Non-deterministic set of values")
     (@param "Another non-deterministic set of values")))
   (@return "Intersection of sets"))
-(: intersection (-> Atom Atom Atom))
+(: intersection (-> Atom Atom %Undefined%))
 (= (intersection $arg1 $arg2)
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (intersection-atom $c1 $c2) (superpose $u)))))
@@ -662,7 +662,7 @@
     (@param "Non-deterministic set of values")
     (@param "Another non-deterministic set of values")))
   (@return "Subtraction of sets"))
-(: subtraction (-> Atom Atom Atom))
+(: subtraction (-> Atom Atom %Undefined%))
 (= (subtraction $arg1 $arg2)
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (subtraction-atom $c1 $c2) (superpose $u)))))
@@ -774,7 +774,7 @@
   (@params (
     (@param "Atom/Function name for which documentation is needed")))
   (@return "Documentation for the given atom/function"))
-(: get-doc (-> Atom Atom))
+(: get-doc (-> Atom %Undefined%))
 (= (get-doc $atom)
   (let $meta-type (get-metatype $atom)
     (case $meta-type (
@@ -786,7 +786,7 @@
   (@params (
     (@param "Atom/Function name for which documentation is needed")))
   (@return "Documentation for the given atom/function"))
-(: get-doc-single-atom (-> Atom Atom))
+(: get-doc-single-atom (-> Atom %Undefined%))
 (= (get-doc-single-atom $atom)
   (let $top-space (mod-space! top)
   (let $type (get-type-space $top-space $atom)
@@ -800,7 +800,7 @@
     (@param "Function name for which documentation is needed")
     (@param "Type notation for this function")))
   (@return "Documentation for the given function"))
-(: get-doc-function (-> Atom Type Atom))
+(: get-doc-function (-> Atom Type %Undefined%))
 (= (get-doc-function $name $type)
   (let $top-space (mod-space! top)
   (unify $top-space (@doc $name $desc (@params $params) $ret)
@@ -826,7 +826,7 @@
   (@params (
     (@param "List of parameters in form of ((@param Description) (@param Description)...)")
     (@param "Return value's description in form of (@return Description)")
-    (@param "Type notation without -> starting symbol e.g. (Atom Atom Atom)")))
+    (@param "Type notation without -> starting symbol e.g. (Atom Atom %Undefined%)")))
   (@return "United list of params and return value each augmented with its type. E.g. (((@param (@type Atom) (@desc Description)) (@param (@type Atom) (@desc Description2))) (@return (@type Atom) (@desc Description)))"))
 (: get-doc-params (-> Expression Atom Expression (Expression Atom)))
 (= (get-doc-params $params $ret $types)
@@ -846,7 +846,7 @@
   (@params (
     (@param "Atom's name to get documentation for")))
   (@return "Documentation on input Atom"))
-(: get-doc-atom (-> Atom Atom))
+(: get-doc-atom (-> Atom %Undefined%))
 (= (get-doc-atom $atom)
   (let $top-space (mod-space! top)
   (let $type (get-type-space $top-space $atom)

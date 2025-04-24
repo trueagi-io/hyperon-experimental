@@ -78,7 +78,7 @@ grounded_op!(SealedOp, "sealed");
 
 impl Grounded for SealedOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -170,7 +170,7 @@ grounded_op!(IfEqualOp, "if-equal");
 
 impl Grounded for IfEqualOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -255,7 +255,7 @@ impl CollapseOp {
 
 impl Grounded for CollapseOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -324,7 +324,7 @@ impl CaseOp {
 
 impl Grounded for CaseOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
