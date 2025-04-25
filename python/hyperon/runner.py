@@ -6,6 +6,8 @@ import site
 import hyperonpy as hp
 from .atoms import Atom, AtomType, OperationAtom
 from .base import GroundingSpaceRef, Tokenizer, SExprParser
+from .ext import RegisterType
+from .module import MettaModRef
 from hyperonpy import EnvBuilder, ModuleId
 
 class RunnerState:
@@ -90,8 +92,6 @@ class RunContext:
     def register_token(self, regexp, constr):
         """Registers a token in the currently running module's Tokenizer"""
         self.tokenizer().register_token(regexp, constr)
-        own_tokenizer = Tokenizer._from_ctokenizer(hp.run_context_get_own_tokenizer(self.c_run_context))
-        own_tokenizer.register_token(regexp, constr)
 
     def register_atom(self, name, symbol):
         """Registers an Atom with a name in the currently running module's Tokenizer"""
@@ -116,7 +116,7 @@ class MeTTa:
                 space = GroundingSpaceRef()
             if env_builder is None:
                 env_builder = hp.env_builder_start()
-            hp.env_builder_push_fs_module_format(env_builder, _PyFileMeTTaModFmt, 5000) #5000 is an arbitrary number unlikely to conflict with the arbitrary number chosen by other formats
+            hp.env_builder_push_fs_module_format(env_builder, _PyFileMeTTaModFmt)
             #LP-TODO-Next, add an fs_module_fmt arg to the standardized way to init environments, so that
             # the Python user can define additional formats without tweaking any hyperon files.  To make
             # this convenient it probably means making a virtual ModuleFormat base class
@@ -128,7 +128,7 @@ class MeTTa:
             for path in py_site_packages_paths:
                 hp.env_builder_push_include_path(env_builder, path)
 
-            self.cmetta = hp.metta_new(space.cspace, env_builder)
+            self.cmetta = hp.metta_new_with_stdlib_loader(_priv_load_module_stdlib, space.cspace, env_builder)
 
     def __del__(self):
         hp.metta_free(self.cmetta)
@@ -175,24 +175,21 @@ class MeTTa:
         """Parse the next single token from the text program"""
         return next(self._parse_all(program))
 
-    def load_module_direct_from_func(self, mod_name, private_to, py_loader_func):
+    def load_module_direct_from_func(self, mod_name, loader_func):
         """Loads a module into the runner using a loader function, with the specified name and scope"""
-        def loader_func(c_run_context, c_descriptor):
-            run_context = RunContext(c_run_context)
-            descriptor = ModuleDescriptor(c_descriptor)
-            py_loader_func(run_context, descriptor)
-        mod_id = hp.metta_load_module_direct(self.cmetta, mod_name, private_to.c_module_descriptor, loader_func)
+        mod_id = hp.metta_load_module_direct(self.cmetta, mod_name, loader_func)
         err_str = hp.metta_err_str(self.cmetta)
         if (err_str is not None):
             raise RuntimeError(err_str)
         return mod_id
 
-    def load_module_direct_from_pymod(self, mod_name, private_to, pymod_name):
+    def load_module_direct_from_pymod(self, mod_name, pymod_name):
         """Loads a module into the runner directly from a Python module, with the specified name and scope"""
         if not isinstance(pymod_name, str):
             pymod_name = repr(pymod_name)
-        loader_func = _priv_make_module_loader_func_for_pymod(pymod_name)
-        return self.load_module_direct_from_func(mod_name, private_to, loader_func)
+        def loader_func(tokenizer, metta):
+            _priv_register_module_tokens(pymod_name, tokenizer, metta)
+        return self.load_module_direct_from_func(mod_name, loader_func)
 
     def load_module_at_path(self, path, mod_name=None):
         """
@@ -297,71 +294,74 @@ class _PyFileMeTTaModFmt:
             spec.loader.exec_module(module)
 
             #TODO: Extract the version here, when it's time to implement versions
+            def loader_func(tokenizer, metta):
+                _priv_register_module_tokens(metta_mod_name, tokenizer, metta)
 
             return {
                 'pymod_name': metta_mod_name,
-                'path': path
+                'path': path,
+                'fmt_id': 5000, #5000 is an arbitrary number unlikely to conflict with the arbitrary number chosen by other formats
+                'loader_func': loader_func,
             }
         except Exception as e:
             hp.log_error("Python error loading MeTTa module '" + metta_mod_name + "'. " + repr(e))
             return None
 
-    def _load_called_from_c(c_run_context, callback_context):
-        """Loads the items from the python module into the runner as a MeTTa module"""
-        run_context = RunContext(c_run_context)
-
-        # We are using the `callback_context` object to store the python module name, which currently is
-        # identical to the MeTTa module name becuase we don't mangle it, but we may mangle it in the future
-        pymod_name = callback_context['pymod_name']
-        path = callback_context['path']
-
-        resource_dir = os.path.dirname(path)
-
-        loader_func = _priv_make_module_loader_func_for_pymod(pymod_name, resource_dir=resource_dir)
-        loader_func(run_context)
-
-def _priv_load_py_stdlib(c_run_context):
-    """
-    Private function called indirectly to load the Python stdlib during Python runner initialization
-    """
+def _priv_load_module(loader_func, path, c_run_context):
+    """Initializes module, and loads the items from the python module into the runner as a MeTTa module"""
     run_context = RunContext(c_run_context)
+    if path is not None:
+        resource_dir = os.path.dirname(path)
+    else:
+        resource_dir = None
+    space = GroundingSpaceRef()
+    run_context.init_self_module(space, resource_dir)
+    loader_func(run_context.tokenizer(), run_context.metta())
 
-    stdlib_loader = _priv_make_module_loader_func_for_pymod("hyperon.stdlib")
-    stdlib_loader(run_context)
+def _priv_load_module_tokens(loader_func, cmettamod, cmetta):
+    """Loads the items from the python module into the tokenizer"""
+    target = MettaModRef(cmettamod)
+    tokenizer = target.tokenizer()
+    metta = MeTTa(cmetta=cmetta)
+    loader_func(tokenizer, metta)
 
-    # #LP-TODO-Next Make a test for loading a metta module from a python module using load_module_direct_from_pymod
+def _priv_load_module_stdlib(tokenizer, metta):
+    """Loads stdlib module"""
+    _priv_register_module_tokens("hyperon.stdlib", tokenizer, metta)
 
-    # #LP-TODO-Next Also make a test for a module that loads another module
-    # py_stdlib_id = run_context.metta().load_module_direct_from_pymod("stdlib-py", descriptor, "hyperon.stdlib")
-    # run_context.import_dependency(py_stdlib_id)
 
-    # #LP-TODO-Next Implement a Catalog that uses the Python module-space, so that any module loaded via `pip`
-    # can be found by MeTTa.  NOTE: We may want to explicitly give priority hyperon "exts" by first checking if Python
-    # has a module at `"hyperon.exts." + mod_name` before just checking `mod_name`, but it's unclear that will
-    # matter since we'll also search the `exts` directory with the include_path / fs_module_format logic
-    # #UPDATE: If we implement a Python module-space Catalog in the future, then the code to search site packages
-    #  directories directly, in the 'MeTTa.__init__' method, needs to be removed
+# #LP-TODO-Next Make a test for loading a metta module from a python module using load_module_direct_from_pymod
 
-def _priv_make_module_loader_func_for_pymod(pymod_name, resource_dir=None):
+# #LP-TODO-Next Also make a test for a module that loads another module
+# py_stdlib_id = run_context.metta().load_module_direct_from_pymod("stdlib-py", descriptor, "hyperon.stdlib")
+# run_context.import_dependency(py_stdlib_id)
+
+# #LP-TODO-Next Implement a Catalog that uses the Python module-space, so that any module loaded via `pip`
+# can be found by MeTTa.  NOTE: We may want to explicitly give priority hyperon "exts" by first checking if Python
+# has a module at `"hyperon.exts." + mod_name` before just checking `mod_name`, but it's unclear that will
+# matter since we'll also search the `exts` directory with the include_path / fs_module_format logic
+# #UPDATE: If we implement a Python module-space Catalog in the future, then the code to search site packages
+#  directories directly, in the 'MeTTa.__init__' method, needs to be removed
+
+def _priv_register_module_tokens(pymod_name, tokenizer, metta):
     """
-    Private function to return a loader function to load a module into the runner directly from the specified Python module
+    Private function to load tokens from a Python module by its name
     """
+    mod = import_module(pymod_name)
+    for n in dir(mod):
+        obj = getattr(mod, n)
+        if 'metta_type' in dir(obj):
+            typ = obj.metta_type
+            if obj.metta_pass_metta:
+                items = obj(metta)
+            else:
+                items = obj()
+            if typ == RegisterType.ATOM:
+                def register(r, a):
+                    tokenizer.register_token(r, lambda _: a)
+                for rex, atom in items.items():
+                    register(rex, atom)
+            elif typ == RegisterType.TOKEN:
+                for rex, lam in items.items():
+                    tokenizer.register_token(rex, lam)
 
-    def loader_func(run_context):
-        try:
-            mod = import_module(pymod_name)
-
-            # LP-TODO-Next, I should create an entry point that allows the python module to initialize the
-            #  space before the rest of the init code runs
-            space = GroundingSpaceRef()
-            run_context.init_self_module(space, resource_dir)
-
-            for n in dir(mod):
-                obj = getattr(mod, n)
-                if '__name__' in dir(obj) and obj.__name__ == 'metta_register':
-                    obj(run_context)
-
-        except Exception as e:
-            raise RuntimeError("Error loading Python module: ", pymod_name, e)
-
-    return loader_func
