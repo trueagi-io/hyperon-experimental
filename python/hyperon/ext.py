@@ -1,33 +1,59 @@
-from .runner import MeTTa
+from enum import Enum
+from functools import wraps
 
-def register_results(method, args, kwargs):
-    """Returns a decorator for registering the results of a method.
-    The behavior of the decorator depends on whether it is used with or without arguments."""
+class RegisterType(Enum):
+    ATOM = 1
+    TOKEN = 2
 
+def mark_register_function(type, args, kwargs):
+    """Mark function as function which registers MeTTa atoms or tokens.
+    The following attributes are added to the decorated function:
+      - metta_type - value of the 'type' parameter
+      - metta_pass_metta - value of `pass_metta` parameter
+
+    Parameters
+    ----------
+    type:
+        Kind of the register function:
+        RegisterType.TOKEN if function register tokens;
+        RegisterType.ATOM if it register atoms.
+    args:
+        args passed to decorator. If no argument are used in decorator then
+        this list contains only function to be decorated. If decorator has
+        some arguments then this list doesn't contain function and keeps
+        decorator arguments instead.
+    kwargs:
+        kwargs passed to decorator. If arguments are used in decorator then
+        it contains named arguments otherwise it is empty.
+    """
     # Case 1: Decorator used without arguments (i.e., @decorator instead of @decorator(args))
     if len(args) == 1 and len(kwargs) == 0 and callable(args[0]):
-        func = args[0]  # func is the decorated function
+        func = args[0]
 
-        # Define the decorator
-        def metta_register(run_context):
-            # Register the results of calling the decorated function using the provided method
-            method(run_context, func())
-        return metta_register
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            return func(*args, **kwargs)
 
+        wrapper.__dict__['metta_type'] = type
+        wrapper.__dict__['metta_pass_metta'] = False
+
+        return wrapper
     # Case 2: Decorator used with arguments (i.e., @decorator(args))
     else:
-        # Check if the decorator is used with arguments
         pass_metta = kwargs.get('pass_metta', False)
 
-        # Define the decorator
-        def inner(func):
-            def metta_register(run_context):
-                # Get the results of calling the decorated function
-                regs = func(run_context.metta()) if pass_metta else func()
-                # Register the results using the provided method
-                method(run_context, regs)
-            return metta_register
-        return inner
+        def no_args_decorator(func):
+
+            @wraps(func)
+            def wrapper(*args, **kwargs):
+                return func(*args, **kwargs)
+
+            wrapper.__dict__['metta_type'] = type
+            wrapper.__dict__['metta_pass_metta'] = pass_metta
+
+            return wrapper
+
+        return no_args_decorator
 
 def register_atoms(*args, **kwargs):
     """Function decorator which registers returned pairs of regular expressions
@@ -39,10 +65,7 @@ def register_atoms(*args, **kwargs):
         Pass instance of MeTTa class to the decorated function as an argument.
         Default is False.
     """
-    def register_atoms_internal(run_context, regs):
-        for rex, atom in regs.items():
-            run_context.register_atom(rex, atom)
-    return register_results(register_atoms_internal, args, kwargs)
+    return mark_register_function(RegisterType.ATOM, args, kwargs)
 
 def register_tokens(*args, **kwargs):
     """Function decorator which registers returned pairs of regular expressions
@@ -54,7 +77,4 @@ def register_tokens(*args, **kwargs):
         Pass instance of MeTTa class to the decorated function as an argument.
         Default is False.
     """
-    def register_tokens_internal(run_context, regs):
-        for rex, lam in regs.items():
-            run_context.register_token(rex, lam)
-    return register_results(register_tokens_internal, args, kwargs)
+    return mark_register_function(RegisterType.TOKEN, args, kwargs)

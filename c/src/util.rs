@@ -1,7 +1,7 @@
 use core::slice;
 use std::io::{Cursor, Write};
 use std::ffi::CString;
-use std::os::raw::c_char;
+use std::os::raw::*;
 use std::ffi::CStr;
 use log::{error, warn, info};
 
@@ -102,3 +102,59 @@ pub extern "C" fn log_info(msg: *const c_char) {
     info!("{msg}")
 }
 
+/// @struct write_t
+/// @brief A handle to a Rust std::fmt::Writer to be used from C code
+/// @ingroup misc_group
+///
+#[repr(C)]
+pub struct write_t(*const c_void);
+
+/// @brief Write C string into a Rust writer
+/// @ingroup misc_group
+/// @param[in]  cwrite  A handle to a Rust writer
+/// @param[in]  text  C string in UTF-8 format to be written
+/// @return 0 if string is written successfully, non-zero otherwise
+///
+#[no_mangle]
+pub extern "C" fn write_str(cwrite: write_t, text: *const c_char) -> isize {
+    let cwrite = unsafe{ &mut *(cwrite.0 as *mut CWrite) };
+    cwrite.res = cwrite.res.and_then(|()| cwrite.write.write_str(cstr_as_str(text)));
+    match cwrite.res {
+        Ok(()) => 0,
+        Err(_) => -1,
+    }
+}
+
+/// Rust wrapper of reference of the [std::fmt::Write] implementer which is used
+/// to writer to the C code and get the result back. Typical use-case is implementing
+/// [std::fmt::Display] or [std::fmt::Debug] for the C object.
+/// See [crate::metta::module_loader_t].
+pub struct CWrite<'a> {
+    /// The reference to the instance of the [std::fmt::Write] trait
+    write: &'a mut dyn std::fmt::Write,
+    /// The result of the last write operation invoked by C code
+    res: std::fmt::Result,
+}
+
+impl<'a> CWrite<'a> {
+    /// Create new writer from the reference to the [std::fmt::Write] implementation
+    pub fn new<T: std::fmt::Write>(write: &'a mut T) -> Self {
+        Self{ write, res: Ok(()) }
+    }
+    /// Get the result of the last operation performed on writer
+    pub fn res(&self) -> std::fmt::Result {
+        self.res
+    }
+    /// Call passed operator in a context of the writer passing instance of the
+    /// [CWrite] as an argument and returning the result back
+    pub fn with<F: 'a + FnOnce(&mut Self)>(&mut self, f: F) -> std::fmt::Result {
+        f(self);
+        self.res()
+    }
+}
+
+impl<'a>  From<&mut CWrite<'a>> for write_t {
+    fn from(write: &mut CWrite<'a>) -> Self {
+        Self((write as *mut CWrite).cast())
+    }
+}

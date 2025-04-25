@@ -96,6 +96,23 @@ START_TEST (test_runner_errors)
 }
 END_TEST
 
+ssize_t load(void const* payload, run_context_t* run_context, write_t err) {
+    space_t space = space_new_grounding_space();
+    run_context_init_self_module(run_context, &space, NULL);
+    space_free(space);
+
+    sexpr_parser_t parser = sexpr_parser_new("test-atom");
+    run_context_push_parser(run_context, parser);
+    return 0;
+}
+
+static module_loader_t const TEST_MODULE_LOADER = {
+    .load = &load,
+    .load_tokens = NULL,
+    .to_string = NULL,
+    .free = NULL,
+};
+
 size_t path_for_name(const void *payload, const char *parent_dir, const char *mod_name, char *dst_buf, uintptr_t buf_size) {
     const char* suffix = ".ctestmod";
     size_t parent_dir_len = strlen(parent_dir);
@@ -121,7 +138,7 @@ size_t path_for_name(const void *payload, const char *parent_dir, const char *mo
     return new_len+1;
 }
 
-void* try_path(const void *payload, const char *path, const char *mod_name) {
+bool try_path(const void *payload, const char *path, const char *mod_name, module_loader_t const ** mod_loader, module_descriptor_t *mod_descriptor) {
 
     //In a real implementation, we would actually check the file-system object (file, dir, etc.) to
     // validate it was a valid module in a format this code can understand.  But this is a test, so we
@@ -130,43 +147,33 @@ void* try_path(const void *payload, const char *path, const char *mod_name) {
     size_t test_str_len = strlen(test_str);
     size_t path_len = strlen(path);
     if (test_str_len > path_len) {
-        return NULL;
+        return false;
     }
 
     if (strncmp(path+(path_len-test_str_len), test_str, test_str_len) == 0) {
-        return (void*)true;
+        *mod_descriptor = module_descriptor_new(mod_name);
+        *mod_loader = &TEST_MODULE_LOADER;
+        return true;
     } else {
-        return NULL;
+        return false;
     }
 }
 
-void load(const void* payload, run_context_t* run_context, void* callback_context) {
-
-    space_t space = space_new_grounding_space();
-    run_context_init_self_module(run_context, &space, NULL);
-    space_free(space);
-
-    sexpr_parser_t parser = sexpr_parser_new("test-atom");
-    run_context_push_parser(run_context, parser);
-}
-
-// Module Format API Declaration for test format
-static mod_file_fmt_api_t const TEST_FMT_API= {
+static fs_module_format_t const TEST_MODULE_FORMAT = {
     .path_for_name = &path_for_name,
     .try_path = &try_path,
-    .load = &load,
-    .free_callback_context = NULL,
+    .free = NULL,
 };
 
 START_TEST (test_custom_module_format)
 {
     env_builder_t env_builder = env_builder_start();
     env_builder_set_is_test(&env_builder, true);
-    env_builder_push_fs_module_format(&env_builder, &TEST_FMT_API, NULL, 0);
+    env_builder_push_fs_module_format(&env_builder, &TEST_MODULE_FORMAT );
 
     //Start by initializing a runner using an environment with our custom module format
     space_t space = space_new_grounding_space();
-    metta_t runner = metta_new_with_space_environment_and_stdlib(&space, env_builder, NULL, NULL);
+    metta_t runner = metta_new_with_stdlib_loader(NULL, &space, env_builder);
     space_free(space);
 
     //Load a module using our custom format, and verify it was loaded sucessfully
@@ -182,7 +189,7 @@ START_TEST (test_custom_module_format)
 }
 END_TEST
 
-void custom_stdlib_loader(run_context_t *run_context, void* callback_context) {
+ssize_t custom_stdlib_loader(void const* loader, run_context_t *run_context, write_t err) {
 
     //Init our new module
     space_t space = space_new_grounding_space();
@@ -196,13 +203,18 @@ void custom_stdlib_loader(run_context_t *run_context, void* callback_context) {
     //Load a custom atom using the MeTTa syntax
     sexpr_parser_t parser = sexpr_parser_new("test-atom");
     run_context_push_parser(run_context, parser);
+
+    return 0;
 }
 
 START_TEST (test_custom_stdlib)
 {
     //Start by initializing a runner using our custom stdlib loader
     space_t space = space_new_grounding_space();
-    metta_t runner = metta_new_with_space_environment_and_stdlib(&space, env_builder_use_test_env(), &custom_stdlib_loader, NULL);
+    module_loader_t* stdlib_loader = calloc(sizeof(module_loader_t), 1);
+    stdlib_loader->load = custom_stdlib_loader;
+    stdlib_loader->free = free;
+    metta_t runner = metta_new_with_stdlib_loader(stdlib_loader, &space, env_builder_use_test_env());
     space_free(space);
 
     //Test that we can match an atom loaded from the custom stdlib function
