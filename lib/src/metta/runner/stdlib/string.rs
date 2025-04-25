@@ -39,7 +39,7 @@ use dyn_fmt::AsStrFormatExt;
 
 impl Grounded for FormatArgsOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_STRING])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {

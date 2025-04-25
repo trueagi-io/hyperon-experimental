@@ -59,7 +59,7 @@ grounded_op!(TraceOp, "trace!");
 
 impl Grounded for TraceOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_UNDEFINED, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {

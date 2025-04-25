@@ -118,7 +118,7 @@ impl IncludeOp {
 
 impl Grounded for IncludeOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {

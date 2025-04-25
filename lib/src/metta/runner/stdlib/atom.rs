@@ -18,7 +18,7 @@ grounded_op!(UniqueAtomOp, "unique-atom");
 
 impl Grounded for UniqueAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -49,7 +49,7 @@ grounded_op!(UnionAtomOp, "union-atom");
 
 impl Grounded for UnionAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -76,7 +76,7 @@ grounded_op!(IntersectionAtomOp, "intersection-atom");
 
 impl Grounded for IntersectionAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -290,7 +290,7 @@ grounded_op!(SubtractionAtomOp, "subtraction-atom");
 
 impl Grounded for SubtractionAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -364,7 +364,7 @@ impl GetTypeOp {
 
 impl Grounded for GetTypeOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
