@@ -1997,4 +1997,20 @@ mod tests {
         let result = interpret(&outer, &Atom::expr([METTA_SYMBOL, expr!("foo" "a"), ATOM_TYPE_UNDEFINED, Atom::gnd(nested)]));
         assert_eq!(result, Ok(vec![metta_atom("a")]));
     }
+
+    #[test]
+    fn interpret_stop_evaluation() {
+        let space = DynSpace::new(space("
+            (= (bar) X)
+            (= (foo) (bar))
+
+            (: q (-> Atom Atom))
+            (= (q $a) $a)
+            (= (e $a) $a)
+        "));
+        let result = interpret(&space, &Atom::expr([METTA_SYMBOL, expr!("q" ("foo")), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]));
+        assert_eq!(result, Ok(vec![Atom::expr([Atom::sym("foo")])]));
+        let result = interpret(&space, &Atom::expr([METTA_SYMBOL, expr!("e" ("q" ("foo"))), ATOM_TYPE_UNDEFINED, Atom::gnd(space.clone())]));
+        assert_eq!(result, Ok(vec![Atom::sym("X")]));
+    }
 }
