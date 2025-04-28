@@ -5,6 +5,9 @@
 
 #define BUF_SIZE 4096
 
+// required by MSVC compiler
+#define ssize_t ptrdiff_t
+
 void str_to_buf(const char *str, void *context);
 
 char* stratom(atom_t const* atom);
