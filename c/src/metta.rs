@@ -6,16 +6,16 @@ use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::{Metta, RunContext, RunnerState, Environment, EnvBuilder};
-use hyperon::metta::runner::modules::{ModuleLoader, ModId, ResourceKey, Resource};
-use hyperon::metta::runner::pkg_mgmt::{FsModuleFormat, ModuleDescriptor};
+use hyperon::metta::runner::modules::{ModuleLoader, ModId};
 use hyperon::atom::*;
 
 use crate::util::*;
 use crate::atom::*;
 use crate::space::*;
+use crate::module::*;
 
 use std::os::raw::*;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::io;
 
 use regex::Regex;
@@ -785,8 +785,19 @@ pub extern "C" fn step_get_result(step: step_result_t,
 #[repr(C)]
 pub struct metta_t {
     /// Internal.  Should not be accessed directly
-    metta: *mut RustMettaRunner,
+    metta: *mut RustMetta,
     err_string: *mut c_char,
+}
+
+struct RustMetta(Metta);
+
+impl From<Metta> for metta_t {
+    fn from(metta: Metta) -> Self {
+        Self{
+            metta: Box::into_raw(Box::new(RustMetta(metta))),
+            err_string: core::ptr::null_mut(),
+        }
+    }
 }
 
 impl metta_t {
@@ -797,20 +808,6 @@ impl metta_t {
             self.err_string = core::ptr::null_mut();
         }
     }
-}
-
-struct RustMettaRunner(Metta);
-
-impl From<Metta> for metta_t {
-    fn from(metta: Metta) -> Self {
-        Self{
-            metta: Box::into_raw(Box::new(RustMettaRunner(metta))),
-            err_string: core::ptr::null_mut(),
-        }
-    }
-}
-
-impl metta_t {
     fn borrow(&self) -> &Metta {
         &unsafe{ &*self.metta }.0
     }
@@ -833,59 +830,32 @@ pub extern "C" fn metta_new() -> metta_t {
 
 /// @brief Creates a new top-level MeTTa Runner, with the specified `stdlib` module loaded
 /// @ingroup interpreter_group
-/// @param[in]  space  A pointer to a handle for the Space for use in the Runner's top-level module
-/// @param[in]  environment  An `env_builder_t` handle to configure the environment to use
-/// @param[in]  loader_callback  The `mod_loader_callback_t` for a function to load the stdlib, if it is
-///     not already loaded.  Pass NULL to use the default `stdlib`
-/// @param[in]  callback_context  A pointer to a caller-defined structure that will be passed to the
-///     `loader_callback` function
+/// @param[in]  space_ref  A pointer to a handle for the Space for use in the Runner's top-level module
+/// @param[in]  env_builder_mov  An `env_builder_t` handle to configure the environment to use
+/// @param[in]  stdlib_loader_mov  Stdlib loader implemented in C code. Pass NULL to use the default `stdlib`
 /// @return A `metta_t` handle to the newly created Runner
 /// @note The caller must take ownership responsibility for the returned `metta_t`, and free it with `metta_free()`
 /// @note Most callers can simply call `metta_new`.  This function is provided to support languages
 ///     with their own stdlib, that needs to be loaded before the init.metta file is run
 ///
 #[no_mangle]
-pub extern "C" fn metta_new_with_space_environment_and_stdlib(space: *mut space_t,
-    env_builder: env_builder_t, loader_callback: mod_loader_callback_t, callback_context: *mut c_void) -> metta_t
+pub extern "C" fn metta_new_with_stdlib_loader(stdlib_loader_mov: *mut module_loader_t,
+    space_ref: *mut space_t, env_builder_mov: env_builder_t, ) -> metta_t
 {
-    let dyn_space = unsafe{ &*space }.borrow();
-    let env_builder = if env_builder.is_default() {
+    let dyn_space = unsafe{ &*space_ref }.borrow();
+    let env_builder_mov = if env_builder_mov.is_default() {
         None
     } else {
-        Some(env_builder.into_inner())
+        Some(env_builder_mov.into_inner())
     };
-    let loader = match loader_callback {
-        Some(callback) => {
-            Some(Box::new(CModLoaderWrapper{ callback, callback_context }) as Box<dyn ModuleLoader>)
-        },
-        None => None
+    let stdlib_loader = if !stdlib_loader_mov.is_null() {
+        Some(Box::new(CModuleLoader::new(stdlib_loader_mov)) as Box<dyn ModuleLoader>)
+    } else {
+        None
     };
 
-    let metta = Metta::new_with_stdlib_loader(loader, Some(dyn_space.clone()), env_builder);
+    let metta = Metta::new_with_stdlib_loader(stdlib_loader, Some(dyn_space.clone()), env_builder_mov);
     metta.into()
-}
-
-/// Internal wrapper to turn a mod_loader_callback_t into an trait object that implements [ModuleLoader]
-#[derive(Debug)]
-struct CModLoaderWrapper {
-    //NOTE: This function type matches the internals of mod_loader_callback_t.  This is necessary because
-    //  CBindGen has some unfortunate inconsistencies around how Rust types are included in the C header
-    callback: extern "C" fn(run_context: *mut run_context_t, callback_context: *mut c_void),
-    callback_context: *mut c_void,
-}
-
-//FUTURE TODO.  See QUESTION around CFsModFmtLoader about whether we trust the C plugins to be reentrant
-unsafe impl Send for CModLoaderWrapper {}
-unsafe impl Sync for CModLoaderWrapper {}
-
-impl ModuleLoader for CModLoaderWrapper {
-    fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let mut c_context = run_context_t::from(context);
-
-        (self.callback)(&mut c_context, self.callback_context);
-
-        Ok(())
-    }
 }
 
 /// @brief Creates a new core MeTTa runner, with no loaded stdlib nor initialization
@@ -1066,30 +1036,26 @@ pub extern "C" fn metta_evaluate_atom(metta: *mut metta_t, atom: atom_t,
     }
 }
 
-/// @brief Loads a module directly into the runner, from a mod_loader_callback_t
+/// @brief Loads a module directly into the runner, from a module_loader_t
 /// @ingroup interpreter_group
-/// @param[in]  metta  A pointer to the handle specifying the runner into which to load the module
-/// @param[in]  name  A C-string specifying a name for the module
-/// @param[in]  loader_callback  The `mod_loader_callback_t` for a function to load the module
-/// @param[in]  callback_context  A pointer to a caller-defined structure that will be passed to the
-///    `loader_callback` function
+/// @param[in]  metta_ref  A pointer to the handle specifying the runner into which to load the module
+/// @param[in]  name_ref  A C-string specifying a name for the module
+/// @param[in]  loader_mov  The `module_loader_t` instance to load the module
 /// @return  The `module_id_t` for the loaded module, or `invalid` if there was an error
 /// @note  This function might be useful to provide MeTTa modules that are built-in as part of your
 ///    application
 /// @note If this function encounters an error, the error may be accessed with `metta_err_str()`
 ///
 #[no_mangle]
-pub extern "C" fn metta_load_module_direct(metta: *mut metta_t,
-        name: *const c_char,
-        loader_callback: mod_loader_callback_t,
-        callback_context: *mut c_void) -> module_id_t {
+pub extern "C" fn metta_load_module_direct(metta_ref: *mut metta_t,
+        name_ref: *const c_char,
+        loader_mov: *mut module_loader_t) -> module_id_t {
 
-    let metta = unsafe{ &mut *metta };
+    let metta = unsafe{ &mut *metta_ref };
     metta.free_err_string();
     let rust_metta = metta.borrow();
-    let name = cstr_as_str(name);
-    let loader_callback = loader_callback.unwrap();
-    let loader = Box::new(CModLoaderWrapper{ callback: loader_callback, callback_context });
+    let name = cstr_as_str(name_ref);
+    let loader = Box::new(CModuleLoader::new(loader_mov));
 
     match rust_metta.load_module_direct(loader, name) {
         Ok(mod_id) => mod_id.into(),
@@ -1167,7 +1133,7 @@ pub struct run_context_t {
 // to invlid memory access
 
 impl run_context_t {
-    fn take_err_string(&mut self) -> Option<String> {
+    pub fn take_err_string(&mut self) -> Option<String> {
         if !self.err_string.is_null() {
             let return_string = unsafe{ std::ffi::CString::from_raw(self.err_string) }.to_str().expect("UTF-8 error").to_string();
             self.err_string = core::ptr::null_mut();
@@ -1250,12 +1216,6 @@ pub extern "C" fn run_context_get_space(run_context: *const run_context_t) -> sp
 pub extern "C" fn run_context_get_tokenizer(run_context: *const run_context_t) -> tokenizer_t {
     let context = unsafe{ &*run_context }.borrow();
     context.module().tokenizer().clone().into()
-}
-
-#[no_mangle]
-pub extern "C" fn run_context_get_own_tokenizer(run_context: *const run_context_t) -> tokenizer_t {
-    let context = unsafe{ &*run_context }.borrow();
-    context.module().own_tokenizer().clone().into()
 }
 
 /// @brief Sets a runtime error
@@ -1637,20 +1597,13 @@ pub extern "C" fn env_builder_push_include_path(builder: *mut env_builder_t, pat
 /// @brief Adds logic to interpret a foreign format for MeTTa modules loaded from the file system
 /// @ingroup environment_group
 /// @param[in]  builder  A pointer to the in-process environment builder state
-/// @param[in]  api  A pointer to the `mod_file_fmt_api_t` table of functions to define the behavior of the
-///    module format
-/// @param[in]  payload  A pointer to a user-defined structure to store information related to this format
-/// @param[in]  fmt_id  An arbitrary number to ensure modules identified by one format are not mistaken
-///    for another
-/// @warning The data referenced by both the `api` and the `payload` pointers must remain valid for the
-///    entire life of the environment.  In the case of the common_env, that is the entire life of the program
-/// @note Formats will be tried in the order they are added to the `env_builder_t``
+/// @param[in]  format  A pointer to a user-defined structure to store information related to this format
 ///
 #[no_mangle]
-pub extern "C" fn env_builder_push_fs_module_format(builder: *mut env_builder_t, api: *const mod_file_fmt_api_t, payload: *const c_void, fmt_id: u64) {
+pub extern "C" fn env_builder_push_fs_module_format(builder: *mut env_builder_t, format: *const fs_module_format_t) {
     let builder_arg_ref = unsafe{ &mut *builder };
     let builder = core::mem::replace(builder_arg_ref, env_builder_t::null()).into_inner();
-    let c_loader = CFsModFmtLoader::new(api, payload, fmt_id);
+    let c_loader = CFsModuleFormat::new(format);
     let builder = builder.push_fs_module_format(c_loader);
     *builder_arg_ref = builder.into();
 }
@@ -1658,310 +1611,6 @@ pub extern "C" fn env_builder_push_fs_module_format(builder: *mut env_builder_t,
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Module Interface
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-
-/// @brief Identifies the properties on a specific module, including its name and version
-/// @ingroup module_group
-/// @note `module_descriptor_t` objects must be freed with `module_descriptor_free` or passed to
-///    a function that assumes responsibility for freeing them
-///
-#[repr(C)]
-pub struct module_descriptor_t {
-    /// Internal.  Should not be accessed directly
-    descriptor: *mut RustModuleDescriptor,
-}
-
-#[derive(Clone)]
-#[allow(dead_code)] //LP-TODO-NEXT.  Currently we don't do much with module_descriptor_t, but that will change when I make C bindings for the catalog API
-enum RustModuleDescriptor {
-    Descriptor(ModuleDescriptor),
-    Err(String)
-}
-
-impl From<ModuleDescriptor> for module_descriptor_t {
-    fn from(descriptor: ModuleDescriptor) -> Self {
-        Self{ descriptor: Box::into_raw(Box::new(RustModuleDescriptor::Descriptor(descriptor))) }
-    }
-}
-
-//LP-TODO-NEXT.  The "interpreter" documentation group is bloating.  Should break out a separate "runner" group
-//LP-TODO-NEXT.  The Error pathway of the module_descriptor_t is no longer used.  So I can simplify this type
-//LP-TODO-NEXT.  Add an error pathway to run_context_t, that mirrors the error pathway in metta_t, so calls where a run_context_t is passed can propagate errors back to the caller
-//LP-TODO-Next.  Add an error-status result to the callbacks.  At a conceptual level, this error type fundamentally the same exec_error_t / ExecError
-
-impl module_descriptor_t {
-    fn new_err(err: String) -> Self {
-        Self{ descriptor: Box::into_raw(Box::new(RustModuleDescriptor::Err(err))) }
-    }
-    fn new_from_enum(rust_enum: RustModuleDescriptor) -> Self {
-        Self{ descriptor: Box::into_raw(Box::new(rust_enum)) }
-    }
-    fn into_rust_enum(self) -> RustModuleDescriptor {
-        unsafe{ *Box::from_raw(self.descriptor) }
-    }
-    fn borrow_rust_enum(&self) -> &RustModuleDescriptor {
-        unsafe{ &*self.descriptor }
-    }
-    //LP-TODO-NEXT: probably dead code.  Delete soon
-    // fn borrow(&self) -> &ModuleDescriptor {
-    //     match unsafe{ &*self.descriptor } {
-    //         RustModuleDescriptor::Descriptor(desc) => desc,
-    //         RustModuleDescriptor::Err(_err) => panic!("Fatal error.  Attempt to access Error module_descriptor_t")
-    //     }
-    // }
-}
-
-/// @brief Identifies a loaded module inside a specific `metta_t` MeTTa runner
-/// @ingroup module_group
-/// @note It is not necessary to free `module_id_t` types
-///
-#[repr(C)]
-pub struct module_id_t {
-    /// Internal.  Should not be accessed directly
-    id: usize,
-}
-
-impl From<ModId> for module_id_t {
-    fn from(mod_id: ModId) -> Self {
-        module_id_t{ id: mod_id.0 }
-    }
-}
-
-impl module_id_t {
-    fn into_inner(self) -> ModId {
-        ModId(self.id)
-    }
-}
-
-/// @brief Returns `true` is a module_id_t is valid, otherwise returns `false`
-/// @ingroup module_group
-/// @param[in]  mod_id  A pointer to the `module_id_t` to test for validity
-/// @return `true` if the module_id_t is valid, otherwise returns `false`
-///
-#[no_mangle]
-pub extern "C" fn module_id_is_valid(mod_id: *const module_id_t) -> bool {
-    let mod_id = unsafe{ &*mod_id };
-    ModId(mod_id.id) != ModId::INVALID
-}
-
-/// @brief Creates a new module_descriptor_t with the specified name
-/// @ingroup module_group
-/// @param[in]  name  A C-style string containing the name of the module
-/// @return The new `module_descriptor_t`
-/// @note The returned `module_descriptor_t` must be freed with `module_descriptor_free()`
-///
-#[no_mangle]
-pub extern "C" fn module_descriptor_new(name: *const c_char) -> module_descriptor_t {
-    //TODO-NEXT: We should probably take a version string, and parse it into a semver version
-    ModuleDescriptor::new(cstr_as_str(name).to_string(), None, None).into()
-}
-
-/// @brief Creates a new module_descriptor_t that represents the error attempting to interpret a module
-/// @ingroup module_group
-/// @param[in]  err_str  A C-style string containing the error message
-/// @return The new error `module_descriptor_t`
-///
-#[no_mangle]
-pub extern "C" fn module_descriptor_error(err_str: *const c_char) -> module_descriptor_t {
-    module_descriptor_t::new_err(cstr_as_str(err_str).to_string()).into()
-}
-
-/// @brief Creates a new module_descriptor_t that is a clone of the argument passed
-/// @ingroup module_group
-/// @param[in]  descriptor  The `module_descriptor_t` to clone
-/// @return The new `module_descriptor_t`
-/// @note The returned `module_descriptor_t` must be freed with `module_descriptor_free()`
-///
-#[no_mangle]
-pub extern "C" fn module_descriptor_clone(descriptor: *const module_descriptor_t) -> module_descriptor_t {
-    let rust_enum = unsafe{ &*descriptor }.borrow_rust_enum();
-    module_descriptor_t::new_from_enum(rust_enum.clone())
-}
-
-/// @brief Frees a module_descriptor_t
-/// @ingroup module_group
-/// @param[in]  descriptor  The `module_descriptor_t` to free
-///
-#[no_mangle]
-pub extern "C" fn module_descriptor_free(descriptor: module_descriptor_t) {
-    let descriptor = descriptor.into_rust_enum();
-    drop(descriptor);
-}
-
-/// @brief A callback to loads a module into a runner, by making calls into the `run_context_t`
-/// @ingroup module_group
-/// @param[in]  run_context  The `run_context_t` to provide access to the MeTTa run interface
-/// @param[in]  callback_context  The state pointer initially passed to the upstream function
-///
-pub type mod_loader_callback_t = Option<extern "C" fn(run_context: *mut run_context_t, callback_context: *mut c_void)>;
-
-/// @struct mod_file_fmt_api_t
-/// @brief A table of functions to load MeTTa modules from an arbitrary format
-/// @ingroup module_group
-/// @warning All of the functions in this interface may be called from threads outside the main
-///    thread, and may be called concurrently.  Therefore these functions must be fully reentrant.
-///
-#[repr(C)]
-pub struct mod_file_fmt_api_t {
-
-    /// @brief Constructs a path for a module with a given name that resides in a parent directory
-    /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
-    ///    format was initialized.  This function must not modify the payload
-    /// @param[in]  parent_dir  A NULL-terminated string, representing the path to the parent directory
-    ///    in the file system
-    /// @param[in]  mod_name  A NULL-terminated string, representing the name of the module
-    /// @param[out]  dst_buf  The buffer into which to write the output path, followed by a NULL character
-    /// @param[in]  buf_size  The size of the allocated dst_buf.  This function must not overwrite the
-    ///    output buffer
-    /// @return the number of bytes written into the `dst_buf` by the function, including a NULL terminator
-    ///    character.  If the path does not fit in the `dst_buf`, then this function should return 0
-    /// @note The implementation does not need to check the validity of the returned path.  Results from
-    ///    this method will be passed to `try_path` to perform validity checking
-    ///
-    //QUESTION: The Rust interface allows for a single module loader to check multiple path variations.
-    //    That could be implemented here in the C interface but it would complicate the API functions
-    //    by requiring multiple buffers to be returned, and currently it's not needed.
-    path_for_name: extern "C" fn(payload: *const c_void, parent_dir: *const c_char, mod_name: *const c_char, dst_buf: *mut c_char, buf_size: usize) -> usize,
-
-    /// @brief Tests a path in the file system to determine if a valid module resides at the path
-    /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
-    ///    format was initialized.  This function must not modify the payload
-    /// @param[in]  path  A NULL-terminated string, representing a path in the file system to test
-    /// @param[in]  mod_name  A NULL-terminated string, representing the name of the module
-    /// @return any non-NULL value if the `path` contains a valid module in the format, otherwise NULL.
-    ///    If a non-NULL value is returned from this function, it may be passed to the `load` function
-    ///    as the `callback_context` argument.  If a non-NULL value is returned, it will eventually
-    ///    trigger a call to `free_callback_context` so the returned value can be an allocated pointer.
-    ///
-    //TODO: This function will also be responsible for returning a module version, through an [out] arg,
-    // when I add versions in the near future
-    try_path: extern "C" fn(payload: *const c_void, path: *const c_char, mod_name: *const c_char) -> *mut c_void,
-
-    /// @brief Loads the module into the runner, by making calls into the `run_context_t`
-    /// @param[in]  payload  The payload passed to `env_builder_push_fs_module_format` when the
-    ///    format was initialized.  This function must not modify the payload
-    /// @param[in]  run_context  The `run_context_t` to provide access to the MeTTa run interface
-    /// @param[in]  callback_context  The state pointer initially passed to the upstream function
-    ///
-    ///QUESTION: What should the error reporting pathway look like?
-    ///QUESTION: Is it worth trying to unify this function prototype with the `mod_loader_callback_t` type?
-    ///   The argument in favor is that they're fundamentally doing the same thing, but the function params
-    ///   are different on account of having a payload, and removing the `payload` argument complicates the
-    ///   API as it becomes necessary to repackage the payload inside the `callback_context`
-    load: extern "C" fn(payload: *const c_void, run_context: *mut run_context_t, callback_context: *mut c_void),
-
-    /// @brief Frees a user-defined structure that may have been allocated in `try_path`.
-    /// @param[in]  callback_context  The value returned from `try_path`, if it was non-NULL
-    ///
-    free_callback_context: Option<extern "C" fn(callback_context: *mut c_void)>,
-}
-
-#[derive(Clone, Debug)]
-struct CFsModFmtLoader {
-    api: *const mod_file_fmt_api_t,
-    payload: *const c_void,
-    callback_context: *mut c_void,
-    fmt_id: u64,
-}
-
-impl CFsModFmtLoader {
-    fn new(api: *const mod_file_fmt_api_t, payload: *const c_void, fmt_id: u64) -> Self {
-        Self {api, payload, callback_context: core::ptr::null_mut(), fmt_id }
-    }
-}
-
-//QUESTION: What should our multi-thread cross-language API look like?  (I am seeing this as establishing
-//  a pattern we can also use for Grounded Atoms, Spaces, etc.)
-//
-//I see several possible approaches:
-// 1.) Let the C implementations ensure their own concurrency.  This preserves the option for optimal speed,
-//  but might invite problems with badly-behaved extensions.  Especially for host languages where the
-//  interpreter is bound to a specific thread such as Python or JavaScript.
-// 2.) Implement a single-threaded API where we transact all interactions with the host language through
-//  queues to a single interface thread.  This is less rope for the user to hang themselves, but will be
-//  a fundamental bottleneck, so I'd prefer not to go this route
-//
-//My strong opinion is we leave the C API unlimited (ie. Option 1).  Then we can implement the queueing
-//  & synchronization for Python within the hyperonpy layer.  My preference would be to undertake
-//  https://github.com/trueagi-io/hyperon-experimental/issues/283 before trying to implement the queueing &
-//  synchronization layer.  My reasoning is that the bug-surface-area will be a lot smaller in Rust than in C++
-unsafe impl Send for CFsModFmtLoader {}
-unsafe impl Sync for CFsModFmtLoader {}
-
-impl FsModuleFormat for CFsModFmtLoader {
-    fn paths_for_name(&self, parent_dir: &Path, mod_name: &str) -> Vec<PathBuf> {
-        let api = unsafe{ &*self.api };
-
-        let parent_dir_c_string = str_as_cstr(parent_dir.to_str().unwrap());
-        let mod_name_c_string = str_as_cstr(mod_name);
-        const BUF_SIZE: usize = 512;
-        let mut buffer = [0 as c_char; BUF_SIZE];
-
-        let bytes_written = (api.path_for_name)(
-            self.payload,
-            parent_dir_c_string.as_ptr(),
-            mod_name_c_string.as_ptr(),
-            buffer.as_mut_ptr(),
-            BUF_SIZE
-        );
-        if bytes_written > 0 {
-            vec![PathBuf::from(cstr_as_str(buffer[0..=bytes_written].as_ptr()))]
-        } else {
-            vec![]
-        }
-    }
-    fn try_path(&self, path: &Path, mod_name: Option<&str>) -> Option<(Box<dyn ModuleLoader>, ModuleDescriptor)> {
-        let api = unsafe{ &*self.api };
-        let path_c_string = str_as_cstr(path.to_str().unwrap());
-        let mod_name = match mod_name {
-            Some(mod_name) => mod_name,
-            None => path.file_stem().unwrap().to_str().unwrap()
-        };
-        let mod_name_c_string = str_as_cstr(mod_name);
-
-        let result_context = (api.try_path)(self.payload, path_c_string.as_ptr(), mod_name_c_string.as_ptr());
-        if !result_context.is_null() {
-            //TODO-NEXT.  We want to provide a way for the loader to support loading a PkgInfo, and also pass
-            // the version from that PkgInfo when the new descriptor is created
-
-            let descriptor = ModuleDescriptor::new_with_path_and_fmt_id(mod_name.to_string(), None, path, self.fmt_id);
-
-            let mut new_loader = self.clone();
-            new_loader.callback_context = result_context;
-            Some((Box::new(new_loader), descriptor))
-        } else {
-            None
-        }
-    }
-}
-
-impl ModuleLoader for CFsModFmtLoader {
-    fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let api = unsafe{ &*self.api };
-        let mut c_context = run_context_t::from(context);
-
-        (api.load)(self.payload, &mut c_context, self.callback_context);
-        match c_context.take_err_string() {
-            None => Ok(()),
-            Some(err_string) => Err(err_string),
-        }
-    }
-    fn get_resource(&self, _res_key: ResourceKey) -> Result<Resource, String> {
-        //TODO, add C API for providing resources
-        Err("resource not found".to_string())
-    }
-}
-
-impl Drop for CFsModFmtLoader {
-    fn drop(&mut self) {
-        let api = unsafe{ &*self.api };
-
-        if let Some(free_func) = api.free_callback_context {
-            if !self.callback_context.is_null() {
-                free_func(self.callback_context)
-            }
-        }
-    }
-}
 
 /// @brief Called within a module `loader` function to initialize the new module
 /// @ingroup module_group

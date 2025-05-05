@@ -1,6 +1,7 @@
 //! MeTTa parser implementation.
 
 use crate::*;
+use crate::gnd::*;
 
 use core::ops::Range;
 use std::iter::Peekable;
@@ -46,6 +47,12 @@ impl Tokenizer {
 
     pub fn register_token_with_regex_str<C: 'static + Fn(&str) -> Atom>(&mut self, regex: &str, constr: C) {
         let regex = Regex::new(regex).unwrap();
+        self.register_token(regex, constr)
+    }
+
+    pub fn register_function<T: 'static + GroundedFunction>(&mut self, func: GroundedFunctionAtom<T>) {
+        let regex = Regex::new(func.name()).unwrap();
+        let constr = move |_token: &str| -> Atom { Atom::gnd(func.clone()) };
         self.register_token(regex, constr)
     }
 

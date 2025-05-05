@@ -170,7 +170,7 @@ grounded_op!(IfEqualOp, "if-equal");
 
 impl Grounded for IfEqualOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, ATOM_TYPE_UNDEFINED])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -210,7 +210,7 @@ impl SuperposeOp {
 
 impl Grounded for SuperposeOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -324,7 +324,7 @@ impl CaseOp {
 
 impl Grounded for CaseOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, ATOM_TYPE_UNDEFINED])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -396,7 +396,7 @@ pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &Dy
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::metta::runner::stdlib::tests::run_program;
+    use crate::metta::runner::run_program;
     use crate::matcher::atoms_are_equivalent;
     use crate::common::test_utils::metta_space;
     use crate::metta::runner::number::Number;
@@ -537,7 +537,7 @@ mod tests {
 
     #[test]
     fn sealed_op_runner() {
-        let nested = run_program("!(sealed ($x) (sealed ($a $b) (quote (= ($a $x $c) ($b)))))");
+        let nested = run_program("!(sealed ($a $b $x) (quote (= ($a $x $c) ($b))))");
         let simple_replace = run_program("!(sealed ($x $y) (quote (= ($y $z))))");
 
         assert!(crate::atom::matcher::atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("quote" ("=" (a b c) (z)))));

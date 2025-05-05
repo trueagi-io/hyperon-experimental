@@ -47,3 +47,6 @@ class PyOpsTest(HyperonTestCase):
         runner.run("!(import! &self py_ops)")
         result = runner.run('!(* "a" 4)')
         self.assertEqual(result[0][0], ValueAtom('aaaa'))
+
+if __name__ == "__main__":
+    unittest.main()

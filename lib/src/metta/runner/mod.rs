@@ -1221,6 +1221,12 @@ fn wrap_atom_by_metta_interpreter(space: DynSpace, atom: Atom) -> Atom {
 // *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*
 
 #[cfg(test)]
+pub fn run_program(program: &str) -> Result<Vec<Vec<Atom>>, String> {
+    let metta = Metta::new(Some(EnvBuilder::test_env()));
+    metta.run(SExprParser::new(program))
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use super::bool::Bool;

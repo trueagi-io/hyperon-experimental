@@ -9,7 +9,6 @@ use crate::space::module::ModuleSpace;
 use regex::Regex;
 
 use super::interpreter::interpret;
-use super::stdlib::*;
 
 use std::mem;
 
@@ -59,7 +58,6 @@ pub struct MettaMod {
     resource_dir: Option<PathBuf>,
     space: Rc<RefCell<ModuleSpace>>,
     tokenizer: Shared<Tokenizer>,
-    own_tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
     loader: Option<Box<dyn ModuleLoader>>,
 }
@@ -78,13 +76,11 @@ impl MettaMod {
             }
         }
         let space = Rc::new(RefCell::new(ModuleSpace::new(space)));
-        let own_tokenizer  = Shared::new(Tokenizer::new());
 
         let new_mod = Self {
             mod_path,
             space,
             tokenizer,
-            own_tokenizer,
             imported_deps: Mutex::new(HashMap::new()),
             resource_dir,
             loader: None,
@@ -206,21 +202,10 @@ impl MettaMod {
         }
 
         // Finally, Import the tokens from the dependency
-        mod_ptr.export_all_tokens_into(self, metta)
-    }
-
-    fn export_all_tokens_into(&self, target_mod: &MettaMod, metta: &Metta) -> Result<(), String> {
-        if self.name() == "corelib" {
-            register_all_corelib_tokens(target_mod.tokenizer().borrow_mut().deref_mut(), target_mod.tokenizer().clone(), &DynSpace::with_rc(target_mod.space.clone()), metta);
-          
-        } else {
-            let dep_tokenizer = self.own_tokenizer();
-            // Export all the owned Tokenizer entries from self to the dependent module
-            let mut dep_tok_clone = dep_tokenizer.borrow().clone();
-            target_mod.tokenizer().borrow_mut().move_back(&mut dep_tok_clone);
-           
-        }        
-        Ok(())
+        match &mod_ptr.loader {
+            Some(loader) => loader.load_tokens(self, metta.clone()),
+            None => Ok(()), // no tokens are exported by mod_ptr
+        }
     }
 
     /// Returns `true` if the `self` module has imported the `mod_id` module as a sub-dependency
@@ -285,10 +270,6 @@ impl MettaMod {
         &self.tokenizer
     }
 
-    pub fn own_tokenizer(&self) -> &Shared<Tokenizer> {
-        &self.own_tokenizer
-    }
-
     pub fn resource_dir(&self) -> Option<&Path> {
         self.resource_dir.as_deref()
     }
@@ -309,7 +290,6 @@ impl MettaMod {
         self.space.borrow_mut().add(atom);
         Ok(())
     }
-
 }
 
 /// ModuleInitState is a smart-pointer to a state that contains some objects to be merged
@@ -610,6 +590,13 @@ pub trait ModuleLoader: std::fmt::Debug + Send + Sync {
     /// Returns a data blob containing a given named resource belonging to a module
     fn get_resource(&self, _res_key: ResourceKey) -> Result<Resource, String> {
         Err("resource not found".to_string())
+    }
+
+    /// Loads module's tokens into target module. This method is used for both
+    /// initial token loading and exporting module's tokens into importing
+    /// module.
+    fn load_tokens(&self, _target: &MettaMod, _metta: Metta) -> Result<(), String> {
+        Ok(())
     }
 }
 
