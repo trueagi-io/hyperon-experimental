@@ -238,6 +238,19 @@
     (@param "Random number generator instance")))
   (@return "Random number generator instance with default behavior"))
 
+(@doc file-read
+  (@desc "Function takes path to the file in form of string and reads file as string")
+  (@params (
+    (@param "Filepath (string atom)")))
+  (@return "Content of file (string atom), error if no file exists"))
+
+(@doc file-write
+  (@desc "Function takes path to the file (string atom) and content to be written (string atom), creates file and puts content into it")
+  (@params (
+    (@param "Filepath (string atom)")
+    (@param "Content (string atom)")))
+  (@return "Unit atom if write successfull, error otherwise (if there is no such folder)"))
+
 (@doc collapse-bind
   (@desc "Evaluates minimal MeTTa operation (first argument) and returns an expression which contains all alternative evaluations in a form (Atom Bindings). Bindings are represented in a form of a grounded atom.")
   (@params (
