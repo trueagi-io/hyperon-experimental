@@ -193,11 +193,11 @@ impl Space for GroundingSpace {
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
        Ok(self.index.iter().for_each(|atom| v.accept(atom)))
     }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        Some(self)
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        Some(self)
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 

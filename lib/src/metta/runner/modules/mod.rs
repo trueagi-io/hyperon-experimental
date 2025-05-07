@@ -68,11 +68,9 @@ impl MettaMod {
     pub(crate) fn new_with_tokenizer(metta: &Metta, mod_path: String, space: DynSpace, tokenizer: Shared<Tokenizer>, resource_dir: Option<PathBuf>, no_stdlib: bool) -> Self {
 
         //Give the space a name based on the module, if it doesn't already have one
-        if let Some(any_space) = space.borrow_mut().as_any_mut() {
-            if let Some(g_space) = any_space.downcast_mut::<GroundingSpace>() {
-                if g_space.name().is_none() {
-                    g_space.set_name(mod_path.clone());
-                }
+        if let Some(g_space) = space.borrow_mut().as_any_mut().downcast_mut::<GroundingSpace>() {
+            if g_space.name().is_none() {
+                g_space.set_name(mod_path.clone());
             }
         }
         let space = DynSpace::new(ModuleSpace::new(space));
@@ -218,7 +216,7 @@ impl MettaMod {
     fn insert_dep(&self, mod_id: ModId, dep_space: DynSpace) -> Result<(), String> {
         let mut deps_table = self.imported_deps.lock().unwrap();
         if !deps_table.contains_key(&mod_id) {
-            match self.space.borrow_mut().as_any_mut().unwrap().downcast_mut::<ModuleSpace>() {
+            match self.space.borrow_mut().as_any_mut().downcast_mut::<ModuleSpace>() {
                 Some(s) => s.add_dep(dep_space.clone()),
                 None => unreachable!(),
             }

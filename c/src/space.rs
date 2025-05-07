@@ -123,10 +123,8 @@ pub extern "C" fn space_eq(a: *const space_t, b: *const space_t) -> bool {
 #[no_mangle]
 pub extern "C" fn space_get_payload(space: *mut space_t) -> *mut c_void {
     let dyn_space = unsafe{ &*space }.borrow();
-    if let Some(any_ref) = dyn_space.borrow_mut().as_any() {
-        if let Some(c_space) = any_ref.downcast_ref::<CSpace>() {
-            return c_space.params.payload;
-        }
+    if let Some(c_space) = dyn_space.borrow_mut().as_any().downcast_ref::<CSpace>() {
+        return c_space.params.payload;
     }
     panic!("Only CSpace has a payload")
 }
@@ -750,11 +748,11 @@ impl Space for CSpace {
             _ => Err(()),
         }
     }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        Some(self)
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        Some(self)
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -776,9 +774,10 @@ impl Space for DefaultSpace<'_> {
     fn common(&self) -> FlexRef<SpaceCommon> { self.0.common() }
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> { self.0.visit(v) }
-    fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self.0) }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> { None }
+    fn as_any(&self) -> &dyn std::any::Any { self.0 }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { unreachable!() }
 }
+
 impl std::fmt::Display for DefaultSpace<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "DefaultSpace")

@@ -212,10 +212,10 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()>;
 
     /// Returns an `&dyn `[Any](std::any::Any) for spaces where this is possible
-    fn as_any(&self) -> Option<&dyn std::any::Any>;
+    fn as_any(&self) -> &dyn std::any::Any;
 
     /// Returns an `&mut dyn `[Any](std::any::Any) for spaces where this is possible
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any>;
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
 /// Mutable space trait.
@@ -334,30 +334,6 @@ impl crate::atom::Grounded for DynSpace {
 impl CustomMatch for DynSpace {
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
         Box::new(self.borrow().query(other).into_iter())
-    }
-}
-
-impl<T: Space> Space for &T {
-    fn common(&self) -> FlexRef<SpaceCommon> {
-        T::common(*self)
-    }
-    fn query(&self, query: &Atom) -> BindingsSet {
-        T::query(*self, query)
-    }
-    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        T::subst(*self, pattern, template)
-    }
-    fn atom_count(&self) -> Option<usize> {
-        T::atom_count(*self)
-    }
-    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
-        T::visit(*self, v)
-    }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        None
-    }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        None
     }
 }
 

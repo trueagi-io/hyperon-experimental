@@ -32,14 +32,10 @@ impl ModuleSpace {
         log::debug!("ModuleSpace::query: {} {}", self, query);
         let mut results = self.main.borrow().query(query);
         for dep in &self.deps {
-            if let Some(space) = dep.borrow().as_any() {
-                if let Some(space) = space.downcast_ref::<Self>()  {
-                    results.extend(space.query_no_deps(query));
-                } else {
-                    panic!("Only ModuleSpace is expected inside dependencies collection");
-                }
+            if let Some(space) = dep.borrow().as_any().downcast_ref::<Self>()  {
+                results.extend(space.query_no_deps(query));
             } else {
-                panic!("Cannot get space as Any inside ModuleSpace dependencies: {}", dep);
+                panic!("Only ModuleSpace is expected inside dependencies collection");
             }
         }
         results
@@ -72,11 +68,11 @@ impl Space for ModuleSpace {
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
         self.main.borrow().visit(v)
     }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        Some(self)
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        Some(self)
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
