@@ -196,9 +196,6 @@ impl Space for GroundingSpace {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl SpaceMut for GroundingSpace {
@@ -210,6 +207,9 @@ impl SpaceMut for GroundingSpace {
     }
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         GroundingSpace::replace(self, from, to)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 

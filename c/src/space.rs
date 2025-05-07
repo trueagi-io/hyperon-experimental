@@ -751,9 +751,6 @@ impl Space for CSpace {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl std::fmt::Display for CSpace {
@@ -775,7 +772,6 @@ impl Space for DefaultSpace<'_> {
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> { self.0.visit(v) }
     fn as_any(&self) -> &dyn std::any::Any { self.0 }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any { unreachable!() }
 }
 
 impl std::fmt::Display for DefaultSpace<'_> {
@@ -798,6 +794,9 @@ impl SpaceMut for CSpace {
         let api = unsafe{ &*self.api };
         let from: atom_ref_t = from.into();
         (api.replace)(&self.params, &from, to.into())
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 

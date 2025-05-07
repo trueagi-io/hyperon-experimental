@@ -71,9 +71,6 @@ impl Space for ModuleSpace {
     fn as_any(&self) -> &dyn std::any::Any {
         self
     }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl SpaceMut for ModuleSpace {
@@ -85,6 +82,9 @@ impl SpaceMut for ModuleSpace {
     }
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         self.main.borrow_mut().replace(from, to)
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 

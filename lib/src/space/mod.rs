@@ -213,9 +213,6 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
 
     /// Returns an `&dyn `[Any](std::any::Any) for spaces where this is possible
     fn as_any(&self) -> &dyn std::any::Any;
-
-    /// Returns an `&mut dyn `[Any](std::any::Any) for spaces where this is possible
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
 /// Mutable space trait.
@@ -276,6 +273,9 @@ pub trait SpaceMut: Space {
     /// assert_eq!(space.query(&sym!("B")), BindingsSet::single());
     /// ```
     fn replace(&mut self, from: &Atom, to: Atom) -> bool;
+
+    /// Returns an `&mut dyn `[Any](std::any::Any) for spaces where this is possible
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
 #[derive(Clone)]
