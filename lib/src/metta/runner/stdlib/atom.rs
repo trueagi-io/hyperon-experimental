@@ -718,12 +718,12 @@ mod tests {
 
     #[test]
     fn get_type_op() {
-        let space = DynSpace::new(metta_space("
+        let space = metta_space("
             (: B Type)
             (: C Type)
             (: A B)
             (: A C)
-        "));
+        ");
 
         let get_type_op = GetTypeOp::new(space.clone());
         assert_eq_no_order!(get_type_op.execute(&mut vec![sym!("A"), expr!({space.clone()})]).unwrap(),
@@ -732,11 +732,11 @@ mod tests {
 
     #[test]
     fn get_type_op_non_valid_atom() {
-        let space = DynSpace::new(metta_space("
+        let space = metta_space("
             (: f (-> Number String))
             (: 42 Number)
             (: \"test\" String)
-        "));
+        ");
 
         let get_type_op = GetTypeOp::new(space.clone());
         assert_eq_no_order!(get_type_op.execute(&mut vec![expr!("f" "42"), expr!({space.clone()})]).unwrap(),

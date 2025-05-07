@@ -1,7 +1,7 @@
 use crate::atom::{Atom, Grounded, ExecError, CustomExecute};
 use crate::space::grounding::GroundingSpace;
 use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE};
-use crate::metta::runner::{Metta, ModuleLoader, RunContext, DynSpace};
+use crate::metta::runner::{Metta, ModuleLoader, RunContext};
 use crate::metta::runner::pkg_mgmt::{UpdateMode, ManagedCatalog};
 use crate::metta::runner::stdlib::{regex, unit_result};
 use crate::metta::runner::modules::MettaMod;
@@ -55,8 +55,8 @@ pub(crate) struct CatalogModLoader;
 
 impl ModuleLoader for CatalogModLoader {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let space = DynSpace::new(GroundingSpace::new());
-        context.init_self_module(space, None);
+        let space = GroundingSpace::new();
+        context.init_self_module(space.into(), None);
         self.load_tokens(context.module(), context.metta.clone())
     }
 

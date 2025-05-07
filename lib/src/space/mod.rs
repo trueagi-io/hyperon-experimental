@@ -212,10 +212,7 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()>;
 
     /// Returns an `&dyn `[Any](std::any::Any) for spaces where this is possible
-    fn as_any(&self) -> Option<&dyn std::any::Any>;
-
-    /// Returns an `&mut dyn `[Any](std::any::Any) for spaces where this is possible
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any>;
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// Mutable space trait.
@@ -277,18 +274,14 @@ pub trait SpaceMut: Space {
     /// ```
     fn replace(&mut self, from: &Atom, to: Atom) -> bool;
 
-    /// Turn a &dyn SpaceMut into an &dyn Space.  Obsolete when Trait Upcasting is stabilized.
-    /// [Rust issue #65991](https://github.com/rust-lang/rust/issues/65991)  Any month now.
-    fn as_space<'a>(&self) -> &(dyn Space + 'a);
+    /// Returns an `&mut dyn `[Any](std::any::Any) for spaces where this is possible
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any;
 }
 
 #[derive(Clone)]
 pub struct DynSpace(Rc<RefCell<dyn SpaceMut>>);
 
 impl DynSpace {
-    pub fn with_rc(space: Rc<RefCell<dyn SpaceMut>>) -> Self {
-        Self(space)
-    }
     pub fn new<T: SpaceMut + 'static>(space: T) -> Self {
         let shared = Rc::new(RefCell::new(space));
         DynSpace(shared)
@@ -299,9 +292,14 @@ impl DynSpace {
     pub fn borrow_mut(&self) -> RefMut<dyn SpaceMut> {
         self.0.borrow_mut()
     }
-    /// A convenience.  See [SpaceCommon::register_observer]
-    pub fn register_observer<T: SpaceObserver + 'static>(&self, observer: T) -> SpaceObserverRef<T> {
-        self.common().register_observer(observer)
+    pub fn common(&self) -> FlexRef<SpaceCommon> {
+        FlexRef::from_ref_cell(Ref::map(self.0.borrow(), |space| space.common().into_simple()))
+    }
+}
+
+impl<T: SpaceMut + 'static> From<T> for DynSpace {
+    fn from(value: T) -> Self {
+        DynSpace::new(value)
     }
 }
 
@@ -314,45 +312,6 @@ impl core::fmt::Debug for DynSpace {
 impl Display for DynSpace {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", &*self.0.borrow())
-    }
-}
-
-impl SpaceMut for DynSpace {
-    fn add(&mut self, atom: Atom) {
-        self.0.borrow_mut().add(atom)
-    }
-    fn remove(&mut self, atom: &Atom) -> bool {
-        self.0.borrow_mut().remove(atom)
-    }
-    fn replace(&mut self, from: &Atom, to: Atom) -> bool {
-        self.0.borrow_mut().replace(from, to)
-    }
-    fn as_space<'a>(&self) -> &(dyn Space + 'a) {
-        self
-    }
-}
-
-impl Space for DynSpace {
-    fn common(&self) -> FlexRef<SpaceCommon> {
-        FlexRef::from_ref_cell(Ref::map(self.0.borrow(), |space| space.common().into_simple()))
-    }
-    fn query(&self, query: &Atom) -> BindingsSet {
-        self.0.borrow().query(query)
-    }
-    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        self.0.borrow().subst(pattern, template)
-    }
-    fn atom_count(&self) -> Option<usize> {
-        self.0.borrow().atom_count()
-    }
-    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
-        self.0.borrow().visit(v)
-    }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        None
-    }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        None
     }
 }
 
@@ -374,31 +333,7 @@ impl crate::atom::Grounded for DynSpace {
 
 impl CustomMatch for DynSpace {
     fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        Box::new(self.query(other).into_iter())
-    }
-}
-
-impl<T: Space> Space for &T {
-    fn common(&self) -> FlexRef<SpaceCommon> {
-        T::common(*self)
-    }
-    fn query(&self, query: &Atom) -> BindingsSet {
-        T::query(*self, query)
-    }
-    fn subst(&self, pattern: &Atom, template: &Atom) -> Vec<Atom> {
-        T::subst(*self, pattern, template)
-    }
-    fn atom_count(&self) -> Option<usize> {
-        T::atom_count(*self)
-    }
-    fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
-        T::visit(*self, v)
-    }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        None
-    }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        None
+        Box::new(self.borrow().query(other).into_iter())
     }
 }
 

@@ -129,8 +129,8 @@ impl Default for CoreLibLoader {
 
 impl ModuleLoader for CoreLibLoader {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
-        let space = DynSpace::new(GroundingSpace::new());
-        context.init_self_module(space, None);
+        let space = GroundingSpace::new();
+        context.init_self_module(space.into(), None);
 
         self.load_tokens(context.module(), context.metta.clone())?;
 

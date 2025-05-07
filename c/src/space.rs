@@ -123,10 +123,8 @@ pub extern "C" fn space_eq(a: *const space_t, b: *const space_t) -> bool {
 #[no_mangle]
 pub extern "C" fn space_get_payload(space: *mut space_t) -> *mut c_void {
     let dyn_space = unsafe{ &*space }.borrow();
-    if let Some(any_ref) = dyn_space.borrow_mut().as_any() {
-        if let Some(c_space) = any_ref.downcast_ref::<CSpace>() {
-            return c_space.params.payload;
-        }
+    if let Some(c_space) = dyn_space.borrow_mut().as_any().downcast_ref::<CSpace>() {
+        return c_space.params.payload;
     }
     panic!("Only CSpace has a payload")
 }
@@ -239,7 +237,7 @@ pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
 pub extern "C" fn space_iterate(space: *const space_t,
         callback: c_atom_callback_t, context: *mut c_void) -> bool {
     let dyn_space = unsafe{ &*space }.borrow();
-    match dyn_space.visit(&mut |atom: Cow<Atom>| callback(atom.as_ref().into(), context)) {
+    match dyn_space.borrow().visit(&mut |atom: Cow<Atom>| callback(atom.as_ref().into(), context)) {
         Ok(()) => true,
         Err(()) => false,
     }
@@ -750,11 +748,8 @@ impl Space for CSpace {
             _ => Err(()),
         }
     }
-    fn as_any(&self) -> Option<&dyn std::any::Any> {
-        Some(self)
-    }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> {
-        Some(self)
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 
@@ -776,9 +771,9 @@ impl Space for DefaultSpace<'_> {
     fn common(&self) -> FlexRef<SpaceCommon> { self.0.common() }
     fn query(&self, query: &Atom) -> BindingsSet { self.0.query(query) }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> { self.0.visit(v) }
-    fn as_any(&self) -> Option<&dyn std::any::Any> { Some(self.0) }
-    fn as_any_mut(&mut self) -> Option<&mut dyn std::any::Any> { None }
+    fn as_any(&self) -> &dyn std::any::Any { self.0 }
 }
+
 impl std::fmt::Display for DefaultSpace<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "DefaultSpace")
@@ -800,7 +795,7 @@ impl SpaceMut for CSpace {
         let from: atom_ref_t = from.into();
         (api.replace)(&self.params, &from, to.into())
     }
-    fn as_space<'a>(&self) -> &(dyn Space + 'a) {
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
         self
     }
 }
