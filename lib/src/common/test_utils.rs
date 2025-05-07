@@ -1,15 +1,16 @@
 
 use crate::*;
 use crate::metta::text::{Tokenizer, SExprParser};
+use crate::space::DynSpace;
 use crate::space::grounding::GroundingSpace;
 
-pub(crate) fn metta_space(text: &str) -> GroundingSpace {
+pub(crate) fn metta_space(text: &str) -> DynSpace {
     let mut space = GroundingSpace::new();
     let mut parser = SExprParser::new(text);
     while let Some(atom) = parser.parse(&Tokenizer::new()).unwrap() {
         space.add(atom);
     }
-    space
+    DynSpace::new(space)
 }
 
 pub(crate) fn metta_atom(atom_str: &str) -> Atom {

@@ -688,19 +688,19 @@ pub struct step_result_t {
     result: *mut RustStepResult,
 }
 
-struct RustStepResult(InterpreterState<DynSpace>);
+struct RustStepResult(InterpreterState);
 
-impl From<InterpreterState<DynSpace>> for step_result_t {
-    fn from(state: InterpreterState<DynSpace>) -> Self {
+impl From<InterpreterState> for step_result_t {
+    fn from(state: InterpreterState) -> Self {
         Self{ result: Box::into_raw(Box::new(RustStepResult(state))) }
     }
 }
 
 impl step_result_t {
-    fn into_inner(self) -> InterpreterState<DynSpace> {
+    fn into_inner(self) -> InterpreterState {
         unsafe{ Box::from_raw(self.result).0 }
     }
-    fn borrow(&self) -> &InterpreterState<DynSpace> {
+    fn borrow(&self) -> &InterpreterState {
         &unsafe{ &*(&*self).result }.0
     }
 }

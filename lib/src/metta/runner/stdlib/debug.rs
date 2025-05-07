@@ -445,13 +445,13 @@ mod tests {
 
     #[test]
     fn assert_equal_op() {
-        let space = DynSpace::new(metta_space("
+        let space = metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
             (= (bar) (B C))
             (= (bar) (A B))
             (= (err) (A B))
-        "));
+        ");
 
         let assert_equal_op = AssertEqualOp::new(space, PragmaSettings::new());
 
@@ -468,10 +468,10 @@ mod tests {
 
     #[test]
     fn assert_equal_to_result_op() {
-        let space = DynSpace::new(metta_space("
+        let space = metta_space("
             (= (foo) (A B))
             (= (foo) (B C))
-        "));
+        ");
         let assert_equal_to_result_op = AssertEqualToResultOp::new(space, PragmaSettings::new());
 
         assert_eq!(assert_equal_to_result_op.execute(&mut vec![

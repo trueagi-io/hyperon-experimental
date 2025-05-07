@@ -5,6 +5,7 @@ use std::fs;
 use std::sync::Arc;
 
 use crate::{sym, ExpressionAtom, metta::GroundingSpace};
+use crate::space::DynSpace;
 
 #[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::pkg_mgmt::{ModuleCatalog, DirCatalog, LocalCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt, git_catalog::*};
@@ -398,11 +399,11 @@ fn interpret_environment_metta<P: AsRef<Path>>(env_metta_path: P, env: &mut Envi
     let file = fs::File::open(env_metta_path).map_err(|e| e.to_string())?;
     let buf_reader = BufReader::new(file);
 
-    let space = GroundingSpace::new();
+    let space = DynSpace::new(GroundingSpace::new());
     let tokenizer = crate::metta::runner::Tokenizer::new();
     let mut parser = crate::metta::runner::SExprParser::new(buf_reader);
     while let Some(atom) = parser.parse(&tokenizer)? {
-        let atoms = crate::metta::runner::interpret(&space, &atom)?;
+        let atoms = crate::metta::runner::interpret(space.clone(), &atom)?;
         let atom = if atoms.len() != 1 {
             return Err(format!("Error in environment.metta. Atom must evaluate into a single deterministic result.  Found {atoms:?}"));
         } else {

@@ -477,7 +477,7 @@ impl Metta {
         if self.type_check_is_enabled() && !validate_atom(&self.module_space(ModId::TOP), &atom) {
             Ok(vec![Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL])])
         } else {
-            interpret(self.space(), &atom)
+            interpret(self.space().clone(), &atom)
         }
     }
 
@@ -1132,7 +1132,7 @@ fn is_bare_minimal_interpreter(metta: &Metta) -> bool {
 struct InterpreterWrapper<'i> {
     mode: MettaRunnerMode,
     input_src: InputStream<'i>,
-    interpreter_state: Option<InterpreterState<DynSpace>>,
+    interpreter_state: Option<InterpreterState>,
     results: Vec<Vec<Atom>>,
 }
 

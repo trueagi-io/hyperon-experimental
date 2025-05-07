@@ -267,10 +267,10 @@ mod tests {
 
     #[test]
     fn remove_atom_op() {
-        let space = DynSpace::new(metta_space("
+        let space = metta_space("
             (foo bar)
             (bar foo)
-        "));
+        ");
         let satom = Atom::gnd(space.clone());
         let res = RemoveAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         // REM: can return Bool in future
@@ -281,10 +281,10 @@ mod tests {
 
     #[test]
     fn get_atoms_op() {
-        let space = DynSpace::new(metta_space("
+        let space = metta_space("
             (foo bar)
             (bar foo)
-        "));
+        ");
         let satom = Atom::gnd(space.clone());
         let res = GetAtomsOp{}.execute(&mut vec![satom]).expect("No result returned");
         let space_atoms = collect_atoms(space.borrow().as_space());
