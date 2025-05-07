@@ -3,7 +3,7 @@ use super::*;
 use std::fmt::Debug;
 
 pub struct ModuleSpace {
-    main: Box<dyn SpaceMut>,
+    main: DynSpace,
     deps: Vec<DynSpace>,
 }
 
@@ -20,8 +20,8 @@ impl Debug for ModuleSpace {
 }
 
 impl ModuleSpace {
-    pub fn new<T: SpaceMut + 'static>(space: T) -> Self {
-        Self { main: Box::new(space), deps: Vec::new() }
+    pub fn new(space: DynSpace) -> Self {
+        Self { main: space, deps: Vec::new() }
     }
 
     pub fn query(&self, query: &Atom) -> BindingsSet {
@@ -103,12 +103,12 @@ mod test {
 
     #[test]
     fn complex_query_two_subspaces() {
-        let mut a = GroundingSpace::new();
+        let mut a = DynSpace::new(GroundingSpace::new());
         a.add(expr!("a" "b"));
-        let mut b = GroundingSpace::new();
+        let mut b = DynSpace::new(GroundingSpace::new());
         b.add(expr!("b" "c"));
 
-        let mut main = ModuleSpace::new(GroundingSpace::new());
+        let mut main = ModuleSpace::new(DynSpace::new(GroundingSpace::new()));
         main.add_dep(DynSpace::new(ModuleSpace::new(a)));
         main.add_dep(DynSpace::new(ModuleSpace::new(b)));
 

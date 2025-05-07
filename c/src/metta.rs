@@ -630,7 +630,7 @@ pub extern "C" fn check_type(space: *const space_t, atom: *const atom_ref_t, typ
     let dyn_space = unsafe{ &*space }.borrow();
     let atom = unsafe{ &*atom }.borrow();
     let typ = unsafe{ &*typ }.borrow();
-    hyperon::metta::types::check_type(dyn_space.borrow().as_space(), atom, typ)
+    hyperon::metta::types::check_type(dyn_space, atom, typ)
 }
 
 /// @brief Checks whether `atom` is correctly typed
@@ -644,7 +644,7 @@ pub extern "C" fn check_type(space: *const space_t, atom: *const atom_ref_t, typ
 pub extern "C" fn validate_atom(space: *const space_t, atom: *const atom_ref_t) -> bool {
     let dyn_space = unsafe{ &*space }.borrow();
     let atom = unsafe{ &*atom }.borrow();
-    hyperon::metta::types::validate_atom(dyn_space.borrow().as_space(), atom)
+    hyperon::metta::types::validate_atom(dyn_space, atom)
 }
 
 /// @brief Provides all types for `atom` in the context of `space`
@@ -661,7 +661,7 @@ pub extern "C" fn get_atom_types(space: *const space_t, atom: *const atom_ref_t,
         callback: c_atom_vec_callback_t, context: *mut c_void) {
     let dyn_space = unsafe{ &*space }.borrow();
     let atom = unsafe{ (&*atom).borrow() };
-    let types = hyperon::metta::types::get_atom_types(dyn_space.borrow().as_space(), atom);
+    let types = hyperon::metta::types::get_atom_types(dyn_space, atom);
     return_atoms(&types, callback, context);
 }
 

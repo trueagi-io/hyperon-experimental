@@ -56,7 +56,7 @@ impl ModId {
 pub struct MettaMod {
     mod_path: String,
     resource_dir: Option<PathBuf>,
-    space: Rc<RefCell<ModuleSpace>>,
+    space: DynSpace,
     tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
     loader: Option<Box<dyn ModuleLoader>>,
@@ -75,7 +75,7 @@ impl MettaMod {
                 }
             }
         }
-        let space = Rc::new(RefCell::new(ModuleSpace::new(space)));
+        let space = DynSpace::new(ModuleSpace::new(space));
 
         let new_mod = Self {
             mod_path,
@@ -192,7 +192,7 @@ impl MettaMod {
         let (dep_space, transitive_deps) = mod_ptr.stripped_space();
 
         // Add a new Grounded Space atom to the &self space, so we can access the dependent module
-        self.insert_dep(mod_id, DynSpace::with_rc(dep_space.clone()))?;
+        self.insert_dep(mod_id, dep_space.clone())?;
 
         // Add all the transitive deps from the dependency
         if let Some(transitive_deps) = transitive_deps {
@@ -218,7 +218,10 @@ impl MettaMod {
     fn insert_dep(&self, mod_id: ModId, dep_space: DynSpace) -> Result<(), String> {
         let mut deps_table = self.imported_deps.lock().unwrap();
         if !deps_table.contains_key(&mod_id) {
-            self.space.borrow_mut().add_dep(dep_space.clone());
+            match self.space.borrow_mut().as_any_mut().unwrap().downcast_mut::<ModuleSpace>() {
+                Some(s) => s.add_dep(dep_space.clone()),
+                None => unreachable!(),
+            }
             deps_table.insert(mod_id, dep_space);
         }
         Ok(())
@@ -241,7 +244,7 @@ impl MettaMod {
 
     /// Private function that returns a deep copy of a module's space, with the module's dependency
     /// sub-spaces stripped out and returned separately
-    fn stripped_space(&self) -> (Rc<RefCell<ModuleSpace>>, Option<HashMap<ModId, DynSpace>>) {
+    fn stripped_space(&self) -> (DynSpace, Option<HashMap<ModId, DynSpace>>) {
         let deps_table = self.imported_deps.lock().unwrap();
         (self.space.clone(), Some(deps_table.clone()))
     }
@@ -263,7 +266,7 @@ impl MettaMod {
     }
 
     pub fn space(&self) -> DynSpace {
-        DynSpace::with_rc(self.space.clone())
+        self.space.clone()
     }
 
     pub fn tokenizer(&self) -> &Shared<Tokenizer> {
@@ -284,7 +287,7 @@ impl MettaMod {
 
     /// A convenience to add an an atom to a module's Space, if it passes type-checking
     pub(crate) fn add_atom(&self, atom: Atom, type_check: bool) -> Result<(), Atom> {
-        if type_check && !validate_atom(self.space.borrow().as_space(), &atom) {
+        if type_check && !validate_atom(&self.space, &atom) {
             return Err(Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]));
         }
         self.space.borrow_mut().add(atom);

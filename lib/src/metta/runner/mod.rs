@@ -1085,7 +1085,7 @@ impl<'input> RunContext<'_, 'input> {
                         },
                         MettaRunnerMode::INTERPRET => {
 
-                            if self.metta.type_check_is_enabled() && !validate_atom(self.module().space().borrow().as_space(), &atom) {
+                            if self.metta.type_check_is_enabled() && !validate_atom(&self.module().space(), &atom) {
                                 let type_err_exp = Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]);
                                 self.i_wrapper.interpreter_state = Some(InterpreterState::new_finished(self.module().space().clone(), vec![type_err_exp]));
                             } else {

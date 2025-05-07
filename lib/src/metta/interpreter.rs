@@ -584,7 +584,7 @@ fn is_variable_op_expr(expr: &ExpressionAtom) -> bool {
     }
 }
 
-fn query<'a, T: Space>(space: T, prev: Option<Rc<RefCell<Stack>>>, to_eval: Atom, bindings: Bindings, vars: Variables) -> Vec<InterpretedAtom> {
+fn query(space: &DynSpace, prev: Option<Rc<RefCell<Stack>>>, to_eval: Atom, bindings: Bindings, vars: Variables) -> Vec<InterpretedAtom> {
     #[cfg(not(feature = "variable_operation"))]
     if is_variable_op(&to_eval) {
         // TODO: This is a hotfix. Better way of doing this is adding
