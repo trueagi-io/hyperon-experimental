@@ -99,7 +99,7 @@ cargo install --force cbindgen
 
 * Install Conan and make default Conan profile:
 ```
-python3 -m pip install conan==2.13.0
+python3 -m pip install conan==2.16.1
 conan profile detect --force
 ```
 
