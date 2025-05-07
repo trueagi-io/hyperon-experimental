@@ -160,7 +160,7 @@ impl CustomExecute for GetAtomsOp {
         let space = args.get(0).ok_or_else(arg_error)?;
         let space = Atom::as_gnd::<DynSpace>(space).ok_or("get-atoms expects a space as its argument")?;
         let mut result = Vec::new();
-        space.borrow().as_space().visit(&mut |atom: std::borrow::Cow<Atom>| {
+        space.borrow().visit(&mut |atom: std::borrow::Cow<Atom>| {
             result.push(make_variables_unique(atom.into_owned()))
         }).map_or(Err(ExecError::Runtime("Unsupported Operation. Can't traverse atoms in this space".to_string())), |_| Ok(result))
     }
@@ -258,9 +258,9 @@ mod tests {
         assert_eq!(result[2], vec![Atom::expr([Atom::gnd(super::super::module::ModSpaceOp::new(runner.clone())), Atom::sym("stdlib")])]);
     }
 
-    fn collect_atoms(space: &dyn Space) -> Vec<Atom> {
+    fn collect_atoms(space: &DynSpace) -> Vec<Atom> {
         let mut atoms = Vec::new();
-        space.visit(&mut |atom: std::borrow::Cow<Atom>| atoms.push(atom.into_owned()))
+        space.borrow().visit(&mut |atom: std::borrow::Cow<Atom>| atoms.push(atom.into_owned()))
             .expect("Space::visit is not implemented");
         atoms
     }
@@ -275,7 +275,7 @@ mod tests {
         let res = RemoveAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         // REM: can return Bool in future
         assert_eq!(res, vec![UNIT_ATOM]);
-        let space_atoms = collect_atoms(space.borrow().as_space());
+        let space_atoms = collect_atoms(&space);
         assert_eq_no_order!(space_atoms, vec![expr!(("bar" "foo"))]);
     }
 
@@ -287,7 +287,7 @@ mod tests {
         ");
         let satom = Atom::gnd(space.clone());
         let res = GetAtomsOp{}.execute(&mut vec![satom]).expect("No result returned");
-        let space_atoms = collect_atoms(space.borrow().as_space());
+        let space_atoms = collect_atoms(&space);
         assert_eq_no_order!(res, space_atoms);
         assert_eq_no_order!(res, vec![expr!(("foo" "bar")), expr!(("bar" "foo"))]);
     }
@@ -297,7 +297,7 @@ mod tests {
         let res = NewSpaceOp{}.execute(&mut vec![]).expect("No result returned");
         let space = res.get(0).expect("Result is empty");
         let space = space.as_gnd::<DynSpace>().expect("Result is not space");
-        let space_atoms = collect_atoms(space.borrow().as_space());
+        let space_atoms = collect_atoms(&space);
         assert_eq_no_order!(space_atoms, Vec::<Atom>::new());
     }
 
@@ -307,7 +307,7 @@ mod tests {
         let satom = Atom::gnd(space.clone());
         let res = AddAtomOp{}.execute(&mut vec![satom, expr!(("foo" "bar"))]).expect("No result returned");
         assert_eq!(res, vec![UNIT_ATOM]);
-        let space_atoms = collect_atoms(space.borrow().as_space());
+        let space_atoms = collect_atoms(&space);
         assert_eq_no_order!(space_atoms, vec![expr!(("foo" "bar"))]);
     }
 

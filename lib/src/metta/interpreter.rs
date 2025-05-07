@@ -594,7 +594,7 @@ fn query(space: &DynSpace, prev: Option<Rc<RefCell<Stack>>>, to_eval: Atom, bind
     }
     let var_x = &VariableAtom::new("X").make_unique();
     let query = Atom::expr([EQUAL_SYMBOL, to_eval.clone(), Atom::Variable(var_x.clone())]);
-    let results = space.query(&query);
+    let results = space.borrow().query(&query);
     log::debug!("interpreter::query: query: {}", query);
     log::debug!("interpreter::query: results.len(): {}, bindings.len(): {}, results: {} bindings: {}",
         results.len(), bindings.len(), results, bindings);

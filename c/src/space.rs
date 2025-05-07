@@ -239,7 +239,7 @@ pub extern "C" fn space_atom_count(space: *const space_t) -> isize {
 pub extern "C" fn space_iterate(space: *const space_t,
         callback: c_atom_callback_t, context: *mut c_void) -> bool {
     let dyn_space = unsafe{ &*space }.borrow();
-    match dyn_space.visit(&mut |atom: Cow<Atom>| callback(atom.as_ref().into(), context)) {
+    match dyn_space.borrow().visit(&mut |atom: Cow<Atom>| callback(atom.as_ref().into(), context)) {
         Ok(()) => true,
         Err(()) => false,
     }
@@ -799,9 +799,6 @@ impl SpaceMut for CSpace {
         let api = unsafe{ &*self.api };
         let from: atom_ref_t = from.into();
         (api.replace)(&self.params, &from, to.into())
-    }
-    fn as_space<'a>(&self) -> &(dyn Space + 'a) {
-        self
     }
 }
 

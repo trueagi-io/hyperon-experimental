@@ -10,7 +10,7 @@ pub(crate) fn metta_space(text: &str) -> DynSpace {
     while let Some(atom) = parser.parse(&Tokenizer::new()).unwrap() {
         space.add(atom);
     }
-    DynSpace::new(space)
+    space.into()
 }
 
 pub(crate) fn metta_atom(atom_str: &str) -> Atom {

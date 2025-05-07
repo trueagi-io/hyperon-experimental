@@ -211,9 +211,6 @@ impl SpaceMut for GroundingSpace {
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
         GroundingSpace::replace(self, from, to)
     }
-    fn as_space<'a>(&self) -> &(dyn Space + 'a) {
-        self
-    }
 }
 
 impl PartialEq for GroundingSpace {

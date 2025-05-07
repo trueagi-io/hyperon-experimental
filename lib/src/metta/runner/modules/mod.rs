@@ -665,8 +665,8 @@ mod test {
 
     impl ModuleLoader for OuterLoader {
         fn load(&self, context: &mut RunContext) -> Result<(), String> {
-            let space = DynSpace::new(GroundingSpace::new());
-            context.init_self_module(space, None);
+            let space = GroundingSpace::new();
+            context.init_self_module(space.into(), None);
 
             let parser = SExprParser::new("outer-module-test-atom");
             context.push_parser(Box::new(parser));
@@ -680,8 +680,8 @@ mod test {
 
     impl ModuleLoader for InnerLoader {
         fn load(&self, context: &mut RunContext) -> Result<(), String> {
-            let space = DynSpace::new(GroundingSpace::new());
-            context.init_self_module(space, None);
+            let space = GroundingSpace::new();
+            context.init_self_module(space.into(), None);
 
             let parser = SExprParser::new("inner-module-test-atom");
             context.push_parser(Box::new(parser));
@@ -726,8 +726,8 @@ mod test {
 
     impl ModuleLoader for RelativeOuterLoader {
         fn load(&self, context: &mut RunContext) -> Result<(), String> {
-            let space = DynSpace::new(GroundingSpace::new());
-            context.init_self_module(space, None);
+            let space = GroundingSpace::new();
+            context.init_self_module(space.into(), None);
 
             let _inner_mod_id = context.load_module_direct(Box::new(InnerLoader), "self:inner").unwrap();
 

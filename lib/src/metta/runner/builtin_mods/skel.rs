@@ -1,7 +1,7 @@
 use crate::metta::*;
 use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
-use crate::metta::runner::{ModuleLoader, RunContext, DynSpace, Metta, MettaMod};
+use crate::metta::runner::{ModuleLoader, RunContext, Metta, MettaMod};
 use crate::atom::gnd::*;
 
 pub static SKEL_METTA: &'static str = include_str!("skel.metta");
@@ -12,8 +12,8 @@ pub(crate) struct SkelModLoader;
 impl ModuleLoader for SkelModLoader {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
         // Initialize module's space
-        let space = DynSpace::new(GroundingSpace::new());
-        context.init_self_module(space, None);
+        let space = GroundingSpace::new();
+        context.init_self_module(space.into(), None);
 
         // Load module's tokens
         let _ = self.load_tokens(context.module(), context.metta.clone())?;

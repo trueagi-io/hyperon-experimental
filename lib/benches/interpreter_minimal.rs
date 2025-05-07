@@ -20,7 +20,7 @@ fn chain_atom(size: isize) -> Atom {
 }
 
 fn new_space() -> DynSpace {
-    DynSpace::new(GroundingSpace::new())
+    GroundingSpace::new().into()
 }
 
 

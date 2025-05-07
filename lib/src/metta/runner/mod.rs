@@ -244,7 +244,7 @@ impl Metta {
     pub fn new_core(space: Option<DynSpace>, env_builder: Option<EnvBuilder>) -> Self {
         let space = match space {
             Some(space) => space,
-            None => DynSpace::new(GroundingSpace::new())
+            None => GroundingSpace::new().into(),
         };
         let settings = PragmaSettings::new();
         let environment = match env_builder {

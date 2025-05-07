@@ -607,7 +607,7 @@ mod tests {
         while let Some(atom) = parser.parse(&*metta.tokenizer().borrow()).unwrap() {
             space.add(atom);
         }
-        DynSpace::new(space)
+        space.into()
     }
 
     fn atom(atom_str: &str) -> Atom {
@@ -633,14 +633,15 @@ mod tests {
         space.add(expr!(":" "like" "Verb"));
         space.add(expr!(":" "a" "Det"));
         space.add(expr!(":" "pizza" "Noun"));
-        DynSpace::new(space)
+        space.into()
     }
 
     #[test]
     fn test_check_type() {
-        let space = DynSpace::new(GroundingSpace::new());
-        space.borrow_mut().add(expr!(":" "do" "Verb"));
-        space.borrow_mut().add(expr!(":" "do" "Aux"));
+        let mut space = GroundingSpace::new();
+        space.add(expr!(":" "do" "Verb"));
+        space.add(expr!(":" "do" "Aux"));
+        let space = space.into();
 
         let aux = sym!("Aux");
         let verb = sym!("Verb");
@@ -659,12 +660,13 @@ mod tests {
 
     #[test]
     fn test_check_expr_type() {
-        let space = DynSpace::new(GroundingSpace::new());
-        space.borrow_mut().add(expr!(":" "i" "Pron"));
-        space.borrow_mut().add(expr!(":" "like" "Verb"));
-        space.borrow_mut().add(expr!(":" "music" "Noun"));
-        space.borrow_mut().add(expr!(":" ("do" "you" "like" "music") "Quest"));
-        space.borrow_mut().add(expr!(":<" ("Pron" "Verb" "Noun") "Statement"));
+        let mut space = GroundingSpace::new();
+        space.add(expr!(":" "i" "Pron"));
+        space.add(expr!(":" "like" "Verb"));
+        space.add(expr!(":" "music" "Noun"));
+        space.add(expr!(":" ("do" "you" "like" "music") "Quest"));
+        space.add(expr!(":<" ("Pron" "Verb" "Noun") "Statement"));
+        let space = space.into();
 
         let i_like_music = expr!("i" "like" "music");
         assert!(check_type(&space, &i_like_music, &ATOM_TYPE_UNDEFINED));
@@ -916,7 +918,7 @@ mod tests {
     fn get_atom_types_variables_are_substituted_for_grounded_atom_type() {
         let actual_type = Atom::var("t");
         let gnd = GroundedAtomWithParameterizedType(actual_type.clone());
-        let resolved_type = get_atom_types(&DynSpace::new(GroundingSpace::new()), &Atom::gnd(gnd));
+        let resolved_type = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd));
         assert_eq!(resolved_type.len(), 1);
         assert_ne!(resolved_type[0], actual_type);
         assert!(atoms_are_equivalent(&resolved_type[0], &actual_type));
@@ -927,8 +929,8 @@ mod tests {
         let actual_type = Atom::expr([ARROW_SYMBOL, Atom::var("t"), Atom::var("t")]);
         let gnd_1 = GroundedAtomWithParameterizedType(actual_type.clone());
         let gnd_2 = GroundedAtomWithParameterizedType(actual_type.clone());
-        let resolved_type_1 = get_atom_types(&DynSpace::new(GroundingSpace::new()), &Atom::gnd(gnd_1));
-        let resolved_type_2 = get_atom_types(&DynSpace::new(GroundingSpace::new()), &Atom::gnd(gnd_2));
+        let resolved_type_1 = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd_1));
+        let resolved_type_2 = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd_2));
 
         //Types of gnd_1 and gnd_2 are different in the space
         assert_ne!(resolved_type_1, resolved_type_2);

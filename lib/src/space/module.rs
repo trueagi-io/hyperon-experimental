@@ -30,7 +30,7 @@ impl ModuleSpace {
  
     fn single_query(&self, query: &Atom) -> BindingsSet {
         log::debug!("ModuleSpace::query: {} {}", self, query);
-        let mut results = self.main.query(query);
+        let mut results = self.main.borrow().query(query);
         for dep in &self.deps {
             if let Some(space) = dep.borrow().as_any() {
                 if let Some(space) = space.downcast_ref::<Self>()  {
@@ -47,7 +47,7 @@ impl ModuleSpace {
 
     fn query_no_deps(&self, query: &Atom) -> BindingsSet {
         log::debug!("ModuleSpace::query_no_deps: {} {}", self, query);
-        self.main.query(query)
+        self.main.borrow().query(query)
     }
 
     pub fn add_dep(&mut self, space: DynSpace) {
@@ -67,10 +67,10 @@ impl Space for ModuleSpace {
         ModuleSpace::query(self, query)
     }
     fn atom_count(&self) -> Option<usize> {
-        self.main.atom_count()
+        self.main.borrow().atom_count()
     }
     fn visit(&self, v: &mut dyn SpaceVisitor) -> Result<(), ()> {
-        self.main.visit(v)
+        self.main.borrow().visit(v)
     }
     fn as_any(&self) -> Option<&dyn std::any::Any> {
         Some(self)
@@ -82,16 +82,13 @@ impl Space for ModuleSpace {
 
 impl SpaceMut for ModuleSpace {
     fn add(&mut self, atom: Atom) {
-        self.main.add(atom)
+        self.main.borrow_mut().add(atom)
     }
     fn remove(&mut self, atom: &Atom) -> bool {
-        self.main.remove(atom)
+        self.main.borrow_mut().remove(atom)
     }
     fn replace(&mut self, from: &Atom, to: Atom) -> bool {
-        self.main.replace(from, to)
-    }
-    fn as_space<'a>(&self) -> &(dyn Space + 'a) {
-        self
+        self.main.borrow_mut().replace(from, to)
     }
 }
 
@@ -103,14 +100,14 @@ mod test {
 
     #[test]
     fn complex_query_two_subspaces() {
-        let mut a = DynSpace::new(GroundingSpace::new());
+        let mut a = GroundingSpace::new();
         a.add(expr!("a" "b"));
-        let mut b = DynSpace::new(GroundingSpace::new());
+        let mut b = GroundingSpace::new();
         b.add(expr!("b" "c"));
 
-        let mut main = ModuleSpace::new(DynSpace::new(GroundingSpace::new()));
-        main.add_dep(DynSpace::new(ModuleSpace::new(a)));
-        main.add_dep(DynSpace::new(ModuleSpace::new(b)));
+        let mut main = ModuleSpace::new(GroundingSpace::new().into());
+        main.add_dep(ModuleSpace::new(a.into()).into());
+        main.add_dep(ModuleSpace::new(b.into()).into());
 
         assert_eq_no_order!(main.query(&expr!("," (a "b") ("b" c))), vec![bind!{ a: sym!("a"), c: sym!("c") }]);
         assert_eq_no_order!(main.query(&expr!("," ("a" b) (b "c"))), vec![bind!{ b: sym!("b") }]);

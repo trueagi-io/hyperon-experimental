@@ -16,7 +16,7 @@ fn metta_space(text: &str) -> DynSpace {
     while let Some(atom) = parser.parse(&tokenizer).unwrap() {
         space.add(atom);
     }
-    DynSpace::new(space)
+    space.into()
 }
 
 fn atom_with_depth(depth: usize) -> Atom {
