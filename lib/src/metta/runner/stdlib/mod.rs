@@ -10,7 +10,6 @@ pub mod debug;
 pub mod space;
 pub mod core;
 pub mod arithmetics;
-pub mod fileio;
 
 use crate::*;
 use crate::space::*;
@@ -105,7 +104,6 @@ fn register_context_independent_tokens(tref: &mut Tokenizer) {
     arithmetics::register_context_independent_tokens(tref);
     string::register_context_independent_tokens(tref);
     space::register_context_independent_tokens(tref);
-    fileio::register_context_independent_tokens(tref);
 }
 
 
