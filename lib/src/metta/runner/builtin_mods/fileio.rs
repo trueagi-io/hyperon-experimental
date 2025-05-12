@@ -35,9 +35,11 @@ impl FileHandle {
         if options.contains("a") { opened_file = opened_file.append(true); }
         else {opened_file = opened_file.truncate(true).append(false);}
 
-        let opened_file = opened_file.open(path).expect("Open file failed");
-
-        Ok(Self(Rc::new(RefCell::new(opened_file))))
+        match opened_file.open(path)
+        {
+            Ok(file) => Ok(Self(Rc::new(RefCell::new(file)))),
+            Err(_) => Err(ExecError::from("Failed to open file with provided arguments"))
+        }
     }
 
     fn read_as_str(&self) -> String
@@ -52,14 +54,6 @@ impl FileHandle {
     {
         let _ = self.0.borrow_mut().write(&content.as_bytes());
         ()
-    }
-
-    fn read_bytes(&self) -> Vec<u8>
-    {
-        let _ = self.0.borrow_mut().seek(SeekFrom::Start(0)).unwrap();
-        let mut buffer: Vec<u8> = Vec::new();
-        self.0.borrow_mut().read_to_end(&mut buffer).unwrap();
-        buffer
     }
 }
 
@@ -130,9 +124,9 @@ fn file_open(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
 }
 
 fn file_read(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-    let arg_error = || ExecError::from("file-read expects filehandle (from file-open) as an argument");
+    let arg_error = || ExecError::from("file-read expects filehandle as an argument");
     let filehandle = args.get(0).ok_or_else(arg_error)?.into();
-    let filehandle = Atom::as_gnd::<FileHandle>(filehandle).ok_or("file-read expects filehandle (from file-open) as an argument")?;
+    let filehandle = Atom::as_gnd::<FileHandle>(filehandle).ok_or("file-read expects filehandle as an argument")?;
 
     let message = filehandle.read_as_str();
     Ok(vec![Atom::gnd(Str::from_string(message))])
