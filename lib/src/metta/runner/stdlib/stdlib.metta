@@ -83,6 +83,12 @@
   (@return "Deconsed expression"))
 (: decons-atom (-> Expression Atom))
 
+(@doc context-space
+  (@desc "Returns the space which is used as a context space in atom evaluation")
+  (@params ())
+  (@return "Context space"))
+(: context-space (-> SpaceType))
+
 (@doc min-atom
   (@desc "Returns atom with min value in the expression (first argument). Only numbers allowed")
   (@params (
