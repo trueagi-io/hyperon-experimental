@@ -9,6 +9,9 @@
 (@doc ErrorType (@desc "Type of the atom which contains error"))
 (: ErrorType Type)
 
+(@doc SpaceType (@desc "Type of the atom which contains space"))
+(: SpaceType Type)
+
 (@doc Error
   (@desc "Error constructor")
   (@params (
@@ -224,7 +227,7 @@
     (@param "Type of input atom")
     (@param "Atomspace where intepretation should take place")))
   (@return "Result of interpretation"))
-(: metta (-> Atom Type Grounded Atom))
+(: metta (-> Atom Type SpaceType Atom))
 
 (@doc id
   (@desc "Returns its argument")

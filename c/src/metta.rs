@@ -1,13 +1,11 @@
 #![allow(non_camel_case_types)]
 
 use hyperon::common::shared::Shared;
-use hyperon::space::DynSpace;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;
 use hyperon::metta::runner::{Metta, RunContext, RunnerState, Environment, EnvBuilder};
 use hyperon::metta::runner::modules::{ModuleLoader, ModId};
-use hyperon::atom::*;
 
 use crate::util::*;
 use crate::atom::*;
@@ -564,7 +562,7 @@ pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, 
 /// @return  The `atom_t` representing the Symbol atom
 /// @note The returned `atom_t` must be freed with `atom_free()`
 ///
-#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> atom_t { rust_type_atom::<DynSpace>().into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> atom_t { hyperon::metta::ATOM_TYPE_SPACE.into() }
 
 /// @brief Creates an atom used to indicate that an atom's type is a unit type.
 /// @ingroup metta_language_group
