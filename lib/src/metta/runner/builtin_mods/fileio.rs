@@ -154,37 +154,3 @@ mod tests {
         std::fs::remove_file("test.txt").expect("File not removed");
     }
 }
-
-// #[cfg(test)]
-// mod tests {
-//     use std::fs;
-//     use std::env;
-//     use crate::metta::runner::stdlib::tests::run_program;
-//     use crate::metta::UNIT_ATOM;
-//
-//     #[test]
-//     fn metta_file_read() {
-//         assert_eq!(run_program("!(assertEqual (file-read \"non-existent.file\") (Error (file-read \"non-existent.file\") FailedToReadPath))"),
-//                    Ok(vec![vec![UNIT_ATOM]]));
-//         let curdir = env::current_dir().unwrap();
-//         env::set_current_dir(env::temp_dir()).unwrap();
-//         fs::write("temp.txt", "check read").expect("Can't write to temp folder");
-//         assert_eq!(run_program("!(assertEqual (file-read \"temp.txt\") \"check read\")"),
-//                    Ok(vec![vec![UNIT_ATOM]]));
-//         fs::remove_file("temp.txt").expect("Can't remove temp file");
-//         env::set_current_dir(curdir).unwrap();
-//     }
-//
-//     #[test]
-//     fn metta_file_write() {
-//         assert_eq!(run_program("!(assertEqual (file-write \"non/existent/folder/tmp.txt\" \"content\") (Error (file-write \"non/existent/folder/tmp.txt\" \"content\") FailedToWritePath))"),
-//                    Ok(vec![vec![UNIT_ATOM]]));
-//         let curdir = env::current_dir().unwrap();
-//         env::set_current_dir(env::temp_dir()).unwrap();
-//         let _ = run_program("!(file-write \"temp.txt\" \"check read\")");
-//         let tmp_read = fs::read_to_string("temp.txt").unwrap();
-//         assert_eq!(tmp_read.as_str(), "check read");
-//         fs::remove_file("temp.txt").expect("Can't remove temp file");
-//         env::set_current_dir(curdir).unwrap();
-//     }
-// }
