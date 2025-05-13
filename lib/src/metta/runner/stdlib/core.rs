@@ -6,6 +6,8 @@ use crate::common::CachingMapper;
 use crate::metta::runner::Metta;
 use crate::metta::runner::PragmaSettings;
 use crate::metta::runner::bool::*;
+use crate::atom::gnd::GroundedFunctionAtom;
+use crate::matcher::{Bindings, apply_bindings_to_atom_move};
 
 use std::convert::TryInto;
 
@@ -240,43 +242,6 @@ impl CustomExecute for SuperposeOp {
 }
 
 #[derive(Clone, Debug)]
-pub struct CollapseOp {
-    space: DynSpace,
-    settings: PragmaSettings,
-}
-
-grounded_op!(CollapseOp, "collapse");
-
-impl CollapseOp {
-    pub fn new(space: DynSpace, settings: PragmaSettings) -> Self {
-        Self{ space, settings }
-    }
-}
-
-impl Grounded for CollapseOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for CollapseOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        let arg_error = || ExecError::from("collapse expects single executable atom as an argument");
-        let atom = args.get(0).ok_or_else(arg_error)?;
-
-        // TODO: Calling interpreter inside the operation is not too good
-        // Could it be done via returning atom for the further interpretation?
-        let result = interpret_no_error(self.space.clone(), atom, self.settings.clone())?;
-
-        Ok(vec![Atom::expr(result)])
-    }
-}
-
-#[derive(Clone, Debug)]
 pub struct CaptureOp {
     space: DynSpace,
     settings: PragmaSettings, 
@@ -367,6 +332,20 @@ impl CustomExecute for CaseOp {
     }
 }
 
+fn collapse_add_next_atom_from_collapse_bind_result(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+    let arg0_error = || ExecError::from("Expression is expected as a first argument");
+    let list = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg0_error)?).map_err(|_| arg0_error())?;
+    let arg1_error = || ExecError::from("(Atom Bindings) pair is expected as a second argument");
+    let atom_bindings = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg1_error)?).map_err(|_| arg1_error())?;
+    let atom = atom_bindings.children().get(0).ok_or_else(arg1_error)?;
+    let bindings = atom_bindings.children().get(1).and_then(|a| a.as_gnd::<Bindings>()).ok_or_else(arg1_error)?;
+
+    let atom = apply_bindings_to_atom_move(atom.clone(), bindings);
+    let mut list = list.clone().into_children();
+    list.push(atom);
+    Ok(vec![Atom::expr(list)])
+}
+
 pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let is_equivalent = Atom::gnd(IfEqualOp{});
     tref.register_token(regex(r"if-equal"), move |_| { is_equivalent.clone() });
@@ -378,13 +357,16 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r"sealed"), move |_| { sealed_op.clone() });
     let eq_op = Atom::gnd(EqualOp{});
     tref.register_token(regex(r"=="), move |_| { eq_op.clone() });
+    tref.register_function(GroundedFunctionAtom::new(
+            r"_collapse-add-next-atom-from-collapse-bind-result".into(),
+            expr!("->" "Expression" "Expression" "Atom"),
+            collapse_add_next_atom_from_collapse_bind_result, 
+            ));
 }
 
 pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Metta) {
     let superpose_op = Atom::gnd(SuperposeOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"superpose"), move |_| { superpose_op.clone() });
-    let collapse_op = Atom::gnd(CollapseOp::new(space.clone(), metta.settings().clone()));
-    tref.register_token(regex(r"collapse"), move |_| { collapse_op.clone() });
     let case_op = Atom::gnd(CaseOp::new(space.clone(), metta.settings().clone()));
     tref.register_token(regex(r"case"), move |_| { case_op.clone() });
     let capture_op = Atom::gnd(CaptureOp::new(space.clone(), metta.settings().clone()));

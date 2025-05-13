@@ -460,9 +460,10 @@
   (function (eval (if-decons-expr $list $head $tail
     (chain (eval (atom-subst $init $a $op)) $op-init
       (chain (eval (atom-subst $head $b $op-init)) $op-head
-        (chain $op-head $head-folded
-          (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) )))
-    (return $init) ))))
+        (chain (context-space) $space
+          (chain (metta $op-head %Undefined% $space) $head-folded
+            (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) ))))
+      (return $init) ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Standard library written in MeTTa ;
@@ -649,7 +650,7 @@
   (@return "Unit atom"))
 (: add-reducts (-> Grounded %Undefined% (->)))
 (= (add-reducts $space $tuple)
-    (foldl-atom $tuple () $a $b (eval (add-atom $space $b))))
+    (foldl-atom $tuple () $a $b (add-atom $space $b)))
 
 (@doc add-atoms
   (@desc "Function takes space and expression and adds atoms in Expression into given space without reducing them")
@@ -659,7 +660,7 @@
   (@return "Unit atom"))
 (: add-atoms (-> Grounded Expression (->)))
 (= (add-atoms $space $tuple)
-    (foldl-atom $tuple () $a $b (eval (add-atom $space $b))))
+    (foldl-atom $tuple () $a $b (add-atom $space $b)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
@@ -1045,6 +1046,20 @@
   (@params (
     (@param "Atom which will be evaluated")))
   (@return "Tuple"))
+(: collapse (-> Atom Atom))
+(= (collapse $atom)
+  (function
+    (chain (context-space) $space
+      (chain (collapse-bind (metta $atom %Undefined% $space)) $eval
+        (chain (eval (foldl-atom $eval () $res $item (_collapse-add-next-atom-from-collapse-bind-result $res $item))) $result
+          (return $result) )))))
+
+(@doc _collapse-add-next-atom-from-collapse-bind-result
+  (@desc "Adds atom from collapse-bind result to the passed list")
+  (@params (
+    (@param "List to add an atom into")
+    (@param "collapse-bind result to extract atom from, should be a pair of atom and bindings")))
+  (@return "List with new atom as a head"))
 
 (@doc case
   (@desc "Subsequently tests multiple pattern-matching conditions (second argument) for the given value (first argument)")
