@@ -14,7 +14,7 @@ use crate::metta::runner::{ModuleLoader, RunContext, DynSpace, Metta, MettaMod};
 use crate::atom::gnd::*;
 
 pub static FILEIO_METTA: &'static str = include_str!("fileio.metta");
-pub const ATOM_TYPE_FILE_HANDLER : Atom = sym!("FileHandle");
+pub const ATOM_TYPE_FILE_HANDLE: Atom = sym!("FileHandle");
 
 #[derive(Clone, Debug)]
 pub struct FileHandle(Rc<RefCell<fs::File>>);
@@ -22,23 +22,13 @@ pub struct FileHandle(Rc<RefCell<fs::File>>);
 impl FileHandle {
     fn open(path: &str, options: &str) -> Result<Self, ExecError> {
 
-        let mut opened_file= &mut OpenOptions::new();
-        if options.contains("r") { opened_file = opened_file.read(true); }
-        else {opened_file = opened_file.read(false);}
-
-        if options.contains("w") { opened_file = opened_file.write(true); }
-        else {opened_file = opened_file.write(false);}
-
-        if options.contains("c") { opened_file = opened_file.create(true); }
-        else {opened_file = opened_file.create(false);}
-
-        if options.contains("a") { opened_file = opened_file.append(true); }
-        else {opened_file = opened_file.truncate(true).append(false);}
+        let mut opened_file = OpenOptions::new();
+        let opened_file= opened_file.read(options.contains("r")).write(options.contains("w")).create(options.contains("c")).append(options.contains("a")).truncate(!options.contains("a"));
 
         match opened_file.open(path)
         {
             Ok(file) => Ok(Self(Rc::new(RefCell::new(file)))),
-            Err(_) => Err(ExecError::from("Failed to open file with provided arguments"))
+            Err(_) => Err(ExecError::from(format!("Failed to open file with provided path={} and options={}", path, options)))
         }
     }
 
@@ -59,7 +49,7 @@ impl FileHandle {
 
 impl Grounded for FileHandle {
     fn type_(&self) -> Atom {
-        ATOM_TYPE_FILE_HANDLER
+        ATOM_TYPE_FILE_HANDLE
     }
 }
 
@@ -97,17 +87,17 @@ impl ModuleLoader for FileioModLoader {
 
         tref.register_function(GroundedFunctionAtom::new(
             r"file-open".into(),
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_STRING, ATOM_TYPE_STRING, ATOM_TYPE_FILE_HANDLER]),
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_STRING, ATOM_TYPE_STRING, ATOM_TYPE_FILE_HANDLE]),
             file_open));
 
         tref.register_function(GroundedFunctionAtom::new(
             r"file-read".into(),
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLER, ATOM_TYPE_STRING]),
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLE, ATOM_TYPE_STRING]),
             file_read));
 
         tref.register_function(GroundedFunctionAtom::new(
             r"file-write".into(),
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLER, ATOM_TYPE_STRING, UNIT_ATOM]),
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLE, ATOM_TYPE_STRING, UNIT_ATOM]),
             file_write));
 
         Ok(())
@@ -142,18 +132,28 @@ fn file_write(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
     unit_result()
 }
 
-// pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
-//     let file_create_op = Atom::gnd(FileCreateOp {});
-//     tref.register_token(regex(r"file-create"), move |_| { file_create_op.clone() });
-//     let file_open_op = Atom::gnd(FileOpenOp {});
-//     tref.register_token(regex(r"file-open"), move |_| { file_open_op.clone() });
-//     let file_read_op = Atom::gnd(FileReadOp {});
-//     tref.register_token(regex(r"file-read"), move |_| { file_read_op.clone() });
-//     let file_read_oo_op = Atom::gnd(FileReadOOOp {});
-//     tref.register_token(regex(r"file-readOO"), move |_| { file_read_oo_op.clone() });
-//     let file_write_op = Atom::gnd(FileWriteOp {});
-//     tref.register_token(regex(r"file-write"), move |_| { file_write_op.clone() });
-// }
+#[cfg(test)]
+mod tests {
+    use crate::metta::*;
+    use crate::metta::runner::run_program;
+
+    #[test]
+    fn test_filehandle() {
+        let program = "
+            !(import! &self fileio)
+            !(bind! &fhandle (file-open \"test.txt\" \"rwc\"))
+            !(file-write &fhandle \"check write/read\")
+            !(assertEqual (file-read &fhandle) \"check write/read\")
+        ";
+        assert_eq!(run_program(program), Ok(vec![
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM]
+        ]));
+        std::fs::remove_file("test.txt").expect("File not removed");
+    }
+}
 
 // #[cfg(test)]
 // mod tests {
