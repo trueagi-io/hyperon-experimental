@@ -24,7 +24,6 @@ serde = { version="1.0.198", features = ["derive"], optional=true }
 serde_json = { version="1.0.116", optional=true }
 semver = { version="1.0", features = ["serde"], optional=true }
 git2 = { version="0.18.3", features=["vendored-libgit2"], optional=true }
-tempfile = "3.20.0"
 
 [dev-dependencies]
 ra_ap_profile = "0.0.261"

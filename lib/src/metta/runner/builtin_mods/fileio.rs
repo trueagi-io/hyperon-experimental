@@ -43,7 +43,7 @@ impl FileHandle {
         let mut contents = String::new();
         match self.0.borrow_mut().read_to_string(&mut contents) {
             Ok(_) => Ok(contents),
-            Err(_) => Err(ExecError::from("Failed to read file contents"))
+            Err(message) => Err(ExecError::from(format!("Failed to read file contents: {}", message)))
         }
     }
 
@@ -51,7 +51,7 @@ impl FileHandle {
     {
         match self.0.borrow_mut().write(&content.as_bytes()) {
             Ok(_) => Ok(()),
-            Err(_) => Err(ExecError::from("Failed to read file contents"))
+            Err(message) => Err(ExecError::from(format!("Failed to write content to file: {}", message)))
         }
     }
 }
@@ -145,20 +145,31 @@ fn file_write(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
 mod tests {
     use crate::metta::*;
     use crate::metta::runner::run_program;
-    use tempfile::NamedTempFile;
+    use rand::{distr::Alphanumeric, Rng};
 
     #[test]
     fn test_filehandle() {
 
-        let file = NamedTempFile::new().unwrap();
+        let filename: String = rand::rng()
+            .sample_iter(&Alphanumeric)
+            .take(7)
+            .map(char::from)
+            .collect();
+
+        let filename = format!("{}/{}.txt", std::env::temp_dir().to_str().unwrap(), filename);
 
         let program = format!("
             !(import! &self fileio)
             !(bind! &fhandle (file-open! \"{}\" \"rwc\"))
             !(file-write! &fhandle \"check write/read\")
             !(assertEqual (file-read! &fhandle) \"check write/read\")
-        ", file.path().to_str().unwrap());
-        assert_eq!(run_program(program.as_str()), Ok(vec![
+        ", filename);
+
+        let res = run_program(program.as_str());
+
+        std::fs::remove_file(filename).expect("File not removed");
+
+        assert_eq!(res, Ok(vec![
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
