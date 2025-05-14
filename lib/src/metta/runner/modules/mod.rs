@@ -56,7 +56,7 @@ impl ModId {
 pub struct MettaMod {
     mod_path: String,
     resource_dir: Option<PathBuf>,
-    space: Rc<RefCell<ModuleSpace>>,
+    space: DynSpace,
     tokenizer: Shared<Tokenizer>,
     imported_deps: Mutex<HashMap<ModId, DynSpace>>,
     loader: Option<Box<dyn ModuleLoader>>,
@@ -68,14 +68,12 @@ impl MettaMod {
     pub(crate) fn new_with_tokenizer(metta: &Metta, mod_path: String, space: DynSpace, tokenizer: Shared<Tokenizer>, resource_dir: Option<PathBuf>, no_stdlib: bool) -> Self {
 
         //Give the space a name based on the module, if it doesn't already have one
-        if let Some(any_space) = space.borrow_mut().as_any_mut() {
-            if let Some(g_space) = any_space.downcast_mut::<GroundingSpace>() {
-                if g_space.name().is_none() {
-                    g_space.set_name(mod_path.clone());
-                }
+        if let Some(g_space) = space.borrow_mut().as_any_mut().downcast_mut::<GroundingSpace>() {
+            if g_space.name().is_none() {
+                g_space.set_name(mod_path.clone());
             }
         }
-        let space = Rc::new(RefCell::new(ModuleSpace::new(space)));
+        let space = DynSpace::new(ModuleSpace::new(space));
 
         let new_mod = Self {
             mod_path,
@@ -192,7 +190,7 @@ impl MettaMod {
         let (dep_space, transitive_deps) = mod_ptr.stripped_space();
 
         // Add a new Grounded Space atom to the &self space, so we can access the dependent module
-        self.insert_dep(mod_id, DynSpace::with_rc(dep_space.clone()))?;
+        self.insert_dep(mod_id, dep_space.clone())?;
 
         // Add all the transitive deps from the dependency
         if let Some(transitive_deps) = transitive_deps {
@@ -218,7 +216,10 @@ impl MettaMod {
     fn insert_dep(&self, mod_id: ModId, dep_space: DynSpace) -> Result<(), String> {
         let mut deps_table = self.imported_deps.lock().unwrap();
         if !deps_table.contains_key(&mod_id) {
-            self.space.borrow_mut().add_dep(dep_space.clone());
+            match self.space.borrow_mut().as_any_mut().downcast_mut::<ModuleSpace>() {
+                Some(s) => s.add_dep(dep_space.clone()),
+                None => unreachable!(),
+            }
             deps_table.insert(mod_id, dep_space);
         }
         Ok(())
@@ -241,7 +242,7 @@ impl MettaMod {
 
     /// Private function that returns a deep copy of a module's space, with the module's dependency
     /// sub-spaces stripped out and returned separately
-    fn stripped_space(&self) -> (Rc<RefCell<ModuleSpace>>, Option<HashMap<ModId, DynSpace>>) {
+    fn stripped_space(&self) -> (DynSpace, Option<HashMap<ModId, DynSpace>>) {
         let deps_table = self.imported_deps.lock().unwrap();
         (self.space.clone(), Some(deps_table.clone()))
     }
@@ -263,7 +264,7 @@ impl MettaMod {
     }
 
     pub fn space(&self) -> DynSpace {
-        DynSpace::with_rc(self.space.clone())
+        self.space.clone()
     }
 
     pub fn tokenizer(&self) -> &Shared<Tokenizer> {
@@ -284,7 +285,7 @@ impl MettaMod {
 
     /// A convenience to add an an atom to a module's Space, if it passes type-checking
     pub(crate) fn add_atom(&self, atom: Atom, type_check: bool) -> Result<(), Atom> {
-        if type_check && !validate_atom(self.space.borrow().as_space(), &atom) {
+        if type_check && !validate_atom(&self.space, &atom) {
             return Err(Atom::expr([ERROR_SYMBOL, atom, BAD_TYPE_SYMBOL]));
         }
         self.space.borrow_mut().add(atom);
@@ -662,8 +663,8 @@ mod test {
 
     impl ModuleLoader for OuterLoader {
         fn load(&self, context: &mut RunContext) -> Result<(), String> {
-            let space = DynSpace::new(GroundingSpace::new());
-            context.init_self_module(space, None);
+            let space = GroundingSpace::new();
+            context.init_self_module(space.into(), None);
 
             let parser = SExprParser::new("outer-module-test-atom");
             context.push_parser(Box::new(parser));
@@ -677,8 +678,8 @@ mod test {
 
     impl ModuleLoader for InnerLoader {
         fn load(&self, context: &mut RunContext) -> Result<(), String> {
-            let space = DynSpace::new(GroundingSpace::new());
-            context.init_self_module(space, None);
+            let space = GroundingSpace::new();
+            context.init_self_module(space.into(), None);
 
             let parser = SExprParser::new("inner-module-test-atom");
             context.push_parser(Box::new(parser));
@@ -723,8 +724,8 @@ mod test {
 
     impl ModuleLoader for RelativeOuterLoader {
         fn load(&self, context: &mut RunContext) -> Result<(), String> {
-            let space = DynSpace::new(GroundingSpace::new());
-            context.init_self_module(space, None);
+            let space = GroundingSpace::new();
+            context.init_self_module(space.into(), None);
 
             let _inner_mod_id = context.load_module_direct(Box::new(InnerLoader), "self:inner").unwrap();
 

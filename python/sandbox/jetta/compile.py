@@ -116,7 +116,7 @@ def compile(metta: MeTTa, j_space_a, func_a, arity=None):
     jetta(j_space, code)
     #TODO: doesn't work for passing expressions (e.g. lambdas)
     funcAtom = OperationAtom(func,
-        lambda *args: jetta_unwrap_atom(j_space_a, E(func_a, *args)),
+        lambda *args: jetta_unwrap_atom(j_space_a, E(S(func), *args)),
         unwrap=False)
     metta.register_atom(func+'-gnd', funcAtom)
     return [Atoms.UNIT]

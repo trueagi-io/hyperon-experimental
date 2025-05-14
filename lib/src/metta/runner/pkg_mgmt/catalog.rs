@@ -425,9 +425,9 @@ impl SingleFileModule {
 impl ModuleLoader for SingleFileModule {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
 
-        let space = DynSpace::new(GroundingSpace::new());
+        let space = GroundingSpace::new();
         let resource_dir = self.path.parent().unwrap();
-        context.init_self_module(space, Some(resource_dir.into()));
+        context.init_self_module(space.into(), Some(resource_dir.into()));
 
         let parser = SExprParser::new(std::io::BufReader::new(self.open_file()?));
         context.push_parser(Box::new(parser));
@@ -469,9 +469,9 @@ impl DirModule {
 impl ModuleLoader for DirModule {
     fn load(&self, context: &mut RunContext) -> Result<(), String> {
 
-        let space = DynSpace::new(GroundingSpace::new());
+        let space = GroundingSpace::new();
         let resource_dir = &self.path;
-        context.init_self_module(space, Some(resource_dir.into()));
+        context.init_self_module(space.into(), Some(resource_dir.into()));
 
         // A module.metta file is optional.  Without one a dir module behaves as just
         // a container for other resources and sub-modules.
@@ -806,8 +806,8 @@ mod tests {
 
     impl ModuleLoader for TestCatalog {
         fn load(&self, context: &mut RunContext) -> Result<(), String> {
-            let space = DynSpace::new(GroundingSpace::new());
-            context.init_self_module(space, None);
+            let space = GroundingSpace::new();
+            context.init_self_module(space.into(), None);
             Ok(())
         }
     }
@@ -870,8 +870,8 @@ mod tests {
 
     impl ModuleLoader for TestLoader {
         fn load(&self, context: &mut RunContext) -> Result<(), String> {
-            let space = DynSpace::new(GroundingSpace::new());
-            context.init_self_module(space, None);
+            let space = GroundingSpace::new();
+            context.init_self_module(space.into(), None);
 
             Ok(())
         }

@@ -546,7 +546,7 @@ mod tests {
 
     #[test]
     fn match_op() {
-        let space = DynSpace::new(metta_space("(A B)"));
+        let space = metta_space("(A B)");
         let match_op = MatchOp{};
         assert_eq!(match_op.execute(&mut vec![expr!({space}), expr!("A" "B"), expr!("B" "A")]),
                    Ok(vec![expr!("B" "A")]));
@@ -554,7 +554,7 @@ mod tests {
 
     #[test]
     fn match_op_issue_530() {
-        let space = DynSpace::new(metta_space("(A $a $a)"));
+        let space = metta_space("(A $a $a)");
         let match_op = MatchOp{};
         let result = match_op.execute(&mut vec![expr!({space}), expr!("A" x y), expr!("A" x y)]).unwrap();
         assert_eq!(result.len(), 1);

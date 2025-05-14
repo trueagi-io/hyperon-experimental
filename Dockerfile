@@ -21,7 +21,7 @@ RUN sh /tmp/rustup.sh -y && rm /tmp/rustup.sh
 ENV PATH="${PATH}:${HOME}/.cargo/bin"
 RUN cargo install cbindgen
 
-RUN python3 -m pip install conan==2.13.0 pip==23.1.2
+RUN python3 -m pip install conan==2.16.1 pip==23.1.2
 ENV PATH="${PATH}:${HOME}/.local/bin"
 RUN conan profile detect --force
 

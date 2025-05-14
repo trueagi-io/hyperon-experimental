@@ -20,7 +20,7 @@
 
 use super::*;
 use crate::atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom_move};
-use crate::space::Space;
+use crate::space::DynSpace;
 
 use std::fmt::{Display, Debug};
 use itertools::Itertools;
@@ -33,19 +33,19 @@ fn isa_query(sub_type: &Atom, super_type: &Atom) -> Atom {
     Atom::expr(vec![SUB_TYPE_SYMBOL, sub_type.clone(), super_type.clone()])
 }
 
-fn query_has_type(space: &dyn Space, sub_type: &Atom, super_type: &Atom) -> BindingsSet {
-    space.query(&typeof_query(sub_type, super_type))
+fn query_has_type(space: &DynSpace, sub_type: &Atom, super_type: &Atom) -> BindingsSet {
+    space.borrow().query(&typeof_query(sub_type, super_type))
 }
 
-fn query_super_types(space: &dyn Space, sub_type: &Atom) -> Vec<Atom> {
+fn query_super_types(space: &DynSpace, sub_type: &Atom) -> Vec<Atom> {
     // TODO: query should check that sub type is a type and not another typed symbol
     let var_x = VariableAtom::new("X").make_unique();
-    let super_types = space.query(&isa_query(&sub_type, &Atom::Variable(var_x.clone())));
+    let super_types = space.borrow().query(&isa_query(&sub_type, &Atom::Variable(var_x.clone())));
     let atom_x = Atom::Variable(var_x);
     super_types.into_iter().map(|bindings| { apply_bindings_to_atom_move(atom_x.clone(), &bindings) }).collect()
 }
 
-fn add_super_types(space: &dyn Space, sub_types: &mut Vec<Atom>, from: usize) {
+fn add_super_types(space: &DynSpace, sub_types: &mut Vec<Atom>, from: usize) {
     let mut types = Vec::new();
     sub_types.iter().skip(from).for_each(|typ| {
         for typ in query_super_types(space, typ) {
@@ -119,7 +119,7 @@ pub fn is_func(typ: &Atom) -> bool {
     }
 }
 
-fn query_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
+fn query_types(space: &DynSpace, atom: &Atom) -> Vec<Atom> {
     let var_x = VariableAtom::new("X").make_unique();
     let types = query_has_type(space, atom, &Atom::Variable(var_x.clone()));
     let atom_x = Atom::Variable(var_x);
@@ -248,7 +248,7 @@ impl Display for AtomType {
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "a")), vec![expr!("B")]);
 /// assert_eq_no_order!(get_atom_types(&space, &expr!("f" "b")), Vec::<Atom>::new());
 /// ```
-pub fn get_atom_types(space: &dyn Space, atom: &Atom) -> Vec<Atom> {
+pub fn get_atom_types(space: &DynSpace, atom: &Atom) -> Vec<Atom> {
     let atom_types = get_atom_types_v2(space, atom);
     if atom_types.is_empty() {
         vec![ATOM_TYPE_UNDEFINED]
@@ -267,7 +267,7 @@ struct ExprTypeInfo {
 }
 
 impl ExprTypeInfo {
-    fn new(space: &dyn Space, expr: &ExpressionAtom) -> Self {
+    fn new(space: &DynSpace, expr: &ExpressionAtom) -> Self {
         let (op, args) = expr.children().split_first().unwrap();
         let op_types = get_atom_types_v2(space, op);
         let mut op_func_types = Vec::with_capacity(op_types.len());
@@ -300,7 +300,7 @@ impl ExprTypeInfo {
     }
 }
 
-pub fn get_atom_types_v2(space: &dyn Space, atom: &Atom) -> Vec<AtomType> {
+pub fn get_atom_types_v2(space: &DynSpace, atom: &Atom) -> Vec<AtomType> {
     log::trace!("get_atom_types_v2: atom: {}", atom);
     let types = match atom {
         // TODO: type of the variable could be actually a type variable,
@@ -393,7 +393,7 @@ impl<'a> Iterator for TupleIndex<'a> {
     }
 }
 
-fn get_tuple_types(space: &dyn Space, atom: &Atom, type_info: &ExprTypeInfo) -> Vec<AtomType> {
+fn get_tuple_types(space: &DynSpace, atom: &Atom, type_info: &ExprTypeInfo) -> Vec<AtomType> {
     let mut types = if let Some(index) = TupleIndex::new(type_info) {
         let mut types = Vec::with_capacity(index.size());
         index.for_each(|v| types.push(Atom::expr(v)));
@@ -498,7 +498,7 @@ fn replace_undefined_types(atom: &Atom) -> Atom {
     atom
 }
 
-fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
+fn get_matched_types(space: &DynSpace, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
     let types = get_atom_types(space, atom);
     types.into_iter().flat_map(|t| {
         // TODO: write a unit test
@@ -524,7 +524,7 @@ fn get_matched_types(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, B
 ///
 /// assert!(check_type(&metta.space(), &expr!("a"), &expr!("B")));
 /// ```
-pub fn check_type(space: &dyn Space, atom: &Atom, typ: &Atom) -> bool {
+pub fn check_type(space: &DynSpace, atom: &Atom, typ: &Atom) -> bool {
     check_meta_type(atom, typ) || !get_matched_types(space, atom, typ).is_empty()
 }
 
@@ -546,7 +546,7 @@ pub fn check_type(space: &dyn Space, atom: &Atom, typ: &Atom) -> bool {
 ///
 /// assert_eq!(types, vec![(expr!("List" "A"), bind!{ t: expr!("A") })]);
 /// ```
-pub fn get_type_bindings(space: &dyn Space, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
+pub fn get_type_bindings(space: &DynSpace, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bindings)> {
     let mut result = Vec::new();
     if check_meta_type(atom, typ) {
         result.push((typ.clone(), Bindings::new()));
@@ -589,7 +589,7 @@ fn check_meta_type(atom: &Atom, typ: &Atom) -> bool {
 /// assert!(validate_atom(&space, &expr!("foo" "a")));
 /// assert!(!validate_atom(&space, &expr!("foo" "b")));
 /// ```
-pub fn validate_atom(space: &dyn Space, atom: &Atom) -> bool {
+pub fn validate_atom(space: &DynSpace, atom: &Atom) -> bool {
     !get_atom_types(space, atom).is_empty()
 }
 
@@ -600,14 +600,14 @@ mod tests {
     use crate::metta::runner::*;
     use crate::metta::text::SExprParser;
 
-    fn metta_space(text: &str) -> GroundingSpace {
+    fn metta_space(text: &str) -> DynSpace {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
         let mut space = GroundingSpace::new();
         let mut parser = SExprParser::new(text);
         while let Some(atom) = parser.parse(&*metta.tokenizer().borrow()).unwrap() {
             space.add(atom);
         }
-        space
+        space.into()
     }
 
     fn atom(atom_str: &str) -> Atom {
@@ -617,7 +617,7 @@ mod tests {
         atom
     }
 
-    fn grammar_space() -> GroundingSpace {
+    fn grammar_space() -> DynSpace {
         let mut space = GroundingSpace::new();
         space.add(expr!(":" "answer" ("->" "Sent" "Sent")));
         space.add(expr!(":<" "Quest" "Sent"));
@@ -633,7 +633,7 @@ mod tests {
         space.add(expr!(":" "like" "Verb"));
         space.add(expr!(":" "a" "Det"));
         space.add(expr!(":" "pizza" "Noun"));
-        space
+        space.into()
     }
 
     #[test]
@@ -641,6 +641,7 @@ mod tests {
         let mut space = GroundingSpace::new();
         space.add(expr!(":" "do" "Verb"));
         space.add(expr!(":" "do" "Aux"));
+        let space = space.into();
 
         let aux = sym!("Aux");
         let verb = sym!("Verb");
@@ -665,6 +666,7 @@ mod tests {
         space.add(expr!(":" "music" "Noun"));
         space.add(expr!(":" ("do" "you" "like" "music") "Quest"));
         space.add(expr!(":<" ("Pron" "Verb" "Noun") "Statement"));
+        let space = space.into();
 
         let i_like_music = expr!("i" "like" "music");
         assert!(check_type(&space, &i_like_music, &ATOM_TYPE_UNDEFINED));
@@ -708,7 +710,7 @@ mod tests {
 
     #[test]
     fn validate_symbol() {
-        let space = GroundingSpace::new();
+        let space = DynSpace::new(GroundingSpace::new());
         assert!(validate_atom(&space, &sym!("a")));
     }
 
@@ -748,7 +750,7 @@ mod tests {
 
     #[test]
     fn validate_basic_expr() {
-        let space = GroundingSpace::new();
+        let space = DynSpace::new(GroundingSpace::new());
         assert!(validate_atom(&space, &expr!({5})));
         assert!(validate_atom(&space, &expr!("+" {3} {5})));
         assert!(validate_atom(&space, &expr!("=" ("f" x) x)));
@@ -887,13 +889,13 @@ mod tests {
 
     #[test]
     fn get_atom_types_variable() {
-        let space = GroundingSpace::new();
+        let space = DynSpace::new(GroundingSpace::new());
         assert_eq!(get_atom_types(&space, &atom("$x")), vec![ATOM_TYPE_UNDEFINED]);
     }
 
     #[test]
     fn get_atom_types_grounded_atom() {
-        let space = GroundingSpace::new();
+        let space = DynSpace::new(GroundingSpace::new());
         assert_eq!(get_atom_types(&space, &Atom::value(3)), vec![atom("i32")]);
     }
 
@@ -916,7 +918,7 @@ mod tests {
     fn get_atom_types_variables_are_substituted_for_grounded_atom_type() {
         let actual_type = Atom::var("t");
         let gnd = GroundedAtomWithParameterizedType(actual_type.clone());
-        let resolved_type = get_atom_types(&GroundingSpace::new(), &Atom::gnd(gnd));
+        let resolved_type = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd));
         assert_eq!(resolved_type.len(), 1);
         assert_ne!(resolved_type[0], actual_type);
         assert!(atoms_are_equivalent(&resolved_type[0], &actual_type));
@@ -927,8 +929,8 @@ mod tests {
         let actual_type = Atom::expr([ARROW_SYMBOL, Atom::var("t"), Atom::var("t")]);
         let gnd_1 = GroundedAtomWithParameterizedType(actual_type.clone());
         let gnd_2 = GroundedAtomWithParameterizedType(actual_type.clone());
-        let resolved_type_1 = get_atom_types(&GroundingSpace::new(), &Atom::gnd(gnd_1));
-        let resolved_type_2 = get_atom_types(&GroundingSpace::new(), &Atom::gnd(gnd_2));
+        let resolved_type_1 = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd_1));
+        let resolved_type_2 = get_atom_types(&GroundingSpace::new().into(), &Atom::gnd(gnd_2));
 
         //Types of gnd_1 and gnd_2 are different in the space
         assert_ne!(resolved_type_1, resolved_type_2);
@@ -968,7 +970,7 @@ mod tests {
 
     #[test]
     fn get_atom_types_empty_expression() {
-        let space = GroundingSpace::new();
+        let space = DynSpace::new(GroundingSpace::new());
         assert_eq!(get_atom_types(&space, &Atom::expr([])), vec![ATOM_TYPE_UNDEFINED]);
     }
 

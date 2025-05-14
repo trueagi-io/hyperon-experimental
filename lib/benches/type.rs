@@ -5,17 +5,18 @@ extern crate test;
 use test::Bencher;
 use hyperon::*;
 use hyperon::metta::types::*;
+use hyperon::space::DynSpace;
 use hyperon::space::grounding::*;
 use hyperon::metta::text::*;
 
-fn metta_space(text: &str) -> GroundingSpace {
+fn metta_space(text: &str) -> DynSpace {
     let tokenizer = Tokenizer::new();
     let mut space = GroundingSpace::new();
     let mut parser = SExprParser::new(text);
     while let Some(atom) = parser.parse(&tokenizer).unwrap() {
         space.add(atom);
     }
-    space
+    space.into()
 }
 
 fn atom_with_depth(depth: usize) -> Atom {

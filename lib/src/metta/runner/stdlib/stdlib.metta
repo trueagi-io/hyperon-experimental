@@ -631,7 +631,7 @@
   (@params (
     (@param "Non-deterministic set of values")))
   (@return "Unique values from input set"))
-(: unique (-> Atom Atom))
+(: unique (-> Atom %Undefined%))
 (= (unique $arg) (let $c (collapse $arg) (let $u (unique-atom $c) (superpose $u))))
 
 (@doc union
@@ -640,7 +640,7 @@
     (@param "Non-deterministic set of values")
     (@param "Another non-deterministic set of values")))
   (@return "Union of sets"))
-(: union (-> Atom Atom Atom))
+(: union (-> Atom Atom %Undefined%))
 (= (union $arg1 $arg2)
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (union-atom $c1 $c2) (superpose $u)))))
@@ -651,7 +651,7 @@
     (@param "Non-deterministic set of values")
     (@param "Another non-deterministic set of values")))
   (@return "Intersection of sets"))
-(: intersection (-> Atom Atom Atom))
+(: intersection (-> Atom Atom %Undefined%))
 (= (intersection $arg1 $arg2)
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (intersection-atom $c1 $c2) (superpose $u)))))
@@ -662,7 +662,7 @@
     (@param "Non-deterministic set of values")
     (@param "Another non-deterministic set of values")))
   (@return "Subtraction of sets"))
-(: subtraction (-> Atom Atom Atom))
+(: subtraction (-> Atom Atom %Undefined%))
 (= (subtraction $arg1 $arg2)
    (let $c1 (collapse $arg1) (let $c2 (collapse $arg2)
      (let $u (subtraction-atom $c1 $c2) (superpose $u)))))

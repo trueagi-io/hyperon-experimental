@@ -31,7 +31,7 @@ sh /tmp/rustup.sh -y && rm /tmp/rustup.sh
 export PATH="${PATH}:${HOME}/.cargo/bin"
 cargo install cbindgen
 
-python3 -m pip install cmake==3.24 conan==2.13.0 pip==23.1.2
+python3 -m pip install cmake==3.24 conan==2.16.1 pip==23.1.2
 PATH="${PATH}:${HOME}/.local/bin"
 conan profile detect --force
 

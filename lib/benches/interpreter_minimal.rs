@@ -6,6 +6,7 @@ extern crate test;
 use test::Bencher;
 
 use hyperon::*;
+use hyperon::space::DynSpace;
 use hyperon::space::grounding::*;
 use hyperon::metta::*;
 use hyperon::metta::interpreter::*;
@@ -18,36 +19,40 @@ fn chain_atom(size: isize) -> Atom {
     atom
 }
 
+fn new_space() -> DynSpace {
+    GroundingSpace::new().into()
+}
+
 
 #[bench]
 fn chain_x10(bencher: &mut Bencher) {
-    let space = GroundingSpace::new();
+    let space = new_space();
     let atom = chain_atom(10);
     let expected = Ok(vec![expr!("A")]);
     bencher.iter(move || {
-        let res = interpret(&space, &atom);
+        let res = interpret(space.clone(), &atom);
         assert_eq!(res, expected);
     })
 }
 
 #[bench]
 fn chain_x100(bencher: &mut Bencher) {
-    let space = GroundingSpace::new();
+    let space = new_space();
     let atom = chain_atom(100);
     let expected = Ok(vec![expr!("A")]);
     bencher.iter(move || {
-        let res = interpret(&space, &atom);
+        let res = interpret(space.clone(), &atom);
         assert_eq!(res, expected);
     })
 }
 
 #[bench]
 fn chain_x1000(bencher: &mut Bencher) {
-    let space = GroundingSpace::new();
+    let space = new_space();
     let atom = chain_atom(1000);
     let expected = Ok(vec![expr!("A")]);
     bencher.iter(move || {
-        let res = interpret(&space, &atom);
+        let res = interpret(space.clone(), &atom);
         assert_eq!(res, expected);
     })
 }
