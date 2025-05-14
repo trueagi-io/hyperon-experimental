@@ -1,6 +1,5 @@
 #[macro_use]
 pub mod math;
-pub mod random;
 pub mod atom;
 pub mod module;
 #[cfg(feature = "pkg_mgmt")]
@@ -100,7 +99,6 @@ fn register_context_independent_tokens(tref: &mut Tokenizer) {
     core::register_context_independent_tokens(tref);
     debug::register_context_independent_tokens(tref);
     math::register_context_independent_tokens(tref);
-    random::register_context_independent_tokens(tref);
     arithmetics::register_context_independent_tokens(tref);
     string::register_context_independent_tokens(tref);
     space::register_context_independent_tokens(tref);
