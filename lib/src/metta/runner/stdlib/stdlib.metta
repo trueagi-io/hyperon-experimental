@@ -203,41 +203,6 @@
     (@param "Number")))
   (@return "True/False"))
 
-(@doc random-int
-  (@desc "Returns random int number from range defined by two numbers (second and third argument)")
-  (@params (
-    (@param "Random number generator instance")
-    (@param "Range start")
-    (@param "Range end")))
-  (@return "Random int number from defined range"))
-
-(@doc random-float
-  (@desc "Returns random float number from range defined by two numbers (second and third argument)")
-  (@params (
-    (@param "Random number generator instance")
-    (@param "Range start")
-    (@param "Range end")))
-  (@return "Random float number from defined range"))
-
-(@doc set-random-seed
-  (@desc "Sets a new seed (second argument) for random number generator (first argument)")
-  (@params (
-    (@param "Random number generator instance")
-    (@param "Seed")))
-  (@return "Unit atom"))
-
-(@doc new-random-generator
-  (@desc "Creates new random number generator instance using seed as input (first argument)")
-  (@params (
-    (@param "Seed")))
-  (@return "Instance of random number generator"))
-
-(@doc reset-random-generator
-  (@desc "Resets instance of random number generator (first argument) to its default behavior (StdRng::from_os_rng())")
-  (@params (
-    (@param "Random number generator instance")))
-  (@return "Random number generator instance with default behavior"))
-
 (@doc collapse-bind
   (@desc "Evaluates minimal MeTTa operation (first argument) and returns an expression which contains all alternative evaluations in a form (Atom Bindings). Bindings are represented in a form of a grounded atom.")
   (@params (
@@ -1227,11 +1192,6 @@ Possible pragmas:
     (@param "First argument")
     (@param "Second argument")))
   (@return "Returns True if one and only one of the inputs is True"))
-
-(@doc flip
-  (@desc "Random boolean value")
-  (@params ())
-  (@return "Returns uniformly distributed random boolean value"))
 
 (@doc unique-atom
   (@desc "Function takes tuple and returns only unique entities. E.g. (unique-atom (a b c d d)) -> (a b c d)")
