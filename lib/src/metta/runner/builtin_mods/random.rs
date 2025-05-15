@@ -124,7 +124,8 @@ impl ModuleLoader for RandomModLoader {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_BOOL]),
             flip));
 
-        tref.register_token(Regex::new(r"&rng").unwrap(),move |_| { Atom::gnd(RandomGenerator::from_os_rng()) });
+        let generator = Atom::gnd(RandomGenerator::from_os_rng());
+        tref.register_token(Regex::new(r"&rng").unwrap(),move |_| { generator.clone() });
 
         Ok(())
     }
@@ -198,23 +199,23 @@ mod tests {
              !(chain (eval (random-int &rng 0 5)) $rint
                 (and (>= $rint 0) (< $rint 5)))")),
             Ok(vec![vec![UNIT_ATOM], vec![expr!({Bool(true)})]]));
-        // assert_eq!(run_program(&format!(
-        //     "!(import! &self random)
-        //      !(assertEqual
-        //         (random-int &rng 5 0)
-        //         (Error (random-int &rng 5 0) RangeIsEmpty))")),
-        //     Ok(vec![vec![UNIT_ATOM], vec![UNIT_ATOM]]));
+        assert_eq!(run_program(&format!(
+            "!(import! &self random)
+             !(assertEqual
+                (random-int &rng 5 0)
+                (Error (random-int &rng 5 0) RangeIsEmpty))")),
+            Ok(vec![vec![UNIT_ATOM], vec![UNIT_ATOM]]));
         assert_eq!(run_program(&format!(
             "!(import! &self random)
              !(chain (eval (random-float &rng 0.0 5.0)) $rfloat
                 (and (>= $rfloat 0.0) (< $rfloat 5.0)))")),
             Ok(vec![vec![UNIT_ATOM], vec![expr!({Bool(true)})]]));
-        // assert_eq!(run_program(&format!(
-        //     "!(import! &self random)
-        //      !(assertEqual
-        //         (random-float &rng 5 0)
-        //         (Error (random-float &rng 5 0) RangeIsEmpty))")),
-        //     Ok(vec![vec![UNIT_ATOM], vec![UNIT_ATOM]]));
+        assert_eq!(run_program(&format!(
+            "!(import! &self random)
+             !(assertEqual
+                (random-float &rng 5 0)
+                (Error (random-float &rng 5 0) RangeIsEmpty))")),
+            Ok(vec![vec![UNIT_ATOM], vec![UNIT_ATOM]]));
 
         assert_eq!(run_program(&format!("
             !(import! &self random)
