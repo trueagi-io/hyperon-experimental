@@ -72,11 +72,7 @@ impl<T: GroundedFunction> Grounded for GroundedFunctionAtom<T> {
 
 impl<T: GroundedFunction> CustomExecute for GroundedFunctionAtom<T> {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        match self.0.func.execute(args) {
-            Err(ExecError::Runtime(msg)) => Err(ExecError::Runtime(format!("{}: {}", self, msg))),
-            Err(err) => Err(err),
-            Ok(res) => Ok(res),
-        }
+        self.0.func.execute(args)
     }
 }
 

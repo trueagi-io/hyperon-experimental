@@ -1,3 +1,5 @@
+!(import! &self random)
+
 ; should work as passing Rust Bool to Rust function
 !(xor (flip) (flip))
 
