@@ -1026,6 +1026,12 @@
     (@param "First expression")
     (@param "Second expression")))
   (@return "Unit atom if both expressions after evaluation are alpha equal, error - otherwise"))
+(: assertAlphaEqual (-> Atom Atom (->)))
+(= (assertAlphaEqual $actual $expected)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (chain (metta (collapse $expected) %Undefined% $space) $expected-results
+         (_assert-results-are-alpha-equal $actual-results $expected-results (assertAlphaEqual $actual $expected)) ))))
 
 (@doc assertEqualToResult
   (@desc "Same as assertEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
@@ -1045,6 +1051,11 @@
     (@param "First expression (it will be evaluated)")
     (@param "Second expression (it won't be evaluated)")))
   (@return "Unit atom if both expressions after evaluation of the first argument are alpha equal, error - otherwise"))
+(: assertAlphaEqualToResult (-> Atom Atom (->)))
+(= (assertAlphaEqualToResult $actual $expected-results)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (_assert-results-are-alpha-equal $actual-results $expected-results (assertAlphaEqualToResult $actual $expected-results)) )))
 
 (@doc superpose
   (@desc "Turns a tuple (first argument) into a nondeterministic result")

@@ -1,14 +1,12 @@
 use crate::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-use crate::space::*;
-use crate::common::collections::{VecDisplay, SliceDisplay, Equality, DefaultEquality};
+use crate::common::collections::{SliceDisplay, Equality, DefaultEquality};
 use crate::common::assert::compare_vec_no_order;
 use crate::atom::matcher::atoms_are_equivalent;
-use crate::metta::runner::stdlib::{grounded_op, regex, interpret_no_error, unit_result};
+use crate::metta::runner::stdlib::{grounded_op, regex, unit_result};
 use crate::metta::runner::bool::*;
 use crate::metta::runner::str::*;
-use crate::metta::runner::{Metta, PragmaSettings};
 use crate::atom::gnd::GroundedFunctionAtom;
 
 use std::convert::TryInto;
@@ -107,16 +105,7 @@ impl Equality<&Atom> for AlphaEquality {
     }
 }
 
-fn assert_alpha_equal(actual: &Vec<Atom>, expected: &Vec<Atom>) -> Result<Vec<Atom>, ExecError> {
-    let report = format!("\nExpected: {}\nGot: {}", VecDisplay(expected), VecDisplay(actual));
-    let res = compare_vec_no_order(actual.iter(), expected.iter(), AlphaEquality{});
-    match res.as_display() {
-        None => unit_result(),
-        Some(diff) => Err(ExecError::Runtime(format!("{}\n{}", report, diff)))
-    }
-}
-
-fn assert_results_are_equal(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+fn assert_results_are_equal<'a, E: Equality<&'a Atom>>(args: &'a [Atom], cmp: E) -> Result<Vec<Atom>, ExecError> {
     let arg_error = || ExecError::from("Pair of evaluation results with bindings is expected as an argument");
     let actual = TryInto::<&ExpressionAtom>::try_into(args.get(0).ok_or_else(arg_error)?)?.children();
     let expected = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)?.children();
@@ -124,50 +113,12 @@ fn assert_results_are_equal(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
 
     let report = format!("\nExpected: {}\nGot: {}", SliceDisplay(expected), SliceDisplay(actual));
 
-    match compare_vec_no_order(actual.iter(), expected.iter(), DefaultEquality{}).as_display() {
+    match compare_vec_no_order(actual.iter(), expected.iter(), cmp).as_display() {
         None => unit_result(),
         Some(diff) => {
             let msg = format!("{}\n{}", report, diff);
             Ok(vec![Atom::expr([ERROR_SYMBOL, assert.clone(), Atom::sym(msg)])])
         },
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct AssertAlphaEqualOp {
-    space: DynSpace,
-    settings: PragmaSettings,
-}
-
-grounded_op!(AssertAlphaEqualOp, "assertAlphaEqual");
-
-impl AssertAlphaEqualOp {
-    pub fn new(space: DynSpace, settings: PragmaSettings) -> Self {
-        Self{ space, settings }
-    }
-}
-
-impl Grounded for AssertAlphaEqualOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM, UNIT_TYPE])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for AssertAlphaEqualOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        log::debug!("AssertAlphaEqualOp::execute: {:?}", args);
-        let arg_error = || ExecError::from("assertAlphaEqual expects two atoms: actual and expected");
-        let actual_atom = args.get(0).ok_or_else(arg_error)?;
-        let expected_atom = args.get(1).ok_or_else(arg_error)?;
-
-        let actual = interpret_no_error(self.space.clone(), actual_atom, self.settings.clone())?;
-        let expected = interpret_no_error(self.space.clone(), expected_atom, self.settings.clone())?;
-
-        assert_alpha_equal(&actual, &expected)
     }
 }
 
@@ -197,46 +148,6 @@ impl CustomExecute for AlphaEqOp {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct AssertAlphaEqualToResultOp {
-    space: DynSpace,
-    settings: PragmaSettings,
-}
-
-grounded_op!(AssertAlphaEqualToResultOp, "assertAlphaEqualToResult");
-
-impl AssertAlphaEqualToResultOp {
-    pub fn new(space: DynSpace, settings: PragmaSettings) -> Self {
-        Self{ space, settings }
-    }
-}
-
-impl Grounded for AssertAlphaEqualToResultOp {
-    fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_EXPRESSION, UNIT_TYPE])
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        Some(self)
-    }
-}
-
-impl CustomExecute for AssertAlphaEqualToResultOp {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        log::debug!("AssertAlphaEqualToResultOp::execute: {:?}", args);
-        let arg_error = || ExecError::from("assertAlphaEqualToResultOp expects atom and expression as arguments: actual and expected");
-        let actual_atom = args.get(0).ok_or_else(arg_error)?;
-        let expected = TryInto::<&ExpressionAtom>::try_into(args.get(1).ok_or_else(arg_error)?)
-            .map_err(|_| arg_error())?
-            .children();
-
-        let actual = interpret_no_error(self.space.clone(), actual_atom, self.settings.clone())?;
-
-        assert_alpha_equal(&actual, &expected.into())
-    }
-}
-
-
 pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     let trace_op = Atom::gnd(TraceOp{});
     tref.register_token(regex(r"trace!"), move |_| { trace_op.clone() });
@@ -244,17 +155,15 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
     tref.register_token(regex(r"print-alternatives!"), move |_| { print_alternatives_op.clone() });
     let alpha_eq_op = Atom::gnd(AlphaEqOp{});
     tref.register_token(regex(r"=alpha"), move |_| { alpha_eq_op.clone() });
-}
-
-pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &DynSpace, metta: &Metta) {
-    let assert_alpha_equal_to_result_op = Atom::gnd(AssertAlphaEqualToResultOp::new(space.clone(), metta.settings().clone()));
-    tref.register_token(regex(r"assertAlphaEqualToResult"), move |_| { assert_alpha_equal_to_result_op.clone() });
-    let assert_alpha_equal_op = Atom::gnd(AssertAlphaEqualOp::new(space.clone(), metta.settings().clone()));
-    tref.register_token(regex(r"assertAlphaEqual"), move |_| { assert_alpha_equal_op.clone() });
     tref.register_function(GroundedFunctionAtom::new(
             r"_assert-results-are-equal".into(),
             expr!("->" "Atom" "Atom" "Atom" ("->")),
-            assert_results_are_equal, 
+            |args: &[Atom]| -> Result<Vec<Atom>, ExecError> { assert_results_are_equal(args, DefaultEquality{}) }, 
+            ));
+    tref.register_function(GroundedFunctionAtom::new(
+            r"_assert-results-are-alpha-equal".into(),
+            expr!("->" "Atom" "Atom" "Atom" ("->")),
+            |args: &[Atom]| -> Result<Vec<Atom>, ExecError> { assert_results_are_equal(args, AlphaEquality{}) }, 
             ));
 }
 
@@ -286,7 +195,6 @@ mod tests {
     #[test]
     fn metta_assert_alpha_equal_op() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        let assert = AssertAlphaEqualOp::new(metta.space().clone(), metta.settings().clone());
         let program = "
             (= (foo $x) $x)
             (= (bar $x) $x)
@@ -296,10 +204,10 @@ mod tests {
             vec![UNIT_ATOM],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertAlphaEqual (foo A) (bar B))")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("foo" "A") ("bar" "B")) "\nExpected: [B]\nGot: [A]\nMissed results: B\nExcessive results: A")],
+            vec![expr!("Error" ("assertAlphaEqual" ("foo" "A") ("bar" "B")) "\nExpected: [B]\nGot: [A]\nMissed results: B\nExcessive results: A")],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertAlphaEqual (foo A) Empty)")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("foo" "A") "Empty") "\nExpected: []\nGot: [A]\nExcessive results: A")]
+            vec![expr!("Error" ("assertAlphaEqual" ("foo" "A") "Empty") "\nExpected: []\nGot: [A]\nExcessive results: A")]
         ]));
     }
 
@@ -335,7 +243,6 @@ mod tests {
     #[test]
     fn metta_assert_alpha_equal_to_result_op() {
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        let assert = AssertAlphaEqualToResultOp::new(metta.space().clone(), metta.settings().clone());
         let program = "
             (= (foo) $x)
             (= (bar) C)
@@ -357,10 +264,10 @@ mod tests {
         assert_eq!(res.get(0).unwrap().len(), 1);
 
         assert_eq!(metta.run(SExprParser::new("!(assertAlphaEqualToResult (bar) (A))")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("bar") ("A")) "\nExpected: [A]\nGot: [C]\nMissed results: A\nExcessive results: C")],
+            vec![expr!("Error" ("assertAlphaEqualToResult" ("bar") ("A")) "\nExpected: [A]\nGot: [C]\nMissed results: A\nExcessive results: C")],
         ]));
         assert_eq!(metta.run(SExprParser::new("!(assertAlphaEqualToResult (baz) (D))")), Ok(vec![
-            vec![expr!("Error" ({assert.clone()} ("baz") ("D")) "\nExpected: [D]\nGot: [D, D, D]\nExcessive results: D, D")]
+            vec![expr!("Error" ("assertAlphaEqualToResult" ("baz") ("D")) "\nExpected: [D]\nGot: [D, D, D]\nExcessive results: D, D")]
         ]));
     }
 
