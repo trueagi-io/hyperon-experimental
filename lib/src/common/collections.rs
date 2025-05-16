@@ -289,6 +289,22 @@ impl<'a, T> Into<&'a [T]> for &'a CowArray<T> {
     }
 }
 
+pub struct IterDisplay<'a, T: 'a + Display, I: 'a + Clone + Iterator<Item=T>>(pub &'a I);
+
+impl<'a, T: 'a + Display, I: 'a + Clone + Iterator<Item=T>> Display for IterDisplay<'a, T, I> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}]", self.0.clone().format(", "))
+    }
+}
+
+pub struct SliceDisplay<'a, T: 'a + Display>(pub &'a [T]);
+
+impl<'a, T: 'a + Display> Display for SliceDisplay<'a, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}]", self.0.iter().format(", "))
+    }
+}
+
 pub struct VecDisplay<'a, T: 'a + Display>(pub &'a Vec<T>);
 
 impl<'a, T: 'a + Display> Display for VecDisplay<'a, T> {

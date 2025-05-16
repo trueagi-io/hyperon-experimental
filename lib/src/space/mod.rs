@@ -323,7 +323,7 @@ impl PartialEq for DynSpace {
 
 impl crate::atom::Grounded for DynSpace {
     fn type_(&self) -> Atom {
-        rust_type_atom::<DynSpace>()
+        crate::metta::ATOM_TYPE_SPACE
     }
 
     fn as_match(&self) -> Option<&dyn CustomMatch> {

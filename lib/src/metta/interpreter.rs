@@ -300,6 +300,7 @@ fn is_embedded_op(atom: &Atom) -> bool {
             || *op == COLLAPSE_BIND_SYMBOL
             || *op == SUPERPOSE_BIND_SYMBOL
             || *op == METTA_SYMBOL
+            || *op == CONTEXT_SPACE_SYMBOL
             || *op == CALL_NATIVE_SYMBOL,
         _ => false,
     }
@@ -437,6 +438,9 @@ fn interpret_stack(context: &InterpreterContext, stack: Stack, mut bindings: Bin
             },
             Some([op, ..]) if *op == METTA_SYMBOL => {
                 metta_sym(stack, bindings)
+            },
+            Some([op, ..]) if *op == CONTEXT_SPACE_SYMBOL => {
+                context_space(context, stack, bindings)
             },
             Some([op, ..]) if *op == CALL_NATIVE_SYMBOL => {
                 call_native_symbol(stack, bindings)
@@ -920,6 +924,19 @@ fn metta_sym(stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
     };
 
     vec![InterpretedAtom(atom_to_stack(call_native!(metta_impl, Atom::expr([atom, typ, space])), prev), bindings)]
+}
+
+fn context_space(context: &InterpreterContext, stack: Stack, bindings: Bindings) -> Vec<InterpretedAtom> {
+    let space = context.space.clone();
+    let Stack{ prev, atom: ctx_space, .. } = stack;
+    let _ = match_atom!{
+        ctx_space ~ [_op] => (),
+        _ => {
+            let error = format!("expected: ({}), found: {}", CONTEXT_SPACE_SYMBOL, ctx_space);
+            return finished_result(error_msg(ctx_space, error), bindings, prev);
+        }
+    };
+    finished_result(Atom::gnd(space), bindings, prev)
 }
 
 type MettaResult = Box<dyn Iterator<Item=(Atom, Bindings)>>;
@@ -2012,5 +2029,13 @@ mod tests {
         assert_eq!(result, Ok(vec![Atom::expr([Atom::sym("foo")])]));
         let result = interpret(space.clone(), &Atom::expr([METTA_SYMBOL, expr!("e" ("q" ("foo"))), ATOM_TYPE_UNDEFINED, Atom::gnd(space)]));
         assert_eq!(result, Ok(vec![Atom::sym("X")]));
+    }
+
+    #[test]
+    fn interpret_context_space() {
+        let space = space("");
+
+        let result = interpret(space.clone(), &Atom::expr([CONTEXT_SPACE_SYMBOL]));
+        assert_eq!(result, Ok(vec![Atom::gnd(space)]));
     }
 }

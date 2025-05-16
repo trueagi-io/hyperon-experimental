@@ -78,7 +78,6 @@ fn register_context_dependent_tokens(tref: &mut Tokenizer, tokenizer: Shared<Tok
 
     atom::register_context_dependent_tokens(tref, space);
     core::register_context_dependent_tokens(tref, space, metta);
-    debug::register_context_dependent_tokens(tref, space, metta);
     module::register_context_dependent_tokens(tref, tokenizer.clone(), metta);
     #[cfg(feature = "pkg_mgmt")]
     package::register_context_dependent_tokens(tref, metta);

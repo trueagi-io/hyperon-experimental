@@ -421,7 +421,7 @@ grounded_op!(GetTypeSpaceOp, "get-type-space");
 
 impl Grounded for GetTypeSpaceOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SPACE, ATOM_TYPE_ATOM, ATOM_TYPE_ATOM])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {

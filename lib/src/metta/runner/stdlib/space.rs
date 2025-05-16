@@ -15,7 +15,7 @@ grounded_op!(NewSpaceOp, "new-space");
 
 impl Grounded for NewSpaceOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SPACE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -146,7 +146,7 @@ grounded_op!(GetAtomsOp, "get-atoms");
 
 impl Grounded for GetAtomsOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(), ATOM_TYPE_ATOM])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SPACE, ATOM_TYPE_ATOM])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
@@ -173,7 +173,7 @@ grounded_op!(AddAtomOp, "add-atom");
 
 impl Grounded for AddAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(),
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SPACE,
             ATOM_TYPE_ATOM, UNIT_TYPE])
     }
 
@@ -200,7 +200,7 @@ grounded_op!(RemoveAtomOp, "remove-atom");
 
 impl Grounded for RemoveAtomOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, rust_type_atom::<DynSpace>(),
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_SPACE,
             ATOM_TYPE_ATOM, UNIT_TYPE])
     }
 
