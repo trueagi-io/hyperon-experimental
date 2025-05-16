@@ -12,6 +12,7 @@ use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{ModuleLoader, RunContext, DynSpace, Metta, MettaMod};
 use crate::atom::gnd::*;
+use crate::metta::runner::number::{Number, ATOM_TYPE_NUMBER};
 
 pub static FILEIO_METTA: &'static str = include_str!("fileio.metta");
 pub const ATOM_TYPE_FILE_HANDLE: Atom = sym!("FileHandle");
@@ -28,7 +29,7 @@ impl FileHandle {
             .write(options.contains("w"))
             .create(options.contains("c"))
             .append(options.contains("a"))
-            .truncate(!options.contains("a"));
+            .truncate(options.contains("t"));
 
         match opened_file.open(path)
         {
@@ -37,9 +38,8 @@ impl FileHandle {
         }
     }
 
-    fn read_as_str(&self) -> Result<String, ExecError>
+    fn read_to_string(&self) -> Result<String, ExecError>
     {
-        self.0.borrow_mut().seek(SeekFrom::Start(0)).unwrap();
         let mut contents = String::new();
         match self.0.borrow_mut().read_to_string(&mut contents) {
             Ok(_) => Ok(contents),
@@ -52,6 +52,25 @@ impl FileHandle {
         match self.0.borrow_mut().write(&content.as_bytes()) {
             Ok(_) => Ok(()),
             Err(message) => Err(ExecError::from(format!("Failed to write content to file: {}", message)))
+        }
+    }
+
+    fn seek(&self, pos: SeekFrom) -> Result<(), ExecError>
+    {
+        match self.0.borrow_mut().seek(pos) {
+            Ok(_) => Ok(()),
+            Err(message) => Err(ExecError::from(format!("Seek operation failed: {}", message)))
+        }
+    }
+
+    fn read_exact (&self, mut buf: Vec<u8>) -> Result<String, ExecError>
+    {
+        match self.0.borrow_mut().read(&mut *buf) {
+            Ok(_) => {match String::from_utf8(buf) {
+                Ok(res_str) => Ok(res_str),
+                Err(msg) => Err(ExecError::from(format!("Read exact failed: {}", msg)))
+            }},
+            Err(message) => Err(ExecError::from(format!("Read exact failed: {}", message)))
         }
     }
 }
@@ -100,14 +119,24 @@ impl ModuleLoader for FileioModLoader {
             file_open));
 
         tref.register_function(GroundedFunctionAtom::new(
-            r"file-read!".into(),
+            r"file-read-to-string!".into(),
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLE, ATOM_TYPE_STRING]),
-            file_read));
+            file_read_till_end));
 
         tref.register_function(GroundedFunctionAtom::new(
             r"file-write!".into(),
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLE, ATOM_TYPE_STRING, UNIT_ATOM]),
             file_write));
+
+        tref.register_function(GroundedFunctionAtom::new(
+            r"file-seek!".into(),
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLE, ATOM_TYPE_NUMBER, UNIT_ATOM]),
+            file_seek));
+
+        tref.register_function(GroundedFunctionAtom::new(
+            r"file-read-exact!".into(),
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLE, ATOM_TYPE_NUMBER, UNIT_ATOM]),
+            file_read_exact));
 
         Ok(())
     }
@@ -122,12 +151,12 @@ fn file_open(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
     Ok(vec![Atom::gnd(fhandler)])
 }
 
-fn file_read(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-    let arg_error = || ExecError::from("file-read! expects filehandle as an argument");
+fn file_read_till_end(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+    let arg_error = || ExecError::from("file-read-to-string! expects filehandle as an argument");
     let filehandle = args.get(0).ok_or_else(arg_error)?.into();
     let filehandle = Atom::as_gnd::<FileHandle>(filehandle).ok_or("file-read! expects filehandle as an argument")?;
 
-    let message = filehandle.read_as_str();
+    let message = filehandle.read_to_string();
     Ok(vec![Atom::gnd(Str::from_string(message?))])
 }
 
@@ -139,6 +168,28 @@ fn file_write(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
 
     filehandle.write(content.as_str()).expect("Failed to write file");
     unit_result()
+}
+
+fn file_seek(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+    let arg_error = || ExecError::from("file-seek! expects filehandle and start byte (number) as an arguments");
+    let filehandle = args.get(0).ok_or_else(arg_error)?.into();
+    let filehandle = Atom::as_gnd::<FileHandle>(filehandle).ok_or("file-seek! expects filehandle and start byte (number) as an arguments")?;
+    let seek_from: i64 = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
+    let _ = filehandle.seek(SeekFrom::Start(seek_from as u64));
+    unit_result()
+}
+
+fn file_read_exact(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+    let arg_error = || ExecError::from("file-read-exact! expects filehandle and number of bytes to read (number) as an arguments");
+    let filehandle = args.get(0).ok_or_else(arg_error)?.into();
+    let filehandle = Atom::as_gnd::<FileHandle>(filehandle).ok_or("file-read-exact! expects filehandle and number of bytes to read (number) as an arguments")?;
+    let num_of_bytes: i64 = args.get(1).and_then(Number::from_atom).ok_or_else(arg_error)?.into();
+
+    let buf = vec![0u8; num_of_bytes as usize];
+
+    let res = filehandle.read_exact(buf);
+
+    Ok(vec![Atom::gnd(Str::from_string(res?))])
 }
 
 #[cfg(test)]
@@ -162,7 +213,12 @@ mod tests {
             !(import! &self fileio)
             !(bind! &fhandle (file-open! \"{}\" \"rwc\"))
             !(file-write! &fhandle \"check write/read\")
-            !(assertEqual (file-read! &fhandle) \"check write/read\")
+            !(file-seek! &fhandle 0)
+            !(assertEqual (file-read-to-string! &fhandle) \"check write/read\")
+            !(file-seek! &fhandle 4)
+            !(assertEqual (file-read-to-string! &fhandle) \"k write/read\")
+            !(file-seek! &fhandle 0)
+            !(assertEqual (file-read-exact! &fhandle 5) \"check\")
         ", filename);
 
         let res = run_program(program.as_str());
@@ -170,6 +226,11 @@ mod tests {
         std::fs::remove_file(filename).expect("File not removed");
 
         assert_eq!(res, Ok(vec![
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
