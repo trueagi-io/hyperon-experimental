@@ -1013,6 +1013,12 @@
     (@param "First expression")
     (@param "Second expression")))
   (@return "Unit atom if both expressions after evaluation are equal, error - otherwise"))
+(: assertEqual (-> Atom Atom (->)))
+(= (assertEqual $actual $expected)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (chain (metta (collapse $expected) %Undefined% $space) $expected-results
+         (_assert-results-are-equal $actual-results $expected-results (assertEqual $actual $expected)) ))))
 
 (@doc assertAlphaEqual
   (@desc "Compares (sets of) results of evaluation of two expressions using alpha equality")
@@ -1025,8 +1031,13 @@
   (@desc "Same as assertEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
   (@params (
     (@param "First expression (it will be evaluated)")
-    (@param "Second expression (it won't be evaluated)")))
+    (@param "Second expression containing the expected evaluation results (it won't be evaluated)")))
   (@return "Unit atom if both expressions after evaluation of the first argument are equal, error - otherwise"))
+(: assertEqualToResult (-> Atom Atom (->)))
+(= (assertEqualToResult $actual $expected-results)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (_assert-results-are-equal $actual-results $expected-results (assertEqualToResult $actual $expected-results)) )))
 
 (@doc assertAlphaEqualToResult
   (@desc "Same as assertAlphaEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
