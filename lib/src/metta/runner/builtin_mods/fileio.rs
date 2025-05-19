@@ -159,17 +159,15 @@ mod tests {
 
         let filename = Path::new("..").join(std::env::temp_dir()).join(format!("{}.txt", filename));
         let filename = filename.to_str().unwrap().replace("\\", "\\\\");
-        println!("{}", filename);
+
         let program = format!("
             !(import! &self fileio)
             !(bind! &fhandle (file-open! \"{}\" \"rwc\"))
             !(file-write! &fhandle \"check write/read\")
             !(assertEqual (file-read! &fhandle) \"check write/read\")
         ", filename);
-        println!("{}", program);
 
         let res = run_program(program.as_str());
-        println!("{:?}", res);
 
         std::fs::remove_file(filename).expect("File not removed");
 
