@@ -143,6 +143,7 @@ fn file_write(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
     use crate::metta::*;
     use crate::metta::runner::run_program;
     use rand::{distr::Alphanumeric, Rng};
@@ -156,16 +157,19 @@ mod tests {
             .map(char::from)
             .collect();
 
-        let filename = format!("{}/{}.txt", std::env::temp_dir().to_str().unwrap(), filename);
-
+        let filename = Path::new("..").join(std::env::temp_dir()).join(format!("{}.txt", filename));
+        let filename = filename.to_str().unwrap().replace("\\", "\\\\");
+        println!("{}", filename);
         let program = format!("
             !(import! &self fileio)
             !(bind! &fhandle (file-open! \"{}\" \"rwc\"))
             !(file-write! &fhandle \"check write/read\")
             !(assertEqual (file-read! &fhandle) \"check write/read\")
         ", filename);
+        println!("{}", program);
 
         let res = run_program(program.as_str());
+        println!("{:?}", res);
 
         std::fs::remove_file(filename).expect("File not removed");
 
