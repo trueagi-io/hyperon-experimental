@@ -121,7 +121,7 @@ impl ModuleLoader for FileioModLoader {
         tref.register_function(GroundedFunctionAtom::new(
             r"file-read-to-string!".into(),
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLE, ATOM_TYPE_STRING]),
-            file_read_till_end));
+            file_read_to_string));
 
         tref.register_function(GroundedFunctionAtom::new(
             r"file-write!".into(),
@@ -151,7 +151,7 @@ fn file_open(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
     Ok(vec![Atom::gnd(fhandler)])
 }
 
-fn file_read_till_end(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+fn file_read_to_string(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
     let arg_error = || ExecError::from("file-read-to-string! expects filehandle as an argument");
     let filehandle = args.get(0).ok_or_else(arg_error)?.into();
     let filehandle = Atom::as_gnd::<FileHandle>(filehandle).ok_or("file-read! expects filehandle as an argument")?;
