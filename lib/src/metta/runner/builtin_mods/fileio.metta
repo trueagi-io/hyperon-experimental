@@ -1,5 +1,5 @@
 (@doc file-open!
-  (@desc "Function takes path to the file and open options (r, w, c, a) both in form of string, creates filehandle and
+  (@desc "Function takes path to the file and open options (r, w, c, a, t) both in form of string, creates filehandle and
     returns it")
   (@params (
     (@param "Filepath (string atom)")
