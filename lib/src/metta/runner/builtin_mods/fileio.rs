@@ -194,6 +194,7 @@ fn file_read_exact(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
     use crate::metta::*;
     use crate::metta::runner::run_program;
     use rand::{distr::Alphanumeric, Rng};
@@ -207,7 +208,8 @@ mod tests {
             .map(char::from)
             .collect();
 
-        let filename = format!("{}/{}.txt", std::env::temp_dir().to_str().unwrap(), filename);
+        let filename = Path::new("..").join(std::env::temp_dir()).join(format!("{}.txt", filename));
+        let filename = filename.to_str().unwrap().replace("\\", "\\\\");
 
         let program = format!("
             !(import! &self fileio)
