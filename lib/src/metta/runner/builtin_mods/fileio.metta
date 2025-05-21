@@ -39,3 +39,9 @@
     (@param "Filehandle")
     (@param "Number of bytes to read")))
   (@return "File's content"))
+
+(@doc file-get-size!
+  (@desc "Function takes filehandle provided by file-open! and returns size of file")
+  (@params (
+    (@param "Filehandle")))
+  (@return "Size of file"))

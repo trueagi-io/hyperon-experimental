@@ -73,6 +73,11 @@ impl FileHandle {
             Err(message) => Err(ExecError::from(format!("Read exact failed: {}", message)))
         }
     }
+
+    fn get_size (&self) -> Result<u64, ExecError>
+    {
+        Ok(self.0.borrow_mut().metadata().unwrap().len())
+    }
 }
 
 impl Grounded for FileHandle {
@@ -138,6 +143,11 @@ impl ModuleLoader for FileioModLoader {
             Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLE, ATOM_TYPE_NUMBER, UNIT_ATOM]),
             file_read_exact));
 
+        tref.register_function(GroundedFunctionAtom::new(
+            r"file-get-size!".into(),
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_FILE_HANDLE, ATOM_TYPE_NUMBER]),
+            file_get_size));
+
         Ok(())
     }
 }
@@ -192,6 +202,16 @@ fn file_read_exact(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
     Ok(vec![Atom::gnd(Str::from_string(res?))])
 }
 
+fn file_get_size(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+    let arg_error = || ExecError::from("file-get-size! expects filehandle as an argument");
+    let filehandle = args.get(0).ok_or_else(arg_error)?.into();
+    let filehandle = Atom::as_gnd::<FileHandle>(filehandle).ok_or("file-get-size! expects filehandle as an argument")?;
+
+    let res = filehandle.get_size();
+    Ok(vec![Atom::gnd(Number::Integer(res? as i64))])
+}
+
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
@@ -221,6 +241,9 @@ mod tests {
             !(assertEqual (file-read-to-string! &fhandle) \"k write/read\")
             !(file-seek! &fhandle 0)
             !(assertEqual (file-read-exact! &fhandle 5) \"check\")
+            !(assertEqual (file-get-size! &fhandle) 16)
+            !(file-seek! &fhandle 0)
+            !(assertEqual (file-read-exact! &fhandle 16) \"check write/read\")
         ", filename);
 
         let res = run_program(program.as_str());
@@ -228,6 +251,9 @@ mod tests {
         std::fs::remove_file(filename).expect("File not removed");
 
         assert_eq!(res, Ok(vec![
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
