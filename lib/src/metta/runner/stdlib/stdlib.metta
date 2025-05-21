@@ -9,6 +9,9 @@
 (@doc ErrorType (@desc "Type of the atom which contains error"))
 (: ErrorType Type)
 
+(@doc SpaceType (@desc "Type of the atom which contains space"))
+(: SpaceType Type)
+
 (@doc Error
   (@desc "Error constructor")
   (@params (
@@ -79,6 +82,12 @@
     (@param "Expression")))
   (@return "Deconsed expression"))
 (: decons-atom (-> Expression Atom))
+
+(@doc context-space
+  (@desc "Returns the space which is used as a context space in atom evaluation")
+  (@params ())
+  (@return "Context space"))
+(: context-space (-> SpaceType))
 
 (@doc min-atom
   (@desc "Returns atom with min value in the expression (first argument). Only numbers allowed")
@@ -224,7 +233,7 @@
     (@param "Type of input atom")
     (@param "Atomspace where intepretation should take place")))
   (@return "Result of interpretation"))
-(: metta (-> Atom Type Grounded Atom))
+(: metta (-> Atom Type SpaceType Atom))
 
 (@doc id
   (@desc "Returns its argument")
@@ -451,9 +460,10 @@
   (function (eval (if-decons-expr $list $head $tail
     (chain (eval (atom-subst $init $a $op)) $op-init
       (chain (eval (atom-subst $head $b $op-init)) $op-head
-        (chain $op-head $head-folded
-          (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) )))
-    (return $init) ))))
+        (chain (context-space) $space
+          (chain (metta $op-head %Undefined% $space) $head-folded
+            (chain (eval (foldl-atom $tail $head-folded $a $b $op)) $res (return $res)) ))))
+      (return $init) ))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Standard library written in MeTTa ;
@@ -640,7 +650,7 @@
   (@return "Unit atom"))
 (: add-reducts (-> Grounded %Undefined% (->)))
 (= (add-reducts $space $tuple)
-    (foldl-atom $tuple () $a $b (eval (add-atom $space $b))))
+    (foldl-atom $tuple () $a $b (add-atom $space $b)))
 
 (@doc add-atoms
   (@desc "Function takes space and expression and adds atoms in Expression into given space without reducing them")
@@ -650,7 +660,7 @@
   (@return "Unit atom"))
 (: add-atoms (-> Grounded Expression (->)))
 (= (add-atoms $space $tuple)
-    (foldl-atom $tuple () $a $b (eval (add-atom $space $b))))
+    (foldl-atom $tuple () $a $b (add-atom $space $b)))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
@@ -1003,6 +1013,12 @@
     (@param "First expression")
     (@param "Second expression")))
   (@return "Unit atom if both expressions after evaluation are equal, error - otherwise"))
+(: assertEqual (-> Atom Atom (->)))
+(= (assertEqual $actual $expected)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (chain (metta (collapse $expected) %Undefined% $space) $expected-results
+         (_assert-results-are-equal $actual-results $expected-results (assertEqual $actual $expected)) ))))
 
 (@doc assertAlphaEqual
   (@desc "Compares (sets of) results of evaluation of two expressions using alpha equality")
@@ -1010,13 +1026,24 @@
     (@param "First expression")
     (@param "Second expression")))
   (@return "Unit atom if both expressions after evaluation are alpha equal, error - otherwise"))
+(: assertAlphaEqual (-> Atom Atom (->)))
+(= (assertAlphaEqual $actual $expected)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (chain (metta (collapse $expected) %Undefined% $space) $expected-results
+         (_assert-results-are-alpha-equal $actual-results $expected-results (assertAlphaEqual $actual $expected)) ))))
 
 (@doc assertEqualToResult
   (@desc "Same as assertEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
   (@params (
     (@param "First expression (it will be evaluated)")
-    (@param "Second expression (it won't be evaluated)")))
+    (@param "Second expression containing the expected evaluation results (it won't be evaluated)")))
   (@return "Unit atom if both expressions after evaluation of the first argument are equal, error - otherwise"))
+(: assertEqualToResult (-> Atom Atom (->)))
+(= (assertEqualToResult $actual $expected-results)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (_assert-results-are-equal $actual-results $expected-results (assertEqualToResult $actual $expected-results)) )))
 
 (@doc assertAlphaEqualToResult
   (@desc "Same as assertAlphaEqual but it doesn't evaluate second argument. Second argument is considered as a set of values of the first argument's evaluation")
@@ -1024,6 +1051,11 @@
     (@param "First expression (it will be evaluated)")
     (@param "Second expression (it won't be evaluated)")))
   (@return "Unit atom if both expressions after evaluation of the first argument are alpha equal, error - otherwise"))
+(: assertAlphaEqualToResult (-> Atom Atom (->)))
+(= (assertAlphaEqualToResult $actual $expected-results)
+   (chain (context-space) $space
+     (chain (metta (collapse $actual) %Undefined% $space) $actual-results
+       (_assert-results-are-alpha-equal $actual-results $expected-results (assertAlphaEqualToResult $actual $expected-results)) )))
 
 (@doc superpose
   (@desc "Turns a tuple (first argument) into a nondeterministic result")
@@ -1036,6 +1068,20 @@
   (@params (
     (@param "Atom which will be evaluated")))
   (@return "Tuple"))
+(: collapse (-> Atom Atom))
+(= (collapse $atom)
+  (function
+    (chain (context-space) $space
+      (chain (collapse-bind (metta $atom %Undefined% $space)) $eval
+        (chain (eval (foldl-atom $eval () $res $item (_collapse-add-next-atom-from-collapse-bind-result $res $item))) $result
+          (return $result) )))))
+
+(@doc _collapse-add-next-atom-from-collapse-bind-result
+  (@desc "Adds atom from collapse-bind result to the passed list")
+  (@params (
+    (@param "List to add an atom into")
+    (@param "collapse-bind result to extract atom from, should be a pair of atom and bindings")))
+  (@return "List with new atom as a head"))
 
 (@doc case
   (@desc "Subsequently tests multiple pattern-matching conditions (second argument) for the given value (first argument)")
