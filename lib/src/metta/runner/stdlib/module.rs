@@ -170,7 +170,7 @@ impl ModSpaceOp {
 
 impl Grounded for ModSpaceOp {
     fn type_(&self) -> Atom {
-        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, rust_type_atom::<DynSpace>()])
+        Atom::expr([ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_SPACE])
     }
 
     fn as_execute(&self) -> Option<&dyn CustomExecute> {
