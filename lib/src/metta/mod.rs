@@ -41,9 +41,12 @@ pub const SUPERPOSE_BIND_SYMBOL : Atom = sym!("superpose-bind");
 
 pub const METTA_SYMBOL : Atom = sym!("metta");
 pub const CALL_NATIVE_SYMBOL : Atom = sym!("call-native");
+pub const CONTEXT_SPACE_SYMBOL : Atom = sym!("context-space");
 
 pub const UNIT_ATOM: Atom = constexpr!();
 pub const UNIT_TYPE: Atom = constexpr!(("->"));
+
+pub const ATOM_TYPE_SPACE: Atom = sym!("SpaceType");
 
 /// Initializes an error expression atom
 pub fn error_atom(err_atom: Option<Atom>, err_code: Option<Atom>, message: String) -> Atom {
