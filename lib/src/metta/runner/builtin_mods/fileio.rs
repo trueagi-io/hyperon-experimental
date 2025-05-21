@@ -76,7 +76,10 @@ impl FileHandle {
 
     fn get_size (&self) -> Result<u64, ExecError>
     {
-        Ok(self.0.borrow_mut().metadata().unwrap().len())
+        match self.0.borrow_mut().metadata() {
+            Ok(metadata) => Ok(metadata.len()),
+            Err(message) => Err(ExecError::from(format!("Get size failed: {}", message)))
+        }
     }
 }
 
