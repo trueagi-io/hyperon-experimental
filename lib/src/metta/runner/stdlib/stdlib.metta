@@ -676,7 +676,7 @@
         (() (Error $arg "Empty result encountered"))
         ($_ (let $atom $arg (Error $arg (Expected True, evaluated to $atom)))))))
 
-(@doc assertContains
+(@doc assertIncludes
   (@desc "Checks if the second argument is one of the results of the first argument's evaluation, rather than requiring all the results")
   (@params (
     (@param "First expression")
