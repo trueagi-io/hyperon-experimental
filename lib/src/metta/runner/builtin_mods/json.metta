@@ -52,13 +52,12 @@
                         (format-args '{}' ($input))))))))
 
 (= (json-encode-dict $dict-space)
-    (chain (context-space) $space
-       (chain (eval (get-keys $dict-space)) $keys
-         (unify Empty $keys
-            (format-args {} ($dict-space))
-            (let $value (get-value $dict-space $keys)
-                (let $recres (json-encode $value)
-                    (format-args "'{}' : {}" ($keys $recres))))) )))
+   (chain (eval (get-keys $dict-space)) $keys
+     (unify Empty $keys
+        (format-args {} ($dict-space))
+        (let $value (get-value $dict-space $keys)
+            (let $recres (json-encode $value)
+                (format-args "'{}' : {}" ($keys $recres))))) ))
 
 (= (json-encode-expr $expr)
     (let ($head $tail) (decons-atom $expr)
