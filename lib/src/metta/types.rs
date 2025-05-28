@@ -125,7 +125,7 @@ fn query_types(space: &DynSpace, atom: &Atom) -> Vec<Atom> {
     let atom_x = Atom::Variable(var_x);
     let mut types = types.into_iter().filter_map(|bindings| {
         let atom = apply_bindings_to_atom_move(atom_x.clone(), &bindings);
-        if atom_x == atom {
+        if atom_x == atom || atom == ATOM_TYPE_UNDEFINED {
             None
         } else {
             Some(atom)
@@ -153,7 +153,7 @@ fn get_args(expr: &ExpressionAtom) -> &[Atom] {
     &expr.children()[1..]
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct AtomType {
     typ: Atom,
     is_function: bool,
@@ -311,7 +311,14 @@ pub fn get_atom_types_v2(space: &DynSpace, atom: &Atom) -> Vec<AtomType> {
         // and `(: + (-> Num Num Num))`then type checker can find that
         // `{ $r = $t = $tt = Num }`.
         Atom::Variable(_) => vec![],
-        Atom::Grounded(gnd) => vec![AtomType::value(make_variables_unique(gnd.type_()))],
+        Atom::Grounded(gnd) => {
+            let typ = gnd.type_();
+            if typ == ATOM_TYPE_UNDEFINED {
+                vec![]
+            } else {
+                vec![AtomType::value(make_variables_unique(gnd.type_()))]
+            }
+        },
         Atom::Symbol(_) => query_types(space, atom).into_iter()
             .map(AtomType::value).collect(),
         // FIXME: incorrect type
@@ -1246,4 +1253,14 @@ mod tests {
         assert!(validate_atom(&space, &atom("(varF (varR a))")));
         assert!(!validate_atom(&space, &atom("(varF (atomR a))")));
     }
+
+    #[test]
+    fn tuple_with_undefined_member() {
+        let space = metta_space("(: F %Undefined%)");
+        assert_eq!(get_atom_types_v2(&space, &atom("(F arg)")), vec![]);
+
+        let gnd = GroundedAtomWithParameterizedType(ATOM_TYPE_UNDEFINED);
+        assert_eq!(get_atom_types_v2(&space, &expr!({gnd} "a")), vec![]);
+    }
+
 }
