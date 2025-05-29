@@ -151,13 +151,12 @@ mod tests {
     use crate::metta::runner::EnvBuilder;
     use crate::metta::runner::str::Str;
     use crate::matcher::atoms_are_equivalent;
-    use crate::common::Operation;
     use crate::metta::runner::bool::Bool;
     use crate::metta::runner::number::Number;
     use crate::metta::runner::run_program;
+    use crate::atom::gnd::GroundedFunctionAtom;
 
     use std::fmt::Display;
-    use regex::Regex;
 
     #[test]
     fn metta_switch() {
@@ -499,15 +498,11 @@ mod tests {
         assert_eq_metta_results!(run_program(program), Ok(vec![vec![expr!("a")]]));
     }
 
-    static ID_NUM: &Operation = &Operation{
-        name: "id_num",
-        execute: |_, args| {
-            let arg_error = || ExecError::from("id_num expects one argument: number");
-            let num = args.get(0).ok_or_else(arg_error)?;
-            Ok(vec![num.clone()])
-        },
-        typ: "(-> Number Number)",
-    };
+    fn id_num(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
+        let arg_error = || ExecError::from("id_num expects one argument: number");
+        let num = args.get(0).ok_or_else(arg_error)?;
+        Ok(vec![num.clone()])
+    }
 
     #[test]
     fn test_return_bad_type_error() {
@@ -520,8 +515,8 @@ mod tests {
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.tokenizer().borrow_mut().register_token(Regex::new("id_num").unwrap(),
-            |_| Atom::gnd(ID_NUM));
+        metta.tokenizer().borrow_mut().register_function(
+            GroundedFunctionAtom::new("id_num".into(), expr!("->" "Number" "Number"), id_num));
 
         assert_eq!(metta.run(SExprParser::new(program1)),
             Ok(vec![vec![expr!("Error" "myAtom" "BadType")]]));
@@ -547,8 +542,8 @@ mod tests {
         ";
 
         let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.tokenizer().borrow_mut().register_token(Regex::new("id_num").unwrap(),
-            |_| Atom::gnd(ID_NUM));
+        metta.tokenizer().borrow_mut().register_function(
+            GroundedFunctionAtom::new("id_num".into(), expr!("->" "Number" "Number"), id_num));
 
         assert_eq!(metta.run(SExprParser::new(program1)),
             Ok(vec![vec![expr!("c")]]));
