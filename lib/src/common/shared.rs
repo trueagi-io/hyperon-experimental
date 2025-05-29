@@ -3,7 +3,6 @@ use std::ops::{Deref, DerefMut};
 use std::rc::Rc;
 use std::cell::RefCell;
 use std::fmt::{Debug, Display};
-use crate::atom::*;
 
 pub trait LockBorrow<T: ?Sized> {
     fn borrow(&self) -> Box<dyn Deref<Target=T> + '_>;
@@ -158,47 +157,9 @@ impl<T: Display> Display for Shared<T> {
     }
 }
 
-impl<T: Grounded> Grounded for Shared<T> {
-    fn type_(&self) -> Atom {
-        rust_type_atom::<Self>()
-    }
-
-    fn as_match(&self) -> Option<&dyn CustomMatch> {
-        match self.0.borrow().as_match() {
-            None => None,
-            Some(_) => Some(self),
-        }
-    }
-
-    fn as_execute(&self) -> Option<&dyn CustomExecute> {
-        match self.0.borrow().as_execute() {
-            None => None,
-            Some(_) => Some(self),
-        }
-    }
-}
-
-impl <T: Grounded> CustomExecute for Shared<T> {
-    fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-        self.0.borrow().as_execute()
-            .expect("Custom execution procedure is not expected to be changed in runtime")
-            .execute(args)
-    }
-}
-
-impl<T: Grounded> CustomMatch for Shared<T> {
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        self.0.borrow().as_match()
-            .expect("Custom match procedure is not expected to be changed in runtime")
-            .match_(other)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::bind;
-    use crate::atom::matcher::Bindings;
 
     #[test]
     fn debug_for_shared() {
@@ -210,55 +171,6 @@ mod tests {
     fn display_for_shared() {
         let shared = Shared::new("some-string");
         assert_eq!(format!("{}", shared), format!("some-string(addr={:?})", RefCell::as_ptr(&shared.0)));
-    }
-
-    struct SharedGrounded {}
-
-    impl Display for SharedGrounded {
-        fn fmt<'a>(&self, f: &mut std::fmt::Formatter<'a>) -> std::fmt::Result {
-            write!(f, "SharedGrounded")
-        }
-    }
-
-    impl Grounded for SharedGrounded {
-        fn type_(&self) -> Atom {
-            Atom::sym("IgnoredType")
-        }
-        fn as_match(&self) -> Option<&dyn CustomMatch> {
-            Some(self)
-        }
-        fn as_execute(&self) -> Option<&dyn CustomExecute> {
-            Some(self)
-        }
-    }
-
-    impl CustomExecute for SharedGrounded {
-        fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            let mut result = vec![Atom::sym("executed")];
-            result.extend(args.into_iter().cloned());
-            Ok(result)
-        }
-    }
-
-    impl CustomMatch for SharedGrounded {
-        fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-            let vec = if *other == Atom::sym("matchable") {
-                vec![bind!{ x: Atom::sym("match") }]
-            } else {
-                Vec::new()
-            };
-            Box::new(vec.into_iter())
-        }
-    }
-
-    #[test]
-    fn grounded_for_shared() {
-        let shared = Shared::new(SharedGrounded{});
-
-        assert_eq!(shared.type_(), Atom::sym("hyperon::common::shared::Shared<hyperon::common::shared::tests::SharedGrounded>"));
-        assert_eq!(shared.as_match().unwrap().match_(&Atom::sym("matchable")).collect::<Vec<Bindings>>(),
-            vec![bind!{ x: Atom::sym("match") }]);
-        assert_eq!(shared.execute(&mut vec![Atom::sym("arg")]), Ok(vec![Atom::sym("executed"), Atom::sym("arg")]));
     }
 
     #[test]
