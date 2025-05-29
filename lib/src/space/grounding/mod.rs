@@ -270,6 +270,7 @@ pub(crate) fn metta_space(text: &str) -> DynSpace {
 mod test {
     use super::*;
     use crate::matcher::*;
+    use hyperon_common::assert_eq_no_order;
 
     struct SpaceEventCollector {
         events: Vec<SpaceEvent>,

@@ -1,8 +1,8 @@
 use crate::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-use crate::common::collections::{SliceDisplay, Equality, DefaultEquality};
-use crate::common::assert::compare_vec_no_order;
+use hyperon_common::collections::{SliceDisplay, Equality, DefaultEquality};
+use hyperon_common::assert::compare_vec_no_order;
 use crate::atom::matcher::atoms_are_equivalent;
 use crate::metta::runner::stdlib::{grounded_op, regex, unit_result};
 use crate::metta::runner::bool::*;

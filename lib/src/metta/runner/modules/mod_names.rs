@@ -1,7 +1,7 @@
 //! Implements logic for working with module names, including a low-allocation layered tree structure 
 
 use crate::metta::runner::*;
-use crate::common::owned_or_borrowed::OwnedOrBorrowed;
+use hyperon_common::owned_or_borrowed::OwnedOrBorrowed;
 
 /// The name of the top module in a runner
 pub const TOP_MOD_NAME: &'static str = "top";

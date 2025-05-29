@@ -244,6 +244,7 @@ mod tests {
     use crate::metta::text::SExprParser;
     use crate::space::grounding::metta_space;
     use crate::metta::runner::Metta;
+    use hyperon_common::assert_eq_no_order;
 
     #[test]
     fn mod_space_op() {

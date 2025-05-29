@@ -1,4 +1,4 @@
-use hyperon::assert_eq_metta_results;
+use hyperon_common::assert_eq_metta_results;
 use hyperon::metta::text::SExprParser;
 use hyperon::metta::runner::{Metta, EnvBuilder};
 

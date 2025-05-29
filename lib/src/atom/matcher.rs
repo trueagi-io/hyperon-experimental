@@ -65,8 +65,8 @@ macro_rules! bind_set {
 use std::collections::{HashMap, HashSet};
 
 use super::*;
-use crate::common::reformove::RefOrMove;
-use crate::common::holeyvec::HoleyVec;
+use hyperon_common::reformove::RefOrMove;
+use hyperon_common::holeyvec::HoleyVec;
 
 enum VarResolutionResult<T> {
     Some(T),
@@ -635,6 +635,7 @@ impl Bindings {
     /// # Examples
     ///
     /// ```
+    /// use hyperon_common::assert_eq_no_order;
     /// use hyperon::*;
     ///
     /// let bindings = bind!{ leftA: expr!("A"), leftA: expr!(rightB),
@@ -889,7 +890,7 @@ pub struct BindingsSet(smallvec::SmallVec<[Bindings; 1]>);
 // BindingsSets are conceptually unordered
 impl PartialEq for BindingsSet {
     fn eq(&self, other: &Self) -> bool {
-        !crate::common::assert::compare_vec_no_order(self.iter(), other.iter(), crate::common::collections::DefaultEquality{}).has_diff()
+        !hyperon_common::assert::compare_vec_no_order(self.iter(), other.iter(), hyperon_common::collections::DefaultEquality{}).has_diff()
     }
 }
 
@@ -1220,7 +1221,7 @@ fn atoms_are_equivalent_with_bindings<'a>(left: &'a Atom, right: &'a Atom,
 
 #[cfg(test)]
 mod test {
-    use crate::assert_eq_no_order;
+    use hyperon_common::assert_eq_no_order;
     use super::*;
 
     fn assert_match(left: Atom, right: Atom, expected: Vec<Bindings>) {

@@ -40,7 +40,7 @@ use std::fmt::{Debug, Display};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::marker::PhantomData;
-use crate::common::shared::Shared;
+use crate::shared::Shared;
 
 /// Single token of [TrieKey]. Each kind of token has its own recognition rules.
 #[derive(PartialEq, Eq, Clone, Debug, Hash)]
@@ -189,7 +189,7 @@ impl<T: Display> Display for TrieKey<T> {
     }
 }
 
-/// Multi-value trie with double side matching. See [crate::common::multitrie]
+/// Multi-value trie with double side matching. See [crate::multitrie]
 /// for the algorithm description.
 #[derive(Clone, Debug)]
 pub struct MultiTrie<K, V>(MultiTrieNode<K, V>);
@@ -209,7 +209,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use hyperon::common::multitrie::*;
+    /// use hyperon_common::multitrie::*;
     ///
     /// fn collect<'a, T, I>(it: I) -> Vec<T> where T: Clone + 'a, I: Iterator<Item=&'a T>, {
     ///     it.cloned().collect()
@@ -237,7 +237,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use hyperon::common::multitrie::*;
+    /// use hyperon_common::multitrie::*;
     ///
     /// fn collect<'a, T, I>(it: I) -> Vec<T> where T: Clone + 'a, I: Iterator<Item=&'a T>, {
     ///     it.cloned().collect()
@@ -266,7 +266,7 @@ where
     /// # Examples
     ///
     /// ```
-    /// use hyperon::common::multitrie::*;
+    /// use hyperon_common::multitrie::*;
     ///
     /// fn collect<'a, T, I>(it: I) -> Vec<T> where T: Clone + 'a, I: Iterator<Item=&'a T>, {
     ///     it.cloned().collect()

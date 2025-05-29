@@ -1,6 +1,6 @@
 #![allow(non_camel_case_types)]
 
-use hyperon::common::shared::Shared;
+use hyperon_common::shared::Shared;
 use hyperon::metta::text::*;
 use hyperon::metta::interpreter;
 use hyperon::metta::interpreter::InterpreterState;

@@ -10,7 +10,7 @@ use std::cell::{RefCell, Ref, RefMut};
 use std::borrow::Cow;
 
 use crate::*;
-use crate::common::FlexRef;
+use hyperon_common::FlexRef;
 use crate::atom::*;
 use crate::atom::matcher::{BindingsSet, apply_bindings_to_atom_move};
 use crate::atom::subexpr::split_expr;
@@ -182,7 +182,8 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::{expr, assert_eq_no_order};
+    /// use hyperon_common::assert_eq_no_order;
+    /// use hyperon::expr;
     /// use hyperon::space::Space;
     /// use hyperon::space::grounding::GroundingSpace;
     ///

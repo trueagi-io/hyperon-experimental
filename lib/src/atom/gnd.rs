@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use super::*;
-use crate::common::collections::ImmutableString;
+use hyperon_common::collections::ImmutableString;
 
 /// Grounded function abstraction.
 pub trait GroundedFunction {

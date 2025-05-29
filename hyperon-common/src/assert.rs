@@ -92,8 +92,8 @@ impl<T, E: Equality<T>> VecDiff<T, E> {
 macro_rules! assert_eq_no_order {
     ($actual:expr, $expected:expr) => {
         {
-            let diff = $crate::common::assert::compare_vec_no_order($actual.iter(), $expected.iter(),
-                $crate::common::collections::DefaultEquality{}).as_debug();
+            let diff = $crate::assert::compare_vec_no_order($actual.iter(), $expected.iter(),
+                $crate::collections::DefaultEquality{}).as_debug();
             assert!(diff.is_none(),
                 "(actual != expected)\nActual: {:?}\nExpected: {:?}\n{}",
                     $actual, $expected, diff.unwrap());
@@ -124,7 +124,7 @@ macro_rules! assert_eq_metta_results {
         {
             let actual = &$actual;
             let expected = &$expected;
-            assert!($crate::common::assert::metta_results_eq(actual, expected),
+            assert!($crate::assert::metta_results_eq(actual, expected),
                 "(actual == expected)\n  actual: {:?}\n expected: {:?}", actual, expected);
         }
     }

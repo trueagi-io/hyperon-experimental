@@ -14,7 +14,7 @@ use crate::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::{Tokenizer, SExprParser};
-use crate::common::shared::Shared;
+use hyperon_common::shared::Shared;
 use crate::metta::runner::{Metta, RunContext, ModuleLoader, PragmaSettings};
 use crate::metta::runner::modules::MettaMod;
 
@@ -155,6 +155,7 @@ mod tests {
     use crate::metta::runner::number::Number;
     use crate::metta::runner::run_program;
     use crate::atom::gnd::GroundedFunctionAtom;
+    use hyperon_common::assert_eq_metta_results;
 
     use std::fmt::Display;
 

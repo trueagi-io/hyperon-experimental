@@ -89,10 +89,10 @@ macro_rules! expr {
 
 #[macro_export]
 macro_rules! constexpr {
-    () => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(&[]))) };
-    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new($crate::common::collections::ImmutableString::Literal($x))) };
-    (($($x:tt)*)) => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
-    ($($x:tt)*) => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
+    () => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(&[]))) };
+    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::collections::ImmutableString::Literal($x))) };
+    (($($x:tt)*)) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
+    ($($x:tt)*) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
 }
 
 /// Constructs new symbol atom. Can be used to construct `const` instances.
@@ -111,7 +111,7 @@ macro_rules! constexpr {
 /// ```
 #[macro_export]
 macro_rules! sym {
-    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new($crate::common::collections::ImmutableString::Literal($x))) };
+    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::collections::ImmutableString::Literal($x))) };
 }
 
 pub mod matcher;
@@ -126,7 +126,7 @@ use std::any::Any;
 use std::fmt::{Display, Debug};
 use std::convert::TryFrom;
 
-use crate::common::collections::{ImmutableString, CowArray};
+use hyperon_common::collections::{ImmutableString, CowArray};
 
 // Symbol atom
 
@@ -320,7 +320,7 @@ impl Display for VariableAtom {
 
 /// Returns `atom` with all variables replaced by unique instances.
 pub fn make_variables_unique(mut atom: Atom) -> Atom {
-    let mut mapper = crate::common::CachingMapper::new(VariableAtom::make_unique);
+    let mut mapper = hyperon_common::CachingMapper::new(VariableAtom::make_unique);
     atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
     atom
 }

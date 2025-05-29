@@ -3,8 +3,8 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use crate::metta::types::{get_atom_types, get_meta_type};
-use crate::common::multitrie::{MultiTrie, TrieKey, TrieToken};
-use crate::common::collections::ImmutableString;
+use hyperon_common::multitrie::{MultiTrie, TrieKey, TrieToken};
+use hyperon_common::collections::ImmutableString;
 use super::{grounded_op, regex};
 use crate::metta::runner::number::*;
 
@@ -478,7 +478,8 @@ mod tests {
     use crate::metta::space::grounding::metta_space;
     use crate::metta::runner::run_program;
     use crate::metta::runner::Metta;
-    use crate::metta::runner::stdlib::arithmetics::*;
+    use crate::metta::runner::stdlib::arithmetics::SumOp;
+    use hyperon_common::{assert_eq_metta_results, assert_eq_no_order};
 
     #[test]
     fn metta_car_atom() {

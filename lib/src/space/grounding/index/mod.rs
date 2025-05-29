@@ -220,7 +220,8 @@ mod test {
     use super::*;
 
     use crate::matcher::*;
-    use crate::{expr, sym, bind, assert_eq_no_order};
+    use crate::{expr, sym, bind};
+    use hyperon_common::assert_eq_no_order;
     use crate::metta::runner::number::Number;
     use std::fmt::{Debug, Display, Formatter};
 
