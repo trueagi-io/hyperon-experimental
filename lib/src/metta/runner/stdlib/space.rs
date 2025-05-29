@@ -242,7 +242,7 @@ pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
 mod tests {
     use super::*;
     use crate::metta::text::SExprParser;
-    use crate::common::test_utils::metta_space;
+    use crate::space::grounding::metta_space;
     use crate::metta::runner::Metta;
 
     #[test]

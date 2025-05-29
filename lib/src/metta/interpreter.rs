@@ -1447,7 +1447,8 @@ fn metta_call_return(args: Atom, bindings: Bindings) -> MettaResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::test_utils::{metta_atom, metta_space};
+    use crate::metta::text::metta_atom;
+    use crate::metta::space::grounding::metta_space;
 
     #[test]
     fn interpret_atom_evaluate_incorrect_args() {

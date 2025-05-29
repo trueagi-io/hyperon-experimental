@@ -13,9 +13,6 @@ pub use flex_ref::FlexRef;
 
 use std::collections::HashMap;
 
-#[cfg(test)]
-pub(crate) mod test_utils;
-
 #[derive(Clone)]
 pub struct CachingMapper<K: Clone + std::hash::Hash + Eq + ?Sized, V: Clone, F: Fn(K) -> V> {
     mapper: F,

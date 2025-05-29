@@ -380,7 +380,7 @@ mod tests {
     use super::*;
     use crate::metta::runner::run_program;
     use crate::matcher::atoms_are_equivalent;
-    use crate::common::test_utils::metta_space;
+    use crate::metta::space::grounding::metta_space;
     use crate::metta::runner::number::Number;
 
     use std::convert::TryFrom;
