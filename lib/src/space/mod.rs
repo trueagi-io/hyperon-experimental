@@ -9,11 +9,10 @@ use std::rc::{Rc, Weak};
 use std::cell::{RefCell, Ref, RefMut};
 use std::borrow::Cow;
 
-use crate::*;
 use hyperon_common::FlexRef;
-use crate::atom::*;
-use crate::atom::matcher::{BindingsSet, apply_bindings_to_atom_move};
-use crate::atom::subexpr::split_expr;
+use hyperon_atom::*;
+use hyperon_atom::matcher::{BindingsSet, apply_bindings_to_atom_move};
+use hyperon_atom::subexpr::split_expr;
 
 /// Symbol to concatenate queries to space.
 pub const COMMA_SYMBOL : Atom = sym!(",");
@@ -34,7 +33,7 @@ pub enum SpaceEvent {
 /// # Examples
 ///
 /// ```
-/// use hyperon::sym;
+/// use hyperon_atom::sym;
 /// use hyperon::space::*;
 /// use hyperon::space::grounding::*;
 /// use std::rc::Rc;
@@ -162,8 +161,8 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::{expr, bind_set, sym};
-    /// use hyperon::matcher::BindingsSet;
+    /// use hyperon_atom::{expr, bind_set, sym};
+    /// use hyperon_atom::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let space = GroundingSpace::from_vec(vec![expr!("A" "B"), expr!("B" "C")]);
@@ -183,7 +182,7 @@ pub trait Space: std::fmt::Debug + std::fmt::Display {
     ///
     /// ```
     /// use hyperon_common::assert_eq_no_order;
-    /// use hyperon::expr;
+    /// use hyperon_atom::expr;
     /// use hyperon::space::Space;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
@@ -223,9 +222,9 @@ pub trait SpaceMut: Space {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::sym;
+    /// use hyperon_atom::sym;
+    /// use hyperon_atom::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
-    /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     /// 
@@ -243,8 +242,8 @@ pub trait SpaceMut: Space {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::sym;
-    /// use hyperon::matcher::BindingsSet;
+    /// use hyperon_atom::sym;
+    /// use hyperon_atom::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
@@ -262,9 +261,9 @@ pub trait SpaceMut: Space {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::sym;
+    /// use hyperon_atom::sym;
+    /// use hyperon_atom::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
-    /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     /// 
@@ -322,7 +321,7 @@ impl PartialEq for DynSpace {
     }
 }
 
-impl crate::atom::Grounded for DynSpace {
+impl hyperon_atom::Grounded for DynSpace {
     fn type_(&self) -> Atom {
         crate::metta::ATOM_TYPE_SPACE
     }

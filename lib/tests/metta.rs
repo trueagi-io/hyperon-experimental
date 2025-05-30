@@ -1,6 +1,6 @@
 use hyperon_common::collections::ImmutableString;
-use hyperon::*;
-use hyperon::gnd::*;
+use hyperon_atom::*;
+use hyperon_atom::gnd::*;
 use hyperon::metta::UNIT_ATOM;
 use hyperon::metta::text::*;
 use hyperon::metta::runner::{Metta, EnvBuilder};

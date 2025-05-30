@@ -56,11 +56,11 @@
 
 //LP-TODO-NEXT: This description above is correct, but it's not complete.  Update with latest design.
 
-use crate::*;
+use hyperon_atom::*;
 use hyperon_common::shared::Shared;
 
 use super::*;
-use super::space::*;
+use crate::space::*;
 use super::text::{Tokenizer, Parser, SExprParser};
 use super::types::validate_atom;
 

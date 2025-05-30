@@ -1,6 +1,6 @@
-use crate::*;
-use crate::atom::serial;
-use crate::atom::serial::ConvertingSerializer;
+use hyperon_atom::*;
+use hyperon_atom::serial;
+use hyperon_atom::serial::ConvertingSerializer;
 
 use std::fmt::Display;
 

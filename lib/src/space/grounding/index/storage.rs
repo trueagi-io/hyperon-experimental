@@ -1,5 +1,5 @@
-use crate::atom::*;
-use crate::serial::NullSerializer;
+use hyperon_atom::*;
+use hyperon_atom::serial::NullSerializer;
 use hyperon_common::collections::write_mapping;
 
 use bimap::BiMap;
@@ -150,7 +150,7 @@ impl Display for HashableAtom {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::expr;
+    use hyperon_atom::expr;
     use crate::metta::runner::number::Number;
 
     #[test]

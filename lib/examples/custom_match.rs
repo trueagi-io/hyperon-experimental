@@ -1,6 +1,6 @@
 use std::fmt::Display;
-use hyperon::*;
-use hyperon::atom::matcher::*;
+use hyperon_atom::*;
+use hyperon_atom::matcher::*;
 
 #[derive(PartialEq, Clone, Debug)]
 struct TestDict(Vec<(Atom, Atom)>);

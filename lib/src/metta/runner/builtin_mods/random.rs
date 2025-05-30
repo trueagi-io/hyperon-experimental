@@ -1,5 +1,5 @@
 
-use crate::*;
+use hyperon_atom::*;
 use crate::metta::*;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::number::*;
@@ -9,7 +9,7 @@ use std::fmt::{Display, Formatter};
 use std::cell::RefCell;
 use rand::{Rng, SeedableRng, rngs::StdRng};
 use std::rc::Rc;
-use crate::gnd::GroundedFunctionAtom;
+use hyperon_atom::gnd::GroundedFunctionAtom;
 use crate::metta::runner::modules::{MettaMod, ModuleLoader};
 use crate::metta::runner::{Metta, RunContext};
 

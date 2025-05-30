@@ -4,8 +4,8 @@ pub mod trie;
 pub use trie::{ALLOW_DUPLICATION, NO_DUPLICATION, DuplicationStrategy, AllowDuplication, NoDuplication};
 use trie::*;
 
-use crate::atom::*;
-use crate::matcher::Bindings;
+use hyperon_atom::*;
+use hyperon_atom::matcher::Bindings;
 
 use std::fmt::Debug;
 use std::borrow::Cow;
@@ -219,8 +219,8 @@ impl<D: DuplicationStrategy> AtomIndex<D> {
 mod test {
     use super::*;
 
-    use crate::matcher::*;
-    use crate::{expr, sym, bind};
+    use hyperon_atom::matcher::*;
+    use hyperon_atom::{expr, sym, bind};
     use hyperon_common::assert_eq_no_order;
     use crate::metta::runner::number::Number;
     use std::fmt::{Debug, Display, Formatter};

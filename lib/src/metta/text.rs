@@ -1,7 +1,7 @@
 //! MeTTa parser implementation.
 
-use crate::*;
-use crate::gnd::*;
+use hyperon_atom::*;
+use hyperon_atom::gnd::*;
 
 use core::ops::Range;
 use std::iter::Peekable;
@@ -834,7 +834,7 @@ mod tests {
         // contours can't be captured by a regex.
         let mut tokenizer = Tokenizer::new();
         tokenizer.register_fallible_token(Regex::new(r"[\-\+]?\d+.\d+").unwrap(),
-            |token| Ok(Atom::gnd(metta::runner::number::Number::from_float_str(token)?))
+            |token| Ok(Atom::gnd(crate::metta::runner::number::Number::from_float_str(token)?))
         );
         let mut parser = SExprParser::new("12345678901234567:8901234567890");
         assert!(parser.parse(&tokenizer).is_err());

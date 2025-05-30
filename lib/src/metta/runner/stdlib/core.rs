@@ -1,4 +1,4 @@
-use crate::*;
+use hyperon_atom::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
@@ -6,8 +6,8 @@ use hyperon_common::CachingMapper;
 use crate::metta::runner::Metta;
 use crate::metta::runner::PragmaSettings;
 use crate::metta::runner::bool::*;
-use crate::atom::gnd::GroundedFunctionAtom;
-use crate::matcher::{Bindings, apply_bindings_to_atom_move};
+use hyperon_atom::gnd::GroundedFunctionAtom;
+use hyperon_atom::matcher::{Bindings, apply_bindings_to_atom_move};
 
 use std::convert::TryInto;
 
@@ -188,7 +188,7 @@ impl CustomExecute for IfEqualOp {
         let then = args.get(2).ok_or_else(arg_error)?;
         let else_ = args.get(3).ok_or_else(arg_error)?;
 
-        if crate::matcher::atoms_are_equivalent(atom, pattern) {
+        if hyperon_atom::matcher::atoms_are_equivalent(atom, pattern) {
             Ok(vec![then.clone()])
         } else {
             Ok(vec![else_.clone()])
@@ -379,8 +379,8 @@ pub(super) fn register_context_dependent_tokens(tref: &mut Tokenizer, space: &Dy
 mod tests {
     use super::*;
     use crate::metta::runner::run_program;
-    use crate::matcher::atoms_are_equivalent;
-    use crate::metta::space::grounding::metta_space;
+    use hyperon_atom::matcher::atoms_are_equivalent;
+    use crate::space::grounding::metta_space;
     use crate::metta::runner::number::Number;
     use hyperon_common::{assert_eq_no_order, assert_eq_metta_results};
 
@@ -523,8 +523,8 @@ mod tests {
         let nested = run_program("!(sealed ($a $b $x) (quote (= ($a $x $c) ($b))))");
         let simple_replace = run_program("!(sealed ($x $y) (quote (= ($y $z))))");
 
-        assert!(crate::atom::matcher::atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("quote" ("=" (a b c) (z)))));
-        assert!(crate::atom::matcher::atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("quote" ("=" (y z)))));
+        assert!(hyperon_atom::matcher::atoms_are_equivalent(&nested.unwrap()[0][0], &expr!("quote" ("=" (a b c) (z)))));
+        assert!(hyperon_atom::matcher::atoms_are_equivalent(&simple_replace.unwrap()[0][0], &expr!("quote" ("=" (y z)))));
     }
 
     #[test]
@@ -553,6 +553,6 @@ mod tests {
     #[test]
     fn sealed_op_execute() {
         let val = SealedOp{}.execute(&mut vec![expr!(x y), expr!("="(y z))]);
-        assert!(crate::atom::matcher::atoms_are_equivalent(&val.unwrap()[0], &expr!("="(y z))));
+        assert!(hyperon_atom::matcher::atoms_are_equivalent(&val.unwrap()[0], &expr!("="(y z))));
     }
 }
