@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+hyperon-common = { workspace = true }
 hyperon = { workspace = true }
 regex = { workspace = true }
 log = { workspace = true }

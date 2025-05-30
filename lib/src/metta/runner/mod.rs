@@ -57,7 +57,7 @@
 //LP-TODO-NEXT: This description above is correct, but it's not complete.  Update with latest design.
 
 use crate::*;
-use crate::common::shared::Shared;
+use hyperon_common::shared::Shared;
 
 use super::*;
 use super::space::*;

@@ -225,7 +225,8 @@ impl Display for AtomType {
 /// # Examples
 ///
 /// ```
-/// use hyperon::{Atom, expr, assert_eq_no_order};
+/// use hyperon_common::assert_eq_no_order;
+/// use hyperon::{Atom, expr};
 /// use hyperon::metta::ATOM_TYPE_UNDEFINED;
 /// use hyperon::metta::runner::*;
 /// use hyperon::metta::text::SExprParser;
@@ -606,6 +607,7 @@ mod tests {
     use crate::atom::matcher::atoms_are_equivalent;
     use crate::metta::runner::*;
     use crate::metta::text::SExprParser;
+    use hyperon_common::assert_eq_no_order;
 
     fn metta_space(text: &str) -> DynSpace {
         let metta = Metta::new(Some(EnvBuilder::test_env()));

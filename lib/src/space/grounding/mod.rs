@@ -254,9 +254,23 @@ impl CustomMatch for GroundingSpace {
 }
 
 #[cfg(test)]
+use crate::metta::text::*;
+
+#[cfg(test)]
+pub(crate) fn metta_space(text: &str) -> DynSpace {
+    let mut space = GroundingSpace::new();
+    let mut parser = SExprParser::new(text);
+    while let Some(atom) = parser.parse(&Tokenizer::new()).unwrap() {
+        space.add(atom);
+    }
+    space.into()
+}
+
+#[cfg(test)]
 mod test {
     use super::*;
     use crate::matcher::*;
+    use hyperon_common::assert_eq_no_order;
 
     struct SpaceEventCollector {
         events: Vec<SpaceEvent>,

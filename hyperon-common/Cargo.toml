@@ -1,0 +1,12 @@
+[package]
+name = "hyperon-common"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+log = { workspace = true }
+itertools = "0.13.0"
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["lib"]

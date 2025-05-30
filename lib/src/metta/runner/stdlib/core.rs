@@ -2,7 +2,7 @@ use crate::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-use crate::common::CachingMapper;
+use hyperon_common::CachingMapper;
 use crate::metta::runner::Metta;
 use crate::metta::runner::PragmaSettings;
 use crate::metta::runner::bool::*;
@@ -380,8 +380,9 @@ mod tests {
     use super::*;
     use crate::metta::runner::run_program;
     use crate::matcher::atoms_are_equivalent;
-    use crate::common::test_utils::metta_space;
+    use crate::metta::space::grounding::metta_space;
     use crate::metta::runner::number::Number;
+    use hyperon_common::{assert_eq_no_order, assert_eq_metta_results};
 
     use std::convert::TryFrom;
 

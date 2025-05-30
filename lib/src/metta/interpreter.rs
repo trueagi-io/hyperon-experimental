@@ -7,7 +7,7 @@ use crate::space::*;
 use crate::metta::*;
 use crate::metta::types::*;
 use crate::metta::runner::stdlib::core::IfEqualOp;
-use crate::common::collections::CowArray;
+use hyperon_common::collections::CowArray;
 
 use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
@@ -1447,7 +1447,9 @@ fn metta_call_return(args: Atom, bindings: Bindings) -> MettaResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::test_utils::{metta_atom, metta_space};
+    use crate::metta::text::metta_atom;
+    use crate::metta::space::grounding::metta_space;
+    use hyperon_common::assert_eq_no_order;
 
     #[test]
     fn interpret_atom_evaluate_incorrect_args() {

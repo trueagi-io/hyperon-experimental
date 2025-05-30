@@ -1,4 +1,4 @@
-use hyperon::common::FlexRef;
+use hyperon_common::FlexRef;
 use hyperon::space::grounding::*;
 use hyperon::space::*;
 use hyperon::atom::*;

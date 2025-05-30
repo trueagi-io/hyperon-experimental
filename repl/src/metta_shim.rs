@@ -274,7 +274,7 @@ pub mod metta_interface_mod {
     use hyperon::ExpressionAtom;
     use hyperon::Atom;
     use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
-    use hyperon::common::collections::VecDisplay;
+    use hyperon_common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
     use hyperon::metta::runner::str::atom_to_string;
 

@@ -669,6 +669,13 @@ impl Parser for &[Atom] {
 }
 
 #[cfg(test)]
+pub(crate) fn metta_atom(atom_str: &str) -> Atom {
+    let mut parser = SExprParser::new(atom_str);
+    let atom = parser.parse(&Tokenizer::new()).unwrap().expect("Single atom is expected");
+    atom
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

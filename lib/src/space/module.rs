@@ -90,6 +90,7 @@ impl SpaceMut for ModuleSpace {
 
 #[cfg(test)]
 mod test {
+    use hyperon_common::assert_eq_no_order;
     use crate::*;
     use crate::space::grounding::*;
     use super::*;

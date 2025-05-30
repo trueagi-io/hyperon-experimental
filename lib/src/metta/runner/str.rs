@@ -1,5 +1,5 @@
 use crate::*;
-use crate::common::collections::ImmutableString;
+use hyperon_common::collections::ImmutableString;
 use crate::serial;
 use crate::atom::serial::ConvertingSerializer;
 use unescaper;
