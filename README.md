@@ -350,8 +350,16 @@ For more information about linking `libpython`, see [#432](https://github.com/tr
 
 Main library `libhyperon.rlib` is written in Rust language, it contains core
 API which can be used from other Rust projects. Source code of the library is
-located under [./lib](./lib) directory. It is a plain Rust project which can be
-built and tested using Cargo tool.
+divided on three crates located under [./hyperon-common](./hyperon-common),
+[./hyperon-atom](./hyperon-atom) and [./lib](./lib) directories. It is a plain
+Rust project which can be built and tested using Cargo tool.
+
+[./hyperon-common](./hyperon-common) crate contains different utility
+structures which are not directly related to the MeTTa and Hyperon. For example
+different collection and reference implementations.
+[./hyperon-atom](./hyperon-atom) crate contains core API which can be imported by
+third-party built-in modules providers. [./lib](./lib) crate contains MeTTa
+atomspace and interpreter implementations.
 
 In order to provide API for platforms and languages other than Rust there is a
 C API export library `libhyperonc`. Source code of the library is located under
