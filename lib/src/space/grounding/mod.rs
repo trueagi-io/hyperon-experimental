@@ -3,7 +3,7 @@
 pub mod index;
 
 use super::*;
-use crate::atom::*;
+use hyperon_atom::*;
 
 use std::fmt::Debug;
 use std::collections::HashSet;
@@ -57,9 +57,9 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::sym;
+    /// use hyperon_atom::sym;
+    /// use hyperon_atom::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
-    /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     ///
@@ -81,8 +81,8 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::sym;
-    /// use hyperon::matcher::BindingsSet;
+    /// use hyperon_atom::sym;
+    /// use hyperon_atom::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
@@ -107,9 +107,9 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::sym;
+    /// use hyperon_atom::sym;
+    /// use hyperon_atom::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
-    /// use hyperon::atom::matcher::BindingsSet;
     ///
     /// let mut space = GroundingSpace::from_vec(vec![sym!("A")]);
     ///
@@ -135,8 +135,8 @@ impl<D: DuplicationStrategy> GroundingSpace<D> {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::{expr, bind_set, sym};
-    /// use hyperon::matcher::BindingsSet;
+    /// use hyperon_atom::{expr, bind_set, sym};
+    /// use hyperon_atom::matcher::BindingsSet;
     /// use hyperon::space::grounding::GroundingSpace;
     ///
     /// let space = GroundingSpace::from_vec(vec![expr!("A" "B"), expr!("B" "C")]);
@@ -269,7 +269,7 @@ pub(crate) fn metta_space(text: &str) -> DynSpace {
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::matcher::*;
+    use hyperon_atom::matcher::*;
     use hyperon_common::assert_eq_no_order;
 
     struct SpaceEventCollector {

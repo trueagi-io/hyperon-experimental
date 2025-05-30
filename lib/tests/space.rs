@@ -1,4 +1,4 @@
-use hyperon::*;
+use hyperon_atom::*;
 use hyperon::space::grounding::GroundingSpace;
 
 #[test]

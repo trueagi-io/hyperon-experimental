@@ -4,7 +4,8 @@ use std::io::{BufReader, Write};
 use std::fs;
 use std::sync::Arc;
 
-use crate::{sym, ExpressionAtom, metta::GroundingSpace};
+use hyperon_atom::{sym, ExpressionAtom};
+use crate::metta::GroundingSpace;
 use crate::space::DynSpace;
 
 #[cfg(feature = "pkg_mgmt")]
@@ -455,9 +456,9 @@ fn git_catalog_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Result
         };
 
         match key_atom {
-            _ if *key_atom == sym!("#name") => catalog_name = Some(<&crate::SymbolAtom>::try_from(val_atom)?.name()),
-            _ if *key_atom == sym!("#url") => catalog_url = Some(<&crate::SymbolAtom>::try_from(val_atom)?.name()),
-            _ if *key_atom == sym!("#refreshTime") => refresh_time = Some(<&crate::SymbolAtom>::try_from(val_atom)?.name()),
+            _ if *key_atom == sym!("#name") => catalog_name = Some(<&hyperon_atom::SymbolAtom>::try_from(val_atom)?.name()),
+            _ if *key_atom == sym!("#url") => catalog_url = Some(<&hyperon_atom::SymbolAtom>::try_from(val_atom)?.name()),
+            _ if *key_atom == sym!("#refreshTime") => refresh_time = Some(<&hyperon_atom::SymbolAtom>::try_from(val_atom)?.name()),
             _ => return Err(format!("Error in environment.metta. Unknown key: {key_atom}"))
         }
     }
@@ -485,7 +486,7 @@ fn include_path_from_cfg_atom(atom: &ExpressionAtom, env: &Environment) -> Resul
         Some(atom) => atom,
         None => return Err(format!("Error in environment.metta. #includePath missing path value"))
     };
-    let path = <&crate::SymbolAtom>::try_from(path_atom)?.name();
+    let path = <&hyperon_atom::SymbolAtom>::try_from(path_atom)?.name();
     // At this stage stdlib is not loaded and thus path is parsed as a symbol not string. 
     // This is why we should manuall stip quotes from the symbol's name.
     let path = crate::metta::runner::str::strip_quotes(path);

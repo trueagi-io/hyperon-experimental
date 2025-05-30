@@ -19,7 +19,7 @@
 //! of `%Undefined%` type can be matched with any type required.
 
 use super::*;
-use crate::atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom_move};
+use hyperon_atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom_move};
 use crate::space::DynSpace;
 
 use std::fmt::{Display, Debug};
@@ -103,7 +103,7 @@ fn check_arg_types_internal(actual: &[Vec<AtomType>], meta: &[Vec<Atom>], expect
 /// # Examples
 ///
 /// ```
-/// use hyperon::expr;
+/// use hyperon_atom::expr;
 /// use hyperon::metta::types::is_func;
 ///
 /// assert!(is_func(&expr!("->" "A" "B")));
@@ -226,7 +226,7 @@ impl Display for AtomType {
 ///
 /// ```
 /// use hyperon_common::assert_eq_no_order;
-/// use hyperon::{Atom, expr};
+/// use hyperon_atom::{Atom, expr};
 /// use hyperon::metta::ATOM_TYPE_UNDEFINED;
 /// use hyperon::metta::runner::*;
 /// use hyperon::metta::text::SExprParser;
@@ -476,7 +476,7 @@ impl Grounded for UndefinedTypeMatch {
 
 impl CustomMatch for UndefinedTypeMatch {
     fn match_(&self, _other: &Atom) -> matcher::MatchResultIter {
-        Box::new(std::iter::once(crate::matcher::Bindings::new()))
+        Box::new(std::iter::once(hyperon_atom::matcher::Bindings::new()))
     }
 }
 
@@ -485,8 +485,8 @@ impl CustomMatch for UndefinedTypeMatch {
 /// # Examples
 ///
 /// ```
-/// use hyperon::{expr, bind};
-/// use hyperon::matcher::Bindings;
+/// use hyperon_atom::{expr, bind};
+/// use hyperon_atom::matcher::Bindings;
 /// use hyperon::metta::types::match_reducted_types;
 ///
 /// let bindings: Vec<Bindings> = match_reducted_types(&expr!("List" t), &expr!("List" "A")).collect();
@@ -522,7 +522,7 @@ fn get_matched_types(space: &DynSpace, atom: &Atom, typ: &Atom) -> Vec<(Atom, Bi
 /// # Examples
 ///
 /// ```
-/// use hyperon::expr;
+/// use hyperon_atom::expr;
 /// use hyperon::metta::runner::*;
 /// use hyperon::metta::text::SExprParser;
 /// use hyperon::metta::types::check_type;
@@ -543,7 +543,7 @@ pub fn check_type(space: &DynSpace, atom: &Atom, typ: &Atom) -> bool {
 /// # Examples
 ///
 /// ```
-/// use hyperon::{expr, bind};
+/// use hyperon_atom::{expr, bind};
 /// use hyperon::metta::runner::*;
 /// use hyperon::metta::text::SExprParser;
 /// use hyperon::metta::types::get_type_bindings;
@@ -585,7 +585,7 @@ fn check_meta_type(atom: &Atom, typ: &Atom) -> bool {
 /// # Examples
 ///
 /// ```
-/// use hyperon::expr;
+/// use hyperon_atom::expr;
 /// use hyperon::metta::runner::*;
 /// use hyperon::metta::text::SExprParser;
 /// use hyperon::metta::types::validate_atom;
@@ -604,7 +604,7 @@ pub fn validate_atom(space: &DynSpace, atom: &Atom) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::atom::matcher::atoms_are_equivalent;
+    use hyperon_atom::matcher::atoms_are_equivalent;
     use crate::metta::runner::*;
     use crate::metta::text::SExprParser;
     use hyperon_common::assert_eq_no_order;

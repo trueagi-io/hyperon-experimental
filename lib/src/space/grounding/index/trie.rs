@@ -1,7 +1,7 @@
 use super::storage::AtomStorage as HashableStorage;
 
-use crate::atom::*;
-use crate::matcher::*;
+use hyperon_atom::*;
+use hyperon_atom::matcher::*;
 use hyperon_common::CachingMapper;
 use hyperon_common::holeyvec::HoleyVec;
 

@@ -1,4 +1,4 @@
-use hyperon::*;
+use hyperon_atom::*;
 use hyperon::metta::runner::*;
 use hyperon::metta::runner::number::Number;
 use hyperon::metta::text::SExprParser;

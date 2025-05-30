@@ -8,7 +8,7 @@
 /// # Examples
 ///
 /// ```
-/// use hyperon::*;
+/// use hyperon_atom::*;
 ///
 /// let bindings = bind!{ a: expr!("A"), b: expr!("foo" "B"), c: expr!(a) };
 ///
@@ -19,7 +19,7 @@
 #[macro_export]
 macro_rules! bind {
     ($($k:ident: $v:expr),*) => {
-        $crate::atom::matcher::Bindings::from( vec![$( ($crate::VariableAtom::new(stringify!($k)), $v), )*])
+        $crate::matcher::Bindings::from( vec![$( ($crate::VariableAtom::new(stringify!($k)), $v), )*])
     };
 }
 
@@ -31,7 +31,7 @@ macro_rules! bind {
 /// # Examples
 ///
 /// ```
-/// use hyperon::*;
+/// use hyperon_atom::*;
 ///
 /// // Compose a BindingsSet with explicitly defined Bindings
 /// let set = bind_set![bind!{a: expr!("A")}, bind!{a: expr!("APrime")}];
@@ -44,15 +44,15 @@ macro_rules! bind {
 macro_rules! bind_set {
     // An empty BindingsSet
     [] => {
-        $crate::atom::matcher::BindingsSet::empty()
+        $crate::matcher::BindingsSet::empty()
     };
     // A single immediately defined Bindings
     [{$($b:tt)*}] => {
-        $crate::atom::matcher::BindingsSet::from($crate::bind!{$($b)*})
+        $crate::matcher::BindingsSet::from($crate::bind!{$($b)*})
     };
     // A single reduced Bindings
     [$b:expr] => {
-        $crate::atom::matcher::BindingsSet::from($b)
+        $crate::matcher::BindingsSet::from($b)
     };
     // Recursive pattern to handle multiple Bindings, where each item is reduced
     [$b:expr, $($b_rest:tt)*] => {{
@@ -212,7 +212,7 @@ impl Bindings {
         self.bindings.remove(from_binding_id);
     }
 
-    pub(crate) fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.binding_by_var.len()
     }
 
@@ -228,7 +228,7 @@ impl Bindings {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::*;
+    /// use hyperon_atom::*;
     ///
     /// let norm_bind = bind!{ a: expr!(("foo" b)), b: expr!("bar") };
     /// let loop_bind = bind!{ a: expr!(("foo" b)), b: expr!(("bar" a)) };
@@ -349,8 +349,8 @@ impl Bindings {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::*;
-    /// use hyperon::matcher::Bindings;
+    /// use hyperon_atom::*;
+    /// use hyperon_atom::matcher::Bindings;
     ///
     /// # fn main() -> Result<(), &'static str> {
     /// let a = VariableAtom::new("a");
@@ -438,8 +438,8 @@ impl Bindings {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::*;
-    /// use hyperon::matcher::{Bindings, BindingsSet};
+    /// use hyperon_atom::*;
+    /// use hyperon_atom::matcher::{Bindings, BindingsSet};
     ///
     /// let mut binds = bind!{ a: expr!("A") };
     /// let mut comp = bind!{ b: expr!("B") };
@@ -510,7 +510,7 @@ impl Bindings {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::*;
+    /// use hyperon_atom::*;
     /// use std::collections::HashSet;
     ///
     /// let bindings = bind!{ leftA: expr!("A"), leftA: expr!(rightB),
@@ -636,7 +636,7 @@ impl Bindings {
     ///
     /// ```
     /// use hyperon_common::assert_eq_no_order;
-    /// use hyperon::*;
+    /// use hyperon_atom::*;
     ///
     /// let bindings = bind!{ leftA: expr!("A"), leftA: expr!(rightB),
     ///     leftC: expr!("C"), leftD: expr!(rightE), rightF: expr!("F") };
@@ -1071,8 +1071,8 @@ pub type MatchResultIter = Box<dyn Iterator<Item=Bindings>>;
 /// # Examples
 ///
 /// ```
-/// use hyperon::*;
-/// use hyperon::atom::matcher::*;
+/// use hyperon_atom::*;
+/// use hyperon_atom::matcher::*;
 ///
 /// let left  = expr!( b (b) a a);
 /// let right = expr!("v" x  x y);
@@ -1141,8 +1141,8 @@ pub fn apply_bindings_to_atom_move(mut atom: Atom, bindings: &Bindings) -> Atom 
 /// # Examples
 ///
 /// ```
-/// use hyperon::*;
-/// use hyperon::atom::matcher::apply_bindings_to_atom_mut;
+/// use hyperon_atom::*;
+/// use hyperon_atom::matcher::apply_bindings_to_atom_mut;
 ///
 /// let binds = bind!{ y: expr!("Y") };
 /// let mut atom = expr!("+" "X" y);
@@ -1173,8 +1173,8 @@ pub fn apply_bindings_to_atom_mut(atom: &mut Atom, bindings: &Bindings) {
 /// # Examples
 ///
 /// ```
-/// use hyperon::expr;
-/// use hyperon::atom::matcher::atoms_are_equivalent;
+/// use hyperon_atom::expr;
+/// use hyperon_atom::matcher::atoms_are_equivalent;
 ///
 /// let atom = expr!(a "b" c);
 /// let eq = expr!(x "b" d);

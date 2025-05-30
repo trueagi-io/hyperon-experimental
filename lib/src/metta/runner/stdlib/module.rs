@@ -1,4 +1,4 @@
-use crate::*;
+use hyperon_atom::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;

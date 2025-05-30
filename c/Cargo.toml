@@ -4,11 +4,13 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-hyperon-common = { workspace = true }
-hyperon = { workspace = true }
 regex = { workspace = true }
 log = { workspace = true }
 env_logger = { workspace = true }
+
+hyperon-common = { workspace = true }
+hyperon-atom = { workspace = true }
+hyperon = { workspace = true }
 
 [lib]
 name = "hyperonc"

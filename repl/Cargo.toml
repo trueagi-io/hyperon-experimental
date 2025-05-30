@@ -14,6 +14,7 @@ ctrlc = "3.4"
 pyo3 = { version = "0.19.2", features = ["auto-initialize"], optional = true }
 pep440_rs = { version = "0.3.11", optional = true }
 hyperon-common = { workspace = true }
+hyperon-atom = { workspace = true }
 hyperon = { workspace = true, optional = true } #TODO: We can only link Hyperon directly or through Python, but not both at the same time.  The right fix is to allow HyperonPy to be built within Hyperon, See https://github.com/trueagi-io/hyperon-experimental/issues/283
 
 [[bin]]

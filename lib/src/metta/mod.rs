@@ -5,7 +5,7 @@ pub mod interpreter;
 pub mod types;
 pub mod runner;
 
-use crate::*;
+use hyperon_atom::*;
 use crate::space::grounding::GroundingSpace;
 
 pub const ATOM_TYPE_UNDEFINED : Atom = sym!("%Undefined%");

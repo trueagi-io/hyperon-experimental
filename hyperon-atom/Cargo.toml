@@ -1,0 +1,15 @@
+[package]
+name = "hyperon-atom"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+log = { workspace = true }
+smallvec = "1.10.0"
+bitset = "0.1.2"
+
+hyperon-common = { workspace = true }
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["lib"]

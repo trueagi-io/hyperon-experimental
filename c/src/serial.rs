@@ -1,4 +1,4 @@
-use hyperon::atom::serial;
+use hyperon_atom::serial;
 
 use std::os::raw::*;
 

@@ -10,7 +10,7 @@ pub mod space;
 pub mod core;
 pub mod arithmetics;
 
-use crate::*;
+use hyperon_atom::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::{Tokenizer, SExprParser};
@@ -150,11 +150,11 @@ mod tests {
     use crate::metta::text::SExprParser;
     use crate::metta::runner::EnvBuilder;
     use crate::metta::runner::str::Str;
-    use crate::matcher::atoms_are_equivalent;
+    use hyperon_atom::matcher::atoms_are_equivalent;
     use crate::metta::runner::bool::Bool;
     use crate::metta::runner::number::Number;
     use crate::metta::runner::run_program;
-    use crate::atom::gnd::GroundedFunctionAtom;
+    use hyperon_atom::gnd::GroundedFunctionAtom;
     use hyperon_common::assert_eq_metta_results;
 
     use std::fmt::Display;
