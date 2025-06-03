@@ -3,6 +3,8 @@
 
 pub mod grounding;
 pub mod module;
+#[cfg(feature = "das")]
+pub mod distributed;
 
 use std::fmt::Display;
 use std::rc::{Rc, Weak};
