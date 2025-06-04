@@ -1,8 +1,8 @@
-use crate::*;
+use hyperon_atom::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-use crate::common::shared::Shared;
+use hyperon_common::shared::Shared;
 use crate::metta::runner::{Metta, RunContext, ResourceKey};
 use super::{grounded_op, regex, unit_result};
 use crate::metta::runner::str::expect_string_like_atom;

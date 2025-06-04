@@ -1,13 +1,13 @@
 //! MeTTa assembly language implementation. See
 //! [minimal MeTTa documentation](https://github.com/trueagi-io/hyperon-experimental/blob/main/docs/minimal-metta.md) for details.
 
-use crate::*;
-use crate::atom::matcher::*;
+use hyperon_atom::*;
+use hyperon_atom::matcher::*;
 use crate::space::*;
 use crate::metta::*;
 use crate::metta::types::*;
 use crate::metta::runner::stdlib::core::IfEqualOp;
-use crate::common::collections::CowArray;
+use hyperon_common::collections::CowArray;
 
 use std::fmt::{Debug, Display, Formatter};
 use std::convert::TryFrom;
@@ -345,7 +345,7 @@ impl FromIterator<VariableAtom> for Variables {
 }
 
 impl VariableSet for Variables {
-    type Iter<'a> = im::hashset::Iter<'a, atom::VariableAtom> where Self: 'a;
+    type Iter<'a> = im::hashset::Iter<'a, hyperon_atom::VariableAtom> where Self: 'a;
 
     fn contains(&self, var: &VariableAtom) -> bool {
         self.0.contains(var)
@@ -1447,7 +1447,9 @@ fn metta_call_return(args: Atom, bindings: Bindings) -> MettaResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::common::test_utils::{metta_atom, metta_space};
+    use crate::metta::text::metta_atom;
+    use crate::space::grounding::metta_space;
+    use hyperon_common::assert_eq_no_order;
 
     #[test]
     fn interpret_atom_evaluate_incorrect_args() {

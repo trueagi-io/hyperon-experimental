@@ -1,8 +1,8 @@
 #![allow(non_camel_case_types)]
 
-use hyperon::*;
+use hyperon_atom::*;
 use hyperon::space::DynSpace;
-use hyperon::atom::serial;
+use hyperon_atom::serial;
 
 use crate::util::*;
 use crate::space::*;
@@ -13,7 +13,7 @@ use std::fmt::Display;
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
-use hyperon::matcher::{Bindings, BindingsSet};
+use hyperon_atom::matcher::{Bindings, BindingsSet};
 use hyperon::metta::runner::bool::Bool;
 use hyperon::metta::runner::number::Number;
 

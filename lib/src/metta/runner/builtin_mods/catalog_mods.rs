@@ -1,4 +1,4 @@
-use crate::atom::{Atom, Grounded, ExecError, CustomExecute};
+use hyperon_atom::{Atom, Grounded, ExecError, CustomExecute};
 use crate::space::grounding::GroundingSpace;
 use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_SYMBOL, UNIT_TYPE};
 use crate::metta::runner::{Metta, ModuleLoader, RunContext};

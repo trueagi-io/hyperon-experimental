@@ -40,7 +40,7 @@ pub mod metta_interface_mod {
     use pep440_rs::{parse_version_specifiers, Version};
     use pyo3::prelude::*;
     use pyo3::types::{PyTuple, PyString, PyBool, PyList, PyDict};
-    use hyperon::common::collections::VecDisplay;
+    use hyperon_common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
     use hyperon::metta::runner::str::unescape;
     use hyperon::metta::text::CharReader;
@@ -271,10 +271,10 @@ pub mod metta_interface_mod {
     use std::path::{PathBuf, Path};
     use hyperon::metta::*;
     use hyperon::metta::text::{CharReader, SExprParser};
-    use hyperon::ExpressionAtom;
-    use hyperon::Atom;
+    use hyperon_atom::ExpressionAtom;
+    use hyperon_atom::Atom;
     use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
-    use hyperon::common::collections::VecDisplay;
+    use hyperon_common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
     use hyperon::metta::runner::str::atom_to_string;
 

@@ -4,7 +4,7 @@ use std::io::BufReader;
 use std::time::{SystemTime, Duration};
 use ra_ap_profile::memory_usage;
 
-use hyperon::*;
+use hyperon_atom::*;
 use hyperon::metta::text::*;
 use hyperon::space::grounding::*;
 

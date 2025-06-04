@@ -1,4 +1,4 @@
-use hyperon::*;
+use hyperon_atom::*;
 use hyperon::metta::*;
 use hyperon::metta::text::*;
 use hyperon::metta::runner::{Metta, EnvBuilder};

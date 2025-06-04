@@ -1,7 +1,7 @@
-use crate::*;
-use crate::common::collections::ImmutableString;
-use crate::serial;
-use crate::atom::serial::ConvertingSerializer;
+use hyperon_atom::*;
+use hyperon_common::collections::ImmutableString;
+use hyperon_atom::serial;
+use hyperon_atom::serial::ConvertingSerializer;
 use unescaper;
 
 /// String type

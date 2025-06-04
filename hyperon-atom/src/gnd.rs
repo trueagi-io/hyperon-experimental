@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use super::*;
-use crate::common::collections::ImmutableString;
+use hyperon_common::collections::ImmutableString;
 
 /// Grounded function abstraction.
 pub trait GroundedFunction {
@@ -73,59 +73,5 @@ impl<T: GroundedFunction> Grounded for GroundedFunctionAtom<T> {
 impl<T: GroundedFunction> CustomExecute for GroundedFunctionAtom<T> {
     fn execute(&self, args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
         self.0.func.execute(args)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use super::*;
-    use crate::metta::runner::*;
-
-    fn execute_expr(expr: Atom) -> Result<Vec<Vec<Atom>>, String> {
-        let metta = Metta::new(Some(EnvBuilder::test_env()));
-        metta.run([Atom::sym("!"), expr].as_slice())
-    }
-
-    #[test]
-    fn test_lambda_into_grounded_atom() {
-        let f = move |_args: &[Atom]| -> Result<Vec<Atom>, ExecError> {
-            Ok(vec![Atom::sym("some-symbol")])
-        };
-
-        let op = GroundedFunctionAtom::new("get-some-symbol".into(), expr!("->" "%Undefined%"), f);
-
-        assert_eq!(execute_expr(Atom::expr([Atom::gnd(op)])),
-            Ok(vec![vec![Atom::sym("some-symbol")]]));
-    }
-
-    #[test]
-    fn test_function_into_grounded_atom() {
-        fn f(_args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-            Ok(vec![Atom::sym("some-symbol")])
-        }
-
-        let op = GroundedFunctionAtom::new("get-some-symbol".into(), expr!("->" "%Undefined%"), f);
-
-        assert_eq!(execute_expr(Atom::expr([Atom::gnd(op)])),
-            Ok(vec![vec![Atom::sym("some-symbol")]]));
-    }
-
-    #[test]
-    fn test_method_into_grounded_atom() {
-        struct S {
-            sym: ImmutableString,
-        }
-
-        impl GroundedFunction for S {
-            fn execute(&self, _args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
-                Ok(vec![Atom::sym(self.sym.as_str())])
-            }
-        }
-
-        let op = GroundedFunctionAtom::new("get-some-symbol".into(), expr!("->" "%Undefined%"), S{ sym: "some-symbol".into() });
-
-        assert_eq!(execute_expr(Atom::expr([Atom::gnd(op)])),
-            Ok(vec![vec![Atom::sym("some-symbol")]]));
     }
 }

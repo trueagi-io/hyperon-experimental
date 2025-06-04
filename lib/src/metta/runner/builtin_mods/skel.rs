@@ -2,7 +2,8 @@ use crate::metta::*;
 use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{ModuleLoader, RunContext, Metta, MettaMod};
-use crate::atom::gnd::*;
+use hyperon_atom::expr;
+use hyperon_atom::gnd::*;
 
 pub static SKEL_METTA: &'static str = include_str!("skel.metta");
 

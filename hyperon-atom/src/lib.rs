@@ -59,13 +59,17 @@
 ///
 /// ```
 /// #[macro_use]
-/// use hyperon::expr;
-/// use hyperon::metta::runner::stdlib::arithmetics::MulOp;
+/// use hyperon_atom::{expr, Atom, ExecError};
+/// use hyperon_atom::gnd::GroundedFunctionAtom;
+///
+/// let mul = GroundedFunctionAtom::new("*".into(),
+///     expr!("->" "Number" "Number" "Number"),
+///     |args: &[Atom]| -> Result<Vec<Atom>, ExecError> { Err(ExecError::NoReduce) });
 ///
 /// let sym = expr!("A");
 /// let var = expr!(x);
 /// let gnd = expr!({42});
-/// let expr = expr!("=" ("*2" n) ({MulOp{}} n {2}));
+/// let expr = expr!("=" ("*2" n) ({mul} n {2}));
 ///
 /// assert_eq!(sym.to_string(), "A");
 /// assert_eq!(var.to_string(), "$x");
@@ -89,10 +93,10 @@ macro_rules! expr {
 
 #[macro_export]
 macro_rules! constexpr {
-    () => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(&[]))) };
-    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new($crate::common::collections::ImmutableString::Literal($x))) };
-    (($($x:tt)*)) => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
-    ($($x:tt)*) => { $crate::Atom::Expression($crate::ExpressionAtom::new($crate::common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
+    () => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(&[]))) };
+    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::collections::ImmutableString::Literal($x))) };
+    (($($x:tt)*)) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
+    ($($x:tt)*) => { $crate::Atom::Expression($crate::ExpressionAtom::new(hyperon_common::collections::CowArray::Literal(const { &[ $( constexpr!($x) , )* ] }))) };
 }
 
 /// Constructs new symbol atom. Can be used to construct `const` instances.
@@ -101,7 +105,7 @@ macro_rules! constexpr {
 ///
 /// ```
 /// #[macro_use]
-/// use hyperon::{Atom, sym};
+/// use hyperon_atom::{Atom, sym};
 ///
 /// const SYM: Atom = sym!("const-symbol");
 /// let sym = sym!("some-symbol");
@@ -111,7 +115,7 @@ macro_rules! constexpr {
 /// ```
 #[macro_export]
 macro_rules! sym {
-    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new($crate::common::collections::ImmutableString::Literal($x))) };
+    ($x:literal) => { $crate::Atom::Symbol($crate::SymbolAtom::new(hyperon_common::collections::ImmutableString::Literal($x))) };
 }
 
 pub mod matcher;
@@ -126,7 +130,7 @@ use std::any::Any;
 use std::fmt::{Display, Debug};
 use std::convert::TryFrom;
 
-use crate::common::collections::{ImmutableString, CowArray};
+use hyperon_common::collections::{ImmutableString, CowArray};
 
 // Symbol atom
 
@@ -251,7 +255,7 @@ impl VariableAtom {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::VariableAtom;
+    /// use hyperon_atom::VariableAtom;
     ///
     /// let x0 = VariableAtom::parse_name("x");
     /// let x42 = VariableAtom::parse_name("x#42");
@@ -297,7 +301,7 @@ impl VariableAtom {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::VariableAtom;
+    /// use hyperon_atom::VariableAtom;
     ///
     /// let x1 = VariableAtom::new("x");
     /// let x2 = x1.clone().make_unique();
@@ -320,7 +324,7 @@ impl Display for VariableAtom {
 
 /// Returns `atom` with all variables replaced by unique instances.
 pub fn make_variables_unique(mut atom: Atom) -> Atom {
-    let mut mapper = crate::common::CachingMapper::new(VariableAtom::make_unique);
+    let mut mapper = hyperon_common::CachingMapper::new(VariableAtom::make_unique);
     atom.iter_mut().filter_type::<&mut VariableAtom>().for_each(|var| *var = mapper.replace(var.clone()));
     atom
 }
@@ -429,8 +433,8 @@ impl dyn GroundedAtom {
 /// # Examples
 ///
 /// ```
-/// use hyperon::*;
-/// use hyperon::matcher::{Bindings, match_atoms};
+/// use hyperon_atom::*;
+/// use hyperon_atom::matcher::{Bindings, match_atoms};
 /// use std::fmt::{Display, Formatter};
 /// use std::iter::once;
 ///
@@ -497,7 +501,7 @@ pub trait Grounded : Display {
 /// # Examples
 ///
 /// ```
-/// use hyperon::*;
+/// use hyperon_atom::*;
 /// use std::fmt::{Display, Formatter};
 /// use std::iter::once;
 ///
@@ -544,8 +548,8 @@ pub trait CustomExecute {
 /// # Examples
 ///
 /// ```
-/// use hyperon::*;
-/// use hyperon::matcher::{BindingsSet, Bindings, MatchResultIter, match_atoms};
+/// use hyperon_atom::*;
+/// use hyperon_atom::matcher::{BindingsSet, Bindings, MatchResultIter, match_atoms};
 /// use std::fmt::{Display, Formatter};
 /// use std::iter::once;
 ///
@@ -816,7 +820,7 @@ impl Atom {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::Atom;
+    /// use hyperon_atom::Atom;
     ///
     /// let a = Atom::sym("A");
     /// let aa = Atom::sym("A");
@@ -837,7 +841,7 @@ impl Atom {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::Atom;
+    /// use hyperon_atom::Atom;
     ///
     /// let expr = Atom::expr([Atom::sym("a"), Atom::sym("b")]);
     /// let same_expr = Atom::expr([Atom::sym("a"), Atom::sym("b")]);
@@ -858,7 +862,7 @@ impl Atom {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::Atom;
+    /// use hyperon_atom::Atom;
     ///
     /// let a = Atom::var("a");
     /// let aa = Atom::var("a");
@@ -883,7 +887,7 @@ impl Atom {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::Atom;
+    /// use hyperon_atom::Atom;
     ///
     /// let i = Atom::value(1);
     /// let j = Atom::value(1);
@@ -904,7 +908,7 @@ impl Atom {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::Atom;
+    /// use hyperon_atom::Atom;
     ///
     /// let x = Atom::value(1u32);
     ///
@@ -926,7 +930,7 @@ impl Atom {
     /// # Examples
     ///
     /// ```
-    /// use hyperon::Atom;
+    /// use hyperon_atom::Atom;
     ///
     /// let mut x = Atom::value(123u32);
     /// assert_eq!(x.to_string(), "123");

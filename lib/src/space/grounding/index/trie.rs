@@ -1,9 +1,9 @@
 use super::storage::AtomStorage as HashableStorage;
 
-use crate::atom::*;
-use crate::matcher::*;
-use crate::common::CachingMapper;
-use crate::common::holeyvec::HoleyVec;
+use hyperon_atom::*;
+use hyperon_atom::matcher::*;
+use hyperon_common::CachingMapper;
+use hyperon_common::holeyvec::HoleyVec;
 
 use std::hash::Hash;
 use std::collections::HashMap;

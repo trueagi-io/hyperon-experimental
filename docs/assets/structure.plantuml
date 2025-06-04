@@ -1,4 +1,11 @@
 @startuml
+package "Rust ./hyperon-common/*" {
+  [libhyperon_common.rlib] as libhyperon_common
+}
+
+package "Rust ./hyperon-atom/*" {
+  [libhyperon_atom.rlib] as libhyperon_atom
+}
 
 package "Rust ./lib/*" {
   [libhyperon.rlib] as libhyperon
@@ -13,8 +20,14 @@ package "Python ./python/*" {
   [hyperon\n./python/hyperon/*] as hyperonpy
 }
 
-libhyperonc -> libhyperon
+package "Rust ./repl/*" {
+  [metta_repl] as metta_repl
+}
+
+libhyperon_atom -u-> libhyperon_common
+libhyperon -u-> libhyperon_atom
+libhyperonc -u-> libhyperon
 libhyperonpy -u-> libhyperonc
 hyperonpy -u-> libhyperonpy
-
+metta_repl -u-> libhyperon
 @enduml
