@@ -84,6 +84,9 @@ fn run_metta_test(code: &[u8]) -> Result<(), String> {
                             let err = atom_to_string(err);
                             return Err(format!("{} returns error: {}", atom, err));
                         },
+                        Ok([op, ..]) if *op == ERROR_SYMBOL => {
+                            return Err(format!("incorrect error format: {}", atom));
+                        },
                         _ => {},
                     }
                 }
