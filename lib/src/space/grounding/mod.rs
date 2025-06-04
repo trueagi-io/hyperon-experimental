@@ -213,12 +213,6 @@ impl SpaceMut for GroundingSpace {
     }
 }
 
-impl PartialEq for GroundingSpace {
-    fn eq(&self, other: &Self) -> bool {
-        self.index == other.index
-    }
-}
-
 impl<D: DuplicationStrategy> Debug for GroundingSpace<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.name {
@@ -234,22 +228,6 @@ impl<D: DuplicationStrategy> Display for GroundingSpace<D> {
             Some(name) => write!(f, "GroundingSpace-{name}"),
             None => write!(f, "GroundingSpace-{self:p}")
         }
-    }
-}
-
-impl Grounded for GroundingSpace {
-    fn type_(&self) -> Atom {
-        rust_type_atom::<GroundingSpace>()
-    }
-
-    fn as_match(&self) -> Option<&dyn CustomMatch> {
-        Some(self)
-    }
-}
-
-impl CustomMatch for GroundingSpace {
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        Box::new(self.query(other).into_iter())
     }
 }
 
@@ -586,7 +564,7 @@ mod test {
             expr!("B" {1} x "b"),
             expr!("A" {2} x "c"),
         ]);
-        let result: BindingsSet = match_atoms(&Atom::gnd(space), &expr!("A" {1} x x)).collect();
+        let result: BindingsSet = match_atoms(&Atom::gnd(DynSpace::new(space)), &expr!("A" {1} x x)).collect();
         assert_eq!(result, bind_set![{x: sym!("a")}]);
     }
 }
