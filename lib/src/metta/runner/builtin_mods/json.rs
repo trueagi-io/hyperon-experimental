@@ -1,5 +1,4 @@
-use crate::{Atom, ExecError};
-use crate::gnd::GroundedFunctionAtom;
+use hyperon_atom::{Atom, ExecError, gnd::GroundedFunctionAtom};
 use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_SPACE};
 use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
