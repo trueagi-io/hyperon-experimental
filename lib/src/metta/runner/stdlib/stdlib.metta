@@ -662,6 +662,20 @@
 (= (add-atoms $space $tuple)
     (foldl-atom $tuple () $a $b (add-atom $space $b)))
 
+(@doc assertIncludes
+  (@desc "Checks if the content in the second argument is included in the results of the first argument's evaluation")
+  (@params (
+    (@param "First expression")
+    (@param "Second expression")))
+  (@return "Unit atom if the second argument is included in the results of the first argument's evaluation, error - otherwise"))
+(: assertIncludes (-> Atom Expression (->)))
+(= (assertIncludes $atom $content)
+    (let $eval_atom (collapse $atom)
+        (let $diff (subtraction-atom $content $eval_atom)
+            (if (== $diff ())
+                ()
+                (Error (assertIncludes error: $diff not included in result))))))
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
