@@ -674,7 +674,8 @@
         (let $diff (subtraction-atom $content $eval_atom)
             (if (== $diff ())
                 ()
-                (Error (assertIncludes error: $diff not included in result))))))
+                (Error (assertIncludes $atom $content) 
+                  (assertIncludes error: $diff not included in result: $eval_atom))))))
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ; Documentation formatting functions
