@@ -224,6 +224,26 @@ mod test {
     use hyperon_common::assert_eq_no_order;
     use std::fmt::{Debug, Display, Formatter};
 
+    #[derive(PartialEq, Clone, Debug)]
+    struct Num(i64);
+
+    impl std::fmt::Display for Num {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            std::fmt::Display::fmt(&self.0, f)
+        }
+    }
+
+    impl Grounded for Num {
+        fn type_(&self) -> Atom {
+            Atom::sym("Num")
+        }
+
+        fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+            serializer.serialize_i64(self.0)
+        }
+    }
+
+
     #[test]
     fn atom_token_iter_symbol() {
         let atom = Atom::sym("sym");
@@ -234,14 +254,14 @@ mod test {
 
     #[test]
     fn atom_token_iter_expr() {
-        let atom = expr!(("sym" var {Number::Integer(42)} ("sym1" var1 {Number::Integer(43)})));
+        let atom = expr!(("sym" var {Num(42)} ("sym1" var1 {Num(43)})));
         let it = AtomIter::from_ref(&atom);
         let actual: Vec<AtomToken> = it.collect();
         assert_eq!(vec![AtomToken::StartExpr(Some(&atom)), AtomToken::Atom(Cow::Borrowed(&expr!("sym"))),
-            AtomToken::Atom(Cow::Borrowed(&expr!(var))), AtomToken::Atom(Cow::Borrowed(&expr!({Number::Integer(42)}))),
-            AtomToken::StartExpr(Some(&expr!("sym1" var1 {Number::Integer(43)}))),
+            AtomToken::Atom(Cow::Borrowed(&expr!(var))), AtomToken::Atom(Cow::Borrowed(&expr!({Num(42)}))),
+            AtomToken::StartExpr(Some(&expr!("sym1" var1 {Num(43)}))),
             AtomToken::Atom(Cow::Borrowed(&expr!("sym1"))), AtomToken::Atom(Cow::Borrowed(&expr!(var1))),
-            AtomToken::Atom(Cow::Borrowed(&expr!({Number::Integer(43)}))),
+            AtomToken::Atom(Cow::Borrowed(&expr!({Num(43)}))),
             AtomToken::EndExpr, AtomToken::EndExpr], actual);
     }
 
@@ -283,13 +303,13 @@ mod test {
         let mut index = AtomIndex::new();
         index.insert(Atom::sym("A"));
         index.insert(Atom::var("a"));
-        index.insert(Atom::gnd(Number::Integer(42)));
+        index.insert(Atom::gnd(Num(42)));
 
         assert_eq_bind_no_order!(index.query(&Atom::sym("A")), vec![bind!{}, bind!{a: Atom::sym("A")}]);
-        assert_eq_bind_no_order!(index.query(&Atom::var("b")), vec![bind!{ b: Atom::sym("A") }, bind!{ b: Atom::gnd(Number::Integer(42)) }, bind!{ b: Atom::var("a") }]);
-        assert_eq_bind_no_order!(index.query(&Atom::gnd(Number::Integer(42))), vec![bind!{}, bind!{a: Atom::gnd(Number::Integer(42))}]);
+        assert_eq_bind_no_order!(index.query(&Atom::var("b")), vec![bind!{ b: Atom::sym("A") }, bind!{ b: Atom::gnd(Num(42)) }, bind!{ b: Atom::var("a") }]);
+        assert_eq_bind_no_order!(index.query(&Atom::gnd(Num(42))), vec![bind!{}, bind!{a: Atom::gnd(Num(42))}]);
         assert_eq_bind_no_order!(index.query(&sym!("B")), vec![bind!{a: Atom::sym("B")}]);
-        assert_eq_bind_no_order!(index.query(&Atom::gnd(Number::Integer(43))), vec![bind!{a: Atom::gnd(Number::Integer(43))}]);
+        assert_eq_bind_no_order!(index.query(&Atom::gnd(Num(43))), vec![bind!{a: Atom::gnd(Num(43))}]);
     }
 
     #[test]
@@ -329,12 +349,12 @@ mod test {
     #[test]
     fn atom_index_query_expression_simple() {
         let mut index = AtomIndex::new();
-        index.insert(expr!("A" a {Number::Integer(42)} a));
+        index.insert(expr!("A" a {Num(42)} a));
 
-        assert_eq_bind_no_order!(index.query(&expr!("A" "B" {Number::Integer(42)} "B")), vec![bind!{a: expr!("B")}]);
-        assert_eq_bind_no_order!(index.query(&expr!("A" ("B" "C") {Number::Integer(42)} ("B" "C"))), vec![bind!{a: expr!("B" "C")}]);
-        assert_eq_bind_no_order!(index.query(&expr!("A" "B" {Number::Integer(42)} "C")), Vec::<Bindings>::new());
-        assert_eq_bind_no_order!(index.query(&expr!(b)), vec![bind!{ b: expr!("A" a {Number::Integer(42)} a)}]);
+        assert_eq_bind_no_order!(index.query(&expr!("A" "B" {Num(42)} "B")), vec![bind!{a: expr!("B")}]);
+        assert_eq_bind_no_order!(index.query(&expr!("A" ("B" "C") {Num(42)} ("B" "C"))), vec![bind!{a: expr!("B" "C")}]);
+        assert_eq_bind_no_order!(index.query(&expr!("A" "B" {Num(42)} "C")), Vec::<Bindings>::new());
+        assert_eq_bind_no_order!(index.query(&expr!(b)), vec![bind!{ b: expr!("A" a {Num(42)} a)}]);
     }
 
     fn get_atoms<D: DuplicationStrategy>(index: &AtomIndex<D>) -> Vec<Atom> {
@@ -346,17 +366,17 @@ mod test {
         let mut index = AtomIndex::new();
         index.insert(Atom::sym("A"));
         index.insert(Atom::var("a"));
-        index.insert(Atom::gnd(Number::Integer(42)));
+        index.insert(Atom::gnd(Num(42)));
 
-        assert_eq_no_order!(get_atoms(&index), vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Number::Integer(42))]);
+        assert_eq_no_order!(get_atoms(&index), vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Num(42))]);
     }
 
     #[test]
     fn atom_index_iter_expression_0() {
         let mut index = AtomIndex::new();
-        index.insert(expr!("A" a {Number::Integer(42)} a));
+        index.insert(expr!("A" a {Num(42)} a));
 
-        assert_eq_no_order!(get_atoms(&index), vec![expr!("A" a {Number::Integer(42)} a)]);
+        assert_eq_no_order!(get_atoms(&index), vec![expr!("A" a {Num(42)} a)]);
     }
 
     #[test]
@@ -392,36 +412,36 @@ mod test {
         index.insert(Atom::sym("A"));
         index.insert(Atom::var("a"));
         index.insert(Atom::var("a"));
-        index.insert(Atom::gnd(Number::Integer(42)));
-        index.insert(Atom::gnd(Number::Integer(42)));
+        index.insert(Atom::gnd(Num(42)));
+        index.insert(Atom::gnd(Num(42)));
 
         assert_eq_bind_no_order!(index.query(&Atom::sym("A")),
             dup(vec![bind!{}, bind!{a: Atom::sym("A")}]));
         assert_eq_bind_no_order!(index.query(&Atom::var("a")),
-            dup(vec![bind!{ a: Atom::sym("A") }, bind!{ a: Atom::gnd(Number::Integer(42)) }, bind!{ a: Atom::var("a") }]));
-        assert_eq_bind_no_order!(index.query(&Atom::gnd(Number::Integer(42))),
-            dup(vec![bind!{}, bind!{a: Atom::gnd(Number::Integer(42))}]));
+            dup(vec![bind!{ a: Atom::sym("A") }, bind!{ a: Atom::gnd(Num(42)) }, bind!{ a: Atom::var("a") }]));
+        assert_eq_bind_no_order!(index.query(&Atom::gnd(Num(42))),
+            dup(vec![bind!{}, bind!{a: Atom::gnd(Num(42))}]));
         assert_eq_bind_no_order!(index.query(&sym!("B")), dup(vec![bind!{a: Atom::sym("B")}]));
         assert_eq_bind_no_order!(index.query(&Atom::var("b")),
-            dup(vec![bind!{ b: Atom::sym("A") }, bind!{ b: Atom::gnd(Number::Integer(42)) }, bind!{ b: Atom::var("a") }]));
-        assert_eq_bind_no_order!(index.query(&Atom::gnd(Number::Integer(43))),
-            dup(vec![bind!{a: Atom::gnd(Number::Integer(43))}]));
+            dup(vec![bind!{ b: Atom::sym("A") }, bind!{ b: Atom::gnd(Num(42)) }, bind!{ b: Atom::var("a") }]));
+        assert_eq_bind_no_order!(index.query(&Atom::gnd(Num(43))),
+            dup(vec![bind!{a: Atom::gnd(Num(43))}]));
     }
 
     #[test]
     fn atom_index_query_expression_duplicate_0() {
         let mut index = AtomIndex::with_strategy(ALLOW_DUPLICATION);
-        index.insert(expr!("A" a {Number::Integer(42)} a));
-        index.insert(expr!("A" a {Number::Integer(42)} a));
+        index.insert(expr!("A" a {Num(42)} a));
+        index.insert(expr!("A" a {Num(42)} a));
 
-        assert_eq_bind_no_order!(index.query(&expr!("A" "B" {Number::Integer(42)} "B")),
+        assert_eq_bind_no_order!(index.query(&expr!("A" "B" {Num(42)} "B")),
             dup(vec![bind!{a: expr!("B")}]));
-        assert_eq_bind_no_order!(index.query(&expr!("A" ("B" "C") {Number::Integer(42)} ("B" "C"))),
+        assert_eq_bind_no_order!(index.query(&expr!("A" ("B" "C") {Num(42)} ("B" "C"))),
             dup(vec![bind!{a: expr!("B" "C")}]));
-        assert_eq_bind_no_order!(index.query(&expr!("A" "B" {Number::Integer(42)} "C")),
+        assert_eq_bind_no_order!(index.query(&expr!("A" "B" {Num(42)} "C")),
             dup(Vec::<Bindings>::new()));
         assert_eq_bind_no_order!(index.query(&expr!(b)),
-            dup(vec![bind!{ b: expr!("A" a {Number::Integer(42)} a)}]));
+            dup(vec![bind!{ b: expr!("A" a {Num(42)} a)}]));
     }
 
     #[test]
@@ -450,11 +470,11 @@ mod test {
         index.insert(Atom::sym("A"));
         index.insert(Atom::var("a"));
         index.insert(Atom::var("a"));
-        index.insert(Atom::gnd(Number::Integer(42)));
-        index.insert(Atom::gnd(Number::Integer(42)));
+        index.insert(Atom::gnd(Num(42)));
+        index.insert(Atom::gnd(Num(42)));
 
         assert_eq_no_order!(get_atoms(&index),
-            dup(vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Number::Integer(42))]));
+            dup(vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Num(42))]));
     }
 
     #[test]
@@ -490,26 +510,26 @@ mod test {
         index.insert(Atom::sym("A"));
         index.insert(Atom::var("a"));
         index.insert(Atom::var("a"));
-        index.insert(Atom::gnd(Number::Integer(42)));
-        index.insert(Atom::gnd(Number::Integer(42)));
+        index.insert(Atom::gnd(Num(42)));
+        index.insert(Atom::gnd(Num(42)));
 
         assert_eq_no_order!(get_atoms(&index),
-            dup(vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Number::Integer(42))]));
+            dup(vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Num(42))]));
 
         assert!(index.remove(&Atom::sym("A")));
         assert_eq_no_order!(get_atoms(&index),
-            vec![Atom::sym("A"), Atom::var("a"), Atom::var("a"), Atom::gnd(Number::Integer(42)), Atom::gnd(Number::Integer(42))]);
+            vec![Atom::sym("A"), Atom::var("a"), Atom::var("a"), Atom::gnd(Num(42)), Atom::gnd(Num(42))]);
 
-        assert!(index.remove(&Atom::gnd(Number::Integer(42))));
+        assert!(index.remove(&Atom::gnd(Num(42))));
         assert_eq_no_order!(get_atoms(&index),
-            vec![Atom::sym("A"), Atom::var("a"), Atom::var("a"), Atom::gnd(Number::Integer(42))]);
+            vec![Atom::sym("A"), Atom::var("a"), Atom::var("a"), Atom::gnd(Num(42))]);
 
         assert!(index.remove(&Atom::var("a")));
         assert_eq_no_order!(get_atoms(&index),
-            vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Number::Integer(42))]);
+            vec![Atom::sym("A"), Atom::var("a"), Atom::gnd(Num(42))]);
 
         assert!(index.remove(&Atom::var("a")));
-        assert!(index.remove(&Atom::gnd(Number::Integer(42))));
+        assert!(index.remove(&Atom::gnd(Num(42))));
         assert!(index.remove(&Atom::sym("A")));
         assert!(index.is_empty());
     }
