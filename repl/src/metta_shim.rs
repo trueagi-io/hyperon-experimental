@@ -276,7 +276,7 @@ pub mod metta_interface_mod {
     use hyperon::metta::runner::{Metta, RunnerState, Environment, EnvBuilder};
     use hyperon_common::collections::VecDisplay;
     use super::{exec_state_prepare, exec_state_should_break};
-    use hyperon::metta::runner::str::atom_to_string;
+    use hyperon_atom::str::atom_to_string;
 
     pub struct MettaShim {
         pub metta: Metta,

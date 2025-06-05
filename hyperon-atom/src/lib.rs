@@ -124,6 +124,10 @@ mod iter;
 pub mod serial;
 pub mod gnd;
 
+pub mod bool;
+pub mod number;
+pub mod str;
+
 pub use iter::*;
 
 use std::any::Any;

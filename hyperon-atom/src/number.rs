@@ -1,6 +1,5 @@
-use hyperon_atom::*;
-use hyperon_atom::serial;
-use hyperon_atom::serial::ConvertingSerializer;
+use crate::{serial, Atom, Grounded};
+use crate::serial::ConvertingSerializer;
 
 use std::fmt::Display;
 

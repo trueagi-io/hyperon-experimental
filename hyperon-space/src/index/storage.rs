@@ -150,8 +150,7 @@ impl Display for HashableAtom {
 #[cfg(test)]
 mod test {
     use super::*;
-    use hyperon_atom::expr;
-    use crate::metta::runner::number::Number;
+    use hyperon_atom::{expr, number::Number};
 
     #[test]
     fn atom_storage_insert_symbol() {

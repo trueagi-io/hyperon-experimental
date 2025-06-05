@@ -1,15 +1,18 @@
 [package]
-name = "hyperon-atom"
+name = "hyperon-space"
 version.workspace = true
 edition.workspace = true
 
 [dependencies]
+hyperon-atom = { workspace = true }
+hyperon-common = { workspace = true }
+
 log = { workspace = true }
 smallvec = "1.10.0"
-bitset = "0.1.2"
-unescaper = "0.1.5"
+bimap = "0.6.3"
 
-hyperon-common = { workspace = true }
+[dev-dependencies]
+hyperon = { workspace = true }
 
 [lib]
 path = "src/lib.rs"

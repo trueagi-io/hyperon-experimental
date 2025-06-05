@@ -1,11 +1,11 @@
 use hyperon_atom::*;
-use crate::space::*;
+use hyperon_space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use hyperon_common::CachingMapper;
 use crate::metta::runner::Metta;
 use crate::metta::runner::PragmaSettings;
-use crate::metta::runner::bool::*;
+use hyperon_atom::bool::*;
 use hyperon_atom::gnd::GroundedFunctionAtom;
 use hyperon_atom::matcher::{Bindings, apply_bindings_to_atom_move};
 

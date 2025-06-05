@@ -1,7 +1,6 @@
-use hyperon_atom::*;
 use hyperon_common::collections::ImmutableString;
-use hyperon_atom::serial;
-use hyperon_atom::serial::ConvertingSerializer;
+use crate::{serial, Atom, Grounded};
+use crate::serial::ConvertingSerializer;
 use unescaper;
 
 /// String type
@@ -104,7 +103,7 @@ pub fn unescape(str: &str) -> unescaper::Result<String> {
     })
 }
 
-pub(crate) fn expect_string_like_atom(atom: &Atom) -> Option<String> {
+pub fn expect_string_like_atom(atom: &Atom) -> Option<String> {
     match atom {
         Atom::Symbol(_) | Atom::Grounded(_) => Some(atom_to_string(atom)),
         _ => None,

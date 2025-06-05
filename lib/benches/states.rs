@@ -6,7 +6,7 @@ use test::Bencher;
 
 use hyperon::metta::runner::*;
 use hyperon::metta::text::SExprParser;
-use hyperon::atom::Atom;
+use hyperon_atom::Atom;
 
 // TODO: use a better benchmark framework with parameterization or somehow else get rid of copypaste code
 

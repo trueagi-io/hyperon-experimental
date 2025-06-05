@@ -10,6 +10,7 @@ env_logger = { workspace = true }
 
 hyperon-common = { workspace = true }
 hyperon-atom = { workspace = true }
+hyperon-space = { workspace = true }
 hyperon = { workspace = true }
 
 [lib]

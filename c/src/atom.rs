@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use hyperon_atom::*;
-use hyperon::space::DynSpace;
+use hyperon_space::DynSpace;
 use hyperon_atom::serial;
 
 use crate::util::*;
@@ -14,8 +14,8 @@ use std::collections::HashSet;
 use std::sync::atomic::{AtomicPtr, Ordering};
 
 use hyperon_atom::matcher::{Bindings, BindingsSet};
-use hyperon::metta::runner::bool::Bool;
-use hyperon::metta::runner::number::Number;
+use hyperon_atom::bool::Bool;
+use hyperon_atom::number::Number;
 
 // =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 // Atom Interface

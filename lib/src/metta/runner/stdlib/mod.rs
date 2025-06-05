@@ -11,7 +11,7 @@ pub mod core;
 pub mod arithmetics;
 
 use hyperon_atom::*;
-use crate::space::*;
+use hyperon_space::*;
 use crate::metta::*;
 use crate::metta::text::{Tokenizer, SExprParser};
 use hyperon_common::shared::Shared;
