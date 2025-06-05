@@ -151,7 +151,6 @@ impl Display for HashableAtom {
 mod test {
     use super::*;
     use hyperon_atom::expr;
-    use crate::metta::runner::number::Number;
 
     #[test]
     fn atom_storage_insert_symbol() {
@@ -171,9 +170,28 @@ mod test {
         assert_eq!(Some(&atom), storage.get_atom(id.unwrap()));
     }
 
+    #[derive(PartialEq, Clone, Debug)]
+    struct Num(i64);
+
+    impl std::fmt::Display for Num {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            std::fmt::Display::fmt(&self.0, f)
+        }
+    }
+
+    impl Grounded for Num {
+        fn type_(&self) -> Atom {
+            Atom::sym("Num")
+        }
+
+        fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+            serializer.serialize_i64(self.0)
+        }
+    }
+
     #[test]
     fn atom_storage_insert_grounded_value() {
-        let atom = Atom::gnd(Number::Integer(1234));
+        let atom = Atom::gnd(Num(1234));
         let mut storage = AtomStorage::new();
         let id = storage.insert(atom.clone());
         assert!(id.is_ok());
@@ -189,8 +207,8 @@ mod test {
     #[test]
     fn atom_storage_insert_expression() {
         let mut storage = AtomStorage::new();
-        assert_eq!(storage.insert(expr!("A" b {Number::Integer(1)})),
-            Err(expr!("A" b {Number::Integer(1)})));
+        assert_eq!(storage.insert(expr!("A" b {Num(1)})),
+            Err(expr!("A" b {Num(1)})));
     }
 
     #[test]
@@ -198,7 +216,7 @@ mod test {
         let mut storage = AtomStorage::new();
         assert!(storage.insert(Atom::sym("S")).is_ok());
         assert!(storage.insert(Atom::var("V")).is_ok());
-        assert!(storage.insert(Atom::gnd(Number::Integer(42))).is_ok());
+        assert!(storage.insert(Atom::gnd(Num(42))).is_ok());
         assert_eq!(format!("{}", storage), "{ 0: S, 1: $V, 2: 42 }");
     }
 }
