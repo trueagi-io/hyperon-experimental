@@ -5,7 +5,7 @@ use crate::metta::text::Tokenizer;
 use hyperon_common::shared::Shared;
 use crate::metta::runner::{Metta, RunContext, ResourceKey};
 use super::{grounded_op, regex, unit_result};
-use hyperon_atom::str::expect_string_like_atom;
+use crate::metta::runner::str::expect_string_like_atom;
 
 use regex::Regex;
 

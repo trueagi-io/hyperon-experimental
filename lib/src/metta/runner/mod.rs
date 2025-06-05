@@ -94,6 +94,10 @@ use stdlib::CoreLibLoader;
 mod builtin_mods;
 use builtin_mods::*;
 
+pub mod bool;
+pub mod number;
+pub mod str;
+
 const EXEC_SYMBOL : Atom = sym!("!");
 
 // *-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*-=-*

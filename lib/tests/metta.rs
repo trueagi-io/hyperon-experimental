@@ -4,7 +4,7 @@ use hyperon_atom::gnd::*;
 use hyperon::metta::{UNIT_ATOM, ERROR_SYMBOL};
 use hyperon::metta::text::*;
 use hyperon::metta::runner::{Metta, EnvBuilder};
-use hyperon_atom::str::atom_to_string;
+use hyperon::metta::runner::str::atom_to_string;
 
 #[test]
 fn test_reduce_higher_order() {

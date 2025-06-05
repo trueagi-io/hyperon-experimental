@@ -220,7 +220,7 @@ mod test {
     use super::*;
 
     use hyperon_atom::matcher::*;
-    use hyperon_atom::{expr, sym, bind, number::Number};
+    use hyperon_atom::{expr, sym, bind};
     use hyperon_common::assert_eq_no_order;
     use std::fmt::{Debug, Display, Formatter};
 

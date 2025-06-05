@@ -1,6 +1,6 @@
 use hyperon_atom::*;
 use hyperon::metta::runner::*;
-use hyperon_atom::number::Number;
+use hyperon::metta::runner::number::Number;
 use hyperon::metta::text::SExprParser;
 
 fn main() -> Result<(), String> {

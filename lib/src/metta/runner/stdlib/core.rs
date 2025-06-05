@@ -5,7 +5,7 @@ use crate::metta::text::Tokenizer;
 use hyperon_common::CachingMapper;
 use crate::metta::runner::Metta;
 use crate::metta::runner::PragmaSettings;
-use hyperon_atom::bool::*;
+use crate::metta::runner::bool::*;
 use hyperon_atom::gnd::GroundedFunctionAtom;
 use hyperon_atom::matcher::{Bindings, apply_bindings_to_atom_move};
 

@@ -6,7 +6,7 @@ use crate::metta::types::{get_atom_types, get_meta_type};
 use hyperon_common::multitrie::{MultiTrie, TrieKey, TrieToken};
 use hyperon_common::collections::ImmutableString;
 use super::{grounded_op, regex};
-use hyperon_atom::number::*;
+use crate::metta::runner::number::*;
 
 use std::convert::TryInto;
 use std::hash::{DefaultHasher, Hasher};

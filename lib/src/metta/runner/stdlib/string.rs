@@ -1,7 +1,7 @@
 use hyperon_atom::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
-use hyperon_atom::str::*;
+use crate::metta::runner::str::*;
 use super::{grounded_op, unit_result, regex};
 
 use std::convert::TryInto;

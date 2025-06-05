@@ -2,8 +2,8 @@ use hyperon_atom::*;
 use hyperon::metta::*;
 use hyperon::metta::text::*;
 use hyperon::metta::runner::{Metta, EnvBuilder};
-use hyperon_atom::number::Number;
-use hyperon_atom::bool::Bool;
+use hyperon::metta::runner::number::Number;
+use hyperon::metta::runner::bool::Bool;
 
 #[test]
 fn test_types_in_metta() {

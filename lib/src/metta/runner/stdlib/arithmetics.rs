@@ -2,8 +2,8 @@ use hyperon_atom::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use super::regex;
-use hyperon_atom::number::*;
-use hyperon_atom::bool::*;
+use crate::metta::runner::number::*;
+use crate::metta::runner::bool::*;
 
 use std::fmt::Display;
 
