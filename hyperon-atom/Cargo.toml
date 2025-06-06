@@ -7,7 +7,6 @@ edition.workspace = true
 log = { workspace = true }
 smallvec = "1.10.0"
 bitset = "0.1.2"
-unescaper = "0.1.5"
 
 hyperon-common = { workspace = true }
 
