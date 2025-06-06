@@ -14,6 +14,11 @@ pub enum Number {
 
 impl PartialEq<Self> for Number {
     fn eq(&self, other: &Self) -> bool {
+        // TODO: this promoting is helpful for the atoms which contain Number
+        // objects, but it breaks logic for Rust data structures which use
+        // Number. For example Map can mix up Float and Number because of
+        // promoting. Possible solution is to have separate equality
+        // implementation for the Grounded trait.
         let (a, b) = Number::promote(self.clone(), other.clone());
         match (a, b) {
             (Number::Integer(a), Number::Integer(b)) => a == b,
