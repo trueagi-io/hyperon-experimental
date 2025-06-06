@@ -11,6 +11,9 @@ log = { workspace = true }
 smallvec = "1.10.0"
 bimap = "0.6.3"
 
+[dev-dependencies]
+hyperon = { workspace = true }
+
 [lib]
 path = "src/lib.rs"
 crate-type = ["lib"]
