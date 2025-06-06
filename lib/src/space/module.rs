@@ -1,6 +1,8 @@
-use super::*;
+use std::fmt::{Debug, Display};
 
-use std::fmt::Debug;
+use hyperon_atom::{matcher::BindingsSet, Atom};
+use hyperon_common::FlexRef;
+use hyperon_space::{complex_query, DynSpace, Space, SpaceCommon, SpaceMut, SpaceVisitor};
 
 pub struct ModuleSpace {
     main: DynSpace,

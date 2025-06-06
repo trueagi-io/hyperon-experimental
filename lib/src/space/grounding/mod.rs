@@ -1,15 +1,13 @@
 //! Atomspace implementation with in-memory atom storage
 
-pub mod index;
+use hyperon_atom::{matcher::BindingsSet, *};
+use hyperon_common::FlexRef;
+#[cfg(test)]
+use hyperon_space::DynSpace;
 
-use super::*;
-use hyperon_atom::*;
-
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::collections::HashSet;
-use index::*;
-
-pub use index::{ALLOW_DUPLICATION, NO_DUPLICATION};
+use hyperon_space::{complex_query, index::{AllowDuplication, AtomIndex, DuplicationStrategy, ALLOW_DUPLICATION}, Space, SpaceCommon, SpaceEvent, SpaceMut, SpaceVisitor};
 
 // Grounding space
 
@@ -246,9 +244,12 @@ pub(crate) fn metta_space(text: &str) -> DynSpace {
 
 #[cfg(test)]
 mod test {
+    use std::borrow::Cow;
+
     use super::*;
     use hyperon_atom::matcher::*;
     use hyperon_common::assert_eq_no_order;
+    use hyperon_space::SpaceObserver;
 
     struct SpaceEventCollector {
         events: Vec<SpaceEvent>,

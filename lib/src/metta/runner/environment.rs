@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use hyperon_atom::{sym, ExpressionAtom};
 use crate::metta::GroundingSpace;
-use crate::space::DynSpace;
+use hyperon_space::DynSpace;
 
 #[cfg(feature = "pkg_mgmt")]
 use crate::metta::runner::pkg_mgmt::{ModuleCatalog, DirCatalog, LocalCatalog, FsModuleFormat, SingleFileModuleFmt, DirModuleFmt, git_catalog::*};

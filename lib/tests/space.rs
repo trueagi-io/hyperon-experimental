@@ -1,5 +1,5 @@
 use hyperon_atom::*;
-use hyperon::space::DynSpace;
+use hyperon_space::DynSpace;
 use hyperon::space::grounding::GroundingSpace;
 
 #[test]
