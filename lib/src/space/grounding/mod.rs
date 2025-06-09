@@ -1,15 +1,13 @@
 //! Atomspace implementation with in-memory atom storage
 
-pub mod index;
+use hyperon_atom::{matcher::BindingsSet, *};
+use hyperon_common::FlexRef;
+#[cfg(test)]
+use hyperon_space::DynSpace;
 
-use super::*;
-use hyperon_atom::*;
-
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 use std::collections::HashSet;
-use index::*;
-
-pub use index::{ALLOW_DUPLICATION, NO_DUPLICATION};
+use hyperon_space::{complex_query, index::{AllowDuplication, AtomIndex, DuplicationStrategy, ALLOW_DUPLICATION}, Space, SpaceCommon, SpaceEvent, SpaceMut, SpaceVisitor};
 
 // Grounding space
 
@@ -213,12 +211,6 @@ impl SpaceMut for GroundingSpace {
     }
 }
 
-impl PartialEq for GroundingSpace {
-    fn eq(&self, other: &Self) -> bool {
-        self.index == other.index
-    }
-}
-
 impl<D: DuplicationStrategy> Debug for GroundingSpace<D> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.name {
@@ -237,22 +229,6 @@ impl<D: DuplicationStrategy> Display for GroundingSpace<D> {
     }
 }
 
-impl Grounded for GroundingSpace {
-    fn type_(&self) -> Atom {
-        rust_type_atom::<GroundingSpace>()
-    }
-
-    fn as_match(&self) -> Option<&dyn CustomMatch> {
-        Some(self)
-    }
-}
-
-impl CustomMatch for GroundingSpace {
-    fn match_(&self, other: &Atom) -> matcher::MatchResultIter {
-        Box::new(self.query(other).into_iter())
-    }
-}
-
 #[cfg(test)]
 use crate::metta::text::*;
 
@@ -268,9 +244,12 @@ pub(crate) fn metta_space(text: &str) -> DynSpace {
 
 #[cfg(test)]
 mod test {
+    use std::borrow::Cow;
+
     use super::*;
     use hyperon_atom::matcher::*;
     use hyperon_common::assert_eq_no_order;
+    use hyperon_space::SpaceObserver;
 
     struct SpaceEventCollector {
         events: Vec<SpaceEvent>,
@@ -586,7 +565,7 @@ mod test {
             expr!("B" {1} x "b"),
             expr!("A" {2} x "c"),
         ]);
-        let result: BindingsSet = match_atoms(&Atom::gnd(space), &expr!("A" {1} x x)).collect();
+        let result: BindingsSet = match_atoms(&Atom::gnd(DynSpace::new(space)), &expr!("A" {1} x x)).collect();
         assert_eq!(result, bind_set![{x: sym!("a")}]);
     }
 }

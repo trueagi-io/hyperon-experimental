@@ -30,7 +30,7 @@ pub trait Serializer {
 }
 
 /// Serialization error code
-#[derive(Debug)]
+#[derive(PartialEq, Debug)]
 pub enum Error {
     /// Serialization of the type is not supported by serializer.
     NotSupported,
@@ -79,7 +79,7 @@ impl PrivHasher for DefaultHasher {}
 impl<H: PrivHasher> Serializer for H {
     fn serialize_bool(&mut self, v: bool) -> Result { Ok(self.write_u8(v as u8)) }
     fn serialize_i64(&mut self, v: i64) -> Result { Ok(self.write_i64(v)) }
-    fn serialize_f64(&mut self, v: f64) -> Result { Ok(self.write_u64(v as u64)) }
+    fn serialize_f64(&mut self, v: f64) -> Result { Ok(self.write_i64(unsafe{ std::mem::transmute::<f64, i64>(v) })) }
     fn serialize_str(&mut self, v: &str) -> Result { Ok(v.bytes().for_each(|b| self.write_u8(b))) }
 }
 
@@ -113,6 +113,7 @@ impl Serializer for NullSerializer {
 mod tests {
     use super::*;
     use crate::*;
+    use std::hash::DefaultHasher;
 
     use std::fmt::Display;
 
@@ -157,5 +158,36 @@ mod tests {
     fn convert_return_none_on_incorrect_grounded_atom() {
         assert_eq!(I64Serializer::convert(&Atom::gnd(I64Gnd(42))), Some(42));
         assert_eq!(I64Serializer::convert(&Atom::value("42")), None);
+    }
+
+    #[derive(PartialEq, Debug, Clone)]
+    struct F64Gnd(f64);
+
+    impl Display for F64Gnd {
+        fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            write!(f, "{}", self.0)
+        }
+    }
+
+    impl Grounded for F64Gnd {
+        fn type_(&self) -> Atom {
+            rust_type_atom::<Self>()
+        }
+
+        fn serialize(&self, serializer: &mut dyn serial::Serializer) -> serial::Result {
+            serializer.serialize_f64(self.0)
+        }
+    }
+
+
+    #[test]
+    fn default_hasher_serialization_f64_i64() {
+        let mut hasher = DefaultHasher::new();
+        assert_eq!(I64Gnd(1i64).serialize(&mut hasher), Ok(()));
+        let i64hash = hasher.finish();
+        let mut hasher = DefaultHasher::new();
+        assert_eq!(F64Gnd(1.0f64).serialize(&mut hasher), Ok(()));
+        let f64hash = hasher.finish();
+        assert_ne!(i64hash, f64hash);
     }
 }

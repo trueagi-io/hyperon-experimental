@@ -2,6 +2,7 @@
 members = [
     "hyperon-common",
     "hyperon-atom",
+    "hyperon-space",
     "lib",
     "c",
     "repl",
@@ -16,6 +17,7 @@ edition = "2021"
 hyperon = { path = "./lib", version = "0.2.5" }
 hyperon-common = { path = "./hyperon-common", version = "0.2.5" }
 hyperon-atom = { path = "./hyperon-atom", version = "0.2.5" }
+hyperon-space = { path = "./hyperon-space", version = "0.2.5" }
 
 regex = "1.11.0"
 log = "0.4.0"

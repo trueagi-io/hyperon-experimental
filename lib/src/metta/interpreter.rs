@@ -3,7 +3,7 @@
 
 use hyperon_atom::*;
 use hyperon_atom::matcher::*;
-use crate::space::*;
+use hyperon_space::*;
 use crate::metta::*;
 use crate::metta::types::*;
 use crate::metta::runner::stdlib::core::IfEqualOp;

@@ -3,10 +3,10 @@ mod interpreter_bench {
 
 extern crate test;
 
+use hyperon_atom::{expr, Atom};
 use test::Bencher;
 
-use hyperon::*;
-use hyperon::space::DynSpace;
+use hyperon_space::DynSpace;
 use hyperon::space::grounding::*;
 use hyperon::metta::*;
 use hyperon::metta::interpreter::*;
