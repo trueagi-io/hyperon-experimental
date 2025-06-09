@@ -1,13 +1,15 @@
 use std::sync::{Arc, Mutex};
 
+use hyperon_atom::{rust_type_atom, Atom, CustomExecute, ExecError, Grounded};
+use hyperon_space::DynSpace;
+use metta_bus_client::space::DistributedAtomSpace;
 use metta_bus_client::{host_id_from_atom, init_service_bus};
 
 use crate::metta::runner::modules::{MettaMod, ModuleLoader};
 use crate::metta::runner::stdlib::{grounded_op, regex};
 use crate::metta::runner::{Metta, RunContext};
-use crate::metta::*;
-use crate::space::distributed::DistributedAtomSpace;
-use crate::space::DynSpace;
+use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_SYMBOL};
+use crate::space::grounding::GroundingSpace;
 
 /// This module expose DAS directly in metta-repl:
 /// 
@@ -15,7 +17,7 @@ use crate::space::DynSpace;
 /// cargo build --release --features=das
 /// 
 /// Then run the MeTTa REPL binary:
-/// ./target/release/metta-repl 
+/// ./target/release/metta-repl
 /// Visit https://metta-lang.dev/ for tutorials.
 /// Execute !(help!) to get list of the standard library functions.
 /// > !(import! &self das)
@@ -54,9 +56,9 @@ impl Grounded for NewDasOp {
     fn type_(&self) -> Atom {
         Atom::expr([
             ARROW_SYMBOL,
+            ATOM_TYPE_SYMBOL,
+            ATOM_TYPE_SYMBOL,
             rust_type_atom::<DynSpace>(),
-            ATOM_TYPE_SYMBOL,
-            ATOM_TYPE_SYMBOL,
         ])
     }
 
@@ -84,7 +86,7 @@ impl CustomExecute for NewDasOp {
             log::debug!(target: "das", "new-das! initialized.");
             Ok(vec![space])
         } else {
-            Err("new-das! expects 2 arguments, eg. !(bind! &das (new-das! (0.0.0.0:8080) (0.0.0.0:35700))".into())
+            Err("new-das! expects 2 arguments, eg. !(bind! &das (new-das! 0.0.0.0:8080 0.0.0.0:35700))".into())
         }
     }
 }
