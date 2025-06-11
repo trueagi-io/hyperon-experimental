@@ -562,7 +562,7 @@ pub extern "C" fn atom_error_message(atom: *const atom_ref_t, buf: *mut c_char, 
 /// @return  The `atom_t` representing the Symbol atom
 /// @note The returned `atom_t` must be freed with `atom_free()`
 ///
-#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> atom_t { hyperon::metta::ATOM_TYPE_SPACE.into() }
+#[no_mangle] pub extern "C" fn ATOM_TYPE_GROUNDED_SPACE() -> atom_t { hyperon_space::ATOM_TYPE_SPACE.into() }
 
 /// @brief Creates an atom used to indicate that an atom's type is a unit type.
 /// @ingroup metta_language_group

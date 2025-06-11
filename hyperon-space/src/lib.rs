@@ -15,6 +15,7 @@ use hyperon_atom::subexpr::split_expr;
 
 /// Symbol to concatenate queries to space.
 pub const COMMA_SYMBOL : Atom = sym!(",");
+pub const ATOM_TYPE_SPACE: Atom = sym!("SpaceType");
 
 /// Contains information about space modification event.
 #[derive(Clone, Debug, PartialEq)]
@@ -322,8 +323,7 @@ impl PartialEq for DynSpace {
 
 impl hyperon_atom::Grounded for DynSpace {
     fn type_(&self) -> Atom {
-        // crate::metta::ATOM_TYPE_SPACE
-        sym!("SpaceType")
+        ATOM_TYPE_SPACE
     }
 
     fn as_match(&self) -> Option<&dyn CustomMatch> {
