@@ -1,7 +1,7 @@
 #![allow(non_camel_case_types)]
 
 use hyperon_atom::*;
-use hyperon::space::DynSpace;
+use hyperon_space::DynSpace;
 use hyperon_atom::serial;
 
 use crate::util::*;

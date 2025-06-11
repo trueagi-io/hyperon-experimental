@@ -2,9 +2,9 @@
 
 extern crate test;
 
+use hyperon_atom::{bind_set, expr, Atom};
 use test::Bencher;
 
-use hyperon::*;
 use hyperon::space::grounding::*;
 
 fn space(size: isize) -> GroundingSpace {

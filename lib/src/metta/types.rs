@@ -20,7 +20,7 @@
 
 use super::*;
 use hyperon_atom::matcher::{Bindings, BindingsSet, apply_bindings_to_atom_move};
-use crate::space::DynSpace;
+use hyperon_space::DynSpace;
 
 use std::fmt::{Display, Debug};
 use itertools::Itertools;

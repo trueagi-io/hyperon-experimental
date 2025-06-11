@@ -1,6 +1,6 @@
 use hyperon_common::FlexRef;
 use hyperon::space::grounding::*;
-use hyperon::space::*;
+use hyperon_space::*;
 use hyperon_atom::*;
 use hyperon_atom::matcher::*;
 

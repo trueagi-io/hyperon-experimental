@@ -1,5 +1,5 @@
 use hyperon_atom::*;
-use crate::space::*;
+use hyperon_space::*;
 use crate::metta::*;
 use crate::metta::text::Tokenizer;
 use hyperon_common::CachingMapper;
