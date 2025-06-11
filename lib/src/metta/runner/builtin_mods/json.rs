@@ -7,7 +7,7 @@ use crate::metta::runner::modules::MettaMod;
 use crate::metta::runner::str::{atom_to_string, ATOM_TYPE_STRING};
 use crate::metta::runner::str::Str;
 use serde_json::Value;
-use crate::space::DynSpace;
+use crate::metta::runner::DynSpace;
 use crate::metta::runner::bool::*;
 use crate::metta::runner::number::Number;
 use crate::metta::types::{get_atom_types, get_meta_type};
