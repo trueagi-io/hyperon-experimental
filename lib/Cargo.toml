@@ -15,7 +15,6 @@ dyn-fmt = "0.4.0"
 itertools = "0.13.0"
 unescaper = "0.1.5"
 unicode_reader = "1.0.2"
-bimap = "0.6.3"
 serde_json = { version="1.0.116", optional=true }
 
 # pkg_mgmt deps

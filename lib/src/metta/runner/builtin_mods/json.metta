@@ -4,11 +4,11 @@
     (@param "Space")
     (@param "Key")))
   (@return "Value which tied to input key, empty if no such key in space"))
-(: get-value (-> Grounded Atom %Undefined%))
+(: get-value (-> Grounded Atom Atom))
 (= (get-value $dictspace $key) (match $dictspace ($key $value) $value))
 
 (@doc get-keys
-  (@desc "Function takes space and checks if space contains key-value pairs in form of (key value) and returns all keys")
+  (@desc "Function takes space and returns all keys from (<key> <value>) tuples in space")
   (@params (
     (@param "Space")))
   (@return "All keys in the input space"))

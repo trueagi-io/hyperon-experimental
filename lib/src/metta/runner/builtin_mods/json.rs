@@ -9,8 +9,8 @@ use crate::metta::runner::str::Str;
 use serde_json::Value;
 use crate::metta::runner::DynSpace;
 use crate::metta::runner::bool::*;
-use crate::metta::runner::number::Number;
-use crate::metta::types::{get_atom_types, get_meta_type};
+use crate::metta::runner::number::{Number, ATOM_TYPE_NUMBER};
+use crate::metta::types::get_atom_types;
 
 pub static JSON_METTA: &'static str = include_str!("json.metta");
 
@@ -43,7 +43,7 @@ impl ModuleLoader for JsonModLoader {
 
         tref.register_function(GroundedFunctionAtom::new(
             r"json-decode".into(),
-            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_STRING, ATOM_TYPE_SPACE]),
+            Atom::expr([ARROW_SYMBOL, ATOM_TYPE_STRING, ATOM_TYPE_ATOM]),
             json_decode));
 
         Ok(())
@@ -51,16 +51,31 @@ impl ModuleLoader for JsonModLoader {
 }
 
 fn encode_list(input: Vec<Atom>) -> Result<String, ExecError> {
-    let mut res_str = "".to_string();
-    for atom in input {
+    let mut res_str = "[".to_string();
+    let first_atom = input.first().unwrap();
+    match encode_atom(first_atom) {
+        Ok(encoded) => {res_str.push_str(&encoded);}
+        Err(err) => return Err(err),
+    }
+    for atom in input[1..].iter() {
         match encode_atom(&atom) {
             Ok(encoded) => {res_str = res_str + ", " + &encoded;},
             Err(err) => return Err(err),
         }
     }
-    res_str.remove(0);
-    res_str.remove(0);
-    Ok(format!("[{}]", res_str))
+    res_str.push_str("]");
+    Ok(res_str)
+}
+
+fn extract_key_value_pair (atom: Atom) -> Result<String, ExecError> {
+    let res_expr = TryInto::<&ExpressionAtom>::try_into(&atom)?;
+    let key = match Str::from_atom(res_expr.children().get(0).unwrap()).ok_or_else(|| ExecError::from("Key must be a string")){
+        Ok(str) => str.to_string(),
+        Err(err) => return Err(err),
+    };
+    let value = res_expr.children().get(1).unwrap();
+    let value_str = encode_atom(value)?;
+    Ok(key + ": " + &value_str)
 }
 
 fn encode_dictspace(input: &Atom) -> Result<String, ExecError> {
@@ -70,43 +85,49 @@ fn encode_dictspace(input: &Atom) -> Result<String, ExecError> {
     if result.len() == 0 {
         return Err(ExecError::from("Input space must be a dictionary space which contains (key value) pairs. See dict-space function"));
     }
-    let mut res_str = "".to_string();
-    for res_atom in result {
-        let res_expr = TryInto::<&ExpressionAtom>::try_into(&res_atom)?;
-        let key = match Str::from_atom(res_expr.children().get(0).unwrap()).ok_or_else(|| ExecError::from("Key must be a string")){
-            Ok(str) => str.to_string(),
-            Err(err) => return Err(err),
-        };
-        let value = res_expr.children().get(1).unwrap();
-        let value_str = encode_atom(value)?;
-        res_str = res_str + ", " + &key + ": " + &value_str;
+    let mut res_str = "{".to_string();
+    let first_atom = result.first().unwrap();
+    match extract_key_value_pair(first_atom.clone()) {
+        Ok(encoded_key_value) => res_str.push_str(&encoded_key_value),
+        Err(err) => return Err(err),
     }
-    res_str.remove(0);
-    res_str.remove(0);
-    res_str = format!("{{{}}}", res_str);
+    for res_atom in result[1..].iter() {
+        match extract_key_value_pair(res_atom.clone()) {
+            Ok(encoded_key_value) => {res_str = res_str + ", " + &encoded_key_value},
+            Err(err) => return Err(err),
+        }
+    }
+    res_str.push_str("}");
     Ok(res_str)
 }
 
 fn encode_atom(input: &Atom) -> Result<String, ExecError> {
-    let metatype = atom_to_string(&get_meta_type(&input));
     let space = DynSpace::new(GroundingSpace::new());
     let typ = get_atom_types(&space, &input);
-    if metatype == "Expression" {
-        let exp = TryInto::<&ExpressionAtom>::try_into(input)?;
-        match encode_list(exp.clone().into_children()) {
+    let exp = TryInto::<&ExpressionAtom>::try_into(input);
+    if exp.is_ok() {
+        match encode_list(exp?.clone().into_children()) {
             Ok(encoded_list) => Ok(encoded_list),
             Err(err) => Err(err),
         }
     }
-    else if atom_to_string(&typ[0]) == "Number" {
+    else if typ[0] == ATOM_TYPE_NUMBER {
         let number_atom_string = atom_to_string(&input);
         Ok(number_atom_string)
     }
-    else if atom_to_string(&typ[0]) == "SpaceType" {
+    else if typ[0] == ATOM_TYPE_SPACE {
         match encode_dictspace(&input) {
             Ok(str) => Ok(str),
             Err(err) => Err(err)
         }
+    }
+    else if typ[0] == ATOM_TYPE_BOOL {
+        let bool_atom = Bool::from_atom(&input).unwrap();
+        match serde_json::to_string(&bool_atom.0) {
+            Ok(encoded) => Ok(encoded),
+            Err(err) => Err(ExecError::from(format!("Encode bool failed: {}", err))),
+        }
+
     }
     // String should be encoded using serde_json since it will encode "a" with additional escape
     // characters. Symbols like just 'a' are not supported by serde_json so proposition is to encode
@@ -160,15 +181,15 @@ fn decode_value(v: &Value) -> Result<Atom, ExecError> {
 fn decode_object(obj: &Value) -> Result<Atom, ExecError> {
     let dict = obj.as_object().unwrap();
     let keys = dict.keys();
-    let space = DynSpace::new(GroundingSpace::new());
+    let mut space = GroundingSpace::new();
     for key in keys {
         let value = dict.get(key).unwrap();
         match decode_value(value) {
-            Ok(decoded) => space.borrow_mut().add(Atom::expr([Atom::gnd(Str::from_string(key.clone())), decoded])),
+            Ok(decoded) => space.add(Atom::expr([Atom::gnd(Str::from_string(key.clone())), decoded])),
             Err(err) => return Err(err)
         }
     }
-    Ok(Atom::gnd(space))
+    Ok(Atom::gnd(DynSpace::new(space)))
 }
 
 fn decode_array(arr: &Vec<Value>) -> Result<Atom, ExecError> {
@@ -208,8 +229,12 @@ mod tests {
             !(assertEqual (json-decode \"[5, 4, 3]\") (5 4 3))
             !(bind! &dictspace (dict-space ((\"k1\" v1) (\"k2\" v2) (\"k3\" (4 \"a\" 5)))))
             !(assertEqual (let $decoded (let $encoded (json-encode &dictspace) (json-decode $encoded)) (get-keys $decoded)) (superpose (\"k1\" \"k2\" \"k3\")))
+            !(assertEqual (json-encode True) \"true\")
+            !(assertEqual (let $encoded (json-encode False) (json-decode $encoded)) False)
         ";
         assert_eq!(run_program(program), Ok(vec![
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
