@@ -1,12 +1,13 @@
-use hyperon_atom::{Atom, ExecError, gnd::GroundedFunctionAtom, ExpressionAtom};
-use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_ATOM, ATOM_TYPE_SPACE};
+use hyperon_atom::{Atom, ExecError, gnd::GroundedFunctionAtom, ExpressionAtom, SymbolAtom};
+use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_ATOM};
 use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, ModuleLoader, RunContext};
 use crate::metta::runner::modules::MettaMod;
-use crate::metta::runner::str::{atom_to_string, ATOM_TYPE_STRING};
+use crate::metta::runner::str::{atom_to_string, unescape, ATOM_TYPE_STRING};
 use crate::metta::runner::str::Str;
 use serde_json::Value;
+use hyperon_space::ATOM_TYPE_SPACE;
 use crate::metta::runner::DynSpace;
 use crate::metta::runner::bool::*;
 use crate::metta::runner::number::{Number, ATOM_TYPE_NUMBER};
@@ -80,6 +81,7 @@ fn extract_key_value_pair (atom: Atom) -> Result<String, ExecError> {
 
 fn encode_dictspace(input: &Atom) -> Result<String, ExecError> {
     let space = Atom::as_gnd::<DynSpace>(input).unwrap();
+
     let result = space.borrow().subst(&Atom::expr([Atom::var("k"), Atom::var("v")]),
                                       &Atom::expr([Atom::var("k"), Atom::var("v")]));
     if result.len() == 0 {
@@ -105,6 +107,7 @@ fn encode_atom(input: &Atom) -> Result<String, ExecError> {
     let space = DynSpace::new(GroundingSpace::new());
     let typ = get_atom_types(&space, &input);
     let exp = TryInto::<&ExpressionAtom>::try_into(input);
+    let sym = TryInto::<&SymbolAtom>::try_into(input);
     if exp.is_ok() {
         match encode_list(exp?.clone().into_children()) {
             Ok(encoded_list) => Ok(encoded_list),
@@ -127,11 +130,24 @@ fn encode_atom(input: &Atom) -> Result<String, ExecError> {
             Ok(encoded) => Ok(encoded),
             Err(err) => Err(ExecError::from(format!("Encode bool failed: {}", err))),
         }
-
+    }
+    // Symbols will use additional sym!: prefix to separate them from regular strings. null is a
+    // symbol too, but it should remain "null" after encoding so decoder will see it like Value::Null instance.
+    else if sym.is_ok() {
+        let mut sym_name = sym.unwrap().name().to_string();
+        if sym_name == "null" {
+            Ok("null".to_string())
+        }
+        else {
+            sym_name = "sym!:".to_string() + &sym_name;
+            match serde_json::to_string(&sym_name) {
+                Ok(encoded) => Ok(encoded),
+                Err(err) => Err(ExecError::from(format!("Encode symbol failed: {}", err))),
+            }
+        }
     }
     // String should be encoded using serde_json since it will encode "a" with additional escape
-    // characters. Symbols like just 'a' are not supported by serde_json so proposition is to encode
-    // them like strings.
+    // characters.
     else {
         let atom_string = atom_to_string(&input);
         match serde_json::to_string(&atom_string) {
@@ -157,9 +173,17 @@ fn decode_value(v: &Value) -> Result<Atom, ExecError> {
             Ok(atom) => Ok(atom),
             Err(err) => Err(err),
         }},
-        Value::Null => Ok(Atom::gnd(Str::from_str("null"))),
+        Value::Null => Ok(Atom::sym("null")),
         Value::Bool(_) => Ok(Atom::gnd(Bool(v.as_bool().unwrap()))),
-        Value::String(_) => Ok(Atom::gnd(Str::from_string(v.to_string()))),
+        Value::String(_) => {
+            let decoded_string = v.to_string();
+            if decoded_string.contains("sym!:") {
+                Ok(Atom::sym(&unescape(&decoded_string.replace("sym!:", "")).unwrap()))
+            }
+            else {
+                Ok(Atom::gnd(Str::from_string(v.to_string())))
+            }
+        },
         Value::Object(_) => {match decode_object(&v.clone()) {
             Ok(atom) => Ok(atom),
             Err(err) => Err(err),
@@ -231,8 +255,16 @@ mod tests {
             !(assertEqual (let $decoded (let $encoded (json-encode &dictspace) (json-decode $encoded)) (get-keys $decoded)) (superpose (\"k1\" \"k2\" \"k3\")))
             !(assertEqual (json-encode True) \"true\")
             !(assertEqual (let $encoded (json-encode False) (json-decode $encoded)) False)
+            !(assertEqual (json-decode \"null\") null)
+            !(assertEqual (let $encoded (json-encode null) (json-decode $encoded)) null)
+            !(assertEqual (json-encode symbol) \"\\\"sym!:symbol\\\"\")
+            !(assertEqual (let $encoded (json-encode symbol) (json-decode $encoded)) symbol)
         ";
         assert_eq!(run_program(program), Ok(vec![
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
+            vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
