@@ -194,7 +194,7 @@ fn json_encode(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
     let mut buffer: Vec<u8> = Vec::new();
     encode_atom(&mut buffer, input)?;
     let json = String::from_utf8(buffer)
-        .map_err(|err| ExecError::Runtime(format!("Encode space failed: {}", err)))?;
+        .map_err(|err| ExecError::Runtime(format!("Encode atom failed: {}", err)))?;
     Ok(vec![Atom::gnd(Str::from_string(json))])
 }
 
