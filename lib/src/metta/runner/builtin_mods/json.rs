@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use hyperon_atom::{Atom, ExecError, gnd::GroundedFunctionAtom, ExpressionAtom, SymbolAtom};
+use hyperon_atom::{Atom, ExecError, gnd::GroundedFunctionAtom, ExpressionAtom};
 use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_ATOM};
 use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
@@ -12,7 +12,6 @@ use hyperon_space::ATOM_TYPE_SPACE;
 use crate::metta::runner::DynSpace;
 use crate::metta::runner::bool::*;
 use crate::metta::runner::number::{Number, ATOM_TYPE_NUMBER};
-use crate::metta::types::get_atom_types;
 
 pub static JSON_METTA: &'static str = include_str!("json.metta");
 
@@ -52,139 +51,105 @@ impl ModuleLoader for JsonModLoader {
     }
 }
 
-fn encode_list(input: Vec<Atom>) -> Result<String, ExecError> {
+fn encode_list(input: &[Atom]) -> Result<String, ExecError> {
     let mut res_str = "[".to_string();
-    let first_atom = input.first().unwrap();
-    match encode_atom(first_atom) {
-        Ok(encoded) => {res_str.push_str(&encoded);}
-        Err(err) => return Err(err),
-    }
-    for atom in input[1..].iter() {
-        match encode_atom(&atom) {
-            Ok(encoded) => {res_str = res_str + ", " + &encoded;},
-            Err(err) => return Err(err),
+    if !input.is_empty() {
+        let first_atom = input.first().unwrap();
+        res_str = res_str + &encode_atom(first_atom)?;
+        for atom in &input[1..] {
+            res_str = res_str + ", " + &encode_atom(atom)?;
         }
     }
     res_str.push_str("]");
     Ok(res_str)
 }
 
-fn extract_key_value_pair (atom: Atom) -> Result<String, ExecError> {
-    let res_expr = TryInto::<&ExpressionAtom>::try_into(&atom)?;
-    let key = match Str::from_atom(res_expr.children().get(0).unwrap()).ok_or_else(|| ExecError::from("Key must be a string")){
-        Ok(str) => str.to_string(),
-        Err(err) => return Err(err),
-    };
-    let value = res_expr.children().get(1).unwrap();
+fn extract_key_value_pair(atom: &Atom) -> Result<String, ExecError> {
+    let res_expr = TryInto::<&ExpressionAtom>::try_into(atom)?;
+    let key = res_expr.children().get(0)
+        .and_then(|k| Str::from_atom(k))
+        .ok_or(ExecError::from("Key/value pair is expected, key must be a string"))?
+        .to_string();
+    let value = res_expr.children().get(1)
+        .ok_or(ExecError::from("Key/value pair is expected"))?;
     let value_str = encode_atom(value)?;
     Ok(key + ": " + &value_str)
 }
 
-fn visit_callback(atom: Cow<Atom>, result: &mut Vec<Atom>) {
-    match TryInto::<&ExpressionAtom>::try_into(&atom.clone().into_owned()) {
-        Ok(expr) => {
-            if expr.children().len() == 2 {
-                result.push(atom.into_owned())
-            }
-            else {
-                ()
-            }
-        }
-        _ => ()
-    }
-}
-
 fn encode_dictspace(input: &Atom) -> Result<String, ExecError> {
     let space = Atom::as_gnd::<DynSpace>(input).unwrap();
-
-    let mut result: Vec<Atom> = Vec::new();
-    let _ = space.borrow().visit(&mut |atoms: Cow<Atom>| visit_callback(atoms, &mut result));
-    if result.len() != space.borrow().atom_count().unwrap() {
-        return Err(ExecError::from("Input space must be a dictionary space consists of key-value pairs only or empty space. Use dict-space function"));
-    }
-    if result.len() == 0 {
-        Ok("{}".to_string())
-    }
-    else {
-        let mut res_str = "{".to_string();
-        let first_atom = result.first().unwrap();
-        match extract_key_value_pair(first_atom.clone()) {
-            Ok(encoded_key_value) => res_str.push_str(&encoded_key_value),
-            Err(err) => return Err(err),
-        }
-        for res_atom in result[1..].iter() {
-            match extract_key_value_pair(res_atom.clone()) {
-                Ok(encoded_key_value) => { res_str = res_str + ", " + &encoded_key_value },
-                Err(err) => return Err(err),
+    let mut err = None;
+    let mut first_atom = true;
+    let mut res_str = "{".to_string();
+    let _ = space.borrow().visit(&mut |atom: Cow<Atom>| {
+        match TryInto::<&ExpressionAtom>::try_into(atom.as_ref()) {
+            Ok(expr) => if err.is_none() && expr.children().len() == 2 {
+                match extract_key_value_pair(&atom) {
+                    Ok(encoded_key_value) => {
+                        if !first_atom {
+                            res_str.push_str(", ");
+                        } else {
+                            first_atom = false;
+                        }
+                        res_str.push_str(&encoded_key_value)
+                    },
+                    Err(e) => err = Some(e),
+                }
             }
+            _ => {
+                err = Some(ExecError::from("Input space must be a dictionary space consists of key-value pairs only or empty space. Use dict-space function"));
+            },
         }
-        res_str.push_str("}");
-        Ok(res_str)
+    });
+    match err {
+        Some(err) => Err(err),
+        None => {
+            res_str.push_str("}");
+            Ok(res_str)
+        }
     }
 }
 
 fn encode_atom(input: &Atom) -> Result<String, ExecError> {
-    let space = DynSpace::new(GroundingSpace::new());
-    let typ = get_atom_types(&space, &input);
-    let exp = TryInto::<&ExpressionAtom>::try_into(input);
-    let sym = TryInto::<&SymbolAtom>::try_into(input);
-    if exp.is_ok() {
-        match encode_list(exp?.clone().into_children()) {
-            Ok(encoded_list) => Ok(encoded_list),
-            Err(err) => Err(err),
-        }
-    }
-    else if typ[0] == ATOM_TYPE_NUMBER {
-        let number_atom_string = atom_to_string(&input);
-        Ok(number_atom_string)
-    }
-    else if typ[0] == ATOM_TYPE_SPACE {
-        match encode_dictspace(&input) {
-            Ok(str) => Ok(str),
-            Err(err) => Err(err)
-        }
-    }
-    else if typ[0] == ATOM_TYPE_BOOL {
-        let bool_atom = Bool::from_atom(&input).unwrap();
-        match serde_json::to_string(&bool_atom.0) {
-            Ok(encoded) => Ok(encoded),
-            Err(err) => Err(ExecError::from(format!("Encode bool failed: {}", err))),
-        }
-    }
-    // Symbols will use additional sym!: prefix to separate them from regular strings. null is a
-    // symbol too, but it should remain "null" after encoding so decoder will see it like Value::Null instance.
-    else if sym.is_ok() {
-        let mut sym_name = sym.unwrap().name().to_string();
-        if sym_name == "null" {
-            Ok("null".to_string())
-        }
-        else {
-            sym_name = "sym!:".to_string() + &sym_name;
-            match serde_json::to_string(&sym_name) {
-                Ok(encoded) => Ok(encoded),
-                Err(err) => Err(ExecError::from(format!("Encode symbol failed: {}", err))),
-            }
-        }
-    }
-    // String should be encoded using serde_json since it will encode "a" with additional escape
-    // characters.
-    else {
+    fn encode_other(input: &Atom) -> Result<String, ExecError> {
+        // String should be encoded using serde_json since it will encode "a" with additional escape
+        // characters.
         let atom_string = atom_to_string(&input);
-        match serde_json::to_string(&atom_string) {
-            Ok(encoded) => Ok(encoded),
-            Err(err) => Err(ExecError::from(format!("Encode string failed: {}", err))),
-        }
+        serde_json::to_string(&atom_string)
+            .map_err(|err| ExecError::from(format!("Encode string failed: {}", err)))
+    }
+    match input {
+        Atom::Grounded(gnd) => {
+            let typ = gnd.type_();
+            if typ == ATOM_TYPE_NUMBER {
+                Ok(atom_to_string(input))
+            } else if typ == ATOM_TYPE_SPACE {
+                encode_dictspace(&input)
+            } else if typ == ATOM_TYPE_BOOL {
+                let val = gnd.downcast_ref::<Bool>().unwrap().0;
+                serde_json::to_string(&val)
+                    .map_err(|err| ExecError::from(format!("Encode bool failed: {}", err)))
+            } else {
+                encode_other(input)
+            }
+        },
+        Atom::Expression(exp) => encode_list(exp.children()),
+        // Symbols will use additional sym!: prefix to separate them from regular strings. null is a
+        // symbol too, but it should remain "null" after encoding so decoder will see it like Value::Null instance.
+        Atom::Symbol(sym) if sym.name() == "null" => Ok("null".into()),
+        Atom::Symbol(sym) => {
+            let sym_name = "sym!:".to_string() + sym.name();
+            serde_json::to_string(&sym_name)
+                .map_err(|err| ExecError::from(format!("Encode symbol failed: {}", err)))
+        },
+        Atom::Variable(_) => encode_other(input),
     }
 }
 
 fn json_encode(args: &[Atom]) -> Result<Vec<Atom>, ExecError> {
     let arg_error = || ExecError::from("json-encode expects atom to encode as input");
     let input = args.get(0).ok_or_else(arg_error)?;
-
-    match encode_atom(input) {
-        Ok(str) => Ok(vec![Atom::gnd(Str::from_string(str))]),
-        Err(err) => Err(err)
-    }
+    encode_atom(input).map(|s| vec![Atom::gnd(Str::from_string(s))])
 }
 
 fn decode_value(v: &Value) -> Result<Atom, ExecError> {
