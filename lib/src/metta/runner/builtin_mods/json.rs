@@ -85,15 +85,15 @@ impl From<JSONError> for ExecError {
 }
 
 fn encode_list<W: Write>(writer: &mut W, input: &[Atom]) -> Result<(), JSONError> {
-    writer.write("[".as_bytes())?;
+    writer.write(b"[")?;
     if !input.is_empty() {
         encode_atom(writer, input.first().unwrap())?;
         for atom in &input[1..] {
-            writer.write(", ".as_bytes())?;
+            writer.write(b", ")?;
             encode_atom(writer, atom)?;
         }
     }
-    writer.write("]".as_bytes())?;
+    writer.write(b"]")?;
     Ok(())
 }
 
@@ -106,7 +106,7 @@ fn extract_key_value_pair<W: Write>(writer: &mut W, atom: &Atom) -> Result<(), J
     let value = res_expr.children().get(1)
         .ok_or("Key/value pair is expected")?;
     writer.write(key.as_bytes())?;
-    writer.write(":".as_bytes())?;
+    writer.write(b":")?;
     encode_atom(writer, value)?;
     Ok(())
 }
@@ -115,7 +115,7 @@ fn encode_dictspace<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONEr
     let space = Atom::as_gnd::<DynSpace>(input).unwrap();
     let mut result = Ok(());
     let mut first_atom = true;
-    writer.write("{".as_bytes())?;
+    writer.write(b"{")?;
     let _ = space.borrow().visit(&mut |atom: Cow<Atom>| {
         if result.is_err() {
             return;
@@ -123,7 +123,7 @@ fn encode_dictspace<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONEr
         result = match TryInto::<&ExpressionAtom>::try_into(atom.as_ref()) {
             Ok(expr) if expr.children().len() == 2 => {
                 let r = if !first_atom {
-                    writer.write(", ".as_bytes()).map(|_| ()).map_err(|e| e.into())
+                    writer.write(b", ").map(|_| ()).map_err(|e| e.into())
                 } else {
                     first_atom = false;
                     Ok(())
@@ -136,7 +136,7 @@ fn encode_dictspace<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONEr
     match result {
         Err(err) => Err(err),
         Ok(()) => {
-            writer.write("}".as_bytes())?;
+            writer.write(b"}")?;
             Ok(())
         }
     }
@@ -170,7 +170,7 @@ fn encode_atom<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONError> 
         // Symbols will use additional sym!: prefix to separate them from regular strings. null is a
         // symbol too, but it should remain "null" after encoding so decoder will see it like Value::Null instance.
         Atom::Symbol(sym) if sym.name() == "null" => {
-            writer.write("null".as_bytes()).map(|_| ()).map_err(|e| e.into())
+            writer.write(b"null").map(|_| ()).map_err(|e| e.into())
         },
         Atom::Symbol(sym) => {
             let sym_name = "sym!:".to_string() + sym.name();
