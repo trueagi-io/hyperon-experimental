@@ -268,4 +268,30 @@ mod tests {
             vec![UNIT_ATOM],
         ]));
     }
+
+    #[cfg(feature="benchmark")]
+    mod benchmarks {
+        extern crate test;
+
+        use test::Bencher;
+        use hyperon_atom::Atom;
+        use hyperon_space::DynSpace;
+        use crate::space::grounding::*;
+        use crate::metta::runner::str::Str;
+        use super::super::json_encode;
+
+        #[bench]
+        fn bench_json_encode(bencher: &mut Bencher) {
+            let mut space = GroundingSpace::new();
+            for _i in 1..1000 {
+                space.add(Atom::expr([Atom::gnd(Str::from_str("some-key")), Atom::sym("some-value")]));
+            }
+            let space = Atom::gnd(DynSpace::new(space));
+            bencher.iter(|| {
+                let result = json_encode(&[space.clone()]);
+                assert!(result.is_ok());
+            })
+        }
+    }
 }
+
