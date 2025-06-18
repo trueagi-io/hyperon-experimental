@@ -144,8 +144,6 @@ fn encode_dictspace<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONEr
 
 fn encode_atom<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONError> {
     fn encode_other<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONError> {
-        // String should be encoded using serde_json since it will encode "a" with additional escape
-        // characters.
         let atom_string = atom_to_string(&input);
         serde_json::to_writer(writer, &atom_string)
             .map_err(|err| JSONError::Runtime(format!("Encode string failed: {}", err)))
@@ -154,14 +152,23 @@ fn encode_atom<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONError> 
         Atom::Grounded(gnd) => {
             let typ = gnd.type_();
             if typ == ATOM_TYPE_NUMBER {
-                writer.write(atom_to_string(input).as_bytes())
-                    .map(|_| ()).map_err(|e| e.into())
+                let val = Number::from_atom(input).unwrap();
+                match val {
+                    Number::Integer(i) => serde_json::to_writer(writer, &i)
+                        .map_err(|err| JSONError::Runtime(format!("Encode integer failed: {}", err))),
+                    Number::Float(f) => serde_json::to_writer(writer, &f)
+                        .map_err(|err| JSONError::Runtime(format!("Encode float failed: {}", err))),
+                }
             } else if typ == ATOM_TYPE_SPACE {
                 encode_dictspace(writer, &input)
             } else if typ == ATOM_TYPE_BOOL {
-                let val = gnd.downcast_ref::<Bool>().unwrap().0;
-                serde_json::to_writer(writer, &val)
+                let val = Bool::from_atom(input).unwrap();
+                serde_json::to_writer(writer, &val.0)
                     .map_err(|err| JSONError::Runtime(format!("Encode bool failed: {}", err)))
+            } else if typ == ATOM_TYPE_STRING {
+                let val = Str::from_atom(input).unwrap();
+                serde_json::to_writer(writer, val.as_str())
+                    .map_err(|err| JSONError::Runtime(format!("Encode string failed: {}", err)))
             } else {
                 encode_other(writer, input)
             }
