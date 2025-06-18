@@ -79,6 +79,7 @@ fn extract_key_value_pair (atom: Atom) -> Result<String, ExecError> {
     Ok(key + ": " + &value_str)
 }
 
+
 fn encode_dictspace(input: &Atom) -> Result<String, ExecError> {
     let space = Atom::as_gnd::<DynSpace>(input).unwrap();
 
@@ -141,7 +142,7 @@ fn encode_atom(input: &Atom) -> Result<String, ExecError> {
         else {
             sym_name = "sym!:".to_string() + &sym_name;
             match serde_json::to_string(&sym_name) {
-                Ok(encoded) => Ok(encoded),
+                Ok(encoded) => {println!("{}", encoded); Ok(encoded)},
                 Err(err) => Err(ExecError::from(format!("Encode symbol failed: {}", err))),
             }
         }
@@ -177,7 +178,7 @@ fn decode_value(v: &Value) -> Result<Atom, ExecError> {
         Value::Bool(_) => Ok(Atom::gnd(Bool(v.as_bool().unwrap()))),
         Value::String(_) => {
             let decoded_string = v.to_string();
-            if decoded_string.contains("sym!:") {
+            if decoded_string.starts_with("\"sym!:") {
                 Ok(Atom::sym(&unescape(&decoded_string.replace("sym!:", "")).unwrap()))
             }
             else {
