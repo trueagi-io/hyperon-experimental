@@ -4,7 +4,7 @@ use crate::space::grounding::GroundingSpace;
 use crate::metta::text::SExprParser;
 use crate::metta::runner::{Metta, ModuleLoader, RunContext};
 use crate::metta::runner::modules::MettaMod;
-use crate::metta::runner::str::{atom_to_string, unescape, ATOM_TYPE_STRING};
+use crate::metta::runner::str::{atom_to_string, ATOM_TYPE_STRING};
 use crate::metta::runner::str::Str;
 use serde_json::Value;
 use hyperon_space::ATOM_TYPE_SPACE;
@@ -142,7 +142,7 @@ fn encode_atom(input: &Atom) -> Result<String, ExecError> {
         else {
             sym_name = "sym!:".to_string() + &sym_name;
             match serde_json::to_string(&sym_name) {
-                Ok(encoded) => {println!("{}", encoded); Ok(encoded)},
+                Ok(encoded) => Ok(encoded),
                 Err(err) => Err(ExecError::from(format!("Encode symbol failed: {}", err))),
             }
         }
@@ -179,7 +179,8 @@ fn decode_value(v: &Value) -> Result<Atom, ExecError> {
         Value::String(_) => {
             let decoded_string = v.to_string();
             if decoded_string.starts_with("\"sym!:") {
-                Ok(Atom::sym(&unescape(&decoded_string.replace("sym!:", "")).unwrap()))
+                let slice = &decoded_string[6..decoded_string.len() - 1];
+                Ok(Atom::sym(slice))
             }
             else {
                 Ok(Atom::gnd(Str::from_string(v.to_string())))
