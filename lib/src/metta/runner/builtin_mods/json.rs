@@ -82,8 +82,11 @@ fn encode_dictspace(input: &Atom) -> Result<String, ExecError> {
     let mut first_atom = true;
     let mut res_str = "{".to_string();
     let _ = space.borrow().visit(&mut |atom: Cow<Atom>| {
+        if err.is_some() {
+            return;
+        }
         match TryInto::<&ExpressionAtom>::try_into(atom.as_ref()) {
-            Ok(expr) => if err.is_none() && expr.children().len() == 2 {
+            Ok(expr) => if expr.children().len() == 2 {
                 match extract_key_value_pair(&atom) {
                     Ok(encoded_key_value) => {
                         if !first_atom {
