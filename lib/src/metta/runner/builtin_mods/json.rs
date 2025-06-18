@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use hyperon_atom::{Atom, ExecError, gnd::GroundedFunctionAtom, ExpressionAtom, SymbolAtom};
 use crate::metta::{ARROW_SYMBOL, ATOM_TYPE_ATOM};
 use crate::space::grounding::GroundingSpace;
@@ -79,29 +80,47 @@ fn extract_key_value_pair (atom: Atom) -> Result<String, ExecError> {
     Ok(key + ": " + &value_str)
 }
 
+fn visit_callback(atom: Cow<Atom>, result: &mut Vec<Atom>) {
+    match TryInto::<&ExpressionAtom>::try_into(&atom.clone().into_owned()) {
+        Ok(expr) => {
+            if expr.children().len() == 2 {
+                result.push(atom.into_owned())
+            }
+            else {
+                ()
+            }
+        }
+        _ => ()
+    }
+}
 
 fn encode_dictspace(input: &Atom) -> Result<String, ExecError> {
     let space = Atom::as_gnd::<DynSpace>(input).unwrap();
 
-    let result = space.borrow().subst(&Atom::expr([Atom::var("k"), Atom::var("v")]),
-                                      &Atom::expr([Atom::var("k"), Atom::var("v")]));
+    let mut result: Vec<Atom> = Vec::new();
+    let _ = space.borrow().visit(&mut |atoms: Cow<Atom>| visit_callback(atoms, &mut result));
+    if result.len() != space.borrow().atom_count().unwrap() {
+        return Err(ExecError::from("Input space must be a dictionary space consists of key-value pairs only or empty space. Use dict-space function"));
+    }
     if result.len() == 0 {
-        return Err(ExecError::from("Input space must be a dictionary space which contains (key value) pairs. See dict-space function"));
+        Ok("{}".to_string())
     }
-    let mut res_str = "{".to_string();
-    let first_atom = result.first().unwrap();
-    match extract_key_value_pair(first_atom.clone()) {
-        Ok(encoded_key_value) => res_str.push_str(&encoded_key_value),
-        Err(err) => return Err(err),
-    }
-    for res_atom in result[1..].iter() {
-        match extract_key_value_pair(res_atom.clone()) {
-            Ok(encoded_key_value) => {res_str = res_str + ", " + &encoded_key_value},
+    else {
+        let mut res_str = "{".to_string();
+        let first_atom = result.first().unwrap();
+        match extract_key_value_pair(first_atom.clone()) {
+            Ok(encoded_key_value) => res_str.push_str(&encoded_key_value),
             Err(err) => return Err(err),
         }
+        for res_atom in result[1..].iter() {
+            match extract_key_value_pair(res_atom.clone()) {
+                Ok(encoded_key_value) => { res_str = res_str + ", " + &encoded_key_value },
+                Err(err) => return Err(err),
+            }
+        }
+        res_str.push_str("}");
+        Ok(res_str)
     }
-    res_str.push_str("}");
-    Ok(res_str)
 }
 
 fn encode_atom(input: &Atom) -> Result<String, ExecError> {
@@ -261,8 +280,10 @@ mod tests {
             !(assertEqual (let $encoded (json-encode null) (json-decode $encoded)) null)
             !(assertEqual (json-encode symbol) \"\\\"sym!:symbol\\\"\")
             !(assertEqual (let $encoded (json-encode symbol) (json-decode $encoded)) symbol)
+            !(assertEqual (let $emptyspace (new-space) (json-encode $emptyspace)) \"{}\")
         ";
         assert_eq!(run_program(program), Ok(vec![
+            vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],

@@ -4,7 +4,7 @@
     (@param "Space")
     (@param "Key")))
   (@return "Value which tied to input key, empty if no such key in space"))
-(: get-value (-> Grounded Atom Atom))
+(: get-value (-> Grounded Atom %Undefined%))
 (= (get-value $dictspace $key) (match $dictspace ($key $value) $value))
 
 (@doc get-keys
