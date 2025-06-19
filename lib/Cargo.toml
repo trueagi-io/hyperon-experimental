@@ -44,3 +44,4 @@ variable_operation = [] # enables evaluation of the expressions which have
 online-test = [] # includes tests which require internet access
 git = ["git2", "pkg_mgmt"]
 pkg_mgmt = ["xxhash-rust", "serde", "serde_json", "semver"]
+benchmark = []
