@@ -184,7 +184,11 @@ fn encode_atom<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONError> 
             serde_json::to_writer(writer, &sym_name)
                 .map_err(|err| JSONError::Runtime(format!("Encode symbol failed: {}", err)))
         },
-        Atom::Variable(_) => encode_other(writer, input),
+        Atom::Variable(var) => {
+            let var_name = "var!:".to_string() + &var.name();
+            serde_json::to_writer(writer, &var_name)
+                .map_err(|err| JSONError::Runtime(format!("Encode variable failed: {}", err)))
+        },
     }
 }
 
@@ -211,6 +215,10 @@ fn decode_value(v: &Value) -> Result<Atom, ExecError> {
             if decoded_string.starts_with("\"sym!:") {
                 let slice = &decoded_string[6..decoded_string.len() - 1];
                 Ok(Atom::sym(slice))
+            }
+            else if decoded_string.starts_with("\"var!:") {
+                let slice = &decoded_string[6..decoded_string.len() - 1];
+                Ok(Atom::var(slice))
             }
             else {
                 Ok(Atom::gnd(Str::from_string(v.to_string())))
@@ -292,8 +300,10 @@ mod tests {
             !(assertEqual (json-encode symbol) \"\\\"sym!:symbol\\\"\")
             !(assertEqual (let $encoded (json-encode symbol) (json-decode $encoded)) symbol)
             !(assertEqual (let $emptyspace (new-space) (json-encode $emptyspace)) \"{}\")
+            !(assertEqual (let $encoded (json-encode $x) (json-decode $encoded)) $x)
         ";
         assert_eq!(run_program(program), Ok(vec![
+            vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
             vec![UNIT_ATOM],
