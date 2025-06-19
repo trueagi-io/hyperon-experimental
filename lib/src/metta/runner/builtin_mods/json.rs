@@ -143,11 +143,6 @@ fn encode_dictspace<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONEr
 }
 
 fn encode_atom<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONError> {
-    fn encode_other<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONError> {
-        let atom_string = atom_to_string(&input);
-        serde_json::to_writer(writer, &atom_string)
-            .map_err(|err| JSONError::Runtime(format!("Encode string failed: {}", err)))
-    }
     match input {
         Atom::Grounded(gnd) => {
             let typ = gnd.type_();
@@ -170,7 +165,7 @@ fn encode_atom<W: Write>(writer: &mut W, input: &Atom) -> Result<(), JSONError> 
                 serde_json::to_writer(writer, val.as_str())
                     .map_err(|err| JSONError::Runtime(format!("Encode string failed: {}", err)))
             } else {
-                encode_other(writer, input)
+                Err(JSONError::Runtime(format!("Encode failed for atom (unsupported type): {:?}", input)))
             }
         },
         Atom::Expression(exp) => encode_list(writer, exp.children()),
