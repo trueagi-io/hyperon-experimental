@@ -15,11 +15,11 @@ dyn-fmt = "0.4.0"
 itertools = "0.13.0"
 unescaper = "0.1.5"
 unicode_reader = "1.0.2"
+serde_json = { version="1.0.116", optional=true }
 
 # pkg_mgmt deps
 xxhash-rust = { version="0.8.7", features=["xxh3"], optional=true }
 serde = { version="1.0.198", features = ["derive"], optional=true }
-serde_json = { version="1.0.116", optional=true }
 semver = { version="1.0", features = ["serde"], optional=true }
 git2 = { version="0.18.3", features=["vendored-libgit2"], optional=true }
 
@@ -44,3 +44,4 @@ variable_operation = [] # enables evaluation of the expressions which have
 online-test = [] # includes tests which require internet access
 git = ["git2", "pkg_mgmt"]
 pkg_mgmt = ["xxhash-rust", "serde", "serde_json", "semver"]
+benchmark = []
