@@ -240,8 +240,16 @@
   (@params (
     (@param "Input argument")))
   (@return "Input argument"))
-(: id (-> Atom Atom))
+(: id (-> $t $t))
 (= (id $x) $x)
+
+(@doc noeval
+  (@desc "Returns its argument")
+  (@params (
+    (@param "Input argument")))
+  (@return "Input argument"))
+(: noeval (-> Atom Atom))
+(= (noeval $x) $x)
 
 (@doc atom-subst
   (@desc "Substitutes variable passed as a second argument in the third argument by the first argument")
@@ -252,7 +260,7 @@
   (@return "Template with substituted variable"))
 (: atom-subst (-> Atom Variable Atom Atom))
 (= (atom-subst $atom $var $templ)
-  (function (chain (eval (id $atom)) $var (return $templ))) )
+  (function (chain (eval (noeval $atom)) $var (return $templ))) )
 
 (@doc if-decons-expr
   (@desc "Checks if first argument is non empty expression. If so gets tail and head from the first argument and returns forth argument using head and tail values. Returns fifth argument otherwise.")
