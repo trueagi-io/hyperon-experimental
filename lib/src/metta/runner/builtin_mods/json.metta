@@ -12,7 +12,7 @@
   (@params (
     (@param "Space")))
   (@return "All keys in the input space"))
-(: get-keys (-> Grounded Expression))
+(: get-keys (-> Grounded Atom))
 (= (get-keys $dictspace)
    (function
      (chain (unify $dictspace ($key $value) $key Empty) $t (return $t)) ))
@@ -23,7 +23,10 @@
     (@param "Expression")))
   (@return "Space"))
 (: dict-space (-> Expression Grounded))
-(= (dict-space $expr) (chain (eval (new-space)) $dictspace (let $res (add-reducts $dictspace $expr) $dictspace)))
+(= (dict-space $expr)
+   (let* (($dictspace (new-space))
+          ($res (add-reducts $dictspace $expr)))
+        $dictspace))
 
 (@doc json-encode
   (@desc "Function takes atom as an input and encodes it to json-string. Atom could be a string, number, expression, space and combination of those")
