@@ -341,9 +341,9 @@ fn collapse_add_next_atom_from_collapse_bind_result(args: &[Atom]) -> Result<Vec
     let bindings = atom_bindings.children().get(1).and_then(|a| a.as_gnd::<Bindings>()).ok_or_else(arg1_error)?;
 
     let atom = apply_bindings_to_atom_move(atom.clone(), bindings);
-    let mut list = list.clone().into_children();
-    list.push(atom);
-    Ok(vec![Atom::expr(list)])
+    let mut list = list.clone();
+    list.children_mut().push(atom);
+    Ok(vec![Atom::Expression(list)])
 }
 
 pub(super) fn register_context_independent_tokens(tref: &mut Tokenizer) {
