@@ -185,8 +185,8 @@ impl ExpressionAtom {
     }
 
     /// Returns a mutable reference to a vector of sub-atoms.
-    pub fn children_mut(&mut self) -> &mut [Atom] {
-        self.children.as_slice_mut()
+    pub fn children_mut(&mut self) -> &mut Vec<Atom> {
+        self.children.as_vec_mut()
     }
 
     /// Converts into a vector of sub-atoms.
@@ -1115,7 +1115,7 @@ mod test {
 
     #[inline]
     fn expression<const N: usize>(children: [Atom; N]) -> Atom {
-        Atom::Expression(ExpressionAtom::new(CowArray::Allocated(Box::new(children))))
+        Atom::Expression(ExpressionAtom::new(CowArray::Allocated(children.into())))
     }
 
     #[inline]
