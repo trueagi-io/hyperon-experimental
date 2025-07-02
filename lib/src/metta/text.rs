@@ -338,13 +338,13 @@ impl<'a> From<&'a String> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(
 pub struct SExprParser<R: Iterator<Item=io::Result<char>>> {
     it: Peekable<Enumerate<CharReader<R>>>,
     last_idx: usize,
-    num_of_nonascii_chars: usize,
+    nonascii_offset: usize,
 }
 
 impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
     pub fn new<I: Into<CharReader<R>>>(chars: I) -> Self {
-        Self{ it: chars.into().enumerate().peekable(), last_idx: 0, num_of_nonascii_chars: 0}
+        Self{ it: chars.into().enumerate().peekable(), last_idx: 0, nonascii_offset: 0}
     }
 
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
@@ -364,29 +364,29 @@ impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
     fn peek(&mut self) -> Result<Option<(usize, char)>, String> {
         match self.it.peek() {
-            Some(&(idx, Ok(c))) => Ok(Some((idx + self.num_of_nonascii_chars, c))),
+            Some(&(idx, Ok(c))) => Ok(Some((idx + self.nonascii_offset, c))),
             None => Ok(None),
-            Some((idx, Err(err))) => Err(format!("Input read error at position {}: {}", idx + self.num_of_nonascii_chars, err)),
+            Some((idx, Err(err))) => Err(format!("Input read error at position {}: {}", idx + self.nonascii_offset, err)),
         }
     }
 
     fn next(&mut self) -> Result<Option<(usize, char)>, String> {
         match self.it.next() {
             Some((idx, Ok(c))) => {
-                self.last_idx = idx + self.num_of_nonascii_chars;
-                Ok(Some((idx + self.num_of_nonascii_chars, c)))
+                self.last_idx = idx + self.nonascii_offset;
+                Ok(Some((idx + self.nonascii_offset, c)))
             },
             None => Ok(None),
             Some((idx, Err(err))) => {
-                self.last_idx = idx + self.num_of_nonascii_chars;
-                Err(format!("Input read error at position {}: {}", idx + self.num_of_nonascii_chars, err))
+                self.last_idx = idx + self.nonascii_offset;
+                Err(format!("Input read error at position {}: {}", idx + self.nonascii_offset, err))
             },
         }
     }
 
     fn skip_next(&mut self) {
         match self.it.next() {
-            Some((idx, _)) => self.last_idx = idx + self.num_of_nonascii_chars,
+            Some((idx, _)) => self.last_idx = idx + self.nonascii_offset,
             _ => {},
         }
     }
@@ -426,7 +426,7 @@ impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
     ///WARNING: may be (often is) == to text.len(), and thus can't be used as an index to read a char
     fn cur_idx(&mut self) -> usize {
         if let Some(&(idx, _)) = self.it.peek() {
-            idx + self.num_of_nonascii_chars
+            idx + self.nonascii_offset
         } else {
             self.last_idx + 1
         }
@@ -629,7 +629,7 @@ impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
                 break;
             }
             if !c.is_ascii() {
-                self.num_of_nonascii_chars += 1;
+                self.nonascii_offset += c.len_utf8() - 1;
             }
             token.push(c);
             self.skip_next();
@@ -788,12 +788,12 @@ mod tests {
         assert_eq!("ж".to_string(), text[node.src_range]);
         assert_eq!(Ok(Some((2, ')'))), parser.next());
 
-        let text = "ю;Some comments.";
+        let text = "⟮;Some comments.";
         let mut parser = SExprParser::new(text);
 
         let node = parser.parse_token().unwrap().unwrap();
-        assert_eq!("ю".to_string(), text[node.src_range]);
-        assert_eq!(Ok(Some((2, ';'))), parser.next());
+        assert_eq!("⟮".to_string(), text[node.src_range]);
+        assert_eq!(Ok(Some((3, ';'))), parser.next());
     }
 
     #[test]
