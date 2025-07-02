@@ -483,13 +483,13 @@ mod tests {
 
     #[test]
     fn metta_car_atom() {
-        let result = run_program("!(eval (car-atom (A $b)))");
+        let result = run_program("!(car-atom (A $b))");
         assert_eq!(result, Ok(vec![vec![expr!("A")]]));
-        let result = run_program("!(eval (car-atom ($a B)))");
+        let result = run_program("!(car-atom ($a B))");
         assert_eq!(result, Ok(vec![vec![expr!(a)]]));
-        let result = run_program("!(eval (car-atom ()))");
+        let result = run_program("!(car-atom ())");
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("car-atom" ()) {Str::from_str("car-atom expects a non-empty expression as an argument")})]]));
-        let result = run_program("!(eval (car-atom A))");
+        let result = run_program("!(car-atom A)");
         assert_eq!(result, Ok(vec![vec![expr!("Error" ("car-atom" "A") {Str::from_str("car-atom expects a non-empty expression as an argument")})]]));
     }
 
