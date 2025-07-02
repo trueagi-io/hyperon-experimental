@@ -777,6 +777,22 @@ mod tests {
     }
 
     #[test]
+    fn test_non_ascii() {
+        let text = "ж)";
+        let mut parser = SExprParser::new(text);
+        let node = parser.parse_token().unwrap().unwrap();
+        assert_eq!("ж".to_string(), text[node.src_range]);
+        assert_eq!(Ok(Some((2, ')'))), parser.next());
+
+        let text = "⟮;Some comments.";
+        let mut parser = SExprParser::new(text);
+
+        let node = parser.parse_token().unwrap().unwrap();
+        assert_eq!("⟮".to_string(), text[node.src_range]);
+        assert_eq!(Ok(Some((3, ';'))), parser.next());
+    }
+
+    #[test]
     fn test_parse_unicode() {
         let mut parser = SExprParser::new("\"\\u{0123}\"");
         assert_eq!(Ok(SyntaxNode::new_token_node(SyntaxNodeType::StringToken, 0..10, "\"\u{0123}\"".into())), parser.parse_string());
