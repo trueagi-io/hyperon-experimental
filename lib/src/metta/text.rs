@@ -4,7 +4,6 @@ use hyperon_atom::*;
 use hyperon_atom::gnd::*;
 
 use core::ops::Range;
-use std::iter::Peekable;
 use regex::Regex;
 use std::rc::Rc;
 use unicode_reader::CodePoints;
@@ -278,24 +277,40 @@ impl Parser for &mut (dyn Parser + '_) {
     }
 }
 
+type CharReaderItem = (usize, io::Result<char>);
+
 /// Proxy type to allow constructing [SExprParser] from different types
 /// automatically. CharReader implements [From] for different types, while
 /// [SExprParser::new] inputs `Into<CharReader<R>>` argument.
 pub struct CharReader<R: Iterator<Item=io::Result<char>>> {
     chars: R,
     idx: usize,
+    next: Option<CharReaderItem>,
 }
 
 impl<R: Iterator<Item=io::Result<char>>> CharReader<R> {
     /// Construct new instance from char reading iterator
     pub fn new(chars: R) -> Self {
-        Self{ chars, idx: 0 }
+        let mut s = Self{ chars, idx: 0, next: None };
+        s.next = s.next_internal();
+        s
     }
-}
 
-impl<R: Iterator<Item=io::Result<char>>> Iterator for CharReader<R> {
-    type Item = (usize, io::Result<char>);
-    fn next(&mut self) -> Option<Self::Item> {
+    pub fn last_idx(&self)  -> usize {
+        self.idx
+    }
+
+    pub fn peek(&mut self) -> Option<&CharReaderItem> {
+        self.next.as_ref()
+    }
+
+    pub fn next(&mut self) -> Option<CharReaderItem> {
+        let next = self.next_internal();
+        let next = std::mem::replace(&mut self.next, next);
+        next
+    }
+
+    pub fn next_internal(&mut self) -> Option<CharReaderItem> {
         let c = self.chars.next();
         match c {
             Some(r @ Ok(c)) => {
@@ -347,14 +362,14 @@ impl<'a> From<&'a String> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(
 /// NOTE: The SExprParser type is short-lived, and can be created cheaply to evaluate a specific block
 /// of MeTTa source code.
 pub struct SExprParser<R: Iterator<Item=io::Result<char>>> {
-    it: Peekable<CharReader<R>>,
+    it: CharReader<R>,
     last_idx: usize,
 }
 
 impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
     pub fn new<I: Into<CharReader<R>>>(chars: I) -> Self {
-        Self{ it: chars.into().peekable(), last_idx: 0 }
+        Self{ it: chars.into(), last_idx: 0 }
     }
 
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
@@ -438,7 +453,7 @@ impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
         if let Some(&(idx, _)) = self.it.peek() {
             idx
         } else {
-            self.last_idx + 1
+            self.it.last_idx()
         }
     }
 
@@ -797,10 +812,15 @@ mod tests {
 
         let text = "⟮;Some comments.";
         let mut parser = SExprParser::new(text);
-
         let node = parser.parse_token().unwrap().unwrap();
         assert_eq!("⟮".to_string(), text[node.src_range]);
         assert_eq!(Ok(Some((3, ';'))), parser.next());
+
+        let text = "⟮";
+        let mut parser = SExprParser::new(text);
+        let node = parser.parse_token().unwrap().unwrap();
+        assert_eq!("⟮".to_string(), text[node.src_range]);
+        assert_eq!(Ok(None), parser.next());
     }
 
     #[test]
