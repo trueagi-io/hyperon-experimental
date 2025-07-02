@@ -5,7 +5,6 @@ use hyperon_atom::gnd::*;
 
 use core::ops::Range;
 use std::iter::Peekable;
-use std::iter::Enumerate;
 use regex::Regex;
 use std::rc::Rc;
 use unicode_reader::CodePoints;
@@ -282,52 +281,64 @@ impl Parser for &mut (dyn Parser + '_) {
 /// Proxy type to allow constructing [SExprParser] from different types
 /// automatically. CharReader implements [From] for different types, while
 /// [SExprParser::new] inputs `Into<CharReader<R>>` argument.
-pub struct CharReader<R: Iterator<Item=io::Result<char>>>(R);
+pub struct CharReader<R: Iterator<Item=io::Result<char>>> {
+    chars: R,
+    idx: usize,
+}
 
 impl<R: Iterator<Item=io::Result<char>>> CharReader<R> {
     /// Construct new instance from char reading iterator
     pub fn new(chars: R) -> Self {
-        Self(chars)
+        Self{ chars, idx: 0 }
     }
 }
 
 impl<R: Iterator<Item=io::Result<char>>> Iterator for CharReader<R> {
-    type Item = io::Result<char>;
+    type Item = (usize, io::Result<char>);
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
+        let c = self.chars.next();
+        match c {
+            Some(r @ Ok(c)) => {
+                let idx = self.idx;
+                self.idx += c.len_utf8();
+                Some((idx, r))
+            },
+            Some(Err(e)) => Some((self.idx, Err(e))),
+            None => None,
+        }
     }
 }
 
 impl<R: Read> From<R> for CharReader<CodePoints<std::io::Bytes<R>>> {
     fn from(input: R) -> Self {
         let chars: CodePoints<_> = input.bytes().into();
-        Self(chars)
+        Self::new(chars)
     }
 }
 
 impl<R: Iterator<Item=io::Result<u8>>> From<R> for CharReader<CodePoints<R>> {
     fn from(input: R) -> Self {
         let chars: CodePoints<_> = input.into();
-        Self(chars)
+        Self::new(chars)
     }
 }
 
 impl<'a> From<&'a str> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(char) -> io::Result<char>>> {
     fn from(text: &'a str) -> Self {
-        Self(text.chars().map(Ok))
+        Self::new(text.chars().map(Ok))
     }
 }
 
 impl From<String> for CharReader<std::iter::Map<std::vec::IntoIter<char>, fn(char) -> io::Result<char>>> {
     fn from(text: String) -> Self {
         let chars: Vec<char> = text.chars().collect();
-        Self(chars.into_iter().map(Ok))
+        Self::new(chars.into_iter().map(Ok))
     }
 }
 
 impl<'a> From<&'a String> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(char) -> io::Result<char>>> {
     fn from(text: &'a String) -> Self {
-        Self(text.chars().map(Ok))
+        Self::new(text.chars().map(Ok))
     }
 }
 
@@ -336,14 +347,14 @@ impl<'a> From<&'a String> for CharReader<std::iter::Map<std::str::Chars<'a>, fn(
 /// NOTE: The SExprParser type is short-lived, and can be created cheaply to evaluate a specific block
 /// of MeTTa source code.
 pub struct SExprParser<R: Iterator<Item=io::Result<char>>> {
-    it: Peekable<Enumerate<CharReader<R>>>,
+    it: Peekable<CharReader<R>>,
     last_idx: usize,
 }
 
 impl<R: Iterator<Item=io::Result<char>>> SExprParser<R> {
 
     pub fn new<I: Into<CharReader<R>>>(chars: I) -> Self {
-        Self{ it: chars.into().enumerate().peekable(), last_idx: 0 }
+        Self{ it: chars.into().peekable(), last_idx: 0 }
     }
 
     pub fn parse(&mut self, tokenizer: &Tokenizer) -> Result<Option<Atom>, String> {
@@ -941,5 +952,4 @@ mod tests {
         let res = parse_atoms(program);
         assert_eq!(res, expected);
     }
-
 }
