@@ -222,10 +222,8 @@ impl InterpreterState {
     fn push(&mut self, atom: InterpretedAtom) {
         if atom.0.prev.is_none() && atom.0.finished {
             let InterpretedAtom(stack, bindings) = atom;
-            if stack.atom != EMPTY_SYMBOL {
-                let atom = apply_bindings_to_atom_move(stack.atom, &bindings);
-                self.finished.push(atom);
-            }
+            let atom = apply_bindings_to_atom_move(stack.atom, &bindings);
+            self.finished.push(atom);
         } else {
             self.plan.push(atom);
         }
@@ -1531,7 +1529,7 @@ mod tests {
     #[test]
     fn interpret_atom_evaluate_grounded_expression_empty() {
         let result = call_interpret(space(""), &expr!("eval" ({ReturnNothing()} {6})));
-        assert_eq!(result, vec![]);
+        assert_eq!(result, vec![EMPTY_SYMBOL]);
     }
 
     #[test]
@@ -1702,7 +1700,7 @@ mod tests {
     #[test]
     fn interpret_atom_unify_else() {
         let result = call_interpret(space(""), &metta_atom("(unify (A $b C) ($a B D) ($a $b) Empty)"));
-        assert_eq!(result, vec![]);
+        assert_eq!(result, vec![EMPTY_SYMBOL]);
     }
 
 
